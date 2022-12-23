@@ -170,7 +170,7 @@ int ObXAService::remote_one_phase_xa_commit_(const ObXATransID &xid,
   }
 
   #ifdef ERRSIM
-  int tmp_ret = E(EventTable::EN_XA_1PC_RESP_LOST) OB_SUCCESS;;
+  int tmp_ret = OB_E(EventTable::EN_XA_1PC_RESP_LOST) OB_SUCCESS;;
   if (OB_SUCCESS != tmp_ret) {
     TRANS_LOG(INFO, "ERRSIM, origin sche ctx not exist");
     result = OB_TRANS_CTX_NOT_EXIST;
@@ -1818,7 +1818,7 @@ int ObXAService::xa_rollback_remote_(const ObXATransID &xid,
   }
 
   #ifdef ERRSIM
-  int tmp_ret = E(EventTable::EN_XA_1PC_RESP_LOST) OB_SUCCESS;;
+  int tmp_ret = OB_E(EventTable::EN_XA_1PC_RESP_LOST) OB_SUCCESS;;
   if (OB_SUCCESS != tmp_ret) {
     TRANS_LOG(INFO, "ERRSIM, origin sche ctx not exist");
     result = OB_TRANS_CTX_NOT_EXIST;
@@ -2329,7 +2329,7 @@ int ObXAService::remote_xa_prepare_(const ObXATransID &xid,
   } while (need_retry);
 
   #ifdef ERRSIM
-  int err_switch = E(EventTable::EN_XA_RPC_TIMEOUT) OB_SUCCESS;
+  int err_switch = OB_E(EventTable::EN_XA_RPC_TIMEOUT) OB_SUCCESS;
   if (OB_SUCCESS != err_switch) {
     TRANS_LOG(INFO, "ERRSIM, rpc timeout");
     result = OB_TIMEOUT;

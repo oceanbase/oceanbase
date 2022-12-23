@@ -224,7 +224,8 @@ int ObSchemaGetterGuard::get_can_read_index_array(
     int64_t &size,
     bool with_mv,
     bool with_global_index /* =true */,
-    bool with_domain_index /*=true*/)
+    bool with_domain_index /*=true*/,
+    bool with_spatial_index /*=true*/)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = NULL;
@@ -238,6 +239,7 @@ int ObSchemaGetterGuard::get_can_read_index_array(
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
     const ObTableSchema *index_schema = NULL;
     int64_t can_read_count = 0;
+    bool is_geo_default_srid = false;
     if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get simple_index_infos failed", KR(ret), K(tenant_id), K(table_id));
     }
@@ -248,6 +250,17 @@ int ObSchemaGetterGuard::get_can_read_index_array(
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index schema should not be null", KR(ret), K(tenant_id), K(index_id));
+      } else if (index_schema->is_spatial_index() && !with_spatial_index) {
+        uint64_t geo_col_id = UINT64_MAX;
+        const ObColumnSchemaV2 *geo_column = NULL;
+        is_geo_default_srid = false;
+        if (OB_FAIL(index_schema->get_spatial_geo_column_id(geo_col_id))) {
+          LOG_WARN("failed to get geometry column id", K(ret));
+        } else if (OB_ISNULL(geo_column = table_schema->get_column_schema(geo_col_id))) {
+          LOG_WARN("failed to get geometry column", K(ret), K(geo_col_id));
+        } else if (geo_column->is_default_srid()) {
+          is_geo_default_srid = true;
+        }
       }
       if (OB_SUCC(ret)) {
         if (!with_mv && index_schema->is_materialized_view()) {
@@ -256,6 +269,8 @@ int ObSchemaGetterGuard::get_can_read_index_array(
           // skip
         } else if (!with_domain_index && index_schema->is_domain_index()) {
           // does not need domain index, skip it
+        } else if (!with_spatial_index && index_schema->is_spatial_index() && is_geo_default_srid) {
+          // skip spatial index when geometry column has not specific srid.
         } else if (index_schema->can_read_index() && index_schema->is_index_visible()) {
           index_tid_array[can_read_count++] = simple_index_infos.at(i).table_id_;
         } else {

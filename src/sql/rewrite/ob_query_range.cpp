@@ -13,12 +13,16 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "lib/timezone/ob_time_convert.h"
 #include "lib/container/ob_array_serialization.h"
+#include "lib/geo/ob_geo_utils.h"
+#include "lib/rc/ob_rc.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_like.h"
 #include "common/ob_smart_call.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 //if cnd is true get full range key part which is always true
 //else, get empty key part which is always false
@@ -61,11 +65,15 @@ ObQueryRange::ObQueryRange()
     : state_(NEED_INIT),
       column_count_(0),
       contain_row_(false),
+      contain_geo_filters_(false),
       inner_allocator_(ObModIds::OB_SQL_QUERY_RANGE),
       allocator_(inner_allocator_),
+      bucket_allocator_wrapper_(allocator_),
+      map_alloc_(OB_MALLOC_NORMAL_BLOCK_SIZE, bucket_allocator_wrapper_),
       query_range_ctx_(NULL),
       key_part_store_(allocator_),
       range_exprs_(allocator_),
+      mbr_filters_(allocator_),
       has_exec_param_(true),
       is_equal_and_(false),
       equal_offs_(allocator_),
@@ -77,11 +85,15 @@ ObQueryRange::ObQueryRange(ObIAllocator &alloc)
     : state_(NEED_INIT),
       column_count_(0),
       contain_row_(false),
+      contain_geo_filters_(false),
       inner_allocator_(ObModIds::OB_SQL_QUERY_RANGE),
       allocator_(alloc),
+      bucket_allocator_wrapper_(allocator_),
+      map_alloc_(OB_MALLOC_NORMAL_BLOCK_SIZE, bucket_allocator_wrapper_),
       query_range_ctx_(NULL),
       key_part_store_(allocator_),
       range_exprs_(allocator_),
+      mbr_filters_(allocator_),
       has_exec_param_(true),
       is_equal_and_(false),
       equal_offs_(allocator_),
@@ -115,6 +127,8 @@ void ObQueryRange::reset()
   state_ = NEED_INIT;
   column_count_ = 0;
   contain_row_ = false;
+  mbr_filters_.reset(),
+  contain_geo_filters_ = false;
   table_graph_.reset();
   range_exprs_.reset();
   inner_allocator_.reset();
@@ -122,6 +136,7 @@ void ObQueryRange::reset()
   is_equal_and_ = false;
   equal_offs_.reset();
   expr_final_infos_.reset();
+  columnId_map_.destroy();
 }
 
 int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
@@ -312,6 +327,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
   int ret = OB_SUCCESS;
   ObKeyPartList and_ranges;
   ObKeyPart *temp_result = NULL;
+  ObKeyPartList geo_ranges;
+  bool has_geo_expr = false;
 
   SQL_REWRITE_LOG(DEBUG, "preliminary extract", K(range_columns), K(root_exprs));
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
@@ -337,7 +354,13 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
           if (root_exprs.at(j)->has_flag(CNT_DYNAMIC_PARAM)) {
             has_exec_param_ = true;
           }
-          if (!and_ranges.add_last(temp_result)) {
+          if (is_contain_geo_filters()) {
+            // or connect with spatial filters for functional correctness
+            has_geo_expr = true;
+            if (OB_FAIL(add_or_item(geo_ranges, temp_result))) {
+              LOG_WARN("Link geo keypart failed", K(ret));
+            }
+          } else if (!and_ranges.add_last(temp_result)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Add key part range failed", K(ret));
           } else if (query_range_ctx_->cur_expr_is_precise_ && temp_result != NULL) {
@@ -379,7 +402,17 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(and_range_graph(and_ranges, temp_result))) {
+    if (has_geo_expr) {
+      ObKeyPart *geo_results = NULL;
+      if (OB_FAIL(or_range_graph(geo_ranges, NULL, geo_results, dtc_params))) {
+        LOG_WARN("or range graph failed", K(ret));
+      } else if (!and_ranges.add_last(geo_results)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("add key part range failed", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(and_range_graph(and_ranges, temp_result))) {
       LOG_WARN("And query range failed", K(ret));
     } else if (NULL == temp_result) {
       // no range left
@@ -702,7 +735,7 @@ int ObQueryRange::check_graph_type()
         is_terminated = true;
       } else if (NULL != cur->or_next_ || NULL != cur->item_next_) {
         table_graph_.is_precise_get_ = false;
-      } else if (cur->is_like_key()) {
+      } else if (cur->is_like_key() || cur->is_geo_key()) {
         table_graph_.is_precise_get_ = false;
       } else if (!cur->is_equal_condition()) {
         table_graph_.is_precise_get_ = false;
@@ -1387,6 +1420,27 @@ int ObQueryRange::get_normal_cmp_keypart(ObItemType cmp_type,
       out_keypart.normal_keypart_->always_false_ = true;
       out_keypart.normal_keypart_->always_true_ = false;
     }
+  }
+  return ret;
+}
+
+int ObQueryRange::get_geo_single_keypart(const ObObj &val_start, const ObObj &val_end, ObKeyPart &out_keypart) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(out_keypart.create_normal_key())) {
+    LOG_WARN("create normal key failed", K(ret));
+  } else if (OB_ISNULL(out_keypart.normal_keypart_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("normal keypart is null");
+  } else {
+    out_keypart.normal_keypart_->include_start_ = true;
+    out_keypart.normal_keypart_->include_end_ = true;
+    out_keypart.normal_keypart_->start_ = val_start;
+    out_keypart.normal_keypart_->end_ = val_end;
+  }
+  if (OB_SUCC(ret)) {
+    out_keypart.normal_keypart_->always_false_ = false;
+    out_keypart.normal_keypart_->always_true_ = false;
   }
   return ret;
 }
@@ -2303,6 +2357,156 @@ int ObQueryRange::pre_extract_const_op(const ObRawExpr *c_expr,
   return ret;
 }
 
+int ObQueryRange::get_dwithin_item(const ObRawExpr *expr, const ObConstRawExpr *&extra_item)
+{
+  int ret = OB_SUCCESS;
+  if (expr->get_param_count() != 3) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid param num", K(expr->get_param_count()));
+  } else {
+    extra_item = static_cast<const ObConstRawExpr *>(expr->get_param_expr(2));
+    if (OB_ISNULL(extra_item)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid param val", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::set_geo_keypart_whole_range(ObKeyPart &out_key_part)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(out_key_part.create_normal_key())) {
+    LOG_WARN("create normal key failed", K(ret));
+  } else if (OB_ISNULL(out_key_part.normal_keypart_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("normal keypart is null", K(ret));
+  } else {
+    // set whole range when cosnt expr calculate failed in constant fold
+    out_key_part.normal_keypart_->start_.set_min_value();
+    out_key_part.normal_keypart_->end_.set_max_value();
+    out_key_part.normal_keypart_->always_false_ = false;
+    out_key_part.normal_keypart_->always_true_ = true;
+    out_key_part.normal_keypart_->include_start_ = false;
+    out_key_part.normal_keypart_->include_end_ = false;
+  }
+  return ret;
+}
+
+int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
+                                     ObKeyPart *&out_key_part,
+                                     const ObDataTypeCastParams &dtc_params)
+{
+  UNUSED(dtc_params);
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(geo_expr) || OB_ISNULL(query_range_ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr is null.", KP(geo_expr), K_(query_range_ctx));
+  } else {
+    bool cur_expr_is_precise = true;
+    ObKeyPartList key_part_list;
+    const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(geo_expr);
+    const ObRawExpr *l_expr = expr->get_param_expr(0);
+    const ObRawExpr *r_expr = expr->get_param_expr(1);
+    const ObConstRawExpr *extra_item = NULL;
+    const ObRawExpr *const_item = NULL;
+    const ObColumnRefRawExpr *column_item = NULL;
+    common::ObGeoRelationType op_type;
+    if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else if (l_expr->has_flag(IS_COLUMN) && r_expr->has_flag(IS_COLUMN)) {
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else if (l_expr->has_flag(IS_DYNAMIC_PARAM) && r_expr->has_flag(IS_DYNAMIC_PARAM)) {
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else {
+      op_type = get_geo_relation(expr->get_expr_type());
+      if (OB_UNLIKELY(r_expr->has_flag(IS_COLUMN))) {
+        column_item = static_cast<const ObColumnRefRawExpr *>(r_expr);
+        const_item = l_expr;
+      } else if (l_expr->has_flag(IS_COLUMN)) {
+        column_item = static_cast<const ObColumnRefRawExpr *>(l_expr);
+        const_item = r_expr;
+        op_type = (ObGeoRelationType::T_COVERS == op_type ? ObGeoRelationType::T_COVEREDBY :
+                  (ObGeoRelationType::T_COVEREDBY == op_type ? ObGeoRelationType::T_COVERS : op_type));
+      }
+      bool is_cellid_col = false;
+      uint64_t column_id = column_item->get_column_id();
+      ObGeoColumnInfo column_info;
+      if (OB_FAIL(columnId_map_.get_refactored(column_id, column_info))) {
+        if (OB_NOT_INIT == ret || OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get from columnId_map_", K(ret));
+        }
+      } else {
+        is_cellid_col = true;
+      }
+
+      if (OB_SUCC(ret)) {
+        if (const_item->cnt_param_expr()) {
+          query_range_ctx_->need_final_extact_ = true;
+        }
+        ObKeyPartId key_part_id(column_item->get_table_id(),
+                                is_cellid_col ? column_info.cellid_columnId_ : column_id);
+        ObKeyPartPos key_part_pos(allocator_);
+        bool b_is_key_part = false;
+        if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
+          LOG_WARN("is_key_part failed", K(ret));
+        } else if (!b_is_key_part) {
+          GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        } else if (OB_ISNULL((out_key_part = create_new_key_part()))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("alloc memory failed", K(ret));
+        } else {
+          contain_geo_filters_ = true;
+          out_key_part->id_ = key_part_id;
+          out_key_part->pos_ = key_part_pos;
+          if (op_type == ObGeoRelationType::T_DWITHIN) {
+            if (OB_FAIL(get_dwithin_item(expr, extra_item))) {
+              LOG_WARN("failed to get dwithin item", K(ret));
+            }
+          }
+
+          ObObj const_val;
+          bool is_valid = true;
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_FAIL(get_calculable_expr_val(const_item, const_val, is_valid))) {
+            LOG_WARN("failed to get calculable expr val", K(ret));
+          } else if (!is_valid) {
+            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+          } else if (OB_FAIL(out_key_part->create_geo_key())) {
+            LOG_WARN("create like geo part failed", K(ret));
+          } else if (extra_item != NULL &&
+                     OB_FAIL(get_calculable_expr_val(extra_item,
+                                                    out_key_part->geo_keypart_->distance_,
+                                                    is_valid))) {
+            LOG_WARN("failed to get calculable expr val", K(ret));
+          } else if (!is_valid) {
+            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+          } else {
+            if (const_item->cnt_param_expr()) {
+              ObObj val;
+              out_key_part->geo_keypart_->geo_type_ = op_type;
+              if (OB_FAIL(get_final_expr_val(const_item, out_key_part->geo_keypart_->wkb_))) {
+                LOG_WARN("failed to get final expr idx", K(ret));
+              } else if (extra_item != NULL &&
+                         OB_FAIL(get_final_expr_val(extra_item, out_key_part->geo_keypart_->distance_))) {
+                  LOG_WARN("failed to get final distance expr idx", K(ret));
+              }
+            } else {
+              if (OB_FAIL(get_geo_range(const_val, op_type, out_key_part))) {
+                LOG_WARN("create geo range failed", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 //  For each index, preliminary extract query range,
 //  the result may contain prepared '?' expression.
 //  If prepared '?' expression exists, final extract action is needed
@@ -2364,6 +2568,10 @@ int ObQueryRange::preliminary_extract(const ObRawExpr *node,
       }
     } else if (T_OP_AND == node->get_expr_type() || T_OP_OR == node->get_expr_type()) {
       if (OB_FAIL(pre_extract_and_or_op(b_expr, out_key_part, dtc_params))) {
+        LOG_WARN("extract and_or failed", K(ret));
+      }
+    } else if (node->is_spatial_expr()) {
+      if (OB_FAIL(pre_extract_geo_op(b_expr, out_key_part, dtc_params))) {
         LOG_WARN("extract and_or failed", K(ret));
       }
     } else {
@@ -3818,6 +4026,7 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
   } else {
 
     bool need_do_or = true;
+    bool need_geo_rebuild = false;
     ObKeyPart *find_false = NULL;
     ObKeyPart *find_true = NULL;
     ObKeyPartList or_list;
@@ -3831,6 +4040,9 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
       while (OB_SUCC(ret) && ranges.get_size() > 0) {
         cur = ranges.get_first();
         ranges.remove_first();
+        if (cur->is_geo_key()) {
+          need_geo_rebuild = true;
+        }
         if (NULL == cur) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("cur is null.", K(ret));
@@ -3896,10 +4108,22 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
         }
       } else if (OB_FAIL(SMART_CALL(or_single_head_graphs(or_list, exec_ctx, dtc_params)))) {
         LOG_WARN("Or single head graphs failed", K(ret));
-      } else if (OB_FAIL(link_or_graphs(or_list, out_key_part))) {
-        LOG_WARN("Or single head graphs failed", K(ret));
       } else {
-        // do nothing
+        bool has_geo_key = false;
+        ObKeyPart *cur = or_list.get_first();
+        for (int64_t i = 0; i < or_list.get_size(); i++) {
+          has_geo_key |= cur->is_geo_key();
+          cur = cur->get_next();
+        }
+        need_geo_rebuild &= !has_geo_key;
+        // if contain ObGeoKeyPart, need do or_range_graph for deduplication with different spatial filters
+        if (!need_geo_rebuild && OB_FAIL(link_or_graphs(or_list, out_key_part))) {
+          LOG_WARN("Or single head graphs failed", K(ret));
+        } else if (need_geo_rebuild && OB_FAIL(or_range_graph(or_list, exec_ctx, out_key_part, dtc_params))) {
+          LOG_WARN("Or single head graphs failed", K(ret));
+        } else {
+          // do nothing
+        }
       }
     }
   }
@@ -4983,7 +5207,7 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
   if (OB_ISNULL(root)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("root=null ", K(ret));
-  } else if (!root->is_like_key()) {
+  } else if (root->is_normal_key()) {
     if (root->normal_keypart_->start_.is_unknown()) {
       if (OB_FAIL(get_result_value_with_rowid(*root, root->normal_keypart_->start_, exec_ctx, is_inconsistent_rowid))) {
         LOG_WARN("get result value failed", K(ret));
@@ -5027,6 +5251,16 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
       root->normal_keypart_->end_.set_min_value();
       root->normal_keypart_->include_start_ = false;
       root->normal_keypart_->include_end_ = false;
+    }
+  } else if (root->is_geo_key()) {
+    if (OB_FAIL(get_result_value_with_rowid(*root, root->geo_keypart_->wkb_, exec_ctx, is_inconsistent_rowid))) {
+      LOG_WARN("get param wkb value failed", K(ret));
+    } else if (OB_FAIL(get_result_value_with_rowid(*root, root->geo_keypart_->distance_, exec_ctx, is_inconsistent_rowid))) {
+      LOG_WARN("get param distance value failed", K(ret));
+    } else if (OB_FAIL(get_geo_range(root->geo_keypart_->wkb_,
+                                     root->geo_keypart_->geo_type_,
+                                     root))) {
+      LOG_WARN("get geo range failed", K(ret));
     }
   } else {
     if (OB_FAIL(get_result_value_with_rowid(*root, root->like_keypart_->pattern_, exec_ctx, is_inconsistent_rowid))) {
@@ -5502,6 +5736,19 @@ int ObQueryRange::serialize_expr_final_info(char *buf, int64_t buf_len, int64_t 
   return ret;
 }
 
+int ObQueryRange::serialize_srid_map(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ColumnIdInfoMap::const_iterator iter = columnId_map_.begin();
+  while (OB_SUCC(ret) && iter != columnId_map_.end()) {
+    OB_UNIS_ENCODE(iter->first);
+    OB_UNIS_ENCODE(iter->second.srid_);
+    OB_UNIS_ENCODE(iter->second.cellid_columnId_);
+    iter++;
+  }
+  return ret;
+}
+
 int ObQueryRange::deserialize_expr_final_info(const char *buf, int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -5535,6 +5782,26 @@ int ObQueryRange::deserialize_expr_final_info(const char *buf, int64_t data_len,
   return ret;
 }
 
+int ObQueryRange::deserialize_srid_map(int64_t count, const char *buf, int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (!columnId_map_.created()
+      && OB_FAIL(columnId_map_.create(OB_DEFAULT_SRID_BUKER, &map_alloc_, &bucket_allocator_wrapper_))) {
+    LOG_WARN("Init columnId_map_ failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+    uint64_t columnID = 0;
+    ObGeoColumnInfo column_info;
+    OB_UNIS_DECODE(columnID);
+    OB_UNIS_DECODE(column_info.srid_);
+    OB_UNIS_DECODE(column_info.cellid_columnId_);
+    if (OB_FAIL(columnId_map_.set_refactored(columnID, column_info))) {
+      LOG_WARN("set srid map failed", K(ret), K(columnID));
+    }
+  }
+  return ret;
+}
+
 int64_t ObQueryRange::get_expr_final_info_serialize_size() const
 {
   int ret = OB_SUCCESS;
@@ -5547,6 +5814,19 @@ int64_t ObQueryRange::get_expr_final_info_serialize_size() const
     } else if (expr_final_infos_.at(i).expr_exists_) {
       OB_UNIS_ADD_LEN(*expr_final_infos_.at(i).temp_expr_);
     }
+  }
+  return len;
+}
+
+int64_t ObQueryRange::get_columnId_map_size() const
+{
+  int64_t len = 0;
+  ColumnIdInfoMap::const_iterator iter = columnId_map_.begin();
+  while (iter != columnId_map_.end()) {
+    OB_UNIS_ADD_LEN(iter->first);
+    OB_UNIS_ADD_LEN(iter->second.srid_);
+    OB_UNIS_ADD_LEN(iter->second.cellid_columnId_);
+    iter++;
   }
   return len;
 }
@@ -5570,7 +5850,8 @@ OB_DEF_SERIALIZE(ObQueryRange)
     OB_UNIS_ENCODE(table_graph_.is_equal_range_);
     OB_UNIS_ENCODE(table_graph_.is_standard_range_);
   }
-  //新增对contain_row_序列化，放到最后面
+
+  //新增对contain_row_序列化
   OB_UNIS_ENCODE(contain_row_);
   OB_UNIS_ENCODE(has_exec_param_);
   //新增 equal_query_range 序列化
@@ -5579,6 +5860,17 @@ OB_DEF_SERIALIZE(ObQueryRange)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(serialize_expr_final_info(buf, buf_len, pos))) {
       LOG_WARN("failed to serialize final exprs", K(ret));
+    }
+  }
+
+  //新增对geo谓词相关序列化
+  OB_UNIS_ENCODE(contain_geo_filters_);
+  OB_UNIS_ENCODE(mbr_filters_);
+  int64_t map_count = columnId_map_.size();
+  OB_UNIS_ENCODE(map_count);
+  if (map_count > 0) {
+    if (OB_FAIL(serialize_srid_map(buf, buf_len, pos))) {
+      LOG_WARN("serialize srid map failed", K(ret));
     }
   }
   return ret;
@@ -5598,13 +5890,23 @@ OB_DEF_SERIALIZE_SIZE(ObQueryRange)
     OB_UNIS_ADD_LEN(table_graph_.is_equal_range_);
     OB_UNIS_ADD_LEN(table_graph_.is_standard_range_);
   }
-  //新增对contain_row_序列化，放到最后面
+
+  //新增对contain_row_序列化
   OB_UNIS_ADD_LEN(contain_row_);
   OB_UNIS_ADD_LEN(has_exec_param_);
   //新增 equal_query_range 序列化
   OB_UNIS_ADD_LEN(is_equal_and_);
   OB_UNIS_ADD_LEN(equal_offs_);
   len += get_expr_final_info_serialize_size();
+
+  //新增对geo谓词相关序列化
+  OB_UNIS_ADD_LEN(contain_geo_filters_);
+  OB_UNIS_ADD_LEN(mbr_filters_);
+  int64_t map_count = columnId_map_.size();
+  OB_UNIS_ADD_LEN(map_count);
+  if (map_count > 0) {
+    len += get_columnId_map_size();
+  }
   return len;
 }
 
@@ -5613,6 +5915,7 @@ OB_DEF_DESERIALIZE(ObQueryRange)
   int ret = OB_SUCCESS;
   int64_t state = 0;
   int64_t graph_count = 0;
+  int64_t map_count = 0;
 
   OB_UNIS_DECODE(state);
   OB_UNIS_DECODE(column_count_);
@@ -5636,6 +5939,14 @@ OB_DEF_DESERIALIZE(ObQueryRange)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(deserialize_expr_final_info(buf, data_len, pos))) {
       LOG_WARN("failed to deserialize final exprs", K(ret));
+    }
+  }
+  OB_UNIS_DECODE(contain_geo_filters_);
+  OB_UNIS_DECODE(mbr_filters_);
+  OB_UNIS_DECODE(map_count);
+  if (map_count > 0) {
+    if (OB_FAIL(deserialize_srid_map(map_count, buf, data_len, pos))) {
+      LOG_WARN("deserialize range graph failed", K(ret));
     }
   }
   return ret;
@@ -5745,8 +6056,10 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
   state_ = other.state_;
   contain_row_ = other.contain_row_;
   column_count_ = other.column_count_;
+  contain_geo_filters_ = other.contain_geo_filters_;
   has_exec_param_ = other.has_exec_param_;
   is_equal_and_ = other.is_equal_and_;
+
   if (OB_FAIL(range_exprs_.assign(other.range_exprs_))) {
     LOG_WARN("assign range exprs failed", K(ret));
   } else if (OB_FAIL(table_graph_.assign(other_graph))) {
@@ -5764,6 +6077,27 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
   } else {
     if (OB_FAIL(deep_copy_expr_final_info(other.expr_final_infos_))) {
       LOG_WARN("Deep copy expr final info failed", K(ret));
+    }
+  }
+
+  const ColumnIdInfoMap& input_srid = other.get_columnId_map();
+  ColumnIdInfoMap::const_iterator iter = input_srid.begin();
+  if (!columnId_map_.created()) {
+    if (OB_FAIL(columnId_map_.create(OB_DEFAULT_SRID_BUKER, &map_alloc_, &bucket_allocator_wrapper_))) {
+      LOG_WARN("Init columnId_map_ failed", K(ret));
+    }
+  } else if (OB_FAIL(columnId_map_.reuse())) {
+    LOG_WARN("reuse columnId_map_ failed", K(ret));
+  }
+  while (OB_SUCC(ret) && iter != input_srid.end()) {
+    if (OB_FAIL(columnId_map_.set_refactored(iter->first, iter->second))) {
+      LOG_WARN("set srid map failed", K(ret), K(iter->first));
+    }
+    iter++;
+  }
+  FOREACH_X(it, other.mbr_filters_, OB_SUCC(ret) && it != other.mbr_filters_.end()) {
+    if (OB_FAIL(mbr_filters_.push_back(*it))) {
+      LOG_WARN("store mbr_filters_ failed", K(ret));
     }
   }
   return ret;
@@ -5889,13 +6223,13 @@ inline bool ObQueryRange::is_standard_graph(const ObKeyPart *root) const
     bret = false;
   } else {
     for (const ObKeyPart *cur = root; bret && NULL != cur; cur = cur->and_next_) {
-      if (NULL != cur->or_next_ || cur->is_like_key()) {
+      if (NULL != cur->or_next_ || cur->is_like_key() || cur->is_geo_key()) {
         bret = false;
       } else {
         for (const ObKeyPart *item_next = cur->item_next_;
              bret && NULL != item_next;
              item_next = item_next->item_next_) {
-          if (item_next->is_like_key()) {
+          if (item_next->is_like_key() || cur->is_geo_key()) {
             bret = false;
           }
         }
@@ -6359,6 +6693,422 @@ DEF_TO_STRING(ObQueryRange::ObRangeExprItem)
   J_KV(K_(cur_expr), K_(cur_pos));
   J_OBJ_END();
   return pos;
+}
+
+common::ObGeoRelationType ObQueryRange::get_geo_relation(ObItemType type) const
+{
+  common::ObGeoRelationType rel_type = common::ObGeoRelationType::T_INVALID;
+  switch (type) {
+    case T_FUN_SYS_ST_INTERSECTS : {
+      rel_type = common::ObGeoRelationType::T_INTERSECTS;
+      break;
+    }
+    case T_FUN_SYS_ST_CONTAINS :
+    case T_FUN_SYS_ST_COVERS : {
+      rel_type = common::ObGeoRelationType::T_COVERS;
+      break;
+    }
+    case T_FUN_SYS_ST_DWITHIN : {
+      rel_type = common::ObGeoRelationType::T_DWITHIN;
+      break;
+    }
+    case T_FUN_SYS_ST_WITHIN : {
+      rel_type = common::ObGeoRelationType::T_COVEREDBY;
+      break;
+    }
+    default:
+      break;
+  }
+  return rel_type;
+}
+
+int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
+                                             const common::ObString &wkb_str,
+                                             const common::ObGeoRelationType op_type,
+                                             ObKeyPart *out_key_part)
+{
+  INIT_SUCC(ret);
+  common::ObArenaAllocator tmp_alloc;
+  ObS2Cellids cells;
+  ObS2Cellids cells_with_ancestors;
+  ObSpatialMBR mbr_filter(op_type);
+  ObGeoType geo_type = ObGeoType::GEOMETRY;
+  const ObSrsItem *srs_item = NULL;
+  omt::ObSrsCacheGuard srs_guard;
+  const ObSrsBoundsItem *srs_bound = NULL;
+  ObS2Adapter *s2object = NULL;
+  ObString buffer_geo;
+  double distance = NAN;
+
+  // todo : fix me, get effective tenant_id
+  if ((input_srid != 0) && OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(lib::current_resource_owner_id(), srs_guard))) {
+    LOG_WARN("get tenant srs guard failed", K(lib::current_resource_owner_id()), K(input_srid), K(ret));
+  } else if ((input_srid != 0) && OB_FAIL(srs_guard.get_srs_item(input_srid, srs_item))) {
+    LOG_WARN("get tenant srs failed", K(input_srid), K(ret));
+  } else if (((input_srid == 0) || !(srs_item->is_geographical_srs())) &&
+             OB_FAIL(OTSRS_MGR.get_srs_bounds(input_srid, srs_item, srs_bound))) {
+    LOG_WARN("failed to get srs item", K(ret));
+  } else if (op_type == ObGeoRelationType::T_DWITHIN) {
+    distance = out_key_part->geo_keypart_->distance_.get_double();
+    if (out_key_part->geo_keypart_->distance_.is_unknown() || std::isnan(distance)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid distance para", K(ret));
+    } else if (input_srid != 0 && srs_item->is_geographical_srs()) {
+      double sphere_radius = (srs_item->semi_major_axis() * 2 + srs_item->semi_minor_axis()) /  3;
+      const double SPHERIOD_ERR_FRACTION = 0.005;
+      double radius = ((1.0 + SPHERIOD_ERR_FRACTION) * distance) / sphere_radius;
+      s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), true, radius);
+      if (OB_ISNULL(s2object)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc s2 object", K(ret));
+      }
+    } else {
+      if (OB_FAIL(ObGeoTypeUtil::get_buffered_geo(&tmp_alloc, wkb_str, distance, srs_item, buffer_geo))) {
+        LOG_WARN("failed to get buffer geo", K(ret));
+        if (ret == OB_INVALID_ARGUMENT) {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_ST_BUFFER);
+        } else if (ret == OB_ERR_GIS_INVALID_DATA) {
+          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_BUFFER);
+        }
+      }
+    }
+  }
+  if (s2object == NULL && OB_SUCC(ret)) {
+    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false));
+    if (OB_ISNULL(s2object)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc s2 object", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // build s2 object from wkb
+    if (OB_FAIL(ObGeoTypeUtil::get_type_from_wkb((buffer_geo.empty() ? wkb_str : buffer_geo), geo_type))) {
+      LOG_WARN("fail to get geo type by wkb", K(ret));
+    } else if (OB_FAIL(s2object->init((buffer_geo.empty() ? wkb_str : buffer_geo), srs_bound))) {
+      LOG_WARN("Init s2object failed", K(ret));
+    } else if (OB_FAIL(s2object->get_cellids(cells, false))) {
+      LOG_WARN("Get cellids from s2object failed", K(ret));
+    } else if (OB_FAIL(s2object->get_cellids(cells_with_ancestors, true))) {
+      LOG_WARN("Get cellids with ancestors from s2object failed", K(ret));
+    } else if (OB_FAIL(s2object->get_mbr(mbr_filter))) {
+      LOG_WARN("Get mbr from s2object failed", K(ret));
+    } else if (OB_FAIL(mbr_filters_.push_back(mbr_filter))) {
+      LOG_WARN("Push back to mbr_filters array failed", K(ret));
+    } else if (mbr_filter.is_empty()) {
+      if (cells.size() == 0) {
+        LOG_INFO("it's might be empty geometry collection", K(wkb_str));
+        if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
+          LOG_WARN("set keypart whole range failed", K(ret));
+        }
+      } else {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        LOG_WARN("invalid geometry", K(ret), K(wkb_str));
+      }
+    } else {
+      if (NULL != query_range_ctx_) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+      }
+      ObKeyPart *last = out_key_part;
+      // build keypart from cells_with_ancestors
+      for (uint64_t i = 0; OB_SUCC(ret) && i < cells_with_ancestors.size(); i++) {
+        ObObj val;
+        val.set_uint64(cells_with_ancestors[i]);
+        if (i == 0) {
+          if (OB_FAIL(get_geo_single_keypart(val, val, *out_key_part))) {
+            LOG_WARN("get normal cmp keypart failed", K(ret));
+          }
+        } else {
+          ObKeyPart *tmp = NULL;
+          if (OB_ISNULL((tmp = create_new_key_part()))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("alloc memory failed", K(ret));
+          } else {
+            tmp->id_ = out_key_part->id_;
+            tmp->pos_ = out_key_part->pos_;
+            if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
+              LOG_WARN("get normal cmp keypart failed", K(ret));
+            } else {
+              last->or_next_ = tmp;
+              last = tmp;
+            }
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && (geo_type != ObGeoType::POINT || !std::isnan(distance))) {
+        // build keypart to index child_of_cellid
+        for (uint64_t i = 0; OB_SUCC(ret) && i < cells.size(); i++) {
+          uint64_t cellid = cells.at(i);
+          uint64_t start_id = 0;
+          uint64_t end_id = 0;
+          ObS2Adapter::get_child_of_cellid(cellid, start_id, end_id);
+          ObKeyPart *tmp = NULL;
+          if (OB_ISNULL((tmp = create_new_key_part()))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("alloc memory failed", K(ret));
+          } else {
+            tmp->id_ = out_key_part->id_;
+            tmp->pos_ = out_key_part->pos_;
+            ObObj val_start, val_end;
+            val_start.set_uint64(start_id);
+            val_end.set_uint64(end_id);
+            if (OB_FAIL(get_geo_single_keypart(val_start, val_end, *tmp))) {
+              LOG_WARN("get normal cmp keypart failed", K(ret));
+            } else {
+              last->or_next_ = tmp;
+              last = tmp;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
+                                            const common::ObString &wkb_str,
+                                            const common::ObGeoRelationType op_type,
+                                            ObKeyPart *out_key_part)
+{
+  INIT_SUCC(ret);
+  common::ObArenaAllocator tmp_alloc;
+  ObS2Cellids cells;
+  ObSpatialMBR mbr_filter(op_type);
+  const ObSrsItem *srs_item = NULL;
+  omt::ObSrsCacheGuard srs_guard;
+  const ObSrsBoundsItem *srs_bound = NULL;
+  ObS2Adapter *s2object = NULL;
+  ObExecContext *exec_ctx = NULL;
+  ObString buffer_geo;
+
+  if ((input_srid != 0) && OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(lib::current_resource_owner_id(), srs_guard))) {
+    LOG_WARN("get tenant srs guard failed", K(lib::current_resource_owner_id()), K(input_srid), K(ret));
+  } else if ((input_srid != 0) && OB_FAIL(srs_guard.get_srs_item(input_srid, srs_item))) {
+    LOG_WARN("get tenant srs failed", K(input_srid), K(ret));
+  } else if (((input_srid == 0) || !(srs_item->is_geographical_srs())) &&
+             OB_FAIL(OTSRS_MGR.get_srs_bounds(input_srid, srs_item, srs_bound))) {
+    LOG_WARN("failed to get srs item", K(ret));
+  }
+  if (s2object == NULL && OB_SUCC(ret)) {
+    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false));
+    if (OB_ISNULL(s2object)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc s2 object", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // build s2 object from wkb
+    if (OB_FAIL(s2object->init((buffer_geo.empty() ? wkb_str : buffer_geo), srs_bound))) {
+      LOG_WARN("Init s2object failed", K(ret));
+    } else if (OB_FAIL(s2object->get_inner_cover_cellids(cells))) {
+      LOG_WARN("Get cellids from s2object failed", K(ret));
+    } else if (OB_FAIL(s2object->get_mbr(mbr_filter))) {
+      LOG_WARN("Get mbr from s2object failed", K(ret));
+    } else if (OB_FAIL(mbr_filters_.push_back(mbr_filter))) {
+      LOG_WARN("Push back to mbr_filters array failed", K(ret));
+    } else if (mbr_filter.is_empty()) {
+      if (cells.size() == 0) {
+        LOG_INFO("it's might be empty geometry collection", K(wkb_str));
+        if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
+          LOG_WARN("set keypart whole range failed", K(ret));
+        }
+      } else {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        LOG_WARN("invalid geometry", K(ret), K(wkb_str));
+      }
+    } else {
+      if (NULL != query_range_ctx_) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+        exec_ctx = query_range_ctx_->exec_ctx_;
+      }
+      ObKeyPartList and_ranges;
+      for (uint64_t i = 0; OB_SUCC(ret) && i < cells.size(); i++) {
+        ObKeyPart *head = NULL;
+        ObKeyPart *last = NULL;
+        if (OB_ISNULL((head = create_new_key_part()))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("alloc memory failed", K(ret));
+        } else {
+          ObObj val;
+          val.set_uint64(cells[i]);
+          head->id_ = out_key_part->id_;
+          head->pos_ = out_key_part->pos_;
+          if (OB_FAIL(get_geo_single_keypart(val, val, *head))) {
+            LOG_WARN("get normal cmp keypart failed", K(ret));
+          } else {
+            last = head;
+          }
+        }
+        ObS2Cellids ancestors;
+        if (OB_FAIL(s2object->get_ancestors(cells[i], ancestors))) {
+          LOG_WARN("Get ancestors of cell failed", K(ret));
+        }
+        for (uint64_t i = 0; OB_SUCC(ret) && i < ancestors.size(); i++) {
+          ObKeyPart *tmp = NULL;
+          if (OB_ISNULL((tmp = create_new_key_part()))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("alloc memory failed", K(ret));
+          } else {
+            ObObj val;
+            val.set_uint64(ancestors[i]);
+            tmp->id_ = out_key_part->id_;
+            tmp->pos_ = out_key_part->pos_;
+            if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
+              LOG_WARN("get normal cmp keypart failed", K(ret));
+            } else {
+              last->or_next_ = tmp;
+              last = tmp;
+            }
+          }
+        }
+        if (!and_ranges.add_last(head)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Add key part range failed", K(ret));
+        }
+      }
+
+      void *ptr = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObQueryRangeCtx)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("alloc query range context failed");
+      } else {
+        query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, NULL, NULL);
+      }
+      ObKeyPart *temp_result = NULL;
+      ObS2Cellids cells_cover_geo;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(and_range_graph(and_ranges, temp_result))) {
+        LOG_WARN("And query range failed", K(ret));
+      } else if (NULL == temp_result) {
+        // no range left
+      } else if (OB_FAIL(refine_large_range_graph(temp_result))) {
+        LOG_WARN("failed to refine large range graph", K(ret));
+      } else if (OB_FAIL(remove_useless_range_graph(temp_result))) {
+        LOG_WARN("failed to remove useless range", K(ret));
+      } else if (OB_FAIL(s2object->get_cellids(cells_cover_geo, false))) {
+          LOG_WARN("Get cellids from s2object failed", K(ret));
+      } else {
+        // get the last node
+        ObKeyPart *cur = temp_result;
+        ObKeyPart *last = NULL;
+        while (OB_NOT_NULL(cur)) {
+          last = cur;
+          cur = cur->or_next_;
+        }
+        for (uint64_t i = 0; OB_SUCC(ret) && i < cells_cover_geo.size(); i++) {
+          ObKeyPart *tmp = NULL;
+          if (OB_ISNULL((tmp = create_new_key_part()))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("alloc memory failed", K(ret));
+          } else {
+            ObObj val;
+            val.set_uint64(cells_cover_geo[i]);
+            tmp->id_ = out_key_part->id_;
+            tmp->pos_ = out_key_part->pos_;
+            if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
+              LOG_WARN("get normal cmp keypart failed", K(ret));
+            } else {
+              last->or_next_ = tmp;
+              last = tmp;
+            }
+          }
+        }
+        // copy temp_result to out_key_part
+        if (OB_FAIL(out_key_part->create_normal_key())) {
+          LOG_WARN("create normal key failed", K(ret));
+        } else if (OB_ISNULL(out_key_part->normal_keypart_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("normal keypart is null");
+        } else {
+          out_key_part->null_safe_ = temp_result->null_safe_;
+          out_key_part->normal_keypart_->include_start_ = true;
+          out_key_part->normal_keypart_->include_end_ = true;
+          out_key_part->normal_keypart_->start_ = temp_result->normal_keypart_->start_;
+          out_key_part->normal_keypart_->end_ = temp_result->normal_keypart_->end_;
+          out_key_part->normal_keypart_->always_false_ = false;
+          out_key_part->normal_keypart_->always_true_ = false;
+          out_key_part->item_next_ = temp_result->item_next_;
+          out_key_part->or_next_ = temp_result->or_next_;
+          out_key_part->and_next_ = temp_result->and_next_;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObGeoRelationType op_type,
+                                ObKeyPart *out_key_part)
+{
+  INIT_SUCC(ret);
+  ObString wkb_str(wkb.get_string());
+  if (OB_ISNULL(wkb_str.ptr()) || wkb.is_unknown()) {
+    // if this spatial relation function is pushdown filter of nl, wkb_str ptr is not null.
+    // set whole range when can not get wkb
+    if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
+      LOG_WARN("set keypart whole range failed", K(ret));
+    }
+  } else {
+    // check srid
+    uint64_t columnid = out_key_part->id_.column_id_;
+    ObGeoColumnInfo column_info;
+    uint32_t input_srid;
+    if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, input_srid))) {
+      LOG_WARN("failed to get srid", K(ret), K(wkb_str));
+    } else if (OB_FAIL(columnId_map_.get_refactored(columnid, column_info))) {
+      LOG_WARN("failed to get from columnId_map_", K(ret));
+    } else if (OB_FAIL(ObSqlGeoUtils::check_srid(column_info.srid_, input_srid))) {
+      ret = OB_ERR_WRONG_SRID_FOR_COLUMN;
+      LOG_USER_ERROR(OB_ERR_WRONG_SRID_FOR_COLUMN, static_cast<uint64_t>(input_srid),
+        static_cast<uint64_t>(column_info.srid_));
+    } else {
+      switch (op_type) {
+        case ObGeoRelationType::T_INTERSECTS:
+        case ObGeoRelationType::T_COVERS:
+        case ObGeoRelationType::T_DWITHIN:
+          if (OB_FAIL(get_geo_intersects_keypart(input_srid, wkb_str, op_type, out_key_part))) {
+            LOG_WARN("failed to get keypart from intersects_keypart", K(ret), K(op_type));
+          }
+          break;
+        case ObGeoRelationType::T_COVEREDBY:
+          if (OB_FAIL(get_geo_coveredby_keypart(input_srid, wkb_str, op_type, out_key_part))) {
+            LOG_WARN("failed to get keypart from intersects_keypart", K(ret), K(op_type));
+          }
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Not support op_type", K(ret), K(op_type));
+          break;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObQueryRange::init_columnId_map()
+{
+  INIT_SUCC(ret);
+  if (!columnId_map_.created()
+      && OB_FAIL(columnId_map_.create(OB_DEFAULT_SRID_BUKER, &map_alloc_, &bucket_allocator_wrapper_))) {
+    LOG_WARN("Init column_info_map failed", K(ret));
+  }
+  return ret;
+}
+
+int ObQueryRange::set_columnId_map(uint64_t columnId, const ObGeoColumnInfo &column_info)
+{
+  INIT_SUCC(ret);
+  if (OB_FAIL(columnId_map_.set_refactored(columnId, column_info))) {
+    LOG_WARN("set columnId map failed", K(ret), K(columnId));
+  }
+  return ret;
 }
 
 }  // namespace sql

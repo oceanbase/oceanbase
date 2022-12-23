@@ -266,6 +266,8 @@ public:
   // convert right table scan parameter of join MV scan.
   // (right table index back not supported)
   inline uint64_t get_table_id() const { return table_id_; }
+  inline int64_t is_spatial_index() const { return is_spatial_index_; }
+  inline void set_is_spatial_index(bool is_spatial_index) { is_spatial_index_ = is_spatial_index; }
   inline bool use_lob_locator() const { return use_lob_locator_; }
   inline bool has_virtual_column() const { return has_virtual_column_; }
   inline int64_t get_rowid_version() const { return rowid_version_; }
@@ -337,6 +339,7 @@ private:
   bool use_lob_locator_;
   int64_t rowid_version_;
   Projector rowid_projector_;
+  bool is_spatial_index_;
 };
 } //namespace schema
 } //namespace share

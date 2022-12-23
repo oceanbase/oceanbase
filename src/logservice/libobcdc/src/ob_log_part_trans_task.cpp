@@ -556,6 +556,11 @@ int MutatorRow::add_column_(
           "old_obj_len", value->get_string_len(),
           "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
           "new_obj_len", cv_node->value_.get_string_len());
+    } else if (value->is_geometry() && value->get_string_len() > 2 * _M_) { // geometry may exceed 2M
+      LOG_DEBUG("column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
+          "old_obj_len", value->get_string_len(),
+          "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
+          "new_obj_len", cv_node->value_.get_string_len());
     } else {
       LOG_DEBUG("column_cast: ", "old_obj", *value, "new_obj",
           cv_node->value_);

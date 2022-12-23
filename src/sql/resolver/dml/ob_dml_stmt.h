@@ -327,7 +327,8 @@ struct ColumnItem
        auto_filled_timestamp_(false),
        default_value_expr_(NULL),
        base_tid_(common::OB_INVALID_ID),
-       base_cid_(common::OB_INVALID_ID)
+       base_cid_(common::OB_INVALID_ID),
+       is_geo_(false)
   {}
   bool is_invalid() const { return NULL == expr_; }
   const ObColumnRefRawExpr *get_expr() const { return expr_; }
@@ -356,6 +357,7 @@ struct ColumnItem
     default_value_expr_ = NULL;
     base_tid_ = common::OB_INVALID_ID;
     base_cid_ = common::OB_INVALID_ID;
+    is_geo_ = false;
   }
   void set_ref_id(uint64_t table_id, uint64_t column_id)
   {
@@ -391,6 +393,7 @@ struct ColumnItem
   // base table id and column id
   uint64_t base_tid_;
   uint64_t base_cid_;
+  bool is_geo_;
 };
 
 inline uint64_t ColumnItem::hash(uint64_t seed) const
@@ -399,6 +402,7 @@ inline uint64_t ColumnItem::hash(uint64_t seed) const
   seed = common::do_hash(column_name_, seed);
   seed = common::do_hash(table_id_, seed);
   seed = common::do_hash(*expr_, seed);
+  seed = common::do_hash(is_geo_, seed);
 
   return seed;
 }

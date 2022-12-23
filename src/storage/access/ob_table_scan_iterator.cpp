@@ -568,5 +568,6 @@ int ObTableScanIterator::check_txn_status_if_read_uncommitted_()
   }
   return ret;
 }
+
 } // namespace storage
 } // namespace oceanbase

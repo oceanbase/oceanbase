@@ -171,12 +171,13 @@ public:
    */
 	int get_can_read_index_array(
       const uint64_t tenant_id,
-			const uint64_t table_id,
-			uint64_t *index_tid_array,
-			int64_t &size,
-			bool with_mv,
-			bool with_global_index = true,
-      bool with_domain_index = true);
+      const uint64_t table_id,
+      uint64_t *index_tid_array,
+      int64_t &size,
+      bool with_mv,
+      bool with_global_index = true,
+      bool with_domain_index = true,
+      bool with_spatial_index = true);
   int check_has_local_unique_index(
       const uint64_t tenant_id,
       const uint64_t table_id,

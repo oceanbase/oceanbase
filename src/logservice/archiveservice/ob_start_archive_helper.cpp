@@ -218,7 +218,7 @@ int StartArchiveHelper::get_local_base_lsn_(palf::LSN &lsn, bool &log_gap)
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_START_ARCHIVE_LOG_GAP) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_START_ARCHIVE_LOG_GAP) OB_SUCCESS;
   }
   if (OB_FAIL(ret)) {
     log_gap = true;

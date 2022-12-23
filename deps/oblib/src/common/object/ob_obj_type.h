@@ -88,6 +88,7 @@ enum ObObjType
   ObURowIDType        = 45, // UROWID
   ObLobType           = 46, // Oracle Lob
   ObJsonType          = 47, // Json Type
+  ObGeometryType      = 48, // Geometry type
   ObMaxType                 // invalid type, or count of obj type
 };
 
@@ -119,6 +120,19 @@ enum ObObjOType
   ObOURowIDType       = 22,
   ObOLobLocatorType   = 23,
   ObOMaxType          //invalid type, or count of ObObjOType
+};
+
+enum class ObGeoType
+{
+  GEOMETRY = 0,
+  POINT = 1,
+  LINESTRING = 2,
+  POLYGON = 3,
+  MULTIPOINT = 4,
+  MULTILINESTRING = 5,
+  MULTIPOLYGON = 6,
+  GEOMETRYCOLLECTION = 7,
+  GEOTYPEMAX = 31, // 5 bit for geometry type in column schema,set max 31
 };
 
 //for cast/cmp map
@@ -206,6 +220,7 @@ enum ObObjTypeClass
   ObRowIDTC         = 20, // oracle rowid typeclass, includes urowid and rowid
   ObLobTC           = 21, //oracle lob typeclass
   ObJsonTC          = 22, // json type class 
+  ObGeometryTC      = 23, // geometry type class
   ObMaxTC,
   // invalid type classes are below, only used as the result of XXXX_type_promotion()
   // to indicate that the two obj can't be promoted to the same type.
@@ -264,7 +279,8 @@ enum ObObjTypeClass
 		(ObNCharType, ObStringTC),                 \
     (ObURowIDType, ObRowIDTC),                 \
     (ObLobType, ObLobTC),                      \
-    (ObJsonType, ObJsonTC)
+    (ObJsonType, ObJsonTC),                    \
+    (ObGeometryType, ObGeometryTC)
 
 #define SELECT_SECOND(x, y) y
 #define SELECT_TC(arg) SELECT_SECOND arg
@@ -302,6 +318,7 @@ const ObObjType OBJ_DEFAULT_TYPE[ObActualMaxTC] =
   ObMaxType,        // no default type for rowid type class
   ObLobType,        // lob
   ObJsonType,       // json
+  ObGeometryType,   // geometry
   ObMaxType,        // maxtype
   ObUInt64Type,     // int&uint
   ObMaxType,        // lefttype
@@ -1041,7 +1058,7 @@ OB_INLINE bool ob_is_castable_type_class(ObObjTypeClass tc)
   return (ObIntTC <= tc && tc <= ObStringTC) || ObLeftTypeTC == tc || ObRightTypeTC == tc
       || ObBitTC == tc || ObEnumSetTC == tc || ObEnumSetInnerTC == tc || ObTextTC == tc
       || ObOTimestampTC == tc || ObRawTC == tc || ObIntervalTC == tc
-      || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc;
+      || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc || ObGeometryTC == tc;
 }
 
 //used for arithmetic
@@ -1055,16 +1072,30 @@ const char *ob_obj_type_str(ObObjType type);
 const char *ob_sql_type_str(ObObjType type);
 
 //such as "double(10,7)". with accuracy
-int ob_sql_type_str(char *buff, int64_t buff_length, int64_t &pos, ObObjType type, int64_t length, int64_t precision, int64_t scale, ObCollationType coll_type);
+int ob_sql_type_str(char *buff,
+                    int64_t buff_length,
+                    int64_t &pos,
+                    ObObjType type,
+                    int64_t length,
+                    int64_t precision,
+                    int64_t scale,
+                    ObCollationType coll_type,
+                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
+
 int ob_sql_type_str(const common::ObObjMeta &obj_meta,
                     const common::ObAccuracy &accuracy,
                     const common::ObIArray<ObString> &type_info,
                     const int16_t default_length_semantics,
-                    char *buff, int64_t buff_length, int64_t &pos);
+                    char *buff, int64_t buff_length, int64_t &pos,
+                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
 
 
 //such as "double". without any accuracy.
-int ob_sql_type_str(char *buff, int64_t buff_length, ObObjType type, ObCollationType coll_type);
+int ob_sql_type_str(char *buff,
+                    int64_t buff_length,
+                    ObObjType type,
+                    ObCollationType coll_type,
+                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
 
 // print obj type class string
 const char *ob_obj_tc_str(ObObjTypeClass tc);
@@ -1101,6 +1132,7 @@ inline bool ob_is_raw_tc(ObObjType type) { return ObRawTC == ob_obj_type_class(t
 inline bool ob_is_interval_tc(ObObjType type) { return ObIntervalTC == ob_obj_type_class(type); }
 inline bool ob_is_lob_tc(ObObjType type) { return ObLobTC == ob_obj_type_class(type); }
 inline bool ob_is_json_tc(ObObjType type) { return ObJsonTC == ob_obj_type_class(type); }
+inline bool ob_is_geometry_tc(ObObjType type) { return ObGeometryTC == ob_obj_type_class(type); }
 
 inline bool is_lob(ObObjType type) { return ob_is_text_tc(type); }
 inline bool is_lob_locator(ObObjType type) { return ObLobType == type; }
@@ -1235,7 +1267,8 @@ inline bool ob_is_accuracy_length_valid_tc(ObObjType type) { return ob_is_string
                                                              ob_is_enumset_tc(type) ||
                                                              ob_is_rowid_tc(type) ||
                                                              ob_is_lob_tc(type) ||
-                                                             ob_is_json_tc(type); }
+                                                             ob_is_json_tc(type) ||
+                                                             ob_is_geometry_tc(type); }
 inline bool ob_is_string_or_enumset_tc(ObObjType type) { return ObStringTC == ob_obj_type_class(type) || ob_is_enumset_tc(type); }
 inline bool ob_is_large_text(ObObjType type) { return ObTextType <= type && ObLongTextType >= type; }
 inline bool ob_is_datetime(const ObObjType type) { return ObDateTimeType == type; }
@@ -1256,7 +1289,9 @@ inline bool ob_is_var_len_type(const ObObjType type) {
       || ob_is_rowid_tc(type)
       || ob_is_lob_locator(type);
 }
-inline bool is_lob_v2(ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type); }
+inline bool is_lob_v2(ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type) || ob_is_geometry_tc(type); }
+inline bool ob_is_geometry(const ObObjType type) { return ObGeometryType == type; }
+inline bool ob_is_lob_group(const ObObjType type) { return ob_is_json(type) || ob_is_geometry(type) || ob_is_large_text(type); }
 
 // to_string adapter
 template<>

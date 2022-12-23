@@ -376,6 +376,42 @@ int ObRelativeTable::get_fulltext_column(uint64_t &column_id) const
   return ret;
 }
 
+int ObRelativeTable::get_spatial_geo_col_id(uint64_t &column_id) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("relative table is invalid", K(ret), K(*this));
+  } else {
+    column_id = schema_param_->get_spatial_geo_col_id();
+  }
+  return ret;
+}
+
+int ObRelativeTable::get_spatial_cellid_col_id(uint64_t &column_id) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("relative table is invalid", K(ret), K(*this));
+  } else {
+    column_id = schema_param_->get_spatial_cellid_col_id();
+  }
+  return ret;
+}
+
+int ObRelativeTable::get_spatial_mbr_col_id(uint64_t &column_id) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("relative table is invalid", K(ret), K(*this));
+  } else {
+    column_id = schema_param_->get_spatial_mbr_col_id();
+  }
+  return ret;
+}
+
 int ObRelativeTable::get_index_name(ObString &index_name) const
 {
   int ret = OB_SUCCESS;
@@ -430,6 +466,11 @@ bool ObRelativeTable::is_domain_index() const
 bool ObRelativeTable::is_lob_meta_table() const
 {
   return schema_param_->is_lob_meta_table();
+}
+
+bool ObRelativeTable::is_spatial_index() const
+{
+  return schema_param_->is_spatial_index();
 }
 
 int ObRelativeTable::check_rowkey_in_column_ids(

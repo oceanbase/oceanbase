@@ -14,13 +14,16 @@
 #define OCEANBASE_SQL_REWRITE_QUERY_RANGE_
 
 #include "lib/allocator/ob_allocator.h"
+#include "lib/allocator/ob_pooled_allocator.h"
 #include "lib/list/ob_list.h"
 #include "lib/list/ob_obj_store.h"
+#include "lib/hash/ob_hashmap.h"
 #include "lib/container/ob_fixed_array.h"
 #include "lib/hash/ob_placement_hashmap.h"
 #include "lib/timezone/ob_timezone_info.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
+#include "lib/geo/ob_s2adapter.h"
 #include "sql/rewrite/ob_query_range_provider.h"
 #include "sql/rewrite/ob_key_part.h"
 #include "sql/resolver/ob_schema_checker.h"
@@ -38,11 +41,24 @@ class ObRawExpr;
 class ObConstRawExpr;
 class ObOpRawExpr;
 class ObColumnRefRawExpr;
+struct ObGeoColumnInfo
+{
+  uint32_t srid_;
+  uint64_t cellid_columnId_;
+};
+
 typedef common::ObDList<ObKeyPart> ObKeyPartList;
 typedef common::ParamStore ParamsIArray;
 typedef common::ObIArray<ObExprConstraint> ExprConstrantArray;
 typedef common::ObIArray<ObRawExpr *> ExprIArray;
 typedef common::ObIArray<ColumnItem> ColumnIArray;
+typedef common::ObPooledAllocator<common::hash::HashMapTypes<uint64_t, ObGeoColumnInfo>::AllocType,
+                                  common::ObWrapperAllocator> ColumnIdInfoMapAllocer;
+typedef hash::ObHashMap<uint64_t, ObGeoColumnInfo, common::hash::LatchReadWriteDefendMode,
+  common::hash::hash_func<uint64_t>, common::hash::equal_to<uint64_t>, ColumnIdInfoMapAllocer,
+  common::hash::NormalPointer, common::ObWrapperAllocator> ColumnIdInfoMap;
+typedef common::ObList<common::ObSpatialMBR, common::ObIAllocator> MbrFilterArray;
+static const uint32_t OB_DEFAULT_SRID_BUKER = 4;
 
 class ObQueryRange : public ObQueryRangeProvider
 {
@@ -88,6 +104,15 @@ private:
     {
       key_part_map_.reset();
       need_final_extact_ = false;
+    }
+    void reset()
+    {
+      clear();
+      precise_range_exprs_.reset();
+      final_expr_map_.clear();
+      expr_constraints_ = NULL;
+      params_ = NULL;
+      cur_expr_is_precise_ = false;
     }
     //131的原因是最大的rowkey个数是128，距离128最近的素数是131
     common::hash::ObPlacementHashMap<ObKeyPartId, ObKeyPartPos, 131> key_part_map_;
@@ -420,6 +445,7 @@ public:
   int is_get(bool &is_get) const;
   int is_get(int64_t column_count, bool &is_get) const;
   bool is_precise_get() const { return table_graph_.is_precise_get_; }
+  common::ObGeoRelationType get_geo_relation(ObItemType type) const;
   const common::ObIArray<ObRawExpr*> &get_range_exprs() const { return range_exprs_; }
   int check_graph_type();
 
@@ -449,6 +475,13 @@ public:
   DECLARE_TO_STRING;
   // check a pattern str is precise range or imprecise range
   static int is_precise_like_range(const ObObjParam &pattern, char escape, bool &is_precise);
+  const MbrFilterArray &get_mbr_filter() const { return mbr_filters_; }
+  const ColumnIdInfoMap &get_columnId_map() const {return columnId_map_; }
+  int init_columnId_map();
+  int set_columnId_map(uint64_t columnId, const ObGeoColumnInfo &column_info);
+  MbrFilterArray &ut_get_mbr_filter() { return mbr_filters_; }
+  ColumnIdInfoMap &ut_get_columnId_map() { return columnId_map_; }
+  bool is_contain_geo_filters() const { return contain_geo_filters_; }
 private:
 
   //  @brief this function to initialize query range context
@@ -501,6 +534,16 @@ private:
   int get_normal_cmp_keypart(ObItemType cmp_type,
                              const common::ObObj &val,
                              ObKeyPart &out_keypart) const;
+  int get_geo_single_keypart(const ObObj &val_start, const ObObj &val_end, ObKeyPart &out_keypart) const;
+  int get_geo_intersects_keypart(uint32_t input_srid,
+                                 const common::ObString &wkb,
+                                 const common::ObGeoRelationType op_type,
+                                 ObKeyPart *out_key_part);
+  int get_geo_coveredby_keypart(uint32_t input_srid,
+                                const common::ObString &wkb,
+                                const common::ObGeoRelationType op_type,
+                                ObKeyPart *out_key_part);
+  int set_geo_keypart_whole_range(ObKeyPart &out_key_part);
   int get_row_key_part(const ObRawExpr *l_expr,
                        const ObRawExpr *r_expr,
                        ObItemType cmp_type,
@@ -543,6 +586,9 @@ private:
                             const common::ObDataTypeCastParams &dtc_params);
   int pre_extract_const_op(const ObRawExpr *node,
                            ObKeyPart *&out_key_part);
+  int pre_extract_geo_op(const ObOpRawExpr *geo_expr,
+                         ObKeyPart *&out_key_part,
+                         const ObDataTypeCastParams &dtc_params);
   int is_key_part(const ObKeyPartId &id, ObKeyPartPos &pos, bool &is_key_part);
   int split_general_or(ObKeyPart *graph, ObKeyPartList &or_storage);
   int split_or(ObKeyPart *graph, ObKeyPartList &or_list);
@@ -621,12 +667,17 @@ private:
   int64_t get_range_graph_serialize_size(const ObKeyPart *cur, const ObKeyPart *pre_and_next) const;
   int64_t get_cur_keypart_serialize_size(const ObKeyPart &cur) const;
   int64_t get_expr_final_info_serialize_size() const;
+  int serialize_srid_map(char *buf, int64_t buf_len, int64_t &pos) const;
+  int deserialize_srid_map(int64_t count, const char *buf, int64_t data_len, int64_t &pos);
+  int64_t get_columnId_map_size() const;
   ObKeyPart *create_new_key_part();
   ObKeyPart *deep_copy_key_part(ObKeyPart *key_part);
   int64_t range_graph_to_string(char *buf, const int64_t buf_len, ObKeyPart *key_part) const;
   bool is_get_graph(int deepth, ObKeyPart *key_part);
   int get_like_range(const common::ObObj &pattern, const common::ObObj &escape,
                      ObKeyPart &out_key_part, const ObDataTypeCastParams &dtc_params);
+  int get_geo_range(const common::ObObj &wkb, const common::ObGeoRelationType op_type, ObKeyPart *out_key_part);
+  int get_dwithin_item(const ObRawExpr *expr, const ObConstRawExpr *&extra_item);
   int get_like_const_range(const ObRawExpr *text,
                            const ObRawExpr *pattern,
                            const ObRawExpr *escape,
@@ -706,13 +757,18 @@ private:
   ObQueryRangeState state_;
   int64_t column_count_;
   bool contain_row_;
+  ColumnIdInfoMap columnId_map_;
+  bool contain_geo_filters_;
   //not need serialize
   common::ObArenaAllocator inner_allocator_;
   common::ObIAllocator &allocator_;
+  common::ObWrapperAllocator bucket_allocator_wrapper_;
+  ColumnIdInfoMapAllocer map_alloc_;
   ObQueryRangeCtx *query_range_ctx_;
   KeyPartStore key_part_store_;
   //this flag used by optimizer, so don't need to serialize it
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> range_exprs_;
+  MbrFilterArray mbr_filters_;
   bool has_exec_param_;
   bool is_equal_and_;
   common::ObFixedArray<ObEqualOff, common::ObIAllocator> equal_offs_;

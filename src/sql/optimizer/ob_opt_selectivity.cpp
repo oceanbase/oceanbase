@@ -707,7 +707,9 @@ int ObOptSelectivity::calculate_qual_selectivity(const OptTableMetas &table_meta
         }
       }
     }
-  } else { //任何处理不了的表达式，都认为是0.5的选择率
+  } else if (qual.is_spatial_expr()) {
+    selectivity = DEFAULT_SPATIAL_SEL;
+  } else { //任何处理不了的表达式，都认为是0.5的选择率		  } else { //任何处理不了的表达式，都认为是0.5的选择率
     selectivity = DEFAULT_SEL;
   }
   if (OB_SUCC(ret)) {

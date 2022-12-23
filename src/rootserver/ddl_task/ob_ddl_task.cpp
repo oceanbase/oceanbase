@@ -696,9 +696,9 @@ bool ObDDLTask::is_replica_build_need_retry(
 int ObDDLTask::check_errsim_error()
 {
   int ret = OB_SUCCESS;
-  int64_t to_fail_status = E(EventTable::EN_DDL_TASK_PROCESS_FAIL_STATUS) 1;
+  int64_t to_fail_status = OB_E(EventTable::EN_DDL_TASK_PROCESS_FAIL_STATUS) 1;
   if (to_fail_status * -1 == task_status_) {
-    ret = E(EventTable::EN_DDL_TASK_PROCESS_FAIL_ERROR) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_DDL_TASK_PROCESS_FAIL_ERROR) OB_SUCCESS;
   }
   return ret;
 }

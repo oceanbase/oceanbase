@@ -324,6 +324,7 @@ struct ColumnContent
     is_nullable_(false),
     is_implicit_(false),
     is_predicate_column_(false),
+    srs_id_(UINT64_MAX),
     column_name_()
   {}
 
@@ -332,6 +333,7 @@ struct ColumnContent
                N_NULLABLE, is_nullable_,
                "implicit", is_implicit_,
                K_(is_predicate_column),
+               K_(srs_id),
                N_COLUMN_NAME, column_name_);
 
   uint64_t projector_index_;
@@ -339,6 +341,14 @@ struct ColumnContent
   bool is_nullable_;
   bool is_implicit_;
   bool is_predicate_column_;
+  union { // only for gis
+    struct {
+      uint32_t geo_type_ : 5;
+      uint32_t reserved_: 27;
+      uint32_t srid_ : 32;
+    } srs_info_;
+    uint64_t srs_id_;
+  };
   common::ObString column_name_;    // only for error message.
 };
 typedef common::ObFixedArray<ColumnContent, common::ObIAllocator> ColContentFixedArray;

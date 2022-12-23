@@ -128,10 +128,9 @@ private:
    * If ob_sql_type_str failed to call, and the error code returned is OB_SIZE_OVERFLOW.
    * realloc memory to the size of OB_MAX_EXTENDED_TYPE_INFO_LENGTH, then try again
    */
-  int get_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy,
-      const common::ObIArray<ObString> &type_info,
-      const int16_t default_length_semantics,
-      ObString &type_val);
+  int get_type_str(const share::schema::ObColumnSchemaV2 &column_schema,
+                   const int16_t default_length_semantics,
+                   ObString &type_val);
   int fill_col_privs(
       ObSessionPrivInfo &session_priv,
       ObNeedPriv &need_priv, 
@@ -140,7 +139,6 @@ private:
       char* buf,
       const int64_t buf_len,
       int64_t &pos);
-
 private:
   char type_str_[common::OB_MAX_SYS_PARAM_NAME_LENGTH];
   char *column_type_str_;

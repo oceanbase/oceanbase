@@ -293,7 +293,7 @@ int ObRemoteFetchWorker::handle(ObFetchLogTask &task)
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_RESTORE_LOG_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_RESTORE_LOG_FAILED) OB_SUCCESS;
   }
 #endif
   return ret;

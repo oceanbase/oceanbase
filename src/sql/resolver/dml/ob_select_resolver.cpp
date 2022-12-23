@@ -752,7 +752,8 @@ int ObSelectResolver::check_group_by()
           LOG_WARN("group by expr is null", K(ret));
         } else if (ObLongTextType == group_by_expr->get_data_type()
                   || ObLobType == group_by_expr->get_data_type()
-                  || ObJsonType == group_by_expr->get_data_type()) {
+                  || ObJsonType == group_by_expr->get_data_type()
+                  || ObGeometryType == group_by_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("group by lob expr is not allowed", K(ret));
         }
@@ -784,7 +785,8 @@ int ObSelectResolver::check_group_by()
                 LOG_WARN("rollup expr is null", K(ret));
               } else if (ObLongTextType == groupby_expr->get_data_type()
                         || ObLobType == groupby_expr->get_data_type()
-                        || ObJsonType == groupby_expr->get_data_type()) {
+                        || ObJsonType == groupby_expr->get_data_type()
+                        || ObGeometryType == groupby_expr->get_data_type()) {
                 ret = OB_ERR_INVALID_TYPE_FOR_OP;
                 LOG_WARN("group by lob expr is not allowed", K(ret));
               }
@@ -887,7 +889,8 @@ int ObSelectResolver::check_order_by()
       for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
         if (ob_is_text_tc(order_items.at(i).expr_->get_data_type())
             || ob_is_lob_tc(order_items.at(i).expr_->get_data_type())
-            || ob_is_json_tc(order_items.at(i).expr_->get_data_type())) {
+            || ob_is_json_tc(order_items.at(i).expr_->get_data_type())
+            || ob_is_geometry_tc(order_items.at(i).expr_->get_data_type())) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("lob expr can't order", K(ret), K(*order_items.at(i).expr_));
         } else if (has_distinct) {
@@ -6427,7 +6430,8 @@ int ObSelectResolver::check_window_exprs()
         for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
           if (ob_is_text_tc(order_items.at(i).expr_->get_data_type())
               || ob_is_lob_tc(order_items.at(i).expr_->get_data_type())
-              || ob_is_json_tc(order_items.at(i).expr_->get_data_type())) {
+              || ob_is_json_tc(order_items.at(i).expr_->get_data_type())
+              || ob_is_geometry_tc(order_items.at(i).expr_->get_data_type())) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("lob expr can't order", K(ret), K(*order_items.at(i).expr_));
           }
@@ -6905,7 +6909,8 @@ int ObSelectResolver::check_multi_rollup_items_valid(
           LOG_WARN("rollup expr is null", K(ret));
         } else if (ObLongTextType == groupby_expr->get_data_type()
                   || ObLobType == groupby_expr->get_data_type()
-                  || ObJsonType == groupby_expr->get_data_type()) {
+                  || ObJsonType == groupby_expr->get_data_type()
+                  || ObGeometryType == groupby_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("group by lob expr is not allowed", K(ret));
         }

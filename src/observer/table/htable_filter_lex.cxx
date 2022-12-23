@@ -147,12 +147,12 @@ typedef void* yyscan_t;
 
 /* Enter a start condition.  This macro really ought to take a parameter,
  * but we do it the disgusting crufty way forced on us by the ()-less
- * definition of BEGIN.
+ * definition of YY_BEGIN.
  */
-#define BEGIN yyg->yy_start = 1 + 2 *
+#define YY_BEGIN yyg->yy_start = 1 + 2 *
 
 /* Translate the current start state into a value that can be later handed
- * to BEGIN to return to the state.  The YYSTATE alias is for lex
+ * to YY_BEGIN to return to the state.  The YYSTATE alias is for lex
  * compatibility.
  */
 #define YY_START ((yyg->yy_start - 1) / 2)
@@ -1028,7 +1028,7 @@ case 15:
 YY_RULE_SETUP
 #line 56 "../../../src/observer/table/htable_filter_lex.lxx"
 {
-BEGIN(IN_STRING);
+YY_BEGIN(IN_STRING);
 char *buf = static_cast<char*>(yyextra->alloc(yyextra->get_input_len()+1));
 if (NULL == buf) {
 yyextra->error_code_ = oceanbase::common::OB_ALLOCATE_MEMORY_FAILED;
@@ -1059,7 +1059,7 @@ case 18:
 YY_RULE_SETUP
 #line 74 "../../../src/observer/table/htable_filter_lex.lxx"
 {
-    BEGIN(INITIAL);
+    YY_BEGIN(INITIAL);
     return STRING_VALUE;
 }
 	YY_BREAK

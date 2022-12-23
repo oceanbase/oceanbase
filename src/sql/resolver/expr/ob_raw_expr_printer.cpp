@@ -805,6 +805,34 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       }
       break;
     }
+    case T_FUN_SYS_POINT: {
+      SET_SYMBOL_IF_EMPTY("point");
+      break;
+    }
+    case T_FUN_SYS_LINESTRING: {
+      SET_SYMBOL_IF_EMPTY("linestring");
+      break;
+    }
+    case T_FUN_SYS_MULTIPOINT: {
+      SET_SYMBOL_IF_EMPTY("multipoint");
+      break;
+    }
+    case T_FUN_SYS_MULTILINESTRING: {
+      SET_SYMBOL_IF_EMPTY("multilinestring");
+      break;
+    }
+    case T_FUN_SYS_POLYGON: {
+      SET_SYMBOL_IF_EMPTY("polygon");
+      break;
+    }
+    case T_FUN_SYS_MULTIPOLYGON: {
+      SET_SYMBOL_IF_EMPTY("multipolygon");
+      break;
+    }
+    case T_FUN_SYS_GEOMCOLLECTION: {
+      SET_SYMBOL_IF_EMPTY("geomcollection");
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown expr type", K(ret), "type", get_type_name(type));
@@ -2796,6 +2824,54 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
       }
       case T_JSON: {
         DATA_PRINTF("json");
+        break;
+      }
+      case T_GEOMETRY: {
+        ObGeoType geo_type = static_cast<ObGeoType>(parse_node.int16_values_[OB_NODE_CAST_GEO_TYPE_IDX]);
+        switch (geo_type) {
+          case ObGeoType::GEOMETRY: {
+            DATA_PRINTF("geometry");
+            break;
+          }
+          case ObGeoType::POINT: {
+            DATA_PRINTF("point");
+            break;
+          }
+          case ObGeoType::LINESTRING: {
+            DATA_PRINTF("linestring");
+            break;
+          }
+          case ObGeoType::POLYGON: {
+            DATA_PRINTF("polygon");
+            break;
+          }
+          case ObGeoType::MULTIPOINT: {
+            DATA_PRINTF("multipoint");
+            break;
+          }
+          case ObGeoType::MULTILINESTRING: {
+            DATA_PRINTF("multilinestring");
+            break;
+          }
+          case ObGeoType::MULTIPOLYGON: {
+            DATA_PRINTF("multipolygon");
+            break;
+          }
+          case ObGeoType::GEOMETRYCOLLECTION: {
+            DATA_PRINTF("geometrycollection");
+            break;
+          }
+          case ObGeoType::GEOTYPEMAX: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid cast geo sub type", K(ret), K(cast_type), K(geo_type));
+            break;
+          }
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unknown cast geo sub type", K(ret), K(cast_type), K(geo_type));
+            break;
+          }
+        }
         break;
       }
       default: {

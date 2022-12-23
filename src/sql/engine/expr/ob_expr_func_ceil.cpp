@@ -82,7 +82,8 @@ int ObExprCeilFloor::calc_result_type1(ObExprResType &type,
       if (OB_FAIL(ObExprResultTypeUtil::get_round_result_type(res_type, type1.get_type()))) {
         LOG_WARN("get round result type failed", K(ret), K(type1), K(res_type));
       } else if (ObMaxType == res_type) {
-        ret = OB_ERR_UNEXPECTED;
+        // 兼容mysql处理不合法类型的报错行为
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("unexpected result type", K(ret), K(type1), K(res_type));
       } else {
         type.set_type(res_type);

@@ -1151,7 +1151,7 @@ int ObStartPrepareMigrationTask::remove_local_incomplete_tablets_()
 
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_LS_REBUILD_PREPARE_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_LS_REBUILD_PREPARE_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_LS_REBUILD_PREPARE_FAILED", K(ret));
       }

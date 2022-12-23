@@ -322,6 +322,16 @@ int ObKeyPart::deep_node_copy(const ObKeyPart &other)
     } else if (OB_FAIL(ob_write_obj(allocator_, other.like_keypart_->escape_, like_keypart_->escape_))) {
       LOG_WARN("deep copy like escape failed", K(ret));
     }
+  } else if (other.is_geo_key()) {
+    if (OB_FAIL(create_geo_key())) {
+      LOG_WARN("create geo key failed", K(ret));
+    } else if (OB_FAIL(ob_write_obj(allocator_, other.geo_keypart_->wkb_, geo_keypart_->wkb_))) {
+      LOG_WARN("deep copy geo wkb failed", K(ret));
+    } else if (OB_FAIL(ob_write_obj(allocator_, other.geo_keypart_->distance_, geo_keypart_->distance_))) {
+      LOG_WARN("deep copy geo distance failed", K(ret));
+    } else {
+      geo_keypart_->geo_type_ = other.geo_keypart_->geo_type_;
+    }
   }
   return ret;
 }
@@ -363,6 +373,10 @@ OB_DEF_SERIALIZE(ObKeyPart)
     } else if (is_like_key()) {
       OB_UNIS_ENCODE(like_keypart_->pattern_);
       OB_UNIS_ENCODE(like_keypart_->escape_);
+    } else if (is_geo_key()) {
+      OB_UNIS_ENCODE(geo_keypart_->wkb_);
+      OB_UNIS_ENCODE(geo_keypart_->geo_type_);
+      OB_UNIS_ENCODE(geo_keypart_->distance_);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected key type", K_(key_type));
@@ -402,6 +416,13 @@ OB_DEF_DESERIALIZE(ObKeyPart)
       }
       OB_UNIS_DECODE(like_keypart_->pattern_);
       OB_UNIS_DECODE(like_keypart_->escape_);
+    } else if (T_GEO_KEY == key_type_) {
+      if (OB_FAIL(create_geo_key())) {
+        LOG_WARN("create geo key failed", K(ret));
+      }
+      OB_UNIS_DECODE(geo_keypart_->wkb_);
+      OB_UNIS_DECODE(geo_keypart_->geo_type_);
+      OB_UNIS_DECODE(geo_keypart_->distance_);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected key type", K_(key_type));
@@ -429,6 +450,10 @@ OB_DEF_SERIALIZE_SIZE(ObKeyPart)
   } else if (is_like_key()) {
     OB_UNIS_ADD_LEN(like_keypart_->pattern_);
     OB_UNIS_ADD_LEN(like_keypart_->escape_);
+  } else if (is_geo_key()) {
+    OB_UNIS_ADD_LEN(geo_keypart_->wkb_);
+    OB_UNIS_ADD_LEN(geo_keypart_->geo_type_);
+    OB_UNIS_ADD_LEN(geo_keypart_->distance_);
   }
   OB_UNIS_ADD_LEN(null_safe_);
   OB_UNIS_ADD_LEN(rowid_column_idx_);
@@ -581,6 +606,20 @@ int ObKeyPart::create_like_key()
   return ret;
 }
 
+int ObKeyPart::create_geo_key()
+{
+  int ret = OB_SUCCESS;
+  void *ptr = NULL;
+  if (OB_UNLIKELY(NULL == (ptr = allocator_.alloc(sizeof(ObGeoKeyPart))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc memory failed");
+  } else {
+    key_type_ = T_GEO_KEY;
+    geo_keypart_ = new(ptr) ObGeoKeyPart();
+  }
+  return ret;
+}
+
 DEF_TO_STRING(ObKeyPart)
 {
   int64_t pos = 0;
@@ -602,6 +641,11 @@ DEF_TO_STRING(ObKeyPart)
     J_COMMA();
     J_KV(N_PATTERN_VAL, like_keypart_->pattern_,
          N_ESCAPE_VAL, like_keypart_->escape_);
+  } else if (is_geo_key()) {
+    J_COMMA();
+    J_KV("wkb_", geo_keypart_->wkb_,
+         "geo_type_", geo_keypart_->geo_type_,
+         "distance_", geo_keypart_->distance_);
   }
   J_OBJ_END();
   return pos;

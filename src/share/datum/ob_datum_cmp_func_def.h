@@ -292,6 +292,14 @@ struct ObDatumTypeCmp<ObJsonType, ObJsonType> : public ObDefined<>
   }
 };
 
+template <>
+struct ObDatumTypeCmp<ObGeometryType, ObGeometryType> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    return ObCharset::strcmpsp(CS_TYPE_BINARY, l.ptr_, l.len_, r.ptr_, r.len_, false);
+  }
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // begin define string compare functions

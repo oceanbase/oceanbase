@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_das_extra_data.h"
+#include "sql/das/ob_das_spatial_index_lookup_op.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/table/ob_table_lookup_op.h"
 #include "sql/engine/px/ob_px_util.h"
@@ -351,24 +352,43 @@ ObLocalIndexLookupOp *ObDASScanOp::get_lookup_op()
 int ObDASScanOp::do_local_index_lookup()
 {
   int ret = OB_SUCCESS;
-  void *buf = op_alloc_.alloc(sizeof(ObLocalIndexLookupOp));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("lookup op buf allocated failed", K(ret));
-  } else {
-    ObLocalIndexLookupOp *op = new(buf) ObLocalIndexLookupOp();
-    op->set_rowkey_iter(result_);
-    result_ = op;
-    if (OB_FAIL(op->init(get_lookup_ctdef(),
-                         get_lookup_rtdef(),
-                         scan_ctdef_,
-                         scan_rtdef_,
-                         trans_desc_,
-                         snapshot_))) {
-      LOG_WARN("init lookup op failed", K(ret));
+  if (scan_param_.table_param_->is_spatial_index()) {
+    void *buf = op_alloc_.alloc(sizeof(ObSpatialIndexLookupOp));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("lookup op buf allocated failed", K(ret));
     } else {
-      op->set_tablet_id(related_tablet_ids_.at(0));
-      op->set_ls_id(ls_id_);
+      ObSpatialIndexLookupOp *op = new(buf) ObSpatialIndexLookupOp(op_alloc_);
+      op->set_rowkey_iter(result_);
+      result_ = op;
+      if (OB_FAIL(op->init(get_lookup_ctdef(), get_lookup_rtdef(), scan_ctdef_, scan_rtdef_,
+                           trans_desc_, snapshot_, &scan_param_.mbr_filters_))) {
+        LOG_WARN("init spatial lookup op failed", K(ret));
+      } else {
+        op->set_tablet_id(related_tablet_ids_.at(0));
+        op->set_ls_id(ls_id_);
+      }
+    }
+  } else {
+    void *buf = op_alloc_.alloc(sizeof(ObLocalIndexLookupOp));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("lookup op buf allocated failed", K(ret));
+    } else {
+      ObLocalIndexLookupOp *op = new(buf) ObLocalIndexLookupOp();
+      op->set_rowkey_iter(result_);
+      result_ = op;
+      if (OB_FAIL(op->init(get_lookup_ctdef(),
+                          get_lookup_rtdef(),
+                          scan_ctdef_,
+                          scan_rtdef_,
+                          trans_desc_,
+                          snapshot_))) {
+        LOG_WARN("init lookup op failed", K(ret));
+      } else {
+        op->set_tablet_id(related_tablet_ids_.at(0));
+        op->set_ls_id(ls_id_);
+      }
     }
   }
   return ret;
@@ -572,6 +592,7 @@ int ObDASScanOp::reuse_iter()
     LOG_WARN("reuse lookup iterator failed", K(ret));
   } else {
     scan_param_.key_ranges_.reuse();
+    scan_param_.mbr_filters_.reuse();
   }
   return ret;
 }

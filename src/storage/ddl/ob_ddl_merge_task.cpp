@@ -727,7 +727,7 @@ int ObTabletDDLUtil::compact_ddl_sstable(const ObIArray<ObITable *> &ddl_sstable
           }
 #ifdef ERRSIM
           if (OB_SUCC(ret) && ddl_param.table_key_.is_major_sstable()) {
-            ret = E(EventTable::EN_DDL_COMPACT_FAIL) OB_SUCCESS;
+            ret = OB_E(EventTable::EN_DDL_COMPACT_FAIL) OB_SUCCESS;
             if (OB_FAIL(ret)) {
               LOG_WARN("errsim compact ddl sstable failed", KR(ret));
             }
@@ -811,7 +811,7 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
       item.checksum_ = column_checksums.at(i);
 #ifdef ERRSIM
       if (OB_SUCC(ret)) {
-        ret = E(EventTable::EN_HIDDEN_CHECKSUM_DDL_TASK) OB_SUCCESS;
+        ret = OB_E(EventTable::EN_HIDDEN_CHECKSUM_DDL_TASK) OB_SUCCESS;
         // set the checksum of the second column inconsistent with the report checksum of data table. (report_ddl_column_checksum())
         if (OB_FAIL(ret) && 17 == item.column_id_) {
           item.checksum_ = i + 100;
@@ -828,7 +828,7 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
     }
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_DDL_REPORT_CHECKSUM_FAIL) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_DDL_REPORT_CHECKSUM_FAIL) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         LOG_WARN("errsim report checksum failed", KR(ret));
       }

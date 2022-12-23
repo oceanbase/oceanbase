@@ -133,7 +133,7 @@ int ObColumnChecksumCalculator::calc_column_checksum(
     for (int64_t i = 0; i < row.count_; ++i) {
       const share::schema::ObColDesc &col_desc = col_descs.at(i);
       if ((NULL != column_changed && !column_changed[i])
-          || ob_is_large_text(col_desc.col_type_.get_type()) || ob_is_json(col_desc.col_type_.get_type())) {
+          || ob_is_lob_group(col_desc.col_type_.get_type())) {
         continue;
       }
       tmp_checksum = row.storage_datums_[i].checksum(0);

@@ -644,7 +644,7 @@ int ObMacroBlock::flush(ObMacroBlockHandle &macro_handle,
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BAD_BLOCK_ERROR) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BAD_BLOCK_ERROR) OB_SUCCESS;
   if (OB_CHECKSUM_ERROR == ret) { // obtest will set this code
     STORAGE_LOG(INFO, "ERRSIM bad block: Insert a bad block.");
     macro_header_.fixed_header_.magic_ = 0;

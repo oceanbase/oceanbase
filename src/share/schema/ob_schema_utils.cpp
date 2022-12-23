@@ -123,6 +123,8 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
         LOG_WARN("get generated column expr failed", K(ret));
       } else if (T_FUN_SYS_WORD_SEGMENT == root_expr_type) {
         column.add_column_flag(GENERATED_CTXCAT_CASCADE_FLAG);
+      } else if (T_FUN_SYS_SPATIAL_CELLID == root_expr_type || T_FUN_SYS_SPATIAL_MBR == root_expr_type) {
+        column.add_column_flag(SPATIAL_INDEX_GENERATED_COLUMN_FLAG);
       } else {
         LOG_DEBUG("succ to resolve_generated_column_info", K(col_def), K(root_expr_type), K(columns_names), K(table_schema));
       }
@@ -192,6 +194,11 @@ bool ObSchemaUtils::is_default_expr_v2_column(uint64_t flag)
 bool ObSchemaUtils::is_fulltext_column(uint64_t flag)
 {
   return flag & GENERATED_CTXCAT_CASCADE_FLAG;
+}
+
+bool ObSchemaUtils::is_spatial_generated_column(uint64_t flag)
+{
+  return flag & SPATIAL_INDEX_GENERATED_COLUMN_FLAG;
 }
 
 bool ObSchemaUtils::is_label_se_column(uint64_t flag)

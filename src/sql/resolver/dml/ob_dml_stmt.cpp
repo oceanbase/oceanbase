@@ -178,6 +178,7 @@ int ColumnItem::deep_copy(ObIRawExprCopier &expr_copier,
   base_tid_ = other.base_tid_;
   base_cid_ = other.base_cid_;
   ObRawExpr *temp_expr = NULL;
+  is_geo_ = other.is_geo_;
   if (OB_FAIL(expr_copier.copy(other.expr_, temp_expr))) {
     LOG_WARN("failed to copy column expr", K(ret));
   } else if (OB_ISNULL(temp_expr)) {
@@ -2109,7 +2110,8 @@ int ObDMLStmt::remove_useless_sharable_expr()
     if (OB_ISNULL(expr = column_items_.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (expr->is_explicited_reference() || expr->is_rowkey_column()) {
+    } else if (expr->is_explicited_reference() || expr->is_rowkey_column()
+               || expr->is_spatial_generated_column()) {
       /*do nothing*/
     } else if (OB_FAIL(is_referred_by_partitioning_expr(expr,
                                                         is_referred))) {

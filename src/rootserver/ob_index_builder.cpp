@@ -398,8 +398,11 @@ int ObIndexBuilder::do_create_local_index(
     ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = table_schema.get_tenant_id();
+    uint64_t tenant_data_version = 0;
     if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
     } else if (OB_FAIL(trans.start(&ddl_service_.get_sql_proxy(), tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else if (OB_FAIL(new_table_schema.assign(table_schema))) {
@@ -421,6 +424,15 @@ int ObIndexBuilder::do_create_local_index(
       } else if (INDEX_TYPE_UNIQUE_GLOBAL == my_arg.index_type_) {
         my_arg.index_type_ = INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE;
         my_arg.index_schema_.set_index_type(INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE);
+      } else if (INDEX_TYPE_SPATIAL_GLOBAL == my_arg.index_type_) {
+        if (tenant_data_version < DATA_VERSION_4_1_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, spatial index");
+        } else {
+          my_arg.index_type_ = INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE;
+          my_arg.index_schema_.set_index_type(INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE);
+        }
       }
       if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
               my_arg, new_table_schema, allocator, gen_columns))) {
@@ -531,12 +543,14 @@ int ObIndexBuilder::do_create_index(
     LOG_WARN("check whether the foreign key related table is executing ddl failed", K(ret));
   } else if (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
              || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
-             || INDEX_TYPE_DOMAIN_CTXCAT == arg.index_type_) {
+             || INDEX_TYPE_DOMAIN_CTXCAT == arg.index_type_
+             || INDEX_TYPE_SPATIAL_LOCAL == arg.index_type_) {
     if (OB_FAIL(do_create_local_index(schema_guard, arg, *table_schema, res))) {
       LOG_WARN("fail to do create local index", K(ret), K(arg));
     }
   } else if (INDEX_TYPE_NORMAL_GLOBAL == arg.index_type_
-             || INDEX_TYPE_UNIQUE_GLOBAL == arg.index_type_) {
+             || INDEX_TYPE_UNIQUE_GLOBAL == arg.index_type_
+             || INDEX_TYPE_SPATIAL_GLOBAL == arg.index_type_) {
     if (!table_schema->is_partitioned_table() && !arg.index_schema_.is_partitioned_table()) {
       // create a global index with local storage when both the data table and index table are non-partitioned
       if (OB_FAIL(do_create_local_index(schema_guard, arg, *table_schema, res))) {
@@ -716,7 +730,9 @@ int ObIndexBuilder::generate_schema(
                                            || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
                                            || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == arg.index_type_
                                            || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == arg.index_type_
-                                           || INDEX_TYPE_DOMAIN_CTXCAT == arg.index_type_);
+                                           || INDEX_TYPE_DOMAIN_CTXCAT == arg.index_type_
+                                           || INDEX_TYPE_SPATIAL_LOCAL == arg.index_type_
+                                           || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == arg.index_type_);
       const bool need_generate_index_schema_column = (is_index_local_storage || global_index_without_column_info);
       schema.set_table_mode(data_schema.get_table_mode_flag());
       schema.set_table_state_flag(data_schema.get_table_state_flag());
@@ -797,7 +813,8 @@ int ObIndexBuilder::set_basic_infos(const ObCreateIndexArg &arg,
       schema.set_load_type(data_schema.get_load_type());
       schema.set_def_type(data_schema.get_def_type());
       if (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
-          || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_) {
+          || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
+          || INDEX_TYPE_SPATIAL_LOCAL == arg.index_type_) {
         schema.set_part_level(data_schema.get_part_level());
       } else {} // partition level is filled during resolve stage for global index
       schema.set_charset_type(data_schema.get_charset_type());

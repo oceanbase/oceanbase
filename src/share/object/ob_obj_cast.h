@@ -19,6 +19,7 @@
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/timezone/ob_time_convert.h"
 #include "lib/charset/ob_charset.h"
+#include "lib/geo/ob_geo_common.h"
 #include "share/ob_errno.h"
 
 namespace oceanbase
@@ -50,6 +51,11 @@ namespace common
 #define CM_NO_ZERO_IN_DATE               (1ULL << 54) // reserve
 #define CM_NO_ZERO_DATE                  (1ULL << 55)
 #define CM_ALLOW_INVALID_DATES           (1ULL << 56)
+#define CM_GEOMETRY_TYPE_RESERVED1       (1ULL << 12)
+#define CM_GEOMETRY_TYPE_RESERVED2       (1ULL << 13)
+#define CM_GEOMETRY_TYPE_RESERVED3       (1ULL << 14)
+#define CM_GEOMETRY_TYPE_RESERVED4       (1ULL << 15)
+#define CM_GEOMETRY_TYPE_RESERVED5       (1ULL << 16)
 // string->integer(int/uint)时默认进行round(round to nearest)，
 // 如果设置该标记，则会进行trunc(round to zero)
 // ceil(round to +inf)以及floor(round to -inf)暂时没有支持
@@ -101,7 +107,23 @@ typedef uint64_t ObCastMode;
 #define CM_IS_ERROR_ON_SCALE_OVER(mode)       ((CM_ERROR_ON_SCALE_OVER & (mode)) != 0)
 #define CM_IS_JSON_VALUE(mode)                CM_IS_ERROR_ON_SCALE_OVER(mode)
 #define CM_IS_TO_COLUMN_CS_LEVEL(mode)        ((CM_TO_COLUMN_CS_LEVEL & (mode)) != 0)
-
+// for geomerty type cast
+#define CM_IS_GEOMETRY_GEOMETRY(mode)             ((((mode) >> 12) & 0x1F) == 0)
+#define CM_IS_GEOMETRY_POINT(mode)                ((((mode) >> 12) & 0x1F) == 1)
+#define CM_IS_GEOMETRY_LINESTRING(mode)           ((((mode) >> 12) & 0x1F) == 2)
+#define CM_IS_GEOMETRY_POLYGON(mode)              ((((mode) >> 12) & 0x1F) == 3)
+#define CM_IS_GEOMETRY_MULTIPOINT(mode)           ((((mode) >> 12) & 0x1F) == 4)
+#define CM_IS_GEOMETRY_MULTILINESTRING(mode)      ((((mode) >> 12) & 0x1F) == 5)
+#define CM_IS_GEOMETRY_MULTIPOLYGON(mode)         ((((mode) >> 12) & 0x1F) == 6)
+#define CM_IS_GEOMETRY_GEOMETRYCOLLECTION(mode)   ((((mode) >> 12) & 0x1F) == 7)
+#define CM_SET_GEOMETRY_GEOMETRY(mode)            ((mode) &= 0xFFFE0FFF, (mode) |= (0 << 12))
+#define CM_SET_GEOMETRY_POINT(mode)               ((mode) &= 0xFFFE0FFF, (mode) |= (1 << 12))
+#define CM_SET_GEOMETRY_LINESTRING(mode)          ((mode) &= 0xFFFE0FFF, (mode) |= (2 << 12))
+#define CM_SET_GEOMETRY_POLYGON(mode)             ((mode) &= 0xFFFE0FFF, (mode) |= (3 << 12))
+#define CM_SET_GEOMETRY_MULTIPOINT(mode)          ((mode) &= 0xFFFE0FFF, (mode) |= (4 << 12))
+#define CM_SET_GEOMETRY_MULTILINESTRING(mode)     ((mode) &= 0xFFFE0FFF, (mode) |= (5 << 12))
+#define CM_SET_GEOMETRY_MULTIPOLYGON(mode)        ((mode) &= 0xFFFE0FFF, (mode) |= (6 << 12))
+#define CM_SET_GEOMETRY_GEOMETRYCOLLECTION(mode)  ((mode) &= 0xFFFE0FFF, (mode) |= (7 << 12))
 struct ObObjCastParams
 {
   // add params when necessary
@@ -470,6 +492,18 @@ public:
   static number::ObNumber MYSQL_CHECK_MAX[number::ObNumber::MAX_PRECISION + 1][number::ObNumber::MAX_SCALE + 1];
   static number::ObNumber ORACLE_CHECK_MIN[OB_MAX_NUMBER_PRECISION + 1][MAX_ORACLE_SCALE_SIZE + 1];
   static number::ObNumber ORACLE_CHECK_MAX[OB_MAX_NUMBER_PRECISION + 1][MAX_ORACLE_SCALE_SIZE + 1];
+};
+
+class ObGeoCastUtils
+{
+public:
+  static common::ObGeoType get_geo_type_from_cast_mode(uint64_t cast_mode);
+  static int set_geo_type_to_cast_mode(common::ObGeoType geo_type,
+                                       uint64_t &cast_mode);
+  static void geo_cast_error_handle(int err_code,
+                                    common::ObGeoType src_type,
+                                    common::ObGeoType dst_type,
+                                    const common::ObGeoErrLogInfo &log_info);
 };
 
 } // end namespace common

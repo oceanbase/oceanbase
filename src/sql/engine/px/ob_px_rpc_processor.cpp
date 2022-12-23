@@ -368,7 +368,7 @@ int ObInitFastSqcP::process()
              || !sqc_handler->valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid sqc handler", K(ret), KPC(sqc_handler));
-  } else if (OB_FAIL(E(EventTable::EN_PX_SQC_EXECUTE_FAILED) OB_SUCCESS)) {
+  } else if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_EXECUTE_FAILED) OB_SUCCESS)) {
     LOG_WARN("match sqc execute errism", K(ret));
   } else if (OB_ISNULL(session = sqc_handler->get_exec_ctx().get_my_session())) {
     ret = OB_ERR_UNEXPECTED;

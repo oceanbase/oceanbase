@@ -16,6 +16,7 @@
 #include "observer/virtual_table/ob_table_columns.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/oblog/ob_log.h"
+#include "lib/geo/ob_geo_utils.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -411,6 +412,36 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
 }
 
 int ObInfoSchemaColumnsTable::get_type_str(
+    const share::schema::ObColumnSchemaV2 &column_schema,
+    const int16_t default_length_semantics, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  const ObObjMeta &obj_meta = column_schema.get_meta_type();
+  const ObAccuracy &accuracy = column_schema.get_accuracy();
+  const common::ObIArray<ObString> &type_info = column_schema.get_extended_type_info();
+  const common::ObGeoType &geo_type = column_schema.get_geo_type();
+
+  if (OB_FAIL(ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
+                              column_type_str_, column_type_str_len_, pos, geo_type))) {
+    if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
+      if (OB_UNLIKELY(NULL == (column_type_str_ = static_cast<char *>(allocator_->realloc(
+                               column_type_str_,
+                               OB_MAX_SYS_PARAM_NAME_LENGTH,
+                               OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
+      } else {
+        pos = 0;
+        column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
+        ret = ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
+                              column_type_str_, column_type_str_len_, pos, geo_type);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObInfoSchemaColumnsTable::get_type_str(
     const ObObjMeta &obj_meta,
     const ObAccuracy &accuracy,
     const common::ObIArray<ObString> &type_info,
@@ -419,7 +450,7 @@ int ObInfoSchemaColumnsTable::get_type_str(
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos))) {
+                              column_type_str_, column_type_str_len_, pos, common::ObGeoType::GEOMETRY))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
       void *tmp_ptr = NULL;
       if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->realloc(
@@ -440,7 +471,7 @@ int ObInfoSchemaColumnsTable::get_type_str(
         column_type_str_ = static_cast<char *>(tmp_ptr);
         column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
         ret = ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos);
+                              column_type_str_, column_type_str_len_, pos, common::ObGeoType::GEOMETRY);
       }
     }
   }
@@ -575,7 +606,8 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             if (OB_FAIL(ob_sql_type_str(data_type_str_,
                                         column_type_str_len_,
                                         column_schema->get_data_type(),
-                                        column_schema->get_collation_type()))) {
+                                        column_schema->get_collation_type(),
+                                        column_schema->get_geo_type()))) {
               SERVER_LOG(WARN,"fail to get data type str",K(ret), K(column_schema->get_data_type()));
             } else {
               ObString type_val(column_type_str_len_,
@@ -587,7 +619,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
           }
         case CHARACTER_MAXIMUM_LENGTH: {
             if(ob_is_string_type(column_schema->get_data_type()) ||
-                ob_is_json(column_schema->get_data_type())) {
+               ob_is_json(column_schema->get_data_type()) || ob_is_geometry(column_schema->get_data_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(column_schema->get_data_length()));
             } else {
               cells[cell_idx].reset();
@@ -605,7 +637,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
                         mbmaxlen * column_schema->get_data_length()));
               }
             } else if(ob_is_text_tc(column_schema->get_data_type()) ||
-                ob_is_json(column_schema->get_data_type())) {
+                ob_is_json(column_schema->get_data_type()) || ob_is_geometry(column_schema->get_data_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(column_schema->get_data_length()));
             } else {
               cells[cell_idx].reset();
@@ -668,11 +700,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
         case COLUMN_TYPE: {
             int64_t pos = 0;
             const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-            if (OB_FAIL(get_type_str(column_schema->get_meta_type(),
-                                        column_schema->get_accuracy(),
-                                        column_schema->get_extended_type_info(),
-                                        default_length_semantics,
-                                        pos))) {
+            if (OB_FAIL(get_type_str(*column_schema,
+                                     default_length_semantics,
+                                     pos))) {
               SERVER_LOG(WARN,"fail to get column type str",K(ret), K(column_schema->get_data_type()));
             } else if (column_schema->is_zero_fill()) {
              // zerofill, only for int, float, decimal
@@ -964,10 +994,16 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             break;
           }
         case DATA_TYPE: {
+            ObGeoType geo_sub_type = ObGeoType::GEOTYPEMAX;
+            if (ob_is_geometry(column_attributes.result_type_.get_type())) {
+              ObString type_str(strlen(column_type_str_), column_type_str_);
+              geo_sub_type = ObGeoTypeUtil::get_geo_type_by_name(type_str);
+            }
             if (OB_FAIL(ob_sql_type_str(data_type_str_,
                                         column_type_str_len_,
                                         column_attributes.result_type_.get_type(),
-                                        ObCharset::get_default_collation(ObCharset::get_default_charset())))) {
+                                        ObCharset::get_default_collation(ObCharset::get_default_charset()),
+                                        geo_sub_type))) {
               SERVER_LOG(WARN,"fail to get data type str",K(ret), K(column_attributes.type_));
             } else {
               ObString type_val(column_type_str_len_,

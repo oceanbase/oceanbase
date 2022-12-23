@@ -579,7 +579,7 @@ int ObLSBackupCleanTask::do_ls_task()
     }
   }
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_DELETE_HANDLE_LS_TASK) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_DELETE_HANDLE_LS_TASK) OB_SUCCESS;
 #endif
   FLOG_INFO("[BACKUP_CLEAN]finish do ls task", K(ret), K(path), K(*this));
   return ret;

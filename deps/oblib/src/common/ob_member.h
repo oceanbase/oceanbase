@@ -45,7 +45,7 @@ public:
   int assign(const ObMember &other);
 
   TO_STRING_KV(K_(server), K_(timestamp), K_(flag));
-  TO_YSON_KV(Y_(server), OB_ID(t), timestamp_, Y_(flag));
+  TO_YSON_KV(OB_Y_(server), OB_ID(t), timestamp_, OB_Y_(flag));
   OB_UNIS_VERSION(1);
 protected:
   common::ObAddr server_;

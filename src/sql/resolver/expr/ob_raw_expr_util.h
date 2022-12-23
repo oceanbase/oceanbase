@@ -417,6 +417,13 @@ public:
   // erase implicit cast which added for operand casting.
   static int erase_operand_implicit_cast(ObRawExpr *src, ObRawExpr *&out);
 
+  static const ObRawExpr *skip_inner_added_expr(const ObRawExpr *expr);
+
+  static ObRawExpr *skip_implicit_cast(ObRawExpr *e);
+
+  static ObRawExpr *skip_inner_added_expr(ObRawExpr *expr);
+  static int is_contain_spatial_exprs(ObRawExpr *raw_expr, bool &is_contain);
+
   static int create_to_type_expr(ObRawExprFactory &expr_factory,
                                  ObRawExpr *src_expr,
                                  const common::ObObjType &dst_type,

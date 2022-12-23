@@ -192,7 +192,7 @@ int ObBackupSetTaskMgr::persist_sys_ls_task_()
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_BACKUP_PERSIST_LS_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_BACKUP_PERSIST_LS_FAILED) OB_SUCCESS;
   }
 #endif
 

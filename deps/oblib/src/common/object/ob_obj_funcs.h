@@ -1466,6 +1466,7 @@ DEF_TEXT_FUNCS(ObTinyTextType, string, ObString);
 DEF_TEXT_FUNCS(ObTextType, string, ObString);
 DEF_TEXT_FUNCS(ObMediumTextType, string, ObString);
 DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
+DEF_TEXT_FUNCS(ObGeometryType, string, ObString);  //todo: not implement
 
 #define DEF_JSON_CS_FUNCS(OBJTYPE)                                    \
   template <>                                                           \

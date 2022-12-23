@@ -826,7 +826,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       }
 
       int tmp_ret = OB_SUCCESS;
-      tmp_ret = E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
+      tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret) {
         LOG_INFO("query info:", K(sql_),
                  "sess_id", result.get_session().get_sessid(),

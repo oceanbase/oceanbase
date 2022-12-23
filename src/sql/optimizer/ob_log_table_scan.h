@@ -37,6 +37,7 @@ public:
         session_id_(0),
         is_index_global_(false),
         is_global_index_back_(false),
+        is_spatial_index_(false),
         use_das_(false),
         index_back_(false),
         is_multi_part_table_scan_(false),
@@ -175,6 +176,14 @@ public:
   inline void set_is_global_index_back(bool is_global_index_back)
   { is_global_index_back_ = is_global_index_back; }
 
+  /*
+   * set is spatial index
+   */
+  inline void set_is_spatial_index(bool is_spatial_index)
+  { is_spatial_index_ = is_spatial_index; }
+
+  inline bool get_is_spatial_index() const
+  { return is_spatial_index_; }
   /**
    *  Set scan direction
    */
@@ -429,6 +438,7 @@ private: // member functions
   int generate_necessary_rowkey_and_partkey_exprs();
   int add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_exprs);
   int replace_gen_column(ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
+  int get_mbr_column_exprs(const uint64_t table_id, ObIArray<ObRawExpr *> &mbr_exprs);
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
@@ -437,6 +447,7 @@ protected: // memeber variables
   uint64_t session_id_; //for temporary table, record session id
   bool is_index_global_;
   bool is_global_index_back_;
+  bool is_spatial_index_;
   // TODO yuming: tells whether the table scan uses shared data access or not
   // mainly designed for code generator
   bool use_das_;
@@ -463,6 +474,7 @@ protected: // memeber variables
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> part_exprs_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> spatial_exprs_;
   // for oracle-mapping, map access expr to a real column expr
   common::ObArray<std::pair<ObRawExpr *, ObRawExpr *>, common::ModulePageAllocator, true> real_expr_map_;
   // aggr func pushdwon to table scan

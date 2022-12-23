@@ -754,7 +754,7 @@ int ObIndexBuildTask::wait_data_complement()
       state_finished = true;
     }
   }
-  if (OB_SUCC(ret) && state_finished) {
+  if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index()) {
     bool dummy_equal = false;
     if (OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
             tenant_id_, execution_id_, object_id_, index_table_id_, task_id_, dummy_equal, root_service_->get_sql_proxy()))) {
@@ -783,6 +783,8 @@ int ObIndexBuildTask::check_need_verify_checksum(bool &need_verify)
     LOG_WARN("not init", K(ret));
   } else if (is_unique_index_) {
     need_verify = true;
+  } else if (create_index_arg_.is_spatial_index()) {
+    need_verify = false;
   } else {
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *index_schema = nullptr;

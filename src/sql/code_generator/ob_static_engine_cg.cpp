@@ -163,7 +163,7 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
   }
 
   bool need_check_output_datum = false;
-  ret = E(EventTable::EN_ENABLE_OP_OUTPUT_DATUM_CHECK) ret;
+  ret = OB_E(EventTable::EN_ENABLE_OP_OUTPUT_DATUM_CHECK) ret;
   if (OB_FAIL(ret)) {
     need_check_output_datum = true;
     ret = OB_SUCCESS;
@@ -534,7 +534,8 @@ void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &
         found = true;
       } else if (col->get_result_type().is_lob_locator()
                  || col->get_result_type().is_lob()
-                 || col->get_result_type().is_json()) {
+                 || col->get_result_type().is_json()
+                 || col->get_result_type().is_geometry()) {
         found = true;
       }
     }
@@ -3559,7 +3560,14 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("output expr is null", K(ret));
       } else if (expr->get_expr_type() != T_PDML_PARTITION_ID) {
-        // do nothing
+        if (expr->get_expr_type() == T_REF_COLUMN && opt_ctx_->is_online_ddl() &&
+            stmt::T_INSERT == opt_ctx_->get_session_info()->get_stmt_type() && op.is_table_scan()) {
+          const ObColumnRefRawExpr *column_expr = static_cast<const ObColumnRefRawExpr*>(expr);
+          if (OB_NOT_NULL(column_expr->get_dependant_expr())
+              && column_expr->get_dependant_expr()->get_expr_type() == T_FUN_SYS_SPATIAL_CELLID) {
+            spec.set_spatial_ddl(true);
+          }
+        }
       } else if (OB_FAIL(generate_rt_expr(*expr, rt_expr))) {
         LOG_WARN("generate rt expr failed", K(ret));
       } else {

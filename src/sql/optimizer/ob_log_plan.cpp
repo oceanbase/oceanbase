@@ -4188,6 +4188,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_scan_direction(ap->order_direction_);
     scan->set_is_index_global(ap->is_global_index_);
     scan->set_is_global_index_back(is_index_back);
+    scan->set_is_spatial_index(ap->est_cost_info_.index_meta_info_.is_geo_index_);
     scan->set_use_das(ap->use_das_);
     scan->set_table_partition_info(ap->table_partition_info_);
     scan->set_table_opt_info(ap->table_opt_info_);
@@ -6565,7 +6566,7 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
     can_push = 0 < distinct_aggrs.count();
     if (can_push) {
       // only for test
-      ret = E(EventTable::EN_ENABLE_THREE_STAGE_AGGREGATE) ret;
+      ret = OB_E(EventTable::EN_ENABLE_THREE_STAGE_AGGREGATE) ret;
       if (OB_FAIL(ret)) {
         // by default disable three stage aggregate
         int64_t xx = -ret;

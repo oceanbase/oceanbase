@@ -120,6 +120,13 @@ private:
                              const common::ObIArray<NewExprType*> &new_row,
                              const common::ObIArray<ObRawExpr*> &full_row,
                              ObDASDMLBaseCtDef &das_ctdef);
+  template<typename ExprType>
+  int add_geo_col_projector(const ObIArray<ExprType*> &cur_row,
+                            const ObIArray<ObRawExpr*> &full_row,
+                            const ObIArray<uint64_t> &dml_column_ids,
+                            uint32_t proj_idx,
+                            ObDASDMLBaseCtDef &das_ctdef,
+                            IntFixedArray &row_projector);
   int get_column_ref_base_cid(const ObLogicalOperator &op, const ObColumnRefRawExpr *col, uint64_t &base_cid);
   int get_table_schema_version(const ObLogicalOperator &op, uint64_t table_id, int64_t &schema_version);
   int generate_das_dml_ctdef(ObLogDelUpd &op,

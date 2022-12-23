@@ -143,6 +143,10 @@ int ObDDLResolver::check_add_column_as_pk_allowed(const ObColumnSchemaV2 &column
     ret = OB_ERR_JSON_USED_AS_KEY;
     LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column_schema.get_column_name_str().length(), column_schema.get_column_name_str().ptr());
     SQL_RESV_LOG(WARN, "JSON column can't be primary key", K(ret), K(column_schema));
+  } else if (ob_is_geometry(column_schema.get_data_type())) {
+    ret = OB_ERR_SPATIAL_UNIQUE_INDEX;
+    LOG_USER_ERROR(OB_ERR_SPATIAL_UNIQUE_INDEX);
+    SQL_RESV_LOG(WARN, "GEO column can't be primary key", K(ret), K(column_schema));
   } else if (ObTimestampTZType == column_schema.get_data_type()) {
     ret = OB_ERR_WRONG_KEY_COLUMN;
     LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_schema.get_column_name_str().length(), column_schema.get_column_name_str().ptr());
@@ -2125,7 +2129,10 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
   bool is_modify_column = stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
                   && OB_DDL_MODIFY_COLUMN == (static_cast<AlterColumnSchema &>(column)).alter_type_;
   ParseNode *column_definition_ref_node = NULL;
-  if (T_COLUMN_DEFINITION != node->type_ || node->num_child_ < COLUMN_DEFINITION_NUM_CHILD ||
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (T_COLUMN_DEFINITION != node->type_ || node->num_child_ < COLUMN_DEFINITION_NUM_CHILD ||
      OB_ISNULL(allocator_) || OB_ISNULL(node->children_) || OB_ISNULL(node->children_[0]) ||
      T_COLUMN_REF != node->children_[0]->type_ ||
      COLUMN_DEF_NUM_CHILD != node->children_[0]->num_child_
@@ -2230,11 +2237,18 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
           column.set_charset_type(ObCharset::charset_type_by_coll(coll_type));
         }
       }
-      if (OB_SUCC(ret) && (column.is_string_type() || column.is_json()) 
+      if (OB_SUCC(ret) && tenant_data_version < DATA_VERSION_4_1_0_0
+          && (column.is_geometry() || data_type.get_meta_type().is_geometry())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant version is less than 4.1, geometry type not supported", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, geometry type");
+      }
+      if (OB_SUCC(ret) && (column.is_string_type() || column.is_json() || column.is_geometry())
           && stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
         if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type_, collation_type_))) {
           SQL_RESV_LOG(WARN, "fail to check and fill column charset info", K(ret));
-        } else if (data_type.get_meta_type().is_lob() || data_type.get_meta_type().is_json()) {
+        } else if (data_type.get_meta_type().is_lob() || data_type.get_meta_type().is_json()
+                   || data_type.get_meta_type().is_geometry()) {
           if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
             SQL_RESV_LOG(WARN, "fail to check text or blob column length", K(ret), K(column));
           }
@@ -2257,6 +2271,9 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
         if (OB_FAIL(resolve_enum_or_set_column(type_node, column))) {
           LOG_WARN("fail to resolve set column", K(ret), K(column));
         }
+      }
+      if (OB_SUCC(ret) && column.is_geometry() && OB_FAIL(column.set_geo_type(type_node->int32_values_[1]))) {
+        SQL_RESV_LOG(WARN, "fail to set geometry sub type", K(ret), K(column));
       }
     }
   }
@@ -2558,10 +2575,11 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_default(ObColumnSchema
       ret = OB_INVALID_DEFAULT;
       LOG_USER_ERROR(OB_INVALID_DEFAULT, column.get_column_name_str().length(), column.get_column_name_str().ptr());
       SQL_RESV_LOG(WARN, "BLOB, TEXT column can't have a default value", K(column), K(default_value), K(ret));
-    } else if (!default_value.is_null() && ob_is_json_tc(column.get_data_type())) {
+    } else if (!default_value.is_null()
+               && (ob_is_json_tc(column.get_data_type()) || ob_is_geometry_tc(column.get_data_type()))) {
       ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
       LOG_USER_ERROR(OB_ERR_BLOB_CANT_HAVE_DEFAULT, column.get_column_name_str().length(), column.get_column_name_str().ptr());
-      SQL_RESV_LOG(WARN, "BLOB, TEXT or JSON column can't have a default value", K(column), 
+      SQL_RESV_LOG(WARN, "JSON or GEOM column can't have a default value", K(column),
                   K(default_value), K(ret));
     } else {
       if (T_CONSTR_DEFAULT == attr_node->type_) {
@@ -2647,6 +2665,10 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           ret = OB_ERR_JSON_USED_AS_KEY;
           LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "JSON column can't be primary key", K(column), K(ret));
+        } else if (ob_is_geometry(column.get_data_type())) {
+          ret = OB_ERR_SPATIAL_UNIQUE_INDEX;
+          LOG_USER_ERROR(OB_ERR_SPATIAL_UNIQUE_INDEX);
+          SQL_RESV_LOG(WARN, "geometry column can't be primary key", K(column), K(ret));
         } else if (ObTimestampTZType == column.get_data_type()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
@@ -2673,6 +2695,10 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           ret = OB_ERR_JSON_USED_AS_KEY;
           LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "JSON column can't be unique key", K(column), K(ret));
+        } else if (ob_is_geometry(column.get_data_type())) {
+          ret = OB_ERR_SPATIAL_UNIQUE_INDEX;
+          LOG_USER_ERROR(OB_ERR_SPATIAL_UNIQUE_INDEX);
+          SQL_RESV_LOG(WARN, "geometry column can't be unique key", K(column), K(ret));
         } else if (ObTimestampTZType == column.get_data_type()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
@@ -2691,7 +2717,8 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
         break;
       }
       case T_CONSTR_AUTO_INCREMENT:
-        if (ob_is_text_tc(column.get_data_type()) || ob_is_json_tc(column.get_data_type())) {
+        if (ob_is_text_tc(column.get_data_type()) || ob_is_json_tc(column.get_data_type())
+            || ob_is_geometry_tc(column.get_data_type())) {
           ret = OB_ERR_COLUMN_SPEC;
           LOG_USER_ERROR(OB_ERR_COLUMN_SPEC, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "BLOB, TEXT column can't set autoincrement", K(column), K(default_value), K(ret));
@@ -2816,6 +2843,12 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           // compatible with mysql 5.7 check (expr), do nothing
           // alter table t modify c1 json check(xyz);
           break;
+      }
+      case T_CONSTR_SRID: {
+        if (OB_FAIL(resolve_srid_node(column, *attr_node))) {
+          SQL_RESV_LOG(WARN, "fail to resolve srid node", K(ret));
+        }
+        break;
       }
       default:  // won't be here
         ret = OB_ERR_PARSER_SYNTAX;
@@ -3048,6 +3081,12 @@ int ObDDLResolver::resolve_generated_column_attribute(ObColumnSchemaV2 &column,
         // alter table t modify c1 json check(xyz);
         break;
     }
+    case T_CONSTR_SRID: {
+      if (OB_FAIL(resolve_srid_node(column, *attr_node))) {
+        SQL_RESV_LOG(WARN, "fail to resolve srid node", K(ret));
+      }
+      break;
+    }
     default:  // won't be here
       ret = OB_ERR_PARSER_SYNTAX;
       SQL_RESV_LOG(WARN, "Wrong column attribute", K(ret), K(attr_node->type_));
@@ -3064,6 +3103,53 @@ int ObDDLResolver::resolve_generated_column_attribute(ObColumnSchemaV2 &column,
   }
   return ret;
 }
+
+int ObDDLResolver::resolve_srid_node(share::schema::ObColumnSchemaV2 &column,
+                                     const ParseNode &srid_node)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = session_info_->get_effective_tenant_id();
+  uint64_t tenant_data_version = 0;;
+
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, srid attribute");
+  } else if (T_CONSTR_SRID != srid_node.type_) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(srid_node.type_));
+  } else {
+    if (is_oracle_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_RESV_LOG(WARN, "srid column attribute is not supported in oracle mode",
+          K(ret), K(srid_node.type_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "srid column attribute is not supported in oracle mode");
+    } else {
+      if (srid_node.num_child_ != 1
+          || OB_ISNULL(srid_node.children_[0])
+          || T_INT != srid_node.children_[0]->type_) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "invalid node", K(ret));
+      } else if (!ob_is_geometry_tc(column.get_data_type())) {
+        ret = OB_ERR_SRID_WRONG_USAGE;
+        SQL_RESV_LOG(WARN, "srid column attribute only support in geometry column",
+            K(ret), K(srid_node.type_));
+        LOG_USER_ERROR(OB_ERR_SRID_WRONG_USAGE);
+      } else {
+        int64_t srid = srid_node.children_[0]->value_;
+        if (OB_FAIL(ObSqlGeoUtils::check_srid_by_srs(session_info_->get_effective_tenant_id(), srid))) {
+          SQL_RESV_LOG(WARN, "invalid srid", K(ret), K(srid));
+        } else {
+          column.set_srid(srid);
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 /*
 int ObDDLResolver::resolve_generated_column_definition(ObColumnSchemaV2 &column,
     ParseNode *node, ObColumnResolveStat &resolve_stat)
@@ -3734,7 +3820,7 @@ int ObDDLResolver::check_text_length(ObCharsetType cs_type,
   int ret = OB_SUCCESS;
   int64_t mbmaxlen = 0;
   int32_t default_length = ObAccuracy::DDL_DEFAULT_ACCURACY[type].get_length();
-  if(!(ob_is_text_tc(type) || ob_is_json_tc(type))
+  if(!(ob_is_text_tc(type) || ob_is_json_tc(type) || ob_is_geometry_tc(type))
      || CHARSET_INVALID == cs_type || CS_TYPE_INVALID == co_type) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(ERROR,"column infomation is error", K(cs_type), K(co_type), K(ret));
@@ -5229,6 +5315,122 @@ int ObDDLResolver::resolve_range_value_exprs(ParseNode *expr_list_node,
   return ret;
 }
 
+int ObDDLResolver::resolve_spatial_index_constraint(
+    const share::schema::ObTableSchema &table_schema,
+    const common::ObString &column_name,
+    int64_t column_num,
+    const int64_t index_keyname_value,
+    bool is_explicit_order)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  bool is_oracle_mode = false;
+
+  if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("check oracle compat mode failed", K(ret));
+  } else if (is_oracle_mode) {
+    // oracle mode not support geometry
+  } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_name))) {
+    if (index_keyname_value != static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY)) {
+      // do nothing
+    } else {
+      ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+      LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
+    }
+
+  } else if (OB_FAIL(resolve_spatial_index_constraint(*column_schema, column_num,
+      index_keyname_value, is_oracle_mode, is_explicit_order))) {
+    LOG_WARN("resolve spatial index constraint fail", K(ret), K(column_num), K(index_keyname_value));
+  }
+
+  return ret;
+}
+
+// 1. A spatial index can only be built on a single spatial column.
+//    CREATE TABLE spatial_index_constraint (g1 GEOMETRY NOT NULL, g2 GEOMETRY NOT NULL);
+//    CREATE INDEX idx ON spatial_index_constraint (g1, g2); -->illegal
+// 2. Spatial index can only be built on spatial columns.
+//    CREATE TABLE spatial_index_constraint (i int, g GEOMETRY NOT NULL);
+//    CREATE SPATIAL INDEX idx ON spatial_index_constraint (i); -->illegal
+// 3. Spatial column can only be indexed spatial index, can't build other index.
+//    CREATE TABLE spatial_index_constraint (i int, g GEOMETRY NOT NULL);
+//    CREATE UNIQUE INDEX idx ON spatial_index_constraint (g); -->illegal
+// 4. Column of a SPATIAL index must be NOT NULL.
+//    DROP TABLE IF EXISTS spatial_index_constraint;
+//    CREATE TABLE spatial_index_constraint (i int, g GEOMETRY);
+//    CREATE SPATIAL INDEX idx ON spatial_index_constraint (g); -->illegal
+//    CREATE INDEX idx ON spatial_index_constraint (g); -->illegal
+// 5. Column of a SPATIAL index must not be generated column;
+// 6. Cannot specify spatial index order.
+int ObDDLResolver::resolve_spatial_index_constraint(
+    const share::schema::ObColumnSchemaV2 &column_schema,
+    int64_t column_num,
+    const int64_t index_keyname_value,
+    bool is_oracle_mode,
+    bool is_explicit_order)
+{
+  int ret = OB_SUCCESS;
+  bool is_spatial_index = index_keyname_value == static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY);
+  bool is_default_index = index_keyname_value == static_cast<int64_t>(INDEX_KEYNAME::NORMAL_KEY);
+  uint64_t tenant_id = column_schema.get_tenant_id();
+  bool is_geo_column = ob_is_geometry_tc(column_schema.get_data_type());
+  uint64_t tenant_data_version = 0;
+
+  if (is_oracle_mode) {
+    // oracle mode not support geometry
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if ((is_geo_column || is_spatial_index) && tenant_data_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant version is less than 4.1, spatial index not supported", K(ret), K(is_geo_column), K(is_spatial_index));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, spatial index");
+  } else { // mysql mode
+    if (is_spatial_index) { // has 'SPATIAL' keyword
+      if (is_geo_column) {
+        index_keyname_ = SPATIAL_KEY;
+      } else {
+        ret = OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL;
+        LOG_USER_ERROR(OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL);
+        LOG_WARN("spatial index can only be built on spatial column", K(ret), K(column_schema));
+      }
+    } else if (is_default_index) { // there are no keyword
+      if (is_geo_column) {
+        index_keyname_ = SPATIAL_KEY;
+      } else {
+        // other index, do nothing
+      }
+    } else { // other index type (UNIQUE_KEY, FULLTEXT)
+      if (is_geo_column) {
+        ret = OB_ERR_SPATIAL_UNIQUE_INDEX;
+        LOG_USER_ERROR(OB_ERR_SPATIAL_UNIQUE_INDEX);
+        LOG_WARN("spatial column can only be indexed spatial index, can't build other index.",
+            K(ret), K(column_schema));
+      } else {
+        // do nothing
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && index_keyname_ == SPATIAL_KEY) {
+    if (column_num != 1) { // spatial only can be built in one column
+      ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+      LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+    } else if (column_schema.is_generated_column()) {
+      ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+      LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, column_schema.get_column_name());
+    } else if (is_explicit_order) {
+      ret = OB_ERR_INDEX_ORDER_WRONG_USAGE;
+      LOG_USER_ERROR(OB_ERR_INDEX_ORDER_WRONG_USAGE);
+    } else if (column_schema.is_nullable()) {
+      ret = OB_ERR_SPATIAL_CANT_HAVE_NULL;
+      LOG_USER_ERROR(OB_ERR_SPATIAL_CANT_HAVE_NULL);
+      LOG_WARN("column of a spatial index must be NOT NULL.", K(ret), K(column_schema));
+    }
+  }
+
+  return ret;
+}
+
 int ObDDLResolver::resolve_list_partition_elements(ParseNode *node,
                                                    const bool is_subpartition,
                                                    const ObPartitionFuncType part_type,
@@ -5909,7 +6111,8 @@ int ObDDLResolver::check_key_cover_partition_column(
     LOG_WARN("invalid argument", K(ret));
   } else if (global_) {
     if (INDEX_TYPE_NORMAL_GLOBAL == crt_idx_stmt->get_create_index_arg().index_type_
-        || INDEX_TYPE_UNIQUE_GLOBAL == crt_idx_stmt->get_create_index_arg().index_type_) {
+        || INDEX_TYPE_UNIQUE_GLOBAL == crt_idx_stmt->get_create_index_arg().index_type_
+        || INDEX_TYPE_SPATIAL_GLOBAL == crt_idx_stmt->get_create_index_arg().index_type_) {
       const common::ObPartitionKeyInfo &part_key_info = index_schema.get_partition_key_info();
       const common::ObPartitionKeyInfo &subpart_key_info = index_schema.get_subpartition_key_info();
       if (!index_schema.is_partitioned_table()) {

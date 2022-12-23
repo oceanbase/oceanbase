@@ -1650,7 +1650,7 @@ int ObFinishCompleteMigrationTask::try_enable_vote_()
 
   #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_MIGRATION_ENABLE_VOTE_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_MIGRATION_ENABLE_VOTE_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_MIGRATION_ENABLE_VOTE_FAILED", K(ret));
       }
@@ -1667,7 +1667,7 @@ int ObFinishCompleteMigrationTask::try_enable_vote_()
       LOG_INFO("succeed enable vote", KPC(ctx_));
     #ifdef ERRSIM
       if (OB_SUCC(ret)) {
-        ret = E(EventTable::EN_MIGRATION_ENABLE_VOTE_RETRY) OB_SUCCESS;
+        ret = OB_E(EventTable::EN_MIGRATION_ENABLE_VOTE_RETRY) OB_SUCCESS;
         if (OB_FAIL(ret)) {
           STORAGE_LOG(ERROR, "fake EN_MIGRATION_ENABLE_VOTE_RETRY", K(ret));
         }

@@ -991,6 +991,7 @@ class ObExternalSortRound
 {
 public:
   ObExternalSortRound();
+  ObExternalSortRound(ObIAllocator &allocator);
   virtual ~ObExternalSortRound();
   int init(const int64_t merge_count, const int64_t file_buf_size, const int64_t expire_timestamp,
       const uint64_t tenant_id, Compare *compare);
@@ -1031,6 +1032,15 @@ ObExternalSortRound<T, Compare>::ObExternalSortRound()
   : is_inited_(false), merge_count_(0), file_buf_size_(0), iters_(), writer_(),
     expire_timestamp_(0), compare_(NULL), merger_(),
     allocator_(common::ObNewModIds::OB_ASYNC_EXTERNAL_SORTER, common::OB_MALLOC_BIG_BLOCK_SIZE),
+    tenant_id_(common::OB_INVALID_ID), dir_id_(-1), is_writer_opened_(false)
+{
+}
+
+template<typename T, typename Compare>
+ObExternalSortRound<T, Compare>::ObExternalSortRound(ObIAllocator &allocator)
+  : is_inited_(false), merge_count_(0), file_buf_size_(0), iters_(), writer_(),
+    expire_timestamp_(0), compare_(NULL), merger_(),
+    allocator_(allocator, common::OB_MALLOC_BIG_BLOCK_SIZE),
     tenant_id_(common::OB_INVALID_ID), dir_id_(-1), is_writer_opened_(false)
 {
 }
@@ -1404,6 +1414,7 @@ class ObMemorySortRound
 public:
   typedef ObExternalSortRound<T, Compare> ExternalSortRound;
   ObMemorySortRound();
+  ObMemorySortRound(ObIAllocator &allocator);
   virtual ~ObMemorySortRound();
   int init(const int64_t mem_limit, const int64_t expire_timestamp,
       Compare *compare, ExternalSortRound *next_round);
@@ -1436,6 +1447,14 @@ template<typename T, typename Compare>
 ObMemorySortRound<T, Compare>::ObMemorySortRound()
   : is_inited_(false), is_in_memory_(false), has_data_(false), buf_mem_limit_(0), expire_timestamp_(0),
     next_round_(NULL), allocator_(common::ObNewModIds::OB_ASYNC_EXTERNAL_SORTER, common::OB_MALLOC_BIG_BLOCK_SIZE), item_list_(NULL, common::ObNewModIds::OB_ASYNC_EXTERNAL_SORTER),
+    compare_(NULL), iter_(NULL)
+{
+}
+
+template<typename T, typename Compare>
+ObMemorySortRound<T, Compare>::ObMemorySortRound(ObIAllocator &allocator)
+  : is_inited_(false), is_in_memory_(false), has_data_(false), buf_mem_limit_(0), expire_timestamp_(0),
+    next_round_(NULL), allocator_(allocator, common::OB_MALLOC_BIG_BLOCK_SIZE), item_list_(NULL, common::ObNewModIds::OB_ASYNC_EXTERNAL_SORTER),
     compare_(NULL), iter_(NULL)
 {
 }
@@ -1665,6 +1684,7 @@ public:
   typedef ObMemorySortRound<T, Compare> MemorySortRound;
   typedef ObExternalSortRound<T, Compare> ExternalSortRound;
   ObExternalSort();
+  ObExternalSort(ObIAllocator &allocator);
   virtual ~ObExternalSort();
   int init(const int64_t mem_limit, const int64_t file_buf_size, const int64_t expire_timestamp,
       const uint64_t tenant_id, Compare *compare);
@@ -1699,6 +1719,17 @@ ObExternalSort<T, Compare>::ObExternalSort()
     compare_(NULL), memory_sort_round_(), curr_round_(NULL), next_round_(NULL),
     is_empty_(true), tenant_id_(common::OB_INVALID_ID)
 {
+}
+
+template<typename T, typename Compare>
+ObExternalSort<T, Compare>::ObExternalSort(ObIAllocator &allocator)
+  : is_inited_(false), file_buf_size_(0), buf_mem_limit_(0), expire_timestamp_(0), merge_count_per_round_(0),
+    compare_(NULL), memory_sort_round_(allocator), curr_round_(NULL), next_round_(NULL),
+    is_empty_(true), tenant_id_(common::OB_INVALID_ID)
+{
+  for (int64_t i = 0; i < EXTERNAL_SORT_ROUND_CNT; i++) {
+    new (&sort_rounds_[i]) ExternalSortRound(allocator);
+  }
 }
 
 template<typename T, typename Compare>

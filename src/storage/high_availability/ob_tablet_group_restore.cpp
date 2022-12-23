@@ -328,7 +328,7 @@ int ObTabletGroupRestoreDagNet::init_by_param(const ObIDagInitParam *param)
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_RESTORE_TABLET_INIT_PARAM_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_RESTORE_TABLET_INIT_PARAM_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       LOG_WARN("init tablet restore dag param failed", K(ret));
     }
@@ -1557,7 +1557,7 @@ int ObFinishTabletGroupRestoreTask::process()
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_FINISH_TABLET_GROUP_RESTORE_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_FINISH_TABLET_GROUP_RESTORE_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       STORAGE_LOG(ERROR, "fake EN_FINISH_TABLET_GROUP_RESTORE_FAILED", K(ret));
       int32_t retry_count = 0;

@@ -319,7 +319,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         }
         #ifdef ERRSIM
         {
-          int tmp_ret = E(EventTable::EN_CTAS_FAIL_NO_DROP_ERROR) OB_SUCCESS; //错误注入, 使表不能清理
+          int tmp_ret = OB_E(EventTable::EN_CTAS_FAIL_NO_DROP_ERROR) OB_SUCCESS; //错误注入, 使表不能清理
           if (OB_FAIL(tmp_ret)) {
             ret = tmp_ret;
             need_clean = false;

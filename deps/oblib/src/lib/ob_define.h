@@ -153,6 +153,7 @@ const char *const OB_NEXT_RESTART_SEQUENCE_PREFIX = "next_restart_sequence_";
 const uint64_t SEARRAY_INIT_NUM = 4;
 const int64_t OB_DEFAULT_TABLE_DOP = 1;
 const int64_t OB_DEFAULT_META_OBJ_PERCENTAGE_LIMIT = 10;
+const uint64_t OB_DEFAULT_COLUMN_SRS_ID = 0xffffffffffffffe0;
 
 // See ObDeviceHealthStatus for more information
 const int64_t OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH = 20;

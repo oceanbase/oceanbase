@@ -1024,6 +1024,31 @@ int ObDmlCgService::convert_dml_column_info(ObTableID index_tid,
   return ret;
 }
 
+template<typename ExprType>
+int ObDmlCgService::add_geo_col_projector(const ObIArray<ExprType*> &cur_row,
+                                          const ObIArray<ObRawExpr*> &full_row,
+                                          const ObIArray<uint64_t> &dml_column_ids,
+                                          uint32_t proj_idx,
+                                          ObDASDMLBaseCtDef &das_ctdef,
+                                          IntFixedArray &row_projector)
+{
+  int ret = OB_SUCCESS;
+  int64_t column_idx = OB_INVALID_INDEX;
+  int64_t projector_idx = OB_INVALID_INDEX;
+  uint64_t geo_cid = das_ctdef.table_param_.get_data_table().get_spatial_geo_col_id();
+  if (has_exist_in_array(dml_column_ids, geo_cid, &column_idx)) {
+    ObRawExpr *column_expr = cur_row.at(column_idx);
+    if (!has_exist_in_array(full_row, column_expr, &projector_idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("row column not found in full row columns", K(ret),
+                K(column_idx), KPC(cur_row.at(column_idx)));
+    } else {
+      row_projector.at(proj_idx) = projector_idx;
+    }
+  }
+  return ret;
+}
+
 template<typename OldExprType, typename NewExprType>
 int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_ids,
                                            const ObIArray<uint64_t> &storage_column_ids,
@@ -1035,11 +1060,14 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
   int ret = OB_SUCCESS;
   IntFixedArray &old_row_projector = das_ctdef.old_row_projector_;
   IntFixedArray &new_row_projector = das_ctdef.new_row_projector_;
+  bool is_spatial_index = das_ctdef.table_param_.get_data_table().is_spatial_index()
+                          && das_ctdef.op_type_ == DAS_OP_TABLE_UPDATE;
+  uint8_t extra_geo = is_spatial_index ? 1 : 0;
   //generate old row projector
   if (!old_row.empty()) {
     //generate storage row projector
-    if (OB_FAIL(old_row_projector.prepare_allocate(storage_column_ids.count()))) {
-      LOG_WARN("init row projector array failed", K(ret), K(storage_column_ids.count()));
+    if (OB_FAIL(old_row_projector.prepare_allocate(storage_column_ids.count() + extra_geo))) {
+      LOG_WARN("init row projector array failed", K(ret), K(storage_column_ids.count()), K(extra_geo));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < storage_column_ids.count(); ++i) {
       uint64_t storage_cid = storage_column_ids.at(i);
@@ -1060,12 +1088,17 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
         }
       }
     }
+    if (OB_SUCC(ret) && is_spatial_index
+        && OB_FAIL(add_geo_col_projector(old_row, full_row, dml_column_ids, storage_column_ids.count(),
+                                         das_ctdef, old_row_projector))) {
+        LOG_WARN("add geo column projector failed", K(ret));
+    }
   }
   //generate new row projector
   if (!new_row.empty()) {
     //generate storage row projector
-    if (OB_FAIL(new_row_projector.prepare_allocate(storage_column_ids.count()))) {
-      LOG_WARN("init row projector array failed", K(ret), K(storage_column_ids.count()));
+    if (OB_FAIL(new_row_projector.prepare_allocate(storage_column_ids.count() + extra_geo))) {
+      LOG_WARN("init row projector array failed", K(ret), K(storage_column_ids.count()), K(extra_geo));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < storage_column_ids.count(); ++i) {
       uint64_t storage_cid = storage_column_ids.at(i);
@@ -1085,6 +1118,11 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
           new_row_projector.at(i) = projector_idx;
         }
       }
+    }
+    if (OB_SUCC(ret) && is_spatial_index
+        && OB_FAIL(add_geo_col_projector(new_row, full_row, dml_column_ids, storage_column_ids.count(),
+                                         das_ctdef, new_row_projector))) {
+        LOG_WARN("add geo column projector failed", K(ret));
     }
   }
   return ret;
@@ -1940,6 +1978,7 @@ int ObDmlCgService::add_all_column_infos(ObLogDelUpd &op,
         column_content.auto_filled_timestamp_ =
             column->get_result_type().has_result_flag(ON_UPDATE_NOW_FLAG);
         column_content.is_nullable_ = !column->get_result_type().is_not_null_for_write();
+        column_content.srs_id_ = column->get_srs_id();
         if (is_heap_table) {
           if (OB_FAIL(get_column_ref_base_cid(op, column, base_cid))) {
             LOG_WARN("fail to get base_column_id", K(ret), KPC(column));
@@ -1985,6 +2024,7 @@ int ObDmlCgService::convert_upd_assign_infos(bool is_heap_table,
     column_content.auto_filled_timestamp_ = col->get_result_type().has_result_flag(ON_UPDATE_NOW_FLAG);
     column_content.is_nullable_ = !col->get_result_type().is_not_null_for_write();
     column_content.is_predicate_column_ = assigns.at(i).is_predicate_column_;
+    column_content.srs_id_ = col->get_srs_id();
     column_content.is_implicit_ = assigns.at(i).is_implicit_;
     if (is_heap_table &&
         assigns.at(i).expr_->get_expr_type() == T_TABLET_AUTOINC_NEXTVAL) {

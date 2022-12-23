@@ -24,6 +24,7 @@
 #include "common/object/ob_object.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_base.h"
+#include "lib/geo/ob_geo_bin.h"
 
 using namespace oceanbase::common;
 
@@ -1078,6 +1079,54 @@ int ObMySQLUtil::json_cell_str(char *buf, const int64_t len, const ObString &val
     }
   }
 
+  return ret;
+}
+
+int ObMySQLUtil::geometry_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t length = val.length();
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input args", K(ret), KP(buf));
+  } else if (length < WKB_DATA_OFFSET + WKB_GEO_TYPE_SIZE) {
+    if (OB_LIKELY(length < len - pos)) {
+      int64_t pos_bk = pos;
+      if (OB_FAIL(ObMySQLUtil::store_length(buf, len, length, pos))) {
+        LOG_WARN("geometry_cell_str store length failed", K(ret), K(len), K(length), K(pos));
+      } else {
+        if (OB_LIKELY(length <= len - pos)) {
+          MEMCPY(buf + pos, val.ptr(), length);
+          pos += length;
+        } else {
+          pos = pos_bk;
+          ret = OB_SIZE_OVERFLOW;
+        }
+      }
+    } else {
+      ret = OB_SIZE_OVERFLOW;
+    }
+  } else {
+    length = val.length() - WKB_VERSION_SIZE;
+    if (OB_LIKELY(length < len - pos)) {
+      int64_t pos_bk = pos;
+      if (OB_FAIL(ObMySQLUtil::store_length(buf, len, length, pos))) {
+        LOG_WARN("geometry_cell_str store length failed", K(ret), K(len), K(length), K(pos));
+      } else {
+        if (OB_LIKELY(length <= len - pos)) {
+          MEMCPY(buf + pos, val.ptr(), WKB_GEO_SRID_SIZE); // srid
+          pos += WKB_GEO_SRID_SIZE;
+          MEMCPY(buf + pos, val.ptr() + WKB_OFFSET, length - WKB_GEO_SRID_SIZE);
+          pos += (length - WKB_GEO_SRID_SIZE);
+        } else {
+          pos = pos_bk;
+          ret = OB_SIZE_OVERFLOW;
+        }
+      }
+    } else {
+      ret = OB_SIZE_OVERFLOW;
+    }
+  }
   return ret;
 }
 

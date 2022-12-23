@@ -792,7 +792,8 @@ inline int ObDatum::from_obj(const ObObj &obj)
       case ObNCharType:
       case ObURowIDType:
       case ObLobType:
-      case ObJsonType: {
+      case ObJsonType:
+      case ObGeometryType: {
         obj2datum<OBJ_DATUM_STRING>(obj);
         break;
       }
@@ -912,7 +913,8 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       case ObNCharType:
       case ObURowIDType:
       case ObLobType:
-      case ObJsonType: {
+      case ObJsonType:
+      case ObGeometryType: {
         datum2obj<OBJ_DATUM_STRING>(obj);
         break;
       }

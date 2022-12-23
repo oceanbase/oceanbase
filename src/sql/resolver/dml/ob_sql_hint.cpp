@@ -2213,7 +2213,9 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
                                                            table_index_count,
                                                            false,
                                                            table_->access_all_part(),
-                                                           false /*domain index*/))) {
+                                                           false /*domain index*/,
+                                                           false,
+                                                           false /*spatial index*/))) {
     LOG_WARN("failed to get can read index", K(ret));
   } else if (table_index_count > OB_MAX_INDEX_PER_TABLE) {
     ret = OB_ERR_UNEXPECTED;

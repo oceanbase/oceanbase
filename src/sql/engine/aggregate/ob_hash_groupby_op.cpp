@@ -2621,7 +2621,7 @@ int ObHashGroupByOp::init_by_pass_op()
   bypass_ctrl_.open_by_pass_ctrl();
   uint64_t cut_ratio = 0;
   uint64_t default_cut_ratio = ObAdaptiveByPassCtrl::INIT_CUT_RATIO;
-  err_sim = E(EventTable::EN_ADAPTIVE_GROUP_BY_SMALL_CACHE) 0;
+  err_sim = OB_E(EventTable::EN_ADAPTIVE_GROUP_BY_SMALL_CACHE) 0;
   if (0 != err_sim) {
     if (INT32_MAX == std::abs(err_sim)) {
       force_by_pass_ = true;

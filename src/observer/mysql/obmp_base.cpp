@@ -145,7 +145,7 @@ int ObMPBase::after_process(int error_code)
     } else if (can_force_print(error_code)) {
       // 需要打印TRACE日志的错误码添加在这里
       int process_ret = error_code;
-      NG_TRACE_EXT(process_ret, Y(process_ret));
+      NG_TRACE_EXT(process_ret, OB_Y(process_ret));
       FORCE_PRINT_TRACE(THE_TRACE, "[err query]");
     } else if (THIS_WORKER.need_retry()) {
       if (OB_TRY_LOCK_ROW_CONFLICT != error_code) {

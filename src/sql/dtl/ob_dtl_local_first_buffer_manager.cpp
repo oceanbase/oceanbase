@@ -116,7 +116,7 @@ int ObDtlLocalFirstBufferCache::cache_buffer(ObDtlCacheBufferInfo *&buffer)
     uint64_t chan_id = buffer->chid();
 #ifdef ERRSIM
     // -17 enable failed set refactored
-    ret = E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
+    ret = OB_E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
 #endif
     int64_t tmp_ret = ret;
     if (TP_ENABLE_FAILED_SET_HT == ret) {
@@ -430,7 +430,7 @@ int ObDtlLocalFirstBufferCacheManager::cache_buffer(int64_t chid, ObDtlLinkedBuf
         ObDtlLinkedBuffer *buffer = nullptr;
     #ifdef ERRSIM
         // -16 enable failed to alloc memory
-        ret = E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
+        ret = OB_E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
     #endif
         if (OB_SUCC(ret) || TP_ENABLE_FAILED_ALLOC_MEM != ret) {
           ret = OB_SUCCESS;

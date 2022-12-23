@@ -262,7 +262,11 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
     } else if (param_info.flag_.is_boolean_ != param.is_boolean()) { //bool type not match int type
       is_same = false;
     } else {
-      is_same = (param.get_scale() == param_info.scale_);
+      // number params in point and st_point can ignore scale check to share plancache
+      // please refrer to ObSqlParameterization::is_ignore_scale_check
+      is_same = param_info.flag_.ignore_scale_check_
+                ? true
+                : (param.get_scale() == param_info.scale_);
     }
   }
   return ret;

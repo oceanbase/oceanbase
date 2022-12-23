@@ -513,7 +513,7 @@ int ObGtsSource::refresh_gts_cache_leader_()
   int ret = OB_SUCCESS;
   const int64_t cluster_id = GCONF.cluster_id;
 #ifdef ERRSIM
-  ret = E(EventTable::EN_GET_GTS_LEADER) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_GET_GTS_LEADER) OB_SUCCESS;
   if (OB_LS_LOCATION_LEADER_NOT_EXIST == ret) {
     ObClockGenerator::msleep(100);
     return ret;

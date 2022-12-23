@@ -260,7 +260,7 @@ public:
   {
     return row_val_.get_deep_copy_size();
   }
-  TO_YSON_KV(OB_ID(row), row_val_, Y_(capacity));
+  TO_YSON_KV(OB_ID(row), row_val_, OB_Y_(capacity));
   int64_t to_string(char *buffer, const int64_t length) const;
   /*
    *multi version row section

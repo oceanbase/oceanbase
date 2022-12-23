@@ -584,9 +584,26 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
     if (OB_UNLIKELY(NULL == rowkey_column)) {
       ret = OB_SCHEMA_ERROR;
       SERVER_LOG(WARN, "fail to get rowkey column", K(ret));
+    } else if (index_schema->is_spatial_index()) {
+      if (rowkey_column->type_.get_type() == ObVarcharType) {
+        is_end = true; // mbr列不需要输出
+        index_column_idx_ = OB_INVALID_ID;
+      } else { // cellid列,获取主表geo列column_name
+        const ObColumnSchemaV2 *cellid_column = NULL;
+        if (OB_ISNULL(cellid_column = index_schema->get_column_schema(rowkey_column->column_id_))) {
+          ret = OB_SCHEMA_ERROR;
+          SERVER_LOG(WARN, "fail to get data table cellid column schema", K(ret), K(rowkey_column->column_id_));
+        } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(cellid_column->get_geo_col_id()))) {
+          ret = OB_SCHEMA_ERROR;
+          SERVER_LOG(WARN, "fail to get data table geo column schema", K(ret), K(cellid_column->get_geo_col_id()));
+        }
+      }
     } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(rowkey_column->column_id_))) { // 索引表的column_id跟数据表的对应列的column_id是相等的
       ret = OB_SCHEMA_ERROR;
       SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K_(rowkey_column->column_id));
+    }
+
+    if (OB_FAIL(ret) || is_end) {
     } else if (OB_ISNULL(index_column = index_schema->get_column_schema(rowkey_column->column_id_))) {
       ret = OB_SCHEMA_ERROR;
       SERVER_LOG(WARN, "get index column schema failed", K_(rowkey_column->column_id));
@@ -713,6 +730,8 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
           case OB_APP_MIN_COLUMN_ID + 13: {
             if (false) {
               cells[cell_idx].set_varchar(ObString("FULLTEXT"));
+            } else if (index_schema->is_spatial_index()) {
+              cells[cell_idx].set_varchar(ObString("SPATIAL"));
             } else {
               cells[cell_idx].set_varchar(ObString("BTREE")); //FIXME 一定是BTREE吗？
             }
@@ -829,7 +848,8 @@ int ObTableIndex::add_fulltext_index_column(const ObString &database_name,
           case OB_APP_MIN_COLUMN_ID + 5: {
             int64_t non_unique = 0;
             if (INDEX_TYPE_UNIQUE_GLOBAL == index_schema->get_index_type()
-                || INDEX_TYPE_UNIQUE_LOCAL == index_schema->get_index_type()) {
+                || INDEX_TYPE_UNIQUE_LOCAL == index_schema->get_index_type()
+                || index_schema->is_spatial_index()) {
               non_unique = 0;
             } else {
               non_unique = 1;

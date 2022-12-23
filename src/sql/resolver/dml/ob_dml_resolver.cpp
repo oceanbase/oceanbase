@@ -907,7 +907,8 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
         col_expr->set_table_alias_name();
       }
       bool is_lob_column = (ob_is_text_tc(col_schema->get_data_type())
-                            || ob_is_json_tc(col_schema->get_data_type()));
+                            || ob_is_json_tc(col_schema->get_data_type())
+                            || ob_is_geometry_tc(col_schema->get_data_type()));
       col_expr->set_lob_column(is_lob_column);
       if (session_info_->get_ddl_info().is_ddl()) {
         column_item.set_default_value(col_schema->get_orig_default_value());
@@ -955,6 +956,7 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       column_item.column_name_ = col_expr->get_column_name();
       column_item.base_tid_ = tid;
       column_item.base_cid_ = column_item.column_id_;
+      column_item.is_geo_ = col_schema->is_geometry();
       LOG_DEBUG("succ to fill column_item", K(column_item), KPC(col_schema));
       if (OB_FAIL(stmt->add_column_item(column_item))) {
         LOG_WARN("add column item to stmt failed", K(ret));
@@ -1591,6 +1593,8 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
         LOG_WARN("resolve table partition expr failed", K(ret), K(table_name));
       } else if (OB_FAIL(resolve_table_check_constraint_items(table_item, table_schema))) {
         LOG_WARN("resolve table partition expr failed", K(ret), K(table_name));
+      } else if (stmt->is_select_stmt() && OB_FAIL(resolve_geo_mbr_column())) {
+        LOG_WARN("resolve geo mbr column failed", K(ret), K(table_name));
       } else if (table_schema->is_oracle_tmp_table() && stmt::T_MERGE == stmt->get_stmt_type()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "MERGE refers to a temporary table");
@@ -4807,9 +4811,27 @@ int ObDMLResolver::add_additional_function_according_to_type(const ColumnItem *c
       if (need_padding && !params_.query_ctx_->is_prepare_stmt()) {
         OZ(build_padding_expr(session_info_, column, expr));
       }
-      OZ(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
-                                                *params_.allocator_,
-                                                *column->get_expr(), expr, session_info_));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+                                                  *params_.allocator_,
+                                                  *column->get_expr(), expr, session_info_))) {
+          LOG_WARN("fail to build column conv expr", K(ret));
+        } else if (column->is_geo_ && T_FUN_COLUMN_CONV == expr->get_expr_type()) {
+          // 1. set geo sub type to cast mode to column covert expr when update
+          // 2. check geo type while doing column covert.
+          const ObColumnRefRawExpr *raw_expr = column->get_expr();
+          if (OB_ISNULL(raw_expr)) {
+            ret = OB_ERR_NULL_VALUE;
+            LOG_WARN("raw expr in column item is null", K(ret));
+          } else {
+            ObGeoType geo_type = raw_expr->get_geo_type();
+            ObConstRawExpr *type_expr = static_cast<ObConstRawExpr *>(expr->get_param_expr(0));
+            ObObj obj;
+            obj.set_int(ObInt32Type, static_cast<uint32_t>(geo_type) << 16 | ObGeometryType);
+            type_expr->set_value(obj);
+          }
+        }
+      }
     }
   } //end else
   return ret;
@@ -4952,7 +4974,8 @@ int ObDMLResolver::resolve_generated_column_expr_temp(TableItem *table_item, con
                                                                  col_schema->get_column_id(),
                                                                  has_index))) {
         LOG_WARN("check column whether has index failed", K(ret));
-      } else if (!col_schema->is_stored_generated_column() && !has_index) {
+      } else if (!col_schema->is_stored_generated_column() && !has_index
+                 && !col_schema->is_spatial_generated_column()) {
         //do nothing
         //匹配被物化到存储中的生成列，减少冗余计算
         //heap table的生成列作为分区键时，也会作为主键进行物化
@@ -5243,6 +5266,37 @@ int ObDMLResolver::deduce_generated_exprs(ObIArray<ObRawExpr*> &exprs)
     } else if (OB_FAIL(get_stmt()->add_deduced_exprs(generate_exprs))) {
       LOG_WARN("add generated exprs failed", K(generate_exprs), K(ret));
     } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_geo_mbr_column()
+{
+  int ret = OB_SUCCESS;
+  // try to get mbr generated column
+  for (int64_t j = 0; OB_SUCC(ret) && j < gen_col_exprs_.count(); ++j) {
+    const ObRawExpr *dep_expr = gen_col_exprs_.at(j).dependent_expr_;
+    if (dep_expr->get_expr_type() == T_FUN_SYS_SPATIAL_MBR) {
+      ObColumnRefRawExpr *left_expr = NULL;
+      ObDMLStmt *stmt = gen_col_exprs_.at(j).stmt_;
+      TableItem *table_item = gen_col_exprs_.at(j).table_item_;
+      const ObString &column_name = gen_col_exprs_.at(j).column_name_;
+      ColumnItem *col_item = NULL;
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null table item", K(ret));
+      } else if (OB_FAIL(resolve_basic_column_item(*table_item, column_name, true, col_item, stmt))) {
+        LOG_WARN("resolve basic column reference failed", K(ret));
+      } else if (OB_ISNULL(col_item) || OB_ISNULL(left_expr = col_item->expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column item is invalid", K(col_item), K(left_expr));
+      } else {
+        left_expr->set_explicited_reference();
+        if (OB_FAIL(stmt->add_column_item(*col_item))) {
+          LOG_WARN("push back error", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }

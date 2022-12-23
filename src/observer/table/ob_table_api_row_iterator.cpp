@@ -426,7 +426,8 @@ int ObTableApiRowIterator::cons_column_type(const share::schema::ObColumnSchemaV
   int ret = OB_SUCCESS;
   column_type.set_type(column_schema.get_data_type());
   column_type.set_result_flag(ObRawExprUtils::calc_column_result_flag(column_schema));
-  if (ob_is_string_type(column_schema.get_data_type()) || ob_is_json(column_schema.get_data_type())) {
+  if (ob_is_string_type(column_schema.get_data_type()) || ob_is_json(column_schema.get_data_type())
+      || ob_is_geometry(column_schema.get_data_type())) {
     column_type.set_collation_type(column_schema.get_collation_type());
     column_type.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {
@@ -1048,6 +1049,9 @@ int ObTableApiUpdateRowIterator::obj_append(
         target.set_meta_type(target_type);
       } else if (ob_is_json_tc(target_type.get_type())) {
         target.set_json_value(target_type.get_type(), result_ptr, result_len);
+        target.set_meta_type(target_type);
+      } else if (ob_is_geometry_tc(target_type.get_type())) {
+        target.set_geometry_value(target_type.get_type(), result_ptr, result_len);
         target.set_meta_type(target_type);
       } else {  // Varchar/Varbinary
         target.set_varchar_value(result_ptr, result_len);

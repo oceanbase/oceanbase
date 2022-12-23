@@ -70,6 +70,7 @@ public:
   static bool is_cte_generated_column(uint64_t flag);
   static bool is_default_expr_v2_column(uint64_t flag);
   static bool is_fulltext_column(uint64_t flag);
+  static bool is_spatial_generated_column(uint64_t flag);
   static bool is_generated_column(uint64_t flag) { return is_virtual_generated_column(flag) || is_stored_generated_column(flag); }
   static bool is_identity_column(uint64_t flag) { return is_always_identity_column(flag) || is_default_identity_column(flag) || is_default_on_null_identity_column(flag); }
   static bool is_label_se_column(uint64_t flag);

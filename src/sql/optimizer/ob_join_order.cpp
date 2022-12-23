@@ -567,7 +567,67 @@ int ObJoinOrder::get_valid_index_ids_with_no_index_hint(ObSqlSchemaGuard &schema
   return ret;
 }
 
+int ObJoinOrder::extract_geo_schema_info(const uint64_t table_id,
+                                         const uint64_t index_id,
+                                         ObWrapperAllocator &wrap_allocator,
+                                         ColumnIdInfoMapAllocer &map_alloc,
+                                         ColumnIdInfoMap &geo_columnInfo_map)
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  const share::schema::ObTableSchema *index_schema = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
+      OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(schema_guard), K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(table_id), K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
+    LOG_WARN("fail to get index schema", K(index_id), K(ret));
+  } else if (OB_ISNULL(table_schema) || OB_ISNULL(index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(table_schema), K(index_schema), K(ret));
+  } else if (OB_FAIL(geo_columnInfo_map.create(OB_DEFAULT_SRID_BUKER, &map_alloc, &wrap_allocator))) {
+    LOG_WARN("Init column_info_map failed", K(ret));
+  } else {
+    const ObRowkeyInfo* rowkey_info = NULL;
+    const ObColumnSchemaV2 *column_schema = NULL;
+    rowkey_info = &index_schema->get_rowkey_info();
+    uint64_t column_id = OB_INVALID_ID;
+    // traverse index schema
+    for (int col_idx = 0;  OB_SUCC(ret) && col_idx < rowkey_info->get_size(); ++col_idx) {
+      if (OB_FAIL(rowkey_info->get_column_id(col_idx, column_id))) {
+        LOG_WARN("Failed to get column id", K(ret));
+      } else if (OB_ISNULL(column_schema = (index_schema->get_column_schema(column_id)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema", K(column_id), K(ret));
+      } else if (column_schema->is_spatial_cellid_column()) {
+        const ObColumnSchemaV2 *geo_column_schema = NULL;
+        uint64_t geo_col_id = column_schema->get_geo_col_id();
+        ObGeoColumnInfo column_info;
+        if (OB_ISNULL(geo_column_schema = (table_schema->get_column_schema(geo_col_id)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get column schema", K(column_id), K(ret));
+        } else if (geo_column_schema->is_geometry()) {
+          column_info.srid_ = geo_column_schema->get_srid();
+          column_info.cellid_columnId_ = column_id;
+          if (OB_FAIL(geo_columnInfo_map.set_refactored(geo_col_id, column_info))) {
+            LOG_WARN("failed to set columnId_map", K(geo_col_id), K(ret));
+          } else if (OB_FAIL(geo_columnInfo_map.set_refactored(column_id, column_info))) {
+            LOG_WARN("failed to set columnId_map", K(column_id), K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObJoinOrder::get_query_range_info(const uint64_t table_id,
+                                      const uint64_t base_table_id,
                                       const uint64_t index_id,
                                       QueryRangeInfo &range_info,
                                       PathHelper &helper)
@@ -581,6 +641,10 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
   const share::schema::ObTableSchema *index_schema = NULL;
   ObQueryRangeArray &ranges = range_info.get_ranges();
   ObIArray<ColumnItem> &range_columns = range_info.get_range_columns();
+  bool is_geo_index = false;
+  ColumnIdInfoMap geo_columnInfo_map;
+  ObWrapperAllocator wrap_allocator(*allocator_);
+  ColumnIdInfoMapAllocer map_alloc(OB_MALLOC_NORMAL_BLOCK_SIZE, wrap_allocator);
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard()) ||
@@ -596,6 +660,12 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
   } else if (OB_FAIL(get_plan()->get_index_column_items(opt_ctx->get_expr_factory(),
                                                         table_id, *index_schema, range_columns))) {
     LOG_WARN("failed to generate rowkey column items", K(ret));
+  } else if ((is_geo_index = index_schema->is_spatial_index()) && OB_FAIL(extract_geo_schema_info(base_table_id,
+                                                                                                index_id,
+                                                                                                wrap_allocator,
+                                                                                                map_alloc,
+                                                                                                geo_columnInfo_map))) {
+    LOG_WARN("failed to extract geometry schema info", K(ret), K(table_id), K(index_id));
   } else {
     const ObSQLSessionInfo *session = opt_ctx->get_session_info();
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
@@ -605,10 +675,15 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
     int64_t range_prefix_count = 0;
     bool contain_always_false = false;
     bool has_exec_param = false;
-    if (OB_FAIL(extract_preliminary_query_range(range_columns,
-                                                helper.filters_,
-                                                range_info.get_expr_constraints(),
-                                                query_range))) {
+    if (!is_geo_index && OB_FAIL(extract_preliminary_query_range(range_columns,
+                                                                 helper.filters_,
+                                                                 range_info.get_expr_constraints(),
+                                                                 query_range))) {
+      LOG_WARN("failed to extract query range", K(ret), K(index_id));
+    } else if (is_geo_index && OB_FAIL(extract_geo_preliminary_query_range(range_columns,
+                                                                           helper.filters_,
+                                                                           geo_columnInfo_map,
+                                                                           query_range))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (OB_ISNULL(query_range)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1261,6 +1336,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->est_cost_info_.index_meta_info_.is_index_back_ = index_info_entry->is_index_back();
     ap->est_cost_info_.index_meta_info_.is_unique_index_ = index_info_entry->is_unique_index();
     ap->est_cost_info_.index_meta_info_.is_global_index_ = index_info_entry->is_index_global();
+    ap->est_cost_info_.index_meta_info_.is_geo_index_ = index_info_entry->is_index_geo();
     ap->est_cost_info_.is_virtual_table_ = is_virtual_table(ref_id);
     ap->est_cost_info_.table_metas_ = &get_plan()->get_basic_table_metas();
     ap->est_cost_info_.sel_ctx_ = &get_plan()->get_selectivity_ctx();
@@ -1811,6 +1887,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
       bool is_index_back = false;
       bool is_unique_index = false;
       bool is_index_global = false;
+      bool is_index_geo = index_schema->is_spatial_index();
       entry->set_index_id(index_id);
       int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
       int64_t max_prefix_count = 0;
@@ -1827,6 +1904,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
           entry->get_ordering_info().get_ordering().reset();
         }
         entry->set_is_index_global(is_index_global);
+        entry->set_is_index_geo(is_index_geo);
         entry->set_is_index_back(is_index_back);
         entry->set_is_unique_index(is_unique_index);
         entry->get_ordering_info().set_scan_direction(direction);
@@ -1857,10 +1935,11 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
            //ignore extract query range
           LOG_TRACE("ignore virtual table", K(base_table_id), K(index_id));
         } else if (OB_FAIL(get_query_range_info(table_id,
+                                                base_table_id,
                                                 index_id,
                                                 entry->get_range_info(),
                                                 helper))) {
-          LOG_WARN("failed to get query range", K(ret));
+          LOG_WARN("failed to get query range", K(ret), K(table_id), K(base_table_id), K(index_id));
         } else {
           LOG_TRACE("finish extract query range", K(table_id), K(index_id));
         }
@@ -2131,7 +2210,8 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
                                                             false,
                                                             table_item->access_all_part(),
                                                             false /*domain index*/,
-                                                            table_item->is_link_table() /*is_link*/))) {
+                                                            table_item->is_link_table() /*is_link*/,
+                                                            false /*spatial index*/))) {
     LOG_WARN("failed to get can read index", K(ref_table_id), K(ret));
   } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
     ret = OB_ERR_UNEXPECTED;
@@ -2660,10 +2740,28 @@ int ObJoinOrder::extract_filter_column_ids(const ObIArray<ObRawExpr*> &quals,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column expr should not be null", K(ret), K(i));
         } else {
-          const uint64_t column_id = column->get_column_id();
+          uint64_t column_id = column->get_column_id();
           bool has = false;
           if (is_data_table) {
             has = true;
+          } else if (index_schema.is_spatial_index()) {
+            const ObRowkeyInfo* rowkey_info = &index_schema.get_rowkey_info();
+            const ObColumnSchemaV2 *column_schema = NULL;
+            uint64_t index_column_id = OB_INVALID_ID;
+            for (int col_idx = 0;  OB_SUCC(ret) && col_idx < rowkey_info->get_size(); ++col_idx) {
+              if (OB_FAIL(rowkey_info->get_column_id(col_idx, index_column_id))) {
+                LOG_WARN("Failed to get column id", K(ret));
+              } else if (OB_ISNULL(column_schema = (index_schema.get_column_schema(index_column_id)))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get column schema", K(index_column_id), K(ret));
+              } else if (column_schema->is_spatial_cellid_column()) {
+                uint64_t geo_col_id = column_schema->get_geo_col_id();
+                if (geo_col_id == column_id) {
+                  has = true;
+                  column_id = index_column_id;
+                }
+              }
+            }
           } else if (OB_FAIL(index_schema.has_column(column_id, has))) {
             LOG_WARN("check has column failed", K(column_id), K(has), K(ret));
           }
@@ -2739,6 +2837,61 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
                                                           dtc_params, opt_ctx->get_exec_ctx(),
                                                           &expr_constraints,
                                                           params))) {
+        LOG_WARN("failed to preliminary extract query range", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      query_range = tmp_qr;
+    } else {
+      if (NULL != tmp_qr) {
+        tmp_qr->~ObQueryRange();
+        tmp_qr = NULL;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
+                                                     const ObIArray<ObRawExpr*> &predicates,
+                                                     const ColumnIdInfoMap &column_schema_info,
+                                                     ObQueryRange *&query_range)
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext *opt_ctx = NULL;
+  const ParamStore *params = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
+      OB_ISNULL(allocator_) ||
+      OB_ISNULL(params = opt_ctx->get_params())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
+        K(allocator_), K(params), K(ret));
+  } else {
+    void *tmp_ptr = allocator_->alloc(sizeof(ObQueryRange));
+    ObQueryRange *tmp_qr = NULL;
+    if (OB_ISNULL(tmp_ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for query range", K(ret));
+    } else {
+      tmp_qr = new(tmp_ptr)ObQueryRange(*allocator_);
+      const ObDataTypeCastParams dtc_params =
+            ObBasicSessionInfo::create_dtc_params(opt_ctx->get_session_info());
+      // deep copy
+      ColumnIdInfoMap::const_iterator iter = column_schema_info.begin();
+      if (OB_FAIL(tmp_qr->init_columnId_map())) {
+        LOG_WARN("Init column_info_map failed", K(ret));
+      }
+      while (OB_SUCC(ret) && iter != column_schema_info.end()) {
+        if (OB_FAIL(tmp_qr->set_columnId_map(iter->first, iter->second))) {
+          LOG_WARN("set column info map failed", K(ret), K(iter->first));
+        }
+        iter++;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
+                                                                 dtc_params, opt_ctx->get_exec_ctx(),
+                                                                 NULL, params))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }
@@ -5883,6 +6036,8 @@ int ObJoinOrder::try_pruning_base_table_access_path(ObIArray<AccessPath*> &acces
     } else {
       need_prune |= ap->range_prefix_count_ > 0 &&
                     ap->query_range_row_count_ < PRUNING_ROW_COUNT_THRESHOLD;
+      need_prune |= ap->range_prefix_count_ > 0 &&
+                    ap->est_cost_info_.index_meta_info_.is_geo_index_;
     }
   }
   
@@ -9251,8 +9406,8 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
   } else if (index_id != ref_table_id) {
     is_unique_index = index_schema->is_unique_index();
     is_index_global = index_schema->is_global_index_table();
-    is_index_back = false;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < column_ids.count(); ++idx) {
+    is_index_back = index_schema->is_spatial_index() ? true : false;
+    for (int64_t idx = 0; OB_SUCC(ret) && !is_index_back && idx < column_ids.count(); ++idx) {
       bool found = false;
       const uint64_t used_column_id = column_ids.at(idx);
       if (OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == used_column_id) {
@@ -9262,7 +9417,6 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
                  K(idx), K(column_ids.at(idx)), K(ret));
       } else if (!found) {
         is_index_back = true;
-        break;
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_pseudo_column_like_exprs().count(); i++) {
@@ -9322,9 +9476,16 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
     } else if (OB_FAIL(index_schema->get_column_ids(index_column_descs))) {
       LOG_WARN("failed to extract column ids", K(ret));
     } else {
-      // get index column bitsets
+      uint64_t geo_column_id;
+      bool is_geo_index = index_schema->is_spatial_index();
+      if (is_geo_index && OB_FAIL(index_schema->get_spatial_geo_column_id(geo_column_id))) {
+        LOG_WARN("failed to extract geo column id", K(ret));
+      }
+      // replace cellid column id with geo column id, since filters only record geo column id.
       for (int64_t i = 0; OB_SUCC(ret) && i < index_column_descs.count(); i++) {
-        if (OB_FAIL(index_column_bs.add_member(index_column_descs.at(i).col_id_))) {
+        if (is_geo_index && (i == 0) && OB_FAIL(index_column_bs.add_member(geo_column_id))) {
+          LOG_WARN("failed to add geo member", K(ret), K(i), K(geo_column_id));
+        } else if (OB_FAIL(index_column_bs.add_member(index_column_descs.at(i).col_id_))) {
           LOG_WARN("failed to add member", K(ret));
         }
       }
@@ -9364,10 +9525,14 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
       for (int64_t i = 0; OB_SUCC(ret) && first_param_column_idx == -1 &&
                           i < est_cost_info.range_columns_.count(); ++i) {
         ColumnItem &column = est_cost_info.range_columns_.at(i);
-        if (!column_bs.has_member(column.column_id_)) {
+        uint64_t column_id = column.column_id_;
+        if (is_geo_index && (i == 0)) {
+          column_id = geo_column_id;
+        }
+        if (!column_bs.has_member(column_id)) {
           first_param_column_idx = i;
         } else {
-          ret = prefix_column_bs.add_member(column.column_id_);
+          ret = prefix_column_bs.add_member(column_id);
         }
       }
 
@@ -9376,6 +9541,9 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
         LOG_WARN("failed to add members", K(ret));
       } else if (-1 != first_param_column_idx) {
         uint64_t column_id = est_cost_info.range_columns_.at(first_param_column_idx).column_id_;
+        if (is_geo_index && (first_param_column_idx == 0)) {
+          column_id = geo_column_id;
+        }
         ret = ex_prefix_column_bs.add_member(column_id);
       }
 
@@ -9401,6 +9569,10 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
           ret = est_cost_info.pushdown_prefix_filters_.push_back(filter);
         } else if (est_cost_info.ref_table_id_ != est_cost_info.index_id_) {
           ret = est_cost_info.postfix_filters_.push_back(filter);
+          // 对于空间索引，空间谓词一定要回表计算
+          if (OB_SUCC(ret) && est_cost_info.index_meta_info_.is_geo_index_) {
+            ret = est_cost_info.table_filters_.push_back(filter);
+          }
         } else {
           ret = est_cost_info.table_filters_.push_back(filter);
         }
@@ -9499,6 +9671,38 @@ int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
           || !ex_prefix_column_bs.has_member(column->get_column_id())) {
         /*do nothing*/
       } else if (column_type == patten_type && ob_is_string_type(column_type)) {
+        can_extract = true;
+      } else {
+        can_extract = false;
+      }
+    }
+  } else if (filter->is_spatial_expr()) {
+    const ObRawExpr *geo_expr = ObRawExprUtils::skip_inner_added_expr(filter);
+    const ObRawExpr *l_expr = NULL;
+    const ObRawExpr *r_expr = NULL;
+    if (OB_ISNULL(geo_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_ISNULL(l_expr = geo_expr->get_param_expr(0))
+              || OB_ISNULL(r_expr = geo_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (l_expr->has_flag(IS_DYNAMIC_PARAM) && r_expr->is_column_ref_expr()) {
+      column = static_cast<const ObColumnRefRawExpr*>(r_expr);
+      exec_param = l_expr;
+    } else if (l_expr->is_column_ref_expr() && r_expr->has_flag(IS_DYNAMIC_PARAM)) {
+      column = static_cast<const ObColumnRefRawExpr*>(l_expr);
+      exec_param = r_expr;
+    }
+
+    if (OB_SUCC(ret) && NULL != column && NULL != exec_param) {
+      ObObjType column_type = column->get_result_type().get_type();
+      ObObjType exec_param_type = exec_param->get_result_type().get_type();
+      if (column->get_table_id() != table_id
+          || !ex_prefix_column_bs.has_member(column->get_column_id())) {
+        /*do nothing*/
+      } else if ((ob_is_string_type(column_type) || ob_is_geometry(column_type))
+                && (ob_is_string_type(exec_param_type) || ob_is_geometry(exec_param_type))) {
         can_extract = true;
       } else {
         can_extract = false;

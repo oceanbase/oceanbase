@@ -964,7 +964,8 @@ private:
                                  common::ObMySQLTransaction &trans);
   virtual int init_freeze_info(const uint64_t tenant_id,
                                common::ObMySQLTransaction &trans);
-
+  virtual int init_tenant_srs(const uint64_t tenant_id,
+                              common::ObMySQLTransaction &trans);
   virtual int init_sys_tenant_charset(common::ObMySQLTransaction &trans);
 
   virtual int init_sys_tenant_collation(common::ObMySQLTransaction &trans);

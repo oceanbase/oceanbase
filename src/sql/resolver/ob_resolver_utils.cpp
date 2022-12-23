@@ -5239,6 +5239,17 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       data_type.set_charset_type(CHARSET_UTF8MB4);
       data_type.set_collation_type(CS_TYPE_UTF8MB4_BIN); // ToDo: oracle, allow utf16
       break;
+    case ObGeometryTC:
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create geometry column before cluster min version 4.1");
+      } else {
+        data_type.set_length(length);
+        data_type.set_scale(default_accuracy.get_scale());
+        data_type.set_charset_type(CHARSET_BINARY);
+        data_type.set_collation_type(CS_TYPE_BINARY);
+      }
+      break;
     case ObBitTC:
       if (precision < 0) {
         ret = OB_ERR_UNEXPECTED;

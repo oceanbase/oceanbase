@@ -359,7 +359,8 @@ public:
                                bool with_mv,
                                bool with_global_index = true,
                                bool with_domain_index = true,
-                               bool is_link = false);
+                               bool is_link = false,
+                               bool with_spatial_index = true);
   int get_link_table_schema(uint64_t table_id,
                             const share::schema::ObTableSchema *&table_schema) const;
   int get_link_column_schema(uint64_t table_id, const common::ObString &column_name,

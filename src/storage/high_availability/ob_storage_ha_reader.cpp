@@ -447,7 +447,7 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(
   // Simulate minor macro data read failed.
   if (!table_key_.get_tablet_id().is_ls_inner_tablet()
     && table_key_.is_minor_sstable()) {
-    ret = E(EventTable::EN_MIGRATION_READ_REMOTE_MACRO_BLOCK_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_MIGRATION_READ_REMOTE_MACRO_BLOCK_FAILED) OB_SUCCESS;
   }
 #endif
 
@@ -868,7 +868,7 @@ int ObCopyTabletInfoRestoreReader::fetch_tablet_info(obrpc::ObCopyTabletInfo &ta
     const common::ObTabletID &tablet_id = tablet_id_array_.at(tablet_id_index_);
 #ifdef ERRSIM
     if (!tablet_id.is_ls_inner_tablet() && tablet_id_array_.count() > 10 && 5 == tablet_id_index_) {
-      ret = E(EventTable::EN_RESTORE_FETCH_TABLET_INFO) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_RESTORE_FETCH_TABLET_INFO) OB_SUCCESS;
       LOG_WARN("errsim restore fetch tablet info", K(ret), K(tablet_id), K_(tablet_id_index), K(tablet_id_array_.count()), K(tablet_id_array_));
     }
 #endif

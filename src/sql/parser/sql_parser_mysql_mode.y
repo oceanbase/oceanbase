@@ -264,7 +264,7 @@ END_P SET_VAR DELIMITER
         FAILOVER FAST FAULTS FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID
 
-        GENERAL GEOMETRY GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GTS
+        GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
         HANDLER HASH HELP HISTOGRAM HOST HOSTS HOUR HIDDEN HYBRID_HIST
@@ -318,7 +318,7 @@ END_P SET_VAR DELIMITER
         SET_TP SHARE SHUTDOWN SIGNED SIMPLE SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
-        SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR STANDBY STAT START STARTS STATS_AUTO_RECALC
+        SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY STAT START STARTS STATS_AUTO_RECALC
         STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STRONG
         SYNCHRONIZATION STOP STORAGE STORAGE_FORMAT_VERSION STORING STRING
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
@@ -2726,6 +2726,60 @@ MOD '(' expr ',' expr ')'
 {
   $$ = $1;
 }
+| POINT '(' expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_POINT, 2, $3, $5);
+}
+| LINESTRING '(' expr_list ')'
+{
+  ParseNode *expr_list = NULL;
+  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_LINESTRING, 1, expr_list);
+}
+| MULTIPOINT '(' expr_list ')'
+{
+  ParseNode *expr_list = NULL;
+  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MULTIPOINT, 1, expr_list);
+}
+| MULTILINESTRING '(' expr_list ')'
+{
+  ParseNode *expr_list = NULL;
+  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MULTILINESTRING, 1, expr_list);
+}
+| POLYGON '(' expr_list ')'
+{
+  ParseNode *expr_list = NULL;
+  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_POLYGON, 1, expr_list);
+}
+| MULTIPOLYGON '(' expr_list ')'
+{
+  ParseNode *expr_list = NULL;
+  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MULTIPOLYGON, 1, expr_list);
+}
+| GEOMETRYCOLLECTION '(' expr_list ')'
+{
+  ParseNode *expr_list = NULL;
+  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, expr_list);
+}
+| GEOMETRYCOLLECTION '(' ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, NULL);
+}
+| GEOMCOLLECTION '(' expr_list ')'
+{
+  ParseNode *expr_list = NULL;
+  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, expr_list);
+}
+| GEOMCOLLECTION '(' ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, NULL);
+}
 ;
 
 sys_interval_func:
@@ -4361,6 +4415,16 @@ column_definition
   malloc_non_terminal_node(constraint_node, result->malloc_pool_, T_CHECK_CONSTRAINT, 1, $2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FOREIGN_KEY, 7, child_col_list, $10, parent_col_list, reference_option_list, constraint_node, $5, $14);
 }
+| SPATIAL opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list
+{
+  (void)($2);
+  ParseNode *col_list = NULL;
+  ParseNode *index_option = NULL;
+  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $6);
+  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX, 5, $3, col_list, index_option, $4, NULL);
+  $$->value_ = 2;
+}
 | FOREIGN KEY opt_index_name '(' column_name_list ')' REFERENCES relation_factor '(' column_name_list ')' opt_match_option opt_reference_option_list
 {
   ParseNode *child_col_list= NULL;
@@ -4570,6 +4634,10 @@ NOT NULLX
 {
   $$ = $1;
 }
+| SRID INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_SRID, 1, $2);
+}
 ;
 
 opt_storage_type:
@@ -4743,6 +4811,69 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_JSON; /* data type */
   $$->int16_values_[OB_NODE_CAST_COLL_IDX] = INVALID_COLLATION;
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;        /* length */
+  $$->param_num_ = 0;
+}
+| POINT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_GEOMETRY; /* data type */
+  $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 1;      /* point */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
+  $$->param_num_ = 0;
+}
+| LINESTRING
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_GEOMETRY; /* data type */
+  $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 2;      /* linestring */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
+  $$->param_num_ = 0;
+}
+| POLYGON
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_GEOMETRY; /* data type */
+  $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 3;      /* polygon */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
+  $$->param_num_ = 0;
+}
+| MULTIPOINT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_GEOMETRY; /* data type */
+  $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 4;      /* multipoint */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
+  $$->param_num_ = 0;
+}
+| MULTILINESTRING
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_GEOMETRY; /* data type */
+  $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 5;      /* multilinestring */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
+  $$->param_num_ = 0;
+}
+| MULTIPOLYGON
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_GEOMETRY;  /* data type */
+  $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 6;       /* multipolygon */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;          /* length */
+  $$->param_num_ = 0;
+}
+| GEOMETRYCOLLECTION
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_GEOMETRY; /* data type */
+  $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 7;      /* geometrycollection */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
   $$->param_num_ = 0;
 }
 ;
@@ -4969,6 +5100,54 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
 {
   malloc_terminal_node($$, result->malloc_pool_, T_JSON);
   $$->int32_values_[0] = 0; /* length */
+}
+| GEOMETRY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
+  $$->int32_values_[0] = 0; /* length */
+  $$->int32_values_[1] = 0; /* geometry, geometry uses collation type value convey sub geometry type. */
+}
+| POINT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
+  $$->int32_values_[0] = 0; /* length */
+  $$->int32_values_[1] = 1; /* point, geometry uses collation type value convey sub geometry type. */
+}
+| LINESTRING
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
+  $$->int32_values_[0] = 0; /* length */
+  $$->int32_values_[1] = 2; /* linestring, geometry uses collation type value convey sub geometry type. */
+}
+| POLYGON
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
+  $$->int32_values_[0] = 0; /* length */
+  $$->int32_values_[1] = 3; /* polygon, geometry uses collation type value convey sub geometry type. */
+}
+| MULTIPOINT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
+  $$->int32_values_[0] = 0; /* length */
+  $$->int32_values_[1] = 4; /* mutipoint, geometry uses collation type value convey sub geometry type. */
+}
+| MULTILINESTRING
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
+  $$->int32_values_[0] = 0; /* length */
+  $$->int32_values_[1] = 5; /* multilinestring, geometry uses collation type value convey sub geometry type. */
+}
+| MULTIPOLYGON
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
+  $$->int32_values_[0] = 0; /* length */
+  $$->int32_values_[1] = 6; /* multipolygon, geometry uses collation type value convey sub geometry type. */
+}
+| GEOMETRYCOLLECTION
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
+  $$->int32_values_[0] = 0; /* length */
+  $$->int32_values_[1] = 7; /* geometrycollection, geometry uses collation type value convey sub geometry type. */
 }
 ;
 
@@ -5367,6 +5546,10 @@ not NULLX
 | constraint_definition
 {
   $$ = $1;
+}
+| SRID INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_SRID, 1, $2);
 }
 ;
 
@@ -6751,7 +6934,8 @@ CREATE {$$ = NULL;}
 ;
 
 opt_index_keyname:
-UNIQUE { $$[0] = 1; }
+SPATIAL { $$[0] = 2; }
+| UNIQUE { $$[0] = 1; }
 | /*EMPTY*/ { $$[0] = 0; }
 ;
 
@@ -8981,7 +9165,7 @@ expr opt_asc_desc
 
 opt_asc_desc:
 /* EMPTY */
-{ malloc_terminal_node($$, result->malloc_pool_, T_SORT_ASC); $$->value_ = 2; }
+{ malloc_terminal_node($$, result->malloc_pool_, T_SORT_ASC); $$->value_ = 2; $$->is_empty_ = 1;}
 | ASC
 { malloc_terminal_node($$, result->malloc_pool_, T_SORT_ASC); $$->value_ = 2; }
 | DESC
@@ -13187,6 +13371,17 @@ ADD key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list '
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_DROP, 1, $3);
 }
+| ADD SPATIAL opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
+{
+  (void)($3);
+  (void)($10);
+  ParseNode *col_list = NULL;
+  ParseNode *index_option = NULL;
+  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $7);
+  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ADD, 5, $4, col_list, index_option, $5, NULL);
+  $$->value_ = 2;
+}
 | ADD CONSTRAINT opt_constraint_name PRIMARY KEY '(' column_name_list ')' opt_index_option_list
 {
   (void)($3);
@@ -16361,6 +16556,7 @@ ACCOUNT
 |       FULL %prec HIGHER_PARENS
 |       GENERAL
 |       GEOMETRY
+|       GEOMCOLLECTION
 |       GEOMETRYCOLLECTION
 |       GET_FORMAT
 |       GLOBAL %prec LOWER_PARENS
@@ -16706,6 +16902,7 @@ ACCOUNT
 |       SQL_TSI_SECOND
 |       SQL_TSI_WEEK
 |       SQL_TSI_YEAR
+|       SRID
 |       STACKED
 |       STANDBY
 |       START

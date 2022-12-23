@@ -351,7 +351,7 @@ int ObDataAccessService::do_remote_das_task(ObDASRef &das_ref, ObDASTaskArg &tas
       }
     }
   }
-  NG_TRACE_EXT(do_remote_das_task_end, Y(ret), OB_ID(addr), task_arg.get_runner_svr());
+  NG_TRACE_EXT(do_remote_das_task_end, OB_Y(ret), OB_ID(addr), task_arg.get_runner_svr());
   return ret;
 }
 

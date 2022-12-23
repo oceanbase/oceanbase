@@ -649,7 +649,7 @@ int ObStorageHATabletsBuilder::get_major_sstable_max_snapshot_(
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_COPY_MAJOR_SNAPSHOT_VERSION) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_COPY_MAJOR_SNAPSHOT_VERSION) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       max_snapshot_version = 0;
       ret = OB_SUCCESS;
@@ -1809,7 +1809,7 @@ int ObStorageHACopySSTableInfoMgr::get_sstable_macro_range_info_ob_reader_(
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_MIGRATION_COPY_MACRO_BLOCK_NUM) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_MIGRATION_COPY_MACRO_BLOCK_NUM) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       arg.macro_range_max_marco_count_ = 1;
       ret = OB_SUCCESS;
@@ -1870,7 +1870,7 @@ int ObStorageHACopySSTableInfoMgr::get_sstable_macro_range_info_restore_reader_(
     arg.ls_rebuild_seq_ = -1;
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_RESTORE_COPY_MACRO_BLOCK_NUM) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_RESTORE_COPY_MACRO_BLOCK_NUM) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       arg.macro_range_max_marco_count_ = 8;
       ret = OB_SUCCESS;

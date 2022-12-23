@@ -1980,7 +1980,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
       LOG_WARN("already timeout", KR(ret));
     }
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_CREATE_TABLE_TRANS_END_FAIL) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_CREATE_TABLE_TRANS_END_FAIL) OB_SUCCESS;
     }
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
@@ -4792,6 +4792,8 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
               create_index_arg->index_type_ = INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE;
             } else if (INDEX_TYPE_UNIQUE_GLOBAL == create_index_arg->index_type_) {
               create_index_arg->index_type_ = INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE;
+            } else if (INDEX_TYPE_SPATIAL_GLOBAL == create_index_arg->index_type_) {
+              create_index_arg->index_type_ = INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE;
             }
           }
           if (OB_SUCC(ret)) {
@@ -4859,7 +4861,8 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
             HEAP_VAR(ObTableSchema, index_schema) {
               ObArray<ObColumnSchemaV2*> gen_columns;
               bool global_storage = INDEX_TYPE_NORMAL_GLOBAL == create_index_arg->index_type_
-                                    || INDEX_TYPE_UNIQUE_GLOBAL == create_index_arg->index_type_;
+                                    || INDEX_TYPE_UNIQUE_GLOBAL == create_index_arg->index_type_
+                                    || INDEX_TYPE_SPATIAL_GLOBAL == create_index_arg->index_type_;
               if (global_storage) {
                 //FIXME: Cannot build index on tablegroup at present,
                 //       For a global index, its locality and primary take the value of the primary table
@@ -5923,6 +5926,9 @@ int ObDDLService::fill_column_collation(
     } else if (OB_FAIL(ObDDLResolver::calc_enum_or_set_data_length(column_schema))) {
       LOG_WARN("fail to calc data length", K(ret), K(column_schema));
     }
+  } else if (ObGeometryTC == col_tc && !column_schema.is_nullable()) {
+    ret = OB_ER_INVALID_USE_OF_NULL;
+    LOG_WARN("alter table add geometry column can not has not null constraint", K(ret));
   }
   return ret;
 }
@@ -6976,6 +6982,7 @@ int ObDDLService::fill_new_column_attributes(
     new_column_schema.set_on_update_current_timestamp(
         alter_column_schema.is_on_update_current_timestamp());
     new_column_schema.set_extended_type_info(alter_column_schema.get_extended_type_info());
+    new_column_schema.set_srs_id(alter_column_schema.get_srs_id());
   }
   return ret;
 }
@@ -8222,7 +8229,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                     LOG_USER_ERROR(OB_INVALID_DEFAULT, new_column_schema.get_column_name_str().length(),
                                                        new_column_schema.get_column_name_str().ptr());
                     RS_LOG(WARN, "BLOB, TEXT column can't have a default value!", K(default_value), K(ret));
-                  } else if (ob_is_json_tc(new_column_schema.get_data_type())) {
+                  } else if (ob_is_json_tc(new_column_schema.get_data_type())
+                             || ob_is_geometry_tc(new_column_schema.get_data_type())) {
                     // cannot alter json column to any default value
                     // text column also cannot be alter to null in mysql
                     ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
@@ -19917,7 +19925,7 @@ int ObDDLService::create_tenant_end(const uint64_t tenant_id)
     }
 
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_CREATE_TENANT_TRANS_THREE_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_CREATE_TENANT_TRANS_THREE_FAILED) OB_SUCCESS;
     }
     int temp_ret = OB_SUCCESS;
     if (trans.is_started()) {
@@ -21413,7 +21421,7 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
   ObArray<ObResourcePoolName> pool_names;
   ObArray<share::ObResourcePool*> pools;
   ObRootService *rootservice = GCTX.root_service_;
-  ret = E(EventTable::EN_DROP_TENANT_FAILED) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_DROP_TENANT_FAILED) OB_SUCCESS;
   bool is_standby = false;
   uint64_t user_tenant_id = common::OB_INVALID_ID;
   int64_t refreshed_schema_version = 0;

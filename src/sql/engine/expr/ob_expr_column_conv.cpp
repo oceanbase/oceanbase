@@ -18,6 +18,7 @@
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
 #include "sql/engine/ob_exec_context.h"
+#include "lib/geo/ob_geo_utils.h"
 
 using namespace oceanbase::common;
 
@@ -348,6 +349,14 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
           LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
         } else {
           val->set_string(str);
+        }
+      } else if (ob_is_geometry(out_type)) {
+        ObString wkb = val->get_string();
+        ObGeoType geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+        if (OB_FAIL(ObGeoTypeUtil::check_geo_type(geo_type, wkb))) {
+          LOG_WARN("fail to check geo type", K(ret), K(wkb), K(geo_type), K(expr));
+          ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+          LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
         }
       }
       if (OB_SUCC(ret)) {

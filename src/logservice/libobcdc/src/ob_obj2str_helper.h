@@ -116,6 +116,10 @@ private:
       common::ObIAllocator &allocator,
       common::ObString &str) const;
 
+  int convert_ob_geometry_to_ewkt_(const common::ObObj &obj,
+      common::ObString &str,
+      common::ObIAllocator &allocator) const;
+
 private:
   bool                          inited_;
   IObLogTimeZoneInfoGetter      *timezone_info_getter_;

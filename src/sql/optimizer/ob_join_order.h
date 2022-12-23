@@ -1373,6 +1373,17 @@ struct NullAwareAntiJoinInfo {
                                         ObIArray<ObExprConstraint> &expr_constraints,
                                         ObQueryRange* &range);
 
+    int extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
+                                              const ObIArray<ObRawExpr*> &predicates,
+                                              const ColumnIdInfoMap &column_schema_info,
+                                              ObQueryRange *&query_range);
+
+    int extract_geo_schema_info(const uint64_t table_id,
+                                const uint64_t index_id,
+                                ObWrapperAllocator &wrap_allocator,
+                                ColumnIdInfoMapAllocer &map_alloc,
+                                ColumnIdInfoMap &geo_columnInfo_map);
+
     int check_expr_match_first_col(const ObRawExpr * qual,
                                    const common::ObIArray<ObRawExpr *>& keys,
                                    bool &match);
@@ -1892,6 +1903,7 @@ struct NullAwareAntiJoinInfo {
                                ObTablePartitionInfo *&table_partition_info);
 
     int get_query_range_info(const uint64_t table_id,
+                             const uint64_t base_table_id,
                              const uint64_t index_id,
                              QueryRangeInfo &range_info,
                              PathHelper &helper);

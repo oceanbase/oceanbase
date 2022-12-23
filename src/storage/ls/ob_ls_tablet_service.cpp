@@ -3341,7 +3341,7 @@ int ObLSTabletService::need_check_old_row_legitimacy(ObDMLRunningCtx &run_ctx,
     //batch stmt execution dependency defensive check to check
     //if the same row was modified multiple times
     need_check = true;
-    ret = E(EventTable::EN_INS_MULTI_VALUES_BATCH_OPT) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_INS_MULTI_VALUES_BATCH_OPT) OB_SUCCESS;
     // no need to check old row, just for bmsql performance optimization
     // TODO yuchen.ywc https://aone.alibaba-inc.com/project/81079/task/45910845
     if (OB_SUCCESS != ret) {

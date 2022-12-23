@@ -124,7 +124,8 @@ OB_SERIALIZE_MEMBER(ColumnContent,
                     column_name_,
                     is_nullable_,
                     is_implicit_,
-                    is_predicate_column_);
+                    is_predicate_column_,
+                    srs_id_);
 
 int SeRowkeyItem::init(
     const ObExprPtrIArray &row, ObEvalCtx &ctx, ObIAllocator &alloc, const int64_t rowkey_cnt)

@@ -21,11 +21,14 @@
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "lib/worker.h"
 #include "share/object/ob_obj_cast_util.h"
+#include "share/rc/ob_tenant_base.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
+#include "observer/omt/ob_tenant_srs_mgr.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_parse.h"
+#include "lib/geo/ob_geometry_cast.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -795,7 +798,8 @@ int ObHexUtils::rawtohex(const ObObj &text, ObCastCtx &cast_ctx, ObObj &result)
       case ObCharType:
       case ObLongTextType:
       case ObRawType: 
-      case ObJsonType: {
+      case ObJsonType:
+      case ObGeometryType: {
         //https://www.techonthenet.com/oracle/functions/rawtohex.php
         //NOTE:: when convert string to raw, Oracle use utl_raw.cast_to_raw(), while PL/SQL use hextoraw()
         //       here we use utl_raw.cast_to_raw(), as we can not distinguish in which SQL
@@ -1389,6 +1393,104 @@ static int int_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int common_get_srs_item(omt::ObSrsCacheGuard &srs_guard,
+                               const ObString &wkb,
+                               const ObSrsItem *&srs,
+                               const char *cast_name)
+{
+  int ret = OB_SUCCESS;
+  uint32_t srid = UINT32_MAX;
+  // todo : get effective tenant id
+  uint64_t tenant_id = MTL_ID();
+  if (wkb.length() < WKB_GEO_SRID_SIZE) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("invalid data length", K(ret), K(wkb.length()));
+    if (OB_NOT_NULL(cast_name)) {
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, cast_name);
+    }
+  } else if (FALSE_IT(srid = ObGeoWkbByteOrderUtil::read<uint32_t>((const char *)wkb.ptr(),
+      ObGeoWkbByteOrder::LittleEndian))) { // adapt mysql, always use little-endian
+    // do nothing
+  } else if (0 == srid) {
+    // do nothing
+  } else if (OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(tenant_id, srs_guard))) {
+    LOG_WARN("fail to get srs guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs))) {
+    LOG_WARN("fail to get srs", K(ret), K(srid));
+  }
+  return ret;
+}
+
+static int common_build_geometry(ObIAllocator &allocator,
+                                 const ObString &wkb,
+                                 ObGeometry *&geo,
+                                 const ObSrsItem *srs,
+                                 const char *cast_name)
+{
+  int ret = OB_SUCCESS;
+  ObGeoErrLogInfo log_info;
+  if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info))) {
+    if (OB_ERR_GIS_INVALID_DATA == ret && OB_NOT_NULL(cast_name)) {
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, cast_name);
+    } else if (OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE == ret && OB_NOT_NULL(cast_name)) {
+      LOG_USER_ERROR(OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE,
+                     cast_name,
+                     log_info.value_out_of_range_,
+                     log_info.min_long_val_,
+                     log_info.max_long_val_);
+    } else if (OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE == ret && OB_NOT_NULL(cast_name)) {
+      LOG_USER_ERROR(OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE,
+                     cast_name,
+                     log_info.value_out_of_range_,
+                     log_info.min_lat_val_,
+                     log_info.max_lat_val_);
+    }
+  }
+  return ret;
+}
+
+static int int_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    int64_t in_val = in.get_int();
+    ObFastFormatInt ffi(in_val);
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    ObString str(ffi.length(), ffi.ptr());
+    if (OB_FAIL(common_get_srs_item(srs_guard, str, srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret), K(str));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, str, geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(in_val), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 // UInt -> XXX
 
@@ -1709,6 +1811,48 @@ static int uint_json(const ObObjType expect_type, ObObjCastParams &params,
   }
 
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
+static int uint_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    uint64_t in_val = in.get_uint64();
+    ObFastFormatInt ffi(in_val);
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    ObString str(ffi.length(), ffi.ptr());
+    if (OB_FAIL(common_get_srs_item(srs_guard, str, srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret), K(str));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, str, geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(in_val), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
   return ret;
 }
 
@@ -2114,6 +2258,66 @@ static int float_json(const ObObjType expect_type, ObObjCastParams &params,
   }
 
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
+static int float_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    int64_t length = 0;
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    ObScale scale = in.get_scale();
+    if (in.get_float() == -INFINITY) {
+      length = strlen("-Inf");
+      strncpy(buf, "-Inf", length);
+    } else if (in.get_float() == INFINITY) {
+      length = strlen("Inf");
+      strncpy(buf, "Inf", length);
+    } else if (isnan(in.get_float())) {
+      length = strlen("Nan");
+      strncpy(buf, "Nan", length);
+    } else {
+      if (0 <= scale) {
+        length = ob_fcvt(in.get_float(), scale, sizeof(buf) - 1, buf, NULL);
+      } else {
+        length = ob_gcvt_opt(in.get_float(), OB_GCVT_ARG_FLOAT, sizeof(buf) - 1,
+                             buf, NULL, lib::is_oracle_mode(), TRUE);
+      }
+    }
+    ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
+    if (OB_FAIL(common_get_srs_item(srs_guard, str, srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret), K(str));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, str, geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
   return ret;
 }
 
@@ -2525,6 +2729,66 @@ static int double_json(const ObObjType expect_type, ObObjCastParams &params,
   }
 
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
+static int double_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    int64_t length = 0;
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    ObScale scale = in.get_scale();
+    if (in.get_double() == -INFINITY) {
+      length = strlen("-Inf");
+      strncpy(buf, "-Inf", length);
+    } else if (in.get_double() == INFINITY) {
+      length = strlen("Inf");
+      strncpy(buf, "Inf", length);
+    } else if (isnan(in.get_double())) {
+      length = strlen("Nan");
+      strncpy(buf, "Nan", length);
+    } else {
+      if (0 <= scale) {
+        length = ob_fcvt(in.get_double(), scale, sizeof(buf) - 1, buf, NULL);
+      } else {
+        length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE,
+                              sizeof(buf) - 1, buf, NULL, lib::is_oracle_mode(), TRUE);
+      }
+    }
+    ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
+    if (OB_FAIL(common_get_srs_item(srs_guard, str, srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret), K(str));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, str, geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
   return ret;
 }
 
@@ -2988,6 +3252,50 @@ static int number_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int number_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    int64_t len = 0;
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    ObScale scale = in.get_scale();
+    if (OB_FAIL(in.get_number().format(buf, sizeof(buf), len, in.get_scale()))) {
+      LOG_WARN("fail to format number", K(ret));
+    } else if (OB_FAIL(common_get_srs_item(srs_guard, ObString(len, buf), srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, ObString(len, buf), geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // Datetime -> XXX
 
@@ -3392,6 +3700,52 @@ static int datetime_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int datetime_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    const ObTimeZoneInfo *tz_info = (ObTimestampType == in.get_type()) ? params.dtc_params_.tz_info_ : NULL;
+    ObString nls_format;
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    int64_t len = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_str(in.get_datetime(), tz_info, nls_format,
+        in.get_scale(), buf, sizeof(buf), len))) {
+      LOG_WARN("failed to convert datetime to string", K(ret));
+    } else if (OB_FAIL(common_get_srs_item(srs_guard, ObString(len, buf), srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, ObString(len, buf), geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // Date -> XXX
 
@@ -3669,6 +4023,49 @@ static int date_json(const ObObjType expect_type, ObObjCastParams &params,
   }
 
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
+static int date_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    int64_t len = 0;
+    if ((OB_FAIL(ObTimeConverter::date_to_str(in.get_date(), buf, sizeof(buf), len)))) {
+      LOG_WARN("failed to convert datetime to string", K(ret));
+    } else if (OB_FAIL(common_get_srs_item(srs_guard, ObString(len, buf), srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, ObString(len, buf), geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
   return ret;
 }
 
@@ -3951,6 +4348,49 @@ static int time_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int time_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    int64_t len = 0;
+    if (OB_FAIL(ObTimeConverter::time_to_str(in.get_time(), in.get_scale(), buf, sizeof(buf), len))) {
+      LOG_WARN("fail to time to str", K(ret));
+    } else if (OB_FAIL(common_get_srs_item(srs_guard, ObString(len, buf), srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, ObString(len, buf), geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // Year -> XXX
 
@@ -4212,6 +4652,49 @@ static int year_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int year_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    int64_t len = 0;
+    if (OB_FAIL(ObTimeConverter::year_to_str(in.get_year(), buf, sizeof(buf), len))) {
+      LOG_WARN("fail to year to str", K(ret));
+    } else if (OB_FAIL(common_get_srs_item(srs_guard, ObString(len, buf), srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, ObString(len, buf), geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // String -> XXX
 
@@ -4299,7 +4782,8 @@ static int string_int(const ObObjType expect_type, ObObjCastParams &params,
 
   ObPrecision res_precision = -1;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class())
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
                   || ObIntTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type",
@@ -4334,7 +4818,8 @@ static int string_uint(const ObObjType expect_type, ObObjCastParams &params,
   int ret = OB_SUCCESS;
   ObPrecision res_precision = -1;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class())
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
                   || ObUIntTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type",
@@ -4368,7 +4853,8 @@ static int string_float(const ObObjType expect_type, ObObjCastParams &params,
   int ret = OB_SUCCESS;
   ObObj dbl;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class())
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
                   || ObFloatTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type",
@@ -4389,7 +4875,8 @@ static int string_double(const ObObjType expect_type, ObObjCastParams &params,
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class())
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
                   || ObDoubleTC != ob_obj_type_class(expect_type))) {
      ret = OB_ERR_UNEXPECTED;
      LOG_ERROR("invalid input type",
@@ -4457,7 +4944,8 @@ static int string_number(const ObObjType expect_type, ObObjCastParams &params,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid allocator", K(ret));
   } else if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                          && ObTextTC != in.get_type_class())
+                          && ObTextTC != in.get_type_class()
+                          && ObGeometryTC != in.get_type_class())
                           || ObNumberTC != ob_obj_type_class(expect_type))) {
      ret = OB_ERR_UNEXPECTED;
      LOG_ERROR("invalid input type",
@@ -4522,7 +5010,8 @@ static int string_datetime(const ObObjType expect_type, ObObjCastParams &params,
   ObString utf8_string;
 
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class())
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
                   || ObDateTimeTC != ob_obj_type_class(expect_type))) {
      ret = OB_ERR_UNEXPECTED;
      LOG_ERROR("invalid input type",
@@ -4572,7 +5061,8 @@ static int string_date(const ObObjType expect_type, ObObjCastParams &params,
   date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
   date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class())
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
                   || ObDateTC != ob_obj_type_class(expect_type))) {
      ret = OB_ERR_UNEXPECTED;
      LOG_ERROR("invalid input type",
@@ -4600,7 +5090,8 @@ static int string_time(const ObObjType expect_type, ObObjCastParams &params,
   int64_t value = 0;
   ObScale res_scale = -1;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class())
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
                   || ObTimeTC != ob_obj_type_class(expect_type))) {
      ret = OB_ERR_UNEXPECTED;
      LOG_ERROR("invalid input type",
@@ -4623,7 +5114,8 @@ static int string_year(const ObObjType expect_type, ObObjCastParams &params,
   int ret = OB_SUCCESS;
   ObObj int64;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class())
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
                   || ObYearTC != ob_obj_type_class(expect_type))) {
      ret = OB_ERR_UNEXPECTED;
      LOG_ERROR("invalid input type",
@@ -4652,7 +5144,8 @@ static int string_string(const ObObjType expect_type, ObObjCastParams &params,
   ObLength res_length = -1;
   ObObj tmp_out;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                   && ObTextTC != in.get_type_class())
+                   && ObTextTC != in.get_type_class()
+                   && ObGeometryTC != in.get_type_class())
       || OB_UNLIKELY(ObStringTC != ob_obj_type_class(expect_type)
                      && ObTextTC != ob_obj_type_class(expect_type)))) {
      ret = OB_ERR_UNEXPECTED;
@@ -4785,7 +5278,8 @@ static int string_bit(const ObObjType expect_type, ObObjCastParams &params,
   int ret = OB_SUCCESS;
   uint64_t value = 0;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
-                  && ObTextTC != in.get_type_class())
+                  && ObTextTC != in.get_type_class()
+                  && ObGeometryTC != in.get_type_class())
                   || ObBitTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
@@ -4994,7 +5488,9 @@ static int string_otimestamp(const ObObjType expect_type, ObObjCastParams &param
   ObScale res_scale = -1;
   ObString utf8_string;
 
-  if (OB_UNLIKELY(ObStringTC != in.get_type_class() && ObTextTC != in.get_type_class())
+  if (OB_UNLIKELY(ObStringTC != in.get_type_class()
+      && ObTextTC != in.get_type_class()
+      && ObGeometryTC != in.get_type_class())
       || OB_UNLIKELY(ObOTimestampTC != ob_obj_type_class(expect_type))) {
      ret = OB_ERR_UNEXPECTED;
      LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
@@ -5239,6 +5735,44 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
   }
 
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length);
+  return ret;
+}
+
+static int geometry_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode);
+static int string_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    ObString in_str;
+    if (OB_FAIL(in.get_string(in_str))) {
+      LOG_WARN("fail to get string", K(ret));
+    } else if (OB_FAIL(common_get_srs_item(srs_guard, in_str, srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret), K(in_str));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, in_str, geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(in_str), K(dst_geo_type));
+    } else if (ObGeoType::GEOMETRY == dst_geo_type) {
+      out.set_string(expect_type, in_str.ptr(), in_str.length());
+      SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, in_str.length());
+    } else if (OB_FAIL(geometry_geometry(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast geometry", K(ret), K(dst_geo_type));
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
   return ret;
 }
 
@@ -5645,6 +6179,47 @@ static int bit_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int bit_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    ObFastFormatInt ffi(in.get_bit());
+    if (OB_FAIL(common_get_srs_item(srs_guard, ObString(ffi.length(), ffi.ptr()), srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, ObString(ffi.length(), ffi.ptr()),
+        geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(dst_geo_type));
+    } else {
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *geo, srs, res_wkb))) {
+        LOG_WARN("fail to get wkb", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+        LOG_WARN("fail to copy string", K(ret), K(expect_type));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 // enum -> XXX
 /*//来自同一个enum 列的obj转换使用应该使用该接口，来自不同enum列的转换使用enumsetinner_enum
@@ -5834,7 +6409,37 @@ ObCastEnumOrSetFunc OB_CAST_ENUM_OR_SET[ObMaxTC][2] =
     cast_not_expected_enum_set,/*set*/
   },
   {
-    /*text -> enum_or_set*/
+    /*OTimestamp -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
+  {
+    /*Raw -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
+  {
+    /*Interval -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
+  {
+    /*RowID -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
+  {
+    /*Lob -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
+  {
+    /*Json -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
+  {
+    /*Geometry -> enum_or_set*/
     cast_not_support_enum_set,/*enum*/
     cast_not_support_enum_set,/*set*/
   },
@@ -6827,6 +7432,42 @@ static int lob_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int lob_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeometry *geo = NULL;
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    ObString in_str;
+    if (OB_FAIL(in.get_string(in_str))) {
+      LOG_WARN("fail to get string", K(ret));
+    } else if (OB_FAIL(common_get_srs_item(srs_guard, in_str, srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret), K(in_str));
+    } else if (OB_FAIL(common_build_geometry(temp_allocator, in_str, geo, srs, cast_name))) {
+      LOG_WARN("fail to parse geometry", K(ret), K(in_str), K(dst_geo_type));
+    } else if (ObGeoType::GEOMETRY == dst_geo_type) {
+      out.set_string(expect_type, in_str.ptr(), in_str.length());
+      SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, in_str.length());
+    } else if (OB_FAIL(geometry_geometry(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast geometry", K(ret), K(dst_geo_type));
+    }
+
+    if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode) && ObGeoType::GEOMETRY == dst_geo_type) { // adapt mysql
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // json -> XXX
 
@@ -7142,14 +7783,14 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else {
       // get in cs type
-      bool need_charset_convert = ((CS_TYPE_BINARY == params.dest_collation_) || 
-                                   (ObCharset::charset_type_by_coll(in.get_collation_type()) != 
+      bool need_charset_convert = ((CS_TYPE_BINARY == params.dest_collation_) ||
+                                   (ObCharset::charset_type_by_coll(in.get_collation_type()) !=
                                     ObCharset::charset_type_by_coll(params.dest_collation_)));
       ObString temp_str_val(j_buf.length(), j_buf.ptr());
 
-      /* this function maybe called in json generated column 
+      /* this function maybe called in json generated column
       * and the generated column may has limitaion constrain the string length */
-      uint64_t accuracy_max_len = 0; 
+      uint64_t accuracy_max_len = 0;
       if (params.res_accuracy_ && params.res_accuracy_->get_length()) {
         accuracy_max_len = params.res_accuracy_->get_length();
       }
@@ -7185,7 +7826,7 @@ static int json_bit(const ObObjType expect_type, ObObjCastParams &params,
   uint64_t value;
   int32_t bit_len = 0;
 
-  if (OB_UNLIKELY(ObJsonType != in.get_type() 
+  if (OB_UNLIKELY(ObJsonType != in.get_type()
       || ObBitTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
@@ -7221,7 +7862,7 @@ static int json_otimestamp(const ObObjType expect_type, ObObjCastParams &params,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(json_datetime(ObDateTimeType, params, in, datetime_obj, cast_mode))) {
-    LOG_WARN("json to datatime convert failed in json to otimestamp convert", 
+    LOG_WARN("json to datatime convert failed in json to otimestamp convert",
              K(ret), K(cast_mode));
   } else if (OB_FAIL(datetime_otimestamp(expect_type, params, datetime_obj, out, cast_mode))) {
     LOG_WARN("datatime to otimestamp convert failed in json to otimestamp convert",
@@ -7267,6 +7908,341 @@ static int json_json(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int json_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  UNUSEDx(expect_type, params, in, out);
+  int ret = OB_NOT_SUPPORTED;
+  if (OB_FAIL(ret) && CM_IS_COLUMN_CONVERT(cast_mode)) { // adapt mysql
+    ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+    LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+  } else {
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "json, geometry");
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////
+// geometry -> XXX
+static int geometry_int(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_int(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to int", K(ret));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "cast_as_signed");
+  }
+  return ret;
+}
+
+static int geometry_uint(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_uint(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to uint", K(ret));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "cast_as_unsigned");
+  }
+  return ret;
+}
+
+static int geometry_double(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode) && !CM_IS_WARN_ON_FAIL(cast_mode)) {
+    if (OB_FAIL(string_double(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to double", K(ret));
+      ret = OB_ERR_WARN_DATA_OUT_OF_RANGE; // adapt mysql
+    }
+  } else {
+    out.set_double(0);
+  }
+  return ret;
+}
+
+static int geometry_float(const ObObjType expect_type, ObObjCastParams &params,
+                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_float(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to float", K(ret));
+      ret = OB_ERR_WARN_DATA_OUT_OF_RANGE; // adapt mysql
+    }
+  } else {
+    out.set_float(0);
+  }
+  return ret;
+}
+
+static int geometry_number(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_number(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to number", K(ret));
+      ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD; // adapt mysql
+    }
+  } else {
+    number::ObNumber nmb;
+    nmb.set_zero();
+    out.set_number(nmb);
+  }
+  return ret;
+}
+
+static int geometry_datetime(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_datetime(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to datetime", K(ret));
+    }
+  } else {
+    out.set_null();
+  }
+  return ret;
+}
+
+static int geometry_date(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_date(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to date", K(ret));
+    }
+  } else {
+    out.set_null();
+  }
+  return ret;
+}
+
+static int geometry_time(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_NULL_ON_WARN(cast_mode)) {
+      // issue/42826593
+      out.set_null();
+    } else if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_time(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to time", K(ret));
+    }
+  } else {
+    out.set_null();
+  }
+  return ret;
+}
+
+static int geometry_year(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_year(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to year", K(ret));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "cast_as_year");
+  }
+  return ret;
+}
+
+static int geometry_bit(const ObObjType expect_type, ObObjCastParams &params,
+                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_bit(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to bit", K(ret));
+    }
+  } else {
+    ret = OB_ERR_PARSE_SQL;
+    const char *err_msg = "bit";
+    int32_t str_len = static_cast<int32_t>(strlen(err_msg));
+    int32_t line_no = 1;
+    LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
+        str_len, err_msg, line_no);
+  }
+  return ret;
+}
+
+static int geometry_otimestamp(const ObObjType expect_type, ObObjCastParams &params,
+                               const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    if (OB_FAIL(string_otimestamp(expect_type, params, in, out, cast_mode))) {
+      LOG_WARN("fail to cast string to otimestamp", K(ret));
+    }
+  } else {
+    ret = OB_ERR_PARSE_SQL;
+    const char *err_msg = "timestamp";
+    int32_t str_len = static_cast<int32_t>(strlen(err_msg));
+    int32_t line_no = 1;
+    LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
+        str_len, err_msg, line_no);
+  }
+  return ret;
+}
+
+static int geom_copy_string(const ObObjCastParams &params,
+                            const ObObjType expect_type,
+                            const ObString &src,
+                            ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t len = src.length() - WKB_VERSION_SIZE;
+  if (OB_LIKELY(len > 0)) {
+    if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(params.alloc(len))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      MEMMOVE(buf, src.ptr(), WKB_GEO_SRID_SIZE);
+      MEMMOVE(buf + WKB_GEO_SRID_SIZE, src.ptr() + WKB_OFFSET, len - WKB_GEO_SRID_SIZE);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid obj len", K(ret), K(len));
+  }
+  if (OB_SUCC(ret)) {
+    if (ob_is_text_tc(expect_type)) {
+      obj.set_lob_value(expect_type, buf, static_cast<int32_t>(len));
+    } else if (ob_is_raw(expect_type)) {
+      obj.set_raw(buf, static_cast<int32_t>(len));
+    } else {
+      obj.set_string(expect_type, buf, static_cast<int32_t>(len));
+    }
+  }
+  return ret;
+}
+
+static int geometry_string(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  ObString wkb;
+  if (OB_FAIL(in.get_string(wkb))) {
+    LOG_WARN("fail to get wkb", K(ret), K(in));
+  } else if (OB_FAIL(geom_copy_string(params, expect_type, wkb, out))){
+    LOG_WARN("fail to copy string", K(ret), K(expect_type));
+  } else {
+    res_length = static_cast<ObLength>(out.get_string_len());
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
+static int geometry_json(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  UNUSEDx(expect_type, params, in, out, cast_mode);
+  int ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "geomerty, json");
+  return ret;
+}
+
+static int geometry_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObGeometry *src_tree = NULL;
+    ObGeometry *dst_tree = NULL;
+    ObString wkb;
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    ObGeoType dst_geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+    const char *cast_name = ObGeometryTypeCastUtil::get_cast_name(dst_geo_type);
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    ObGeometryTypeCast *geo_cast = NULL;
+    ObGeoErrLogInfo log_info;
+    if (OB_FAIL(in.get_string(wkb))) {
+      LOG_WARN("fail to get wkb", K(ret), K(in));
+    } else if (ObGeoType::GEOMETRY == dst_geo_type) {
+      out = in;
+    } else if (OB_FAIL(common_get_srs_item(srs_guard, wkb, srs, cast_name))) {
+      LOG_WARN("fail to get srs item", K(ret), K(wkb));
+    } else if (OB_FAIL(ObGeometryTypeCastUtil::get_tree(temp_allocator, wkb, src_tree,
+        srs, log_info, cast_name))) {
+      LOG_WARN("fail to get tree", K(ret), K(wkb));
+      if (OB_ERR_GIS_INVALID_DATA == ret) {
+        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, cast_name);
+      } else if (OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE == ret) {
+        LOG_USER_ERROR(OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE,
+                      cast_name,
+                      log_info.value_out_of_range_,
+                      log_info.min_long_val_,
+                      log_info.max_long_val_);
+      } else if (OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE == ret) {
+        LOG_USER_ERROR(OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE,
+                      cast_name,
+                      log_info.value_out_of_range_,
+                      log_info.min_lat_val_,
+                      log_info.max_lat_val_);
+      }
+    } else {
+      ObSrsType srs_type = src_tree->get_srid() == 0 ?
+                           ObSrsType::PROJECTED_SRS :
+                           srs->srs_type();
+      if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(temp_allocator, dst_geo_type,
+          ObSrsType::GEOGRAPHIC_SRS == srs_type, false, dst_tree, src_tree->get_srid()))) {
+        LOG_WARN("fail to alloc dst geo tree", K(ret), K(dst_geo_type), K(srs_type));
+      } else if (OB_FAIL(ObGeometryTypeCastFactory::alloc(temp_allocator,
+          dst_geo_type, geo_cast))) {
+        LOG_WARN("fail to alloc geometry cast", K(ret), K(dst_geo_type));
+      } else {
+        ObGeoErrLogInfo log_info;
+        if (ObSrsType::PROJECTED_SRS == srs_type) {
+          if (OB_FAIL(geo_cast->cast_geom(*src_tree, *dst_tree, srs, log_info, &temp_allocator))) {
+            LOG_WARN("fail to cast geom", K(ret), K(src_tree->type()), K(dst_geo_type));
+            ObGeoCastUtils::geo_cast_error_handle(ret, src_tree->type(), dst_geo_type, log_info);
+          }
+        } else if (ObSrsType::GEOGRAPHIC_SRS == srs_type) {
+          if (OB_FAIL(geo_cast->cast_geog(*src_tree, *dst_tree, srs, log_info, &temp_allocator))) {
+            LOG_WARN("fail to cast geog", K(ret), K(src_tree->type()), K(dst_geo_type));
+            ObGeoCastUtils::geo_cast_error_handle(ret, src_tree->type(), dst_geo_type, log_info);
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unknowed srs type", K(ret), K(srs_type));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        ObString res_wkb;
+        if (OB_FAIL(ObGeoTypeUtil::to_wkb(temp_allocator, *dst_tree, srs, res_wkb))) {
+          LOG_WARN("fail to get wkb", K(ret), K(src_tree->type()), K(dst_geo_type));
+        } else if (OB_FAIL(copy_string(params, expect_type, res_wkb, out))){
+          LOG_WARN("fail to copy string", K(ret), K(expect_type));
+        } else {
+          res_length = static_cast<ObLength>(out.get_string_len());
+        }
+      }
+    }
+  }
+  SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+  return ret;
+}
+
 ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
 {
   {
@@ -7294,6 +8270,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_identity,/*lob*/
     cast_identity,/*json*/
+    cast_identity,/*geometry*/
   },
   {
     /*int -> XXX*/
@@ -7320,6 +8297,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     int_lob,/*lob*/
     int_json,/*json*/
+    int_geometry,/*geometry*/
   },
   {
     /*uint -> XXX*/
@@ -7346,6 +8324,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     uint_lob,/*lob*/
     uint_json,/*json*/
+    uint_geometry,/*geometry*/
   },
   {
     /*float -> XXX*/
@@ -7372,6 +8351,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     float_lob,/*lob*/
     float_json,/*json*/
+    float_geometry,/*geometry*/
   },
   {
     /*double -> XXX*/
@@ -7398,6 +8378,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     double_lob,/*lob*/
     double_json,/*json*/
+    double_geometry,/*geometry*/
   },
   {
     /*number -> XXX*/
@@ -7424,6 +8405,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     number_lob,/*lob*/
     number_json,/*lob*/
+    number_geometry,/*geometry*/
   },
   {
     /*datetime -> XXX*/
@@ -7450,6 +8432,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     datetime_lob,/*lob*/
     datetime_json,/*json*/
+    datetime_geometry,/*geometry*/
   },
   {
     /*date -> XXX*/
@@ -7476,6 +8459,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     date_lob,/*lob*/
     date_json,/*json*/
+    date_geometry,/*geometry*/
   },
   {
     /*time -> XXX*/
@@ -7502,6 +8486,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     time_lob,/*lob*/
     time_json,/*json*/
+    time_geometry,/*geometry*/
   },
   {
     /*year -> XXX*/
@@ -7528,6 +8513,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     year_lob,/*lob*/
     year_json,/*json*/
+    year_geometry,/*geometry*/
   },
   {
     /*string -> XXX*/
@@ -7554,6 +8540,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     string_lob,/*lob*/
     string_json,/*json*/
+    string_geometry,/*geometry*/
   },
   {
     /*extend -> XXX*/
@@ -7580,6 +8567,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*unknown -> XXX*/
@@ -7606,6 +8594,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*text -> XXX*/
@@ -7632,6 +8621,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     string_lob,/*lob*/
     string_json,/*json*/
+    string_geometry,/*geometry*/
   },
   {
     /*bit -> XXX*/
@@ -7658,6 +8648,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     bit_lob,/*lob*/
     bit_json,/*lob*/
+    bit_geometry,/*geometry*/
   },
   {
     /*enum -> XXX*/
@@ -7684,6 +8675,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -7710,6 +8702,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*otimestamp -> XXX*/
@@ -7736,6 +8729,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
   },
   {
     /*raw -> XXX*/
@@ -7762,6 +8756,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
   },
   {
     /*interval -> XXX*/
@@ -7788,6 +8783,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
   },
   {
     /*rowid -> XXX*/
@@ -7814,6 +8810,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
   },
   {
     /*lob -> XXX*/
@@ -7840,6 +8837,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     lob_lob,/*lob*/
     lob_json,/*json*/
+    lob_geometry,/*geometry*/
   },
   {
     /*json -> XXX*/
@@ -7866,6 +8864,34 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     json_lob,/*lob*/
     json_json,/*json*/
+    json_geometry,/*geometry*/
+  },
+  {
+    /*geometry -> XXX*/
+    cast_not_support,/*null*/
+    geometry_int,/*int*/
+    geometry_uint,/*uint*/
+    geometry_float,/*float*/
+    geometry_double,/*double*/
+    geometry_number,/*number*/
+    geometry_datetime,/*datetime*/
+    geometry_date,/*date*/
+    geometry_time,/*time*/
+    geometry_year,/*year*/
+    geometry_string,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    geometry_string,/*text*/
+    geometry_bit,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    geometry_otimestamp,/*otimestamp*/
+    cast_inconsistent_types,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    geometry_json,/*json*/
+    geometry_geometry,/*geometry*/
   },
 };
 
@@ -7896,6 +8922,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_identity,/*rowid*/
     cast_identity,/*lob*/
     cast_identity,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*int -> XXX*/
@@ -7922,6 +8949,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*uint -> XXX*/
@@ -7948,6 +8976,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*float -> XXX*/
@@ -7974,6 +9003,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*double -> XXX*/
@@ -8000,6 +9030,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*number -> XXX*/
@@ -8026,6 +9057,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*datetime -> XXX*/
@@ -8052,6 +9084,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*date -> XXX*/
@@ -8078,6 +9111,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*time -> XXX*/
@@ -8104,6 +9138,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*year -> XXX*/
@@ -8130,6 +9165,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*string -> XXX*/
@@ -8156,6 +9192,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     string_rowid,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*extend -> XXX*/
@@ -8182,6 +9219,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*unknown -> XXX*/
@@ -8208,6 +9246,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     unknown_other,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*text -> XXX*/
@@ -8234,6 +9273,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*bit -> XXX*/
@@ -8260,6 +9300,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*enum -> XXX*/
@@ -8286,6 +9327,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*enumset_inner -> XXX*/
@@ -8312,6 +9354,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*otimestamp -> XXX*/
@@ -8338,6 +9381,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*raw -> XXX*/
@@ -8364,6 +9408,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*interval -> XXX*/
@@ -8390,6 +9435,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*rowid -> XXX*/
@@ -8416,6 +9462,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     rowid_rowid,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*lob -> XXX*/
@@ -8442,6 +9489,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
     /*json -> XXX, not support oracle currently*/
@@ -8468,6 +9516,34 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
+    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+  },
+  {
+    /*geometry -> XXX, not support oracle currently*/
+    cast_not_support,/*null*/
+    cast_not_support,/*int*/
+    cast_not_support,/*uint*/
+    cast_not_support,/*float*/
+    cast_not_support,/*double*/
+    cast_not_support,/*number*/
+    cast_not_support,/*datetime*/
+    cast_not_support,/*date*/
+    cast_not_support,/*time*/
+    cast_not_support,/*year*/
+    cast_not_support,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    cast_not_support,/*text*/
+    cast_not_support,/*bit*/
+    cast_not_support,/*enumset*/
+    cast_not_support,/*enumset_inner*/
+    cast_not_support,/*otimestamp*/
+    cast_not_support,/*raw*/
+    cast_not_support,/*interval*/
+    cast_not_support,/*rowid*/
+    cast_not_support,/*lob*/
+    cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
   },
 };
 
@@ -8506,6 +9582,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_identity, /*rowid*/
     cast_identity,/*lob*/
     cast_identity,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*int -> XXX*/
@@ -8532,6 +9609,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*uint -> XXX*/
@@ -8558,6 +9636,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*float -> XXX*/
@@ -8584,6 +9663,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*double -> XXX*/
@@ -8610,6 +9690,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*number -> XXX*/
@@ -8636,6 +9717,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     number_lob,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*datetime -> XXX*/
@@ -8662,6 +9744,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*date -> XXX*/
@@ -8688,6 +9771,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*time -> XXX*/
@@ -8714,6 +9798,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*year -> XXX*/
@@ -8740,6 +9825,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*string -> XXX*/
@@ -8766,6 +9852,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_rowid,/*rowid*/
     string_lob,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*extend -> XXX*/
@@ -8792,6 +9879,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*unknown -> XXX*/
@@ -8818,6 +9906,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*text -> XXX*/
@@ -8844,6 +9933,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_rowid,/*rowid*/
     string_lob,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*bit -> XXX*/
@@ -8870,6 +9960,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*enum -> XXX*/
@@ -8896,6 +9987,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -8922,6 +10014,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*otimestamp -> XXX*/
@@ -8948,6 +10041,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*raw -> XXX*/
@@ -8974,6 +10068,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     raw_lob,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*interval -> XXX*/
@@ -9000,6 +10095,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /* rowid -> XXX */
@@ -9026,6 +10122,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     rowid_rowid,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*lob -> XXX*/
@@ -9052,6 +10149,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     lob_rowid,/*rowid*/
     lob_lob,/*lob*/
     cast_inconsistent_types,/*json*/
+    cast_not_support,/*geometry*/
   },
   {
     /*json -> XXX, not support oracle currently*/
@@ -9078,6 +10176,34 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
+  },
+  {
+    /*geoemtry -> XXX, not support oracle currently*/
+    cast_not_support,/*null*/
+    cast_not_support,/*int*/
+    cast_not_support,/*uint*/
+    cast_not_support,/*float*/
+    cast_not_support,/*double*/
+    cast_not_support,/*number*/
+    cast_not_support,/*datetime*/
+    cast_not_support,/*date*/
+    cast_not_support,/*time*/
+    cast_not_support,/*year*/
+    cast_not_support,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    cast_not_support,/*text*/
+    cast_not_support,/*bit*/
+    cast_not_support,/*enumset*/
+    cast_not_support,/*enumset_inner*/
+    cast_not_support,/*otimestamp*/
+    cast_not_support,/*raw*/
+    cast_not_support,/*interval*/
+    cast_not_support,/*rowid*/
+    cast_not_support,/*lob*/
+    cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
   },
 };
 
@@ -10312,8 +11438,9 @@ int ObObjCaster::to_type(const ObObjType expect_type, ObCastCtx &cast_ctx,
   cast_ctx.warning_ = OB_SUCCESS;
   ObObjType in_type = in_obj.get_type();
   bool is_string = ob_is_string_type(in_type) || ob_is_lob_locator(in_type);
-  if (OB_UNLIKELY((expect_type == in_type && (!is_string))
-              ||  ObNullType == in_type)) {
+  bool is_geometry = ob_is_geometry(in_type);
+  if (OB_UNLIKELY((expect_type == in_type && (!is_string) && (!is_geometry))
+      ||  ObNullType == in_type)) {
     buf_obj = in_obj;
     res_obj = &buf_obj;
   } else if (in_obj.get_collation_type() == cast_ctx.dest_collation_
@@ -10420,7 +11547,8 @@ int ObObjCaster::to_type(const ObObjType expect_type,
   int ret = OB_SUCCESS;
   ObObjType in_type = in_obj.get_type();
   bool is_string = ob_is_string_type(in_type) || ob_is_lob_locator(in_type);
-  if (OB_UNLIKELY((expect_type == in_type && (!is_string))
+  bool is_geometry = ob_is_geometry(in_type);
+  if (OB_UNLIKELY((expect_type == in_type && (!is_string) && (!is_geometry))
       || ObNullType == in_type)) {
     out_obj = in_obj;
   } else if (in_obj.get_collation_type() == cast_ctx.dest_collation_
@@ -12674,6 +13802,104 @@ int ObObjEvaluator::is_false(const ObObj &obj, ObCastMode cast_mode, bool &b_res
   }
 
   return ret;
+}
+
+ObGeoType ObGeoCastUtils::get_geo_type_from_cast_mode(uint64_t cast_mode)
+{
+  ObGeoType type = ObGeoType::GEOMETRY;
+  if (CM_IS_GEOMETRY_GEOMETRY(cast_mode)) {
+    type = ObGeoType::GEOMETRY;
+  } else if (CM_IS_GEOMETRY_POINT(cast_mode)) {
+    type = ObGeoType::POINT;
+  } else if (CM_IS_GEOMETRY_LINESTRING(cast_mode)) {
+    type = ObGeoType::LINESTRING;
+  } else if (CM_IS_GEOMETRY_POLYGON(cast_mode)) {
+    type = ObGeoType::POLYGON;
+  } else if (CM_IS_GEOMETRY_MULTIPOINT(cast_mode)) {
+    type = ObGeoType::MULTIPOINT;
+  } else if (CM_IS_GEOMETRY_MULTILINESTRING(cast_mode)) {
+    type = ObGeoType::MULTILINESTRING;
+  } else if (CM_IS_GEOMETRY_MULTIPOLYGON(cast_mode)) {
+    type = ObGeoType::MULTIPOLYGON;
+  } else if (CM_IS_GEOMETRY_GEOMETRYCOLLECTION(cast_mode)) {
+    type = ObGeoType::GEOMETRYCOLLECTION;
+  }
+  return type;
+}
+
+int ObGeoCastUtils::set_geo_type_to_cast_mode(ObGeoType geo_type, uint64_t &cast_mode)
+{
+  int ret = OB_SUCCESS;
+  switch (geo_type) {
+    case ObGeoType::GEOMETRY: {
+      CM_SET_GEOMETRY_GEOMETRY(cast_mode);
+      break;
+    }
+    case ObGeoType::POINT: {
+      CM_SET_GEOMETRY_POINT(cast_mode);
+      break;
+    }
+    case ObGeoType::LINESTRING: {
+      CM_SET_GEOMETRY_LINESTRING(cast_mode);
+      break;
+    }
+    case ObGeoType::POLYGON: {
+      CM_SET_GEOMETRY_POLYGON(cast_mode);
+      break;
+    }
+    case ObGeoType::MULTIPOINT: {
+      CM_SET_GEOMETRY_MULTIPOINT(cast_mode);
+      break;
+    }
+    case ObGeoType::MULTILINESTRING: {
+      CM_SET_GEOMETRY_MULTILINESTRING(cast_mode);
+      break;
+    }
+    case ObGeoType::MULTIPOLYGON: {
+      CM_SET_GEOMETRY_MULTIPOLYGON(cast_mode);
+      break;
+    }
+    case ObGeoType::GEOMETRYCOLLECTION: {
+      CM_SET_GEOMETRY_GEOMETRYCOLLECTION(cast_mode);
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid geometry type", K(ret), K(geo_type));
+      break;
+    }
+  }
+  return ret;
+}
+
+void ObGeoCastUtils::geo_cast_error_handle(int err_code,
+                                           ObGeoType src_type,
+                                           ObGeoType dst_type,
+                                           const ObGeoErrLogInfo &log_info)
+{
+  if (OB_ERR_INVALID_CAST_TO_GEOMETRY == err_code) {
+    LOG_USER_ERROR(OB_ERR_INVALID_CAST_TO_GEOMETRY,
+                   ObGeoTypeUtil::get_geo_name_by_type(src_type),
+                   ObGeoTypeUtil::get_geo_name_by_type(dst_type));
+  } else if (OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE == err_code) {
+    LOG_USER_ERROR(OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE,
+                   ObGeometryTypeCastUtil::get_cast_name(dst_type),
+                   log_info.value_out_of_range_,
+                   -180.000000,
+                   180.000000);
+  } else if (OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE == err_code) {
+    LOG_USER_ERROR(OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE,
+                   ObGeometryTypeCastUtil::get_cast_name(dst_type),
+                   log_info.value_out_of_range_,
+                   -90.000000,
+                   90.000000);
+  } else if (OB_ERR_GIS_INVALID_DATA == err_code) {
+    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, ObGeometryTypeCastUtil::get_cast_name(dst_type));
+  } else if (OB_ERR_INVALID_CAST_POLYGON_RING_DIRECTION == err_code) {
+    LOG_USER_ERROR(OB_ERR_INVALID_CAST_POLYGON_RING_DIRECTION,
+                   ObGeoTypeUtil::get_geo_name_by_type(src_type),
+                   ObGeoTypeUtil::get_geo_name_by_type(dst_type));
+  }
 }
 
 } // end namespace common

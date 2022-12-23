@@ -3621,6 +3621,64 @@ int ObRawExprUtils::erase_operand_implicit_cast(ObRawExpr *src, ObRawExpr *&out)
   return ret;
 }
 
+const ObRawExpr *ObRawExprUtils::skip_inner_added_expr(const ObRawExpr *expr)
+{
+  expr = skip_implicit_cast(expr);
+  if (NULL != expr && T_OP_BOOL == expr->get_expr_type()) {
+    expr = skip_inner_added_expr(expr->get_param_expr(0));
+  }
+  return expr;
+}
+
+ObRawExpr *ObRawExprUtils::skip_implicit_cast(ObRawExpr *e)
+{
+  ObRawExpr *res = e;
+  while (res != NULL
+         && T_FUN_SYS_CAST == res->get_expr_type()
+         && res->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
+    res = res->get_param_expr(0);
+  }
+  return res;
+}
+
+ObRawExpr *ObRawExprUtils::skip_inner_added_expr(ObRawExpr *expr)
+{
+  expr = skip_implicit_cast(expr);
+  if (NULL != expr && T_OP_BOOL == expr->get_expr_type()) {
+    expr = skip_inner_added_expr(expr->get_param_expr(0));
+  }
+  return expr;
+}
+
+int ObRawExprUtils::is_contain_spatial_exprs(ObRawExpr *raw_expr,
+                                             bool &is_contain)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+
+  if (is_contain) {
+   // return
+  } else if (NULL == raw_expr) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid raw expr", K(ret), K(raw_expr));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (raw_expr->is_spatial_expr()) {
+    is_contain = true;
+  } else {
+    int64_t N = raw_expr->get_param_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      if (OB_FAIL(SMART_CALL(is_contain_spatial_exprs(raw_expr->get_param_expr(i), is_contain)))) {
+        LOG_WARN("fail to extract contain expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::create_to_type_expr(ObRawExprFactory &expr_factory,
                                         ObRawExpr *src_expr,
                                         const ObObjType &dst_type,
@@ -3928,7 +3986,8 @@ bool ObRawExprUtils::need_column_conv(const ObExprResType &expected_type, const 
 bool ObRawExprUtils::need_column_conv(const ColumnItem &column, ObRawExpr &expr)
 {
   int bret = true;
-  if (column.get_expr() != NULL && column.get_expr()->is_fulltext_column()) {
+  if (column.get_expr() != NULL && (column.get_expr()->is_fulltext_column()
+      || column.get_expr()->is_spatial_generated_column())) {
     //全文索引的生成列是内部生成的隐藏列，不需要做column convert
     bret = false;
   } else if (column.get_column_type() != NULL) {
@@ -3959,8 +4018,9 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
   CK(OB_NOT_NULL(session_info));
   CK(OB_NOT_NULL(column_schema));
   if (OB_SUCC(ret)) {
-    if (column_schema->is_fulltext_column()) {
+    if (column_schema->is_fulltext_column() || column_schema->is_spatial_generated_column()) {
       //全文列不会破坏约束性，且数据不会存储，跳过强转
+      // 空间索引列是虚拟列，跳过强转
     } else if (OB_FAIL(build_column_conv_expr(session_info,
                                               expr_factory,
                                               column_schema->get_data_type(),
@@ -4004,8 +4064,9 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
   }
   CK(session_info);
   if (OB_SUCC(ret)) {
-    if (col_ref.is_fulltext_column()) {
-      //全文列不会破坏约束性，且数据不会存储，跳过强转
+    if (col_ref.is_fulltext_column() || col_ref.is_spatial_generated_column()) {
+      // 全文列不会破坏约束性，且数据不会存储，跳过强转
+      // 空间索引列是虚拟列，跳过强转
     } else if (OB_FAIL(build_column_conv_expr(session_info,
                                               expr_factory,
                                               col_ref.get_data_type(),
@@ -5474,7 +5535,11 @@ int ObRawExprUtils::get_item_count(const ObRawExpr *expr, int64_t &count)
   } else if (expr->is_column_ref_expr()) {
     const ObColumnRefRawExpr *col_ref = static_cast<const ObColumnRefRawExpr*>(expr);
     if (col_ref->is_generated_column()) {
-      ret = get_item_count(col_ref->get_dependant_expr(), count);
+      if (col_ref->is_spatial_generated_column()) {
+        ++count;
+      } else {
+        ret = get_item_count(col_ref->get_dependant_expr(), count);
+      }
     } else {
       ++count;
     }
@@ -5604,9 +5669,11 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObCo
   column_expr.set_hidden_column(column_schema.is_hidden());
   column_expr.set_lob_column(ob_is_text_tc(column_schema.get_data_type()));
   column_expr.set_is_rowkey_column(column_schema.is_rowkey_column());
+  column_expr.set_srs_id(column_schema.get_srs_id());
   if (ob_is_string_type(column_schema.get_data_type())
       || ob_is_enumset_tc(column_schema.get_data_type())
-      || ob_is_json_tc(column_schema.get_data_type())) {
+      || ob_is_json_tc(column_schema.get_data_type())
+      || ob_is_geometry_tc(column_schema.get_data_type())) {
     column_expr.set_collation_type(column_schema.get_collation_type());
     column_expr.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {
@@ -5750,6 +5817,7 @@ int ObRawExprUtils::need_wrap_to_string(ObObjType param_type, ObObjType calc_typ
           need_wrap = false;
           break;
         }
+      case ObGeometryType:
       case ObJsonType :
       case ObDateTimeType :
       case ObTimestampType :

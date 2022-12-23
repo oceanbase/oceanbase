@@ -1460,7 +1460,8 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
       LOG_WARN("resolve data type failed", K(ret));
     } else if (scalar_data_type.get_meta_type().is_string_or_lob_locator_type()
             || scalar_data_type.get_meta_type().is_enum_or_set()
-            || scalar_data_type.get_meta_type().is_json()) {
+            || scalar_data_type.get_meta_type().is_json()
+            || scalar_data_type.get_meta_type().is_geometry()) {
       ObObjMeta tmp_meta = scalar_data_type.get_meta_type();
       if (ObLongTextType == tmp_meta.get_type() && is_oracle_mode()) {
         tmp_meta.set_type(ObLobType);
@@ -1497,7 +1498,8 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
       if (OB_SUCC(ret) &&
           (scalar_data_type.get_meta_type().is_lob()
             || scalar_data_type.get_meta_type().is_lob_locator()
-            || scalar_data_type.get_meta_type().is_json())
+            || scalar_data_type.get_meta_type().is_json()
+            || scalar_data_type.get_meta_type().is_geometry())
           && CHARSET_ANY != scalar_data_type.get_charset_type()) {
         ObObjType type = scalar_data_type.get_obj_type();
         type = ob_is_lob_locator(type) ? ObLongTextType : type;
@@ -2361,7 +2363,8 @@ int ObPLResolver::adjust_routine_param_type(ObPLDataType &type)
       } break;
       case ObLobTC:
       case ObTextTC:
-      case ObJsonTC: {
+      case ObJsonTC:
+      case ObGeometryTC: {
         data_type.set_length(0);
         data_type.set_scale(default_accuracy.get_scale());
       } break;
@@ -4710,7 +4713,8 @@ int ObPLResolver::resolve_execute_immediate(
     } else if (OB_FAIL(resolve_expr(sql_node, func,
                                     sql, combine_line_and_col(sql_node->stmt_loc_)))) {
       LOG_WARN("failed to resolve sql expr", K(ret));
-    } else if (!sql->get_result_type().is_string_or_lob_locator_type() && !sql->get_result_type().is_json()) {
+    } else if (!sql->get_result_type().is_string_or_lob_locator_type() && !sql->get_result_type().is_json()
+               && !sql->get_result_type().is_geometry()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("dynamic sql must be string type", K(sql->get_result_type()), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-string type dynamic sql");
@@ -6784,7 +6788,8 @@ int ObPLResolver::resolve_open_for(
         } else if (OB_FAIL(resolve_expr(for_node, func, dynamic_sql_expr,
                                  combine_line_and_col(for_node->stmt_loc_)))) {
           LOG_WARN("failed to resolve sql expr", K(ret));
-        } else if (!dynamic_sql_expr->get_result_type().is_string_or_lob_locator_type() && !dynamic_sql_expr->get_result_type().is_json()) {
+        } else if (!dynamic_sql_expr->get_result_type().is_string_or_lob_locator_type() && !dynamic_sql_expr->get_result_type().is_json()
+                   && !dynamic_sql_expr->get_result_type().is_geometry()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("dynamic sql must be string type", K(dynamic_sql_expr->get_result_type()), K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-string type dynamic sql");

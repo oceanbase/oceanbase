@@ -124,7 +124,7 @@ int ObXACtx::init(const ObXATransID &xid,
     tenant_id_ = tenant_id;
     is_inited_ = true;
   }
-  REC_TRACE_EXT(tlog_, init, Y(ret), OB_ID(trans_id), trans_id_, OB_ID(xid), xid_,
+  REC_TRACE_EXT(tlog_, init, OB_Y(ret), OB_ID(trans_id), trans_id_, OB_ID(xid), xid_,
       OB_ID(ctx_ref), get_uref());
 
   return ret;
@@ -176,7 +176,7 @@ int ObXACtx::handle_timeout(const int64_t delay)
      }
   }
   
-  REC_TRACE_EXT(tlog_, handle_timeout, Y(ret), OB_ID(ctx_ref), get_uref());
+  REC_TRACE_EXT(tlog_, handle_timeout, OB_Y(ret), OB_ID(ctx_ref), get_uref());
 
   TRANS_LOG(INFO, "xa trans timeout", K(*this));
 
@@ -732,7 +732,7 @@ int ObXACtx::process_xa_start_tightly_(const obrpc::ObXAStartRPCRequest &req)
     }
   }
 
-  REC_TRACE_EXT(tlog_, xa_start_request, Y(ret), OB_ID(bqual), xid.get_bqual_hash(),
+  REC_TRACE_EXT(tlog_, xa_start_request, OB_Y(ret), OB_ID(bqual), xid.get_bqual_hash(),
       OB_ID(ctx_ref), get_uref());
   return ret;
 }
@@ -771,7 +771,7 @@ int ObXACtx::process_xa_start_loosely_(const obrpc::ObXAStartRPCRequest &req)
       }
     }
   }
-  REC_TRACE_EXT(tlog_, xa_start_request, Y(ret), OB_ID(ctx_ref), get_uref());
+  REC_TRACE_EXT(tlog_, xa_start_request, OB_Y(ret), OB_ID(ctx_ref), get_uref());
 
   return ret;
 }
@@ -792,7 +792,7 @@ int ObXACtx::process_xa_start_response(const obrpc::ObXAStartRPCResponse &resp)
 
   TRANS_LOG(INFO, "xa start response", K(ret), K(*this));
   xa_sync_status_cond_.notify(ret);
-  REC_TRACE_EXT(tlog_, xa_start_response, Y(ret), OB_ID(ctx_ref), get_uref());
+  REC_TRACE_EXT(tlog_, xa_start_response, OB_Y(ret), OB_ID(ctx_ref), get_uref());
 
   return ret;
 }
@@ -915,7 +915,7 @@ int ObXACtx::process_start_stmt(const obrpc::ObXAStartStmtRPCRequest &req)
       }
     }
   }
-  REC_TRACE_EXT(tlog_, xa_start_stmt_request, Y(ret), OB_ID(ctx_ref), get_uref());
+  REC_TRACE_EXT(tlog_, xa_start_stmt_request, OB_Y(ret), OB_ID(ctx_ref), get_uref());
   TRANS_LOG(INFO, "process start stmt", K(ret), K(req), K(*this));
 
   return ret;
@@ -947,7 +947,7 @@ int ObXACtx::process_start_stmt_response(const obrpc::ObXAStartStmtRPCResponse &
 
   TRANS_LOG(INFO, "process start stmt response", K(ret), K(res));
   xa_sync_status_cond_.notify(ret);
-  REC_TRACE_EXT(tlog_, xa_start_stmt_response, Y(ret), OB_ID(ctx_ref), get_uref()); 
+  REC_TRACE_EXT(tlog_, xa_start_stmt_response, OB_Y(ret), OB_ID(ctx_ref), get_uref());
 
   return ret;
 }
@@ -1443,7 +1443,7 @@ int ObXACtx::xa_end(const ObXATransID &xid,
     ret = OB_SUCCESS;
   }
 
-  REC_TRACE_EXT(tlog_, xa_end, Y(ret), OB_ID(bqual), xid_.get_bqual_hash(),
+  REC_TRACE_EXT(tlog_, xa_end, OB_Y(ret), OB_ID(bqual), xid_.get_bqual_hash(),
       OB_ID(ctx_ref), get_uref());
   return ret;
 }
@@ -2011,7 +2011,7 @@ int ObXACtx::one_phase_end_trans(const ObXATransID &xid,
     }
   }
 
-  REC_TRACE_EXT(tlog_, xa_one_phase, Y(ret), OB_ID(is_rollback), is_rollback,
+  REC_TRACE_EXT(tlog_, xa_one_phase, OB_Y(ret), OB_ID(is_rollback), is_rollback,
       OB_ID(ctx_ref), get_uref());
 
   return ret;
@@ -2319,7 +2319,7 @@ int ObXACtx::xa_prepare(const ObXATransID &xid, const int64_t timeout_us)
     tx_desc_ = NULL;
   }
 
-  REC_TRACE_EXT(tlog_, xa_prepare, Y(ret), OB_ID(bqual), xid_.get_bqual_hash(),
+  REC_TRACE_EXT(tlog_, xa_prepare, OB_Y(ret), OB_ID(bqual), xid_.get_bqual_hash(),
       OB_ID(ctx_ref), get_uref());
 
   TRANS_LOG(INFO, "xa prepare", K(ret), K(xid), K(timeout_us), K(*this));
@@ -2521,7 +2521,7 @@ int ObXACtx::two_phase_end_trans(const ObXATransID &xid,
     }
   }
 
-  REC_TRACE_EXT(tlog_, xa_end_trans, Y(ret), OB_ID(is_rollback), is_rollback,
+  REC_TRACE_EXT(tlog_, xa_end_trans, OB_Y(ret), OB_ID(is_rollback), is_rollback,
       OB_ID(ctx_ref), get_uref());
   return ret;
 }

@@ -72,6 +72,7 @@ ObObjDatumMapType ObDatum::get_obj_datum_map_type(const ObObjType type)
     OBJ_DATUM_STRING,         // ObURowID
     OBJ_DATUM_STRING,         // ObLobType
     OBJ_DATUM_STRING,         // ObJsonType
+    OBJ_DATUM_STRING,         // ObGeometryType
   };
   static_assert(sizeof(maps) / sizeof(maps[0]) == ObMaxType,
       "new added type should extend this map");

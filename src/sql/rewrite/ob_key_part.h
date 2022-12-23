@@ -18,6 +18,7 @@
 #include "lib/container/ob_array_serialization.h"
 #include "common/object/ob_object.h"
 #include "sql/engine/expr/ob_expr_res_type.h"
+#include "lib/geo/ob_geo_common.h"
 
 namespace oceanbase
 {
@@ -28,7 +29,8 @@ class ObQueryRange;
 enum ObKeyPartType
 {
   T_NORMAL_KEY = 0,
-  T_LIKE_KEY
+  T_LIKE_KEY,
+  T_GEO_KEY
 };
 
 class ObKeyPartId
@@ -144,6 +146,13 @@ struct ObLikeKeyPart
   common::ObObj escape_;
 };
 
+struct ObGeoKeyPart
+{
+  common::ObObj wkb_;
+  common::ObGeoRelationType geo_type_;
+  common::ObObj distance_;
+};
+
 class ObKeyPart : public common::ObDLinkBase<ObKeyPart>
 {
   OB_UNIS_VERSION_V(1);
@@ -238,6 +247,8 @@ public:
       bret = like_keypart_->pattern_.is_unknown() || like_keypart_->escape_.is_unknown();
     } else if (is_normal_key()) {
       bret = normal_keypart_->start_.is_unknown() || normal_keypart_->end_.is_unknown();
+    } else if (is_geo_key()) {
+      bret = geo_keypart_->wkb_.is_unknown();
     }
     return bret;
   }
@@ -312,8 +323,10 @@ public:
   inline bool is_always_false() const { return is_normal_key() && normal_keypart_->always_false_; }
   inline bool is_normal_key() const { return T_NORMAL_KEY == key_type_ && normal_keypart_ != NULL; }
   inline bool is_like_key() const { return T_LIKE_KEY == key_type_ && like_keypart_ != NULL; }
+  inline bool is_geo_key() const { return T_GEO_KEY == key_type_ && geo_keypart_ != NULL; }
   int create_normal_key();
   int create_like_key();
+  int create_geo_key();
   inline ObNormalKeyPart *get_normal_key()
   {
     ObNormalKeyPart *normal_key = NULL;
@@ -357,6 +370,8 @@ public:
     ObNormalKeyPart *normal_keypart_;
     //like expr type
     ObLikeKeyPart *like_keypart_;
+    //geo expr type
+    ObGeoKeyPart *geo_keypart_;
   };
   //list member
   ObKeyPart *item_next_;

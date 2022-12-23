@@ -1010,6 +1010,16 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         }
         break;
       }
+      case T_FUN_SYS_POINT:
+      case T_FUN_SYS_LINESTRING:
+      case T_FUN_SYS_MULTIPOINT:
+      case T_FUN_SYS_MULTILINESTRING:
+      case T_FUN_SYS_POLYGON:
+      case T_FUN_SYS_MULTIPOLYGON:
+      case T_FUN_SYS_GEOMCOLLECTION: {
+        OZ (process_geo_func_node(node, expr));
+        break;
+      }
       default:
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("Wrong type in expression", K(get_type_name(node->type_)));
@@ -2483,6 +2493,110 @@ int ObRawExprResolverImpl::process_char_charset_node(const ParseNode *node, ObRa
       expr = c_expr;
     }
   }
+  return ret;
+}
+
+int ObRawExprResolverImpl::set_geo_func_name(ObSysFunRawExpr *func_expr,
+                                             const ObItemType func_type)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(func_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null function expr", K(ret), K(get_type_name(func_type)));
+  } else {
+    switch (func_type) {
+      case T_FUN_SYS_POINT: {
+        OX(func_expr->set_func_name(N_POINT));
+        break;
+      }
+      case T_FUN_SYS_LINESTRING: {
+        OX(func_expr->set_func_name(N_LINESTRING));
+        break;
+      }
+      case T_FUN_SYS_POLYGON: {
+        OX(func_expr->set_func_name(N_POLYGON));
+        break;
+      }
+      case T_FUN_SYS_MULTIPOINT: {
+        OX(func_expr->set_func_name(N_MULTIPOINT));
+        break;
+      }
+      case T_FUN_SYS_MULTILINESTRING: {
+        OX(func_expr->set_func_name(N_MULTILINESTRING));
+        break;
+      }
+      case T_FUN_SYS_MULTIPOLYGON: {
+        OX(func_expr->set_func_name(N_MULTIPOLYGON));
+        break;
+      }
+      case T_FUN_SYS_GEOMCOLLECTION: {
+        OX(func_expr->set_func_name(N_GEOMCOLLECTION));
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid geometry function", K(ret), K(func_type));
+        break;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_geo_func_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(node));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_FAIL(set_geo_func_name(func_expr, node->type_))) {
+    LOG_WARN("fail to set geo function name", K(ret), K(get_type_name(node->type_)));
+  } else if (T_FUN_SYS_POINT == node->type_) {
+    ObRawExpr *sub_expr1 = NULL;
+    ObRawExpr *sub_expr2 = NULL;
+    if (OB_UNLIKELY(2 != node->num_child_) || OB_ISNULL(node->children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node children", K(ret), K_(node->num_child),
+          K_(node->children), K_(node->type));
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], sub_expr1)))) {
+      LOG_WARN("resolve x child failed", K(ret));
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], sub_expr2)))) {
+      LOG_WARN("resolve y child failed", K(ret));
+    } else if (OB_FAIL(func_expr->set_param_exprs(sub_expr1, sub_expr2))) {
+      LOG_WARN("failed to add param expr", K(ret));
+    }
+  } else if (OB_ISNULL(node->children_[0]) && T_FUN_SYS_GEOMCOLLECTION == node->type_) { // SELECT GEOMETRYCOLLECTION();
+    // do nothing
+  } else {
+    ParseNode *expr_list_node = node->children_[0];
+    if (OB_ISNULL(expr_list_node) || OB_UNLIKELY(T_EXPR_LIST != expr_list_node->type_)
+        || OB_ISNULL(expr_list_node->children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid children for geometry type function", K(node), K(expr_list_node));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr_list_node->num_child_; ++i) {
+      ObRawExpr *para_expr = NULL;
+      if (OB_ISNULL(expr_list_node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid expr list node children", K(ret), K(i), K(expr_list_node->children_[i]));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(expr_list_node->children_[i], para_expr)))) {
+        LOG_WARN("fail to recursive resolve expr list item", K(ret));
+      } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
+        LOG_WARN("fail to add param expr to expr", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    expr = func_expr;
+  }
+
   return ret;
 }
 

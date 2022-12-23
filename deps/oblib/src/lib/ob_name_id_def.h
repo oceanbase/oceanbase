@@ -863,7 +863,7 @@ const char* get_description(int32_t id);
 
 #define OB_ID(name_sym) (::oceanbase::name::name_sym)
 #define NAME(name_id) (::oceanbase::name::get_name(name_id))
-#define Y(x) OB_ID(x), x
-#define Y_(x) OB_ID(x), x ##_
+#define OB_Y(x) OB_ID(x), x
+#define OB_Y_(x) OB_ID(x), x ##_
 
 #endif /* _OB_NAME_ID_DEF_H */

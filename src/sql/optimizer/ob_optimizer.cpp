@@ -480,7 +480,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt &stmt,
   bool enable_all_pdml_feature = false; // 默认非注入错误情况下，关闭PDML不稳定feature
   // 目前通过注入错误的方式来打开PDML不稳定功能，用于PDML全部功能的case回归
   // 对应的event注入任何类型的错误，都会打开PDML非稳定功能
-  ret = E(EventTable::EN_ENABLE_PDML_ALL_FEATURE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_ENABLE_PDML_ALL_FEATURE) OB_SUCCESS;
   LOG_TRACE("event: check pdml all feature", K(ret));
   if (OB_FAIL(ret)) {
     enable_all_pdml_feature = true;

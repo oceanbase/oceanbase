@@ -476,6 +476,10 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
                                             cm_, datum))) {
             LOG_WARN("fail to dynamic cast", K(dst_expr->datum_meta_),
                                              K(real_src_expr), K(cm_), K(ret));
+            if (dst_expr->obj_meta_.is_geometry()) {
+              ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+              LOG_USER_WARN(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+            }
           }
         }
 

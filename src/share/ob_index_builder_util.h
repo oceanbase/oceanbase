@@ -72,6 +72,7 @@ public:
       const bool is_hidden,
       const bool is_specified_storing_col);
 private:
+  static const int SPATIAL_MBR_COLUMN_MAX_LENGTH = 32;
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
   class FulltextColumnOrder
   {
@@ -117,6 +118,22 @@ private:
       const share::schema::ObTableSchema &data_schema,
       common::ObRowDesc &row_desc,
       share::schema::ObTableSchema &schema);
+  static int adjust_spatial_args(
+      obrpc::ObCreateIndexArg &arg,
+      share::schema::ObTableSchema &data_schema,
+      common::ObIArray<share::schema::ObColumnSchemaV2*> &spatial_cols);
+  static int generate_spatial_columns(
+      const common::ObString &col_name,
+      share::schema::ObTableSchema &data_schema,
+      common::ObIArray<share::schema::ObColumnSchemaV2*> &spatial_cols);
+  static int generate_spatial_cellid_column(
+      share::schema::ObColumnSchemaV2 &col_schema,
+      share::schema::ObTableSchema &data_schema,
+      share::schema::ObColumnSchemaV2 *&cellid_col);
+  static int generate_spatial_mbr_column(
+    share::schema::ObColumnSchemaV2 &col_schema,
+    share::schema::ObTableSchema &data_schema,
+    share::schema::ObColumnSchemaV2 *&mbr_col);
 };
 }//end namespace rootserver
 }//end namespace oceanbase

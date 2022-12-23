@@ -598,6 +598,11 @@ bool is_json_type(const int ctype)
   return (oceanbase::obmysql::MYSQL_TYPE_JSON == ctype);
 }
 
+bool is_geometry_type(const int ctype)
+{
+  return (ctype == oceanbase::obmysql::MYSQL_TYPE_GEOMETRY);
+}
+
 double get_delay_sec(const int64_t tstamp_ns)
 {
   int64_t delta = (ObTimeUtility::current_time() - tstamp_ns / NS_CONVERSION);

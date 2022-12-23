@@ -924,7 +924,7 @@ int ObSchemaChecker::get_can_read_index_array(
   } else if (OB_NOT_NULL(sql_schema_mgr_)) {
     if (OB_FAIL(sql_schema_mgr_->get_can_read_index_array(
                 table_id, index_tid_array, size, with_mv,
-                true /* with_global_index*/, true /* with_domin_index*/, is_link))) {
+                true /* with_global_index*/, true /* with_domin_index*/, is_link, false /* with_spatial_index*/))) {
       LOG_WARN("failed to get_can_read_index_array", K(table_id), K(ret));
     }
   } else {

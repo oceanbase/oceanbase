@@ -560,6 +560,7 @@ int ObUpgradeProcesserSet::init(
         } \
       } \
     }
+
     // order by data version asc
     INIT_PROCESSOR_BY_VERSION(4, 1, 0, 0);
 #undef INIT_PROCESSOR_BY_VERSION
@@ -744,6 +745,42 @@ int ObBaseUpgradeProcessor::init(
 #undef FORMAT_STR
 
 /* =========== special upgrade processor start ============= */
+int ObUpgradeFor4100Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(post_upgrade_for_srs())) {
+    LOG_WARN("post upgrade for srs failed", K(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4100Processor::post_upgrade_for_srs()
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t start = ObTimeUtility::current_time();
+  int64_t affected_rows = 0;
+  if (OB_FAIL(sql.assign_fmt("INSERT IGNORE INTO %s "
+      "(SRS_VERSION, SRS_ID, SRS_NAME, ORGANIZATION, ORGANIZATION_COORDSYS_ID, DEFINITION, minX, maxX, minY, maxY, proj4text, DESCRIPTION) VALUES"
+      R"((1, 0, '', NULL, NULL, '', -2147483648,2147483647,-2147483648,2147483647,'', NULL))",
+      OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME))) {
+    LOG_WARN("sql assign failed", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed", K(ret), K(sql));
+    } else if (!is_zero_row(affected_rows) && !is_single_row(affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected_rows", K(affected_rows));
+    } else {
+      LOG_TRACE("execute sql", KR(ret), K(tenant_id_), K(sql), K(affected_rows));
+    }
+  }
+
+  LOG_INFO("add tenant srs finish", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
+  return ret;
+}
 
 /* =========== special upgrade processor end   ============= */
 } // end share

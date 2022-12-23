@@ -21,6 +21,7 @@ namespace oceanbase {
 using namespace share::schema;
 using namespace share;
 namespace sql {
+static const int64_t SPATIAL_ROWKEY_MIN_NUM = 3;
 
 /// It is possible for us to find a better way to combine differnt kinds of cardinality
 /// estimation methods. e.g. if a table is found to be uniformally distributed over partitions,
@@ -134,7 +135,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
   
   bool force_leader_estimation = false;
   
-  force_leader_estimation = OB_FAIL(E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS);
+  force_leader_estimation = OB_FAIL(OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS);
   ret = OB_SUCCESS;
 
   // for each access path, find a partition/server for estimation
@@ -466,7 +467,8 @@ int ObAccessPathEstimation::add_index_info(ObOptimizerContext &ctx,
     for (int64_t i = 0; ap->is_global_index_ && i < scan_ranges.count(); ++i) {
       scan_ranges.at(i).table_id_ = ap->index_id_;
     }
-    if (scan_ranges.count() > ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM) {
+    bool is_spatial_index = ap->est_cost_info_.index_meta_info_.is_geo_index_;
+    if (!is_spatial_index && scan_ranges.count() > ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM) {
       ObArray<common::ObNewRange> valid_ranges;
       for (int64_t i = 0; OB_SUCC(ret) && i < ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM; ++i) {
         if (OB_FAIL(valid_ranges.push_back(scan_ranges.at(i)))) {
@@ -480,8 +482,10 @@ int ObAccessPathEstimation::add_index_info(ObOptimizerContext &ctx,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(construct_scan_range_batch(allocator, scan_ranges, index_est_arg->batch_))) {
+      if (!is_spatial_index && OB_FAIL(construct_scan_range_batch(allocator, scan_ranges, index_est_arg->batch_))) {
         LOG_WARN("failed to construct scan range batch", K(ret));
+      } else if (is_spatial_index && OB_FAIL(construct_geo_scan_range_batch(allocator, scan_ranges, index_est_arg->batch_))) {
+        LOG_WARN("failed to construct spatial scan range batch", K(ret));
       }
     }
   }
@@ -625,6 +629,77 @@ int ObAccessPathEstimation::construct_scan_range_batch(ObIAllocator &allocator,
   return ret;
 }
 
+bool ObAccessPathEstimation::is_multi_geo_range(const ObNewRange &range)
+{
+  return OB_NOT_NULL(range.get_start_key().get_obj_ptr()) &&
+         range.get_start_key().get_obj_ptr()[0].get_uint64() != range.get_end_key().get_obj_ptr()[0].get_uint64();
+}
+
+
+int ObAccessPathEstimation::construct_geo_scan_range_batch(ObIAllocator &allocator,
+                                                           const ObIArray<ObNewRange> &scan_ranges,
+                                                           ObSimpleBatch &batch)
+{
+  int ret = OB_SUCCESS;
+  if (scan_ranges.empty()) {
+    batch.type_ = ObSimpleBatch::T_NONE;
+  } else if (scan_ranges.count() == 1) { //T_SCAN
+    void *ptr = allocator.alloc(sizeof(SQLScanRange));
+    if (OB_ISNULL(ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ptr), K(ret));
+    } else {
+      SQLScanRange *range = new(ptr)SQLScanRange();
+      *range = scan_ranges.at(0);
+      batch.type_ = ObSimpleBatch::T_SCAN;
+      batch.range_ = range;
+    }
+  } else { //T_MULTI_SCAN
+    SQLScanRangeArray *range_array = NULL;
+    void *ptr = NULL;
+    if (scan_ranges.at(0).get_start_key().get_obj_cnt() < SPATIAL_ROWKEY_MIN_NUM) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The count of rowkey from spatial_index_table is wrong.", K(ret), K(scan_ranges.at(0).get_start_key().get_obj_cnt()));
+    } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(SQLScanRangeArray)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ptr), K(ret));
+    } else {
+      range_array = new(ptr)SQLScanRangeArray();
+      batch.type_ = ObSimpleBatch::T_MULTI_SCAN;
+      batch.ranges_ = range_array;
+      int64_t ranges_count = 0;
+      // push_back scan_range for first priority
+      for (int64_t i = 0; OB_SUCC(ret) && i < scan_ranges.count(); ++i) {
+        const ObNewRange &range = scan_ranges.at(i);
+        if (is_multi_geo_range(range)) {
+          if (OB_FAIL(range_array->push_back(range))) {
+            LOG_WARN("failed to push back scan range", K(ret));
+          } else {
+            ranges_count++;
+          }
+        }
+      }
+      // push_back get_range
+      for (int64_t i = 0;
+          OB_SUCC(ret)
+          && ranges_count < ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM
+          && i < scan_ranges.count();
+          ++i) {
+        const ObNewRange &range = scan_ranges.at(i);
+        if (!is_multi_geo_range(range)) {
+          if (OB_FAIL(range_array->push_back(range))) {
+            LOG_WARN("failed to push back scan range", K(ret));
+          } else {
+            ranges_count++;
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 bool ObBatchEstTasks::check_result_reliable() const
 {
   bool bret = paths_.count() == res_.index_param_res_.count();
@@ -652,7 +727,7 @@ int ObAccessPathEstimation::estimate_full_table_rowcount(ObOptimizerContext &ctx
   ObArenaAllocator arena("CardEstimation");
   bool force_leader_estimation = false;
   
-  force_leader_estimation = OB_FAIL(E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS);
+  force_leader_estimation = OB_FAIL(OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS);
   ret = OB_SUCCESS;
   
   HEAP_VAR(ObBatchEstTasks, task) {

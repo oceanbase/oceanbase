@@ -80,7 +80,7 @@ void ObTransCtx::after_unlock(CtxLockArg &arg)
       if (OB_FAIL(arg.commit_cb_.callback())) {
         TRANS_LOG(WARN, "end transaction callback failed", KR(ret), "context", *this);
       }
-      REC_TRANS_TRACE_EXT2(tlog_, end_trans_cb, Y(ret),
+      REC_TRANS_TRACE_EXT2(tlog_, end_trans_cb, OB_Y(ret),
                            OB_ID(arg1), arg.commit_cb_.ret_,
                            OB_ID(arg2), arg.commit_cb_.commit_version_,
                            OB_ID(async), false);
@@ -115,7 +115,7 @@ void ObTransCtx::after_unlock(CtxLockArg &arg)
           TRANS_LOG(WARN, "end transaction callback failed", KR(ret), "context", *this);
         }
       }
-      REC_TRANS_TRACE_EXT2(tlog_, end_trans_cb, Y(ret),
+      REC_TRANS_TRACE_EXT2(tlog_, end_trans_cb, OB_Y(ret),
                            OB_ID(arg1), arg.commit_cb_.ret_,
                            OB_ID(arg2), arg.commit_cb_.commit_version_,
                            OB_ID(async), true);

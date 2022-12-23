@@ -631,7 +631,7 @@ int ObInitialMigrationTask::process()
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_INITIAL_MIGRATION_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_INITIAL_MIGRATION_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_INITIAL_MIGRATION_TASK_FAILED", K(ret));
       }
@@ -955,7 +955,7 @@ int ObStartMigrationTask::process()
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_START_MIGRATION_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_START_MIGRATION_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_START_MIGRATION_TASK_FAILED", K(ret));
       }
@@ -1290,7 +1290,7 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
 
   #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_MIGRATION_GENERATE_SYS_TABLETS_DAG_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_MIGRATION_GENERATE_SYS_TABLETS_DAG_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_MIGRATION_GENERATE_SYS_TABLETS_DAG_FAILED", K(ret));
 
@@ -1706,7 +1706,7 @@ int ObSysTabletsMigrationTask::process()
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_SYS_TABLETS_MIGRATION_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_SYS_TABLETS_MIGRATION_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_SYS_TABLETS_MIGRATION_TASK_FAILED", K(ret));
       }
@@ -2179,7 +2179,7 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
 
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_TABLET_MIGRATION_DAG_INNER_RETRY) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_TABLET_MIGRATION_DAG_INNER_RETRY) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_TABLET_MIGRATION_DAG_INNER_RETRY", K(ret));
       }
@@ -2285,7 +2285,7 @@ int ObTabletMigrationTask::process()
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_TABLET_MIGRATION_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_TABLET_MIGRATION_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_TABLET_MIGRATION_TASK_FAILED", K(ret));
       }
@@ -2972,7 +2972,7 @@ int ObDataTabletsMigrationTask::process()
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_DATA_TABLETS_MIGRATION_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_DATA_TABLETS_MIGRATION_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_DATA_TABLETS_MIGRATION_TASK_FAILED", K(ret));
       }
@@ -3038,7 +3038,7 @@ int ObDataTabletsMigrationTask::ls_online_()
   } else {
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_MIGRATION_ENABLE_LOG_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_MIGRATION_ENABLE_LOG_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       STORAGE_LOG(ERROR, "fake EN_MIGRATION_ENABLE_LOG_FAILED", K(ret));
     }
@@ -3055,7 +3055,7 @@ int ObDataTabletsMigrationTask::ls_online_()
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_MIGRATION_ONLINE_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_MIGRATION_ONLINE_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       STORAGE_LOG(ERROR, "fake EN_MIGRATION_ONLINE_FAILED", K(ret));
     }
@@ -3569,7 +3569,7 @@ int ObTabletGroupMigrationTask::process()
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_TABLET_GROUP_MIGRATION_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_TABLET_GROUP_MIGRATION_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_TABLET_GROUP_MIGRATION_TASK_FAILED", K(ret));
       }

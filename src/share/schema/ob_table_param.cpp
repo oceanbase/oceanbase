@@ -593,6 +593,7 @@ void ObTableParam::reset()
   rowid_version_ = ObURowIDData::INVALID_ROWID_VERSION;
   rowid_projector_.reset();
   main_read_info_.reset();
+  is_spatial_index_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -609,8 +610,8 @@ OB_DEF_SERIALIZE(ObTableParam)
               use_lob_locator_,
               rowid_version_,
               rowid_projector_,
-              main_read_info_);
-
+              main_read_info_,
+              is_spatial_index_);
   return ret;
 }
 
@@ -632,8 +633,8 @@ OB_DEF_DESERIALIZE(ObTableParam)
     if (OB_FAIL(main_read_info_.deserialize(allocator_, buf, data_len, pos))) {
       LOG_WARN("Fail to deserialize read info", K(ret));
     }
+    OB_UNIS_DECODE(is_spatial_index_);
   }
-
   return ret;
 }
 
@@ -652,8 +653,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               use_lob_locator_,
               rowid_version_,
               rowid_projector_,
-              main_read_info_);
-
+              main_read_info_,
+              is_spatial_index_);
   return len;
 }
 

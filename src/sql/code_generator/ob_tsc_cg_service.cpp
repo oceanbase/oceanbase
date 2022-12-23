@@ -179,7 +179,8 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op, ObDASScanCtDe
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr", K(ret), K(table_schema));
-  } else if (OB_FAIL(extract_das_output_column_ids(op, index_id, tsc_out_cols))) {
+  } else if (table_schema->is_spatial_index() && FALSE_IT(scan_ctdef.table_param_.set_is_spatial_index(true))) {
+  } else if (OB_FAIL(extract_das_output_column_ids(op, index_id, *table_schema, tsc_out_cols))) {
     LOG_WARN("extract tsc output column ids failed", K(ret));
   } else if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema,
                                                      scan_ctdef.access_column_ids_,
@@ -663,6 +664,36 @@ int ObTscCgService::extract_tsc_access_columns(const ObLogTableScan &op,
   return ret;
 }
 
+int ObTscCgService::generate_geo_access_ctdef(const ObLogTableScan &op, const ObTableSchema &index_schema,
+                                              ObArray<ObRawExpr*> &access_exprs)
+{
+  int ret = OB_SUCCESS;
+  uint64_t mbr_col_id = 0;
+  bool is_found = false;
+  if (OB_FAIL(index_schema.get_index_info().get_spatial_mbr_col_id(mbr_col_id))) {
+    LOG_WARN("fail to get spatial mbr column id", K(ret), K(index_schema.get_index_info()));
+  } else {
+    const ObIArray<ObRawExpr*> &log_access_exprs = op.get_access_exprs();
+    for (uint32_t i = 0; i < log_access_exprs.count() && OB_SUCC(ret); i++) {
+      ObRawExpr *expr = log_access_exprs.at(i);
+      if (T_REF_COLUMN == expr->get_expr_type()) {
+        ObColumnRefRawExpr* col_expr = static_cast<ObColumnRefRawExpr *>(expr);
+        if (mbr_col_id == col_expr->get_column_id()
+            && op.get_table_id() == col_expr->get_table_id()) {
+          access_exprs.push_back(expr);
+          is_found = true;
+        }
+      }
+    }
+    if (!is_found) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mbr column expr not found", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObTscCgService::generate_access_ctdef(const ObLogTableScan &op,
                                           ObDASScanCtDef &scan_ctdef,
                                           bool &has_rowscn)
@@ -677,6 +708,9 @@ int ObTscCgService::generate_access_ctdef(const ObLogTableScan &op,
     LOG_WARN("get table schema failed", K(ret), K(table_id));
   } else if (OB_FAIL(extract_das_access_exprs(op, scan_ctdef.ref_table_id_, access_exprs))) {
     LOG_WARN("extract das access exprs failed", K(ret));
+  } else if (table_schema->is_spatial_index()
+             && OB_FAIL(generate_geo_access_ctdef(op, *table_schema, access_exprs))) {
+    LOG_WARN("extract das geo access exprs failed", K(ret));
   }
   ARRAY_FOREACH(access_exprs, i) {
     ObRawExpr *expr = access_exprs.at(i);
@@ -825,6 +859,7 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
 
 int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
                                                   ObTableID table_id,
+                                                  const ObTableSchema &index_schema,
                                                   ObIArray<uint64_t> &output_cids)
 {
   int ret = OB_SUCCESS;
@@ -840,6 +875,14 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
     } else if (nullptr != op.get_group_id_expr()) {
       if (OB_FAIL(output_cids.push_back(OB_HIDDEN_GROUP_IDX_COLUMN_ID))) {
         LOG_WARN("store group column id failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && index_schema.is_spatial_index()) {
+      uint64_t mbr_col_id;
+      if (OB_FAIL(index_schema.get_index_info().get_spatial_mbr_col_id(mbr_col_id))) {
+        LOG_WARN("fail to get spatial mbr column id", K(ret), K(index_schema.get_index_info()));
+      } else if (OB_FAIL(output_cids.push_back(mbr_col_id))) {
+        LOG_WARN("store cell colum id failed", K(ret), K(mbr_col_id));
       }
     }
     //column expr in non-pushdown filter need to be output,
