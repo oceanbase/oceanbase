@@ -170,7 +170,8 @@ int ObURowIDData::inner_get_pk_value<ObURowIDType>(const uint8_t *rowid_buf,
           *(reinterpret_cast<const ObNumberDesc *>(rowid_buf + pos));          \
       pos += sizeof(ObNumberDesc);                                             \
       int64_t digits_len = sizeof(uint32_t) * num_desc.len_;                   \
-      if (OB_LIKELY(pos + digits_len <= rowid_buf_len)) {                      \
+      if (OB_LIKELY(0 <= digits_len && digits_len <= rowid_buf_len             \
+              && pos + digits_len <= rowid_buf_len)) {                         \
         const uint32_t *digits = reinterpret_cast<const uint32_t *>(rowid_buf + pos); \
         pos += digits_len;                                                     \
         pk_val.set_##type(num_desc, const_cast<uint32_t *>(digits));           \
@@ -196,7 +197,7 @@ int ObURowIDData::inner_get_pk_value<ObURowIDType>(const uint8_t *rowid_buf,
       int32_t char_len =                                                       \
           *(reinterpret_cast<const int32_t *>(rowid_buf + pos));               \
       pos += 4;                                                                \
-      if (OB_LIKELY(pos + char_len <= rowid_buf_len)) {                        \
+      if (OB_LIKELY(0 <= char_len && pos + char_len <= rowid_buf_len)) {       \
         const char *str_val = (const char *)rowid_buf + pos;                   \
         pos += char_len;                                                       \
         ObString str_value(char_len, str_val);                                 \
