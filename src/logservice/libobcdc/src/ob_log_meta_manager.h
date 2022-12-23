@@ -100,9 +100,11 @@ public:
   // delete all data of the deleted database and decrease ref count of the database meta by 1 for all version
   virtual int drop_database(const int64_t database_id) = 0;
 
-  virtual int get_table_schema_meta(const int64_t version,
-    const uint64_t table_id,
-    TableSchemaInfo *&tb_schema_info) = 0;
+  virtual int get_table_schema_meta(
+      const int64_t version,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      TableSchemaInfo *&tb_schema_info) = 0;
 };
 
 class ObLogMetaManager : public IObLogMetaManager
@@ -130,9 +132,11 @@ public:
   virtual void revert_db_meta(IDBMeta *db_meta);
   virtual int drop_table(const int64_t table_id);
   virtual int drop_database(const int64_t database_id);
-  virtual int get_table_schema_meta(const int64_t version,
-    const uint64_t table_id,
-    TableSchemaInfo *&tb_schema_info);
+  virtual int get_table_schema_meta(
+      const int64_t version,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      TableSchemaInfo *&tb_schema_info);
 public:
   int init(ObObj2strHelper *obj2str_helper,
       const bool enable_output_hidden_primary_key);
@@ -181,35 +185,47 @@ private:
 
   struct MetaKey
   {
-    uint64_t id_;
+    uint64_t tenant_id_;
+    uint64_t id_; // schema key id
 
-    bool is_valid() const { return common::OB_INVALID_ID != id_; }
-    uint64_t hash() const { return id_; }
-    bool operator== (const MetaKey & other) const { return id_ == other.id_; }
-    TO_STRING_KV(K_(id));
+    bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && common::OB_INVALID_ID != id_; }
+    uint64_t hash() const
+    {
+      uint64_t hash_val = 0;
+      hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
+      hash_val = common::murmurhash(&id_, sizeof(id_), hash_val);
+      return hash_val;
+    }
+    bool operator==(const MetaKey &other) const
+    { return (tenant_id_ == other.tenant_id_) && (id_ == other.id_); }
+    TO_STRING_KV(K_(tenant_id), K_(id));
   };
 
   // multi-version table
   struct MulVerTableKey
   {
     int64_t version_;
+    uint64_t tenant_id_;
     uint64_t table_id_;
 
-    MulVerTableKey(const int64_t version,
-        const uint64_t table_id) : version_(version), table_id_(table_id) {}
+    MulVerTableKey(
+        const int64_t version,
+        const uint64_t tenant_id,
+        const uint64_t table_id) : version_(version), tenant_id_(tenant_id), table_id_(table_id) {}
 
     uint64_t hash() const
     {
       uint64_t hash_val = 0;
       hash_val = common::murmurhash(&version_, sizeof(version_), hash_val);
+      hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
       hash_val = common::murmurhash(&table_id_, sizeof(table_id_), hash_val);
 
       return hash_val;
     }
-    bool operator== (const MulVerTableKey & other) const
-    { return (version_ == other.version_) && (table_id_ == other.table_id_); }
+    bool operator==(const MulVerTableKey &other) const
+    { return (version_ == other.version_) && (tenant_id_ == other.tenant_id_) && (table_id_ == other.table_id_); }
 
-    TO_STRING_KV(K_(version), K_(table_id));
+    TO_STRING_KV(K_(version), K_(tenant_id), K_(table_id));
   };
 
   typedef MetaNode<ITableMeta> TableMetaNode;
@@ -303,7 +319,9 @@ private:
       const int16_t usr_column_idx,
       TableSchemaInfo &tb_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap);
-  int set_table_schema_(const int64_t version,
+  int set_table_schema_(
+      const int64_t version,
+      const uint64_t tenant_id,
       const uint64_t table_id,
       const char *table_name,
       const int64_t non_hidden_column_cnt,
