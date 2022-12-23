@@ -139,6 +139,8 @@ private:
                             bool &is_nmb_literal,
                             ObRawExpr *&interval_expr,
                             ObRawExpr *&date_unit_expr);
+  int process_geo_func_node(const ParseNode *node, ObRawExpr *&expr);
+  int set_geo_func_name(ObSysFunRawExpr *func_expr, const ObItemType func_type);
   bool is_win_expr_valid_scope(ObStmtScope scope) const;
   int check_and_canonicalize_window_expr(ObRawExpr *expr);
   int process_ident_node(const ParseNode &node, ObRawExpr *&expr);

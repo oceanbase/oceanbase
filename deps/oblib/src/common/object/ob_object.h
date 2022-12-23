@@ -132,7 +132,8 @@ public:
     } else if (!ob_is_string_type(static_cast<ObObjType>(type_))
                && !ob_is_lob_locator(static_cast<ObObjType>(type_))
                && !ob_is_raw(static_cast<ObObjType>(type_))
-               && !ob_is_enum_or_set_type(static_cast<ObObjType>(type_))) {
+               && !ob_is_enum_or_set_type(static_cast<ObObjType>(type_))
+               && !ob_is_geometry(static_cast<ObObjType>(type_))) {
       set_collation_level(CS_LEVEL_NUMERIC);
       set_collation_type(CS_TYPE_BINARY);
     }
@@ -217,6 +218,13 @@ public:
     lob_scale_.set_in_row();
     set_collation_level(CS_LEVEL_IMPLICIT);
     set_collation_type(CS_TYPE_UTF8MB4_BIN);
+  }
+  OB_INLINE void set_geometry()
+  {
+    type_ = static_cast<uint8_t>(ObGeometryType);
+    lob_scale_.set_in_row();
+    set_collation_level(CS_LEVEL_IMPLICIT);
+    set_collation_type(CS_TYPE_BINARY);
   }
   OB_INLINE void set_otimestamp_type(const ObObjType type) { type_ = static_cast<uint8_t>(type); set_collation_level(CS_LEVEL_NUMERIC);set_collation_type(CS_TYPE_BINARY); }
   OB_INLINE void set_timestamp_tz() { set_otimestamp_type(ObTimestampTZType); }
@@ -323,7 +331,7 @@ public:
   {
     return (ob_is_text_tc(get_type()) && CS_TYPE_BINARY == cs_type_);
   }
-  OB_INLINE bool is_lob_v2() const { return ob_is_large_text(get_type()) || ob_is_json_tc(get_type()); }
+  OB_INLINE bool is_lob_v2() const { return ob_is_large_text(get_type()) || ob_is_json_tc(get_type()) || ob_is_geometry_tc(get_type()); }
   OB_INLINE bool is_lob() const { return ob_is_text_tc(get_type()); }
   OB_INLINE bool is_inrow() const { return is_lob() && lob_scale_.is_in_row(); }
   OB_INLINE bool is_outrow() const { return is_lob() && lob_scale_.is_out_row(); }
@@ -332,6 +340,11 @@ public:
   OB_INLINE bool is_json() const { return type_ == static_cast<uint8_t>(ObJsonType); }
   OB_INLINE bool is_json_inrow() const { return is_json() && lob_scale_.is_in_row(); }
   OB_INLINE bool is_json_outrow() const { return is_json() && lob_scale_.is_out_row(); }
+
+  OB_INLINE bool is_geometry() const { return type_ == static_cast<uint8_t>(ObGeometryType); }
+  OB_INLINE bool is_geometry_inrow() const { return is_geometry() && lob_scale_.is_in_row(); }
+  OB_INLINE bool is_geometry_outrow() const { return is_geometry() && lob_scale_.is_out_row(); }
+
   // combination of above functions.
   OB_INLINE bool is_varbinary_or_binary() const { return is_varbinary() || is_binary(); }
   OB_INLINE bool is_varchar_or_char() const { return is_varchar() || is_char(); }
@@ -698,7 +711,7 @@ public:
     meta_.set_type_simple(meta.get_type());
     meta_.set_collation_type(meta.get_collation_type());
     if (ObCharType == get_type() || ObVarcharType == get_type() || ob_is_text_tc(get_type())
-        || ob_is_lob_locator(get_type()) || ob_is_json(get_type())) {
+        || ob_is_lob_locator(get_type()) || ob_is_json(get_type()) || ob_is_geometry(get_type())) {
       meta_.set_collation_level(ObCollationLevel::CS_LEVEL_IMPLICIT);
     } else {
       meta_.set_collation_level(meta.get_collation_level());
@@ -721,6 +734,7 @@ public:
       case ObLongTextType:
       case ObLobType:
       case ObJsonType:
+      case ObGeometryType:
       case ObRawType: {
         obj.meta_.set_collation_level(meta_.get_collation_level());
         obj.meta_.set_scale(meta_.get_scale());
@@ -868,6 +882,8 @@ public:
   void set_lob_value(const ObObjType type, const char *ptr, const int32_t length);
   void set_json_value(const ObObjType type, const ObLobCommon *value, const int32_t length);
   void set_json_value(const ObObjType type, const char *ptr, const int32_t length);
+  void set_geometry_value(const ObObjType type, const ObLobCommon *value, const int32_t length);
+  void set_geometry_value(const ObObjType type, const char *ptr, const int32_t length);
   void set_lob_locator(const ObLobLocator &value);
   void set_lob_locator(const ObObjType type, const ObLobLocator &value);
   inline void set_inrow() { meta_.set_inrow(); }
@@ -1143,6 +1159,10 @@ public:
   OB_INLINE bool is_json() const { return meta_.is_json(); }
   OB_INLINE bool is_json_inrow() const { return meta_.is_json_inrow(); }
   OB_INLINE bool is_json_outrow() const { return meta_.is_json_outrow(); }
+
+  OB_INLINE bool is_geometry() const { return meta_.is_geometry(); }
+  OB_INLINE bool is_geometry_inrow() const { return meta_.is_geometry_inrow(); }
+  OB_INLINE bool is_geometry_outrow() const { return meta_.is_geometry_outrow(); }
 
   OB_INLINE bool is_timestamp_tz() const { return meta_.is_timestamp_tz(); }
   OB_INLINE bool is_timestamp_ltz() const { return meta_.is_timestamp_ltz(); }
@@ -2043,6 +2063,18 @@ inline void ObObj::set_json_value(const ObObjType type, const char *ptr, const i
   meta_.set_collation_type(CS_TYPE_UTF8MB4_BIN); // for oracle it is decided by sys collation.
 }
 
+inline void ObObj::set_geometry_value(const ObObjType type, const ObLobCommon *value, const int32_t length)
+{
+  set_lob_value(type, value, length);
+  meta_.set_collation_type(CS_TYPE_BINARY);
+}
+
+inline void ObObj::set_geometry_value(const ObObjType type, const char *ptr, const int32_t length)
+{
+  set_lob_value(type, ptr, length);
+  meta_.set_collation_type(CS_TYPE_BINARY);
+}
+
 inline void ObObj::set_lob_locator(const ObLobLocator &value)
 {
   meta_.set_type(ObLobType);
@@ -2229,6 +2261,7 @@ inline bool ObObj::need_deep_copy()const
   return (((ob_is_string_type(meta_.get_type())
             || ob_is_lob_locator(meta_.get_type())
             || ob_is_json(meta_.get_type())
+            || ob_is_geometry(meta_.get_type())
             || ob_is_raw(meta_.get_type())
             || ob_is_rowid_tc(meta_.get_type())) && 0 != val_len_ && NULL != get_string_ptr())
             || (ob_is_number_tc(meta_.get_type())
@@ -2493,7 +2526,7 @@ inline int ObObj::get_string(ObString &v) const
       v.assign_ptr(v_.string_, val_len_);
     }
     ret = OB_SUCCESS;
-  } else if (meta_.is_json()) {
+  } else if (meta_.is_json() || meta_.is_geometry()) {
     v.assign_ptr(v_.string_, val_len_);
     ret = OB_SUCCESS;
   } else if (meta_.is_null()) {
@@ -2765,7 +2798,8 @@ inline uint64_t ObObj::varchar_xx_hash(ObCollationType cs_type, uint64_t seed) c
 inline const void *ObObj::get_data_ptr() const
 {
   const void *ret = NULL;
-  if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type()) || ob_is_json(get_type())) {
+  if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type()) || ob_is_json(get_type())
+      || ob_is_geometry(get_type())) {
     ret = const_cast<char *>(v_.string_);
   } else if (ob_is_number_tc(get_type())) {
     ret = const_cast<uint32_t *>(v_.nmb_digits_);
@@ -2779,7 +2813,8 @@ inline const void *ObObj::get_data_ptr() const
 
 inline void ObObj::set_data_ptr(void *data_ptr)
 {
-  if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type()) || ob_is_json(get_type())) {
+  if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type()) || ob_is_json(get_type())
+      || ob_is_geometry(get_type())) {
     v_.string_ = static_cast<char*>(data_ptr);
   } else if (ob_is_number_tc(get_type())) {
     v_.nmb_digits_ = static_cast<uint32_t*>(data_ptr);
@@ -2835,7 +2870,8 @@ inline int64_t ObObj::get_data_length() const
       ob_is_raw(get_type()) ||
       ob_is_rowid_tc(get_type()) ||
       ob_is_lob_locator(get_type()) ||
-      ob_is_json(get_type())) {
+      ob_is_json(get_type()) ||
+      ob_is_geometry(get_type())) {
     ret = val_len_;
   } else if (ob_is_number_tc(get_type())) {
     ret = nmb_desc_.len_ * sizeof(uint32_t);
@@ -3123,10 +3159,13 @@ struct ParamFlag
                 is_ref_cursor_type_(false),
                 is_pl_mock_default_param_(false),
                 is_boolean_(false),
-                is_batch_parameter_(0)
+                is_batch_parameter_(0),
+                ignore_scale_check_(false),
+                reserved_(0)
   { }
   TO_STRING_KV(K_(need_to_check_type), K_(need_to_check_bool_value),
-               K_(expected_bool_value), K_(is_pl_mock_default_param), K_(need_to_check_extend_type), K_(is_batch_parameter));
+               K_(expected_bool_value), K_(is_pl_mock_default_param), K_(need_to_check_extend_type), K_(is_batch_parameter),
+               K_(ignore_scale_check));
   void reset();
 
   static uint32_t flag_offset_bits() { return offsetof(ParamFlag, flag_) * 8; }
@@ -3146,6 +3185,14 @@ struct ParamFlag
     };
   };
 
+  union
+  {
+    uint8_t extend_flag_;
+    struct {
+      uint8_t ignore_scale_check_ : 1; //TRUE if plan cache can reuse by different scale numbers, FALSE otherwise
+      uint8_t reserved_ : 7;
+    };
+  };
   OB_UNIS_VERSION_V(1);
 };
 
@@ -3205,6 +3252,10 @@ public:
   OB_INLINE bool is_pl_mock_default_param() const { return flag_.is_pl_mock_default_param_; }
   OB_INLINE void set_is_boolean(bool flag) { flag_.is_boolean_ = flag; }
   OB_INLINE bool is_boolean() const { return flag_.is_boolean_; }
+
+  OB_INLINE void set_ignore_scale_check(bool flag) { flag_.ignore_scale_check_ = flag; }
+  OB_INLINE bool ignore_scale_check() const { return flag_.ignore_scale_check_; }
+
   OB_INLINE void set_raw_text_info(int32_t pos, int32_t len)
   {
     raw_text_pos_ = pos;
@@ -3309,7 +3360,8 @@ public:
 OB_INLINE int64_t ObObj::get_deep_copy_size() const
 {
   int64_t ret = 0;
-  if (is_string_type() || is_raw() || ob_is_rowid_tc(get_type()) || is_lob_locator() || is_json()) {
+  if (is_string_type() || is_raw() || ob_is_rowid_tc(get_type()) || is_lob_locator() || is_json()
+      || is_geometry()) {
     ret += val_len_;
   } else if (ob_is_number_tc(get_type())) {
     ret += (sizeof(uint32_t) * nmb_desc_.len_);

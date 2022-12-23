@@ -1556,7 +1556,8 @@ int ObTableSqlService::supplement_for_core_table(ObISQLClient &sql_client,
   } else {
     MEMSET(orig_default_value_buf, 0, value_buf_len);
     lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
-    if (!ob_is_string_type(column.get_data_type()) && !ob_is_json(column.get_data_type())) {
+    if (!ob_is_string_type(column.get_data_type()) && !ob_is_json(column.get_data_type())
+        && !ob_is_geometry(column.get_data_type())) {
       if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(
           column.get_tenant_id(), column.get_table_id(), compat_mode))) {
         LOG_WARN("fail to get tenant mode", K(ret), K(column));
@@ -1573,7 +1574,8 @@ int ObTableSqlService::supplement_for_core_table(ObISQLClient &sql_client,
   }
   ObString orig_default_value;
   if (OB_SUCC(ret)) {
-    if (ob_is_string_type(column.get_data_type()) || ob_is_json(column.get_data_type())) {
+    if (ob_is_string_type(column.get_data_type()) || ob_is_json(column.get_data_type())
+        || ob_is_geometry(column.get_data_type())) {
       ObString orig_default_value_str = column.get_orig_default_value().get_string();
       orig_default_value.assign_ptr(orig_default_value_str.ptr(), orig_default_value_str.length());
     } else {
@@ -1772,7 +1774,14 @@ int ObTableSqlService::add_table(
   ObDMLSqlSplicer dml;
   const uint64_t tenant_id = table.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  if (OB_FAIL(check_ddl_allowed(table))) {
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_1_0_0 && table.is_spatial_index()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, spatial index");
+  } else if (OB_FAIL(check_ddl_allowed(table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(table));
   } else if (OB_FAIL(gen_table_dml(exec_tenant_id, table, dml))) {
     LOG_WARN("gen table dml failed", K(ret));
@@ -3553,10 +3562,21 @@ int ObTableSqlService::gen_column_dml(
   ObString cur_default_value;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
   char *extended_type_info_buf = NULL;
-  if (column.is_generated_column() ||
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_1_0_0 &&
+             (ob_is_geometry(column.get_data_type()) ||
+             column.get_srs_id() != OB_DEFAULT_COLUMN_SRS_ID ||
+             column.is_spatial_generated_column())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.1, geometry type is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, geometry type");
+  } else if (column.is_generated_column() ||
       column.is_identity_column() ||
       ob_is_string_type(column.get_data_type()) ||
-      ob_is_json(column.get_data_type())) {
+      ob_is_json(column.get_data_type()) ||
+      ob_is_geometry(column.get_data_type())) {
     //The default value of the generated column is the expression definition of the generated column
     ObString orig_default_value_str = column.get_orig_default_value().get_string();
     ObString cur_default_value_str = column.get_cur_default_value().get_string();
@@ -3660,6 +3680,7 @@ int ObTableSqlService::gen_column_dml(
                          || OB_FAIL(dml.add_column("column_flags", column.get_stored_column_flags()))
                          || OB_FAIL(dml.add_column("extended_type_info", ObHexEscapeSqlStr(bin_extended_type_info)))
                          || OB_FAIL(dml.add_column("prev_column_id", column.get_prev_column_id()))
+                         || (tenant_data_version >= DATA_VERSION_4_1_0_0 && OB_FAIL(dml.add_column("srs_id", column.get_srs_id())))
                          || OB_FAIL(dml.add_gmt_create())
                          || OB_FAIL(dml.add_gmt_modified()))) {
       LOG_WARN("dml add column failed", K(ret));

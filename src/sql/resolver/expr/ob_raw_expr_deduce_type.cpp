@@ -280,6 +280,33 @@ bool need_calc_json(ObItemType item_type)
   return bool_ret; // json calc type set to long text in other sql functions
 }
 
+bool need_reject_geometry_type(ObItemType item_type)
+{
+  bool bool_ret = false;
+  if ((item_type >= T_OP_BIT_AND && item_type <= T_OP_BIT_RIGHT_SHIFT)
+      || (item_type >= T_OP_BTW && item_type <= T_OP_NOT_IN)
+      || (item_type >= T_FUN_MAX && item_type <= T_FUN_AVG)
+      || item_type == T_OP_POW
+      || item_type == T_FUN_SYS_EXP
+      || (item_type >= T_FUN_SYS_SQRT && item_type <= T_FUN_SYS_TRUNCATE)
+      || (item_type >= T_FUN_SYS_POWER && item_type <= T_FUN_SYS_LOG)
+      || (item_type >= T_FUN_SYS_ASIN && item_type <= T_FUN_SYS_ATAN2)
+      || (item_type >= T_FUN_SYS_COS && item_type <= T_FUN_SYS_TANH)
+      || item_type == T_FUN_SYS_ROUND
+      || item_type == T_FUN_SYS_CEILING
+      || (item_type >= T_OP_NEG && item_type <= T_OP_ABS)
+      || item_type == T_FUN_SYS_RAND
+      || item_type == T_OP_SIGN
+      || item_type == T_FUN_SYS_DEGREES
+      || item_type == T_FUN_SYS_RADIANS
+      || item_type == T_FUN_SYS_FORMAT
+      || item_type == T_FUN_SYS_COT
+      || item_type == T_OP_CONV) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
 int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
                                           ObIExprResTypes &types,
                                           ObCastMode &cast_mode,
@@ -328,6 +355,9 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
           // ToDo: test and fix, not all sql functions need calc json as long text
           if (ObJsonType == type->get_type() && !need_calc_json(expr.get_expr_type())) {
             type->set_calc_type(ObLongTextType);
+          } else if (ObGeometryType == type->get_type() && need_reject_geometry_type(expr.get_expr_type())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("Incorrect geometry arguments", K(expr.get_expr_type()), K(ret));
           }
         }
       }
@@ -351,7 +381,8 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     for (int64_t i = 0; i < types.count(); ++i) {
       types.at(i).set_calc_meta(types.at(i));
     }
-    if (ObExprOperator::NOT_ROW_DIMENSION != row_dimension) {
+    if (OB_FAIL(ret)) {
+    } else if (ObExprOperator::NOT_ROW_DIMENSION != row_dimension) {
       ret = op->calc_result_typeN(result_type, GET_TYPE_ARRAY(types), types.count(), type_ctx);
     } else {
       switch (op->get_param_num()) {
@@ -1192,6 +1223,9 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         if (OB_ISNULL(child_expr = expr.get_param_expr(0))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param expr is null");
+        } else if (OB_UNLIKELY(ob_is_geometry(child_expr->get_data_type()))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Incorrect geometry arguments", K(child_expr->get_data_type()), K(ret));
         } else if (lib::is_oracle_mode()) {
           ObObjType from_type = child_expr->get_result_type().get_type();
           ObCollationType from_cs_type = child_expr->get_result_type().get_collation_type();
@@ -1574,6 +1608,9 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         if (OB_ISNULL(child_expr = expr.get_param_expr(0))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param expr is null");
+        } else if (OB_UNLIKELY(ob_is_geometry(child_expr->get_data_type()))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Incorrect geometry arguments", K(child_expr->get_data_type()), K(ret));
         } else if (OB_UNLIKELY(ob_is_enumset_tc(child_expr->get_data_type()))) {
           // To compatible with MySQL, we need to add cast expression that enumset to varchar
           // to evalute MIN/MAX aggregate functions.

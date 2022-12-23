@@ -1092,6 +1092,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
       if (OB_FAIL(ret)) {
       } else if (OB_LIKELY(T_COLUMN_DEFINITION == element->type_)) {
         ObColumnSchemaV2 column;
+        column.set_tenant_id(tenant_id);
         ObColumnResolveStat stat;
         common::ObString pk_name;
         if (OB_INVALID_ID == column.get_column_id()) {
@@ -1716,8 +1717,12 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             } else {
               if (OB_FAIL(set_nullable_for_cta_column(select_stmt, column, expr))) {
                 LOG_WARN("failed to check and set nullable for cta.", K(ret));
-              } else if (column.is_string_type() || column.is_json()) {
-                if (column.get_meta_type().is_lob() || column.get_meta_type().is_json()) {
+              } else if (column.is_string_type() || column.is_json() || column.is_geometry()) {
+                if (column.is_geometry() && T_REF_COLUMN == select_item.expr_->get_expr_type()) {
+                  column.set_srs_id((static_cast<ObColumnRefRawExpr*>(select_item.expr_))->get_srs_id());
+                }
+                if (column.get_meta_type().is_lob() || column.get_meta_type().is_json()
+                    || column.get_meta_type().is_geometry()) {
                   if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                     LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                   }
@@ -1791,10 +1796,13 @@ int ObCreateTableResolver::get_table_schema_for_check(ObTableSchema &table_schem
 int ObCreateTableResolver::generate_index_arg()
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
 
   if (OB_ISNULL(stmt_) || OB_ISNULL(session_info_)) {
     ret = OB_NOT_INIT;
     SQL_RESV_LOG(WARN, "variables are not inited.", K(ret), KP(stmt_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
   } else if (OB_FAIL(set_index_name())) {
     SQL_RESV_LOG(WARN, "set index name failed", K(ret), K_(index_name));
   } else if (OB_FAIL(set_index_option_to_arg())) {
@@ -1828,6 +1836,16 @@ int ObCreateTableResolver::generate_index_arg()
           type = INDEX_TYPE_NORMAL_GLOBAL;
         } else {
           type = INDEX_TYPE_NORMAL_LOCAL;
+        }
+      } else if (SPATIAL_KEY == index_keyname_) {
+        if (tenant_data_version < DATA_VERSION_4_1_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, spatial index");
+        } else if (global_) {
+          type = INDEX_TYPE_SPATIAL_GLOBAL;
+        } else {
+          type = INDEX_TYPE_SPATIAL_LOCAL;
         }
       }
     }
@@ -2297,6 +2315,10 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                   ret = OB_ERR_WRONG_KEY_COLUMN;
                   LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
                 }
+              } else if (OB_FAIL(resolve_spatial_index_constraint(*column_schema,
+                  index_column_list_node->num_child_, node->value_, is_oracle_mode,
+                  NULL != index_column_node->children_[2] && 1 != index_column_node->children_[2]->is_empty_))) {
+                SQL_RESV_LOG(WARN, "fail to resolve spatial index constraint", K(ret), K(column_name));
               }
               if (OB_SUCC(ret) && ob_is_string_type(column_schema->get_data_type())) {
                 int64_t length = 0;
@@ -2454,6 +2476,10 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(generate_index_arg())) {
         SQL_RESV_LOG(WARN, "generate index arg failed", K(ret));
+      } else if (tbl_schema.is_partitioned_table()
+          && INDEX_TYPE_SPATIAL_GLOBAL == index_arg_.index_type_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "spatial global index");
       } else {
         if (has_index_using_type_) {
           index_arg_.index_using_type_ = index_using_type_;

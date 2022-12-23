@@ -304,6 +304,7 @@ all_column_def = dict(
       ('extended_type_info', 'varbinary:OB_MAX_VARBINARY_LENGTH', 'true'),
       ('orig_default_value_v2', 'varbinary:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
       ('cur_default_value_v2', 'varbinary:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
+      ('srs_id', 'int', 'false', 'OB_DEFAULT_COLUMN_SRS_ID'),
     ],
 )
 
@@ -3753,6 +3754,7 @@ def_table_schema(
     ('path', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ],
 )
+
 def_table_schema(
   owner = 'chongrong.th',
   table_name    = '__all_backup_task',
@@ -5069,7 +5071,33 @@ def_table_schema(
   ],
 )
 
-# 413 : __all_spatial_reference_systems
+def_table_schema(
+  owner = 'tonghui.ht',
+  table_name    = '__all_spatial_reference_systems',
+  table_id      = '413',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('srs_id', 'uint'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+
+  normal_columns = [
+    ('srs_version', 'uint', 'false'),
+    ('srs_name', 'varchar:128', 'false'),
+    ('organization', 'varchar:256', 'true'),
+    ('organization_coordsys_id', 'uint', 'true'),
+    ('definition', 'varchar:4096', 'false'),
+    ('minX', 'number:38:10', 'true'),
+    ('maxX', 'number:38:10', 'true'),
+    ('minY', 'number:38:10', 'true'),
+    ('maxY', 'number:38:10', 'true'),
+    ('proj4text', 'varchar:2048', 'true'),
+    ('description', 'varchar:2048', 'true'),
+  ],
+)
+
 # 414 : __all_tenant_datafile
 # 415 : __all_tenant_datafile_history
 
@@ -17297,7 +17325,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND (C.PARTITION_KEY_POSITION & 255) > 0
 """.replace("\n", " ")
 )
@@ -17357,7 +17385,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND (C.PARTITION_KEY_POSITION & 65280) > 0
 """.replace("\n", " ")
 )
@@ -17456,10 +17484,12 @@ FROM
         (CASE I.INDEX_TYPE
          WHEN 1 THEN 1
          WHEN 2 THEN 1
+         WHEN 10 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
+         WHEN 10 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM OCEANBASE.__ALL_VIRTUAL_TABLE I
  JOIN OCEANBASE.__ALL_VIRTUAL_TABLE T
@@ -17479,7 +17509,7 @@ LEFT JOIN
                 1 AS IS_PREFIXED
  FROM OCEANBASE.__ALL_VIRTUAL_TABLE I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2)
+   AND I.INDEX_TYPE IN (1, 2, 10)
    AND I.PART_LEVEL != 0
  AND NOT EXISTS
  (SELECT /*+NO_USE_NL(PART_COLUMNS INDEX_COLUMNS)*/ *
@@ -18307,7 +18337,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND (C.PARTITION_KEY_POSITION & 255) > 0
           AND C.TENANT_ID = 0
 """.replace("\n", " ")
@@ -18368,7 +18398,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND (C.PARTITION_KEY_POSITION & 65280) > 0
           AND C.TENANT_ID = 0
 """.replace("\n", " ")
@@ -18755,10 +18785,12 @@ FROM
         (CASE I.INDEX_TYPE
          WHEN 1 THEN 1
          WHEN 2 THEN 1
+         WHEN 10 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
+         WHEN 10 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM OCEANBASE.__ALL_TABLE I
  JOIN OCEANBASE.__ALL_TABLE T
@@ -18785,7 +18817,7 @@ LEFT JOIN
         1 AS IS_PREFIXED
  FROM OCEANBASE.__ALL_TABLE I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2)
+   AND I.INDEX_TYPE IN (1, 2, 10)
    AND I.PART_LEVEL != 0
    AND I.TENANT_ID = 0
  AND NOT EXISTS
@@ -22414,7 +22446,65 @@ def_table_schema(
 )
 
 # 21304:  ST_GEOMETRY_COLUMNS
+def_table_schema(
+  owner = 'tonghui.ht',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'ST_GEOMETRY_COLUMNS',
+  table_id        = '21304',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  select CAST(db.database_name AS CHAR(128)) as TABLE_SCHEMA,
+         CAST(tbl.table_name AS CHAR(256)) as TABLE_NAME,
+         CAST(col.column_name AS CHAR(128)) as COLUMN_NAME,
+         CAST(srs.srs_name AS CHAR(128)) as SRS_NAME,
+         CAST(if ((col.srs_id >> 32) = 4294967295, NULL, col.srs_id >> 32) AS UNSIGNED) as SRS_ID,
+         CAST(case (col.srs_id & 31)
+                when 0 then 'geometry'
+                when 1 then 'point'
+                when 2 then 'linestring'
+                when 3 then 'polygon'
+                when 4 then 'multipoint'
+                when 5 then 'multilinestring'
+                when 6 then 'multipolygon'
+                when 7 then 'geomcollection'
+                else 'invalid'
+          end AS CHAR(128))as GEOMETRY_TYPE_NAME
+  from
+      oceanbase.__all_column col left join oceanbase.__all_spatial_reference_systems srs on (col.srs_id >> 32) = srs.srs_id
+      join oceanbase.__all_table tbl on (tbl.table_id = col.table_id and tbl.tenant_id = col.tenant_id)
+      join oceanbase.__all_database db on (db.database_id = tbl.database_id and db.tenant_id = tbl.tenant_id)
+      and db.database_name != '__recyclebin'
+  where col.data_type  = 48;
+""".replace("\n", " ")
+)
+
 # 21305:  ST_SPATIAL_REFERENCE_SYSTEMS
+def_table_schema(
+  owner = 'tonghui.ht',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'ST_SPATIAL_REFERENCE_SYSTEMS',
+  table_id        = '21305',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  select CAST(srs_name AS CHAR(128)) as SRS_NAME,
+         CAST(srs_id AS UNSIGNED) as SRS_ID,
+         CAST(organization AS CHAR(256)) as ORGANIZATION,
+         CAST(organization_coordsys_id AS UNSIGNED) as ORGANIZATION_COORDSYS_ID,
+         CAST(definition AS CHAR(4096)) as DEFINITION,
+         CAST(description AS CHAR(2048)) as DESCRIPTION
+  from oceanbase.__all_spatial_reference_systems; """
+)
+
 
 def_table_schema(
   owner = 'wangzelin.wzl',
@@ -30742,7 +30832,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND BITAND(C.PARTITION_KEY_POSITION, 255) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -30813,7 +30903,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND BITAND(C.PARTITION_KEY_POSITION, 255) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -30881,7 +30971,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND BITAND(C.PARTITION_KEY_POSITION, 255) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -30953,7 +31043,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND BITAND(C.PARTITION_KEY_POSITION, 65280) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -31024,7 +31114,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND BITAND(C.PARTITION_KEY_POSITION, 65280) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -31092,7 +31182,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2)
+          AND T.INDEX_TYPE IN (1,2,10)
           AND BITAND(C.PARTITION_KEY_POSITION, 65280) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -32550,10 +32640,12 @@ FROM
         (CASE I.INDEX_TYPE
          WHEN 1 THEN 1
          WHEN 2 THEN 1
+         WHEN 10 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
+         WHEN 10 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
@@ -32580,7 +32672,7 @@ LEFT JOIN
         1 AS IS_PREFIXED
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2)
+   AND I.INDEX_TYPE IN (1, 2, 10)
    AND I.PART_LEVEL != 0
    AND I.TENANT_ID = EFFECTIVE_TENANT_ID()
  AND NOT EXISTS
@@ -32717,10 +32809,12 @@ FROM
         (CASE I.INDEX_TYPE
          WHEN 1 THEN 1
          WHEN 2 THEN 1
+         WHEN 10 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
+         WHEN 10 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
@@ -32750,7 +32844,7 @@ LEFT JOIN
         1 AS IS_PREFIXED
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2)
+   AND I.INDEX_TYPE IN (1, 2, 10)
    AND I.PART_LEVEL != 0
    AND I.TENANT_ID = EFFECTIVE_TENANT_ID()
  AND NOT EXISTS
@@ -32886,10 +32980,12 @@ FROM
         (CASE I.INDEX_TYPE
          WHEN 1 THEN 1
          WHEN 2 THEN 1
+         WHEN 10 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
+         WHEN 10 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
@@ -32918,7 +33014,7 @@ LEFT JOIN
         1 AS IS_PREFIXED
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2)
+   AND I.INDEX_TYPE IN (1, 2, 10)
    AND I.PART_LEVEL != 0
    AND I.TENANT_ID = EFFECTIVE_TENANT_ID()
  AND NOT EXISTS

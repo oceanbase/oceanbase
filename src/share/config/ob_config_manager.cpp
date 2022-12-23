@@ -227,7 +227,7 @@ int ObConfigManager::dump2file(const char* path) const
     }
 
     #ifdef ERRSIM
-    ret = E(EventTable::EN_WRITE_CONFIG_FILE_FAILED) OB_SUCCESS;;
+    ret = OB_E(EventTable::EN_WRITE_CONFIG_FILE_FAILED) OB_SUCCESS;;
     if (OB_FAIL(ret)) {
       ret = OB_IO_ERROR;
       LOG_WARN("ERRSIM, write config file failed", K(ret));

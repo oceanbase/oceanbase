@@ -1384,6 +1384,7 @@ int ObOptEstCostModel::cost_table_scan_one_batch(const ObCostTableScanInfo &est_
       double base_cost = 0.0;
       double ib_cost = 0.0;
       double network_cost = 0.0;
+      double spatial_cost = 0.0;
       if (OB_FAIL(cost_table_scan_one_batch_inner(physical_output_row_count,
                                                   est_cost_info,
                                                   true,
@@ -1407,11 +1408,15 @@ int ObOptEstCostModel::cost_table_scan_one_batch(const ObCostTableScanInfo &est_
                                                 est_cost_info,
                                                 network_cost))) {
           LOG_WARN("failed to get newwork transform scan_cost for global index", K(ret));
+        } else if (OB_FAIL(cost_table_get_one_batch_spatial(index_back_row_count,
+                                                            est_cost_info,
+                                                            spatial_cost))) {
+          LOG_WARN("failed to get scan_cost for spatial index", K(ret));
         } else {
-          scan_cost = base_cost + ib_cost + network_cost;
-          scan_index_back_cost = ib_cost + network_cost;
+          scan_cost = base_cost + ib_cost + network_cost + spatial_cost;
+          scan_index_back_cost = ib_cost + network_cost + spatial_cost;
           LOG_TRACE("OPT:[COST SCAN]", K(logical_output_row_count), K(index_back_row_count),
-                    K(scan_cost), K(base_cost), K(ib_cost),K(network_cost),
+                    K(scan_cost), K(base_cost), K(ib_cost),K(network_cost), K(spatial_cost),
                     "postfix_sel", est_cost_info.postfix_filter_sel_);
         }
       }
@@ -1431,6 +1436,24 @@ int ObOptEstCostModel::cost_table_scan_one_batch(const ObCostTableScanInfo &est_
       index_back_cost = scan_index_back_cost;
     }
   }
+  return ret;
+}
+
+int ObOptEstCostModel::cost_table_get_one_batch_spatial(double row_count,
+                                                        const ObCostTableScanInfo &est_cost_info,
+                                                        double &cost)
+{
+  int ret = OB_SUCCESS;
+  const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
+  cost = 0.0;
+  if (OB_ISNULL(table_meta_info) ||
+      OB_UNLIKELY(table_meta_info->table_column_count_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table column count should not be 0", K(table_meta_info->table_column_count_), K(ret));
+  } else if (est_cost_info.index_meta_info_.is_geo_index_) {
+    cost = row_count *  cost_params_.SPATIAL_PER_ROW_COST;
+  } else { /*do nothing*/ }
+  LOG_TRACE("OPT::[COST_TABLE_GET_SPATIAL]", K(cost), K(ret), K(row_count));
   return ret;
 }
 
@@ -2024,6 +2047,11 @@ double ObOptEstCostModel::cost_quals(double rows, const ObIArray<ObRawExpr *> &q
     const ObRawExpr *qual = quals.at(i);
     if (OB_ISNULL(qual)) {
       LOG_WARN("qual should not be NULL, but we don't set error return code here, just skip it");
+    } else if (qual->is_spatial_expr()) {
+      cost_per_row +=  cost_params_.CMP_SPATIAL_COST * factor;
+      if (need_scale) {
+        factor /= 10.0;
+      }
     } else {
       ObObjTypeClass calc_type = qual->get_result_type().get_calc_type_class();
       if (OB_UNLIKELY(comparison_params_[calc_type] < 0)) {

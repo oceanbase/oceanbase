@@ -115,6 +115,7 @@ public:
       case obmysql::MYSQL_TYPE_ORA_BLOB:
       case obmysql::MYSQL_TYPE_ORA_CLOB:
       case obmysql::MYSQL_TYPE_JSON:
+      case obmysql::MYSQL_TYPE_GEOMETRY:
         is_support = true;
         break;
       case obmysql::MYSQL_TYPE_COMPLEX:

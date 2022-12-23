@@ -38,6 +38,7 @@
 #include "observer/ob_safe_destroy_thread.h"
 #include "observer/ob_server_memory_cutter.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "observer/omt/ob_tenant_srs_mgr.h"
 #include "observer/table/ob_table_rpc_processor.h"
 #include "observer/mysql/ob_query_retry_ctrl.h"
 #include "rpc/obrpc/ob_rpc_handler.h"
@@ -125,6 +126,7 @@ ObServer::ObServer()
     reload_config_(config_, gctx_), config_mgr_(config_, reload_config_),
     tenant_config_mgr_(omt::ObTenantConfigMgr::get_instance()),
     tenant_timezone_mgr_(omt::ObTenantTimezoneMgr::get_instance()),
+    tenant_srs_mgr_(omt::ObTenantSrsMgr::get_instance()),
     schema_service_(share::schema::ObMultiVersionSchemaService::get_instance()),
     lst_operator_(), tablet_operator_(),
     server_tracer_(),
@@ -186,6 +188,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
   } else if (OB_FAIL(init_tz_info_mgr())) {
     LOG_ERROR("init tz_info_mgr failed", KR(ret));
+  } else if (OB_FAIL(init_srs_mgr())) {
+    LOG_ERROR("init srs_mgr fail", K(ret));
   } else if (OB_FAIL(ObSqlTaskFactory::get_instance().init())) {
     LOG_ERROR("init sql task factory failed", KR(ret));
   }
@@ -508,6 +512,10 @@ void ObServer::destroy()
     tenant_timezone_mgr_.destroy();
     FLOG_INFO("tenant timezone manager destroyed");
 
+    FLOG_INFO("begin to destroy tenant srs manager");
+    tenant_srs_mgr_.destroy();
+    FLOG_INFO("tenant srs manager destroyed");
+
     FLOG_INFO("begin to destroy query retry ctrl");
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
@@ -774,6 +782,11 @@ int ObServer::start()
     }
   }
   FLOG_INFO("check if timezone usable", KR(ret), K(stop_), K(timezone_usable));
+
+  while (OB_SUCC(ret) && !stop_ && !tenant_srs_mgr_.is_sys_load_completed()) {
+    SLEEP(1);
+  }
+  LOG_INFO("[NOTICE] check if sys srs usable", K(ret), K(stop_));
 
   if (OB_SUCC(ret)) {
     if (stop_) {
@@ -1215,6 +1228,16 @@ int ObServer::init_tz_info_mgr()
 
   if (OB_FAIL(tenant_timezone_mgr_.init(sql_proxy_, self_addr_, schema_service_))) {
     LOG_ERROR("tenant_timezone_mgr_ init failed", K_(self_addr), KR(ret));
+  }
+  return ret;
+}
+
+int ObServer::init_srs_mgr()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(tenant_srs_mgr_.init(&sql_proxy_, self_addr_, &schema_service_))) {
+    LOG_WARN("tenant_srs_mgr_ init failed", K_(self_addr), K(ret));
   }
   return ret;
 }

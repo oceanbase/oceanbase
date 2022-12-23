@@ -7577,6 +7577,7 @@ int ObOptimizerUtil::generate_rowkey_expr(ObDMLStmt *stmt,
     dummy_col_item.column_name_ = rowkey->get_column_name();
     dummy_col_item.set_default_value(column_schema.get_cur_default_value());
     dummy_col_item.expr_ = rowkey;
+    dummy_col_item.is_geo_ = column_schema.is_geometry();
     if (OB_FAIL(stmt->add_column_item(dummy_col_item))) {
       LOG_WARN("add column item to stmt failed", K(ret));
     } else if (FALSE_IT(rowkey->clear_explicited_referece())) {

@@ -4905,14 +4905,17 @@ int ObSelectLogPlan::convert_project_columns(ObSelectStmt *stmt,
         item->set_ref_id(project_table_item->table_id_, item->column_id_);
         expr->set_ref_id(project_table_item->table_id_, expr->get_column_id());
         expr->set_table_name(project_table_item->get_table_name());
-        if (expr->is_generated_column() &&
-            OB_FAIL(project_generate_column(expr_copier,
-                                            stmt,
-                                            table_id,
-                                            project_table_item,
-                                            index_columns,
-                                            expr))) {
-          LOG_WARN("failed to project dependant expr", K(ret));
+        if (expr->is_generated_column()) {
+          if (item->is_geo_ == true && expr->get_srs_id() != SPATIAL_COLUMN_SRID_MASK) {
+            // spatial index generated column, cannot projet from main table, do nothing
+          } else if (OB_FAIL(project_generate_column(expr_copier,
+                                                     stmt,
+                                                     table_id,
+                                                     project_table_item,
+                                                     index_columns,
+                                                     expr))) {
+            LOG_WARN("failed to project dependant expr", K(ret));
+          } else { /*do nothing*/ }
         }
       } else { /*do nothing*/ }
     }

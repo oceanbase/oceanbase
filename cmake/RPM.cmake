@@ -61,6 +61,7 @@ install(PROGRAMS
 install(FILES
   src/sql/fill_help_tables-ob.sql
   tools/timezone_V1.log
+  tools/default_srs_data_mysql.sql
   tools/upgrade/upgrade_pre.py
   tools/upgrade/upgrade_post.py
   tools/upgrade/upgrade_post_checker.py

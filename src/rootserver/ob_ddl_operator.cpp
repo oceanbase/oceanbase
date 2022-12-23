@@ -5027,6 +5027,8 @@ int ObDDLOperator::init_tenant_env(const ObTenantSchema &tenant_schema,
     LOG_WARN("insert default sys stats failed", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_freeze_info(tenant_id, trans))) {
     LOG_WARN("insert freeze info failed", K(tenant_id), KR(ret));
+  } else if (OB_FAIL(init_tenant_srs(tenant_id, trans))) {
+    LOG_WARN("insert tenant srs failed", K(tenant_id), K(ret));
   } else if (OB_SYS_TENANT_ID == tenant_id) {
     if (OB_FAIL(init_sys_tenant_charset(trans))) {
       LOG_WARN("insert charset failed", K(tenant_id), K(ret));
@@ -5654,6 +5656,44 @@ int ObDDLOperator::init_freeze_info(const uint64_t tenant_id,
   }
 
   LOG_INFO("init freeze info", K(ret), K(tenant_id),
+           "cost", ObTimeUtility::current_time() - start);
+  return ret;
+}
+
+int ObDDLOperator::init_tenant_srs(const uint64_t tenant_id,
+                                   ObMySQLTransaction &trans)
+{
+  // todo : import srs_id 0 in srs mgr init
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t start = ObTimeUtility::current_time();
+  int64_t expected_rows = 1;
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, spatial reference system");
+  } else {
+    if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
+        "(SRS_VERSION, SRS_ID, SRS_NAME, ORGANIZATION, ORGANIZATION_COORDSYS_ID, DEFINITION, minX, maxX, minY, maxY, proj4text, DESCRIPTION) VALUES"
+        R"((1, 0, '', NULL, NULL, '', -2147483648,2147483647,-2147483648,2147483647,'', NULL))",
+        OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME))) {
+      LOG_WARN("sql assign failed", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      int64_t affected_rows = 0;
+      if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
+        LOG_WARN("execute sql failed", K(ret), K(sql));
+      } else if (expected_rows != affected_rows) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected affected_rows", K(expected_rows), K(affected_rows));
+      }
+    }
+  }
+
+  LOG_INFO("init tenant srs", K(ret), K(tenant_id),
            "cost", ObTimeUtility::current_time() - start);
   return ret;
 }
@@ -9109,6 +9149,7 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
     } else if (index_col->is_hidden() && index_col->is_generated_column()) {
       // delete the generated column generated internally when the index is created,
       // This kind of generated column is hidden.
+      // delete generated column in data table for spatial index
       bool exist_index = false;
       for (int64_t j = 0; OB_SUCC(ret) && !exist_index && j < simple_index_infos.count(); ++j) {
         const ObColumnSchemaV2 *tmp_col = NULL;

@@ -582,7 +582,7 @@ int ObExprUtil::eval_stack_overflow_check(const ObExpr &expr,
   int ret = OB_SUCCESS;
 
   // control the occupied stack size by event to simulate stack overflow in testing.
-  int stack_size = E(EventTable::EN_STACK_OVERFLOW_CHECK_EXPR_STACK_SIZE) 0;
+  int stack_size = OB_E(EventTable::EN_STACK_OVERFLOW_CHECK_EXPR_STACK_SIZE) 0;
   stack_size = std::abs(stack_size);
   char *cur_stack[stack_size];
   if (stack_size > 0) {

@@ -148,7 +148,7 @@ void ObTenantDfc::calc_max_buffer(int64_t max_parallel_cnt)
   max_buffer_size_ = max_blocked_buffer_size_ * MAX_BUFFER_FACTOR;
   int64_t factor = 1;
   int ret = OB_SUCCESS;
-  ret = E(EventTable::EN_DFC_FACTOR) ret;
+  ret = OB_E(EventTable::EN_DFC_FACTOR) ret;
   if (OB_FAIL(ret)) {
     factor = -ret;
     max_buffer_size_ *= factor;

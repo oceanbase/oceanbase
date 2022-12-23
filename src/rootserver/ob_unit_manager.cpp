@@ -1063,7 +1063,7 @@ int ObUnitManager::inner_create_resource_pool(
         }
       }
       if (OB_SUCC(ret)) {
-        ret = E(EventTable::EN_UNIT_MANAGER) OB_SUCCESS;
+        ret = OB_E(EventTable::EN_UNIT_MANAGER) OB_SUCCESS;
         DEBUG_SYNC(UNIT_MANAGER_WAIT_FOR_TIMEOUT);
       }
 

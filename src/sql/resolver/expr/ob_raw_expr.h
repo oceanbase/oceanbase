@@ -90,6 +90,69 @@ extern ObRawExpr *USELESS_POINTER;
 #define VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(args...) DEFINE_VIRTUAL_TO_STRING_CHECK_STACK_OVERFLOW(J_KV(args))
 #endif
 
+#define IS_SPATIAL_OP(op) \
+  (((op) == T_FUN_SYS_ST_INTERSECTS) \
+    || ((op) == T_FUN_SYS_ST_COVERS) \
+    || ((op) == T_FUN_SYS_ST_DWITHIN) \
+    || ((op) == T_FUN_SYS_ST_WITHIN) \
+    || ((op) == T_FUN_SYS_ST_CONTAINS)) \
+
+#define IS_MYSQL_GEO_OP(op) \
+  (((op) == T_FUN_SYS_ST_GEOMFROMTEXT) \
+    || ((op) == T_FUN_SYS_ST_INTERSECTION) \
+    || ((op) == T_FUN_SYS_ST_AREA) \
+    || ((op) == T_FUN_SYS_ST_INTERSECTS) \
+    || ((op) == T_FUN_SYS_ST_X) \
+    || ((op) == T_FUN_SYS_ST_Y) \
+    || ((op) == T_FUN_SYS_ST_LATITUDE) \
+    || ((op) == T_FUN_SYS_ST_LONGITUDE) \
+    || ((op) == T_FUN_SYS_ST_TRANSFORM) \
+    || ((op) == T_FUN_SYS_POINT) \
+    || ((op) == T_FUN_SYS_LINESTRING) \
+    || ((op) == T_FUN_SYS_MULTIPOINT) \
+    || ((op) == T_FUN_SYS_MULTILINESTRING) \
+    || ((op) == T_FUN_SYS_POLYGON) \
+    || ((op) == T_FUN_SYS_MULTIPOLYGON) \
+    || ((op) == T_FUN_SYS_GEOMCOLLECTION) \
+    || ((op) == T_FUN_SYS_ST_COVERS) \
+    || ((op) == T_FUN_SYS_ST_ASTEXT) \
+    || ((op) == T_FUN_SYS_ST_BUFFER_STRATEGY) \
+    || ((op) == T_FUN_SYS_ST_BUFFER) \
+    || ((op) == T_FUN_SYS_SPATIAL_CELLID) \
+    || ((op) == T_FUN_SYS_SPATIAL_MBR) \
+    || ((op) == T_FUN_SYS_ST_GEOMFROMEWKB) \
+    || ((op) == T_FUN_SYS_ST_GEOMFROMWKB) \
+    || ((op) == T_FUN_SYS_ST_GEOMETRYFROMWKB) \
+    || ((op) == T_FUN_SYS_ST_GEOMFROMEWKT) \
+    || ((op) == T_FUN_SYS_ST_SRID) \
+    || ((op) == T_FUN_SYS_ST_ASWKT) \
+    || ((op) == T_FUN_SYS_ST_DISTANCE) \
+    || ((op) == T_FUN_SYS_ST_GEOMETRYFROMTEXT) \
+    || ((op) == T_FUN_SYS_ST_ISVALID) \
+    || ((op) == T_FUN_SYS_ST_ASWKB) \
+    || ((op) == T_FUN_SYS_ST_ASBINARY) \
+    || ((op) == T_FUN_SYS_ST_DISTANCE_SPHERE) \
+    || ((op) == T_FUN_SYS_ST_DWITHIN) \
+    || ((op) == T_FUN_SYS_ST_WITHIN) \
+    || ((op) == T_FUN_SYS_ST_CONTAINS)) \
+
+
+#define IS_PRIV_GEO_OP(op) \
+  (((op) == T_FUN_SYS_PRIV_ST_BUFFER) \
+    || ((op) == T_FUN_SYS_PRIV_ST_ASEWKB) \
+    || ((op) == T_FUN_SYS_PRIV_ST_TRANSFORM) \
+    || ((op) == T_FUN_SYS_PRIV_ST_SETSRID) \
+    || ((op) == T_FUN_SYS_PRIV_ST_BESTSRID) \
+    || ((op) == T_FUN_SYS_PRIV_ST_POINT) \
+    || ((op) == T_FUN_SYS_PRIV_ST_GEOGFROMTEXT) \
+    || ((op) == T_FUN_SYS_PRIV_ST_GEOGRAPHYFROMTEXT) \
+    || ((op) == T_FUN_SYS_PRIV_ST_ASEWKT)) \
+
+#define IS_GEO_OP(op) ((IS_MYSQL_GEO_OP(op)) || IS_PRIV_GEO_OP(op))
+
+#define IS_SPATIAL_EXPR(op) \
+  ((op) >= T_FUN_SYS_ST_LONGITUDE && (op) <= T_FUN_SYS_ST_LATITUDE)
+
 // ObSqlBitSet is a simple bitset, in order to avoid memory explosure
 // ObBitSet is too large just for a simple bitset
 const static int64_t DEFAULT_SQL_BITSET_SIZE = 32;
@@ -1647,7 +1710,13 @@ public:
   bool is_calculated() const { return is_calculated_; }
   bool is_deterministic() const { return is_deterministic_; }
   bool is_bool_expr() const;
+  bool is_spatial_expr() const;
+  bool is_geo_expr() const;
+  bool is_mysql_geo_expr() const;
+  bool is_priv_geo_expr() const;
+  ObGeoType get_geo_expr_result_type() const;
   void set_is_deterministic(bool is_deterministic) { is_deterministic_ = is_deterministic; }
+  int get_geo_cast_result_type(ObGeoType& geo_type) const;
   void set_partition_id_calc_type(PartitionIdCalcType calc_type) {
     partition_id_calc_type_ = calc_type; }
   bool is_json_expr() const;
@@ -2221,7 +2290,8 @@ public:
       from_alias_table_(false),
       is_rowkey_column_(false),
       is_unique_key_column_(false),
-      is_mul_key_column_(false)
+      is_mul_key_column_(false),
+      srs_id_(UINT64_MAX)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2246,7 +2316,8 @@ public:
       from_alias_table_(false),
       is_rowkey_column_(false),
       is_unique_key_column_(false),
-      is_mul_key_column_(false)
+      is_mul_key_column_(false),
+      srs_id_(UINT64_MAX)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2271,7 +2342,8 @@ public:
       from_alias_table_(false),
       is_rowkey_column_(false),
       is_unique_key_column_(false),
-      is_mul_key_column_(false)
+      is_mul_key_column_(false),
+      srs_id_(UINT64_MAX)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2325,6 +2397,7 @@ public:
   inline bool is_default_identity_column() const { return share::schema::ObSchemaUtils::is_default_identity_column(column_flags_); }
   inline bool is_default_on_null_identity_column() const { return share::schema::ObSchemaUtils::is_default_on_null_identity_column(column_flags_); }
   inline bool is_fulltext_column() const { return share::schema::ObSchemaUtils::is_fulltext_column(column_flags_); }
+  inline bool is_spatial_generated_column() const { return share::schema::ObSchemaUtils::is_spatial_generated_column(column_flags_); }
   inline bool is_cte_generated_column() const { return share::schema::ObSchemaUtils::is_cte_generated_column(column_flags_); }
   inline bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
   inline bool is_table_part_key_column() const { return column_flags_ & TABLE_PART_KEY_COLUMN_FLAG; }
@@ -2356,6 +2429,9 @@ public:
   void set_is_rowkey_column(bool value) { is_rowkey_column_ = value; }
 
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
+  inline uint64_t get_srs_id() const { return srs_id_; };
+  inline void set_srs_id(uint64_t srs_id) { srs_id_ = srs_id; };
+  inline common::ObGeoType get_geo_type() const { return static_cast<common::ObGeoType>(srs_info_.geo_type_); }
 
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
@@ -2379,7 +2455,8 @@ public:
                        K_(from_alias_table),
                        K_(is_rowkey_column),
                        K_(is_unique_key_column),
-                       K_(is_mul_key_column));
+                       K_(is_mul_key_column),
+                       K_(srs_id));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObColumnRefRawExpr);
   uint64_t table_id_;
@@ -2399,6 +2476,14 @@ private:
   bool is_rowkey_column_;
   bool is_unique_key_column_;
   bool is_mul_key_column_;
+  union { // for geometry column
+    struct {
+      uint32_t geo_type_ : 5;
+      uint32_t reserved_: 27;
+      uint32_t srid_ : 32;
+    } srs_info_;
+    uint64_t srs_id_;
+  };
 };
 
 inline void ObColumnRefRawExpr::set_ref_id(uint64_t table_id, uint64_t column_id)

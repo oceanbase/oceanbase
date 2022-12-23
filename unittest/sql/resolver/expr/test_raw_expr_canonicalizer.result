@@ -289,7 +289,8 @@ not not a > b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -337,7 +338,8 @@ not not a > b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     }
   ]
 }
@@ -416,7 +418,8 @@ not a > b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -464,7 +467,8 @@ not a > b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     }
   ]
 }
@@ -543,7 +547,8 @@ not a = b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -591,7 +596,8 @@ not a = b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     }
   ]
 }
@@ -670,7 +676,8 @@ not a < b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -718,7 +725,8 @@ not a < b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     }
   ]
 }
@@ -798,7 +806,8 @@ not a is true
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_BOOL",
@@ -970,7 +979,8 @@ not a between 1 and 100
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_INT",
@@ -1080,7 +1090,8 @@ not a between 1 and 100
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_INT",
@@ -1772,7 +1783,8 @@ not(not(a))
               "from_alias_table":false,
               "is_rowkey_column":false,
               "is_unique_key_column":false,
-              "is_mul_key_column":false
+              "is_mul_key_column":false,
+              "srs_id":-1
             }
           ]
         }
@@ -1917,7 +1929,8 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     }
@@ -2027,7 +2040,8 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     },
@@ -2106,7 +2120,8 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     }
@@ -2216,7 +2231,8 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     },
@@ -2295,7 +2311,8 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     }
@@ -2405,7 +2422,8 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     },
@@ -2484,7 +2502,8 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     },
@@ -2563,7 +2582,8 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     }

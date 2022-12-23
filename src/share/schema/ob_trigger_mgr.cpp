@@ -261,7 +261,7 @@ int ObTriggerMgr::add_trigger(const ObSimpleTriggerSchema &trigger_schema)
                              equal_trigger, replaced_trigger), trigger_schema);
   // 以下是错误注入
   DEBUG_SYNC(ADD_TRIGGER_BEFORE_MAP);
-  int skip_map = E(EventTable::EN_ADD_TRIGGER_SKIP_MAP) 0;
+  int skip_map = OB_E(EventTable::EN_ADD_TRIGGER_SKIP_MAP) 0;
   if (OB_SUCC(ret) && skip_map == 0) {
     if (OB_NOT_NULL(replaced_trigger)) {
       OX (name_wrapper.set_tenant_id(replaced_trigger->get_tenant_id()));
@@ -293,7 +293,7 @@ int ObTriggerMgr::del_trigger(const ObTenantTriggerId &tenant_trigger_id)
   OV (OB_NOT_NULL(deleted_trigger), OB_ERR_UNEXPECTED, tenant_trigger_id);
   // 以下是错误注入
   DEBUG_SYNC(DEL_TRIGGER_BEFORE_MAP);
-  int skip_map = E(EventTable::EN_ADD_TRIGGER_SKIP_MAP) 0;
+  int skip_map = OB_E(EventTable::EN_ADD_TRIGGER_SKIP_MAP) 0;
   if (OB_SUCC(ret) && skip_map == 0) {
     ObTriggerNameHashWrapper name_wrapper(deleted_trigger->get_tenant_id(),
                                           deleted_trigger->get_database_id(),

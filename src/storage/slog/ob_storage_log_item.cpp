@@ -148,7 +148,7 @@ int ObStorageLogItem::wait_flush_log(const uint64_t max_wait_time)
       }
     }
 #ifdef ERRSIM
-    ret = E(EventTable::EN_SLOG_WAIT_FLUSH_LOG) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_SLOG_WAIT_FLUSH_LOG) OB_SUCCESS;
 #endif
     if (OB_LIKELY(OB_SUCC(ret))) {
       ret = flush_ret_;

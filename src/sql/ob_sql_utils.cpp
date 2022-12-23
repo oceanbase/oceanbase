@@ -50,6 +50,7 @@
 #include "storage/ob_locality_manager.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "pl/ob_pl_user_type.h"
+#include "observer/omt/ob_tenant_srs_mgr.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -419,7 +420,7 @@ int ObSQLUtils::calc_const_or_calculable_expr(
       // do nothing
     } else if (OB_FAIL(calc_const_expr(*exec_ctx, raw_expr,
                                        result, allocator, *params))) {
-      if (ignore_failure) {
+      if (ignore_failure && !IS_SPATIAL_EXPR(raw_expr->get_expr_type())) {
         LOG_TRACE("failed to calc const expr, ignore the failure", K(ret));
         ret = OB_SUCCESS;
       }
@@ -2288,6 +2289,54 @@ int ObSQLUtils::extract_pre_query_range(const ObQueryRange &pre_query_range,
   return ret;
 }
 
+int ObSQLUtils::extract_geo_query_range(const ObQueryRange &pre_query_range,
+                                          ObIAllocator &allocator,
+                                          ObExecContext &exec_ctx,
+                                          ObQueryRangeArray &key_ranges,
+                                          ObMbrFilterArray &mbr_filters,
+                                          ObGetMethodArray get_method,
+                                          const ObDataTypeCastParams &dtc_params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(!pre_query_range.need_deep_copy())) {
+    //对于大多数查询来说，query条件是非常规范和工整的，这种条件我们不需要拷贝进行graph的变化，可以直接提取
+    if (OB_FAIL(pre_query_range.get_tablet_ranges(allocator,
+                                                  exec_ctx,
+                                                  key_ranges,
+                                                  get_method,
+                                                  dtc_params))) {
+      LOG_WARN("fail to get tablet ranges", K(ret));
+    } else {
+      const MbrFilterArray &pre_filters = pre_query_range.get_mbr_filter();
+      FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
+        if (OB_FAIL(mbr_filters.push_back(*it))) {
+          LOG_WARN("store mbr_filters_ failed", K(ret));
+        }
+      }
+    }
+  } else {
+    ObQueryRange final_query_range(allocator);
+    if (OB_FAIL(final_query_range.deep_copy(pre_query_range))) {
+      // MUST deep copy to make it thread safe
+      LOG_WARN("fail to create final query range", K(ret), K(pre_query_range));
+    } else if (OB_FAIL(final_query_range.final_extract_query_range(exec_ctx, dtc_params))) {
+      LOG_WARN("fail to final extract query range", K(ret), K(final_query_range));
+    } else if (OB_FAIL(final_query_range.get_tablet_ranges(key_ranges,
+                                                           get_method,
+                                                           dtc_params))) {
+      LOG_WARN("fail to get tablet ranges from query range", K(ret), K(final_query_range));
+    } else {
+      const MbrFilterArray &pre_filters = final_query_range.get_mbr_filter();
+      FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
+        if (OB_FAIL(mbr_filters.push_back(*it))) {
+          LOG_WARN("store mbr_filters_ failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSQLUtils::extract_equal_pre_query_range(const ObQueryRange &pre_query_range,
                                               void *range_buffer,
                                               const ParamStore &param_store,
@@ -4005,6 +4054,45 @@ bool ObExprConstraint::operator==(const ObExprConstraint &rhs) const
            pre_calc_expr_->same_as(*rhs.pre_calc_expr_);
   }
   return bret;
+}
+
+int ObSqlGeoUtils::check_srid_by_srs(uint64_t tenant_id, uint64_t srid)
+{
+  int ret = OB_SUCCESS;
+  omt::ObSrsCacheGuard srs_guard;
+  const ObSrsItem *srs = NULL;
+
+  if (0 == srid || UINT32_MAX == srid) {
+    // do nothing
+  } else if (UINT32_MAX < srid) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "srid", "UINT32_MAX");
+  } else if (srid != 0 &&
+      OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(tenant_id, srs_guard))) {
+    LOG_WARN("failed to get srs guard", K(tenant_id), K(srid), K(ret));
+  } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs))) {
+    LOG_WARN("get srs failed", K(srid), K(ret));
+  }
+
+  return ret;
+}
+
+int ObSqlGeoUtils::check_srid(uint32_t column_srid, uint32_t input_srid)
+{
+  int ret = OB_SUCCESS;
+  // todo : get effective tenant_id
+  uint64_t tenant_id = MTL_ID();
+
+  if (OB_FAIL(check_srid_by_srs(tenant_id, input_srid))) {
+    LOG_WARN("invalid srid", K(ret), K(input_srid));
+  } else if (UINT32_MAX == column_srid) {
+    // do nothing, accept all.
+  } else if (input_srid != column_srid) {
+    ret = OB_ERR_GIS_DIFFERENT_SRIDS;
+    LOG_WARN("different srid", K(ret), K(column_srid), K(input_srid));
+  }
+
+  return ret;
 }
 
 int ObPreCalcExprConstraint::assign(const ObPreCalcExprConstraint &other, common::ObIAllocator &allocator)

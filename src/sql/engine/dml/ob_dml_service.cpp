@@ -26,6 +26,8 @@
 #include "share/ob_tablet_autoincrement_service.h"
 #include "storage/tx/ob_trans_service.h"
 #include "pl/ob_pl.h"
+#include "lib/geo/ob_geo_utils.h"
+#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -35,11 +37,11 @@ using namespace transaction;
 namespace sql
 {
 int ObDMLService::check_row_null(const ObExprPtrIArray &row,
-                                 ObEvalCtx &eval_ctx,
-                                 int64_t row_num,
-                                 const ColContentIArray &column_infos,
-                                 bool is_ignore,
-                                 ObTableModifyOp &dml_op)
+                                       ObEvalCtx &eval_ctx,
+                                       int64_t row_num,
+                                       const ColContentIArray &column_infos,
+                                       bool is_ignore,
+                                       ObTableModifyOp &dml_op)
 {
   int ret = OB_SUCCESS;
   CK(row.count() >= column_infos.count());
@@ -55,6 +57,10 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
         if (is_oracle_mode()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("dml with ignore not supported in oracle mode");
+        } else if (ob_is_geometry(row.at(col_idx)->obj_meta_.get_type())) {
+            ret = OB_BAD_NULL_ERROR;
+            LOG_WARN("dml with ignore not supported in geometry type");
+            LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
         } else if (OB_FAIL(ObObjCaster::get_zero_value(
             row.at(col_idx)->obj_meta_.get_type(),
             row.at(col_idx)->obj_meta_.get_collation_type(),
@@ -91,6 +97,23 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
     ObDatum *datum = nullptr;
     if (OB_FAIL(expr->eval(dml_op.get_eval_ctx(), datum))) {
       dml_op.log_user_error_inner(ret, row_num, column_info);
+    } else if (!datum->is_null() && expr->obj_meta_.is_geometry()) {
+      // geo column type
+      const uint32_t column_srid = column_info.srs_info_.srid_;
+      const ObGeoType column_geo_type = static_cast<ObGeoType>(column_info.srs_info_.geo_type_);
+      const ObString &wkb = datum->get_string();
+      uint32_t input_srid = UINT32_MAX;
+      if (ObGeoTypeUtil::check_geo_type(column_geo_type, wkb)) {
+        LOG_WARN("check geo type failed", K(ret), K(wkb));
+        ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+        LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+      } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, input_srid))) {
+        LOG_WARN("get srid by wkb failed", K(ret), K(wkb));
+      } else if (OB_FAIL(ObSqlGeoUtils::check_srid(column_srid, input_srid))) {
+        ret = OB_ERR_WRONG_SRID_FOR_COLUMN;
+        LOG_USER_ERROR(OB_ERR_WRONG_SRID_FOR_COLUMN, static_cast<uint64_t>(input_srid),
+            static_cast<uint64_t>(column_srid));
+      }
     }
   }
   return ret;
@@ -1589,7 +1612,8 @@ int ObDMLService::check_local_index_affected_rows(int64_t table_affected_rows,
 {
   int ret = OB_SUCCESS;
   if (GCONF.enable_defensive_check()) {
-    if (table_affected_rows != index_affected_rows) {
+    if (table_affected_rows != index_affected_rows
+        && !related_ctdef.table_param_.get_data_table().is_spatial_index()) {
       ret = OB_ERR_DEFENSIVE_CHECK;
       ObString func_name = ObString::make_string("check_local_index_affected_rows");
       LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());

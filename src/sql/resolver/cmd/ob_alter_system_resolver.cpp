@@ -1994,7 +1994,7 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
       } else if (FALSE_IT(GCTX.locality_manager_->set_ssl_invited_nodes(value))) {
       }
       #ifdef ERRSIM
-      if (OB_SUCCESS != (ret = E(EventTable::EN_SSL_INVITE_NODES_FAILED) OB_SUCCESS)) {
+      if (OB_SUCCESS != (ret = OB_E(EventTable::EN_SSL_INVITE_NODES_FAILED) OB_SUCCESS)) {
         LOG_WARN("ERRSIM, fail to set ssl invite node", K(ret));
       }
       #endif

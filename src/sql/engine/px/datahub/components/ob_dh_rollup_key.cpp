@@ -121,7 +121,7 @@ int ObRollupKeyPieceMsgCtx::process_ndv()
   whole_msg_.rollup_ndv_ = optimal_rollup_ndv;
   if (OB_SUCC(ret)) {
     // set partial rollup keys
-    ret = E(EventTable::EN_ROLLUP_ADAPTIVE_KEY_NUM) ret;
+    ret = OB_E(EventTable::EN_ROLLUP_ADAPTIVE_KEY_NUM) ret;
     if (OB_FAIL(ret)) {
       whole_msg_.rollup_ndv_.n_keys_ = (-ret);
     }

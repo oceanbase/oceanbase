@@ -686,6 +686,9 @@ int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType 
     case obmysql::EMySQLFieldType::MYSQL_TYPE_JSON:
       ob_type = ObJsonType;
       break;
+    case obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY:
+      ob_type = ObGeometryType;
+      break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_BIT:
       ob_type = ObBitType;
       break;

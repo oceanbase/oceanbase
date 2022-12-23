@@ -979,6 +979,7 @@ int ObAlterTableResolver::resolve_drop_column_nodes_for_mysql(const ParseNode& n
 
 int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
                                                     obrpc::ObCreateIndexArg &index_arg,
+                                                    const int64_t index_name_value,
                                                     ObIArray<ObString> &input_index_columns_name)
 {
   int ret = OB_SUCCESS;
@@ -1018,6 +1019,19 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           }
         } else {
           sort_item.prefix_len_ = 0;
+        }
+
+        // spatial index constraint
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else {
+          bool is_explicit_order = (NULL != sort_column_node->children_[2]
+              && 1 != sort_column_node->children_[2]->is_empty_);
+          if (OB_FAIL(resolve_spatial_index_constraint(*table_schema_, sort_item.column_name_,
+              node.num_child_, index_name_value, is_explicit_order))) {
+            SQL_RESV_LOG(WARN, "check spatial index constraint fail",K(ret),
+                K(sort_item.column_name_), K(node.num_child_));
+          }
         }
 
         //column_order
@@ -1151,6 +1165,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
               SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
             } else if (OB_FAIL(resolve_index_column_list(*column_list_node,
                                                          *create_index_arg,
+                                                         node.value_,
                                                          input_index_columns_name))) {
               SQL_RESV_LOG(WARN, "resolve index name failed", K(ret));
             }
@@ -1158,7 +1173,11 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
           if (OB_SUCC(ret)) {
             if (!lib::is_oracle_mode()) {
               if (NULL != node.children_[3]) {
-                if (T_USING_BTREE == node.children_[3]->type_) {
+                if (SPATIAL_KEY == index_keyname_) {
+                  const char *method = T_USING_HASH == node.children_[3]->type_ ? "HASH" : "BTREE";
+                  ret = OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX;
+                  LOG_USER_ERROR(OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, method);
+                } else if (T_USING_BTREE == node.children_[3]->type_) {
                   create_index_arg->index_using_type_ = USING_BTREE;
                 } else {
                   create_index_arg->index_using_type_ = USING_HASH;
@@ -1281,6 +1300,10 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
             if (OB_SUCC(ret)) {
               if (OB_FAIL(generate_index_arg(*create_index_arg, is_unique_key))) {
                 SQL_RESV_LOG(WARN, "failed to generate index arg!", K(ret));
+              } else if (table_schema_->is_partitioned_table()
+                         && INDEX_TYPE_SPATIAL_GLOBAL == create_index_arg->index_type_) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "spatial global index");
               } else {
                 create_index_arg->index_schema_.set_table_type(USER_INDEX);
                 create_index_arg->index_schema_.set_index_type(create_index_arg->index_type_);
@@ -1730,9 +1753,12 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
 {
   int ret = OB_SUCCESS;
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  uint64_t tenant_data_version = 0;
   if (OB_ISNULL(session_info_) || OB_ISNULL(alter_table_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "session info should not be null", K(session_info_), K(alter_table_stmt));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
   } else {
     //add storing column
     for (int32_t i = 0; OB_SUCC(ret) && i < store_column_names_.count(); ++i) {
@@ -1775,10 +1801,22 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           type = INDEX_TYPE_UNIQUE_LOCAL;
         }
       } else {
-        if (global_) {
-          type = INDEX_TYPE_NORMAL_GLOBAL;
+        if (tenant_data_version < DATA_VERSION_4_1_0_0 && index_keyname_ == SPATIAL_KEY) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, spatial index");
+        } else if (global_) {
+          if (index_keyname_ == SPATIAL_KEY) {
+            type = INDEX_TYPE_SPATIAL_GLOBAL;
+          } else {
+            type = INDEX_TYPE_NORMAL_GLOBAL;
+          }
         } else {
-          type = INDEX_TYPE_NORMAL_LOCAL;
+          if (index_keyname_ == SPATIAL_KEY) {
+            type = INDEX_TYPE_SPATIAL_LOCAL;
+          } else {
+            type = INDEX_TYPE_NORMAL_LOCAL;
+          }
         }
       }
       index_arg.index_type_ = type;
@@ -4350,6 +4388,9 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode &node)
         } else if (!lib::is_oracle_mode() && ob_is_json_tc(alter_column_schema.get_data_type())) {
           ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
           SQL_RESV_LOG(WARN, "BLOB/TEXT or JSON can't set default value!", K(ret));
+        } else if (!lib::is_oracle_mode() && ob_is_geometry_tc(alter_column_schema.get_data_type())) {
+          ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
+          SQL_RESV_LOG(WARN, "GEOMETRY can't set default value!", K(ret));
         } else if (OB_FAIL(resolve_default_value(default_node, default_value))) {
           SQL_RESV_LOG(WARN, "failed to resolve default value!", K(ret));
         }
@@ -4630,6 +4671,19 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
             && alter_column_schema.get_cur_default_value().is_null()) {
           ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
           LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
+        } else if (ObGeometryType == origin_col_schema->get_data_type()
+                   && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Change geometry type");
+          LOG_WARN("can't not change geometry type", K(ret), K(origin_col_schema->get_geo_type()),
+                  K(alter_column_schema.get_geo_type()));
+        } else if (ObGeometryType == origin_col_schema->get_data_type()
+                   && ObGeometryType == alter_column_schema.get_data_type()
+                   && origin_col_schema->get_srid() != alter_column_schema.get_srid()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support alter srid");
+          LOG_WARN("not support alter srid now", K(ret),
+                  K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
         }
       }
       if (OB_SUCC(ret)) {
@@ -4875,6 +4929,19 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
               && alter_column_schema.get_cur_default_value().is_null()) {
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
+          } else if (ObGeometryType == origin_col_schema->get_data_type()
+                     && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry type");
+            LOG_WARN("can't not modify geometry type", K(ret), K(origin_col_schema->get_geo_type()),
+                    K(alter_column_schema.get_geo_type()));
+          } else if (ObGeometryType == origin_col_schema->get_data_type()
+                     && ObGeometryType == alter_column_schema.get_data_type()
+                     && origin_col_schema->get_srid() != alter_column_schema.get_srid()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
+            LOG_WARN("can't not modify geometry srid", K(ret),
+                    K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
           }
         }
       }

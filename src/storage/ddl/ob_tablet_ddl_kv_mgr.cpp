@@ -707,7 +707,7 @@ int ObTabletDDLKvMgr::release_ddl_kvs(const SCN &end_scn)
       LOG_INFO("try release ddl kv", K(end_scn), KPC(kv));
 #ifdef ERRSIM
           if (OB_SUCC(ret)) {
-            ret = E(EventTable::EN_DDL_RELEASE_DDL_KV_FAIL) OB_SUCCESS;
+            ret = OB_E(EventTable::EN_DDL_RELEASE_DDL_KV_FAIL) OB_SUCCESS;
             if (OB_FAIL(ret)) {
               LOG_WARN("errsim release ddl kv failed", KR(ret));
             }

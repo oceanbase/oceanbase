@@ -206,9 +206,28 @@ int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
           } else if (OB_FAIL(recursive_values_expr(expr))) {
             LOG_WARN("fail to resolve values expr", K(ret));
           } else {
-            assignment.expr_ = expr;
-            if (OB_FAIL(add_assignment(table_assigns, table, column, assignment))) {
-              LOG_WARN("failed to add assignment", K(ret));
+            // 1. set geo sub type to cast mode to column covert expr when update
+            // 2. check geo type while doing column covert.
+            if (column->is_geo_ && T_FUN_COLUMN_CONV == expr->get_expr_type()) {
+              ObColumnRefRawExpr *raw_expr = column->get_expr();
+              if (OB_ISNULL(raw_expr)) {
+                ret = OB_ERR_NULL_VALUE;
+                LOG_WARN("raw expr in column item is null", K(ret));
+              } else {
+                ObGeoType geo_type = raw_expr->get_geo_type();
+                uint64_t cast_mode = expr->get_extra();
+                if (OB_FAIL(ObGeoCastUtils::set_geo_type_to_cast_mode(geo_type, cast_mode))) {
+                  LOG_WARN("fail to set geometry type to cast mode", K(ret), K(geo_type));
+                } else {
+                  expr->set_extra(cast_mode);
+                }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              assignment.expr_ = expr;
+              if (OB_FAIL(add_assignment(table_assigns, table, column, assignment))) {
+                LOG_WARN("failed to add assignment", K(ret));
+              }
             }
           }
         }
@@ -603,8 +622,29 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
             } else if (trigger_exist &&
                       OB_FAIL(ObRawExprUtils::build_wrapper_inner_expr(*params_.expr_factory_, *session_info_, assignment.expr_, assignment.expr_))) {
               LOG_WARN("failed to build wrapper inner expr", K(ret));
-            } else if (OB_FAIL(add_assignment(assigns, table_item, col_item, assignment))) {
-              LOG_WARN("failed to ass assignment", K(ret));
+            } else {
+              // 1. set geo sub type to cast mode to column covert expr when update
+              // 2. check geo type while doing column covert.
+              if (col_item->is_geo_ && T_FUN_COLUMN_CONV == assignment.expr_->get_expr_type()) {
+                ObColumnRefRawExpr *raw_expr = col_item->get_expr();
+                if (OB_ISNULL(raw_expr)) {
+                  ret = OB_ERR_NULL_VALUE;
+                  LOG_WARN("raw expr in column item is null", K(ret));
+                } else {
+                  ObGeoType geo_type = raw_expr->get_geo_type();
+                  uint64_t cast_mode = assignment.expr_->get_extra();
+                  if (OB_FAIL(ObGeoCastUtils::set_geo_type_to_cast_mode(geo_type, cast_mode))) {
+                    LOG_WARN("fail to set geometry type to cast mode", K(ret), K(geo_type));
+                  } else {
+                    assignment.expr_->set_extra(cast_mode);
+                  }
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(add_assignment(assigns, table_item, col_item, assignment))) {
+                  LOG_WARN("failed to ass assignment", K(ret));
+                }
+              }
             }
           }
         }
@@ -2531,12 +2571,31 @@ int ObDelUpdResolver::build_column_conv_function_with_value_desc(ObInsertTableIn
                                         ObObjMeta::is_binary(tbl_col->get_data_type(),
                                                              tbl_col->get_collation_type())))) {
       LOG_WARN("failed to build column conv expr", K(ret));
-    } else if (trigger_exist &&
-               OB_FAIL(ObRawExprUtils::build_wrapper_inner_expr(*params_.expr_factory_, *session_info_, column_ref, column_ref))) {
-        LOG_WARN("failed to build wrapper inner expr", K(ret));
-    } else {
-      table_info.column_conv_exprs_.at(idx) = column_ref;
-      LOG_TRACE("add column conv expr", K(*column_ref), K(trigger_exist));
+    } else if (column_item->is_geo_) {
+      // 1. set geo sub type to cast mode to column covert expr when update
+      // 2. check geo type while doing column covert.
+      ObColumnRefRawExpr *raw_expr = column_item->get_expr();
+      if (OB_ISNULL(raw_expr)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("raw expr in column item is null", K(ret));
+      } else {
+        ObGeoType geo_type = raw_expr->get_geo_type();
+        uint64_t cast_mode = column_ref->get_extra();
+        if (OB_FAIL(ObGeoCastUtils::set_geo_type_to_cast_mode(geo_type, cast_mode))) {
+          LOG_WARN("fail to set geometry type to cast mode", K(ret), K(geo_type));
+        } else {
+          column_ref->set_extra(cast_mode);
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (trigger_exist &&
+          OB_FAIL(ObRawExprUtils::build_wrapper_inner_expr(*params_.expr_factory_, *session_info_, column_ref, column_ref))) {
+          LOG_WARN("failed to build wrapper inner expr", K(ret));
+      } else {
+        table_info.column_conv_exprs_.at(idx) = column_ref;
+        LOG_TRACE("add column conv expr", K(*column_ref), K(trigger_exist));
+      }
     }
   }
   return ret;

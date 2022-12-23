@@ -18,6 +18,7 @@
 #include "lib/container/ob_vector.h"
 #include "lib/container/ob_2d_array.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
+#include "lib/geo/ob_s2adapter.h"
 #include "share/partition_table/ob_partition_location.h"
 #include "share/ob_errno.h"             // get_ob_errno_from_oracle_errno
 #include "share/ob_i_sql_expression.h"          // ObISqlExpression,ObExprCtx
@@ -55,6 +56,7 @@ struct ObPreCalcExprFrameInfo;
 typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
 typedef common::ObSEArray<bool, 2, common::ModulePageAllocator, true> ObGetMethodArray;
 struct ObExprConstraint;
+typedef common::ObSEArray<common::ObSpatialMBR, 1> ObMbrFilterArray;
 
 struct EstimatedPartition {
   common::ObAddr addr_;
@@ -380,6 +382,13 @@ public:
                                            void *range_buffer,
                                            const ParamStore &param_store,
                                            ObQueryRangeArray &key_ranges);
+  static int extract_geo_query_range(const ObQueryRange &pre_query_range,
+                                       ObIAllocator &allocator,
+                                       ObExecContext &exec_ctx,
+                                       ObQueryRangeArray &key_ranges,
+                                       ObMbrFilterArray &mbr_filters,
+                                       ObGetMethodArray get_method,
+                                       const ObDataTypeCastParams &dtc_params);
 
   static bool is_same_type(const ObExprResType &type1, const ObExprResType &type2);
 
@@ -558,6 +567,13 @@ private:
     common::ObTimeZoneInfo tz_info_;
   };
 }; // end of ObSQLUtils
+
+class ObSqlGeoUtils
+{
+public:
+  static int check_srid_by_srs(uint64_t tenant_id, uint64_t srid);
+  static int check_srid(uint32_t column_srid, uint32_t input_srid);
+};
 
 class RelExprCheckerBase
 {

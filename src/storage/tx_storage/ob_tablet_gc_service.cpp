@@ -108,7 +108,7 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
   ObLSService *ls_svr = MTL(ObLSService*);
   bool skip_gc_task = false;
   
-  skip_gc_task = (OB_SUCCESS != (E(EventTable::EN_TABLET_GC_TASK_FAILED) OB_SUCCESS));
+  skip_gc_task = (OB_SUCCESS != (OB_E(EventTable::EN_TABLET_GC_TASK_FAILED) OB_SUCCESS));
   
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;

@@ -445,3 +445,36 @@ int ObRowkeyInfo::get_fulltext_column(uint64_t &column_id) const
   }
   return ret;
 }
+
+int ObRowkeyInfo::get_spatial_col_id_by_type(uint64_t &column_id, ObObjType type) const
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  if (OB_ISNULL(columns_)) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "columns is null");
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < size_ && !found; i++) {
+    if (columns_[i].spatial_flag_ && columns_[i].type_.get_type() == type) {
+      column_id = columns_[i].column_id_;
+      found = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && !found) {
+    ret = OB_SEARCH_NOT_FOUND;
+    COMMON_LOG(WARN, "spatial column id not found", K(ret), K(type), K(*this));
+  }
+
+  return ret;
+}
+
+int ObRowkeyInfo::get_spatial_cellid_col_id(uint64_t &column_id) const
+{
+  return get_spatial_col_id_by_type(column_id, ObUInt64Type);
+}
+
+int ObRowkeyInfo::get_spatial_mbr_col_id(uint64_t &column_id) const
+{
+  return get_spatial_col_id_by_type(column_id, ObVarcharType);
+}

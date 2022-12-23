@@ -1006,6 +1006,7 @@ int ObRawDecoder::load_data_to_obj_cell(
     case ObStringSC:
     case ObTextSC: 
     case ObJsonSC:
+    case ObGeometrySC:
     { // json and text storage class have the same behavior currently
       load_obj.val_len_ = static_cast<int32_t>(cell_len);
       load_obj.v_.string_ = cell_data;

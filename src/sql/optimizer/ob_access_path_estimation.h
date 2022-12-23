@@ -91,6 +91,12 @@ private:
                                         const ObIArray<ObNewRange> &scan_ranges,
                                         ObSimpleBatch &batch);
 
+  static int construct_geo_scan_range_batch(ObIAllocator &allocator,
+                                            const ObIArray<ObNewRange> &scan_ranges,
+                                            ObSimpleBatch &batch);
+
+  static bool is_multi_geo_range(const ObNewRange &range);
+
   static int estimate_prefix_range_rowcount(
       const obrpc::ObEstPartResElement &result,
       ObCostTableScanInfo &est_cost_info,

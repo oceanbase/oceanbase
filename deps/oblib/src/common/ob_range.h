@@ -260,7 +260,7 @@ struct ObVersion
   int fixed_length_encode(char *buf, const int64_t buf_len, int64_t &pos) const;
   int fixed_length_decode(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_fixed_length_encoded_size() const;
-  TO_YSON_KV(Y_(version));
+  TO_YSON_KV(OB_Y_(version));
   OB_UNIS_VERSION(1);
 };
 

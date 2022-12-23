@@ -2521,6 +2521,7 @@ int ObTransformUtils::get_expr_idx(const ObIArray<ObRawExpr *> &source,
  * column like ?
  * column not/between ? and ?
  * column in (?,?,?)
+ * column in st_function
  * 获取存在于这一类谓词的column
  */
 int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
@@ -2562,10 +2563,18 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
       case T_OP_GE:
       case T_OP_GT:
       case T_OP_NE:
+      case T_FUN_SYS_ST_INTERSECTS:
+      case T_FUN_SYS_ST_COVERS:
+      case T_FUN_SYS_ST_DWITHIN:
+      case T_FUN_SYS_ST_WITHIN:
+      case T_FUN_SYS_ST_CONTAINS:
       {
         ObRawExpr *left = NULL;
         ObRawExpr *right = NULL;
-        if (2 != expr->get_param_count()) {
+        if (T_FUN_SYS_ST_DWITHIN == expr->get_expr_type() && 3 != expr->get_param_count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dwithin expr arguments invalid", K(ret), K(expr->get_param_count()));
+        } else if (2 != expr->get_param_count() && T_FUN_SYS_ST_DWITHIN != expr->get_expr_type()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr must has 2 arguments", K(ret));
         } else if (OB_ISNULL(left = expr->get_param_expr(0)) ||
@@ -2618,6 +2627,19 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
             if (OB_FAIL(add_var_to_array_no_dup(col_exprs, static_cast<ObColumnRefRawExpr*>(left)))) {
               LOG_WARN("failed to push back column expr", K(ret));
             }
+          }
+        }
+        break;
+      }
+      case T_OP_BOOL:
+      {
+        if (expr->is_spatial_expr()) {
+          ObRawExpr *geo_expr = ObRawExprUtils::skip_inner_added_expr(expr);
+          if (OB_FAIL(SMART_CALL(get_simple_filter_column(stmt,
+                                                          geo_expr,
+                                                          table_id,
+                                                          col_exprs)))) {
+            LOG_WARN("failed to get spatial filter column", K(ret));
           }
         }
         break;
@@ -2994,6 +3016,9 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
       } else if (!index_schema->get_rowkey_info().is_valid()) {
         // 一些表没有主键信息, information_schema.tables 等
         // do nothing
+      } else if (OB_UNLIKELY(index_schema->is_spatial_index())
+                && OB_FAIL(index_schema->get_spatial_index_column_ids(index_cols))) {
+        LOG_WARN("failed to get domain index cols", K(ret));
       } else if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(index_cols))) {
         LOG_WARN("failed to get index cols", K(ret));
       } else if (OB_FAIL(is_match_index(stmt,

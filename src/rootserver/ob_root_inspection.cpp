@@ -562,7 +562,7 @@ int ObInspector::process()
   ObRootInspection system_schema_checker;
   ObTenantChecker tenant_checker(rs_.get_schema_service(), rs_.get_sql_proxy(), rs_.get_common_rpc_proxy());
 
-  ret = E(EventTable::EN_STOP_ROOT_INSPECTION) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_STOP_ROOT_INSPECTION) OB_SUCCESS;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(tablegroup_checker.init())) {
     LOG_WARN("init tablegroup_checker failed", K(ret));

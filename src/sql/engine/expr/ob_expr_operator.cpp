@@ -1135,6 +1135,9 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (ob_is_json(res_type)) {
         type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
         type.set_collation_level(CS_LEVEL_IMPLICIT);
+      } else if (ob_is_geometry(res_type)) {
+        type.set_geometry();
+        type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
       }
     }
     LOG_DEBUG("merged type is", K(type), K(is_oracle_mode));
@@ -1916,6 +1919,17 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
       && type_ != T_OP_IS && type_ != T_OP_IS_NOT) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()), ob_obj_type_str(type2.get_type()));
+  } else if ((type1.is_geometry() || type2.is_geometry())
+             && !(type_ == T_OP_EQ
+                  || type_ == T_OP_NE
+                  || type_ == T_OP_NSEQ
+                  || type_ == T_OP_SQ_EQ
+                  || type_ == T_OP_SQ_NE
+                  || type_ == T_OP_SQ_NSEQ
+                  || type_ == T_OP_IS
+                  || type_ == T_OP_IS_NOT)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
                                                             type1.get_type(),
                                                             type2.get_type()))) {
@@ -2007,6 +2021,9 @@ int ObExprOperator::calc_trig_function_result_type1(ObExprResType &type,
   int ret = OB_SUCCESS;
   if (NOT_ROW_DIMENSION != row_dimension_ || ObMaxType == type1.get_type()) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
+  } else if (type1.is_geometry()){
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Incorrect geometry arguments", K(type1), K(ret));
   } else if (!lib::is_oracle_mode()){
     type.set_double();
   } else {
@@ -2035,6 +2052,9 @@ int ObExprOperator::calc_trig_function_result_type2(ObExprResType &type,
     ret = OB_ERR_INVALID_TYPE_FOR_OP; // arithmetic not support row
   } else if (ObMaxType == type1.get_type() || ObMaxType == type2.get_type()) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
+  } else if (type1.is_geometry() || type2.is_geometry()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Incorrect geometry arguments", K(type1), K(type2), K(ret));
   } else if (!lib::is_oracle_mode()) {
     type.set_double();
   } else {
@@ -4117,7 +4137,10 @@ int ObBitwiseExprOperator::calc_result_type1(ObExprResType &type,
       type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
     }
     ObExprOperator::calc_result_flag1(type, type1);
-    if (OB_FAIL(set_calc_type(type1))) {
+    if (type1.is_geometry()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Incorrect geometry arguments", K(type1), K(ret));
+    } else if (OB_FAIL(set_calc_type(type1))) {
       LOG_WARN("set_calc_type for type1 failed", K(ret), K(type1));
     } else {
       ObCastMode cm = lib::is_oracle_mode() ? CM_NONE : CM_STRING_INTEGER_TRUNC;
@@ -4146,7 +4169,10 @@ int ObBitwiseExprOperator::calc_result_type2(ObExprResType &type,
       type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
     }
     ObExprOperator::calc_result_flag2(type, type1, type2);
-    if (OB_FAIL(set_calc_type(type1))) {
+    if (type1.is_geometry() || type2.is_geometry()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Incorrect geometry arguments", K(type1), K(type2), K(ret));
+    } else if (OB_FAIL(set_calc_type(type1))) {
       LOG_WARN("set_calc_type for type1 failed", K(ret), K(type1));
     } else if (OB_FAIL(set_calc_type(type2))) {
       LOG_WARN("set_calc_type for type2 failed", K(ret), K(type2));
@@ -4179,7 +4205,12 @@ int ObBitwiseExprOperator::calc_result_type3(ObExprResType &type,
       type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
       type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
     }
-    ObExprOperator::calc_result_flag3(type, type1, type2, type3);
+    if (type1.is_geometry() || type2.is_geometry() || type3.is_geometry()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Incorrect geometry arguments", K(type1), K(type2), K(type3), K(ret));
+    } else {
+      ObExprOperator::calc_result_flag3(type, type1, type2, type3);
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row_dimension_ is not NOT_ROW_DIMENSION", K(ret));
@@ -4205,7 +4236,15 @@ int ObBitwiseExprOperator::calc_result_typeN(ObExprResType &type,
       type.set_uint64();
       type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
     }
-    ObExprOperator::calc_result_flagN(type, types, param_num);
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_num;  i++) {
+      if (types[i].is_geometry()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Incorrect geometry arguments", K(types[i]), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObExprOperator::calc_result_flagN(type, types, param_num);
+    }
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
   }

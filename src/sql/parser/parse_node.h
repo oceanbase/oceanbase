@@ -140,7 +140,8 @@ typedef struct _ParseNode
       uint16_t is_num_must_be_pos_: 1; //
       uint16_t is_date_unit_ : 1; //1 表示是date unit常量，在反拼的时候需要反拼为字符串
       uint16_t is_literal_bool_ : 1; // indicate node is a literal TRUE/FALSE
-      uint16_t reserved_ : 2;
+      uint16_t is_empty_ : 1; // 表示是否缺省该节点，1表示缺省，0表示没有缺省, opt_asc_desc节点中使用到
+      uint16_t reserved_ : 1;
     };
   };
   /* attributes for terminal node, it is real value */
@@ -404,6 +405,7 @@ extern bool nodename_equal(const ParseNode *node, const char *pattern, int64_t p
 #define OB_NODE_CAST_N_SCALE_IDX 3
 #define OB_NODE_CAST_NUMBER_TYPE_IDX 1
 #define OB_NODE_CAST_C_LEN_IDX 1
+#define OB_NODE_CAST_GEO_TYPE_IDX 1
 
 typedef enum ObNumberParseType
 {

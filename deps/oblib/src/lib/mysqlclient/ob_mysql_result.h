@@ -988,13 +988,13 @@
         res_obj.set_scale(column.get_data_scale());\
         ret = (class_obj).set_##column_name(res_obj); \
       } \
-      else if (column.is_identity_column() || ob_is_string_type(data_type)) \
+      else if (column.is_identity_column() || ob_is_string_type(data_type) || ob_is_geometry(data_type)) \
       { \
         res_obj.set_string(data_type, str_value); \
         res_obj.meta_.set_collation_type(column.get_collation_type());  \
         /* will override the collaction level set in set_varchar */ \
         res_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT); \
-        if (ob_is_text_tc(data_type)) { res_obj.set_inrow(); } \
+        if (ob_is_text_tc(data_type) || ob_is_geometry(data_type)) { res_obj.set_inrow(); } \
         ret = (class_obj).set_##column_name(res_obj); \
       }                                               \
       else if (ob_is_bit_tc(data_type) || ob_is_enum_or_set_type(data_type)) \

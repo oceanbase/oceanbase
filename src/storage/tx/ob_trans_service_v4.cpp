@@ -505,7 +505,7 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
   }
 #endif
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, handle_tx_commit_result, Y(ret),
+  REC_TRANS_TRACE_EXT(&tlog, handle_tx_commit_result, OB_Y(ret),
                       OB_ID(arg), result,
                       OB_ID(is_finish), commit_fin,
                       OB_ID(result), commit_out,

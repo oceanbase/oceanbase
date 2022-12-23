@@ -1607,7 +1607,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
       ObPCMemPctConf pc_mem_conf;
       int64_t received_schema_version = OB_INVALID_VERSION;
       if (OB_SUCC(ret)) {
-        ret = E(EventTable::EN_CHANGE_TENANT_FAILED) OB_SUCCESS;
+        ret = OB_E(EventTable::EN_CHANGE_TENANT_FAILED) OB_SUCCESS;
       }
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(plan_cache_mgr)) {

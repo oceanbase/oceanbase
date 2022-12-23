@@ -494,6 +494,7 @@ public:
   static int all_mock_fk_parent_table_column_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_log_restore_source_schema(share::schema::ObTableSchema &table_schema);
   static int all_service_epoch_schema(share::schema::ObTableSchema &table_schema);
+  static int all_spatial_reference_systems_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
@@ -1267,6 +1268,8 @@ public:
   static int cdb_ob_sys_variables_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_log_stat_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_log_stat_schema(share::schema::ObTableSchema &table_schema);
+  static int st_geometry_columns_schema(share::schema::ObTableSchema &table_schema);
+  static int st_spatial_reference_systems_schema(share::schema::ObTableSchema &table_schema);
   static int query_response_time_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_column_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_tablet_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
@@ -1845,6 +1848,7 @@ public:
   static int all_mock_fk_parent_table_column_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_log_restore_source_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_service_epoch_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_spatial_reference_systems_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -2060,6 +2064,7 @@ public:
   static int all_mock_fk_parent_table_column_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_log_restore_source_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_service_epoch_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_spatial_reference_systems_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_stat_all_virtual_plan_cache_stat_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_session_event_all_virtual_session_event_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -2394,6 +2399,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_mock_fk_parent_table_column_history_schema,
   ObInnerTableSchema::all_log_restore_source_schema,
   ObInnerTableSchema::all_service_epoch_schema,
+  ObInnerTableSchema::all_spatial_reference_systems_schema,
   ObInnerTableSchema::all_column_checksum_error_info_schema,
   NULL,};
 
@@ -3190,6 +3196,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_sys_variables_schema,
   ObInnerTableSchema::gv_ob_log_stat_schema,
   ObInnerTableSchema::v_ob_log_stat_schema,
+  ObInnerTableSchema::st_geometry_columns_schema,
+  ObInnerTableSchema::st_spatial_reference_systems_schema,
   ObInnerTableSchema::query_response_time_schema,
   ObInnerTableSchema::cdb_ob_column_checksum_error_info_schema,
   ObInnerTableSchema::cdb_ob_tablet_checksum_error_info_schema,
@@ -3852,6 +3860,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_TID,
   OB_ALL_LOG_RESTORE_SOURCE_TID,
   OB_ALL_SERVICE_EPOCH_TID,
+  OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TID,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_TID,
   OB_TENANT_VIRTUAL_ALL_TABLE_TID,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TID,
@@ -4389,6 +4398,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_DEADLOCK_EVENT_HISTORY_TID,
   OB_GV_OB_LOG_STAT_TID,
   OB_V_OB_LOG_STAT_TID,
+  OB_ST_GEOMETRY_COLUMNS_TID,
+  OB_ST_SPATIAL_REFERENCE_SYSTEMS_TID,
   OB_QUERY_RESPONSE_TIME_TID,
   OB_DBA_OB_LS_TID,
   OB_DBA_OB_TABLE_LOCATIONS_TID,
@@ -5019,6 +5030,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_AUX_LOB_META_TID,
   OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_META_TID,
   OB_ALL_SERVICE_EPOCH_AUX_LOB_META_TID,
+  OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_META_TID,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_META_TID,
   OB_ALL_TABLE_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TID,
@@ -5215,6 +5227,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_PIECE_TID,
   OB_ALL_SERVICE_EPOCH_AUX_LOB_PIECE_TID,
+  OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_PIECE_TID,  };
 
 const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
@@ -5639,6 +5652,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_TNAME,
   OB_ALL_LOG_RESTORE_SOURCE_TNAME,
   OB_ALL_SERVICE_EPOCH_TNAME,
+  OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_TNAME,
   OB_TENANT_VIRTUAL_ALL_TABLE_TNAME,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME,
@@ -6176,6 +6190,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_DEADLOCK_EVENT_HISTORY_TNAME,
   OB_GV_OB_LOG_STAT_TNAME,
   OB_V_OB_LOG_STAT_TNAME,
+  OB_ST_GEOMETRY_COLUMNS_TNAME,
+  OB_ST_SPATIAL_REFERENCE_SYSTEMS_TNAME,
   OB_QUERY_RESPONSE_TIME_TNAME,
   OB_DBA_OB_LS_TNAME,
   OB_DBA_OB_TABLE_LOCATIONS_TNAME,
@@ -6806,6 +6822,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_META_TNAME,
   OB_ALL_SERVICE_EPOCH_AUX_LOB_META_TNAME,
+  OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_META_TNAME,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TNAME,
@@ -7002,6 +7019,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_PIECE_TNAME,
   OB_ALL_SERVICE_EPOCH_AUX_LOB_PIECE_TNAME,
+  OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_PIECE_TNAME,  };
 
 const uint64_t only_rs_vtables [] = {
@@ -9115,6 +9133,14 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TID,
+    OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_META_TID,
+    OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_spatial_reference_systems_aux_lob_meta_schema,
+    ObInnerTableSchema::all_spatial_reference_systems_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_TID,
     OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_META_TID,
     OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_PIECE_TID,
@@ -9159,12 +9185,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 212;
+const int64_t OB_SYS_TABLE_COUNT = 213;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 552;
-const int64_t OB_SYS_VIEW_COUNT = 601;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1370;
+const int64_t OB_SYS_VIEW_COUNT = 603;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1373;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1373;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1376;
 
 } // end namespace share
 } // end namespace oceanbase

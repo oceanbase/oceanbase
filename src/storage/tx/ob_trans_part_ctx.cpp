@@ -1007,7 +1007,7 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
       }
       need_revert_ctx = true;
     }
-    REC_TRANS_TRACE_EXT2(tlog_, get_gts_callback, Y(ret), OB_ID(srr), srr.mts_, Y(gts),  OB_ID(ctx_ref), get_ref());
+    REC_TRANS_TRACE_EXT2(tlog_, get_gts_callback, OB_Y(ret), OB_ID(srr), srr.mts_, OB_Y(gts),  OB_ID(ctx_ref), get_ref());
   }
   // before revert self
   if (OB_FAIL(ret)) {
@@ -1070,7 +1070,7 @@ int ObPartTransCtx::gts_elapse_callback(const MonotonicTs srr, const SCN &gts)
       sub_state_.clear_gts_waiting();
       need_revert_ctx = true;
     }
-    REC_TRANS_TRACE_EXT2(tlog_, gts_elapse_callback, Y(ret), OB_ID(srr), srr.mts_, Y(gts),  OB_ID(ctx_ref), get_ref());
+    REC_TRANS_TRACE_EXT2(tlog_, gts_elapse_callback, OB_Y(ret), OB_ID(srr), srr.mts_, OB_Y(gts),  OB_ID(ctx_ref), get_ref());
   }
   // before revert self
   if (OB_FAIL(ret)) {
@@ -1453,7 +1453,7 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
     tg.click();
     ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, false);
     if (try_submit) {
-      REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, Y(ret), OB_ID(arg2), is_freeze,
+      REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, OB_Y(ret), OB_ID(arg2), is_freeze,
                            OB_ID(used), tg.get_diff(),
                            OB_ID(ctx_ref), get_ref());
     }
@@ -1481,7 +1481,7 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
     }
     tg.click();
     if (try_submit) {
-      REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, Y(ret), OB_ID(arg2), is_freeze,
+      REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, OB_Y(ret), OB_ID(arg2), is_freeze,
                            OB_ID(used), tg.get_diff(),
                            OB_ID(ctx_ref), get_ref());
     }
@@ -2083,7 +2083,7 @@ int ObPartTransCtx::get_gts_(SCN &gts)
       if (OB_SUCCESS != (tmp_ret = acquire_ctx_ref_())) {
         TRANS_LOG(ERROR, "acquire ctx ref failed", KR(tmp_ret), K(*this));
       } else {
-        // REC_TRANS_TRACE_EXT2(tlog_, wait_get_gts, Y(log_type));
+        // REC_TRANS_TRACE_EXT2(tlog_, wait_get_gts, OB_Y(log_type));
       }
       sub_state_.set_gts_waiting();
     } else {
@@ -3148,7 +3148,7 @@ bool ObPartTransCtx::need_record_log_() const
   uint64_t prev_redo_lsns_count = MAX_PREV_LOG_IDS_COUNT;
    #ifdef ERRSIM
   // Error injection test, used for changing prev_redo_lsns_count for test
-  int tmp_ret = E(EventTable::EN_LOG_IDS_COUNT_ERROR) OB_SUCCESS;
+  int tmp_ret = OB_E(EventTable::EN_LOG_IDS_COUNT_ERROR) OB_SUCCESS;
   if (tmp_ret != OB_SUCCESS) {
     prev_redo_lsns_count = 2;
     TRANS_LOG(INFO, "need_record_log: ", K(prev_redo_lsns_count));
@@ -3781,7 +3781,7 @@ int ObPartTransCtx::replay_redo_in_ctx(const ObTxRedoLog &redo_log,
   }
   REC_TRANS_TRACE_EXT(tlog_, replay_redo, OB_ID(ret), ret,
                                           OB_ID(used), timeguard.get_diff(),
-                                          Y(need_replay), OB_ID(offset), offset.val_,
+                                          OB_Y(need_replay), OB_ID(offset), offset.val_,
                                           OB_ID(t), timestamp, OB_ID(ctx_ref), get_ref());
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "[Replay Tx] Replay Redo in TxCtx Failed", K(ret), K(timestamp), K(offset),
@@ -3839,7 +3839,7 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
                       ret,
                       OB_ID(used),
                       timeguard.get_diff(),
-                      Y(need_replay),
+                      OB_Y(need_replay),
                       OB_ID(offset),
                       offset.val_,
                       OB_ID(t),

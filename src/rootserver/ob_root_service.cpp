@@ -3111,12 +3111,15 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
             index_arg.index_type_ = INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE;
           } else if (INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {
             index_arg.index_type_ = INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE;
+          } else if (INDEX_TYPE_SPATIAL_GLOBAL == index_arg.index_type_) {
+            index_arg.index_type_ = INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE;
           }
         }
         // the global index has generated column schema during resolve, RS no need to generate index schema,
         // just assign column schema
         if (INDEX_TYPE_NORMAL_GLOBAL == index_arg.index_type_
-            || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {
+            || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_
+            || INDEX_TYPE_SPATIAL_GLOBAL == index_arg.index_type_) {
           if (OB_FAIL(index_schema.assign(index_arg.index_schema_))) {
             LOG_WARN("fail to assign schema", K(ret));
           }

@@ -348,7 +348,7 @@ int ObLSBackupMetaDagNet::start_running()
     LOG_WARN("failed to add dag into dag net", K(ret), KPC(backup_meta_dag));
   } else {
 #ifdef ERRSIM
-    ret = E(EventTable::EN_ADD_BACKUP_META_DAG_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_ADD_BACKUP_META_DAG_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_meta_dag_failed");
     }
@@ -554,7 +554,7 @@ int ObLSBackupDataDagNet::start_running()
     bool add_prepare_dag_success = false;
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_ADD_BACKUP_FINISH_DAG_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_ADD_BACKUP_FINISH_DAG_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_finish_dag_failed");
       }
@@ -568,7 +568,7 @@ int ObLSBackupDataDagNet::start_running()
     }
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_ADD_BACKUP_PREPARE_DAG_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_ADD_BACKUP_PREPARE_DAG_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_prepare_dag_failed");
       }
@@ -2037,7 +2037,7 @@ int ObPrefetchBackupInfoTask::process()
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_BACKUP_PREFETCH_BACKUP_INFO_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_BACKUP_PREFETCH_BACKUP_INFO_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       if (0 != param_.retry_id_) {
         ret = OB_SUCCESS;  // only errsim first retry
@@ -2373,7 +2373,7 @@ int ObPrefetchBackupInfoTask::generate_backup_dag_(
     LOG_WARN("failed to add child without inheritance", K(ret), KPC_(index_rebuild_dag));
   } else {
 #ifdef ERRSIM
-    ret = E(EventTable::EN_ADD_BACKUP_DATA_DAG_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_ADD_BACKUP_DATA_DAG_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_data_dag_failed");
     }
@@ -2470,7 +2470,7 @@ int ObLSBackupDataTask::process()
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     if (!param_.ls_id_.is_sys_ls() && backup_data_type_.is_major_backup() && param_.retry_id_ <= 2 && task_id_ >= 2) {
-      ret = E(EventTable::EN_BACKUP_MULTIPLE_MACRO_BLOCK) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_MULTIPLE_MACRO_BLOCK) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_macro_block_errsim",
                               "ls_id", param_.ls_id_.id(),
@@ -2560,19 +2560,19 @@ int ObLSBackupDataTask::may_inject_simulated_error_()
 #ifdef ERRSIM
   if (0 == param_.retry_id_) {
     if (backup_data_type_.is_sys_backup()) {
-      ret = E(EventTable::EN_BACKUP_SYS_TABLET_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_SYS_TABLET_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_sys_tablet");
         LOG_WARN("errsim backup sys tablet data task failed", K(ret));
       }
     } else if (backup_data_type_.is_minor_backup()) {
-      ret = E(EventTable::EN_BACKUP_DATA_TABLET_MINOR_SSTABLE_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_DATA_TABLET_MINOR_SSTABLE_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_minor_sstable");
         LOG_WARN("errsim backup data tablet minor sstable task failed", K(ret));
       }
     } else if (backup_data_type_.is_major_backup()) {
-      ret = E(EventTable::EN_BACKUP_DATA_TABLET_MAJOR_SSTABLE_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_DATA_TABLET_MAJOR_SSTABLE_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_major_sstable");
         LOG_WARN("errsim backup data tablet major sstable task failed", K(ret));
@@ -3443,9 +3443,9 @@ int ObLSBackupMetaTask::process()
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     if (ls_id.is_sys_ls()) {
-      ret = E(EventTable::EN_BACKUP_SYS_META_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_SYS_META_TASK_FAILED) OB_SUCCESS;
     } else {
-      ret = E(EventTable::EN_BACKUP_USER_META_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_USER_META_TASK_FAILED) OB_SUCCESS;
     }
     if (OB_FAIL(ret)) {
       SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_meta");
@@ -3681,7 +3681,7 @@ int ObLSBackupPrepareTask::process()
       bool add_dag_success = false;
 #ifdef ERRSIM
       if (OB_SUCC(ret) && 0 != i) {
-        ret = E(EventTable::EN_ADD_BACKUP_PREFETCH_DAG_FAILED) OB_SUCCESS;
+        ret = OB_E(EventTable::EN_ADD_BACKUP_PREFETCH_DAG_FAILED) OB_SUCCESS;
         if (OB_FAIL(ret)) {
           FLOG_INFO("add_backup_build_prefetch_dag_failed");
         }
@@ -3708,7 +3708,7 @@ int ObLSBackupPrepareTask::process()
   }
   if (OB_SUCC(ret)) {
 #ifdef ERRSIM
-    ret = E(EventTable::EN_ADD_BACKUP_BUILD_INDEX_DAG_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_ADD_BACKUP_BUILD_INDEX_DAG_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       FLOG_INFO("add_backup_build_index_dag_failed");
     }
@@ -3738,7 +3738,7 @@ int ObLSBackupPrepareTask::process()
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_BACKUP_PREPARE_TASK_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_BACKUP_PREPARE_TASK_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_prepare_task", "result", ret);
       LOG_WARN("errsim backup prepare task failed", K(ret));
@@ -4114,13 +4114,13 @@ int ObBackupIndexRebuildTask::process()
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     if (0 == param_.ls_id_.id() && !param_.backup_data_type_.is_sys_backup()) {
-      ret = E(EventTable::EN_BACKUP_BUILD_TENANT_LEVEL_INDEX_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_BUILD_TENANT_LEVEL_INDEX_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_build_tenant_level_index");
         LOG_WARN("errsim backup build tenant level index task failed", K(ret));
       }
     } else {
-      ret = E(EventTable::EN_BACKUP_BUILD_LS_LEVEL_INDEX_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_BUILD_LS_LEVEL_INDEX_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_build_ls_level_index");
         LOG_WARN("errsim backup build ls level index task failed", K(ret));
@@ -4507,7 +4507,7 @@ int ObLSBackupComplementLogTask::process()
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_BACKUP_COMPLEMENT_LOG_TASK_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_BACKUP_COMPLEMENT_LOG_TASK_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_complement_log");
       LOG_WARN("errsim complement log task failed", K(ret));

@@ -213,7 +213,7 @@ int ObBackupIoAdapter::write_single_file(const common::ObString &uri, const shar
   int64_t write_size = -1;
 
   #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_BEFORE_WRITE_SINGLE_FILE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_BEFORE_WRITE_SINGLE_FILE) OB_SUCCESS;
   #endif
 
   if (OB_FAIL(ret)) {
@@ -231,7 +231,7 @@ int ObBackupIoAdapter::write_single_file(const common::ObString &uri, const shar
   
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_BACKUP_IO_AFTER_WRITE_SINGLE_FILE) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_WRITE_SINGLE_FILE) OB_SUCCESS;
   }
 #endif
 

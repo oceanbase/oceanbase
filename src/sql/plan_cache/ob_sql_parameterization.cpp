@@ -63,6 +63,7 @@ struct TransformTreeCtx
   SQL_EXECUTION_MODE mode_;
   bool is_project_list_scope_;
   int64_t assign_father_level_;
+  bool ignore_scale_check_;
   TransformTreeCtx();
 };
 
@@ -121,7 +122,8 @@ TransformTreeCtx::TransformTreeCtx() :
  raw_params_(NULL),
  mode_(INVALID_MODE),
  is_project_list_scope_(false),
- assign_father_level_(ObSqlParameterization::NO_VALUES)
+ assign_father_level_(ObSqlParameterization::NO_VALUES),
+ ignore_scale_check_(false)
 {
 }
 
@@ -351,6 +353,44 @@ bool ObSqlParameterization::is_execute_mode(SQL_EXECUTION_MODE mode)
   return (PS_EXECUTE_MODE == mode || PL_EXECUTE_MODE == mode);
 }
 
+/* fix: https://aone.alibaba-inc.com/v2/project/81079/bug/42222037
+* decide if a number param can ignore scale check when choosing plancache.
+* if current node type is expr list or number,
+* and parent node is point, st_point, json array, or ctx.ignore_scale_check_ is true, return true,
+* otherwise return false.
+* example1 scale check could ignore:
+*   'select point(1.1, 1.1)' and 'select point(1.1111, 1.1111)' could share a same plancache,
+*   scale check about number literal in them are ignored
+* example2 scale check cannot ignore:
+*   'select point(cast(1.11 as double), 1.1)' and 'select point(cast(1.1111 as double), 1.1111)'
+*   because 1.11 and 1.1111 in cast expr have different scales,
+*   scale check will prevent them to share a same plancache
+*/
+bool ObSqlParameterization::is_ignore_scale_check(TransformTreeCtx &ctx, const ParseNode *parent)
+{
+  bool ret_bool = false;
+  if (OB_ISNULL(parent) || OB_ISNULL(ctx.tree_)) {
+    // do nothing
+  } else if (T_EXPR_LIST == ctx.tree_->type_ || T_NUMBER == ctx.tree_->type_) {
+    if (T_NUMBER == ctx.tree_->type_ && ctx.ignore_scale_check_) {
+      ret_bool = true;
+    } else if (T_FUN_SYS_POINT == parent->type_) {
+      ret_bool = true;
+    } else if (T_FUN_SYS == parent->type_) {
+      ParseNode **node = parent->children_;
+      if (OB_ISNULL(node) || OB_ISNULL(node[0])) {
+        // do nothing
+      } else {
+        ObString func_name(node[0]->str_len_, node[0]->str_value_);
+        if ((0 == func_name.case_compare("st_point"))) {
+          ret_bool = true;
+        }
+      }
+    } else { /* do nothing*/ }
+  } else { /* do nothing*/ }
+  return ret_bool;
+}
+
 // helper method of transform_syntax_tree
 //正常parse和fast parse识别常量不一致的问题
 /*
@@ -499,6 +539,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                 }
               } else {
                 value.set_need_to_check_type(true); 
+              }
+              if (ctx.ignore_scale_check_) {
+                value.set_ignore_scale_check(true);
               }
             }
             //用于sql限流，记录哪些参数需要严格比对
@@ -652,6 +695,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     if (is_project_list_scope) {
       ctx.is_project_list_scope_ = true;
     }
+    bool ignore_scale_check = ctx.ignore_scale_check_;
     for (int32_t i = 0;
          OB_SUCC(ret) && i < root->num_child_ && root->type_ != T_QUESTIONMARK
          && root->type_ != T_VARCHAR && root->type_ != T_CHAR && root->type_ != T_NCHAR;
@@ -738,6 +782,10 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
               SQL_PC_LOG(WARN, "judge is fast parse const failed", K(ret));
             }
           }
+
+          if (OB_SUCC(ret)) {
+            ctx.ignore_scale_check_ = is_ignore_scale_check(ctx, root);
+          }
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(SMART_CALL(transform_tree(ctx, session_info)))) {
@@ -746,6 +794,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
             }
           } else {
             ctx.not_param_ = not_param;
+            ctx.ignore_scale_check_ = ignore_scale_check;
             if (T_ALIAS == root->type_ && 0 == i) {
               // alias node的param_num_处理必须等到其第一个子节点转换完之后
               // select a + 1 as 'a'，'a'不能被参数化，但是它在raw_params数组内的下标必须是计算了1的下标之后才能得到

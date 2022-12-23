@@ -338,6 +338,38 @@
 #include "sql/engine/expr/ob_expr_timestamp_to_scn.h"
 #include "sql/engine/expr/ob_expr_scn_to_timestamp.h"
 #include "sql/engine/expr/ob_expr_errno.h"
+#include "sql/engine/expr/ob_expr_point.h"
+#include "sql/engine/expr/ob_expr_spatial_collection.h"
+#include "sql/engine/expr/ob_expr_st_geomfromtext.h"
+#include "sql/engine/expr/ob_expr_st_area.h"
+#include "sql/engine/expr/ob_expr_st_intersects.h"
+#include "sql/engine/expr/ob_expr_st_x.h"
+#include "sql/engine/expr/ob_expr_st_transform.h"
+#include "sql/engine/expr/ob_expr_priv_st_transform.h"
+#include "sql/engine/expr/ob_expr_st_covers.h"
+#include "sql/engine/expr/ob_expr_st_bestsrid.h"
+#include "sql/engine/expr/ob_expr_st_astext.h"
+#include "sql/engine/expr/ob_expr_st_buffer.h"
+#include "sql/engine/expr/ob_expr_spatial_cellid.h"
+#include "sql/engine/expr/ob_expr_spatial_mbr.h"
+#include "sql/engine/expr/ob_expr_st_geomfromewkb.h"
+#include "sql/engine/expr/ob_expr_st_geomfromwkb.h"
+#include "sql/engine/expr/ob_expr_st_geomfromewkt.h"
+#include "sql/engine/expr/ob_expr_priv_st_geogfromtext.h"
+#include "sql/engine/expr/ob_expr_priv_st_geographyfromtext.h"
+#include "sql/engine/expr/ob_expr_st_asewkt.h"
+#include "sql/engine/expr/ob_expr_st_srid.h"
+#include "sql/engine/expr/ob_expr_st_distance.h"
+#include "sql/engine/expr/ob_expr_st_geometryfromtext.h"
+#include "sql/engine/expr/ob_expr_priv_st_setsrid.h"
+#include "sql/engine/expr/ob_expr_priv_st_point.h"
+#include "sql/engine/expr/ob_expr_st_isvalid.h"
+#include "sql/engine/expr/ob_expr_st_dwithin.h"
+#include "sql/engine/expr/ob_expr_st_aswkb.h"
+#include "sql/engine/expr/ob_expr_st_distance_sphere.h"
+#include "sql/engine/expr/ob_expr_st_contains.h"
+#include "sql/engine/expr/ob_expr_st_within.h"
+#include "sql/engine/expr/ob_expr_priv_st_asewkb.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -854,6 +886,52 @@ void ObExprOperatorFactory::register_expr_operators()
     // convert input value into an OceanBase error number and throw out as exception
     REG_OP(ObExprErrno);
 #endif
+    REG_OP(ObExprPoint);
+    REG_OP(ObExprLineString);
+    REG_OP(ObExprMultiPoint);
+    REG_OP(ObExprMultiLineString);
+    REG_OP(ObExprPolygon);
+    REG_OP(ObExprMultiPolygon);
+    REG_OP(ObExprGeomCollection);
+    REG_OP(ObExprGeometryCollection);
+    REG_OP(ObExprSTGeomFromText);
+    REG_OP(ObExprSTArea);
+    REG_OP(ObExprSTIntersects);
+    REG_OP(ObExprSTX);
+    REG_OP(ObExprSTY);
+    REG_OP(ObExprSTLatitude);
+    REG_OP(ObExprSTLongitude);
+    REG_OP(ObExprSTTransform);
+    REG_OP(ObExprPrivSTTransform);
+    REG_OP(ObExprPrivSTCovers);
+    REG_OP(ObExprPrivSTBestsrid);
+    REG_OP(ObExprSTAsText);
+    REG_OP(ObExprSTAsWkt);
+    REG_OP(ObExprSTBufferStrategy);
+    REG_OP(ObExprSTBuffer);
+    REG_OP(ObExprSpatialCellid);
+    REG_OP(ObExprSpatialMbr);
+    REG_OP(ObExprPrivSTGeomFromEWKB);
+    REG_OP(ObExprSTGeomFromWKB);
+    REG_OP(ObExprSTGeometryFromWKB);
+    REG_OP(ObExprPrivSTGeomFromEwkt);
+    REG_OP(ObExprPrivSTAsEwkt);
+    REG_OP(ObExprSTSRID);
+    REG_OP(ObExprSTDistance);
+    REG_OP(ObExprPrivSTGeogFromText);
+    REG_OP(ObExprPrivSTGeographyFromText);
+    REG_OP(ObExprPrivSTSetSRID);
+    REG_OP(ObExprSTGeometryFromText);
+    REG_OP(ObExprPrivSTPoint);
+    REG_OP(ObExprSTIsValid);
+    REG_OP(ObExprPrivSTBuffer);
+    REG_OP(ObExprPrivSTDWithin);
+    REG_OP(ObExprSTAsWkb);
+    REG_OP(ObExprStPrivAsEwkb);
+    REG_OP(ObExprSTAsBinary);
+    REG_OP(ObExprSTDistanceSphere);
+    REG_OP(ObExprSTContains);
+    REG_OP(ObExprSTWithin);
   }();
     REG_OP(ObExprDayName);
 // 注册oracle系统函数

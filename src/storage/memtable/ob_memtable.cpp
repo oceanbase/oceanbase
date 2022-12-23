@@ -2081,7 +2081,7 @@ int ObMemtable::check_standby_cluster_schema_condition_(ObStoreCtx &ctx,
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  ret = E(EventTable::EN_CHECK_STANDBY_CLUSTER_SCHEMA_CONDITION) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_CHECK_STANDBY_CLUSTER_SCHEMA_CONDITION) OB_SUCCESS;
   if (OB_FAIL(ret) && !common::is_inner_table(table_id)) {
     TRANS_LOG(WARN, "ERRSIM, replay row failed", K(ret));
     return ret;

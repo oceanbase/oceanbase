@@ -481,7 +481,8 @@ int ObSqlSchemaGuard::get_can_read_index_array(uint64_t table_id,
                                                  bool with_mv,
                                                  bool with_global_index,
                                                  bool with_domain_index,
-                                                 bool is_link /* = false */)
+                                                 bool is_link /* = false */,
+                                                 bool with_spatial_index)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -491,7 +492,8 @@ int ObSqlSchemaGuard::get_can_read_index_array(uint64_t table_id,
     OV (OB_NOT_NULL(schema_guard_));
     OZ (schema_guard_->get_can_read_index_array(tenant_id, table_id,
                                                 index_tid_array, size, with_mv,
-                                                with_global_index, with_domain_index));
+                                                with_global_index, with_domain_index,
+                                                with_spatial_index));
   }
   return ret;
 }

@@ -490,6 +490,7 @@ private:
   int64_t tenant_schema_version_;
   int64_t orig_question_mark_cnt_;
   common::ObCurTraceId::TraceId last_trace_id_;
+  int64_t tenant_srs_version_;
 
 private:
   /**

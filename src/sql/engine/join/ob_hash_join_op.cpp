@@ -3510,7 +3510,7 @@ int ObHashJoinOp::partition_and_build_histograms()
 {
   int ret = OB_SUCCESS;
   enable_batch_ = 0 == level2_part_count_ && level1_part_count_ == part_count_;
-  ret = E(EventTable::EN_SET_DISABLE_HASH_JOIN_BATCH) ret;
+  ret = OB_E(EventTable::EN_SET_DISABLE_HASH_JOIN_BATCH) ret;
   if (OB_FAIL(ret)) {
     ret = -ret;
     enable_batch_ = (0 == ret % 2) ? true : false;

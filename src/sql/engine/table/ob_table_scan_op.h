@@ -55,6 +55,22 @@ public:
   TableItem::FlashBackQueryType flashback_query_type_; //flashback query type
 };
 
+struct ObSpatialIndexCache
+{
+public:
+  ObSpatialIndexCache() :
+      spat_rows_(nullptr),
+      spat_row_index_(0),
+      mbr_buffer_(nullptr),
+      obj_buffer_(nullptr)
+  {}
+  ~ObSpatialIndexCache() {};
+  ObSpatIndexRow *spat_rows_;
+  uint8_t spat_row_index_;
+  void *mbr_buffer_;
+  void *obj_buffer_;
+};
+
 //for the oracle virtual agent table access the real table
 struct AgentVtAccessMeta
 {
@@ -185,6 +201,8 @@ public:
 protected:
   ObDASTabletLoc *tablet_loc_;
   common::ObSEArray<common::ObNewRange, 1> key_ranges_;
+  common::ObSEArray<common::ObSpatialMBR, 1> mbr_filters_;
+  common::ObPosArray range_array_pos_;
   // if the query range was extracted before(include whole range), tsc not need to extract every time
   bool not_need_extract_query_range_;
   // FIXME bin.lb: partition_ranges_ not used, ObTableScanInput keep it for compatibility.
@@ -233,6 +251,8 @@ public:
     return tsc_ctdef_.scan_ctdef_.table_param_.get_read_info().get_schema_rowkey_count(); }
   const ObIArray<ObColDesc> &get_columns_desc() const {
     return tsc_ctdef_.scan_ctdef_.table_param_.get_read_info().get_columns_desc(); }
+  inline void set_spatial_ddl(bool is_spatial_ddl) { is_spatial_ddl_ = is_spatial_ddl; }
+  inline bool is_spatial_ddl() const { return is_spatial_ddl_; }
   DECLARE_VIRTUAL_TO_STRING;
 
 public:
@@ -320,6 +340,7 @@ public:
       uint64_t reserved_                        : 55;
     };
   };
+  bool is_spatial_ddl_;
 };
 
 class ObTableScanOp : public ObOperator
@@ -397,6 +418,10 @@ protected:
   void fill_table_scan_stat(const ObTableScanStatistic &statistic,
                             ObTableScanStat &scan_stat) const;
   void set_cache_stat(const ObPlanStat &plan_stat);
+  int inner_get_next_row_implement();
+  int fill_generated_cellid_mbr(const ObObj &cellid, const ObObj &mbr);
+  int inner_get_next_spatial_index_row();
+  int init_spatial_index_rows();
 
 protected:
   int prepare_das_task();
@@ -469,8 +494,8 @@ protected:
   // for equal_query_range opt end
   int64_t group_size_;
   int64_t max_group_size_;
+  ObSpatialIndexCache spat_index_;
 };
-
 } // end namespace sql
 } // end namespace oceanbase
 

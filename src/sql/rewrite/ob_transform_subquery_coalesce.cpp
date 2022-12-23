@@ -967,6 +967,7 @@ int ObTransformSubqueryCoalesce::merge_exists_subqueries(TransformParam &trans_p
       new_col_item.expr_ = static_cast<ObColumnRefRawExpr *>(new_expr);
       new_col_item.expr_->set_table_id(new_table_item->table_id_);
       new_col_item.expr_->set_table_name(new_table_item->table_name_);
+      new_col_item.is_geo_ = col_item.is_geo_;
       if (OB_FAIL(new_exist_stmt->add_column_item(new_col_item))) {
         LOG_WARN("failed to add column item", K(ret));
       }
@@ -1140,6 +1141,7 @@ int ObTransformSubqueryCoalesce::merge_any_all_subqueries(ObQueryRefRawExpr *any
       new_col_item.expr_ = static_cast<ObColumnRefRawExpr *>(new_expr);
       new_col_item.expr_->set_table_id(new_table_item->table_id_);
       new_col_item.expr_->set_table_name(new_table_item->table_name_);
+      new_col_item.is_geo_ = col_item.is_geo_;
       if (OB_FAIL(new_any_stmt->add_column_item(new_col_item))) {
         LOG_WARN("failed to add column item", K(ret));
       }

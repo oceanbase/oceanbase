@@ -51,6 +51,9 @@ public:
   OB_INLINE int64_t get_rowkey_column_num() const { return read_info_.get_schema_rowkey_count(); }
   OB_INLINE int64_t get_shadow_rowkey_column_num() const { return shadow_rowkey_column_num_; }
   OB_INLINE int64_t get_fulltext_col_id() const { return fulltext_col_id_; }
+  OB_INLINE uint64_t get_spatial_geo_col_id() const { return spatial_geo_col_id_; }
+  OB_INLINE uint64_t get_spatial_cellid_col_id() const { return spatial_cellid_col_id_; }
+  OB_INLINE uint64_t get_spatial_mbr_col_id() const { return spatial_mbr_col_id_; }
   OB_INLINE int64_t get_column_count() const { return columns_.count(); }
   OB_INLINE const Columns &get_columns() const { return columns_; }
   OB_INLINE const ColumnMap &get_col_map() const { return col_map_; }
@@ -63,6 +66,7 @@ public:
   OB_INLINE bool can_read_index() const { return ObTableSchema::can_read_index(index_status_); }
   OB_INLINE bool is_unique_index() const { return ObTableSchema::is_unique_index(index_type_); }
   OB_INLINE bool is_domain_index() const { return ObTableSchema::is_domain_index(index_type_); }
+  OB_INLINE bool is_spatial_index() const { return ObTableSchema::is_spatial_index(index_type_); }
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
 
@@ -92,6 +96,9 @@ private:
   ObIndexStatus index_status_;
   int64_t shadow_rowkey_column_num_;
   uint64_t fulltext_col_id_;
+  uint64_t spatial_geo_col_id_; // geometry column id in data table_schema.
+  uint64_t spatial_cellid_col_id_; // cellid column id in index table_schema.
+  uint64_t spatial_mbr_col_id_; // mbr column id in index table_schema.
   common::ObString index_name_;
   //generated storage param from columns_ids_ in ObTableModify, for performance improvement
   Columns columns_;

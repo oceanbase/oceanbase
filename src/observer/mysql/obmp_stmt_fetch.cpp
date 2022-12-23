@@ -852,7 +852,8 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
       } else if (NULL == piece) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("piece is null before use.", K(ret), K(stmt_id), K(i));
-      } else if (ob_is_string_type(value.get_type()) || ob_is_raw(value.get_type()) || ob_is_json(value.get_type())) {
+      } else if (ob_is_string_type(value.get_type()) || ob_is_raw(value.get_type()) || ob_is_json(value.get_type())
+                 || ob_is_geometry(value.get_type())) {
         str = value.get_string();
       } else if (ob_is_rowid_tc(value.get_type())) {
         str = value.get_string_ptr();

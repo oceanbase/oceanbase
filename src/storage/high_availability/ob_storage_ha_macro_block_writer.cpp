@@ -90,7 +90,7 @@ int ObStorageHAMacroBlockWriter::check_macro_block_(
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_RESTORE_MACRO_CRC_ERROR) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_RESTORE_MACRO_CRC_ERROR) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       STORAGE_LOG(INFO, "ERRSIM check_macro_block", K(ret));
     }

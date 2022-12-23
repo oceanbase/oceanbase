@@ -60,7 +60,7 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
   return ::malloc(size);
 #else
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
-  int ret = E(EventTable::EN_4) OB_SUCCESS;
+  int ret = OB_E(EventTable::EN_4) OB_SUCCESS;
   void *ptr = NULL;
   ObIAllocator *allocator = NULL;
   oceanbase::lib::ObMemAttr inner_attr = attr;
@@ -106,7 +106,7 @@ void *ObMallocAllocator::realloc(
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   // Won't create tenant allocator!!
   void *nptr = NULL;
-  int ret = E(EventTable::EN_4) OB_SUCCESS;
+  int ret = OB_E(EventTable::EN_4) OB_SUCCESS;
   if (NULL != ptr) {
     AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     abort_unless(NULL != obj);

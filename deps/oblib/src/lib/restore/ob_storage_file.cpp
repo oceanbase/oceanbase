@@ -691,7 +691,7 @@ int ObStorageFileBaseWriter::write(const char *buf,const int64_t buf_size)
   int64_t write_size = 0;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (!is_opened_) {
@@ -737,7 +737,7 @@ int ObStorageFileBaseWriter::pwrite(const char *buf, const int64_t buf_size, con
   int64_t write_size = 0;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (!is_opened_) {
@@ -854,7 +854,7 @@ int ObStorageFileWriter::close()
 
   if (OB_SUCC(ret)) {
 #ifdef ERRSIM
-  ret = E(EventTable::EN_FILE_SYSTEM_RENAME_ERROR) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_FILE_SYSTEM_RENAME_ERROR) OB_SUCCESS;
   if (OB_FAIL(ret)) {
     has_error_ = true;
   }

@@ -32,6 +32,9 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     index_status_(INDEX_STATUS_MAX),
     shadow_rowkey_column_num_(0),
     fulltext_col_id_(OB_INVALID_ID),
+    spatial_geo_col_id_(OB_INVALID_ID),
+    spatial_cellid_col_id_(OB_INVALID_ID),
+    spatial_mbr_col_id_(OB_INVALID_ID),
     index_name_(),
     columns_(allocator),
     col_map_(allocator),
@@ -54,6 +57,9 @@ void ObTableSchemaParam::reset()
   index_status_ = INDEX_STATUS_MAX;
   shadow_rowkey_column_num_ = 0;
   fulltext_col_id_ = OB_INVALID_ID;
+  spatial_geo_col_id_ = OB_INVALID_ID;
+  spatial_cellid_col_id_ = OB_INVALID_ID;
+  spatial_mbr_col_id_ = OB_INVALID_ID;
   index_name_.reset();
   columns_.reset();
   col_map_.clear();
@@ -93,7 +99,20 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     index_status_ = schema->get_index_status();
     shadow_rowkey_column_num_ = schema->get_shadow_rowkey_column_num();
     ObString tmp_name;
-    if (OB_FAIL(schema->get_index_info().get_fulltext_column(fulltext_col_id_))) {
+
+    if (schema->is_spatial_index()) {
+      if (OB_FAIL(schema->get_spatial_geo_column_id(spatial_geo_col_id_))) {
+        LOG_WARN("fail to get spatial geo column id", K(ret), K(schema->get_index_info()));
+      } else if (OB_FAIL(schema->get_index_info().get_spatial_cellid_col_id(spatial_cellid_col_id_))) {
+        LOG_WARN("fail to get spatial cellid column id", K(ret), K(schema->get_index_info()));
+      } else if (OB_FAIL(schema->get_index_info().get_spatial_mbr_col_id(spatial_mbr_col_id_))) {
+        LOG_WARN("fail to get spatial mbr column id", K(ret), K(schema->get_index_info()));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(schema->get_index_info().get_fulltext_column(fulltext_col_id_))) {
       LOG_WARN("fail to get fulltext column id", K(ret), K(schema->get_index_info()));
     } else if (OB_FAIL(schema->get_index_name(tmp_name))) {
       LOG_WARN("fail to get index name", K(ret), K(schema->get_index_info()));
@@ -346,6 +365,9 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
       LOG_WARN("failed to serialize pk name", K(ret));
     }
   }
+  OB_UNIS_ENCODE(spatial_geo_col_id_);
+  OB_UNIS_ENCODE(spatial_cellid_col_id_);
+  OB_UNIS_ENCODE(spatial_mbr_col_id_);
   return ret;
 }
 
@@ -388,6 +410,9 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
        LOG_WARN("failed to copy pk name", K(ret), K(tmp_name));
      }
   }
+  OB_UNIS_DECODE(spatial_geo_col_id_);
+  OB_UNIS_DECODE(spatial_cellid_col_id_);
+  OB_UNIS_DECODE(spatial_mbr_col_id_);
   return ret;
 }
 
@@ -416,6 +441,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   }
   OB_UNIS_ADD_LEN(read_info_);
   len += pk_name_.get_serialize_size();
+  OB_UNIS_ADD_LEN(spatial_geo_col_id_);
+  OB_UNIS_ADD_LEN(spatial_cellid_col_id_);
+  OB_UNIS_ADD_LEN(spatial_mbr_col_id_);
   return len;
 }
 

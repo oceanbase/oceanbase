@@ -309,7 +309,8 @@ struct ObDynReserveBuf
            || common::ObRawTC == tc
            || common::ObRowIDTC == tc
            || common::ObLobTC == tc
-           || common::ObJsonTC == tc;
+           || common::ObJsonTC == tc
+           || common::ObGeometryTC == tc;
   }
 
   ObDynReserveBuf() = default;

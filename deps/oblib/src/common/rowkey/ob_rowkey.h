@@ -95,6 +95,7 @@ public:
 
   OB_INLINE int deep_copy(char *buffer, int64_t size) const;
   OB_INLINE int deep_copy(ObRowkey &out, char *buffer, int64_t size) const;
+  OB_INLINE int deep_copy(const ObRowkey &src, char *ptr, int64_t size, int64_t &pos);
 
   template <typename Allocator>
   int deserialize(Allocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
@@ -318,6 +319,36 @@ OB_INLINE int ObRowkey::deep_copy(char *ptr, int64_t size) const
 
 }
 
+OB_INLINE int ObRowkey::deep_copy(const ObRowkey &src, char *ptr, int64_t size, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!src.is_legal())) {
+    ret = OB_INVALID_DATA;
+    COMMON_LOG(WARN, "illegal src rowkey.", KP(src.obj_ptr_), K(src.obj_cnt_), K(ret));
+  } else {
+    int64_t total_len = src.get_deep_copy_size();
+    if (size < total_len + pos || OB_UNLIKELY(NULL == ptr)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid arguments.", KP(ptr), K(size), K(total_len), K(pos), K(ret));
+    } else if (src.obj_cnt_ > 0 && NULL != src.obj_ptr_) {
+      ObObj *obj_ptr = NULL;
+      obj_ptr = reinterpret_cast<ObObj *>(ptr + pos);
+      pos += (src.obj_cnt_ * sizeof(ObObj));
+
+      for (int64_t i = 0; i < src.obj_cnt_ && OB_SUCC(ret); ++i) {
+        if (OB_FAIL(obj_ptr[i].deep_copy(src.obj_ptr_[i], ptr, size, pos))) {
+          COMMON_LOG(WARN, "deep copy object failed.",  K(i), K(src.obj_ptr_[i]), K(size), K(pos), K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        obj_ptr_ = obj_ptr;
+        obj_cnt_ = src.obj_cnt_;
+      }
+   }
+  }
+
+  return ret;
+}
 
 OB_INLINE int ObRowkey::deep_copy(ObRowkey &rhs, char *ptr, int64_t total_len) const
 {

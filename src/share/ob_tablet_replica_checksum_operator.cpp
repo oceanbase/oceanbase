@@ -1003,6 +1003,9 @@ int ObTabletReplicaChecksumOperator::check_column_checksum(
           compaction_scn, sql_proxy))) {
         LOG_WARN("fail to check global index column checksum", KR(ret), K(tenant_id), K(compaction_scn));
       }
+    } else if (OB_UNLIKELY(index_table_schema.is_spatial_index())) {
+      // do nothing
+      // spatial index column is different from data table column
     } else {
       if (OB_FAIL(check_local_index_column_checksum(tenant_id, data_table_schema, index_table_schema,
           compaction_scn, sql_proxy))) {

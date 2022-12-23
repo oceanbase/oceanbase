@@ -692,6 +692,8 @@ public:
   inline ObTenantTableId get_tenant_data_table_id() const
   { return ObTenantTableId(tenant_id_, data_table_id_); }
 
+  inline bool is_spatial_index() const;
+  inline static bool is_spatial_index(ObIndexType index_type);
   inline bool is_normal_index() const;
   inline bool is_unique_index() const;
   inline static bool is_unique_index(ObIndexType index_type);
@@ -1112,6 +1114,8 @@ public:
   // including the primary key + vertical partition column
   int get_vp_column_ids_with_rowkey(common::ObIArray<share::schema::ObColDesc> &column_ids,
       const bool no_virtual = false) const;
+  int get_spatial_geo_column_id(uint64_t &geo_column_id) const;
+  int get_spatial_index_column_ids(common::ObIArray<uint64_t> &column_ids) const;
 
   // get columns for building rowid
   int get_column_ids_serialize_to_rowid(common::ObIArray<uint64_t> &col_ids,
@@ -1494,7 +1498,9 @@ inline bool ObSimpleTableSchemaV2::is_index_local_storage() const
              || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type_
              || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_
              || INDEX_TYPE_PRIMARY == index_type_
-             || INDEX_TYPE_DOMAIN_CTXCAT == index_type_);
+             || INDEX_TYPE_DOMAIN_CTXCAT == index_type_
+             || INDEX_TYPE_SPATIAL_LOCAL == index_type_
+             || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type_);
 }
 
 inline bool ObSimpleTableSchemaV2::is_global_index_table() const
@@ -1505,7 +1511,8 @@ inline bool ObSimpleTableSchemaV2::is_global_index_table() const
 inline bool ObSimpleTableSchemaV2::is_global_index_table(const ObIndexType index_type)
 {
   return INDEX_TYPE_NORMAL_GLOBAL == index_type
-        || INDEX_TYPE_UNIQUE_GLOBAL == index_type;
+        || INDEX_TYPE_UNIQUE_GLOBAL == index_type
+        || INDEX_TYPE_SPATIAL_GLOBAL == index_type;
 }
 
 inline bool ObSimpleTableSchemaV2::is_global_normal_index_table() const
@@ -1533,9 +1540,21 @@ inline bool ObSimpleTableSchemaV2::is_local_unique_index_table() const
 inline bool ObSimpleTableSchemaV2::is_global_local_index_table() const
 {
   return INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type_
-         || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_;
+         || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_
+         || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type_;
 }
 
+inline bool ObSimpleTableSchemaV2::is_spatial_index(ObIndexType index_type)
+{
+  return INDEX_TYPE_SPATIAL_LOCAL == index_type
+         || INDEX_TYPE_SPATIAL_GLOBAL == index_type
+         || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
+}
+
+inline bool ObSimpleTableSchemaV2::is_spatial_index() const
+{
+  return is_spatial_index(index_type_);
+}
 
 inline bool ObSimpleTableSchemaV2::is_normal_index() const
 {
@@ -1730,6 +1749,7 @@ int ObTableSchema::add_column(const ColumnType &column)
           index_column.length_ = column.get_data_length();
           index_column.type_ = column.get_meta_type();
           index_column.fulltext_flag_ = column.is_fulltext_column();
+          index_column.spatial_flag_ = column.is_spatial_generated_column();
           if (OB_FAIL(index_info_.set_column(column.get_index_position() - 1, index_column))) {
             SHARE_SCHEMA_LOG(WARN, "Fail to set column to index info", K(ret));
           } else {

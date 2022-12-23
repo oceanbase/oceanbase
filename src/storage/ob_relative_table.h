@@ -79,12 +79,16 @@ public:
   int get_fulltext_column(uint64_t &column_id) const;
   int get_index_name(common::ObString &index_name) const;
   int get_primary_key_name(common::ObString &pk_name) const;
+  int get_spatial_geo_col_id(uint64_t &column_id) const;
+  int get_spatial_cellid_col_id(uint64_t &column_id) const;
+  int get_spatial_mbr_col_id(uint64_t &column_id) const;
   bool is_index_table() const;
   bool is_lob_meta_table() const;
   bool is_storage_index_table() const;
   bool can_read_index() const;
   bool is_unique_index() const;
   bool is_domain_index() const;
+  bool is_spatial_index() const;
   int check_rowkey_in_column_ids(const common::ObIArray<uint64_t> &column_ids,
                                   const bool has_other_column) const;
   int build_index_row(const common::ObNewRow &table_row,

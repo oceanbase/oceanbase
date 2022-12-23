@@ -61,6 +61,7 @@ ob_set_subtarget(ob_sql das
   das/ob_das_id_rpc.cpp
   das/ob_das_id_cache.cpp
   das/ob_das_task_result.cpp
+  das/ob_das_spatial_index_lookup_op.cpp
 )
 
 ob_set_subtarget(ob_sql dtl
@@ -565,6 +566,39 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_timestamp_to_scn.cpp
   engine/expr/ob_expr_scn_to_timestamp.cpp
   engine/expr/ob_expr_errno.cpp
+  engine/expr/ob_geo_expr_utils.cpp
+  engine/expr/ob_expr_spatial_cellid.cpp
+  engine/expr/ob_expr_spatial_mbr.cpp
+  engine/expr/ob_expr_point.cpp
+  engine/expr/ob_expr_priv_st_point.cpp
+  engine/expr/ob_expr_spatial_collection.cpp
+  engine/expr/ob_expr_st_geomfromtext.cpp
+  engine/expr/ob_expr_st_intersects.cpp
+  engine/expr/ob_expr_st_area.cpp
+  engine/expr/ob_expr_st_x.cpp
+  engine/expr/ob_expr_st_transform.cpp
+  engine/expr/ob_expr_priv_st_transform.cpp
+  engine/expr/ob_expr_st_covers.cpp
+  engine/expr/ob_expr_st_bestsrid.cpp
+  engine/expr/ob_expr_st_astext.cpp
+  engine/expr/ob_expr_priv_st_setsrid.cpp
+  engine/expr/ob_expr_st_geometryfromtext.cpp
+  engine/expr/ob_expr_st_buffer.cpp
+  engine/expr/ob_expr_st_geomfromewkb.cpp
+  engine/expr/ob_expr_st_geomfromwkb.cpp
+  engine/expr/ob_expr_st_geomfromewkt.cpp
+  engine/expr/ob_expr_priv_st_geogfromtext.cpp
+  engine/expr/ob_expr_priv_st_geographyfromtext.cpp
+  engine/expr/ob_expr_st_asewkt.cpp
+  engine/expr/ob_expr_st_srid.cpp
+  engine/expr/ob_expr_st_distance.cpp
+  engine/expr/ob_expr_st_isvalid.cpp
+  engine/expr/ob_expr_st_dwithin.cpp
+  engine/expr/ob_expr_st_aswkb.cpp
+  engine/expr/ob_expr_priv_st_asewkb.cpp
+  engine/expr/ob_expr_st_distance_sphere.cpp
+  engine/expr/ob_expr_st_contains.cpp
+  engine/expr/ob_expr_st_within.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

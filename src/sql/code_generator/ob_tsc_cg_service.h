@@ -58,6 +58,7 @@ private:
   int generate_table_param(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef);
   int extract_das_output_column_ids(const ObLogTableScan &op,
                                     common::ObTableID table_id,
+                                    const ObTableSchema &index_schema,
                                     common::ObIArray<uint64_t> &output_cids);
   int extract_pushdown_filters(const ObLogTableScan &op,
                                common::ObIArray<ObRawExpr*> &nonpushdown_filters,
@@ -69,6 +70,7 @@ private:
   //extract these column exprs need by TSC operator, these column will output by DAS scan
   int extract_tsc_access_columns(const ObLogTableScan &op, common::ObIArray<ObRawExpr*> &access_exprs);
   int extract_das_column_ids(const common::ObIArray<ObRawExpr*> &column_exprs, common::ObIArray<uint64_t> &column_ids);
+  int generate_geo_access_ctdef(const ObLogTableScan &op, const ObTableSchema &index_schema, ObArray<ObRawExpr*> &access_exprs);
 private:
   ObStaticEngineCG &cg_;
 };

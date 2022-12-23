@@ -94,6 +94,7 @@ const char *ob_sql_type_str(ObObjType type)
       "ROWID",
       "LOB",
       "JSON",
+      "GEOMETRY",
       ""
     },
     {
@@ -146,6 +147,8 @@ const char *ob_sql_type_str(ObObjType type)
       "NCHAR",
       "ROWID",
       "LOB",
+      "JSON",
+      "GEOMETRY",
       ""
     }
   };
@@ -379,6 +382,7 @@ DEF_TYPE_STR_FUNCS(set, "set", "");
 DEF_TYPE_STR_FUNCS_PRECISION(number_float, "float", "");
 DEF_TYPE_TEXT_FUNCS_LENGTH(lob, (lib::is_oracle_mode() ? "clob" : "longtext"), (lib::is_oracle_mode() ? "blob" : "longblob"));
 DEF_TYPE_TEXT_FUNCS_LENGTH(json, "json", "json");
+DEF_TYPE_TEXT_FUNCS_LENGTH(geometry, "geometry", "geometry");
 
 ///////////////////////////////////////////////////////////
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(null, "null", "");
@@ -427,6 +431,7 @@ DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(nchar, "nchar", "nchar");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(urowid, "urowid", "");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(lob, (lib::is_oracle_mode() ? "clob" : "longtext"), (lib::is_oracle_mode() ? "blob" : "longblob"));
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(json, "json", "json");
+DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(geometry, "geometry", "geometry");
 
 
 int ob_empty_str(char *buff, int64_t buff_length, ObCollationType coll_type)
@@ -448,6 +453,54 @@ int ob_empty_str(char *buff, int64_t buff_length, int64_t &pos, int64_t length, 
   UNUSED(precision);
   UNUSED(pos);
   return ob_empty_str(buff, buff_length, coll_type);
+}
+
+int ob_geometry_sub_type_str(char *buff, int64_t buff_length, int64_t &pos, const common::ObGeoType geo_type)
+{
+  int ret = OB_SUCCESS;
+  switch (geo_type) {
+    case common::ObGeoType::POINT: {
+      ret = databuff_printf(buff, buff_length, pos, "point");
+      break;
+    }
+
+    case common::ObGeoType::LINESTRING: {
+      ret = databuff_printf(buff, buff_length, pos, "linestring");
+      break;
+    }
+
+    case common::ObGeoType::POLYGON: {
+      ret = databuff_printf(buff, buff_length, pos, "polygon");
+      break;
+    }
+
+    case common::ObGeoType::MULTIPOINT: {
+      ret = databuff_printf(buff, buff_length, pos, "multipoint");
+      break;
+    }
+
+    case common::ObGeoType::MULTILINESTRING: {
+      ret = databuff_printf(buff, buff_length, pos, "multilinestring");
+      break;
+    }
+
+    case common::ObGeoType::MULTIPOLYGON: {
+      ret = databuff_printf(buff, buff_length, pos, "multipolygon");
+      break;
+    }
+
+    case common::ObGeoType::GEOMETRYCOLLECTION: {
+      ret = databuff_printf(buff, buff_length, pos, "geomcollection");
+      break;
+    }
+
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("undefined geometry type", K(ret), K(geo_type));
+      break;
+    }
+  }
+  return ret;
 }
 
 int ob_enum_or_set_str(const ObObjMeta &obj_meta, const common::ObIArray<ObString> &type_info, char *buff, int64_t buff_length, int64_t &pos)
@@ -561,8 +614,17 @@ int ob_urowid_str(char *buff, int64_t buff_length, int64_t &pos, int64_t length,
   return databuff_printf(buff, buff_length, pos, "urowid(%ld)", length);
 }
 
-int ob_sql_type_str(char *buff, int64_t buff_length, int64_t &pos, ObObjType type, int64_t length, int64_t precision, int64_t scale, ObCollationType coll_type)
+int ob_sql_type_str(char *buff,
+    int64_t buff_length,
+    int64_t &pos,
+    ObObjType type,
+    int64_t length,
+    int64_t precision,
+    int64_t scale,
+    ObCollationType coll_type,
+    const common::ObGeoType geo_type/* common::ObGeoType::GEOTYPEMAX */)
 {
+  int ret = OB_SUCCESS;
   static ObSqlTypeStrFunc sql_type_name[ObMaxType+1] =
   {
     ob_null_str,  // NULL
@@ -621,13 +683,25 @@ int ob_sql_type_str(char *buff, int64_t buff_length, int64_t &pos, ObObjType typ
     ob_urowid_str,//urowid
     ob_lob_str,//lob
     ob_json_str,//json
+    ob_geometry_str,//geometry
     ob_empty_str             // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(ObSqlTypeStrFunc) == ObMaxType + 1, "Not enough initializer");
-  return sql_type_name[OB_LIKELY(type < ObMaxType) ? type : ObMaxType](buff, buff_length, pos, length, precision, scale, coll_type);
+  if (ob_is_geometry_tc(type) && geo_type != common::ObGeoType::GEOMETRY) {
+    if (OB_FAIL(ob_geometry_sub_type_str(buff, buff_length, pos, geo_type))) {
+      LOG_WARN("fail to get geometry sub type str", K(ret), K(geo_type), K(buff), K(buff_length), K(pos));
+    }
+  } else {
+    ret = sql_type_name[OB_LIKELY(type < ObMaxType) ? type : ObMaxType](buff, buff_length, pos, length, precision, scale, coll_type);
+  }
+  return ret;
 }
 
-int ob_sql_type_str(char *buff, int64_t buff_length, ObObjType type, ObCollationType coll_type)
+int ob_sql_type_str(char *buff,
+    int64_t buff_length,
+    ObObjType type,
+    ObCollationType coll_type,
+    const common::ObGeoType geo_type/* common::ObGeoType::GEOTYPEMAX */)
 {
   int ret = OB_SUCCESS;
   static obSqlTypeStrWithoutAccuracyFunc sql_type_name[ObMaxType+1] =
@@ -688,12 +762,18 @@ int ob_sql_type_str(char *buff, int64_t buff_length, ObObjType type, ObCollation
     ob_urowid_str_without_accuracy,  // urowid
     ob_lob_str_without_accuracy,//lob
     ob_json_str_without_accuracy,//json
+    ob_geometry_str_without_accuracy,//geometry
     ob_empty_str   // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(obSqlTypeStrWithoutAccuracyFunc) == ObMaxType + 1, "Not enough initializer");
   if (OB_UNLIKELY(type > ObMaxType)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected type", K(type), K(ObMaxType), K(ret));
+  } else if (ob_is_geometry_tc(type) && geo_type != common::ObGeoType::GEOMETRY) {
+    int64_t pos = 0;
+    if (OB_FAIL(ob_geometry_sub_type_str(buff, buff_length, pos, geo_type))) {
+      LOG_WARN("fail to get geometry sub type str", K(ret), K(geo_type), K(buff), K(buff_length), K(pos));
+    }
   } else if (OB_ISNULL(sql_type_name[type])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("function pointer is NULL", K(type), K(ret));
@@ -703,10 +783,15 @@ int ob_sql_type_str(char *buff, int64_t buff_length, ObObjType type, ObCollation
 
   return ret;
 }
-int ob_sql_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy,
+
+int ob_sql_type_str(const ObObjMeta &obj_meta,
+    const ObAccuracy &accuracy,
     const common::ObIArray<ObString> &type_info,
     const int16_t default_length_semantics,
-    char *buff, int64_t buff_length, int64_t &pos)
+    char *buff,
+    int64_t buff_length,
+    int64_t &pos,
+    const common::ObGeoType geo_type/* common::ObGeoType::GEOTYPEMAX */)
 {
   int ret = OB_SUCCESS;
   int16_t precision_or_length_semantics = accuracy.get_precision();
@@ -717,6 +802,10 @@ int ob_sql_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy,
   if (obj_meta.is_enum_or_set()) {
     if (OB_FAIL(ob_enum_or_set_str(obj_meta, type_info, buff, buff_length, pos))) {
       LOG_WARN("fail to get enum_or_set str", K(ret), K(obj_meta), K(accuracy), K(buff_length), K(pos));
+    }
+  } else if (obj_meta.is_geometry() && geo_type != common::ObGeoType::GEOMETRY) {
+    if (OB_FAIL(ob_geometry_sub_type_str(buff, buff_length, pos, geo_type))) {
+      LOG_WARN("fail to get geometry sub type str", K(ret), K(geo_type), K(buff), K(buff_length), K(pos));
     }
   } else {
     ObObjType datatype = obj_meta.get_type();
@@ -729,9 +818,9 @@ int ob_sql_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy,
       length = 0;
     }
     if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos,
-                                     datatype, length,
-                                     precision_or_length_semantics,
-                                     accuracy.get_scale(), coll_type))) {
+                                datatype, length,
+                                precision_or_length_semantics,
+                                accuracy.get_scale(), coll_type, geo_type))) {
       LOG_WARN("fail to print sql type", K(ret), K(obj_meta), K(accuracy));
     }
   }
@@ -766,6 +855,7 @@ const char *ob_sql_tc_str(ObObjTypeClass tc)
     "ROWID",
     "LOB",
     "JSON",
+    "GEOMETRY",
     ""
   };
   static_assert(sizeof(sql_tc_name) / sizeof(const char *) == ObMaxTC + 1, "Not enough initializer");

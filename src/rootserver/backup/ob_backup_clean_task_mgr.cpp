@@ -297,7 +297,7 @@ int ObBackupCleanTaskMgr::prepare_backup_clean_task_()
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_DELETE_MARK_DELETING) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_DELETE_MARK_DELETING) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) { 
   } else if (OB_FAIL(mark_backup_files_deleting_())) {

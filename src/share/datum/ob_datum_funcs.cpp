@@ -185,6 +185,12 @@ bool ObDatumFuncs::is_json(const ObObjType type)
   return (tc == ObJsonTC);
 }
 
+bool ObDatumFuncs::is_geometry(const ObObjType type)
+{
+  const ObObjTypeClass tc = OBJ_TYPE_TO_CLASS[type];
+  return (tc == ObGeometryTC);
+}
+
 OB_SERIALIZE_MEMBER(ObCmpFunc, ser_cmp_func_);
 OB_SERIALIZE_MEMBER(ObHashFunc, ser_hash_func_, ser_batch_hash_func_);
 

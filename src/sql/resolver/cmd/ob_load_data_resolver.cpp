@@ -814,6 +814,7 @@ int ObLoadDataResolver::build_column_ref_expr(ObQualifiedName &q_name, ObRawExpr
     column_item.table_id_ = col_expr->get_table_id();
     column_item.column_id_ = col_expr->get_column_id();
     column_item.column_name_ = col_expr->get_column_name();
+    column_item.is_geo_ = col_schema->is_geometry();
     if (OB_FAIL(load_stmt->add_column_item(column_item))) {
       LOG_WARN("add column item failed", K(ret));
     }

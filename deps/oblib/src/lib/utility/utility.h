@@ -29,7 +29,7 @@
 
 #define CPUID_STD_SSE4_2 0x00100000
 
-#define htonll(i) \
+#define ob_htonll(i) \
   ( \
     (((uint64_t)i & 0x00000000000000ff) << 56) | \
     (((uint64_t)i & 0x000000000000ff00) << 40) | \

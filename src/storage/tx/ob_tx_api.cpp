@@ -66,7 +66,7 @@ int ObTransService::acquire_tx(ObTxDesc *&tx, const uint32_t session_id)
 
   if (OB_SUCC(ret)) {
     ObTransTraceLog &tlog = tx->get_tlog();
-    REC_TRANS_TRACE_EXT(&tlog, acquire, Y(ret),
+    REC_TRANS_TRACE_EXT(&tlog, acquire, OB_Y(ret),
                         OB_ID(addr), (void*)tx,
                         OB_ID(session), session_id,
                         OB_ID(ref), tx->get_ref(),
@@ -124,7 +124,7 @@ int ObTransService::release_tx(ObTxDesc &tx)
     }
   } else {
     ObTransTraceLog &tlog = tx.get_tlog();
-    REC_TRANS_TRACE_EXT(&tlog, release, Y(ret),
+    REC_TRANS_TRACE_EXT(&tlog, release, OB_Y(ret),
                         OB_ID(ref), tx.get_ref(),
                         OB_ID(thread_id), GETTID());
     if (tx.flags_.SHADOW_) {
@@ -171,7 +171,7 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
   }
   TRANS_LOG(TRACE, "reuse tx", K(ret), K(orig_tx_id), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, reuse, Y(ret),
+  REC_TRANS_TRACE_EXT(&tlog, reuse, OB_Y(ret),
                       OB_ID(addr), (void*)&tx,
                       OB_ID(txid), orig_tx_id,
                       OB_ID(thread_id), GETTID());
@@ -227,7 +227,7 @@ int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param)
       tx.state_           = ObTxDesc::State::ACTIVE;
     }
     ObTransTraceLog &tlog = tx.get_tlog();
-    REC_TRANS_TRACE_EXT(&tlog, start_tx, Y(ret),
+    REC_TRANS_TRACE_EXT(&tlog, start_tx, OB_Y(ret),
                         OB_ID(txid), tx.tx_id_,
                         OB_ID(isolation_level), (int)tx.isolation_,
                         OB_ID(ref), tx.get_ref(),
@@ -286,7 +286,7 @@ int ObTransService::rollback_tx(ObTxDesc &tx)
   }
   TRANS_LOG(INFO, "rollback tx", K(ret), K(*this), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, rollback_tx, Y(ret),
+  REC_TRANS_TRACE_EXT(&tlog, rollback_tx, OB_Y(ret),
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
@@ -305,7 +305,7 @@ int ObTransService::abort_tx(ObTxDesc &tx, int cause)
     ret = abort_tx_(tx, cause);
   }
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, abort_tx, Y(ret),
+  REC_TRANS_TRACE_EXT(&tlog, abort_tx, OB_Y(ret),
                       OB_ID(arg), cause,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
@@ -352,7 +352,7 @@ int ObTransService::commit_tx(ObTxDesc &tx, const int64_t expire_ts, const ObStr
   }
 #endif
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, commit_tx, Y(ret), Y(expire_ts),
+  REC_TRANS_TRACE_EXT(&tlog, commit_tx, OB_Y(ret), OB_Y(expire_ts),
                       OB_ID(time_used), elapsed_us,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
@@ -503,7 +503,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
 #endif
   ObTransTraceLog &tlog = tx.get_tlog();
   const char *trace_info_str = (trace_info == NULL ? NULL : trace_info->ptr());
-  REC_TRANS_TRACE_EXT(&tlog, submit_commit_tx, Y(ret), Y(expire_ts),
+  REC_TRANS_TRACE_EXT(&tlog, submit_commit_tx, OB_Y(ret), OB_Y(expire_ts),
                       OB_ID(tag1), committed,
                       OB_ID(tag2), trace_info_str,
                       OB_ID(ref), tx.get_ref(),
@@ -575,7 +575,7 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
     snapshot.valid_ = true;
   }
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, get_read_snapshot, Y(ret), Y(expire_ts),
+  REC_TRANS_TRACE_EXT(&tlog, get_read_snapshot, OB_Y(ret), OB_Y(expire_ts),
                       OB_ID(isolation_level), (int)isolation,
                       OB_ID(snapshot_source), (int)snapshot.source_,
                       OB_ID(snapshot_version), snapshot.core_.version_,
@@ -637,7 +637,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
     ret = get_read_snapshot(tx, isolation, expire_ts, snapshot);
   }
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, get_ls_read_snapshot, Y(ret), Y(expire_ts),
+  REC_TRANS_TRACE_EXT(&tlog, get_ls_read_snapshot, OB_Y(ret), OB_Y(expire_ts),
                       OB_ID(ls_id), lsid.id(),
                       OB_ID(isolation_level), (int)isolation,
                       OB_ID(snapshot_source), (int)snapshot.source_,
@@ -715,7 +715,7 @@ int ObTransService::release_snapshot(ObTxDesc &tx)
   }
   TRANS_LOG(TRACE, "release snapshot", K(tx), K(snapshot));
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, release_snapshot, Y(ret), OB_ID(thread_id), GETTID());
+  REC_TRANS_TRACE_EXT(&tlog, release_snapshot, OB_Y(ret), OB_ID(thread_id), GETTID());
   return ret;
 }
 
@@ -735,7 +735,7 @@ int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
                   K(snapshot), KPC(tx));
       }
       ObTransTraceLog &tlog = tx->get_tlog();
-      REC_TRANS_TRACE_EXT(&tlog, register_snapshot, Y(ret),
+      REC_TRANS_TRACE_EXT(&tlog, register_snapshot, OB_Y(ret),
                           OB_ID(arg), (void*)&snapshot,
                           OB_ID(snapshot_version), snapshot.core_.version_,
                           OB_ID(snapshot_scn), snapshot.core_.scn_,
@@ -770,7 +770,7 @@ void ObTransService::unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
         }
       }
       ObTransTraceLog &tlog = tx->get_tlog();
-      REC_TRANS_TRACE_EXT(&tlog, unregister_snapshot, Y(ret),
+      REC_TRANS_TRACE_EXT(&tlog, unregister_snapshot, OB_Y(ret),
                           OB_ID(arg), (void*)&snapshot,
                           OB_ID(snapshot_version), snapshot.core_.version_,
                           OB_ID(snapshot_scn), snapshot.core_.scn_,
@@ -816,7 +816,7 @@ int ObTransService::create_local_implicit_savepoint_(ObTxDesc &tx,
   TRANS_LOG(TRACE, "create local implicit savepoint", K(ret), K(savepoint), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, create_local_implicit_savepoint,
-                      Y(ret), Y(savepoint), OB_ID(opid), tx.op_sn_,
+                      OB_Y(ret), OB_Y(savepoint), OB_ID(opid), tx.op_sn_,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
@@ -858,9 +858,9 @@ int ObTransService::create_global_implicit_savepoint_(ObTxDesc &tx,
     tx.add_implicit_savepoint(savepoint);
   }
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, create_global_implicit_savepoint, Y(ret),
+  REC_TRANS_TRACE_EXT(&tlog, create_global_implicit_savepoint, OB_Y(ret),
                       OB_ID(txid), tx.tx_id_,
-                      Y(savepoint), Y(release),
+                      OB_Y(savepoint), OB_Y(release),
                       OB_ID(opid), tx.op_sn_,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
@@ -948,7 +948,7 @@ int ObTransService::rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
 #endif
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, rollback_local_implicit_savepoint,
-                      Y(ret), Y(savepoint), Y(expire_ts),
+                      OB_Y(ret), OB_Y(savepoint), OB_Y(expire_ts),
                       OB_ID(time_used) , elapsed_us,
                       OB_ID(opid), tx.op_sn_,
                       OB_ID(ref), tx.get_ref(),
@@ -1051,7 +1051,7 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
 #endif
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, rollback_global_implicit_savepoint,
-                      Y(ret), Y(savepoint), Y(expire_ts),
+                      OB_Y(ret), OB_Y(savepoint), OB_Y(expire_ts),
                       OB_ID(time_used), elapsed_us,
                       OB_ID(arg), (void*)extra_touched_ls,
                       OB_ID(opid), tx.op_sn_,
@@ -1124,7 +1124,7 @@ int ObTransService::create_explicit_savepoint(ObTxDesc &tx, const ObString &save
   }
   TRANS_LOG(TRACE, "normal savepoint", K(ret), K(savepoint), K(scn), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, create_explicit_savepoint, Y(ret),
+  REC_TRANS_TRACE_EXT(&tlog, create_explicit_savepoint, OB_Y(ret),
                       OB_ID(savepoint), savepoint,
                       OB_ID(seq_no), scn,
                       OB_ID(opid), tx.op_sn_,
@@ -1188,7 +1188,7 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
   }
   auto elapsed_us = ObTimeUtility::current_time() - start_ts;
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, rollback_explicit_savepoint, Y(ret),
+  REC_TRANS_TRACE_EXT(&tlog, rollback_explicit_savepoint, OB_Y(ret),
                       OB_ID(id), savepoint,
                       OB_ID(savepoint), sp_scn,
                       OB_ID(time_used), elapsed_us,
@@ -1231,7 +1231,7 @@ int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &sav
     }
   }
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, release_explicit_savepoint, Y(ret),
+  REC_TRANS_TRACE_EXT(&tlog, release_explicit_savepoint, OB_Y(ret),
                       OB_ID(savepoint), savepoint,
                       OB_ID(seq_no), sp_id,
                       OB_ID(opid), tx.op_sn_);
@@ -1251,7 +1251,7 @@ int ObTransService::create_stash_savepoint(ObTxDesc &tx, const ObString &name)
     }
   }
   TRANS_LOG(TRACE, "create stash savepoint", K(ret), K(seq_no), K(name), K(tx));
-  REC_TRANS_TRACE_EXT(&tx.tlog_, create_stash_savepoint, Y(ret),
+  REC_TRANS_TRACE_EXT(&tx.tlog_, create_stash_savepoint, OB_Y(ret),
                       OB_ID(savepoint), name,
                       OB_ID(seq_no), seq_no,
                       OB_ID(opid), tx.op_sn_);
@@ -1456,8 +1456,8 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
             K_(tx.tx_id), K(start_ts), K(retries),
             K(savepoint), K(expire_ts), K(tx), K(parts.count()));
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, rollback_savepoint_slowpath, Y(ret),
-                      Y(savepoint), Y(expire_ts),
+  REC_TRANS_TRACE_EXT(&tlog, rollback_savepoint_slowpath, OB_Y(ret),
+                      OB_Y(savepoint), OB_Y(expire_ts),
                       OB_ID(retry_cnt), retries,
                       OB_ID(time_used), elapsed_us);
   return ret;
@@ -1531,7 +1531,7 @@ int ObTransService::merge_tx_state(ObTxDesc &to, const ObTxDesc &from)
   TRANS_LOG(TRACE, "merge_tx_state", K(to), K(from));
   int ret = to.merge_exec_info_with(from);
   ObTransTraceLog &tlog = to.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, merge_tx_state, Y(ret),
+  REC_TRANS_TRACE_EXT(&tlog, merge_tx_state, OB_Y(ret),
                       OB_ID(to), (void*)&to,
                       OB_ID(from), (void*)&from,
                       OB_ID(opid), to.op_sn_,
@@ -1635,7 +1635,7 @@ int ObTransService::start_epoch_(ObTxDesc &tx)
     TRANS_LOG(INFO, "tx start new epoch", K(ret), K(tx));
   }
   ObTransTraceLog &tlog = tx.get_tlog();
-  REC_TRANS_TRACE_EXT(&tlog, start_epoch, Y(ret), OB_ID(opid), tx.op_sn_);
+  REC_TRANS_TRACE_EXT(&tlog, start_epoch, OB_Y(ret), OB_ID(opid), tx.op_sn_);
   return ret;
 }
 

@@ -171,7 +171,16 @@ public:
 };
 
 /* =========== special upgrade processor start ============= */
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 1, 0, 0)
+class ObUpgradeFor4100Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4100Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4100Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+   int post_upgrade_for_srs();
+};
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

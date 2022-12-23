@@ -54,7 +54,6 @@ public:
   void reuse();
   void reset_for_switch();
   virtual void reset();
-
   ObAccessService::ObStoreCtxGuard &get_ctx_guard() { return ctx_guard_; }
 public:
   static constexpr int64_t RP_MAX_FREE_LIST_NUM = 1024;

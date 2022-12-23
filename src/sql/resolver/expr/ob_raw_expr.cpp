@@ -527,6 +527,88 @@ const ObRawExpr *ObRawExpr::get_same_identify(const ObRawExpr *e,
   return e;
 }
 
+bool ObRawExpr::is_spatial_expr() const
+{
+  const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
+  return IS_SPATIAL_OP(expr->get_expr_type());
+}
+
+bool ObRawExpr::is_geo_expr() const
+{
+  return IS_GEO_OP(get_expr_type());
+}
+
+bool ObRawExpr::is_mysql_geo_expr() const
+{
+  return IS_MYSQL_GEO_OP(get_expr_type());
+}
+
+bool ObRawExpr::is_priv_geo_expr() const
+{
+  return IS_PRIV_GEO_OP(get_expr_type());
+}
+
+ObGeoType ObRawExpr::get_geo_expr_result_type() const
+{
+  if (!is_geo_expr() && T_FUN_SYS_CAST != this->get_expr_type()) {
+    LOG_WARN("Expr is not a geo expr");
+    return ObGeoType::GEOTYPEMAX;
+  } else {
+    switch (this->get_expr_type()) {
+      case T_FUN_SYS_CAST: {
+        int ret = OB_SUCCESS;
+        ObGeoType geo_type = ObGeoType::GEOTYPEMAX;
+        if (OB_FAIL(get_geo_cast_result_type(geo_type))) {
+          LOG_WARN("could not get geo type from cast", K(ret));
+        }
+        return geo_type;
+      }
+      case T_FUN_SYS_POINT:
+        return ObGeoType::POINT;
+      case T_FUN_SYS_LINESTRING:
+        return ObGeoType::LINESTRING;
+      case T_FUN_SYS_MULTIPOINT:
+        return ObGeoType::MULTIPOINT;
+      case T_FUN_SYS_MULTILINESTRING:
+        return ObGeoType::MULTILINESTRING;
+      case T_FUN_SYS_POLYGON:
+        return ObGeoType::POLYGON;
+      case T_FUN_SYS_MULTIPOLYGON:
+        return ObGeoType::MULTIPOLYGON;
+      case T_FUN_SYS_GEOMCOLLECTION:
+        return ObGeoType::GEOMETRYCOLLECTION;
+      default:
+        return ObGeoType::GEOMETRY;
+    }
+  }
+}
+
+int ObRawExpr::get_geo_cast_result_type(ObGeoType& geo_type) const
+{
+  int ret = OB_SUCCESS;
+  if (T_FUN_SYS_CAST != get_expr_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should be cast expr", K(ret));
+  } else if (OB_ISNULL(get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cast second param expr is NULL", K(ret));
+  } else if (!get_param_expr(1)->is_const_expr()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cast second param expr is not const expr", K(ret));
+  } else {
+    const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(get_param_expr(1));
+    ObObj value = const_expr->get_value();
+    if (!value.is_int()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value of second param expr is not int", K(value), K(ret));
+    } else {
+      ParseNode parse_node;
+      parse_node.value_ = value.get_int();
+      geo_type = static_cast<ObGeoType>(parse_node.int16_values_[OB_NODE_CAST_GEO_TYPE_IDX]);
+    }
+  }
+  return ret;
+}
 
 bool ObRawExpr::same_as(const ObRawExpr &expr,
                         ObExprEqualCheckContext *check_context) const
@@ -3709,7 +3791,7 @@ int ObSysFunRawExpr::get_cast_type_name(char *buf, int64_t buf_len, int64_t &pos
             LOG_WARN("fail to BUF_PRINTF", K(ret));
           }
         }
-      } else if(ob_is_text_tc(dest_type)|| ob_is_json_tc(dest_type)) {
+      } else if(ob_is_text_tc(dest_type) || ob_is_json_tc(dest_type) || ob_is_geometry_tc(dest_type)) {
         // TODO@hanhui texttc should use default length
         length = ObAccuracy::DDL_DEFAULT_ACCURACY[dest_type].get_length();
         if (OB_FAIL(BUF_PRINTF("%s(%d)", type_str, length))) {

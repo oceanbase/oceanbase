@@ -1036,7 +1036,8 @@
     "from_alias_table":false,
     "is_rowkey_column":false,
     "is_unique_key_column":false,
-    "is_mul_key_column":false
+    "is_mul_key_column":false,
+    "srs_id":-1
   },
   "default": {
     "item_type":"T_VARCHAR",
@@ -1664,7 +1665,8 @@
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     }
   ],
   "distinct":false,
@@ -1758,7 +1760,8 @@
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_QUERY",
@@ -2010,7 +2013,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -2058,7 +2062,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     },
@@ -2353,7 +2358,8 @@
   "from_alias_table":false,
   "is_rowkey_column":false,
   "is_unique_key_column":false,
-  "is_mul_key_column":false
+  "is_mul_key_column":false,
+  "srs_id":-1
 }
 [21] 10+10
 {
@@ -2615,7 +2621,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -2663,7 +2670,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     },
@@ -2741,7 +2749,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -2789,7 +2798,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     }
@@ -2872,7 +2882,8 @@
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_INT",
@@ -2983,7 +2994,8 @@
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_INT",
@@ -3092,7 +3104,8 @@
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -3140,7 +3153,8 @@
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     }
   ]
 }
@@ -3223,7 +3237,8 @@
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_OP_ROW",
@@ -3484,7 +3499,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_INT",
@@ -3594,7 +3610,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_INT",
@@ -3798,7 +3815,8 @@
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     }
   ]
 }
@@ -3880,7 +3898,8 @@
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-1
     },
      {
       "item_type":"T_OP_ADD",
@@ -4083,7 +4102,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_OP_ADD",
@@ -4254,7 +4274,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_INT",
@@ -4490,7 +4511,8 @@
                   "from_alias_table":false,
                   "is_rowkey_column":false,
                   "is_unique_key_column":false,
-                  "is_mul_key_column":false
+                  "is_mul_key_column":false,
+                  "srs_id":-1
                 }
               ]
             },
@@ -4670,7 +4692,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_VARCHAR",
@@ -5112,7 +5135,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -5160,7 +5184,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_VARCHAR",
@@ -5303,7 +5328,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -5351,7 +5377,8 @@
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         }
       ]
     }

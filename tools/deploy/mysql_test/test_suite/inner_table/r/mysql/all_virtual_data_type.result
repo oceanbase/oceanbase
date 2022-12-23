@@ -49,6 +49,7 @@ data_type	data_type_str	data_type_class
 45	ROWID	20
 46	LOB	21
 47	JSON	22
+48	GEOMETRY	23
 select data_type, data_type_str, data_type_class from __all_virtual_data_type order by data_type;
 data_type	data_type_str	data_type_class
 0	NULL	0
@@ -99,6 +100,7 @@ data_type	data_type_str	data_type_class
 45	ROWID	20
 46	LOB	21
 47	JSON	22
+48	GEOMETRY	23
 select * from __all_virtual_data_type where data_type = 22;
 data_type	data_type_str	data_type_class
 22	VARCHAR	10
@@ -150,6 +152,7 @@ NCHAR	STRING
 ROWID	ROWID
 LOB	LOB
 JSON	JSON
+GEOMETRY	GEOMETRY
 show create table __all_virtual_data_type;
 Table	Create Table
 __all_virtual_data_type	CREATE TABLE `__all_virtual_data_type` (

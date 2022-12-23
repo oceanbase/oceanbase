@@ -224,7 +224,7 @@ int ObPartTransCtx::do_commit()
 int ObPartTransCtx::check_and_response_scheduler_(ObTxState next_phase, int result)
 {
   int ret = OB_SUCCESS;
-  ret = E(EventTable::EN_EARLY_RESPONSE_SCHEDULER) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_EARLY_RESPONSE_SCHEDULER) OB_SUCCESS;
   if (!is_sub2pc() && OB_FAIL(ret)) {
     // when error inject, response scheduler delayed to CLEAR state
     if (ObTxState::CLEAR == next_phase) {

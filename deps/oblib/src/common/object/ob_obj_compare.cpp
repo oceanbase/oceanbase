@@ -1246,8 +1246,8 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int cmp_ret = CR_OB_ERROR;                                                                  \
     int ret = OB_SUCCESS;                                                                       \
     int result = 0;                                                                             \
-    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                        \
-    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                        \
+    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                           \
+    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                           \
     ObIJsonBase *j_base1 = &j_bin1;                                                             \
     ObIJsonBase *j_base2 = &j_bin2;                                                             \
     if (OB_FAIL(j_bin1.reset_iter())) {                                                         \
@@ -1291,6 +1291,48 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     return result;                                                                              \
   }
 
+// geometrytc vs geometrytc
+#define DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(op, op_str)                                        \
+  template <> inline                                                                            \
+  int ObObjCmpFuncs::cmp_op_func<ObGeometryTC, ObGeometryTC, op>(const ObObj &obj1,             \
+                                                                 const ObObj &obj2,             \
+                                                                 const ObCompareCtx &cmp_ctx)   \
+  {                                                                                             \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObGeometryTC);                                                   \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObGeometryTC);                                                   \
+    UNUSED(cmp_ctx);                                                                            \
+    int cmp_ret = CR_OB_ERROR;                                                                  \
+    if (op == CO_EQ || op == CO_NE) {                                                           \
+      cmp_ret = static_cast<int>(ObCharset::strcmpsp(CS_TYPE_BINARY,                            \
+                                                     obj1.v_.string_, obj1.val_len_,            \
+                                                     obj2.v_.string_, obj2.val_len_,            \
+                                                     false)                                     \
+                                                     op_str 0);                                 \
+    }                                                                                           \
+    return cmp_ret;                                                                             \
+  }
+
+// There is no greater than and less than in geometry, if not equal then error
+#define DEFINE_CMP_FUNC_GEOMETRY_GEOMETRY()                                                     \
+  template <> inline                                                                            \
+  int ObObjCmpFuncs::cmp_func<ObGeometryTC, ObGeometryTC>(const ObObj &obj1,                    \
+                                                          const ObObj &obj2,                    \
+                                                          const ObCompareCtx &cmp_ctx)          \
+  {                                                                                             \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObGeometryTC);                                                   \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObGeometryTC);                                                   \
+    UNUSED(cmp_ctx);                                                                            \
+    int result = ObCharset::strcmpsp(CS_TYPE_BINARY, obj1.v_.string_, obj1.val_len_,            \
+                                     obj2.v_.string_, obj2.val_len_, false);                    \
+    if (0 == result) {                                                                          \
+      result = CR_EQ;                                                                           \
+    } else if (0 > result) {                                                                    \
+      result = CR_LT;                                                                           \
+    } else {                                                                                    \
+      result = CR_GT;                                                                           \
+    }                                                                                           \
+    return result;                                                                              \
+  }
 
 #define DEFINE_CMP_FUNC_ROWT_ROWT()                                            \
   template <>                                                                  \
@@ -1937,6 +1979,15 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
   DEFINE_CMP_OP_FUNC_JSON_JSON(CO_NE, !=); \
   DEFINE_CMP_FUNC_JSON_JSON()
 
+#define DEFINE_CMP_FUNCS_GEOMETRY_GEOMETRY() \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_EQ, ==); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_LE, <=); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_LT, < ); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_GE, >=); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_GT, > ); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_NE, !=); \
+  DEFINE_CMP_FUNC_GEOMETRY_GEOMETRY()
+
 #define DEFINE_CMP_FUNCS_STRING_TEXT() \
   DEFINE_CMP_OP_FUNC_STRING_TEXT(CO_EQ, ==); \
   DEFINE_CMP_OP_FUNC_STRING_TEXT(CO_LE, <=); \
@@ -2078,6 +2129,7 @@ DEFINE_CMP_FUNCS_STRING_TEXT();
 DEFINE_CMP_FUNCS_TEXT_STRING();
 DEFINE_CMP_FUNCS_LOB_LOB();
 DEFINE_CMP_FUNCS_JSON_JSON();
+DEFINE_CMP_FUNCS_GEOMETRY_GEOMETRY();
 
 DEFINE_CMP_FUNCS_ENUMSETINNER_INT();
 DEFINE_CMP_FUNCS_ENUMSETINNER_UINT();
@@ -2249,6 +2301,7 @@ DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObIntervalTC, ObIntervalTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObRowIDTC, ObRowIDTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObLobTC, ObLobTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObJsonTC, ObJsonTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObGeometryTC, ObGeometryTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObExtendTC)
 DEFINE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObExtendTC)
@@ -2281,6 +2334,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     DECLARE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC),//rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // int
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2306,6 +2360,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // uint
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2331,6 +2386,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // float
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2356,6 +2412,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // double
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2381,6 +2438,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // number
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2406,6 +2464,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // datetime
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2431,6 +2490,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // date
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2456,6 +2516,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL,  // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // time
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2481,6 +2542,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // year
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2506,6 +2568,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // string
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2531,6 +2594,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // extend
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObExtendTC),
@@ -2556,6 +2620,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObExtendTC, ObMaxTC, ObExtendTC, ObMaxTC), // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // unknown
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2581,6 +2646,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // text
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2606,6 +2672,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // bit
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2631,6 +2698,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { //enumset
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2656,6 +2724,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { //enumsetInner
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2681,6 +2750,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // otimestamp
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2706,6 +2776,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // raw
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2731,6 +2802,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // rowid
    NULL, // lob
    NULL, // json
+   NULL, // geometry
   },
   { // interval
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2756,6 +2828,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // rowid
    NULL, // lob
    NULL, // json
+   NULL, // geometry
   },
   { // rowid
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2781,6 +2854,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObRowIDTC, ObRowIDTC, ObMaxTC, ObMaxTC), // rowid
    NULL, // lob
    NULL, // json
+   NULL, // geometry
   },
   { // lob
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2806,6 +2880,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObLobTC, ObLobTC, ObMaxTC, ObMaxTC), // lob
     NULL, // json
+    NULL, // geometry
   },
   { // json
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2831,6 +2906,33 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObJsonTC, ObJsonTC, ObMaxTC, ObMaxTC), // json
+    NULL, // geometry
+  },
+  { // geometry
+    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
+    NULL,  // int
+    NULL,  // uint
+    NULL,  // float
+    NULL,  // double
+    NULL,  // number
+    NULL,  // datetime
+    NULL,  // date
+    NULL,  // time
+    NULL,  // year
+    NULL,  // string
+    NULL,  // extend
+    NULL,  // unknown
+    NULL,  // text
+    NULL,  // bit
+    NULL,  // enumset
+    NULL,  //enumsetInner will not go here
+    NULL, // otimestamp
+    NULL, // raw
+    NULL, // interval
+    NULL, // rowid
+    NULL, // lob
+    NULL, // json
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObGeometryTC, ObGeometryTC, ObMaxTC, ObMaxTC), // geometry
   },
 };
 
@@ -2860,6 +2962,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//rowid
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//lob
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//json
+    DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//geometry
   },
   { // int
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2885,6 +2988,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // uint
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2910,6 +3014,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // float
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2935,6 +3040,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // double
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2960,6 +3066,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // number
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2985,6 +3092,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // datetime
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3010,6 +3118,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // date
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3035,6 +3144,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // time
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3060,6 +3170,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // year
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3085,6 +3196,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // string
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3110,6 +3222,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // extend
     DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObNullTC),
@@ -3135,6 +3248,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObMaxTC),//rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // unknown
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3160,6 +3274,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // text
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3185,6 +3300,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // bit
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3210,6 +3326,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { //enumset
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3235,6 +3352,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { //enumsetInner
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3260,6 +3378,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // otimestamp
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3285,6 +3404,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // raw
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3310,6 +3430,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // interval
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3335,6 +3456,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // rowid
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3360,6 +3482,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObRowIDTC, ObRowIDTC),  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // lob
     DEFINE_CMP_FUNCS_ENTRY_NULL, //null
@@ -3385,6 +3508,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // json
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3410,6 +3534,33 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY(ObJsonTC, ObJsonTC),  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
+  },
+  { // geometry
+    DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // int
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // uint
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // float
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // double
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // number
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // datetime
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // date
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // time
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // year
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // string
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //extend
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // unknown
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // text
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // bit
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // enumset
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // enumsetInner will not go here
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // otimestamp
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // raw
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // interval
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY(ObGeometryTC, ObGeometryTC),  //geometry
   },
 };
 

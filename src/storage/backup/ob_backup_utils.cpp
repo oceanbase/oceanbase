@@ -189,7 +189,7 @@ int ObBackupUtils::report_task_result(const int64_t job_id, const int64_t task_i
   backup_ls_res.trace_id_ = trace_id;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_META_REPORT_RESULT_FAILED) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_META_REPORT_RESULT_FAILED) OB_SUCCESS;
   if (OB_FAIL(ret)) {
     SERVER_EVENT_SYNC_ADD("backup_errsim", "before report task result");
     LOG_WARN("errsim backup meta task failed", K(ret), K(backup_ls_res));
@@ -2008,7 +2008,7 @@ int ObBackupTabletProvider::check_tablet_continuity_(const share::ObLSID &ls_id,
   if (OB_SUCC(ret)) {
     const int64_t errsim_tablet_id = GCONF.errsim_backup_tablet_id;
     if (errsim_tablet_id == tablet_id.id() && backup_data_type_.is_major_backup() && 0 == param_.retry_id_) {
-      ret = E(EventTable::EN_BACKUP_CHECK_TABLET_CONTINUITY_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_CHECK_TABLET_CONTINUITY_FAILED) OB_SUCCESS;
       FLOG_WARN("errsim backup check tablet continuity", K(ret), K(ls_id), K(tablet_id));
       SERVER_EVENT_SYNC_ADD("backup_errsim", "check_tablet_continuity",
                             "ls_id", ls_id.id(), "tablet_id", tablet_id.id());

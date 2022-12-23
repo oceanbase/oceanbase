@@ -1320,6 +1320,7 @@ int ObSchemaRetrieveUtils::fill_column_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, comment, column);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, column_flags, column, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, prev_column_id, column, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, UINT64_MAX);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, srs_id, column, uint64_t, true, true, OB_DEFAULT_COLUMN_SRS_ID);
 
     common::ColumnType default_type = column.get_data_type();
     if (column.is_generated_column() || column.is_identity_column()) {

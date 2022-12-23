@@ -372,7 +372,7 @@ void ObjectSet::free_object(AObject *obj)
   abort_unless(obj->in_use_);
 
 #ifdef ERRSIM
-  if (0 != (E(EventTable::EN_RESET_FREE_MEMORY) 0)) {
+  if (0 != (OB_E(EventTable::EN_RESET_FREE_MEMORY) 0)) {
     memset(obj->data_, 0xAA, obj->alloc_bytes_);
   }
 #endif

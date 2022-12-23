@@ -950,7 +950,7 @@ int ObRARowStore::write_file(BlockIndex &bi, void *buf, int64_t size)
         LOG_INFO("open file success", K_(fd), K_(dir_id));
       }
     }
-    ret = E(EventTable::EN_8) ret;
+    ret = OB_E(EventTable::EN_8) ret;
   }
   if (OB_SUCC(ret) && size > 0) {
     blocksstable::ObTmpFileIOInfo io;

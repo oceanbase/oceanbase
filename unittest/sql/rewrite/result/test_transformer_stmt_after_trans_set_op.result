@@ -101,7 +101,8 @@ SQL: select c1 from t1 union select c2 from t2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -155,7 +156,8 @@ SQL: select c1 from t1 union select c2 from t2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -384,7 +386,8 @@ SQL: select c1 from t1 union select c2 from t2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -438,7 +441,8 @@ SQL: select c1 from t1 union select c2 from t2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -668,7 +672,8 @@ SQL: select c1 from t1 union select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -722,7 +727,8 @@ SQL: select c1 from t1 union select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -980,7 +986,8 @@ SQL: select c1 from t1 union select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -1034,7 +1041,8 @@ SQL: select c1 from t1 union select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -1322,7 +1330,8 @@ SQL: select c1 from t1 minus select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -1376,7 +1385,8 @@ SQL: select c1 from t1 minus select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -1605,7 +1615,8 @@ SQL: select c1 from t1 minus select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -1659,7 +1670,8 @@ SQL: select c1 from t1 minus select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -1918,7 +1930,8 @@ SQL: select c1 from t1 limit 2 union select c2 from t2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -1972,7 +1985,8 @@ SQL: select c1 from t1 limit 2 union select c2 from t2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -2230,7 +2244,8 @@ SQL: select c1 from t1 limit 2 union select c2 from t2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -2284,7 +2299,8 @@ SQL: select c1 from t1 limit 2 union select c2 from t2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -2514,7 +2530,8 @@ SQL: select c1 from t1 union all select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -2568,7 +2585,8 @@ SQL: select c1 from t1 union all select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -2826,7 +2844,8 @@ SQL: select c1 from t1 union all select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -2880,7 +2899,8 @@ SQL: select c1 from t1 union all select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -3168,7 +3188,8 @@ SQL: select c1 from t1 limit 5 union all select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -3222,7 +3243,8 @@ SQL: select c1 from t1 limit 5 union all select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -3480,7 +3502,8 @@ SQL: select c1 from t1 limit 5 union all select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -3534,7 +3557,8 @@ SQL: select c1 from t1 limit 5 union all select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -3822,7 +3846,8 @@ SQL: select c1 from t1 intersect select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -3876,7 +3901,8 @@ SQL: select c1 from t1 intersect select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -4105,7 +4131,8 @@ SQL: select c1 from t1 intersect select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -4159,7 +4186,8 @@ SQL: select c1 from t1 intersect select c2 from t2 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -4418,7 +4446,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -4472,7 +4501,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -4701,7 +4731,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -4755,7 +4786,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -5020,7 +5052,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -5074,7 +5107,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -5163,7 +5197,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "ascending":"NULLs_first_asc"
         }
@@ -5385,7 +5420,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -5439,7 +5475,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -5528,7 +5565,8 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "ascending":"NULLs_first_asc"
         }
@@ -5815,7 +5853,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         },
          {
@@ -5876,7 +5915,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -5930,7 +5970,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -5995,7 +6036,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -6084,7 +6126,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "ascending":"NULLs_first_asc"
         }
@@ -6245,7 +6288,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         },
          {
@@ -6306,7 +6350,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -6360,7 +6405,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -6425,7 +6471,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -6514,7 +6561,8 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "ascending":"NULLs_first_asc"
         }
@@ -6848,7 +6896,8 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         },
          {
@@ -6909,7 +6958,8 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -6963,7 +7013,8 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -7028,7 +7079,8 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -7225,7 +7277,8 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         },
          {
@@ -7286,7 +7339,8 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -7340,7 +7394,8 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -7405,7 +7460,8 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -7494,7 +7550,8 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "ascending":"NULLs_first_asc"
         }
@@ -7828,7 +7885,8 @@ SQL: select c1 from t1 minus select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -7882,7 +7940,8 @@ SQL: select c1 from t1 minus select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -8111,7 +8170,8 @@ SQL: select c1 from t1 minus select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -8165,7 +8225,8 @@ SQL: select c1 from t1 minus select c2 from t2 order by c1 limit 2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -8475,7 +8536,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           }
                         }
                       ],
@@ -8529,7 +8591,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "is_alias":false,
                           "alias_name":"c1",
@@ -8722,7 +8785,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                                 "from_alias_table":false,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               }
                             }
                           ],
@@ -8776,7 +8840,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                                 "from_alias_table":false,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               },
                               "is_alias":true,
                               "alias_name":"c1",
@@ -8948,7 +9013,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           }
                         }
                       ],
@@ -9002,7 +9068,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "is_alias":false,
                           "alias_name":"c1",
@@ -9195,7 +9262,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                                 "from_alias_table":true,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               }
                             }
                           ],
@@ -9249,7 +9317,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                                 "from_alias_table":true,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               },
                               "is_alias":true,
                               "alias_name":"c1",
@@ -9506,7 +9575,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                         "from_alias_table":false,
                         "is_rowkey_column":false,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-1
                       }
                     }
                   ],
@@ -9560,7 +9630,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                         "from_alias_table":false,
                         "is_rowkey_column":false,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-1
                       },
                       "is_alias":false,
                       "alias_name":"c1",
@@ -9753,7 +9824,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                             "from_alias_table":true,
                             "is_rowkey_column":true,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-32
                           }
                         }
                       ],
@@ -9807,7 +9879,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                             "from_alias_table":true,
                             "is_rowkey_column":true,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-32
                           },
                           "is_alias":true,
                           "alias_name":"c1",
@@ -10064,7 +10137,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                     "from_alias_table":false,
                     "is_rowkey_column":false,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-1
                   }
                 }
               ],
@@ -10118,7 +10192,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                     "from_alias_table":false,
                     "is_rowkey_column":false,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-1
                   },
                   "is_alias":false,
                   "alias_name":"c1",
@@ -10311,7 +10386,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                         "from_alias_table":true,
                         "is_rowkey_column":true,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-32
                       }
                     }
                   ],
@@ -10365,7 +10441,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                         "from_alias_table":true,
                         "is_rowkey_column":true,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-32
                       },
                       "is_alias":true,
                       "alias_name":"c1",
@@ -10622,7 +10699,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               }
             }
           ],
@@ -10676,7 +10754,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               },
               "is_alias":false,
               "alias_name":"c1",
@@ -10869,7 +10948,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   }
                 }
               ],
@@ -10923,7 +11003,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   },
                   "is_alias":true,
                   "alias_name":"c1",
@@ -11180,7 +11261,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-1
           }
         }
       ],
@@ -11234,7 +11316,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-1
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -11323,7 +11406,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-1
           },
           "ascending":"NULLs_first_asc"
         }
@@ -11480,7 +11564,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                 "from_alias_table":true,
                 "is_rowkey_column":true,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               }
             }
           ],
@@ -11534,7 +11619,8 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                 "from_alias_table":true,
                 "is_rowkey_column":true,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
               "is_alias":true,
               "alias_name":"c1",
@@ -11848,7 +11934,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           }
                         }
                       ],
@@ -11902,7 +11989,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "is_alias":false,
                           "alias_name":"c1",
@@ -11991,7 +12079,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "ascending":"NULLs_first_asc"
                         }
@@ -12148,7 +12237,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                                 "from_alias_table":false,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               }
                             }
                           ],
@@ -12202,7 +12292,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                                 "from_alias_table":false,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               },
                               "is_alias":true,
                               "alias_name":"c1",
@@ -12374,7 +12465,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           }
                         }
                       ],
@@ -12428,7 +12520,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "is_alias":false,
                           "alias_name":"c1",
@@ -12517,7 +12610,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "ascending":"NULLs_first_asc"
                         }
@@ -12674,7 +12768,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                                 "from_alias_table":true,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               }
                             }
                           ],
@@ -12728,7 +12823,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                                 "from_alias_table":true,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               },
                               "is_alias":true,
                               "alias_name":"c1",
@@ -13020,7 +13116,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                         "from_alias_table":false,
                         "is_rowkey_column":false,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-1
                       }
                     }
                   ],
@@ -13074,7 +13171,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                         "from_alias_table":false,
                         "is_rowkey_column":false,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-1
                       },
                       "is_alias":false,
                       "alias_name":"c1",
@@ -13163,7 +13261,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                         "from_alias_table":false,
                         "is_rowkey_column":false,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-1
                       },
                       "ascending":"NULLs_first_asc"
                     }
@@ -13320,7 +13419,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                             "from_alias_table":true,
                             "is_rowkey_column":true,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-32
                           }
                         }
                       ],
@@ -13374,7 +13474,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                             "from_alias_table":true,
                             "is_rowkey_column":true,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-32
                           },
                           "is_alias":true,
                           "alias_name":"c1",
@@ -13666,7 +13767,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                     "from_alias_table":false,
                     "is_rowkey_column":false,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-1
                   }
                 }
               ],
@@ -13720,7 +13822,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                     "from_alias_table":false,
                     "is_rowkey_column":false,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-1
                   },
                   "is_alias":false,
                   "alias_name":"c1",
@@ -13809,7 +13912,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                     "from_alias_table":false,
                     "is_rowkey_column":false,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-1
                   },
                   "ascending":"NULLs_first_asc"
                 }
@@ -13966,7 +14070,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                         "from_alias_table":true,
                         "is_rowkey_column":true,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-32
                       }
                     }
                   ],
@@ -14020,7 +14125,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                         "from_alias_table":true,
                         "is_rowkey_column":true,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-32
                       },
                       "is_alias":true,
                       "alias_name":"c1",
@@ -14312,7 +14418,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               }
             }
           ],
@@ -14366,7 +14473,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               },
               "is_alias":false,
               "alias_name":"c1",
@@ -14455,7 +14563,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               },
               "ascending":"NULLs_first_asc"
             }
@@ -14612,7 +14721,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   }
                 }
               ],
@@ -14666,7 +14776,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   },
                   "is_alias":true,
                   "alias_name":"c1",
@@ -14958,7 +15069,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-1
           }
         }
       ],
@@ -15012,7 +15124,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-1
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -15101,7 +15214,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-1
           },
           "ascending":"NULLs_first_asc"
         }
@@ -15258,7 +15372,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                 "from_alias_table":true,
                 "is_rowkey_column":true,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               }
             }
           ],
@@ -15312,7 +15427,8 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                 "from_alias_table":true,
                 "is_rowkey_column":true,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
               "is_alias":true,
               "alias_name":"c1",
@@ -15626,7 +15742,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           }
                         }
                       ],
@@ -15680,7 +15797,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "is_alias":false,
                           "alias_name":"c1",
@@ -15769,7 +15887,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "ascending":"NULLs_first_asc"
                         }
@@ -15926,7 +16045,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                                 "from_alias_table":false,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               }
                             }
                           ],
@@ -15980,7 +16100,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                                 "from_alias_table":false,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               },
                               "is_alias":true,
                               "alias_name":"c1",
@@ -16152,7 +16273,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           }
                         }
                       ],
@@ -16206,7 +16328,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "is_alias":false,
                           "alias_name":"c1",
@@ -16295,7 +16418,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                             "from_alias_table":false,
                             "is_rowkey_column":false,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-1
                           },
                           "ascending":"NULLs_first_asc"
                         }
@@ -16452,7 +16576,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                                 "from_alias_table":true,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               }
                             }
                           ],
@@ -16506,7 +16631,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                                 "from_alias_table":true,
                                 "is_rowkey_column":true,
                                 "is_unique_key_column":false,
-                                "is_mul_key_column":false
+                                "is_mul_key_column":false,
+                                "srs_id":-32
                               },
                               "is_alias":true,
                               "alias_name":"c1",
@@ -16798,7 +16924,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                         "from_alias_table":false,
                         "is_rowkey_column":false,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-1
                       }
                     }
                   ],
@@ -16852,7 +16979,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                         "from_alias_table":false,
                         "is_rowkey_column":false,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-1
                       },
                       "is_alias":false,
                       "alias_name":"c1",
@@ -16941,7 +17069,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                         "from_alias_table":false,
                         "is_rowkey_column":false,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-1
                       },
                       "ascending":"NULLs_first_asc"
                     }
@@ -17098,7 +17227,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                             "from_alias_table":true,
                             "is_rowkey_column":true,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-32
                           }
                         }
                       ],
@@ -17152,7 +17282,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                             "from_alias_table":true,
                             "is_rowkey_column":true,
                             "is_unique_key_column":false,
-                            "is_mul_key_column":false
+                            "is_mul_key_column":false,
+                            "srs_id":-32
                           },
                           "is_alias":true,
                           "alias_name":"c1",
@@ -17444,7 +17575,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                     "from_alias_table":false,
                     "is_rowkey_column":false,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-1
                   }
                 }
               ],
@@ -17498,7 +17630,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                     "from_alias_table":false,
                     "is_rowkey_column":false,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-1
                   },
                   "is_alias":false,
                   "alias_name":"c1",
@@ -17587,7 +17720,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                     "from_alias_table":false,
                     "is_rowkey_column":false,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-1
                   },
                   "ascending":"NULLs_first_asc"
                 }
@@ -17744,7 +17878,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                         "from_alias_table":true,
                         "is_rowkey_column":true,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-32
                       }
                     }
                   ],
@@ -17798,7 +17933,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                         "from_alias_table":true,
                         "is_rowkey_column":true,
                         "is_unique_key_column":false,
-                        "is_mul_key_column":false
+                        "is_mul_key_column":false,
+                        "srs_id":-32
                       },
                       "is_alias":true,
                       "alias_name":"c1",
@@ -18090,7 +18226,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               }
             }
           ],
@@ -18144,7 +18281,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               },
               "is_alias":false,
               "alias_name":"c1",
@@ -18233,7 +18371,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               },
               "ascending":"NULLs_first_asc"
             }
@@ -18390,7 +18529,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   }
                 }
               ],
@@ -18444,7 +18584,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   },
                   "is_alias":true,
                   "alias_name":"c1",
@@ -18736,7 +18877,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-1
           }
         }
       ],
@@ -18790,7 +18932,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-1
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -18879,7 +19022,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-1
           },
           "ascending":"NULLs_first_asc"
         }
@@ -19036,7 +19180,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                 "from_alias_table":true,
                 "is_rowkey_column":true,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               }
             }
           ],
@@ -19090,7 +19235,8 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                 "from_alias_table":true,
                 "is_rowkey_column":true,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
               "is_alias":true,
               "alias_name":"c1",
@@ -19453,7 +19599,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               }
             }
           ],
@@ -19507,7 +19654,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
               "is_alias":false,
               "alias_name":"c2",
@@ -19675,7 +19823,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               }
             }
           ],
@@ -19729,7 +19878,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               },
               "is_alias":false,
               "alias_name":"c1",
@@ -19893,7 +20043,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   }
                 }
               ],
@@ -19947,7 +20098,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   },
                   "is_alias":true,
                   "alias_name":"c1",
@@ -20243,7 +20395,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                 "from_alias_table":true,
                 "is_rowkey_column":true,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               }
             }
           ],
@@ -20297,7 +20450,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                 "from_alias_table":true,
                 "is_rowkey_column":true,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
               "is_alias":false,
               "alias_name":"c1",
@@ -20465,7 +20619,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               }
             }
           ],
@@ -20519,7 +20674,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-1
               },
               "is_alias":false,
               "alias_name":"c1",
@@ -20683,7 +20839,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   }
                 }
               ],
@@ -20737,7 +20894,8 @@ SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 
                     "from_alias_table":true,
                     "is_rowkey_column":true,
                     "is_unique_key_column":false,
-                    "is_mul_key_column":false
+                    "is_mul_key_column":false,
+                    "srs_id":-32
                   },
                   "is_alias":true,
                   "alias_name":"c1",

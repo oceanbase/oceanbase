@@ -535,7 +535,8 @@ bool ObSimpleTableSchemaV2::is_valid() const
       if (OB_INVALID_ID == data_table_id_) {
         ret = false;
         LOG_WARN("invalid data table_id", K(ret), K(data_table_id_));
-      } else if (is_index_table() && !is_normal_index() && !is_unique_index() && !is_domain_index()) {
+      } else if (is_index_table() && !is_normal_index() && !is_unique_index()
+          && !is_domain_index() && !is_spatial_index()) {
         ret = false;
         LOG_WARN("table_type is not consistent with index_type",
             "table_type", static_cast<int64_t>(table_type_),
@@ -1500,7 +1501,8 @@ bool ObTableSchema::is_valid() const
                   rowkey_varchar_col_length += column->get_data_length();
                 }
               }
-            } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())) {
+            } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
+                       || ob_is_geometry_tc(column->get_data_type())) {
               ObLength max_length = 0;
               max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
               if (max_length < column->get_data_length()) {
@@ -4362,6 +4364,22 @@ int ObTableSchema::check_column_can_be_altered_online(
                  "src", src_schema->get_data_type(),
                  "dst", dst_schema->get_data_type(),
                  K(ret));
+      } else if (ob_is_geometry(src_schema->get_data_type())
+                 && src_schema->get_geo_type() != dst_schema->get_geo_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry type");
+        LOG_WARN("can't not modify geometry type",
+                 "src", src_schema->get_geo_type(),
+                 "dst", dst_schema->get_geo_type(),
+                 K(ret));
+      } else if (ob_is_geometry(src_schema->get_data_type())
+                 && src_schema->get_srid() != dst_schema->get_srid()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
+        LOG_WARN("can't not modify geometry srid",
+                 "src", src_schema->get_srid(),
+                 "dst", dst_schema->get_srid(),
+                 K(ret));
       } else {
         tmp_column = get_column_schema(dst_schema->get_column_name());
         if ((NULL != tmp_column) && (tmp_column != src_schema)) {
@@ -4498,7 +4516,8 @@ int ObTableSchema::check_rowkey_column_can_be_altered(const ObColumnSchemaV2 *sr
                  K(rowkey_varchar_col_length), K(max_rowkey_length), K(ret));
       }
     } else if (ObTextTC == dst_schema->get_data_type_class()
-               || ObJsonTC == dst_schema->get_data_type_class()) {
+               || ObJsonTC == dst_schema->get_data_type_class()
+               || ObGeometryTC == dst_schema->get_data_type_class()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify rowkey column to text/clob/blob");
     }
@@ -4529,7 +4548,8 @@ int ObTableSchema::check_row_length(
       } else if (is_storage_index_table() && col->is_fulltext_column()) {
         // The full text column in the index only counts the length of one word segment
         row_length += OB_MAX_OBJECT_NAME_LENGTH;
-      } else if (ob_is_string_type(col->get_data_type()) || ob_is_json(col->get_data_type())) {
+      } else if (ob_is_string_type(col->get_data_type()) || ob_is_json(col->get_data_type())
+                 || ob_is_geometry(col->get_data_type())) {
         int64_t length = 0;
         if (OB_FAIL(col->get_byte_length(length, is_oracle_mode, true))) {
           SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret));
@@ -4678,7 +4698,8 @@ int ObTableSchema::has_lob_column(bool &has_lob, const bool check_large /*= fals
     if (OB_ISNULL(column_schema = *iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Column schema is NULL", K(ret));
-    } else if (ob_is_json_tc(column_schema->get_data_type())) {
+    } else if (ob_is_json_tc(column_schema->get_data_type())
+               || ob_is_geometry_tc(column_schema->get_data_type())) {
       has_lob = true; // cannot know whether a json is lob or not from schema
     } else if (check_large) {
       if (ob_is_large_text(column_schema->get_data_type())) {
@@ -6898,6 +6919,22 @@ int ObTableSchema::init_column_meta_array(
   return ret;
 }
 
+int ObTableSchema::get_spatial_geo_column_id(uint64_t &geo_column_id) const
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *cellid_column = NULL;
+  uint64_t cellid_column_id = UINT64_MAX;
+  if (OB_FAIL(get_index_info().get_spatial_cellid_col_id(cellid_column_id))) {
+    LOG_WARN("fail to get cellid column id", K(ret), K(get_index_info()));
+  } else if (OB_ISNULL(cellid_column = get_column_schema(cellid_column_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get cellid column", K(ret), K(cellid_column_id));
+  } else {
+    geo_column_id = cellid_column->get_geo_col_id();
+  }
+  return ret;
+}
+
 int ObTableSchema::check_has_local_index(ObSchemaGetterGuard &schema_guard, bool &has_local_index) const
 {
   int ret = OB_SUCCESS;
@@ -6920,6 +6957,22 @@ int ObTableSchema::check_has_local_index(ObSchemaGetterGuard &schema_guard, bool
       has_local_index = true;
       break;
     }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_spatial_index_column_ids(common::ObIArray<uint64_t> &column_ids) const
+{
+  // spatial index is a kind of domain index
+  // other types of domain indexes or gin index may have more than one column
+  int ret = OB_SUCCESS;
+  uint64_t geo_column_id = UINT64_MAX;
+  if (OB_FAIL(get_spatial_geo_column_id(geo_column_id))) {
+    LOG_WARN("fail to get spatial geo column id", K(ret));
+  } else if (OB_FAIL(column_ids.push_back(geo_column_id))) {
+    LOG_WARN("fail to push back geo column id", K(ret), K(geo_column_id));
+  } else {
+    // do nothing
   }
   return ret;
 }

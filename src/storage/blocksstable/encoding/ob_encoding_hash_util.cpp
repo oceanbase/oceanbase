@@ -117,7 +117,7 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
   } else {
     ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
     const bool need_binary_hash =
-        (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC);
+        (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC || store_class == ObGeometrySC);
     sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
         col_desc.col_type_.get_type(), col_desc.col_type_.get_collation_type());
     ObHashFunc hash_func;
@@ -341,7 +341,8 @@ int build_column_encoding_ctx(ObEncodingHashTable *ht,
       }
       case ObStringSC:
       case ObTextSC:
-      case ObJsonSC: { // json and text storage class have the same behavior currently
+      case ObJsonSC:
+      case ObGeometrySC: { // geometry, json and text storage class have the same behavior currently
         col_ctx.fix_data_size_ = -1;
         col_ctx.max_string_size_ = -1;
         bool var_store = false;

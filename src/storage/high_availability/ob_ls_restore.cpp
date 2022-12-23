@@ -248,7 +248,7 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_RESTORE_LS_INIT_PARAM_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_RESTORE_LS_INIT_PARAM_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       LOG_WARN("init ls restore dag param failed", K(ret));
     }

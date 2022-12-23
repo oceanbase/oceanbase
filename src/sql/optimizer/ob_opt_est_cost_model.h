@@ -107,6 +107,7 @@ struct ObIndexMetaInfo
       is_index_back_(false),
       is_unique_index_(false),
       is_global_index_(false),
+      is_geo_index_(false),
       index_micro_block_count_(-1)
   { }
   virtual ~ObIndexMetaInfo()
@@ -126,6 +127,7 @@ struct ObIndexMetaInfo
   bool is_index_back_; // is index back
   bool is_unique_index_; // is unique index
   bool is_global_index_; // whether is global index
+  bool is_geo_index_; // whether is spatial index
   int64_t index_micro_block_count_;  // micro block count from table static info
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMetaInfo);
@@ -603,6 +605,7 @@ public:
     const double DEFAULT_CMP_INT_COST,
     const double DEFAULT_CMP_NUMBER_COST,
     const double DEFAULT_CMP_CHAR_COST,
+    const double DEFAULT_CMP_GEO_COST,
     const double INVALID_CMP_COST,
     const double DEFAULT_HASH_INT_COST,
     const double DEFAULT_HASH_NUMBER_COST,
@@ -635,7 +638,8 @@ public:
     const double DEFAULT_UPDATE_CHECK_PER_ROW_COST,
     const double DEFAULT_DELETE_PER_ROW_COST,
     const double DEFAULT_DELETE_INDEX_PER_ROW_COST,
-    const double DEFAULT_DELETE_CHECK_PER_ROW_COST
+    const double DEFAULT_DELETE_CHECK_PER_ROW_COST,
+    const double DEFAULT_SPATIAL_PER_ROW_COST
     )
     : CPU_TUPLE_COST(DEFAULT_CPU_TUPLE_COST),
       TABLE_SCAN_CPU_TUPLE_COST(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST),
@@ -652,6 +656,7 @@ public:
       CMP_INT_COST(DEFAULT_CMP_INT_COST),
       CMP_NUMBER_COST(DEFAULT_CMP_NUMBER_COST),
       CMP_CHAR_COST(DEFAULT_CMP_CHAR_COST),
+      CMP_SPATIAL_COST(DEFAULT_CMP_GEO_COST),
       HASH_DEFAULT_COST(DEFAULT_HASH_INT_COST),
       HASH_INT_COST(DEFAULT_HASH_INT_COST),
       HASH_NUMBER_COST(DEFAULT_HASH_NUMBER_COST),
@@ -683,7 +688,8 @@ public:
       UPDATE_CHECK_PER_ROW_COST(DEFAULT_UPDATE_CHECK_PER_ROW_COST),
       DELETE_PER_ROW_COST(DEFAULT_DELETE_PER_ROW_COST),
       DELETE_INDEX_PER_ROW_COST(DEFAULT_DELETE_INDEX_PER_ROW_COST),
-      DELETE_CHECK_PER_ROW_COST(DEFAULT_DELETE_CHECK_PER_ROW_COST)
+      DELETE_CHECK_PER_ROW_COST(DEFAULT_DELETE_CHECK_PER_ROW_COST),
+      SPATIAL_PER_ROW_COST(DEFAULT_SPATIAL_PER_ROW_COST)
     {}
     /** 读取一行的CPU开销，基本上只包括get_next_row()操作 */
     double CPU_TUPLE_COST;
@@ -715,6 +721,8 @@ public:
     double CMP_NUMBER_COST;
     /** 比较一次字符串的代价 */
     double CMP_CHAR_COST;
+    /** 比较一次空间数据的代价 */
+    double CMP_SPATIAL_COST;
     /** 对于无法获取数据类型的情况，默认的hash代价 */
     double HASH_DEFAULT_COST;
     /** 计算一个整型变量的hash值的代价 */
@@ -777,6 +785,8 @@ public:
     double DELETE_INDEX_PER_ROW_COST;
     //delete单个约束检查代价
     double DELETE_CHECK_PER_ROW_COST;
+    //空间索引扫描的线性参数
+    double SPATIAL_PER_ROW_COST;
   };
 
 	ObOptEstCostModel(
@@ -991,6 +1001,11 @@ protected:
   int cost_table_lookup_rpc(double row_count,
 														const ObCostTableScanInfo &est_cost_info,
 														double &cost);
+
+  // estimate the spatial calculation and sort cost for spatial index
+  int cost_table_get_one_batch_spatial(double row_count,
+                                       const ObCostTableScanInfo &est_cost_info,
+                                       double &cost);
 
   // @param[in] is_index_back 仅在对索引扫描的回表扫描进行估计时为true
   //estimate one batch table get cost, truly estimation function

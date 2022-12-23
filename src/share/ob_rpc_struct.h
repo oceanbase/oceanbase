@@ -2023,6 +2023,9 @@ public:
         || share::schema::INDEX_TYPE_PRIMARY == index_type_;
   }
   DECLARE_VIRTUAL_TO_STRING;
+  inline bool is_spatial_index() const { return share::schema::INDEX_TYPE_SPATIAL_LOCAL == index_type_
+                                                || share::schema::INDEX_TYPE_SPATIAL_GLOBAL == index_type_
+                                                || share::schema::INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type_; }
 
   share::schema::ObIndexType index_type_;
   common::ObSEArray<ObColumnSortItem, common::OB_PREALLOCATED_NUM> index_columns_;

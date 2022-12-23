@@ -120,9 +120,11 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libisal.a
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
+  ${DEP_DIR}/lib/libs2.a
   ${LGPL_DEPS}
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
   ${DEP_DIR}/lib/libz.a
+  ${DEP_DIR}/lib/libs2.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib

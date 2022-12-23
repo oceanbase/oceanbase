@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "lib/geo/ob_geometry_cast.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -159,7 +160,8 @@ int ObExprCast::get_cast_string_len(ObExprResType &type1,
     case ObEnumInnerType:
     case ObSetInnerType:
     case ObLobType:
-    case ObJsonType: {
+    case ObJsonType:
+    case ObGeometryType: {
       res_len = type1.get_length();
       length_semantics = type1.get_length_semantics();
       break;
@@ -308,7 +310,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
                                         dst_type.get_type(), dst_type.get_collation_type()))) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("transition does not support", "src", ob_obj_type_str(type1.get_type()),
-             "dst", ob_obj_type_str(dst_type.get_type()));
+               "dst", ob_obj_type_str(dst_type.get_type()));
   } else if (FALSE_IT(is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr->get_extra()))) {
   // check cast supported in cast_map but not support here.
   } else if (FALSE_IT(is_to_column_cs_level = CM_IS_TO_COLUMN_CS_LEVEL(cast_raw_expr->get_extra()))) {
@@ -356,7 +358,8 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       ObCollationType collation_nation = session->get_nls_collation_nation();
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
-      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())) {
+      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())
+          || ob_is_geometry(dst_type.get_type())) {
         type.set_collation_level((is_explicit_cast || is_to_column_cs_level)
                                  ? CS_LEVEL_IMPLICIT
                                  : type1.get_collation_level());
@@ -460,8 +463,23 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           // need_warp is true, no-op and keep type1's calc_type is dst_type. It will be wrapped
           // to string in ObRawExprWrapEnumSet::visit(ObSysFunRawExpr &expr) later.
         } else {
-          // need_warp is false, set calc_type to type1 itself.
-          type1.set_calc_meta(type1.get_obj_meta());
+          if (ob_is_geometry_tc(dst_type.get_type())) {
+            ObCastMode cast_mode = cast_raw_expr->get_extra();
+            const ObObj &param = type2.get_param();
+            ParseNode parse_node;
+            parse_node.value_ = param.get_int();
+            ObGeoType geo_type = static_cast<ObGeoType>(parse_node.int16_values_[OB_NODE_CAST_GEO_TYPE_IDX]);
+            if (OB_FAIL(ObGeoCastUtils::set_geo_type_to_cast_mode(geo_type, cast_mode))) {
+              LOG_WARN("fail to set geometry type to cast mode", K(ret), K(geo_type));
+            } else {
+              cast_raw_expr->set_extra(cast_mode);
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            // need_warp is false, set calc_type to type1 itself.
+            type1.set_calc_meta(type1.get_obj_meta());
+          }
         }
       }
     } else {
@@ -502,6 +520,14 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
       dst_type.set_udt_id(param_type2.get_udt_id());
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    } else if (ob_is_geometry(obj_type)) {
+      if (lib::is_mysql_mode()) {
+        dst_type.set_collation_type(CS_TYPE_BINARY);
+        dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support cast to geometry in oracle mode", K(ret));
+      }
     } else if (ob_is_interval_tc(obj_type)) {
       if (CM_IS_EXPLICIT_CAST(cast_mode) &&
           ((ObIntervalYMType != obj_type && !ObIntervalScaleUtil::scale_check(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX])) ||

@@ -779,7 +779,7 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
     serialize_buf = NULL;
   }
 
-  NG_TRACE_EXT(post_packet, Y(ret), Y(pcode), OB_ID(addr), dst_);
+  NG_TRACE_EXT(post_packet, OB_Y(ret), OB_Y(pcode), OB_ID(addr), dst_);
   return ret;
 }
 

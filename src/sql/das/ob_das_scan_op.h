@@ -315,8 +315,9 @@ public:
   void set_rowkey_iter(common::ObNewRowIterator *rowkey_iter) {rowkey_iter_ = rowkey_iter;}
   common::ObNewRowIterator *get_rowkey_iter() { return rowkey_iter_; }
   int reuse_iter();
-  int reset_lookup_state(bool need_switch_param);
+  virtual int reset_lookup_state(bool need_switch_param);
   int revert_iter();
+  int do_index_lookup();
   VIRTUAL_TO_STRING_KV(KPC_(lookup_ctdef),
                        KPC_(lookup_rtdef),
                        KPC_(tx_desc),
@@ -329,7 +330,6 @@ private:
   int init_scan_param();
   int process_data_table_rowkey();
   int process_data_table_rowkeys(int64_t batch_count);
-  int do_index_lookup();
   common::ObITabletScan &get_tsc_service();
 private:
   const static int64_t DEFAULT_BATCH_ROW_COUNT = 1000;

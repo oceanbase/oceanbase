@@ -109,7 +109,7 @@ private:
 #define ERRSIM_POINT_CALL(name) name?:
 
 // to check if a certain tracepoint is set
-#define E(event_no, ...)  \
+#define OB_E(event_no, ...)  \
   EVENT_CALL(event_no, ##__VA_ARGS__)?:
 
 // to set a particular tracepoint

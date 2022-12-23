@@ -68,7 +68,7 @@ int ObRpcProxy::init(const ObReqTransport *transport,
 int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, Handle *handle, const ObRpcOpts &opts)
 {
   POC_RPC_INTERCEPT(send, dst_, pcode, None, None, opts);
-  int ret = E(EventTable::EN_6) OB_SUCCESS;
+  int ret = OB_E(EventTable::EN_6) OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
   rpc::RpcStatPiece piece;
 

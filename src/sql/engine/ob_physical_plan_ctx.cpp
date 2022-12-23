@@ -76,6 +76,7 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       bind_array_idx_(0),
       tenant_schema_version_(OB_INVALID_VERSION),
       orig_question_mark_cnt_(0),
+      tenant_srs_version_(OB_INVALID_VERSION),
       affected_rows_(0),
       is_affect_found_row_(false),
       found_rows_(0),
@@ -683,6 +684,7 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
   OB_UNIS_ENCODE(cursor_count);
   OB_UNIS_ENCODE(plan_start_time_);
   OB_UNIS_ENCODE(last_trace_id_);
+  OB_UNIS_ENCODE(tenant_srs_version_);
   return ret;
 }
 
@@ -765,6 +767,7 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
   OB_UNIS_ADD_LEN(cursor_count);
   OB_UNIS_ADD_LEN(plan_start_time_);
   OB_UNIS_ADD_LEN(last_trace_id_);
+  OB_UNIS_ADD_LEN(tenant_srs_version_);
   return len;
 }
 
@@ -846,6 +849,7 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
     (void)ObSQLUtils::adjust_time_by_ntp_offset(ts_timeout_us_);
   }
   OB_UNIS_DECODE(last_trace_id_);
+  OB_UNIS_DECODE(tenant_srs_version_);
   return ret;
 }
 

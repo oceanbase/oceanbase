@@ -214,6 +214,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 408	__all_mock_fk_parent_table_column_history	0	201001	1
 409	__all_log_restore_source	0	201001	1
 412	__all_service_epoch	0	201001	1
+413	__all_spatial_reference_systems	0	201001	1
 416	__all_column_checksum_error_info	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -792,6 +793,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21299	CDB_OB_SYS_VARIABLES	1	201001	1
 21302	GV$OB_LOG_STAT	1	201001	1
 21303	V$OB_LOG_STAT	1	201001	1
+21304	ST_GEOMETRY_COLUMNS	1	201002	1
+21305	ST_SPATIAL_REFERENCE_SYSTEMS	1	201002	1
 21306	QUERY_RESPONSE_TIME	1	201002	1
 21316	CDB_OB_COLUMN_CHECKSUM_ERROR_INFO	1	201001	1
 21317	CDB_OB_TABLET_CHECKSUM_ERROR_INFO	1	201001	1

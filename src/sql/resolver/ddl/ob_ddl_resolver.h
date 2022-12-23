@@ -108,7 +108,8 @@ public:
   };
   enum INDEX_KEYNAME {
     NORMAL_KEY = 0,
-    UNIQUE_KEY = 1
+    UNIQUE_KEY = 1,
+    SPATIAL_KEY = 2
   };
   enum COLUMN_NODE {
     COLUMN_REF_NODE = 0,
@@ -402,6 +403,18 @@ public:
   int resolve_subpartition_option(ObPartitionedStmt *stmt,
                                   ParseNode *subpart_node,
                                   share::schema::ObTableSchema &table_schema);
+  int resolve_spatial_index_constraint(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObString &column_name,
+      int64_t column_num,
+      const int64_t index_keyname_value,
+      bool is_explicit_order);
+  int resolve_spatial_index_constraint(
+      const share::schema::ObColumnSchemaV2 &column_schema,
+      int64_t column_num,
+      const int64_t index_keyname_value,
+      bool is_oracle_mode,
+      bool is_explicit_order);
 protected:
   static int check_same_substr_expr(ObRawExpr &left, ObRawExpr &right, bool &same);
   static int check_uniq_allow(ObResolverParams &params,
@@ -483,6 +496,8 @@ protected:
                                         ParseNode *attrs_node,
                                         ObColumnResolveStat &reslove_stat,
                                         common::ObString &pk_name);
+  int resolve_srid_node(share::schema::ObColumnSchemaV2 &column,
+                        const ParseNode &srid_node);
   /*
   int resolve_generated_column_definition(
       share::schema::ObColumnSchemaV2 &column,

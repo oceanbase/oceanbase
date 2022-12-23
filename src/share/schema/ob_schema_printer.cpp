@@ -211,7 +211,8 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                                       col->get_accuracy(),
                                       col->get_extended_type_info(),
                                       default_length_semantics,
-                                      buf, buf_len, pos))) {
+                                      buf, buf_len, pos,
+                                      col->get_geo_type()))) {
             SHARE_SCHEMA_LOG(WARN, "fail to get data type str", K(col->get_data_type()), K(*col), K(ret));
           } else if (is_oracle_mode) {
             int64_t end = pos;
@@ -286,6 +287,14 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
             if (OB_FAIL(databuff_printf(buf, buf_len, pos, " NULL"))) {
               SHARE_SCHEMA_LOG(WARN, "fail to print NULL", K(ret));
             }
+          }
+        }
+        // adapt mysql geometry column format:`g` linestring NOT NULL /*!80003 SRID 4326 */
+        if (OB_SUCC(ret) && !is_oracle_mode && ob_is_geometry(col->get_data_type())) {
+          uint32_t srid = col->get_srid();
+          if (!col->is_default_srid()
+              && OB_FAIL(databuff_printf(buf, buf_len, pos, " /*!80003 SRID %u */", srid))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print geometry srid", K(ret), K(srid));
           }
         }
         if (OB_SUCC(ret) && !is_oracle_mode && !col->is_generated_column()) {
@@ -507,7 +516,6 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
     const bool is_alter_table_add, ObSQLMode sql_mode, const ObTimeZoneInfo *tz_info) const
 {
   int ret = OB_SUCCESS;
-
   if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_SCHEMA_LOG(WARN, "index is not exist", K(ret));
@@ -538,6 +546,10 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " FULLTEXT KEY "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print FULLTEXT KEY", K(ret));
         }
+      } else if (index_schema->is_spatial_index()) {
+          if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n  SPATIAL KEY "))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print SPATIAL KEY", K(ret));
+          }
       } else {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " KEY "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print KEY", K(ret));
@@ -846,6 +858,43 @@ int ObSchemaPrinter::print_fulltext_index_column(const ObTableSchema &table_sche
   return ret;
 }
 
+int ObSchemaPrinter::print_spatial_index_column(const ObTableSchema &table_schema,
+                                                const ObColumnSchemaV2 &column,
+                                                char *buf,
+                                                int64_t buf_len,
+                                                int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObObjType type = column.get_meta_type().get_type();
+
+  if (ObVarcharType != type && ObUInt64Type != type) {
+    STORAGE_LOG(WARN, "Invalid type for spatial index column", K(ret), K(type));
+  } else if (ObVarcharType == column.get_meta_type().get_type()) {
+    // do nothing
+  } else { // ObUInt64Type, cellid column
+    bool is_oracle_mode = false;
+    ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+    uint64_t geo_col_id = column.get_geo_col_id();
+    const ObColumnSchemaV2 *geo_col = table_schema.get_column_schema(geo_col_id);
+    ObString new_col_name;
+    if (OB_ISNULL(geo_col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The geo column schema is null, ", K(ret), K(geo_col_id));
+    } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to get compat mode", KR(ret), K(table_schema));
+    } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+        allocator, geo_col->get_column_name_str(), new_col_name, is_oracle_mode))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to generate new name with escape character",
+        K(ret), K(column.get_column_name_str()));
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+        (is_oracle_mode ? "\"%s\")" : "`%s`)"), new_col_name.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print column name", K(ret), K(new_col_name));
+    }
+  }
+
+  return ret;
+}
+
 int ObSchemaPrinter::print_prefix_index_column(const ObColumnSchemaV2 &column,
                                                bool is_last,
                                                char *buf,
@@ -962,6 +1011,14 @@ int ObSchemaPrinter::print_index_column(const ObTableSchema &table_schema,
                                               buf_len,
                                               pos))) {
         LOG_WARN("print fulltext index column failed", K(ret));
+      }
+    } else if (column.is_spatial_generated_column()) {
+      if (OB_FAIL(print_spatial_index_column(table_schema,
+                                             column,
+                                             buf,
+                                             buf_len,
+                                             pos))) {
+        LOG_WARN("print spatial index column failed", K(ret));
       }
     } else if (column.is_prefix_column()) {
       if (OB_FAIL(print_prefix_index_column(column, is_last, buf, buf_len, pos))) {

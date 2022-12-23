@@ -28,7 +28,6 @@ ObExprJsonMerge::ObExprJsonMerge(ObIAllocator &alloc)
       MORE_THAN_ONE,
       NOT_ROW_DIMENSION)
 {
-  ;
 }
 
 ObExprJsonMerge::~ObExprJsonMerge()

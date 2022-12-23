@@ -6,6 +6,10 @@ target_compile_definitions(regex PRIVATE -DREGEX_STANDALONE -DREGEX_WCHAR)
 ob_set_subtarget(oblib_lib ALONE
   cpu/ob_cpu_topology.cpp
   timezone/ob_timezone_util.cpp
+  geo/ob_geo_func_difference.cpp
+  geo/ob_geo_func_covered_by.cpp
+  geo/ob_geo_func_within.cpp
+  geo/ob_geo_func_union.cpp
 )
 
 ob_set_subtarget(oblib_lib charset
@@ -33,6 +37,47 @@ ob_set_subtarget(oblib_lib common
   worker.cpp
 )
 
+ob_set_subtarget(oblib_lib geo
+  geo/ob_geo_common.cpp
+  geo/ob_geo_bin.cpp
+  geo/ob_geo_ibin.cpp
+  geo/ob_geo_bin_iter.ipp
+  geo/ob_geo_tree.cpp
+  geo/ob_s2adapter.cpp
+  geo/ob_geo.cpp
+  geo/ob_wkt_parser.cpp
+  geo/ob_geo_utils.cpp
+  geo/ob_srs_wkt_parser.cpp
+  geo/ob_srs_info.cpp
+  geo/ob_geo_visitor.cpp
+  geo/ob_geo_wkb_size_visitor.cpp
+  geo/ob_geo_wkb_visitor.cpp
+  geo/ob_geo_coordinate_range_visitor.cpp
+  geo/ob_geo_latlong_check_visitor.cpp
+  geo/ob_geo_longtitude_correct_visitor.cpp
+  geo/ob_geo_to_tree_visitor.cpp
+  geo/ob_geo_to_s2_visitor.cpp
+  geo/ob_geo_to_wkt_visitor.cpp
+  geo/ob_geo_reverse_coordinate_visitor.cpp
+  geo/ob_geo_normalize_visitor.cpp
+  geo/ob_geo_denormalize_visitor.cpp
+  geo/ob_geo_wkb_check_visitor.cpp
+  geo/ob_geo_zoom_in_visitor.cpp
+  geo/ob_geo_func_envelope.cpp
+  geo/ob_geo_func_intersects.cpp
+  geo/ob_geo_func_area.cpp
+  geo/ob_geo_func_correct.cpp
+  geo/ob_geo_func_disjoint.cpp
+  geo/ob_geo_func_utils.cpp
+  geo/ob_geo_func_distance_sphere.cpp
+  geo/ob_geo_func_transform.cpp
+  geo/ob_geo_func_box.cpp
+  geo/ob_geo_func_buffer.cpp
+  geo/ob_geo_func_distance.cpp
+  geo/ob_geo_func_isvalid.cpp
+  geo/ob_geometry_cast.cpp
+)
+
 ob_set_subtarget(oblib_lib common_mixed
   atomic/ob_atomic_reference.cpp
   checksum/ob_crc64.cpp
@@ -52,7 +97,6 @@ ob_set_subtarget(oblib_lib common_mixed
   json/ob_json.cpp
   json/ob_json_print_utils.cpp
   json/ob_yson.cpp
-  json_type/ob_json_common.cpp
   json_type/ob_json_path.cpp
   json_type/ob_json_tree.cpp
   json_type/ob_json_bin.cpp
@@ -88,6 +132,7 @@ ob_set_subtarget(oblib_lib common_mixed
   string/ob_sql_string.cpp
   string/ob_string.cpp
   string/ob_strings.cpp
+  string/ob_string_buffer.cpp
   task/ob_timer.cpp
   task/ob_timer_monitor.cpp
   thread_local/ob_tsi_factory.cpp

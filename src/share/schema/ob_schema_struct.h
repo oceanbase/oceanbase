@@ -126,7 +126,8 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 /* create table t1(c1 int, c2 as (c1+1)) partition by hash(c2) partitions 2
    c1 and c2 has flag TABLE_PART_KEY_COLUMN_ORG_FLAG */
 #define TABLE_PART_KEY_COLUMN_ORG_FLAG (INT64_C(1) << 37) //column is part key, or column is depened by part key(gc col)
-
+#define SPATIAL_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 38) // for spatial index
+#define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF
 //-------enum defenition
@@ -260,8 +261,13 @@ enum ObIndexType
    */
   INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE = 7,
   INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE = 8,
+  // INDEX_TYPE_MAX = 9 in 4.0
+  // new index types for gis
+  INDEX_TYPE_SPATIAL_LOCAL = 10,
+  INDEX_TYPE_SPATIAL_GLOBAL = 11,
+  INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE = 12,
 
-  INDEX_TYPE_MAX = 9,
+  INDEX_TYPE_MAX = 13,
 };
 
 // using type for index
@@ -485,7 +491,9 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type
            || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
            || INDEX_TYPE_PRIMARY == index_type
-           || INDEX_TYPE_DOMAIN_CTXCAT == index_type;
+           || INDEX_TYPE_DOMAIN_CTXCAT == index_type
+           || INDEX_TYPE_SPATIAL_LOCAL == index_type
+           || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
 }
 
 struct ObTenantTableId

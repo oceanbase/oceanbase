@@ -288,6 +288,8 @@ int ObLogTableScan::check_output_dependance(common::ObIArray<ObRawExpr *> &child
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append_array_no_dup(exprs, part_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(exprs, spatial_exprs_))) {
+    LOG_WARN("failed to append exprs", K(ret));
   } else if (nullptr != group_id_expr_
              && OB_FAIL(add_var_to_array_no_dup(exprs, group_id_expr_))) {
     LOG_WARN("failed to push back group id expr", K(ret));
@@ -317,6 +319,8 @@ int ObLogTableScan::generate_access_exprs()
   } else if (OB_FAIL(append_array_no_dup(access_exprs_, rowkey_exprs_))) {
     LOG_WARN("failed to push back exprs", K(ret));
   } else if (OB_FAIL(append_array_no_dup(access_exprs_, part_exprs_))) {
+    LOG_WARN("failed to push back exprs", K(ret));
+  } else if (is_spatial_index_ && OB_FAIL(append_array_no_dup(access_exprs_, spatial_exprs_))) {
     LOG_WARN("failed to push back exprs", K(ret));
   } else if (is_index_global_ && is_global_index_back_) {
     if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter_exprs_, temp_exprs))) {
@@ -364,6 +368,39 @@ int ObLogTableScan::generate_access_exprs()
   return ret;
 }
 
+int ObLogTableScan::get_mbr_column_exprs(const uint64_t table_id,
+                                         ObIArray<ObRawExpr *> &mbr_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *expr = NULL;
+  const ObDMLStmt *stmt = NULL;
+  ObSEArray<ObRawExpr*, 8> temp_exprs;
+  if (OB_ISNULL(stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); i++) {
+      const ColumnItem *col_item = stmt->get_column_item(i);
+      if (OB_ISNULL(col_item) || OB_ISNULL(col_item->expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(col_item), K(ret));
+      } else if (table_id == col_item->table_id_ &&
+                 OB_NOT_NULL(col_item->expr_->get_dependant_expr()) &&
+                 col_item->expr_->get_dependant_expr()->get_expr_type() == T_FUN_SYS_SPATIAL_MBR &&
+                 OB_FAIL(temp_exprs.push_back(col_item->expr_))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else { /*do nothing*/}
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(append_array_no_dup(mbr_exprs, temp_exprs))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  }
+
+  return ret;
+}
+
 int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
 {
   int ret = OB_SUCCESS;
@@ -381,6 +418,8 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
   } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
   } else if (OB_FAIL(get_stmt()->has_lob_column(table_id_, has_lob_column))) {
     LOG_WARN("failed to check whether stmt has lob column", K(ret));
+  } else if (OB_FAIL(get_mbr_column_exprs(table_id_, spatial_exprs_))) {
+    LOG_WARN("failed to check whether stmt has mbr column", K(ret));
   } else if (has_lob_column || (is_index_global_ && is_global_index_back_) || get_index_back()) {
     if (is_heap_table && is_index_global_ && is_global_index_back_) {
       if (OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
@@ -492,6 +531,8 @@ int ObLogTableScan::index_back_check()
     	  ret = OB_ERR_UNEXPECTED;
     	  LOG_WARN("get unexpected null", K(ret));
       } else if (T_ORA_ROWSCN == expr->get_expr_type()) {
+        column_found = false;
+      } else if (ob_is_geometry_tc(expr->get_data_type())) { // 在此处先标记为需要index_back，具体是否需要需要结合谓词来判断。
         column_found = false;
       } else if (T_PSEUDO_GROUP_ID == expr->get_expr_type()) {
         // do nothing
