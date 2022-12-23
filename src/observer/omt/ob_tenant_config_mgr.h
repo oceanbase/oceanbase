@@ -133,6 +133,7 @@ public:
   int dump2file(const char *path = nullptr) const;
 
   void refresh_config_version_map(const common::ObIArray<uint64_t> &tenants);
+  void reset_version_has_refreshed() { version_has_refreshed_ = false; }
   int set_tenant_config_version(uint64_t tenant_id, int64_t version);
   int64_t get_tenant_config_version(uint64_t tenant_id);
   void get_lease_request(share::ObLeaseRequest &lease_request);

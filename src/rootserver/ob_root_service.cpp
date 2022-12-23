@@ -1081,6 +1081,7 @@ int ObRootService::start_service()
     ddl_service_.restart();
     server_manager_.reset();
     zone_manager_.reset();
+    OTC_MGR.reset_version_has_refreshed();
 
     if (OB_FAIL(hb_checker_.start())) {
       FLOG_WARN("hb checker start failed", KR(ret));
