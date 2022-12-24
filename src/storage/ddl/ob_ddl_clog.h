@@ -178,14 +178,24 @@ public:
   ObDDLPrepareLog();
   ~ObDDLPrepareLog() = default;
   int init(const ObITable::TableKey &table_key,
-           const share::SCN &start_scn);
-  bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid(); }
+           const share::SCN &start_scn,
+           const uint64_t table_id,
+           const int64_t ddl_task_id,
+           const ObIArray<uint64_t> &column_ids);
+  bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid() &&
+    table_id_ > 0 && ddl_task_id_ > 0 && column_ids_.count() > 0; }
   ObITable::TableKey get_table_key() const { return table_key_; }
   share::SCN get_start_scn() const { return start_scn_; }
+  uint64_t get_table_id() const { return table_id_; }
+  int64_t get_ddl_task_id() const { return ddl_task_id_; }
+  const ObSArray<uint64_t> &get_ddl_column_ids() const { return column_ids_; }
   TO_STRING_KV(K_(table_key), K_(start_scn));
 private:
   ObITable::TableKey table_key_;
   share::SCN start_scn_;
+  uint64_t table_id_;
+  int64_t ddl_task_id_;
+  ObSArray<uint64_t> column_ids_;
 };
 
 class ObDDLCommitLog final
@@ -196,16 +206,31 @@ public:
   ~ObDDLCommitLog() = default;
   int init(const ObITable::TableKey &table_key,
            const share::SCN &start_scn,
-           const share::SCN &prepare_scn);
-  bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid() && prepare_scn_.is_valid(); }
+           const share::SCN &prepare_scn,
+           const uint64_t table_id,
+           const int64_t ddl_task_id,
+           const ObIArray<uint64_t> &column_ids);
+  bool is_valid() const {
+    return table_key_.is_valid() &&
+           start_scn_.is_valid() &&
+           prepare_scn_.is_valid() &&
+           table_id_ > 0 &&
+           ddl_task_id_ > 0 &&
+           column_ids_.count() > 0;}
   ObITable::TableKey get_table_key() const { return table_key_; }
   share::SCN get_start_scn() const { return start_scn_; }
   share::SCN get_prepare_scn() const { return prepare_scn_; }
+  uint64_t get_table_id() const { return table_id_; }
+  int64_t get_ddl_task_id() const { return ddl_task_id_; }
+  const ObSArray<uint64_t> &get_ddl_column_ids() const { return column_ids_; }
   TO_STRING_KV(K_(table_key), K_(start_scn), K_(prepare_scn));
 private:
   ObITable::TableKey table_key_;
   share::SCN start_scn_;
   share::SCN prepare_scn_;
+  uint64_t table_id_; // used for report ddl checksum
+  int64_t ddl_task_id_; // used for report ddl checksum
+  ObSArray<uint64_t> column_ids_;
 };
 
 class ObTabletSchemaVersionChangeLog final

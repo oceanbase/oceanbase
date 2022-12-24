@@ -205,6 +205,74 @@ int ObDDLChecksumOperator::get_column_checksum(const ObSqlString &sql, const uin
   return ret;
 }
 
+int ObDDLChecksumOperator::get_tablet_checksum_status(
+    const ObSqlString &sql,
+    const uint64_t tenant_id,
+    common::ObMySQLProxy &sql_proxy,
+    common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_map)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    sqlclient::ObMySQLResult *result = NULL;
+    if (!sql.is_valid() || !tablet_checksum_map.created()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(sql), K(tablet_checksum_map.created()));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to execute sql", K(ret));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next row", K(ret));
+          }
+        } else {
+          uint64_t tablet_id_id = 0;
+          EXTRACT_UINT_FIELD_MYSQL(*result, "task_id", tablet_id_id, uint64_t);
+          if (OB_FAIL(tablet_checksum_map.set_refactored(tablet_id_id, true))) {
+            LOG_WARN("fail to set column checksum to map", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLChecksumOperator::get_tablet_checksum_record(
+  const uint64_t tenant_id,
+  const uint64_t execution_id,
+  const uint64_t table_id,
+  const int64_t ddl_task_id,
+  ObMySQLProxy &sql_proxy,
+  common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_map)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == execution_id || OB_INVALID_ID == table_id
+        || OB_INVALID_ID == ddl_task_id || !tablet_checksum_map.created())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(table_id), K(ddl_task_id),
+        K(tablet_checksum_map.created()));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT task_id FROM %s "
+      "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld "
+      "ORDER BY task_id", OB_ALL_DDL_CHECKSUM_TNAME,
+      execution_id, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+      ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id), ddl_task_id))) {
+    LOG_WARN("fail to assign fmt", K(ret));
+  } else if (OB_FAIL(get_tablet_checksum_status(sql, tenant_id, sql_proxy, tablet_checksum_map))) {
+    LOG_WARN("fail to get column checksum", K(ret), K(sql));
+  }
+  return ret;
+}
+
 int ObDDLChecksumOperator::get_table_column_checksum(
     const uint64_t tenant_id,
     const int64_t execution_id,

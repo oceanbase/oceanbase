@@ -82,6 +82,8 @@ int ObIndexSSTableBuildTask::process()
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret));
   } else {
     (void)ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_, dest_table_id_,
+                                                        task_id_,
+                                                        execution_id_,
                                                         inner_sql_exec_addr_,
                                                         trace_id_,
                                                         table_schema->get_schema_version(),

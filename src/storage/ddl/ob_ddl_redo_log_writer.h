@@ -256,9 +256,13 @@ public:
                         const int64_t table_id,
                         const int64_t execution_id,
                         const int64_t ddl_task_id,
-                        share::SCN &prepare_scn);
+                        share::SCN &prepare_scn,
+                        const ObIArray<uint64_t> &column_ids);
   int write_commit_log(const ObITable::TableKey &table_key,
-                       const share::SCN &prepare_scn);
+                       const share::SCN &prepare_scn,
+                       const uint64_t table_id,
+                       const int64_t ddl_task_id,
+                       const ObIArray<uint64_t> &column_ids);
   OB_INLINE void set_start_scn(const share::SCN &start_scn) { start_scn_.atomic_set(start_scn); }
   OB_INLINE share::SCN get_start_scn() const { return start_scn_.atomic_get(); }
 private:

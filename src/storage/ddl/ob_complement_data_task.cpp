@@ -1143,6 +1143,7 @@ int ObComplementMergeTask::process()
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   int tmp_ret = OB_SUCCESS;
   ObIDag *tmp_dag = get_dag();
+  ObArray<uint64_t> column_ids;
   ObComplementDataDag *dag = nullptr;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
@@ -1161,12 +1162,17 @@ int ObComplementMergeTask::process()
     } else if (OB_ISNULL(latest_major_sstable)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, major sstable shoud not be null", K(ret), K(*param_));
+    } else if (OB_FAIL(ObDDLUtil::get_tenant_schema_column_ids(param_->hidden_table_schema_->get_tenant_id(),
+                                                               param_->hidden_table_schema_->get_table_id(),
+                                                               column_ids))) {
+      LOG_WARN("fail to get tenant schema column ids", K(ret), K(*param_));
     } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->ls_id_,
                                                             param_->dest_tablet_id_,
                                                             param_->hidden_table_schema_->get_table_id(),
                                                             1 /* execution_id */,
                                                             param_->task_id_,
-                                                            latest_major_sstable->get_meta().get_col_checksum()))) {
+                                                            latest_major_sstable->get_meta().get_col_checksum(),
+                                                            column_ids))) {
       LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
     } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(param_->tenant_id_, param_->ls_id_, param_->dest_tablet_id_))) {
       LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
@@ -1194,6 +1200,7 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   ObTablet *tablet = nullptr;
   ObTabletHandle tablet_handle;
   ObITable::TableKey hidden_table_key;
+  ObArray<uint64_t> column_ids;
   SCN prepare_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1218,11 +1225,14 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDDLUtil::get_tenant_schema_column_ids(MTL_ID(), param_->hidden_table_schema_->get_table_id(), column_ids))) {
+    LOG_WARN("fail to get tenant schema column ids", K(ret), K(param_));
   } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_prepare_log(hidden_table_key,
                                                                            param_->hidden_table_schema_->get_table_id(),
                                                                            param_->execution_id_,
                                                                            param_->task_id_,
-                                                                           prepare_scn))) {
+                                                                           prepare_scn,
+                                                                           column_ids))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(hidden_table_key), KPC(param_));
     } else {
@@ -1234,20 +1244,26 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
     const ObLSID &ls_id = param_->ls_id_;
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     const SCN &ddl_start_scn = static_cast<ObComplementDataDag *>(get_dag())->get_context().data_sstable_redo_writer_.get_start_scn();
+    const uint64_t table_id = param_->hidden_table_schema_->get_table_id();
+    const int64_t ddl_task_id = param_->task_id_;
     if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       LOG_WARN("get ddl kv manager failed", K(ret));
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_scn,
                                                                 prepare_scn,
-                                                                param_->hidden_table_schema_->get_table_id(),
-                                                                param_->task_id_))) {
-      LOG_WARN("commit ddl log failed", K(ret), K(ls_id), K(tablet_id), K(prepare_scn), K(hidden_table_key),
+                                                                column_ids,
+                                                                table_id,
+                                                                ddl_task_id))) {
+      LOG_WARN("commit ddl log failed", K(ret), K(ls_id), K(tablet_id), K(prepare_scn), K(hidden_table_key), K(column_ids),
           K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_scn, prepare_scn))) {
-      LOG_WARN("wait ddl commit failed", K(ret), K(ls_id), K(tablet_id), K(hidden_table_key),
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_scn, prepare_scn, table_id, ddl_task_id, column_ids))) {
+      LOG_WARN("wait ddl commit failed", K(ret), K(ls_id), K(tablet_id), K(hidden_table_key), K(column_ids),
           K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
     } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_commit_log(hidden_table_key,
-                                                                            prepare_scn))) {
-      LOG_WARN("fail write ddl commit log", K(ret), K(hidden_table_key));
+                                                                            prepare_scn,
+                                                                            table_id,
+                                                                            ddl_task_id,
+                                                                            column_ids))) {
+      LOG_WARN("fail write ddl commit log", K(ret), K(hidden_table_key), K(column_ids));
     }
   }
   return ret;
