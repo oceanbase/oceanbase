@@ -1318,7 +1318,9 @@ int ObDDLScheduler::on_update_execution_id(
     } else if (OB_FAIL(ddl_task->push_execution_id())) {
       LOG_WARN("fail to push execution id", K(ret), KPC(ddl_task));
     }
-    ret_execution_id = ddl_task->get_execution_id();  // ignore ret, if fail, take old execution id
+    if (nullptr != ddl_task) {
+      ret_execution_id = ddl_task->get_execution_id();  // ignore ret, if fail, take old execution id
+    }
   }
   return ret;
 }
