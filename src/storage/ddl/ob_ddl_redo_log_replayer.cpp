@@ -181,7 +181,11 @@ int ObDDLRedoLogReplayer::replay_prepare(const ObDDLPrepareLog &log, const SCN &
     LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(tablet_handle), K(log), K(scn));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv mgr failed", K(ret), K(log), K(scn));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(log.get_start_scn(), scn))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(log.get_start_scn(),
+                                                              scn,
+                                                              log.get_ddl_column_ids(),
+                                                              log.get_table_id(),
+                                                              log.get_ddl_task_id()))) {
     LOG_WARN("replay ddl prepare log failed", K(ret), K(log), K(scn));
   } else {
     LOG_INFO("replay ddl prepare log success", K(ret), K(log), K(scn));
@@ -219,7 +223,12 @@ int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const SCN &sc
     LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(tablet_handle), K(log), K(scn));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv mgr failed", K(ret), K(log), K(scn));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(log.get_start_scn(), log.get_prepare_scn(), true/*is_replay*/))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(log.get_start_scn(),
+                                                             log.get_prepare_scn(),
+                                                             true/*is_replay*/,
+                                                             log.get_table_id(),
+                                                             log.get_ddl_task_id(),
+                                                             log.get_ddl_column_ids()))) {
     if (OB_EAGAIN != ret) {
       LOG_WARN("replay ddl commit log failed", K(ret), K(log), K(scn));
     }

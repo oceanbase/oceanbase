@@ -70,6 +70,13 @@ public:
       const uint64_t table_id,
       const int64_t ddl_task_id,
       common::hash::ObHashMap<int64_t, int64_t> &column_checksums, common::ObMySQLProxy &sql_proxy);
+  static int get_tablet_checksum_record(
+      const uint64_t tenant_id,
+      const uint64_t execution_id,
+      const uint64_t table_id,
+      const int64_t ddl_task_id,
+      ObMySQLProxy &sql_proxy,
+      common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_map);
   static int check_column_checksum(
       const uint64_t tenant_id,
       const int64_t execution_id,
@@ -93,6 +100,11 @@ private:
       const uint64_t tenant_id,
       common::hash::ObHashMap<int64_t, int64_t> &column_checksum_map,
       common::ObMySQLProxy &sql_proxy);
+  static int get_tablet_checksum_status(
+      const ObSqlString &sql,
+      const uint64_t tenant_id,
+      common::ObMySQLProxy &sql_proxy,
+      common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_map);
 };
 
 }  // end namespace share

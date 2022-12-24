@@ -274,6 +274,10 @@ public:
       const ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle,
       const int64_t timeout_us = storage::ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
+  static int get_tenant_schema_column_ids(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      ObIArray<uint64_t> &column_ids);
 
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
   
@@ -345,6 +349,8 @@ public:
   static int check_and_wait_old_complement_task(
       const uint64_t tenant_id,
       const uint64_t index_table_id,
+      const uint64_t ddl_task_id,
+      const int64_t execution_id,
       const common::ObAddr &inner_sql_exec_addr,
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t schema_version,
@@ -357,6 +363,8 @@ private:
       const uint64_t tenant_id,
       const uint64_t index_table_id,
       const int64_t snapshot_version,
+      const int64_t execution_id,
+      const uint64_t ddl_task_id,
       bool &is_all_sstable_build_finished);
 
   static int check_task_inner_sql_session_status(
@@ -403,6 +411,14 @@ private:
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       hash::ObHashMap<ObAddr, ObArray<ObTabletID>> &ip_tablets_map);
+
+  static int check_tablet_checksum_update_status(
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const uint64_t ddl_task_id,
+      const int64_t execution_id,
+      ObIArray<ObTabletID> &tablet_ids,
+      bool &tablet_checksum_status);
 
 };
 

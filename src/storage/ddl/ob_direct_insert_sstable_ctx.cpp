@@ -655,6 +655,7 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
   share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
   const share::schema::ObTableSchema *table_schema = nullptr;
   const uint64_t tenant_id = MTL_ID();
+  ObArray<uint64_t> column_ids;
   SCN prepare_scn;
   ObSchemaGetterGuard schema_guard;
   if (OB_UNLIKELY(!table_key.is_valid())) {
@@ -676,11 +677,14 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDDLUtil::get_tenant_schema_column_ids(tenant_id, table_schema->get_table_id(), column_ids))) {
+    LOG_WARN("fail to get tenant schema column ids", K(ret), K(tenant_id), K(build_param_));
   } else if (OB_FAIL(data_sstable_redo_writer_.write_prepare_log(table_key,
                                                                  table_schema->get_table_id(),
                                                                  build_param_.execution_id_,
                                                                  build_param_.ddl_task_id_,
-                                                                 prepare_scn))) {
+                                                                 prepare_scn,
+                                                                 column_ids))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(table_key), K(build_param_));
     } else {
@@ -694,30 +698,38 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
     const ObLSID &ls_id = ls->get_ls_id();
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     const SCN &ddl_start_scn = data_sstable_redo_writer_.get_start_scn();
+    const uint64_t table_id = table_schema->get_table_id();
+    const int64_t ddl_task_id = build_param_.ddl_task_id_;
     if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, tablet_id, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_scn,
                                                                 prepare_scn,
-                                                                table_schema->get_table_id(),
-                                                                build_param_.ddl_task_id_))) {
+                                                                column_ids,
+                                                                table_id,
+                                                                ddl_task_id))) {
       if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id),
+        LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id), K(column_ids),
             K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
       } else {
-        LOG_WARN("failed to do ddl kv prepare", K(ret), K(ddl_start_scn), K(prepare_scn), K(build_param_));
+        LOG_WARN("failed to do ddl kv prepare", K(ret), K(ddl_start_scn), K(prepare_scn), K(build_param_), K(column_ids));
       }
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_scn, prepare_scn))) {
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_scn, prepare_scn, table_id, ddl_task_id, column_ids))) {
       if (OB_TASK_EXPIRED == ret) {
         LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
-            K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
+            K(ddl_start_scn), "new_ddl_start_scn",
+            ddl_kv_mgr_handle.get_obj()->get_start_scn(), K(build_param_),
+            K(table_id), K(ddl_task_id), K(column_ids));
       } else {
-        LOG_WARN("failed to wait ddl kv commit", K(ret), K(ddl_start_scn), K(build_param_));
+        LOG_WARN("failed to wait ddl kv commit", K(ret), K(ddl_start_scn), K(build_param_), K(column_ids));
       }
     } else if (OB_FAIL(data_sstable_redo_writer_.write_commit_log(table_key,
-                                                                  prepare_scn))) {
-      LOG_WARN("fail write ddl commit log", K(ret), K(table_key));
+                                                                  prepare_scn,
+                                                                  table_id,
+                                                                  ddl_task_id,
+                                                                  column_ids))) {
+      LOG_WARN("fail write ddl commit log", K(ret), K(table_key), K(table_id), K(ddl_task_id), K(column_ids));
     }
   }
   return ret;

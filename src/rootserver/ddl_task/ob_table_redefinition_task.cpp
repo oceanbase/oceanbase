@@ -94,7 +94,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_FAIL(set_ddl_stmt_str(task_record.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
   } else {
-    set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
+    set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to ddl_task, switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     task_id_ = task_record.task_id_;
     task_type_ = task_record.ddl_type_;
     object_id_ = data_table_id;
