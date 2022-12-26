@@ -949,7 +949,7 @@ int ObFreezer::loop_set_freeze_flag()
     ret = OB_SUCCESS;
     if (OB_FAIL(set_freeze_flag_without_inc_freeze_clock())) {
       const int64_t cost_time = ObTimeUtility::current_time() - start;
-      if (cost_time > 3 * 1000 * 1000) {
+      if (cost_time > 10 * 1000 * 1000) {
         TRANS_LOG(WARN, "[Freezer] wait the running freeze too long time", K(ls_id),
                   K(cost_time));
         break;

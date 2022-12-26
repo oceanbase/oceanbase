@@ -3161,9 +3161,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
 
       // try tablet freeze
       if (!tablet_id.is_ls_inner_tablet()) {
-        if (OB_FAIL(old_tablet->set_memtable_clog_checkpoint_scn(param.tablet_meta_))) {
-          LOG_WARN("failed to set memtable clog checkpoint ts", K(ret), KPC(old_tablet), K(param));
-        } else if (nullptr != param.tablet_meta_
+        if (nullptr != param.tablet_meta_
             && old_tablet->get_clog_checkpoint_scn() < param.tablet_meta_->clog_checkpoint_scn_) {
           if (OB_FAIL(freezer->tablet_freeze_for_replace_tablet_meta(tablet_id, imemtable))) {
             LOG_WARN("failed to freeze tablet", K(ret), K(tablet_id), KPC(old_tablet));
@@ -3225,6 +3223,8 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
         LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(disk_addr));
         ob_usleep(1000 * 1000);
         ob_abort();
+      } else if (OB_FAIL(old_tablet->set_memtable_clog_checkpoint_scn(param.tablet_meta_))) {
+        LOG_WARN("failed to set memtable clog checkpoint ts", K(ret), KPC(old_tablet), K(param));
       } else {
         LOG_INFO("succeed to build ha tablet new table store", K(ret), K(key), K(disk_addr), K(param));
       }
