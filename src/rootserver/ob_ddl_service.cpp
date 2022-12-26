@@ -23624,19 +23624,18 @@ int ObDDLService::drop_user(const ObDropUserArg &arg,
                             ObIArray<int64_t> &failed_index)
 {
   int ret = OB_SUCCESS;
-  ObDropUserArg arg_tmp = arg;
   const uint64_t tenant_id = arg.tenant_id_;
   uint64_t user_id = OB_INVALID_ID;
   ObSqlString ddl_stmt_str;
   ObAccountArg account;
   ObString ddl_sql;
-  for (int64_t i = 0; OB_SUCC(ret) && i < arg_tmp.users_.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < arg.users_.count(); ++i) {
     ObSchemaGetterGuard schema_guard;
     ddl_stmt_str.reuse();
     ddl_sql.reset();
-    account.user_name_ = arg_tmp.users_.at(i);
-    account.host_name_ = arg_tmp.hosts_.at(i);
-    const bool is_role = arg_tmp.is_role_;
+    account.user_name_ = arg.users_.at(i);
+    account.host_name_ = arg.hosts_.at(i);
+    const bool is_role = arg.is_role_;
     account.is_role_ = is_role;
     const ObUserInfo *user_info = NULL;
     if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
