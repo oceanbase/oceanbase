@@ -580,9 +580,8 @@ int ObInnerSQLConnection::process_record(ObInnerSQLResult &res,
     }
 
     record_stat(session, result_set.get_stmt_type(), is_from_pl);
-    ObSQLUtils::handle_audit_record(false, sql::PSCursor == exec_timestamp.exec_type_
-                                                  ? EXECUTE_PS_EXECUTE : EXECUTE_INNER,
-                                    session);
+    ObSQLUtils::handle_audit_record(false, sql::PSCursor == exec_timestamp.exec_type_ ? EXECUTE_PS_EXECUTE
+                                              : is_from_pl ? EXECUTE_PL_EXECUTE : EXECUTE_INNER, session);
   }
   return ret;
 }
