@@ -1521,6 +1521,7 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
                                                                 fake_columns,
                                                                 fake_exprs,
                                                                 var,
+                                                                false,/*is_prepare_protocol*/
                                                                 true,/*is_check_mode*/
                                                                 ctx_.current_scope_ != T_PL_SCOPE /*is_sql_scope*/))) {
         LOG_INFO("failed to resolve external symbol", K(q_name), K(ret));
