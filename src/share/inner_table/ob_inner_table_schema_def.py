@@ -10912,6 +10912,9 @@ def_table_schema(
 # 12362: __all_virtual_core_table
 
 # 12363: __all_virtual_malloc_sample_info
+# 12364: __all_virtual_ls_arb_replica_task
+# 12365: __all_virtual_ls_arb_replica_task_history
+
 #
 # 余留位置
 #
@@ -11187,6 +11190,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_ke
 
 # 15287: __all_virtual_trans_scheduler
 
+# 15288: __all_virtual_ls_arb_replica_task
+# 15289: __all_virtual_ls_arb_replica_task_history
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
@@ -23417,6 +23422,11 @@ def_table_schema(
 # 21355 : INFORMATION_SCHEMA.TRIGGERS
 # 21356 : INFORMATION_SCHEMA.PARTITIONS
 
+# 21357: DBA_OB_ARBITRATION_SERVICE
+# 21358: CDB_OB_LS_ARB_REPLICA_TASKS
+# 21359: DBA_OB_LS_ARB_REPLICA_TASKS
+# 21360: CDB_OB_LS_ARB_REPLICA_TASK_HISTORY
+# 21361: DBA_OB_LS_ARB_REPLICA_TASK_HISTORY
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]
@@ -40014,6 +40024,8 @@ def_table_schema(
 # 25219: ALL_SEC_RELEVANT_COLS
 # 25220: USER_SEC_RELEVANT_COLS
 
+# 25221: DBA_OB_LS_ARB_REPLICA_TASKS
+# 25222: DBA_OB_LS_ARB_REPLICA_TASK_HISTORY
 #### End Data Dictionary View
 ################################################################################
 
