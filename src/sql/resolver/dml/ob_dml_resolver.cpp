@@ -7625,6 +7625,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                                          columns,
                                                          real_exprs,
                                                          expr,
+                                                         params_.is_prepare_protocol_,
                                                          false, /*is_check_mode*/
                                                          true /*is_sql_scope*/))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));

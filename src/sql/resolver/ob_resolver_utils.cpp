@@ -2665,6 +2665,7 @@ int ObResolverUtils::resolve_columns_for_const_expr(ObRawExpr *&expr, ObArray<Ob
                                                            columns,
                                                            real_exprs,
                                                            real_ref_expr,
+                                                           resolve_params.is_prepare_protocol_,
                                                            false, /*is_check_mode*/
                                                            true /*is_sql_scope*/))) {
         LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));
@@ -6234,6 +6235,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                          ObIArray<ObQualifiedName> &columns,
                                          ObIArray<ObRawExpr*> &real_exprs,
                                          ObRawExpr *&expr,
+                                         bool is_prepare_protocol,
                                          bool is_check_mode,
                                          bool is_sql_scope)
 {
@@ -6246,7 +6248,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                NULL == sql_proxy ? (NULL == ns ? *GCTX.sql_proxy_ : ns->get_external_ns()->get_resolve_ctx().sql_proxy_) : *sql_proxy,
                                expr_factory,
                                NULL == ns ? NULL : ns->get_external_ns()->get_parent_ns(),
-                               false/*not prepare*/,
+                               is_prepare_protocol,
                                is_check_mode,
                                is_sql_scope,
                                NULL/*param store*/,
