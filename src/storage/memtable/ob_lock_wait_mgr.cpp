@@ -88,7 +88,7 @@ void ObLockWaitMgr::destroy()
 
 void ObLockWaitMgr::run1()
 {
-  const int interval_us = (lib::is_mini_mode() ? 10 : 1000) * 1000;
+  const int interval_us = (!lib::is_mini_mode() ? 10 : 1000) * 1000;
 
   (void)prctl(PR_SET_NAME, "ObLockWaitMgr", 0, 0, 0);
   while (!has_set_stop() || !is_hash_empty()) {
