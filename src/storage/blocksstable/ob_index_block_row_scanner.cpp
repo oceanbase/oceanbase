@@ -431,8 +431,23 @@ int ObIndexBlockRowScanner::check_blockscan(
     }
   } else {
     int cmp_ret = 0;
-    if (OB_FAIL((idx_data_header_->rowkey_array_ + end_)->compare(rowkey, index_read_info_->get_datum_utils(), cmp_ret))) {
+    if (!is_transformed_) {
+      ObDatumRowkey last_endkey;
+      ObDatumRow tmp_datum_row; // Normally will use local datum buf, won't allocate memory
+      if (OB_FAIL(tmp_datum_row.init(index_read_info_->get_request_count()))) {
+        LOG_WARN("Fail to init tmp_datum_row", K(ret));
+      } else if (OB_FAIL(micro_reader_->get_row(end_, tmp_datum_row))) {
+        LOG_WARN("Fail to get last row of micro block", K(ret), K_(end));
+      } else if (OB_FAIL(last_endkey.assign(tmp_datum_row.storage_datums_, index_read_info_->get_rowkey_count()))) {
+        LOG_WARN("Fail to assign storage datum to endkey", K(ret), K(tmp_datum_row));
+      } else if (OB_FAIL(last_endkey.compare(rowkey, index_read_info_->get_datum_utils(), cmp_ret))) {
+        LOG_WARN("Fail to compare rowkey", K(ret), K(last_endkey), K(rowkey));
+      }
+    } else if (OB_FAIL((idx_data_header_->rowkey_array_ + end_)->compare(rowkey, index_read_info_->get_datum_utils(), cmp_ret))) {
       LOG_WARN("Fail to compare rowkey", K(ret), K(rowkey));
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (cmp_ret < 0) {
       can_blockscan = true;
     } else {
