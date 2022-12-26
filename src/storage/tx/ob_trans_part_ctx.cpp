@@ -1292,6 +1292,9 @@ int ObPartTransCtx::recover_tx_ctx_table_info(const ObTxCtxTableInfo &ctx_info)
     if (ObTxState::REDO_COMPLETE == get_downstream_state()) {
       sub_state_.set_info_log_submitted();
     }
+    if (exec_info_.prepare_version_ != ObTransVersion::INVALID_TRANS_VERSION) {
+      mt_ctx_.set_trans_version(exec_info_.prepare_version_);
+    }
     exec_info_.multi_data_source_.reset();
     if (OB_FAIL(ret)) {
       // do nothing
