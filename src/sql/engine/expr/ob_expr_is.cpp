@@ -124,7 +124,7 @@ int ObExprIs::calc_with_null(common::ObObj &result,
       switch (obj1.get_meta().get_extend_type()) {
         case pl::PL_RECORD_TYPE: {
           pl::ObPLRecord *rec = reinterpret_cast<pl::ObPLRecord *>(obj1.get_ext());
-          ret_bool = rec->is_null();
+          ret_bool = rec != NULL ? rec->is_null() : true;
         }
           break;
         default: {
@@ -160,7 +160,7 @@ int ObExprIsNot::calc_with_null(ObObj &result,
     switch (obj1.get_meta().get_extend_type()) {
       default: {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("check complex value is null not supported", K(ret), K(obj1));
+        LOG_WARN("check complex value is null not supported", K(ret), K(obj1), K(obj1.get_meta().get_extend_type()));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "check complex is null");
       } break;
     }
