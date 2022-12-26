@@ -305,8 +305,6 @@ bool ObUpdateTableStoreParam::is_valid() const
 
 ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
   : tables_handle_(),
-    snapshot_version_(0),
-    multi_version_start_(0),
     rebuild_seq_(OB_INVALID_VERSION),
     update_logical_minor_sstable_(false),
     start_scn_(0),
@@ -317,7 +315,6 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
 void ObBatchUpdateTableStoreParam::reset()
 {
   tables_handle_.reset();
-  multi_version_start_ = 0;
   rebuild_seq_ = OB_INVALID_VERSION;
   update_logical_minor_sstable_ = false;
   start_scn_ = 0;
@@ -326,9 +323,7 @@ void ObBatchUpdateTableStoreParam::reset()
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
 {
-  return snapshot_version_ >= 0
-      && multi_version_start_ >= 0
-      && rebuild_seq_ > OB_INVALID_VERSION
+  return rebuild_seq_ > OB_INVALID_VERSION
       && (!update_logical_minor_sstable_
           || (update_logical_minor_sstable_ && start_scn_ > 0 && OB_ISNULL(tablet_meta_)));
 }
@@ -343,7 +338,6 @@ int ObBatchUpdateTableStoreParam::assign(
   } else if (OB_FAIL(tables_handle_.assign(param.tables_handle_))) {
     LOG_WARN("failed to assign tables handle", K(ret), K(param));
   } else {
-    multi_version_start_ = param.multi_version_start_;
     rebuild_seq_ = param.rebuild_seq_;
     update_logical_minor_sstable_ = param.update_logical_minor_sstable_;
     start_scn_ = param.start_scn_;

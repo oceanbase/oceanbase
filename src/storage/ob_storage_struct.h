@@ -354,12 +354,10 @@ struct ObBatchUpdateTableStoreParam final
   int assign(const ObBatchUpdateTableStoreParam &param);
   int get_max_clog_checkpoint_ts(int64_t &clog_checkpoint_ts) const;
 
-  TO_STRING_KV(K_(tables_handle), K_(snapshot_version), K_(multi_version_start),
-      K_(rebuild_seq), K_(update_logical_minor_sstable), K_(start_scn), KP_(tablet_meta));
+  TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(update_logical_minor_sstable), K_(start_scn),
+      KP_(tablet_meta));
 
   ObTablesHandleArray tables_handle_;
-  int64_t snapshot_version_;
-  int64_t multi_version_start_;
   int64_t rebuild_seq_;
   bool update_logical_minor_sstable_;
   int64_t start_scn_;

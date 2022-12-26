@@ -1225,11 +1225,12 @@ int ObTabletTableStore::build_ha_major_tables_(
   inc_base_snapshot_version = -1;
   ObArray<ObITable *> major_tables;
   const bool allow_duplicate_sstable = true;
+  const int64_t multi_version_start = 0;
 
   if (!old_store.major_tables_.empty() && OB_FAIL(old_store.major_tables_.get_all_tables(major_tables))) {
     LOG_WARN("failed to get all tables", K(ret), K(old_store));
   } else if (OB_FAIL(inner_build_major_tables_(allocator, old_store, param.tables_handle_,
-      param.multi_version_start_, allow_duplicate_sstable, inc_base_snapshot_version))) {
+      multi_version_start, allow_duplicate_sstable, inc_base_snapshot_version))) {
     LOG_WARN("failed to inner build major tables", K(ret), K(param));
   }
   return ret;
@@ -1254,6 +1255,11 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
     LOG_WARN("failed to get old minor tables", K(ret), K(old_store));
   } else if (OB_FAIL(check_old_store_minor_sstables_(old_minor_tables))) {
     LOG_WARN("failed to check old store minor sstables", K(ret), K(old_minor_tables));
+  } else if (need_add_minor_tables.empty()) {
+    if (old_minor_tables.empty()) {
+    } else if (OB_FAIL(minor_tables_.init_and_copy(allocator, old_minor_tables, inc_pos))) {
+      LOG_WARN("failed to init minor_tables", K(ret));
+    }
   } else if (OB_FAIL(combin_ha_minor_sstables_(old_minor_tables, need_add_minor_tables, new_minor_tables))) {
     LOG_WARN("failed to combin ha minor sstables", K(ret), K(old_store), K(param));
   } else if (new_minor_tables.empty()) { // no minor tables
