@@ -1922,7 +1922,6 @@ int ObRpcRemoteWriteDDLPrepareLogP::process()
     ObDDLSSTableRedoWriter sstable_redo_writer;
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle ls_handle;
-    ObArray<uint64_t> column_ids;
     ObTabletHandle tablet_handle;
     ObDDLKvMgrHandle ddl_kv_mgr_handle;
     if (OB_UNLIKELY(!arg_.is_valid())) {
@@ -1937,20 +1936,16 @@ int ObRpcRemoteWriteDDLPrepareLogP::process()
     } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
     } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
-    } else if (OB_FAIL(ObDDLUtil::get_tenant_schema_column_ids(tenant_id, arg_.table_id_, column_ids))) {
-      LOG_WARN("fail to get tenant schema column ids", K(ret), K(arg_));
     } else {
       SCN prepare_scn;
       if (OB_FAIL(sstable_redo_writer.write_prepare_log(table_key,
                                                         arg_.table_id_,
                                                         arg_.execution_id_,
                                                         arg_.ddl_task_id_,
-                                                        prepare_scn,
-                                                        column_ids))) {
+                                                        prepare_scn))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
       } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(arg_.start_scn_,
                                                                   prepare_scn,
-                                                                  column_ids,
                                                                   arg_.table_id_,
                                                                   arg_.ddl_task_id_))) {
         LOG_WARN("failed to do ddl kv prepare", K(ret), K(arg_));
@@ -1972,7 +1967,6 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     ObDDLSSTableRedoWriter sstable_redo_writer;
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle ls_handle;
-    ObArray<uint64_t> column_ids;
     ObTabletHandle tablet_handle;
     ObDDLKvMgrHandle ddl_kv_mgr_handle;
     if (OB_UNLIKELY(!arg_.is_valid())) {
@@ -1987,15 +1981,11 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
     } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
-    } else if (OB_FAIL(ObDDLUtil::get_tenant_schema_column_ids(tenant_id, arg_.table_id_, column_ids))) {
-      LOG_WARN("fail to get tenant schema column ids", K(ret), K(arg_));
     } else {
       // wait in rpc framework may cause rpc timeout, need sync commit via rs @xiajin
-      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(
-          arg_.start_scn_, arg_.prepare_scn_, arg_.table_id_, arg_.ddl_task_id_, column_ids))) {
+      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(arg_.start_scn_, arg_.prepare_scn_))) {
         LOG_WARN("failed to wait ddl kv commit", K(ret), K(arg_));
-      } else if (OB_FAIL(sstable_redo_writer.write_commit_log(
-          table_key, arg_.prepare_scn_, arg_.table_id_, arg_.ddl_task_id_, column_ids))) {
+      } else if (OB_FAIL(sstable_redo_writer.write_commit_log(table_key, arg_.prepare_scn_))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
       }
     }

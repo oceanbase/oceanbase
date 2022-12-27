@@ -47,16 +47,15 @@ public:
       start_scn_(share::SCN::min_scn()),
       table_id_(0),
       execution_id_(-1),
-      ddl_task_id_(0),
-      column_ids_()
+      ddl_task_id_(0)
   { }
   bool is_valid() const
   {
-    return ls_id_.is_valid() && tablet_id_.is_valid() && start_scn_.is_valid_and_not_min() && column_ids_.count() > 0;
+    return ls_id_.is_valid() && tablet_id_.is_valid() && start_scn_.is_valid_and_not_min();
   }
   virtual ~ObDDLTableMergeDagParam() = default;
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_scn), K_(is_commit), K_(start_scn),
-    K_(table_id), K_(execution_id), K_(ddl_task_id), K_(column_ids));
+    K_(table_id), K_(execution_id), K_(ddl_task_id));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
@@ -66,7 +65,6 @@ public:
   uint64_t table_id_; // used for report ddl checksum
   int64_t execution_id_; // used for report ddl checksum
   int64_t ddl_task_id_; // used for report ddl checksum
-  ObArray<uint64_t> column_ids_;
 };
 
 class ObDDLTableMergeDag : public share::ObIDag
@@ -175,8 +173,7 @@ public:
                                  const uint64_t table_id,
                                  const int64_t execution_id,
                                  const int64_t ddl_task_id,
-                                 const ObIArray<int64_t> &column_checksums,
-                                 const ObIArray<uint64_t> &column_ids);
+                                 const ObIArray<int64_t> &column_checksums);
   static int check_and_get_major_sstable(const share::ObLSID &ls_id,
                                          const ObTabletID &tablet_id,
                                          const blocksstable::ObSSTable *&latest_major_sstable);

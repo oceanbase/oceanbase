@@ -6741,36 +6741,31 @@ OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLPrepareLogArg, tenant_id_, ls_id_, table_
                     table_id_, execution_id_, ddl_task_id_);
 
 ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
-  : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), prepare_scn_(SCN::min_scn()),
-    table_id_(0), ddl_task_id_(0)
+  : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), prepare_scn_(SCN::min_scn())
 {}
 
 int ObRpcRemoteWriteDDLCommitLogArg::init(const uint64_t tenant_id,
                                           const share::ObLSID &ls_id,
                                           const storage::ObITable::TableKey &table_key,
                                           const SCN &start_scn,
-                                          const SCN &prepare_scn,
-                                          const uint64_t table_id,
-                                          const int64_t ddl_task_id)
+                                          const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid_and_not_min()
-                  || !prepare_scn.is_valid_and_not_min() || table_id <= 0 || ddl_task_id <= 0)) {
+                  || !prepare_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_scn), K(prepare_scn), K(table_id), K(ddl_task_id));
+    LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_scn), K(prepare_scn));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     table_key_ = table_key;
     start_scn_ = start_scn;
     prepare_scn_ = prepare_scn;
-    table_id_ = table_id;
-    ddl_task_id_ = ddl_task_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLCommitLogArg, tenant_id_, ls_id_, table_key_, start_scn_, prepare_scn_, table_id_, ddl_task_id_);
+OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLCommitLogArg, tenant_id_, ls_id_, table_key_, start_scn_, prepare_scn_);
 
 bool ObCheckLSCanOfflineArg::is_valid() const
 {

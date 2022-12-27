@@ -954,48 +954,6 @@ int ObDDLUtil::check_table_exist(
   return ret;
 }
 
-int ObDDLUtil::get_tenant_schema_column_ids(
-  const uint64_t tenant_id,
-  const uint64_t table_id,
-  ObIArray<uint64_t> &column_ids)
-{
-  int ret = OB_SUCCESS;
-
-  ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  ObArray<ObColDesc> column_desc;
-  column_ids.reset(); // make clear
-
-  if (OB_UNLIKELY(!is_valid_id(table_id) || 0 == table_id || !is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_id), K(tenant_id));
-  } else if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("schema service is null pointer", K(ret), K(tenant_id), KP(schema_service));
-  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_INFO("table not exit", K(ret), K(tenant_id), K(table_id));
-  } else if (OB_FAIL(table_schema->get_multi_version_column_descs(column_desc))) {
-    LOG_WARN("fail to get column ids", K(ret), K(ls_id), K(tenant_id), K(table_id));
-  } else if (column_desc.count() <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("columns desc should not be zero", K(ret), K(tenant_id), K(table_id), K(column_desc));
-  } else {
-    int64_t column_idx = 0;
-    for (column_idx = 0; OB_SUCC(ret) && column_idx < column_desc.count(); ++column_idx) {
-      if (OB_FAIL(column_ids.push_back(column_desc.at(column_idx).col_id_))) {
-        LOG_WARN("fail to get columns ids", K(ret), K(tenant_id), K(table_id), K(column_desc));
-      }
-    }
-  }
-  return ret;
-}
-
 int64_t ObDDLUtil::get_ddl_rpc_timeout()
 {
   return max(GCONF.rpc_timeout, 9 * 1000 * 1000L);
@@ -1509,11 +1467,13 @@ int ObCheckTabletDataComplementOp::check_all_tablet_sstable_status(
     LOG_WARN("fail to get tablets", K(ret), K(tenant_id), K(index_table_id));
   } else if (OB_FAIL(check_tablet_merge_status(tenant_id, dest_tablet_ids, snapshot_version, is_all_sstable_build_finished))){
     LOG_WARN("fail to check tablet merge status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(snapshot_version));
-  } else if (OB_FAIL(is_all_sstable_build_finished
-      && check_tablet_checksum_update_status(tenant_id, table_id, ddl_task_id, execution_id, dest_tablet_ids, tablet_checksum_status))) {
-    LOG_WARN("fail to check tablet checksum update status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
   } else {
-    is_all_sstable_build_finished &= tablet_checksum_status;
+    if (is_all_sstable_build_finished) {
+      if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, index_table_id, ddl_task_id, execution_id, dest_tablet_ids, tablet_checksum_status))) {
+        LOG_WARN("fail to check tablet checksum update status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
+      }
+      is_all_sstable_build_finished &= tablet_checksum_status;
+    }
   }
   return ret;
 }
@@ -1560,6 +1520,9 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
         } else {
           usleep(10 * 1000); // sleep 10ms
         }
+      }
+      if (OB_EAGAIN == ret) { // retry
+        ret = OB_SUCCESS;
       }
       need_wait = !is_all_sstable_build_finished && is_old_task_session_exist;
     } while (OB_SUCC(ret) && need_wait); // TODO: time out

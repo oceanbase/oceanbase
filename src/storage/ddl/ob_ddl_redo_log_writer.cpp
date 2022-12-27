@@ -1061,8 +1061,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
                                               const int64_t table_id,
                                               const int64_t execution_id,
                                               const int64_t ddl_task_id,
-                                              SCN &prepare_scn,
-                                              const ObIArray<uint64_t> &column_ids)
+                                              SCN &prepare_scn)
 
 {
   int ret = OB_SUCCESS;
@@ -1082,10 +1081,10 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn_.is_valid_and_not_min() || column_ids.count() < 0)) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn_.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_), K(column_ids));
-  } else if (OB_FAIL(log.init(table_key, get_start_scn(), table_id, ddl_task_id, column_ids))) {
+    LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_));
+  } else if (OB_FAIL(log.init(table_key, get_start_scn()))) {
     LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn_));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
@@ -1126,10 +1125,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
 }
 
 int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key,
-                                             const SCN &prepare_scn,
-                                             const uint64_t table_id,
-                                             const int64_t ddl_task_id,
-                                             const ObIArray<uint64_t> &column_ids)
+                                             const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -1139,11 +1135,10 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn_.is_valid_and_not_min() ||
-           !prepare_scn.is_valid_and_not_min() || column_ids.count() < 0)) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn_.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_), K(prepare_scn), K(column_ids));
-  } else if (OB_FAIL(log.init(table_key, get_start_scn(), prepare_scn, table_id, ddl_task_id, column_ids))) {
+    LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
+  } else if (OB_FAIL(log.init(table_key, get_start_scn(), prepare_scn))) {
     LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
@@ -1167,7 +1162,7 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
     ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
     obrpc::ObRpcRemoteWriteDDLCommitLogArg arg;
     obrpc::Int64 log_ns;
-    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn(), prepare_scn, table_id, ddl_task_id))) {
+    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn(), prepare_scn))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLCommitLogArg", K(ret));
     } else if (OB_ISNULL(srv_rpc_proxy)) {
       ret = OB_ERR_SYS;
