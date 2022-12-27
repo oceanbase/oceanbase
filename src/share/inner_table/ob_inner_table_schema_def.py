@@ -5160,6 +5160,7 @@ def_table_schema(
 # 444 : __all_reserved_snapshot
 # 445 : __all_cluster_event_history
 # 446 : __all_ls_transfer_member_list_lock_info
+# 447 : __all_ls_log_restore_stat
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -10916,6 +10917,7 @@ def_table_schema(
 # 12364: __all_virtual_ls_arb_replica_task
 # 12365: __all_virtual_ls_arb_replica_task_history
 
+# 12366: __all_virtual_archive_dest_status
 #
 # 余留位置
 #
@@ -11193,6 +11195,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_ke
 
 # 15288: __all_virtual_ls_arb_replica_task
 # 15289: __all_virtual_ls_arb_replica_task_history
+
+# 15290: __all_virtual_archive_dest_status
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
@@ -23428,6 +23432,12 @@ def_table_schema(
 # 21359: DBA_OB_LS_ARB_REPLICA_TASKS
 # 21360: CDB_OB_LS_ARB_REPLICA_TASK_HISTORY
 # 21361: DBA_OB_LS_ARB_REPLICA_TASK_HISTORY
+
+# 21362: V$OB_ARCHIVE_DEST_STATUS
+# 21363: DBA_OB_LS_LOG_ARCHIVE_PROGRESS
+# 21364: CDB_OB_LS_LOG_ARCHIVE_PROGRESS
+# 21365: DBA_OB_LS_LOG_RESTORE_STAT
+# 21366: CDB_OB_LS_LOG_RESTORE_STAT
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]
@@ -45042,6 +45052,10 @@ FROM (
 # 28173: V$OB_SQL_PLAN
 # 28174: GV$OB_PLAN_REAL_INFO
 # 28175: V$OB_PLAN_REAL_INFO
+
+# 28176:  V$OB_ARCHIVE_DEST_STATUS
+# 28177:  DBA_OB_LS_LOG_ARCHIVE_PROGRESS
+# 28178:  DBA_OB_LS_LOG_RESTORE_STAT
 
 ################################################################################
 # Lob Table (50000, 70000)
