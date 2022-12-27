@@ -1,12 +1,8 @@
 ob_set_subtarget(ob_share ALONE
   ob_rpc_struct.cpp
   ob_tenant_mgr.cpp
-  schema/ob_schema_getter_guard.cpp
+  datum/ob_datum_funcs.cpp
   schema/ob_schema_service_sql_impl.cpp
-  schema/ob_schema_struct.cpp
-  schema/ob_sequence_sql_service.cpp
-  schema/ob_server_schema_service.cpp
-  schema/ob_table_schema.cpp
   parameter/ob_parameter_attr.cpp
 )
 
@@ -191,7 +187,6 @@ ob_set_subtarget(ob_share common_mixed
   client_feedback/ob_feedback_int_struct.cpp
   client_feedback/ob_feedback_partition_struct.cpp
   datum/ob_datum.cpp
-  datum/ob_datum_funcs.cpp
   diagnosis/ob_sql_monitor_statname.cpp
   diagnosis/ob_sql_plan_monitor_node_list.cpp
   interrupt/ob_global_interrupt_call.cpp
@@ -394,6 +389,11 @@ ob_set_subtarget(ob_share schema
   schema/ob_context_sql_service.cpp
   schema/ob_context_mgr.cpp
   schema/ob_context_ddl_proxy.cpp
+  schema/ob_schema_getter_guard.cpp
+  schema/ob_schema_struct.cpp
+  schema/ob_sequence_sql_service.cpp
+  schema/ob_server_schema_service.cpp
+  schema/ob_table_schema.cpp
 )
 
 ob_set_subtarget(ob_share stat

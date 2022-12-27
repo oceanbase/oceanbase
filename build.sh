@@ -140,7 +140,7 @@ function do_build
 function do_clean
 {
     echo_log "cleaning..."
-    find . -maxdepth 1 -type d -name 'build_*' | xargs rm -rf
+    find . -maxdepth 1 -type d -name 'build_*' | grep -v 'build_ccls' | xargs rm -rf
 }
 
 # build - configurate project and prepare to compile, by calling make
