@@ -35,6 +35,7 @@
 #include "pl/ob_pl.h"
 
 #include "storage/tx/wrs/ob_weak_read_service.h"         // ObWeakReadService
+#include "storage/tx/wrs/ob_black_list.h"                // ObBLService
 #include "storage/ob_long_ops_monitor.h"
 #include "storage/ob_partition_component_factory.h"
 
@@ -370,6 +371,8 @@ private:
 
   // Weakly Consistent Read Service
   transaction::ObWeakReadService  weak_read_service_;
+  // blacklist service
+  transaction::ObBLService &bl_service_;
   // table service
   ObTableService table_service_;
 

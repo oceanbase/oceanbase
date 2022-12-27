@@ -2921,5 +2921,18 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/wan7iw4mox8vgkfm"
+  },
+  "ob_max_read_stale_time": {
+    "id": 10137,
+    "name": "ob_max_read_stale_time",
+    "value": "5000000",
+    "data_type": "int",
+    "info": "max stale time(us) for weak read query ",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large",
+    "publish_version": "410",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "https://yuque.antfin.com/ob/product_functionality_review/ns7okery0azyvlnp"
   }
 }

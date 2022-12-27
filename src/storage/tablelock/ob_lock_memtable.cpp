@@ -335,7 +335,6 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
                                        lock_id,
                                        lock_wait_expire_ts,
                                        remote_tx,
-                                       mem_ctx->is_can_elr(),
                                        -1,
                                        -1, // total_trans_node_cnt
                                        tx_id,

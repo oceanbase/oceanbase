@@ -148,7 +148,7 @@ int GetTxStateWithSCNFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_
   // return the transaction state_ according to the merge log ts.
   // the detailed document is available as follows.
   // https://yuque.antfin-inc.com/docs/share/a3160d5e-6e1a-4980-a12e-4af653c6cf57?#
-  if (ObTxData::RUNNING == state) {
+  if (ObTxData::RUNNING == state || ObTxData::ELR_COMMIT == state) {
     // Case 1: data is during execution, so we return the running state with
     // INT64_MAX as version
     state_ = ObTxData::RUNNING;
@@ -168,11 +168,6 @@ int GetTxStateWithSCNFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_
     // ts, so we return the abort state with 0 as txn version
     state_ = ObTxData::ABORT;
     trans_version_ = SCN::min_scn();
-  } else if (ObTxData::ELR_COMMIT == state) {
-    // Case 5: data is elr committed and the required state is after the merge log
-    // ts, it means tx's state is completely decided so it must not be elr commit
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "unexpected state", K(ret), K(tx_data), KPC(tx_cc_ctx));
   } else {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "unexpected transaction state_", K(ret), K(tx_data));
@@ -218,13 +213,8 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
       is_determined_state_ = true;
       break;
     }
+    case ObTxData::RUNNING:
     case ObTxData::ELR_COMMIT: {
-      can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
-      trans_version_ = commit_version;
-      is_determined_state_ = false;
-      break;
-    }
-    case ObTxData::RUNNING: {
       // Case 2: data is during execution, so the state is not decided.
       if (read_latest && reader_tx_id == data_tx_id) {
         // Case 2.0: read the latest written of current txn
@@ -272,15 +262,22 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
           can_read_ = false;
           trans_version_ = SCN::min_scn();
         } else {
-          // Case 2.2.3: data is in prepare state and the prepare version is
-          // smaller than the read txn's snapshot version, then the data's
-          // commit version may or may not be bigger than the read txn's
-          // snapshot version, so we are unsure whether we can read it and we
-          // need wait for the commit version of the data
-          ret = OB_ERR_SHARED_LOCK_CONFLICT;
-          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            TRANS_LOG(WARN, "lock_for_read need retry", K(ret),
-                      K(tx_data), K(lock_for_read_arg_), K(tx_cc_ctx));
+          // Only dml statement can read elr data
+          if (ObTxData::ELR_COMMIT == state
+              && lock_for_read_arg_.mvcc_acc_ctx_.get_tx_id().is_valid()) {
+            can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
+            trans_version_ = commit_version;
+          } else {
+            // Case 2.2.3: data is in prepare state and the prepare version is
+            // smaller than the read txn's snapshot version, then the data's
+            // commit version may or may not be bigger than the read txn's
+            // snapshot version, so we are unsure whether we can read it and we
+            // need wait for the commit version of the data
+            ret = OB_ERR_SHARED_LOCK_CONFLICT;
+            if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+              TRANS_LOG(WARN, "lock_for_read need retry", K(ret),
+                        K(tx_data), K(lock_for_read_arg_), K(tx_cc_ctx));
+            }
           }
         }
       }

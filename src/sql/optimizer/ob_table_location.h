@@ -603,6 +603,7 @@ public:
 
   static int get_is_weak_read(const ObDMLStmt &dml_stmt,
                               const ObSQLSessionInfo *session_info,
+                              const ObSqlCtx *sql_ctx,
                               bool &is_weak_read);
 
   int send_add_interval_partition_rpc(ObExecContext &exec_ctx,

@@ -244,6 +244,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_interm_result_mem_limit",
   "ob_last_schema_version",
   "ob_log_level",
+  "ob_max_read_stale_time",
   "ob_org_cluster_id",
   "ob_pl_block_timeout",
   "ob_plan_cache_evict_high_percentage",
@@ -467,6 +468,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT,
   SYS_VAR_OB_LAST_SCHEMA_VERSION,
   SYS_VAR_OB_LOG_LEVEL,
+  SYS_VAR_OB_MAX_READ_STALE_TIME,
   SYS_VAR_OB_ORG_CLUSTER_ID,
   SYS_VAR_OB_PL_BLOCK_TIMEOUT,
   SYS_VAR_OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE,
@@ -783,7 +785,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "_windowfunc_optimization_settings",
   "ob_enable_rich_error_msg",
   "ob_sql_plan_memory_percentage",
-  "log_row_value_options"
+  "log_row_value_options",
+  "ob_max_read_stale_time"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1171,6 +1174,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObEnableRichErrorMsg)
         + sizeof(ObSysVarObSqlPlanMemoryPercentage)
         + sizeof(ObSysVarLogRowValueOptions)
+        + sizeof(ObSysVarObMaxReadStaleTime)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3157,6 +3161,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_ROW_VALUE_OPTIONS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarLogRowValueOptions));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObMaxReadStaleTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObMaxReadStaleTime", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_MAX_READ_STALE_TIME))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObMaxReadStaleTime));
       }
     }
 
@@ -5602,6 +5615,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogRowValueOptions())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarLogRowValueOptions", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_MAX_READ_STALE_TIME: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObMaxReadStaleTime)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObMaxReadStaleTime)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObMaxReadStaleTime())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObMaxReadStaleTime", K(ret));
       }
       break;
     }

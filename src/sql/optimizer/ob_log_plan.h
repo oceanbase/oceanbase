@@ -1671,6 +1671,8 @@ private: // member functions
   static int weak_select_replicas(const common::ObAddr &local_server,
                                   ObRoutePolicyType route_type,
                                   bool proxy_priority_hit_support,
+                                  uint64_t tenant_id,
+                                  int64_t max_read_stale_time,
                                   common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                   bool &is_hit_partition,
                                   share::ObFollowerFirstFeedbackType &follower_first_feedback);

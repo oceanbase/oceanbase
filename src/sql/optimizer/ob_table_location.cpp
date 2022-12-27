@@ -998,7 +998,10 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret)) {
     bool is_weak_read = false;
-    if (OB_FAIL(get_is_weak_read(stmt, exec_ctx.get_my_session(), is_weak_read))) {
+    if (OB_FAIL(get_is_weak_read(stmt,
+                                 exec_ctx.get_my_session(),
+                                 exec_ctx.get_sql_ctx(),
+                                 is_weak_read))) {
       LOG_WARN("get is weak read failed", K(ret));
     } else if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
       loc_meta_.is_dup_table_ = 1;
@@ -1272,7 +1275,7 @@ int ObTableLocation::init(
   }
   if (OB_SUCC(ret)) {
     bool is_weak_read = false;
-    if (OB_FAIL(get_is_weak_read(stmt, session_info, is_weak_read))) {
+    if (OB_FAIL(get_is_weak_read(stmt, session_info, exec_ctx->get_sql_ctx(), is_weak_read))) {
       LOG_WARN("get is weak read failed", K(ret));
     } else if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
       loc_meta_.is_dup_table_ = 1;
@@ -1291,20 +1294,24 @@ int ObTableLocation::init(
 
 int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
                                       const ObSQLSessionInfo *session,
+                                      const ObSqlCtx *sql_ctx,
                                       bool &is_weak_read)
 {
   int ret = OB_SUCCESS;
   is_weak_read = false;
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session) || OB_ISNULL(sql_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected null", K(ret), K(session));
+    LOG_ERROR("unexpected null", K(ret), K(session), K(sql_ctx));
   } else if (dml_stmt.get_query_ctx()->has_dml_write_stmt_) {
     is_weak_read = false;
   } else {
     ObConsistencyLevel consistency_level = INVALID_CONSISTENCY;
     ObTxConsistencyType trans_consistency_type = ObTxConsistencyType::INVALID;
     if (stmt::T_SELECT == dml_stmt.get_stmt_type()) {
-      if (OB_UNLIKELY(INVALID_CONSISTENCY != dml_stmt.get_query_ctx()->get_global_hint().read_consistency_)) {
+      if (sql_ctx->is_protocol_weak_read_) {
+        consistency_level = WEAK;
+      } else if (OB_UNLIKELY(INVALID_CONSISTENCY
+             != dml_stmt.get_query_ctx()->get_global_hint().read_consistency_)) {
         consistency_level = dml_stmt.get_query_ctx()->get_global_hint().read_consistency_;
       } else {
         consistency_level = session->get_consistency_level();
@@ -1374,8 +1381,10 @@ int ObTableLocation::calculate_partition_ids_by_rowkey(ObSQLSessionInfo &session
   ObArenaAllocator allocator(ObModIds::OB_SQL_TABLE_LOCATION);
   SMART_VAR(ObExecContext, exec_ctx, allocator) {
     ObSqlSchemaGuard sql_schema_guard;
+    ObSqlCtx sql_ctx;
     sql_schema_guard.set_schema_guard(&schema_guard);
     exec_ctx.set_my_session(&session_info);
+    exec_ctx.set_sql_ctx(&sql_ctx);
     ObDASTabletMapper tablet_mapper;
     if (is_non_partition_optimized_ && table_id == loc_meta_.ref_table_id_) {
       tablet_mapper.set_non_partitioned_table_ids(tablet_id_, object_id_, &related_list_);

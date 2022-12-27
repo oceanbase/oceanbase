@@ -949,10 +949,15 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   loc_meta.ref_table_id_ = table_schema.get_table_id();
   loc_meta.is_dup_table_ = table_schema.is_duplicate_table();
   bool is_weak_read = false;
-  if (stmt.get_query_ctx()->has_dml_write_stmt_) {
+  if (OB_ISNULL(cg_.opt_ctx_) || OB_ISNULL(cg_.opt_ctx_->get_exec_ctx())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(cg_.opt_ctx_), K(ret));
+  } else if (stmt.get_query_ctx()->has_dml_write_stmt_) {
     loc_meta.select_leader_ = 1;
     loc_meta.is_weak_read_ = 0;
-  } else if (OB_FAIL(ObTableLocation::get_is_weak_read(stmt, &session, is_weak_read))) {
+  } else if (OB_FAIL(ObTableLocation::get_is_weak_read(stmt, &session,
+                                                       cg_.opt_ctx_->get_exec_ctx()->get_sql_ctx(),
+                                                       is_weak_read))) {
     LOG_WARN("get is weak read failed", K(ret));
   } else if (is_weak_read) {
     loc_meta.is_weak_read_ = 1;

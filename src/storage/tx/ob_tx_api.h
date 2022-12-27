@@ -226,13 +226,15 @@ int get_ls_read_snapshot_version(const share::ObLSID &local_ls_id,
 /**
  * get_weak_read_snapshot_version - get snapshot version for weak read
  *
+ * max_read_stale_time              the minimal threshold of stale snapshot
  * @snapshot_version:               the snapshot acquired
  *
  * Return:
  * OB_SUCCESS              - OK
  * OB_REPLICA_NOT_READABLE - snapshot is too stale
  */
-int get_weak_read_snapshot_version(share::SCN &snapshot_version);
+int get_weak_read_snapshot_version(const int64_t max_read_stale_time,
+                                   share::SCN &snapshot_version);
 /*
  * release_snapshot - release snapshot
  *

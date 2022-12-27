@@ -559,6 +559,9 @@ public:
   {
     return sys_vars_cache_.get_ob_trx_lock_timeout();
   }
+  int64_t get_ob_max_read_stale_time() {
+    return sys_vars_cache_.get_ob_max_read_stale_time();
+  }
   int get_sql_throttle_current_priority(int64_t &sql_throttle_current_priority)
   {
     sql_throttle_current_priority = sys_vars_cache_.get_sql_throttle_current_priority();
@@ -1473,7 +1476,8 @@ private:
         nls_collation_(CS_TYPE_INVALID),
         nls_nation_collation_(CS_TYPE_INVALID),
         ob_trace_info_(),
-        ob_plsql_ccflags_()
+        ob_plsql_ccflags_(),
+        ob_max_read_stale_time_(0)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1526,6 +1530,7 @@ private:
       ob_trace_info_.reset();
       iso_nls_currency_.reset();
       ob_plsql_ccflags_.reset();
+      ob_max_read_stale_time_ = 0;
     }
     void set_nls_date_format(const common::ObString &format)
     {
@@ -1614,7 +1619,7 @@ private:
                  K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
                  K_(is_result_accurate), K_(character_set_results),
                  K_(character_set_connection), K_(ob_pl_block_timeout), K_(ob_plsql_ccflags),
-                 K_(iso_nls_currency));
+                 K_(iso_nls_currency), K_(ob_max_read_stale_time));
   public:
     static const int64_t MAX_NLS_FORMAT_STR_LEN = 256;
 
@@ -1665,6 +1670,7 @@ private:
     char trace_info_buf_[OB_TRACE_BUFFER_SIZE];
     ObString ob_plsql_ccflags_;
     char plsql_ccflags_[OB_TMP_BUF_SIZE_256];
+    int64_t ob_max_read_stale_time_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -1770,6 +1776,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_pl_block_timeout);
     DEF_SYS_VAR_CACHE_FUNCS_STR(plsql_ccflags);
     DEF_SYS_VAR_CACHE_FUNCS_STR(iso_nls_currency);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_max_read_stale_time);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -1831,6 +1838,7 @@ private:
         bool inc_ob_pl_block_timeout_:1;
         bool inc_plsql_ccflags_:1;
         bool inc_iso_nls_currency_:1;
+        bool inc_ob_max_read_stale_time_:1;
       };
     };
   };

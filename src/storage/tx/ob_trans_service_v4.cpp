@@ -1132,8 +1132,7 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
   int ret = OB_SUCCESS;
   bool existed = false;
   int64_t epoch = 0;
-  ObTxCreateArg arg(tx.can_elr_,  /* can_elr */
-                    false,  /* for_replay */
+  ObTxCreateArg arg(false,  /* for_replay */
                     tx.tenant_id_,
                     tx.tx_id_,
                     ls_id,

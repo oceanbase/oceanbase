@@ -20,15 +20,14 @@ namespace oceanbase
 namespace transaction
 {
 
-int ObTxELRUtil::check_and_update_tx_elr_info(ObTxDesc &tx, const bool can_elr)
+int ObTxELRUtil::check_and_update_tx_elr_info(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
-  if (can_elr && can_tenant_elr_) {  // tenant config enable elr
+  if (can_tenant_elr_ && OB_SYS_TENANT_ID != MTL_ID()) {  // tenant config enable elr
     tx.set_can_elr(true);
     TX_STAT_ELR_ENABLE_TRANS_INC(MTL_ID());
-  } else {
-    refresh_elr_tenant_config_();
   }
+  refresh_elr_tenant_config_();
   return ret;
 }
 

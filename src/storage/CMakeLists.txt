@@ -189,6 +189,7 @@ ob_set_subtarget(ob_storage tablet
 )
 
 ob_set_subtarget(ob_storage tx_wrs
+  tx/wrs/ob_black_list.cpp
   tx/wrs/ob_i_weak_read_service.cpp
   tx/wrs/ob_tenant_weak_read_cluster_service.cpp
   tx/wrs/ob_tenant_weak_read_cluster_version_mgr.cpp
