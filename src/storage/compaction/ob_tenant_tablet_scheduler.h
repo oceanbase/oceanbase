@@ -166,7 +166,10 @@ private:
   int schedule_ls_minor_merge(
       ObLS &ls);
   int try_remove_old_table(ObLS &ls);
-  int restart_schedule_timer_task(const int64_t interval);
+  int restart_schedule_timer_task(
+    const int64_t interval,
+    const int64_t tg_id,
+    common::ObTimerTask &timer_task);
   int update_report_scn_as_ls_leader(
       ObLS &ls);
 

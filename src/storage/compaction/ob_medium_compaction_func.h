@@ -91,7 +91,7 @@ protected:
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result);
   static int check_need_merge_and_schedule(
-      const share::ObLSID &ls_id,
+      ObLS &ls,
       ObTablet &tablet,
       const int64_t schedule_scn,
       bool &need_merge);

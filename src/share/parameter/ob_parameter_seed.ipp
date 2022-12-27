@@ -746,6 +746,9 @@ DEF_BOOL(_enable_parallel_minor_merge, OB_TENANT_PARAMETER, "True",
          "specifies whether enable parallel minor merge. "
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_adaptive_compaction, OB_TENANT_PARAMETER, "True",
+         "specifies whether allow adaptive compaction schedule and information collection",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(compaction_low_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of low priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

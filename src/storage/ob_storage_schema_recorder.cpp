@@ -152,6 +152,8 @@ int ObStorageSchemaRecorder::inner_replay_clog(
   } else if (OB_FAIL(tmp_tablet_handle.get_obj()->save_multi_source_data_unit(&replay_storage_schema, scn,
       true/*for_replay*/, memtable::MemtableRefOp::NONE))) {
     LOG_WARN("failed to save storage schema", K(ret), K_(tablet_id), K(replay_storage_schema));
+  } else {
+    LOG_INFO("success to replay schema clog", K(ret), K(replay_storage_schema.get_schema_version()), K(replay_storage_schema.compat_mode_));
   }
   replay_storage_schema.reset();
   tmp_tablet_handle.reset();

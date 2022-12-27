@@ -1281,11 +1281,17 @@ int ObTabletMergeFinishTask::try_schedule_compaction_after_mini(
   int tmp_ret = OB_SUCCESS;
   const ObTabletID &tablet_id = ctx.param_.tablet_id_;
   ObLSID ls_id = ctx.param_.ls_id_;
-
+  bool enable_adaptive_compaction = true;
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
+    }
+  }
   // report tablet stat
   if (0 == ctx.get_merge_info().get_sstable_merge_info().macro_block_count_) {
     // empty mini compaction, no need to reprot stat
-  } else if (OB_TMP_FAIL(try_report_tablet_stat_after_mini(ctx))) {
+  } else if (enable_adaptive_compaction && OB_TMP_FAIL(try_report_tablet_stat_after_mini(ctx))) {
     LOG_WARN("failed to report table stat after mini compaction", K(tmp_ret), K(ls_id), K(tablet_id));
   }
   if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(

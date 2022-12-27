@@ -1487,8 +1487,17 @@ int ObTablet::do_rowkey_exists(
         // ROWKEY IN_ROW_CACHE / NOT EXIST
       } else if (FALSE_IT(store_ctx.tablet_stat_.exist_row_read_table_cnt_ = check_table_cnt)) {
       } else if (FALSE_IT(store_ctx.tablet_stat_.exist_row_total_table_cnt_ = table_iter.count())) {
-      } else if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(store_ctx.tablet_stat_))) {
-        LOG_WARN("failed to report tablet stat", K(tmp_ret), K(stat));
+      } else {
+        bool enable_adaptive_compaction = true;
+        {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+          if (tenant_config.is_valid()) {
+            enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
+          }
+        }
+        if (enable_adaptive_compaction && OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(store_ctx.tablet_stat_))) {
+          LOG_WARN("failed to report tablet stat", K(tmp_ret), K(stat));
+        }
       }
     }
 
@@ -1539,8 +1548,17 @@ int ObTablet::do_rowkeys_exist(ObTableStoreIterator &tables_iter, ObRowsInfo &ro
     int tmp_ret = OB_SUCCESS;
     if (0 == access_ctx.table_store_stat_.exist_row_.empty_read_cnt_) {
       // ROWKEY IN_ROW_CACHE / NOT EXIST
-    } else if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(tablet_stat))) {
-      LOG_WARN("failed to report tablet stat", K(tmp_ret), K(tablet_stat));
+    } else {
+      bool enable_adaptive_compaction = true;
+      {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        if (tenant_config.is_valid()) {
+          enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
+        }
+      }
+      if (enable_adaptive_compaction && OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->report_stat(tablet_stat))) {
+        LOG_WARN("failed to report tablet stat", K(tmp_ret), K(tablet_stat));
+      }
     }
   }
   return ret;
@@ -2451,7 +2469,7 @@ int ObTablet::get_kept_multi_version_start(
   uint64_t compat_version = 0;
   if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
     LOG_WARN("fail to get data version", K(tmp_ret));
-  } else if (compat_version >= DATA_VERSION_4_1_0_0) {
+  } else if (compat_version >= DATA_VERSION_4_1_0_0 && ls.get_min_reserved_snapshot() > 0) {
     ls_min_reserved_snapshot = ls.get_min_reserved_snapshot();
   }
   if (OB_SUCC(ret)) {

@@ -274,8 +274,13 @@ int ObTenantTabletScheduler::reload_tenant_config()
   } else if (is_stop_) {
     // do nothing
   } else if (schedule_interval_ != merge_schedule_interval) {
-    if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval))) {
+    if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, medium_loop_tg_id_, medium_loop_task_))) {
       LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
+    } else if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, merge_loop_tg_id_, merge_loop_task_))) {
+      LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
+    } else {
+      schedule_interval_ = merge_schedule_interval;
+      LOG_INFO("succeeded to reload new merge schedule interval", K(merge_schedule_interval));
     }
   }
   return ret;
@@ -522,7 +527,7 @@ int ObTenantTabletScheduler::schedule_merge(const int64_t broadcast_version)
         "last_merged_version",
         merged_version_);
 
-    if (OB_FAIL(restart_schedule_timer_task(CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL))) {
+    if (OB_FAIL(restart_schedule_timer_task(CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL, medium_loop_tg_id_, medium_loop_task_))) {
       LOG_WARN("failed to restart schedule timer task", K(ret));
     }
   }
@@ -870,6 +875,13 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     bool is_leader = false;
     bool could_major_merge = false;
     const int64_t major_frozen_scn = get_frozen_version();
+    bool enable_adaptive_compaction = true;
+    {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
+      }
+    }
 
     if (MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
       could_major_merge = true;
@@ -933,12 +945,14 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
           } else if (ObTimeUtility::fast_current_time() <
               tablet->get_medium_compaction_info_list().get_wait_check_medium_scn() + WAIT_MEDIUM_CHECK_THRESHOLD) {
             // need wait 10 mins before schedule meta major
-          } else if (OB_TMP_FAIL(schedule_tablet_meta_major_merge(ls_handle, tablet_handle))) {
+          } else if (enable_adaptive_compaction && OB_TMP_FAIL(schedule_tablet_meta_major_merge(ls_handle, tablet_handle))) {
             if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
               LOG_WARN("failed to schedule tablet merge", K(tmp_ret), K(ls_id), K(tablet_id));
             }
           }
-        } else if (could_major_merge && OB_TMP_FAIL(func.schedule_next_medium_for_leader(
+        } else if (could_major_merge
+          && (!tablet_merge_finish || enable_adaptive_compaction)
+          && OB_TMP_FAIL(func.schedule_next_medium_for_leader(
             tablet_merge_finish ? 0 : merge_version))) { // schedule another round
           LOG_WARN("failed to schedule next medium", K(tmp_ret), K(ls_id), K(tablet_id));
         } else {
@@ -1050,8 +1064,8 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
         }
       } else {
         schedule_stats_.check_weak_read_ts_cnt_++;
-        if (OB_FAIL(restart_schedule_timer_task(CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL))) {
-          LOG_WARN("failed to restart schedule timer task", K(ret));
+        if (OB_FAIL(restart_schedule_timer_task(CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL, medium_loop_tg_id_, medium_loop_task_))) {
+          LOG_WARN("failed to restart schedule timer task", K(ret), K(medium_loop_tg_id_));
         }
       }
 
@@ -1097,21 +1111,19 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
   return ret;
 }
 
-int ObTenantTabletScheduler::restart_schedule_timer_task(const int64_t schedule_interval)
+int ObTenantTabletScheduler::restart_schedule_timer_task(
+  const int64_t schedule_interval,
+  const int64_t tg_id,
+  common::ObTimerTask &timer_task)
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
   if (OB_FAIL(TG_TASK_EXIST(medium_loop_tg_id_, medium_loop_task_, is_exist))) {
     LOG_ERROR("failed to check merge schedule task exist", K(ret));
-  } else if (is_exist) {
-    TG_CANCEL(medium_loop_tg_id_, medium_loop_task_);
-  }
-  if (OB_FAIL(ret)) {
+  } else if (is_exist && OB_FAIL(TG_CANCEL_R(medium_loop_tg_id_, medium_loop_task_))) {
+    LOG_WARN("failed to cancel task", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(medium_loop_tg_id_, medium_loop_task_, schedule_interval, true/*repeat*/))) {
     LOG_WARN("Fail to schedule minor merge scan task", K(ret));
-  } else {
-    schedule_interval_ = schedule_interval;
-    LOG_INFO("succeeded to reload new merge schedule interval", K(schedule_interval));
   }
   return ret;
 }
