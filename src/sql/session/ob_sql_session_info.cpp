@@ -1825,13 +1825,14 @@ bool ObSQLSessionInfo::get_changed_package_state_num() const
 int ObSQLSessionInfo::add_changed_package_info(ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
-  ObPLExecCtx pl_ctx(&get_allocator(), &exec_ctx, NULL, NULL, NULL, NULL);
+  ObPLExecCtx pl_ctx(NULL, &exec_ctx, NULL, NULL, NULL, NULL);
   ObArray<ObString> key;
   ObArray<ObObj> value;
   if (0 != package_state_map_.size()) {
     FOREACH(it, package_state_map_) {
       ObPLPackageState *package_state = it->second;
       if (package_state->is_package_info_changed()) {
+        pl_ctx.allocator_ = &(package_state->get_pkg_allocator());
         if (OB_FAIL(package_state->convert_changed_info_to_string_kvs(pl_ctx, key, value))) {
           LOG_WARN("convert package state to string kv failed",
             K(ret), KPC(package_state));
