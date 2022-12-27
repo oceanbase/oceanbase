@@ -5934,6 +5934,7 @@ int ObSPIService::fill_cursor(sqlclient::ObMySQLResult *mysql_result, ObSPICurso
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mysql_result) || OB_ISNULL(cursor)
+      || OB_ISNULL(cursor->allocator_)
       || OB_ISNULL(static_cast<observer::ObInnerSQLResult*>(mysql_result)->get_result_set())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(mysql_result), K(cursor), K(ret));
@@ -5960,9 +5961,23 @@ int ObSPIService::fill_cursor(sqlclient::ObMySQLResult *mysql_result, ObSPICurso
       } else if (OB_ISNULL(inner_result->get_row())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get a invalud row", K(ret));
-      } else if (OB_FAIL(cursor->row_store_.add_row(*inner_result->get_row()))) {
-        LOG_WARN("failed to add row to row store", K(ret));
-      } else { /*do nothing*/ }
+      } else {
+        ObNewRow row = *(inner_result->get_row());
+        for (int64_t i = 0; OB_SUCC(ret) && i < row.get_count(); ++i) {
+          ObObj& obj = row.get_cell(i);
+          ObObj tmp;
+          if (obj.is_pl_extend()) {
+            if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(cursor->allocator_), obj, tmp))) {
+              LOG_WARN("failed to copy pl extend", K(ret));
+            } else {
+              obj = tmp;
+            }
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(cursor->row_store_.add_row(row))) {
+          LOG_WARN("failed to add row to row store", K(ret));
+        }
+      }
     }
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
