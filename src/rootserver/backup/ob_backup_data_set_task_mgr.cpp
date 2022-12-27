@@ -724,24 +724,38 @@ int ObBackupSetTaskMgr::get_dst_server_(const ObLSID &ls_id, ObAddr &dst)
   } else if (OB_ISNULL(lst_operator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
-             ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
-    LOG_WARN("[DATA_BACKUP]failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
   } else {
-    const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
-    for (int64_t i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
-      const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid()) {
-        dst = replica.get_server();
-        break;
+    // When change leader, the new leader may not be reported to __all_ls_meta_table timely, and we could get no leader.
+    // And ownerless election may cost more than 30s for choosing leader.
+    // So, we add retry to tolerate this scene, and set the abs timeout to 30s in the future.
+    const int64_t abs_timeout = ObTimeUtility::current_time() + 30 * 1000 * 1000;
+    do {
+      if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
+        LOG_WARN("[DATA_BACKUP]failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
+      } else {
+        const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
+        for (int64_t i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
+          const ObLSReplica &replica = replica_array.at(i);
+          if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid()) {
+            dst = replica.get_server();
+            break;
+          }
+        }
       }
-    }
+      if (!dst.is_valid()) {
+        // wait 100 ms for next retry.
+        usleep(100 * 1000);
+        if(OB_FAIL(lease_service_->check_lease())) {
+          LOG_WARN("failed to check lease", K(ret));
+        }
+      }
+    } while (OB_SUCC(ret) && !dst.is_valid() && ObTimeUtility::current_time() < abs_timeout);
   }
 
   if (OB_FAIL(ret)) {
   } else if (!dst.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[DATA_BACKUP]no server", K(ret), K(set_task_attr_));
+    ret = OB_LEADER_NOT_EXIST;
+    LOG_WARN("[DATA_BACKUP]no leader be found", K(ret), K(ls_id), K(set_task_attr_));
   }
   return ret;
 }
