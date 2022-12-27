@@ -710,7 +710,7 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
   bool need_merge = false;
   LOG_DEBUG("schedule_tablet_medium_merge", K(schedule_scn), K(ls_id), K(tablet_id));
   if (schedule_scn > 0) {
-    if (OB_FAIL(check_need_merge_and_schedule(ls_id, tablet, schedule_scn, need_merge))) {
+    if (OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, need_merge))) {
       LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id), K(schedule_scn));
     }
   }
@@ -773,7 +773,7 @@ int ObMediumCompactionScheduleFunc::freeze_memtable_to_get_medium_info()
 }
 
 int ObMediumCompactionScheduleFunc::check_need_merge_and_schedule(
-    const ObLSID &ls_id,
+    ObLS &ls,
     ObTablet &tablet,
     const int64_t schedule_scn,
     bool &need_merge)
@@ -784,6 +784,7 @@ int ObMediumCompactionScheduleFunc::check_need_merge_and_schedule(
   bool can_merge = false;
 
   if (OB_FAIL(ObPartitionMergePolicy::check_need_medium_merge(
+          ls,
           tablet,
           schedule_scn,
           need_merge,
@@ -794,7 +795,7 @@ int ObMediumCompactionScheduleFunc::check_need_merge_and_schedule(
     if (OB_FAIL(tablet.get_medium_compaction_info_list().get_specified_scn_info(schedule_scn, medium_info))) {
       LOG_WARN("failed to get specified scn info", K(ret), K(schedule_scn));
     } else if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_merge_dag(
-            ls_id,
+            ls.get_ls_id(),
             tablet.get_tablet_meta().tablet_id_,
             MEDIUM_MERGE,
             schedule_scn,

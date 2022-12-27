@@ -27,6 +27,7 @@
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/scn.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -859,6 +860,7 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
 
 // call this func means have serialized medium compaction clog = medium_snapshot
 int ObPartitionMergePolicy::check_need_medium_merge(
+    ObLS &ls,
     storage::ObTablet &tablet,
     const int64_t medium_snapshot,
     bool &need_merge,
@@ -877,7 +879,8 @@ int ObPartitionMergePolicy::check_need_medium_merge(
     need_merge = last_major->get_snapshot_version() < medium_snapshot;
     if (need_merge
         && is_tablet_data_status_complete
-        && tablet.get_tablet_meta().max_serialized_medium_scn_ >= medium_snapshot) {
+        && tablet.get_tablet_meta().max_serialized_medium_scn_ >= medium_snapshot
+        && ObTenantTabletScheduler::check_weak_read_ts_ready(medium_snapshot, ls)) {
       can_merge = true;
     }
   }

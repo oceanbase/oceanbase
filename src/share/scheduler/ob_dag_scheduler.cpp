@@ -583,7 +583,7 @@ int ObIDag::get_next_ready_task(ObITask *&task)
   if (ObIDag::DAG_STATUS_NODE_RUNNING == dag_status_) {
     ObITask *cur_task = task_list_.get_first();
     const ObITask *head = task_list_.get_header();
-    while (!found && head != cur_task) {
+    while (!found && head != cur_task && nullptr != cur_task) {
       if (0 == cur_task->get_indegree()
           && (ObITask::TASK_STATUS_WAITING == cur_task->get_status()
               || ObITask::TASK_STATUS_RETRY == cur_task->get_status())) {

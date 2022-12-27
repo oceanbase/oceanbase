@@ -71,6 +71,7 @@ public:
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
    static int check_need_medium_merge(
+      ObLS &ls,
       storage::ObTablet &tablet,
       const int64_t medium_snapshot,
       bool &need_merge,
