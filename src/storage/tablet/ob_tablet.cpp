@@ -3302,13 +3302,13 @@ int ObTablet::set_memtable_clog_checkpoint_scn(
     // no need to set memtable clog checkpoint ts
   } else if (tablet_meta->clog_checkpoint_scn_ <= tablet_meta_.clog_checkpoint_scn_) {
     // do nothing
+  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
   } else if (is_ls_inner_tablet()) {
     if (OB_UNLIKELY(memtable_mgr->has_memtable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls inner tablet should not have memtable", K(ret), KPC(tablet_meta));
     }
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
-    LOG_WARN("failed to get memtable mgr", K(ret));
   } else if (OB_FAIL(memtable_mgr->get_boundary_memtable(handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
