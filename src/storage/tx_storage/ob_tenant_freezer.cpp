@@ -199,25 +199,14 @@ int ObTenantFreezer::ls_freeze_(ObLS *ls)
   // wait if there is a freeze is doing
   do {
     retry_times++;
-    if (OB_FAIL(ls->logstream_freeze(true/*is_tenant_freeze*/)) && OB_ENTRY_EXIST == ret) {
+    if (OB_FAIL(ls->logstream_freeze(true/*is_sync*/)) && OB_ENTRY_EXIST == ret) {
       ob_usleep(SLEEP_TS);
     }
     if (retry_times % 10 == 0) {
       LOG_WARN("wait ls freeze finished cost too much time", K(retry_times));
     }
   } while (ret == OB_ENTRY_EXIST);
-  if (OB_SUCC(ret)) {
-    const int64_t start = ObTimeUtility::current_time();
-    while (!ls->get_freezer()->is_ready_for_flush()) {
-      const int64_t cost_time = ObTimeUtility::current_time() - start;
-      if (cost_time > 5 * 1000 * 1000) {
-        if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-          TRANS_LOG(WARN, "[TenantFreezer] cost too much time to wait ls ready_for_flush", K(ls->get_ls_id()), K(cost_time));
-        }
-      }
-      ob_usleep(100);
-    }
-  } else if (OB_NOT_RUNNING == ret) {
+  if (OB_NOT_RUNNING == ret) {
     ret = OB_SUCCESS;
   }
   return ret;
@@ -264,7 +253,8 @@ int ObTenantFreezer::tenant_freeze_()
 }
 
 int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
-                                   const bool is_force_freeze)
+                                   const bool is_force_freeze,
+                                   const bool is_sync)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id;
@@ -293,10 +283,8 @@ int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
     LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
   } else if (OB_FAIL(is_force_freeze
                      ? ls->force_tablet_freeze(tablet_id)
-                     : ls->tablet_freeze(tablet_id))) {
+                     : ls->tablet_freeze(tablet_id, is_sync))) {
     LOG_WARN("[TenantFreezer] fail to freeze tablet", KR(ret), K(ls_id), K(tablet_id));
-  } else {
-    LOG_INFO("[TenantFreezer] succeed to freeze tablet", KR(ret), K(ls_id), K(tablet_id));
   }
 
   return ret;

@@ -830,7 +830,7 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
           } else if (OB_TMP_FAIL(fast_freeze_checker_.check_need_fast_freeze(*tablet_handle.get_obj(), need_fast_freeze))) {
             LOG_WARN("failed to check need fast freeze", K(tmp_ret), K(tablet_handle));
           } else if (need_fast_freeze) {
-            if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(tablet_id, false/*force_freeze*/))) {
+            if (OB_TMP_FAIL(ls.tablet_freeze(tablet_id, true/*is_sync*/))) {
               LOG_WARN("failt to freeze tablet", K(tmp_ret), K(tablet_id));
             }
           }
