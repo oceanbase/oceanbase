@@ -204,7 +204,7 @@ int ObRawExprInfoExtractor::add_const(ObRawExpr &expr)
           || T_FUN_SYS_WRAPPER_INNER == expr.get_expr_type()
           || T_FUN_SYS_LAST_INSERT_ID == expr.get_expr_type()
           || T_FUN_SYS_TO_BLOB == expr.get_expr_type()
-          || T_FUN_SYS_SYSDATE == expr.get_expr_type()
+          || (T_FUN_SYS_SYSDATE == expr.get_expr_type() && lib::is_mysql_mode())
           || not_calculable_expr(expr)
           || (T_FUN_UDF == expr.get_expr_type()
              && !static_cast<ObUDFRawExpr&>(expr).is_deterministic()))) {
