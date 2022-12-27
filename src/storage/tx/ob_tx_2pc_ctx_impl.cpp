@@ -311,21 +311,6 @@ int ObPartTransCtx::on_clear()
   return ret;
 }
 
-bool ObPartTransCtx::need_request_gts_()
-{
-  bool bret = false;
-
-  if (!is_leaf()) {
-    if (0 != exec_info_.participants_.count()
-        && ls_id_ == exec_info_.participants_[0]) {
-      bret = true;
-    } else {
-      bret = false;
-    }
-  }
-  return bret;
-}
-
 int ObPartTransCtx::reply_to_scheduler_for_sub2pc(int64_t msg_type)
 {
   int ret = OB_SUCCESS;

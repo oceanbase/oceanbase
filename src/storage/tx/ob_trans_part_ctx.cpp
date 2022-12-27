@@ -2152,11 +2152,10 @@ int ObPartTransCtx::generate_prepare_version_()
     int64_t gts = 0;
     int64_t local_max_read_version = 0;
     bool is_gts_ok = false;
-    bool need_gts = need_request_gts_();
+    // Only the root participant require to request gts
+    const bool need_gts = is_root();
 
-    // Only the first participant in the participants list of the root require
-    // to request gts
-    if (is_root() && need_gts) {
+    if (need_gts) {
       if (OB_FAIL(get_gts_(gts))) {
         if (OB_EAGAIN == ret) {
           is_gts_ok = false;
