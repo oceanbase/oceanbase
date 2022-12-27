@@ -514,10 +514,13 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     } else if (info->is_called_in_sql_) {
       if (tmp_result.is_pl_extend()) {
         OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, tmp_result, result, true));
+        OZ (pl::ObUserDefinedType::destruct_obj(tmp_result, ctx.exec_ctx_.get_my_session()));
+        CK (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx()));
+        OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj());
+        OZ (ctx.exec_ctx_.get_pl_ctx()->add(result));
       } else {
         OZ (deep_copy_obj(alloc, tmp_result, result));
       }
-      OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj());
     } else {
       result = tmp_result;
     }
