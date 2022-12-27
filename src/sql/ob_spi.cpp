@@ -5117,7 +5117,12 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
       CK (OB_NOT_NULL(values = record->get_element())); \
       for (int64_t i = 0; OB_SUCC(ret) && i < type_count; ++i) { \
         ObObj deep_copy;  \
-        OZ (deep_copy_obj(*cast_ctx.allocator_v2_, values[i], deep_copy)); \
+        /*may element of record also complex value*/ \
+        if (values[i].is_pl_extend()) { \
+          OZ (pl::ObUserDefinedType::deep_copy_obj(*cast_ctx.allocator_v2_, values[i], deep_copy)); \
+        } else { \
+          OZ (deep_copy_obj(*cast_ctx.allocator_v2_, values[i], deep_copy)); \
+        } \
         OZ (tmp_result.push_back(deep_copy)); \
       } \
     } \
