@@ -5159,6 +5159,7 @@ def_table_schema(
 
 # 444 : __all_reserved_snapshot
 # 445 : __all_cluster_event_history
+# 446 : __all_ls_transfer_member_list_lock_info
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
