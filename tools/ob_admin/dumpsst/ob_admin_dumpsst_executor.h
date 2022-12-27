@@ -31,8 +31,6 @@ enum ObAdminDumpsstCmd
   DUMP_SUPER_BLOCK,
   DUMP_MACRO_DATA,
   PRINT_MACRO_BLOCK,
-  DUMP_SSTABLE,
-  DUMP_SSTABLE_META,
   DUMP_MAX,
 };
 
@@ -64,14 +62,13 @@ private:
   void print_macro_meta();
   void print_super_block();
   int dump_macro_block(const ObDumpMacroBlockContext &context);
+  int dump_single_macro_block(const char* buf, const int64_t size);
+  int dump_shared_macro_block(const char* buf, const int64_t size);
   void dump_sstable();
   void dump_sstable_meta();
 
   bool is_quiet_;
-  bool in_csv_;
   ObAdminDumpsstCmd cmd_;
-  storage::ObITable::TableKey table_key_;
-  bool skip_log_replay_;
   bool hex_print_;
   ObDumpMacroBlockContext dump_macro_context_;
   char *key_hex_str_;
