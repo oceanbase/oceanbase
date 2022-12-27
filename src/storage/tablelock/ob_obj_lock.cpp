@@ -293,11 +293,14 @@ int ObOBJLock::recover_lock(
     ObMalloc &allocator)
 {
   int ret = OB_SUCCESS;
+  common::ObTimeGuard timeguard("recover_lock", 10 * 1000);
   if (OB_UNLIKELY(!lock_op.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(lock_op));
+  } else if (FALSE_IT(timeguard.click("start"))) {
   } else if (OB_LIKELY(!lock_op.need_record_lock_op())) {
     RDLockGuard guard(rwlock_);
+    timeguard.click("rlock");
     if (is_deleted_) {
       // need retry from upper layer.
       ret = OB_EAGAIN;
@@ -306,6 +309,7 @@ int ObOBJLock::recover_lock(
     }
   } else {
     WRLockGuard guard(rwlock_);
+    timeguard.click("wlock");
     if (is_deleted_) {
       // need retry from upper layer.
       ret = OB_EAGAIN;
