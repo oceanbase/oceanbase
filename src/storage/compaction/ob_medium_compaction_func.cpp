@@ -262,7 +262,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       }
     } else if (OB_FAIL(submit_medium_clog(medium_info))) {
       LOG_WARN("failed to submit medium clog and update inner table", K(ret), KPC(this));
-    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(tablet_id, false/*force_freeze*/))) {
+    } else if (OB_TMP_FAIL(ls_.tablet_freeze(tablet_id, true/*is_sync*/))) {
       // need to freeze memtable with MediumCompactionInfo
       LOG_WARN("failed to freeze tablet", K(tmp_ret), KPC(this));
     }
@@ -760,7 +760,7 @@ int ObMediumCompactionScheduleFunc::freeze_memtable_to_get_medium_info()
     } // end of for
     if (OB_FAIL(ret)) {
     } else if (receive_medium_info) {
-      if (OB_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(tablet_.get_tablet_meta().tablet_id_, false/*force_freeze*/))) {
+      if (OB_FAIL(ls_.tablet_freeze(tablet_.get_tablet_meta().tablet_id_, true/*is_sync*/))) {
         if (OB_TABLE_NOT_EXIST != ret) {
           LOG_WARN("failed to freeze tablet", K(ret), KPC(this));
         }

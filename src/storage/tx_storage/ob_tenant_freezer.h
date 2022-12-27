@@ -59,7 +59,8 @@ public:
 
   // freeze a tablet
   int tablet_freeze(const common::ObTabletID &tablet_id,
-                    const bool is_force_freeze=false);
+                    const bool is_force_freeze = false,
+                    const bool is_sync = false);
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.
   int check_and_do_freeze();
 

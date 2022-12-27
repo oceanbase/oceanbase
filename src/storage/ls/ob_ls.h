@@ -592,14 +592,16 @@ public:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
 
   // ObFreezer interface:
-  // logstream freeze
-  // @param [in] is_tenant_freeze: only used for ObTenantFreezer::tenant_freeze_()
-  int logstream_freeze(bool is_tenant_freeze=false);
+  // @param [in] result, only used for wait_freeze_finished()
+  // int logstream_freeze(ObFuture<int> *result = nullptr);
+  // DELEGATE_WITH_RET(ls_freezer_, logstream_freeze, int);
+  int logstream_freeze(bool is_sync = false);
   // tablet freeze
   // @param [in] tablet_id
-  // int tablet_freeze(const ObTabletID &tablet_id);
+  // @param [in] result, only used for wait_freeze_finished()
+  // int tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
   // DELEGATE_WITH_RET(ls_freezer_, tablet_freeze, int);
-  int tablet_freeze(const ObTabletID &tablet_id);
+  int tablet_freeze(const ObTabletID &tablet_id, bool is_sync = false);
   // force freeze tablet
   // @param [in] tablet_id
   // int force_tablet_freeze(const ObTabletID &tablet_id);
