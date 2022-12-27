@@ -274,10 +274,6 @@ public:
       const ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle,
       const int64_t timeout_us = storage::ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
-  static int get_tenant_schema_column_ids(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      ObIArray<uint64_t> &column_ids);
 
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
   

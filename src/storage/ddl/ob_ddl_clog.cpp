@@ -305,67 +305,50 @@ int ObDDLRedoLog::init(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info)
 OB_SERIALIZE_MEMBER(ObDDLRedoLog, redo_info_);
 
 ObDDLPrepareLog::ObDDLPrepareLog()
-  : table_key_(), start_scn_(SCN::min_scn()), table_id_(0), ddl_task_id_(0), column_ids_()
+  : table_key_(), start_scn_(SCN::min_scn())
 {
 }
 
 int ObDDLPrepareLog::init(const ObITable::TableKey &table_key,
-                          const SCN &start_scn,
-                          const uint64_t table_id,
-                          const int64_t ddl_task_id,
-                          const ObIArray<uint64_t> &column_ids)
+                          const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  if (!table_key.is_valid() || !start_scn.is_valid_and_not_min() || table_id <= 0 || ddl_task_id <= 0) {
+  if (!table_key.is_valid() || !start_scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(table_id), K(ddl_task_id));
-  } else if (OB_FAIL(column_ids_.assign(column_ids))) {
-    LOG_WARN("columns ids assigned fail.", K(ret), K(column_ids));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn));
   } else {
     table_key_ = table_key;
     start_scn_ = start_scn;
-    table_id_ = table_id;
-    ddl_task_id_ = ddl_task_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLPrepareLog, table_key_, start_scn_, table_id_, ddl_task_id_, column_ids_);
+OB_SERIALIZE_MEMBER(ObDDLPrepareLog, table_key_, start_scn_);
 
 ObDDLCommitLog::ObDDLCommitLog()
-  : table_key_(), start_scn_(SCN::min_scn()), prepare_scn_(SCN::min_scn()),
-    table_id_(0), ddl_task_id_(0), column_ids_()
+  : table_key_(), start_scn_(SCN::min_scn()), prepare_scn_(SCN::min_scn())
 {
 }
 
 int ObDDLCommitLog::init(const ObITable::TableKey &table_key,
                          const SCN &start_scn,
-                         const SCN &prepare_scn,
-                         const uint64_t table_id,
-                         const int64_t ddl_task_id,
-                         const ObIArray<uint64_t> &column_ids)
+                         const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
   if (!table_key.is_valid() ||
       !start_scn.is_valid_and_not_min() ||
-      !prepare_scn.is_valid_and_not_min() ||
-      table_id <= 0 ||
-      ddl_task_id <= 0) {
+      !prepare_scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(prepare_scn), K(table_id), K(ddl_task_id));
-  } else if (OB_FAIL(column_ids_.assign(column_ids))) {
-    LOG_WARN("columns ids assigned fail.", K(ret), K(column_ids));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(prepare_scn));
   } else {
     table_key_ = table_key;
     start_scn_ = start_scn;
     prepare_scn_ = prepare_scn;
-    table_id_ = table_id;
-    ddl_task_id_ = ddl_task_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_scn_, prepare_scn_, table_id_, ddl_task_id_, column_ids_);
+OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_scn_, prepare_scn_);
 
 ObTabletSchemaVersionChangeLog::ObTabletSchemaVersionChangeLog()
   : tablet_id_(), schema_version_(-1)

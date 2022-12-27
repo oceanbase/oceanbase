@@ -39,9 +39,9 @@ public:
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
   int ddl_start(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t cluster_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
-  int ddl_prepare(const share::SCN &start_scn, const share::SCN &commit_scn, const ObIArray<uint64_t> &column_ids, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
-  int ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn, const bool is_replay, const uint64_t table_id, const int64_t ddl_task_id, const ObIArray<uint64_t> &column_ids); // try wait build major sstable
-  int wait_ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn, const uint64_t table_id, const int64_t ddl_task_id, const ObIArray<uint64_t> &column_ids);
+  int ddl_prepare(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
+  int ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn, const bool is_replay); // try wait build major sstable
+  int wait_ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
   int get_or_create_ddl_kv(const share::SCN &scn, ObDDLKVHandle &kv_handle); // used in active ddl kv guard
   int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts

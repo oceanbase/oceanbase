@@ -409,8 +409,7 @@ int ObDDLTableMergeTask::process()
                                                           merge_param_.table_id_,
                                                           merge_param_.execution_id_,
                                                           merge_param_.ddl_task_id_,
-                                                          sstable->get_meta().get_col_checksum(),
-                                                          merge_param_.column_ids_))) {
+                                                          sstable->get_meta().get_col_checksum()))) {
         LOG_WARN("report ddl column checksum failed", K(ret), K(merge_param_));
       } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(tenant_id, merge_param_.ls_id_, merge_param_.tablet_id_))) {
         LOG_WARN("fail to submit tablet update task", K(ret), K(tenant_id), K(merge_param_));
@@ -769,11 +768,11 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
                                          const uint64_t table_id,
                                          const int64_t execution_id,
                                          const int64_t ddl_task_id,
-                                         const ObIArray<int64_t> &column_checksums,
-                                         const ObIArray<uint64_t> &column_ids)
+                                         const ObIArray<int64_t> &column_checksums)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
   const uint64_t tenant_id = MTL_ID();
@@ -781,12 +780,22 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
         || !is_valid_id(table_id) || 0 == table_id || execution_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(table_id), K(execution_id));
-  } else if (!is_valid_tenant_id(tenant_id) || OB_ISNULL(sql_proxy) || column_ids.count() <= 0) {
+  } else if (!is_valid_tenant_id(tenant_id) || OB_ISNULL(sql_proxy) || OB_ISNULL(schema_service)) {
     ret = OB_ERR_SYS;
-    LOG_WARN("ls service or sql proxy is null", K(ret), K(tenant_id), KP(sql_proxy), K(column_ids));
+    LOG_WARN("ls service or sql proxy is null", K(ret), K(tenant_id), KP(sql_proxy), KP(schema_service));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_INFO("table not exit", K(ret), K(tenant_id), K(table_id));
   } else {
+    ObArray<ObColDesc> column_ids;
     ObArray<ObDDLChecksumItem> ddl_checksum_items;
-    if (OB_UNLIKELY(column_checksums.count() != column_ids.count())) {
+    if (OB_FAIL(table_schema->get_multi_version_column_descs(column_ids))) {
+      LOG_WARN("fail to get column ids", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_UNLIKELY(column_checksums.count() != column_ids.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect error, column checksums count didn't equal to column ids count", K(ret),
           K(ls_id), K(tablet_id), K(column_checksums.count()), K(column_ids.count()));
@@ -797,7 +806,7 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
       item.tenant_id_ = tenant_id;
       item.table_id_ = table_id;
       item.ddl_task_id_ = ddl_task_id;
-      item.column_id_ = column_ids.at(i);
+      item.column_id_ = column_ids.at(i).col_id_;
       item.task_id_ = tablet_id.id();
       item.checksum_ = column_checksums.at(i);
 #ifdef ERRSIM

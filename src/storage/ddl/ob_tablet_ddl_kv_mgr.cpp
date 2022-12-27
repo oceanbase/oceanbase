@@ -151,7 +151,6 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key,
 int ObTabletDDLKvMgr::ddl_prepare(
   const SCN &start_scn,
   const SCN &prepare_scn,
-  const ObIArray<uint64_t> &column_ids,
   const uint64_t table_id,
   const int64_t ddl_task_id)
 {
@@ -182,9 +181,7 @@ int ObTabletDDLKvMgr::ddl_prepare(
     param.execution_id_ = execution_id_;
     param.ddl_task_id_ = ddl_task_id_;
     const int64_t start_ts = ObTimeUtility::fast_current_time();
-    if (OB_FAIL(param.column_ids_.assign(column_ids))) {
-      LOG_WARN("fail to assign columns ids", K(ret), K(column_ids));
-    }
+
     while (OB_SUCC(ret) && is_started()) {
       if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
         if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
@@ -210,10 +207,7 @@ int ObTabletDDLKvMgr::ddl_prepare(
 int ObTabletDDLKvMgr::ddl_commit(
   const SCN &start_scn,
   const SCN &prepare_scn,
-  const bool is_replay,
-  const uint64_t table_id,
-  const int64_t ddl_task_id,
-  const ObIArray<uint64_t> &column_ids)
+  const bool is_replay)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -228,8 +222,6 @@ int ObTabletDDLKvMgr::ddl_commit(
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else {
-    table_id_ = table_id;
-    ddl_task_id_ = ddl_task_id;
 
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
@@ -240,9 +232,8 @@ int ObTabletDDLKvMgr::ddl_commit(
     param.table_id_ = table_id_;
     param.execution_id_ = execution_id_;
     param.ddl_task_id_ = ddl_task_id_;
-    if (OB_FAIL(param.column_ids_.assign(column_ids))) {
-      LOG_WARN("fail to assign columns ids", K(ret), K(column_ids));
-    } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) { // retry submit dag in case of the previous dag failed
+    // retry submit dag in case of the previous dag failed
+    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       if (OB_SIZE_OVERFLOW == ret || OB_EAGAIN == ret) {
         ret = OB_EAGAIN;
       } else {
@@ -267,19 +258,15 @@ int ObTabletDDLKvMgr::ddl_commit(
 
 int ObTabletDDLKvMgr::wait_ddl_commit(
     const SCN &start_scn,
-    const SCN &prepare_scn,
-    const uint64_t table_id,
-    const int64_t ddl_task_id,
-    const ObIArray<uint64_t> &column_ids)
+    const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!start_scn.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min() ||
-      table_id <= 0 || ddl_task_id <= 0 || column_ids.count() <= 0)) {
+  } else if (OB_UNLIKELY(!start_scn.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(start_scn), K(prepare_scn), K(table_id), K(ddl_task_id), K(column_ids));
+    LOG_WARN("invalid argument", K(ret), K(start_scn), K(prepare_scn));
   } else if (!is_started()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl not started", K(ret));
@@ -289,12 +276,12 @@ int ObTabletDDLKvMgr::wait_ddl_commit(
   } else {
     const int64_t wait_start_ts = ObTimeUtility::fast_current_time();
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(ddl_commit(start_scn, prepare_scn, false/*is_replay*/, table_id, ddl_task_id, column_ids))) {
+      if (OB_FAIL(ddl_commit(start_scn, prepare_scn, false/*is_replay*/ ))) {
         if (OB_EAGAIN == ret) {
           ob_usleep(10L * 1000L);
           ret = OB_SUCCESS; // retry
         } else {
-          LOG_WARN("commit ddl log failed", K(ret), K(start_scn), K(prepare_scn), K(ls_id_), K(tablet_id_), K(column_ids));
+          LOG_WARN("commit ddl log failed", K(ret), K(start_scn), K(prepare_scn), K(ls_id_), K(tablet_id_));
         }
       } else {
         break;
