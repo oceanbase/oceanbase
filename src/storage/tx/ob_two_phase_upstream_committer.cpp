@@ -239,6 +239,21 @@ int ObTxCycleTwoPhaseCommitter::handle_timeout()
     TRANS_LOG(WARN, "retransmit upstream msg failed", KR(tmp_ret));
   }
 
+  // if a distributed trans has one participant and its 2pc state (up and down) is prepare,
+  // then try enter into pre commit state.
+  // NOTE that if a distributed trans has at least two participants,
+  // the state can be drived by message.
+  if (is_root()) {
+    const int SINGLE_COUNT = 1;
+    if (SINGLE_COUNT == get_downstream_size()
+        && ObTxState::PREPARE == get_downstream_state()
+        && ObTxState::PREPARE == get_upstream_state()) {
+      if (OB_FAIL(try_enter_pre_commit_state())) {
+        TRANS_LOG(WARN, "try enter into pre commit state failed", K(ret));
+      }
+    }
+  }
+
   return ret;
 }
 
