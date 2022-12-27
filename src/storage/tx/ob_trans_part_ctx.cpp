@@ -63,7 +63,6 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
                          ObTransService *trans_service,
                          const uint64_t cluster_id,
                          const int64_t epoch,
-                         const bool can_elr,
                          ObLSTxCtxMgr *ls_ctx_mgr,
                          const bool for_replay)
 {
@@ -123,7 +122,6 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     last_ask_scheduler_status_ts_ = 0;
     cluster_id_ = cluster_id;
     epoch_ = epoch;
-    can_elr_ = can_elr;
     pending_write_ = 0;
     set_role_state(for_replay);
 
@@ -154,7 +152,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
                        OB_ID(trans_id), trans_id,
                        OB_ID(ctx_ref), get_ref());
   TRANS_LOG(TRACE, "part trans ctx init", K(ret), K(tenant_id), K(trans_id), K(trans_expired_time),
-            K(ls_id), K(cluster_version), KP(trans_service), K(cluster_id), K(epoch), K(can_elr));
+            K(ls_id), K(cluster_version), KP(trans_service), K(cluster_id), K(epoch));
   return ret;
 }
 
@@ -254,6 +252,7 @@ void ObPartTransCtx::default_init_()
   session_id_ = 0;
   timeout_task_.reset();
   trace_info_.reset();
+  can_elr_ = false;
 
   // TODO ObPartTransCtx
   clog_encrypt_info_.reset();
@@ -694,6 +693,7 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
       TRANS_LOG(ERROR, "the size of participant is 0 when commit", KPC(this));
     } else if (parts.count() == 1 && parts[0] == ls_id_) {
       exec_info_.trans_type_ = TransType::SP_TRANS;
+      can_elr_ = (trans_service_->get_tx_elr_util().is_can_tenant_elr() ? true : false);
       if (OB_FAIL(one_phase_commit_())) {
         TRANS_LOG(WARN, "start sp coimit fail", K(ret), KPC(this));
       }

@@ -35,6 +35,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"        //ObWeakReadUtil
+#include "storage/tx_storage/ob_ls_service.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
 
@@ -463,9 +464,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OZ (stmt_sanity_check_(session, plan, plan_ctx));
   OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid()));
   if (OB_SUCC(ret)
-      && txs->get_tx_elr_util().check_and_update_tx_elr_info(
-                                         *session->get_tx_desc(),
-                                         session->get_early_lock_release())) {
+      && txs->get_tx_elr_util().check_and_update_tx_elr_info(*session->get_tx_desc())) {
     LOG_WARN("check and update tx elr info", K(ret), KPC(session->get_tx_desc()));
   }
   uint32_t session_id = 0;
@@ -576,7 +575,8 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   auto &snapshot = das_ctx.get_snapshot();
   if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
     SCN snapshot_version = SCN::min_scn();
-    if (OB_FAIL(txs->get_weak_read_snapshot_version(snapshot_version))) {
+    if (OB_FAIL(txs->get_weak_read_snapshot_version(session->get_ob_max_read_stale_time(),
+                                                    snapshot_version))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
     } else {
       snapshot.init_weak_read(snapshot_version);
@@ -987,6 +987,54 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
 void ObSqlTransControl::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc)
 {
   MTL(transaction::ObXAService *)->clear_xa_branch(xid, tx_desc);
+}
+
+
+int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
+                                         const share::ObLSID &ls_id,
+                                         const common::ObAddr &addr,
+                                         const int64_t max_stale_time_ns,
+                                         bool &can_read)
+{
+  int ret = OB_SUCCESS;
+  can_read = false;
+
+  if (!ls_id.is_valid()
+      || !addr.is_valid()
+      || max_stale_time_ns <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_ns));
+  } else if (observer::ObServer::get_instance().get_self() == addr) {
+    // distribute plan and check black list
+    ObBLKey blk;
+    bool in_black_list = false;
+    if (OB_FAIL(blk.init(addr, tenant_id, ls_id))) {
+      LOG_WARN("ObBLKey init error", K(ret), K(addr), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(blk, in_black_list))) {
+      LOG_WARN("check in black list error", K(ret), K(blk));
+    } else {
+      can_read = (in_black_list ? false : true);
+    }
+  } else {
+    storage::ObLSService *ls_svr =  MTL(storage::ObLSService *);
+    storage::ObLSHandle handle;
+    ObLS *ls = nullptr;
+
+    if (OB_ISNULL(ls_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream service is NULL", K(ret));
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
+      LOG_WARN("get id service log stream failed");
+    } else if (OB_ISNULL(ls = handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("id service log stream not exist");
+    } else if (ObTimeUtility::current_time() - max_stale_time_ns / 1000
+         < ls->get_ls_wrs_handler()->get_ls_weak_read_ts().convert_to_ts()) {
+      can_read = true;
+    }
+  }
+
+  return ret;
 }
 
 }/* ns sql*/

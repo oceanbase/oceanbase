@@ -495,6 +495,7 @@ public:
 
   bool can_reroute_sql_; // 是否可以重新路由
   bool is_sensitive_;    // 是否含有敏感信息，若有则不记入 sql_audit
+  bool is_protocol_weak_read_; // record whether proxy set weak read for this request in protocol flag
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
   ObRawExpr *flashback_query_expr_;
   ObSpmCacheCtx spm_ctx_;

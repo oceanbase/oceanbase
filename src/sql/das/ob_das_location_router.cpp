@@ -20,12 +20,14 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_utils.h"
 #include "sql/das/ob_das_utils.h"
+#include "storage/tx/wrs/ob_black_list.h"
 
 namespace oceanbase
 {
 using namespace common;
 using namespace share;
 using namespace share::schema;
+using namespace transaction;
 namespace sql
 {
 OB_SERIALIZE_MEMBER(DASRelatedTabletMap::MapEntry,
@@ -630,13 +632,23 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
   }
 
   if (OB_UNLIKELY(tablet_loc.need_refresh_)){
+    ObAddr strong_leader;
+    ObBLKey bl_key;
+    bool in_black_list = true;
     for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < ls_loc.get_replica_locations().count(); ++i) {
       const ObLSReplicaLocation &tmp_replica_loc = ls_loc.get_replica_locations().at(i);
       if (tmp_replica_loc.is_strong_leader()) {
-        //in version 4.0, if das task in retry, we force to choose the leader replica
+        strong_leader = tmp_replica_loc.get_server();
+      } else if (OB_SUCC(bl_key.init(tmp_replica_loc.get_server(), tenant_id, tablet_loc.ls_id_))
+                 && OB_SUCC(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))
+                 && !in_black_list) {
         tablet_loc.server_ = tmp_replica_loc.get_server();
         is_found = true;
       }
+    }
+    if (!is_found && strong_leader.is_valid()) {
+      tablet_loc.server_ = strong_leader;
+      is_found = true;
     }
   }
 

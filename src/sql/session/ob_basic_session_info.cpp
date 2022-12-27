@@ -2490,6 +2490,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       }
       break;
     }
+    case SYS_VAR_OB_MAX_READ_STALE_TIME: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_ob_max_read_stale_time(int_val));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -2869,6 +2875,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       } else {
         sys_vars_cache.set_base_ob_trace_info(trace_info);
       }
+      break;
+    }
+    case SYS_VAR_OB_MAX_READ_STALE_TIME: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_ob_max_read_stale_time(int_val));
       break;
     }
     default: {
@@ -3579,7 +3591,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               nls_formats_[NLS_TIMESTAMP_TZ],
               ob_trx_lock_timeout_,
               ob_trace_info_,
-              ob_plsql_ccflags_);
+              ob_plsql_ccflags_,
+              ob_max_read_stale_time_);
   return ret;
 }
 
@@ -3604,7 +3617,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               nls_formats_[NLS_TIMESTAMP_TZ],
               ob_trx_lock_timeout_,
               ob_trace_info_,
-              ob_plsql_ccflags_);
+              ob_plsql_ccflags_,
+              ob_max_read_stale_time_);
   set_nls_date_format(nls_formats_[NLS_DATE]);
   set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
   set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
@@ -3634,7 +3648,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
               nls_formats_[NLS_TIMESTAMP_TZ],
               ob_trx_lock_timeout_,
               ob_trace_info_,
-              ob_plsql_ccflags_);
+              ob_plsql_ccflags_,
+              ob_max_read_stale_time_);
   return len;
 }
 

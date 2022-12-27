@@ -207,8 +207,7 @@ int ObTxReplayExecutor::try_get_tx_ctx_(ObTxLogType type,
       ret = OB_SUCCESS;
       bool tx_ctx_existed = false;
       common::ObAddr scheduler;
-      ObTxCreateArg arg(false, /* can_elr */
-                        true,  /* for_replay */
+      ObTxCreateArg arg(true,  /* for_replay */
                         tenant_id,
                         tx_id,
                         ls_id,

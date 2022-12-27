@@ -58,7 +58,7 @@ public:
 
   inline common::ObTabletID get_tablet_id() const { return tablet_id_; }
 
-  inline share::ObLSID get_ls_id() const { return ls_id_; }
+  inline const share::ObLSID &get_ls_id() const { return ls_id_; }
 
   inline int64_t get_renew_time() const { return renew_time_; }
 
@@ -90,7 +90,7 @@ public:
   int add_priority_replica_idx(int64_t priority_replica_idx);
   int64_t get_selected_replica_idx() const { return selected_replica_idx_; }
   bool has_selected_replica() const { return common::OB_INVALID_INDEX != selected_replica_idx_; }
-
+  const share::ObLSID &get_ls_id() const { return opt_tablet_loc_.get_ls_id(); }
   int get_selected_replica(share::ObLSReplicaLocation &replica_loc) const;
   int get_selected_replica(ObRoutePolicy::CandidateReplica &replica_loc) const;
   int get_priority_replica(int64_t idx, share::ObLSReplicaLocation &replica_loc) const;

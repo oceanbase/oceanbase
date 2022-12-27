@@ -938,14 +938,17 @@ int ObResultSet::get_read_consistency(ObConsistencyLevel &consistency)
   consistency = INVALID_CONSISTENCY;
   int ret = OB_SUCCESS;
   ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
-  if (OB_ISNULL(physical_plan_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("physical_plan", K_(physical_plan), K(ret));
-    ret = OB_ERR_UNEXPECTED;
+  if (OB_ISNULL(physical_plan_)
+      || OB_ISNULL(exec_ctx_)
+      || OB_ISNULL(exec_ctx_->get_sql_ctx())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("physical_plan", K_(physical_plan), K(exec_ctx_->get_sql_ctx()), K(ret));
   } else {
     const ObPhyPlanHint &phy_hint = physical_plan_->get_phy_plan_hint();
     if (stmt::T_SELECT == stmt_type_) { // select才有weak
-      if (OB_UNLIKELY(phy_hint.read_consistency_ != INVALID_CONSISTENCY)) {
+      if (exec_ctx_->get_sql_ctx()->is_protocol_weak_read_) {
+        consistency = WEAK;
+      } else if (OB_UNLIKELY(phy_hint.read_consistency_ != INVALID_CONSISTENCY)) {
         consistency = phy_hint.read_consistency_;
       } else {
         consistency = my_session_.get_consistency_level();

@@ -397,7 +397,6 @@ public:
   virtual void add_trans_mem_total_size(const int64_t size);
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_); }
   uint64_t get_tenant_id() const;
-  bool is_can_elr() const;
   inline bool has_read_elr_data() const { return read_elr_data_; }
   int remove_callbacks_for_fast_commit();
   int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);

@@ -719,10 +719,9 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
 {
   int ret = OB_SUCCESS;
   int64_t foreign_key_checks = 0;
-  if (OB_ISNULL(phy_plan_ctx_) || OB_ISNULL(my_session_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("physical_plan or ctx is NULL", K_(phy_plan_ctx), K_(my_session), K(ret));
-    ret = OB_ERR_UNEXPECTED;
+  if (OB_ISNULL(phy_plan_ctx_) || OB_ISNULL(my_session_) || OB_ISNULL(sql_ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K_(phy_plan_ctx), K_(my_session), K(ret));
   } else if (OB_FAIL(my_session_->get_foreign_key_checks(foreign_key_checks))) {
     LOG_WARN("failed to get foreign_key_checks", K(ret));
   } else {
@@ -747,7 +746,9 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
     }
     if (OB_SUCC(ret)) {
       if (stmt::T_SELECT == plan.get_stmt_type()) { // select才有weak
-        if (OB_UNLIKELY(phy_plan_hint.read_consistency_ != INVALID_CONSISTENCY)) {
+        if (sql_ctx_->is_protocol_weak_read_) {
+          consistency = WEAK;
+        } else if (OB_UNLIKELY(phy_plan_hint.read_consistency_ != INVALID_CONSISTENCY)) {
           consistency = phy_plan_hint.read_consistency_;
         } else {
           consistency = my_session_->get_consistency_level();

@@ -96,7 +96,6 @@ public: // for mvcc engine invoke
                             const share::SCN max_trans_version,
                             const transaction::ObTransID &conflict_tx_id) = 0;
   virtual void on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id) = 0;
-  virtual bool is_can_elr() const = 0;
   virtual void inc_truncate_cnt() = 0;
   virtual void add_trans_mem_total_size(const int64_t size) = 0;
   virtual void update_max_submitted_seq_no(const int64_t seq_no) = 0;

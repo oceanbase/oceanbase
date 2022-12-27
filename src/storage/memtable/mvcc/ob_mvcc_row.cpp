@@ -748,7 +748,7 @@ void ObMvccRow::lock_begin(ObIMemtableCtx &ctx) const
 
 void ObMvccRow::mvcc_write_end(ObIMemtableCtx &ctx, int64_t ret) const
 {
-  if (!ctx.is_can_elr() && GCONF.enable_sql_audit) {
+  if (GCONF.enable_sql_audit) {
     const int64_t lock_use_time = OB_TSC_TIMESTAMP.current_time() - ctx.get_lock_start_time();
     EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, lock_use_time);
     if (OB_FAIL(ret)) {
@@ -995,8 +995,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
         res.tx_node_ = &writer_node;
         total_trans_node_cnt_++;
       }
-      if (ctx.is_can_elr()
-          && NULL != writer_node.prev_
+      if (NULL != writer_node.prev_
           && writer_node.prev_->is_elr()) {
         ObMemtableCtx &mt_ctx = static_cast<ObMemtableCtx &>(ctx);
         if (NULL != mt_ctx.get_trans_ctx()) {

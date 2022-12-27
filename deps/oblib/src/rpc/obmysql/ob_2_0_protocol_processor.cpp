@@ -407,6 +407,7 @@ inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& conte
         // If a request is divided into multiple MySQL packages, each MySQL package will also set the re-routing flag
         ObMySQLRawPacket *input_packet = reinterpret_cast<ObMySQLRawPacket *>(ipacket);
         input_packet->set_can_reroute_pkt(pkt20->get_flags().is_proxy_reroute());
+        input_packet->set_is_weak_read(pkt20->get_flags().is_weak_read());
         input_packet->set_extra_info(pkt20->get_extra_info());
         context.reset();
         // set again for sending response

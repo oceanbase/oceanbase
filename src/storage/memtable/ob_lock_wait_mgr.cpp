@@ -553,7 +553,6 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                              const ObStoreRowkey& row_key,
                              const int64_t timeout,
                              const bool is_remote_sql,
-                             const bool can_elr,
                              const int64_t last_compact_cnt,
                              const int64_t total_trans_node_cnt,
                              const ObTransID &tx_id,
@@ -578,7 +577,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
         TRANS_LOG(WARN, "recheck lock fail", K(key), K(holder_tx_id));
       } else if (locked) {
         auto hash = wait_on_row ? row_hash : tx_hash;
-        if (is_remote_sql && can_elr) {
+        if (is_remote_sql) {
           delay_header_node_run_ts(hash);
         }
         node->set((void*)node,
@@ -605,7 +604,6 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                              const ObLockID &lock_id,
                              const int64_t timeout,
                              const bool is_remote_sql,
-                             const bool can_elr,
                              const int64_t last_compact_cnt,
                              const int64_t total_trans_node_cnt,
                              const transaction::ObTransID &tx_id,
@@ -621,7 +619,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
   } else if (NULL == (node = get_thread_node())) {
   } else if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
     auto hash = hash_lock_id(lock_id);
-    const bool need_delay = is_remote_sql && can_elr;
+    const bool need_delay = is_remote_sql;
     char lock_id_buf[common::MAX_LOCK_ID_BUF_LENGTH];
     lock_id.to_string(lock_id_buf, sizeof(lock_id_buf));
     lock_id_buf[common::MAX_LOCK_ID_BUF_LENGTH - 1] = '\0';

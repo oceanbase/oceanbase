@@ -140,6 +140,7 @@ ObServer::ObServer()
     ob_service_(gctx_),
     multi_tenant_(), vt_data_service_(root_service_, self_addr_, &config_),
     weak_read_service_(),
+    bl_service_(ObBLService::get_instance()),
     table_service_(),
     cgroup_ctrl_(),
     start_time_(ObTimeUtility::current_time()),
@@ -288,6 +289,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_ERROR("init ts mgr failed", KR(ret));
   } else if (OB_FAIL(weak_read_service_.init(net_frame_.get_req_transport()))) {
     LOG_ERROR("init weak_read_service failed", KR(ret));
+  } else if (OB_FAIL(bl_service_.init())) {
+    LOG_ERROR("init bl_service_ failed", KR(ret));
   } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
     LOG_ERROR("init device manager failed", KR(ret));
   } else if (OB_FAIL(ObTenantMutilAllocatorMgr::get_instance().init())) {
@@ -488,6 +491,10 @@ void ObServer::destroy()
     weak_read_service_.destroy();
     FLOG_INFO("weak read service destroyed");
 
+    FLOG_INFO("begin to destroy blacklist service");
+    bl_service_.destroy();
+    FLOG_INFO("blacklist service destroyed");
+
     FLOG_INFO("begin to destroy net frame");
     net_frame_.destroy();
     FLOG_INFO("net frame destroyed");
@@ -635,6 +642,12 @@ int ObServer::start()
     LOG_ERROR("fail to start weak read service", KR(ret));
   } else {
     FLOG_INFO("success to start weak read service");
+  }
+
+  if (FAILEDx(bl_service_.start())) {
+    LOG_ERROR("fail to start blacklist service", KR(ret));
+  } else {
+    FLOG_INFO("success to start blacklist service");
   }
 
   // do not wait clog replay over, avoid blocking other module
@@ -971,6 +984,10 @@ int ObServer::stop()
   weak_read_service_.stop();
   FLOG_INFO("weak read service stopped");
 
+  FLOG_INFO("begin to stop blacklist service");
+  bl_service_.stop();
+  FLOG_INFO("blacklist service stopped");
+
   FLOG_INFO("begin to stop ts mgr");
   OB_TS_MGR.stop();
   FLOG_INFO("ts mgr stopped");
@@ -1208,6 +1225,10 @@ int ObServer::wait()
   FLOG_INFO("begin to wait weak read service");
   weak_read_service_.wait();
   FLOG_INFO("wait weak read service success");
+
+  FLOG_INFO("begin to wait blacklist service");
+  bl_service_.wait();
+  FLOG_INFO("wait blacklist service success");
 
   FLOG_INFO("begin to wait server checkpoint slog handler");
   ObServerCheckpointSlogHandler::get_instance().wait();

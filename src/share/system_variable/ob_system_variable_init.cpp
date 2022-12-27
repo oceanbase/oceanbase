@@ -2892,13 +2892,26 @@ static struct VarsInit{
     ObSysVars[219].alias_ = "OB_SV_LOG_ROW_VALUE_OPTIONS" ;
     }();
 
+    [&] (){
+      ObSysVars[220].info_ = "max stale time(us) for weak read query " ;
+      ObSysVars[220].name_ = "ob_max_read_stale_time" ;
+      ObSysVars[220].data_type_ = ObIntType ;
+      ObSysVars[220].value_ = "5000000" ;
+      ObSysVars[220].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[220].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
+      ObSysVars[220].id_ = SYS_VAR_OB_MAX_READ_STALE_TIME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_MAX_READ_STALE_TIME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_MAX_READ_STALE_TIME] = 220 ;
+    ObSysVars[220].alias_ = "OB_SV_MAX_READ_STALE_TIME" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 220;
+static int64_t var_amount = 221;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

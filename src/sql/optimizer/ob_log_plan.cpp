@@ -2330,9 +2330,13 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
 
   if (OB_FAIL(ret)) {
   } else if (is_weak && !exec_ctx.get_my_session()->get_is_in_retry()) {
+    int64_t max_read_stale_time = exec_ctx.get_my_session()->get_ob_max_read_stale_time();
+    uint64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
     if (OB_FAIL(ObLogPlan::weak_select_replicas(local_server,
                                                 static_cast<ObRoutePolicyType>(route_policy_type),
                                                 proxy_priority_hit_support,
+                                                tenant_id,
+                                                max_read_stale_time,
                                                 phy_tbl_loc_info_list,
                                                 is_hit_partition, follower_first_feedback))) {
       LOG_WARN("fail to weak select intersect replicas", K(ret), K(local_server), K(phy_tbl_loc_info_list.count()));
@@ -2443,6 +2447,8 @@ int ObLogPlan::strong_select_replicas(const ObAddr &local_server,
 int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
                                     ObRoutePolicyType route_type,
                                     bool proxy_priority_hit_support,
+                                    uint64_t tenant_id,
+                                    int64_t max_read_stale_time,
                                     ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                     bool &is_hit_partition,
                                     ObFollowerFirstFeedbackType &follower_first_feedback)
@@ -2457,6 +2463,8 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
     route_policy_ctx.policy_type_ = route_type;
     route_policy_ctx.consistency_level_ = WEAK;
     route_policy_ctx.is_proxy_priority_hit_support_ = proxy_priority_hit_support;
+    route_policy_ctx.max_read_stale_time_ = max_read_stale_time;
+    route_policy_ctx.tenant_id_ = tenant_id;
 
     if (OB_FAIL(route_policy.init())) {
       LOG_WARN("fail to init route policy", K(ret));
@@ -2474,7 +2482,9 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
             ObIArray<ObRoutePolicy::CandidateReplica> &replica_array = phy_part_loc_info.get_partition_location().get_replica_locations();
             if (OB_FAIL(route_policy.init_candidate_replicas(replica_array))) {
               LOG_WARN("fail to init candidate replicas", K(replica_array), K(ret));
-            } else if (OB_FAIL(route_policy.calculate_replica_priority(replica_array, route_policy_ctx))) {
+            } else if (OB_FAIL(route_policy.calculate_replica_priority(phy_part_loc_info.get_ls_id(),
+                                                                       replica_array,
+                                                                       route_policy_ctx))) {
               LOG_WARN("fail to calculate replica priority", K(replica_array), K(route_policy_ctx), K(ret));
             } else if (OB_FAIL(route_policy.select_replica_with_priority(route_policy_ctx, replica_array, phy_part_loc_info))) {
               LOG_WARN("fail to select replica", K(replica_array), K(ret));

@@ -459,12 +459,14 @@ class ObMySQLRawPacket
 public:
   ObMySQLRawPacket() : ObMySQLPacket(), cmd_(COM_MAX_NUM),
                        can_reroute_pkt_(false),
+                       is_weak_read_(false),
                        extra_info_()
   {}
 
   explicit ObMySQLRawPacket(obmysql::ObMySQLCmd cmd)
     : ObMySQLPacket(), cmd_(cmd),
       can_reroute_pkt_(false),
+      is_weak_read_(false),
       extra_info_()
   {}
 
@@ -479,6 +481,9 @@ public:
   inline void set_can_reroute_pkt(const bool can_rerute);
   inline bool can_reroute_pkt() const;
 
+  inline void set_is_weak_read(const bool v) { is_weak_read_ = v; }
+  inline bool is_weak_read() const { return is_weak_read_; }
+
   inline void set_extra_info(const Ob20ExtraInfo &extra_info) { extra_info_ = extra_info; }
   inline const Ob20ExtraInfo &get_extra_info() const { return extra_info_; }
   bool exist_trace_info() const { return extra_info_.exist_trace_info_; }
@@ -489,6 +494,7 @@ public:
     ObMySQLPacket::reset();
     cmd_ = COM_MAX_NUM;
     can_reroute_pkt_ = false;
+    is_weak_read_ = false;
     extra_info_.reset();
   }
 
@@ -497,10 +503,11 @@ public:
     ObMySQLPacket::assign(other);
     cmd_ = other.cmd_;
     can_reroute_pkt_ = other.can_reroute_pkt_;
+    is_weak_read_ = other.is_weak_read_;
     extra_info_ = other.extra_info_;
   }
 
-  TO_STRING_KV("header", hdr_, "can_reroute", can_reroute_pkt_);
+  TO_STRING_KV("header", hdr_, "can_reroute", can_reroute_pkt_, "weak_read", is_weak_read_);
 protected:
   virtual int serialize(char*, const int64_t, int64_t&) const;
 
@@ -509,6 +516,7 @@ private:
 private:
   ObMySQLCmd cmd_;
   bool can_reroute_pkt_;
+  bool is_weak_read_;
   Ob20ExtraInfo extra_info_;
 };
 

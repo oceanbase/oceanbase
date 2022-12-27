@@ -30,6 +30,7 @@ union Ob20ProtocolFlags
   bool is_last_packet() const { return 1 == st_flags_.OB_IS_LAST_PACKET; }
   bool is_proxy_reroute() const { return 1 == st_flags_.OB_IS_PROXY_REROUTE; }
   bool is_new_extra_info() const { return 1 == st_flags_.OB_IS_NEW_EXTRA_INFO; }
+  bool is_weak_read() const { return 1 == st_flags_.OB_IS_WEAK_READ; }
 
   uint32_t flags_;
   struct Protocol20Flags
@@ -38,7 +39,8 @@ union Ob20ProtocolFlags
     uint32_t OB_IS_LAST_PACKET:                         1;
     uint32_t OB_IS_PROXY_REROUTE:                       1;
     uint32_t OB_IS_NEW_EXTRA_INFO:                      1;
-    uint32_t OB_FLAG_RESERVED_NOT_USE:                 28;
+    uint32_t OB_IS_WEAK_READ:                           1;
+    uint32_t OB_FLAG_RESERVED_NOT_USE:                 27;
   } st_flags_;
 };
 

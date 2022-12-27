@@ -873,15 +873,6 @@ uint64_t ObMemtableCtx::get_tenant_id() const
   return tenant_id;
 }
 
-bool ObMemtableCtx::is_can_elr() const
-{
-  bool bret = false;
-  if (OB_NOT_NULL(ATOMIC_LOAD(&ctx_))) {
-    bret = ctx_->is_can_elr();
-  }
-  return bret;
-}
-
 void ObMemtableCtx::update_max_submitted_seq_no(const int64_t seq_no)
 {
   if (NULL != ATOMIC_LOAD(&ctx_)) {

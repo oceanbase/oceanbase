@@ -349,7 +349,8 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
       // 并且还没开启事务时，这条sql才能二次路由
       ctx.can_reroute_sql_ = (pkt.can_reroute_pkt() && get_conn()->is_support_proxy_reroute());
     }
-    LOG_TRACE("recorded sql reroute flag", K(ctx.can_reroute_sql_));
+    ctx.is_protocol_weak_read_ = pkt.is_weak_read();
+    LOG_TRACE("protocol flag info", K(ctx.can_reroute_sql_), K(ctx.is_protocol_weak_read_));
   }
   return ret;
 }

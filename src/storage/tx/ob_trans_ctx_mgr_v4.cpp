@@ -405,7 +405,6 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
                           arg.trans_service_,
                           arg.cluster_id_,
                           epoch,
-                          arg.can_elr_,
                           this,
                           arg.for_replay_))) {
     } else if (FALSE_IT(inc_total_tx_ctx_count())) {

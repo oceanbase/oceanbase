@@ -230,6 +230,7 @@ ObSqlCtx::ObSqlCtx()
     cur_plan_(nullptr),
     can_reroute_sql_(false),
     is_sensitive_(false),
+    is_protocol_weak_read_(false),
     flashback_query_expr_(nullptr),
     is_execute_call_stmt_(false),
     reroute_info_(nullptr)
@@ -267,6 +268,7 @@ void ObSqlCtx::reset()
   is_ddl_from_primary_ = false;
   can_reroute_sql_ = false;
   is_sensitive_ = false;
+  is_protocol_weak_read_ = false;
   if (nullptr != reroute_info_) {
     reroute_info_->reset();
     op_reclaim_free(reroute_info_);

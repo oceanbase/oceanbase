@@ -116,7 +116,6 @@ public:
            ObTransService *trans_service,
            const uint64_t cluster_id,
            const int64_t epoch,
-           const bool can_elr,
            ObLSTxCtxMgr *ls_ctx_mgr,
            const bool for_replay);
   void reset() { }

@@ -148,7 +148,6 @@ public:
   uint32_t get_session_id() const { return session_id_; }
   void before_unlock(CtxLockArg &arg);
   void after_unlock(CtxLockArg &arg);
-  bool is_can_elr() const { return can_elr_; }
 public:
   void set_exiting() { is_exiting_ = true; }
   bool is_exiting() const { return is_exiting_; }

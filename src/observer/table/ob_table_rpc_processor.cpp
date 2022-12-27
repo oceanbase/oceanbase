@@ -27,6 +27,7 @@
 #include "observer/mysql/ob_mysql_request_manager.h"
 #include "share/ob_define.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/tx/wrs/ob_weak_read_util.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -412,7 +413,9 @@ int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_des
     }
   } else {
     SCN weak_read_snapshot;
-    if (OB_FAIL(txs->get_weak_read_snapshot_version(weak_read_snapshot))) {
+    if (OB_FAIL(txs->get_weak_read_snapshot_version(
+              transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID()),
+              weak_read_snapshot))) {
       LOG_WARN("fail to get weak read snapshot", K(ret));
     } else {
       tx_snapshot_.init_weak_read(weak_read_snapshot);
