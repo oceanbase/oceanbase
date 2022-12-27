@@ -1,8 +1,8 @@
 ob_set_subtarget(ob_rootserver ALONE
   ob_ddl_service.cpp
-  ob_index_builder.cpp
-  ob_root_inspection.cpp
   ob_root_service.cpp
+  ddl_task/ob_ddl_redefinition_task.cpp
+  ob_unit_manager.cpp
 )
 
 ob_set_subtarget(ob_rootserver backup
@@ -39,11 +39,13 @@ ob_set_subtarget(ob_rootserver common
   ob_ddl_operator.cpp
   ob_ddl_sql_generator.cpp
   ob_inner_table_monitor.cpp
+  ob_index_builder.cpp
   ob_locality_util.cpp
   ob_resource_weight_parser.cpp
   ob_root_balancer.cpp
   ob_root_minor_freeze.cpp
   ob_root_utils.cpp
+  ob_root_inspection.cpp
   ob_rs_event_history_table_operator.cpp
   ob_rs_job_table_operator.cpp
   ob_rs_reentrant_thread.cpp
@@ -70,7 +72,6 @@ ob_set_subtarget(ob_rootserver common
   ob_tenant_role_transition_service.cpp
   ob_server_balancer.cpp
   ob_system_admin_util.cpp
-  ob_unit_manager.cpp
   ob_update_rs_list_task.cpp
   ob_upgrade_storage_format_version_executor.cpp
   ob_schema_history_recycler.cpp
@@ -82,7 +83,7 @@ ob_set_subtarget(ob_rootserver common
 ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_column_redefinition_task.cpp
   ddl_task/ob_constraint_task.cpp
-  ddl_task/ob_ddl_redefinition_task.cpp
+
   ddl_task/ob_ddl_retry_task.cpp
   ddl_task/ob_ddl_scheduler.cpp
   ddl_task/ob_ddl_single_replica_executor.cpp

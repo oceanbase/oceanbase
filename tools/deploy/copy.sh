@@ -2,7 +2,7 @@
 if [ $# -lt 1 ]
 then
   echo "Usage ./copy.sh [oceanbase_dev_dir]"
-  BUILD_DIR=$(find $PWD/../../ -maxdepth 1 -name 'build_*' -type d | head -1)
+  BUILD_DIR=$(find $PWD/../../ -maxdepth 1 -name 'build_*' -type d | grep -v 'build_ccls' | head -1)
   SOURCE_DIR=$PWD/../../
 else
   BUILD_DIR=$1

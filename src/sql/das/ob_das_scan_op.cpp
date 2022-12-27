@@ -1070,7 +1070,7 @@ OB_INLINE int ObLocalIndexLookupOp::process_data_table_rowkey()
   return ret;
 }
 
-OB_INLINE int ObLocalIndexLookupOp::do_index_lookup()
+int ObLocalIndexLookupOp::do_index_lookup()
 {
   int ret = OB_SUCCESS;
   ObITabletScan &tsc_service = get_tsc_service();

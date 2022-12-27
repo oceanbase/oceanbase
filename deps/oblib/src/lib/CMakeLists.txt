@@ -4,7 +4,6 @@ add_subdirectory(regex)
 target_compile_definitions(regex PRIVATE -DREGEX_STANDALONE -DREGEX_WCHAR)
 
 ob_set_subtarget(oblib_lib ALONE
-  cpu/ob_cpu_topology.cpp
   timezone/ob_timezone_util.cpp
   geo/ob_geo_func_difference.cpp
   geo/ob_geo_func_covered_by.cpp
@@ -84,6 +83,7 @@ ob_set_subtarget(oblib_lib common_mixed
   checksum/ob_parity_check.cpp
   container/ob_bitmap.cpp
   container/ob_vector.ipp
+  cpu/ob_cpu_topology.cpp
   encode/ob_base64_encode.cpp
   encode/ob_quoted_printable_encode.cpp
   encode/ob_uuencode.cpp
