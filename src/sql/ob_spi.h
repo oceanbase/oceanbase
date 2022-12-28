@@ -388,10 +388,12 @@ public:
                                          const ObSqlExpression *errmsg_expr);
 
   static int spi_process_resignal(pl::ObPLExecCtx *ctx,
-                                         const ObSqlExpression *errcode_expr,
-                                         const ObSqlExpression *errmsg_expr,
-                                         const char *sql_state = NULL,
-                                         bool is_signal = false);
+                                  const ObSqlExpression *errcode_expr,
+                                  const ObSqlExpression *errmsg_expr,
+                                  const char *sql_state,
+                                  int *error_code,
+                                  const char *resignal_sql_state,
+                                  bool is_signal);
 
   static int spi_delete_collection(pl::ObPLExecCtx *ctx,
                                    const ObSqlExpression *collection_expr,
