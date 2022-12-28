@@ -293,7 +293,7 @@ public:
                                  ObObj &result);
   static void destruct_default_expr_context(ObExprCtx &expr_ctx);
   static int64_t get_usec();
-  static int check_and_convert_db_name(const common::ObCollationType cs_type, const bool perserver_lettercase,
+  static int check_and_convert_db_name(const common::ObCollationType cs_type, const bool preserve_lettercase,
                                        common::ObString &name);
   static int cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_guard,
                                 const ObSQLSessionInfo *session,
