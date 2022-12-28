@@ -94,14 +94,16 @@ public:
   int refresh_gts_location() { return refresh_gts_location_(); }
   TO_STRING_KV(K_(tenant_id), K_(gts_local_cache), K_(server), K_(gts_cache_leader));
 private:
-  int refresh_gts_cache_leader_();
+  int get_gts_leader_(common::ObAddr &leader);
   int refresh_gts_location_();
   int refresh_gts_(const bool need_refresh);
   int query_gts_(const common::ObAddr &leader);
   void statistics_();
-  int get_gts_from_local_timestamp_service_(int64_t &gts,
+  int get_gts_from_local_timestamp_service_(common::ObAddr &leader,
+                                            int64_t &gts,
                                             MonotonicTs &receive_gts_ts);
-  int get_gts_from_local_timestamp_service_(int64_t &gts);
+  int get_gts_from_local_timestamp_service_(common::ObAddr &leader,
+                                            int64_t &gts);
 public:
   static const int64_t GET_GTS_QUEUE_COUNT = 1;
   static const int64_t WAIT_GTS_QUEUE_COUNT = 1;
