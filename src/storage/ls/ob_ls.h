@@ -115,6 +115,8 @@ class ObLS : public common::ObLink
 {
 public:
   friend ObLSLockGuard;
+  friend class ObFreezer;
+  friend class checkpoint::ObDataCheckpoint;
 public:
   static constexpr int64_t TOTAL_INNER_TABLET_NUM = 3;
   static const uint64_t INNER_TABLET_ID_LIST[TOTAL_INNER_TABLET_NUM];
@@ -586,14 +588,16 @@ public:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
 
   // ObFreezer interface:
-  // logstream freeze
-  // @param [in] null
-  int logstream_freeze();
+  // @param [in] result, only used for wait_freeze_finished()
+  // int logstream_freeze(ObFuture<int> *result = nullptr);
+  // DELEGATE_WITH_RET(ls_freezer_, logstream_freeze, int);
+  int logstream_freeze(bool is_sync = false);
   // tablet freeze
   // @param [in] tablet_id
-  // int tablet_freeze(const ObTabletID &tablet_id);
+  // @param [in] result, only used for wait_freeze_finished()
+  // int tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
   // DELEGATE_WITH_RET(ls_freezer_, tablet_freeze, int);
-  int tablet_freeze(const ObTabletID &tablet_id);
+  int tablet_freeze(const ObTabletID &tablet_id, bool is_sync = false);
   // force freeze tablet
   // @param [in] tablet_id
   // int force_tablet_freeze(const ObTabletID &tablet_id);

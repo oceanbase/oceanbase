@@ -142,6 +142,7 @@ LATCH_DEF(APPLY_STATUS_LOCK, 127, "apply_status latch", LATCH_FIFO, 2000, 0, APP
 LATCH_DEF(ID_SOURCE_LOCK, 128, "ID allocator updates assignable interval lock", LATCH_FIFO, 2000, 0, ID_SOURCE_LOCK_WAIT, "ID allocator updates assignable interval lock")
 LATCH_DEF(TRANS_AUDIT_RECORD_LOCK, 129, "trans records audit information lock", LATCH_FIFO, 2000, 0, TRANS_AUDIT_RECORD_LOCK_WAIT, "trans records audit information lock")
 LATCH_DEF(TABLET_MULTI_SOURCE_DATA_LOCK, 130, "tablet multi source data lock", LATCH_FIFO, 2000, 0, TABLET_MULTI_SOURCE_DATA_WAIT, "tablet multi source data lock")
+LATCH_DEF(FREEZE_THREAD_POOL_LOCK, 131, "freeze thread pool lock", LATCH_FIFO, 2000, 0, FREEZE_THREAD_POOL_WAIT, "freeze thread pool lock")
 
 LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif

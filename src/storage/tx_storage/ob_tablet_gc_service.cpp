@@ -351,8 +351,8 @@ int ObTabletGCHandler::freeze_unpersist_tablet_ids(const common::ObTabletIDArray
       if (!unpersist_tablet_ids.at(i).is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "invalid tablet_id", KR(ret), KPC(this->ls_), K(unpersist_tablet_ids));
-      } else if (OB_FAIL(ls_->tablet_freeze(unpersist_tablet_ids.at(i)))) {
-        STORAGE_LOG(WARN, "fail to tablet freeze", KR(ret), KPC(this->ls_), K(unpersist_tablet_ids.at(i)));
+      } else if (OB_FAIL(ls_->tablet_freeze(unpersist_tablet_ids.at(i), true/*is_sync*/))) {
+        STORAGE_LOG(WARN, "fail to freeze tablet", KR(ret), KPC(this->ls_), K(unpersist_tablet_ids.at(i)));
       }
     }
   }

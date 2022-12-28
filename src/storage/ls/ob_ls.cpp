@@ -59,7 +59,7 @@ const uint64_t ObLS::INNER_TABLET_ID_LIST[TOTAL_INNER_TABLET_NUM] = {
 ObLS::ObLS()
   : ls_tx_svr_(this),
     replay_handler_(this),
-    ls_freezer_(&ls_wrs_handler_, &ls_tx_svr_, &ls_tablet_svr_, &data_checkpoint_, &log_handler_, ls_meta_.ls_id_),
+    ls_freezer_(this),
     ls_sync_tablet_seq_handler_(),
     ls_ddl_log_handler_(),
     is_inited_(false),
@@ -113,7 +113,7 @@ int ObLS::init(const share::ObLSID &ls_id,
     LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id), K(replica_type));
   } else {
     rs_reporter_ = reporter;
-    ls_freezer_.init(&ls_wrs_handler_, &ls_tx_svr_, &ls_tablet_svr_, &data_checkpoint_, &log_handler_, ls_meta_.ls_id_);
+    ls_freezer_.init(this);
     transaction::ObTxPalfParam tx_palf_param(get_log_handler());
 
     // tx_table_.init() should after ls_table_svr.init()
@@ -1139,49 +1139,67 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
   return ret;
 }
 
-int ObLS::logstream_freeze()
+int ObLS::logstream_freeze(bool is_sync)
 {
   int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
-  int64_t write_lock = 0;
-  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_UNLIKELY(is_stopped_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-  } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(ls_freezer_.logstream_freeze())) {
-    LOG_WARN("logstream freeze failed", K(ret), K_(ls_meta));
-  } else {
-    // do nothing
+  ObFuture<int> result;
+
+  {
+    int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+    int64_t write_lock = 0;
+    ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ls is not inited", K(ret));
+    } else if (OB_UNLIKELY(is_stopped_)) {
+      ret = OB_NOT_RUNNING;
+      LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+    } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
+      ret = OB_NOT_RUNNING;
+      LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
+    } else if (OB_FAIL(ls_freezer_.logstream_freeze(&result))) {
+      LOG_WARN("logstream freeze failed", K(ret), K_(ls_meta));
+    } else {
+      // do nothing
+    }
   }
+
+  if (is_sync) {
+    ret = ls_freezer_.wait_freeze_finished(result);
+  }
+
   return ret;
 }
 
-int ObLS::tablet_freeze(const ObTabletID &tablet_id)
+int ObLS::tablet_freeze(const ObTabletID &tablet_id, bool is_sync)
 {
   int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
-  int64_t write_lock = 0;
-  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_UNLIKELY(is_stopped_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-  } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("log handler not enable replay, should not freeze", K(ret), K(tablet_id), K_(ls_meta));
-  } else if (OB_FAIL(ls_freezer_.tablet_freeze(tablet_id))) {
-    LOG_WARN("tablet freeze failed", K(ret), K(tablet_id));
-  } else {
-    // do nothing
+  ObFuture<int> result;
+
+  {
+    int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+    int64_t write_lock = 0;
+    ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ls is not inited", K(ret));
+    } else if (OB_UNLIKELY(is_stopped_)) {
+      ret = OB_NOT_RUNNING;
+      LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+    } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
+      ret = OB_NOT_RUNNING;
+      LOG_WARN("log handler not enable replay, should not freeze", K(ret), K(tablet_id), K_(ls_meta));
+    } else if (OB_FAIL(ls_freezer_.tablet_freeze(tablet_id, &result))) {
+      LOG_WARN("tablet freeze failed", K(ret), K(tablet_id));
+    } else {
+      // do nothing
+    }
   }
+
+  if (is_sync) {
+    ret = ls_freezer_.wait_freeze_finished(result);
+  }
+
   return ret;
 }
 

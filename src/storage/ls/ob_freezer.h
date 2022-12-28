@@ -22,6 +22,7 @@
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "logservice/ob_log_handler.h"
 #include "lib/container/ob_array_serialization.h"
+#include "share/ob_occam_thread_pool.h"
 
 namespace oceanbase
 {
@@ -183,35 +184,18 @@ public:
 
 public:
   ObFreezer();
-  ObFreezer(ObLSWRSHandler *ls_loop_worker,
-            ObLSTxService *ls_tx_svr,
-            ObLSTabletService *ls_tablet_svr,
-            checkpoint::ObDataCheckpoint *data_checkpoint,
-            logservice::ObILogHandler *ob_loghandler,
-            const share::ObLSID &ls_id);
+  ObFreezer(ObLS *ls);
   ~ObFreezer();
 
-  int init(ObLSWRSHandler *ls_loop_worker,
-           ObLSTxService *ls_tx_svr,
-           ObLSTabletService *ls_tablet_svr,
-           checkpoint::ObDataCheckpoint *data_checkpoint,
-           logservice::ObILogHandler *ob_loghandler,
-           const share::ObLSID &ls_id);
-  void set(ObLSWRSHandler *ls_loop_worker,
-           ObLSTxService *ls_tx_svr,
-           ObLSTabletService *ls_tablet_svr,
-           checkpoint::ObDataCheckpoint *data_checkpoint,
-           logservice::ObILogHandler *ob_loghandler,
-           const share::ObLSID &ls_id,
-           uint32_t freeze_flag = 0);
+  int init(ObLS *ls);
   void reset();
   void offline() { enable_ = false; }
   void online() { enable_ = true; }
 
 public:
   /* freeze */
-  int logstream_freeze();
-  int tablet_freeze(const ObTabletID &tablet_id);
+  int logstream_freeze(ObFuture<int> *result = nullptr);
+  int tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
   int force_tablet_freeze(const ObTabletID &tablet_id);
   int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *&imemtable);
   int handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *imemtable);
@@ -222,10 +206,12 @@ public:
   uint32_t get_freeze_clock() { return ATOMIC_LOAD(&freeze_flag_) & (~(1 << 31)); }
 
   /* ls info */
-  share::ObLSID &get_ls_id() { return ls_id_; }
-  checkpoint::ObDataCheckpoint *get_data_checkpoint() { return data_checkpoint_; }
-  ObLSTxService *get_ls_tx_svr() { return ls_tx_svr_; }
-  ObLSTabletService *get_ls_tablet_svr() { return ls_tablet_svr_; }
+  share::ObLSID get_ls_id();
+  checkpoint::ObDataCheckpoint *get_ls_data_checkpoint();
+  ObLSTxService *get_ls_tx_svr();
+  ObLSTabletService *get_ls_tablet_svr();
+  logservice::ObILogHandler *get_ls_log_handler();
+  ObLSWRSHandler *get_ls_wrs_handler();
 
   /* freeze_snapshot_version */
   int64_t get_freeze_snapshot_version() { return freeze_snapshot_version_; }
@@ -253,6 +239,8 @@ public:
   ObFreezerStat& get_stat() { return stat_; }
   bool need_resubmit_log() { return ATOMIC_LOAD(&need_resubmit_log_); }
   void set_need_resubmit_log(bool flag) { return ATOMIC_STORE(&need_resubmit_log_, flag); }
+  // only used after start freeze_task successfully
+  int wait_freeze_finished(ObFuture<int> &result);
 
 private:
   class ObLSFreezeGuard
@@ -283,17 +271,21 @@ private:
   void undo_freeze_();
 
   /* inner subfunctions for freeze process */
-  int inner_logstream_freeze();
+  int inner_logstream_freeze(ObFuture<int> *result);
   int submit_log_for_freeze();
+  int ls_freeze_task();
+  int tablet_freeze_task(memtable::ObIMemtable *imemtable);
+  int submit_freeze_task(bool is_ls_freeze, ObFuture<int> *result, memtable::ObIMemtable *imemtable = nullptr);
   void wait_memtable_ready_for_flush(memtable::ObMemtable *memtable);
+  int wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable);
   int handle_memtable_for_tablet_freeze(memtable::ObIMemtable *imemtable);
   int create_memtable_if_no_active_memtable(ObTablet *tablet);
-
   int try_set_tablet_freeze_begin_();
   void set_tablet_freeze_begin_();
   void set_tablet_freeze_end_();
   void set_ls_freeze_begin_();
   void set_ls_freeze_end_();
+  int check_ls_state(); // must be used under the protection of ls_lock
 private:
   // flag whether the logsteram is freezing
   // the first bit: 1, freeze; 0, not freeze
@@ -307,14 +299,8 @@ private:
   // log ts before which will be smaller than the log ts in the latter memtables
   int64_t max_decided_log_ts_;
 
-  ObLSWRSHandler *ls_wrs_handler_;
-  ObLSTxService *ls_tx_svr_;
-  ObLSTabletService *ls_tablet_svr_;
-  checkpoint::ObDataCheckpoint *data_checkpoint_;
-  logservice::ObILogHandler *loghandler_;
-  share::ObLSID ls_id_;
+  ObLS *ls_;
   ObFreezerStat stat_;
-
   int64_t empty_memtable_cnt_;
 
   // make sure ls freeze has higher priority than tablet freeze

@@ -240,7 +240,7 @@ int ObTabletMemtableMgr::create_memtable(const int64_t clog_checkpoint_ts,
         if (OB_FAIL(add_memtable_(memtable_handle))) {
           LOG_WARN("failed to add memtable", K(ret), K(ls_id), K(tablet_id_), K(memtable_handle));
         } else if (FALSE_IT(time_guard.click("add memtable"))) {
-        } else if (OB_FAIL(memtable->add_to_data_checkpoint(freezer_->get_data_checkpoint()))) {
+        } else if (OB_FAIL(memtable->add_to_data_checkpoint(freezer_->get_ls_data_checkpoint()))) {
           LOG_WARN("add to data_checkpoint failed", K(ret), K(ls_id), KPC(memtable));
           clean_tail_memtable_();
         } else if (FALSE_IT(time_guard.click("add to data_checkpoint"))) {

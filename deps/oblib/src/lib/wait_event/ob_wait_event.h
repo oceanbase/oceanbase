@@ -215,6 +215,7 @@ WAIT_EVENT_DEF(ID_SOURCE_LOCK_WAIT, 16014, "ID allocator updates assignable inte
 WAIT_EVENT_DEF(TRANS_AUDIT_RECORD_LOCK_WAIT, 16015, "trans records audit information lock wait", "", "", "", CONCURRENCY, "TRANS_AUDIT_RECORD_LOCK_WAIT", true)
 WAIT_EVENT_DEF(TABLET_LOCK_WAIT, 16016, "tablet lock wait", "", "", "", CONCURRENCY, "TABLET_LOCK_WAIT", true)
 WAIT_EVENT_DEF(TABLET_MULTI_SOURCE_DATA_WAIT, 16017, "tablet multi source data wait", "", "", "", CONCURRENCY, "TABLET_MULTI_SOURCE_DATA_WAIT", true)
+WAIT_EVENT_DEF(FREEZE_THREAD_POOL_WAIT, 16018, "freeze thread pool wait", "", "", "", CONCURRENCY, "FREEZE_THREAD_POOL_WAIT", true)
 
 //replication group
 WAIT_EVENT_DEF(RG_TRANSFER_LOCK_WAIT, 17000, "transfer lock wait", "src_rg", "dst_rg", "transfer_pkey", CONCURRENCY, "transfer lock wait", false)

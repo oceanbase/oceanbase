@@ -40,6 +40,8 @@ ObTenantFreezer::ObTenantFreezer()
     rs_mgr_(nullptr),
     config_(nullptr),
     allocator_mgr_(nullptr),
+    freeze_thread_pool_(),
+    freeze_thread_pool_lock_(common::ObLatchIds::FREEZE_THREAD_POOL_LOCK),
     exist_ls_freezing_(false),
     last_update_ts_(0)
 {}
@@ -86,6 +88,8 @@ int ObTenantFreezer::init()
              K(GCONF.self_addr_));
   } else if (OB_FAIL(freeze_trigger_pool_.init_and_start(FREEZE_TRIGGER_THREAD_NUM))) {
     LOG_WARN("[TenantFreezer] fail to initialize freeze trigger pool", KR(ret));
+  } else if (OB_FAIL(freeze_thread_pool_.init_and_start(FREEZE_THREAD_NUM))) {
+    LOG_WARN("[TenantFreezer] fail to initialize freeze thread pool", KR(ret));
   } else if (OB_FAIL(freeze_trigger_timer_.init_and_start(freeze_trigger_pool_,
                                                           TIME_WHEEL_PRECISION,
                                                           "FrzTrigger"))) {
@@ -194,13 +198,16 @@ int ObTenantFreezer::ls_freeze_(ObLS *ls)
   // wait if there is a freeze is doing
   do {
     retry_times++;
-    if (OB_FAIL(ls->logstream_freeze()) && OB_ENTRY_EXIST == ret) {
+    if (OB_FAIL(ls->logstream_freeze(true/*is_sync*/)) && OB_ENTRY_EXIST == ret) {
       ob_usleep(SLEEP_TS);
     }
     if (retry_times % 10 == 0) {
       LOG_WARN("wait ls freeze finished cost too much time", K(retry_times));
     }
   } while (ret == OB_ENTRY_EXIST);
+  if (OB_NOT_RUNNING == ret) {
+    ret = OB_SUCCESS;
+  }
   return ret;
 }
 
@@ -245,7 +252,8 @@ int ObTenantFreezer::tenant_freeze_()
 }
 
 int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
-                                   const bool is_force_freeze)
+                                   const bool is_force_freeze,
+                                   const bool is_sync)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id;
@@ -274,10 +282,8 @@ int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
     LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
   } else if (OB_FAIL(is_force_freeze
                      ? ls->force_tablet_freeze(tablet_id)
-                     : ls->tablet_freeze(tablet_id))) {
+                     : ls->tablet_freeze(tablet_id, is_sync))) {
     LOG_WARN("[TenantFreezer] fail to freeze tablet", KR(ret), K(ls_id), K(tablet_id));
-  } else {
-    LOG_INFO("[TenantFreezer] succeed to freeze tablet", KR(ret), K(ls_id), K(tablet_id));
   }
 
   return ret;
