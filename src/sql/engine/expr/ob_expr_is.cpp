@@ -457,7 +457,7 @@ int ObExprIs::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("const raw expr param2 or param3 is null", K(param2), K(param3));
   } else if(FALSE_IT(param1_type = rt_expr.args_[0]->datum_meta_.type_)) {
-  } else if (param3->get_value().is_true()) { // 特殊情况，not null的date或datetime列
+  } else if (param2->get_value().is_null() && param3->get_value().is_true()) { // 特殊情况，not null的date或datetime列
     rt_expr.eval_func_ = ObExprIs::calc_is_date_int_null;
   } else if (param2->get_value().is_null()) {  // c1 is null
     if (lib::is_oracle_mode() && rt_expr.args_[0]->obj_meta_.is_ext()) {
