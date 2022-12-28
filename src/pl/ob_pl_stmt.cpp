@@ -993,7 +993,7 @@ int ObPLBlockNS::add_label(const ObString &name,
     LOG_USER_ERROR(OB_ERR_IDENTIFIER_TOO_LONG, name.length(), name.ptr());
   } else {
     bool is_dup = false;
-    if (OB_FAIL(check_dup_label(name, is_dup, true))) {
+    if (OB_FAIL(check_dup_label(name, is_dup))) {
       LOG_INFO("check dup label fail. ", K(ret), K(name));
     } else if (is_dup) {
       ret = OB_ERR_REDEFINE_LABEL;
@@ -1218,29 +1218,29 @@ int ObPLBlockNS::check_dup_symbol(const ObString &name, const ObPLDataType &type
   return ret;
 }
 
-int ObPLBlockNS::check_dup_label(const ObString &name, bool &is_dup, bool check_parent) const
+int ObPLBlockNS::check_dup_label(const ObString &name, bool &is_dup) const
 {
   int ret = OB_SUCCESS;
   is_dup = false;
   if (lib::is_oracle_mode()) {
     // do nothing
-  } else if (OB_ISNULL(label_table_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("label table is NULL", K(ret));
   } else {
-    const ObPLBlockNS *ns = check_parent ? pre_ns_ : this;
-    while (NULL != ns && !is_dup && !ns->stop_search_label()) {
+    const ObPLBlockNS *ns = this;
+    while (NULL != ns && !is_dup) {
       for (int64_t i = 0; OB_SUCC(ret) && !is_dup && i < ns->get_labels().count(); ++i) {
-        if (OB_ISNULL(ns->get_label_table()->get_label(ns->get_labels().at(i)))) {
+        if (OB_ISNULL(ns->get_label_table())
+            || OB_ISNULL(ns->get_label_table()->get_label(ns->get_labels().at(i)))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("label is NULL", K(i), K(ns->get_labels().at(i)), K(ret));
-        } else if (*ns->get_label_table()->get_label(ns->get_labels().at(i)) == name &&
-                   ns->get_label_table()->is_ended(ns->get_labels().at(i)) == false) {
+        } else if (*ns->get_label_table()->get_label(ns->get_labels().at(i)) == name
+                    && ns->get_label_table()->is_ended(ns->get_labels().at(i)) == false) {
           is_dup = true;
-        } else { /*do nothing*/ }
+        }
       }
-      if (!is_dup && check_parent) {
+      if (!is_dup && !ns->stop_search_label()) {
         ns = ns->get_pre_ns();
+      } else {
+        break;
       }
     }
   }
