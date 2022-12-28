@@ -144,21 +144,10 @@ public:
     int64_t allocated_;
   };
 
-  class ObAdvanceClockTask : public common::ObTimerTask
-  {
-  public:
-    ObAdvanceClockTask(ObFifoArena &arena) : arena_(arena) {}
-    virtual ~ObAdvanceClockTask() {}
-    virtual void runTimerTask() {
-      arena_.advance_clock();
-    }
-  private:
-    ObFifoArena &arena_;
-  };
 public:
   enum { MAX_CACHED_GROUP_COUNT = 16, MAX_CACHED_PAGE_COUNT = MAX_CACHED_GROUP_COUNT * Handle::MAX_NWAY, PAGE_SIZE = OB_MALLOC_BIG_BLOCK_SIZE + sizeof(Page) + sizeof(Ref)};
-  ObFifoArena(): allocator_(NULL), nway_(0), allocated_(0), reclaimed_(0), hold_(0), retired_(0), max_seq_(0), clock_(0), advance_clock_timer_(), advance_clock_task_(*this),
-    last_reclaimed_(0), lastest_memstore_threshold_(0)
+  ObFifoArena(): allocator_(NULL), nway_(0), allocated_(0), reclaimed_(0), hold_(0), retired_(0), max_seq_(0), clock_(0), last_update_ts_(0),
+  last_reclaimed_(0), lastest_memstore_threshold_(0)
     { memset(cur_pages_, 0, sizeof(cur_pages_)); }
   ~ObFifoArena() { reset(); }
 public:
@@ -236,7 +225,7 @@ private:
   int64_t get_writing_throttling_maximum_duration_() const;
 private:
   static const int64_t MAX_WAIT_INTERVAL = 20 * 1000 * 1000;//20s
-  static const int64_t ADVANCE_CLOCK_INTERVAL = 200;// 200us
+  static const int64_t ADVANCE_CLOCK_INTERVAL = 50;// 50us
   static const int64_t MEM_SLICE_SIZE = 2 * 1024 * 1024; //Bytes per usecond
   static const int64_t MIN_INTERVAL = 20000;
   static const int64_t DEFAULT_TRIGGER_PERCENTAGE = 100;
@@ -249,14 +238,9 @@ private:
   int64_t hold_;//for single tenant
   int64_t retired_;
 
-  // typedef common::SpinRWLock RWLock;
-  // typedef common::SpinRLockGuard  RLockGuard;
-  // typedef common::SpinWLockGuard  WLockGuard;
-  // RWLock rwlock_;
   int64_t max_seq_;
   int64_t clock_;
-  common::ObTimer advance_clock_timer_;
-  ObAdvanceClockTask advance_clock_task_;
+  int64_t last_update_ts_;
 
   int64_t last_reclaimed_;
   Page* cur_pages_[MAX_CACHED_PAGE_COUNT];

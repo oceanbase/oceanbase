@@ -85,14 +85,8 @@ int ObFifoArena::init(uint64_t tenant_id)
   int ret = OB_SUCCESS;
   lib::ObMallocAllocator *allocator = lib::ObMallocAllocator::get_instance();
   uint64_t ctx_id = ObCtxIds::MEMSTORE_CTX_ID;
-  MTL_SWITCH(tenant_id) {
-    advance_clock_timer_.set_run_wrapper(MTL_CTX());
-  }
-  if (OB_FAIL(advance_clock_timer_.init("ADV_CLOCK"))) {
-    STORAGE_LOG(ERROR, "fail to init advance_clock_timer_", K(ret));
-  } else if (OB_FAIL(advance_clock_timer_.schedule(advance_clock_task_, ADVANCE_CLOCK_INTERVAL, true))) {
-    STORAGE_LOG(ERROR, "fail to schedule advance_clock task", K(ret));
-  } else if (OB_ISNULL(allocator)) {
+
+  if (OB_ISNULL(allocator)) {
     ret = OB_INIT_FAIL;
     OB_LOG(ERROR, "mallocator instance is NULLL", K(ret));
   } else if (OB_ISNULL(allocator_ = allocator->get_tenant_ctx_allocator(tenant_id, ctx_id))) {
@@ -114,9 +108,6 @@ int ObFifoArena::init(uint64_t tenant_id)
 
 void ObFifoArena::reset()
 {
-  advance_clock_timer_.stop();
-  advance_clock_timer_.wait();
-  advance_clock_timer_.destroy();
   COMMON_LOG(INFO, "MTALLOC.reset", "tenant_id", get_tenant_id());
   shrink_cached_page(0);
 }
@@ -312,6 +303,7 @@ void ObFifoArena::speed_limit(const int64_t cur_mem_hold, const int64_t alloc_si
         COMMON_LOG(WARN, "failed to check_and_calc_decay_factor", K(cur_mem_hold), K(alloc_size), K(throttle_info_));
       }
     }
+    advance_clock();
     seq = ATOMIC_AAF(&max_seq_, alloc_size);
     get_seq() = seq;
     tl_need_speed_limit() = need_speed_limit;
@@ -326,28 +318,34 @@ void ObFifoArena::speed_limit(const int64_t cur_mem_hold, const int64_t alloc_si
 
 bool ObFifoArena::check_clock_over_seq(const int64_t req)
 {
+  advance_clock();
   int64_t clock = ATOMIC_LOAD(&clock_);
   return req <= clock;
 }
 
 void ObFifoArena::advance_clock()
 {
-  int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
-  int64_t trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100;
-  int64_t cur_mem_hold = ATOMIC_LOAD(&hold_);
-  bool need_speed_limit = false;
-  if (trigger_percentage < 100) {
-    need_speed_limit = cur_mem_hold > trigger_mem_limit;
-  }
-  int64_t mem_limit =
-    (need_speed_limit ? calc_mem_limit(cur_mem_hold, trigger_mem_limit, ADVANCE_CLOCK_INTERVAL) :
-                        trigger_mem_limit - cur_mem_hold);
-  int64_t clock = ATOMIC_LOAD(&clock_);
-  int64_t max_seq = ATOMIC_LOAD(&max_seq_);
-  ATOMIC_SET(&clock_, min(max_seq, clock + mem_limit));
-  if (REACH_TIME_INTERVAL(100 * 1000L)) {
-    COMMON_LOG(INFO, "current clock is ",
-               K(clock_), K(max_seq_), K(mem_limit), K(cur_mem_hold), K(attr_.tenant_id_));
+  int64_t cur_ts = ObTimeUtility::current_time();
+  int64_t old_ts = last_update_ts_;
+  if ((cur_ts - last_update_ts_ > ADVANCE_CLOCK_INTERVAL) &&
+       old_ts == ATOMIC_CAS(&last_update_ts_, old_ts, cur_ts)) {
+    int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
+    int64_t trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100;
+    int64_t cur_mem_hold = ATOMIC_LOAD(&hold_);
+    bool need_speed_limit = false;
+    if (trigger_percentage < 100) {
+      need_speed_limit = cur_mem_hold > trigger_mem_limit;
+    }
+    int64_t mem_limit =
+      (need_speed_limit ? calc_mem_limit(cur_mem_hold, trigger_mem_limit, ADVANCE_CLOCK_INTERVAL) :
+                          trigger_mem_limit - cur_mem_hold);
+    int64_t clock = ATOMIC_LOAD(&clock_);
+    int64_t max_seq = ATOMIC_LOAD(&max_seq_);
+    ATOMIC_SET(&clock_, min(max_seq, clock + mem_limit));
+    if (REACH_TIME_INTERVAL(100 * 1000L)) {
+      COMMON_LOG(INFO, "current clock is ",
+                K(clock_), K(max_seq_), K(mem_limit), K(cur_mem_hold), K(attr_.tenant_id_));
+    }
   }
 }
 
