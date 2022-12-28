@@ -1292,6 +1292,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             row_count = 0;
             spi_result.get_mysql_result().reset();
             out_params.reset();
+            retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
             if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
               LOG_WARN("get schema guard failed", K(ret));
             } else if (OB_FAIL(schema_guard.get_schema_version(session->get_effective_tenant_id(), tenant_version))) {
@@ -1301,7 +1302,6 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             } else {
               retry_ctrl.set_tenant_local_schema_version(tenant_version);
               retry_ctrl.set_sys_local_schema_version(sys_version);
-              retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
               ObArenaAllocator allocator;
               if (OB_FAIL(inner_open(ctx,
                                     allocator,
@@ -1500,6 +1500,7 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
           row_count = 0;
           spi_result.get_mysql_result().reset();
           out_params.reset();
+          retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
           if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(eff_tenant_id, schema_guard))) {
             LOG_WARN("get schema guard failed", K(ret));
           } else if (OB_FAIL(schema_guard.get_schema_version(eff_tenant_id, tenant_version))) {
@@ -1509,7 +1510,6 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
           } else {
             retry_ctrl.set_tenant_local_schema_version(tenant_version);
             retry_ctrl.set_sys_local_schema_version(sys_version);
-            retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
             if (OB_FAIL(inner_open(ctx,
                                    exec_params.count() > 0 ? NULL : sql_stmt.ptr(),
                                    stmt_id,
@@ -2384,6 +2384,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             }
 
             ret = OB_SUCCESS;
+            retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
             OZ (GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(),
                                                               schema_guard));
             OZ (schema_guard.get_schema_version(session->get_effective_tenant_id(), tenant_version));
@@ -2391,7 +2392,6 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
 
             OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
             OX (retry_ctrl.set_sys_local_schema_version(sys_version));
-            OX (retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update()));
 
             if (OB_NOT_NULL(spi_conn)) {
               sql_proxy->close(spi_conn, OB_SUCCESS == ret);
@@ -3357,6 +3357,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         share::schema::ObSchemaGetterGuard schema_guard;
         do {
           ret = OB_SUCCESS;
+          retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
           OZ (cursor.prepare_spi_cursor(spi_cursor,
                                         session->get_effective_tenant_id(),
                                         size));
@@ -3365,7 +3366,6 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
           OZ (schema_guard.get_schema_version(OB_SYS_TENANT_ID, sys_version));
           OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
           OX (retry_ctrl.set_sys_local_schema_version(sys_version));
-          OX (retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update()));
           if (OB_SUCC(ret)) {
             OZ (inner_open(ctx, sql_str, stmt_id, stmt_type, exec_params,
                           spi_result.get_mysql_result(), spi_result.get_out_params()),
@@ -5043,6 +5043,7 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
     if (OB_SUCC(ret)) {
       do {
         ret = OB_SUCCESS;
+        retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
         if (THIS_WORKER.is_timeout()) {
           ret = OB_TIMEOUT;
           LOG_WARN("inner fetch with retry already timeout!",
@@ -5058,7 +5059,6 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
         OZ (schema_guard.get_schema_version(OB_SYS_TENANT_ID, sys_version));
         OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
         OX (retry_ctrl.set_sys_local_schema_version(sys_version));
-        OX (retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update()));
         CK (OB_NOT_NULL(result_set));
         CK (OB_NOT_NULL(static_cast<observer::ObInnerSQLResult*>(result_set)->get_result_set()));
         if (OB_SUCC(ret)) {

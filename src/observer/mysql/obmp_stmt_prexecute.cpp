@@ -191,6 +191,7 @@ int ObMPStmtPrexecute::before_process()
                 share::schema::ObSchemaGetterGuard schema_guard;
                 const uint64_t tenant_id = session->get_effective_tenant_id();
                 ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
+                retry_ctrl_.clear_state_before_each_retry(session->get_retry_info_for_update());
                 if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
                   LOG_WARN("get schema guard failed", K(ret));
                 } else if (OB_FAIL(schema_guard.get_schema_version(
@@ -225,7 +226,6 @@ int ObMPStmtPrexecute::before_process()
                     LOG_WARN("fail to set session active", K(ret));
                   }
                   if (OB_SUCC(ret)) {
-                    retry_ctrl_.clear_state_before_each_retry(session->get_retry_info_for_update());
                     if (OB_FAIL(gctx_.sql_engine_->stmt_prepare(sql_,
                                                                 get_ctx(),
                                                                 result,
