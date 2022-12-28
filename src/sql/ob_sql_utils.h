@@ -554,7 +554,7 @@ public:
   *  So, timestamp between servers can be vary large.
   *  A sql executed across servers needs to be corrected
   *  according to the THIS_WORKER.get_ntp_offset(),
-  *  That is the time correctly set by the processer of the RPC
+  *  That is the time correctly set by the processor of the RPC
   ------------------------*/
   static void adjust_time_by_ntp_offset(int64_t &dst_timeout_ts);
 private:
