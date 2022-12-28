@@ -119,7 +119,8 @@ ObTableLockOp::ObTableLockOp(ObExecContext &exec_ctx,
                              const ObOpSpec &spec,
                              ObOpInput *input)
   : ObTableModifyOp(exec_ctx, spec, input),
-    savepoint_no_(0)
+    savepoint_no_(0),
+    need_return_row_(false)
 {
 }
 
@@ -177,108 +178,150 @@ int ObTableLockOp::init_lock_rtdef()
 int ObTableLockOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
-  const ObTableLockSpec &spec = MY_SPEC;
-  bool need_get_next_row = false;
   if (iter_end_) {
     LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
     ret = OB_ITER_END;
-  } else if (OB_FAIL(try_check_status())) {
-    LOG_WARN("check status failed", K(ret));
-  } else if (!MY_SPEC.is_skip_locked()) {
-    if (OB_FAIL(get_next_row_from_child())) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get next row", K(ret));
-      } else {
-        iter_end_ = true;
-      }
-    } else if (OB_FAIL(lock_row_to_das())) {
-      LOG_WARN("lock row to das failed", K(ret));
-    }
-  } else if (MY_SPEC.is_skip_locked()) {
-    do {
-      need_get_next_row = false;
-      if (OB_FAIL(get_next_row_from_child())) {
+  } else {
+    need_return_row_ = false;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(try_check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (OB_FAIL(get_next_row_from_child())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next row", K(ret));
         } else {
           iter_end_ = true;
+          ret = OB_SUCCESS;
+          break;
         }
       } else if (OB_FAIL(lock_row_to_das())) {
-        LOG_WARN("lock row to das failed", K(ret));
-      } else if (OB_FAIL(lock_one_row_post_proc(need_get_next_row))) {
-        LOG_WARN("fail to execute lock_one_row_post_proc", K(ret));
+        LOG_WARN("write row to das failed", K(ret));
+      } else if (OB_FAIL(submit_row_by_strategy())) {
+        LOG_WARN("submit row by strategy failed", K(ret));
+      } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
+        clear_evaluated_flag();
+        err_log_rt_def_.curr_err_log_record_num_++;
+        err_log_rt_def_.reset();
+        continue;
+      } else if (need_return_row_) {
+        //break to output this row
+        break;
       }
-    } while(need_get_next_row);
-  }
+    }
 
-  if (OB_ITER_END == ret) {
-    if (OB_FAIL(lock_rows_post_proc(need_get_next_row))) {
-      LOG_WARN("do lock rows post process failed", K(ret));
-    } else {
-      //can not overwrite the original error code
+    if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
+      //DML operator reach iter end,
+      //now submit the remaining rows in the DAS Write Buffer to the storage
+      if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
+        LOG_WARN("execute all dml das task failed", K(ret));
+      } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
+        LOG_WARN("close all das task failed", K(ret));
+      }
+      //to post process the DML info after writing all data to the storage
+      ret = write_rows_post_proc(ret);
+    }
+    if (OB_SUCC(ret) && iter_end_) {
       ret = OB_ITER_END;
     }
   }
   return ret;
+}
 
+int ObTableLockOp::submit_row_by_strategy()
+{
+  int ret = OB_SUCCESS;
+  if (!MY_SPEC.is_skip_locked()) {
+    need_return_row_ = true;
+    if (OB_FAIL(discharge_das_write_buffer())) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret
+          && OB_TRANSACTION_SET_VIOLATION != ret
+          && OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
+        LOG_WARN("failed to lock row with das", K(ret));
+      } else if (MY_SPEC.is_nowait() && OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+        ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT;
+      }
+    }
+  } else if (OB_FAIL(lock_one_row_post_proc())) {
+    LOG_WARN("lock one row post proc failed", K(ret));
+  }
+  return ret;
 }
 
 int ObTableLockOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
-  const ObTableLockSpec &spec = MY_SPEC;
-  const ObBatchRows * child_brs = nullptr;
-  bool need_get_next_batch = false;
   if (iter_end_) {
+    LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
     brs_.end_ = true;
     brs_.size_ = 0;
-    LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
-    if (OB_FAIL(lock_rows_post_proc(need_get_next_batch))) {
-        LOG_WARN("do lock rows post process failed", K(ret));
-    }
   } else {
-    if (OB_FAIL(get_next_batch_from_child(max_row_cnt, child_brs))) {
-      // do nothing: log is done in previous call
-    } else if (OB_FAIL(lock_batch_to_das(child_brs, MY_SPEC.is_skip_locked()))) {
-      LOG_WARN("lock batch to das failed", K(ret));
-    }
-
-    if (OB_SUCC(ret) && child_brs->end_ == true) {
-      if (!MY_SPEC.is_skip_locked() &&
-          OB_FAIL(lock_rows_post_proc(need_get_next_batch))) {
-        LOG_WARN("do lock rows post process failed", K(ret));
+    need_return_row_ = false;
+    const ObBatchRows * child_brs = nullptr;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(try_check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (OB_FAIL(get_next_batch_from_child(max_row_cnt, child_brs))) {
+        if (OB_ITER_END == ret) {
+          iter_end_ = true;
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (child_brs->size_ == 0 && child_brs->end_) {
+        iter_end_ = true;
+        brs_.end_ = true;
+        brs_.size_ = 0;
+        break;
+      } else if (OB_FAIL(lock_batch_to_das(child_brs))) {
+        LOG_WARN("write row to das failed", K(ret));
+      } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
+        clear_evaluated_flag();
+        err_log_rt_def_.curr_err_log_record_num_++;
+        err_log_rt_def_.reset();
+        continue;
+      } else if (!brs_.skip_->is_all_true(brs_.size_)) {
+        //this batch has not been skipped for all rows, need break to output this batch
+        break;
       }
-      iter_end_ = true;
     }
+  }
+  if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
+    //DML operator reach iter end,
+    //now submit the remaining rows in the DAS Write Buffer to the storage
+    if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
+      LOG_WARN("execute all dml das task failed", K(ret));
+    } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
+      LOG_WARN("close all das task failed", K(ret));
+    }
+    //to post process the DML info after writing all data to the storage
+    ret = write_rows_post_proc(ret);
   }
   return ret;
 }
 
 // this func only work for for update skip locked
-OB_INLINE int ObTableLockOp::lock_one_row_post_proc(bool &need_get_next_row)
+OB_INLINE int ObTableLockOp::lock_one_row_post_proc()
 {
   int ret = OB_SUCCESS;
-  need_get_next_row = false;
 
-  if (MY_SPEC.is_multi_table_skip_locked_) {
-    if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(ctx_, savepoint_no_))) {
-      LOG_WARN("fail to get save point", K(ret));
+  if (MY_SPEC.is_multi_table_skip_locked_ &&
+      OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(ctx_, savepoint_no_))) {
+    LOG_WARN("fail to get save point", K(ret));
+  } else if (OB_FAIL(submit_all_dml_task())) {
+    if (OB_TRY_LOCK_ROW_CONFLICT != ret &&
+        OB_TRANSACTION_SET_VIOLATION != ret &&
+        OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
+      LOG_WARN("submit all dml task failed", K(ret));
+    } else if (MY_SPEC.is_skip_locked()) {
+      ret = OB_SUCCESS;
+      dml_rtctx_.reuse(); //reuse current context to lock the next row
+      need_return_row_ = false;
     }
-  }
-
-  if (OB_FAIL(ret)) {
-
-  } else if (OB_FAIL(lock_rows_post_proc(need_get_next_row))) {
-    LOG_WARN("execute lock_rows_post_proc failed", K(ret));
-  } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
-    LOG_WARN("close all das task failed", K(ret));
   } else {
-    // don't release all memory, need to reuse das ctx
-    dml_rtctx_.reuse();
+    need_return_row_ = true;
   }
 
   // if fail must rollback to save point
-  if (OB_SUCC(ret) && need_get_next_row && MY_SPEC.is_multi_table_skip_locked_) {
+  if (OB_SUCC(ret) && !need_return_row_ && MY_SPEC.is_multi_table_skip_locked_) {
     if (OB_FAIL(ObSqlTransControl::rollback_savepoint(ctx_, savepoint_no_))) {
       LOG_WARN("fail to rollback save point", K(ret));
     }
@@ -286,17 +329,15 @@ OB_INLINE int ObTableLockOp::lock_one_row_post_proc(bool &need_get_next_row)
   return ret;
 }
 
-OB_INLINE int ObTableLockOp::lock_rows_post_proc(bool &need_get_next_row)
+int ObTableLockOp::write_rows_post_proc(int last_errno)
 {
   int ret = OB_SUCCESS;
-  //iterator end, if das ref has task, need flush all task data to partition storage
-  if (OB_FAIL(submit_all_dml_task())) {
+  if (OB_FAIL(last_errno)) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret &&
         OB_TRANSACTION_SET_VIOLATION != ret &&
         OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
       LOG_WARN("failed to lock row with das", K(ret));
     } else if (MY_SPEC.is_skip_locked()) {
-      need_get_next_row = true;
       ret = OB_SUCCESS;
     } else if (MY_SPEC.is_nowait() && OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
       ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT;
@@ -372,11 +413,9 @@ int ObTableLockOp::lock_row_to_das()
   return ret;
 }
 
-int ObTableLockOp::lock_batch_to_das(const ObBatchRows *child_brs,
-                                     const bool skip_locked)
+int ObTableLockOp::lock_batch_to_das(const ObBatchRows *child_brs)
 {
   int ret = OB_SUCCESS;
-  bool lock_conflict = false;
 
   // Note: there are three evalctx involved in das lock:
   // 1. eval_ctx_,
@@ -388,43 +427,22 @@ int ObTableLockOp::lock_batch_to_das(const ObBatchRows *child_brs,
   operator_evalctx_guard.set_batch_size(child_brs->size_);
   (void) brs_.copy(child_brs);
   for (auto i = 0; OB_SUCC(ret) && i < child_brs->size_; i++) {
+    need_return_row_ = false;
     if (child_brs->skip_->at(i)) {
       continue;
     }
     operator_evalctx_guard.set_batch_idx(i);
     if (OB_FAIL(lock_row_to_das())) {
       LOG_WARN("Failed to lock das row", K(i), K(ret));
-    }
-    if (skip_locked) {
-      if (OB_FAIL(lock_one_row_post_proc(lock_conflict))) {
-        LOG_WARN("fail to execute lock_one_row_post_proc", K(ret));
-      } else {
-        // NO need to reset lock_conflict inside loop as it is reset within
-        // routine "lock_one_row_post_proc"
-        if (lock_conflict) {
-          brs_.skip_->set(i);
-        }
-        LOG_DEBUG("lock_batch_to_das", K(lock_conflict), K(i),
-                 K(brs_));
-      }
+    } else if (OB_FAIL(submit_row_by_strategy())) {
+      LOG_WARN("submit row by strategy failed", K(ret));
+    } else if (MY_SPEC.is_skip_locked() && !need_return_row_) {
+      //lock conflict, skip it
+      brs_.skip_->set(i);
     }
   }
   clear_evaluated_flag();
 
-  return ret;
-}
-
-OB_INLINE int ObTableLockOp::get_next_row_from_child()
-{
-  int ret = OB_SUCCESS;
-  clear_evaluated_flag();
-  if (OB_FAIL(child_->get_next_row())) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to get next row", K(ret));
-    }
-  } else {
-    LOG_TRACE("child output row", "row", ROWEXPR2STR(eval_ctx_, child_->get_spec().output_));
-  }
   return ret;
 }
 

@@ -1031,6 +1031,7 @@ int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *
 int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(S_revert_iter_begin);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("access service is not initiated", K(ret));
@@ -1042,7 +1043,7 @@ int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
     iter->~ObNewRowIterator();
   }
   iter = nullptr;
-  NG_TRACE(revert_scan_iter);
+  NG_TRACE(S_revert_iter_end);
   return ret;
 }
 

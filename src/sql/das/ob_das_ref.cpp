@@ -49,6 +49,7 @@ ObDASRef::ObDASRef(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx)
     wild_datum_info_(eval_ctx),
     lookup_cnt_(0),
     task_cnt_(0),
+    init_mem_used_(exec_ctx.get_allocator().used()),
     task_map_(),
     flags_(0)
 {
@@ -245,6 +246,8 @@ int ObDASRef::close_all_task()
   int ret = OB_SUCCESS;
   int last_end_ret = OB_SUCCESS;
   if (has_task()) {
+    NG_TRACE(close_das_task_begin);
+    FLTSpanGuard(close_das_task);
     ObSQLSessionInfo *session = nullptr;
 
     DASTaskIter task_iter = begin_task_iter();
@@ -280,6 +283,7 @@ int ObDASRef::close_all_task()
     if (task_map_.created()) {
       task_map_.destroy();
     }
+    NG_TRACE(close_das_task_end);
   }
   return ret;
 }
@@ -321,6 +325,7 @@ void ObDASRef::reset()
   batched_tasks_.destroy();
   lookup_cnt_ = 0;
   task_cnt_ = 0;
+  init_mem_used_ = 0;
   if (task_map_.created()) {
     task_map_.destroy();
   }
@@ -339,6 +344,7 @@ void ObDASRef::reuse()
   batched_tasks_.destroy();
   lookup_cnt_ = 0;
   task_cnt_ = 0;
+  init_mem_used_ = 0;
   if (task_map_.created()) {
     task_map_.destroy();
   }

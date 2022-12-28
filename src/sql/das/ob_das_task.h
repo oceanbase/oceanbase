@@ -143,7 +143,6 @@ public:
                        K_(need_switch_param),
                        KPC_(trans_desc),
                        KPC_(snapshot),
-                       K_(trans_result),
                        K_(tablet_id),
                        K_(ls_id),
                        KPC_(tablet_loc),
@@ -159,7 +158,6 @@ public:
   transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
   void set_snapshot(transaction::ObTxReadSnapshot *snapshot) { snapshot_ = snapshot; }
   transaction::ObTxReadSnapshot *get_snapshot() { return snapshot_; }
-  transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
   bool is_local_task() const { return task_started_; }
   void set_can_part_retry(const bool flag) { can_part_retry_ = flag; }
   bool can_part_retry() const { return can_part_retry_; }
@@ -193,7 +191,6 @@ protected:
   };
   transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存
   transaction::ObTxReadSnapshot *snapshot_; // Mvcc snapshot
-  transaction::ObTxExecResult trans_result_; //does not need serialize it
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   const ObDASTabletLoc *tablet_loc_; //does not need serialize it

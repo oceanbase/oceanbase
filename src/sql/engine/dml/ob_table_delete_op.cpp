@@ -125,43 +125,6 @@ int ObTableDeleteOp::inner_open()
   return ret;
 }
 
-int ObTableDeleteOp::inner_get_next_row()
-{
-  int ret = OB_SUCCESS;
-  if (iter_end_) {
-    LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
-    ret = OB_ITER_END;
-  } else {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(try_check_status())) {
-        LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(get_next_row_from_child())) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to get next row", K(ret));
-        } else {
-          iter_end_ = true;
-        }
-      } else if (OB_FAIL(delete_row_to_das())) {
-        LOG_WARN("delete row to das failed", K(ret));
-      } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
-        err_log_rt_def_.reset();
-        continue;
-      } else if (MY_SPEC.is_returning_) {
-        break;
-      }
-    }
-    if (OB_ITER_END == ret) {
-      if (!MY_SPEC.del_ctdefs_.at(0).at(0)->has_instead_of_trigger_ && OB_FAIL(del_rows_post_proc())) {
-        LOG_WARN("do delete rows post process failed", K(ret));
-      } else {
-        //can not overwrite the original error code
-        ret = OB_ITER_END;
-      }
-    }
-  }
-  return ret;
-}
-
 OB_INLINE int ObTableDeleteOp::inner_open_with_das()
 {
   int ret = OB_SUCCESS;
@@ -256,6 +219,13 @@ OB_INLINE int ObTableDeleteOp::calc_tablet_loc(const ObDelCtDef &del_ctdef,
   return ret;
 }
 
+int ObTableDeleteOp::write_row_to_das_buffer()
+{
+  int ret = OB_SUCCESS;
+  ret = delete_row_to_das();
+  return ret;
+}
+
 OB_INLINE int ObTableDeleteOp::delete_row_to_das()
 {
   int ret = OB_SUCCESS;
@@ -309,22 +279,19 @@ OB_INLINE int ObTableDeleteOp::delete_row_to_das()
   return ret;
 }
 
-OB_INLINE int ObTableDeleteOp::del_rows_post_proc()
+int ObTableDeleteOp::write_rows_post_proc(int last_errno)
 {
-  int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  //iterator end, if das ref has task, need flush all task data to partition storage
-  if (OB_FAIL(submit_all_dml_task())) {
-    LOG_WARN("submit all dml task failed", K(ret));
-  } else {
+  int ret = last_errno;
+  if (iter_end_) {
+    ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
     for (int64_t i = 0; OB_SUCC(ret) && i < del_rtdefs_.count(); ++i) {
       plan_ctx->add_affected_rows(del_rtdefs_.at(i).at(0).das_rtdef_.affected_rows_);
       LOG_DEBUG("del rows post proc", K(plan_ctx->get_affected_rows()), K(del_rtdefs_.at(i).at(0)));
     }
-  }
-  if (OB_SUCC(ret) && GCONF.enable_defensive_check()) {
-    if (OB_FAIL(check_delete_affected_row())) {
-      LOG_WARN("check delete affected row failed", K(ret));
+    if (OB_SUCC(ret) && GCONF.enable_defensive_check()) {
+      if (OB_FAIL(check_delete_affected_row())) {
+        LOG_WARN("check delete affected row failed", K(ret));
+      }
     }
   }
   return ret;
@@ -362,20 +329,6 @@ int ObTableDeleteOp::check_delete_affected_row()
                   KPC(primary_del_ctdef), K(primary_del_rtdef));
       }
     }
-  }
-  return ret;
-}
-
-OB_INLINE int ObTableDeleteOp::get_next_row_from_child()
-{
-  int ret = OB_SUCCESS;
-  clear_evaluated_flag();
-  if (OB_FAIL(child_->get_next_row())) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to get next row", K(ret));
-    }
-  } else {
-    LOG_TRACE("child output row", "row", ROWEXPR2STR(eval_ctx_, child_->get_spec().output_));
   }
   return ret;
 }

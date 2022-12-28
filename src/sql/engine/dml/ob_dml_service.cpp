@@ -451,7 +451,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
     } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
         dml_op, ins_ctdef.das_base_ctdef_, ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
       LOG_WARN("failed to handle before trigger", K(ret));
-    } 
+    }
     if (OB_FAIL(ret)) {
     } else if (has_instead_of_trg) {
       is_skipped = true;
@@ -1307,8 +1307,6 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
       int64_t simulate_row_cnt = - EVENT_CALL(EventTable::EN_DAS_DML_BUFFER_OVERFLOW);
       if (OB_UNLIKELY(simulate_row_cnt > 0 && dml_op->get_row_cnt() >= simulate_row_cnt)) {
         buffer_full = true;
-      } else if (dml_rtctx.get_das_alloc().used() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE) {
-        buffer_full = true;
       } else if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), buffer_full))) {
         LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
       }
@@ -1320,7 +1318,7 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     if (OB_SUCC(ret) && buffer_full) {
       need_retry = true;
       if (REACH_COUNT_INTERVAL(10)) { // print log per 10 times.
-        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.get_das_alloc().used()));
+        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()));
       }
       if (OB_UNLIKELY(dml_rtctx.need_non_sub_full_task())) {
         // 因为replace into 和 insert up在做try_insert时，需要返回duplicated row，
@@ -1331,13 +1329,8 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
         if (dml_rtctx.need_pick_del_task_first() &&
                    OB_FAIL(dml_rtctx.das_ref_.pick_del_task_to_first())) {
           LOG_WARN("fail to pick delete das task to first", K(ret));
-        } else if (OB_FAIL(dml_rtctx.das_ref_.execute_all_task())) {
-          LOG_WARN("execute all das task failed", K(ret));
-        } else if (OB_FAIL(dml_rtctx.das_ref_.close_all_task())) {
-          LOG_WARN("close all das task failed", K(ret));
-        } else {
-          //don't release all memory, need to reuse das ctx
-          dml_rtctx.reuse();
+        } else if (OB_FAIL(dml_rtctx.op_.submit_all_dml_task())) {
+          LOG_WARN("submit all dml task failed", K(ret));
         }
       }
     }
