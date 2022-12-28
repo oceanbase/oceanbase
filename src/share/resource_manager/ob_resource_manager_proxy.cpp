@@ -188,7 +188,7 @@ int ObResourceManagerProxy::allocate_consumer_group_id(
     ObSqlString sql;
     const char *tname = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
     if (OB_FAIL(sql.assign_fmt(
-                "SELECT /* ALLOC_MAX_GROUP_ID */ COALESCE(MAX(CONSUMER_GROUP_ID) + 1, 1) AS NEXT_GROUP_ID FROM %s "
+                "SELECT /* ALLOC_MAX_GROUP_ID */ COALESCE(MAX(CONSUMER_GROUP_ID) + 1, 10000) AS NEXT_GROUP_ID FROM %s "
                 "WHERE TENANT_ID = %ld",
                 tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
       LOG_WARN("fail format sql", K(ret));
