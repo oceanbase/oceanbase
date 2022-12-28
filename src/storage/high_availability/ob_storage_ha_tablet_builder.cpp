@@ -331,8 +331,6 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
     LOG_WARN("failed to hold local reuse sstable", K(ret), K(tablet_info));
   } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_info.param_, keep_old))) {
     LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
-  } else if (OB_FAIL(create_tablet_with_major_sstables_(ls, tablet_info, major_tables, storage_schema))) {
-    LOG_WARN("failed to crete tablet with major sstables", K(ret), KPC(ls), K(tablet_info), K(major_tables));
   } else if (OB_FAIL(create_tablet_remote_logical_sstable_(tablet_info.tablet_id_, remote_logical_table))) {
     LOG_WARN("failed to create tablet remote logical sstable", K(ret), K(tablet_info));
   } else if (remote_logical_table.empty()) {
@@ -343,6 +341,11 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
   } else if (FALSE_IT(param.rebuild_seq_ = ls->get_rebuild_seq())) {
   } else if (OB_FAIL(ls->build_ha_tablet_new_table_store(tablet_info.tablet_id_, param))) {
     LOG_WARN("failed to build ha tablet new table store", K(ret), K(remote_logical_table), K(tablet_info));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(create_tablet_with_major_sstables_(ls, tablet_info, major_tables, storage_schema))) {
+    LOG_WARN("failed to crete tablet with major sstables", K(ret), KPC(ls), K(tablet_info), K(major_tables));
   } else {
     LOG_INFO("succeed build ha table new table store", K(tablet_info), K(remote_logical_table));
   }
