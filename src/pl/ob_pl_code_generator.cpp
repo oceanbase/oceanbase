@@ -4206,10 +4206,8 @@ int ObPLCodeGenerator::generate_get_collection_attr(ObLLVMValue &param_array,
           } else {
             if (current_access.var_type_.is_composite_type()) {
               OZ (helper_.get_int8(ObExtendType, type_value));
-            } else {
-              OZ (helper_.get_int8(current_access.var_type_.get_obj_type(), type_value));
+              OZ (helper_.create_store(type_value, p_type_value));
             }
-            OZ (helper_.create_store(type_value, p_type_value));
             OZ (helper_.create_br(after_delete_block));
           }
           OZ (helper_.set_insert_point(after_delete_block));

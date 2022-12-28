@@ -8634,22 +8634,37 @@ int ObPLResolver::resolve_inner_call(
 #if 1
 #define MOCK_SELF_PARAM(need_rotate) \
 do { \
+  uint64_t acc_cnt = obj_access_idents.count(); \
+  const ObUserDefinedType *user_type = NULL; \
+  bool need_mock = true; \
   ObRawExpr *self_arg = NULL; \
-  int64_t acc_cnt = obj_access_idents.count(); \
-  OZ (make_var_from_access(self_access_idxs, \
-                           expr_factory_, \
-                           &resolve_ctx_.session_info_, \
-                           current_block_->get_namespace(), \
-                           self_arg), K(obj_access_idents), K(self_access_idxs)); \
-  OZ (func.add_obj_access_expr(self_arg)); \
-  OZ (func.add_expr(self_arg)); \
-  OZ (obj_access_idents.at(acc_cnt - 1).params_.push_back( \
-    std::make_pair(self_arg, 0))); \
-  if (OB_SUCC(ret) && need_rotate) { \
-    std::rotate(obj_access_idents.at(acc_cnt - 1).params_.begin(), \
-                obj_access_idents.at(acc_cnt - 1).params_.begin()  \
-                  + obj_access_idents.at(acc_cnt - 1).params_.count() - 1, \
-                obj_access_idents.at(acc_cnt - 1).params_.end()); \
+  if (OB_SUCC(ret) && acc_cnt > 1) { \
+    OZ (current_block_->get_namespace().get_pl_data_type_by_name(resolve_ctx_, \
+                                    acc_cnt > 2 ? obj_access_idents.at(acc_cnt - 3).access_name_ : ObString(""), \
+                                    ObString(""), \
+                                    obj_access_idents.at(acc_cnt - 2).access_name_, \
+                                    user_type), ret, obj_access_idents); \
+    if (OB_SUCC(ret) && OB_NOT_NULL(user_type)) { \
+      need_mock = false; \
+    } \
+    ret = OB_SUCCESS; \
+  } \
+  if (need_mock) { \
+    OZ (make_var_from_access(self_access_idxs, \
+                             expr_factory_, \
+                             &resolve_ctx_.session_info_, \
+                             current_block_->get_namespace(), \
+                             self_arg), K(obj_access_idents), K(self_access_idxs)); \
+    OZ (func.add_obj_access_expr(self_arg)); \
+    OZ (func.add_expr(self_arg)); \
+    OZ (obj_access_idents.at(acc_cnt - 1).params_.push_back( \
+      std::make_pair(self_arg, 0))); \
+    if (OB_SUCC(ret) && need_rotate) { \
+      std::rotate(obj_access_idents.at(acc_cnt - 1).params_.begin(), \
+                  obj_access_idents.at(acc_cnt - 1).params_.begin()  \
+                    + obj_access_idents.at(acc_cnt - 1).params_.count() - 1, \
+                  obj_access_idents.at(acc_cnt - 1).params_.end()); \
+    } \
   } \
 } while(0)
 #else
@@ -10928,7 +10943,7 @@ int ObPLResolver::build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &acc
   //函数名称格式为get_attr_idx_a
   ObSqlString buf;
   OZ (buf.append_fmt("%s", "get_attr"));
-  if (for_write && ObObjAccessIdx::is_contain_object_type(access_idxs)) {
+  if (for_write /*&& ObObjAccessIdx::is_contain_object_type(access_idxs)*/) {
     OZ (buf.append_fmt("%s", "for_write"));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < access_idxs.count(); ++i) {

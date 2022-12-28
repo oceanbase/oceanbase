@@ -4082,8 +4082,13 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
           ObObj *data = reinterpret_cast<ObObj*>(table->get_data());
           if (i > 0 && i <= org_elem_cnt) {
             ObObj &ith_elem = data[i - 1];
-            for (int64_t j = coll_cnt - n; j < coll_cnt; ++j) {
-              new (&(data[j]))ObObj(ith_elem);
+            for (int64_t j = coll_cnt - n; OB_SUCC(ret) && j < coll_cnt; ++j) {
+              if (ith_elem.is_pl_extend()) {
+                CK (OB_NOT_NULL(table->get_allocator()));
+                OZ (ObUserDefinedType::deep_copy_obj(*(table->get_allocator()), ith_elem, data[j]));
+              } else {
+                new (&(data[j]))ObObj(ith_elem);
+              }
             }
           } else {
             ret = OB_ERR_SUBSCRIPT_BEYOND_COUNT;
@@ -5115,7 +5120,7 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
       ObObj *values = NULL; \
       CK (OB_NOT_NULL(record)); \
       CK (OB_NOT_NULL(values = record->get_element())); \
-      for (int64_t i = 0; OB_SUCC(ret) && i < type_count; ++i) { \
+      for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) { \
         ObObj deep_copy;  \
         /*may element of record also complex value*/ \
         if (values[i].is_pl_extend()) { \
@@ -5901,6 +5906,7 @@ int ObSPIService::store_datums(ObObj &dest_addr, const ObIArray<ObObj> &obj_arra
         } else {
           ObPLRecord *record = static_cast<ObPLRecord*>(composite);
           current_datum = reinterpret_cast<int64_t>(record) + ObRecordType::get_data_offset(record->get_count());
+          record->set_is_null(false);
         }
       }
     } else { //must be a single Obj
