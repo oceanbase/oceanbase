@@ -392,7 +392,8 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
         // 指定db_name，同时指定了tbl_name
         const ObTableSchema *filter_table_schema = NULL;
         ObString table_name = start_key_obj_ptr[1].get_varchar();
-        if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_,
+        if (table_name.empty()) {
+        } else if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_,
             filter_database_schema->get_database_id(),
             table_name,
             false/*is_index*/,
