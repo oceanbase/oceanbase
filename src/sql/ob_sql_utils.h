@@ -141,7 +141,7 @@ public:
    *  and a partition func.
    *
    *  The range array is assumed to only contain single_value ranges and
-   *  the partiton_ids will contain all the resulted partition ids without
+   *  the partition_ids will contain all the resulted partition ids without
    *  duplicates.
    */
   static int calc_partition_ids(const common::ObIArray<common::ObNewRange*> &ranges,
