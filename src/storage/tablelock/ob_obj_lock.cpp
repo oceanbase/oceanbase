@@ -648,8 +648,8 @@ int ObOBJLock::get_table_lock_store_info(
     ObTableLockOpList *op_list = map_[i];
     if (op_list != NULL) {
       DLIST_FOREACH(curr, *op_list) {
-        if (curr->lock_op_.commit_scn_ <= freeze_scn
-            && curr->is_complete_outtrans_lock()) {
+        if (curr->lock_op_.commit_scn_ <= freeze_scn &&
+            (curr->is_complete_outtrans_lock() || curr->is_complete_outtrans_unlock())) {
           ObTableLockOp store_info;
           if(OB_FAIL(curr->get_table_lock_store_info(store_info))) {
             LOG_WARN("get_table_lock_store_info failed", K(ret));

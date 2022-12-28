@@ -14,7 +14,7 @@
 #define OCEANBASE_TRANSACTION_OB_LS_TX_SERVICE
 
 #include "lib/ob_errno.h"
-#include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_spin_rwlock.h"           // SpinRWLock
 #include "share/ob_ls_id.h"
 #include "storage/checkpoint/ob_common_checkpoint.h"
 #include "storage/ob_i_store.h"
@@ -62,7 +62,7 @@ public:
         ls_id_(),
         mgr_(NULL),
         trans_service_(NULL),
-        lock_(common::ObLatchIds::CLOG_CKPT_LOCK) {
+        rwlock_(common::ObLatchIds::CLOG_CKPT_RWLOCK) {
     reset_();
   }
   ~ObLSTxService() {}
@@ -177,7 +177,10 @@ private:
 
   // responsible for maintenance checkpoint unit that write TRANS_SERVICE_LOG_BASE_TYPE clog
   checkpoint::ObCommonCheckpoint *common_checkpoints_[checkpoint::ObCommonCheckpointType::MAX_BASE_TYPE];
-  common::ObSpinLock lock_;
+  typedef common::SpinRWLock RWLock;
+  typedef common::SpinRLockGuard  RLockGuard;
+  typedef common::SpinWLockGuard  WLockGuard;
+  RWLock rwlock_;
 };
 
 }
