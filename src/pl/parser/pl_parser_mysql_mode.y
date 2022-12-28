@@ -247,13 +247,24 @@ stmt_list:
 stmt:
   outer_stmt
   {
-    if(NULL != $1 && T_SP_DO == $1->type_) {
+    if(NULL != $1 && !parse_ctx->is_inner_parse_) {
+      switch($1->type_) {
+        // wrap nodes of following types into an anonymous block to mock SQL execution.
+        case T_SP_DO:
+        case T_SP_SIGNAL:
+        case T_SP_RESIGNAL: {
           ParseNode *proc_stmts = NULL;
           merge_nodes(proc_stmts, parse_ctx->mem_pool_, T_SP_PROC_STMT_LIST, $1);
           ParseNode *block_content = NULL;
           merge_nodes(block_content, parse_ctx->mem_pool_, T_SP_BLOCK_CONTENT, proc_stmts);
           malloc_non_terminal_node($1, parse_ctx->mem_pool_, T_SP_ANONYMOUS_BLOCK, 1, block_content);
+        } break;
+        default:{
+          // do nothing
+        } break;
+      }
     }
+
     $$ = $1;
     int32_t str_len = @1.last_column - @1.first_column + 1;
     $$->pos_ = @1.first_column;

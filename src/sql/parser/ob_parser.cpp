@@ -369,6 +369,8 @@ ObParser::State ObParser::transform_normal(ObString &normal)
   ELSIF(2, S_OF, "of")
   ELSIF(11, S_EDITIONABLE, "editionable")
   ELSIF(14, S_EDITIONABLE, "noneditionable")
+  ELSIF(6, S_SIGNAL, "signal")
+  ELSIF(8, S_RESIGNAL, "resignal")
   ELSE()
 
   if (S_INVALID == state
@@ -400,7 +402,9 @@ ObParser::State ObParser::transform_normal(
         case S_FUNCTION:
         case S_PACKAGE:
         case S_TRIGGER:
-        case S_TYPE: {
+        case S_TYPE:
+        case S_SIGNAL:
+        case S_RESIGNAL: {
           is_pl = true;
         } break;
         case S_CALL: {
