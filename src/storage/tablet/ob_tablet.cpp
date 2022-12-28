@@ -410,6 +410,8 @@ int ObTablet::check_sstable_column_checksum() const
       if (OB_ISNULL(cur)) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("invalid null sstable", K(ret), K(i), KP(cur), KPC(this));
+      } else if (cur->is_major_sstable() && cur->get_meta().is_empty()) {
+        // since empty major sstable may have wrong column count, skip for compatibility from 4.0 to 4.1
       } else if ((sstable_col_cnt = cur->get_meta().get_col_checksum().count()) > schema_col_cnt) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("The storage schema is older than the sstable, and cann’t explain the data.",
