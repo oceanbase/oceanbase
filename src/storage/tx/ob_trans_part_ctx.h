@@ -632,7 +632,6 @@ protected:
 
 private:
   // int tx_end_(const bool commit, const int64_t commit_version);
-  bool need_request_gts_();
   void register_gts_callback_();
   int restart_2pc_trans_timer_();
   // ============================ TX COMMITTER END ============================

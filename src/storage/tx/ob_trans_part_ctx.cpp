@@ -2138,11 +2138,10 @@ int ObPartTransCtx::generate_prepare_version_()
     SCN gts = SCN::min_scn();
     SCN local_max_read_version = SCN::min_scn();
     bool is_gts_ok = false;
-    bool need_gts = need_request_gts_();
+    // Only the root participant require to request gts
+    const bool need_gts = is_root();
 
-    // Only the first participant in the participants list of the root require
-    // to request gts
-    if (is_root() && need_gts) {
+    if (need_gts) {
       if (OB_FAIL(get_gts_(gts))) {
         if (OB_EAGAIN == ret) {
           is_gts_ok = false;
@@ -2169,6 +2168,9 @@ int ObPartTransCtx::generate_prepare_version_()
         TRANS_LOG(WARN, "get local max read version failed", KR(ret), K(*this));
       } else {
         exec_info_.prepare_version_ = std::max(gts, local_max_read_version);
+        if (exec_info_.prepare_version_ > gts) {
+          mt_ctx_.before_prepare(exec_info_.prepare_version_);
+        }
       }
     }
   }
