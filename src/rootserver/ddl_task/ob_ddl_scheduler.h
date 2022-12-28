@@ -61,6 +61,7 @@ public:
   int add_task_to_last(ObDDLTask *task);
   int get_task(const ObDDLTaskKey &task_key, ObDDLTask *&task);
   int get_task(const int64_t task_id, ObDDLTask *&task);
+  int64_t get_task_cnt() const { return task_list_.get_size(); }
   void destroy();
 private:
   typedef common::ObDList<ObDDLTask> TaskList;
