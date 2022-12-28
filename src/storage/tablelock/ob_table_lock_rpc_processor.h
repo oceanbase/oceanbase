@@ -28,6 +28,28 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_HIGH_PRIORITY_TABLE_LOCK_TASK, ObHighPriorityTable
 OB_DEFINE_PROCESSOR_S(TableLock, OB_OUT_TRANS_LOCK_TABLE, ObOutTransLockTableP);
 OB_DEFINE_PROCESSOR_S(TableLock, OB_OUT_TRANS_UNLOCK_TABLE, ObOutTransUnlockTableP);
 
+class ObAdminRemoveLockP : public obrpc::ObRpcProcessor<obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_REMOVE_OBJ_LOCK>>
+{
+public:
+  explicit ObAdminRemoveLockP() {}
+  ~ObAdminRemoveLockP() {}
+protected:
+  int process();
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAdminRemoveLockP);
+};
+
+class ObAdminUpdateLockP : public obrpc::ObRpcProcessor<obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_UPDATE_OBJ_LOCK>>
+{
+public:
+  explicit ObAdminUpdateLockP() {}
+  ~ObAdminUpdateLockP() {}
+protected:
+  int process();
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAdminUpdateLockP);
+};
+
 }
 }
 
