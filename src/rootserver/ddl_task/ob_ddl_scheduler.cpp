@@ -370,7 +370,10 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   const obrpc::ObDropIndexArg *drop_index_arg = nullptr;
   ObRootService *root_service = GCTX.root_service_;
   LOG_INFO("create ddl task", K(param));
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_CLUSTER_VERSION_EQUAL_4_0_0_0 && GCONF.in_upgrade_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("cluster version Upgrading, create_ddl_task not support", K(ret));
+  } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLScheduler has not been inited", K(ret));
   } else if (OB_ISNULL(root_service)) {

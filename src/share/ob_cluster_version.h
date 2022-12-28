@@ -158,6 +158,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define IS_CLUSTER_VERSION_BEFORE_3000 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_3000)
 #define IS_CLUSTER_VERSION_BEFORE_3100 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_3100)
 #define IS_CLUSTER_VERSION_BEFORE_4_0_0_0 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_4_0_0_0)
+#define IS_CLUSTER_VERSION_EQUAL_4_0_0_0 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() == CLUSTER_VERSION_4_0_0_0)
 
 #define IS_CLUSTER_VERSION_AFTER_2274 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() > CLUSTER_VERSION_2274)
 } // end of namespace common

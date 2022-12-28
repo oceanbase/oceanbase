@@ -1822,6 +1822,13 @@
 #def modify_server_permanent_offline_time(cur):
 #  set_parameter(cur, 'server_permanent_offline_time', '72h')
 #
+## 9. 检查是否有DDL任务在执行
+#def check_ddl_task_execute(query_cur):
+#  (desc, results) = query_cur.exec_query("""select count(1) from __all_virtual_ddl_task_status""")
+#  if 0 != results[0][0]:
+#    fail_list.append("There are DDL task in progress")
+#  logging.info('check ddl task execut status success')
+#
 ## last check of do_check, make sure no function execute after check_fail_list
 #def check_fail_list():
 #  if len(fail_list) != 0 :
@@ -1848,6 +1855,7 @@
 #      check_tenant_status(query_cur)
 #      check_restore_job_exist(query_cur)
 #      check_tenant_primary_zone(query_cur)
+#      check_ddl_task_execute(query_cur)
 #      # all check func should execute before check_fail_list
 #      check_fail_list()
 #      #modify_server_permanent_offline_time(cur)
