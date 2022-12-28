@@ -833,7 +833,7 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   timeguard.click();
   TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_follower_gracefully", K(ret), KPC(this), K(process_count));
   if (timeguard.get_diff() > 1000000) {
-    TRANS_LOG(ERROR, "use too much time", K(timeguard), K(process_count));
+    TRANS_LOG(WARN, "use too much time", K(timeguard), K(process_count));
   }
   return ret;
 }
