@@ -8613,17 +8613,46 @@ int ObPLResolver::resolve_inner_call(
   if (OB_SUCC(ret)) {
     ObArray<ObObjAccessIdent> obj_access_idents;
     ObArray<ObObjAccessIdx> access_idxs;
+    ObArray<ObObjAccessIdx> self_access_idxs;
     OZ (resolve_obj_access_idents(*parse_tree->children_[0], obj_access_idents, func));
     for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
       OZ (resolve_access_ident(obj_access_idents.at(i),
-                               current_block_->get_namespace(), expr_factory_,
+                               current_block_->get_namespace(),
+                               expr_factory_,
                                &resolve_ctx_.session_info_,
                                access_idxs,
                                func,
                                (i == (obj_access_idents.count() - 1)) ? true : false),
                                K(access_idxs), K(i));
+      if (OB_SUCC(ret)
+          && obj_access_idents.count() >= 2
+          && i == (obj_access_idents.count() - 2)) {
+        OZ (self_access_idxs.assign(access_idxs));
+      }
     }
 
+#if 1
+#define MOCK_SELF_PARAM(need_rotate) \
+do { \
+  ObRawExpr *self_arg = NULL; \
+  int64_t acc_cnt = obj_access_idents.count(); \
+  OZ (make_var_from_access(self_access_idxs, \
+                           expr_factory_, \
+                           &resolve_ctx_.session_info_, \
+                           current_block_->get_namespace(), \
+                           self_arg), K(obj_access_idents), K(self_access_idxs)); \
+  OZ (func.add_obj_access_expr(self_arg)); \
+  OZ (func.add_expr(self_arg)); \
+  OZ (obj_access_idents.at(acc_cnt - 1).params_.push_back( \
+    std::make_pair(self_arg, 0))); \
+  if (OB_SUCC(ret) && need_rotate) { \
+    std::rotate(obj_access_idents.at(acc_cnt - 1).params_.begin(), \
+                obj_access_idents.at(acc_cnt - 1).params_.begin()  \
+                  + obj_access_idents.at(acc_cnt - 1).params_.count() - 1, \
+                obj_access_idents.at(acc_cnt - 1).params_.end()); \
+  } \
+} while(0)
+#else
 #define MOCK_SELF_PARAM(need_rotate) \
 do { \
     /* two case, implict self param is at end, explicit self param is at 0  */ \
@@ -8653,24 +8682,25 @@ do { \
       ret = OB_SUCCESS; \
     } \
     if (OB_SUCC(ret) && need_mock) { \
-    if (OB_FAIL(make_udt_udf_self_expr(access_name, func, self_arg))) { \
-      LOG_WARN("failed to contruct udt udf self node", K(ret), K(access_name)); \
-    } else { \
-      std::pair<ObRawExpr*, int64_t> param_pair(self_arg, 0); \
-      if (OB_FAIL(obj_access_idents.at(idx_cnt-1).params_.push_back(param_pair))) { \
-        LOG_WARN("failed to push self param", K(ret)); \
+      if (OB_FAIL(make_udt_udf_self_expr(access_name, func, self_arg))) { \
+        LOG_WARN("failed to contruct udt udf self node", K(ret), K(access_name)); \
+      } else { \
+        std::pair<ObRawExpr*, int64_t> param_pair(self_arg, 0); \
+        if (OB_FAIL(obj_access_idents.at(acc_cnt-1).params_.push_back(param_pair))) { \
+          LOG_WARN("failed to push self param", K(ret)); \
+        } \
+        if (need_rotate) { \
+          /* self param is the first param, if not, rotate to the first pos */ \
+          std::rotate(obj_access_idents.at(acc_cnt-1).params_.begin(), \
+            obj_access_idents.at(acc_cnt-1).params_.begin()  \
+            + obj_access_idents.at(acc_cnt-1).params_.count() - 1, \
+            obj_access_idents.at(acc_cnt-1).params_.end()); \
+        } \
       } \
-      if (need_rotate) { \
-        /* self param is the first param, if not, rotate to the first pos */ \
-        std::rotate(obj_access_idents.at(idx_cnt-1).params_.begin(), \
-          obj_access_idents.at(idx_cnt-1).params_.begin()  \
-          + obj_access_idents.at(idx_cnt-1).params_.count() - 1, \
-          obj_access_idents.at(idx_cnt-1).params_.end()); \
-      } \
-    } \
     } \
   } \
 } while(0)
+#endif
 
     if (OB_SUCC(ret)) {
       int64_t idx_cnt = access_idxs.count();
@@ -8840,7 +8870,7 @@ do { \
                 }
               }
             }
-            OZ (obj_access_idents.at(idx_cnt-1).extract_params(0, params));
+            OZ (obj_access_idents.at(idents_cnt - 1).extract_params(0, params));
             if (routine_params.count() != 0) {
               OZ (resolve_call_param_list(params, routine_params, call_stmt, func));
             } else if (params.count() != 0) {
