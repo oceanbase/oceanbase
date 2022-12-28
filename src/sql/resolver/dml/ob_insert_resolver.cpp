@@ -844,7 +844,7 @@ int ObInsertResolver::resolve_insert_constraint()
     LOG_WARN("get unexpected null", K(ret));
   } else {
     ObInsertTableInfo &table_info = insert_stmt->get_insert_table_info();
-    if (OB_FAIL(resolve_view_check_exprs(table_item, false, table_info.view_check_exprs_))) {
+    if (OB_FAIL(resolve_view_check_exprs(table_item->table_id_, table_item, false, table_info.view_check_exprs_))) {
       LOG_WARN("resolve view check exprs failed", K(ret));
     } else if (OB_FAIL(resolve_check_constraints(table_item, table_info.check_constraint_exprs_))) {
       LOG_WARN("failed to resolve check constraints", K(ret));

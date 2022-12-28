@@ -724,7 +724,7 @@ int ObUpdateResolver::resolve_update_constraints()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(table_item), K(ret));
       } else if (!update_stmt->has_instead_of_trigger() &&
-                 OB_FAIL(resolve_view_check_exprs(table_item, false, table_info->view_check_exprs_))) {
+                 OB_FAIL(resolve_view_check_exprs(table_item->table_id_, table_item, false, table_info->view_check_exprs_))) {
         LOG_WARN("failed to resolve view check exprs", K(ret));
       } else if (OB_FAIL(resolve_check_constraints(table_item, table_info->check_constraint_exprs_))) {
         LOG_WARN("failed to resolve view check exprs", K(ret));
