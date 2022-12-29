@@ -612,13 +612,15 @@ int ObDDLTask::push_execution_id()
   return ret;
 }
 
-void ObDDLTask::calc_next_schedule_ts(int ret_code)
+// The length of [min_dt, max_dt] controls the execution rate of ddl tasks.
+void ObDDLTask::calc_next_schedule_ts(const int ret_code, const int64_t total_task_cnt)
 {
   if (OB_TIMEOUT == ret_code) {
     const int64_t SEC = 1000000;
-    delay_schedule_time_ = std::min(delay_schedule_time_ * 6/5 + SEC/10, 30*SEC);
+    const int64_t max_delay = total_task_cnt * ObDDLUtil::get_ddl_rpc_timeout() * 10;
+    delay_schedule_time_ = std::min(delay_schedule_time_ * 6/5 + SEC/10, max_delay);
     const int64_t max_dt = delay_schedule_time_;
-    const int64_t min_dt = std::max(0L, max_dt - 3*SEC);
+    const int64_t min_dt = max_dt / 2;
     next_schedule_ts_ = ObTimeUtility::current_time() + ObRandom::rand(min_dt, max_dt);
   } else {
     delay_schedule_time_ = 0;

@@ -311,7 +311,7 @@ public:
       const common::ObIArray<common::ObTabletID> &tablet_ids);
   void set_sys_task_id(const TraceId &sys_task_id) { sys_task_id_ = sys_task_id; }
   const TraceId &get_sys_task_id() const { return sys_task_id_; }
-  void calc_next_schedule_ts(int ret_code);
+  void calc_next_schedule_ts(const int ret_code, const int64_t total_task_cnt);
   bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
   int push_execution_id();
   bool is_replica_build_need_retry(const int ret_code);
