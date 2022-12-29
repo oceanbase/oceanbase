@@ -2192,7 +2192,8 @@ public:
       cursor_idx_(OB_INVALID_INDEX),
       params_(allocator),
       need_declare_(false),
-      user_type_(NULL) {}
+      user_type_(NULL),
+      expand_user_types_() {}
 
   virtual ~ObPLCursorForLoopStmt() {}
 
@@ -2261,6 +2262,8 @@ public:
     user_type_ = user_type;
   }
 
+  ObIArray<ObDataType> &get_expand_user_types() { return expand_user_types_; }
+  const ObIArray<ObDataType> &get_expand_user_types() const { return expand_user_types_; }
   inline void set_need_declare(bool need) { need_declare_ = need; }
   inline bool get_need_declare() const { return need_declare_; }
 
@@ -2274,6 +2277,7 @@ private:
   ObPLSEArray<int64_t> params_; //cursor的实参
   bool need_declare_;  // 是否是SQL语句, 需要在codegen时声明
   const ObUserDefinedType *user_type_; // CURSOR返回值类型
+  ObSEArray<ObDataType, 8> expand_user_types_; //expand return type
 };
 
 class ObPLSqlStmt;
@@ -2908,7 +2912,9 @@ public:
       pkg_id_(OB_INVALID_ID),
       routine_id_(OB_INVALID_ID),
       idx_(common::OB_INVALID_INDEX),
-      limit_(INT64_MAX) {}
+      limit_(INT64_MAX),
+      user_type_(NULL),
+      expand_user_types_() {}
   virtual ~ObPLFetchStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2923,6 +2929,16 @@ public:
     routine_id_ = routine_id;
     idx_ = idx;
   }
+  inline const ObUserDefinedType* get_user_type() const
+  {
+    return user_type_;
+  }
+  inline void set_user_type(const ObUserDefinedType *user_type)
+  {
+    user_type_ = user_type;
+  }
+  ObIArray<ObDataType> &get_expand_user_types() { return expand_user_types_; }
+  const ObIArray<ObDataType> &get_expand_user_types() const { return expand_user_types_; }
   inline int64_t get_limit() const { return limit_; }
   inline void set_limit(int64_t limit) { limit_ = limit; }
 
@@ -2933,6 +2949,8 @@ private:
   uint64_t routine_id_;
   int64_t idx_; //symbol表里的下标
   int64_t limit_; //INT64_MAX:是bulk fetch但是没有limit子句
+  const ObUserDefinedType *user_type_; // CURSOR返回值类型
+  ObSEArray<ObDataType, 8> expand_user_types_; //expand return type
 };
 
 class ObPLCloseStmt : public ObPLStmt

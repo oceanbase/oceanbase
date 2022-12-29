@@ -262,6 +262,8 @@ public:
                      const uint64_t &routine_id,
                      const int64_t &cursor_index,
                      const int64_t &limit,
+                     const ObUserDefinedType *user_defined_type,
+                     const ObIArray<ObDataType> &user_types,
                      jit::ObLLVMValue &ret_err);
   int generate_close(const ObPLStmt &s,
                      const uint64_t &package_id,

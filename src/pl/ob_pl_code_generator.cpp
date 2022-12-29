@@ -1104,6 +1104,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
                                     s.get_cursor()->get_routine_id(),
                                     s.get_index(),
                                     static_cast<int64_t>(INT64_MAX),
+                                    s.get_user_type(),
+                                    s.get_expand_user_types(),
                                     ret_err));
       OZ (generator_.get_helper().create_icmp_eq(ret_err, OB_READ_NOTHING, is_not_found));
       OZ (generator_.get_helper().stack_restore(stack));
@@ -2687,6 +2689,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLFetchStmt &s)
                                         s.get_routine_id(),
                                         s.get_index(),
                                         s.get_limit(),
+                                        s.get_user_type(),
+                                        s.get_expand_user_types(),
                                         ret_err))) {
     LOG_WARN("failed to generate fetch", K(ret));
   } else if (lib::is_mysql_mode()) { //Mysql模式直接检查抛出异常
@@ -3603,6 +3607,8 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (arg_types.push_back(int_pointer_type));//pl_integer_ranges
     OZ (arg_types.push_back(bool_type));//is_bulk
     OZ (arg_types.push_back(int64_type));//limit
+    OZ (arg_types.push_back(data_type_pointer_type));//return_type
+    OZ (arg_types.push_back(int64_type));//return_type_count
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_cursor_fetch"), ft, spi_service_.spi_cursor_fetch_));
   }
@@ -4548,6 +4554,8 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
                                       const uint64_t &routine_id,
                                       const int64_t &cursor_index,
                                       const int64_t &limit,
+                                      const ObUserDefinedType *user_defined_type,
+                                      const ObIArray<ObDataType> &user_types,
                                       jit::ObLLVMValue &ret_err)
 {
   int ret = OB_SUCCESS;
@@ -4621,6 +4629,45 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
       }
       OZ (args.push_back(limit_value));
     }
+
+    ObLLVMValue return_type_array_value;
+    ObLLVMValue return_type_count_value;
+    ObLLVMValue type_value;
+    ObLLVMType data_type;
+    ObLLVMType data_type_pointer;
+    ObLLVMType array_type;
+
+    if (OB_ISNULL(user_defined_type)) {
+      OZ (adt_service_.get_data_type(data_type));
+      OZ (data_type.get_pointer_to(data_type_pointer));
+      OZ (ObLLVMHelper::get_null_const(data_type_pointer, return_type_array_value));
+      OZ (helper_.get_int64(0, return_type_count_value));
+    } else {
+      OZ (adt_service_.get_data_type(data_type));
+      OZ (data_type.get_pointer_to(data_type_pointer));
+      OZ (ObLLVMHelper::get_array_type(data_type,
+                                      user_types.count(),
+                                      array_type));
+      OZ (helper_.create_alloca(ObString("datatype_array"),
+                              array_type,
+                              return_type_array_value));
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < user_types.count(); ++i) {
+        type_value.reset();
+        OZ (helper_.create_gep(ObString("extract_datatype"),
+                                return_type_array_value,
+                                i, type_value));
+        OZ (store_data_type(user_types.at(i), type_value));
+      }
+
+      OZ (helper_.create_bit_cast(ObString("datatype_array_to_pointer"),
+              return_type_array_value, data_type_pointer, return_type_array_value));
+      OZ (helper_.get_int64(static_cast<int64_t>(user_types.count()),
+                            return_type_count_value));
+    }
+
+    OZ (args.push_back(return_type_array_value));
+    OZ (args.push_back(return_type_count_value));
 
     OZ (get_helper().create_call(ObString("spi_cursor_fetch"),
                                  get_spi_service().spi_cursor_fetch_,
