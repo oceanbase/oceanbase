@@ -900,16 +900,16 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
     ObIArray<FromItem> &from_items = stmt->get_from_items();
     ObIArray<SemiInfo*> &semi_infos = stmt->get_semi_infos();
     ObSEArray<ObRawExpr *, 1> empty;
-    for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
-      if (OB_FAIL(pushdown_into_semi_info(stmt, semi_infos.at(i), *pullup_preds, 
-                                            enable_no_pred_deduce ? empty : stmt->get_condition_exprs()))) {
-        LOG_WARN("failed to push down into semi info", K(ret));
-      }
-    }
     for (int64_t i = 0; OB_SUCC(ret) && i < from_items.count(); ++i) {
       if (OB_FAIL(pushdown_into_table(stmt, stmt->get_table_item(from_items.at(i)),
                                       *pullup_preds, enable_no_pred_deduce ? empty : stmt->get_condition_exprs()))) {
         LOG_WARN("failed to push down predicates", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
+      if (OB_FAIL(pushdown_into_semi_info(stmt, semi_infos.at(i), *pullup_preds,
+                                            enable_no_pred_deduce ? empty : stmt->get_condition_exprs()))) {
+        LOG_WARN("failed to push down into semi info", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
