@@ -217,6 +217,62 @@ public:
   common::ObTabletID tablet_id_;
 };
 
+struct ObAdminRemoveLockOpArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminRemoveLockOpArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), lock_op_() {}
+  ~ObAdminRemoveLockOpArg()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    ls_id_.reset();
+  }
+  int set(const uint64_t tenant_id,
+          const share::ObLSID &ls_id,
+          const ObTableLockOp &lock_op);
+  int assign(const ObAdminRemoveLockOpArg &arg);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(lock_op));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObTableLockOp lock_op_;
+};
+
+struct ObAdminUpdateLockOpArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminUpdateLockOpArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      ls_id_(),
+      lock_op_(),
+      commit_version_(-1),
+      commit_log_ts_(-1)
+  {}
+  ~ObAdminUpdateLockOpArg()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    ls_id_.reset();
+    commit_version_ = -1;
+    commit_log_ts_ = -1;
+  }
+  int set(const uint64_t tenant_id,
+          const share::ObLSID &ls_id,
+          const ObTableLockOp &lock_op,
+          const int64_t commit_version,
+          const int64_t commit_log_ts);
+  int assign(const ObAdminUpdateLockOpArg &arg);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(lock_op), K_(commit_version), K_(commit_log_ts));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObTableLockOp lock_op_;
+  int64_t commit_version_;
+  int64_t commit_log_ts_;
+};
+
 }
 }
 }

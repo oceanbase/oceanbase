@@ -682,6 +682,49 @@ int ObLockTable::get_lock_op_iter(const ObLockID &lock_id,
   return ret;
 }
 
+int ObLockTable::admin_remove_lock_op(const ObTableLockOp &op_info)
+{
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  ObLockMemtable *memtable = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TABLELOCK_LOG(WARN, "ObLockTable not inited", K(ret));
+  } else if (OB_FAIL(get_lock_memtable(handle))) {
+    TABLELOCK_LOG(WARN, "get lock memtable failed", K(ret));
+  } else if (OB_FAIL(handle.get_lock_memtable(memtable))) {
+    TABLELOCK_LOG(ERROR, "get lock memtable from lock handle failed", K(ret));
+  } else {
+    memtable->remove_lock_record(op_info);
+  }
+  TABLELOCK_LOG(INFO, "ObLockTable::admin_remove_lock_op", K(ret), K(op_info));
+  return ret;
+}
+
+int ObLockTable::admin_update_lock_op(const ObTableLockOp &op_info,
+                                      const int64_t commit_version,
+                                      const int64_t commit_log_ts,
+                                      const ObTableLockOpStatus status)
+{
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  ObLockMemtable *memtable = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TABLELOCK_LOG(WARN, "ObLockTable not inited", K(ret));
+  } else if (OB_FAIL(get_lock_memtable(handle))) {
+    TABLELOCK_LOG(WARN, "get lock memtable failed", K(ret));
+  } else if (OB_FAIL(handle.get_lock_memtable(memtable))) {
+    TABLELOCK_LOG(ERROR, "get lock memtable from lock handle failed", K(ret));
+  } else if (OB_FAIL(memtable->update_lock_status(op_info,
+                                                  commit_version,
+                                                  commit_log_ts,
+                                                  status))) {
+    LOG_WARN("update lock status failed", KR(ret), K(op_info), K(status));
+  }
+  TABLELOCK_LOG(INFO, "ObLockTable::admin_update_lock_op", K(ret), K(op_info));
+  return ret;
+}
 
 } // tablelock
 } // transaction

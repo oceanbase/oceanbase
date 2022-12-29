@@ -216,6 +216,91 @@ int ObInTransLockTabletRequest::assign(const ObInTransLockTabletRequest &arg)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObAdminRemoveLockOpArg, tenant_id_, ls_id_, lock_op_);
+
+int ObAdminRemoveLockOpArg::set(const uint64_t tenant_id,
+                                const share::ObLSID &ls_id,
+                                const ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id ||
+                  !ls_id.is_valid() ||
+                  !lock_op.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(lock_op));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    lock_op_ = lock_op;
+  }
+  return ret;
+}
+
+int ObAdminRemoveLockOpArg::assign(const ObAdminRemoveLockOpArg &arg)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = arg.tenant_id_;
+  ls_id_ = arg.ls_id_;
+  lock_op_ = arg.lock_op_;
+  return ret;
+}
+
+bool ObAdminRemoveLockOpArg::is_valid() const
+{
+  return (OB_INVALID_TENANT_ID != tenant_id_ &&
+          ls_id_.is_valid() &&
+          lock_op_.is_valid());
+}
+
+OB_SERIALIZE_MEMBER(ObAdminUpdateLockOpArg, tenant_id_, ls_id_, lock_op_,
+                    commit_version_, commit_log_ts_);
+
+int ObAdminUpdateLockOpArg::set(const uint64_t tenant_id,
+                                const share::ObLSID &ls_id,
+                                const ObTableLockOp &lock_op,
+                                const int64_t commit_version,
+                                const int64_t commit_log_ts)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id ||
+                  !ls_id.is_valid() ||
+                  !lock_op.is_valid() ||
+                  !(commit_version > 0) ||
+                  !(commit_log_ts > 0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(lock_op),
+             K(commit_version), K(commit_log_ts));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    lock_op_ = lock_op;
+    commit_version_ = commit_version;
+    commit_log_ts_ = commit_log_ts;
+  }
+  return ret;
+}
+
+int ObAdminUpdateLockOpArg::assign(const ObAdminUpdateLockOpArg &arg)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = arg.tenant_id_;
+  ls_id_ = arg.ls_id_;
+  lock_op_ = arg.lock_op_;
+  commit_version_ = arg.commit_version_;
+  commit_log_ts_ = arg.commit_log_ts_;
+  return ret;
+}
+
+bool ObAdminUpdateLockOpArg::is_valid() const
+{
+  return (OB_INVALID_TENANT_ID != tenant_id_ &&
+          ls_id_.is_valid() &&
+          lock_op_.is_valid() &&
+          commit_version_ > 0 &&
+          commit_log_ts_ > 0);
+}
+
+
 }
 }
 }

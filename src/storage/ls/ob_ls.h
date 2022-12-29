@@ -423,6 +423,20 @@ public:
   // int unlock(ObStoreCtx &ctx,
   //            const transaction::tablelock::ObLockParam &param);
   DELEGATE_WITH_RET(lock_table_, unlock, int);
+  // admin remove a lock op
+  // @param[in] op_info, contain the lock id, lock type and so on.
+  // void admin_remove_lock_op(const ObTableLockOp &op_info);
+  DELEGATE_WITH_RET(lock_table_, admin_remove_lock_op, int);
+  // used by admin tool. update lock op status.
+  // @param[in] op_info, the lock/unlock op will be update by admin.
+  // @param[in] commit_version, set the commit version.
+  // @param[in] commit_log_ts, set the commit logts.
+  // @param[in] status, the lock op status will be set.
+  // int admin_update_lock_op(const ObTableLockOp &op_info,
+  //                          const int64_t commit_version,
+  //                          const int64_t commit_scn,
+  //                          const ObTableLockOpStatus status);
+  DELEGATE_WITH_RET(lock_table_, admin_update_lock_op, int);
   // get the lock memtable, used by ObMemtableCtx create process.
   // @param[in] handle, will store the memtable of lock table.
   // int get_lock_memtable(ObTableHandleV2 &handle)
