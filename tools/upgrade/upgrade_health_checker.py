@@ -74,6 +74,8 @@ sys.argv[0] + """ [OPTIONS]""" +\
 '                    For example: -m all, or --module=ddl,normal_dml,special_action\n' +\
 '-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 '-t, --timeout=name  check timeout, default: 600(s).\n' + \
+'-z, --zone=name     If zone is not specified, check all servers status in cluster. \n' +\
+'                    Otherwise, only check servers status in specified zone. \n' + \
 '\n\n' +\
 'Maybe you want to run cmd like that:\n' +\
 sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
@@ -134,7 +136,8 @@ Option('m', 'module', True, False, 'all'),\
 # 日志文件路径，不同脚本的main函数中中会改成不同的默认值
 Option('l', 'log-file', True, False),\
 # 一些检查的超时时间，默认是600s
-Option('t', 'timeout', True, False, '600')
+Option('t', 'timeout', True, False, '600'),\
+Option('z', 'zone', True, False, ''),\
 ]\
 
 def change_opt_defult_value(opt_long_name, opt_default_val):
@@ -245,6 +248,12 @@ def get_opt_timeout():
   for opt in g_opts:
     if 'timeout' == opt.get_long_name():
       return opt.get_value()
+
+def get_opt_zone():
+  global g_opts
+  for opt in g_opts:
+    if 'zone' == opt.get_long_name():
+      return opt.get_value()
 #### ---------------end----------------------
 
 #### --------------start :  do_upgrade_pre.py--------------
@@ -266,37 +275,77 @@ def config_logging_module(log_filenamme):
   logging.getLogger('').addHandler(stdout_handler)
 #### ---------------end----------------------
 
+def check_zone_valid(query_cur, zone):
+  if zone != '':
+    sql = """select count(*) from oceanbase.DBA_OB_ZONES where zone = '{0}'""".format(zone)
+    (desc, results) = query_cur.exec_query(sql);
+    if len(results) != 1 or len(results[0]) != 1:
+      raise MyError("unmatched row/column cnt")
+    elif results[0][0] == 0:
+      raise MyError("zone:{0} doesn't exist".format(zone))
+    else:
+      logging.info("zone:{0} is valid".format(zone))
+  else:
+    logging.info("zone is empty, check all servers in cluster")
+
 #### START ####
+# 0. 检查server版本是否严格一致
+def check_server_version_by_zone(query_cur, zone):
+  if zone == '':
+    logging.info("skip check server version by cluster")
+  else:
+    sql = """select distinct(substring_index(build_version, '_', 1)) from __all_server where zone = '{0}'""".format(zone);
+    (desc, results) = query_cur.exec_query(sql);
+    if len(results) != 1:
+      raise MyError("servers build_version not match")
+    else:
+      logging.info("check server version success")
+
 # 1. 检查paxos副本是否同步, paxos副本是否缺失
-def check_paxos_replica(query_cur):
-  # 2.1 检查paxos副本是否同步
-  (desc, results) = query_cur.exec_query("""select count(1) as unsync_cnt from GV$OB_LOG_STAT where in_sync = 'NO'""")
-  if results[0][0] > 0 :
-    raise MyError('{0} replicas unsync, please check'.format(results[0][0]))
-  # 2.2 检查paxos副本是否有缺失 TODO
+def check_paxos_replica(query_cur, timeout):
+  # 1.1 检查paxos副本是否同步
+  sql = """select count(*) from GV$OB_LOG_STAT where in_sync = 'NO'"""
+  check_until_timeout(query_cur, sql, 0, timeout)
+
+  # 1.2 检查paxos副本是否有缺失 TODO
   logging.info('check paxos replica success')
 
 # 2. 检查observer是否可服务
-def check_observer_status(query_cur):
-  # 3.1 检查是否有做locality变更
-  (desc, results) = query_cur.exec_query("""select count(*) from oceanbase.__all_server where start_service_time is null  or status='INACTIVE'""")
-  if results[0][0] > 0 :
-    raise MyError('{0} observer not service, please check'.format(results[0][0]))
-  logging.info('check observer status success')
+def check_observer_status(query_cur, zone, timeout):
+  sql = """select count(*) from oceanbase.__all_server where (start_service_time <= 0 or status='inactive')"""
+  if zone != '':
+    sql += """ and zone = '{0}'""".format(zone)
+  check_until_timeout(query_cur, sql, 0, timeout)
 
 # 3. 检查schema是否刷新成功
-def check_schema_status(query_cur):
-  # 4.1 检查是否非合并状态
-  (desc, results) = query_cur.exec_query("""select count(*) from __all_server a left join __all_virtual_server_schema_info b on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port where b.svr_ip is null""")
-  if results[0][0] > 0 :
-    raise MyError('refresh schema failed, please check')
-  (desc, results) = query_cur.exec_query("""select count(*) from __all_virtual_server_schema_info a join __all_virtual_server_schema_info b on a.tenant_id = b.tenant_id where a.refreshed_schema_version != b.refreshed_schema_version or a.refreshed_schema_version <= 1""")
-  if results[0][0] > 0 :
-    raise MyError('refresh schema failed, please check')
-  logging.info('check schema status success')
+def check_schema_status(query_cur, timeout):
+  sql = """select count(*) from __all_server a left join __all_virtual_server_schema_info b on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port where b.svr_ip is null"""
+  check_until_timeout(query_cur, sql, 0, timeout)
+
+  sql = """select count(*) from __all_virtual_server_schema_info a join __all_virtual_server_schema_info b on a.tenant_id = b.tenant_id where a.refreshed_schema_version != b.refreshed_schema_version or a.refreshed_schema_version <= 1"""
+  check_until_timeout(query_cur, sql, 0, timeout)
+
+def check_until_timeout(query_cur, sql, value, timeout):
+  times = timeout / 10
+  while times >= 0:
+    (desc, results) = query_cur.exec_query(sql)
+
+    if len(results) != 1 or len(results[0]) != 1:
+      raise MyError("unmatched row/column cnt")
+    elif results[0][0] == value:
+      logging.info("check value is {0} success".format(value))
+      break
+    else:
+      logging.info("value is {0}, expected value is {0}, not matched".format(results[0][0], value))
+
+    times -= 1
+    if times == -1:
+      logging.warn("""check {0} job timeout""".format(job_name))
+      raise e
+    time.sleep(10)
 
 # 开始健康检查
-def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout):
+def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, zone = ''):
   try:
     conn = mysql.connector.connect(user = my_user,
                                    password = my_passwd,
@@ -306,11 +355,14 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout):
                                    raise_on_warnings = True)
     conn.autocommit = True
     cur = conn.cursor(buffered=True)
+    timeout = timeout if timeout > 0 else 600
     try:
       query_cur = QueryCursor(cur)
-      check_paxos_replica(query_cur)
-      check_observer_status(query_cur)
-      check_schema_status(query_cur)
+      check_zone_valid(query_cur, zone)
+      check_observer_status(query_cur, zone, timeout)
+      check_paxos_replica(query_cur, timeout)
+      check_schema_status(query_cur, timeout)
+      check_server_version_by_zone(query_cur, zone)
     except Exception, e:
       logging.exception('run error')
       raise e
@@ -342,9 +394,10 @@ if __name__ == '__main__':
       user = get_opt_user()
       password = get_opt_password()
       timeout = int(get_opt_timeout())
-      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s', \
-          host, port, user, password, log_filename, timeout)
-      do_check(host, port, user, password, upgrade_params, timeout)
+      zone = get_opt_zone()
+      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
+          host, port, user, password, log_filename, timeout, zone)
+      do_check(host, port, user, password, upgrade_params, timeout, zone)
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')
       raise e

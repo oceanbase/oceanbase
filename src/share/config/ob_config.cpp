@@ -15,6 +15,8 @@
 #include <cstring>
 #include <ctype.h>
 #include "common/ob_smart_var.h"
+#include "share/ob_cluster_version.h"
+#include "share/ob_task_define.h"
 
 using namespace oceanbase::share;
 namespace oceanbase
@@ -963,6 +965,160 @@ int ObConfigLogArchiveOptionsItem::format_option_str(const char *src, int64_t sr
     }
   }
   return ret;
+}
+
+ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
+                                         Scope::ScopeInfo scope_info,
+                                         const char *name,
+                                         const char *def,
+                                         const char *range,
+                                         const char *info,
+                                         const ObParameterAttr attr)
+{
+  if (OB_LIKELY(NULL != container)) {
+    container->set_refactored(ObConfigStringKey(name), this, 1);
+  }
+  init(scope_info, name, def, range, info, attr);
+}
+
+ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
+                                         Scope::ScopeInfo scope_info,
+                                         const char *name,
+                                         const char *def,
+                                         const char *info,
+                                         const ObParameterAttr attr)
+{
+  if (OB_LIKELY(NULL != container)) {
+    container->set_refactored(ObConfigStringKey(name), this, 1);
+  }
+  init(scope_info, name, def, "", info, attr);
+}
+
+bool ObConfigVersionItem::set(const char *str)
+{
+  int64_t old_value = value_;
+  bool value_update = value_updated();
+  bool valid = ObConfigIntegralItem::set(str);
+  if (valid && value_update && old_value > value_) {
+    OB_LOG(ERROR, "Attention!!! data version is retrogressive", K(old_value), K_(value));
+  }
+  if (old_value != value_) {
+    ObTaskController::get().allow_next_syslog();
+    OB_LOG(INFO, "Config data version changed", K(old_value), K_(value), K(value_update), K(valid));
+  }
+  return valid;
+}
+
+int64_t ObConfigVersionItem::parse(const char *str, bool &valid) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t version = 0;
+  if (OB_FAIL(ObClusterVersion::get_version(str, version))) {
+    OB_LOG(ERROR, "parse version failed", KR(ret), "name", name(), K(str));
+  }
+  valid = OB_SUCC(ret);
+  return static_cast<int64_t>(version);
+}
+
+ObConfigVersionItem &ObConfigVersionItem::operator = (int64_t value)
+{
+  char buf[64] = {0};
+  (void) snprintf(buf, sizeof(buf), "%ld", value);
+  if (!set_value(buf)) {
+    OB_LOG(WARN, "obconfig version item set value failed");
+  }
+  return *this;
+}
+
+void ObConfigPairs::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  config_array_.reset();
+  allocator_.clear();
+}
+
+int ObConfigPairs::assign(const ObConfigPairs &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    reset();
+    int64_t array_cnt = other.config_array_.count();
+    if (OB_FAIL(config_array_.reserve(array_cnt))) {
+      OB_LOG(WARN, "fail to reserve array", KR(ret), K(array_cnt));
+    } else {
+      tenant_id_ = other.tenant_id_;
+    }
+    ObConfigPair pair;
+    bool c_like_str = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < array_cnt; i++) {
+      const ObConfigPair &other_pair = other.config_array_.at(i);
+      if (OB_FAIL(ob_write_string(allocator_, other_pair.key_, pair.key_, c_like_str))) {
+        OB_LOG(WARN, "fail to write string", KR(ret), K(other));
+      } else if (OB_FAIL(ob_write_string(allocator_, other_pair.value_, pair.value_, c_like_str))) {
+        OB_LOG(WARN, "fail to write string", KR(ret), K(other));
+      } else if (OB_FAIL(config_array_.push_back(pair))) {
+        OB_LOG(WARN, "fail to push back array", KR(ret), K(pair));
+      }
+    } // end for
+  }
+  return ret;
+}
+
+int ObConfigPairs::add_config(const ObString &key, const ObString &value)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < config_array_.count(); i++) {
+    const ObConfigPair &pair = config_array_.at(i);
+    if (0 == key.case_compare(pair.key_)) {
+      ret = OB_ENTRY_EXIST;
+      OB_LOG(WARN, "config already exist", KR(ret), K(key), K(value), K(pair));
+    }
+  } // end for
+
+  ObConfigPair tmp_pair;
+  bool c_like_str = true;
+  if (FAILEDx(ob_write_string(allocator_, key, tmp_pair.key_, c_like_str))) {
+    OB_LOG(WARN, "fail to write string", KR(ret), K(key));
+  } else if (OB_FAIL(ob_write_string(allocator_, value, tmp_pair.value_, c_like_str))) {
+    OB_LOG(WARN, "fail to write string", KR(ret), K(value));
+  } else if (OB_FAIL(config_array_.push_back(tmp_pair))) {
+    OB_LOG(WARN, "fail to push back array", KR(ret), K(tmp_pair));
+  }
+  return ret;
+}
+
+int ObConfigPairs::get_config_str(char *buf, const int64_t length) const
+{
+  int ret = OB_SUCCESS;
+  int64_t array_cnt = config_array_.count();
+  if (OB_UNLIKELY(
+      array_cnt <= 0
+      || OB_ISNULL(buf)
+      || length <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arg", KR(ret), K(array_cnt), KP(buf), K(length));
+  }
+  int64_t pos = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < array_cnt; i++) {
+    const ObConfigPair &pair = config_array_.at(i);
+    if (OB_FAIL(databuff_printf(buf, length, pos, "%s%s=%s",
+                (0 == pos ? "" : ","),
+                pair.key_.ptr(), pair.value_.ptr()))) {
+      OB_LOG(WARN, "fail to print pair", KR(ret), K(pair));
+    }
+  } // end for
+  return ret;
+}
+
+int64_t ObConfigPairs::get_config_str_length() const
+{
+  int64_t length = config_array_.count() * 2; // reserved for some characters
+  for (int64_t i = 0; i < config_array_.count(); i++) {
+    length += config_array_.at(i).key_.length();
+    length += config_array_.at(i).value_.length();
+  } // end for
+  return length;
+
 }
 
 } // end of namespace common

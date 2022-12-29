@@ -34,6 +34,7 @@
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/ddl/ob_ddl_clog.h"
 #include "share/ob_freeze_info_proxy.h"
+#include "share/config/ob_config.h" // ObConfigPairs
 
 namespace oceanbase
 {
@@ -1680,6 +1681,14 @@ public:
       share::schema::ObTenantSchema &tenant_schema,
       share::schema::ObSchemaGetterGuard &schema_guard);
 
+  static int gen_tenant_init_config(
+             const uint64_t tenant_id,
+             const uint64_t compatible_version,
+             common::ObConfigPairs &tenant_config);
+  static int notify_init_tenant_config(
+             obrpc::ObSrvRpcProxy &rpc_proxy,
+             const common::ObIArray<common::ObConfigPairs> &init_configs,
+             const common::ObIArray<common::ObAddr> &addrs);
 private:
   int handle_security_audit_for_stmt(const obrpc::ObSecurityAuditArg &arg,
                                      share::schema::ObSAuditSchema &audit_schema);
@@ -1715,7 +1724,8 @@ private:
       share::schema::ObTenantSchema &user_tenant_schema,
       share::schema::ObSysVariableSchema &user_sys_variable,
       share::schema::ObTenantSchema &meta_tenant_schema,
-      share::schema::ObSysVariableSchema &meta_sys_variable);
+      share::schema::ObSysVariableSchema &meta_sys_variable,
+      common::ObIArray<common::ObConfigPairs> &init_configs);
   int init_schema_status(
       const uint64_t tenant_id,
       const share::ObTenantRole &tenant_role);
@@ -1731,7 +1741,8 @@ private:
       const obrpc::ObCreateTenantArg &arg,
       share::schema::ObSchemaGetterGuard &schema_guard,
       share::schema::ObTenantSchema &user_tenant_schema,
-      share::schema::ObTenantSchema &meta_tenant_schema);
+      share::schema::ObTenantSchema &meta_tenant_schema,
+      const common::ObIArray<common::ObConfigPairs> &init_configs);
   int create_normal_tenant(
       const uint64_t tenant_id,
       const ObIArray<share::ObResourcePoolName> &pool_list,
@@ -1739,7 +1750,8 @@ private:
       const share::ObTenantRole &tenant_role,
       share::schema::ObSysVariableSchema &sys_variable,
       const bool create_ls_with_palf,
-      const palf::PalfBaseInfo &palf_base_info);
+      const palf::PalfBaseInfo &palf_base_info,
+      const common::ObIArray<common::ObConfigPairs> &init_configs);
   int set_sys_ls_status(const uint64_t tenant_id);
   int create_tenant_sys_ls(
       const share::schema::ObTenantSchema &tenant_schema,
@@ -1757,7 +1769,8 @@ private:
       const share::schema::ObTenantSchema &tenant_schema,
       const share::ObTenantRole &tenant_role,
       common::ObIArray<share::schema::ObTableSchema> &tables,
-      share::schema::ObSysVariableSchema &sys_variable);
+      share::schema::ObSysVariableSchema &sys_variable,
+      const common::ObIArray<common::ObConfigPairs> &init_configs);
   int insert_restore_tenant_job(
       const uint64_t tenant_id,
       const ObString &tenant_name,

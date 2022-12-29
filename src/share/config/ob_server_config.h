@@ -106,6 +106,7 @@ public:
   bool in_major_version_upgrade_mode() const { return in_upgrade_mode() && is_major_version_upgrade(); }
   bool enable_new_major() const {  return true; }
   bool in_upgrade_mode() const;
+  bool in_dbupgrade_stage() const;
   bool is_valid() const { return  system_config_!= NULL; };
   int64_t get_current_version() { return system_config_->get_version(); }
 

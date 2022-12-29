@@ -696,7 +696,7 @@ public:
   int report_single_replica(const int64_t tenant_id, const share::ObLSID &ls_id);
   // @see RsListChangeCb
   int submit_update_rslist_task(const bool force_update = false);
-  int submit_upgrade_task(const obrpc::ObUpgradeJobArg::Action action, const int64_t version);
+  int submit_upgrade_task(const obrpc::ObUpgradeJobArg &arg);
   int submit_upgrade_storage_format_version_task();
   int submit_create_inner_schema_task();
   int submit_async_minor_freeze_task(const obrpc::ObRootMinorFreezeArg &arg);

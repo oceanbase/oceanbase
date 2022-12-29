@@ -70,6 +70,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "observer/report/ob_tenant_meta_checker.h"//ObTenantMetaChecker
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 namespace oceanbase
@@ -192,6 +193,8 @@ int ObService::init(common::ObMySQLProxy &sql_proxy,
     FLOG_WARN("heartbeat_process_.init failed", KR(ret));
   } else if (OB_FAIL(schema_updater_.init(gctx_.self_addr(), gctx_.schema_service_))) {
     FLOG_WARN("client_manager_.initialize failed", "self_addr", gctx_.self_addr(), KR(ret));
+  } else if (OB_FAIL(CLUSTER_EVENT_INSTANCE.init(sql_proxy))) {
+    FLOG_WARN("init cluster event history table failed", KR(ret));
   } else if (OB_FAIL(SERVER_EVENT_INSTANCE.init(sql_proxy, gctx_.self_addr()))) {
     FLOG_WARN("init server event history table failed", KR(ret));
   } else if (OB_FAIL(DEALOCK_EVENT_INSTANCE.init(sql_proxy))) {
@@ -348,6 +351,10 @@ int ObService::destroy()
     FLOG_INFO("begin to destroy lease state manager");
     lease_state_mgr_.destroy();
     FLOG_INFO("lease state manager destroyed");
+
+    FLOG_INFO("begin to destroy cluster event instance");
+    CLUSTER_EVENT_INSTANCE.destroy();
+    FLOG_INFO("cluster event instance destroyed");
 
     FLOG_INFO("begin to destroy server event instance");
     SERVER_EVENT_INSTANCE.destroy();
@@ -1395,9 +1402,17 @@ int ObService::check_deployment_mode_match(
 int ObService::is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::Bool &is_empty)
 {
   int ret = OB_SUCCESS;
+  uint64_t sys_data_version = 0;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    LOG_WARN("fail to get sys data version", KR(ret));
+  } else if (arg.sys_data_version_ > 0
+             && sys_data_version > arg.sys_data_version_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("add server with larger sys data version is not supported",
+             KR(ret), K(arg), K(sys_data_version));
   } else {
     bool server_empty = false;
     // server dir must be created when 1) local mode, 2) OFS bootstrap this server
@@ -2279,6 +2294,31 @@ int ObService::estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
     LOG_WARN("failed to estimate partition rowcount", K(ret));
   }
   return ret;
+}
+
+int ObService::init_tenant_config(
+    const obrpc::ObInitTenantConfigArg &arg,
+    obrpc::ObInitTenantConfigRes &result)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("service is not inited", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invalid", KR(ret), K(arg));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.get_tenant_configs().count(); i++) {
+      const ObTenantConfigArg &config = arg.get_tenant_configs().at(i);
+      if (OB_FAIL(OTC_MGR.init_tenant_config(config)))  {
+        LOG_WARN("fail to init tenant config", KR(ret), K(config));
+      }
+    } // end for
+  }
+  (void) result.set_ret(ret);
+  FLOG_INFO("init tenant config", KR(ret), K(arg));
+  // use result to pass ret
+  return OB_SUCCESS;
 }
 
 }// end namespace observer

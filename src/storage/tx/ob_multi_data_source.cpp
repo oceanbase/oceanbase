@@ -20,6 +20,7 @@
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "share/ls/ob_ls_operator.h"
+#include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 
 namespace oceanbase
 {
@@ -162,6 +163,10 @@ int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
         ret = notify_modify_tablet_binding(notify_type, buf, len, tmp_notify_arg);
         break;
       }
+      case ObTxDataSourceType::STANDBY_UPGRADE: {
+        ret = notify_standby_upgrade(notify_type, buf, len, tmp_notify_arg);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         break;
@@ -262,6 +267,30 @@ int ObMulSourceTxDataNotifier::notify_ls_table(const NotifyType type,
     TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
   }
   TRANS_LOG(INFO, "ls table notify", KR(ret), K(ls_attr));
+
+  ob_abort_log_cb_notify_(type, ret, arg.for_replay_);
+
+  return ret;
+}
+
+int ObMulSourceTxDataNotifier::notify_standby_upgrade(const NotifyType type,
+                                               const char *buf, const int64_t len,
+                                               const ObMulSourceDataNotifyArg &arg)
+{
+  int ret = OB_SUCCESS;
+  share::ObStandbyUpgrade data_version;
+  int64_t pos = 0;
+
+  if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(buf), K(len), K(type));
+  } else if (OB_FAIL(data_version.deserialize(buf, len, pos))) {
+    TRANS_LOG(WARN, "failed to deserialize data_version", KR(ret), K(buf), K(len));
+  } else if (pos > len) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
+  }
+  TRANS_LOG(INFO, "standby upgrade notify", KR(ret), K(data_version), K(len), K(type));
 
   ob_abort_log_cb_notify_(type, ret, arg.for_replay_);
 

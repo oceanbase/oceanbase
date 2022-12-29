@@ -248,7 +248,7 @@ private:
   int init_sequence();
   int init_pl();
   int init_global_context();
-  int init_cluster_version();
+  int init_version();
   int init_ts_mgr();
   int init_px_target_mgr();
   int init_storage();

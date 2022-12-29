@@ -29,6 +29,10 @@
 #     real_agent access tables belong to current tenant
 # 8. Virtual table system design summary:
 #    https://yuque.antfin.com/docs/share/876fb26e-7466-476f-bd67-b3c4860fbdb8?#
+# 9. For compatibility, when add new column for system table, new column's definition should be "not null + default value" or "nullable".
+#    Specially, when column types are as follows:
+#    1. double、number：default value is not supported, so new column definition should be "nullable".
+#    2. longtext、timestamp：mysql can't cast default value to specified column type, so new column definition should be "nullable".
 
 global fields
 fields = [
@@ -5158,7 +5162,33 @@ def_table_schema(
 # 443 : __all_tenant_rewrite_rules
 
 # 444 : __all_reserved_snapshot
-# 445 : __all_cluster_event_history
+def_table_schema(
+    owner = 'yanmu.ztl',
+    table_name = '__all_cluster_event_history',
+    table_id = '445',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+      ('gmt_create', 'timestamp:6', 'false')
+    ],
+    normal_columns = [
+      ('module', 'varchar:MAX_CLUSTER_EVENT_NAME_LENGTH', 'false'),
+      ('event', 'varchar:MAX_CLUSTER_EVENT_NAME_LENGTH', 'false'),
+      ('name1', 'varchar:MAX_CLUSTER_EVENT_NAME_LENGTH', 'false', ''),
+      ('value1', 'varchar:MAX_CLUSTER_EVENT_VALUE_LENGTH', 'false', ''),
+      ('name2', 'varchar:MAX_CLUSTER_EVENT_NAME_LENGTH', 'false', ''),
+      ('value2', 'varchar:MAX_CLUSTER_EVENT_VALUE_LENGTH', 'false', ''),
+      ('name3', 'varchar:MAX_CLUSTER_EVENT_NAME_LENGTH', 'false', ''),
+      ('value3', 'varchar:MAX_CLUSTER_EVENT_VALUE_LENGTH', 'false', ''),
+      ('name4', 'varchar:MAX_CLUSTER_EVENT_NAME_LENGTH', 'false', ''),
+      ('value4', 'varchar:MAX_CLUSTER_EVENT_VALUE_LENGTH', 'false', ''),
+      ('name5', 'varchar:MAX_CLUSTER_EVENT_NAME_LENGTH', 'false', ''),
+      ('value5', 'varchar:MAX_CLUSTER_EVENT_VALUE_LENGTH', 'false', ''),
+      ('name6', 'varchar:MAX_CLUSTER_EVENT_NAME_LENGTH', 'false', ''),
+      ('value6', 'varchar:MAX_CLUSTER_EVENT_VALUE_LENGTH', 'false', ''),
+      ('extra_info', 'varchar:MAX_CLUSTER_EVENT_VALUE_LENGTH', 'false', '')
+    ],
+)
 # 446 : __all_ls_transfer_member_list_lock_info
 # 447 : __all_ls_log_restore_stat
 ################################################################################
@@ -10911,7 +10941,10 @@ def_table_schema(
 # 12360: __all_virtual_plan_table
 # 12361: __all_virtual_plan_real_info
 
-# 12362: __all_virtual_core_table
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12362',
+  table_name = '__all_virtual_core_table',
+  keywords = all_def_keywords['__all_core_table']))
 
 # 12363: __all_virtual_malloc_sample_info
 # 12364: __all_virtual_ls_arb_replica_task
@@ -23410,7 +23443,36 @@ def_table_schema(
 # 21343: GV$OB_PLAN_REAL_INFO
 # 21344: V$OB_PLAN_REAL_INFO
 
-# 21345: DBA_OB_CLUSTER_EVENT_HISTORY
+def_table_schema(
+    owner = 'yanmu.ztl',
+    table_name     = 'DBA_OB_CLUSTER_EVENT_HISTORY',
+    table_id       = '21345',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = False,
+    view_definition = """
+SELECT
+  gmt_create AS `TIMESTAMP`,
+  CAST(MODULE AS CHAR(256)) MODULE,
+  CAST(EVENT AS CHAR(256)) EVENT,
+  CAST(NAME1 AS CHAR(256)) NAME1,
+  CAST(VALUE1 AS CHAR(4096)) VALUE1,
+  CAST(NAME2 AS CHAR(256)) NAME2,
+  CAST(VALUE2 AS CHAR(4096)) VALUE2,
+  CAST(NAME3 AS CHAR(256)) NAME3,
+  CAST(VALUE3 AS CHAR(4096)) VALUE3,
+  CAST(NAME4 AS CHAR(256)) NAME4,
+  CAST(VALUE4 AS CHAR(4096)) VALUE4,
+  CAST(NAME5 AS CHAR(256)) NAME5,
+  CAST(VALUE5 AS CHAR(4096)) VALUE5,
+  CAST(NAME6 AS CHAR(256)) NAME6,
+  CAST(VALUE6 AS CHAR(4096)) VALUE6,
+  CAST(EXTRA_INFO AS CHAR(4096)) EXTRA_INFO
+FROM oceanbase.__all_cluster_event_history
+""".replace("\n", " ")
+)
 
 # 21346: PARAMETERS
 

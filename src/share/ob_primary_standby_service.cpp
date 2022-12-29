@@ -19,6 +19,9 @@
 #include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
 #include "rootserver/ob_tenant_role_transition_service.h" // ObTenantRoleTransitionService
 #include "share/restore/ob_log_archive_source_mgr.h"  // ObLogArchiveSourceMgr
+#include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
+#include "observer/ob_inner_sql_connection.h"//ObInnerSQLConnection
+#include "storage/tx/ob_trans_service.h" //ObTransService
 
 namespace oceanbase
 {
@@ -180,6 +183,48 @@ int ObPrimaryStandbyService::failover_to_primary(const uint64_t tenant_id, const
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant status is not normal, failover is");
   }
 
+  return ret;
+}
+
+int ObPrimaryStandbyService::write_upgrade_barrier_log(
+    ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const uint64_t data_version)
+{
+  int ret = OB_SUCCESS;
+  ObStandbyUpgrade primary_data_version(data_version);
+  observer::ObInnerSQLConnection *inner_conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection());
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("inner stat error", KR(ret), K_(inited));
+  } else if (OB_ISNULL(inner_conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("connection or trans service is null", KR(ret), KP(inner_conn));
+  } else if (!is_user_tenant(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not user tenant_id", KR(ret), K(tenant_id));
+  } else if (!ObClusterVersion::check_version_valid_(data_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid data_version", KR(ret), K(data_version));
+  } else {
+    const int64_t length = primary_data_version.get_serialize_size();
+    char *buf = NULL;
+    int64_t pos = 0;
+    ObArenaAllocator allocator("StandbyUpgrade");
+    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(length)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc buf", KR(ret), K(length));
+    } else if (OB_FAIL(primary_data_version.serialize(buf, length, pos))) {
+      LOG_WARN("failed to serialize", KR(ret), K(primary_data_version), K(length), K(pos));
+    } else if (OB_UNLIKELY(pos > length)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("serialize error", KR(ret), K(pos), K(length), K(primary_data_version));
+    } else if (OB_FAIL(inner_conn->register_multi_data_source(
+                       tenant_id, SYS_LS, transaction::ObTxDataSourceType::STANDBY_UPGRADE,
+                       buf, length))) {
+      LOG_WARN("failed to register tx data", KR(ret), K(tenant_id));
+    }
+    LOG_INFO("write_upgrade_barrier_log finished", KR(ret), K(tenant_id), K(primary_data_version), K(length), KPHEX(buf, length));
+  }
   return ret;
 }
 

@@ -223,7 +223,7 @@ OB_DEF_DESERIALIZE(ObCommonConfig)
     } else {
       MEMSET(copy_buf, '\0', data_len + 1);
       MEMCPY(copy_buf, buf + pos, data_len);
-      if (OB_FAIL(add_extra_config(copy_buf))) {
+      if (OB_FAIL(ObCommonConfig::add_extra_config(copy_buf))) {
         LOG_ERROR("Read server config failed", K(ret));
       }
 

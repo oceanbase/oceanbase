@@ -8,4 +8,5 @@ zone_check	succeed
 sys_stat_check	succeed
 sys_param_check	succeed
 sys_table_schema_check	succeed
+data_version_check	succeed
 all_check	succeed

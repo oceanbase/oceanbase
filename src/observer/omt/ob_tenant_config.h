@@ -89,9 +89,9 @@ public:
   int got_version(int64_t version, const bool remove_repeat);
   int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult &result,
                    bool save2file = true);
-  int add_extra_config(char *config_str,
-                   int64_t version = 0 ,
-                   bool check_name = false);
+  int add_extra_config(const char *config_str,
+                       int64_t version = 0 ,
+                       bool check_name = false);
 
   OB_UNIS_VERSION(1);
 private:

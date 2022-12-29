@@ -64,6 +64,7 @@
 #include "logservice/palf/log_define.h"//INVALID_PROPOSAL_ID
 #include "share/scn.h"//SCN
 #include "share/location_cache/ob_vtable_location_service.h" // share::ObVtableLocationType
+#include "share/config/ob_config.h" // ObConfigArray
 #include "logservice/palf/log_meta_info.h"//LogConfigVersion
 
 namespace oceanbase
@@ -498,11 +499,12 @@ struct ObCreateTenantArg : public ObDDLArg
 public:
   ObCreateTenantArg()
     : ObDDLArg(), tenant_schema_(), pool_list_(), if_not_exist_(false),
-      sys_var_list_(), name_case_mode_(common::OB_NAME_CASE_INVALID), is_restore_(false),
-      palf_base_info_() {}
+      sys_var_list_(), name_case_mode_(common::OB_NAME_CASE_INVALID),
+      is_restore_(false), palf_base_info_(), compatible_version_(0) {}
   virtual ~ObCreateTenantArg() {};
   bool is_valid() const;
   int check_valid() const;
+  void reset();
   int assign(const ObCreateTenantArg &other);
 
   virtual bool is_allow_in_standby() const { return sync_from_primary_; }
@@ -521,6 +523,8 @@ public:
   bool is_restore_;
   //for restore tenant sys ls
   palf::PalfBaseInfo palf_base_info_;
+  //for restore tenant, from backuped meta file
+  uint64_t compatible_version_;
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg
@@ -4523,15 +4527,23 @@ public:
     STOP_UPGRADE_JOB,
     UPGRADE_SYSTEM_VARIABLE,
     UPGRADE_SYSTEM_TABLE,
+    UPGRADE_BEGIN,
+    UPGRADE_VIRTUAL_SCHEMA,
+    UPGRADE_SYSTEM_PACKAGE,
+    UPGRADE_ALL_POST_ACTION,
+    UPGRADE_INSPECTION,
+    UPGRADE_END,
+    UPGRADE_ALL
   };
 public:
   ObUpgradeJobArg();
   bool is_valid() const;
   int assign(const ObUpgradeJobArg &other);
-  TO_STRING_KV(K_(action), K_(version));
+  TO_STRING_KV(K_(action), K_(version), K_(tenant_ids));
 public:
   Action action_;
   int64_t version_;
+  ObSArray<uint64_t> tenant_ids_; // empty means all tenant
 };
 
 struct ObUpgradeTableSchemaArg : public ObDDLArg
@@ -4541,17 +4553,24 @@ public:
   ObUpgradeTableSchemaArg()
     : ObDDLArg(),
       tenant_id_(common::OB_INVALID_TENANT_ID),
-      table_id_(common::OB_INVALID_ID) {}
+      table_id_(common::OB_INVALID_ID),
+      upgrade_virtual_schema_(false) {}
   ~ObUpgradeTableSchemaArg() {}
-  int init(const uint64_t tenant_id, const uint64_t table_id);
+  int init(const uint64_t tenant_id,
+           const uint64_t table_id,
+           const bool upgrade_virtual_schema);
   bool is_valid() const;
   int assign(const ObUpgradeTableSchemaArg &other);
   uint64_t get_tenant_id() const { return tenant_id_; }
   uint64_t get_table_id() const { return table_id_; }
-  TO_STRING_KV(K_(tenant_id), K_(table_id));
+  bool upgrade_virtual_schema() const { return upgrade_virtual_schema_; }
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(upgrade_virtual_schema));
 private:
   uint64_t tenant_id_;
+  // 1. upgrade_virtual_schema_ = false, table_id_ should be sys table(except sys index/lob table).
+  // 2. upgrade_virtual_schema_ = true, table_id_ is invalid.
   uint64_t table_id_;
+  bool upgrade_virtual_schema_;
 };
 
 struct ObAdminMergeArg
@@ -6742,9 +6761,13 @@ public:
     ADD_SERVER
   };
 
-  ObCheckServerEmptyArg(): mode_(BOOTSTRAP) {}
-  TO_STRING_KV(K_(mode));
+  ObCheckServerEmptyArg(): mode_(BOOTSTRAP), sys_data_version_(0) {}
+  ObCheckServerEmptyArg(const Mode mode,
+                        const uint64_t sys_data_version)
+    : mode_(mode), sys_data_version_(sys_data_version) {}
+  TO_STRING_KV(K_(mode), K_(sys_data_version));
   Mode mode_;
+  uint64_t sys_data_version_;
 };
 
 struct ObArchiveLogArg
@@ -8066,6 +8089,35 @@ public:
   TO_STRING_KV(K_(servers));
 private:
   common::ObSArray<common::ObAddr> servers_;
+};
+
+struct ObInitTenantConfigArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObInitTenantConfigArg() : tenant_configs_() {}
+  ~ObInitTenantConfigArg() {}
+  bool is_valid() const { return tenant_configs_.count() > 0; }
+  int assign(const ObInitTenantConfigArg &other);
+  int add_tenant_config(const ObTenantConfigArg &arg);
+  const common::ObSArray<ObTenantConfigArg> &get_tenant_configs() const { return tenant_configs_; }
+  TO_STRING_KV(K_(tenant_configs));
+private:
+  common::ObSArray<ObTenantConfigArg> tenant_configs_;
+};
+
+struct ObInitTenantConfigRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObInitTenantConfigRes() : ret_(common::OB_ERROR) {}
+  ~ObInitTenantConfigRes() {}
+  int assign(const ObInitTenantConfigRes &other);
+  void set_ret(int ret) { ret_ = ret; }
+  int64_t get_ret() const { return ret_; }
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
 };
 
 }//end namespace obrpc

@@ -239,7 +239,7 @@ int ObDataStoreDesc::init(
       STORAGE_LOG(WARN, "Failed to generate multi version column ids", K(ret));
     } else if (OB_FAIL(datum_utils_.init(col_desc_array_, schema_rowkey_col_cnt_, lib::is_oracle_mode(), allocator_))) {
       STORAGE_LOG(WARN, "Failed to init datum utils", K(ret));
-    } else if (is_major && major_working_cluster_version_ <= CLUSTER_VERSION_4_0_0_0) {
+    } else if (is_major && major_working_cluster_version_ <= DATA_VERSION_4_0_0_0) {
       micro_block_size_ = merge_schema.get_block_size();
     } else {
       micro_block_size_ = MAX(merge_schema.get_block_size(), MIN_MICRO_BLOCK_SIZE);

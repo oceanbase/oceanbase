@@ -349,7 +349,7 @@ void ObMicroBlockEncoder::update_estimate_size_limit(const ObMicroBlockEncodingC
                                   ? (2 * ctx.micro_block_size_ - header_size_)
                                   : (2 * ctx.micro_block_size_);
 //TODO huronghui.hrh@oceanbase.com use 4.1.0.0 for version judgment
-  if(ctx.major_working_cluster_version_ >= CLUSTER_VERSION_4_1_0_0 ) {
+  if(ctx.major_working_cluster_version_ >= DATA_VERSION_4_1_0_0 ) {
     data_size_limit = MAX(data_size_limit, DEFAULT_MICRO_MAX_SIZE);
   }
   estimate_size_limit_ = std::min(data_size_limit * expand_pct_ / 100, ctx.macro_block_size_);

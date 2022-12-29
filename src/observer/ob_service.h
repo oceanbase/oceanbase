@@ -224,6 +224,9 @@ public:
   int submit_async_refresh_schema_task(const uint64_t tenant_id, const int64_t schema_version);
   int renew_in_zone_hb(const share::ObInZoneHbRequest &arg,
                        share::ObInZoneHbResponse &result);
+  int init_tenant_config(
+      const obrpc::ObInitTenantConfigArg &arg,
+      obrpc::ObInitTenantConfigRes &result);
 private:
   int inner_fill_tablet_info_(
       const int64_t tenant_id,

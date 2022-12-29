@@ -371,8 +371,8 @@ public:
   virtual ~ObAdminUpgradeVirtualSchema() {}
 
   int execute();
+  int execute(const uint64_t tenant_id, int64_t &upgrade_cnt);
 private:
-  int execute_(const uint64_t tenant_id, int64_t &upgrade_cnt);
   int upgrade_(const uint64_t tenant_id, share::schema::ObTableSchema &table);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminUpgradeVirtualSchema);

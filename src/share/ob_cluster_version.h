@@ -18,6 +18,10 @@
 
 namespace oceanbase
 {
+namespace omt
+{
+class ObTenantConfigMgr;
+}
 namespace common
 {
 class ObServerConfig;
@@ -32,8 +36,10 @@ public:
   void destroy();
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
+  int init(const common::ObServerConfig *config,
+           const omt::ObTenantConfigMgr *tenant_config_mgr);
+
   /* cluster version related */
-  int init(const common::ObServerConfig *config);
   int init(const uint64_t cluster_version);
   int refresh_cluster_version(const char *verstr);
   int reload_config();
@@ -52,6 +58,7 @@ public:
   static int get_version(const common::ObString &verstr, uint64_t &version);
   static int64_t print_vsn(char *buf, const int64_t buf_len, uint64_t version);
   static int64_t print_version_str(char *buf, const int64_t buf_len, uint64_t version);
+  static bool check_version_valid_(const uint64_t version);
 public:
   static const int64_t MAX_VERSION_ITEM = 16;
   static const int64_t MAJOR_POS       = 0;
@@ -59,10 +66,9 @@ public:
   static const int64_t MAJOR_PATCH_POS = 2;
   static const int64_t MINOR_PATCH_POS = 3;
 private:
-  static bool check_version_valid_(const uint64_t version);
-private:
   bool is_inited_;
   const common::ObServerConfig *config_;
+  const omt::ObTenantConfigMgr *tenant_config_mgr_;
   uint64_t cluster_version_;
 };
 
@@ -170,6 +176,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define DATA_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
 
 // should check returned ret
+#define LAST_BARRIER_DATA_VERSION DATA_VERSION_4_0_0_0
 #define DATA_CURRENT_VERSION DATA_VERSION_4_1_0_0
 #define GET_MIN_DATA_VERSION(tenant_id, data_version) (oceanbase::common::ObClusterVersion::get_instance().get_tenant_data_version((tenant_id), (data_version)))
 #define TENANT_NEED_UPGRADE(tenant_id, need) (oceanbase::common::ObClusterVersion::get_instance().tenant_need_upgrade((tenant_id), (need)))

@@ -64,9 +64,8 @@ install(FILES
   tools/default_srs_data_mysql.sql
   tools/upgrade/upgrade_pre.py
   tools/upgrade/upgrade_post.py
-  tools/upgrade/upgrade_post_checker.py
   tools/upgrade/upgrade_checker.py
-  tools/upgrade/upgrade_cluster_health_checker.py
+  tools/upgrade/upgrade_health_checker.py
   DESTINATION etc
   COMPONENT server)
 

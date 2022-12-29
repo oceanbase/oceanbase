@@ -122,6 +122,9 @@ access_specifier:                                                               
 #define DEF_STR(args...)                                                       \
   _DEF_PARAMETER_SCOPE_EASY(public, String, args)
 
+#define DEF_VERSION(args...)                                                   \
+  _DEF_PARAMETER_SCOPE_EASY(public, Version, args)
+
 #define DEF_STR_WITH_CHECKER(args...)                                          \
   _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, String, args)
 

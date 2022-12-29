@@ -498,6 +498,7 @@ public:
   virtual int init_tenant_env(const share::schema::ObTenantSchema &tenant_schema,
                               const share::schema::ObSysVariableSchema &sys_variable,
                               const share::ObTenantRole &tenant_role,
+                              const common::ObIArray<common::ObConfigPairs> &init_configs,
                               common::ObMySQLTransaction &trans);
   virtual int rename_table(const share::schema::ObTableSchema &table_schema,
                            const common::ObString &new_table_name,
@@ -961,6 +962,7 @@ private:
   virtual int init_tenant_sys_stats(const uint64_t tenant_id,
                                     common::ObMySQLTransaction &trans);
   virtual int init_tenant_config(const uint64_t tenant_id,
+                                 const common::ObIArray<common::ObConfigPairs> &init_configs,
                                  common::ObMySQLTransaction &trans);
   virtual int init_freeze_info(const uint64_t tenant_id,
                                common::ObMySQLTransaction &trans);
@@ -1106,6 +1108,13 @@ private:
                                        uint64_t tenant_id,
                                        ObMySQLTransaction &trans);
   int init_tenant_spm_configure(uint64_t tenant_id, ObMySQLTransaction &trans);
+  int init_tenant_config_(
+      const uint64_t tenant_id,
+      const common::ObConfigPairs &tenant_config,
+      common::ObMySQLTransaction &trans);
+  int init_tenant_config_from_seed_(
+      const uint64_t tenant_id,
+      common::ObMySQLTransaction &trans);
 private:
   share::schema::ObMultiVersionSchemaService &schema_service_;
   common::ObMySQLProxy &sql_proxy_;

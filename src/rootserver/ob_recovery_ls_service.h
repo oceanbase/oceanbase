@@ -18,6 +18,7 @@
 #include "logservice/palf/palf_iterator.h"          //PalfBufferIterator
 #include "ob_primary_ls_service.h" //ObTenantThreadHelper
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
+#include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
 
 namespace oceanbase
 {
@@ -75,6 +76,7 @@ private:
  int seek_log_iterator_(const share::SCN &syn_scn,
                         palf::PalfBufferIterator &iterator);
  int process_ls_log_(const share::SCN &start_scn,palf::PalfBufferIterator &iterator);
+ int process_upgrade_log_(const transaction::ObTxBufferNode &node);
  int process_gc_log_(logservice::ObGCLSLog &gc_log,
                      const share::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
@@ -94,6 +96,9 @@ private:
  int update_sys_ls_restore_finish_();
  //readable scn need report
  int report_sys_ls_recovery_stat_(const share::SCN &sync_scn);
+ void try_tenant_upgrade_end_();
+ int get_min_data_version_(uint64_t &compatible);
+
 private:
   bool inited_;
   uint64_t tenant_id_;

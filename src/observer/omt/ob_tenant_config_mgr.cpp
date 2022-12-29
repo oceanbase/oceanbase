@@ -246,6 +246,21 @@ int ObTenantConfigMgr::refresh_tenants(const ObIArray<uint64_t> &tenants)
   return ret;
 }
 
+// This function will be called in the early stage in bootstrap/create tenant.
+// Meanwhile, related tenant's tables are not readable, so it's safe to call add_extra_config().
+int ObTenantConfigMgr::init_tenant_config(const obrpc::ObTenantConfigArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(add_tenant_config(arg.tenant_id_))) {
+    LOG_WARN("fail to add tenant config", KR(ret), K(arg));
+  } else if (OB_FAIL(add_extra_config(arg))) {
+    LOG_WARN("fail to add extra config", KR(ret), K(arg));
+  } else if (OB_FAIL(dump2file())) {
+    LOG_WARN("fail to dump config to file", KR(ret), K(arg));
+  }
+  return ret;
+}
+
 int ObTenantConfigMgr::add_tenant_config(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -597,7 +612,7 @@ void ObTenantConfigMgr::notify_tenant_config_changed(uint64_t tenant_id)
   update_tenant_config_cb_(tenant_id);
 }
 
-int ObTenantConfigMgr::add_extra_config(obrpc::ObTenantConfigArg &arg)
+int ObTenantConfigMgr::add_extra_config(const obrpc::ObTenantConfigArg &arg)
 {
   int ret = OB_SUCCESS;
   ObTenantConfig *config = nullptr;
@@ -612,7 +627,7 @@ int ObTenantConfigMgr::add_extra_config(obrpc::ObTenantConfigArg &arg)
       ret = config->add_extra_config(arg.config_str_.ptr());
     }
   }
-  LOG_INFO("add tenant extra config", K(arg));
+  FLOG_INFO("add tenant extra config", K(arg));
   return ret;
 }
 

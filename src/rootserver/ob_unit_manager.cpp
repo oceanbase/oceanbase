@@ -11466,6 +11466,25 @@ int ObUnitManager::get_unit_infos(const common::ObIArray<share::ObResourcePoolNa
   return ret;
 }
 
+int ObUnitManager::get_servers_by_pools(
+    const common::ObIArray<share::ObResourcePoolName> &pools,
+    common::ObIArray<ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  addrs.reset();
+  ObArray<share::ObUnitInfo> unit_infos;
+  if (OB_FAIL(get_unit_infos(pools, unit_infos))) {
+    LOG_WARN("fail to get unit infos", KR(ret), K(pools));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < unit_infos.count(); i++) {
+    const share::ObUnitInfo &unit_info = unit_infos.at(i);
+    if (OB_FAIL(addrs.push_back(unit_info.unit_.server_))) {
+      LOG_WARN("fail to push back addr", KR(ret), K(unit_info));
+    }
+  } // end for
+  return ret;
+}
+
 int ObUnitManager::inner_get_active_unit_infos_of_tenant(const ObTenantSchema &tenant_schema,
                                                   ObIArray<ObUnitInfo> &unit_info)
 {
