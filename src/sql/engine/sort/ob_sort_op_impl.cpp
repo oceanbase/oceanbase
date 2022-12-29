@@ -858,10 +858,10 @@ int ObSortOpImpl::preprocess_dump(bool &dumped)
           }
         } else { }
       }
+      LOG_INFO("trace sort need dump", K(dumped), K(mem_context_->used()), K(get_memory_limit()),
+        K(profile_.get_cache_size()), K(profile_.get_expect_size()),
+        K(sql_mem_processor_.get_data_size()));
     }
-    LOG_TRACE("trace sort need dump", K(dumped), K(mem_context_->used()), K(get_memory_limit()),
-      K(profile_.get_cache_size()), K(profile_.get_expect_size()),
-      K(sql_mem_processor_.get_data_size()));
   }
   return ret;
 }

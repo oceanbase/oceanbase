@@ -757,7 +757,7 @@ inline int ObChunkDatumStore::dump_one_block(BlockBuffer *item)
   }
   if (OB_SUCC(ret)) {
     n_block_in_file_++;
-    LOG_DEBUG("RowStore Dumpped block", K_(item->block->rows),
+    LOG_INFO("RowStore Dumpped block", K_(item->block->rows),
       K_(item->cur_pos), K(item->capacity()));
   }
   if (OB_LIKELY(nullptr != io_event_observer_)) {
