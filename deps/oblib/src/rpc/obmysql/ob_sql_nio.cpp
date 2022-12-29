@@ -581,7 +581,9 @@ private:
 class ObSqlNioImpl
 {
 public:
-  ObSqlNioImpl(ObISqlSockHandler& handler): handler_(handler), epfd_(-1), lfd_(-1) {}
+  ObSqlNioImpl(ObISqlSockHandler& handler):
+    handler_(handler), epfd_(-1), lfd_(-1), tcp_keepalive_enabled_(0),
+    tcp_keepidle_(0), tcp_keepintvl_(0), tcp_keepcnt_(0) {}
   ~ObSqlNioImpl() {}
   int init(int port) {
     int ret = OB_SUCCESS;
@@ -613,6 +615,7 @@ public:
     handle_write_req_queue();
     handle_close_req_queue();
     handle_pending_destroy_list();
+    update_tcp_keepalive_parameters();
     print_session_info();
   }
   void push_close_req(ObSqlSock* s) {
@@ -645,7 +648,12 @@ public:
       }
     }
   }
-
+  void update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt) {
+    tcp_keepalive_enabled_ = keepalive_enabled;
+    tcp_keepidle_ = tcp_keepidle;
+    tcp_keepintvl_ = tcp_keepintvl;
+    tcp_keepcnt_ = tcp_keepcnt;
+  }
 private:
   void handle_epoll_event() {
     const int maxevents = 512;
@@ -828,6 +836,29 @@ private:
     all_list_.del(&s->all_list_link_);
   }
 
+  void update_tcp_keepalive_parameters() {
+    if (TC_REACH_TIME_INTERVAL(5*1000*1000L)) {
+      if (1 == tcp_keepalive_enabled_) {
+        ObDLink* head = all_list_.head();
+        ObLink* cur = head->next_;
+        while (cur != head) {
+          ObSqlSock* s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
+          cur = cur->next_;
+          int fd = s->get_fd();
+          if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&tcp_keepalive_enabled_, sizeof(tcp_keepalive_enabled_)) < 0) {
+            LOG_WARN("setsockopt SO_KEEPALIVE failed", K(fd), KERRNOMSG(errno));
+          } else if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, (const void *)&tcp_keepidle_, sizeof(tcp_keepidle_)) < 0) {
+            LOG_WARN("setsockopt TCP_KEEPIDLE failed", K(fd), KERRNOMSG(errno));
+          } else if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, (const void *)&tcp_keepintvl_, sizeof(tcp_keepintvl_)) < 0) {
+            LOG_WARN("setsockopt TCP_KEEPINTVL failed", K(fd), KERRNOMSG(errno));
+          } else if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, (const void *)&tcp_keepcnt_, sizeof(tcp_keepcnt_)) < 0) {
+            LOG_WARN("setsockopt TCP_KEEPCNT failed", K(fd), KERRNOMSG(errno));
+          }
+        }
+      }
+    }
+  }
+
   void print_session_info() {
     static const int64_t max_process_time = 1000L * 1000L * 20L; // 20s
     if (TC_REACH_TIME_INTERVAL(15*1000*1000L)) {
@@ -857,6 +888,10 @@ private:
   ObSpScLinkQueue write_req_queue_;
   ObDList pending_destroy_list_;
   ObDList all_list_;
+  int tcp_keepalive_enabled_;
+  uint32_t tcp_keepidle_;
+  uint32_t tcp_keepintvl_;
+  uint32_t tcp_keepcnt_;
 };
 
 int ObSqlNio::start(int port, ObISqlSockHandler* handler, int n_thread)
@@ -989,5 +1024,18 @@ SSL* ObSqlNio::get_ssl_st(void* sess)
   ObSqlSock* sock = sess2sock(sess);
   return sock->get_ssl_st();
 }
+
+void ObSqlNio::update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt)
+{
+  int thread_count = get_thread_count();
+  if (NULL != impl_) {
+    for (int index = 0; index < thread_count; index++) {
+      impl_[index].update_tcp_keepalive_params(keepalive_enabled, tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
+    }
+  } else {
+    LOG_ERROR("sql nio impl_ is nullptr", KP(impl_));
+  }
+}
+
 }; // end namespace obmysql
 }; // end namespace oceanbase

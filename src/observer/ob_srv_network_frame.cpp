@@ -30,6 +30,7 @@ using namespace oceanbase::rpc::frame;
 using namespace oceanbase::common;
 using namespace oceanbase::observer;
 using namespace oceanbase::share;
+using namespace oceanbase::obmysql;
 
 ObSrvNetworkFrame::ObSrvNetworkFrame(ObGlobalContext &gctx)
     : gctx_(gctx),
@@ -75,6 +76,19 @@ static int get_default_net_thread_count()
     cnt = max(8, get_cpu_num() / 6);
   }
   return cnt;
+}
+
+static int update_tcp_keepalive_parameters_for_sql_nio_server(int tcp_keepalive_enabled, int64_t tcp_keepidle, int64_t tcp_keepintvl, int64_t tcp_keepcnt)
+{
+  int ret = OB_SUCCESS;
+  if (enable_new_sql_nio()) {
+    if (NULL != global_sql_nio_server) {
+      tcp_keepidle = max(tcp_keepidle/1000000, 1);
+      tcp_keepintvl = max(tcp_keepintvl/1000000, 1);
+      global_sql_nio_server->update_tcp_keepalive_params(tcp_keepalive_enabled, tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
+    }
+  }
+  return ret;
 }
 
 int ObSrvNetworkFrame::init()
@@ -185,6 +199,7 @@ int ObSrvNetworkFrame::start()
   return ret;
 }
 
+
 int ObSrvNetworkFrame::reload_config()
 {
   int ret = common::OB_SUCCESS;
@@ -217,6 +232,10 @@ int ObSrvNetworkFrame::reload_config()
                                                           tcp_keepidle, tcp_keepintvl,
                                                           tcp_keepcnt))) {
     LOG_WARN("Failed to set sql tcp keepalive parameters.");
+  } else if (OB_FAIL(update_tcp_keepalive_parameters_for_sql_nio_server(enable_tcp_keepalive,
+                                                                        tcp_keepidle, tcp_keepintvl,
+                                                                        tcp_keepcnt))) {
+    LOG_WARN("Failed to set sql tcp keepalive parameters for sql nio server", K(ret));
   }
 
   return ret;
