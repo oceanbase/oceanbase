@@ -413,45 +413,16 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
 }
 
 int ObInfoSchemaColumnsTable::get_type_str(
-    const share::schema::ObColumnSchemaV2 &column_schema,
-    const int16_t default_length_semantics, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  const ObObjMeta &obj_meta = column_schema.get_meta_type();
-  const ObAccuracy &accuracy = column_schema.get_accuracy();
-  const common::ObIArray<ObString> &type_info = column_schema.get_extended_type_info();
-  const common::ObGeoType &geo_type = column_schema.get_geo_type();
-
-  if (OB_FAIL(ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, geo_type))) {
-    if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
-      if (OB_UNLIKELY(NULL == (column_type_str_ = static_cast<char *>(allocator_->realloc(
-                               column_type_str_,
-                               OB_MAX_SYS_PARAM_NAME_LENGTH,
-                               OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
-      } else {
-        pos = 0;
-        column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
-        ret = ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, geo_type);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObInfoSchemaColumnsTable::get_type_str(
     const ObObjMeta &obj_meta,
     const ObAccuracy &accuracy,
     const common::ObIArray<ObString> &type_info,
-    const int16_t default_length_semantics, int64_t &pos)
+    const int16_t default_length_semantics, int64_t &pos,
+    const common::ObGeoType geo_type)
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, common::ObGeoType::GEOMETRY))) {
+                              column_type_str_, column_type_str_len_, pos, geo_type))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
       void *tmp_ptr = NULL;
       if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->realloc(
@@ -472,7 +443,7 @@ int ObInfoSchemaColumnsTable::get_type_str(
         column_type_str_ = static_cast<char *>(tmp_ptr);
         column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
         ret = ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, common::ObGeoType::GEOMETRY);
+                              column_type_str_, column_type_str_len_, pos, geo_type);
       }
     }
   }
@@ -701,9 +672,12 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
         case COLUMN_TYPE: {
             int64_t pos = 0;
             const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-            if (OB_FAIL(get_type_str(*column_schema,
+            if (OB_FAIL(get_type_str(column_schema->get_meta_type(),
+                                     column_schema->get_accuracy(),
+                                     column_schema->get_extended_type_info(),
                                      default_length_semantics,
-                                     pos))) {
+                                     pos,
+                                     column_schema->get_geo_type()))) {
               SERVER_LOG(WARN,"fail to get column type str",K(ret), K(column_schema->get_data_type()));
             } else if (column_schema->is_zero_fill()) {
              // zerofill, only for int, float, decimal
