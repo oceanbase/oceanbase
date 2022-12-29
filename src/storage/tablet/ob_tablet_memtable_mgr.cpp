@@ -225,6 +225,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
         int64_t unsynced_cnt = last_frozen_memtable->get_unsynced_cnt();
         if (write_ref > 0 || unsubmitted_cnt > 0) {
           memtable->set_logging_blocked();
+          TRANS_LOG(INFO, "set logging_block", KPC(last_frozen_memtable), KPC(memtable));
         }
         if (write_ref > 0 || unsynced_cnt > 0) {
           last_frozen_memtable->set_resolve_active_memtable_left_boundary(false);
@@ -235,7 +236,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                            0 == unsubmitted_cnt &&
                            0 == unsynced_cnt)) {
           last_frozen_memtable->resolve_right_boundary();
-          TRANS_LOG(INFO, "[resolve_right_boundary] create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
+          TRANS_LOG(INFO, "[resolve_right_boundary] last_frozen_memtable in create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
           if (memtable != last_frozen_memtable) {
             const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(), last_frozen_memtable->get_migration_clog_checkpoint_scn());
             memtable->resolve_left_boundary(new_start_scn);
