@@ -131,7 +131,8 @@ int ObDASDMLIterator::get_next_spatial_index_row(ObNewRow *&row)
         } else {
           spatial_rows = get_spatial_index_rows();
         }
-      } else {
+      }
+      if (OB_NOT_NULL(spatial_rows)) {
         spatial_rows->reuse();
       }
 
