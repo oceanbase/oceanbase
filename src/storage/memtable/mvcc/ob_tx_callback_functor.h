@@ -412,7 +412,8 @@ class ObTxEndFunctor : public ObITxCallbackFunctor
 {
 public:
   ObTxEndFunctor(bool is_commit)
-    : is_commit_(is_commit) {}
+    : is_commit_(is_commit),
+      need_print_(false) {}
 
   virtual int operator()(ObITransCallback *callback) override
   {
@@ -434,15 +435,37 @@ public:
       TRANS_LOG(ERROR, "trans abort failed", KPC(callback));
     } else {
       need_remove_callback_ = true;
+      print_callback_if_logging_block_(callback);
     }
 
     return ret;
   }
 
-  VIRTUAL_TO_STRING_KV(K_(is_commit));
+  VIRTUAL_TO_STRING_KV(K_(is_commit), K_(need_print));
+
+private:
+  int print_callback_if_logging_block_(ObITransCallback *callback)
+  {
+    // print callback list
+    // if a callback has not been submitted log and
+    // the memtable linked to it is logging_blocked
+    int ret = OB_SUCCESS;
+    if (!is_commit_ &&
+        !need_print_ &&
+        callback->need_submit_log() &&
+        callback->need_fill_redo() &&
+        callback->is_logging_blocked()) {
+      need_print_ = true;
+    }
+    if (need_print_) {
+      callback->print_callback();
+    }
+    return ret;
+  }
 
 private:
   const bool is_commit_;
+  bool need_print_;
 };
 
 class ObCleanUnlogCallbackFunctor : public ObITxCallbackFunctor

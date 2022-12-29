@@ -1221,7 +1221,8 @@ void ObTenantFreezer::log_frozen_memstore_info_if_need_(const ObTenantFreezeCtx 
 {
   int ret = OB_SUCCESS;
   ObTenantMemstoreAllocator *tenant_allocator = NULL;
-  if (ctx.total_memstore_hold_ > ctx.memstore_freeze_trigger_) {
+  if (ctx.total_memstore_hold_ > ctx.memstore_freeze_trigger_ ||
+      ctx.active_memstore_used_ > ctx.memstore_freeze_trigger_) {
     // There is an unreleased memstable
     LOG_INFO("[TenantFreezer] tenant have inactive memstores",
              K(ctx.active_memstore_used_),

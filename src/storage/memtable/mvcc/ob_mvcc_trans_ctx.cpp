@@ -674,8 +674,14 @@ bool ObMvccRowCallback::is_logging_blocked() const
 {
   const bool is_blocked = memtable_->get_logging_blocked();
   if (is_blocked) {
-    TRANS_LOG(WARN, "block logging", K(is_blocked), KP(memtable_),
-              K(memtable_->get_key().get_tablet_id()));
+    int ret = OB_SUCCESS;
+    ObTransID trans_id;
+    if (OB_FAIL(get_trans_id(trans_id))) {
+      TRANS_LOG(WARN, "fail to get trans_id", K(ret));
+    } else {
+      TRANS_LOG(WARN, "block logging", K(is_blocked), KP(memtable_),
+                K(memtable_->get_key().get_tablet_id()), K(trans_id));
+    }
   }
   return is_blocked;
 }
