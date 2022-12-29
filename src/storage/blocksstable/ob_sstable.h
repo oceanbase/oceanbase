@@ -140,7 +140,7 @@ public:
   OB_INLINE const blocksstable::ObSSTableMeta &get_meta() const { return meta_; }
   OB_INLINE int64_t get_macro_read_size() const { return meta_.get_macro_info().get_nested_size(); }
   OB_INLINE bool is_small_sstable() const {
-      return OB_DEFAULT_MACRO_BLOCK_SIZE != meta_.get_macro_info().get_nested_size()
+      return OB_DEFAULT_MACRO_BLOCK_SIZE > meta_.get_macro_info().get_nested_size()
              && 0 < meta_.get_macro_info().get_nested_size(); }
   OB_INLINE int get_index_tree_root(
       const ObTableReadInfo &index_read_info,
