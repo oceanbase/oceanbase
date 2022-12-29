@@ -127,7 +127,11 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(base_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null base table", K(ret), K(tablet));
+  } else {
     result.version_range_.base_version_ = base_table->get_upper_trans_version();
     result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
     result.version_range_.snapshot_version_ = param.merge_version_;
@@ -1210,9 +1214,6 @@ int ObAdaptiveMergePolicy::find_meta_major_tables(
       LOG_WARN("Failed to find meta merge base table", K(ret), KPC(last_major), KPC(last_major), KPC(base_table));
     }
   } else if (FALSE_IT(base_table = nullptr == base_table ? last_major : base_table)) {
-  } else if (OB_ISNULL(base_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("base table is unexpected null", K(ret), KP(base_table));
   } else if (base_table->get_snapshot_version() < min_snapshot || max_snapshot != INT64_MAX) {
     // max_snapshot == INT64_MAX means there's no next freeze_info
     ret = OB_NO_NEED_MERGE;

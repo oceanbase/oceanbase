@@ -21,6 +21,25 @@ using namespace common;
 using namespace storage;
 using namespace compaction;
 
+
+template <uint32_t SIZE>
+int ObTabletStream::get_bucket_tablet_stat(
+    const ObTabletStatBucket<SIZE> &bucket,
+    common::ObIArray<ObTabletStat> &tablet_stats) const
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = bucket.head_idx_;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < bucket.count(); ++i) {
+    int64_t curr_idx = bucket.get_idx(idx);
+    if (OB_FAIL(tablet_stats.push_back(bucket.units_[curr_idx]))) {
+      LOG_WARN("failed to add tablet stat", K(ret), K(idx));
+    }
+    ++idx;
+  }
+  return ret;
+}
+
 class TestTenantTabletStatMgr : public ::testing::Test
 {
 public:
@@ -242,7 +261,7 @@ TEST_F(TestTenantTabletStatMgr, get_all_tablet_stat)
   for (int64_t i = 0; i < curr_bucket_size; ++i) {
     curr_buckets.units_[i] += tablet_stat;
   }
-  ret = stream.get_bucket_tablet_stat(curr_buckets, tablet_stats);
+  ret = stream.get_bucket_tablet_stat<ObTabletStream::CURR_BUCKET_CNT>(curr_buckets, tablet_stats);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(curr_bucket_size == tablet_stats.count());
 
@@ -250,7 +269,7 @@ TEST_F(TestTenantTabletStatMgr, get_all_tablet_stat)
   for (int64_t i = 0; i < latest_bucket_size; ++i) {
     latest_buckets.units_[i] += tablet_stat;
   }
-  ret = stream.get_bucket_tablet_stat(latest_buckets, tablet_stats);
+  ret = stream.get_bucket_tablet_stat(stream.latest_buckets_, tablet_stats);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE((curr_bucket_size + latest_bucket_size) == tablet_stats.count());
 
@@ -258,7 +277,7 @@ TEST_F(TestTenantTabletStatMgr, get_all_tablet_stat)
   for (int64_t i = 0; i < past_bucket_size; ++i) {
     past_buckets.units_[i] += tablet_stat;
   }
-  ret = stream.get_bucket_tablet_stat(past_buckets, tablet_stats);
+  ret = stream.get_bucket_tablet_stat(stream.past_buckets_, tablet_stats);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE((curr_bucket_size + latest_bucket_size + past_bucket_size) == tablet_stats.count());
 }
