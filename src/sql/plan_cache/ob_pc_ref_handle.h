@@ -190,5 +190,5 @@ private:
   uint64_t tenant_id_;
 };
 } // end namespace sql
-} // end namespace oceanbases
+} // end namespace oceanbase
 #endif // !OCEANBASE_PC_REF_HANDLE_H_

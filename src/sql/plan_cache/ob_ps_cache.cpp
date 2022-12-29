@@ -294,7 +294,7 @@ int ObPsCache::get_or_add_stmt_item(uint64_t db_id,
       new_item_value->~ObPsStmtItem();
       inner_allocator_->free(new_item_value);
     } else {
-      LOG_WARN("unexpecte error", K(ret), K(new_stmt_id));
+      LOG_WARN("unexpected error", K(ret), K(new_stmt_id));
       new_item_value->~ObPsStmtItem();
       inner_allocator_->free(new_item_value);
     }
@@ -339,7 +339,7 @@ int ObPsCache::ref_stmt_item(const ObPsSqlKey &ps_sql_key,
         if (OB_SUCCESS != (callback_ret = op.get_callback_ret())) {
           ret = callback_ret;
           if (OB_EAGAIN == ret) {
-            LOG_INFO("try egain", K(ret), "stmt_id", ps_sql_key, K(retry_cnt));
+            LOG_INFO("try again", K(ret), "stmt_id", ps_sql_key, K(retry_cnt));
             ob_usleep(static_cast<uint32_t>(500)); //sleep 500us
           }
         } else if (OB_FAIL(op.get_value(ps_stmt_item))) {
@@ -352,7 +352,7 @@ int ObPsCache::ref_stmt_item(const ObPsSqlKey &ps_sql_key,
         break;
       }
       case OB_EAGAIN: {
-        LOG_WARN("try egain", K(ret), "stmt_id", ps_sql_key, K(retry_cnt));
+        LOG_WARN("try again", K(ret), "stmt_id", ps_sql_key, K(retry_cnt));
         ob_usleep(static_cast<uint32_t>(500)); //sleep 500us
         break;
       }
@@ -531,7 +531,7 @@ int ObPsCache::fill_ps_stmt_info(const ObResultSet &result,
     LOG_WARN("invalid argument", K(params), K(columns), K(sql_ctx), K(ret));
   } else if (OB_FAIL(ps_stmt_info.reserve_ps_meta_fields(params->count(),
                                                          columns->count()))) {
-    LOG_WARN("fail to reserver ps meta field", K(ret));
+    LOG_WARN("fail to reserve ps meta field", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < params->count(); ++i) {
     if (OB_FAIL(ps_stmt_info.add_param_field(params->at(i)))) {
@@ -662,7 +662,7 @@ int ObPsCache::ref_stmt_info(const ObPsStmtId stmt_id, ObPsStmtInfo *&ps_stmt_in
         if (OB_SUCCESS != (callback_ret = op.get_callback_ret())) {
           ret = callback_ret;
           if (OB_EAGAIN == ret) {
-            LOG_INFO("try egain", K(ret), K(stmt_id), K(retry_cnt));
+            LOG_INFO("try again", K(ret), K(stmt_id), K(retry_cnt));
             ob_usleep(static_cast<uint32_t>(500)); //sleep 500us
           }
         } else if (OB_FAIL(op.get_value(ps_stmt_info))) {
@@ -675,7 +675,7 @@ int ObPsCache::ref_stmt_info(const ObPsStmtId stmt_id, ObPsStmtInfo *&ps_stmt_in
         break;
       }
       case OB_EAGAIN: {
-        LOG_INFO("try egain", K(ret), K(stmt_id), K(retry_cnt));
+        LOG_INFO("try again", K(ret), K(stmt_id), K(retry_cnt));
         ob_usleep(static_cast<uint32_t>(500)); //sleep 500us
         break;
       }
