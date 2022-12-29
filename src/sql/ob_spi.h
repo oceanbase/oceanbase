@@ -351,7 +351,9 @@ public:
                               const bool *exprs_not_null_flag,
                               const int64_t *pl_integer_rangs,
                               bool is_bulk,
-                              int64_t limit);
+                              int64_t limit,
+                              const ObDataType *return_types,
+                              int64_t return_type_count);
   static int spi_cursor_close(pl::ObPLExecCtx *ctx,
                               uint64_t package_id,
                               uint64_t routine_id,
@@ -431,7 +433,8 @@ public:
                                                  const sql::ObResultSet &result_set,
                                                  int64_t hidden_column_count,
                                                  pl::ObRecordType *&record_type,
-                                                 uint64_t &rowid_table_id);
+                                                 uint64_t &rowid_table_id,
+                                                 pl::ObPLBlockNS *secondary_namespace);
 
   static int spi_construct_collection(
     pl::ObPLExecCtx *ctx, uint64_t package_id, ObObjParam *result);
@@ -661,7 +664,9 @@ private:
                          ObNewRow *current_row = NULL,
                          bool has_hidden_rowid = false,
                          bool for_cursor = false,
-                         int64_t limit = INT64_MAX);
+                         int64_t limit = INT64_MAX,
+                         const ObDataType *return_types = nullptr,
+                         int64_t return_type_count = 0);
     static int inner_fetch_with_retry(
                          pl::ObPLExecCtx *ctx,
                          sqlclient::ObMySQLResult *result_set,
@@ -677,7 +682,19 @@ private:
                          bool is_bulk,
                          bool for_cursor,
                          int64_t limit,
-                         int64_t last_exec_time);
+                         int64_t last_exec_time,
+                         const ObDataType *return_types = nullptr,
+                         int64_t return_type_count = 0);
+
+  static int convert_obj(pl::ObPLExecCtx *ctx,
+                          ObCastCtx &cast_ctx,
+                          bool is_strict,
+                          const ObSqlExpression *result_expr,
+                          const ObIArray<ObDataType> &current_type,
+                          ObIArray<ObObj> &obj_array,
+                          const ObDataType *trans_type,
+                          int64_t trans_type_count,
+                          ObIArray<ObObj> &calc_array);
 
   static int get_result(pl::ObPLExecCtx *ctx,
                          void *result_set,
@@ -697,7 +714,9 @@ private:
                          bool is_dynamic_sql = false,
                          bool for_cursor = false,
                          bool is_forall = false,
-                         int64_t limit = INT64_MAX);
+                         int64_t limit = INT64_MAX,
+                         const ObDataType *return_types = nullptr,
+                         int64_t return_type_count = 0);
 
   static int fetch_row(void *result_set,
                        bool is_streaming,
@@ -721,7 +740,9 @@ private:
                           const ObIArray<ObDataType> &row_desc,
                           bool is_strict,
                           ObCastCtx &cast_ctx,
-                          ObIArray<ObObj> &obj_array);
+                          ObIArray<ObObj> &obj_array,
+                          const ObDataType *return_types,
+                          int64_t return_type_count);
 
   static int store_result(ObIArray<pl::ObPLCollection*> &bulk_tables,
                           int64_t row_count,
@@ -797,7 +818,9 @@ private:
                                      const bool *exprs_not_null_flag,
                                      const int64_t *pl_integer_ranges,
                                      bool is_bulk,
-                                     int64_t limit);
+                                     int64_t limit,
+                                     const ObDataType *return_types = nullptr,
+                                     int64_t return_type_count = 0);
 
   static int check_package_dest_and_deep_copy(pl::ObPLExecCtx &ctx,
                                     const ObSqlExpression &expr,

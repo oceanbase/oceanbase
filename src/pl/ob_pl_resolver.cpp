@@ -3507,6 +3507,9 @@ int ObPLResolver::resolve_cursor_for_loop(
       } else {
         stmt->set_user_type(user_type);
         stmt->set_index_index(func.get_symbol_table().get_count() - 1);
+        if (OB_FAIL(body_block->get_namespace().expand_data_type(user_type, stmt->get_expand_user_types()))) {
+          LOG_WARN("fail to expand data type", K(ret));
+        }
       }
     }
     // 将index作为fetch into变量
@@ -6874,27 +6877,37 @@ int ObPLResolver::resolve_fetch(
         } else {
           bool is_compatible = true;
           const ObRecordType *return_type = static_cast<const ObRecordType*>(cursor_type);
-          if (return_type->get_record_member_count() != stmt->get_data_type().count()
+          stmt->set_user_type(cursor_type);
+          if (OB_FAIL(current_block_->get_namespace().expand_data_type(cursor_type, stmt->get_expand_user_types()))) {
+            LOG_WARN("fail to expand data type", K(ret));
+          } else if (return_type->get_record_member_count() != stmt->get_data_type().count()
               && return_type->get_record_member_count() != stmt->get_into().count()) {
             ret = OB_ERR_WRONG_FETCH_INTO_NUM;
             LOG_WARN("wrong number of values in the INTO list of a FETCH statement", K(ret));
           } else {
+            bool has_record_type = false;
             for (int64_t i = 0;
                  OB_SUCC(ret) && is_compatible && i < return_type->get_record_member_count();
                  ++i) {
               const ObPLDataType *left = return_type->get_record_member_type(i);
               ObDataType right;
-              if (return_type->get_record_member_count() == stmt->get_data_type().count()) {
-                right = stmt->get_data_type(i);
-              } else {
-                const ObRawExpr *raw_expr = func.get_expr(stmt->get_into(i));
-                CK (return_type->get_record_member_count() == stmt->get_into().count());
-                CK (OB_NOT_NULL(raw_expr));
-                OV (raw_expr->get_result_type().is_ext(), OB_ERR_UNEXPECTED, KPC(raw_expr));
-                OX (right.set_meta_type(raw_expr->get_result_type()));
-                OX (right.set_accuracy(raw_expr->get_result_type().get_accuracy()));
-              }
               CK (OB_NOT_NULL(left));
+              if (OB_SUCC(ret)) {
+                if (!left->is_obj_type()) {
+                  has_record_type = true;
+                }
+                if (!has_record_type) {
+                  right = stmt->get_data_type(i);
+                } else {
+                  const ObRawExpr *raw_expr = func.get_expr(stmt->get_into(i));
+                  CK (return_type->get_record_member_count() == stmt->get_into().count());
+                  CK (OB_NOT_NULL(raw_expr));
+                  OV (raw_expr->get_result_type().is_ext(), OB_ERR_UNEXPECTED, KPC(raw_expr));
+                  OX (right.set_meta_type(raw_expr->get_result_type()));
+                  OX (right.set_accuracy(raw_expr->get_result_type().get_accuracy()));
+                }
+              }
+
               if (OB_FAIL(ret)) {
               } else if (left->is_obj_type() && !right.get_meta_type().is_ext()) {
                 if (right.get_meta_type().is_null()
