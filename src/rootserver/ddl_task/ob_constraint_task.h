@@ -107,7 +107,6 @@ public:
   virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
 private:
-  int switch_status(const share::ObDDLTaskStatus new_status, const int ret_code);
   int hold_snapshot(const int64_t snapshot_version);
   int release_snapshot(const int64_t snapshot_version);
   int wait_trans_end();
