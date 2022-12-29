@@ -45,6 +45,11 @@ void ObSqlNioServer::destroy()
   nio_.destroy();
 }
 
+void ObSqlNioServer::update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt)
+{
+  nio_.update_tcp_keepalive_params(keepalive_enabled, tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
+}
+
 ObSqlNioServer* global_sql_nio_server = NULL;
 }; // end namespace obmysql
 }; // end namespace oceanbase
