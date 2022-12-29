@@ -818,6 +818,7 @@ int ObMediumCompactionInfoList::init_after_check_finish(
 void ObMediumCompactionInfoList::reset_list()
 {
   DLIST_REMOVE_ALL_NORET(info, medium_info_list_) {
+    medium_info_list_.remove(info);
     static_cast<ObMediumCompactionInfo *>(info)->~ObMediumCompactionInfo();
     allocator_->free(info);
   }
@@ -828,7 +829,6 @@ void ObMediumCompactionInfoList::reset()
 {
   if (OB_NOT_NULL(allocator_)) {
     reset_list();
-    medium_info_list_.reset();
   }
   is_inited_ = false;
   info_ = 0;

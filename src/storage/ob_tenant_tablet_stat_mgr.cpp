@@ -465,6 +465,10 @@ void ObTenantTabletStatMgr::destroy()
   {
     ObBucketWLockAllGuard lock_guard(bucket_lock_);
     stream_map_.destroy();
+    DLIST_REMOVE_ALL_NORET(node, lru_list_) {
+      lru_list_.remove(node);
+      stream_pool_.free(node);
+    }
     lru_list_.reset();
     stream_pool_.destroy();
     report_cursor_ = 0;
@@ -643,6 +647,7 @@ int ObTenantTabletStatMgr::fetch_node(ObTabletStreamNode *&node)
   } else if (!lru_list_.add_first(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to add node to lru list", K(ret), KPC(node));
+    stream_pool_.free(node);
   }
   return ret;
 }

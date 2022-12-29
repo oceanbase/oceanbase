@@ -27,6 +27,7 @@ ObLSReservedSnapshotMgr::ObLSReservedSnapshotMgr()
    min_reserved_snapshot_(0),
    next_reserved_snapshot_(0),
    snapshot_lock_(),
+   sync_clog_lock_(),
    ls_(nullptr),
    ls_handle_(),
    dependent_tablet_set_(),
@@ -221,8 +222,11 @@ int ObLSReservedSnapshotMgr::sync_clog(const int64_t new_reserved_snapshot)
     LOG_WARN("fail to get data version", K(ret));
   } else if (compat_version < DATA_VERSION_4_1_0_0) {
     // do nothing, should sync clog
-  } else if (OB_FAIL(try_update_for_leader(new_reserved_snapshot, nullptr/*allocator*/))) {
-    LOG_WARN("failed to send update reserved snapshot log", K(ret), K(new_reserved_snapshot));
+  } else {
+    ObMutexGuard guard(sync_clog_lock_);
+    if (OB_FAIL(try_update_for_leader(new_reserved_snapshot, nullptr/*allocator*/))) {
+      LOG_WARN("failed to send update reserved snapshot log", K(ret), K(new_reserved_snapshot));
+    }
   }
   return ret;
 }
