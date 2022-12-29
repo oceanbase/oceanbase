@@ -209,6 +209,7 @@ public:
   ColChecksumArray column_checksums_;
   storage::ObITable::TableKey table_key_;
   ColChecksumArray column_default_checksums_;
+  bool is_small_sstable_;
   OB_UNIS_VERSION(MIGRATION_SSTABLE_PARAM_VERSION);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSSTableParam);

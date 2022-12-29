@@ -692,7 +692,8 @@ ObMigrationSSTableParam::ObMigrationSSTableParam()
   : basic_meta_(),
     column_checksums_(),
     table_key_(),
-    column_default_checksums_()
+    column_default_checksums_(),
+    is_small_sstable_(false)
 {
 }
 
@@ -707,6 +708,7 @@ void ObMigrationSSTableParam::reset()
   column_checksums_.reset();
   column_default_checksums_.reset();
   basic_meta_.reset();
+  is_small_sstable_ = false;
 }
 
 bool ObMigrationSSTableParam::is_valid() const
@@ -724,6 +726,7 @@ int ObMigrationSSTableParam::assign(const ObMigrationSSTableParam &param)
   } else {
     basic_meta_ = param.basic_meta_;
     table_key_ = param.table_key_;
+    is_small_sstable_ = param.is_small_sstable_;
     if (OB_FAIL(column_checksums_.assign(param.column_checksums_))) {
       LOG_WARN("fail to assign column checksums", K(ret), K(param));
     } else if (OB_FAIL(column_default_checksums_.assign(param.column_default_checksums_))) {
@@ -771,6 +774,8 @@ int ObMigrationSSTableParam::serialize_(char *buf, const int64_t buf_len, int64_
     LOG_WARN("fail to serialize table key", K(ret), KP(buf), K(buf_len), K(pos), K(table_key_));
   } else if (OB_FAIL(column_default_checksums_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize default column checksum", K(ret), KP(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::encode_bool(buf, buf_len, pos, is_small_sstable_))) {
+    LOG_WARN("fail to serialize is_small_sstable_", K(ret), KP(buf), K(buf_len), K(pos));
   }
   return ret;
 }
@@ -791,7 +796,10 @@ DEFINE_DESERIALIZE(ObMigrationSSTableParam)
     } else if (OB_UNLIKELY(version != UNIS_VERSION)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("object version mismatch", K(ret), K(version));
-    } else if (OB_FAIL(deserialize_(buf + pos, data_len, tmp_pos))) {
+    } else if (OB_UNLIKELY(data_len - pos < len)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("payload is out of the buf's boundary", K(ret), K(data_len), K(pos), K(len));
+    } else if (OB_FAIL(deserialize_(buf + pos, len, tmp_pos))) {
        LOG_WARN("fail to deserialize_", K(ret), KP(buf), K(data_len), K(pos));
     } else if (OB_UNLIKELY(len != tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
@@ -806,14 +814,16 @@ DEFINE_DESERIALIZE(ObMigrationSSTableParam)
 int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(basic_meta_.deserialize(buf, data_len, pos))) {
+  if (pos < data_len && OB_FAIL(basic_meta_.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize basic meta", K(ret), KP(buf), K(data_len), K(pos));
-  } else if (OB_FAIL(column_checksums_.deserialize(buf, data_len, pos))) {
+  } else if (pos < data_len && OB_FAIL(column_checksums_.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize column checksums", K(ret), KP(buf), K(data_len), K(pos));
-  } else if (OB_FAIL(table_key_.deserialize(buf, data_len, pos))) {
+  } else if (pos < data_len && OB_FAIL(table_key_.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize table key", K(ret), KP(buf), K(data_len), K(pos), K(table_key_));
-  } else if (OB_FAIL(column_default_checksums_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("fail to deserialize default column checksums", K(ret));
+  } else if (pos < data_len && OB_FAIL(column_default_checksums_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize default column checksums", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(serialization::decode_bool(buf, data_len, pos, &is_small_sstable_))) {
+    LOG_WARN("fail to deserialize is_small_sstable_", K(ret), KP(buf), K(data_len), K(pos));
   }
   return ret;
 }
@@ -835,6 +845,7 @@ int64_t ObMigrationSSTableParam::get_serialize_size_() const
   len += column_checksums_.get_serialize_size();
   len += table_key_.get_serialize_size();
   len += column_default_checksums_.get_serialize_size();
+  len += serialization::encoded_length_bool(is_small_sstable_);
   return len;
 }
 

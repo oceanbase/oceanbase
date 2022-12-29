@@ -800,7 +800,8 @@ int ObPhysicalCopyFinishTask::prepare_sstable_index_builder_(
 {
   int ret = OB_SUCCESS;
   ObDataStoreDesc desc;
-  const ObSSTableIndexBuilder::ObSpaceOptimizationMode mode = sstable_param->table_key_.is_ddl_sstable()
+  const ObSSTableIndexBuilder::ObSpaceOptimizationMode mode =
+      (sstable_param->table_key_.is_ddl_sstable() || !sstable_param->is_small_sstable_)
       ? ObSSTableIndexBuilder::DISABLE : ObSSTableIndexBuilder::AUTO;
 
   if (!tablet_id.is_valid() || OB_ISNULL(sstable_param)) {

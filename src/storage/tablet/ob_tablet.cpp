@@ -2210,6 +2210,7 @@ int ObTablet::build_migration_sstable_param(
     const ObSSTableMeta &sstable_meta = sstable->get_meta();
     mig_sstable_param.basic_meta_ = sstable_meta.get_basic_meta();
     mig_sstable_param.table_key_ = table_key;
+    mig_sstable_param.is_small_sstable_ = sstable->is_small_sstable();
     if (OB_FAIL(mig_sstable_param.column_checksums_.assign(sstable_meta.get_col_checksum()))) {
       LOG_WARN("fail to assign column checksums", K(ret), K(sstable_meta));
     } else if (OB_FAIL(ObSSTableMergeRes::fill_column_default_checksum_from_schema(&storage_schema_,
