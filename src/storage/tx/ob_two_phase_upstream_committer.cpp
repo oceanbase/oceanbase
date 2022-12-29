@@ -872,6 +872,9 @@ bool ObTxCycleTwoPhaseCommitter::all_downstream_collected_()
     all_collected = true;
     break;
   }
+  default: {
+    break;
+  }
   }
   return all_collected;
 }
