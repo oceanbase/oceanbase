@@ -28,6 +28,7 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "rootserver/ob_root_service.h"
+#include "rootserver/ddl_task/ob_ddl_task.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -957,6 +958,59 @@ int ObDDLUtil::check_table_exist(
 int64_t ObDDLUtil::get_ddl_rpc_timeout()
 {
   return max(GCONF.rpc_timeout, 9 * 1000 * 1000L);
+}
+
+int ObDDLUtil::get_ddl_cluster_version(
+    const uint64_t tenant_id,
+    const uint64_t task_id,
+    int64_t &ddl_cluster_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0
+      || nullptr == GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(task_id), KP(GCTX.sql_proxy_));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObSqlString query_string;
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(query_string.assign_fmt(" SELECT ddl_type, UNHEX(message) as message_unhex FROM %s WHERE task_id = %lu",
+          OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
+        LOG_WARN("assign sql string failed", K(ret));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, query_string.ptr()))) {
+        LOG_WARN("read record failed", K(ret), K(query_string));
+      } else if (OB_UNLIKELY(nullptr == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("get next row failed", K(ret));
+      } else {
+        int64_t pos = 0;
+        ObDDLType ddl_type = ObDDLType::DDL_INVALID;
+        ObString task_message;
+        EXTRACT_INT_FIELD_MYSQL(*result, "ddl_type", ddl_type, ObDDLType);
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "message_unhex", task_message);
+        if (ObDDLType::DDL_CREATE_INDEX == ddl_type) {
+          SMART_VAR(rootserver::ObIndexBuildTask, task) {
+            if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
+              LOG_WARN("deserialize from msg failed", K(ret));
+            } else {
+              ddl_cluster_version = task.get_cluster_version();
+            }
+          }
+        } else {
+          SMART_VAR(rootserver::ObTableRedefinitionTask, task) {
+            if (OB_FAIL(task.deserlize_params_from_message(task_message.ptr(), task_message.length(), pos))) {
+              LOG_WARN("deserialize from msg failed", K(ret));
+            } else {
+              ddl_cluster_version = task.get_cluster_version();
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 /******************           ObCheckTabletDataComplementOp         *************/

@@ -816,7 +816,9 @@ int ObPxSubCoord::start_ddl()
       param.exec_ctx_ = exec_ctx;
       param.execution_id_ = phy_plan->get_ddl_execution_id();
       param.ddl_task_id_ = phy_plan->get_ddl_task_id();
-      if (OB_FAIL(ObSSTableInsertManager::get_instance().create_table_context(param, ddl_ctrl_.context_id_))) {
+      if (OB_FAIL(ObDDLUtil::get_ddl_cluster_version(tenant_id, param.ddl_task_id_, param.cluster_version_))) {
+        LOG_WARN("get ddl cluster version failed", K(ret));
+      } else if (OB_FAIL(ObSSTableInsertManager::get_instance().create_table_context(param, ddl_ctrl_.context_id_))) {
         LOG_WARN("create table context failed", K(ret));
       } else {
         FLOG_INFO("start ddl", "context_id", ddl_ctrl_.context_id_, K(param));

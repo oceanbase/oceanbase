@@ -318,6 +318,7 @@ struct ObUpdateTableStoreParam
     const bool keep_old_ddl_sstable,
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
+    const int64_t ddl_cluster_version,
     const bool update_with_major_flag,
     const bool need_report = false);
 

@@ -38,8 +38,7 @@ public:
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
         schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
         trace_id_(trace_id), parallelism_(parallelism), allocator_("IdxSSTBuildTask"),
-        root_service_(root_service),
-        inner_sql_exec_addr_(inner_sql_exec_addr)
+        root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr)
   {
     set_retry_times(0);
   }
