@@ -930,7 +930,10 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
                 }
               } else {
                 ObArray<common::ObString> extended_type_info;
-                if (OB_FAIL(column_item.default_value_.print_plain_str_literal(extended_type_info, buf, buf_len, pos))) {
+                const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
+                if (OB_FAIL(extended_type_info.assign(select_item.expr_->get_enum_set_values()))) {
+                  SERVER_LOG(WARN, "failed to assign enum values", K(ret));
+                } else if (OB_FAIL(column_item.default_value_.print_plain_str_literal(extended_type_info, buf, buf_len, pos))) {
                   SERVER_LOG(WARN, "fail to print plain str literal", K(buf), K(buf_len), K(pos), K(ret));
                 } else {
                   cells[cell_idx].set_varchar(ObString(static_cast<int32_t>(pos), buf));
@@ -1057,21 +1060,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             break;
           }
         case COLUMN_TYPE: {
-            int64_t pos = 0;
-            const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-            ObArray<common::ObString> extended_type_info;
-            if (OB_FAIL(get_type_str(column_attributes.result_type_.get_obj_meta(),
-                                        column_attributes.result_type_.get_accuracy(),
-                                        extended_type_info,
-                                        default_length_semantics,
-                                        pos))) {
-              SERVER_LOG(WARN,"fail to get column type str",K(ret), K(column_attributes.result_type_));
-            }
-            if (OB_SUCC(ret)) {
-              ObString type_val(column_type_str_len_, static_cast<int32_t>(strlen(column_type_str_)),column_type_str_);
-              cells[cell_idx].set_varchar(type_val);
-              cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-            }
+            ObString type_val(column_type_str_len_, static_cast<int32_t>(strlen(column_type_str_)),column_type_str_);
+            cells[cell_idx].set_varchar(type_val);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
         case COLUMN_KEY: {
