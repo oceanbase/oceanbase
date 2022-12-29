@@ -378,6 +378,8 @@ public:
                                                    common::ObIArray<share::ObUnitInfo> &unit_info) const;
   virtual int get_unit_infos(const common::ObIArray<share::ObResourcePoolName> &pools,
                              common::ObIArray<share::ObUnitInfo> &unit_infos);
+  virtual int get_servers_by_pools(const common::ObIArray<share::ObResourcePoolName> &pools,
+                                   common::ObIArray<ObAddr> &addrs);
 
   virtual int get_unit_ids(common::ObIArray<uint64_t> &unit_ids) const;
   virtual int get_logonly_unit_ids(common::ObIArray<uint64_t> &unit_ids) const;

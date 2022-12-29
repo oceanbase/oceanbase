@@ -287,15 +287,77 @@ def config_logging_module(log_filenamme):
 
 fail_list=[]
 
+def get_version(version_str):
+  versions = version_str.split(".")
+
+  if len(versions) != 4:
+    logging.exception("""version:{0} is invalid""".format(version_str))
+    raise e
+
+  major = int(versions[0])
+  minor = int(versions[1])
+  major_patch = int(versions[2])
+  minor_patch = int(versions[3])
+
+  if major > 0xffffffff or minor > 0xffff or major_patch > 0xff or minor_patch > 0xff:
+    logging.exception("""version:{0} is invalid""".format(version_str))
+    raise e
+
+  version = (major << 32) | (minor << 16) | (major_patch << 8) | (minor_patch)
+  return version
+
 #### START ####
 # 1. 检查前置版本
 def check_observer_version(query_cur, upgrade_params):
   (desc, results) = query_cur.exec_query("""select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'""")
   if len(results) != 1:
-    fail_list.append('query results count is not 1')
+    fail_list.append('min_observer_version is not sync')
   elif cmp(results[0][0], upgrade_params.old_version) < 0 :
     fail_list.append('old observer version is expected equal or higher then: {0}, actual version:{1}'.format(upgrade_params.old_version, results[0][0]))
   logging.info('check observer version success, version = {0}'.format(results[0][0]))
+
+def check_data_version(query_cur):
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+
+    # check data version
+    if min_cluster_version >= get_version("4.1.0.0"):
+      data_version_str = ''
+      data_version = 0
+      # check compatible is same
+      sql = """select distinct value from GV$OB_PARAMETERS where name='compatible'"""
+      (desc, results) = query_cur.exec_query(sql)
+      if len(results) != 1:
+        fail_list.append('compatible is not sync')
+      elif len(results[0]) != 1:
+        fail_list.append('column cnt not match')
+      else:
+        data_version_str = results[0][0]
+        data_version = get_version(results[0][0])
+
+        # check target_data_version/current_data_version
+        sql = "select count(*) from oceanbase.__all_tenant"
+        (desc, results) = query_cur.exec_query(sql)
+        if len(results) != 1 or len(results[0]) != 1:
+          fail_list.append('result cnt not match')
+        else:
+          tenant_count = results[0][0]
+
+          sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(data_version)
+          (desc, results) = query_cur.exec_query(sql)
+          if len(results) != 1 or len(results[0]) != 1:
+            fail_list.append('result cnt not match')
+          elif 2 * tenant_count != results[0][0]:
+            fail_list.append('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(data_version_str, tenant_count, results[0][0]))
+          else:
+            logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
 
 # 2. 检查paxos副本是否同步, paxos副本是否缺失
 def check_paxos_replica(query_cur):
@@ -396,6 +458,7 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
     try:
       query_cur = Cursor(cur)
       check_observer_version(query_cur, upgrade_params)
+      check_data_version(query_cur)
       check_paxos_replica(query_cur)
       check_rebalance_task(query_cur)
       check_cluster_status(query_cur)

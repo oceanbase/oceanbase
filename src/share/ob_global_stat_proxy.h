@@ -51,11 +51,15 @@ public:
                              const int64_t baseline_schema_version,
                              const int64_t rootservice_epoch,
                              const SCN &snapshot_gc_scn,
-                             const int64_t gc_schema_version);
+                             const int64_t gc_schema_version,
+                             const uint64_t target_data_version,
+                             const uint64_t current_data_version);
 
   virtual int set_tenant_init_global_stat(const int64_t core_schema_version,
                                           const int64_t baseline_schema_version,
-                                          const SCN &snapshot_gc_scn);
+                                          const SCN &snapshot_gc_scn,
+                                          const uint64_t target_data_version,
+                                          const uint64_t current_data_version);
 
   virtual int set_core_schema_version(const int64_t core_schema_version);
   virtual int set_baseline_schema_version(const int64_t baseline_schema_version);
@@ -65,12 +69,18 @@ public:
   virtual int get_baseline_schema_version(int64_t &baseline_schema_version);
 
   virtual int get_rootservice_epoch(int64_t &rootservice_epoch);
+
+  int update_current_data_version(const uint64_t current_data_version);
+  int get_current_data_version(uint64_t &current_data_version);
+  int update_target_data_version(const uint64_t target_data_version);
+  int get_target_data_version(const bool for_update, uint64_t &target_data_version);
+
   virtual int get_snapshot_info(int64_t &snapshot_gc_scn,
                                 int64_t &gc_schema_version);
-  static int select_snapshot_gc_scn_for_update(common::ObISQLClient &sql_client, 
+  static int select_snapshot_gc_scn_for_update(common::ObISQLClient &sql_client,
                                                const uint64_t tenant_id,
                                                SCN &snapshot_gc_scn);
-  static int update_snapshot_gc_scn(common::ObISQLClient &sql_client, 
+  static int update_snapshot_gc_scn(common::ObISQLClient &sql_client,
                                     const uint64_t tenant_id,
                                     const SCN &snapshot_gc_scn,
                                     int64_t &affected_rows);
@@ -79,7 +89,7 @@ public:
   int set_snapshot_gc_scn(const SCN &snapshot_gc_scn);
 private:
   int update(const ObGlobalStatItem::ItemList &list, const bool is_incremental = false);
-  int get(ObGlobalStatItem::ItemList &list);
+  int get(ObGlobalStatItem::ItemList &list, bool for_update = false);
 
 private:
   static const char* OB_ALL_GC_SCHEMA_VERSION_TNAME;

@@ -50,6 +50,7 @@
 #include "storage/ob_file_system_router.h"
 #include "logservice/leader_coordinator/table_accessor.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
+#include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 namespace oceanbase
 {
 using namespace common;
@@ -1160,7 +1161,7 @@ int ObAdminUpgradeVirtualSchema::execute()
   } else {
     FOREACH(tenant_id, tenant_ids) { // ignore ret
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = execute_(*tenant_id, upgrade_cnt))) {
+      if (OB_SUCCESS != (tmp_ret = execute(*tenant_id, upgrade_cnt))) {
         LOG_WARN("fail to execute upgrade virtual table by tenant", KR(tmp_ret), K(*tenant_id));
       }
       ret = OB_SUCC(ret) ? tmp_ret : ret;
@@ -1176,7 +1177,7 @@ int ObAdminUpgradeVirtualSchema::execute()
   return ret;
 }
 
-int ObAdminUpgradeVirtualSchema::execute_(
+int ObAdminUpgradeVirtualSchema::execute(
     const uint64_t tenant_id,
     int64_t &upgrade_cnt)
 {
@@ -1362,55 +1363,48 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
 int ObAdminUpgradeCmd::execute(const Bool &upgrade)
 {
   int ret = OB_SUCCESS;
-  char min_server_version[OB_SERVER_VERSION_LENGTH];
-  uint64_t current_version = 0;
-  if (OB_FAIL(ctx_.server_mgr_->get_min_server_version(min_server_version))) {
-    LOG_WARN("failed to get the min server version", KR(ret));
-  } else if (OB_FAIL(ObClusterVersion::get_version(min_server_version, current_version))) {
-    LOG_WARN("fail to parse current version", KR(ret), K(min_server_version));
-  } else {
-    // set min_observer_version and enable_upgrade_mode
-    HEAP_VAR(ObAdminSetConfigItem, item) {
-      obrpc::ObAdminSetConfigArg set_config_arg;
-      set_config_arg.is_inner_ = true;
-      const char *min_obs_version_name = "min_observer_version";
-      const char *enable_upgrade_name = "enable_upgrade_mode";
-      ObAdminSetConfig admin_set_config(ctx_);
+  // set enable_upgrade_mode
+  HEAP_VAR(ObAdminSetConfigItem, item) {
+    obrpc::ObAdminSetConfigArg set_config_arg;
+    set_config_arg.is_inner_ = true;
+    const char *enable_upgrade_name = "enable_upgrade_mode";
+    ObAdminSetConfig admin_set_config(ctx_);
+    char min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
+    uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
 
-      if (OB_FAIL(item.name_.assign(min_obs_version_name))) {
-        LOG_WARN("assign min_observer_version config name failed", KR(ret));
-      } else if (OB_FAIL(item.value_.assign(min_server_version))) {
-        LOG_WARN("assign min_observer_version config value failed", KR(ret));
+    if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
+        min_server_version, OB_SERVER_VERSION_LENGTH, cluster_version)) {
+       ret = OB_INVALID_ARGUMENT;
+       LOG_WARN("fail to print version str", KR(ret), K(cluster_version));
+    } else if (OB_FAIL(item.name_.assign(enable_upgrade_name))) {
+      LOG_WARN("assign enable_upgrade_mode config name failed", KR(ret));
+    } else if (OB_FAIL(item.value_.assign((upgrade ? "true" : "false")))) {
+      LOG_WARN("assign enable_upgrade_mode config value failed", KR(ret));
+    } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
+      LOG_WARN("add enable_upgrade_mode config item failed", KR(ret));
+    } else {
+      const char *upgrade_stage_name = "_upgrade_stage";
+      obrpc::ObUpgradeStage stage = upgrade ?
+                                    obrpc::OB_UPGRADE_STAGE_PREUPGRADE :
+                                    obrpc::OB_UPGRADE_STAGE_NONE;
+      if (OB_FAIL(item.name_.assign(upgrade_stage_name))) {
+        LOG_WARN("assign _upgrade_stage config name failed", KR(ret), K(upgrade));
+      } else if (OB_FAIL(item.value_.assign(obrpc::get_upgrade_stage_str(stage)))) {
+        LOG_WARN("assign _upgrade_stage config value failed", KR(ret), K(stage), K(upgrade));
       } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
-        LOG_WARN("add min_observer_version config item failed", KR(ret));
-      } else if (OB_FAIL(item.name_.assign(enable_upgrade_name))) {
-        LOG_WARN("assign enable_upgrade_mode config name failed", KR(ret));
-      } else if (OB_FAIL(item.value_.assign((upgrade ? "true" : "false")))) {
-        LOG_WARN("assign enable_upgrade_mode config value failed", KR(ret));
-      } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
-        LOG_WARN("add enable_upgrade_mode config item failed", KR(ret));
-      } else {
-        const char *upgrade_stage_name = "_upgrade_stage";
-        obrpc::ObUpgradeStage stage = upgrade ?
-                                      obrpc::OB_UPGRADE_STAGE_PREUPGRADE :
-                                      obrpc::OB_UPGRADE_STAGE_NONE;
-        if (OB_FAIL(item.name_.assign(upgrade_stage_name))) {
-          LOG_WARN("assign _upgrade_stage config name failed", KR(ret), K(upgrade));
-        } else if (OB_FAIL(item.value_.assign(obrpc::get_upgrade_stage_str(stage)))) {
-          LOG_WARN("assign _upgrade_stage config value failed", KR(ret), K(stage), K(upgrade));
-        } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
-          LOG_WARN("add _upgrade_stage config item failed", KR(ret), K(stage), K(upgrade));
-        }
+        LOG_WARN("add _upgrade_stage config item failed", KR(ret), K(stage), K(upgrade));
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(admin_set_config.execute(set_config_arg))) {
-        LOG_WARN("execute set config failed", KR(ret));
-      } else {
-        LOG_INFO("change upgrade parameters",
-                 "min_observer_version", min_server_version,
-                 "enable_upgrade_mode", upgrade,
-                 "in_major_version_upgrade_mode", GCONF.in_major_version_upgrade_mode());
-      }
+    }
+    if (FAILEDx(admin_set_config.execute(set_config_arg))) {
+      LOG_WARN("execute set config failed", KR(ret));
+    } else {
+      CLUSTER_EVENT_SYNC_ADD("UPGRADE",
+                             upgrade ? "BEGIN_UPGRADE" : "END_UPGRADE",
+                             "cluster_version", min_server_version);
+      LOG_INFO("change upgrade parameters",
+               "enable_upgrade_mode", upgrade,
+               "in_major_version_upgrade_mode", GCONF.in_major_version_upgrade_mode());
+
     }
   }
   return ret;
@@ -1419,24 +1413,57 @@ int ObAdminUpgradeCmd::execute(const Bool &upgrade)
 int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg &arg)
 {
   int ret = OB_SUCCESS;
-  HEAP_VAR(ObAdminSetConfigItem, upgrade_stage_item) {
+  HEAP_VAR(ObAdminSetConfigItem, item) {
     obrpc::ObAdminSetConfigArg set_config_arg;
     set_config_arg.is_inner_ = true;
     const char *upgrade_stage_name = "_upgrade_stage";
     ObAdminSetConfig admin_set_config(ctx_);
+    char ori_min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
+    char min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
+    uint64_t ori_cluster_version = GET_MIN_CLUSTER_VERSION();
 
     if (!arg.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arg", KR(ret), K(arg));
-    } else if (OB_FAIL(upgrade_stage_item.name_.assign(upgrade_stage_name))) {
+    } else if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
+               ori_min_server_version, OB_SERVER_VERSION_LENGTH, ori_cluster_version)) {
+       ret = OB_INVALID_ARGUMENT;
+       LOG_WARN("fail to print version str", KR(ret), K(ori_cluster_version));
+    } else if (OB_FAIL(item.name_.assign(upgrade_stage_name))) {
       LOG_WARN("assign _upgrade_stage config name failed", KR(ret), K(arg));
-    } else if (OB_FAIL(upgrade_stage_item.value_.assign(obrpc::get_upgrade_stage_str(arg.stage_)))) {
+    } else if (OB_FAIL(item.value_.assign(obrpc::get_upgrade_stage_str(arg.stage_)))) {
       LOG_WARN("assign _upgrade_stage config value failed", KR(ret), K(arg));
-    } else if (OB_FAIL(set_config_arg.items_.push_back(upgrade_stage_item))) {
+    } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
       LOG_WARN("add _upgrade_stage config item failed", KR(ret), K(arg));
-    } else if (OB_FAIL(admin_set_config.execute(set_config_arg))) {
+    } else if (obrpc::OB_UPGRADE_STAGE_POSTUPGRADE == arg.stage_) {
+      // end rolling upgrade, should raise min_observer_version
+      const char *min_obs_version_name = "min_observer_version";
+      if (OB_ISNULL(ctx_.server_mgr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("server_mgr is null", KR(ret));
+      } else if (OB_FAIL(ctx_.server_mgr_->get_min_server_version(min_server_version))) {
+        LOG_WARN("failed to get the min server version", KR(ret));
+      } else if (OB_FAIL(item.name_.assign(min_obs_version_name))) {
+        LOG_WARN("assign min_observer_version config name failed",
+                 KR(ret), K(min_obs_version_name));
+      } else if (OB_FAIL(item.value_.assign(min_server_version))) {
+        LOG_WARN("assign min_observer_version config value failed",
+                 KR(ret), K(min_server_version));
+      } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
+        LOG_WARN("add min_observer_version config item failed", KR(ret), K(item));
+      }
+    }
+    if (FAILEDx(admin_set_config.execute(set_config_arg))) {
       LOG_WARN("execute set config failed", KR(ret));
     } else {
+      if (obrpc::OB_UPGRADE_STAGE_POSTUPGRADE != arg.stage_) {
+        CLUSTER_EVENT_SYNC_ADD("UPGRADE", "BEGIN_ROLLING_UPGRADE",
+                               "cluster_version", ori_min_server_version);
+      } else {
+        CLUSTER_EVENT_SYNC_ADD("UPGRADE", "END_ROLLING_UPGRADE",
+                               "cluster_version", min_server_version,
+                               "ori_cluster_version", ori_min_server_version);
+      }
       LOG_INFO("change upgrade parameters", KR(ret), "_upgrade_stage", arg.stage_);
     }
   }

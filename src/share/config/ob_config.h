@@ -45,6 +45,7 @@ enum ObConfigItemType{
   OB_CONF_ITEM_TYPE_MOMENT = 8,
   OB_CONF_ITEM_TYPE_CAPACITY = 9,
   OB_CONF_ITEM_TYPE_LOGARCHIVEOPT = 10,
+  OB_CONF_ITEM_TYPE_VERSION = 11,
 };
 
 class ObConfigItem
@@ -395,7 +396,7 @@ public:
 
 protected:
   //use current value to do input operation
-  bool set(const char *str);
+  virtual bool set(const char *str);
   virtual int64_t parse(const char *str, bool &valid) const = 0;
 
 private:
@@ -814,6 +815,85 @@ protected:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigLogArchiveOptionsItem);
+};
+
+class ObConfigVersionItem
+  : public ObConfigIntegralItem
+{
+public:
+  ObConfigVersionItem(ObConfigContainer *container,
+                       Scope::ScopeInfo scope_info,
+                       const char *name,
+                       const char *def,
+                       const char *range,
+                       const char *info,
+                       const ObParameterAttr attr = ObParameterAttr());
+  ObConfigVersionItem(ObConfigContainer *container,
+                      Scope::ScopeInfo scope_info,
+                      const char *name,
+                      const char *def,
+                      const char *info,
+                      const ObParameterAttr attr = ObParameterAttr());
+  virtual ~ObConfigVersionItem() {}
+
+  virtual ObConfigItemType get_config_item_type() const {
+    return ObConfigItemType::OB_CONF_ITEM_TYPE_VERSION;
+  }
+  ObConfigVersionItem &operator = (int64_t value);
+
+protected:
+  virtual bool set(const char *str) override;
+  virtual int64_t parse(const char *str, bool &valid) const override;
+
+private:
+  uint64_t value_;
+  DISALLOW_COPY_AND_ASSIGN(ObConfigVersionItem);
+};
+
+
+class ObConfigPairs
+{
+public:
+
+struct ObConfigPair {
+public:
+  ObConfigPair()
+    : key_(), value_()
+  {}
+  ~ObConfigPair() {}
+  TO_STRING_KV(K_(key), K_(value));
+public:
+  ObString key_;
+  ObString value_;
+};
+
+public:
+  ObConfigPairs()
+    : tenant_id_(common::OB_INVALID_TENANT_ID),
+      allocator_(),
+      config_array_()
+  {}
+  ~ObConfigPairs() {}
+  void init(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_
+           && config_array_.count() > 0;
+  }
+  void reset();
+  int assign(const ObConfigPairs &other);
+
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const common::ObSArray<ObConfigPair> &get_configs() const { return config_array_; }
+  int get_config_str(char *buf, const int64_t length) const;
+  int64_t get_config_str_length() const;
+  int add_config(const ObString &key, const ObString &value);
+
+  TO_STRING_KV(K_(tenant_id), K_(config_array));
+private:
+  uint64_t tenant_id_;
+  ObArenaAllocator allocator_;
+  common::ObSArray<ObConfigPair> config_array_;
 };
 
 } // namespace common

@@ -56,6 +56,8 @@ public:
    */
   int switch_tenant(const obrpc::ObSwitchTenantArg &arg);
 
+  int write_upgrade_barrier_log(ObMySQLTransaction &trans, const uint64_t tenant_id, const uint64_t data_version);
+
 private:
   int check_inner_stat_();
 

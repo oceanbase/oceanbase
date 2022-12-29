@@ -130,7 +130,7 @@ int ObPartitionMerger::open_macro_writer(ObMergeParameter &merge_param)
     STORAGE_LOG(WARN, "failed to set sstable seq", K(ret), K(merge_param.sstable_logic_seq_));
   } else {
     data_store_desc_.end_scn_ = merge_ctx_->scn_range_.end_scn_;
-    if ((data_store_desc_.is_major_merge() && data_store_desc_.major_working_cluster_version_ <= CLUSTER_VERSION_4_0_0_0)
+    if ((data_store_desc_.is_major_merge() && data_store_desc_.major_working_cluster_version_ <= DATA_VERSION_4_0_0_0)
       || !data_store_desc_.is_use_pct_free()) {
       macro_writer_ = alloc_merge_helper<ObMacroBlockWriter>();
     } else {

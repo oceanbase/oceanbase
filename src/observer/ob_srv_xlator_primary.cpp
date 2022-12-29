@@ -69,6 +69,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObCheckFrozenVersionP, gctx_);
   RPC_PROCESSOR(ObGetDiagnoseArgsP);
   RPC_PROCESSOR(ObGetMinSSTableSchemaVersionP, gctx_);
+  RPC_PROCESSOR(ObInitTenantConfigP, gctx_);
   RPC_PROCESSOR(ObBatchBroadcastSchemaP, gctx_);
 
   // interrupt

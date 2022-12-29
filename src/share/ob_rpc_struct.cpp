@@ -520,7 +520,7 @@ OB_SERIALIZE_MEMBER(ObSysVarIdValue, sys_id_, value_);
 bool ObCreateTenantArg::is_valid() const
 {
   return !tenant_schema_.get_tenant_name_str().empty() && pool_list_.count() > 0
-         && (!is_restore_ || (is_restore_ && palf_base_info_.is_valid()));
+         && (!is_restore_ || (palf_base_info_.is_valid() && compatible_version_ > 0));
 }
 
 int ObCreateTenantArg::check_valid() const
@@ -552,8 +552,22 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg &other)
     name_case_mode_ = other.name_case_mode_;
     is_restore_ = other.is_restore_;
     palf_base_info_ = other.palf_base_info_;
+    compatible_version_ = other.compatible_version_;
   }
   return ret;
+}
+
+void ObCreateTenantArg::reset()
+{
+  ObDDLArg::reset();
+  tenant_schema_.reset();
+  pool_list_.reset();
+  if_not_exist_ = false;
+  sys_var_list_.reset();
+  name_case_mode_ = common::OB_NAME_CASE_INVALID;
+  is_restore_ = false;
+  palf_base_info_.reset();
+  compatible_version_ = 0;
 }
 
 int ObCreateTenantArg::init(const share::schema::ObTenantSchema &tenant_schema,
@@ -562,7 +576,7 @@ int ObCreateTenantArg::init(const share::schema::ObTenantSchema &tenant_schema,
                             const bool if_not_exist)
 {
   int ret = OB_SUCCESS;
-  ObDDLArg::reset();
+  reset();
   if (OB_UNLIKELY(!tenant_schema.is_valid() || 0 == pool_list.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_schema), K(pool_list));
@@ -587,7 +601,8 @@ DEF_TO_STRING(ObCreateTenantArg)
        K_(sys_var_list),
        K_(name_case_mode),
        K_(is_restore),
-       K_(palf_base_info));
+       K_(palf_base_info),
+       K_(compatible_version));
   return pos;
 }
 
@@ -597,7 +612,9 @@ OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg),
                     if_not_exist_,
                     sys_var_list_,
                     name_case_mode_,
-                    is_restore_, palf_base_info_);
+                    is_restore_,
+                    palf_base_info_,
+                    compatible_version_);
 
 bool ObCreateTenantEndArg::is_valid() const
 {
@@ -3925,8 +3942,11 @@ OB_SERIALIZE_MEMBER((ObRunJobArg, ObServerZoneArg), job_);
 
 ObUpgradeJobArg::ObUpgradeJobArg()
   : action_(INVALID_ACTION),
-    version_(common::OB_INVALID_VERSION)
-{}
+    version_(common::OB_INVALID_VERSION),
+    tenant_ids_()
+{
+  tenant_ids_.set_label("UpgJobArr");
+}
 bool ObUpgradeJobArg::is_valid() const
 {
   return INVALID_ACTION != action_
@@ -3935,21 +3955,27 @@ bool ObUpgradeJobArg::is_valid() const
 int ObUpgradeJobArg::assign(const ObUpgradeJobArg &other)
 {
   int ret = OB_SUCCESS;
-  action_ = other.action_;
-  version_ = other.version_;
+  if (OB_FAIL(tenant_ids_.assign(other.tenant_ids_))) {
+    LOG_WARN("fail to assign tenant_ids", KR(ret));
+  } else {
+    action_ = other.action_;
+    version_ = other.version_;
+  }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObUpgradeJobArg, action_, version_);
+OB_SERIALIZE_MEMBER(ObUpgradeJobArg, action_, version_, tenant_ids_);
 
 int ObUpgradeTableSchemaArg::init(
     const uint64_t tenant_id,
-    const uint64_t table_id)
+    const uint64_t table_id,
+    const bool upgrade_virtual_schema)
 {
   int ret = OB_SUCCESS;
   ObDDLArg::reset();
   exec_tenant_id_ = tenant_id;
   tenant_id_ = tenant_id;
   table_id_ = table_id;
+  upgrade_virtual_schema_ = upgrade_virtual_schema;
   return ret;
 }
 
@@ -3957,8 +3983,7 @@ bool ObUpgradeTableSchemaArg::is_valid() const
 {
   return common::OB_INVALID_TENANT_ID != exec_tenant_id_
          && common::OB_INVALID_TENANT_ID != tenant_id_
-         /*index、lob table will be created with related system table*/
-         && is_system_table(table_id_);
+         && (upgrade_virtual_schema_ || is_system_table(table_id_));
 }
 
 int ObUpgradeTableSchemaArg::assign(const ObUpgradeTableSchemaArg &other)
@@ -3970,11 +3995,12 @@ int ObUpgradeTableSchemaArg::assign(const ObUpgradeTableSchemaArg &other)
   } else {
     tenant_id_ = other.tenant_id_;
     table_id_ = other.table_id_;
+    upgrade_virtual_schema_ = other.upgrade_virtual_schema_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER((ObUpgradeTableSchemaArg, ObDDLArg), tenant_id_, table_id_);
+OB_SERIALIZE_MEMBER((ObUpgradeTableSchemaArg, ObDDLArg), tenant_id_, table_id_, upgrade_virtual_schema_);
 
 int ObAdminFlushCacheArg::assign(const ObAdminFlushCacheArg &other)
 {
@@ -5096,7 +5122,7 @@ OB_SERIALIZE_MEMBER((ObLabelSePolicyDDLArg, ObDDLArg), ddl_type_, schema_);
 OB_SERIALIZE_MEMBER((ObLabelSeComponentDDLArg, ObDDLArg), ddl_type_, schema_, policy_name_);
 OB_SERIALIZE_MEMBER((ObLabelSeLabelDDLArg, ObDDLArg), ddl_type_, schema_, policy_name_);
 OB_SERIALIZE_MEMBER((ObLabelSeUserLevelDDLArg, ObDDLArg), ddl_type_, level_schema_, policy_name_);
-OB_SERIALIZE_MEMBER(ObCheckServerEmptyArg, mode_);
+OB_SERIALIZE_MEMBER(ObCheckServerEmptyArg, mode_, sys_data_version_);
 OB_SERIALIZE_MEMBER(ObCheckDeploymentModeArg, single_zone_deployment_on_);
 
 OB_SERIALIZE_MEMBER(ObArchiveLogArg, enable_, tenant_id_, archive_tenant_ids_);
@@ -7200,6 +7226,38 @@ int ObFetchLocationResult::set_servers(
 {
   return servers_.assign(servers);
 }
+
+OB_SERIALIZE_MEMBER(ObInitTenantConfigArg, tenant_configs_);
+
+int ObInitTenantConfigArg::assign(const ObInitTenantConfigArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(tenant_configs_.assign(other.tenant_configs_))) {
+    LOG_WARN("fail to assign tenant configs", KR(ret), K(other));
+  }
+  return ret;
+}
+
+int ObInitTenantConfigArg::add_tenant_config(const ObTenantConfigArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tenant_configs_.push_back(arg))) {
+    LOG_WARN("fail to push back config configs", KR(ret), K(arg));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObInitTenantConfigRes, ret_);
+int ObInitTenantConfigRes::assign(const ObInitTenantConfigRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
 
 }//end namespace obrpc
 }//end namepsace oceanbase

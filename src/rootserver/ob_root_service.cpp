@@ -93,6 +93,7 @@
 #include "storage/ob_file_system_router.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
+#include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "share/scn.h"
 namespace oceanbase
 {
@@ -880,7 +881,8 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init snapshot manager failed", KR(ret));
   } else if (OB_FAIL(root_inspection_.init(*schema_service_, zone_manager_, sql_proxy_, &common_proxy_))) {
     FLOG_WARN("init root inspection failed", KR(ret));
-  } else if (OB_FAIL(upgrade_executor_.init(*schema_service_, sql_proxy_, rpc_proxy_, common_proxy_))) {
+  } else if (OB_FAIL(upgrade_executor_.init(*schema_service_,
+             root_inspection_, sql_proxy_, rpc_proxy_, common_proxy_))) {
     FLOG_WARN("init upgrade_executor failed", KR(ret));
   } else if (OB_FAIL(upgrade_storage_format_executor_.init(*this, ddl_service_))) {
     FLOG_WARN("init upgrade storage format executor failed", KR(ret));
@@ -1080,6 +1082,7 @@ int ObRootService::start_service()
     ddl_service_.restart();
     server_manager_.reset();
     zone_manager_.reset();
+    OTC_MGR.reset_version_has_refreshed();
 
     if (OB_FAIL(hb_checker_.start())) {
       FLOG_WARN("hb checker start failed", KR(ret));
@@ -1432,21 +1435,22 @@ int ObRootService::submit_offline_server_task(const common::ObAddr &server)
 }
 
 int ObRootService::submit_upgrade_task(
-    const obrpc::ObUpgradeJobArg::Action action,
-    const int64_t version)
+    const obrpc::ObUpgradeJobArg &arg)
 {
   int ret = OB_SUCCESS;
-  ObUpgradeTask task(upgrade_executor_, action, version);
+  ObUpgradeTask task(upgrade_executor_);
   task.set_retry_times(0); //not repeat
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(task.init(arg))) {
+    LOG_WARN("task init failed", KR(ret), K(arg));
   } else if (OB_FAIL(upgrade_executor_.can_execute())) {
-    LOG_WARN("can't run task now", KR(ret), K(action), K(version));
+    LOG_WARN("can't run task now", KR(ret), K(arg));
   } else if (OB_FAIL(task_queue_.add_async_task(task))) {
-    LOG_WARN("submit upgrade task fail", KR(ret), K(action), K(version));
+    LOG_WARN("submit upgrade task fail", KR(ret), K(arg));
   } else {
-    LOG_INFO("submit upgrade task success", KR(ret), K(action), K(version));
+    LOG_INFO("submit upgrade task success", KR(ret), K(arg));
   }
   return ret;
 }
@@ -1997,6 +2001,19 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
       LOG_WARN("fail to get baseline schema version", KR(ret));
     } else if (OB_FAIL(set_cpu_quota_concurrency_config_())) {
       LOG_ERROR("failed to update cpu_quota_concurrency", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      char ori_min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
+      uint64_t ori_cluster_version = GET_MIN_CLUSTER_VERSION();
+      if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
+          ori_min_server_version, OB_SERVER_VERSION_LENGTH, ori_cluster_version)) {
+         ret = OB_INVALID_ARGUMENT;
+         LOG_WARN("fail to print version str", KR(ret), K(ori_cluster_version));
+      } else {
+        CLUSTER_EVENT_SYNC_ADD("BOOTSTRAP", "BOOTSTRAP_SUCCESS",
+                               "cluster_version", ori_min_server_version);
+      }
     }
 
     //clear bootstrap flag, regardless failure or success
@@ -6678,19 +6695,20 @@ int ObRootService::construct_rs_list_arg(
 int ObRootService::add_server(const obrpc::ObAdminServerArg &arg)
 {
   int ret = OB_SUCCESS;
+  uint64_t sys_data_version = 0;
   // argument
-  ObCheckServerEmptyArg new_arg;
-  new_arg.mode_ = ObCheckServerEmptyArg::ADD_SERVER;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    LOG_WARN("fail to get sys data version", KR(ret));
   } else {
     LOG_INFO("add_server", K(arg), "timeout_ts", THIS_WORKER.get_timeout_ts());
-    ObCheckServerEmptyArg new_arg;
-    new_arg.mode_ = ObCheckServerEmptyArg::ADD_SERVER;
+    ObCheckServerEmptyArg new_arg(ObCheckServerEmptyArg::ADD_SERVER,
+                                  sys_data_version);
     ObCheckDeploymentModeArg dp_arg;
     dp_arg.single_zone_deployment_on_ = OB_FILE_SYSTEM_ROUTER.is_single_zone_deployment_on();
 
@@ -7967,30 +7985,23 @@ int ObRootService::run_upgrade_job(const obrpc::ObUpgradeJobArg &arg)
   int64_t version = arg.version_;
   if (!inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+    LOG_WARN("not init", KR(ret), K(arg));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), KR(ret));
   } else if (ObUpgradeJobArg::UPGRADE_POST_ACTION == arg.action_
-             || ObUpgradeJobArg::UPGRADE_SYSTEM_VARIABLE == arg.action_
-             || ObUpgradeJobArg::UPGRADE_SYSTEM_TABLE == arg.action_) {
-    if (ObUpgradeJobArg::UPGRADE_POST_ACTION == arg.action_
-        && !ObUpgradeChecker::check_data_version_exist(version)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "run upgrade job with such version is");
-    } else if (OB_FAIL(submit_upgrade_task(arg.action_, version))) {
-      LOG_WARN("fail to submit upgrade task", KR(ret), K(arg));
-    }
+             && !ObUpgradeChecker::check_data_version_exist(version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "run upgrade job with such version is");
   } else if (ObUpgradeJobArg::STOP_UPGRADE_JOB == arg.action_) {
     if (OB_FAIL(upgrade_executor_.stop())) {
       LOG_WARN("fail to stop upgrade task", KR(ret));
     } else {
       upgrade_executor_.start();
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid action type", KR(ret), K(arg));
+  } else if (OB_FAIL(submit_upgrade_task(arg))) {
+    LOG_WARN("fail to submit upgrade task", KR(ret), K(arg));
   }
   ROOTSERVICE_EVENT_ADD("root_service", "admin_run_upgrade_job", KR(ret), K(arg));
   return ret;
@@ -7999,12 +8010,34 @@ int ObRootService::run_upgrade_job(const obrpc::ObUpgradeJobArg &arg)
 int ObRootService::upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg)
 {
   int ret = OB_SUCCESS;
+  const int64_t start = ObTimeUtility::current_time();
+  FLOG_INFO("[UPGRADE] start to upgrade table", K(arg));
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(ddl_service_.upgrade_table_schema(arg))) {
-    LOG_WARN("fail to upgrade table schema", KR(ret), K(arg));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invalid", KR(ret), K(arg));
+  } else if (!arg.upgrade_virtual_schema()) {
+    // upgrade single system table
+    if (OB_FAIL(ddl_service_.upgrade_table_schema(arg))) {
+      LOG_WARN("fail to upgrade table schema", KR(ret), K(arg));
+    }
+  } else {
+    // upgrade all virtual table/sys view
+    ObSystemAdminCtx ctx;
+    if (OB_FAIL(init_sys_admin_ctx(ctx))) {
+      LOG_WARN("init_sys_admin_ctx failed", K(ret));
+    } else {
+      ObAdminUpgradeVirtualSchema admin_util(ctx);
+      int64_t upgrade_cnt = 0;
+      if (OB_FAIL(admin_util.execute(arg.get_tenant_id(), upgrade_cnt))) {
+        LOG_WARN("upgrade virtual schema failed", KR(ret), K(arg));
+      }
+    }
   }
+  FLOG_INFO("[UPGRADE] finish upgrade table", KR(ret), K(arg),
+            "cost_us", ObTimeUtility::current_time() - start);
   return ret;
 }
 

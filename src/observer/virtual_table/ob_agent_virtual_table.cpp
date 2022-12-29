@@ -146,23 +146,20 @@ int ObAgentVirtualTable::init(
 int ObAgentVirtualTable::do_open()
 {
   int ret = OB_SUCCESS;
+  ObSqlString sql;
   if (OB_FAIL(ObAgentTableBase::do_open())) {
-    LOG_WARN("base agent table open failed", K(ret));
+    LOG_WARN("base agent table open failed", KR(ret));
+  } else if (OB_FAIL(construct_sql(base_tenant_id_, sql))) {
+    LOG_WARN("construct sql failed", KR(ret), K(base_tenant_id_));
+  } else if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, base_tenant_id_, sql.ptr()))) {
+    LOG_WARN("execute sql failed", KR(ret), K(base_tenant_id_), K(sql));
+  } else if (OB_ISNULL(sql_res_->get_result())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL sql executing result", KR(ret), K(base_tenant_id_), K(sql));
   } else {
-    ObSqlString sql;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(construct_sql(sql))) {
-      LOG_WARN("construct sql failed", K(ret));
-    } else if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, base_tenant_id_, sql.ptr()))) {
-      LOG_WARN("execute sql failed", K(ret), K(base_tenant_id_), K(sql));
-    } else if (OB_ISNULL(sql_res_->get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL sql executing result", K(ret));
-    } else {
-      inner_sql_res_ = static_cast<ObInnerSQLResult *>(sql_res_->get_result());
-      if (general_tenant_id_ != OB_INVALID_TENANT_ID) {
-        inner_sql_res_->result_set().get_session().switch_tenant(general_tenant_id_);
-      }
+    inner_sql_res_ = static_cast<ObInnerSQLResult *>(sql_res_->get_result());
+    if (general_tenant_id_ != OB_INVALID_TENANT_ID) {
+      inner_sql_res_->result_set().get_session().switch_tenant(general_tenant_id_);
     }
   }
 

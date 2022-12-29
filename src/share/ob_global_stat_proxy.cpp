@@ -28,18 +28,23 @@ using namespace common::sqlclient;
 namespace share
 {
 const char *ObGlobalStatProxy::TENANT_ID_CNAME = "tenant_id";
-int ObGlobalStatProxy::set_init_value(const int64_t core_schema_version,
-                                      const int64_t baseline_schema_version,
-                                      const int64_t rootservice_epoch,
-                                      const SCN &snapshot_gc_scn,
-                                      const int64_t gc_schema_version)
+int ObGlobalStatProxy::set_init_value(
+    const int64_t core_schema_version,
+    const int64_t baseline_schema_version,
+    const int64_t rootservice_epoch,
+    const SCN &snapshot_gc_scn,
+    const int64_t gc_schema_version,
+    const uint64_t target_data_version,
+    const uint64_t current_data_version)
 {
   int ret = OB_SUCCESS;
   if (!is_valid() || core_schema_version <= 0 || baseline_schema_version < -1
-      || !snapshot_gc_scn.is_valid() || OB_INVALID_ID == rootservice_epoch || gc_schema_version < 0) {
+      || !snapshot_gc_scn.is_valid() || OB_INVALID_ID == rootservice_epoch || gc_schema_version < 0
+      || target_data_version <= 0 || current_data_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), "self valid", is_valid(), K(rootservice_epoch),
-        K(core_schema_version), K(baseline_schema_version), K(snapshot_gc_scn), K(gc_schema_version));
+    LOG_WARN("invalid argument", KR(ret), "self valid", is_valid(), K(rootservice_epoch),
+             K(core_schema_version), K(baseline_schema_version), K(snapshot_gc_scn),
+             K(gc_schema_version), K(target_data_version), K(current_data_version));
   } else {
     ObGlobalStatItem::ItemList list;
     ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
@@ -47,9 +52,11 @@ int ObGlobalStatProxy::set_init_value(const int64_t core_schema_version,
     ObGlobalStatItem rootservice_epoch_item(list, "rootservice_epoch", rootservice_epoch);
     ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn.get_val_for_inner_table_field());
     ObGlobalStatItem gc_schema_version_item(list, "gc_schema_version", gc_schema_version);
+    ObGlobalStatItem target_data_version_item(list, "target_data_version", static_cast<int64_t>(target_data_version));
+    ObGlobalStatItem current_data_version_item(list, "current_data_version", static_cast<int64_t>(current_data_version));
 
     if (OB_FAIL(update(list))) {
-      LOG_WARN("update failed", K(list), K(ret));
+      LOG_WARN("update failed", KR(ret), K(list));
     }
   }
   return ret;
@@ -58,18 +65,27 @@ int ObGlobalStatProxy::set_init_value(const int64_t core_schema_version,
 int ObGlobalStatProxy::set_tenant_init_global_stat(
     const int64_t core_schema_version,
     const int64_t baseline_schema_version,
-    const SCN &snapshot_gc_scn)
+    const SCN &snapshot_gc_scn,
+    const uint64_t target_data_version,
+    const uint64_t current_data_version)
 {
   int ret = OB_SUCCESS;
-  if (!is_valid() || core_schema_version <= 0 || baseline_schema_version < OB_INVALID_VERSION
-      || (!snapshot_gc_scn.is_valid())) {
+  if (!is_valid() || core_schema_version <= 0
+      || baseline_schema_version < OB_INVALID_VERSION
+      || !snapshot_gc_scn.is_valid()
+      || target_data_version <= 0
+      || current_data_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "self valid", is_valid(),
-             K(core_schema_version), K(baseline_schema_version), K(snapshot_gc_scn));
+             K(core_schema_version), K(baseline_schema_version),
+             K(snapshot_gc_scn), K(target_data_version),
+             K(current_data_version));
   } else {
     ObGlobalStatItem::ItemList list;
     ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
     ObGlobalStatItem baseline_schema_version_item(list, "baseline_schema_version", baseline_schema_version);
+    ObGlobalStatItem target_data_version_item(list, "target_data_version", static_cast<int64_t>(target_data_version));
+    ObGlobalStatItem current_data_version_item(list, "current_data_version", static_cast<int64_t>(current_data_version));
     // only Normal state tenant can refresh snapshot_gc_scn
     ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn.get_val_for_inner_table_field());
     if (OB_FAIL(update(list))) {
@@ -136,12 +152,9 @@ int ObGlobalStatProxy::get_snapshot_gc_scn(SCN &snapshot_gc_scn)
   ObGlobalStatItem::ItemList list;
   uint64_t snapshot_gc_scn_val = 0;
   ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn_val);
-  ObTimeoutCtx ctx;
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), "self valid", is_valid());
-  } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
-    LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
   } else if (OB_FAIL(get(list))) {
     LOG_WARN("get failed", K(ret));
   } else {
@@ -149,6 +162,72 @@ int ObGlobalStatProxy::get_snapshot_gc_scn(SCN &snapshot_gc_scn)
     if (OB_FAIL(snapshot_gc_scn.convert_for_inner_table_field(snapshot_gc_scn_val))) {
       LOG_WARN("fail to convert val to SCN", KR(ret), K(snapshot_gc_scn_val));
     }
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::update_current_data_version(const uint64_t current_data_version)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem item(list, "current_data_version", current_data_version);
+  bool is_incremental = true;
+  if (!is_valid() || current_data_version <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), "valid", is_valid(), K(current_data_version));
+  } else if (OB_FAIL(update(list, is_incremental))) {
+    LOG_WARN("update failed", KR(ret), K(list));
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::get_current_data_version(uint64_t &current_data_version)
+{
+  int ret = OB_SUCCESS;
+  current_data_version = 0;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem item(list, "current_data_version", OB_INVALID_VERSION);
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), "self valid", is_valid());
+  } else if (OB_FAIL(get(list))) {
+    LOG_WARN("get failed", KR(ret));
+  } else {
+    current_data_version = static_cast<uint64_t>(item.value_);
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::update_target_data_version(const uint64_t target_data_version)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem item(list, "target_data_version", target_data_version);
+  bool is_incremental = true;
+  if (!is_valid() || target_data_version <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), "valid", is_valid(), K(target_data_version));
+  } else if (OB_FAIL(update(list, is_incremental))) {
+    LOG_WARN("update failed", KR(ret), K(list));
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::get_target_data_version(
+    const bool for_update,
+    uint64_t &target_data_version)
+{
+  int ret = OB_SUCCESS;
+  target_data_version = 0;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem item(list, "target_data_version", OB_INVALID_VERSION);
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), "self valid", is_valid());
+  } else if (OB_FAIL(get(list, for_update))) {
+    LOG_WARN("get failed", KR(ret));
+  } else {
+    target_data_version = static_cast<uint64_t>(item.value_);
   }
   return ret;
 }
@@ -201,10 +280,13 @@ int ObGlobalStatProxy::update(const ObGlobalStatItem::ItemList &list,
   int64_t affected_rows = 0;
   ObDMLSqlSplicer dml(ObDMLSqlSplicer::NAKED_VALUE_MODE);
   ObArray<ObCoreTableProxy::UpdateCell> cells;
+  ObTimeoutCtx ctx;
   if (!is_valid() || list.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), "self valid", is_valid(),
         "list size", list.get_size());
+  } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+    LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
   } else if (OB_FAIL(core_table_.load_for_update())) {
     LOG_WARN("core_table_load_for_update failed", K(ret));
   } else {
@@ -291,40 +373,44 @@ int ObGlobalStatProxy::get_rootservice_epoch(int64_t &rootservice_epoch)
   return ret;
 }
 
-int ObGlobalStatProxy::get(ObGlobalStatItem::ItemList &list)
+int ObGlobalStatProxy::get(
+    ObGlobalStatItem::ItemList &list,
+    bool for_update /*= false*/)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
   if (!is_valid() || list.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), "self valid", is_valid(),
+    LOG_WARN("invalid argument", KR(ret), "self valid", is_valid(),
         "list size", list.get_size());
   } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
-    LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
-  } else if (OB_FAIL(core_table_.load())) {
-    LOG_WARN("core_table load failed", K(ret));
+    LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+  } else if (!for_update && OB_FAIL(core_table_.load())) {
+    LOG_WARN("core_table load failed", KR(ret));
+  } else if (for_update && OB_FAIL(core_table_.load_for_update())) {
+    LOG_WARN("core_table load failed", KR(ret));
   } else {
     if (OB_FAIL(core_table_.next())) {
       if (OB_ITER_END == ret) {
         ret = OB_EMPTY_RESULT;
-        LOG_WARN("no row exist", K(ret));
+        LOG_WARN("no row exist", KR(ret));
       } else {
-        LOG_WARN("next failed", K(ret));
+        LOG_WARN("next failed", KR(ret));
       }
     } else {
       ObGlobalStatItem *it = list.get_first();
       if (NULL == it) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL iterator", K(ret));
+        LOG_WARN("NULL iterator", KR(ret));
       }
       while (OB_SUCCESS == ret && it != list.get_header()) {
         if (OB_FAIL(core_table_.get_int(it->name_, it->value_))) {
-          LOG_WARN("get int failed", "name", it->name_, K(ret));
+          LOG_WARN("get int failed", "name", it->name_, KR(ret));
         } else {
           it = it->get_next();
           if (NULL == it) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("NULL iterator", K(ret));
+            LOG_WARN("NULL iterator", KR(ret));
           }
         }
       }
@@ -334,9 +420,9 @@ int ObGlobalStatProxy::get(ObGlobalStatItem::ItemList &list)
           ret = OB_SUCCESS;
         } else if (OB_SUCC(ret)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("__all_global_stat table more than one row", K(ret));
+          LOG_WARN("__all_global_stat table more than one row", KR(ret));
         } else {
-          LOG_WARN("next failed", K(ret));
+          LOG_WARN("next failed", KR(ret));
         }
       }
     }

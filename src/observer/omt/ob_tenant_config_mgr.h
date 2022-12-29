@@ -113,6 +113,7 @@ public:
   int refresh_tenants(const common::ObIArray<uint64_t> &tenants);
   int add_tenant_config(uint64_t tenant_id);
   int del_tenant_config(uint64_t tenant_id);
+  int init_tenant_config(const obrpc::ObTenantConfigArg &arg);
 
   ObTenantConfig *get_tenant_config(uint64_t tenant_id) const;
   // lock to guarantee this will not be deleted by calling del_tenant_config.
@@ -133,6 +134,7 @@ public:
   int dump2file(const char *path = nullptr) const;
 
   void refresh_config_version_map(const common::ObIArray<uint64_t> &tenants);
+  void reset_version_has_refreshed() { version_has_refreshed_ = false; }
   int set_tenant_config_version(uint64_t tenant_id, int64_t version);
   int64_t get_tenant_config_version(uint64_t tenant_id);
   void get_lease_request(share::ObLeaseRequest &lease_request);
@@ -142,7 +144,7 @@ public:
   int got_version(uint64_t tenant_id, int64_t version, const bool remove_repeat = true);
   int update_local(uint64_t tenant_id, int64_t expected_version);
   void notify_tenant_config_changed(uint64_t tenatn_id);
-  int add_extra_config(obrpc::ObTenantConfigArg &arg);
+  int add_extra_config(const obrpc::ObTenantConfigArg &arg);
   int schedule(ObTenantConfig::TenantConfigUpdateTask &task, const int64_t delay);
   int cancel(const ObTenantConfig::TenantConfigUpdateTask &task);
   int wait(const ObTenantConfig::TenantConfigUpdateTask &task);

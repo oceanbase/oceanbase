@@ -217,8 +217,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_ERROR("init pre setting failed", KR(ret));
   } else if (OB_FAIL(init_global_context())) {
     LOG_ERROR("init global context failed", KR(ret));
-  } else if (OB_FAIL(init_cluster_version())) {
-    LOG_ERROR("init cluster version failed", KR(ret));
+  } else if (OB_FAIL(init_version())) {
+    LOG_ERROR("init version failed", KR(ret));
   } else if (OB_FAIL(init_sql_proxy())) {
     LOG_ERROR("init sql connection pool failed", KR(ret));
   } else if (OB_FAIL(init_io())) {
@@ -2028,9 +2028,9 @@ int ObServer::init_global_context()
   return ret;
 }
 
-int ObServer::init_cluster_version()
+int ObServer::init_version()
 {
-  return ObClusterVersion::get_instance().init(&config_);
+  return ObClusterVersion::get_instance().init(&config_, &tenant_config_mgr_);
 }
 
 int ObServer::init_ts_mgr()

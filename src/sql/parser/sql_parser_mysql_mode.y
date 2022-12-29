@@ -13982,9 +13982,9 @@ ALTER SYSTEM upgrade_action UPGRADE
   malloc_non_terminal_node($$, result->malloc_pool_, T_ADMIN_UPGRADE_CMD, 1, $3);
 }
 |
-ALTER SYSTEM RUN UPGRADE JOB STRING_VALUE
+ALTER SYSTEM RUN UPGRADE JOB STRING_VALUE opt_tenant_list_v2
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_ADMIN_RUN_UPGRADE_JOB, 1, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ADMIN_RUN_UPGRADE_JOB, 2, $6, $7);
 }
 |
 ALTER SYSTEM STOP UPGRADE JOB

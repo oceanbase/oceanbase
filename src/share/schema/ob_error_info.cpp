@@ -155,12 +155,8 @@ int ObErrorInfo::collect_error_info(const IObErrorInfo *info)
     LOG_WARN("collect error info failed", K(ret));
   } else {
     const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
-    uint16_t wcnt = 0;
-    if (OB_ISNULL(warnings_buf)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("can not get thread warnings buffer");
-    } else {
-      wcnt = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
+    if (OB_NOT_NULL(warnings_buf)) {
+      uint16_t wcnt = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
       if (OB_FAIL(collect_error_info(info, warnings_buf, wcnt > 0))) {
         LOG_WARN("failed to fill error info", K(ret), K(*this));
       } else {

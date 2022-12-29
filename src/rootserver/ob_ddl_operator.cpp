@@ -5005,10 +5005,12 @@ int ObDDLOperator::fetch_expire_recycle_objects(
   return ret;
 }
 
-int ObDDLOperator::init_tenant_env(const ObTenantSchema &tenant_schema,
-                                   const ObSysVariableSchema &sys_variable,
-                                   const share::ObTenantRole &tenant_role,
-                                   ObMySQLTransaction &trans)
+int ObDDLOperator::init_tenant_env(
+    const ObTenantSchema &tenant_schema,
+    const ObSysVariableSchema &sys_variable,
+    const share::ObTenantRole &tenant_role,
+    const common::ObIArray<common::ObConfigPairs> &init_configs,
+    ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
@@ -5041,10 +5043,10 @@ int ObDDLOperator::init_tenant_env(const ObTenantSchema &tenant_schema,
   }
   if (OB_SUCC(ret) && !is_user_tenant(tenant_id)) {
     uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
-    if (OB_FAIL(init_tenant_config(tenant_id, trans))) {
+    if (OB_FAIL(init_tenant_config(tenant_id, init_configs, trans))) {
       LOG_WARN("insert tenant config failed", KR(ret), K(tenant_id));
     } else if (is_meta_tenant(tenant_id)
-               && OB_FAIL(init_tenant_config(user_tenant_id, trans))) {
+               && OB_FAIL(init_tenant_config(user_tenant_id, init_configs, trans))) {
       LOG_WARN("insert tenant config failed", KR(ret), K(user_tenant_id));
     }
   }
@@ -5548,8 +5550,91 @@ int ObDDLOperator::init_tenant_users(const ObTenantSchema &tenant_schema,
   return ret;
 }
 
-int ObDDLOperator::init_tenant_config(const uint64_t tenant_id,
-                                      ObMySQLTransaction &trans)
+int ObDDLOperator::init_tenant_config(
+    const uint64_t tenant_id,
+    const common::ObIArray<common::ObConfigPairs> &init_configs,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_idx = !is_user_tenant(tenant_id) ? 0 : 1;
+  if (OB_UNLIKELY(
+      init_configs.count() < tenant_idx + 1
+      || tenant_id != init_configs.at(tenant_idx).get_tenant_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid init_configs", KR(ret), K(tenant_idx), K(tenant_id), K(init_configs));
+  } else if (OB_FAIL(init_tenant_config_(tenant_id, init_configs.at(tenant_idx), trans))) {
+    LOG_WARN("fail to init tenant config", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(init_tenant_config_from_seed_(tenant_id, trans))) {
+    LOG_WARN("fail to init tenant config from seed", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObDDLOperator::init_tenant_config_(
+    const uint64_t tenant_id,
+    const common::ObConfigPairs &tenant_config,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard hard_code_config(TENANT_CONF(OB_SYS_TENANT_ID));
+  int64_t config_cnt = tenant_config.get_configs().count();
+  if (OB_UNLIKELY(tenant_id != tenant_config.get_tenant_id() || config_cnt <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant config", KR(ret), K(tenant_id), K(tenant_config));
+  } else if (!hard_code_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get hard code config", KR(ret), K(tenant_id));
+  } else {
+    ObDMLSqlSplicer dml;
+    ObConfigItem *item = NULL;
+    char svr_ip[OB_MAX_SERVER_ADDR_SIZE] = "ANY";
+    int64_t svr_port = 0;
+    int64_t config_version = 1; // hard code init version
+    FOREACH_X(config, tenant_config.get_configs(), OB_SUCC(ret)) {
+      const ObConfigStringKey key(config->key_.ptr());
+      if (OB_ISNULL(hard_code_config->get_container().get(key))
+          || OB_ISNULL(item = *(hard_code_config->get_container().get(key)))) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("config not exist", KR(ret), KPC(config));
+      } else if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
+                 || OB_FAIL(dml.add_pk_column("zone", ""))
+                 || OB_FAIL(dml.add_pk_column("svr_type", print_server_role(OB_SERVER)))
+                 || OB_FAIL(dml.add_pk_column(K(svr_ip)))
+                 || OB_FAIL(dml.add_pk_column(K(svr_port)))
+                 || OB_FAIL(dml.add_pk_column("name", config->key_.ptr()))
+                 || OB_FAIL(dml.add_column("data_type", "varchar"))
+                 || OB_FAIL(dml.add_column("value", config->value_.ptr()))
+                 || OB_FAIL(dml.add_column("info", ""))
+                 || OB_FAIL(dml.add_column("config_version", config_version))
+                 || OB_FAIL(dml.add_column("section", item->section()))
+                 || OB_FAIL(dml.add_column("scope", item->scope()))
+                 || OB_FAIL(dml.add_column("source", item->source()))
+                 || OB_FAIL(dml.add_column("edit_level", item->edit_level()))) {
+        LOG_WARN("fail to add column", KR(ret), K(tenant_id), KPC(config));
+      } else if (OB_FAIL(dml.finish_row())) {
+        LOG_WARN("fail to finish row", KR(ret), K(tenant_id), KPC(config));
+      }
+    } // end foreach
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+    if (FAILEDx(dml.splice_batch_insert_sql(OB_TENANT_PARAMETER_TNAME, sql))) {
+      LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
+    } else if (config_cnt != affected_rows) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("affected_rows not match", KR(ret), K(tenant_id), K(config_cnt), K(affected_rows));
+    } else if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id, config_version))) {
+      LOG_WARN("failed to set tenant config version", KR(ret), K(tenant_id), K(config_version));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::init_tenant_config_from_seed_(
+    const uint64_t tenant_id,
+    ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   int64_t start = ObTimeUtility::current_time();
@@ -5649,7 +5734,7 @@ int ObDDLOperator::init_freeze_info(const uint64_t tenant_id,
   int64_t start = ObTimeUtility::current_time();
   ObFreezeInfoProxy freeze_info_proxy(tenant_id);
   ObSimpleFrozenStatus frozen_status;
-  frozen_status.set_initial_value(GET_MIN_CLUSTER_VERSION());
+  frozen_status.set_initial_value(DATA_CURRENT_VERSION);
   // init freeze_info in __all_freeze_info
   if (OB_FAIL(freeze_info_proxy.set_freeze_info(trans, frozen_status))) {
     LOG_WARN("fail to set freeze info", KR(ret), K(frozen_status), K(tenant_id));

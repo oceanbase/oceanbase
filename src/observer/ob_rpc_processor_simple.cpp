@@ -433,6 +433,18 @@ int ObGetMinSSTableSchemaVersionP::process()
   return ret;
 }
 
+int ObInitTenantConfigP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->init_tenant_config(arg_, result_);
+  }
+  return ret;
+}
+
 int ObCalcColumnChecksumRequestP::process()
 {
   int ret = OB_SUCCESS;

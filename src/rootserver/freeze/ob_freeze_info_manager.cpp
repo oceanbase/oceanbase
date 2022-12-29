@@ -299,6 +299,7 @@ int ObFreezeInfoManager::set_freeze_info()
   ObSimpleFrozenStatus frozen_status;
   if (OB_SUCC(ret)) {
     int64_t schema_version_in_frozen_ts = 0;
+    uint64_t data_version = 0;
 
     // 3. generate new frozen_scn
     if (OB_FAIL(generate_frozen_scn(freeze_info_, remote_snapshot_gc_scn, new_frozen_scn))) {
@@ -306,10 +307,12 @@ int ObFreezeInfoManager::set_freeze_info()
     // 4. get schema_version at frozen_scn
     } else if (OB_FAIL(get_schema_version(new_frozen_scn, schema_version_in_frozen_ts))) {
       LOG_WARN("fail to get schema version", KR(ret), K(new_frozen_scn));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+      LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
     } else {
       frozen_status.frozen_scn_ = new_frozen_scn;
       frozen_status.schema_version_ = schema_version_in_frozen_ts;
-      frozen_status.cluster_version_ = GET_MIN_CLUSTER_VERSION();
+      frozen_status.data_version_ = data_version;
 
       // 5. insert freeze info
       if (OB_FAIL(freeze_info_proxy.set_freeze_info(trans, frozen_status))) {

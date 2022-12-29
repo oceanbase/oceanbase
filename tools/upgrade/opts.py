@@ -6,7 +6,7 @@ import sys
 import os
 import getopt
 
-help_str = \
+pre_help_str = \
 """
 Help:
 """ +\
@@ -19,11 +19,45 @@ sys.argv[0] + """ [OPTIONS]""" +\
 '-u, --user=name     User for login.\n' +\
 '-p, --password=name Password to use when connecting to server. If password is\n' +\
 '                    not given it\'s empty string "".\n' +\
+'-t, --timeout=name  Cmd/Query/Inspection execute timeout(s).\n' +\
 '-m, --module=name   Modules to run. Modules should be a string combined by some of\n' +\
-'                    the following strings: ddl, normal_dml, each_tenant_dml,\n' +\
-'                    system_variable_dml, special_action, all. "all" represents\n' +\
+'                    the following strings:\n' +\
+'                    1. begin_upgrade \n' +\
+'                    2. begin_rolling_upgrade \n' +\
+'                    3. special_action \n' +\
+'                    4. health_check \n' +\
+'                    5. all: default value, run all sub modules above \n' +\
 '                    that all modules should be run. They are splitted by ",".\n' +\
-'                    For example: -m all, or --module=ddl,normal_dml,special_action\n' +\
+'                    For example: -m all, or --module=begin_upgrade,begin_rolling_upgrade,special_action\n' +\
+'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
+'\n\n' +\
+'Maybe you want to run cmd like that:\n' +\
+sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
+
+post_help_str = \
+"""
+Help:
+""" +\
+sys.argv[0] + """ [OPTIONS]""" +\
+'\n\n' +\
+'-I, --help          Display this help and exit.\n' +\
+'-V, --version       Output version information and exit.\n' +\
+'-h, --host=name     Connect to host.\n' +\
+'-P, --port=name     Port number to use for connection.\n' +\
+'-u, --user=name     User for login.\n' +\
+'-p, --password=name Password to use when connecting to server. If password is\n' +\
+'                    not given it\'s empty string "".\n' +\
+'-t, --timeout=name  Cmd/Query/Inspection execute timeout(s).\n' +\
+'-m, --module=name   Modules to run. Modules should be a string combined by some of\n' +\
+'                    the following strings:\n' +\
+'                    1. health_check \n' +\
+'                    2. end_rolling_upgrade \n' +\
+'                    3. tenant_upgrade \n' +\
+'                    4. end_upgrade \n' +\
+'                    5. post_check \n' +\
+'                    6. all: default value, run all sub modules above \n' +\
+'                    that all modules should be run. They are splitted by ",".\n' +\
+'                    For example: -m all, or --module=health_check,end_rolling_upgrade\n' +\
 '-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 '\n\n' +\
 'Maybe you want to run cmd like that:\n' +\
@@ -79,6 +113,7 @@ Option('V', 'version', False, True),\
 Option('h', 'host', True, False),\
 Option('P', 'port', True, False),\
 Option('u', 'user', True, False),\
+Option('t', 'timeout', True, False, 0),\
 Option('p', 'password', True, False, ''),\
 # 要跑哪个模块，默认全跑
 Option('m', 'module', True, False, 'all'),\
@@ -134,22 +169,28 @@ def parse_options(argv):
   if has_no_local_opts():
     check_db_client_opts()
 
-def deal_with_local_opt(opt):
+def deal_with_local_opt(opt, filename):
   if 'help' == opt.get_long_name():
-    global help_str
-    print help_str
+    if 'upgrade_pre' == filename:
+      global pre_help_str
+      print pre_help_str
+    elif 'upgrade_post' == filename:
+      global post_help_str
+      print post_help_str
+    else:
+            raise MyError('not supported filename:{0} for help option'.format(filename))
   elif 'version' == opt.get_long_name():
     global version_str
     print version_str
 
-def deal_with_local_opts():
+def deal_with_local_opts(filename):
   global g_opts
   if has_no_local_opts():
     raise MyError('no local options, can not deal with local options')
   else:
     for opt in g_opts:
       if opt.is_local_opt() and opt.has_value():
-        deal_with_local_opt(opt)
+        deal_with_local_opt(opt, filename)
         # 只处理一个
         return
 
@@ -175,6 +216,12 @@ def get_opt_password():
   global g_opts
   for opt in g_opts:
     if 'password' == opt.get_long_name():
+      return opt.get_value()
+
+def get_opt_timeout():
+  global g_opts
+  for opt in g_opts:
+    if 'timeout' == opt.get_long_name():
       return opt.get_value()
 
 def get_opt_module():

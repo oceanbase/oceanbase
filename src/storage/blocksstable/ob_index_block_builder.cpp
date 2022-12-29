@@ -863,7 +863,7 @@ int ObSSTableIndexBuilder::close(const int64_t column_cnt, ObSSTableMergeRes &re
   } else if (OB_FAIL(sort_roots())) {
     STORAGE_LOG(WARN, "fail to sort roots", K(ret));
   } else if (!index_store_desc_.is_major_merge()
-      || index_store_desc_.major_working_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
+      || index_store_desc_.major_working_cluster_version_ >= DATA_VERSION_4_1_0_0) {
     const bool is_single_block = check_single_block();
     if (is_single_block) {
       switch (optimization_mode_) {

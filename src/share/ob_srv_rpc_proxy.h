@@ -50,6 +50,8 @@ public:
   RPC_AP(PR5 check_frozen_scn, OB_CHECK_FROZEN_SCN, (obrpc::ObCheckFrozenScnArg));
   RPC_AP(PR5 get_min_sstable_schema_version, OB_GET_MIN_SSTABLE_SCHEMA_VERSION,
       (obrpc::ObGetMinSSTableSchemaVersionArg), obrpc::ObGetMinSSTableSchemaVersionRes);
+  RPC_AP(PR5 init_tenant_config, OB_INIT_TENANT_CONFIG,
+      (obrpc::ObInitTenantConfigArg), obrpc::ObInitTenantConfigRes);
   RPC_S(PR5 fetch_sys_ls, OB_FETCH_SYS_LS,
         share::ObLSReplica);
   RPC_S(PR5 broadcast_rs_list, OB_BROADCAST_RS_LIST, (obrpc::ObRsListArg));

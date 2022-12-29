@@ -496,6 +496,7 @@ public:
   static int all_service_epoch_schema(share::schema::ObTableSchema &table_schema);
   static int all_spatial_reference_systems_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_cluster_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -836,6 +837,7 @@ public:
   static int all_virtual_schema_slot_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_minor_freeze_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ha_diagnose_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_core_table_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1291,6 +1293,7 @@ public:
   static int cdb_ob_users_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_database_privilege_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_database_privilege_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_cluster_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -1850,6 +1853,7 @@ public:
   static int all_service_epoch_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_spatial_reference_systems_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_cluster_event_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -2066,6 +2070,7 @@ public:
   static int all_service_epoch_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_spatial_reference_systems_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_cluster_event_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_stat_all_virtual_plan_cache_stat_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_session_event_all_virtual_session_event_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_session_wait_all_virtual_session_wait_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -2401,6 +2406,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_service_epoch_schema,
   ObInnerTableSchema::all_spatial_reference_systems_schema,
   ObInnerTableSchema::all_column_checksum_error_info_schema,
+  ObInnerTableSchema::all_cluster_event_history_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -2744,6 +2750,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_schema_slot_schema,
   ObInnerTableSchema::all_virtual_minor_freeze_info_schema,
   ObInnerTableSchema::all_virtual_ha_diagnose_schema,
+  ObInnerTableSchema::all_virtual_core_table_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
   ObInnerTableSchema::all_virtual_plan_cache_plan_explain_ora_schema,
@@ -3219,6 +3226,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_users_schema,
   ObInnerTableSchema::dba_ob_database_privilege_schema,
   ObInnerTableSchema::cdb_ob_database_privilege_schema,
+  ObInnerTableSchema::dba_ob_cluster_event_history_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -9148,6 +9156,14 @@ LOBMapping const lob_aux_table_mappings [] = {
     ObInnerTableSchema::all_column_checksum_error_info_aux_lob_piece_schema
   },
 
+  {
+    OB_ALL_CLUSTER_EVENT_HISTORY_TID,
+    OB_ALL_CLUSTER_EVENT_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_CLUSTER_EVENT_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_cluster_event_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_cluster_event_history_aux_lob_piece_schema
+  },
+
 };
 
 static inline bool get_sys_table_lob_aux_table_id(const uint64_t tid, uint64_t& meta_tid, uint64_t& piece_tid)
@@ -9185,12 +9201,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 213;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 552;
-const int64_t OB_SYS_VIEW_COUNT = 603;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1373;
+const int64_t OB_SYS_TABLE_COUNT = 214;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 553;
+const int64_t OB_SYS_VIEW_COUNT = 604;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1376;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1376;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1379;
 
 } // end namespace share
 } // end namespace oceanbase

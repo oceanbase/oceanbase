@@ -34,8 +34,31 @@ using namespace sql;
 namespace share
 {
 const uint64_t ObUpgradeChecker::UPGRADE_PATH[DATA_VERSION_NUM] = {
+  CALC_VERSION(4UL, 0UL, 0UL, 0UL),  // 4.0.0.0
   CALC_VERSION(4UL, 1UL, 0UL, 0UL)   // 4.1.0.0
 };
+
+int ObUpgradeChecker::get_data_version_by_cluster_version(
+    const uint64_t cluster_version,
+    uint64_t &data_version)
+{
+  int ret = OB_SUCCESS;
+  switch (cluster_version) {
+    case CLUSTER_VERSION_4_0_0_0: {
+      data_version = DATA_VERSION_4_0_0_0;
+      break;
+    }
+    case CLUSTER_VERSION_4_1_0_0: {
+      data_version = DATA_VERSION_4_1_0_0;
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid cluster_version", KR(ret), K(cluster_version));
+    }
+  }
+  return ret;
+}
 
 bool ObUpgradeChecker::check_data_version_exist(
      const uint64_t version)
@@ -189,7 +212,10 @@ int ObUpgradeUtils::check_rs_job_success(ObRsJobType job_type, bool &success)
   return ret;
 }
 
-int ObUpgradeUtils::check_schema_sync(bool &is_sync)
+// tenant_id == OB_INVALID_TENANT_ID: check all tenants' schema statuses
+int ObUpgradeUtils::check_schema_sync(
+    const uint64_t tenant_id,
+    bool &is_sync)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -199,26 +225,32 @@ int ObUpgradeUtils::check_schema_sync(bool &is_sync)
     is_sync = false;
     if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sql_proxy is null", K(ret));
-    } else if (sql.assign_fmt("SELECT floor(count(*)) as count FROM %s AS a "
-                              "JOIN %s AS b ON a.tenant_id = b.tenant_id "
-                              "WHERE a.refreshed_schema_version != b.refreshed_schema_version",
-                              OB_ALL_VIRTUAL_SERVER_SCHEMA_INFO_TNAME,
-                              OB_ALL_VIRTUAL_SERVER_SCHEMA_INFO_TNAME)) {
-      LOG_WARN("fail to assign sql", K(ret));
+      LOG_WARN("sql_proxy is null", KR(ret));
+    } else if (OB_FAIL(sql.assign_fmt(
+               "SELECT floor(count(*)) as count FROM %s AS a "
+               "JOIN %s AS b ON a.tenant_id = b.tenant_id "
+               "WHERE (a.refreshed_schema_version != b.refreshed_schema_version "
+               "       OR (a.refreshed_schema_version mod %ld) != 0) ",
+               OB_ALL_VIRTUAL_SERVER_SCHEMA_INFO_TNAME,
+               OB_ALL_VIRTUAL_SERVER_SCHEMA_INFO_TNAME,
+               schema::ObSchemaService::SCHEMA_VERSION_INC_STEP))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_INVALID_TENANT_ID != tenant_id
+               && OB_FAIL(sql.append_fmt(" AND a.tenant_id = %ld", tenant_id))) {
+      LOG_WARN("fail to append sql", KR(ret), K(tenant_id));
     } else if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
-      LOG_WARN("fail to execute sql", K(ret), K(sql));
+      LOG_WARN("fail to execute sql", KR(ret), K(sql));
     } else if (NULL == (result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get sql result", K(ret));
     } else if (OB_FAIL((result->next()))) {
-      LOG_WARN("fail to get result", K(ret));
+      LOG_WARN("fail to get result", KR(ret));
     } else {
       EXTRACT_INT_FIELD_MYSQL(*result, "count", count, int32_t);
       if (OB_FAIL(ret)) {
       } else if (count < 0) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid count", K(ret), K(count));
+        LOG_WARN("invalid count", KR(ret), K(count));
       } else {
         is_sync = (count == 0);
       }
@@ -562,6 +594,7 @@ int ObUpgradeProcesserSet::init(
     }
 
     // order by data version asc
+    INIT_PROCESSOR_BY_VERSION(4, 0, 0, 0);
     INIT_PROCESSOR_BY_VERSION(4, 1, 0, 0);
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;

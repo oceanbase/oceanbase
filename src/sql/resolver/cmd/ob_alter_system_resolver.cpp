@@ -2587,26 +2587,51 @@ int ObRunUpgradeJobResolver::resolve(const ParseNode &parse_tree)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_ADMIN_RUN_UPGRADE_JOB",
              KR(ret), "type", get_type_name(parse_tree.type_));
-  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+  } else if (OB_ISNULL(parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children should not be null", KR(ret));
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", KR(ret));
   } else {
     ObRunUpgradeJobStmt *stmt = create_stmt<ObRunUpgradeJobStmt>();
-    if (NULL == stmt) {
+    if (OB_ISNULL(stmt)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("create ObRunUpgradeJobStmt failed", KR(ret));
     } else {
       stmt_ = stmt;
+      // 1. parse action
       ObString str;
       uint64_t version = OB_INVALID_VERSION;
       if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], str))) {
         LOG_WARN("resolve string failed", KR(ret));
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_BEGIN))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_BEGIN;
       } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
                  rootserver::JOB_TYPE_UPGRADE_SYSTEM_VARIABLE))) {
         stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_SYSTEM_VARIABLE;
       } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
                  rootserver::JOB_TYPE_UPGRADE_SYSTEM_TABLE))) {
         stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_SYSTEM_TABLE;
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_VIRTUAL_SCHEMA))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_VIRTUAL_SCHEMA;
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_SYSTEM_PACKAGE))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_SYSTEM_PACKAGE;
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_ALL_POST_ACTION))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_ALL_POST_ACTION;
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_INSPECTION))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_INSPECTION;
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_END))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_END;
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_ALL))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_ALL;
       } else {
         // UPGRADE_POST_ACTION
         if (OB_FAIL(ObClusterVersion::get_version(str, version))) {
@@ -2614,6 +2639,38 @@ int ObRunUpgradeJobResolver::resolve(const ParseNode &parse_tree)
         } else {
           stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_POST_ACTION;
           stmt->get_rpc_arg().version_ = static_cast<int64_t>(version);
+        }
+      }
+      // 2. parse tenant_ids
+      if (OB_SUCC(ret)
+          && parse_tree.num_child_ >= 2
+          && OB_NOT_NULL(parse_tree.children_[1])) {
+        ParseNode *tenants_node = parse_tree.children_[1];
+        bool affect_all = false;
+        const int64_t child_num = tenants_node->num_child_;
+        const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
+        ObSArray<uint64_t> &tenant_ids = stmt->get_rpc_arg().tenant_ids_;
+        if (T_TENANT_LIST != tenants_node->type_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("type is not T_TENANT_LIST", KR(ret),
+                   "type", get_type_name(tenants_node->type_));
+        } else if (OB_ISNULL(tenants_node->children_)
+                   || OB_UNLIKELY(0 == child_num)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("children of tenant should not be null", KR(ret), K(child_num));
+        } else if (OB_FAIL(Util::resolve_tenant(
+                   *tenants_node, cur_tenant_id, tenant_ids, affect_all))) {
+          LOG_WARN("fail to resolve tenant", KR(ret), K(cur_tenant_id));
+        } else if (affect_all && 0 != tenant_ids.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant_ids should be empty when specify tenant = all", KR(ret));
+        } else if (obrpc::ObUpgradeJobArg::UPGRADE_SYSTEM_PACKAGE == stmt->get_rpc_arg().action_) {
+          if ((tenant_ids.count() > 1)
+               || (1 == tenant_ids.count() && !is_sys_tenant(tenant_ids.at(0)))) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("Only system tenant can run UPGRADE_SYSTEM_PACKAGE Job", KR(ret), K(tenant_ids));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Non-sys tenant run UPGRADE_SYSTEM_PACKAGE job");
+          }
         }
       }
     }

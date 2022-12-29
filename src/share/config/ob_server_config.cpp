@@ -78,6 +78,11 @@ bool ObServerConfig::in_upgrade_mode() const
   return bret;
 }
 
+bool ObServerConfig::in_dbupgrade_stage() const
+{
+  return obrpc::OB_UPGRADE_STAGE_DBUPGRADE == GCTX.get_upgrade_stage();
+}
+
 int ObServerConfig::read_config()
 {
   int ret = OB_SUCCESS;

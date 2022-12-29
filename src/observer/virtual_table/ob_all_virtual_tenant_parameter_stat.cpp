@@ -268,7 +268,14 @@ int ObAllVirtualTenantParameterStat::fill_row_(common::ObNewRow *&row,
             break;
           }
           case VALUE: {
-            cells[i].set_varchar(iter->second->str());
+            if (0 == ObString("compatible").case_compare(iter->first.str())
+                && !iter->second->value_updated()) {
+              // `compatible` is used for tenant compatibility,
+              // default value should not be used when `compatible` is not loaded yet.
+              cells[i].set_varchar("0.0.0.0");
+            } else {
+              cells[i].set_varchar(iter->second->str());
+            }
             cells[i].set_collation_type(
                 ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;

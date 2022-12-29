@@ -768,7 +768,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::get_freeze_info(
     for (int64_t i = 0; i < tmp.count() && OB_SUCC(ret); ++i) {
       ObSimpleFrozenStatus &status = tmp.at(i);
       if (OB_FAIL(freeze_info.push_back(
-            FreezeInfo(status.frozen_scn_.get_val_for_tx(), status.schema_version_, status.cluster_version_)))) {
+            FreezeInfo(status.frozen_scn_.get_val_for_tx(), status.schema_version_, status.data_version_)))) {
         STORAGE_LOG(WARN, "fail to push back freeze info", K(ret), K(status));
       }
     }
