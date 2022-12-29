@@ -226,6 +226,16 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
     } else if (udf_info.count() > 0 &&
                OB_FAIL(ObRawExprUtils::init_udfs_info(params_, udf_info))) {
       LOG_WARN("failed to init udf infos", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_columns_for_const_expr(value_expr, columns, params_))) {
+      LOG_WARN("resolve columns for const expr failed", K(ret));
+    } else if (value_expr->get_expr_type() == T_SP_CPARAM) {
+      ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(value_expr);
+      if (OB_ISNULL(call_expr->get_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(call_expr->get_expr()->formalize(params_.session_info_))) {
+        LOG_WARN("failed to formalize call expr", K(ret));
+      }
     } else if (value_expr->has_flag(CNT_SUB_QUERY)) {
       if (is_oracle_mode()) {
         ret = OB_NOT_SUPPORTED;
@@ -234,28 +244,14 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
       } else if (is_mysql_mode()) {
         if (OB_FAIL(resolve_subquery_info(sub_query_info, value_expr))) {
           LOG_WARN("failed to resolve subquery info", K(ret));
-        } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
-          LOG_WARN("failed to formalize value expr", K(ret));
         }
       }
       LOG_TRACE("set user variable with subquery", K(sub_query_info.count()), K(is_mysql_mode()));
-    } else {
-      if (OB_FAIL(ObResolverUtils::resolve_columns_for_const_expr(value_expr, columns, params_))) {
-        LOG_WARN("resolve columnts for const expr failed", K(ret));
-      } else if (value_expr->get_expr_type() == T_SP_CPARAM) {
-        ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(value_expr);
-        if (OB_ISNULL(call_expr->get_expr())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(call_expr->get_expr()->formalize(params_.session_info_))) {
-          LOG_WARN("failed to formalize call expr", K(ret));
-        }
-      } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
-        LOG_WARN("failed to formalize value expr", K(ret));
-      }
     }
-    
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
+      LOG_WARN("failed to formalize value expr", K(ret));
+    } else {
       params_.prepare_param_count_ += ctx.prepare_param_count_; //prepare param count
     }
   }
