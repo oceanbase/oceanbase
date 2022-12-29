@@ -188,7 +188,8 @@ private:
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
   int cut_ha_sstable_scn_range_(
-      common::ObIArray<ObITable *> &minor_sstables);
+      common::ObIArray<ObITable *> &minor_sstables,
+      ObTablesHandleArray &tables_handle);
   int check_minor_tables_continue_(
       const int64_t count,
       ObITable **minor_sstables) const;
@@ -217,6 +218,8 @@ private:
       const ObIArray<ObTableHandleV2> &table_handles,
       const ObITableArray &old_tables,
       ObSEArray<ObITable *, 8> &replaced_tables) const;
+  int deep_copy_sstable_(const blocksstable::ObSSTable &old_sstable,
+      ObTableHandleV2 &new_table_handle);
 
 public:
   static const int64_t TABLE_STORE_VERSION = 0x0100;
