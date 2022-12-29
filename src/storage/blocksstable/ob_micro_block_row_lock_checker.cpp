@@ -81,6 +81,15 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
           break;
         }
       } else { // committed row
+        if (flag.is_ghost_row()) {
+          if (OB_UNLIKELY(!flag.is_last_multi_version_row())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected row flag", K(ret), K(flag));
+          } else {
+            ret = OB_ITER_END;
+          }
+        }
+        current_++;
         break;
       }
       current_++;
