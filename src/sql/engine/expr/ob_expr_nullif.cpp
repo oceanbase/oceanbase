@@ -74,7 +74,9 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
   int ret = OB_SUCCESS;
   type.set_meta(type1.get_obj_meta());
   type.set_accuracy(type1.get_accuracy());
-  if (ob_is_string_type(type.get_type()) || ob_is_enumset_tc(type.get_type())) {
+  if (ob_is_real_type(type.get_type()) && SCALE_UNKNOWN_YET != type1.get_scale()) {
+    type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type1.get_scale())));
+  } else if (ob_is_string_type(type.get_type()) || ob_is_enumset_tc(type.get_type())) {
     ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
     ObCollationType res_cs_type = CS_TYPE_INVALID;
     OZ(ObCharset::aggregate_collation(type1.get_collation_level(), type1.get_collation_type(),
@@ -198,6 +200,8 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
           cmp_func = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                             rt_expr.args_[0]->datum_meta_.type_,
                                                             rt_expr.args_[1]->datum_meta_.type_,
+                                                            rt_expr.args_[0]->datum_meta_.scale_,
+                                                            rt_expr.args_[1]->datum_meta_.scale_,
                                                             lib::is_oracle_mode(),
                                                             rt_expr.args_[0]->datum_meta_.cs_type_);
         }
@@ -211,6 +215,8 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
           if (OB_ISNULL(cmp_func = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                             cmp_meta.get_type(),
                                                             cmp_meta.get_type(),
+                                                            cmp_meta.get_scale(),
+                                                            cmp_meta.get_scale(),
                                                             lib::is_oracle_mode(),
                                                             cmp_meta.get_collation_type()))){
             ret = OB_INVALID_ARGUMENT;

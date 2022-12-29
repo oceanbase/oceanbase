@@ -635,6 +635,7 @@ int ObStorageDatumUtils::init(const ObIArray<share::schema::ObColDesc> &col_desc
         bool is_ascending = true || col_desc.col_order_ == ObOrderType::ASC;
         sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(col_desc.col_type_.get_type(),
                                                                           col_desc.col_type_.get_collation_type(),
+                                                                          col_desc.col_type_.get_scale(),
                                                                           is_oracle_mode);
         if (OB_UNLIKELY(nullptr == basic_funcs
                        || nullptr == basic_funcs->null_last_cmp_

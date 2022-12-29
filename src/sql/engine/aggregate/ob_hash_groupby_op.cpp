@@ -693,6 +693,7 @@ int ObHashGroupByOp::init_distinct_info(bool is_part)
                             expr->datum_meta_.type_,
                             NULL_LAST,//这里null last还是first无所谓
                             expr->datum_meta_.cs_type_,
+                            expr->datum_meta_.scale_,
                             lib::is_oracle_mode());
       hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_;
       hash_func.batch_hash_func_ = expr->basic_funcs_->murmur_hash_batch_;

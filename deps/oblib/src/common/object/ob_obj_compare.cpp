@@ -301,6 +301,9 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
              : CR_EQ; \
   }
 
+#define IS_FIXED_DOUBLE_CMP obj1.is_fixed_double() && obj2.is_fixed_double() && \
+  lib::is_mysql_mode()
+
 #define DEFINE_CMP_OP_FUNC_REAL_REAL_EQ(real1_tc, real1_type, real2_tc, real2_type) \
   template <> inline \
   int ObObjCmpFuncs::cmp_op_func<real1_tc, real2_tc, CO_EQ>(const ObObj &obj1, \
@@ -320,6 +323,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_FALSE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) == 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num == r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -345,6 +350,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_TRUE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) <= 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num <= r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -370,6 +377,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_TRUE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) < 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num < r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -395,6 +404,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_FALSE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) >= 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num >= r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -420,6 +431,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_FALSE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) > 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num > r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -443,6 +456,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_TRUE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) != 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num != r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -468,6 +483,9 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_LT;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      int cmp_res = fixed_double_cmp(obj1, obj2);\
+      ret = cmp_res == 0 ? CR_EQ : (cmp_res < 0 ? CR_LT : CR_GT);\
     } else {\
       ret = l_num == r_num ? CR_EQ : (l_num < r_num ? CR_LT : CR_GT);\
     }\

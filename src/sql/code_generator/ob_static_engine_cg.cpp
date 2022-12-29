@@ -1121,6 +1121,7 @@ int ObStaticEngineCG::generate_spec(
                                 expr->datum_meta_.type_,
                                 NULL_LAST,//这里null last还是first无所谓
                                 expr->datum_meta_.cs_type_,
+                                expr->datum_meta_.scale_,
                                 lib::is_oracle_mode());
           ObHashFunc hash_func;
           hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_;
@@ -1254,6 +1255,7 @@ int ObStaticEngineCG::generate_hash_set_spec(ObLogSet &op, ObHashSetSpec &spec)
                                                                 expr->datum_meta_.type_,
                                                                 field_collation.null_pos_,
                                                                 field_collation.cs_type_,
+                                                                expr->datum_meta_.scale_,
                                                                 lib::is_oracle_mode());
         ObHashFunc hash_func;
         hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_;
@@ -1423,6 +1425,7 @@ int ObStaticEngineCG::generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec
                                                                   expr->datum_meta_.type_,
                                                                   field_collation.null_pos_,
                                                                   field_collation.cs_type_,
+                                                                  expr->datum_meta_.scale_,
                                                                   lib::is_oracle_mode());
           if (OB_ISNULL(cmp_func.cmp_func_)) {
             ret = OB_ERR_UNEXPECTED;
@@ -1595,6 +1598,7 @@ int ObStaticEngineCG::fill_sort_funcs(
                                                                 expr->datum_meta_.type_,
                                                                 sort_collation.null_pos_,
                                                                 sort_collation.cs_type_,
+                                                                expr->datum_meta_.scale_,
                                                                 lib::is_oracle_mode());
         if (OB_ISNULL(cmp_func.cmp_func_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -3759,6 +3763,7 @@ int ObStaticEngineCG::generate_pump_exprs(ObLogJoin &op, ObNLConnectBySpecBase &
                               expr->datum_meta_.type_,
                               NULL_LAST,//这里null last还是first无所谓
                               expr->datum_meta_.cs_type_,
+                              expr->datum_meta_.scale_,
                               lib::is_oracle_mode());
         if (OB_ISNULL(cmp_func.cmp_func_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -4002,8 +4007,9 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
         ObDatumMeta &r = equal_cond_info.expr_->args_[1]->datum_meta_;
         CK(l.cs_type_ == r.cs_type_);
         if (OB_SUCC(ret)) {
+          const ObScale scale = ObDatumFuncs::max_scale(l.scale_, r.scale_);
           equal_cond_info.ns_cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(l.type_,
-                             r.type_, default_null_pos(), l.cs_type_, is_oracle_mode());
+                             r.type_, default_null_pos(), l.cs_type_, scale, is_oracle_mode());
           CK(OB_NOT_NULL(equal_cond_info.ns_cmp_func_));
           OZ(calc_equal_cond_opposite(op, *raw_expr, equal_cond_info.is_opposite_));
           OZ(mj_spec.equal_cond_infos_.push_back(equal_cond_info));
@@ -5118,6 +5124,7 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
                                                                    expr->datum_meta_.type_,
                                                                    field_collation.null_pos_,
                                                                    field_collation.cs_type_,
+                                                                   expr->datum_meta_.scale_,
                                                                    lib::is_oracle_mode());
           if (OB_ISNULL(cmp_func.cmp_func_)) {
             ret = OB_ERR_UNEXPECTED;
@@ -5619,6 +5626,7 @@ int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem> &sort_keys,
                                                                  expr->datum_meta_.type_,
                                                                  field_collation.null_pos_,
                                                                  field_collation.cs_type_,
+                                                                 expr->datum_meta_.scale_,
                                                                  lib::is_oracle_mode());
         if (OB_ISNULL(cmp_func.cmp_func_)) {
           ret = OB_ERR_UNEXPECTED;

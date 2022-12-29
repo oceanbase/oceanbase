@@ -283,6 +283,9 @@ int ObExprAbs::calc_result_type1(ObExprResType &type, ObExprResType &type1,
     if (lib::is_oracle_mode() && (type1.is_varchar_or_char() || type1.is_number_float())) {
       type.set_precision(PRECISION_UNKNOWN_YET);
       type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+    } else if (lib::is_mysql_mode() && type.is_double() && type1.get_scale() != SCALE_UNKNOWN_YET) {
+      type.set_scale(type1.get_scale());
+      type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type1.get_scale())));
     } else {
       type.set_accuracy(type1.get_accuracy());
     }

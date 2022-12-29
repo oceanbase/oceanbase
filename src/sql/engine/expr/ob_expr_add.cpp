@@ -69,11 +69,15 @@ int ObExprAdd::calc_result_type2(ObExprResType &type,
     } else {
       ObScale scale1 = static_cast<ObScale>(MAX(type1.get_scale(), 0));
       ObScale scale2 = static_cast<ObScale>(MAX(type2.get_scale(), 0));
-      int64_t inter_part_length1 = type1.get_precision() - type1.get_scale();
-      int64_t inter_part_length2 = type2.get_precision() - type2.get_scale();
       scale = MAX(scale1, scale2);
-      precision = static_cast<ObPrecision>(MAX(inter_part_length1, inter_part_length2)
-                                           + CARRY_OFFSET + scale);
+      if (lib::is_mysql_mode() && type.is_double()) {
+        precision = ObMySQLUtil::float_length(scale);
+      } else {
+        int64_t inter_part_length1 = type1.get_precision() - type1.get_scale();
+        int64_t inter_part_length2 = type2.get_precision() - type2.get_scale();
+        precision = static_cast<ObPrecision>(MAX(inter_part_length1, inter_part_length2)
+                                            + CARRY_OFFSET + scale);
+      }
     }
 
     type.set_scale(scale);

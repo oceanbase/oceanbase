@@ -431,6 +431,7 @@ public:
                                   const common::ObLobLocator &lob_locator, int64_t &pos);
   static int json_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos);
   static int geometry_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos);
+  static inline int16_t float_length(const int16_t scale);
 public:
   static const uint64_t NULL_;
 
@@ -735,6 +736,14 @@ void ObMySQLUtil::get_uint8(char *&pos, uint64_t &v)
     v = uint8korr(pos);
     pos += 8;
   }
+}
+
+/*
+ * get precision for double type, keep same with MySQL
+ */
+int16_t ObMySQLUtil::float_length(const int16_t scale)
+{
+  return (scale >= 0 && scale <= OB_MAX_DOUBLE_FLOAT_SCALE) ? DBL_DIG + 2 + scale : DBL_DIG + 8;
 }
 
 }      // namespace obmysql

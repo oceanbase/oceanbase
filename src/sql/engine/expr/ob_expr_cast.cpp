@@ -332,13 +332,25 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       // however, ob use -1 as default precision, so it is a valid value
       type.set_collation_type(dst_type.get_collation_type());
       ObPrecision float_precision = dst_type.get_precision();
-      if (float_precision < -1 || float_precision > OB_MAX_DOUBLE_FLOAT_PRECISION) {
+      ObScale float_scale = dst_type.get_scale();
+      if (OB_UNLIKELY(float_scale > OB_MAX_DOUBLE_FLOAT_SCALE)) {
+        ret = OB_ERR_TOO_BIG_SCALE;
+        LOG_USER_ERROR(OB_ERR_TOO_BIG_SCALE, float_scale, "CAST", OB_MAX_DOUBLE_FLOAT_SCALE);
+        LOG_WARN("scale of float overflow", K(ret), K(float_scale), K(float_precision));
+      } else if (float_precision < -1 ||
+          (SCALE_UNKNOWN_YET == float_scale && float_precision > OB_MAX_DOUBLE_FLOAT_PRECISION)) {
         ret = OB_ERR_TOO_BIG_PRECISION;
         LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, float_precision, "CAST", OB_MAX_DOUBLE_FLOAT_PRECISION);
-      } else if (float_precision <= OB_MAX_FLOAT_PRECISION) {
-        type.set_type(ObFloatType);
+      } else if (SCALE_UNKNOWN_YET == float_scale) {
+        if (float_precision <= OB_MAX_FLOAT_PRECISION) {
+          type.set_type(ObFloatType);
+        } else {
+          type.set_type(ObDoubleType);
+        }
       } else {
-        type.set_type(ObDoubleType);
+        type.set_type(ObFloatType);
+        type.set_precision(float_precision);
+        type.set_scale(float_scale);
       }
     } else {
       type.set_type(dst_type.get_type());

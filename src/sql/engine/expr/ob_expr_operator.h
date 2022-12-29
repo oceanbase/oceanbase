@@ -1208,7 +1208,7 @@ public:
           common::ObCharset::charset_type_by_coll(type2.get_collation_type());
     } else {
       auto func_ptr = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(
-          type1.get_type(), type2.get_type(), cmp_op,
+          type1.get_type(), type2.get_type(), type1.get_scale(), type2.get_scale(), cmp_op,
           lib::is_oracle_mode(), common::CS_TYPE_MAX);
       need_no_cast = (func_ptr != nullptr);
     }

@@ -75,6 +75,7 @@ TEST(ObTestDatumCmp, defined_nullsafe_func_by_type)
                                                       static_cast<ObObjType>(j),
                                                       NULL_FIRST,
                                                       CS_TYPE_COLLATION_FREE,
+                                                      SCALE_UNKNOWN_YET,
                                                       false)) {
         of_result << "defined\n";
       } else {
@@ -104,6 +105,8 @@ TEST(ObTestDatumCmp, defined_expr_func_by_type)
                 << "> : ";
       if (NULL != ObExprCmpFuncsHelper::get_datum_expr_cmp_func(static_cast<ObObjType>(i),
                                                         static_cast<ObObjType>(j),
+                                                        SCALE_UNKNOWN_YET,
+                                                        SCALE_UNKNOWN_YET,
                                                         false,
                                                         CS_TYPE_COLLATION_FREE)) {
         of_result << "defined\n";

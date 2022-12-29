@@ -66,8 +66,8 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
     if (SCALE_UNKNOWN_YET == type1.get_scale() || SCALE_UNKNOWN_YET == type2.get_scale()) {
       type.set_scale(SCALE_UNKNOWN_YET);
     } else {
-      if (lib::is_oracle_mode()) {
-        type.set_scale(MIN(static_cast<ObScale>(scale1 + scale2), OB_MAX_NUMBER_SCALE));
+      if (lib::is_mysql_mode() && type.is_double()) {
+        type.set_scale(MAX(scale1, scale2));
       } else {
         type.set_scale(MIN(static_cast<ObScale>(scale1 + scale2), OB_MAX_DECIMAL_SCALE));
       }
@@ -79,8 +79,12 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
       type.set_precision(PRECISION_UNKNOWN_YET);
     } else {
       // estimated precision
-      type.set_precision(static_cast<ObPrecision>((precision1 - scale1)
-          +  (precision2 - scale2) + type.get_scale()));
+      if (lib::is_mysql_mode() && type.is_double()) {
+        type.set_precision(ObMySQLUtil::float_length(type.get_scale()));
+      } else {
+        type.set_precision(static_cast<ObPrecision>((precision1 - scale1)
+            +  (precision2 - scale2) + type.get_scale()));
+      }
     }
   }
   return ret;

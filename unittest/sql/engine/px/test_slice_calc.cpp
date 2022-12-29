@@ -68,6 +68,7 @@ void TestPkeyRangeSliceCalc::SetUp()
       ObObjType::ObIntType,
       ObCmpNullPos::NULL_LAST,
       ObCollationType::CS_TYPE_BINARY,
+      SCALE_UNKNOWN_YET,
       false/*is_orace_mode*/);
   ASSERT_EQ(OB_SUCCESS, sort_cmp_funcs_.push_back(cmp_func));
   int_datum_.int_ = &tmp_int_;
