@@ -273,11 +273,6 @@ int ObSPIResultSet::start_cursor_stmt(
   CK (OB_NOT_NULL(pl_ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = pl_ctx->exec_ctx_->get_my_session()));
   if (OB_SUCC(ret)) {
-    if (stmt::T_SELECT != stmt_type) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("only supported select stmt in cursor", K(ret), K(stmt_type));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-select stmt in cursor");
-    }
     OZ (store_orign_session(session));
     OX (need_end_nested_stmt_ = EST_RESTORE_SESSION);
   }
@@ -3023,6 +3018,10 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     LOG_USER_ERROR(OB_ER_SP_CURSOR_ALREADY_OPEN);
     LOG_WARN("Cursor is already open",
       K(ret), KPC(cursor), K(package_id), K(routine_id), K(cursor_index), K(cursor_var), K(loc));
+  } else if (stmt::T_SELECT != static_cast<stmt::StmtType>(type)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only supported select stmt in cursor", K(ret), K(type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-select stmt in cursor");
   } else {
     ParamStore current_params(ObWrapperAllocator(ctx->allocator_));
     ObIAllocator *allocator = cursor->get_allocator();
@@ -3276,6 +3275,10 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
 
   if (OB_FAIL(ret)) {
     // do nothing
+  } else if (stmt::T_SELECT != static_cast<stmt::StmtType>(stmt_type)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only supported select stmt in cursor", K(ret), K(stmt_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-select stmt in cursor");
   } else if (!for_update && use_stream) {
     ObSPIResultSet *spi_result = NULL;
     OX (cursor.set_streaming());
