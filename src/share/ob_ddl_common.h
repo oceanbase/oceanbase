@@ -313,6 +313,11 @@ public:
 
   static int64_t get_ddl_rpc_timeout();
 
+  static int get_ddl_cluster_version(
+     const uint64_t tenant_id,
+     const uint64_t task_id,
+     int64_t &ddl_cluster_version);
+
 private:
   static int generate_column_name_str(
     const common::ObIArray<ObColumnNameInfo> &column_names,

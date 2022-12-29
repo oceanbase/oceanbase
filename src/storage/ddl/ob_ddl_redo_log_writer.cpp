@@ -960,6 +960,7 @@ int ObDDLSSTableRedoWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_i
 
 int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
                                            const int64_t execution_id,
+                                           const int64_t ddl_cluster_version,
                                            ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
@@ -972,11 +973,11 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0)) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || ddl_cluster_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key), K(execution_id));
-  } else if (OB_FAIL(log.init(table_key, GET_MIN_CLUSTER_VERSION(), execution_id))) {
-    LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), K(execution_id), "cluster_version", GET_MIN_CLUSTER_VERSION());
+    LOG_WARN("invalid arguments", K(ret), K(table_key), K(execution_id), K(ddl_cluster_version));
+  } else if (OB_FAIL(log.init(table_key, ddl_cluster_version, execution_id))) {
+    LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), K(execution_id), K(ddl_cluster_version));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {

@@ -48,8 +48,8 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const common::ObAddr &inner_sql_exec_addr)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
-    execution_id_(execution_id), sql_mode_(sql_mode), trace_id_(trace_id), parallelism_(parallelism),
-    use_heap_table_ddl_plan_(use_heap_table_ddl_plan), root_service_(root_service),
+    execution_id_(execution_id), sql_mode_(sql_mode), trace_id_(trace_id),
+    parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan), root_service_(root_service),
     inner_sql_exec_addr_(inner_sql_exec_addr)
 {
   set_retry_times(0); // do not retry
@@ -1310,7 +1310,7 @@ int ObDDLRedefinitionTask::serialize_params_to_message(char *buf, const int64_t 
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
   } else {
-    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_);
+    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, cluster_version_);
   }
   return ret;
 }
@@ -1329,7 +1329,7 @@ int ObDDLRedefinitionTask::deserlize_params_from_message(const char *buf, const 
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
   } else {
-    LST_DO_CODE(OB_UNIS_DECODE, parallelism_);
+    LST_DO_CODE(OB_UNIS_DECODE, parallelism_, cluster_version_);
   }
   return ret;
 }
@@ -1337,7 +1337,7 @@ int ObDDLRedefinitionTask::deserlize_params_from_message(const char *buf, const 
 int64_t ObDDLRedefinitionTask::get_serialize_param_size() const
 {
   return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_)
-         + serialization::encoded_length_i64(parallelism_);
+         + serialization::encoded_length_i64(parallelism_) + serialization::encoded_length_i64(cluster_version_);
 }
 
 int ObDDLRedefinitionTask::check_health()
