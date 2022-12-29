@@ -263,9 +263,9 @@ public:
   int64_t ddl_snapshot_version_;
   // max_sync_version may less than storage_schema.schema_version_ when major update schema
   int64_t max_sync_storage_schema_version_;
-  int64_t max_serialized_medium_scn_;
   int64_t ddl_execution_id_;
   int64_t ddl_cluster_version_;
+  int64_t max_serialized_medium_scn_;
 };
 
 } // namespace storage
