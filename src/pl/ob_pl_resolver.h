@@ -964,6 +964,9 @@ private:
                                    const uint64_t udt_id, ObString &db_name);
   static bool check_with_rowid(const ObString &routine_name,
                                bool is_for_trigger);
+  static int recursive_replace_expr(ObRawExpr *expr,
+                                    ObQualifiedName &qualified_name,
+                                    ObRawExpr *real_expr);
 private:
   ObPLResolveCtx resolve_ctx_;
   ObPLExternalNS external_ns_;
