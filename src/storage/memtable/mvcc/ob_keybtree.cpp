@@ -1414,7 +1414,7 @@ BtreeNode *BtreeNodeAllocator::alloc_node(const bool is_emergency)
   int ret = OB_SUCCESS;
   UNUSED(is_emergency);
   if (OB_FAIL(pop(p))) {
-    OB_LOG(ERROR, "alloc_block fail", K(get_allocated()));
+    OB_LOG(WARN, "alloc_block fail", K(get_allocated()));
   }
   return p;
 }
