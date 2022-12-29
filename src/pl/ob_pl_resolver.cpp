@@ -5184,8 +5184,16 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
           ObPLStmtBlock *body_block = NULL;
           int64_t top_continue = handler_analyzer_.get_continue();
           ++current_level_;
-          handler_analyzer_.set_continue(OB_INVALID_INDEX);
-          if (OB_FAIL(resolve_stmt_list(parse_tree->children_[1],
+          if (handler_analyzer_.in_continue()) {
+            ObPLDeclareHandlerStmt::DeclareHandler info;
+            if (OB_FAIL(handler_analyzer_.get_handler(top_continue, info))) {
+              LOG_WARN("failed to get top continue handler", K(ret), K(top_continue));
+            } else if (info.get_level() == (current_level_ - 1)) {
+              handler_analyzer_.set_continue(OB_INVALID_INDEX);
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(resolve_stmt_list(parse_tree->children_[1],
                                         body_block,
                                         func,
                                         true,/*stop scarch label*/
