@@ -279,6 +279,7 @@ int ObSharedMacroBlockMgr::try_switch_macro_block()
   if (block_id.is_valid() && OB_FAIL(add_block(block_id, used_size))) {
     LOG_WARN("fail to add cur block to map", K(ret), K(block_id));
   } else if (FALSE_IT(macro_handle_.reset())) {
+  } else if (FALSE_IT(offset_ = OB_DEFAULT_MACRO_BLOCK_SIZE /* invalid offset */)) {
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.alloc_block(macro_handle_))) {
     LOG_WARN("fail to alloc block for new macro block", K(ret));
   } else {
