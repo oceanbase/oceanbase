@@ -5855,51 +5855,59 @@ int ObAggregateProcessor::fast_single_row_agg(ObEvalCtx &eval_ctx)
     if (aggr_info.is_implicit_first_aggr()) {
       continue;
     }
-    const ObItemType aggr_fun = aggr_info.get_expr_type();
-    switch (aggr_fun) {
-      case T_FUN_COUNT: {
-        bool has_null = false;
-        ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx);
-        for (int64_t j = 0; !has_null && j < aggr_info.param_exprs_.count(); ++j) {
-          has_null = aggr_info.param_exprs_.at(j)->locate_expr_datum(eval_ctx).is_null();
-        }
-        if (lib::is_mysql_mode()) {
-          result.set_int(has_null ? 0 : 1);
-        } else {
-          result.set_number(has_null ? ObNumber::get_zero() : ObNumber::get_positive_one());
-        }
-        break;
+    for (int64_t j = 0; OB_SUCC(ret) && j < aggr_info.param_exprs_.count(); ++j) {
+      ObDatum *tmp_res = nullptr;
+      if (OB_FAIL(aggr_info.param_exprs_.at(j)->eval(eval_ctx, tmp_res))) {
+        LOG_WARN("failed to eval param expr", K(ret), K(j));
       }
-      case T_FUN_SUM: {
-        ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx);
-        const ObObjTypeClass tc = ob_obj_type_class(aggr_info.get_first_child_type());
-        if ((ObIntTC == tc || ObUIntTC == tc) && !aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).is_null()) {
-          ObNumStackAllocator<2> tmp_alloc;
-          ObNumber result_nmb;
-          if (ObIntTC == tc) {
-            if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_int(), tmp_alloc))) {
+    }
+    if (OB_SUCC(ret)) {
+      const ObItemType aggr_fun = aggr_info.get_expr_type();
+      switch (aggr_fun) {
+        case T_FUN_COUNT: {
+          bool has_null = false;
+          ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx);
+          for (int64_t j = 0; !has_null && j < aggr_info.param_exprs_.count(); ++j) {
+            has_null = aggr_info.param_exprs_.at(j)->locate_expr_datum(eval_ctx).is_null();
+          }
+          if (lib::is_mysql_mode()) {
+            result.set_int(has_null ? 0 : 1);
+          } else {
+            result.set_number(has_null ? ObNumber::get_zero() : ObNumber::get_positive_one());
+          }
+          break;
+        }
+        case T_FUN_SUM: {
+          ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx);
+          const ObObjTypeClass tc = ob_obj_type_class(aggr_info.get_first_child_type());
+          if ((ObIntTC == tc || ObUIntTC == tc) && !aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).is_null()) {
+            ObNumStackAllocator<2> tmp_alloc;
+            ObNumber result_nmb;
+            if (ObIntTC == tc) {
+              if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_int(), tmp_alloc))) {
+                  LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
+                }
+            } else {
+              if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_uint(), tmp_alloc))) {
                 LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
               }
-          } else {
-            if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_uint(), tmp_alloc))) {
-              LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
             }
+            OX (result.set_number(result_nmb));
+          } else {
+            result.set_datum(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx));
           }
-          OX (result.set_number(result_nmb));
-        } else {
-          result.set_datum(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx));
+          break;
         }
-        break;
-      }
-      case T_FUN_MAX:
-      case T_FUN_MIN: {
-        ObDatum &result = aggr_info.expr_->locate_expr_datum(eval_ctx);
-        result.set_datum(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx));
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unknown aggr function type", K(ret), K(aggr_fun), K(*aggr_info.expr_));
+        case T_FUN_MAX:
+        case T_FUN_MIN: {
+          ObDatum &result = aggr_info.expr_->locate_expr_datum(eval_ctx);
+          result.set_datum(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx));
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unknown aggr function type", K(ret), K(aggr_fun), K(*aggr_info.expr_));
+        }
       }
     }
   }
