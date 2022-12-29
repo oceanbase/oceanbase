@@ -2774,15 +2774,24 @@ int ObSql::code_generate(
         } // for end
       }
     }
+    // get tablet id and partition id for non partition tables
     if (OB_SUCC(ret)) {
+      bool skip_non_partition_optimized = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < tbl_part_infos.count(); i++) {
         ObTableLocation &tl = tbl_part_infos.at(i)->get_table_location();
         if (tl.is_partitioned() || is_virtual_table(tl.get_loc_meta().ref_table_id_)) {
-          continue;
-        } else if (OB_FAIL(tl.calc_not_partitioned_table_ids(result.get_exec_context()))) {
-          LOG_WARN("failed to calc not partitioned table ids", K(ret));
-        } else {
-          tl.set_is_non_partition_optimized(true);
+          skip_non_partition_optimized = true;
+          break;
+        }
+      }
+      if (OB_SUCC(ret) && !skip_non_partition_optimized) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tbl_part_infos.count(); i++) {
+          ObTableLocation &tl = tbl_part_infos.at(i)->get_table_location();
+          if (OB_FAIL(tl.calc_not_partitioned_table_ids(result.get_exec_context()))) {
+            LOG_WARN("failed to calc not partitioned table ids", K(ret));
+          } else {
+            tl.set_is_non_partition_optimized(true);
+          }
         }
       }
     }
