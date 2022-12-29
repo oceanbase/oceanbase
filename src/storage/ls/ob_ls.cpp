@@ -932,9 +932,6 @@ int ObLS::try_sync_reserved_snapshot(
   } else {
     ObRole role = INVALID_ROLE;
     int64_t proposal_id = 0;
-    int64_t read_lock = LSLOCKLS | LSLOCKLOG;
-    int64_t write_lock = 0;
-    ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
     if (is_stopped_) {
       // do nothing
     } else if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {

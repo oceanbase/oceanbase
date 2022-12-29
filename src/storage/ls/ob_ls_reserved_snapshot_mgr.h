@@ -97,6 +97,7 @@ private:
   int64_t min_reserved_snapshot_;
   int64_t next_reserved_snapshot_;
   mutable common::TCRWLock snapshot_lock_;
+  lib::ObMutex sync_clog_lock_;
   storage::ObLS *ls_;
   ObLSHandle ls_handle_;
   common::hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> dependent_tablet_set_; // tablet_id
