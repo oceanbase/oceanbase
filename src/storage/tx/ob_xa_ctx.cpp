@@ -2498,11 +2498,16 @@ int ObXACtx::two_phase_end_trans(const ObXATransID &xid,
   } else if (OB_FAIL(check_trans_state_(is_rollback, request_id, false))) {
     TRANS_LOG(WARN, "check trans state fail", K(ret), K(xid), K(is_rollback), K(timeout_us));
   } else {
+    ObTxDesc *tx = NULL;
     if (OB_FAIL(MTL(ObTransService*)->end_two_phase_tx(trans_id_, xid, coord, timeout_us,
-            is_rollback, end_trans_cb_))) {
+            is_rollback, end_trans_cb_, tx))) {
       TRANS_LOG(WARN, "fail to end trans for two phase commit", K(ret), K(xid), K(coord),
           K(is_rollback), K(timeout_us), K(*this));
+    } else if (OB_ISNULL(tx)) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid trans descriptor", K(ret), K(xid));
     } else {
+      tx_desc_ = tx;
       request_id_ = request_id;
       if (is_rollback) {
         xa_trans_state_ = ObXATransState::ROLLBACKING;

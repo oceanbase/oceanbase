@@ -287,6 +287,7 @@ int ObTxCycleTwoPhaseCommitter::retransmit_upstream_msg_(const ObTxState state)
         } else {
           need_respond = false;
         }
+        break;
       }
       case ObTxState::PREPARE: {
         msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_RESP;
