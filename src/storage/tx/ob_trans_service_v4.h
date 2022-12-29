@@ -47,7 +47,8 @@ int end_two_phase_tx(const ObTransID &tx_id,
                      const share::ObLSID &ls_id,
                      const int64_t timeout_us,
                      const bool is_rollback,
-                     ObITxCallback &cb);
+                     ObITxCallback &cb,
+                     ObTxDesc *&tx_desc);
 
 /*
  * acquire transaction's coordinator
