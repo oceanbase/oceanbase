@@ -237,6 +237,36 @@ public:
                                     ObCmpOp cmp_op,
                                     obj_cmp_func_nullsafe &func);
 
+  OB_INLINE static int fixed_double_cmp(const ObObj &obj1, const ObObj &obj2)
+  {
+    int ret = 0;
+    const double P[] =
+    {
+      5/1e000, 5/1e001, 5/1e002, 5/1e003, 5/1e004, 5/1e005, 5/1e006, 5/1e007,
+      5/1e008, 5/1e009, 5/1e010, 5/1e011, 5/1e012, 5/1e013, 5/1e014, 5/1e015,
+      5/1e016, 5/1e017, 5/1e018, 5/1e019, 5/1e020, 5/1e021, 5/1e022, 5/1e023,
+      5/1e024, 5/1e025, 5/1e026, 5/1e027, 5/1e028, 5/1e029, 5/1e030, 5/1e031
+    };
+    // Compatible with mysql, the condition for judging whether two fixed double are equal
+    // is that their fabs is less than 5 divided by the log10 of the maximum scale plus 1.
+    const int cmp_scale = MAX(obj1.get_scale(), obj2.get_scale()) + 1;
+    double p = 0;
+    if (cmp_scale <= 0 || cmp_scale > OB_NOT_FIXED_SCALE) {
+      p = P[OB_NOT_FIXED_SCALE];
+      COMMON_LOG(ERROR, "not fixed obj", K(obj1), K(obj2), K(lbt()));
+    } else {
+      p = P[cmp_scale];
+    }
+    const double l = obj1.get_double();
+    const double r = obj2.get_double();
+    if (l == r || fabs(l - r) < p) {
+      ret = 0;
+    } else {
+      ret = (l < r ? -1 : 1);
+    }
+    return ret;
+  }
+
   enum ObCmpRes
   {
     // for bool.

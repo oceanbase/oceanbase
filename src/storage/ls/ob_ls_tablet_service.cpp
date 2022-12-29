@@ -4827,6 +4827,12 @@ int ObLSTabletService::table_refresh_row(
       LOG_WARN("get row from single row col count not equal.", K(ret), K(row.get_count()), K(new_row->get_count()));
     } else {
       LOG_DEBUG("get new row success.", K(row), KPC(new_row));
+      // passing fixed double scale from row to new_row
+      for (int64_t i = 0; OB_SUCC(ret) && i < new_row->get_count(); ++i) {
+        if (row.cells_[i].is_fixed_double()) {
+          new_row->cells_[i].set_scale(row.cells_[i].get_scale());
+        }
+      }
       if (OB_FAIL(ob_write_row(run_ctx.lob_allocator_, *new_row, row))) {
         LOG_WARN("failed to deep copy new row", K(ret));
       } else {

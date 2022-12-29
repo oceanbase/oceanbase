@@ -145,7 +145,7 @@ int ObDictEncoder::build_dict()
   } else {
     if (need_sort_) {
       sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
-          column_type_.get_type(), column_type_.get_collation_type());
+          column_type_.get_type(), column_type_.get_collation_type(), column_type_.get_scale());
       ObCmpFunc cmp_func;
       cmp_func.cmp_func_ = lib::is_oracle_mode()
           ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;

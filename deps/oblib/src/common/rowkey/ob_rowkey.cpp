@@ -18,6 +18,7 @@
 #include "common/rowkey/ob_rowkey_info.h"
 #include "common/object/ob_object.h"
 #include "common/object/ob_obj_type.h"
+#include "common/object/ob_obj_compare.h"
 
 namespace oceanbase
 {
@@ -104,7 +105,13 @@ int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
           is_equal = (obj.v_.float_ == rhs_obj.v_.float_);
           break;
         case ObDoubleTC:
-          is_equal = (obj.v_.double_ == rhs_obj.v_.double_);
+          {
+            if (lib::is_mysql_mode() && obj.is_fixed_double() && rhs_obj.is_fixed_double()) {
+              is_equal = ObObjCmpFuncs::fixed_double_cmp(obj, rhs_obj) == 0;
+            } else {
+              is_equal = (obj.v_.double_ == rhs_obj.v_.double_);
+            }
+          }
           break;
         case ObOTimestampTC:
           is_equal = (obj.time_ctx_.desc_ == rhs_obj.time_ctx_.desc_ && obj.v_.datetime_ == rhs_obj.v_.datetime_);
@@ -203,7 +210,13 @@ bool ObRowkey::simple_equal(const ObRowkey &rhs) const
           ret = (obj.v_.float_ == rhs_obj.v_.float_);
           break;
         case ObDoubleTC:
-          ret = (obj.v_.double_ == rhs_obj.v_.double_);
+          {
+            if (lib::is_mysql_mode() && obj.is_fixed_double() && rhs_obj.is_fixed_double()) {
+              ret = ObObjCmpFuncs::fixed_double_cmp(obj, rhs_obj) == 0;
+            } else {
+              ret = (obj.v_.double_ == rhs_obj.v_.double_);
+            }
+          }
           break;
         case ObOTimestampTC:
           ret = (obj.time_ctx_.desc_ == rhs_obj.time_ctx_.desc_ && obj.v_.datetime_ == rhs_obj.v_.datetime_);

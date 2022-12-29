@@ -24,6 +24,12 @@ namespace sql
 {
 using namespace common;
 
+#define IS_FIXED_DOUBLE                                         \
+  !is_oracle_mode &&                                            \
+  ob_is_double_type(type1) && ob_is_double_type(type2) &&       \
+  SCALE_UNKNOWN_YET < scale1 && SCALE_UNKNOWN_YET < scale2 &&   \
+  MAX(scale1, scale2) <= OB_MAX_DOUBLE_FLOAT_SCALE              \
+
 template<ObCmpOp cmp_op>
 constexpr int get_cmp_ret(const int)
 {
@@ -176,6 +182,37 @@ struct ObRelationalStrFunc<true, CS_TYPE, WITH_END_SPACE, CMP_OP>
   // }
 };
 
+
+template<bool, ObScale SCALE, ObCmpOp CMP_OP>
+struct ObRelationFixedDoubleFunc{};
+
+template<ObScale SCALE, ObCmpOp CMP_OP>
+struct ObRelationFixedDoubleFunc<false, SCALE, CMP_OP> : ObDummyRelationalFunc {};
+
+template<ObScale SCALE, ObCmpOp CMP_OP>
+struct ObRelationFixedDoubleFunc<true, SCALE, CMP_OP>
+{
+  struct DatumCmp
+  {
+    int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
+    {
+      res.set_int(get_cmp_ret<CMP_OP>(datum_cmp::ObFixedDoubleCmp<SCALE>::cmp(l, r)));
+      return OB_SUCCESS;
+    }
+  };
+
+  inline static int eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+  {
+    return def_relational_eval_func<DatumCmp>(expr, ctx, expr_datum);
+  }
+
+  inline static int eval_batch(BATCH_EVAL_FUNC_ARG_DECL)
+  {
+    return def_relational_eval_batch_func<DatumCmp>(BATCH_EVAL_FUNC_ARG_LIST);
+  }
+};
+
+
 // define null, extend, string evaluate batch functions.
 template<ObCmpOp CMP_OP>
 struct ObRelationalExtraFunc
@@ -249,6 +286,10 @@ static ObDatumCmpFuncType DATUM_TC_CMP_FUNCS[ObMaxTC][ObMaxTC];
 
 static ObExpr::EvalFunc EVAL_STR_CMP_FUNCS[CS_TYPE_MAX][CO_MAX][2];
 static ObDatumCmpFuncType DATUM_STR_CMP_FUNCS[CS_TYPE_MAX][2];
+
+static ObExpr::EvalFunc EVAL_FIXED_DOUBLE_CMP_FUNCS[OB_NOT_FIXED_SCALE][CO_MAX];
+static ObExpr::EvalBatchFunc EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS[OB_NOT_FIXED_SCALE][CO_MAX];
+static ObDatumCmpFuncType DATUM_FIXED_DOUBLE_CMP_FUNCS[OB_NOT_FIXED_SCALE];
 
 template<int X>
 struct ExtraExprCmpIniter
@@ -378,6 +419,42 @@ int g_init_tc_ret = Ob2DArrayConstIniter<ObMaxTC, ObMaxTC, TCExprCmpFuncIniter>:
 int g_init_str_ret = Ob2DArrayConstIniter<CS_TYPE_MAX, CO_MAX, StrExprFuncIniter>::init();
 int g_init_datum_str_ret = ObArrayConstIniter<CS_TYPE_MAX, DatumStrExprCmpIniter>::init();
 
+template<int X>
+struct FixedDoubleCmpFuncIniter
+{
+  using Def = datum_cmp::ObFixedDoubleCmp<static_cast<ObScale>(X)>;
+
+  template<ObCmpOp cmp_op>
+  using EvalCmp = ObRelationFixedDoubleFunc<Def::defined_, static_cast<ObScale>(X), cmp_op>;
+  static void init_array()
+  {
+    auto &funcs = EVAL_FIXED_DOUBLE_CMP_FUNCS;
+    funcs[X][CO_LE] = Def::defined_ ? &EvalCmp<CO_LE>::eval : NULL;
+    funcs[X][CO_LT] = Def::defined_ ? &EvalCmp<CO_LT>::eval : NULL;
+    funcs[X][CO_EQ] = Def::defined_ ? &EvalCmp<CO_EQ>::eval : NULL;
+    funcs[X][CO_GE] = Def::defined_ ? &EvalCmp<CO_GE>::eval : NULL;
+    funcs[X][CO_GT] = Def::defined_ ? &EvalCmp<CO_GT>::eval : NULL;
+    funcs[X][CO_NE] = Def::defined_ ? &EvalCmp<CO_NE>::eval : NULL;
+    funcs[X][CO_CMP] = Def::defined_ ? &EvalCmp<CO_CMP>::eval : NULL;
+
+    auto &batch_funcs = EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS;
+    batch_funcs[X][CO_LE] = Def::defined_ ? &EvalCmp<CO_LE>::eval_batch : NULL;
+    batch_funcs[X][CO_LT] = Def::defined_ ? &EvalCmp<CO_LT>::eval_batch : NULL;
+    batch_funcs[X][CO_EQ] = Def::defined_ ? &EvalCmp<CO_EQ>::eval_batch : NULL;
+    batch_funcs[X][CO_GE] = Def::defined_ ? &EvalCmp<CO_GE>::eval_batch : NULL;
+    batch_funcs[X][CO_GT] = Def::defined_ ? &EvalCmp<CO_GT>::eval_batch : NULL;
+    batch_funcs[X][CO_NE] = Def::defined_ ? &EvalCmp<CO_NE>::eval_batch : NULL;
+    // CO_CMP only used in T_FUN_SYS_STRCMP, set to NULL
+    batch_funcs[X][CO_CMP] = NULL;
+
+    DATUM_FIXED_DOUBLE_CMP_FUNCS[X] = Def::defined_ ? &Def::cmp : NULL;
+  }
+};
+
+int g_init_fixed_double_ret =
+  ObArrayConstIniter<OB_NOT_FIXED_SCALE, FixedDoubleCmpFuncIniter>::init();
+
+
 static int64_t fill_type_with_tc_eval_func(void)
 {
   int64_t cnt = 0;
@@ -408,6 +485,8 @@ int64_t g_fill_type_with_tc_eval_func =  fill_type_with_tc_eval_func();
 
 ObExpr::EvalFunc ObExprCmpFuncsHelper::get_eval_expr_cmp_func(const ObObjType type1,
                                                               const ObObjType type2,
+                                                              const ObScale scale1,
+                                                              const ObScale scale2,
                                                               const ObCmpOp cmp_op,
                                                               const bool is_oracle_mode,
                                                               const ObCollationType cs_type)
@@ -423,6 +502,8 @@ ObExpr::EvalFunc ObExprCmpFuncsHelper::get_eval_expr_cmp_func(const ObObjType ty
       OB_UNLIKELY(ob_is_invalid_obj_tc(tc1) ||
       OB_UNLIKELY(ob_is_invalid_obj_tc(tc2)))) {
     func_ptr = NULL;
+  } else if (IS_FIXED_DOUBLE) {
+    func_ptr = EVAL_FIXED_DOUBLE_CMP_FUNCS[MAX(scale1, scale2)][cmp_op];
   } else if (!ObDatumFuncs::is_string_type(type1) || !ObDatumFuncs::is_string_type(type2)) {
     func_ptr = EVAL_TYPE_CMP_FUNCS[type1][type2][cmp_op];
   } else {
@@ -437,6 +518,8 @@ ObExpr::EvalFunc ObExprCmpFuncsHelper::get_eval_expr_cmp_func(const ObObjType ty
 ObExpr::EvalBatchFunc ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
     const ObObjType type1,
     const ObObjType type2,
+    const ObScale scale1,
+    const ObScale scale2,
     const ObCmpOp cmp_op,
     const bool is_oracle_mode,
     const ObCollationType cs_type)
@@ -452,6 +535,8 @@ ObExpr::EvalBatchFunc ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
       OB_UNLIKELY(ob_is_invalid_obj_tc(tc1) ||
       OB_UNLIKELY(ob_is_invalid_obj_tc(tc2)))) {
     func_ptr = NULL;
+  } else if (IS_FIXED_DOUBLE) {
+    func_ptr = EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS[MAX(scale1, scale2)][cmp_op];
   } else if (!ObDatumFuncs::is_string_type(type1) || !ObDatumFuncs::is_string_type(type2)) {
     func_ptr = EVAL_BATCH_TYPE_CMP_FUNCS[type1][type2][cmp_op];
   } else {
@@ -467,6 +552,8 @@ ObExpr::EvalBatchFunc ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
 
 DatumCmpFunc ObExprCmpFuncsHelper::get_datum_expr_cmp_func(const ObObjType type1,
                                            const ObObjType type2,
+                                           const ObScale scale1,
+                                           const ObScale scale2,
                                            const bool is_oracle_mode,
                                            const ObCollationType cs_type)
 {
@@ -476,7 +563,9 @@ DatumCmpFunc ObExprCmpFuncsHelper::get_datum_expr_cmp_func(const ObObjType type1
   ObObjTypeClass tc1 = ob_obj_type_class(type1);
   ObObjTypeClass tc2 = ob_obj_type_class(type2);
   ObDatumCmpFuncType func_ptr = NULL;
-  if (!ObDatumFuncs::is_string_type(type1) || !ObDatumFuncs::is_string_type(type2)) {
+  if (IS_FIXED_DOUBLE) {
+    func_ptr = DATUM_FIXED_DOUBLE_CMP_FUNCS[MAX(scale1, scale2)];
+  } else if (!ObDatumFuncs::is_string_type(type1) || !ObDatumFuncs::is_string_type(type2)) {
     func_ptr = DATUM_TYPE_CMP_FUNCS[type1][type2];
     if (NULL == func_ptr) {
       func_ptr = DATUM_TC_CMP_FUNCS[tc1][tc2];
@@ -552,6 +641,28 @@ static_assert(CS_TYPE_MAX * 2 == sizeof(DATUM_STR_CMP_FUNCS) / sizeof(void *),
 REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_STR,
                    DATUM_STR_CMP_FUNCS,
                    sizeof(DATUM_STR_CMP_FUNCS) / sizeof(void *));
+
+// Fixed double cmp functions reg
+static_assert(
+  OB_NOT_FIXED_SCALE * CO_MAX == sizeof(EVAL_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
+  "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_CMP_EVAL,
+                   EVAL_FIXED_DOUBLE_CMP_FUNCS,
+                   sizeof(EVAL_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *));
+
+static_assert(
+  OB_NOT_FIXED_SCALE * CO_MAX == sizeof(EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
+  "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_CMP_EVAL_BATCH,
+                   EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS,
+                   sizeof(EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *));
+
+static_assert(
+  OB_NOT_FIXED_SCALE == sizeof(DATUM_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
+  "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_DATUM_FIXED_DOUBLE_CMP,
+                   DATUM_FIXED_DOUBLE_CMP_FUNCS,
+                   sizeof(DATUM_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *));
 
 } // end namespace common;
 } // end namespace oceanbase

@@ -485,6 +485,7 @@ int ObExprOracleDecode::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
     rt_expr.inner_functions_[0] = reinterpret_cast<void*>(
         ObDatumFuncs::get_nullsafe_cmp_func(cmp_meta.type_, cmp_meta.type_,
                                             default_null_pos(), cmp_meta.cs_type_,
+                                            cmp_meta.scale_,
                                             lib::is_oracle_mode()));
   }
   return ret;

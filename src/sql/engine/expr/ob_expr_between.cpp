@@ -92,6 +92,7 @@ int ObExprBetween::cg_expr(ObExprCGCtx &expr_cg_ctx,
       raw_expr.get_result_type().get_calc_collation_type();
     if (OB_ISNULL(cmp_func_1 = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                         left_meta.type_, val_meta.type_,
+                                                        left_meta.scale_, val_meta.scale_,
                                                         is_oracle_mode(),
                                                         cmp_cs_type))) {
       ret = OB_ERR_UNEXPECTED;
@@ -99,6 +100,7 @@ int ObExprBetween::cg_expr(ObExprCGCtx &expr_cg_ctx,
                 K(is_oracle_mode()), K(rt_expr));
     } else if (OB_ISNULL(cmp_func_2 = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                         val_meta.type_, right_meta.type_,
+                                                        val_meta.scale_, right_meta.scale_,
                                                         is_oracle_mode(),
                                                         cmp_cs_type))) {
       ret = OB_ERR_UNEXPECTED;

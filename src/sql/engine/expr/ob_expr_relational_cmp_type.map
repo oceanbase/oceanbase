@@ -616,7 +616,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UMediumIntType  */
     ObDoubleType,      /* UInt32Type  */
     ObDoubleType,      /* UIntType  */
-    ObFloatType,       /* FloatType  */
+    ObDoubleType,      /* FloatType  */
     ObDoubleType,      /* DoubleType  */
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
@@ -724,7 +724,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UIntType  */
     ObDoubleType,      /* FloatType  */
     ObDoubleType,      /* DoubleType  */
-    ObUFloatType,      /* UFloatType  */
+    ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObDoubleType,      /* NumberType  */
     ObDoubleType,      /* UNumberType  */

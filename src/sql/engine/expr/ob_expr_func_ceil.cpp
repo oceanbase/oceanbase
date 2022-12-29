@@ -100,7 +100,11 @@ int ObExprCeilFloor::calc_result_type1(ObExprResType &type,
     //no need to test ret here
     // scale
     type.set_scale(0);
-    type.set_precision(type1.get_precision());
+    if (lib::is_mysql_mode() && type.is_double()) {
+      type.set_precision(17); // float length of 0
+    } else {
+      type.set_precision(type1.get_precision());
+    }
   }
 
   ObExprOperator::calc_result_flag1(type, type1);

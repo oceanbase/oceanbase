@@ -33,6 +33,8 @@ public:
   static sql::ObExpr::EvalFunc get_eval_expr_cmp_func(
       const common::ObObjType type1,
       const common::ObObjType type2,
+      const common::ObScale scale1,
+      const common::ObScale scale2,
       const common::ObCmpOp cmp_op,
       const bool is_oracle_mode,
       const common::ObCollationType cs_type);
@@ -40,6 +42,8 @@ public:
   static sql::ObExpr::EvalBatchFunc get_eval_batch_expr_cmp_func(
       const common::ObObjType type1,
       const common::ObObjType type2,
+      const common::ObScale scale1,
+      const common::ObScale scale2,
       const common::ObCmpOp cmp_op,
       const bool is_oracle_mode,
       const common::ObCollationType cs_type);
@@ -47,6 +51,8 @@ public:
   static DatumCmpFunc get_datum_expr_cmp_func(
       const common::ObObjType type1,
       const common::ObObjType type2,
+      const common::ObScale scale1,
+      const common::ObScale scale2,
       const bool is_oracle_mode,
       const common::ObCollationType cs_type);
 };

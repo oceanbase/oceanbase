@@ -242,6 +242,8 @@ int ObExprOracleNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
     CK(OB_NOT_NULL(cmp_func = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                       left_meta.type_,
                                                       right_meta.type_,
+                                                      left_meta.scale_,
+                                                      right_meta.scale_,
                                                       lib::is_oracle_mode(),
                                                       cmp_cs_type)));
     OX(rt_expr.inner_func_cnt_ = 1);

@@ -54,7 +54,11 @@ int ObExprMod::calc_result_type2(ObExprResType &type,
       type.set_scale(SCALE_UNKNOWN_YET);
     } else {
       type.set_scale(MAX(scale1, scale2));
-      type.set_precision(MAX(type1.get_precision(),type2.get_precision()));
+      if (lib::is_mysql_mode() && type.is_double()) {
+        type.set_precision(ObMySQLUtil::float_length(type.get_scale()));
+      } else {
+        type.set_precision(MAX(type1.get_precision(),type2.get_precision()));
+      }
     }
   }
   return ret;

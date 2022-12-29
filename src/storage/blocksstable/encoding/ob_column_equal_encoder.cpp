@@ -101,7 +101,7 @@ int ObColumnEqualEncoder::traverse(bool &suitable)
     // to avoid overflow, we have to limit the max excepction count
     const int64_t max_exc_cnt = std::min(MAX_EXC_CNT, rows_->count() * EXC_THRESHOLD_PCT / 100 + 1);
     sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
-        column_type_.get_type(), column_type_.get_collation_type());
+        column_type_.get_type(), column_type_.get_collation_type(), column_type_.get_scale());
     ObCmpFunc cmp_func;
     cmp_func.cmp_func_ = lib::is_oracle_mode()
         ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;

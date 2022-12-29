@@ -1100,7 +1100,8 @@ int ObStaticEngineExprCG::cg_expr_basic_funcs(const ObIArray<ObRawExpr *> &raw_e
       LOG_WARN("rt expr is null", K(ret), K(*raw_exprs.at(i)));
     } else {
       rt_expr->basic_funcs_ = ObDatumFuncs::get_basic_func(rt_expr->datum_meta_.type_,
-                                                        rt_expr->datum_meta_.cs_type_);
+                                                        rt_expr->datum_meta_.cs_type_,
+                                                        rt_expr->datum_meta_.scale_);
       CK(NULL != rt_expr->basic_funcs_);
     }
   }

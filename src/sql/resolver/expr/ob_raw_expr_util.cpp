@@ -6611,6 +6611,14 @@ int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
   } else if ((ob_is_string_or_lob_type(in_type) && in_type == out_type && in_cs_type == out_cs_type)
              || (!ob_is_string_or_lob_type(in_type) && in_type == out_type)) {
     need_cast = false;
+    if (lib::is_mysql_mode() && ob_is_double_type(in_type) &&
+          src_type.get_scale() != dst_type.get_scale() &&
+          src_type.get_precision() != PRECISION_UNKNOWN_YET) {
+      // for the conversion between doubles with increased scale in mysql mode,
+      // it is necessary to explicitly add the cast expression
+      need_cast = (SCALE_UNKNOWN_YET == dst_type.get_scale()) ||
+                     (src_type.get_scale() < dst_type.get_scale());
+    }
   } else if (ob_is_enumset_tc(out_type)) {
     //no need add cast, will add column_conv later
     need_cast = false;

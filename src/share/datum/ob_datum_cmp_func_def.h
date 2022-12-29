@@ -120,6 +120,32 @@ struct ObDatumTCCmp<ObFloatTC, ObFloatTC> : public ObDefined<>
   }
 };
 
+template <ObScale SCALE>
+struct ObFixedDoubleCmp: public ObDefined<>
+{
+  constexpr static double LOG_10[] =
+  {
+    1e000, 1e001, 1e002, 1e003, 1e004, 1e005, 1e006, 1e007,
+    1e008, 1e009, 1e010, 1e011, 1e012, 1e013, 1e014, 1e015,
+    1e016, 1e017, 1e018, 1e019, 1e020, 1e021, 1e022, 1e023,
+    1e024, 1e025, 1e026, 1e027, 1e028, 1e029, 1e030, 1e031
+  };
+  constexpr static double P = 5 / LOG_10[SCALE + 1];
+  inline static int cmp(const ObDatum &l_datum, const ObDatum &r_datum)
+  {
+    int ret = 0;
+    const double l = l_datum.get_double();
+    const double r = r_datum.get_double();
+    if (l == r || fabs(l - r) < P) {
+      ret = 0;
+    } else {
+      ret = (l < r ? -1 : 1);
+    }
+    return ret;
+  }
+};
+
+
 template <>
 struct ObDatumTCCmp<ObDoubleTC, ObDoubleTC> : public ObDatumTCCmp<ObFloatTC, ObFloatTC>
 {

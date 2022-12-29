@@ -3518,7 +3518,8 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
       } else if (lib::is_mysql_mode() &&
                    (ObFloatTC == column_schema.get_data_type_class() ||
                       ObDoubleTC == column_schema.get_data_type_class()) &&
-                   (column_schema.get_data_precision() > 0 && column_schema.get_data_scale() == 0)) {
+                   (column_schema.get_data_precision() != PRECISION_UNKNOWN_YET &&
+                    column_schema.get_data_scale() != SCALE_UNKNOWN_YET)) {
         const ObObj *res_obj = &default_value;
         const common::ObAccuracy &accuracy = column_schema.get_accuracy();
         if (OB_FAIL(common::obj_accuracy_check(cast_ctx, accuracy,

@@ -288,9 +288,31 @@ template <>
       v = 0.0;                                                        \
     } else if (isnan(v)) {                                            \
       v = NAN;                                                        \
-    }                                                                 \
+    } else if (obj.is_fixed_double() && lib::is_mysql_mode()) {       \
+      char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};                   \
+      int64_t len = ob_fcvt(v, static_cast<int>(obj.get_scale()), sizeof(buf) - 1, buf, NULL); \
+      return murmurhash(buf, static_cast<int32_t>(len), ret);            \
+    }                                                       \
     return murmurhash(&v, sizeof(obj.get_##TYPE()), ret);   \
   }                                                                     \
+  template <typename T>                                     \
+  struct ObjHashCalculator<OBJTYPE, T, ObObj>                               \
+  {                                                                             \
+    static uint64_t calc_hash_value(const ObObj &obj, const uint64_t hash) {      \
+      VTYPE v = obj.get_##TYPE();                                     \
+      HTYPE v2 = v;                                                     \
+      if (0.0 == v2) {                                                \
+        v2 = 0.0;                                                     \
+      } else if (isnan(v2)) {                                         \
+        v2 = NAN;                                                     \
+      } else if (obj.is_fixed_double() && lib::is_mysql_mode()) {     \
+        char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};                   \
+        int64_t len = ob_fcvt(v2, static_cast<int>(obj.get_scale()), sizeof(buf) - 1, buf, NULL); \
+        return T::hash(buf, static_cast<int32_t>(len), hash);            \
+      }                                                              \
+      return T::hash(&v2, sizeof(v2), hash);                            \
+    }                                                                   \
+  };                                                                    \
   template <typename T, typename P>                                     \
   struct ObjHashCalculator<OBJTYPE, T, P>                               \
   {                                                                             \

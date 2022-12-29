@@ -14,6 +14,7 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/container/ob_fixed_array.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/object/ob_obj_cast_util.h"
 #include "sql/resolver/expr/ob_raw_expr_deduce_type.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/ob_stmt.h"
@@ -1295,8 +1296,27 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               scale_increment_recover = result_type.get_scale();
               result_type.set_scale(static_cast<ObScale>(result_type.get_scale() + scale_increment));
             }
-          } else if (ob_is_float_tc(obj_type) || ob_is_double_tc(obj_type) || ob_is_json(obj_type)
-                    || ob_is_string_type(obj_type) || ob_is_enumset_tc(obj_type)) {
+          } else if (ob_is_float_tc(obj_type) || ob_is_double_tc(obj_type)) {
+            result_type.set_double();
+            if (result_type.get_scale() >= 0) {
+              scale_increment_recover = result_type.get_scale();
+              result_type.set_scale(static_cast<ObScale>(result_type.get_scale() + scale_increment));
+              if (T_FUN_AVG == expr.get_expr_type()) {
+                result_type.set_precision(
+                  static_cast<ObPrecision>(result_type.get_precision() + scale_increment));
+              } else {
+                result_type.set_precision(
+                  static_cast<ObPrecision>(ObMySQLUtil::float_length(result_type.get_scale())));
+              }
+            }
+            // recheck precision and scale overflow
+            if (result_type.get_precision() > OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH ||
+                  result_type.get_scale() > OB_MAX_DOUBLE_FLOAT_SCALE) {
+              result_type.set_scale(SCALE_UNKNOWN_YET);
+              result_type.set_precision(PRECISION_UNKNOWN_YET);
+            }
+          } else if (ob_is_json(obj_type) || ob_is_string_type(obj_type) ||
+                       ob_is_enumset_tc(obj_type)) {
             result_type.set_double();
             // todo jiuren
             // todo blob and text@hanhui
@@ -1312,7 +1332,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               result_type.set_scale(static_cast<ObScale>(scale_increment));
             } else {
               scale_increment_recover = result_type.get_scale();
-              result_type.set_scale(static_cast<ObScale>(result_type.get_scale() + scale_increment));
+              result_type.set_scale(static_cast<ObScale>(
+                MIN(OB_MAX_DOUBLE_FLOAT_SCALE, result_type.get_scale() + scale_increment)));
             }
             result_type.set_precision(static_cast<ObPrecision>(result_type.get_precision() + scale_increment));
           }
@@ -1452,19 +1473,9 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         break;
       }
-      case T_FUN_GROUPING: {
-        if (!lib::is_oracle_mode()) {
-          result_type.set_int();
-          expr.set_result_type(result_type);
-        } else {
-          result_type.set_number();
-          result_type.set_scale(0);
-          result_type.set_precision(OB_MAX_NUMBER_PRECISION);
-          expr.set_result_type(result_type);
-        }
-        break;
-      }
-      case T_FUN_GROUPING_ID: {
+      case T_FUN_GROUPING:
+      case T_FUN_GROUPING_ID:
+      case T_FUN_GROUP_ID: {
         if (!lib::is_oracle_mode()) {
           result_type.set_int();
           expr.set_result_type(result_type);
@@ -1479,18 +1490,6 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       case T_FUN_AGG_UDF: {
         if (OB_FAIL(set_agg_udf_result_type(expr))) {
           LOG_WARN("failed to set agg udf result type", K(ret));
-        }
-        break;
-      }
-      case T_FUN_GROUP_ID: {
-        if (!lib::is_oracle_mode()) {
-          result_type.set_int();
-          expr.set_result_type(result_type);
-        } else {
-          result_type.set_number();
-          result_type.set_scale(0);
-          result_type.set_precision(OB_MAX_NUMBER_PRECISION);
-          expr.set_result_type(result_type);
         }
         break;
       }
@@ -2987,6 +2986,24 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
              && ObDateTimeTC == child_res_type.get_type_class()
              && ObDateTimeTC == dst_type.get_calc_meta().get_type_class()) {
     cast_dst_type.set_accuracy(child_res_type.get_accuracy());
+  } else if (lib::is_mysql_mode() && ObDoubleTC == dst_type.get_calc_meta().get_type_class()) {
+    if (ob_is_numeric_tc(child_res_type.get_type_class())) {
+      // passing scale and precision when casting float/double/decimal to double
+      ObScale s = child_res_type.get_calc_accuracy().get_scale();
+      ObPrecision p = child_res_type.get_calc_accuracy().get_precision();
+      if (ObNumberTC == child_res_type.get_type_class() &&
+          SCALE_UNKNOWN_YET != s && PRECISION_UNKNOWN_YET != p) {
+        p += decimal_to_double_precision_inc(child_res_type.get_type(), s);
+        cast_dst_type.set_scale(s);
+        cast_dst_type.set_precision(p);
+      } else if (s != SCALE_UNKNOWN_YET && PRECISION_UNKNOWN_YET != p &&
+                s <= OB_MAX_DOUBLE_FLOAT_SCALE && p >= s) {
+        cast_dst_type.set_accuracy(child_res_type.get_calc_accuracy());
+      }
+    } else {
+      cast_dst_type.set_scale(SCALE_UNKNOWN_YET);
+      cast_dst_type.set_precision(PRECISION_UNKNOWN_YET);
+    }
   }
 
   // 这里仅设置部分情况的accuracy，其他情况的accuracy信息交给cast类型推导设置

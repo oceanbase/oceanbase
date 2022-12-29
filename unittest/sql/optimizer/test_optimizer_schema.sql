@@ -200,7 +200,7 @@ create index idx_t_idx_c126 on t_idx(c126) LOCAL;
 create index idx_t_idx_c127 on t_idx(c127) LOCAL;
 create index idx_t_idx_c128 on t_idx(c128) LOCAL;
 create index idx_t_idx_c129 on t_idx(c129) LOCAL;
-create table yuming(c1 float, c2 float, primary key(c1, c2));
+create table yuming(c1 float(10, 5), c2 float(10, 5), primary key(c1, c2));
 create table query_range(c1 int, c2 int, c3 int, c4 int, c5 int, primary key(c1, c2, c3));
 CREATE TABLE query_range1(c1 int(31) NOT NULL, `c2` decimal(5,1) DEFAULT NULL, `c3` int(123) DEFAULT NULL, `c4` int(6) DEFAULT NULL, `c5` int(19) NOT NULL, `c6` int(105) DEFAULT NULL, `c7` tinyint(112) NOT NULL, `c8` decimal(26,6) NOT NULL, `c9` decimal(14,4) NOT NULL, `c10` varbinary(18) DEFAULT NULL, `c11` decimal(35,8) NOT NULL, `c12` int(3) NOT NULL, PRIMARY KEY (`c9`, `c11`, `c8`, `c1`, `c12`, `c7`, `c5`), KEY `i_BX` (`c2`) BLOCK_SIZE 16384);
 

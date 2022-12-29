@@ -32,6 +32,7 @@ public:
                                                   const ObObjType type2,
                                                   const ObCmpNullPos null_pos,
                                                   const ObCollationType cs_type,
+                                                  const ObScale max_scale,
                                                   const bool is_oracle_mode);
   static bool is_string_type(const ObObjType type);
   static bool is_json(const ObObjType type);
@@ -39,8 +40,17 @@ public:
   static bool is_varying_len_char_type(const ObObjType type, const ObCollationType cs_type) {
     return (type == ObNVarchar2Type || (type == ObVarcharType && cs_type != CS_TYPE_BINARY));
   }
+  static ObScale max_scale(const ObScale s1, const ObScale s2)
+  {
+    ObScale max_scale = SCALE_UNKNOWN_YET;
+    if (s1 != SCALE_UNKNOWN_YET && s2 != SCALE_UNKNOWN_YET) {
+      max_scale = MAX(s1, s2);
+    }
+    return max_scale;
+  }
   static sql::ObExprBasicFuncs* get_basic_func(const ObObjType type,
                                                const ObCollationType cs_type,
+                                               const ObScale scale = SCALE_UNKNOWN_YET,
                                                const bool is_oracle_mode = lib::is_oracle_mode());
 };
 

@@ -185,7 +185,8 @@ OB_DEF_DESERIALIZE(ObExpr)
   }
 
   if (OB_SUCC(ret)) {
-    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_);
+    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_,
+                                                datum_meta_.scale_);
     CK(NULL != basic_funcs_);
   }
   if (is_batch_result()) {

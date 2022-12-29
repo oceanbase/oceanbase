@@ -316,6 +316,7 @@ int ObExprLeastGreatest::cg_expr(ObExprCGCtx &op_cg_ctx,
                                                                             cmp_meta.get_type(),
                                                                             NULL_LAST,
                                                                             cmp_meta.get_collation_type(),
+                                                                            info->cmp_meta_.scale_,
                                                                             lib::is_oracle_mode());
           if (OB_ISNULL(cmp_func)) {
             ret = OB_INVALID_ARGUMENT;

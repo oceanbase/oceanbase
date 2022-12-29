@@ -76,6 +76,24 @@ struct ObNullSafeDatumStrCmp
   }
 };
 
+template <ObScale SCALE, bool NULL_FIRST>
+struct ObNullSafeFixedDoubleCmp
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r) {
+    int ret = 0;
+    if (OB_UNLIKELY(l.is_null()) && OB_UNLIKELY(r.is_null())) {
+      ret = 0;
+    } else if (OB_UNLIKELY(l.is_null())) {
+      ret = NULL_FIRST ? -1 : 1;
+    } else if (OB_UNLIKELY(r.is_null())) {
+      ret = NULL_FIRST ? 1 : -1;
+    } else {
+      ret = datum_cmp::ObFixedDoubleCmp<SCALE>::cmp(l, r);
+    }
+    return ret;
+  }
+};
+
 static ObDatumCmpFuncType NULLSAFE_TYPE_CMP_FUNCS[ObMaxType][ObMaxType][2];
 // init type type compare function array
 template <int X, int Y>
@@ -153,9 +171,24 @@ struct InitStrCmpArray
 
 bool g_str_cmp_array_inited = ObArrayConstIniter<CS_TYPE_MAX, InitStrCmpArray>::init();
 
+static ObDatumCmpFuncType FIXED_DOUBLE_CMP_FUNCS[OB_NOT_FIXED_SCALE][2];
+template <int X>
+struct InitFixedDoubleCmpArray
+{
+  static void init_array()
+  {
+    auto &funcs = FIXED_DOUBLE_CMP_FUNCS;
+    funcs[X][0] = ObNullSafeFixedDoubleCmp<static_cast<ObScale>(X), false>::cmp;
+    funcs[X][1] = ObNullSafeFixedDoubleCmp<static_cast<ObScale>(X), true>::cmp;
+  }
+};
+
+bool g_fixed_double_cmp_array_inited =
+  ObArrayConstIniter<OB_NOT_FIXED_SCALE, InitFixedDoubleCmpArray>::init();
+
 ObDatumCmpFuncType ObDatumFuncs::get_nullsafe_cmp_func(
     const ObObjType type1, const ObObjType type2, const ObCmpNullPos null_pos,
-    const ObCollationType cs_type, const bool is_oracle_mode) {
+    const ObCollationType cs_type, const ObScale max_scale, const bool is_oracle_mode) {
   OB_ASSERT(type1 >= ObNullType && type1 < ObMaxType);
   OB_ASSERT(type2 >= ObNullType && type2 < ObMaxType);
   OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
@@ -163,7 +196,10 @@ ObDatumCmpFuncType ObDatumFuncs::get_nullsafe_cmp_func(
 
   ObDatumCmpFuncType func_ptr = NULL;
   int null_pos_idx = NULL_LAST == null_pos ? 0 : 1;
-  if (!is_string_type(type1) || !is_string_type(type2)) {
+  if (!is_oracle_mode && ob_is_double_type(type1) && ob_is_double_type(type1)
+       && max_scale > SCALE_UNKNOWN_YET && max_scale < OB_NOT_FIXED_SCALE) {
+    func_ptr = FIXED_DOUBLE_CMP_FUNCS[max_scale][null_pos_idx];
+  } else if (!is_string_type(type1) || !is_string_type(type2)) {
     func_ptr = NULLSAFE_TYPE_CMP_FUNCS[type1][type2][null_pos_idx];
   } else {
     int64_t calc_with_end_space_idx =
@@ -260,6 +296,19 @@ struct DatumStrHashCalculator<cs_type, calc_end_space, T, true> : public DefHash
   static uint64_t calc_datum_hash(const ObDatum &datum, const uint64_t seed)
   {
     return datum_lob_locator_hash(datum, cs_type, seed, T::is_varchar_hash ? T::hash : NULL);
+  }
+};
+
+template <ObScale SCALE, typename T>
+struct DatumFixedDoubleHashCalculator : public DefHashMethod<T>
+{
+  static uint64_t calc_datum_hash(const ObDatum &datum, const uint64_t seed)
+  {
+    // format fixed double to string first, then calc hash value of the string
+    const double d_val = datum.get_double();
+    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
+    int64_t length = ob_fcvt(d_val, static_cast<int>(SCALE), sizeof(buf) - 1, buf, NULL);
+    return T::hash(buf, static_cast<int32_t>(length), seed);
   }
 };
 
@@ -417,13 +466,37 @@ struct InitBasicStrFuncArray
   }
 };
 
+static ObExprBasicFuncs FIXED_DOUBLE_BASIC_FUNCS[OB_NOT_FIXED_SCALE];
+template <int X>
+struct InitFixedDoubleBasicFuncArray
+{
+  template <typename T>
+  using Hash = DefHashFunc<DatumFixedDoubleHashCalculator<static_cast<ObScale>(X), T>>;
+  static void init_array()
+  {
+    auto &basic_funcs = FIXED_DOUBLE_BASIC_FUNCS;
+    basic_funcs[X].default_hash_ = Hash<ObDefaultHash>::hash;
+    basic_funcs[X].default_hash_batch_= Hash<ObDefaultHash>::hash_batch;
+    basic_funcs[X].murmur_hash_ = Hash<ObMurmurHash>::hash;
+    basic_funcs[X].murmur_hash_batch_ = Hash<ObMurmurHash>::hash_batch;
+    basic_funcs[X].xx_hash_ = Hash<ObXxHash>::hash;
+    basic_funcs[X].xx_hash_batch_ = Hash<ObXxHash>::hash_batch;
+    basic_funcs[X].wy_hash_ = Hash<ObWyHash>::hash;
+    basic_funcs[X].wy_hash_batch_ = Hash<ObWyHash>::hash_batch;
+    basic_funcs[X].null_first_cmp_ = ObNullSafeFixedDoubleCmp<static_cast<ObScale>(X), true>::cmp;
+    basic_funcs[X].null_last_cmp_ = ObNullSafeFixedDoubleCmp<static_cast<ObScale>(X), false>::cmp;
+  }
+};
 
 bool g_basic_funcs_array_inited = ObArrayConstIniter<ObMaxType, InitBasicFuncArray>::init();
 bool g_basic_str_array_inited = Ob2DArrayConstIniter<CS_TYPE_MAX, 2, InitBasicStrFuncArray>::init();
+bool g_fixed_double_basic_func_array_inited =
+  ObArrayConstIniter<OB_NOT_FIXED_SCALE, InitFixedDoubleBasicFuncArray>::init();
 
 ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
                                                const ObCollationType cs_type,
-                                                  const bool is_oracle_mode)
+                                               const ObScale scale,
+                                               const bool is_oracle_mode)
 {
   ObExprBasicFuncs *res = NULL;
   if ((type >= ObNullType && type < ObMaxType)) {
@@ -437,6 +510,9 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
       bool calc_end_space = false;
       bool is_lob_locator = true;
       res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][is_lob_locator];
+    } else if (!is_oracle_mode && ob_is_double_type(type) &&
+                scale > SCALE_UNKNOWN_YET && scale < OB_NOT_FIXED_SCALE) {
+      res = &FIXED_DOUBLE_BASIC_FUNCS[scale];
     } else {
       res = &EXPR_BASIC_FUNCS[type];
     }
@@ -475,6 +551,12 @@ REG_SER_FUNC_ARRAY(OB_SFA_DATUM_NULLSAFE_STR_CMP,
                    NULLSAFE_STR_CMP_FUNCS,
                    sizeof(NULLSAFE_STR_CMP_FUNCS) / sizeof(void*));
 
+static_assert(OB_NOT_FIXED_SCALE * 2 == sizeof(FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_NULLSAFE_CMP,
+                   FIXED_DOUBLE_CMP_FUNCS,
+                   sizeof(FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *));
+
 // When new function add to ObExprBasicFuncs, EXPR_BASIC_FUNCS should split into
 // multi arrays for register.
 struct ExprBasicFuncSerPart1
@@ -510,6 +592,8 @@ static ExprBasicFuncSerPart1 EXPR_BASIC_FUNCS_PART1[ObMaxType];
 static ExprBasicFuncSerPart2 EXPR_BASIC_FUNCS_PART2[ObMaxType];
 static ExprBasicFuncSerPart1 EXPR_BASIC_STR_FUNCS_PART1[CS_TYPE_MAX][2][2];
 static ExprBasicFuncSerPart2 EXPR_BASIC_STR_FUNCS_PART2[CS_TYPE_MAX][2][2];
+static ExprBasicFuncSerPart1 EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART1[OB_NOT_FIXED_SCALE];
+static ExprBasicFuncSerPart2 EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART2[OB_NOT_FIXED_SCALE];
 
 bool split_basic_func_for_ser(void)
 {
@@ -522,6 +606,10 @@ bool split_basic_func_for_ser(void)
         reinterpret_cast<ObExprBasicFuncs *>(EXPR_BASIC_STR_FUNCS)[i]);
     reinterpret_cast<ExprBasicFuncSerPart2 *>(EXPR_BASIC_STR_FUNCS_PART2)[i].from(
         reinterpret_cast<ObExprBasicFuncs *>(EXPR_BASIC_STR_FUNCS)[i]);
+  }
+  for (int64_t i = 0; i < sizeof(FIXED_DOUBLE_BASIC_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
+    EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART1[i].from(FIXED_DOUBLE_BASIC_FUNCS[i]);
+    EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART2[i].from(FIXED_DOUBLE_BASIC_FUNCS[i]);
   }
   return true;
 }
@@ -546,6 +634,15 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_STR_BASIC_PART1,
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_STR_BASIC_PART2,
                    EXPR_BASIC_STR_FUNCS_PART2,
                    sizeof(EXPR_BASIC_STR_FUNCS_PART2) / sizeof(void *));
+
+static_assert(OB_NOT_FIXED_SCALE * 10 == sizeof(FIXED_DOUBLE_BASIC_FUNCS) / sizeof(void *),
+              "unexpected size");
+REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_BASIC_PART1,
+                   EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART1,
+                   sizeof(EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART1) / sizeof(void *));
+REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_BASIC_PART2,
+                   EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART2,
+                   sizeof(EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART2) / sizeof(void *));
 
 } // end namespace sql
 } // end namespace oceanbase

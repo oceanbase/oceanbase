@@ -65,6 +65,12 @@ typedef void (*ser_eval_batch_function)(ObBatchEvalFuncTag &);
   OB_SFA_SQL_EXPR_EVAL_BATCH,                    \
   OB_SFA_EXPR_BASIC_PART2,                       \
   OB_SFA_EXPR_STR_BASIC_PART2,                   \
+  OB_SFA_FIXED_DOUBLE_NULLSAFE_CMP,              \
+  OB_SFA_FIXED_DOUBLE_BASIC_PART1,               \
+  OB_SFA_FIXED_DOUBLE_BASIC_PART2,               \
+  OB_SFA_FIXED_DOUBLE_CMP_EVAL,                  \
+  OB_SFA_FIXED_DOUBLE_CMP_EVAL_BATCH,            \
+  OB_SFA_DATUM_FIXED_DOUBLE_CMP,                 \
   OB_SFA_MAX
 
 enum ObSerFuncArrayID {

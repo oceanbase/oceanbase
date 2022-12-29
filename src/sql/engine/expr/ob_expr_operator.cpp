@@ -1351,7 +1351,9 @@ int ObExprOperator::aggregate_numeric_accuracy_for_merge(ObExprResType &type,
     ObScale scale = 0;
     int16_t max_integer_digits = -1;
     int16_t max_decimal_digits = -1;
+    int16_t max_scale_for_real = -1;
     bool has_real_type = false;
+    bool has_unknow_scale = false;
     for (int64_t i = 0; i < param_num && OB_SUCC(ret); ++i) {
       precision = PRECISION_UNKNOWN_YET;
       scale = SCALE_UNKNOWN_YET;
@@ -1368,6 +1370,8 @@ int ObExprOperator::aggregate_numeric_accuracy_for_merge(ObExprResType &type,
           a union c will result to 1.5 and 1923
         */
         has_real_type = true;
+        precision = types[i].get_precision();
+        scale = types[i].get_scale();
       } else {
         /*
           create table sb(a int(3));//3 ? display width ? precision? length?
@@ -1397,12 +1401,25 @@ int ObExprOperator::aggregate_numeric_accuracy_for_merge(ObExprResType &type,
           max_decimal_digits = scale;
         }
       }
+      if (OB_SUCC(ret)) {
+        if (SCALE_UNKNOWN_YET == scale) {
+          has_unknow_scale = true;
+        } else {
+          max_scale_for_real = MAX(max_scale_for_real, scale);
+        }
+      }
     }
 
     if (OB_FAIL(ret)) {
     } else if (ob_is_real_type(type.get_type()) && has_real_type) {
-      type.set_precision(PRECISION_UNKNOWN_YET);
-      type.set_scale(SCALE_UNKNOWN_YET);
+      if (is_oracle_mode || has_unknow_scale || max_scale_for_real > OB_MAX_DOUBLE_FLOAT_SCALE) {
+        type.set_precision(PRECISION_UNKNOWN_YET);
+        type.set_scale(SCALE_UNKNOWN_YET);
+      } else {
+        precision = static_cast<ObPrecision>(ObMySQLUtil::float_length(scale));
+        type.set_precision(precision);
+        type.set_scale(max_scale_for_real);
+      }
     } else {
       if (max_integer_digits + max_decimal_digits >= 0) {
         precision = static_cast<ObPrecision>(max_integer_digits + max_decimal_digits);
@@ -1829,6 +1846,8 @@ bool ObRelationalExprOperator::can_cmp_without_cast(ObExprResType type1,
     } else {
       auto func_ptr = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(type1.get_type(),
                                                                    type2.get_type(),
+                                                                   type1.get_scale(),
+                                                                   type2.get_scale(),
                                                                    cmp_op,
                                                                    lib::is_oracle_mode(),
                                                                    CS_TYPE_BINARY);
@@ -2149,6 +2168,19 @@ int ObRelationalExprOperator::deduce_cmp_type(const ObExprOperator &expr,
     } else if (ObRawType == cmp_type.get_calc_type()) {
       type1.set_calc_collation_type(CS_TYPE_BINARY);
       type2.set_calc_collation_type(CS_TYPE_BINARY);
+    } else if (is_mysql_mode() && ObDoubleType == cmp_type.get_calc_type()) {
+      if (ob_is_numeric_tc(type1.get_type_class()) && ob_is_numeric_tc(type2.get_type_class()) &&
+            SCALE_UNKNOWN_YET != type1.get_scale() && SCALE_UNKNOWN_YET != type2.get_scale()) {
+        const ObScale scale = MAX(type1.get_scale(), type2.get_scale());
+        const ObPrecision precision = MAX(type1.get_precision(), type2.get_precision());
+        ObAccuracy calc_acc(precision, scale);
+        type1.set_calc_accuracy(calc_acc);
+        type2.set_calc_accuracy(calc_acc);
+      } else {
+        ObAccuracy calc_acc(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET);
+        type1.set_calc_accuracy(calc_acc);
+        type2.set_calc_accuracy(calc_acc);
+      }
     }
   }
   return ret;
@@ -3280,7 +3312,8 @@ int ObSubQueryRelationalExpr::cg_expr(ObExprCGCtx &op_cg_ctx,
       }
       if (OB_SUCC(ret)) {
         funcs[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-            l.get_type(), r.get_type(), lib::is_oracle_mode(), l.get_collation_type());
+            l.get_type(), r.get_type(), l.get_scale(), r.get_scale(),
+            lib::is_oracle_mode(), l.get_collation_type());
         CK(NULL != funcs[i]);
       }
     }
@@ -3888,6 +3921,19 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
     } else if (ObRawType == cmp_type.get_calc_type()) {
       type1.set_calc_collation_type(CS_TYPE_BINARY);
       type2.set_calc_collation_type(CS_TYPE_BINARY);
+    } else if (is_mysql_mode() && ObDoubleType == cmp_type.get_calc_type()) {
+      if (ob_is_numeric_tc(type1.get_type_class()) && ob_is_numeric_tc(type2.get_type_class()) &&
+            SCALE_UNKNOWN_YET != type1.get_scale() && SCALE_UNKNOWN_YET != type2.get_scale()) {
+        const ObScale scale = MAX(type1.get_scale(), type2.get_scale());
+        const ObPrecision precision = MAX(type1.get_precision(), type2.get_precision());
+        ObAccuracy calc_acc(precision, scale);
+        type1.set_calc_accuracy(calc_acc);
+        type2.set_calc_accuracy(calc_acc);
+      } else {
+        ObAccuracy calc_acc(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET);
+        type1.set_calc_accuracy(calc_acc);
+        type2.set_calc_accuracy(calc_acc);
+      }
     }
   }
   return ret;
@@ -4766,8 +4812,18 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
       //兼容mysql行为对类型进行提升。
         type.set_type(ObIntType);
       }
-      type.set_scale(result_scale);
-      type.set_precision(static_cast<ObPrecision>(max_precision + max_scale)); // esti, not accurate
+      if (lib::is_mysql_mode() && ob_is_real_type(type.get_type())) {
+        if (SCALE_UNKNOWN_YET != result_scale && OB_MAX_DOUBLE_FLOAT_SCALE >= result_scale) {
+          type.set_scale(result_scale);
+          type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(result_scale)));
+        } else {
+          type.set_scale(SCALE_UNKNOWN_YET);
+          type.set_precision(PRECISION_UNKNOWN_YET);
+        }
+      } else {
+        type.set_scale(result_scale);
+        type.set_precision(static_cast<ObPrecision>(max_precision + max_scale)); // esti, not accurate
+      }
     }
   }
 
@@ -5739,6 +5795,8 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
     const ObCmpOp cmp_op = get_cmp_op(raw_expr.get_expr_type());
     const ObObjType input_type1 = rt_expr.args_[0]->datum_meta_.type_;
     const ObObjType input_type2 = rt_expr.args_[1]->datum_meta_.type_;
+    const ObScale input_scale1 = rt_expr.args_[0]->datum_meta_.scale_;
+    const ObScale input_scale2 = rt_expr.args_[1]->datum_meta_.scale_;
     LOG_DEBUG("CG Datum CMP Expr", K(input_type1), K(input_type2), K(cmp_op));
     const ObCollationType cs_type = rt_expr.args_[0]->datum_meta_.cs_type_;
     if (ObDatumFuncs::is_string_type(input_type1) && ObDatumFuncs::is_string_type(input_type2)) {
@@ -5746,9 +5804,11 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
     }
     if (OB_SUCC(ret)) {
       rt_expr.eval_func_ = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(
-          input_type1, input_type2, cmp_op, lib::is_oracle_mode(), cs_type);
+          input_type1, input_type2, input_scale1, input_scale2, cmp_op, lib::is_oracle_mode(),
+          cs_type);
       rt_expr.eval_batch_func_ = ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
-          input_type1, input_type2, cmp_op, lib::is_oracle_mode(), cs_type);
+          input_type1, input_type2, input_scale1, input_scale2, cmp_op, lib::is_oracle_mode(),
+          cs_type);
     }
     CK(NULL != rt_expr.eval_func_);
     CK(NULL != rt_expr.eval_batch_func_);
@@ -5808,17 +5868,20 @@ int ObRelationalExprOperator::cg_row_cmp_expr(const int row_dimension,
       {
         const ObObjType type1 = left_row->args_[i]->datum_meta_.type_;
         const ObObjType type2 = right_row->args_[i]->datum_meta_.type_;
+        const ObScale scale1 = left_row->args_[i]->datum_meta_.scale_;
+        const ObScale scale2 = right_row->args_[i]->datum_meta_.scale_;
         const ObCollationType cs_type = left_row->args_[i]->datum_meta_.cs_type_;
         if (ObDatumFuncs::is_string_type(type1) && ObDatumFuncs::is_string_type(type2)) {
           CK(left_row->args_[i]->datum_meta_.cs_type_
                     == right_row->args_[i]->datum_meta_.cs_type_);
           rt_expr.inner_functions_[i] = (void*)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                                   type1, type2,
+                                                                  scale1, scale2,
                                                                   lib::is_oracle_mode(),
                                                                   cs_type);
         } else {
           rt_expr.inner_functions_[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-              type1, type2, lib::is_oracle_mode(), cs_type);
+              type1, type2, scale1, scale2, lib::is_oracle_mode(), cs_type);
           if (OB_ISNULL(rt_expr.inner_functions_[i])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null function", K(ret), K(i), K(type1), K(type2));
