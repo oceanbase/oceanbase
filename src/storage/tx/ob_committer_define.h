@@ -57,8 +57,9 @@ enum class ObTwoPhaseCommitMsgType : uint8_t
   OB_MSG_TX_MAX,
 };
 
-enum class Ob2PCRole : uint8_t
+enum class Ob2PCRole : int8_t
 {
+  UNKNOWN = -1,
   ROOT = 0,
   INTERNAL,
   LEAF,

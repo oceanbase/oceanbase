@@ -456,7 +456,8 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       }
 
       // handle commit timeout on root node
-      if (!is_sub2pc() && !is_follower_() && is_root() && part_trans_action_ == ObPartTransAction::COMMIT) {
+      if (!is_sub2pc() && !is_follower_() && part_trans_action_ == ObPartTransAction::COMMIT &&
+          (is_local_tx_() || is_root())) {
         if (tx_expired) {
           tmp_ret = post_tx_commit_resp_(OB_TRANS_TIMEOUT);
           TRANS_LOG(INFO, "callback scheduler txn has timeout", K(tmp_ret), KPC(this));
@@ -585,7 +586,8 @@ int ObPartTransCtx::kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &
 
       // if ctx was killed gracefully or forcely killed
       // notify scheduler commit result, if in committing
-      if (is_root() && !is_follower_() && part_trans_action_ == ObPartTransAction::COMMIT) {
+      if (!is_follower_() && part_trans_action_ == ObPartTransAction::COMMIT &&
+          (is_local_tx_() || is_root())) {
       // notify scheduler only if commit callback has not been armed
         if (commit_cb_.is_enabled() && !commit_cb_.is_inited()) {
           if (exec_info_.scheduler_ == addr_) {
@@ -699,6 +701,8 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
       }
     } else {
       exec_info_.trans_type_ = TransType::DIST_TRANS;
+      // set 2pc upstream to self
+      set_2pc_upstream_(ls_id_);
       if (OB_FAIL(two_phase_commit())) {
         TRANS_LOG(WARN, "start dist coimit fail", K(ret), KPC(this));
       }
@@ -1273,6 +1277,16 @@ int ObPartTransCtx::recover_tx_ctx_table_info(const ObTxCtxTableInfo &ctx_info)
     trans_id_ = ctx_info.tx_id_;
     ls_id_ = ctx_info.ls_id_;
     exec_info_ = ctx_info.exec_info_;
+    if (!exec_info_.upstream_.is_valid() &&
+        !is_local_tx_() &&
+       (ObTxState::REDO_COMPLETE == exec_info_.state_ ||
+        ObTxState::PREPARE == exec_info_.state_ ||
+        ObTxState::PRE_COMMIT == exec_info_.state_ ||
+        ObTxState::COMMIT == exec_info_.state_ ||
+        ObTxState::CLEAR == exec_info_.state_)) {
+      set_2pc_upstream_(ls_id_);
+      TRANS_LOG(INFO, "set upstream to self", K(*this));
+    }
     if (ObTxState::REDO_COMPLETE == get_downstream_state()) {
       sub_state_.set_info_log_submitted();
     }
@@ -3942,7 +3956,12 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   } else if (OB_FAIL(set_app_trace_id_(commit_info_log.get_app_trace_id()))) {
     TRANS_LOG(WARN, "set app trace id error", K(ret), K(commit_info_log), K(*this));
   } else {
-    set_2pc_upstream_(commit_info_log.get_upstream());
+    if (!is_local_tx_() && !commit_info_log.get_upstream().is_valid()) {
+      set_2pc_upstream_(ls_id_);
+      TRANS_LOG(INFO, "set upstream to self", K(*this), K(commit_info_log));
+    } else {
+      set_2pc_upstream_(commit_info_log.get_upstream());
+    }
     exec_info_.xid_ = commit_info_log.get_xid();
     can_elr_ = commit_info_log.is_elr();
     cluster_version_ = commit_info_log.get_cluster_version();
@@ -4555,7 +4574,7 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
 }
 
 inline bool ObPartTransCtx::need_callback_scheduler_() {
-  return is_root()
+  return (is_local_tx_() || is_root())
     && !is_sub2pc()
     && ObPartTransAction::COMMIT == part_trans_action_
     && addr_ == exec_info_.scheduler_
@@ -5468,6 +5487,8 @@ int ObPartTransCtx::sub_prepare(const ObLSArray &parts,
     } else {
       set_stc_by_now_();
     }
+    // set 2pc upstream to self
+    set_2pc_upstream_(ls_id_);
     exec_info_.trans_type_ = TransType::DIST_TRANS;
     exec_info_.xid_ = xid;
     // (void)set_sub2pc_coord_state(Ob2PCPrepareState::REDO_PREPARING);

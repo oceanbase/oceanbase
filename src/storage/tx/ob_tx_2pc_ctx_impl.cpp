@@ -12,6 +12,7 @@
 
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_committer_define.h"
 
 namespace oceanbase
 {
@@ -22,17 +23,19 @@ namespace transaction
 
 Ob2PCRole ObPartTransCtx::get_2pc_role() const
 {
-  Ob2PCRole role;
+  Ob2PCRole role = Ob2PCRole::UNKNOWN;
 
-  if (!exec_info_.upstream_.is_valid()) {
-    role = Ob2PCRole::ROOT;
-  } else if (exec_info_.incremental_participants_.empty()) {
-    // not root & downstream is empty
-    // root must not be leaf, because the distributed txn must be composed by
-    // more than one participants.
-    role = Ob2PCRole::LEAF;
-  } else {
-    role = Ob2PCRole::INTERNAL;
+  if (exec_info_.upstream_.is_valid()) {
+    if (exec_info_.upstream_ == ls_id_) {
+      role = Ob2PCRole::ROOT;
+    } else if (exec_info_.incremental_participants_.empty()) {
+      // not root & downstream is empty
+      // root must not be leaf, because the distributed txn must be composed by
+      // more than one participants.
+      role = Ob2PCRole::LEAF;
+    } else {
+      role = Ob2PCRole::INTERNAL;
+    }
   }
 
   return role;

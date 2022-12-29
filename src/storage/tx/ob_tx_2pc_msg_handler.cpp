@@ -473,10 +473,10 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
       const Ob2pcPrepareReqMsg &msg = *(static_cast<const Ob2pcPrepareReqMsg *>(msg_2pc_cache_));
 
       if (FALSE_IT(set_trans_type_(TransType::DIST_TRANS))) {
-      } else if (OB_FAIL(set_app_trace_info_(msg.app_trace_info_))) {
-        TRANS_LOG(WARN, "set app trace info failed", KR(ret), K(msg), K(*this));
       } else if (OB_FAIL(set_2pc_upstream_(msg.upstream_))) {
         TRANS_LOG(WARN, "set coordinator failed", KR(ret), K(msg), K(*this));
+      } else if (OB_FAIL(set_app_trace_info_(msg.app_trace_info_))) {
+        TRANS_LOG(WARN, "set app trace info failed", KR(ret), K(msg), K(*this));
       }
       break;
     }
@@ -625,12 +625,12 @@ int ObPartTransCtx::handle_tx_2pc_prepare_redo_req(const Ob2pcPrepareRedoReqMsg 
   exec_info_.xid_ = msg.xid_;
 
   if (FALSE_IT(set_trans_type_(TransType::DIST_TRANS))) {
+  } else if (OB_FAIL(set_2pc_upstream_(msg.upstream_))) {
+    TRANS_LOG(WARN, "set coordinator failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
     TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(set_app_trace_info_(msg.app_trace_info_))) {
     TRANS_LOG(WARN, "set app trace info failed", KR(ret), K(msg), K(*this));
-  } else if (OB_FAIL(set_2pc_upstream_(msg.upstream_))) {
-    TRANS_LOG(WARN, "set coordinator failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(handle_2pc_req(msg_type))) {
     TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));
   }
