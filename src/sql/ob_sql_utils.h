@@ -364,6 +364,13 @@ public:
 
   static int reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
                              ObObjPrintParams print_params = ObObjPrintParams());
+  static int print_sql(ObIAllocator &allocator,
+                       char *buf,
+                       int64_t buf_len,
+                       const ObStmt *stmt,
+                       ObString &sql,
+                       ObObjPrintParams print_params);
+
 
   static int wrap_expr_ctx(const stmt::StmtType &stmt_type,
                            ObExecContext &exec_ctx,
