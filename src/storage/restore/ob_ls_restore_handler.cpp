@@ -797,7 +797,23 @@ int ObILSRestoreState::report_ls_restore_progress_(
   if (OB_FAIL(helper.init(ls_key.tenant_id_))) {
     LOG_WARN("fail to init restore table helper", K(ret), "tenant_id", ls_key.tenant_id_);
   } else if (OB_FAIL(helper.update_ls_restore_status(*proxy_, ls_key, trace_id, status, result, comment))) {
-    LOG_WARN("fail to update log restore status", K(ret));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // this ls may created by migrate.
+      LOG_INFO("ls restore progress not exist. this ls may created by migrate", K(ret), KPC(ls_));
+      ObLSRestoreProgressPersistInfo ls_restore_info;
+      ls_restore_info.key_ = ls_key;
+      ls_restore_info.restore_scn_ = ls_restore_arg_->get_restore_scn();
+      ls_restore_info.status_ = status;
+      ls_restore_info.result_ = result;
+      ls_restore_info.trace_id_ = trace_id;
+      if (OB_FAIL(ls_restore_info.comment_.assign(comment))) {
+        LOG_WARN("failed to assign comment", K(ret));
+      } else if (OB_FAIL(helper.insert_initial_ls_restore_progress(*proxy_, ls_restore_info))) {
+        LOG_WARN("failed to insert initial ls restore progress", K(ret));
+      }
+    } else {
+      LOG_WARN("fail to update log restore status", K(ret));
+    }
   }
   return ret;
 }
@@ -2550,7 +2566,8 @@ void ObLSRestoreResultMgr::set_result(const int result, const share::ObTaskId &t
   // 1. result_ is OB_SUCCESS;
   // 2. result_ is retrieable err, but input result is non retrieable err.
   lib::ObMutexGuard guard(mtx_);
-  if ((!can_retrieable_err(result) && can_retrieable_err(result_))
+  if (retry_cnt_ >= OB_MAX_RESTORE_RETRY_TIMES) { // avoiding overwrite error code
+  } else if ((!can_retrieable_err(result) && can_retrieable_err(result_))
       || OB_SUCCESS == result_) {
     result_ = result;
     trace_id_.set(trace_id);

@@ -957,6 +957,9 @@ int ObRestorePersistHelper::update_ls_restore_status(
   } else if (OB_FAIL(ls_restore_progress_table_operator.update_string_column(proxy, ls_key, OB_STR_COMMENT, 
       comment, affected_rows))) {
     LOG_WARN("fail to update comment", K(ret), K(ls_key), KP(comment));
+  } else if (affected_rows == 0) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("update row not exist", K(ret), K(ls_key));
   }
   return ret;
 }
