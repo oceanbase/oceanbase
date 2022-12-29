@@ -829,6 +829,8 @@ int ObLockMemtable::flush(int64_t recycle_log_ts, bool need_freeze)
       if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
         LOG_WARN("failed to schedule lock_memtable merge dag", K(ret), K(this));
       }
+    } else {
+      LOG_INFO("schedule lock_memtable merge_dag successfully", K(ls_id_), K(freeze_log_ts_));
     }
   }
 

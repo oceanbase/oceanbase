@@ -418,7 +418,7 @@ int64_t ObLSTxService::get_rec_log_ts()
   int64_t min_rec_log_ts = INT64_MAX;
   int min_rec_log_ts_common_checkpoint_type_index = 0;
   char common_checkpoint_type[common::MAX_CHECKPOINT_TYPE_BUF_LENGTH];
-  ObSpinLockGuard guard(lock_);
+  RLockGuard guard(rwlock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     if (OB_NOT_NULL(common_checkpoints_[i])) {
       int64_t rec_log_ts = common_checkpoints_[i]->get_rec_log_ts();
@@ -443,7 +443,7 @@ int ObLSTxService::flush(int64_t rec_log_ts)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
+  RLockGuard guard(rwlock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     // only flush the common_checkpoint that whose clog need recycle
     if (OB_NOT_NULL(common_checkpoints_[i]) && rec_log_ts >= common_checkpoints_[i]->get_rec_log_ts()) {
@@ -477,7 +477,7 @@ int ObLSTxService::get_common_checkpoint_info(
 {
   int ret = OB_SUCCESS;
   common_checkpoint_array.reset();
-  ObSpinLockGuard guard(lock_);
+  RLockGuard guard(rwlock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     ObCommonCheckpoint *common_checkpoint = common_checkpoints_[i];
     if (OB_ISNULL(common_checkpoint)) {
@@ -504,7 +504,7 @@ int ObLSTxService::register_common_checkpoint(const ObCommonCheckpointType &type
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(type), K(common_checkpoint));
   } else {
-    ObSpinLockGuard guard(lock_);
+    WLockGuard guard(rwlock_);
     if (OB_NOT_NULL(common_checkpoints_[type])) {
       STORAGE_LOG(WARN, "repeat register common_checkpoint", K(ret), K(type), K(common_checkpoint));
     } else {
@@ -524,7 +524,7 @@ int ObLSTxService::unregister_common_checkpoint(const ObCommonCheckpointType &ty
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(type), K(common_checkpoint));
   } else {
-    ObSpinLockGuard guard(lock_);
+    WLockGuard guard(rwlock_);
     if (OB_ISNULL(common_checkpoints_[type])) {
       STORAGE_LOG(WARN, "common_checkpoint is null, no need unregister", K(type),
                   K(common_checkpoint));
@@ -556,7 +556,7 @@ int ObLSTxService::traversal_flush()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
+  RLockGuard guard(rwlock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     if (OB_NOT_NULL(common_checkpoints_[i]) &&
         OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(INT64_MAX, false))) {
@@ -567,7 +567,7 @@ int ObLSTxService::traversal_flush()
 }
 
 void ObLSTxService::reset_() {
-  ObSpinLockGuard guard(lock_);
+  WLockGuard guard(rwlock_);
   for (int i = 0; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     common_checkpoints_[i] = NULL;
   }

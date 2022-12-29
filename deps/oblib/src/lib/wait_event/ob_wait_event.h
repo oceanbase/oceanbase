@@ -197,6 +197,8 @@ WAIT_EVENT_DEF(MIGRATE_RETRY_WORKER_COND_WAIT, 15157, "migrate retry queue worke
 WAIT_EVENT_DEF(BACKUP_TASK_SCHEDULER_COND_WAIT, 15158, "backup scheduler condition wait", "address", "", "", CONCURRENCY, "backup scheduler condition wait", true)
 WAIT_EVENT_DEF(HA_SERVICE_COND_WAIT, 15159, "ha service condition wait", "address", "", "", CONCURRENCY, "ha service condition wait", false)
 WAIT_EVENT_DEF(PX_LOOP_COND_WAIT, 15160, "px loop condition wait", "address", "", "", CONCURRENCY, "px loop condition wait", true)
+WAIT_EVENT_DEF(CLOG_CKPT_LOCK_WAIT, 15161, "spinlock: clog checkpoint lock wait", "address", "number", "tries", CONCURRENCY, "spinlock: clog checkpoint lock wait", true)
+WAIT_EVENT_DEF(CLOG_CKPT_RWLOCK_WAIT, 15162, "rwlock: clog checkpoint rwlock wait", "address", "number", "tries", CONCURRENCY, "rwlock: clog checkpoint rwlock wait", true)
 //transaction
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,"wait end trans", false)
 WAIT_EVENT_DEF(START_STMT_WAIT, 16002, "wait start stmt", "trans_hash_value", "physic_plan_type", "participant_count", CLUSTER, "wait start stmt", false)

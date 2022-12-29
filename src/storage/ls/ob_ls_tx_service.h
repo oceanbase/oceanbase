@@ -14,7 +14,7 @@
 #define OCEANBASE_TRANSACTION_OB_LS_TX_SERVICE
 
 #include "lib/ob_errno.h"
-#include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_spin_rwlock.h"           // SpinRWLock
 #include "share/ob_ls_id.h"
 #include "storage/checkpoint/ob_common_checkpoint.h"
 #include "storage/ob_i_store.h"
@@ -53,7 +53,13 @@ class ObLSTxService : public logservice::ObIReplaySubHandler,
                       public logservice::ObICheckpointSubHandler
 {
 public:
-  ObLSTxService(ObLS *parent) : parent_(parent), tenant_id_(0), ls_id_(), mgr_(NULL), trans_service_(NULL) {
+  ObLSTxService(ObLS *parent)
+      : parent_(parent),
+        tenant_id_(0),
+        ls_id_(),
+        mgr_(NULL),
+        trans_service_(NULL),
+        rwlock_(common::ObLatchIds::CLOG_CKPT_RWLOCK) {
     reset_();
   }
   ~ObLSTxService() {}
@@ -168,7 +174,10 @@ private:
 
   // responsible for maintenance checkpoint unit that write TRANS_SERVICE_LOG_BASE_TYPE clog
   checkpoint::ObCommonCheckpoint *common_checkpoints_[checkpoint::ObCommonCheckpointType::MAX_BASE_TYPE];
-  common::ObSpinLock lock_;
+  typedef common::SpinRWLock RWLock;
+  typedef common::SpinRLockGuard  RLockGuard;
+  typedef common::SpinWLockGuard  WLockGuard;
+  RWLock rwlock_;
 };
 
 }

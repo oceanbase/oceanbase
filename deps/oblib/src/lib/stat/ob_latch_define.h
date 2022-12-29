@@ -143,6 +143,8 @@ LATCH_DEF(ID_SOURCE_LOCK, 128, "ID allocator updates assignable interval lock", 
 LATCH_DEF(TRANS_AUDIT_RECORD_LOCK, 129, "trans records audit information lock", LATCH_FIFO, 2000, 0, TRANS_AUDIT_RECORD_LOCK_WAIT, "trans records audit information lock")
 LATCH_DEF(TABLET_MULTI_SOURCE_DATA_LOCK, 130, "tablet multi source data lock", LATCH_FIFO, 2000, 0, TABLET_MULTI_SOURCE_DATA_WAIT, "tablet multi source data lock")
 LATCH_DEF(FREEZE_THREAD_POOL_LOCK, 131, "freeze thread pool lock", LATCH_FIFO, 2000, 0, FREEZE_THREAD_POOL_WAIT, "freeze thread pool lock")
+LATCH_DEF(CLOG_CKPT_LOCK, 132, "clog checkpoint lock", LATCH_FIFO, 2000, 0, CLOG_CKPT_LOCK_WAIT, "clog checkpoint lock")
+LATCH_DEF(CLOG_CKPT_RWLOCK, 133, "clog checkpoint rwlock", LATCH_READ_PREFER, 2000, 0, CLOG_CKPT_RWLOCK_WAIT, "clog checkpoint rwlock")
 
 LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif

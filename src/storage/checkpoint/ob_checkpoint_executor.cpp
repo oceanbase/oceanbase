@@ -29,7 +29,7 @@ namespace checkpoint
 {
 
 ObCheckpointExecutor::ObCheckpointExecutor()
-    : rwlock_(),
+    : rwlock_(common::ObLatchIds::CLOG_CKPT_RWLOCK),
       update_checkpoint_enabled_(false)
 {
   reset();
