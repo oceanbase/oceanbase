@@ -1592,7 +1592,7 @@ public:
       alter_constraint_type_(CONSTRAINT_NO_OPERATION),
       index_arg_list_(),
       foreign_key_arg_list_(),
-      alter_table_schema_(),
+      alter_table_schema_(&allocator_),
       tz_info_wrap_(),
       nls_formats_{},
       sequence_ddl_arg_(),
