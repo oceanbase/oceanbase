@@ -1090,15 +1090,6 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
       : ob_is_double_tc(type) ? 3                             \
         : ob_is_int_tc(type) || ob_is_uint_tc(type) ? 4 : 5;
 
-#define CHECK_AND_SET_ROUTINE_INFO(pos)                                       \
-  if (OB_ISNULL(routine_info)) {                                              \
-    routine_info = tmp_match_infos.at(pos).routine_info_;                     \
-  } else if (routine_info != tmp_match_infos.at(pos).routine_info_) {         \
-    ret = OB_ERR_FUNC_DUP;                                                    \
-    LOG_WARN("PLS-00307: too many declarations of 'string' match this call",  \
-             K(ret), K(tmp_match_infos));                                     \
-  }
-
   // 处理所有的匹配都需要经过Cast的情况
   if (OB_SUCC(ret) && OB_ISNULL(routine_info)) {
     ObSEArray<int, 16> numric_args;
@@ -1119,21 +1110,31 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
       }
     }
     // 按照优先级选择一个Routine
+    int64_t pos = -1;
     for (int64_t i = 0; OB_SUCC(ret) && i < numric_args.count(); ++i) {
+      int64_t tmp_pos = 0;
       for (int64_t j = 1; OB_SUCC(ret) && j < tmp_match_infos.count(); ++j) {
         int level1 = NUMRIC_TYPE_LEVEL(tmp_match_infos.at(j).get_type(numric_args.at(i)));
-        int level2 = NUMRIC_TYPE_LEVEL(tmp_match_infos.at(j-1).get_type(numric_args.at(i)));
+        int level2 = NUMRIC_TYPE_LEVEL(tmp_match_infos.at(tmp_pos).get_type(numric_args.at(i)));
         if (level1 < level2) {
-          CHECK_AND_SET_ROUTINE_INFO(j);
-        } else {
-          CHECK_AND_SET_ROUTINE_INFO(j-1);
+          OX (tmp_pos = j);
         }
       }
+      if (-1 == pos) {
+        pos = tmp_pos;
+      } else if (pos != tmp_pos) {
+        ret = OB_ERR_FUNC_DUP;
+        LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
+                  K(ret), K(tmp_match_infos), K(numric_args));
+      }
+    }
+    if (OB_SUCC(ret) && numric_args.count() > 0) {
+      CK (pos != -1);
+      OX (routine_info = tmp_match_infos.at(pos).routine_info_);
     }
   }
 
 #undef NUMRIC_TYPE_LEVEL
-#undef CHECK_AND_SET_ROUTINE_INFO
 
   if (OB_SUCC(ret) && OB_ISNULL(routine_info)) {
     ret = OB_ERR_FUNC_DUP;
