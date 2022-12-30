@@ -566,43 +566,6 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
   return ret;
 }
 
-int ObConstraintTask::switch_status(const ObDDLTaskStatus new_status, const int ret_code)
-{
-  int ret = OB_SUCCESS;
-  const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
-  const ObDDLTaskStatus real_new_status = OB_SUCCESS == ret_code ? new_status : FAIL;
-  ret_code_ = OB_SUCCESS == ret_code_ ? ret_code : ret_code_;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (real_new_status < old_status) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument, task status is not allowed to roll back", K(ret), K(old_status), K(real_new_status));
-  } else {
-    ObRootService *root_service = GCTX.root_service_;
-    TCWLockGuard guard(lock_);
-    if (OB_ISNULL(root_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
-    } else if (old_status != task_status_) {
-      ret = OB_EAGAIN;
-      LOG_WARN("task status has changed", K(ret));
-    } else if (real_new_status == old_status) {
-      // do nothing
-    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(
-        root_service->get_sql_proxy(), tenant_id_, task_id_, static_cast<int64_t>(real_new_status)))) {
-      LOG_WARN("update task status failed", K(ret), K(task_id_), K(real_new_status));
-      ret = OB_EAGAIN;
-    } else {
-      ROOTSERVICE_EVENT_ADD("constraint_task", "switch_state", K_(tenant_id), K_(object_id), K_(target_object_id),
-          "pre_state", old_status, "new_state", real_new_status, K_(snapshot_version));
-      task_status_ = real_new_status;
-    }
-  }
-  LOG_INFO("switch task status", K(ret), K(old_status), K(real_new_status));
-  return ret;
-}
-
 int ObConstraintTask::hold_snapshot(const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
