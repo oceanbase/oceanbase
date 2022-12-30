@@ -803,14 +803,18 @@ int ObMediumCompactionScheduleFunc::check_need_merge_and_schedule(
   int tmp_ret = OB_SUCCESS;
   need_merge = false;
   bool can_merge = false;
+  bool need_force_freeze = false;
+  const ObLSID &ls_id = ls.get_ls_id();
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
 
   if (OB_FAIL(ObPartitionMergePolicy::check_need_medium_merge(
           ls,
           tablet,
           schedule_scn,
           need_merge,
-          can_merge))) { // check merge finish
-    LOG_WARN("failed to check medium merge", K(ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+          can_merge,
+          need_force_freeze))) { // check merge finish
+    LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id));
   } else if (need_merge && can_merge) {
     const ObMediumCompactionInfo *medium_info = nullptr;
     if (OB_FAIL(tablet.get_medium_compaction_info_list().get_specified_scn_info(schedule_scn, medium_info))) {
@@ -823,11 +827,14 @@ int ObMediumCompactionScheduleFunc::check_need_merge_and_schedule(
             medium_info->is_major_compaction()))) {
       if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
         ret = tmp_ret;
-        LOG_WARN("failed to schedule medium merge dag", K(ret), K(ls_id),
-            "tablet_id", tablet.get_tablet_meta().tablet_id_);
+        LOG_WARN("failed to schedule medium merge dag", K(ret), K(ls_id), K(tablet_id));
       }
     } else {
       LOG_DEBUG("success to schedule medium merge dag", K(ret), K(schedule_scn));
+    }
+  } else if (need_force_freeze) {
+    if (OB_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(tablet_id, true/*force_freeze*/))) {
+      LOG_WARN("failed to force freeze tablet", K(ret), K(ls_id), K(tablet_id));
     }
   }
   return ret;
