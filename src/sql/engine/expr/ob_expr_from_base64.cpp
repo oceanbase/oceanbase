@@ -27,7 +27,7 @@ namespace sql
 {
 
 ObExprFromBase64::ObExprFromBase64(ObIAllocator &alloc)
-:ObFuncExprOperator(alloc, T_FUN_SYS_FROM_BASE64, N_FROM_BASE64, 1, NOT_ROW_DIMENSION)
+:ObStringExprOperator(alloc, T_FUN_SYS_FROM_BASE64, N_FROM_BASE64, 1)
 {
 }
 
@@ -126,21 +126,18 @@ int ObExprFromBase64::eval_from_base64(const ObExpr &expr,
   } else {
     const ObString & in_raw = arg->get_string();
     ObLength in_raw_len = in_raw.length();
-    if (OB_UNLIKELY(in_raw_len == 0)) {
+    const char *buf = in_raw.ptr();
+    if (NULL == buf) {
       res.set_string(nullptr, 0);
     } else {
-      const char *buf = in_raw.ptr();
-      char *output_buf = nullptr;
+      char *output_buf = NULL;
       int64_t buf_len = base64_needed_decoded_length(in_raw_len);
       int64_t pos = 0;
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       output_buf = static_cast<char*>(alloc_guard.get_allocator().alloc(buf_len));
-      if (OB_ISNULL(output_buf)) {
-        LOG_WARN("output_buf is null", K(ret), K(buf_len), K(in_raw_len));
-        res.set_null();
-      } else if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
-                                                 reinterpret_cast<uint8_t*>(output_buf),
-                                                 buf_len, pos, true))) {
+      if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
+                                          reinterpret_cast<uint8_t*>(output_buf),
+                                          buf_len, pos, true))) {
         if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
           ret = OB_SUCCESS;
           res.set_null();
@@ -181,20 +178,19 @@ int ObExprFromBase64::eval_from_base64_batch(const ObExpr &expr, ObEvalCtx &ctx,
       ObDatum *arg = args.at(j);
       const ObString & in_raw = arg->get_string();
       ObLength in_raw_len = in_raw.length();
-      if (OB_UNLIKELY(in_raw_len == 0)) {
+      const char *buf = in_raw.ptr();
+      if (arg->is_null()) {
+        res[j].set_null();
+      } else if (NULL == buf) {
         res[j].set_string(nullptr, 0);
       } else {
-        const char *buf = in_raw.ptr();
         char *output_buf = nullptr;
         int64_t buf_len = base64_needed_decoded_length(in_raw_len);
         int64_t pos = 0;
         output_buf = static_cast<char*>(alloc_guard.get_allocator().alloc(buf_len));
-        if (OB_ISNULL(output_buf)) {
-          LOG_WARN("output_buf is null", K(ret), K(buf_len), K(in_raw_len));
-          res[j].set_null();
-        } else if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
-                                                   reinterpret_cast<uint8_t*>(output_buf),
-                                                   buf_len, pos, true))) {
+        if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
+                                            reinterpret_cast<uint8_t*>(output_buf),
+                                            buf_len, pos, true))) {
           if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
             ret = OB_SUCCESS;
             res[j].set_null();
