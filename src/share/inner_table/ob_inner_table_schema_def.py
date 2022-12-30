@@ -5191,6 +5191,8 @@ def_table_schema(
 )
 # 446 : __all_ls_transfer_member_list_lock_info
 # 447 : __all_ls_log_restore_stat
+# 448 : __all_backup_transferring_tablets
+
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -10950,9 +10952,11 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12364: __all_virtual_ls_arb_replica_task
 # 12365: __all_virtual_ls_arb_replica_task_history
 
+
 # 12366: __all_virtual_archive_dest_status
 
 # 12367: __all_virtual_kv_hotkey_stat
+# 12368: __all_virtual_backup_transferring_tablets
 
 #
 # 余留位置
@@ -11233,6 +11237,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_ke
 # 15289: __all_virtual_ls_arb_replica_task_history
 
 # 15290: __all_virtual_archive_dest_status
+# 15291: __all_virtual_backup_transferring_tablets
+
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
