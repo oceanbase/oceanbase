@@ -9474,7 +9474,8 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
       while (OB_SUCC(ret) && in_service() && purge_sum > 0) {
         int64_t start_time = ObTimeUtility::current_time();
         arg.purge_num_ = purge_sum > PURGE_EACH_RPC ? PURGE_EACH_RPC : purge_sum;
-        if (OB_FAIL(common_proxy_.purge_expire_recycle_objects(arg, affected_rows))) {
+        // replcace timeout from hardcode 9s to 10 * GCONF.rpc_timeout
+        if (OB_FAIL(common_proxy_.timeout(10 * GCONF.rpc_timeout).purge_expire_recycle_objects(arg, affected_rows))) {
           LOG_WARN("purge reyclebin objects failed", KR(ret),
               K(current_time), K(expire_time), K(affected_rows), K(arg));
         } else {
