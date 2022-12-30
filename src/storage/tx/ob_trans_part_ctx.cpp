@@ -1152,6 +1152,8 @@ bool ObPartTransCtx::can_be_recycled_()
     bool_ret = false;
   } else if (is_logging_()) { // FIXME. xiaoshi
     bool_ret = false;
+  } else if (ObTxState::REDO_COMPLETE < get_downstream_state()) {
+    bool_ret = false;
   } else {
     TRANS_LOG(DEBUG, "can be recycled", KPC(this));
   }
