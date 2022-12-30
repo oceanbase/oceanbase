@@ -44,22 +44,26 @@ public:
       : tenant_id_(OB_INVALID_TENANT_ID),
         ls_id_(),
         tablet_id_(),
-        add_timestamp_(OB_INVALID_TIMESTAMP) {}
+        add_timestamp_(OB_INVALID_TIMESTAMP),
+        add_task_cnt_(OB_INVALID_COUNT) {}
   explicit ObTabletTableUpdateTask(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t add_timestamp)
+      const int64_t add_timestamp,
+      const int64_t add_task_cnt)
       : tenant_id_(tenant_id),
         ls_id_(ls_id),
         tablet_id_(tablet_id),
-        add_timestamp_(add_timestamp) {}
+        add_timestamp_(add_timestamp),
+        add_task_cnt_(add_task_cnt) {}
   virtual ~ObTabletTableUpdateTask();
   int init(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t add_timestamp);
+      const int64_t add_timestamp,
+      const int64_t add_task_cnt);
   void reset();
   // operator-related functions for ObTabletTableUpdateTask
   bool is_valid() const;
@@ -72,6 +76,7 @@ public:
   inline const share::ObLSID &get_ls_id() const { return ls_id_; }
   inline const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   inline int64_t get_add_timestamp() const { return add_timestamp_; }
+  inline int64_t get_add_task_count() const { return add_task_cnt_; }
 
   // other functions
   bool need_process_alone() const { return false; }
@@ -88,13 +93,14 @@ public:
   // TODO: need to realize barrier related functions
   bool is_barrier() const;
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(add_timestamp));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(add_timestamp), K_(add_task_cnt));
 private:
   const int64_t TABLET_CHECK_INTERVAL = 120l * 1000 * 1000; //2 minutes
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   int64_t add_timestamp_;
+  int64_t add_task_cnt_;
 };
 
 typedef ObUniqTaskQueue<ObTabletTableUpdateTask, ObTabletTableUpdater> ObTabletTableUpdateTaskQueue;
