@@ -254,8 +254,9 @@ public:
       // K(clog_encrypt_info_),
       K(ctx_redo_info_.cluster_version_));
 
-private:
+public:
   int before_serialize() { return ctx_redo_info_.before_serialize(); }
+private:
   //------------ For ob_admin
   int format_mutator_row_(const memtable::ObMemtableMutatorRow &row, share::ObAdminMutatorStringArg &arg);
   int format_row_data_(const memtable::ObRowData &row_data, share::ObAdminMutatorStringArg &arg);
@@ -297,7 +298,7 @@ public:
   static const ObTxLogType LOG_TYPE;
   TO_STRING_KV(K(LOG_TYPE), K_(data));
 
-private:
+public:
   int before_serialize();
 
 private:
@@ -396,7 +397,7 @@ public:
                K(max_submitted_seq_no_),
                K(cluster_version_));
 
-private:
+public:
   int before_serialize();
 
 private:
@@ -511,7 +512,7 @@ public:
                K(prev_record_lsn_),
                K(redo_lsns_),
                K(xid_))
-private:
+public:
   int before_serialize();
 
 private:
@@ -566,7 +567,7 @@ public:
   static const ObTxLogType LOG_TYPE;
   TO_STRING_KV(K(LOG_TYPE), K(incremental_participants_), K(prev_lsn_));
 
-private:
+public:
   int before_serialize();
 
 private:
@@ -659,7 +660,7 @@ public:
                K(prev_lsn_),
                K(ls_log_info_arr_));
 
-private:
+public:
   int before_serialize();
 
 private:
@@ -711,7 +712,7 @@ public:
   static const ObTxLogType LOG_TYPE;
   TO_STRING_KV(K(LOG_TYPE), K(incremental_participants_));
 
-private:
+public:
   int before_serialize();
 
 private:
@@ -753,7 +754,7 @@ public:
   static const ObTxLogType LOG_TYPE;
   TO_STRING_KV(K(LOG_TYPE), K(multi_source_data_));
 
-private:
+public:
   int before_serialize();
 
 private:
@@ -796,7 +797,7 @@ public:
   static const ObTxLogType LOG_TYPE;
   TO_STRING_KV(K(LOG_TYPE), K(prev_record_lsn_), K(redo_lsns_));
 
-private:
+public:
   int before_serialize();
 
 private:
@@ -832,7 +833,7 @@ public:
   static const ObTxLogType LOG_TYPE;
   TO_STRING_KV(K(LOG_TYPE), K(leader_epoch_));
 
-private:
+public:
   int before_serialize();
 
 private:
@@ -858,7 +859,7 @@ public:
   static const ObTxLogType LOG_TYPE;
   TO_STRING_KV(KP(this), K(LOG_TYPE), K_(from), K_(to));
 
-private:
+public:
   int before_serialize();
 private:
   ObTxSerCompatByte compat_bytes_;
@@ -900,7 +901,7 @@ public:
 
   TO_STRING_KV(K_(org_cluster_id), K_(log_entry_no), K_(tx_id));
 
-private:
+public:
   int before_serialize();
 
 private:
@@ -1006,8 +1007,6 @@ int ObTxLogBlock::add_new_log(T &tx_log_body)
   } else if (T::LOG_TYPE == ObTxLogType::TX_REDO_LOG) {
     // ret = OB_EAGAIN;
     TRANS_LOG(DEBUG, "RedoLogBody does not require add_new_log()");
-  // } else if (OB_FAIL(tx_log_body.before_serialize())) {
-  //   TRANS_LOG(WARN, "before serialize failed", K(ret), K(tx_log_body), K(*this));
   } else if (len_ < header.get_serialize_size() + tx_log_body.get_serialize_size() + tmp_pos) {
     ret = OB_BUF_NOT_ENOUGH;
   } else if (ObTxLogType::TX_REDO_LOG == cur_log_type_) {
@@ -1015,6 +1014,8 @@ int ObTxLogBlock::add_new_log(T &tx_log_body)
     TRANS_LOG(WARN, "MutatorBuf is using");
   } else if (OB_FAIL(header.serialize(fill_buf_->get_buf(), len_, tmp_pos))) {
     TRANS_LOG(WARN, "serialize log header error", K(ret), K(header), K(*this));
+  } else if (OB_FAIL(tx_log_body.before_serialize())) {
+    TRANS_LOG(WARN, "before serialize failed", K(ret), K(tx_log_body), K(*this));
   } else if (OB_FAIL(tx_log_body.serialize(fill_buf_->get_buf(), len_, tmp_pos))) {
     TRANS_LOG(WARN, "serialize tx_log_body error", K(ret), K(tx_log_body), K(*this));
   } else {

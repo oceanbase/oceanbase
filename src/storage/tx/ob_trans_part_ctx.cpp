@@ -2442,6 +2442,19 @@ int ObPartTransCtx::submit_redo_commit_info_log_()
   return ret;
 }
 
+int ObPartTransCtx::validate_commit_info_log_(const ObTxCommitInfoLog &commit_info_log)
+{
+  int ret = OB_SUCCESS;
+
+  if (!commit_info_log.get_scheduler().is_valid()
+      || commit_info_log.get_redo_lsns().count() != exec_info_.redo_lsns_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "invalid commit info log", K(ret), K(commit_info_log), KPC(this));
+  }
+
+  return ret;
+}
+
 int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
                                                  bool &has_redo,
                                                  ObRedoLogSubmitHelper &helper)
@@ -2461,9 +2474,12 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
         trace_info_.get_app_trace_info(), exec_info_.prev_record_lsn_, exec_info_.redo_lsns_,
         exec_info_.incremental_participants_, cluster_version_, exec_info_.xid_);
 
-    if (OB_FAIL(log_block.add_new_log(commit_info_log))) {
+    if (OB_FAIL(validate_commit_info_log_(commit_info_log))) {
+      TRANS_LOG(WARN, "invalid commit info log", K(ret), K(commit_info_log), K(trans_id_),
+                K(ls_id_));
+    } else if (OB_FAIL(log_block.add_new_log(commit_info_log))) {
       if (OB_BUF_NOT_ENOUGH == ret) {
-        TRANS_LOG(WARN, "buf not enough", K(ret), K(commit_info_log));
+        // TRANS_LOG(WARN, "buf not enough", K(ret), K(commit_info_log), KPC(this));
         if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
           if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
             TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
@@ -2484,9 +2500,11 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
           release_ctx_ref_();
         } else if (OB_FAIL(after_submit_log_(log_block, log_cb, &helper))) {
         } else {
-          // TRANS_LOG(INFO, "submit redo and commit_info log in clog adapter success", K(*log_cb));
           log_cb = NULL;
-          if (OB_FAIL(log_block.add_new_log(commit_info_log))) {
+          if (OB_FAIL(validate_commit_info_log_(commit_info_log))) {
+            TRANS_LOG(WARN, "invalid commit info log", K(ret), K(commit_info_log), K(trans_id_),
+                      K(ls_id_));
+          } else if (OB_FAIL(log_block.add_new_log(commit_info_log))) {
             TRANS_LOG(WARN, "add new log failed", KR(ret), K(*this));
           }
           has_redo = false;

@@ -402,6 +402,7 @@ private:
                                    bool &has_redo,
                                    memtable::ObRedoLogSubmitHelper &helper);
   int compensate_abort_log_();
+  int validate_commit_info_log_(const ObTxCommitInfoLog &commit_info_log);
 
   int switch_log_type_(const ObTwoPhaseCommitLogType &log_type,
                        ObTxLogType &ret_log_type);
