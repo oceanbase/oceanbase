@@ -985,7 +985,7 @@ int64_t ObSQLUtils::get_usec()
   return time_val.tv_sec*1000000 + time_val.tv_usec;
 }
 
-int ObSQLUtils::check_and_convert_db_name(const ObCollationType cs_type, const bool perserve_lettercase,
+int ObSQLUtils::check_and_convert_db_name(const ObCollationType cs_type, const bool preserve_lettercase,
                                           ObString &name)
 {
   /*如果database name的字节数大于384则报错OB_WRONG_DB_NAME;
@@ -1011,7 +1011,7 @@ int ObSQLUtils::check_and_convert_db_name(const ObCollationType cs_type, const b
     }
 
     ObString last_name(name_len, name_str);
-    if (!perserve_lettercase) {
+    if (!preserve_lettercase) {
       ObCharset::casedn(CS_TYPE_UTF8MB4_BIN, last_name);
     }
     if (OB_ERR_WRONG_IDENT_NAME == (ret = check_ident_name(cs_type, last_name, check_for_path_chars,
@@ -1056,7 +1056,7 @@ int ObSQLUtils::cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_gu
 }
 
 int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type,
-                                             const bool perserve_lettercase,
+                                             const bool preserve_lettercase,
                                              ObString &name,
                                              const stmt::StmtType stmt_type,
                                              const bool is_index_table)
@@ -1090,7 +1090,7 @@ int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type,
   } else {
     char origin_name[OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE * OB_MAX_CHAR_LEN + 1] = {'\0'};
     MEMCPY(origin_name, name_str, name_len);
-    if (!perserve_lettercase) {
+    if (!preserve_lettercase) {
       ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, name);
     }
     bool check_for_path_chars = false;
@@ -1124,9 +1124,9 @@ int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type,
 int ObSQLUtils::check_and_convert_context_namespace(const common::ObCollationType cs_type,
                                                     common::ObString &name)
 {
-  bool perserve_lettercase = true;
+  bool preserve_lettercase = true;
   stmt::StmtType type = stmt::T_CREATE_CONTEXT;
-  return check_and_convert_table_name(cs_type, perserve_lettercase, name, type);
+  return check_and_convert_table_name(cs_type, preserve_lettercase, name, type);
 }
 
 int ObSQLUtils::check_index_name(const ObCollationType cs_type, ObString &name)

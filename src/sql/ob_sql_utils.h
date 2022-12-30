@@ -141,7 +141,7 @@ public:
    *  and a partition func.
    *
    *  The range array is assumed to only contain single_value ranges and
-   *  the partiton_ids will contain all the resulted partition ids without
+   *  the partition_ids will contain all the resulted partition ids without
    *  duplicates.
    */
   static int calc_partition_ids(const common::ObIArray<common::ObNewRange*> &ranges,
@@ -293,13 +293,13 @@ public:
                                  ObObj &result);
   static void destruct_default_expr_context(ObExprCtx &expr_ctx);
   static int64_t get_usec();
-  static int check_and_convert_db_name(const common::ObCollationType cs_type, const bool perserver_lettercase,
+  static int check_and_convert_db_name(const common::ObCollationType cs_type, const bool preserve_lettercase,
                                        common::ObString &name);
   static int cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_guard,
                                 const ObSQLSessionInfo *session,
                                 common::ObString &name);
   static int check_and_convert_table_name(const common::ObCollationType cs_type,
-                                          const bool perserve_lettercase,
+                                          const bool preserve_lettercase,
                                           common::ObString &name,
                                           const stmt::StmtType stmt_type = stmt::T_NONE,
                                           const bool is_index_table = false);
@@ -561,7 +561,7 @@ public:
   *  So, timestamp between servers can be vary large.
   *  A sql executed across servers needs to be corrected
   *  according to the THIS_WORKER.get_ntp_offset(),
-  *  That is the time correctly set by the processer of the RPC
+  *  That is the time correctly set by the processor of the RPC
   ------------------------*/
   static void adjust_time_by_ntp_offset(int64_t &dst_timeout_ts);
 private:
