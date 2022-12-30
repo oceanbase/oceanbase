@@ -238,9 +238,17 @@ int ObResultSet::on_cmd_execute()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid inner state", K(cmd_));
   } else if (cmd_->cause_implicit_commit()) {
-    // commit current open transaction, synchronously
-    if (OB_FAIL(ObSqlTransControl::implicit_end_trans(get_exec_context(), false))) {
-      SQL_ENG_LOG(WARN, "fail end implicit trans on cmd execute", K(ret));
+    // not allow implicit commit in xa trans
+    if (my_session_.associated_xa()) {
+      ret = OB_TRANS_XA_ERR_COMMIT;
+      get_exec_context().set_need_disconnect(false);
+      const transaction::ObTxDesc *tx_desc = my_session_.get_tx_desc();
+      LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), KPC(tx_desc));
+    } else {
+      // commit current open transaction, synchronously
+      if (OB_FAIL(ObSqlTransControl::implicit_end_trans(get_exec_context(), false))) {
+        SQL_ENG_LOG(WARN, "fail end implicit trans on cmd execute", K(ret));
+      }
     }
   }
   return ret;
