@@ -578,6 +578,25 @@ uint32_t ObCharset::instr(ObCollationType collation_type,
   return result;
 }
 
+int64_t ObCharset::instrb(ObCollationType collation_type,
+                          const char *str1,
+                          int64_t str1_len,
+                          const char *str2,
+                          int64_t str2_len)
+{
+  int64_t result = -1;
+  if (is_argument_valid(collation_type, str1, str1_len, str2, str2_len)) {
+    ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
+    ob_match_t m_match_t[2];
+    uint nmatch = 1;
+    uint m_ret = cs->coll->instr(cs, str1, str1_len, str2, str2_len, m_match_t, nmatch);
+    if (0 != m_ret) {
+      result =  m_match_t[0].end - m_match_t[0].beg;
+    }
+  }
+  return result;
+}
+
 uint32_t ObCharset::locate(ObCollationType collation_type,
                 const char *str1,
                 int64_t str1_len,
