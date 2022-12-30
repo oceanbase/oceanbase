@@ -769,8 +769,22 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
 
   if (OB_SUCC(ret)
       && result->is_character_type()) {
-    OZ (spi_pad_char_or_varchar(
-      ctx->exec_ctx_->get_my_session(), expr, ctx->allocator_, result));
+    ObObjType type = result->get_type();
+    if (lib::is_mysql_mode() && T_QUESTIONMARK == get_expression_type(*expr) &&
+        (ObCharType == type || ObNCharType == type)) {
+      if (is_pad_char_to_full_length(ctx->exec_ctx_->get_my_session()->get_sql_mode())) {
+        OZ (spi_pad_char_or_varchar(
+          ctx->exec_ctx_->get_my_session(), type, result->get_accuracy(), ctx->allocator_, result));
+      } else {
+        ObString res = result->get_string();
+        OZ (ObCharsetUtils::remove_char_endspace(  // this function only adjust res.data_length_
+            res, ObCharset::charset_type_by_coll(result->get_collation_type())));
+        OX (result->val_len_ = res.length());
+      }
+    } else {
+      OZ (spi_pad_char_or_varchar(
+        ctx->exec_ctx_->get_my_session(), expr, ctx->allocator_, result));
+    }
   }
 
   if (OB_SUCC(ret)) {
