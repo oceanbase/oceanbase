@@ -799,6 +799,7 @@ typedef enum ObItemType
   T_PSEUDO_DUP_EXPR = 3008,
   T_PSEUDO_STMT_ID = 3009,
   T_PSEUDO_RANDOM = 3010,
+  T_INNER_WF_AGGR_STAUTS = 3011,
   T_PSEUDO_GROUP_PARAM = 3040,
 
   ///< @note values of the following symbols are insiginificant
