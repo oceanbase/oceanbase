@@ -10951,6 +10951,9 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12365: __all_virtual_ls_arb_replica_task_history
 
 # 12366: __all_virtual_archive_dest_status
+
+# 12367: __all_virtual_kv_hotkey_stat
+
 #
 # 余留位置
 #
@@ -23500,6 +23503,10 @@ FROM oceanbase.__all_cluster_event_history
 # 21364: CDB_OB_LS_LOG_ARCHIVE_PROGRESS
 # 21365: DBA_OB_LS_LOG_RESTORE_STAT
 # 21366: CDB_OB_LS_LOG_RESTORE_STAT
+
+# 21367: GV$OB_KV_HOTKEY_STAT
+# 21368: V$OB_KV_HOTKEY_STAT
+
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]
