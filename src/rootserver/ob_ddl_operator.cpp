@@ -2569,7 +2569,9 @@ int ObDDLOperator::drop_table_constraints(const ObTableSchema &orig_table_schema
       iter != inc_table_schema.constraint_end(); iter ++) {
       (*iter)->set_tenant_id(orig_table_schema.get_tenant_id());
       (*iter)->set_table_id(orig_table_schema.get_table_id());
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      if (nullptr == new_table_schema.get_constraint((*iter)->get_constraint_id())) {
+        LOG_INFO("constraint has already been dropped", K(ret), K(**iter));
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_service->get_table_sql_service().delete_single_constraint(
                            new_schema_version, trans, new_table_schema, **iter))) {

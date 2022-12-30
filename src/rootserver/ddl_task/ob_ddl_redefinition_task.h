@@ -145,8 +145,8 @@ protected:
   int hold_snapshot(const int64_t snapshot_version);
   int release_snapshot(const int64_t snapshot_version);
   int cleanup();
-  int add_constraint_ddl_task(const int64_t constraint_id, share::schema::ObSchemaGetterGuard &schema_guard);
-  int add_fk_ddl_task(const int64_t fk_id, share::schema::ObSchemaGetterGuard &schema_guard);
+  int add_constraint_ddl_task(const int64_t constraint_id);
+  int add_fk_ddl_task(const int64_t fk_id);
   int sync_auto_increment_position();
   int modify_autoinc(const share::ObDDLTaskStatus next_task_status);
   int finish();
