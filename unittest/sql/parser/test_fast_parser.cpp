@@ -203,8 +203,11 @@ int TestFastParser::parse(const ObString &sql)
   char *no_param_sql_ptr = NULL;
   int64_t no_param_sql_len = 0;
   ParamList *p_list = NULL; 
-  bool enable_batched_multi_stmt = false;
-  int ret2 = ObFastParser::parse(sql, enable_batched_multi_stmt, no_param_sql_ptr, no_param_sql_len, p_list, param_num, connection_collation, allocator_);
+  FPContext fp_ctx(connection_collation);
+  fp_ctx.enable_batched_multi_stmt_ = false;
+  fp_ctx.is_udr_mode_ = false;
+  int ret2 = ObFastParser::parse(sql, fp_ctx, allocator_,
+    no_param_sql_ptr, no_param_sql_len, p_list, param_num);
   if ((OB_SUCCESS == ret1) != (OB_SUCCESS == ret2)) {
     SQL_PC_LOG(ERROR, "parser results are not equal", K(ret1), K(ret2), K(sql));
     return OB_ERROR;

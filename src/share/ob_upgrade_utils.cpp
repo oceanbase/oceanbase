@@ -781,9 +781,32 @@ int ObBaseUpgradeProcessor::init(
 int ObUpgradeFor4100Processor::post_upgrade()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(post_upgrade_for_srs())) {
+  const uint64_t tenant_id = get_tenant_id();
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_srs())) {
     LOG_WARN("post upgrade for srs failed", K(ret));
+  } else if (OB_FAIL(init_rewrite_rule_version(tenant_id))) {
+    LOG_WARN("fail to init rewrite rule version", K(ret), K(tenant_id));
   }
+  return ret;
+}
+
+int ObUpgradeFor4100Processor::init_rewrite_rule_version(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  OZ (sql.append_fmt(
+                  "insert ignore into %s "
+                  "(tenant_id, zone, name, data_type, value, info) values "
+                  "(%lu, '', 'ob_max_used_rewrite_rule_version', %lu, %lu, 'max used rewrite rule version')",
+                  OB_ALL_SYS_STAT_TNAME,
+                  OB_INVALID_TENANT_ID,
+                  static_cast<uint64_t>(ObIntType),
+                  OB_INIT_REWRITE_RULE_VERSION));
+  CK (sql_proxy_ != NULL);
+  OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
   return ret;
 }
 
@@ -815,6 +838,7 @@ int ObUpgradeFor4100Processor::post_upgrade_for_srs()
   return ret;
 }
 
+/* =========== 4100 upgrade processor end ============= */
 /* =========== special upgrade processor end   ============= */
 } // end share
 } // end oceanbase

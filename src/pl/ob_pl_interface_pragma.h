@@ -20,6 +20,8 @@
 #include "pl/sys_package/ob_dbms_session.h"
 #include "pl/sys_package/ob_dbms_monitor.h"
 #include "pl/sys_package/ob_dbms_sql.h"
+#include "pl/sys_package/ob_dbms_user_define_rule.h"
+
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (void*)(ObPLInterfaceImpl::call))

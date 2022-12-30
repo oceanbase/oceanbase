@@ -41,6 +41,7 @@ namespace sql {
   class ObPlanBaselineMgr;
   class ObDataAccessService;
   class ObDASIDService;
+  class ObUDRMgr;
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
@@ -209,6 +210,7 @@ namespace detector
       storage::ObTenantFreezeInfoMgr*,               \
       transaction::ObTxLoopWorker *,                 \
       storage::ObAccessService*,                     \
+      sql::ObUDRMgr*,                        \
       ObTestModule*                                  \
   )
 

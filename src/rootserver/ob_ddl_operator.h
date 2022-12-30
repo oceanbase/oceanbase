@@ -131,6 +131,7 @@ struct ObSysStat
   Item ob_max_used_ls_group_id_;
   Item ob_max_used_sys_pl_object_id_;
   Item ob_max_used_object_id_;
+  Item ob_max_used_rewrite_rule_version_;
 };
 
 class ObDDLOperator

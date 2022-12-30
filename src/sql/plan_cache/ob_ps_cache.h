@@ -84,17 +84,11 @@ public:
   int get_or_add_stmt_item(const uint64_t db_id,
                            const common::ObString &ps_sql,
                            ObPsStmtItem *&ps_item_value);
-  int get_or_add_stmt_info(const ObResultSet &result,
-                           const ObString &origin_sql,
-                           const common::ObString &no_param_sql,
-                           const ObIArray<ObPCParam*> &raw_params,
-                           const common::ObIArray<int64_t> &raw_params_idx,
-                           int64_t param_cnt,
+  int get_or_add_stmt_info(const PsCacheInfoCtx &info_ctx,
+                           const ObResultSet &result,
                            ObSchemaGetterGuard &schema_guard,
-                           stmt::StmtType stmt_type,
                            ObPsStmtItem *ps_item,
-                           ObPsStmtInfo *&ref_ps_info,
-                           int32_t returning_into_parm_num);
+                           ObPsStmtInfo *&ref_ps_info);
 
   int cache_evict();
   int cache_evict_all_ps();

@@ -73,7 +73,7 @@ int parse_sql(ParseResult *p, const char *buf, size_t len)
     p->comment_cnt_ = 0;
     p->stop_add_comment_ = false;
 #endif
-    if (false == p->pl_parse_info_.is_pl_parse_) {//如果是PLParse调用的该接口，不去重置
+    if (false == p->pl_parse_info_.is_pl_parse_ && !p->is_for_udr_) {//如果是PLParse调用的该接口，不去重置
       p->question_mark_ctx_.count_ = 0;
     }
 

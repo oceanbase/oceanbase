@@ -55,6 +55,7 @@ WAIT_EVENT_DEF(ELECTION_LOCK_WAIT, 15008, "spinlock: election lock wait", "addre
 WAIT_EVENT_DEF(TRANS_CTX_LOCK_WAIT, 15009, "latch: trans ctx lock wait", "address", "number", "tries", CONCURRENCY, "latch: trans ctx lock wait", true)
 WAIT_EVENT_DEF(PARTITION_LOG_LOCK_WAIT, 15010, "latch: partition log lock wait", "address", "number", "tries", CONCURRENCY, "latch: partition log lock wait", true)
 WAIT_EVENT_DEF(PCV_SET_LOCK_WAIT, 15011, "latch: plan cache pcv set lock wait", "address", "number", "tries", CONCURRENCY, "latch: plan cache pcv set lock wait", true)
+WAIT_EVENT_DEF(REWRITE_RULE_ITEM_LOCK_WAIT, 15093, "latch: rewrite rule item lock wait", "address", "number", "tries", CONCURRENCY, "latch: rewrite rule item lock wait", true)
 
 WAIT_EVENT_DEF(CLOG_HISTORY_REPORTER_LOCK_WAIT, 15012, "latch: clog history reporter lock wait", "address", "number", "tries", CONCURRENCY, "latch: clog history reporter lock wait", true)
 WAIT_EVENT_DEF(CLOG_EXTERNAL_EXEC_LOCK_WAIT, 15013, "latch: clog external executor lock wait", "address", "number", "tries", CONCURRENCY, "latch: clog external executor lock wait", true)

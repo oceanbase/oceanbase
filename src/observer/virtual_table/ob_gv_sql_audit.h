@@ -158,7 +158,8 @@ private:
     PLAN_HASH,
     USER_GROUP,
     LOCK_FOR_READ_TIME,
-    PARAMS_VALUE
+    PARAMS_VALUE,
+    RULE_NAME
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

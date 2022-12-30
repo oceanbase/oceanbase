@@ -587,6 +587,10 @@ public:
   //----End of functions for managing synonyms----
 
 
+  //----Functions for sync rewrite rules----
+  int admin_sync_rewrite_rules(const obrpc::ObSyncRewriteRuleArg &arg);
+  //----End of functions for sync rewrite rules----
+
   //----Functions for managing package----
   int create_package(const obrpc::ObCreatePackageArg &arg);
   int alter_package(const obrpc::ObAlterPackageArg &arg);

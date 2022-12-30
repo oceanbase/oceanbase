@@ -26,6 +26,7 @@
 #include "sql/optimizer/ob_optimizer.h"
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
+#include "sql/udr/ob_udr_item_mgr.h"
 
 namespace test
 {
@@ -237,8 +238,6 @@ private:
   ObSql &operator=(const ObSql &other);
 
 private:
-  int add_param_to_param_store(const ObObjParam &param,
-                               ParamStore &param_store);
   int construct_param_store(const ParamStore &params,
                             ParamStore &param_store);
   int construct_ps_param_store(const ParamStore &params,
@@ -253,35 +252,18 @@ private:
                       ObSqlCtx &context,
                       ObResultSet &result,
                       bool is_inner_sql);
-  /**
-   * @brief  把prepare的信息加入ps cache
-   * @param [in] sql      - prepare的语句
-   * @param [in] stmt_type  - stmt类型
-   * @param [inout] result      - prepare的结果
-   * @param [out] ps_stmt_info  - 加入ps cache的结构
-   * @retval OB_SUCCESS execute success
-   * @retval OB_SOME_ERROR special errno need to handle
-   *
-   * 两个add_to_ps_cache接口输入参数不同，一个使用parser的结果，供mysql模式使用；
-   * 一个使用resolver的结果，供oracle模式使用
-   * 其主要内容是获取prepare语句的id和type，并构造出ObPsStmtInfo，加入ps cache
-   */
-   int do_add_ps_cache(const ObString &sql,
-                       const ObString &no_param_sql,
-                       const ObIArray<ObPCParam*> &raw_params,
-                       const common::ObIArray<int64_t> &fixed_param_idx,
-                       int64_t param_cnt,
-                       share::schema::ObSchemaGetterGuard &schema_guard,
-                       stmt::StmtType stmt_type,
-                       ObResultSet &result,
-                       bool is_inner_sql,
-                       bool is_sensitive_sql,
-                       int32_t returning_into_parm_num);
-
+  int do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
+                      share::schema::ObSchemaGetterGuard &schema_guard,
+                      ObResultSet &result);
   int fill_result_set(ObResultSet &result, ObSqlCtx *context, const bool is_ps_mode, ObStmt &stmt);
   int fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, const bool is_ps_mode,
                              ObCollationType collation_type, const ObString &type_name,
                              ObStmt &basic_stmt, ObField &field);
+  int pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
+                      ObPlanCacheCtx &pc_ctx,
+                      ObResultSet &result,
+                      ObOutlineState &outline_state,
+                      bool& plan_added);
   int handle_ps_prepare(const common::ObString &stmt,
                         ObSqlCtx &context,
                         ObResultSet &result,
@@ -454,6 +436,8 @@ private:
   int handle_text_execute(const ObStmt *basic_stmt, ObSqlCtx &sql_ctx, ObResultSet &result);
   int check_need_reroute(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan *plan, bool &need_reroute);
   int get_first_batched_multi_stmt(ObMultiStmtItem& multi_stmt_item, ObString& sql);
+  static int add_param_to_param_store(const ObObjParam &param,
+                                      ParamStore &param_store);
 
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;

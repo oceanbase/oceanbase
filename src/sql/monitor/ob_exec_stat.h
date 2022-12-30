@@ -422,6 +422,8 @@ struct ObAuditRecordData {
   int64_t trx_lock_for_read_elapse_;
   int64_t params_value_len_;
   char *params_value_;
+  char *rule_name_;
+  int64_t rule_name_len_;
   struct StmtSnapshot {
     share::SCN version_;      // snapshot version
     int64_t tx_id_;        // snapshot inner which txn

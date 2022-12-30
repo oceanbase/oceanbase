@@ -91,6 +91,7 @@ enum ParseMode
   TRIGGER_MODE, /* treat ':xxx' as identifier */
   DYNAMIC_SQL_MODE, /*解析动态sql过程中，:idx和:identifier要根据语句类型确定是否检查placeholder的名字*/
   DBMS_SQL_MODE,
+  UDR_SQL_MODE,
   INS_MULTI_VALUES,
 };
 
@@ -227,6 +228,7 @@ typedef struct _ObQuestionMarkCtx
   int capacity_;
   bool by_ordinal_;
   bool by_name_;
+  bool by_defined_name_;
 } ObQuestionMarkCtx;
 
 
@@ -301,7 +303,7 @@ typedef struct
     uint32_t is_include_old_new_in_trigger_    : 1;
     uint32_t is_normal_ps_prepare_             : 1;
     uint32_t is_multi_values_parser_           : 1;
-    uint32_t reserved_                         : 1;
+    uint32_t is_for_udr_                       : 1;
   };
 
   ParseNode *result_tree_;
@@ -394,6 +396,7 @@ extern uint64_t parsenode_hash(const ParseNode *node, int *ret);
 extern bool parsenode_equal(const ParseNode *node1, const ParseNode *node2, int *ret);
 
 extern int64_t get_question_mark(ObQuestionMarkCtx *ctx, void *malloc_pool, const char *name);
+extern int64_t get_question_mark_by_defined_name(ObQuestionMarkCtx *ctx, const char *name);
 
 // compare ParseNode str_value_ to pattern
 // @param [in] node        ParseNode

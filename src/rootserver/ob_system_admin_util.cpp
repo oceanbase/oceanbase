@@ -1943,5 +1943,48 @@ int ObAdminSetTP::call_server(const ObAddr &server)
   return ret;
 }
 
+int ObAdminSyncRewriteRules::execute(const obrpc::ObSyncRewriteRuleArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAddr, 8> server_list;
+  if (OB_FAIL(get_tenant_servers(arg.tenant_id_, server_list))) {
+    LOG_WARN("fail to get tenant servers", "tenant_id", arg.tenant_id_, KR(ret));
+  } else {
+    //call tenant servers;
+    for (int64_t j = 0; OB_SUCC(ret) && j < server_list.count(); ++j) {
+      if (OB_FAIL(call_server(server_list.at(j), arg))) {
+        LOG_WARN("fail to call tenant server",
+                 "tenant_id", arg.tenant_id_,
+                 "server addr", server_list.at(j),
+                 KR(ret));
+      }
+    }
+  }
+  server_list.reset();
+  return ret;
+}
+
+int ObAdminSyncRewriteRules::call_server(const common::ObAddr &server,
+                                         const obrpc::ObSyncRewriteRuleArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!ctx_.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", K(server), KR(ret));
+  } else if (OB_ISNULL(ctx_.rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ctx_.rpc_proxy_->to(server)
+                                     .by(arg.tenant_id_)
+                                     .as(arg.tenant_id_)
+                                     .sync_rewrite_rules(arg))) {
+    LOG_WARN("request server sync rewrite rules failed", KR(ret), K(server));
+  }
+  return ret;
+}
+
 } // end namespace rootserver
 } // end namespace oceanbase

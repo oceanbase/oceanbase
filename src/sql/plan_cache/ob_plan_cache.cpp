@@ -32,6 +32,7 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/plan_cache/ob_plan_cache_callback.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
+#include "sql/udr/ob_udr_mgr.h"
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
 #include "observer/ob_req_time_service.h"
@@ -389,13 +390,16 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   ObPhysicalPlan *plan = NULL;
   bool need_late_compilation = false;
   ObJITEnableMode jit_mode = OFF;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
-
   if (cache_obj != NULL && ObLibCacheNameSpace::NS_CRSR == cache_obj->get_ns()) {
     plan = static_cast<ObPhysicalPlan *>(cache_obj);
   }
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
+    if (!tenant_config.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant config is invalid", K(ret));
+    } else if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null session info", K(ret));
     } else if (OB_FAIL(pc_ctx.sql_ctx_.session_info_->get_jit_enabled_mode(jit_mode))) {
@@ -404,17 +408,39 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
       // do nothing
     }
   }
-  if (OB_SUCC(ret) &&
-      plan != NULL &&
-      AUTO == jit_mode && // only use late compilation when jit_mode is auto
-      OB_FAIL(need_late_compile(plan, need_late_compilation))) {
-    LOG_WARN("failed to check for late compilation", K(ret));
-  } else {
-    // set context's need_late_compile_ for upper layer to proceed
-    pc_ctx.sql_ctx_.need_late_compile_ = need_late_compilation;
+  if (OB_SUCC(ret) && plan != NULL) {
+    bool is_exists = false;
+    sql::ObUDRMgr *rule_mgr = MTL(sql::ObUDRMgr*);
+    // when the global rule version changes or enable_user_defined_rewrite_rules changes
+    // it is necessary to check whether the physical plan are expired
+    if ((plan->get_rule_version() != rule_mgr->get_rule_version()
+      || plan->is_enable_udr() != tenant_config->enable_user_defined_rewrite_rules)) {
+      if (OB_FAIL(rule_mgr->fuzzy_check_by_pattern_digest(pc_ctx.get_normalized_pattern_digest(), is_exists))) {
+        LOG_WARN("failed to fuzzy check by pattern digest", K(ret));
+      } else if (is_exists || plan->is_rewrite_sql()) {
+        ret = OB_OLD_SCHEMA_VERSION;
+        LOG_TRACE("Obsolete user-defined rewrite rules require eviction plan", K(ret),
+        K(is_exists), K(pc_ctx.raw_sql_), K(plan->is_enable_udr()), K(tenant_config->enable_user_defined_rewrite_rules),
+        K(plan->is_rewrite_sql()), K(plan->get_rule_version()), K(rule_mgr->get_rule_version()));
+      } else {
+        plan->set_rule_version(rule_mgr->get_rule_version());
+        plan->set_is_enable_udr(tenant_config->enable_user_defined_rewrite_rules);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (AUTO == jit_mode && // only use late compilation when jit_mode is auto
+        OB_FAIL(need_late_compile(plan, need_late_compilation))) {
+        LOG_WARN("failed to check for late compilation", K(ret));
+      } else {
+        // set context's need_late_compile_ for upper layer to proceed
+        pc_ctx.sql_ctx_.need_late_compile_ = need_late_compilation;
+      }
+    }
   }
   // if schema expired, update pcv set;
-  if (OB_OLD_SCHEMA_VERSION == ret || (plan != NULL && plan->is_expired()) || need_late_compilation) {
+  if (OB_OLD_SCHEMA_VERSION == ret
+    || (plan != NULL && plan->is_expired())
+    || need_late_compilation) {
     if (plan != NULL && plan->is_expired()) {
       LOG_INFO("the statistics of table is stale and evict plan.", K(plan->stat_));
     }
@@ -583,14 +609,17 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
       LOG_WARN("failed to construct plan cache key", K(ret));
     } else if (enable_exact_mode) {
       (void)fp_result.pc_key_.name_.assign_ptr(raw_sql.ptr(), raw_sql.length());
-    } else if (OB_FAIL(ObSqlParameterization::fast_parser(allocator,
-                         sql_mode,
-                         conn_coll,
-                         raw_sql,
-                         pc_ctx.sql_ctx_.handle_batched_multi_stmt(),
-                         fp_result))) {
-      LOG_WARN("failed to fast parser", K(ret), K(sql_mode), K(pc_ctx.raw_sql_));
-    } else { /*do nothing*/ }
+    } else {
+      FPContext fp_ctx(conn_coll);
+      fp_ctx.enable_batched_multi_stmt_ = pc_ctx.sql_ctx_.handle_batched_multi_stmt();
+      fp_ctx.sql_mode_ = sql_mode;
+      if (OB_FAIL(ObSqlParameterization::fast_parser(allocator,
+                                                    fp_ctx,
+                                                    raw_sql,
+                                                    fp_result))) {
+        LOG_WARN("failed to fast parser", K(ret), K(sql_mode), K(pc_ctx.raw_sql_));
+      } else { /*do nothing*/ }
+    }
   }
   return ret;
 }
@@ -1579,6 +1608,7 @@ int ObPlanCache::add_ps_plan(T *plan, ObPlanCacheCtx &pc_ctx)
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(WARN, "pc_ctx.raw_sql_.ptr() is NULL, cannot add plan to plan cache by sql", K(ret));
   } else {
+    pc_ctx.fp_result_.pc_key_.is_ps_mode_ = true;
     pc_ctx.fp_result_.pc_key_.name_ = pc_ctx.raw_sql_;
     uint64_t old_stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
     // the remote plan uses key_id is 0 to distinguish, so if key_id is 0, it cannot be set to OB_INVALID_ID

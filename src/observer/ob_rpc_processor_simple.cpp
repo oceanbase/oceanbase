@@ -55,6 +55,7 @@
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "observer/ob_req_time_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "sql/udr/ob_udr_mgr.h"
 
 namespace oceanbase
 {
@@ -2132,6 +2133,30 @@ int ObEstimateTabletBlockCountP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->estimate_tablet_block_count(arg_, result_);
+  }
+  return ret;
+}
+
+int ObSyncRewriteRulesP::process()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg_.tenant_id_;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  sql::ObUDRMgr *rule_mgr = nullptr;
+
+  if (tenant_id != MTL_ID()) {
+    ret = guard.switch_to(tenant_id);
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("start do sync rewrite rules from inner table", K(arg_));
+
+    rule_mgr = MTL(sql::ObUDRMgr*);
+    if (OB_ISNULL(rule_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "mtl ObUDRMgr should not be null", K(ret));
+    } else if (OB_FAIL(rule_mgr->sync_rule_from_inner_table())) {
+      LOG_WARN("failed to sync rewrite rules from inner table", K(ret));
+    }
   }
   return ret;
 }

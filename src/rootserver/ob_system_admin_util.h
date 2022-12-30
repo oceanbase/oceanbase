@@ -545,6 +545,23 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminSetTP);
 };
 
+class ObAdminSyncRewriteRules : public ObTenantServerAdminUtil
+{
+public:
+  explicit ObAdminSyncRewriteRules(const ObSystemAdminCtx &ctx)
+    : ObTenantServerAdminUtil(ctx)
+  {}
+  virtual ~ObAdminSyncRewriteRules() {}
+
+  int call_server(const common::ObAddr &server,
+                  const obrpc::ObSyncRewriteRuleArg &arg);
+
+  int execute(const obrpc::ObSyncRewriteRuleArg &arg);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAdminSyncRewriteRules);
+};
+
 } // end namespace rootserver
 } // end namespace oceanbase
 

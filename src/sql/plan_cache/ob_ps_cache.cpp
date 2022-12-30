@@ -15,6 +15,7 @@
 #include "sql/plan_cache/ob_ps_sql_utils.h"
 #include "sql/plan_cache/ob_ps_cache_callback.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
+#include "sql/udr/ob_udr_mgr.h"
 #include "share/schema/ob_schema_getter_guard.h"
 
 namespace oceanbase
@@ -381,25 +382,22 @@ int ObPsCache::ref_stmt_item(const uint64_t db_id,
   return ret;
 }
 
-int ObPsCache::get_or_add_stmt_info(const ObResultSet &result,
-                                    const ObString &origin_sql,
-                                    const ObString &no_param_sql,
-                                    const ObIArray<ObPCParam*> &raw_params,
-                                    const common::ObIArray<int64_t> &raw_params_idx,
-                                    int64_t param_cnt,
+int ObPsCache::get_or_add_stmt_info(const PsCacheInfoCtx &info_ctx,
+                                    const ObResultSet &result,
                                     ObSchemaGetterGuard &schema_guard,
-                                    stmt::StmtType stmt_type,
                                     ObPsStmtItem *ps_item,
-                                    ObPsStmtInfo *&ref_ps_info,
-                                    int32_t returning_into_parm_num)
+                                    ObPsStmtInfo *&ref_ps_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ps_item)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ps_item));
-  } else if (OB_ISNULL(origin_sql.ptr())) {
+  } else if (OB_ISNULL(info_ctx.normalized_sql_.ptr())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("origin_sql is null", K(ret), K(ps_item));
+    LOG_WARN("normalized sql is null", K(ret), K(ps_item));
+  } else if (OB_ISNULL(info_ctx.raw_params_) || OB_ISNULL(info_ctx.fixed_param_idx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("param is null", K(ret));
   } else if (OB_FAIL(ref_stmt_info(ps_item->get_ps_stmt_id(), ref_ps_info))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -407,21 +405,25 @@ int ObPsCache::get_or_add_stmt_info(const ObResultSet &result,
       ObArenaAllocator allocator;
       ObPsStmtInfo tmp_stmt_info(&allocator);
       tmp_stmt_info.assign_sql_key(*ps_item);
-      tmp_stmt_info.set_stmt_type(stmt_type);
+      tmp_stmt_info.set_stmt_type(info_ctx.stmt_type_);
       tmp_stmt_info.set_ps_item(ps_item);
-      // calc check_sum with origin_sql
-      uint64_t ps_stmt_checksum = ob_crc64(origin_sql.ptr(),
-                                           origin_sql.length()); // actual is crc32
+      // calc check_sum with normalized sql
+      uint64_t ps_stmt_checksum = ob_crc64(info_ctx.normalized_sql_.ptr(),
+                                           info_ctx.normalized_sql_.length()); // actual is crc32
       tmp_stmt_info.set_ps_stmt_checksum(ps_stmt_checksum);
       if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_version))) {
         LOG_WARN("fail to get tenant version", K(ret), K(tenant_id_));
       } else if (FALSE_IT(tmp_stmt_info.set_tenant_version(tenant_version))) {
         // do nothing
-      } else if (OB_FAIL(tmp_stmt_info.assign_no_param_sql(no_param_sql))) {
-        LOG_WARN("fail to assign no param sql", K(ret), K(no_param_sql));
-      } else if (OB_FAIL(tmp_stmt_info.assign_fixed_raw_params(raw_params_idx, raw_params))) {
-        LOG_WARN("fail to assign raw params failed", K(raw_params_idx), K(ret));
-      } else if (OB_FAIL(fill_ps_stmt_info(result, param_cnt, tmp_stmt_info, returning_into_parm_num))) {
+      } else if (OB_FAIL(tmp_stmt_info.assign_no_param_sql(info_ctx.no_param_sql_))) {
+        LOG_WARN("fail to assign no param sql", K(ret), K(info_ctx.no_param_sql_));
+      } else if (OB_FAIL(tmp_stmt_info.assign_raw_sql(info_ctx.raw_sql_))) {
+        LOG_WARN("fail to assign rule name", K(ret), K(info_ctx.raw_sql_));
+      } else if (OB_FAIL(tmp_stmt_info.assign_fixed_raw_params(*info_ctx.fixed_param_idx_,
+                                                               *info_ctx.raw_params_))) {
+        LOG_WARN("fail to assign raw params failed", KPC(info_ctx.fixed_param_idx_), K(ret));
+      } else if (OB_FAIL(fill_ps_stmt_info(result, info_ctx.param_cnt_,
+                                           tmp_stmt_info, info_ctx.num_of_returning_into_))) {
         LOG_WARN("fill ps stmt info failed", K(ret));
       } else if (OB_FAIL(add_stmt_info(*ps_item, tmp_stmt_info, ref_ps_info))) {
         LOG_WARN("add stmt info failed", K(ret), K(*ps_item), K(tmp_stmt_info));
