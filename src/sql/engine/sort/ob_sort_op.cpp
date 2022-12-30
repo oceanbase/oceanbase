@@ -58,8 +58,8 @@ OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
 
 ObSortOp::ObSortOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(ctx_, spec, input),
-  sort_impl_(),
-  prefix_sort_impl_(),
+  sort_impl_(op_monitor_info_),
+  prefix_sort_impl_(op_monitor_info_),
   topn_sort_(),
   read_func_(&ObSortOp::sort_impl_next),
   read_batch_func_(&ObSortOp::sort_impl_next_batch),
@@ -238,6 +238,7 @@ int ObSortOp::process_sort()
       } else {
         sort_row_count_++;
         OZ(sort_impl_.add_row(MY_SPEC.all_exprs_, need_dump));
+        sort_impl_.collect_memory_dump_info(op_monitor_info_);
         if (need_dump && MY_SPEC.prescan_enabled_) {
           break;
         }
@@ -253,6 +254,7 @@ int ObSortOp::process_sort()
       ret = OB_SUCCESS;
     }
     OZ(sort_impl_.sort());
+    sort_impl_.collect_memory_dump_info(op_monitor_info_);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid read function pointer",
@@ -311,6 +313,7 @@ int ObSortOp::process_sort_batch()
           sort_row_count_ += input_brs->size_
               - input_brs->skip_->accumulate_bit_cnt(input_brs->size_);
           OZ(sort_impl_.add_batch(MY_SPEC.all_exprs_, *input_brs->skip_, input_brs->size_, 0, need_dump, nullptr));
+          sort_impl_.collect_memory_dump_info(op_monitor_info_);
         }
         if (input_brs->end_ || (need_dump && MY_SPEC.prescan_enabled_)) {
           break;
@@ -324,6 +327,7 @@ int ObSortOp::process_sort_batch()
       }
     }
     OZ(sort_impl_.sort());
+    sort_impl_.collect_memory_dump_info(op_monitor_info_);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid read function pointer",

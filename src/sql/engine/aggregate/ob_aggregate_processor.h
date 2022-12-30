@@ -271,6 +271,7 @@ public:
     DECLARE_VIRTUAL_TO_STRING;
   protected:
     common::ObIAllocator &alloc_;
+    ObMonitorNode op_monitor_info_;
   public:
     // for distinct calculate may be replace by hash based distinct in the future.
     ObUniqueSortImpl *unique_sort_op_;

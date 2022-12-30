@@ -581,7 +581,7 @@ int ObOperator::open()
       eval_ctx_.set_batch_size(1);
       eval_ctx_.set_batch_idx(0);
     }
-    if (ctx_.get_my_session()->is_user_session()) {
+    if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(0);
     }
     while (OB_SUCC(ret) && open_order != OPEN_EXIT) {
@@ -910,7 +910,7 @@ int ObOperator::get_next_row()
     LOG_WARN("too deep recusive", K(ret));
   } else {
     begin_cpu_time_counting();
-    if (ctx_.get_my_session()->is_user_session()) {
+    if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(1);
     }
     if (row_reach_end_) {
@@ -1045,7 +1045,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
             continue;
           }
         }
-        if (OB_SUCC(ret) && ctx_.get_my_session()->is_user_session()) {
+        if (OB_SUCC(ret) && (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_)) {
           IGNORE_RETURN try_register_rt_monitor_node(brs_.size_);
         }
         if (OB_FAIL(ret)) {

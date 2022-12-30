@@ -19,6 +19,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_ddl_common.h"
+#include "share/longops_mgr/ob_ddl_longops.h"
 #include "rootserver/ddl_task/ob_ddl_single_replica_executor.h"
 
 namespace oceanbase
@@ -72,6 +73,17 @@ public:
   int64_t ret_code_;
   int64_t execution_id_;
   ObString ddl_stmt_str_;
+};
+
+struct ObDDLTaskInfo final
+{
+public:
+  ObDDLTaskInfo() : row_scanned_(0), row_inserted_(0) {}
+  ~ObDDLTaskInfo() {}
+  TO_STRING_KV(K_(row_scanned), K_(row_inserted));
+public:
+  int64_t row_scanned_;
+  int64_t row_inserted_;
 };
 
 struct ObCreateDDLTaskParam final
@@ -223,8 +235,9 @@ public:
   void reset();
   bool is_inited() const { return is_inited_; }
   int try_wait(bool &is_trans_end, int64_t &snapshot_version, const bool need_wait_trans_end = true);
+  transaction::ObTransID get_pending_tx_id() const { return pending_tx_id_; }
   TO_STRING_KV(K(is_inited_), K_(tenant_id), K(table_id_), K(is_trans_end_), K(wait_type_),
-      K(wait_version_), K(tablet_ids_), K(snapshot_array_));
+      K(wait_version_), K_(pending_tx_id), K(tablet_ids_), K(snapshot_array_));
 
 private:
   static bool is_wait_trans_type_valid(const WaitTransType wait_trans_type);
@@ -261,8 +274,27 @@ private:
   bool is_trans_end_;
   WaitTransType wait_type_;
   int64_t wait_version_;
+  transaction::ObTransID pending_tx_id_;
   common::ObArray<common::ObTabletID> tablet_ids_;
   common::ObArray<int64_t> snapshot_array_;
+};
+
+struct ObDDLTaskStatInfo final
+{
+public:
+  ObDDLTaskStatInfo();
+  ~ObDDLTaskStatInfo() = default;
+  int init(const char *&ddl_type_str, const uint64_t table_id);
+  TO_STRING_KV(K_(start_time), K_(finish_time), K_(time_remaining), K_(percentage),
+               K_(op_name), K_(target), K_(message));
+public:
+  int64_t start_time_;
+  int64_t finish_time_;
+  int64_t time_remaining_;
+  int64_t percentage_;
+  char op_name_[common::MAX_LONG_OPS_NAME_LENGTH];
+  char target_[common::MAX_LONG_OPS_TARGET_LENGTH];
+  char message_[common::MAX_LONG_OPS_MESSAGE_LENGTH];
 };
 
 class ObDDLTask : public common::ObDLinkBase<ObDDLTask>
@@ -274,7 +306,7 @@ public:
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
-      delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(-1), sql_exec_addr_(), cluster_version_(0)
+      longops_stat_(nullptr), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(-1), sql_exec_addr_(), cluster_version_(0)
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -300,6 +332,8 @@ public:
   int64_t get_task_version() const { return task_version_; }
   int64_t get_execution_id() const { return execution_id_; }
   int64_t get_parallelism() const { return parallelism_; }
+  void set_longops_stat(share::ObDDLLongopsStat *longops_stat) { longops_stat_ = longops_stat; }
+  share::ObDDLLongopsStat *get_longops_stat() const { return longops_stat_; }
   int64_t get_cluster_version() const { return cluster_version_; }
   static int deep_copy_table_arg(common::ObIAllocator &allocator, const obrpc::ObDDLArg &source_arg, obrpc::ObDDLArg &dest_arg);
   static int fetch_new_task_id(ObMySQLProxy &sql_proxy, int64_t &new_task_id);
@@ -324,10 +358,13 @@ public:
   void set_sys_task_id(const TraceId &sys_task_id) { sys_task_id_ = sys_task_id; }
   void set_sql_exec_addr(const common::ObAddr &addr) { sql_exec_addr_ = addr; }
   const TraceId &get_sys_task_id() const { return sys_task_id_; }
+  virtual int collect_longops_stat(share::ObLongopsValue &value);
+
   void calc_next_schedule_ts(const int ret_code, const int64_t total_task_cnt);
   bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
   bool is_replica_build_need_retry(const int ret_code);
   int push_execution_id();
+  virtual bool support_longops_monitoring() const { return false; }
   #ifdef ERRSIM
   int check_errsim_error();
   #endif
@@ -337,14 +374,37 @@ public:
       K(target_object_id_), K(task_status_), K(snapshot_version_),
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
-      K_(sys_task_id), K_(err_code_occurence_cnt), K_(next_schedule_ts), K_(delay_schedule_time),
-      K(execution_id_), K(sql_exec_addr_), K_(cluster_version));
+      K_(sys_task_id), K_(err_code_occurence_cnt), K_(stat_info),
+      K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(cluster_version));
 protected:
+  int gather_redefinition_stats(const uint64_t tenant_id,
+                                const int64_t task_id,
+                                ObMySQLProxy &sql_proxy,
+                                int64_t &row_scanned,
+                                int64_t &row_sorted,
+                                int64_t &row_inserted);
+  int gather_scanned_rows(
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      ObMySQLProxy &sql_proxy,
+      int64_t &row_scanned);
+  int gather_sorted_rows(
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      ObMySQLProxy &sql_proxy,
+      int64_t &row_sorted);
+  int gather_inserted_rows(
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      ObMySQLProxy &sql_proxy,
+      int64_t &row_inserted);
+  int copy_longops_stat(share::ObLongopsValue &value);
   virtual bool is_error_need_retry(const int ret_code)
   {
     return !share::ObIDDLTask::in_ddl_retry_black_list(ret_code) && (share::ObIDDLTask::in_ddl_retry_white_list(ret_code)
              || MAX_ERR_TOLERANCE_CNT > ++err_code_occurence_cnt_);
   }
+  int init_ddl_task_monitor_info(const ObTableSchema *target_schema);
 protected:
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   bool is_inited_;
@@ -369,6 +429,8 @@ protected:
   lib::Worker::CompatMode compat_mode_;
   TraceId sys_task_id_;
   int64_t err_code_occurence_cnt_; // occurence count for all error return codes not in white list.
+  share::ObDDLLongopsStat *longops_stat_;
+  ObDDLTaskStatInfo stat_info_;
   int64_t delay_schedule_time_;
   int64_t next_schedule_ts_;
   int64_t execution_id_;

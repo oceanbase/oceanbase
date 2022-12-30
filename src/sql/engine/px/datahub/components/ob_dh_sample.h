@@ -140,6 +140,7 @@ public:
   ObArray<uint64_t> tablet_ids_;
   int64_t expect_range_count_;
   ObArray<ObChunkDatumStore *> sample_stores_;
+  ObMonitorNode op_monitor_info_;
   ObSortOpImpl sort_impl_;
   ObExecContext &exec_ctx_;
   ObChunkDatumStore::ShadowStoredRow last_store_row_;

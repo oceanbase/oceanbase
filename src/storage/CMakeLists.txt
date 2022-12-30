@@ -384,7 +384,6 @@ ob_set_subtarget(ob_storage common
   ob_i_store.cpp
   ob_i_table.cpp
   ob_locality_manager.cpp
-  ob_long_ops_monitor.cpp
   ob_micro_block_handle_mgr.cpp
   ob_partition_component_factory.cpp
   ob_partition_range_spliter.cpp

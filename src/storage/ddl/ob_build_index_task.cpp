@@ -19,7 +19,6 @@
 #include "share/ob_get_compat_mode.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
-#include "storage/ob_long_ops_monitor.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "storage/ddl/ob_complement_data_task.h"
 #include "storage/ob_i_table.h"

@@ -84,6 +84,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   ObSchemaGetterGuard schema_guard;
   const ObSysVariableSchema *sys_variable_schema = nullptr;
   ObDDLTaskKey task_key(dest_table_id_, schema_version_);
+  ObDDLTaskInfo info;
   bool oracle_mode = false;
   bool need_exec_new_inner_sql = true;
 
@@ -170,7 +171,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       }
     }
   }
-  if (OB_SUCCESS != (tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, snapshot_version_, execution_id_, ret))) {
+  if (OB_SUCCESS != (tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, snapshot_version_, execution_id_, ret, info))) {
     LOG_WARN("fail to finish sstable complement", K(ret));
   }
   return ret;
@@ -1205,6 +1206,8 @@ int ObDDLRedefinitionTask::cleanup()
     LOG_WARN("report error code failed", K(ret));
   } else if (OB_FAIL(remove_task_record())) {
     LOG_WARN("remove task record failed", K(ret));
+  } else {
+    need_retry_ = false;      // clean succ, stop the task
   }
   return ret;
 }
@@ -1913,6 +1916,35 @@ int ObDDLRedefinitionTask::check_need_check_table_empty(bool &need_check_table_e
           && !alter_column_schema->is_identity_column()) {
         need_check_table_empty = true;
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::get_child_task_ids(char *buf, int64_t len)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  MEMSET(buf, 0, len);
+  TCRLockGuard guard(lock_);
+  common::hash::ObHashMap<uint64_t, DependTaskStatus> ::const_iterator iter =
+    dependent_task_result_map_.begin();
+  if (OB_FAIL(databuff_printf(buf, MAX_LONG_OPS_MESSAGE_LENGTH, pos, "[ "))) {
+    LOG_WARN("failed to print", K(ret));
+  } else {
+    while (OB_SUCC(ret) && iter != dependent_task_result_map_.end()) {
+      const int64_t child_task_id = iter->second.task_id_;
+      if (OB_FAIL(databuff_printf(buf,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "%ld ",
+                                  child_task_id))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      ++iter;
+    }
+    if (OB_SUCC(ret)) {
+      databuff_printf(buf, MAX_LONG_OPS_MESSAGE_LENGTH, pos, "]");
     }
   }
   return ret;

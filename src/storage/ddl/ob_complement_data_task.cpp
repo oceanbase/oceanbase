@@ -29,7 +29,6 @@
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "storage/ob_i_table.h"
-#include "storage/ob_long_ops_monitor.h"
 #include "storage/ob_parallel_external_sort.h"
 #include "storage/ob_partition_range_spliter.h"
 #include "storage/ob_row_reshape.h"
@@ -552,7 +551,9 @@ int ObComplementDataDag::report_replica_build_status()
     arg.schema_version_ = param_.schema_version_;
     arg.task_id_ = param_.task_id_;
     arg.execution_id_ = param_.execution_id_;
-    FLOG_INFO("send replica build status response to RS", K(ret), K(context_.complement_data_ret_), K(arg));
+    arg.row_scanned_ = context_.row_scanned_;
+    arg.row_inserted_ = context_.row_inserted_;
+    FLOG_INFO("send replica build status response to RS", K(ret), K(context_), K(arg));
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_SYS;
@@ -967,7 +968,6 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
     ObDDLRedoLogWriterCallback callback;
     ObITable::TableKey hidden_table_key;
     ObMacroDataSeq macro_start_seq(0);
-    int64_t row_cnt = 0;
     int64_t get_next_row_time = 0;
     int64_t append_row_time = 0;
     int64_t t1 = 0;
@@ -1074,6 +1074,7 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
       } else {
         t2 = ObTimeUtility::current_time();
         get_next_row_time += t2 - t1;
+        context_->row_scanned_++;
         if (OB_FAIL(writer.append_row(datum_row))) {
           LOG_WARN("fail to append row to macro block", K(ret), K(datum_row));
         } else if (OB_ISNULL(checksum_calculator = local_scan.get_checksum_calculator())) {
@@ -1084,7 +1085,7 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
         } else {
           t3 = ObTimeUtility::current_time();
           append_row_time += t3 - t2;
-          row_cnt++;
+          context_->row_inserted_++;
         }
         if (lob_cnt % 128 == 0) {
           lob_allocator.reuse(); // reuse after append_row to macro block to save memory
@@ -1094,7 +1095,7 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
-    LOG_INFO("print append row to macro block cost time", K(ret), K(task_id_), K(row_cnt),
+    LOG_INFO("print append row to macro block cost time", K(ret), K(task_id_), K(context_->row_inserted_),
         K(get_next_row_time), K(append_row_time));
     ObRowReshapeUtil::free_row_reshape(allocator, reshape_ptr, 1);
     if (OB_FAIL(ret)) {

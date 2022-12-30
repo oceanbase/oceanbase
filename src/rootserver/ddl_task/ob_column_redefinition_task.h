@@ -45,7 +45,10 @@ public:
     const common::ObTabletID &tablet_id,
     const int64_t snapshot_version,
     const int64_t execution_id,
-    const int ret_code) override;
+    const int ret_code,
+    const ObDDLTaskInfo &addition_info) override;
+  virtual int collect_longops_stat(share::ObLongopsValue &value) override;
+  virtual bool support_longops_monitoring() const { return true; }
 private:
   int wait_data_complement(const share::ObDDLTaskStatus next_task_status);
   int send_build_single_replica_request();

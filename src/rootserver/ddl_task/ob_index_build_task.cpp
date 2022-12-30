@@ -149,8 +149,9 @@ int ObIndexSSTableBuildTask::process()
 
   LOG_INFO("build index sstable finish", K(ret), K(*this));
   ObDDLTaskKey task_key(dest_table_id_, schema_version_);
+  ObDDLTaskInfo info;
   int tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(
-      unused_tablet_id, task_key, snapshot_version_, execution_id_, ret);
+      unused_tablet_id, task_key, snapshot_version_, execution_id_, ret, info);
   if (OB_SUCCESS != tmp_ret) {
     LOG_WARN("report build finish failed", K(ret), K(tmp_ret));
     ret = OB_SUCCESS == ret ? tmp_ret : ret;
@@ -324,6 +325,11 @@ int ObIndexBuildTask::init(
     cluster_version_ = GET_MIN_CLUSTER_VERSION();
     if (OB_SUCC(ret)) {
       task_status_ = static_cast<ObDDLTaskStatus>(task_status);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(init_ddl_task_monitor_info(data_table_schema))) {
+      LOG_WARN("init ddl task monitor info failed", K(ret));
+    } else {
       is_inited_ = true;
     }
   }
@@ -337,7 +343,10 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
   const uint64_t index_table_id = task_record.target_object_id_;
   const int64_t schema_version = task_record.schema_version_;
   int64_t pos = 0;
+  const ObTableSchema *data_schema = nullptr;
   const ObTableSchema *index_schema = nullptr;
+  const char *ddl_type_str = nullptr;
+  const char *target_name = nullptr;
   ObSchemaGetterGuard schema_guard;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -358,11 +367,13 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     LOG_WARN("fail to get schema guard", K(ret), K(index_table_id), K(schema_version));
   } else if (OB_FAIL(schema_guard.check_formal_guard())) {
     LOG_WARN("schema_guard is not formal", K(ret), K(index_table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(task_record.tenant_id_, data_table_id, data_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(data_table_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(task_record.tenant_id_, index_table_id, index_schema))) {
-    LOG_WARN("fail to get table schema", K(ret));
-  } else if (OB_ISNULL(index_schema)) {
+    LOG_WARN("fail to get table schema", K(ret), K(index_table_id));
+  } else if (OB_ISNULL(data_schema) || OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("fail to get table schema", K(ret));
+    LOG_WARN("fail to get table schema", K(ret), K(data_schema), K(index_schema));
   } else {
     set_sql_exec_addr(create_index_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     is_global_index_ = index_schema->is_global_index_table();
@@ -374,13 +385,19 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     snapshot_version_ = task_record.snapshot_version_;
     execution_id_ = task_record.execution_id_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
+
     if (ObDDLTaskStatus::VALIDATE_CHECKSUM == task_status_) {
       sstable_complete_ts_ = ObTimeUtility::current_time();
     }
     task_id_ = task_record.task_id_;
     parent_task_id_ = task_record.parent_task_id_;
     ret_code_ = task_record.ret_code_;
-    is_inited_ = true;
+
+    if (OB_FAIL(init_ddl_task_monitor_info(data_schema))) {
+      LOG_WARN("init ddl task monitor info failed", K(ret));
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -960,9 +977,11 @@ int ObIndexBuildTask::update_complete_sstable_job_status(
     const common::ObTabletID &tablet_id,
     const int64_t snapshot_version,
     const int64_t execution_id,
-    const int ret_code)
+    const int ret_code,
+    const ObDDLTaskInfo &addition_info)
 {
   int ret = OB_SUCCESS;
+  UNUSED(addition_info);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1227,6 +1246,108 @@ int ObIndexBuildTask::cleanup()
   return ret;
 }
 
+int ObIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  const ObDDLTaskStatus status = static_cast<ObDDLTaskStatus>(task_status_);
+  databuff_printf(stat_info_.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos, "TENANT_ID: %ld, TASK_ID: %ld, ", tenant_id_, task_id_);
+  switch(status) {
+    case ObDDLTaskStatus::PREPARE: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: PREPARE"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::WAIT_TRANS_END: {
+      if (snapshot_version_ > 0) {
+        if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: ACQUIRE SNAPSHOT, SNAPSHOT_VERSION: %ld",
+                                    snapshot_version_))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+      } else {
+        if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: WAIT TRANS END, PENDING_TX_ID: %ld",
+                                    wait_trans_ctx_.get_pending_tx_id().get_id()))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+      }
+      break;
+    }
+    case ObDDLTaskStatus::REDEFINITION: {
+      int64_t row_scanned = 0;
+      int64_t row_sorted = 0;
+      int64_t row_inserted = 0;
+      if (OB_FAIL(gather_redefinition_stats(tenant_id_, task_id_, *GCTX.sql_proxy_, row_scanned, row_sorted, row_inserted))) {
+        LOG_WARN("failed to gather redefinition stats", K(ret));
+      } else if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: REPLICA BUILD, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld",
+                                  row_scanned,
+                                  row_sorted,
+                                  row_inserted))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::VALIDATE_CHECKSUM: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: VALIDATE CHECKSUM"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::TAKE_EFFECT: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: ENABLE INDEX"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::FAIL: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: CLEAN ON FAIL"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::SUCCESS: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: CLEAN ON SUCCESS"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not expected status", K(ret), K(status), K(*this));
+      break;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(copy_longops_stat(value))) {
+    LOG_WARN("failed to collect common longops stat", K(ret));
+  }
+
+  return ret;
+}
+
 int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
@@ -1254,7 +1375,7 @@ int ObIndexBuildTask::deserlize_params_from_message(const char *buf, const int64
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
     LOG_WARN("fail to deserialize task version", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
-    LOG_WARN("serialize table failed", K(ret));
+    LOG_WARN("deserialize table failed", K(ret));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, create_index_arg_))) {
     LOG_WARN("deep copy create index arg failed", K(ret));
   } else {
@@ -1266,7 +1387,9 @@ int ObIndexBuildTask::deserlize_params_from_message(const char *buf, const int64
 
 int64_t ObIndexBuildTask::get_serialize_param_size() const
 {
-  return create_index_arg_.get_serialize_size() + serialization::encoded_length_i64(check_unique_snapshot_)
-         + serialization::encoded_length_i64(task_version_) + serialization::encoded_length_i64(parallelism_)
-         + serialization::encoded_length_i64(cluster_version_);
+  return create_index_arg_.get_serialize_size()
+      + serialization::encoded_length_i64(check_unique_snapshot_)
+      + serialization::encoded_length_i64(task_version_)
+      + serialization::encoded_length_i64(parallelism_)
+      + serialization::encoded_length_i64(cluster_version_);
 }

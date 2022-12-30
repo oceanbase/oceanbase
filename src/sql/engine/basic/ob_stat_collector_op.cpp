@@ -39,7 +39,7 @@ OB_SERIALIZE_MEMBER((ObStatCollectorSpec, ObOpSpec),
 
 ObStatCollectorOp::ObStatCollectorOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(ctx_, spec, input),
-  sort_impl_(),
+  sort_impl_(op_monitor_info_),
   iter_end_(false),
   by_pass_(false),
   exist_sample_row_(false),

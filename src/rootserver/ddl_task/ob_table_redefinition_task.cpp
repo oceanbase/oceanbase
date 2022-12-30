@@ -72,7 +72,11 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
     parallelism_ = parallelism;
     cluster_version_ = GET_MIN_CLUSTER_VERSION();
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
-    is_inited_ = true;
+    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+      LOG_WARN("init ddl task monitor info failed", K(ret));
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -107,7 +111,12 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     tenant_id_ = task_record.tenant_id_;
     ret_code_ = task_record.ret_code_;
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
-    is_inited_ = true;
+
+    if (OB_FAIL(init_ddl_task_monitor_info(&alter_table_arg_.alter_table_schema_))) {
+      LOG_WARN("init ddl task monitor info failed", K(ret));
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -115,11 +124,13 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
 int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
                                                                 const int64_t snapshot_version,
                                                                 const int64_t execution_id,
-                                                                const int ret_code)
+                                                                const int ret_code,
+                                                                const ObDDLTaskInfo &addition_info)
 {
   int ret = OB_SUCCESS;
   TCWLockGuard guard(lock_);
   UNUSED(tablet_id);
+  UNUSED(addition_info);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
@@ -289,7 +300,6 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
       LOG_WARN("fail to switch task status", K(ret));
     }
   }
-
   return ret;
 }
 
@@ -387,6 +397,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
               const uint64_t task_key = index_ids.at(i);
               DependTaskStatus status;
               status.task_id_ = task_record.task_id_;
+              TCWLockGuard guard(lock_);
               if (OB_FAIL(dependent_task_result_map_.set_refactored(task_key, status))) {
                 if (OB_HASH_EXIST == ret) {
                   ret = OB_SUCCESS;
@@ -564,6 +575,7 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
   } else {
     // wait copy dependent objects to be finished
     ObAddr unused_addr;
+    TCRLockGuard guard(lock_);
     for (common::hash::ObHashMap<uint64_t, DependTaskStatus>::const_iterator iter = dependent_task_result_map_.begin();
         iter != dependent_task_result_map_.end(); ++iter) {
       const uint64_t task_key = iter->first;
@@ -762,6 +774,145 @@ int ObTableRedefinitionTask::check_modify_autoinc(bool &modify_autoinc)
     } else if (alter_column_schema->is_autoincrement()) {
       modify_autoinc = true;
     }
+  }
+  return ret;
+}
+
+int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  const ObDDLTaskStatus status = static_cast<ObDDLTaskStatus>(task_status_);
+  databuff_printf(stat_info_.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos, "TENANT_ID: %ld, TASK_ID: %ld, ", tenant_id_, task_id_);
+  switch (status) {
+    case ObDDLTaskStatus::PREPARE: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  "STATUS: PREPARE"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::WAIT_TRANS_END: {
+      if (snapshot_version_ > 0) {
+        if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: ACQUIRE SNAPSHOT, SNAPSHOT_VERSION: %ld",
+                                    snapshot_version_))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+      } else {
+        if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                    MAX_LONG_OPS_MESSAGE_LENGTH,
+                                    pos,
+                                    "STATUS: WAIT TRANS END, PENDING_TX_ID: %ld",
+                                    wait_trans_ctx_.get_pending_tx_id().get_id()))) {
+          LOG_WARN("failed to print", K(ret));
+        }
+      }
+      break;
+    }
+    case ObDDLTaskStatus::LOCK_TABLE: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: ACQUIRE TABLE LOCK"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::CHECK_TABLE_EMPTY: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: CHECK TABLE EMPTY"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::REDEFINITION: {
+      int64_t row_scanned = 0;
+      int64_t row_sorted = 0;
+      int64_t row_inserted = 0;
+      if (OB_FAIL(gather_redefinition_stats(tenant_id_, task_id_, *GCTX.sql_proxy_, row_scanned, row_sorted, row_inserted))) {
+        LOG_WARN("failed to gather redefinition stats", K(ret));
+      } else if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: REPLICA BUILD, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld",
+                                  row_scanned,
+                                  row_sorted,
+                                  row_inserted))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::COPY_TABLE_DEPENDENT_OBJECTS: {
+      char child_task_ids[MAX_LONG_OPS_MESSAGE_LENGTH];
+      if (OB_FAIL(get_child_task_ids(child_task_ids, MAX_LONG_OPS_MESSAGE_LENGTH))) {
+        if (ret == OB_SIZE_OVERFLOW) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get all child task ids", K(ret));
+        }
+      } else if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                         MAX_LONG_OPS_MESSAGE_LENGTH,
+                                         pos,
+                                         "STATUS: COPY DEPENDENT OBJECTS, CHILD TASK IDS: %s",
+                                         child_task_ids))) {
+        if (ret == OB_SIZE_OVERFLOW) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to print", K(ret));
+        }
+      }
+      break;
+    }
+    case ObDDLTaskStatus::MODIFY_AUTOINC: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: MODIFY AUTOINC"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::TAKE_EFFECT: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: TAKE EFFECT"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::FAIL: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  "STATUS: CLEAN ON FAIL"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::SUCCESS: {
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                  MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
+                                  "STATUS: CLEAN ON SUCCESS"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not expected status", K(ret), K(status), K(*this));
+      break;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(copy_longops_stat(value))) {
+    LOG_WARN("failed to collect common longops stat", K(ret));
   }
   return ret;
 }

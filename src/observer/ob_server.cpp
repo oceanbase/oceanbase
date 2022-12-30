@@ -71,7 +71,6 @@
 #include "sql/ob_sql_init.h"
 #include "sql/ob_sql_task.h"
 #include "storage/ob_i_store.h"
-#include "storage/ob_long_ops_monitor.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx/ob_ts_mgr.h"
@@ -97,6 +96,7 @@
 #include "share/ash/ob_active_sess_hist_list.h"
 #include "share/ob_server_blacklist.h"
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "share/longops_mgr/ob_longops_mgr.h"
 #include "logservice/palf/election/interface/election.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 
@@ -149,7 +149,6 @@ ObServer::ObServer()
     scramble_rand_(),
     duty_task_(),
     sql_mem_task_(),
-    long_ops_task_(),
     ctas_clean_up_task_(),
     refresh_active_time_task_(),
     refresh_network_speed_task_(),
@@ -329,8 +328,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_ERROR("set_use_rpc_table failed", KR(ret));
   } else if (OB_FAIL(ObSysTaskStatMgr::get_instance().set_self_addr(self_addr_))) {
     LOG_ERROR("set sys task status self addr failed", KR(ret));
-  } else if (OB_FAIL(LONG_OPS_MONITOR_INSTANCE.init())) {
-    LOG_ERROR("init long ops monitor instance failed", KR(ret));
+  } else if (OB_FAIL(ObTableStoreStatMgr::get_instance().init())) {
+    LOG_ERROR("init table store stat mgr failed", KR(ret));
   } else if (OB_FAIL(ObCompatModeGetter::instance().init(&sql_proxy_))) {
     LOG_ERROR("init get compat mode server failed",KR(ret));
   } else if (OB_FAIL(table_service_.init(gctx_))) {
@@ -369,6 +368,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_ERROR("init ASH failed", KR(ret));
   } else if (OB_FAIL(ObServerBlacklist::get_instance().init(self_addr_, net_frame_.get_req_transport()))) {
     LOG_ERROR("init server blacklist failed", KR(ret));
+  } else if (OB_FAIL(ObLongopsMgr::get_instance().init())) {
+    LOG_WARN("init longops mgr fail", KR(ret));
   } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().init())) {
     LOG_WARN("init DDL redo log writer failed", KR(ret));
   } else {
@@ -1753,8 +1754,6 @@ int ObServer::init_multi_tenant()
   if (OB_SUCC(ret)) {
     if (OB_FAIL(duty_task_.schedule(lib::TGDefIDs::ServerGTimer))) {
       LOG_ERROR("schedule tenant duty task fail", KR(ret));
-    } else if (OB_FAIL(long_ops_task_.init(&schema_service_, lib::TGDefIDs::ServerGTimer))) {
-      LOG_ERROR("fail to init create index task", KR(ret));
     } else if (OB_FAIL(sql_mem_task_.schedule(lib::TGDefIDs::SqlMemTimer))) {
       LOG_ERROR("schedule tenant sql memory manager task fail", KR(ret));
     }

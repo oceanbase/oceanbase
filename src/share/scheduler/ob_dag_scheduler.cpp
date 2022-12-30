@@ -29,6 +29,7 @@
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
+#include "storage/ddl/ob_complement_data_task.h"
 #include <sys/sysinfo.h>
 #include <algorithm>
 
@@ -2199,7 +2200,7 @@ int ObTenantDagScheduler::diagnose_dag(
     COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
   } else if (OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arugment", KP(dag));
+    COMMON_LOG(WARN, "invalid arugment", K(ret), KP(dag));
   } else {
     ObThreadCondGuard guard(scheduler_sync_);
     ObIDag *stored_dag = nullptr;
@@ -3369,6 +3370,35 @@ int ObTenantDagScheduler::cancel_dag_net(const ObDagId &dag_id)
 
     if (OB_SUCC(ret)) {
       notify();
+    }
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::get_complement_data_dag_progress(const ObIDag *dag,
+                                                           int64_t &row_scanned,
+                                                           int64_t &row_inserted)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
+  } else if (OB_ISNULL(dag) || dag->get_type() != ObDagType::DAG_TYPE_DDL) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arugment", K(ret), KP(dag));
+  } else {
+    ObThreadCondGuard guard(scheduler_sync_);
+    ObIDag *stored_dag = nullptr;
+    if (OB_FAIL(dag_map_.get_refactored(dag, stored_dag))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to get from dag map", K(ret));
+      }
+    } else if (OB_ISNULL(stored_dag)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("dag is null", K(ret));
+    } else {
+      row_scanned = static_cast<ObComplementDataDag*>(stored_dag)->get_context().row_scanned_;
+      row_inserted = static_cast<ObComplementDataDag*>(stored_dag)->get_context().row_inserted_;
     }
   }
   return ret;

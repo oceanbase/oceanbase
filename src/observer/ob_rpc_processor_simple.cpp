@@ -465,7 +465,7 @@ int ObRpcBuildDDLSingleReplicaRequestP::process()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
   } else {
-    ret = gctx_.ob_service_->build_ddl_single_replica_request(arg_);
+    ret = gctx_.ob_service_->build_ddl_single_replica_request(arg_, result_);
   }
   return ret;
 }
