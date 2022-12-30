@@ -1355,9 +1355,10 @@ private:
       const share::ObColumnNameMap &col_name_map,
       const ObConstraint &orig_constraint,
       ObConstraint &hidden_constraint);
-  int get_rebuild_constraints(
+  int check_and_get_rebuild_constraints(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const ObTableSchema &orig_table_schema,
+      const ObTableSchema &new_table_schema,
       ObIArray<ObConstraint> &rebuild_constraints);
   int rebuild_hidden_table_constraints_in_trans(
       const obrpc::ObAlterTableArg &alter_table_arg,

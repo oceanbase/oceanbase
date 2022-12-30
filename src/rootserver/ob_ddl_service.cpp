@@ -14131,17 +14131,38 @@ int ObDDLService::copy_constraint_for_hidden_table(
   return ret;
 }
 
-// confirm constraints that need to rebuild.
-int ObDDLService::get_rebuild_constraints(
+// check whether the csts have been rebuilt, and get rebuilds constraints.
+int ObDDLService::check_and_get_rebuild_constraints(
                   const ObAlterTableArg &alter_table_arg,
                   const ObTableSchema &orig_table_schema,
+                  const ObTableSchema &new_table_schema,
                   ObIArray<ObConstraint> &rebuild_constraints)
 {
   int ret = OB_SUCCESS;
   ObArray<int64_t> drop_cols_id_arr;
   rebuild_constraints.reset();
+  bool has_rebuilt = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
+  } else {
+    // check whether the csts have been rebuilt.
+    for (ObTableSchema::const_constraint_iterator iter = orig_table_schema.constraint_begin();
+        OB_SUCC(ret) && !has_rebuilt && iter != orig_table_schema.constraint_end(); ++iter) {
+      if (OB_ISNULL(*iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("iter is NULL", K(ret));
+      } else if (CONSTRAINT_TYPE_PRIMARY_KEY == (*iter)->get_constraint_type()) {
+        // the primary key has been added when creating the hidden table, so won't add it again
+      } else {
+        const ObString &cst_name = (*iter)->get_constraint_name();
+        has_rebuilt = nullptr != new_table_schema.get_constraint(cst_name) ?
+                       true : has_rebuilt;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (has_rebuilt) {
   } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, orig_table_schema, drop_cols_id_arr))) {
     LOG_WARN("fail to get drop cols id set", K(ret));
   } else {
@@ -14205,8 +14226,10 @@ int ObDDLService::rebuild_hidden_table_constraints_in_trans(
     LOG_WARN("schema_service must not null", K(ret));
   } else if (OB_FAIL(new_table_schema.assign(hidden_table_schema))) {
     LOG_WARN("fail to assign schema", K(ret));
-  } else if (OB_FAIL(get_rebuild_constraints(alter_table_arg, orig_table_schema, rebuild_constraints))) {
+  } else if (OB_FAIL(check_and_get_rebuild_constraints(alter_table_arg, orig_table_schema, new_table_schema, rebuild_constraints))) {
     LOG_WARN("fail to get constraints that need to rebuild", K(ret));
+  } else if (rebuild_constraints.count() == 0) {
+    // no constraints, or constraints have been rebuilt.
   } else if (OB_FAIL(col_name_map.init(orig_table_schema, alter_table_arg.alter_table_schema_))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
@@ -15392,8 +15415,6 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column schema not found", K(ret), K(hidden_column_id));
-        } else if (!col_schema->is_nullable()) {
-          LOG_INFO("column already not null", K(alter_table_arg.hidden_table_id_), K(hidden_column_id));
         } else {
           ObColumnSchemaV2 new_col_schema = *col_schema;
           new_col_schema.set_nullable(false);

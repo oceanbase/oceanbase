@@ -421,7 +421,7 @@ int ObTableRedefinitionTask::copy_table_constraints()
     } else {
       ObSArray<uint64_t> constraint_ids;
       ObSArray<uint64_t> new_constraint_ids;
-      bool need_rebuild_constraint = false;
+      bool need_rebuild_constraint = true;
       if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
         LOG_WARN("get schema guard failed", K(ret));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, table_schema))) {
@@ -448,14 +448,14 @@ int ObTableRedefinitionTask::copy_table_constraints()
       DEBUG_SYNC(TABLE_REDEFINITION_COPY_TABLE_CONSTRAINTS);
       if (OB_SUCC(ret) && constraint_ids.count() > 0) {
         for (int64_t i = 0; OB_SUCC(ret) && i < constraint_ids.count(); ++i) {
-          if (OB_FAIL(add_constraint_ddl_task(constraint_ids.at(i), schema_guard))) {
+          if (OB_FAIL(add_constraint_ddl_task(constraint_ids.at(i)))) {
             LOG_WARN("add constraint ddl task failed", K(ret));
           }
         }
       }
       if (OB_SUCC(ret) && new_constraint_ids.count() > 0) {
         for (int64_t i = 0; OB_SUCC(ret) && i < new_constraint_ids.count(); ++i) {
-          if (OB_FAIL(add_constraint_ddl_task(new_constraint_ids.at(i), schema_guard))) {
+          if (OB_FAIL(add_constraint_ddl_task(new_constraint_ids.at(i)))) {
             LOG_WARN("add constraint ddl task failed", K(ret));
           }
         }
@@ -514,7 +514,7 @@ int ObTableRedefinitionTask::copy_table_foreign_keys()
         DEBUG_SYNC(TABLE_REDEFINITION_COPY_TABLE_FOREIGN_KEYS);
         if (OB_SUCC(ret) && fk_ids.count() > 0) {
           for (int64_t i = 0; OB_SUCC(ret) && i < fk_ids.count(); ++i) {
-            if (OB_FAIL(add_fk_ddl_task(fk_ids.at(i), schema_guard))) {
+            if (OB_FAIL(add_fk_ddl_task(fk_ids.at(i)))) {
               LOG_WARN("add foreign key ddl task failed", K(ret));
             }
           }
