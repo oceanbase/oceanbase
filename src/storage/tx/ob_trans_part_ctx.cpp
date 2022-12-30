@@ -653,6 +653,7 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "transaction is replaying", KR(ret), KPC(this));
   } else if (OB_UNLIKELY(is_2pc_logging_())) {
+    ret = OB_EAGAIN;
     TRANS_LOG(WARN, "tx is 2pc logging", KPC(this));
   } else if (!(ObTxState::INIT == get_downstream_state() ||
       (ObTxState::REDO_COMPLETE == get_downstream_state() && part_trans_action_ < ObPartTransAction::COMMIT))) {
@@ -1021,7 +1022,15 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
   }
   // before revert self
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "get_gts_callback end", KR(ret), K(*this), K(srr), K(gts), K(receive_gts_ts));
+    if (OB_EAGAIN == ret) {
+      TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback - retry gts task by TsMgr", KR(ret), K(*this),
+                K(gts));
+    } else {
+      TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback", KR(ret), K(*this), K(gts));
+      if (sub_state_.is_gts_waiting()) {
+        sub_state_.clear_gts_waiting();
+      }
+    }
   }
   if (need_revert_ctx) {
     ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
@@ -1085,9 +1094,14 @@ int ObPartTransCtx::gts_elapse_callback(const MonotonicTs srr, const SCN &gts)
   }
   // before revert self
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback", KR(ret), K(*this), K(gts));
-    if (sub_state_.is_gts_waiting()) {
-      sub_state_.clear_gts_waiting();
+    if (OB_EAGAIN == ret) {
+      TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback - retry gts task by TsMgr", KR(ret), K(*this),
+                K(gts));
+    } else {
+      TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback", KR(ret), K(*this), K(gts));
+      if (sub_state_.is_gts_waiting()) {
+        sub_state_.clear_gts_waiting();
+      }
     }
   }
   if (need_revert_ctx) {
