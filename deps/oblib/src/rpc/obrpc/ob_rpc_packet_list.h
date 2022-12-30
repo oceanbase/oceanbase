@@ -497,8 +497,9 @@ PCODE_DEF(OB_ESTIMATE_TABLET_BLOCK_COUNT, 0x526)
 PCODE_DEF(OB_DAS_SYNC_FETCH_ID, 0x527) //fetch das id with sync rpc
 PCODE_DEF(OB_DAS_SYNC_FETCH_RESULT, 0x528) //fetch das result with sync rpc
 PCODE_DEF(OB_DAS_ASYNC_ERASE_RESULT, 0x529) //erase das result with async rpc
-PCODE_DEF(OB_RECOMPILE_ALL_VIEWS_AND_SYNONYMS, 0x52A) //reset status for view && add dependency for synonym after upgrade
+PCODE_DEF(OB_RECOMPILE_ALL_VIEWS_BATCH, 0x52A) //reset status for view during upgrade
 PCODE_DEF(OB_DAS_ASYNC_ACCESS, 0x52B) //das async rpc
+PCODE_DEF(OB_TRY_ADD_DEP_INFOS_FOR_SYNONYM_BATCH, 0x52C) //add dependency for synonym during upgrade
 PCODE_DEF(OB_SQL_PCODE_END, 0x54F) // as a guardian
 
 // for test schema
