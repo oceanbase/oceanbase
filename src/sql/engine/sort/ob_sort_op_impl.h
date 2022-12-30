@@ -73,7 +73,7 @@ public:
   static const int64_t MAX_MERGE_WAYS = 256;
   static const int64_t INMEMORY_MERGE_SORT_WARN_WAYS = 10000;
 
-  ObSortOpImpl();
+  explicit ObSortOpImpl(ObMonitorNode &op_monitor_info);
   virtual ~ObSortOpImpl();
 
   // if rewind id not needed, we will release the resource after iterate end.
@@ -175,6 +175,14 @@ public:
   void set_operator_id(uint64_t op_id) { op_id_ = op_id; }
   void collect_memory_dump_info(ObMonitorNode &info)
   {
+    info.otherstat_1_id_ = op_monitor_info_.otherstat_1_id_;
+    info.otherstat_1_value_ = op_monitor_info_.otherstat_1_value_;
+    info.otherstat_2_id_ = op_monitor_info_.otherstat_2_id_;
+    info.otherstat_2_value_ = op_monitor_info_.otherstat_2_value_;
+    info.otherstat_3_id_ = op_monitor_info_.otherstat_3_id_;
+    info.otherstat_3_value_ = op_monitor_info_.otherstat_3_value_;
+    info.otherstat_4_id_ = op_monitor_info_.otherstat_4_id_;
+    info.otherstat_4_value_ = op_monitor_info_.otherstat_4_value_;
     info.otherstat_6_id_ = op_monitor_info_.otherstat_6_id_;
     info.otherstat_6_value_ = op_monitor_info_.otherstat_6_value_;
   }
@@ -455,7 +463,7 @@ protected:
   int64_t input_rows_;
   int64_t input_width_;
   ObSqlWorkAreaProfile profile_;
-  ObMonitorNode op_monitor_info_;
+  ObMonitorNode &op_monitor_info_;
   ObSqlMemMgrProcessor sql_mem_processor_;
   ObPhyOperatorType op_type_;
   uint64_t op_id_;
@@ -477,7 +485,7 @@ protected:
 class ObPrefixSortImpl : public ObSortOpImpl
 {
 public:
-  ObPrefixSortImpl();
+  explicit ObPrefixSortImpl(ObMonitorNode &op_monitor_info);
 
   // init && start fetch %op rows
   int init(const int64_t tenant_id,
@@ -556,7 +564,7 @@ private:
 class ObUniqueSortImpl : public ObSortOpImpl
 {
 public:
-  ObUniqueSortImpl() : prev_row_(NULL), prev_buf_size_(0)
+  explicit ObUniqueSortImpl(ObMonitorNode &op_monitor_info) : ObSortOpImpl(op_monitor_info), prev_row_(NULL), prev_buf_size_(0)
   {
   }
 

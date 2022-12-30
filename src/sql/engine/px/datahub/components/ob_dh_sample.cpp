@@ -213,6 +213,7 @@ ObDynamicSamplePieceMsgCtx::ObDynamicSamplePieceMsgCtx(
     succ_count_(0),
     tablet_ids_(),
     expect_range_count_(0),
+    sort_impl_(op_monitor_info_),
     exec_ctx_(exec_ctx),
     last_store_row_(),
     coord_(coord),

@@ -1989,7 +1989,8 @@ int ObService::broadcast_rs_list(const ObRsListArg &arg)
   return ret;
 }
 
-int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaRequestArg &arg)
+int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaRequestArg &arg,
+                                                ObDDLBuildSingleReplicaRequestResult &res)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("receive build single replica request", K(arg));
@@ -2019,8 +2020,13 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         } else if (OB_FAIL(dag_scheduler->add_dag(dag))) {
           saved_ret = ret;
           LOG_WARN("add dag failed", K(ret), K(arg));
+          if (OB_EAGAIN == saved_ret) {
+            dag_scheduler->get_complement_data_dag_progress(dag, res.row_scanned_, res.row_inserted_);
+          }
+        } else {
+          dag = nullptr;
         }
-        if (OB_FAIL(ret) && OB_NOT_NULL(dag)) {
+        if (OB_NOT_NULL(dag)) {
           (void) dag->handle_init_failed_ret_code(ret);
           dag_scheduler->free_dag(*dag);
           dag = nullptr;

@@ -272,6 +272,12 @@ ob_set_subtarget(ob_share partition_table
   partition_table/ob_partition_location.cpp
 )
 
+ob_set_subtarget(ob_share longops_mgr
+  longops_mgr/ob_ddl_longops.cpp
+  longops_mgr/ob_i_longops.cpp
+  longops_mgr/ob_longops_mgr.cpp
+)
+
 ob_set_subtarget(ob_share ls
   ls/ob_inmemory_ls_table.cpp
   ls/ob_ls_info.cpp

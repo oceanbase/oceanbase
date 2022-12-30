@@ -93,6 +93,10 @@ int ObPxMultiPartSSTableInsertOp::inner_open()
       LOG_WARN("fail to create row cnt map", K(ret));
     } else {
       ddl_task_id_ = ctx_.get_px_task_id();
+      op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SSTABLE_INSERT_ROW_COUNT;
+      op_monitor_info_.otherstat_1_value_ = 0;
+      op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::DDL_TASK_ID;
+      op_monitor_info_.otherstat_5_value_ = MY_SPEC.plan_->get_ddl_task_id();
       LOG_INFO("update table context", K(context_id), K(snapshot_version),
                K(MY_SPEC.ins_ctdef_.das_ctdef_.table_id_), K(MY_SPEC.ins_ctdef_.das_ctdef_.index_tid_));
     }
@@ -308,6 +312,10 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
     }
   } else {
     ret = child_->get_next_row();
+  }
+  if (OB_SUCC(ret)) {
+    op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SSTABLE_INSERT_ROW_COUNT;
+    op_monitor_info_.otherstat_1_value_++;
   }
   return ret;
 }

@@ -115,7 +115,8 @@ public:
       const ObDDLTaskKey &task_key,
       const int64_t snapshot_version,
       const int64_t execution_id,
-      const int ret_code);
+      const int ret_code,
+      const ObDDLTaskInfo &addition_info);
 
   int on_ddl_task_finish(
       const int64_t parent_task_id,
@@ -251,6 +252,8 @@ private:
   int schedule_ddl_retry_task(const ObDDLTaskRecord &task_record);
   int add_sys_task(ObDDLTask *task);
   int remove_sys_task(ObDDLTask *task);
+  int add_task_to_longops_mgr(ObDDLTask *ddl_task);
+  int remove_ddl_task(ObDDLTask *ddl_task);
 
 private:
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;

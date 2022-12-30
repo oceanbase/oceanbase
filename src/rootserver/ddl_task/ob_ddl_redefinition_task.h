@@ -117,7 +117,8 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
       const int64_t execution_id,
-      const int ret_code) = 0;
+      const int ret_code,
+      const ObDDLTaskInfo &addition_info) = 0;
   int on_child_task_finish(
       const uint64_t child_task_key,
       const int ret_code);
@@ -190,6 +191,7 @@ protected:
                                     ObIArray<uint64_t> &constraint_ids,
                                     bool &need_rebuild_constraint);
   int check_need_check_table_empty(bool &need_check_table_empty);
+  int get_child_task_ids(char *buf, int64_t len);
   int get_estimated_timeout(const share::schema::ObTableSchema *dst_table_schema, int64_t &estimated_timeout);
 protected:
   struct DependTaskStatus final

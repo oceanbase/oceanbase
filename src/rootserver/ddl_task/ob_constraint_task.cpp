@@ -147,7 +147,8 @@ int ObCheckConstraintValidationTask::process()
       }
     }
   }
-  if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret))) {
+  ObDDLTaskInfo info;
+  if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret, info))) {
     LOG_WARN("fail to finish check constraint task", K(ret), K(tmp_ret));
   }
   return ret;
@@ -189,11 +190,12 @@ int ObForeignKeyConstraintValidationTask::process()
   } else {
     ObTabletID unused_tablet_id;
     ObDDLTaskKey task_key(foregin_key_id_, schema_version_);
+    ObDDLTaskInfo info;
     int tmp_ret = OB_SUCCESS;
     if (OB_FAIL(check_fk_by_send_sql())) {
       LOG_WARN("failed to check fk", K(ret));
     }
-    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret))) {
+    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret, info))) {
       LOG_WARN("fail to finish check constraint task", K(ret));
     }
     LOG_INFO("execute check foreign key task finish", K(ret), K(task_key), K(data_table_id_), K(foregin_key_id_));

@@ -2715,23 +2715,6 @@ void ObCalcColumnChecksumRequestArg::reset()
   source_table_id_ = OB_INVALID_ID;
   execution_id_ = -1;
   task_id_ = 0;
-  calc_items_.reset();
-}
-
-int ObCalcColumnChecksumRequestArg::assign(const ObCalcColumnChecksumRequestArg &other)
-{
-  int ret = common::OB_SUCCESS;
-  tenant_id_ = other.tenant_id_;
-  target_table_id_ = other.target_table_id_;
-  schema_version_ = other.schema_version_;
-  execution_id_ = other.execution_id_;
-  snapshot_version_ = other.snapshot_version_;
-  source_table_id_ = other.source_table_id_;
-  task_id_ = other.task_id_;
-  if (OB_FAIL(calc_items_.assign(other.calc_items_))) {
-    LOG_WARN("assign calc_items failed", K(ret), K(other.calc_items_.count()));
-  }
-  return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObCalcColumnChecksumRequestRes, ret_codes_);
@@ -5746,16 +5729,18 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestResult, ret_code_);
+OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestResult, ret_code_, row_inserted_, row_scanned_);
 
 int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRequestResult &other)
 {
   int ret = OB_SUCCESS;
   ret_code_ = other.ret_code_;
+  row_inserted_ = other.row_inserted_;
+  row_scanned_ = other.row_scanned_;
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_, source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_, task_id_, execution_id_);
+OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_, source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_, task_id_, execution_id_, row_scanned_, row_inserted_);
 
 int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResponseArg &other)
 {
@@ -5770,6 +5755,8 @@ int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResp
   schema_version_ = other.schema_version_;
   task_id_ = other.task_id_;
   execution_id_ = other.execution_id_;
+  row_scanned_ = other.row_scanned_;
+  row_inserted_ = other.row_inserted_;
   return ret;
 }
 

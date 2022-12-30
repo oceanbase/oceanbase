@@ -98,12 +98,15 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
       const int64_t execution_id,
-      const int ret_code);
+      const int ret_code,
+      const ObDDLTaskInfo &addition_info);
   virtual int process() override;
   virtual bool is_valid() const override;
+  virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
   virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
+  virtual bool support_longops_monitoring() const override { return true; }
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_),K(snapshot_held_), K(is_sstable_complete_task_submitted_),
       K(sstable_complete_ts_), K(check_unique_snapshot_), K_(redefinition_execution_id), K(create_index_arg_));

@@ -810,6 +810,7 @@ public:
   int check_dag_net_exist(
       const ObDagId &dag_id, bool &exist);
   int cancel_dag_net(const ObDagId &dag_id);
+  int get_complement_data_dag_progress(const ObIDag *dag, int64_t &row_scanned, int64_t &row_inserted);
 
 private:
   typedef common::ObDList<ObIDag> DagList;

@@ -9473,6 +9473,9 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
 {
   int ret = OB_SUCCESS;
   LOG_INFO("receive build ddl single replica response", K(arg));
+  ObDDLTaskInfo info;
+  info.row_scanned_ = arg.row_scanned_;
+  info.row_inserted_ = arg.row_inserted_;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -9480,7 +9483,7 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(ddl_scheduler_.on_sstable_complement_job_reply(
-      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_schema_id_, arg.schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_))) {
+      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_schema_id_, arg.schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
   return ret;

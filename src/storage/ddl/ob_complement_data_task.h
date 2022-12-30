@@ -114,13 +114,14 @@ struct ObComplementDataContext final
 public:
   ObComplementDataContext():
     is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
-    allocator_("CompleteDataCtx"), lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0), data_sstable_redo_writer_(), index_builder_(nullptr)
+    allocator_("CompleteDataCtx"), lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
+    data_sstable_redo_writer_(), index_builder_(nullptr), ddl_kv_mgr_handle_(), row_scanned_(0), row_inserted_(0)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(const ObComplementDataParam &param, const ObDataStoreDesc &desc);
   void destroy();
   int write_start_log(const ObComplementDataParam &param);
-  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder));
+  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder), K_(row_scanned), K_(row_inserted));
 public:
   bool is_inited_;
   bool is_major_sstable_exist_;
@@ -131,6 +132,8 @@ public:
   ObDDLSSTableRedoWriter data_sstable_redo_writer_;
   blocksstable::ObSSTableIndexBuilder *index_builder_;
   ObDDLKvMgrHandle ddl_kv_mgr_handle_; // for keeping ddl kv mgr alive
+  int64_t row_scanned_;
+  int64_t row_inserted_;
 };
 
 class ObComplementPrepareTask;

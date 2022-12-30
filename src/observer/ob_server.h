@@ -35,8 +35,7 @@
 #include "pl/ob_pl.h"
 
 #include "storage/tx/wrs/ob_weak_read_service.h"         // ObWeakReadService
-#include "storage/tx/wrs/ob_black_list.h"                // ObBLService
-#include "storage/ob_long_ops_monitor.h"
+#include "storage/tx/wrs/ob_black_list.h"
 #include "storage/ob_partition_component_factory.h"
 
 #include "rootserver/ob_root_service.h"
@@ -393,7 +392,6 @@ private:
   common::ObMysqlRandom scramble_rand_;
   ObTenantDutyTask duty_task_;
   ObTenantSqlMemoryTimerTask sql_mem_task_;
-  storage::ObPurgeCompletedMonitorInfoTask long_ops_task_;
   ObCTASCleanUpTask ctas_clean_up_task_;     // repeat & no retry
   ObRefreshTimeTask refresh_active_time_task_; // repeat & no retry
   ObRefreshNetworkSpeedTask refresh_network_speed_task_; // repeat & no retry

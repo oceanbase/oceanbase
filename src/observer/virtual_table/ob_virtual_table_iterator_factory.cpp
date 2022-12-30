@@ -1760,9 +1760,8 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualLongOpsStatus *long_ops_status = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualLongOpsStatus, long_ops_status))) {
               SERVER_LOG(ERROR, "fail to placement new ObAllVirtualLongOpsStatus", K(ret));
-            } else if (OB_FAIL(long_ops_status->init())) {
-              SERVER_LOG(WARN, "fail to init ObAllVirtualLongOpsStatus", K(ret));
             } else {
+              long_ops_status->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(long_ops_status);
             }
             break;

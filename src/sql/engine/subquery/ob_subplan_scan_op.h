@@ -46,6 +46,8 @@ public:
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
 
   virtual void destroy() override { ObOperator::destroy(); }
+private:
+  int init_monitor_info();
 };
 
 } // end namespace sql

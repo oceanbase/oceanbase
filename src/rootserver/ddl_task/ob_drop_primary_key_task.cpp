@@ -31,6 +31,7 @@ using namespace oceanbase::rootserver;
 ObDropPrimaryKeyTask::ObDropPrimaryKeyTask()
   : ObTableRedefinitionTask()
 {
+  task_type_ = ObDDLType::DDL_DROP_PRIMARY_KEY;
 }
 
 ObDropPrimaryKeyTask::~ObDropPrimaryKeyTask()

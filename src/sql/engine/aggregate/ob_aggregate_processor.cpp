@@ -279,7 +279,7 @@ int ObAggregateProcessor::ExtraResult::init_distinct_set(const uint64_t tenant_i
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fall to alloc buff", "size", sizeof(ObUniqueSortImpl), K(ret));
   } else {
-    new (unique_sort_op_) ObUniqueSortImpl();
+    new (unique_sort_op_) ObUniqueSortImpl(op_monitor_info_);
     if (OB_FAIL(unique_sort_op_->init(tenant_id,
                                       &aggr_info.distinct_collations_,
                                       &aggr_info.distinct_cmp_funcs_,
@@ -320,7 +320,7 @@ int ObAggregateProcessor::GroupConcatExtraResult::init(const uint64_t tenant_id,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fall to alloc buff", "size", sizeof(ObSortOpImpl), K(ret));
       } else {
-        new (sort_op_) ObSortOpImpl();
+        new (sort_op_) ObSortOpImpl(op_monitor_info_);
         if (OB_FAIL(sort_op_->init(tenant_id,
                                    &aggr_info.sort_collations_,
                                    &aggr_info.sort_cmp_funcs_,

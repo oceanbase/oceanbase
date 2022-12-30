@@ -70,7 +70,11 @@ class ObDDLSingleReplicaExecutor
 public:
   int build(const ObDDLSingleReplicaExecutorParam &param);
   int check_build_end(bool &is_end, int64_t &ret_code);
-  int set_partition_task_status(const common::ObTabletID &tablet_id, const int ret_code);
+  int set_partition_task_status(const common::ObTabletID &tablet_id,
+                                const int ret_code,
+                                const int64_t row_scanned,
+                                const int64_t row_inserted);
+  int get_progress(int64_t &row_scanned, int64_t &row_inserted);
 private:
   int schedule_task();
 private:
@@ -87,7 +91,8 @@ private:
   public:
     static const int64_t PARTITION_BUILD_HEART_BEAT_TIME = 10 * 1000 * 1000;
     ObPartitionBuildInfo()
-      : ret_code_(common::OB_SUCCESS), stat_(ObPartitionBuildStat::BUILD_INIT), heart_beat_time_(0)
+      : ret_code_(common::OB_SUCCESS), stat_(ObPartitionBuildStat::BUILD_INIT), heart_beat_time_(0),
+        row_inserted_(0), row_scanned_(0)
     {}
     ~ObPartitionBuildInfo() = default;
     bool need_schedule() const {
@@ -95,11 +100,13 @@ private:
         || (ObPartitionBuildStat::BUILD_REQUESTED == stat_
           && ObTimeUtility::current_time() - heart_beat_time_ > PARTITION_BUILD_HEART_BEAT_TIME);
     }
-    TO_STRING_KV(K_(ret_code), K_(stat), K_(heart_beat_time));
+    TO_STRING_KV(K_(ret_code), K_(stat), K_(heart_beat_time), K_(row_inserted), K_(row_scanned));
   public:
     int64_t ret_code_;
     ObPartitionBuildStat stat_;
     int64_t heart_beat_time_;
+    int64_t row_inserted_;
+    int64_t row_scanned_;
   };
 private:
   uint64_t tenant_id_;

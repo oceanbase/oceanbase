@@ -3698,11 +3698,14 @@ struct ObCheckTransElapsedResult final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCheckTransElapsedResult() : ret_code_(common::OB_SUCCESS), snapshot_(common::OB_INVALID_TIMESTAMP) {}
-  TO_STRING_KV(K_(ret_code), K_(snapshot), K_(pending_tx_id));
-  int ret_code_;
+  ObCheckTransElapsedResult()
+    : snapshot_(common::OB_INVALID_TIMESTAMP), pending_tx_id_(), ret_code_(OB_SUCCESS) {}
+  bool is_valid() const { return snapshot_ != common::OB_INVALID_TIMESTAMP; }
+  void reuse() { snapshot_ = common::OB_INVALID_TIMESTAMP; pending_tx_id_.reset(); }
+  TO_STRING_KV(K_(snapshot), K_(pending_tx_id), K_(ret_code));
   int64_t snapshot_;
   transaction::ObTransID pending_tx_id_;
+  int ret_code_;
 };
 
 struct ObDDLCheckTabletMergeStatusResult
@@ -7245,13 +7248,15 @@ struct ObDDLBuildSingleReplicaRequestResult final
   OB_UNIS_VERSION(1);
 public:
   ObDDLBuildSingleReplicaRequestResult()
-    : ret_code_(OB_SUCCESS)
+    : ret_code_(OB_SUCCESS), row_inserted_(0), row_scanned_(0)
   {}
   ~ObDDLBuildSingleReplicaRequestResult() = default;
   int assign(const ObDDLBuildSingleReplicaRequestResult &other);
-  TO_STRING_KV(K_(ret_code))
+  TO_STRING_KV(K_(ret_code), K_(row_inserted), K_(row_scanned))
 public:
   int64_t ret_code_;
+  int64_t row_inserted_;
+  int64_t row_scanned_;
 };
 
 struct ObDDLBuildSingleReplicaResponseArg final
@@ -7260,14 +7265,16 @@ struct ObDDLBuildSingleReplicaResponseArg final
 public:
   ObDDLBuildSingleReplicaResponseArg()
     : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), source_table_id_(), dest_schema_id_(OB_INVALID_ID),
-      ret_code_(OB_SUCCESS), snapshot_version_(0), schema_version_(0), task_id_(0), execution_id_(-1)
+      ret_code_(OB_SUCCESS), snapshot_version_(0), schema_version_(0), task_id_(0), execution_id_(-1),
+      row_scanned_(0), row_inserted_(0)
   {}
   ~ObDDLBuildSingleReplicaResponseArg() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid()
                           && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_
                           && snapshot_version_ > 0 && schema_version_ > 0 && task_id_ > 0 && execution_id_ >= 0; }
   int assign(const ObDDLBuildSingleReplicaResponseArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code), K_(snapshot_version), K_(schema_version), K_(task_id), K_(execution_id));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code),
+               K_(snapshot_version), K_(schema_version), K_(task_id), K_(execution_id), K_(row_scanned), K_(row_inserted));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -7279,6 +7286,8 @@ public:
   int64_t schema_version_;
   int64_t task_id_;
   int64_t execution_id_;
+  int64_t row_scanned_;
+  int64_t row_inserted_;
 };
 
 struct ObLogReqLoadProxyRequest
