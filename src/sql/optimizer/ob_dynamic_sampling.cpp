@@ -57,7 +57,7 @@ int ObDynamicSampling::estimate_table_rowcount(const ObDSTableParam &param,
     LOG_WARN("failed to get ds stat items");
   } else if (get_ds_item_size() == 0) {
     //all ds item can get from cache.
-    LOG_TRACE("suceed to get ds item from cache", K(param));
+    LOG_TRACE("succeed to get ds item from cache", K(param));
   } else if (OB_FAIL(do_estimate_table_rowcount(param, throw_ds_error))) {
     LOG_WARN("failed to do estimate table rowcount", K(ret));
   } else if (OB_FAIL(add_ds_result_cache(ds_result_items))) {
@@ -97,7 +97,7 @@ int ObDynamicSampling::add_ds_result_cache(ObIArray<ObDSResultItem> &ds_result_i
                                                                          ds_result_items.at(i).stat_handle_))) {
         LOG_WARN("failed to add ds stat cache", K(ret));
       } else {
-        ds_result_items.at(i).stat_ = NULL;//reset and the memory will free togather after ds.
+        ds_result_items.at(i).stat_ = NULL;//reset and the memory will free togther after ds.
         if (ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_BASIC_STAT) {
           logical_idx = i;
         }
@@ -326,7 +326,7 @@ int ObDynamicSampling::add_ds_col_stat_item(const ObDSTableParam &param,
         }
         if (!found_it) {
           if (!ObColumnStatParam::is_valid_opt_col_type(col_expr->get_data_type())) {
-            //do nothing, only ds fullfill with column stats type.
+            //do nothing, only ds fulfill with column stats type.
           } else if (OB_FAIL(add_ds_stat_item(ObDSStatItem(&result_item,
                                                            tmp_str,
                                                            col_expr,
@@ -507,7 +507,7 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
     LOG_WARN("failed to pack dynamic sampling", K(ret));
   } else if (OB_FAIL(prepare_and_store_session(session_info, session_value,
                                                nested_count, is_no_backslash_escapes, tx_desc))) {
-    throw_ds_error = true;//here we must throw error, because the seesion may be unavailable.
+    throw_ds_error = true;//here we must throw error, because the session may be unavailable.
     LOG_WARN("failed to prepare and store session", K(ret));
   } else {
     need_restore_session = true;
@@ -525,7 +525,7 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = restore_session(session_info, session_value,
                                                  nested_count, is_no_backslash_escapes, tx_desc))) {
-      throw_ds_error = true;//here we must throw error, because the seesion may be unavailable.
+      throw_ds_error = true;//here we must throw error, because the session may be unavailable.
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("failed to restore session", K(tmp_ret));
     }
@@ -806,7 +806,7 @@ int ObDynamicSampling::calc_table_sample_block_ratio(const ObDSTableParam &param
       sample_block_ratio_ = sample_block_ratio_ * param.degree_;
       sample_block_ratio_ = sample_block_ratio_ < 100.0 ? sample_block_ratio_ : 100.0;
     }
-    //4.adjsut the seed.
+    //4.adjust the seed.
     seed_ = (param.degree_ > 1 || param.partition_infos_.count() > 1) ? 0 : 1;
   }
   LOG_TRACE("succeed to calc table sample block ratio", K(param), K(seed_), K(sample_micro_cnt),
@@ -1332,7 +1332,7 @@ int ObDynamicSamplingUtils::check_ds_can_use_filters(const ObIArray<ObRawExpr*> 
   for (int64_t i = 0; OB_SUCC(ret) && !no_use && i < filters.count(); ++i) {
     if (OB_ISNULL(filters.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpcted null", K(ret), K(filters.at(i)));
+      LOG_WARN("get unexpected null", K(ret), K(filters.at(i)));
     } else if (OB_FAIL(check_ds_can_use_filter(filters.at(i), no_use, total_expr_cnt))) {
       LOG_WARN("failed to check ds can use filter", K(ret));
     }
@@ -1347,7 +1347,7 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
   int ret = OB_SUCCESS;
   if (OB_ISNULL(filter)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpcted null", K(ret), K(filter));
+    LOG_WARN("get unexpected null", K(ret), K(filter));
   } else if (filter->has_flag(CNT_DYNAMIC_PARAM) ||
              filter->has_flag(CNT_SUB_QUERY) ||
              filter->has_flag(CNT_RAND_FUNC) ||
@@ -1581,7 +1581,7 @@ bool ObDynamicSamplingUtils::is_ds_virtual_table(const int64_t table_id)
           table_id == share::OB_TENANT_VIRTUAL_COLLATION_ORA_TID);
 }
 
-//fowllowing function used to dynamic sampling join in the future.
+//following function used to dynamic sampling join in the future.
 
 // int ObDynamicSampling::estimate_join_rowcount(const ObOptDSJoinParam &param,
 //                                                  uint64_t &join_output_cnt)

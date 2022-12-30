@@ -370,7 +370,7 @@ int ObInsertLogPlan::allocate_insert_values_as_top(ObLogicalOperator *&top)
   } else if (insert_stmt->is_error_logging() && OB_FAIL(values_op->extract_err_log_info())) {
     LOG_WARN("failed to extract error log exprs", K(ret));
   } else if (OB_FAIL(values_op->compute_property())) {
-    LOG_WARN("failed to compute propery", K(ret));
+    LOG_WARN("failed to compute property", K(ret));
   } else {
     if (NULL != top) {
       ret = values_op->add_child(top);
@@ -687,7 +687,7 @@ int ObInsertLogPlan::check_insert_stmt_need_multi_partition_dml(bool &is_multi_p
   } else if (OB_FAIL(insert_stmt->part_key_has_subquery(has_subquery_part_key))) {
     LOG_WARN("failed to check part key has subquery", K(ret));
   } else if (OB_FAIL(insert_stmt->part_key_has_auto_inc(has_auto_inc_part_key))) {
-    LOG_WARN("check to check whether part key containts auto inc column", K(ret));
+    LOG_WARN("check to check whether part key contains auto inc column", K(ret));
   } else if (has_rand_part_key || has_subquery_part_key || has_auto_inc_part_key) {
     is_multi_part_dml = true;
   } else { /*do nothing*/ }
@@ -1027,7 +1027,7 @@ int ObInsertLogPlan::copy_index_dml_infos_for_insert_up(const ObInsertTableInfo&
           LOG_WARN("init index assignment info failed", K(ret));
         } else if (!table_info.is_link_table_ &&
                   OB_FAIL(check_update_part_key(index_schema, index_dml_info))) {
-          LOG_WARN("faield to check update part key", K(ret));
+          LOG_WARN("failed to check update part key", K(ret));
         } else if (0 == i) {
           if (OB_FAIL(index_dml_info->ck_cst_exprs_.assign(update_cst_exprs))) {
             LOG_WARN("failed to assign update check exprs", K(ret));
@@ -1295,7 +1295,7 @@ int ObInsertLogPlan::get_all_rowkey_columns_for_ddl(const ObInsertTableInfo& tab
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
   if (OB_ISNULL(stmt) || OB_ISNULL(ddl_table_schema) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexptected null", K(ret), K(stmt), K(ddl_table_schema));
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(ddl_table_schema));
   } else {
     const ObRowkeyInfo &rowkey_info = ddl_table_schema->get_rowkey_info();
     uint64_t rowkey_column_id = 0;
@@ -1357,7 +1357,7 @@ int ObInsertLogPlan::get_all_columns_for_ddl(const ObInsertTableInfo& table_info
   const ObInsertStmt* stmt = get_stmt();
   if (OB_ISNULL(stmt) || OB_ISNULL(ddl_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexptected null", K(ret), K(stmt), K(ddl_table_schema));
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(ddl_table_schema));
   } else {
     ObTableSchema::const_column_iterator iter = ddl_table_schema->column_begin();
     ObTableSchema::const_column_iterator end = ddl_table_schema->column_end();
@@ -1392,7 +1392,7 @@ int ObInsertLogPlan::get_all_part_columns_for_ddl(const ObInsertTableInfo& table
   const ObInsertStmt* stmt = get_stmt();
   if (OB_ISNULL(stmt) || OB_ISNULL(data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexptected null", K(ret), K(stmt), K(data_table_schema));
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(data_table_schema));
   } else {
     ObTableSchema::const_column_iterator iter = data_table_schema->column_begin();
     ObTableSchema::const_column_iterator end = data_table_schema->column_end();
