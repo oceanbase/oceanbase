@@ -348,14 +348,14 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
               compaction::ObMediumCompactionInfo medium_info;
               ObMultiSourceData::ObIMultiSourceDataUnitList dst_list;
               if (OB_SUCC(mt->get_multi_source_data_unit_list(&medium_info, dst_list, allocator_))) {
-                int i = 0;
+                int k = 0;
                 DLIST_FOREACH_X(info, dst_list, OB_SUCC(ret)) {
                   common::databuff_printf(
                       compaction_info_buf_,
                       sizeof(compaction_info_buf_),
                       pos,
                       "medium%d_%ld,",
-                      i++,
+                      k++,
                       static_cast<const compaction::ObMediumCompactionInfo*>(info)->medium_snapshot_);
                 }
                 if (OB_SUCC(ret)) {
