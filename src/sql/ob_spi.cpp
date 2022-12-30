@@ -1822,8 +1822,8 @@ int ObSPIService::spi_build_record_type_by_result_set(common::ObIAllocator &allo
     OZ (record_type->record_members_init(&allocator, columns->count() - hidden_column_count));
     for (int64_t i = 0; OB_SUCC(ret) && i < columns->count() - hidden_column_count; ++i) {
       ObPLDataType pl_type;
-      if (columns->at(i).type_.is_ext()) {
-        int64_t udt_id = columns->at(i).accuracy_.accuracy_;
+      if (columns->at(i).type_.is_ext() && columns->at(i).accuracy_.accuracy_ != OB_INVALID_ID) {
+        uint64_t udt_id = columns->at(i).accuracy_.accuracy_;
         const ObUserDefinedType *user_type = NULL;
         OZ (secondary_namespace->get_pl_data_type_by_id(udt_id, user_type));
         CK (OB_NOT_NULL(user_type));
@@ -3275,12 +3275,13 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (stmt::T_SELECT != static_cast<stmt::StmtType>(stmt_type)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("only supported select stmt in cursor", K(ret), K(stmt_type));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-select stmt in cursor");
   } else if (!for_update && use_stream) {
     ObSPIResultSet *spi_result = NULL;
+    if (stmt::T_SELECT != static_cast<stmt::StmtType>(stmt_type)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("only supported select stmt in cursor", K(ret), K(stmt_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-select stmt in cursor");
+    }
     OX (cursor.set_streaming());
     OV (OB_NOT_NULL(cursor.get_dbms_entity()), OB_NOT_INIT, sql_stmt, stmt_id, exec_params);
     OV (OB_NOT_NULL(cursor.get_cursor_entity()), OB_NOT_INIT, sql_stmt, stmt_id, exec_params);
