@@ -922,7 +922,7 @@ int ObLogDelUpd::get_rowid_version(int64_t &rowid_version)
   } else if (OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_schema_guard()) ||
              OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get schama guart", K(ret), K(schema_guard), K(session_info));
+    LOG_WARN("failed to get schema guard", K(ret), K(schema_guard), K(session_info));
   } else if (OB_FAIL(schema_guard->get_table_schema(
              session_info->get_effective_tenant_id(),
              get_index_tid(), table_schema))) {

@@ -51,7 +51,7 @@ public:
       all_partition_indexes_(),
       all_subpartition_indexes_(),
       is_partition_single_(false),
-      is_subpartition_sinlge_(false),
+      is_subpartition_single_(false),
       can_reselect_replica_(false)
   {}
   ObShardingInfo(ObTableLocationType type)
@@ -68,7 +68,7 @@ public:
     all_partition_indexes_(),
     all_subpartition_indexes_(),
     is_partition_single_(false),
-    is_subpartition_sinlge_(false),
+    is_subpartition_single_(false),
     can_reselect_replica_(false)
   {}
 
@@ -117,7 +117,7 @@ public:
   const common::ObIArray<int64_t> &get_all_partition_indexes() const { return all_partition_indexes_; }
   const common::ObIArray<int64_t> &get_all_subpartition_indexes() const { return all_subpartition_indexes_; }
   inline bool is_partition_single() const { return is_partition_single_; }
-  inline bool is_subpartition_single() const { return is_subpartition_sinlge_; }
+  inline bool is_subpartition_single() const { return is_subpartition_single_; }
   // end 分区相关的getter
 
   // for set-op and insert-op to check partition wise
@@ -334,7 +334,7 @@ private:
                                              const common::ObIArray<ObRawExpr *> &first_keys,
                                              const common::ObIArray<ObShardingInfo *> &first_shardings,
                                              const common::ObIArray<ObRawExpr *> &second_keys,
-                                             const common::ObIArray<ObShardingInfo *> &second_shardins,
+                                             const common::ObIArray<ObShardingInfo *> &second_shardings,
                                              bool &is_cover);
 
   static int is_expr_equivalent(const EqualSets &equal_sets,
@@ -375,7 +375,7 @@ private:
   // 二级分区表的phy_table_location_info_中，是否只涉及到一个一级分区
   bool is_partition_single_;
   // 二级分区表的phy_table_location_info_中，是否每个一级分区都只涉及一个二级分区
-  bool is_subpartition_sinlge_;
+  bool is_subpartition_single_;
   bool can_reselect_replica_; //能否重新选择partition的leader, 仅最下层的复制表允许, 继承后不再允许
   DISALLOW_COPY_AND_ASSIGN(ObShardingInfo);
 };

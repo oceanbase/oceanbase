@@ -39,7 +39,7 @@ int ObShardingInfo::assign(const ObShardingInfo &other)
   partition_array_ = other.partition_array_;
   can_reselect_replica_ = other.can_reselect_replica_;
   is_partition_single_ = other.is_partition_single_;
-  is_subpartition_sinlge_ = other.is_subpartition_sinlge_;
+  is_subpartition_single_ = other.is_subpartition_single_;
   if (OB_FAIL(partition_keys_.assign(other.partition_keys_))) {
     LOG_WARN("failed to assign exprs", K(ret));
   } else if (OB_FAIL(sub_partition_keys_.assign(other.sub_partition_keys_))) {
@@ -123,7 +123,7 @@ int ObShardingInfo::init_partition_info(ObOptimizerContext &ctx,
                                                               all_partition_indexes_,
                                                               all_subpartition_indexes_,
                                                               is_partition_single_,
-                                                              is_subpartition_sinlge_))) {
+                                                              is_subpartition_single_))) {
       LOG_WARN("failed to extract all partition indexes", K(ret));
     }
   }
@@ -589,7 +589,7 @@ int ObShardingInfo::check_if_match_partition_wise(const EqualSets &equal_sets,
     is_partition_wise = false;
   } else if (first_left_sharding->part_level_ != first_right_sharding->part_level_ ||
              first_left_sharding->is_partition_single_ != first_right_sharding->is_partition_single_ ||
-             first_left_sharding->is_subpartition_sinlge_ != first_right_sharding->is_subpartition_sinlge_) {
+             first_left_sharding->is_subpartition_single_ != first_right_sharding->is_subpartition_single_) {
     is_partition_wise = false;
   } else if (OB_FAIL(is_join_key_cover_partition_key(equal_sets,
                                                      left_keys,
@@ -811,7 +811,7 @@ int ObShardingInfo::copy_without_part_keys(const ObShardingInfo &other)
   partition_array_ = other.partition_array_;
   can_reselect_replica_ = other.can_reselect_replica_;
   is_partition_single_ = other.is_partition_single_;
-  is_subpartition_sinlge_ = other.is_subpartition_sinlge_;
+  is_subpartition_single_ = other.is_subpartition_single_;
   if (OB_FAIL(all_tablet_ids_.assign(other.all_tablet_ids_))) {
     LOG_WARN("failed to assign partition ids");
   } else if (OB_FAIL(all_partition_indexes_.assign(other.all_partition_indexes_))) {
