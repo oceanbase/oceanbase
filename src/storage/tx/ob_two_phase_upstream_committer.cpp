@@ -231,11 +231,11 @@ int ObTxCycleTwoPhaseCommitter::handle_timeout()
     TRANS_LOG(WARN, "resubmit 2pc log failed", KR(tmp_ret));
   }
 
-  if (!is_leaf() && OB_TMP_FAIL(retransmit_downstream_msg_())) {
+  if ((is_root() || is_internal()) && OB_TMP_FAIL(retransmit_downstream_msg_())) {
     TRANS_LOG(WARN, "retransmit downstream msg failed", KR(tmp_ret));
   }
 
-  if (!is_root() && OB_TMP_FAIL(retransmit_upstream_msg_(get_downstream_state()))) {
+  if ((is_internal() || is_leaf()) && OB_TMP_FAIL(retransmit_upstream_msg_(get_downstream_state()))) {
     TRANS_LOG(WARN, "retransmit upstream msg failed", KR(tmp_ret));
   }
 
@@ -281,7 +281,7 @@ int ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_()
   ObTwoPhaseCommitMsgType msg_type;
   bool need_submit = true;
 
-  if (!is_leaf()) {
+  if (is_root() || is_internal()) {
     int64_t this_part_id = get_self_id();
     if (OB_FAIL(decide_downstream_msg_type_(need_submit, msg_type))) {
       TRANS_LOG(WARN, "deecide downstream msg_type fail", K(ret), KPC(this));

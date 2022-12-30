@@ -276,6 +276,7 @@ public:
   // is_leaf returns whether it is the leaf participant in the cycle two phase
   // commit
   bool is_leaf() const { return Ob2PCRole::LEAF == get_2pc_role(); }
+  bool is_internal() const { return Ob2PCRole::INTERNAL == get_2pc_role(); }
   virtual Ob2PCRole get_2pc_role() const = 0;
 
   // is_2pc_logging returns whether it is waiting for the success of two phase

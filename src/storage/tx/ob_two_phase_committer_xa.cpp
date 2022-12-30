@@ -113,7 +113,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_redo_request_impl_()
     } else {
       TRANS_LOG(WARN, "submit commit info log failed", K(tmp_ret), K(*this));
     }
-  } else if (!is_root() && !is_leaf()) {
+  } else if (is_internal()) {
     if (OB_TMP_FAIL(post_downstream_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REDO_REQ))) {
       TRANS_LOG(WARN, "post prepare redo msg failed", KR(tmp_ret), KPC(this));
     }
@@ -221,7 +221,7 @@ int ObTxCycleTwoPhaseCommitter::apply_commit_info_log()
   //} else if (OB_FAIL(set_2pc_state(ObTxState::REDO_COMPLETE))) {
   //  TRANS_LOG(ERROR, "set 2pc state failed", K(ret), K(*this), K(state));
   } else {
-    if (!is_root()
+    if ((is_internal() || is_leaf())
         && all_downstream_collected_()) {
       if (OB_TMP_FAIL(post_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REDO_RESP,
                                OB_C2PC_UPSTREAM_ID))) {
