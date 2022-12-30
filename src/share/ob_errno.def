@@ -2119,6 +2119,34 @@ DEFINE_ORACLE_ERROR(OB_ERR_MISSING_INTO_KEYWORD, -9712, -1, "HY000", "missing IN
 DEFINE_ORACLE_ERROR(OB_ERR_CLAUSE_RETURN_ILLEGAL, -9713, -1, "HY000", "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements", 6547, "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements");
 DEFINE_ORACLE_ERROR(OB_ERR_NAME_HAS_TOO_MANY_PARTS, -9714, -1, "HY000", "name has too many parts", 6563, "name has too many parts");
 DEFINE_ORACLE_ERROR(OB_ERR_LOB_SPAN_TRANSACTION, -9715, -1, "HY000", "LOB locators cannot span transactions", 22990, "LOB locators cannot span transactions");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_MULTISET, -9716, -1, "HY000", "MULTISET expression not allowed", 22903, "MULTISET expression not allowed");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CAST_UDT, -9717, -1, "HY000", "invalid CAST to a type that is not a nested table or VARRAY", 22907, "invalid CAST to a type that is not a nested table or VARRAY");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_EXIST, -9718, -1, "HY000", "policy already exists", 28101, "policy already exists");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_NOT_EXIST, -9719, -1, "HY000", "policy does not exist", 28102, "policy does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_ADD_POLICY_TO_SYS_OBJECT, -9720, -1, "HY000", "adding a policy to an object owned by SYS is not allowed", 28103, "adding a policy to an object owned by SYS is not allowed");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_INPUT_STRING, -9721, -1, "HY000", "input value for %s is not valid", 28104, "input value for %s is not valid");
+DEFINE_ORACLE_ERROR(OB_ERR_SEC_COLUMN_ON_VIEW, -9722, -1, "HY000", "cannot create security relevant column policy in an object view", 28105, "cannot create security relevant column policy in an object view");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_INPUT_FOR_ARGUMENT, -9723, -1, "HY000", "input value for argument %s is not valid", 28106, "input value for argument %s is not valid");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_DISABLED, -9724, -1, "HY000", "policy was disabled", 28107, "policy was disabled");
+DEFINE_ORACLE_ERROR(OB_ERR_CIRCULAR_POLICIES, -9725, -1, "HY000", "circular security policies detected", 28108, "circular security policies detected");
+DEFINE_ORACLE_ERROR(OB_ERR_TOO_MANY_POLICIES, -9726, -1, "HY000", "the number of related policies has exceeded the limit of 16", 28109, "the number of related policies has exceeded the limit of 16");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_FUNCTION, -9727, -1, "HY000", "policy function or package %.*s.%.*s has error", 28110, "policy function or package %.*s.%.*s has error");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_PRIV_EVAL_PREDICATE, -9728, -1, "HY000", "insufficient privilege to evaluate policy predicate", 28111, "insufficient privilege to evaluate policy predicate");
+DEFINE_ORACLE_ERROR(OB_ERR_EXECUTE_POLICY_FUNCTION, -9729, -1, "HY000", "failed to execute policy function", 28112, "failed to execute policy function");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_PREDICATE, -9730, -1, "HY000", "policy predicate has error", 28113, "policy predicate has error");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS, -9731, -1, "HY000", "insufficient privileges to do direct path access", 28116, "insufficient privileges to do direct path access");
+DEFINE_ORACLE_ERROR(OB_ERR_INTEGRITY_CONSTRAINT_VIOLATED, -9732, -1, "HY000", "integrity constraint violated - parent record not found", 28117, "integrity constraint violated - parent record not found");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_GROUP_EXIST, -9733, -1, "HY000", "policy group already exists", 28118, "policy group already exists");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_GROUP_NOT_EXIST, -9734, -1, "HY000", "policy group does not exist", 28119, "policy group does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_DRIVING_CONTEXT_EXIST, -9735, -1, "HY000", "driving context already exists", 28120, "driving context already exists");
+DEFINE_ORACLE_ERROR(OB_ERR_DRIVING_CONTEXT_NOT_EXIST, -9736, -1, "HY000", "driving context does not exist", 28121, "driving context does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_DEFAULT_GROUP, -9737, -1, "HY000", "can not update SYS_DEFAULT policy group", 28122, "can not update SYS_DEFAULT policy group");
+DEFINE_ORACLE_ERROR(OB_ERR_CONTEXT_CONTAIN_INVALID_GROUP, -9738, -1, "HY000", "Driving context %.*s,%.*s contains invalid group %.*s", 28123, "Driving context %.*s,%.*s contains invalid group %.*s");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_SEC_COLUMN_TYPE, -9739, -1, "HY000", "Column %.*s in sec_relevant_cols cannot be of an object data type", 28124, "Column %.*s in sec_relevant_cols cannot be of an object data type");
+DEFINE_ORACLE_ERROR(OB_ERR_UNPROTECTED_VIRTUAL_COLUMN, -9740, -1, "HY000", "A protected base column was referenced in an unprotected virtual column expression", 28125, "A protected base column was referenced in an unprotected virtual column expression");
+DEFINE_ORACLE_ERROR(OB_ERR_ATTRIBUTE_ASSOCIATION, -9741, -1, "HY000", "Attribute association failed for policy %.*s", 28126, "Attribute association failed for policy %.*s");
+DEFINE_ORACLE_ERROR(OB_ERR_MERGE_INTO_WITH_POLICY, -9742, -1, "HY000", "The MERGE INTO syntax does not support the security policy", 28132, "The MERGE INTO syntax does not support the security policy");
+
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

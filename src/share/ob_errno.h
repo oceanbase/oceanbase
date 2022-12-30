@@ -1599,6 +1599,33 @@ constexpr int OB_ERR_MISSING_INTO_KEYWORD = -9712;
 constexpr int OB_ERR_CLAUSE_RETURN_ILLEGAL = -9713;
 constexpr int OB_ERR_NAME_HAS_TOO_MANY_PARTS = -9714;
 constexpr int OB_ERR_LOB_SPAN_TRANSACTION = -9715;
+constexpr int OB_ERR_INVALID_MULTISET = -9716;
+constexpr int OB_ERR_INVALID_CAST_UDT = -9717;
+constexpr int OB_ERR_POLICY_EXIST = -9718;
+constexpr int OB_ERR_POLICY_NOT_EXIST = -9719;
+constexpr int OB_ERR_ADD_POLICY_TO_SYS_OBJECT = -9720;
+constexpr int OB_ERR_INVALID_INPUT_STRING = -9721;
+constexpr int OB_ERR_SEC_COLUMN_ON_VIEW = -9722;
+constexpr int OB_ERR_INVALID_INPUT_FOR_ARGUMENT = -9723;
+constexpr int OB_ERR_POLICY_DISABLED = -9724;
+constexpr int OB_ERR_CIRCULAR_POLICIES = -9725;
+constexpr int OB_ERR_TOO_MANY_POLICIES = -9726;
+constexpr int OB_ERR_POLICY_FUNCTION = -9727;
+constexpr int OB_ERR_NO_PRIV_EVAL_PREDICATE = -9728;
+constexpr int OB_ERR_EXECUTE_POLICY_FUNCTION = -9729;
+constexpr int OB_ERR_POLICY_PREDICATE = -9730;
+constexpr int OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS = -9731;
+constexpr int OB_ERR_INTEGRITY_CONSTRAINT_VIOLATED = -9732;
+constexpr int OB_ERR_POLICY_GROUP_EXIST = -9733;
+constexpr int OB_ERR_POLICY_GROUP_NOT_EXIST = -9734;
+constexpr int OB_ERR_DRIVING_CONTEXT_EXIST = -9735;
+constexpr int OB_ERR_DRIVING_CONTEXT_NOT_EXIST = -9736;
+constexpr int OB_ERR_UPDATE_DEFAULT_GROUP = -9737;
+constexpr int OB_ERR_CONTEXT_CONTAIN_INVALID_GROUP = -9738;
+constexpr int OB_ERR_INVALID_SEC_COLUMN_TYPE = -9739;
+constexpr int OB_ERR_UNPROTECTED_VIRTUAL_COLUMN = -9740;
+constexpr int OB_ERR_ATTRIBUTE_ASSOCIATION = -9741;
+constexpr int OB_ERR_MERGE_INTO_WITH_POLICY = -9742;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3527,6 +3554,33 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CLAUSE_RETURN_ILLEGAL__USER_ERROR_MSG "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements"
 #define OB_ERR_NAME_HAS_TOO_MANY_PARTS__USER_ERROR_MSG "name has too many parts"
 #define OB_ERR_LOB_SPAN_TRANSACTION__USER_ERROR_MSG "LOB locators cannot span transactions"
+#define OB_ERR_INVALID_MULTISET__USER_ERROR_MSG "MULTISET expression not allowed"
+#define OB_ERR_INVALID_CAST_UDT__USER_ERROR_MSG "invalid CAST to a type that is not a nested table or VARRAY"
+#define OB_ERR_POLICY_EXIST__USER_ERROR_MSG "policy already exists"
+#define OB_ERR_POLICY_NOT_EXIST__USER_ERROR_MSG "policy does not exist"
+#define OB_ERR_ADD_POLICY_TO_SYS_OBJECT__USER_ERROR_MSG "adding a policy to an object owned by SYS is not allowed"
+#define OB_ERR_INVALID_INPUT_STRING__USER_ERROR_MSG "input value for %s is not valid"
+#define OB_ERR_SEC_COLUMN_ON_VIEW__USER_ERROR_MSG "cannot create security relevant column policy in an object view"
+#define OB_ERR_INVALID_INPUT_FOR_ARGUMENT__USER_ERROR_MSG "input value for argument %s is not valid"
+#define OB_ERR_POLICY_DISABLED__USER_ERROR_MSG "policy was disabled"
+#define OB_ERR_CIRCULAR_POLICIES__USER_ERROR_MSG "circular security policies detected"
+#define OB_ERR_TOO_MANY_POLICIES__USER_ERROR_MSG "the number of related policies has exceeded the limit of 16"
+#define OB_ERR_POLICY_FUNCTION__USER_ERROR_MSG "policy function or package %.*s.%.*s has error"
+#define OB_ERR_NO_PRIV_EVAL_PREDICATE__USER_ERROR_MSG "insufficient privilege to evaluate policy predicate"
+#define OB_ERR_EXECUTE_POLICY_FUNCTION__USER_ERROR_MSG "failed to execute policy function"
+#define OB_ERR_POLICY_PREDICATE__USER_ERROR_MSG "policy predicate has error"
+#define OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS__USER_ERROR_MSG "insufficient privileges to do direct path access"
+#define OB_ERR_INTEGRITY_CONSTRAINT_VIOLATED__USER_ERROR_MSG "integrity constraint violated - parent record not found"
+#define OB_ERR_POLICY_GROUP_EXIST__USER_ERROR_MSG "policy group already exists"
+#define OB_ERR_POLICY_GROUP_NOT_EXIST__USER_ERROR_MSG "policy group does not exist"
+#define OB_ERR_DRIVING_CONTEXT_EXIST__USER_ERROR_MSG "driving context already exists"
+#define OB_ERR_DRIVING_CONTEXT_NOT_EXIST__USER_ERROR_MSG "driving context does not exist"
+#define OB_ERR_UPDATE_DEFAULT_GROUP__USER_ERROR_MSG "can not update SYS_DEFAULT policy group"
+#define OB_ERR_CONTEXT_CONTAIN_INVALID_GROUP__USER_ERROR_MSG "Driving context %.*s,%.*s contains invalid group %.*s"
+#define OB_ERR_INVALID_SEC_COLUMN_TYPE__USER_ERROR_MSG "Column %.*s in sec_relevant_cols cannot be of an object data type"
+#define OB_ERR_UNPROTECTED_VIRTUAL_COLUMN__USER_ERROR_MSG "A protected base column was referenced in an unprotected virtual column expression"
+#define OB_ERR_ATTRIBUTE_ASSOCIATION__USER_ERROR_MSG "Attribute association failed for policy %.*s"
+#define OB_ERR_MERGE_INTO_WITH_POLICY__USER_ERROR_MSG "The MERGE INTO syntax does not support the security policy"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -5455,6 +5509,33 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CLAUSE_RETURN_ILLEGAL__ORA_USER_ERROR_MSG "ORA-06547: RETURNING clause must be used with INSERT, UPDATE, or DELETE statements"
 #define OB_ERR_NAME_HAS_TOO_MANY_PARTS__ORA_USER_ERROR_MSG "ORA-06563: name has too many parts"
 #define OB_ERR_LOB_SPAN_TRANSACTION__ORA_USER_ERROR_MSG "ORA-22990: LOB locators cannot span transactions"
+#define OB_ERR_INVALID_MULTISET__ORA_USER_ERROR_MSG "ORA-22903: MULTISET expression not allowed"
+#define OB_ERR_INVALID_CAST_UDT__ORA_USER_ERROR_MSG "ORA-22907: invalid CAST to a type that is not a nested table or VARRAY"
+#define OB_ERR_POLICY_EXIST__ORA_USER_ERROR_MSG "ORA-28101: policy already exists"
+#define OB_ERR_POLICY_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-28102: policy does not exist"
+#define OB_ERR_ADD_POLICY_TO_SYS_OBJECT__ORA_USER_ERROR_MSG "ORA-28103: adding a policy to an object owned by SYS is not allowed"
+#define OB_ERR_INVALID_INPUT_STRING__ORA_USER_ERROR_MSG "ORA-28104: input value for %s is not valid"
+#define OB_ERR_SEC_COLUMN_ON_VIEW__ORA_USER_ERROR_MSG "ORA-28105: cannot create security relevant column policy in an object view"
+#define OB_ERR_INVALID_INPUT_FOR_ARGUMENT__ORA_USER_ERROR_MSG "ORA-28106: input value for argument %s is not valid"
+#define OB_ERR_POLICY_DISABLED__ORA_USER_ERROR_MSG "ORA-28107: policy was disabled"
+#define OB_ERR_CIRCULAR_POLICIES__ORA_USER_ERROR_MSG "ORA-28108: circular security policies detected"
+#define OB_ERR_TOO_MANY_POLICIES__ORA_USER_ERROR_MSG "ORA-28109: the number of related policies has exceeded the limit of 16"
+#define OB_ERR_POLICY_FUNCTION__ORA_USER_ERROR_MSG "ORA-28110: policy function or package %.*s.%.*s has error"
+#define OB_ERR_NO_PRIV_EVAL_PREDICATE__ORA_USER_ERROR_MSG "ORA-28111: insufficient privilege to evaluate policy predicate"
+#define OB_ERR_EXECUTE_POLICY_FUNCTION__ORA_USER_ERROR_MSG "ORA-28112: failed to execute policy function"
+#define OB_ERR_POLICY_PREDICATE__ORA_USER_ERROR_MSG "ORA-28113: policy predicate has error"
+#define OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS__ORA_USER_ERROR_MSG "ORA-28116: insufficient privileges to do direct path access"
+#define OB_ERR_INTEGRITY_CONSTRAINT_VIOLATED__ORA_USER_ERROR_MSG "ORA-28117: integrity constraint violated - parent record not found"
+#define OB_ERR_POLICY_GROUP_EXIST__ORA_USER_ERROR_MSG "ORA-28118: policy group already exists"
+#define OB_ERR_POLICY_GROUP_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-28119: policy group does not exist"
+#define OB_ERR_DRIVING_CONTEXT_EXIST__ORA_USER_ERROR_MSG "ORA-28120: driving context already exists"
+#define OB_ERR_DRIVING_CONTEXT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-28121: driving context does not exist"
+#define OB_ERR_UPDATE_DEFAULT_GROUP__ORA_USER_ERROR_MSG "ORA-28122: can not update SYS_DEFAULT policy group"
+#define OB_ERR_CONTEXT_CONTAIN_INVALID_GROUP__ORA_USER_ERROR_MSG "ORA-28123: Driving context %.*s,%.*s contains invalid group %.*s"
+#define OB_ERR_INVALID_SEC_COLUMN_TYPE__ORA_USER_ERROR_MSG "ORA-28124: Column %.*s in sec_relevant_cols cannot be of an object data type"
+#define OB_ERR_UNPROTECTED_VIRTUAL_COLUMN__ORA_USER_ERROR_MSG "ORA-28125: A protected base column was referenced in an unprotected virtual column expression"
+#define OB_ERR_ATTRIBUTE_ASSOCIATION__ORA_USER_ERROR_MSG "ORA-28126: Attribute association failed for policy %.*s"
+#define OB_ERR_MERGE_INTO_WITH_POLICY__ORA_USER_ERROR_MSG "ORA-28132: The MERGE INTO syntax does not support the security policy"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
