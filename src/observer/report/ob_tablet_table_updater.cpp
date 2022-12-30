@@ -38,19 +38,24 @@ int ObTabletTableUpdateTask::init(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
-    const int64_t add_timestamp)
+    const int64_t add_timestamp,
+    const int64_t add_task_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id)
       || !tablet_id.is_valid_with_tenant(tenant_id)
-      || 0 >= add_timestamp)) {
+      || 0 >= add_timestamp
+      || 0 > add_task_cnt)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("task init failed", KR(ret), K(tenant_id), K(ls_id), K(tablet_id), K(add_timestamp));
+    LOG_WARN("task init failed", KR(ret), K(tenant_id), K(ls_id), K(tablet_id),
+              K(add_timestamp), K(add_task_cnt));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     add_timestamp_ = add_timestamp;
+    add_task_cnt_ = add_task_cnt;
+
   }
   return ret;
 }
@@ -63,6 +68,7 @@ int ObTabletTableUpdateTask::assign(const ObTabletTableUpdateTask &other)
     ls_id_ = other.get_ls_id();
     tablet_id_ = other.get_tablet_id();
     add_timestamp_ = other.get_add_timestamp();
+    add_task_cnt_ = other.add_task_cnt_;
   }
   return ret;
 }
@@ -86,6 +92,7 @@ void ObTabletTableUpdateTask::reset()
   ls_id_.reset();
   tablet_id_.reset();
   add_timestamp_ = OB_INVALID_TIMESTAMP;
+  add_task_cnt_ = OB_INVALID_COUNT;
 }
 
 bool ObTabletTableUpdateTask::compare_without_version(
@@ -105,11 +112,21 @@ bool ObTabletTableUpdateTask::compare_without_version(
 void ObTabletTableUpdateTask::check_task_status() const
 {
   int64_t now = ObTimeUtility::current_time();
+  int64_t task_execute_time = 1 * 1000 * 1000;//1s
   const int64_t safe_interval = TABLET_CHECK_INTERVAL;
-  // need to print an error log if this task is not executed correctly since two minuts ago
+  // need to print a WARN log if this task is not executed correctly since two minuts ago
   if (now - add_timestamp_ > safe_interval) {
-    LOG_ERROR("tablet table update task cost too much time to execute",
+    LOG_WARN("tablet table update task cost too much time to execute",
               K(*this), K(safe_interval), "cost_time", now - add_timestamp_);
+  }
+
+  //Assuming that each task takes 1s to execute,
+  //an error is reported if the execution time of the current task minus the time of
+  //the previous task exceeds 2 minutes.
+  if (now - add_timestamp_ - task_execute_time * add_task_cnt_ > safe_interval) {
+    LOG_ERROR("tablet table update task cost too much time to execute",
+              K(*this), K(safe_interval), "cost_time", now - add_timestamp_,
+              K(add_task_cnt_));
   }
 }
 
@@ -119,7 +136,8 @@ bool ObTabletTableUpdateTask::is_valid() const
   return OB_INVALID_TENANT_ID != tenant_id_
       && ls_id_.is_valid_with_tenant(tenant_id_)
       && tablet_id_.is_valid_with_tenant(tenant_id_)
-      && 0 < add_timestamp_;
+      && 0 < add_timestamp_
+      && 0 <= add_task_cnt_;
 }
 
 bool ObTabletTableUpdateTask::is_barrier() const
@@ -204,6 +222,7 @@ int ObTabletTableUpdater::async_update(
 {
   int ret = OB_SUCCESS;
   int64_t add_timestamp = ObTimeUtility::current_time();
+  const int64_t task_cnt = update_queue_.task_count();
   ObTabletTableUpdateTask task;
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
@@ -221,9 +240,9 @@ int ObTabletTableUpdater::async_update(
   } else if (OB_FAIL(task.init(tenant_id,
                                ls_id,
                                tablet_id,
-                               add_timestamp))) {
+                               add_timestamp, task_cnt))) {
     LOG_WARN("set update task failed", KR(ret), K(tenant_id), K(ls_id), K(tablet_id),
-             K(add_timestamp));
+             K(add_timestamp), K(task_cnt));
   } else if (OB_FAIL(add_task_(task))){
     LOG_WARN("fail to add task", KR(ret), K(tenant_id), K(ls_id), K(tablet_id),
              K(add_timestamp));
