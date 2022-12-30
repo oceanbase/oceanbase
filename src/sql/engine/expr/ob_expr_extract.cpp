@@ -149,7 +149,6 @@ int ObExprExtract::calc(T &result,
   if (date.is_null()) {
     result.set_null();
   } else {
-    int ret = OB_SUCCESS;
     int warning = OB_SUCCESS;
     int &cast_ret = CM_IS_ERROR_ON_FAIL(cast_mode) ? ret : warning;
 
