@@ -1267,6 +1267,8 @@ int ObCopySSTableInfoRestoreReader::get_backup_sstable_metas_(
   share::ObBackupDataType data_type;
   ObArray<backup::ObBackupSSTableMeta> backup_sstable_meta_array;
 
+  backup_sstable_meta_array_.reset();
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("copy sstable info restore reader get invalid argument", K(ret), K(tablet_id));
