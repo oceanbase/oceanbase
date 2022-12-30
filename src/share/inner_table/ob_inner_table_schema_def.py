@@ -13499,20 +13499,20 @@ def_table_schema(
     RESTORE_SCN,
     CASE
       WHEN RESTORE_SCN IS NULL
-        THEN ''
+        THEN NULL
       WHEN RESTORE_SCN=0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(RESTORE_SCN)
       END AS RESTORE_SCN_DISPLAY,
     STATUS,
     CASE
       WHEN START_TIMESTAMP IS NULL
-        THEN ''
+        THEN NULL
       WHEN START_TIMESTAMP=''
-        THEN ''
+        THEN NULL
       WHEN START_TIMESTAMP='0'
-        THEN ''
+        THEN NULL
       ELSE 
         USEC_TO_TIME(START_TIMESTAMP)
       END AS START_TIMESTAMP,
@@ -13596,7 +13596,7 @@ def_table_schema(
     RESTORE_SCN,
     CASE
       WHEN RESTORE_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(RESTORE_SCN)
       END AS RESTORE_SCN_DISPLAY,
@@ -13986,14 +13986,14 @@ def_table_schema(
     START_SCN,
     CASE
       WHEN START_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
@@ -14056,7 +14056,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE
       WHEN END_TS = 0
-          THEN ''
+          THEN NULL
       ELSE
           USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -14072,14 +14072,14 @@ def_table_schema(
     START_REPLAY_SCN,
     CASE 
       WHEN START_REPLAY_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(START_REPLAY_SCN) 
       END AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
     CASE 
     WHEN MIN_RESTORE_SCN = 0
-      THEN ''
+      THEN NULL
     ELSE 
       SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
     END AS MIN_RESTORE_SCN_DISPLAY,
@@ -14336,7 +14336,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -14374,7 +14374,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -14405,7 +14405,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -14456,7 +14456,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -19660,7 +19660,7 @@ def_table_schema(
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE 
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
@@ -19695,7 +19695,7 @@ def_table_schema(
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE 
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
@@ -19729,7 +19729,7 @@ def_table_schema(
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE 
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
@@ -19764,7 +19764,7 @@ def_table_schema(
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE 
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
@@ -20516,7 +20516,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -20556,7 +20556,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -20589,7 +20589,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -20642,7 +20642,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -20697,7 +20697,7 @@ def_table_schema(
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE
       WHEN END_TS = 0
-          THEN ''
+          THEN NULL
       ELSE
           USEC_TO_TIME(END_TS) 
       END AS END_TIMESTAMP,
@@ -20713,14 +20713,14 @@ def_table_schema(
     START_REPLAY_SCN,
     CASE 
       WHEN START_REPLAY_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(START_REPLAY_SCN) 
       END AS START_REPLAY_SCN_DISPLAY,
     MIN_RESTORE_SCN,
     CASE 
     WHEN MIN_RESTORE_SCN = 0
-      THEN ''
+      THEN NULL
     ELSE 
       SCN_TO_TIMESTAMP(MIN_RESTORE_SCN)
     END AS MIN_RESTORE_SCN_DISPLAY,
@@ -21210,7 +21210,7 @@ def_table_schema(
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE 
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
@@ -21247,7 +21247,7 @@ def_table_schema(
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE 
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
@@ -21283,7 +21283,7 @@ def_table_schema(
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE 
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
@@ -21320,7 +21320,7 @@ def_table_schema(
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE 
           USEC_TO_TIME(END_TS)
         END AS END_TIMESTAMP,
@@ -21420,20 +21420,20 @@ def_table_schema(
     RESTORE_SCN,
     CASE
       WHEN RESTORE_SCN IS NULL
-        THEN ''
+        THEN NULL
       WHEN RESTORE_SCN=0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(RESTORE_SCN)
       END AS RESTORE_SCN_DISPLAY,
     STATUS,
     CASE
       WHEN START_TIMESTAMP IS NULL
-        THEN ''
+        THEN NULL
       WHEN START_TIMESTAMP=''
-        THEN ''
+        THEN NULL
       WHEN START_TIMESTAMP='0'
-        THEN ''
+        THEN NULL
       ELSE 
         USEC_TO_TIME(START_TIMESTAMP)
       END AS START_TIMESTAMP,
@@ -21518,7 +21518,7 @@ def_table_schema(
     RESTORE_SCN,
     CASE
       WHEN RESTORE_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(RESTORE_SCN)
       END AS RESTORE_SCN_DISPLAY,
@@ -21604,14 +21604,14 @@ def_table_schema(
     START_SCN,
     CASE
       WHEN START_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
@@ -21698,14 +21698,14 @@ def_table_schema(
     START_SCN,
     CASE
       WHEN START_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
@@ -21836,14 +21836,14 @@ def_table_schema(
     START_SCN,
     CASE
       WHEN START_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
@@ -21947,14 +21947,14 @@ def_table_schema(
     START_SCN,
     CASE
       WHEN START_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
@@ -22040,14 +22040,14 @@ def_table_schema(
     START_SCN,
     CASE
       WHEN START_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(START_SCN)
       END AS START_SCN_DISPLAY,
     CHECKPOINT_SCN,
     CASE
       WHEN CHECKPOINT_SCN = 0
-        THEN ''
+        THEN NULL
       ELSE 
         SCN_TO_TIMESTAMP(CHECKPOINT_SCN)
       END AS CHECKPOINT_SCN_DISPLAY,
@@ -38454,7 +38454,7 @@ def_table_schema(
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
       END AS END_TIMESTAMP,
@@ -38496,7 +38496,7 @@ def_table_schema(
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
       END AS END_TIMESTAMP,
@@ -38531,7 +38531,7 @@ def_table_schema(
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
       END AS END_TIMESTAMP,
@@ -38586,7 +38586,7 @@ def_table_schema(
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
     CASE 
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
       END AS END_TIMESTAMP,
@@ -38643,7 +38643,7 @@ def_table_schema(
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
     CASE
       WHEN END_TS = 0
-        THEN ''
+        THEN NULL
       ELSE
         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
       END AS END_TIMESTAMP,
@@ -38975,7 +38975,7 @@ def_table_schema(
       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE
           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
         END AS END_TIMESTAMP,
@@ -39014,7 +39014,7 @@ def_table_schema(
       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE
           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
         END AS END_TIMESTAMP,
@@ -39052,7 +39052,7 @@ def_table_schema(
       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE
           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
         END AS END_TIMESTAMP,
@@ -39091,7 +39091,7 @@ def_table_schema(
       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
       CASE
         WHEN END_TS = 0
-          THEN ''
+          THEN NULL
         ELSE
           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') 
         END AS END_TIMESTAMP,
@@ -39139,11 +39139,11 @@ def_table_schema(
     STATUS, 
     CASE
       WHEN START_TIMESTAMP IS NULL
-        THEN ''
+        THEN NULL
       WHEN START_TIMESTAMP=''
-        THEN ''
+        THEN NULL
       WHEN START_TIMESTAMP='0'
-        THEN ''
+        THEN NULL
       ELSE 
         TO_CHAR(TO_NUMBER(START_TIMESTAMP) / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
       END AS START_TIMESTAMP,
