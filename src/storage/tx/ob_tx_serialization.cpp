@@ -59,6 +59,20 @@ int ObTxSerCompatByte::init(int64_t total_object_count)
   return ret;
 }
 
+int ObTxSerCompatByte::set_all_member_need_ser()
+{
+  int ret = OB_SUCCESS;
+
+  if (total_obj_cnt_ <= 0 || total_byte_cnt_ <= 0) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "compat bytes have not been inited", K(ret), KPC(this));
+  } else {
+    init_all_bytes_valid_(total_byte_cnt_);
+  }
+
+  return ret;
+}
+
 int ObTxSerCompatByte::set_object_flag(int64_t object_index, bool is_valid)
 {
   int ret = OB_SUCCESS;

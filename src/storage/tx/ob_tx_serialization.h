@@ -37,6 +37,8 @@ public:
   ObTxSerCompatByte() { reset(); }
   void reset();
   int init(int64_t total_object_count);
+  bool is_inited() { return total_byte_cnt_ > 0 && total_obj_cnt_ > 0; }
+  int set_all_member_need_ser();
   int set_object_flag(int64_t object_index, bool is_valid);
   bool is_object_valid(int64_t object_index) const;
 
