@@ -26,6 +26,7 @@
 #include "storage/memtable/ob_multi_source_data.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
+#include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
 
 namespace oceanbase
 {
@@ -167,7 +168,7 @@ public:
   virtual ~ObMemtable();
 public:
   int init(const ObITable::TableKey &table_key,
-           storage::ObLS *ls,
+           ObLSHandle &ls_handle,
            storage::ObFreezer *freezer,
            storage::ObTabletMemtableMgr *memtable_mgr,
            const int64_t schema_version,
@@ -521,7 +522,7 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
   bool is_inited_;
-  storage::ObLS *ls_;
+  storage::ObLSHandle ls_handle_;
   storage::ObFreezer *freezer_;
   storage::ObTabletMemtableMgr *memtable_mgr_;
   uint32_t freeze_clock_;

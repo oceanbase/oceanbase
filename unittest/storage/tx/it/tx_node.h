@@ -26,6 +26,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/lock/ob_scond.h"
+#include "storage/tx_storage/ob_ls_map.h"
 
 #include "../mock_utils/msg_bus.h"
 #include "../mock_utils/basic_fake_define.h"
@@ -270,6 +271,7 @@ public:
   ObTabletMemtableMgr fake_memtable_mgr_;
   storage::ObLS mock_ls_; // TODO mock required member on LS
   common::hash::ObHashSet<int16_t> drop_msg_type_set_;
+  ObLSMap fake_ls_map_;
 };
 
 } // transaction

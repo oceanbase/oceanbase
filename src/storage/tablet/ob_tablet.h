@@ -803,8 +803,9 @@ int ObTablet::save_multi_source_data_unit(
     ret = common::OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "ls inner tablet does not support multi source data", K(ret), K(tablet_id));
   } else if (is_callback) {
+    ObTableHandleV2 handle;
     memtable::ObMemtable *memtable = nullptr;
-    if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(memtable, msd->type()))) {
+    if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(handle, msd->type()))) {
       if (OB_ENTRY_NOT_EXIST == ret && for_replay) {
         TRANS_LOG(INFO, "clog_checkpoint_scn of ls is bigger than the commit_info scn of this multi-trans in replay, failed to get multi source data unit",
                   K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
@@ -814,6 +815,8 @@ int ObTablet::save_multi_source_data_unit(
       } else {
         TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
       }
+    } else if (OB_FAIL(handle.get_data_memtable(memtable))) {
+      TRANS_LOG(WARN, "fail to get memtable", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op, is_callback))) {
       TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
     }
@@ -821,9 +824,12 @@ int ObTablet::save_multi_source_data_unit(
   // for tx_end(inf_ref), binding_info must be prepared after tablet_state is prepared
   else if (memtable::MemtableRefOp::INC_REF == ref_op
            && memtable::MultiSourceDataUnitType::TABLET_BINDING_INFO == msd->type()) {
+    ObTableHandleV2 handle;
     memtable::ObMemtable *memtable = nullptr;
-    if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(memtable, memtable::MultiSourceDataUnitType::TABLET_TX_DATA))) {
+    if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(handle, memtable::MultiSourceDataUnitType::TABLET_TX_DATA))) {
       TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
+    } else if (OB_FAIL(handle.get_data_memtable(memtable))) {
+      TRANS_LOG(WARN, "[Freezer] fail to get memtable", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op/*add_ref*/, is_callback/*false*/))) {
       TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
     }

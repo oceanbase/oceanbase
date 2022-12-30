@@ -45,6 +45,7 @@ class ObLSTxService;
 class ObLSTabletService;
 class ObTablet;
 class ObLSWRSHandler;
+class ObTableHandleV2;
 namespace checkpoint
 {
 class ObDataCheckpoint;
@@ -198,8 +199,8 @@ public:
   int logstream_freeze(ObFuture<int> *result = nullptr);
   int tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
   int force_tablet_freeze(const ObTabletID &tablet_id);
-  int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *&imemtable);
-  int handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *imemtable);
+  int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, ObTableHandleV2 &handle);
+  int handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &tablet_id, ObTableHandleV2 &handle);
 
   /* freeze_flag */
   bool is_freeze(uint32_t is_freeze=UINT32_MAX) const;
@@ -275,8 +276,8 @@ private:
   int inner_logstream_freeze(ObFuture<int> *result);
   int submit_log_for_freeze();
   int ls_freeze_task();
-  int tablet_freeze_task(memtable::ObIMemtable *imemtable);
-  int submit_freeze_task(bool is_ls_freeze, ObFuture<int> *result, memtable::ObIMemtable *imemtable = nullptr);
+  int tablet_freeze_task(ObTableHandleV2 handle);
+  int submit_freeze_task(const bool is_ls_freeze, ObFuture<int> *result, ObTableHandleV2 &handle);
   void wait_memtable_ready_for_flush(memtable::ObMemtable *memtable);
   int wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable);
   int handle_memtable_for_tablet_freeze(memtable::ObIMemtable *imemtable);
