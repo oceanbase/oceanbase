@@ -24,6 +24,14 @@ extern "C" {
 #endif
 extern int obpl_parser_init(ObParseCtx *parse_ctx);
 extern int obpl_parser_parse(ObParseCtx *parse_ctx);
+int obpl_parser_check_stack_overflow() {
+  int ret = OB_SUCCESS;
+  bool is_overflow = true;
+  if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow status", K(ret));
+  }
+  return is_overflow;
+}
 #ifdef __cplusplus
 }
 #endif
