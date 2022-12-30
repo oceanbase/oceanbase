@@ -248,7 +248,7 @@ public:
       ObIAllocator *allocator = nullptr) const;
 
   virtual int get_memtable_for_multi_source_data_unit(
-      memtable::ObMemtable *&memtable,
+      ObTableHandleV2 &handle,
       const memtable::MultiSourceDataUnitType type) const;
 
   int release_memtables(const share::SCN &scn);
