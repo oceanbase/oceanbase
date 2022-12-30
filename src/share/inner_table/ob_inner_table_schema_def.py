@@ -5147,6 +5147,7 @@ def_table_schema(
 # 429 : __all_arbitration_service
 # 430 : __all_arbitration_service_replica_task
 # 431 : __all_meta_dictionary_location;
+
 # 432 : __all_arbitration_service_replica_task_history
 
 # 433 : __all_tenant_rls_policy
@@ -5159,7 +5160,36 @@ def_table_schema(
 # 440 : __all_tenant_rls_context_history
 # 441 : __all_tenant_rls_attribute
 # 442 : __all_tenant_rls_attribute_history
-# 443 : __all_tenant_rewrite_rules
+
+def_table_schema(
+  owner = 'luofan.zp',
+  table_name    = '__all_tenant_rewrite_rules',
+  table_id      = '443',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('rule_name', 'varchar:OB_MAX_ORIGINAL_NANE_LENGTH'),
+  ],
+
+  in_tenant_space = True,
+  is_cluster_private = False,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('rule_id', 'int'),
+    ('pattern', 'longtext'),
+    ('db_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
+    ('replacement', 'longtext'),
+    ('normalized_pattern', 'longtext'),
+    ('status', 'int'),
+    ('version', 'int'),
+    ('pattern_digest', 'uint'),
+    ('fixed_param_infos', 'longtext', 'false', ''),
+    ('dynamic_param_infos', 'longtext', 'false', ''),
+    ('def_name_ctx_str', 'longtext', 'false', '')
+  ],
+)
 
 # 444 : __all_reserved_snapshot
 def_table_schema(
@@ -5754,6 +5784,7 @@ def_table_schema(
       ('pl_schema_id', 'uint'),
       ('is_batched_multi_stmt', 'bool'),
       ('object_status', 'int'),
+      ('rule_name', 'varchar:256'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -6379,7 +6410,8 @@ def_table_schema(
     ('plan_hash', 'uint'),
     ('user_group', 'int', 'true'),
     ('lock_for_read_time', 'bigint'),
-    ('params_value', 'longtext')
+    ('params_value', 'longtext'),
+    ('rule_name', 'varchar:256')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -11223,7 +11255,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_ke
 # 15278: all_virtual_tenant_rls_group_real_agent
 # 15279: all_virtual_tenant_rls_context_real_agent
 # 15280: all_virtual_tenant_rls_attribute_real_agent
-# def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
+
 # 15282: ALL_VIRTUAL_TENANT_SYS_AGENT
 # 15283: __all_virtual_tenant_info_agent
 
@@ -11273,7 +11306,15 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-    SELECT TENANT_ID,SVR_IP,SVR_PORT,PLAN_ID,SQL_ID,TYPE,IS_BIND_SENSITIVE,IS_BIND_AWARE,DB_ID,STATEMENT,QUERY_SQL,SPECIAL_PARAMS,PARAM_INFOS, SYS_VARS, CONFIGS, PLAN_HASH,FIRST_LOAD_TIME,SCHEMA_VERSION,LAST_ACTIVE_TIME,AVG_EXE_USEC,SLOWEST_EXE_TIME,SLOWEST_EXE_USEC,SLOW_COUNT,HIT_COUNT,PLAN_SIZE,EXECUTIONS,DISK_READS,DIRECT_WRITES,BUFFER_GETS,APPLICATION_WAIT_TIME,CONCURRENCY_WAIT_TIME,USER_IO_WAIT_TIME,ROWS_PROCESSED,ELAPSED_TIME,CPU_TIME,LARGE_QUERYS,DELAYED_LARGE_QUERYS,DELAYED_PX_QUERYS,OUTLINE_VERSION,OUTLINE_ID,OUTLINE_DATA,ACS_SEL_INFO,TABLE_SCAN,EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID, TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID, IS_BATCHED_MULTI_STMT
+    SELECT TENANT_ID,SVR_IP,SVR_PORT,PLAN_ID,SQL_ID,TYPE,IS_BIND_SENSITIVE,IS_BIND_AWARE,
+    DB_ID,STATEMENT,QUERY_SQL,SPECIAL_PARAMS,PARAM_INFOS, SYS_VARS, CONFIGS, PLAN_HASH,
+    FIRST_LOAD_TIME,SCHEMA_VERSION,LAST_ACTIVE_TIME,AVG_EXE_USEC,SLOWEST_EXE_TIME,SLOWEST_EXE_USEC,
+    SLOW_COUNT,HIT_COUNT,PLAN_SIZE,EXECUTIONS,DISK_READS,DIRECT_WRITES,BUFFER_GETS,APPLICATION_WAIT_TIME,
+    CONCURRENCY_WAIT_TIME,USER_IO_WAIT_TIME,ROWS_PROCESSED,ELAPSED_TIME,CPU_TIME,LARGE_QUERYS,
+    DELAYED_LARGE_QUERYS,DELAYED_PX_QUERYS,OUTLINE_VERSION,OUTLINE_ID,OUTLINE_DATA,ACS_SEL_INFO,
+    TABLE_SCAN,EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID,
+    TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
+    IS_BATCHED_MULTI_STMT, RULE_NAME
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0
 """.replace("\n", " "),
 
@@ -12178,7 +12219,8 @@ def_table_schema(
                          ob_trace_info as OB_TRACE_INFO,
                          plan_hash as PLAN_HASH,
                          lock_for_read_time as LOCK_FOR_READ_TIME,
-                         params_value as PARAMS_VALUE
+                         params_value as PARAMS_VALUE,
+                         rule_name as RULE_NAME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -23445,7 +23487,32 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 21340:  DBA_OB_USER_DEFINED_RULES
+def_table_schema(
+    owner = 'luofan.zp',
+    table_name     = 'DBA_OB_USER_DEFINED_RULES',
+    table_id       = '21340',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """SELECT
+      CAST(T.DB_NAME AS CHAR(128)) AS DB_NAME,
+      CAST(T.RULE_NAME AS CHAR(256)) AS RULE_NAME,
+      CAST(T.RULE_ID AS SIGNED) AS RULE_ID,
+      PATTERN,
+      REPLACEMENT,
+      NORMALIZED_PATTERN,
+      CAST(CASE STATUS WHEN 1 THEN 'ENABLE'
+                      WHEN 2 THEN 'DISABLE'
+                      ELSE NULL END AS CHAR(10)) AS STATUS,
+      CAST(T.VERSION AS SIGNED) AS VERSION,
+      CAST(T.PATTERN_DIGEST AS UNSIGNED) AS PATTERN_DIGEST
+    FROM
+      oceanbase.__all_tenant_rewrite_rules T
+    WHERE T.STATUS != 3
+""".replace("\n", " ")
+)
 
 # 21341: GV$OB_SQL_PLAN
 # 21342: V$OB_SQL_PLAN
@@ -40220,7 +40287,8 @@ def_table_schema(
                          is_batched_multi_stmt as IS_BATCHED_MULTI_STMT,
                          ob_trace_info as OB_TRACE_INFO,
                          plan_hash as PLAN_HASH,
-                         params_value as PARAMS_VALUE
+                         params_value as PARAMS_VALUE,
+                         rule_name as RULE_NAME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -45121,7 +45189,36 @@ FROM (
 # 28159: GV$OB_TRANSACTION_SCHEDULERS
 # 28160: V$OB_TRANSACTION_SCHEDULERS
 
-# 28171: DBA_OB_USER_DEFINED_RULES
+def_table_schema(
+  owner           = 'luofan.zp',
+  table_name      = 'DBA_OB_USER_DEFINED_RULES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28171',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      CAST(T.DB_NAME AS VARCHAR2(128)) AS DB_NAME,
+      CAST(T.RULE_NAME AS VARCHAR2(256)) AS RULE_NAME,
+      CAST(T.RULE_ID AS NUMBER) AS RULE_ID,
+      PATTERN,
+      REPLACEMENT,
+      NORMALIZED_PATTERN,
+      CAST(CASE WHEN STATUS = 1 THEN 'ENABLE'
+                WHEN STATUS = 2 THEN 'DISABLE'
+                ELSE NULL END AS VARCHAR2(8)) AS STATUS,
+      CAST(T.VERSION AS NUMBER) AS VERSION,
+      CAST(T.PATTERN_DIGEST AS NUMBER) AS PATTERN_DIGEST
+    FROM
+      SYS.ALL_VIRTUAL_TENANT_REWRITE_RULES_REAL_AGENT T
+    WHERE T.STATUS != 3
+  """.replace("\n", " "),
+)
 
 # 28172: GV$OB_SQL_PLAN
 # 28173: V$OB_SQL_PLAN

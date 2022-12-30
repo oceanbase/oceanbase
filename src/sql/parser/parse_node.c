@@ -751,6 +751,26 @@ int64_t get_question_mark(ObQuestionMarkCtx *ctx, void *malloc_pool, const char 
   return idx;
 }
 
+int64_t get_question_mark_by_defined_name(ObQuestionMarkCtx *ctx, const char *name)
+{
+  int64_t idx = -1;
+  if (OB_UNLIKELY(NULL == ctx || NULL == name)) {
+    (void)fprintf(stderr, "ERROR question mark ctx or name is NULL\n");
+  } else if (ctx->name_ != NULL) {
+    for (int64_t i = 0; -1 == idx && i < ctx->count_; ++i) {
+      if (NULL == ctx->name_[i]) {
+        (void)fprintf(stderr, "ERROR name_ in question mark ctx is null\n");
+      } else if (0 == STRCASECMP(ctx->name_[i], name)) {
+        idx = i;
+        break;
+      }
+    }
+  } else {
+    (void)fprintf(stderr, "ERROR name_ in question mark ctx is null\n");
+  }
+  return idx;
+}
+
 ParserLinkNode *new_link_node(void *malloc)
 {
   ParserLinkNode *new_node = (ParserLinkNode *)parse_malloc(sizeof(ParserLinkNode), malloc);

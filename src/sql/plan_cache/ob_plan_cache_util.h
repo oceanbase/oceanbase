@@ -490,6 +490,10 @@ struct ObPlanStat
   common::ObString config_str_;
   common::ObString raw_sql_; //记录生成plan时的原始sql
   common::ObCollationType sql_cs_type_;
+  common::ObString rule_name_;
+  bool is_rewrite_sql_;
+  int64_t rule_version_; // the rule version when query rewrite generates a plan
+  bool enable_udr_;
   //******** for spm ******
   //该计划是否正在演进过程中
   bool is_evolution_;
@@ -589,6 +593,10 @@ struct ObPlanStat
       outline_id_(common::OB_INVALID_ID),
       is_last_exec_succ_(true),
       sql_cs_type_(common::CS_TYPE_INVALID),
+      rule_name_(),
+      is_rewrite_sql_(false),
+      rule_version_(OB_INVALID_VERSION),
+      enable_udr_(false),
       is_evolution_(false),
       db_id_(common::OB_INVALID_ID),
       constructed_sql_(),
@@ -660,6 +668,10 @@ struct ObPlanStat
       outline_id_(rhs.outline_id_),
       is_last_exec_succ_(rhs.is_last_exec_succ_),
       sql_cs_type_(rhs.sql_cs_type_),
+      rule_name_(),
+      is_rewrite_sql_(false),
+      rule_version_(OB_INVALID_VERSION),
+      enable_udr_(false),
       is_evolution_(rhs.is_evolution_),
       db_id_(rhs.db_id_),
       evolution_stat_(rhs.evolution_stat_),

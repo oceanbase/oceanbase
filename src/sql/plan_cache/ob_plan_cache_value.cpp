@@ -24,6 +24,8 @@
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_plan_set.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/udr/ob_udr_mgr.h"
+#include "sql/udr/ob_udr_utils.h"
 #include "share/ob_duplicate_scope_define.h"
 #include "pl/ob_pl_stmt.h"
 using namespace oceanbase::share::schema;
@@ -154,6 +156,42 @@ ObPlanCacheValue::ObPlanCacheValue()
   MEMSET(sql_id_, 0, sizeof(sql_id_));
 }
 
+int ObPlanCacheValue::assign_udr_infos(ObPlanCacheCtx &pc_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dynamic_param_list_.assign(pc_ctx.dynamic_param_info_list_))) {
+    LOG_WARN("fail to assign dynamic param info list", K(ret));
+  } else if (OB_FAIL(tpl_sql_const_cons_.assign(pc_ctx.tpl_sql_const_cons_))) {
+    LOG_WARN("failed to assign tpl sql const cons", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tpl_sql_const_cons_.count(); ++i) {
+      NotParamInfoList &not_param_list = tpl_sql_const_cons_.at(i);
+      std::sort(not_param_list.begin(), not_param_list.end(),
+              [](NotParamInfo &l, NotParamInfo &r) { return (l.idx_  < r.idx_); });
+      for (int64_t j = 0; OB_SUCC(ret) && j < not_param_list.count(); ++j) {
+        if (OB_FAIL(ob_write_string(*pc_alloc_,
+                                   not_param_list.at(j).raw_text_,
+                                   not_param_list.at(j).raw_text_))) {
+          LOG_WARN("deep_copy_obj failed", K(i), K(not_param_list.at(j)));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ObPlanCacheValue::reset_tpl_sql_const_cons()
+{
+  for (int64_t i = 0; i < tpl_sql_const_cons_.count(); ++i) {
+    NotParamInfoList &not_param_list = tpl_sql_const_cons_.at(i);
+    for (int64_t j = 0; j < not_param_list.count(); ++j) {
+      pc_alloc_->free(not_param_list.at(j).raw_text_.ptr());
+      not_param_list.at(j).raw_text_.reset();
+    }
+  }
+  tpl_sql_const_cons_.reset();
+}
+
 int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj, ObPlanCacheCtx &pc_ctx)
 {
   int ret = OB_SUCCESS;
@@ -207,6 +245,8 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
                                               pc_ctx.sql_ctx_.schema_guard_))) {
       LOG_WARN("failed to set stored schema objs",
                K(ret), K(plan->get_dependency_table()), K(pc_ctx.sql_ctx_.schema_guard_));
+    } else if (OB_FAIL(assign_udr_infos(pc_ctx))) {
+      LOG_WARN("failed to assign user-defined rule infos", K(ret));
     } else {
       //deep copy special param raw text
       if (pc_ctx.is_ps_mode_) {
@@ -230,6 +270,10 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
             LOG_WARN("fail to deep copy param raw text", K(ret));
           }
         } //for end
+        if (OB_SUCC(ret)) {
+          std::sort(not_param_info_.begin(), not_param_info_.end(),
+              [](NotParamInfo &l, NotParamInfo &r) { return (l.idx_  < r.idx_); });
+        }
       }
       //deep copy constructed sql
       if (OB_SUCC(ret)) {
@@ -428,6 +472,13 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
     } else if (OB_FAIL(resolve_multi_stmt_params(pc_ctx))) {
       if (OB_BATCHED_MULTI_STMT_ROLLBACK != ret) {
         LOG_WARN("failed to resolver row params", K(ret));
+      }
+    }
+    // cons user-defined rule param store
+    if (OB_SUCC(ret)) {
+      ParamStore param_store( (ObWrapperAllocator(pc_ctx.allocator_)) );
+      if (OB_FAIL(ObUDRUtils::cons_udr_param_store(dynamic_param_list_, pc_ctx, param_store))) {
+        LOG_WARN("failed to construct user-defined rule param store", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -792,6 +843,54 @@ int  ObPlanCacheValue::check_not_param_value(const ObFastParserResult &fp_result
   return ret;
 }
 
+int ObPlanCacheValue::cmp_not_param_info(const NotParamInfoList &l_param_info_list,
+                                         const NotParamInfoList &r_param_info_list,
+                                         bool &is_equal)
+{
+  int ret = OB_SUCCESS;
+  is_equal = true;
+  if (l_param_info_list.count() != r_param_info_list.count()) {
+    is_equal = false;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_equal && i < l_param_info_list.count(); ++i) {
+      const NotParamInfo &l_param_info = l_param_info_list.at(i);
+      const NotParamInfo &r_param_info = r_param_info_list.at(i);
+      if (l_param_info.idx_ != r_param_info.idx_) {
+        is_equal = false;
+        LOG_DEBUG("compare not param info", K(l_param_info), K(r_param_info));
+      } else if (0 != l_param_info.raw_text_.compare(r_param_info.raw_text_)) {
+        is_equal = false;
+        LOG_DEBUG("compare not param info", K(l_param_info), K(r_param_info));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPlanCacheValue::check_tpl_sql_const_cons(const ObFastParserResult &fp_result,
+                                               const TplSqlConstCons &tpl_cst_cons_list,
+                                               bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = false;
+  bool is_match_tpl_cst_cons = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !is_match_tpl_cst_cons && i < tpl_cst_cons_list.count(); ++i) {
+    const NotParamInfoList &not_param_list = tpl_cst_cons_list.at(i);
+    if (OB_FAIL(check_not_param_value(fp_result, not_param_list, is_match_tpl_cst_cons))) {
+      LOG_WARN("failed to check not param value", K(ret));
+    } else if (is_match_tpl_cst_cons
+      && OB_FAIL(cmp_not_param_info(not_param_list, not_param_info_, is_same))) {
+      LOG_WARN("failed to cmp not param info", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && !is_match_tpl_cst_cons && !is_same) {
+    if (OB_FAIL(check_not_param_value(fp_result, not_param_info_, is_same))) {
+      LOG_WARN("failed to check not param value", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObPlanCacheValue::get_outline_param_index(ObExecContext &exec_ctx, int64_t &param_idx) const
 {
   int ret = OB_SUCCESS;
@@ -1091,6 +1190,7 @@ void ObPlanCacheValue::reset()
   neg_param_index_.reset();
   param_charset_type_.reset();
   sql_traits_.reset();
+  reset_tpl_sql_const_cons();
 
   if (OB_SUCCESS != outline_params_wrapper_.destroy()) {
     LOG_ERROR("fail to destroy ObOutlineParamWrapper");
@@ -1338,10 +1438,10 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
       LOG_DEBUG("match", K(not_param_var_[i].idx_), K(not_param_var_[i].ps_param_), KPC(ps_param));
     }
   } else {
-     if (OB_FAIL(check_not_param_value(pc_ctx.fp_result_,
-                                              not_param_info_,
-                                              is_same))) {
-      LOG_WARN("failed to check not param value", K(ret));
+     if (OB_FAIL(check_tpl_sql_const_cons(pc_ctx.fp_result_,
+                                          tpl_sql_const_cons_,
+                                          is_same))) {
+      LOG_WARN("failed to check tpl sql const cons", K(ret));
     }
   }
 

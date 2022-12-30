@@ -216,6 +216,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 412	__all_service_epoch	0	201001	1
 413	__all_spatial_reference_systems	0	201001	1
 416	__all_column_checksum_error_info	0	201001	1
+443	__all_tenant_rewrite_rules	0	201001	1
 445	__all_cluster_event_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -818,6 +819,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21337	CDB_OB_USERS	1	201001	1
 21338	DBA_OB_DATABASE_PRIVILEGE	1	201001	1
 21339	CDB_OB_DATABASE_PRIVILEGE	1	201001	1
+21340	DBA_OB_USER_DEFINED_RULES	1	201001	1
 21345	DBA_OB_CLUSTER_EVENT_HISTORY	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success

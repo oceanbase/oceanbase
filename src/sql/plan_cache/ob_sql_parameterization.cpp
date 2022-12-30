@@ -63,6 +63,7 @@ struct TransformTreeCtx
   SQL_EXECUTION_MODE mode_;
   bool is_project_list_scope_;
   int64_t assign_father_level_;
+  const ObIArray<FixedParamValue> *udr_fixed_params_;
   bool ignore_scale_check_;
   TransformTreeCtx();
 };
@@ -123,6 +124,7 @@ TransformTreeCtx::TransformTreeCtx() :
  mode_(INVALID_MODE),
  is_project_list_scope_(false),
  assign_father_level_(ObSqlParameterization::NO_VALUES),
+ udr_fixed_params_(NULL),
  ignore_scale_check_(false)
 {
 }
@@ -138,7 +140,8 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
                                                  SelectItemParamInfoArray *select_item_param_infos,
                                                  ObMaxConcurrentParam::FixParamStore &fixed_param_store,
                                                  bool is_transform_outline,
-                                                 SQL_EXECUTION_MODE execution_mode)
+                                                 SQL_EXECUTION_MODE execution_mode,
+                                                 const ObIArray<FixedParamValue> *udr_fixed_params)
 {
   int ret = OB_SUCCESS;
   ObCollationType collation_connection = CS_TYPE_INVALID;
@@ -173,6 +176,7 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
     ctx.paramlized_questionmask_count_ = 0;//used for outline sql限流，
     ctx.is_transform_outline_ = is_transform_outline;//used for outline sql限流
     ctx.raw_params_ = raw_params;
+    ctx.udr_fixed_params_ = udr_fixed_params;
     ctx.is_project_list_scope_ = false;
     ctx.mode_ = execution_mode;
     ctx.assign_father_level_ = NO_VALUES;
@@ -253,6 +257,23 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx &ctx)
     }
   }
   return ret;
+}
+
+bool ObSqlParameterization::is_udr_not_param(TransformTreeCtx &ctx)
+{
+  bool b_ret = false;
+  if (OB_ISNULL(ctx.tree_) || (NULL == ctx.udr_fixed_params_)) {
+    b_ret = false;
+  } else {
+    for (int64_t i = 0; !b_ret && i < ctx.udr_fixed_params_->count(); ++i) {
+      const FixedParamValue &fixed_param = ctx.udr_fixed_params_->at(i);
+      if (fixed_param.idx_ == ctx.tree_->raw_param_idx_) {
+        b_ret = true;
+        break;
+      }
+    }
+  }
+  return b_ret;
 }
 
 //判断该node是否为不能参数化的node
@@ -598,9 +619,11 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
               //do nothing
             } else if (!is_execute_mode(ctx.mode_) && OB_FAIL(ctx.params_->push_back(value))) {
               SQL_PC_LOG(WARN, "fail to push into params", K(ret));
+            } else if (is_udr_not_param(ctx) && OB_FAIL(add_not_param_flag(ctx.tree_, *ctx.sql_info_))) {
+              SQL_PC_LOG(WARN, "fail to add not param flag", K(ret));
             }
           }
-        } else if (add_not_param_flag(ctx.tree_, *ctx.sql_info_)) { //not param
+        } else if (OB_FAIL(add_not_param_flag(ctx.tree_, *ctx.sql_info_))) { //not param
           SQL_PC_LOG(WARN, "fail to add not param flag", K(ret));
         }
       } //if is_fast_parse_const end
@@ -906,11 +929,14 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
     // if so, faster parser is needed
     // otherwise, fast parser has been done before
     pc_ctx.fp_result_.reset();
+    FPContext fp_ctx(cs_type);
+    fp_ctx.enable_batched_multi_stmt_ = pc_ctx.sql_ctx_.handle_batched_multi_stmt();
+    fp_ctx.sql_mode_ = session->get_sql_mode();
+    fp_ctx.is_udr_mode_ = pc_ctx.is_rewrite_sql_;
+    fp_ctx.def_name_ctx_ = pc_ctx.def_name_ctx_;
     if (OB_FAIL(fast_parser(allocator,
-                            session->get_sql_mode(),
-                            cs_type,
+                            fp_ctx,
                             pc_ctx.raw_sql_,
-                            pc_ctx.sql_ctx_.handle_batched_multi_stmt(),
                             pc_ctx.fp_result_))) {
       SQL_PC_LOG(WARN, "fail to fast parser", K(ret));
     }
@@ -925,14 +951,15 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
     LOG_WARN("failed to reserve array", K(ret));
   } else if (OB_FAIL(transform_syntax_tree(allocator,
                                            *session,
-                                           &pc_ctx.fp_result_.raw_params_,
+                                           is_execute_mode(mode) ? NULL : &pc_ctx.fp_result_.raw_params_,
                                            tree,
                                            sql_info,
                                            params,
                                            is_prepare_mode(mode) ? NULL : &pc_ctx.select_item_param_infos_,
                                            fix_param_store,
                                            is_transform_outline,
-                                           mode))) {
+                                           mode,
+                                           &pc_ctx.fixed_param_info_list_))) {
     if (OB_NOT_SUPPORTED != ret) {
       SQL_PC_LOG(WARN, "fail to normal parameterized parser tree", K(ret));
     }
@@ -1224,10 +1251,8 @@ bool ObSqlParameterization::need_fast_parser(const ObString &sql)
 }
 
 int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
-                                       ObSQLMode sql_mode,
-                                       ObCollationType connection_collation,
+                                       const FPContext &fp_ctx,
                                        const ObString &sql,
-                                       const bool enable_batched_multi_stmt,
                                        ObFastParserResult &fp_result)
 {
   //UNUSED(sql_mode);
@@ -1242,8 +1267,8 @@ int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
     || (ObParser::is_pl_stmt(sql, nullptr, &is_call_procedure) && !is_call_procedure))) {
     (void)fp_result.pc_key_.name_.assign_ptr(sql.ptr(), sql.length());
   } else if (GCONF._ob_enable_fast_parser) {
-    if (OB_FAIL(ObFastParser::parse(sql, enable_batched_multi_stmt, no_param_sql_ptr,
-                no_param_sql_len, p_list, param_num, connection_collation, allocator, sql_mode))) {
+    if (OB_FAIL(ObFastParser::parse(sql, fp_ctx, allocator, no_param_sql_ptr,
+                no_param_sql_len, p_list, param_num, fp_result.question_mark_ctx_))) {
       LOG_WARN("fast parse error", K(param_num),
               K(ObString(no_param_sql_len, no_param_sql_ptr)), K(sql));
     }
@@ -1252,6 +1277,7 @@ int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
       if (param_num > 0) {
         ObPCParam *pc_param = NULL;
         char *ptr = (char *)allocator.alloc(param_num * sizeof(ObPCParam));
+        fp_result.raw_params_.reset();
         fp_result.raw_params_.set_allocator(&allocator);
         fp_result.raw_params_.set_capacity(param_num);
         if (OB_ISNULL(ptr)) {
@@ -1271,9 +1297,9 @@ int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
       } else { /*do nothing*/}
     }
   } else {
-    ObParser parser(allocator, sql_mode, connection_collation);
+    ObParser parser(allocator, fp_ctx.sql_mode_, fp_ctx.conn_coll_);
     SMART_VAR(ParseResult, parse_result) {
-      if (OB_FAIL(parser.parse(sql, parse_result, FP_MODE, enable_batched_multi_stmt))) {
+      if (OB_FAIL(parser.parse(sql, parse_result, FP_MODE, fp_ctx.enable_batched_multi_stmt_))) {
         SQL_PC_LOG(WARN, "fail to fast parser", K(sql), K(ret));
       } else {
         (void)fp_result.pc_key_.name_.assign_ptr(parse_result.no_param_sql_, parse_result.no_param_sql_len_);

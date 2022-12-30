@@ -335,6 +335,17 @@ public:
   inline int64_t get_ddl_execution_id() const { return ddl_execution_id_; }
   inline void set_ddl_task_id(const int64_t ddl_task_id) { ddl_task_id_ = ddl_task_id; }
   inline int64_t get_ddl_task_id() const { return ddl_task_id_; }
+  const common::ObString &get_rule_name() const { return stat_.rule_name_; }
+  inline void set_is_rewrite_sql(bool v) { stat_.is_rewrite_sql_ = v; }
+  inline bool is_rewrite_sql() const { return stat_.is_rewrite_sql_; }
+  inline void set_rule_version(int64_t version) { stat_.rule_version_ = version; }
+  inline int64_t get_rule_version() const { return stat_.rule_version_; }
+  inline void set_is_enable_udr(const bool v) { stat_.enable_udr_ = v; }
+  inline bool is_enable_udr() const { return stat_.enable_udr_; }
+  inline int set_rule_name(const common::ObString &rule_name)
+  {
+    return ob_write_string(allocator_, rule_name, stat_.rule_name_);
+  }
 public:
   int inc_concurrent_num();
   void dec_concurrent_num();

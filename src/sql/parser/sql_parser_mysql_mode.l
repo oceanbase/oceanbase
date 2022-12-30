@@ -1349,6 +1349,33 @@ BEGIN(in_c_comment);
   }
 }
 
+":"{identifier} {
+  ParseResult *p = (ParseResult *)yyextra;
+  check_value(yylval);
+  malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
+  if (p->question_mark_ctx_.by_defined_name_) {
+    yylval->node->value_ = get_question_mark_by_defined_name(&p->question_mark_ctx_, yytext);
+    if (yylval->node->value_ < 0) {
+      YY_UNEXPECTED_ERROR("Invalid question mark idx\n");
+    }
+  } else {
+    yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
+  }
+  p->question_mark_ctx_.by_name_ = true;
+  if (OB_UNLIKELY(p->question_mark_ctx_.by_ordinal_)) {
+    YY_UNEXPECTED_ERROR("Ordinal binding and Named binding cannot be combined\n");
+  }
+  copy_and_replace_questionmark(p, yylloc->first_column, yylloc->last_column, yylval->node->value_);
+  if (IS_FAST_PARAMETERIZE) {
+    yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+    check_malloc(yylval->node->raw_text_);
+    STORE_PARAM_NODE();
+  } else {
+    yylval->node->pos_ = yylloc->first_column - 1;
+    return QUESTIONMARK;
+  }
+}
+
 ":"{identifier}"."{identifier} {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);

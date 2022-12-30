@@ -964,6 +964,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   ObPsStmtId inner_stmt_id = OB_INVALID_ID;
+  ObIAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
   if (OB_ISNULL(session.get_ps_cache())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ps : ps cache is null.", K(ret), K(stmt_id_));
@@ -1237,6 +1238,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         audit_record.table_scan_ = plan->contain_table_scan();
         audit_record.plan_id_ = plan->get_plan_id();
         audit_record.plan_hash_ = plan->get_plan_hash_value();
+        audit_record.rule_name_ = const_cast<char *>(plan->get_rule_name().ptr());
+        audit_record.rule_name_len_ = plan->get_rule_name().length();
       }
       audit_record.affected_rows_ = result.get_affected_rows();
       audit_record.return_rows_ = result.get_return_rows();

@@ -23,10 +23,14 @@ using namespace oceanbase::pl;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-ObParser::ObParser(common::ObIAllocator &allocator, ObSQLMode mode, ObCollationType conn_collation)
+ObParser::ObParser(common::ObIAllocator &allocator,
+                   ObSQLMode mode,
+                   ObCollationType conn_collation,
+                   QuestionMarkDefNameCtx *ctx)
     :allocator_(&allocator),
      sql_mode_(mode),
-     connection_collation_(conn_collation)
+     connection_collation_(conn_collation),
+     def_name_ctx_(ctx)
 {}
 
 ObParser::~ObParser()
@@ -982,6 +986,7 @@ int ObParser::parse(const ObString &query,
   parse_result.is_for_trigger_ = (TRIGGER_MODE == parse_mode);
   parse_result.is_dynamic_sql_ = (DYNAMIC_SQL_MODE == parse_mode);
   parse_result.is_dbms_sql_ = (DBMS_SQL_MODE == parse_mode);
+  parse_result.is_for_udr_ = (UDR_SQL_MODE == parse_mode);
   parse_result.is_batched_multi_enabled_split_ = is_batched_multi_stmt_split_on;
   parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?
         (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4) : false;
@@ -999,6 +1004,11 @@ int ObParser::parse(const ObString &query,
   parse_result.connection_collation_ = connection_collation_;
   parse_result.mysql_compatible_comment_ = false;
   parse_result.enable_compatible_comment_ = true;
+  if (nullptr != def_name_ctx_) {
+    parse_result.question_mark_ctx_.by_defined_name_ = true;
+    parse_result.question_mark_ctx_.name_ = def_name_ctx_->name_;
+    parse_result.question_mark_ctx_.count_ = def_name_ctx_->count_;
+  }
 
   if (INS_MULTI_VALUES == parse_mode) {
     void *buffer = nullptr;

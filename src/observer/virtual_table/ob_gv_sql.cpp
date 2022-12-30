@@ -853,6 +853,21 @@ int ObGVSql::fill_cells(const ObPlanCacheObject *cache_obj, const ObPlanCache &p
       cells[i].set_int(cache_obj->get_obj_status());
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::RULE_NAME: {
+      ObString rule_name;
+      if (!cache_obj->is_sql_crsr() || plan->get_rule_name()) {
+        cells[i].set_null();
+      } else if (OB_FAIL(ob_write_string(*allocator_,
+                                         plan->get_rule_name(),
+                                         rule_name))) {
+        SERVER_LOG(ERROR, "copy rule_name failed", K(ret));
+      } else {
+        cells[i].set_varchar(rule_name);
+        cells[i].set_collation_type(ObCharset::get_default_collation(
+                                      ObCharset::get_default_charset()));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN,

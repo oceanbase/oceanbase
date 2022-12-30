@@ -291,6 +291,10 @@ public:
   //----Definitions for Application Context----
   RPC_S(PRD do_context_ddl, obrpc::OB_DO_CONTEXT_DDL, (ObContextDDLArg));
   //----End of definitions for Application Context----
+
+  //----Definitions for sync rewrite rules----
+  RPC_S(PR5 admin_sync_rewrite_rules, obrpc::OB_ADMIN_SYNC_REWRITE_RULES, (ObSyncRewriteRuleArg));
+  //----End of Definitions for sync rewrite rules----
 public:
   void set_rs_mgr(share::ObRsMgr &rs_mgr)
   {

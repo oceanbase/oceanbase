@@ -26,6 +26,7 @@
 #include "sql/plan_cache/ob_i_lib_cache_context.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
+#include "sql/udr/ob_udr_struct.h"
 
 namespace oceanbase
 {
@@ -180,6 +181,11 @@ struct NotParamInfo
   TO_STRING_KV(K_(idx), K_(raw_text));
 };
 
+typedef common::ObSEArray<NotParamInfo, 4> NotParamInfoList;
+
+// Template SQL Constant Constraints
+typedef common::ObSEArray<NotParamInfoList, 4> TplSqlConstCons;
+
 struct PsNotParamInfo
 {
   int64_t idx_;
@@ -198,16 +204,28 @@ public:
       raw_params_(&inner_alloc_),
       ps_params_(&inner_alloc_),
       cache_params_(NULL)
-  {}
+  {
+    reset_question_mark_ctx();
+  }
   ObPlanCacheKey pc_key_; //plan cache key, parameterized by fast parser
   common::ObFixedArray<ObPCParam *, common::ObIAllocator> raw_params_;
   common::ObFixedArray<const common::ObObjParam *, common::ObIAllocator> ps_params_;
   ParamStore *cache_params_;
+  ObQuestionMarkCtx question_mark_ctx_;
   void reset() {
     pc_key_.reset();
     raw_params_.reuse();
     ps_params_.reuse();
     cache_params_ = NULL;
+  }
+  void reset_question_mark_ctx()
+  {
+    question_mark_ctx_.name_ = NULL;
+    question_mark_ctx_.count_ = 0;
+    question_mark_ctx_.capacity_ = 0;
+    question_mark_ctx_.by_ordinal_ = false;
+    question_mark_ctx_.by_name_ = false;
+    question_mark_ctx_.by_defined_name_ = false;
   }
    TO_STRING_KV(K(pc_key_), K(raw_params_), K(ps_params_), K(cache_params_));
 };
@@ -294,7 +312,13 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       need_add_obj_stat_(true),
       is_inner_sql_(false),
       is_original_ps_mode_(false),
-      ab_params_(NULL)
+      ab_params_(NULL),
+      is_rewrite_sql_(false),
+      rule_name_(),
+      def_name_ctx_(NULL),
+      fixed_param_info_list_(allocator),
+      dynamic_param_info_list_(allocator),
+      tpl_sql_const_cons_(allocator)
   {
     fp_result_.pc_key_.is_ps_mode_ = is_ps_mode_;
   }
@@ -329,6 +353,17 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     return ret;
   }
 
+  uint64_t get_normalized_pattern_digest() const
+  {
+    common::ObString normalized_pattern;
+    if (is_ps_mode_ || fp_result_.pc_key_.name_.empty()) {
+      normalized_pattern = raw_sql_;
+    } else {
+      normalized_pattern = fp_result_.pc_key_.name_;
+    }
+    return normalized_pattern.hash();
+  }
+
   int is_retry(bool &v) const;  //是否在重试之中
   int is_retry_for_dup_tbl(bool &v) const; //仅复制表原因的重试才会设置为true
   void set_begin_commit_stmt() { begin_commit_stmt_ = true; }
@@ -337,6 +372,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   bool is_ps_execute_stage() { return is_ps_execute_stage_; }
   void set_is_inner_sql(bool v) { is_inner_sql_ = v; };
   bool is_inner_sql() const { return is_inner_sql_; } 
+  void set_is_rewrite_sql(bool v) { is_rewrite_sql_ = v; }
+  bool is_rewrite_sql() const { return is_rewrite_sql_; }
   TO_STRING_KV(
     K(is_ps_mode_),
     K(raw_sql_),
@@ -353,6 +390,12 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(fixed_param_idx_),
     K(need_add_obj_stat_),
     K(is_inner_sql_),
+    K(is_rewrite_sql_),
+    K(rule_name_),
+    K(def_name_ctx_),
+    K(fixed_param_info_list_),
+    K(dynamic_param_info_list_),
+    K(tpl_sql_const_cons_),
     K(is_original_ps_mode_)
     );
   bool is_ps_mode_; //control use which variables to do match
@@ -402,6 +445,15 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   bool is_inner_sql_;
   bool is_original_ps_mode_;
   ParamStore *ab_params_;  // arraybinding batch parameters,
+
+  // **********  for rewrite rule **********
+  bool is_rewrite_sql_;
+  common::ObString rule_name_;
+  QuestionMarkDefNameCtx *def_name_ctx_;
+  common::ObFixedArray<FixedParamValue, common::ObIAllocator> fixed_param_info_list_;
+  common::ObFixedArray<DynamicParamInfo, common::ObIAllocator> dynamic_param_info_list_;
+  common::ObFixedArray<NotParamInfoList, common::ObIAllocator> tpl_sql_const_cons_;
+  // **********  for rewrite end **********
 };
 
 struct ObPlanCacheStat

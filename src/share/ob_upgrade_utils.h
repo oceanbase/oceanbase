@@ -184,6 +184,7 @@ public:
   virtual int post_upgrade() override;
 private:
    int post_upgrade_for_srs();
+   int init_rewrite_rule_version(const uint64_t tenant_id);
 };
 /* =========== special upgrade processor end   ============= */
 

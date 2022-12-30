@@ -826,6 +826,7 @@ const uint64_t OB_SYS_UNIT_ID = 1;
 const uint64_t OB_INIT_SERVER_ID = 1;
 const uint64_t OB_INIT_DDL_TASK_ID = 1;
 const uint64_t OB_SYS_UNIT_GROUP_ID = 1;
+const uint64_t OB_INIT_REWRITE_RULE_VERSION = 1;
 const uint64_t OB_USER_UNIT_CONFIG_ID = 1000;
 const uint64_t OB_USER_RESOURCE_POOL_ID = 1000;
 const uint64_t OB_USER_UNIT_ID = 1000;

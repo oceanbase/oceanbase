@@ -7228,6 +7228,8 @@ int ObFetchLocationResult::set_servers(
   return servers_.assign(servers);
 }
 
+OB_SERIALIZE_MEMBER(ObSyncRewriteRuleArg, tenant_id_);
+
 OB_SERIALIZE_MEMBER(ObInitTenantConfigArg, tenant_configs_);
 
 int ObInitTenantConfigArg::assign(const ObInitTenantConfigArg &other)
