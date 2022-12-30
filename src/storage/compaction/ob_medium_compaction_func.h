@@ -99,6 +99,7 @@ protected:
 
   int get_table_schema_to_merge(const int64_t schema_version, ObMediumCompactionInfo &medium_info);
 
+  int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
   static int get_table_id(
       ObMultiVersionSchemaService &schema_service,
       const ObTabletID &tablet_id,

@@ -711,6 +711,12 @@ int ObTabletMergeCtx::init_get_medium_compaction_info(
         LOG_WARN("failed to init storage schema from current medium info", K(ret), KPC(medium_info));
       }
     }
+
+    if (OB_FAIL(ret)) {
+    } else if (tablet_handle_.get_obj()->get_multi_version_start() > medium_snapshot) {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_ERROR("multi version data is discarded, should not compaction now", K(ret), K(param_), K(medium_snapshot));
+    }
   }
 
   return ret;
