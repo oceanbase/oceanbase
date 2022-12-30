@@ -293,6 +293,7 @@ int ObIndexBuildTask::init(
     task_id_ = task_id;
     parent_task_id_ = parent_task_id;
     task_version_ = OB_INDEX_BUILD_TASK_VERSION;
+    cluster_version_ = GET_MIN_CLUSTER_VERSION();
     if (OB_SUCC(ret)) {
       task_status_ = static_cast<ObDDLTaskStatus>(task_status);
       is_inited_ = true;
@@ -1204,7 +1205,7 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
     LOG_WARN("serialize create index arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, check_unique_snapshot_);
-    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_);
+    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, cluster_version_);
   }
   return ret;
 }
@@ -1224,7 +1225,7 @@ int ObIndexBuildTask::deserlize_params_from_message(const char *buf, const int64
     LOG_WARN("deep copy create index arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_);
-    LST_DO_CODE(OB_UNIS_DECODE, parallelism_);
+    LST_DO_CODE(OB_UNIS_DECODE, parallelism_, cluster_version_);
   }
   return ret;
 }
@@ -1232,6 +1233,7 @@ int ObIndexBuildTask::deserlize_params_from_message(const char *buf, const int64
 int64_t ObIndexBuildTask::get_serialize_param_size() const
 {
   return create_index_arg_.get_serialize_size() + serialization::encoded_length_i64(check_unique_snapshot_)
-         + serialization::encoded_length_i64(task_version_) + serialization::encoded_length_i64(parallelism_);
+         + serialization::encoded_length_i64(task_version_) + serialization::encoded_length_i64(parallelism_)
+         + serialization::encoded_length_i64(cluster_version_);
 }
 

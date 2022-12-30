@@ -66,6 +66,7 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
     task_version_ = OB_TABLE_REDEFINITION_TASK_VERSION;
     task_id_ = task_id;
     parallelism_ = parallelism;
+    cluster_version_ = GET_MIN_CLUSTER_VERSION();
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
     is_inited_ = true;
   }

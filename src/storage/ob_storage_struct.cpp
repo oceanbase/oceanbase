@@ -269,6 +269,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const bool keep_old_ddl_sstable,
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
+    const int64_t ddl_cluster_version,
     const bool update_with_major_flag,
     const bool need_report)
   : table_handle_(table_handle),
@@ -285,7 +286,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_start_log_ts_(0),
     ddl_snapshot_version_(0),
     ddl_execution_id_(0),
-    ddl_cluster_version_(0),
+    ddl_cluster_version_(ddl_cluster_version),
     allow_duplicate_sstable_(false),
     tx_data_(),
     binding_info_(),

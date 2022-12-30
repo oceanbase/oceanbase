@@ -67,6 +67,7 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     task_id_ = task_id;
     parallelism_ = parallelism;
     execution_id_ = 1L;
+    cluster_version_ = GET_MIN_CLUSTER_VERSION();
     is_inited_ = true;
   }
   return ret;
@@ -152,6 +153,7 @@ int ObColumnRedefinitionTask::send_build_single_replica_request()
     param.task_id_ = task_id_;
     param.parallelism_ = alter_table_arg_.parallelism_;
     param.execution_id_ = execution_id_;
+    param.cluster_version_ = cluster_version_;
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, param.source_tablet_ids_))) {
       LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, param.dest_tablet_ids_))) {

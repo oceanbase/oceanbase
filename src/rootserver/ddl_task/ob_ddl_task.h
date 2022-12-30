@@ -263,7 +263,7 @@ public:
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
-      delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(0)
+      delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(0), cluster_version_(0)
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -289,6 +289,7 @@ public:
   int64_t get_task_version() const { return task_version_; }
   int64_t get_execution_id() const { return execution_id_; }
   int64_t get_parallelism() const { return parallelism_; }
+  int64_t get_cluster_version() const { return cluster_version_; }
   static int deep_copy_table_arg(common::ObIAllocator &allocator, const obrpc::ObDDLArg &source_arg, obrpc::ObDDLArg &dest_arg);
   static int fetch_new_task_id(ObMySQLProxy &sql_proxy, int64_t &new_task_id);
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const = 0;
@@ -324,7 +325,8 @@ public:
       K(target_object_id_), K(task_status_), K(snapshot_version_),
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
-      K_(sys_task_id), K_(err_code_occurence_cnt), K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_));
+      K_(sys_task_id), K_(err_code_occurence_cnt), K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_),
+      K_(cluster_version));
 protected:
   virtual bool is_error_need_retry(const int ret_code)
   {
@@ -358,6 +360,7 @@ protected:
   int64_t delay_schedule_time_;
   int64_t next_schedule_ts_;
   int64_t execution_id_;
+  int64_t cluster_version_;
 };
 
 enum ColChecksumStat

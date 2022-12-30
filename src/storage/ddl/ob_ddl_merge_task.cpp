@@ -660,6 +660,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
                                                     ddl_param.table_key_.is_major_sstable() ? false: true, // keep_old_ddl_sstable
                                                     &storage_schema,
                                                     rebuild_seq,
+                                                    ddl_param.cluster_version_,
                                                     ddl_param.table_key_.is_major_sstable() ? true : false, // update_with_major_flag
                                                     ddl_param.table_key_.is_major_sstable() ? true : false); // need report checksum
           if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {

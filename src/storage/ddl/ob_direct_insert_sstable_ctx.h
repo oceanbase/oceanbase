@@ -55,7 +55,8 @@ public:
   ~ObSSTableInsertTabletParam();
   bool is_valid() const;
   TO_STRING_KV(K(context_id_), K(ls_id_), K(tablet_id_), K(table_id_), K(write_major_),
-      K(task_cnt_), K(schema_version_), K(snapshot_version_), K_(execution_id), K_(ddl_task_id));
+      K(task_cnt_), K(schema_version_), K(snapshot_version_), K_(execution_id), K_(ddl_task_id),
+      K_(cluster_version));
 public:
   int64_t context_id_;
   share::ObLSID ls_id_;
@@ -67,6 +68,7 @@ public:
   int64_t snapshot_version_;
   int64_t execution_id_;
   int64_t ddl_task_id_;
+  int64_t cluster_version_;
 };
 
 typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletIDPair;
@@ -148,9 +150,10 @@ public:
   int assign(const ObSSTableInsertTableParam &other);
   bool is_valid() const { return exec_ctx_ != nullptr && OB_INVALID_ID != dest_table_id_
     && schema_version_ >= 0 && snapshot_version_ >= 0 && task_cnt_ >= 0
-    && execution_id_ > 0 && ddl_task_id_ > 0 && ls_tablet_ids_.count() > 0; }
+    && execution_id_ > 0 && ddl_task_id_ > 0 && ls_tablet_ids_.count() > 0
+    && cluster_version_ > 0; }
   TO_STRING_KV(K_(context_id), K_(dest_table_id), K_(write_major), K_(schema_version), K_(snapshot_version),
-      K_(task_cnt), K_(execution_id), K_(ddl_task_id), K_(ls_tablet_ids));
+      K_(task_cnt), K_(execution_id), K_(ddl_task_id), K_(cluster_version), K_(ls_tablet_ids));
 public:
   sql::ObExecContext *exec_ctx_;
   int64_t context_id_;
@@ -161,6 +164,7 @@ public:
   int64_t task_cnt_;
   int64_t execution_id_;
   int64_t ddl_task_id_;
+  int64_t cluster_version_;
   common::ObArray<LSTabletIDPair> ls_tablet_ids_;
 };
 
