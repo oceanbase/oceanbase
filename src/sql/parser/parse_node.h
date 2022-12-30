@@ -142,6 +142,7 @@ typedef struct _ParseNode
       uint16_t is_date_unit_ : 1; //1 表示是date unit常量，在反拼的时候需要反拼为字符串
       uint16_t is_literal_bool_ : 1; // indicate node is a literal TRUE/FALSE
       uint16_t is_empty_ : 1; // 表示是否缺省该节点，1表示缺省，0表示没有缺省, opt_asc_desc节点中使用到
+      uint16_t is_multiset_ : 1; // for cast(multiset(...) as ...)
       uint16_t reserved_ : 1;
     };
   };
