@@ -714,10 +714,11 @@ int ObDDLRedefinitionTask::check_data_dest_tables_columns_checksum(const int64_t
   return ret;
 }
 
-int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id, ObSchemaGetterGuard &schema_guard)
+int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id)
 {
   int ret = OB_SUCCESS;
   SMART_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
+    ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
     AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
     const ObConstraint *constraint = nullptr;
@@ -732,6 +733,8 @@ int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id, 
     } else if (OB_UNLIKELY(OB_INVALID_ID == constraint_id)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K(constraint_id));
+    } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
+      LOG_WARN("get schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(tenant_id_));
     } else if (OB_ISNULL(table_schema)) {
@@ -813,9 +816,10 @@ int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id, 
   return ret;
 }
 
-int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id, ObSchemaGetterGuard &schema_guard)
+int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id)
 {
   int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *orig_table_schema = nullptr;
   const ObTableSchema *hidden_table_schema = nullptr;
   SMART_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
@@ -832,6 +836,8 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id, ObSchemaGetterGu
     } else if (OB_UNLIKELY(OB_INVALID_ID == fk_id)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K(fk_id));
+    } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
+      LOG_WARN("get schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, orig_table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(tenant_id_));
     } else if (OB_ISNULL(orig_table_schema)) {
@@ -1846,17 +1852,22 @@ int ObDDLRedefinitionTask::check_need_rebuild_constraint(const ObTableSchema &ta
                                                          bool &need_rebuild_constraint)
 {
   int ret = OB_SUCCESS;
-  int64_t new_constraint_cnt = 0;
+  need_rebuild_constraint = true;
+  const int64_t CONSTRAINT_ID_BUCKET_NUM = 7;
+  ObHashSet<uint64_t> new_constraints_id_set; // newly added csts has already added into dest table schema at do_offline_ddl_in_trans stage.
   const AlterTableSchema &alter_table_schema = alter_table_arg_.alter_table_schema_;
-  if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg_.alter_constraint_type_
+  if (OB_FAIL(new_constraints_id_set.create(CONSTRAINT_ID_BUCKET_NUM))) {
+    LOG_WARN("create alter constraint id set failed", K(ret));
+  } else if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg_.alter_constraint_type_
              || obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE == alter_table_arg_.alter_constraint_type_) {
     for (ObTableSchema::const_constraint_iterator iter = alter_table_schema.constraint_begin();
         OB_SUCC(ret) && iter != alter_table_schema.constraint_end(); ++iter) {
       if (OB_ISNULL(*iter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("iter is NULL", K(ret));
-      } else if ((*iter)->get_constraint_type() != CONSTRAINT_TYPE_PRIMARY_KEY) {
-        new_constraint_cnt++;
+      } else if ((*iter)->get_constraint_type() != CONSTRAINT_TYPE_PRIMARY_KEY
+        && OB_FAIL(new_constraints_id_set.set_refactored((*iter)->get_constraint_id()))) {
+        LOG_WARN("push back constraint id failed", K(ret));
       }
     }
   }
@@ -1868,6 +1879,9 @@ int ObDDLRedefinitionTask::check_need_rebuild_constraint(const ObTableSchema &ta
         LOG_WARN("iter is NULL", K(ret));
       } else if ((*iter)->get_constraint_type() != CONSTRAINT_TYPE_PRIMARY_KEY) {
         const uint64_t constraint_id = (*iter)->get_constraint_id();
+        // There are some csts not included in alter_table_schema, which means csts have rebuilt successfully.
+        need_rebuild_constraint = OB_HASH_NOT_EXIST == new_constraints_id_set.exist_refactored(constraint_id) ?
+                                                        false : need_rebuild_constraint;
         if (OB_FAIL(constraint_ids.push_back(constraint_id))) {
           LOG_WARN("push back constraint id failed", K(ret));
         } else {
@@ -1876,7 +1890,6 @@ int ObDDLRedefinitionTask::check_need_rebuild_constraint(const ObTableSchema &ta
       }
     }
   }
-  need_rebuild_constraint = constraint_ids.count() == new_constraint_cnt;
   return ret;
 }        
 
