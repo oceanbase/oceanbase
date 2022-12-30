@@ -524,14 +524,15 @@ ssize_t ob_read_regard_ssl(int fd, void *buf, size_t nbytes)
           rbytes = -1;
           errno = EIO;
           COMMON_LOG(ERROR, "SSL_read want write, maybe peer started SSL renegotiation", K(fd));
-        } else if (SSL_ERROR_ZERO_RETURN == ssl_error) {
+        } else if (SSL_ERROR_ZERO_RETURN == ssl_error || 0 == ERR_peek_error()) {
           /* connection shutdown by peer*/
           rbytes = 0;
-          COMMON_LOG(WARN, "SSL_read return SSL_ERROR_ZERO_RETURN, peer shutdown", K(fd));
+          COMMON_LOG(WARN, "SSL_read, peer shutdown cleanly", K(fd), K(ssl_error));
         } else {
           rbytes = -1;
+		  int sys_errno = errno;
           errno = EIO;
-          COMMON_LOG(ERROR, "SSL_read failed", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
+          COMMON_LOG(WARN, "SSL_read failed", K(fd), K(sys_errno), K(ssl_error), K(ERR_error_string(ERR_get_error(), NULL)));
         }
       }
     }
