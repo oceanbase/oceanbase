@@ -81,6 +81,74 @@ extern ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const cha
 extern void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s, ...);
 extern void obpl_mysql_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, yyconst char *msg, ...);
 
+int obpl_mysql_check_specific_node(const ParseNode *node, const ObItemType type, int *is_contain) {
+  int ret = OB_PARSER_SUCCESS;
+  if (obpl_parser_check_stack_overflow()) {
+    ret = OB_PARSER_ERR_SIZE_OVERFLOW;
+  } else if (OB_UNLIKELY(NULL == is_contain)) {
+    ret = OB_PARSER_ERR_UNEXPECTED;
+  } else {
+    *is_contain = false;
+  }
+
+  if (OB_PARSER_SUCCESS == ret && OB_NOT_NULL(node)) {
+    if (type == node->type_) {
+      *is_contain = true;
+    } else {
+      for (int64_t i = 0; OB_PARSER_SUCCESS == ret && !*is_contain && i < node->num_child_; ++i) {
+        ret = obpl_mysql_check_specific_node(node->children_[i], type, is_contain);
+      }
+    }
+  }
+  return ret;
+}
+
+int obpl_mysql_wrap_node_into_subquery(ObParseCtx *_parse_ctx, ParseNode *node) {
+  int ret = OB_PARSER_SUCCESS;
+  if (OB_NOT_NULL(node)) {
+    int max_query_len = node->str_len_ + 10;
+    char *subquery = (char *)parse_malloc(max_query_len, _parse_ctx->mem_pool_);
+    int len = 0;
+    if (OB_UNLIKELY(NULL == subquery)) {
+      ret = OB_PARSER_ERR_NO_MEMORY;
+    } else if ((len = snprintf(subquery, max_query_len, "(SELECT %s)", node->str_value_)) <= 0) {
+      ret = OB_PARSER_ERR_UNEXPECTED;
+    } else {
+      ParseResult parse_result;
+      memset(&parse_result, 0, sizeof(ParseResult));
+      parse_result.input_sql_ = subquery;
+      parse_result.input_sql_len_ = len;
+      parse_result.malloc_pool_ = _parse_ctx->mem_pool_;
+      parse_result.pl_parse_info_.is_pl_parse_ = true;
+      parse_result.pl_parse_info_.is_pl_parse_expr_ = true;
+      parse_result.is_for_trigger_ = (1 == _parse_ctx->is_for_trigger_);
+      parse_result.question_mark_ctx_ = _parse_ctx->question_mark_ctx_;
+      parse_result.charset_info_ = _parse_ctx->charset_info_;
+      parse_result.is_not_utf8_connection_ = _parse_ctx->is_not_utf8_connection_;
+      parse_result.connection_collation_ = _parse_ctx->connection_collation_;
+      if (0 == parse_sql_stmt(&parse_result)) {
+        *node = *parse_result.result_tree_->children_[0];
+        node->str_value_ = subquery;
+        node->str_len_ = len;
+        node->str_off_ = -1;
+      }
+    }
+  }
+  return ret;
+}
+
+void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode *node) {
+  int ret = OB_PARSER_SUCCESS;
+  int is_contain = false;
+  if (OB_PARSER_SUCCESS != (ret = obpl_mysql_check_specific_node(node, T_OP_GET_USER_VAR, &is_contain))) {
+    obpl_mysql_parse_fatal_error(ret, YYLEX_PARAM, "failed to check T_OP_GET_USER_VAR in parse tree");
+  } else if (is_contain) {
+    if (OB_PARSER_SUCCESS != (ret = obpl_mysql_wrap_node_into_subquery(parse_ctx, node))) {
+      obpl_mysql_parse_fatal_error(ret, YYLEX_PARAM, "failed to wrap T_OP_GET_USER_VAR into subquery");
+    }
+  }
+}
+
 #define YY_FATAL_ERROR(msg, args...) (obpl_mysql_parse_fatal_error(OB_PARSER_ERR_NO_MEMORY, YYLEX_PARAM, msg, ##args))
 #define YY_UNEXPECTED_ERROR(msg, args...) (obpl_mysql_parse_fatal_error(OB_PARSER_ERR_UNEXPECTED, YYLEX_PARAM, msg, ##args))
 
@@ -355,6 +423,11 @@ sql_stmt:
     {
       //read sql query string直到读到token';'或者END_P
       do_parse_sql_stmt($$, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      if(OB_UNLIKELY(NULL == $$->children_[0] || NULL == $$->children_[0]->children_[1])){
+        YY_UNEXPECTED_ERROR("value node in SET statement is NULL");
+      } else {
+        obpl_mysql_wrap_get_user_var_into_subquery(parse_ctx, $$->children_[0]->children_[1]);
+      }
     }
   | COMMIT
     {
@@ -1625,6 +1698,7 @@ expr:
     {
       //same as expr in sql rule, and terminate when read ';'
       do_parse_sql_expr_rule($$, parse_ctx, 9, INTO, USING, WHEN, THEN, ';', DO, LIMIT, ',', END_KEY);
+      obpl_mysql_wrap_get_user_var_into_subquery(parse_ctx, $$);
     }
 ;
 

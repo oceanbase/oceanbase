@@ -370,6 +370,8 @@ extern ParseNode *new_node(void *malloc_pool, ObItemType type, int num);
 extern ParseNode *new_non_terminal_node(void *malloc_pool, ObItemType node_tag, int num, ...);
 extern ParseNode *new_terminal_node(void *malloc_pool, ObItemType type);
 
+extern int obpl_parser_check_stack_overflow();
+
 int get_deep_copy_size(const ParseNode *node, int64_t *size);
 int deep_copy_parse_node(void *malloc_pool, const ParseNode *src, ParseNode *dst);
 
