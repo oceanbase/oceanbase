@@ -328,7 +328,9 @@ OB_INLINE int ObTableUpdateOp::update_row_to_das()
       ObDASTabletLoc *old_tablet_loc = nullptr;
       ObDASTabletLoc *new_tablet_loc = nullptr;
       bool is_skipped = false;
-      ++upd_rtdef.cur_row_num_;
+      if (!MY_SPEC.upd_ctdefs_.at(0).at(0)->has_instead_of_trigger_) {
+        ++upd_rtdef.cur_row_num_;
+      }
       if (OB_FAIL(ObDMLService::process_update_row(upd_ctdef, upd_rtdef, is_skipped, *this))) {
         LOG_WARN("process update row failed", K(ret));
       } else if (OB_UNLIKELY(is_skipped)) {
