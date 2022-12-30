@@ -868,7 +868,8 @@ int ObPartitionMergePolicy::check_need_medium_merge(
     storage::ObTablet &tablet,
     const int64_t medium_snapshot,
     bool &need_merge,
-    bool &can_merge)
+    bool &can_merge,
+    bool &need_force_freeze)
 {
   int ret = OB_SUCCESS;
   need_merge = false;
@@ -883,9 +884,31 @@ int ObPartitionMergePolicy::check_need_medium_merge(
     need_merge = last_major->get_snapshot_version() < medium_snapshot;
     if (need_merge
         && is_tablet_data_status_complete
-        && tablet.get_tablet_meta().max_serialized_medium_scn_ >= medium_snapshot
         && ObTenantTabletScheduler::check_weak_read_ts_ready(medium_snapshot, ls)) {
-      can_merge = true;
+      can_merge = tablet.get_snapshot_version() >= medium_snapshot;
+      if (!can_merge) {
+        ObTabletMemtableMgr *memtable_mgr = nullptr;
+        ObTableHandleV2 memtable_handle;
+        memtable::ObMemtable *last_frozen_memtable = nullptr;
+        if (OB_ISNULL(memtable_mgr = static_cast<ObTabletMemtableMgr *>(tablet.get_memtable_mgr()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("memtable mgr is unexpected null", K(ret), K(tablet));
+        } else if (OB_FAIL(memtable_mgr->get_last_frozen_memtable(memtable_handle))) {
+          if (OB_ENTRY_NOT_EXIST == ret) { // no frozen memtable, need force freeze
+            need_force_freeze = true;
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to get last frozen memtable", K(ret));
+          }
+        } else if (OB_FAIL(memtable_handle.get_data_memtable(last_frozen_memtable))) {
+          LOG_WARN("failed to get last frozen memtable", K(ret));
+        } else {
+          need_force_freeze = last_frozen_memtable->get_snapshot_version() < medium_snapshot;
+          if (!need_force_freeze) {
+            LOG_INFO("tablet no need force freeze", K(ret), K(tablet_id), K(medium_snapshot), KPC(last_frozen_memtable));
+          }
+        }
+      }
     }
   }
 
@@ -894,7 +917,7 @@ int ObPartitionMergePolicy::check_need_medium_merge(
              K(need_merge), K(can_merge), K(medium_snapshot), K(is_tablet_data_status_complete));
     ADD_SUSPECT_INFO(MAJOR_MERGE, tablet.get_tablet_meta().ls_id_, tablet_id,
                      "need major merge but can't merge now",
-                     K(medium_snapshot), K(is_tablet_data_status_complete),
+                     K(medium_snapshot), K(is_tablet_data_status_complete), K(need_force_freeze),
                      "max_serialized_medium_scn", tablet.get_tablet_meta().max_serialized_medium_scn_);
   }
   return ret;

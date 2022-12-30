@@ -75,7 +75,8 @@ public:
       storage::ObTablet &tablet,
       const int64_t medium_snapshot,
       bool &need_merge,
-      bool &can_merge);
+      bool &can_merge,
+      bool &need_force_freeze);
   static int generate_parallel_minor_interval(
       const ObGetMergeTablesResult &input_result,
       ObMinorExecuteRangeMgr &minor_range_mgr,
