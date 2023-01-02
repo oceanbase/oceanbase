@@ -1238,6 +1238,7 @@ int mock_get_tenant_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObS
     rs.datum_info.towgs84.value[4] = 2.697;
     rs.datum_info.towgs84.value[5] = -1.434;
     rs.datum_info.towgs84.value[6] = -5.38;
+    rs.authority.is_valid = false;
 
     ObSpatialReferenceSystemBase *srs_info;
     if (OB_FAIL(ObSpatialReferenceSystemBase::create_geographic_srs(&allocator, srs_id, &rs, srs_info))) {
