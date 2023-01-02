@@ -433,6 +433,7 @@ private:
   int do_local_abort_tx_();
   int do_force_kill_tx_();
   int on_local_commit_tx_();
+  int after_local_commit_succ_();
   int on_local_abort_tx_();
 
   // int local_tx_abort_();

@@ -649,6 +649,7 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "transaction is replaying", KR(ret), KPC(this));
   } else if (OB_UNLIKELY(is_2pc_logging_())) {
+    ret = OB_EAGAIN;
     TRANS_LOG(WARN, "tx is 2pc logging", KPC(this));
   } else if (!(ObTxState::INIT == get_downstream_state() ||
       (ObTxState::REDO_COMPLETE == get_downstream_state() && part_trans_action_ < ObPartTransAction::COMMIT))) {
@@ -986,7 +987,6 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
         TRANS_LOG(ERROR, "unexpected sub state", K(*this));
       }
       set_trans_need_wait_wrap_(receive_gts_ts, GET_GTS_AHEAD_INTERVAL);
-      ObTxLogType log_type = ObTxLogType::UNKNOWN;
       // the same as before prepare
       mt_ctx_.set_trans_version(gts);
       const int64_t max_read_ts = trans_service_->get_tx_version_mgr().get_max_read_ts();
@@ -994,25 +994,43 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
       if (is_local_tx_()) {
         if (OB_FAIL(ctx_tx_data_.set_commit_version(max(gts, max_read_ts)))) {
           TRANS_LOG(WARN, "set commit_version failed", K(ret));
+        } else if (part_trans_action_ != ObPartTransAction::COMMIT) {
+          // one phase commit failed or abort
+          TRANS_LOG(INFO, "one phase commit has not been successful, need retry", K(ret), KPC(this));
+        } else if (sub_state_.is_state_log_submitted()) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "the commit log has been submitted", K(ret), KPC(this));
+        } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_COMMIT_LOG))) {
+          TRANS_LOG(WARN, "submit commit log in gts callback failed", K(ret), KPC(this));
         }
-        log_type = ObTxLogType::TX_COMMIT_LOG;
       } else {
-        const int64_t local_prepare_version = max(gts, max_read_ts);
-        exec_info_.prepare_version_ = max(local_prepare_version, exec_info_.prepare_version_);
-        log_type = ObTxLogType::TX_PREPARE_LOG;
+        const int64_t local_prepare_version = std::max(gts, max_read_ts);
+        exec_info_.prepare_version_ = std::max(local_prepare_version, exec_info_.prepare_version_);
+
+        bool no_need_submit_log = true;
+        if (get_upstream_state() < ObTxState::PREPARE && OB_FAIL(do_prepare(no_need_submit_log))) {
+          TRANS_LOG(WARN, "drive into prepare phase failed in gts callback", K(ret), KPC(this));
+        } else {
+          // retry to submit prepare log in handle_timeout
+          TRANS_LOG(INFO, "invoke do_prepare in gts callback", K(ret), KPC(this));
+        }
       }
-      if (OB_FAIL(submit_log_impl_(log_type))) {
-        TRANS_LOG(WARN, "gts retry submit log error", KR(ret), K(log_type), K(*this));
-      } else {
-        TRANS_LOG(DEBUG, "submit log when gts callback", KR(ret), K(*this), K(log_type));
-      }
+
       need_revert_ctx = true;
     }
     REC_TRANS_TRACE_EXT2(tlog_, get_gts_callback, Y(ret), OB_ID(srr), srr.mts_, Y(gts),  OB_ID(ctx_ref), get_ref());
   }
   // before revert self
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "get_gts_callback end", KR(ret), K(*this));
+    if (OB_EAGAIN == ret) {
+      TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback - retry gts task by TsMgr", KR(ret), K(*this),
+                K(gts));
+    } else {
+      TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback", KR(ret), K(*this), K(gts));
+      if (sub_state_.is_gts_waiting()) {
+        sub_state_.clear_gts_waiting();
+      }
+    }
   }
   if (need_revert_ctx) {
     ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
@@ -1039,14 +1057,16 @@ int ObPartTransCtx::gts_elapse_callback(const MonotonicTs srr, const int64_t gts
       TRANS_LOG(WARN, "transaction is exiting", KR(ret), "context", *this);
     } else if (ctx_tx_data_.get_commit_version() > gts) {
       ret = OB_EAGAIN;
+      TRANS_LOG(WARN, "the commit version is still larger than gts", K(ret), K(this));
     } else {
       if (OB_UNLIKELY(!sub_state_.is_gts_waiting())) {
         TRANS_LOG(ERROR, "unexpected gts waiting flag", K(*this));
       } else {
+        sub_state_.clear_gts_waiting();
       }
       if (is_local_tx_()) {
-        if (OB_FAIL(on_local_commit_tx_())) {
-          TRANS_LOG(WARN, "local tx commit side effect error", KR(ret), KPC(this));
+        if (OB_FAIL(after_local_commit_succ_())) {
+          TRANS_LOG(WARN, "terminate trx after local commit failed", KR(ret), KPC(this));
         }
       } else {
         // distributed tx
@@ -1088,14 +1108,21 @@ int ObPartTransCtx::gts_elapse_callback(const MonotonicTs srr, const int64_t gts
           }
         }
       }
-      sub_state_.clear_gts_waiting();
       need_revert_ctx = true;
     }
     REC_TRANS_TRACE_EXT2(tlog_, gts_elapse_callback, Y(ret), OB_ID(srr), srr.mts_, Y(gts),  OB_ID(ctx_ref), get_ref());
   }
   // before revert self
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback", KR(ret), K(*this), K(gts));
+    if (OB_EAGAIN == ret) {
+      TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback - retry gts task by TsMgr", KR(ret), K(*this),
+                K(gts));
+    } else {
+      TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback", KR(ret), K(*this), K(gts));
+      if (sub_state_.is_gts_waiting()) {
+        sub_state_.clear_gts_waiting();
+      }
+    }
   }
   if (need_revert_ctx) {
     ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
@@ -2041,6 +2068,9 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
     log_cb = NULL;
     if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
       sub_state_.clear_info_log_submitted();
+    }
+    if (busy_cbs_.is_empty() && get_downstream_state() < ObTxState::PREPARE) {
+      sub_state_.clear_state_log_submitted();
     }
     if (busy_cbs_.is_empty() && !has_persisted_log_()) {
       // busy callback array is empty and trx has not persisted any log, exit here
@@ -4597,7 +4627,7 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb
     TRANS_LOG(WARN, "switch role state error", KR(ret), K(*this));
   } else {
     (void)unregister_timeout_task_();
-    if (!has_persisted_log_()) {
+    if (!has_persisted_log_() && !is_logging_()) {
       // has not persisted any log, exit here
       bool need_cb_scheduler = need_callback_scheduler_();
       if (need_cb_scheduler) {
@@ -6032,40 +6062,36 @@ int ObPartTransCtx::on_local_commit_tx_()
 
   common::ObTimeGuard tg("part_ctx::on_local_commit", 100 * 1000);
 
-  if (!sub_state_.is_gts_waiting()) {
-    if (OB_UNLIKELY(ctx_tx_data_.get_commit_version() <= 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "invalid commit version", K(ret), KPC(this));
-    } else if (OB_FAIL(wait_gts_elapse_commit_version_(need_wait))) {
-      TRANS_LOG(WARN, "wait gts elapse commit version failed", KR(ret), KPC(this));
-    } else if (FALSE_IT(tg.click())) {
-    } else if (FALSE_IT(start_us = ObTimeUtility::fast_current_time())) {
-    } else if (OB_FAIL(tx_end_(true /*commit*/))) {
-      TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
-    } else if (FALSE_IT(end_us = ObTimeUtility::fast_current_time())) {
-    } else if (FALSE_IT(elr_handler_.reset_elr_state())) {
-    } else if (OB_FAIL(trans_clear_())) {
-      TRANS_LOG(WARN, "local tx clear error", KR(ret), K(*this));
-    } else if (OB_FAIL(notify_data_source_(NotifyType::ON_COMMIT, ctx_tx_data_.get_end_log_ts(),
-                                           false, exec_info_.multi_data_source_))) {
-      TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
-    } else if (FALSE_IT(set_durable_state_(ObTxState::COMMIT))) {
+  if (sub_state_.is_gts_waiting()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "unexpected gts waiting flag", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(ctx_tx_data_.get_commit_version() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "invalid commit version", K(ret), KPC(this));
+  } else if (OB_FAIL(wait_gts_elapse_commit_version_(need_wait))) {
+    TRANS_LOG(WARN, "wait gts elapse commit version failed", KR(ret), KPC(this));
+  } else if (FALSE_IT(tg.click())) {
+  } else if (OB_FAIL(tx_end_(true /*commit*/))) {
+    TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
+  } else if (FALSE_IT(elr_handler_.reset_elr_state())) {
+  } else if (OB_FAIL(trans_clear_())) {
+    TRANS_LOG(WARN, "local tx clear error", KR(ret), K(*this));
+  } else if (OB_FAIL(notify_data_source_(NotifyType::ON_COMMIT, ctx_tx_data_.get_end_log_ts(),
+                                         false, exec_info_.multi_data_source_))) {
+    TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
+  } else if (FALSE_IT(set_durable_state_(ObTxState::COMMIT))) {
 
-    } else if (FALSE_IT(unregister_timeout_task_())) {
+  } else if (FALSE_IT(unregister_timeout_task_())) {
 
-    } else if (need_wait) {
-      REC_TRANS_TRACE_EXT2(tlog_, wait_gts_elapse, OB_ID(ctx_ref), get_ref());
-    } else if (FALSE_IT(tg.click())) {
-    }
+  } else if (need_wait) {
+    REC_TRANS_TRACE_EXT2(tlog_, wait_gts_elapse, OB_ID(ctx_ref), get_ref());
+  } else if (FALSE_IT(tg.click())) {
   }
 
   if (OB_FAIL(ret) || need_wait) {
     // do nothing
-  } else if (OB_FAIL(update_max_commit_version_())) {
-    TRANS_LOG(WARN, "update max commit version failed", KR(ret), KPC(this));
-  } else {
-    (void)post_tx_commit_resp_(OB_SUCCESS);
-    set_exiting_();
+  } else if (OB_FAIL(after_local_commit_succ_())) {
+    TRANS_LOG(WARN, "terminate trx after local commit failed", KR(ret), KPC(this));
   }
 
   if (tg.get_diff() > 100000) {
@@ -6074,6 +6100,20 @@ int ObPartTransCtx::on_local_commit_tx_()
 
   ObTransStatistic::get_instance().add_trans_mt_end_count(tenant_id_, 1);
   ObTransStatistic::get_instance().add_trans_mt_end_time(tenant_id_, end_us - start_us);
+
+  return ret;
+}
+
+int ObPartTransCtx::after_local_commit_succ_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(update_max_commit_version_())) {
+    TRANS_LOG(WARN, "update max commit version failed", KR(ret), KPC(this));
+  } else {
+    (void)post_tx_commit_resp_(OB_SUCCESS);
+    set_exiting_();
+  }
 
   return ret;
 }
