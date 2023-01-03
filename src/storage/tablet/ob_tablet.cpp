@@ -1900,7 +1900,7 @@ int ObTablet::inner_create_memtable(
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
   ObIMemtableMgr *memtable_mgr = nullptr;
 
-  if (OB_UNLIKELY(!clog_checkpoint_scn.is_valid()) || OB_UNLIKELY(schema_version < 0)) {
+  if (OB_UNLIKELY(!clog_checkpoint_scn.is_valid_and_not_min()) || OB_UNLIKELY(schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(clog_checkpoint_scn), K(schema_version));
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
