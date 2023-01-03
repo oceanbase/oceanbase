@@ -264,7 +264,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
         } else {
           // Only dml statement can read elr data
           if (ObTxData::ELR_COMMIT == state
-              && lock_for_read_arg_.mvcc_acc_ctx_.get_tx_id().is_valid()) {
+              && lock_for_read_arg_.mvcc_acc_ctx_.snapshot_.tx_id_.is_valid()) {
             can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
             trans_version_ = commit_version;
           } else {

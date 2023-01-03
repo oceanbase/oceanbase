@@ -559,18 +559,18 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
   if (OB_SUCC(ret)) {
     snapshot.source_ = ObTxReadSnapshot::SRC::GLOBAL;
     snapshot.parts_.reset();
-    if (tx.state_ != ObTxDesc::State::IDLE) {
+    // If tx id is valid , record tx_id and scn
+    if (tx.tx_id_.is_valid()) {
       snapshot.core_.tx_id_ = tx.tx_id_;
       snapshot.core_.scn_ = ObSequence::get_max_seq_no();
+    }
+    if (tx.state_ != ObTxDesc::State::IDLE) {
       ARRAY_FOREACH(tx.parts_, i) {
         if (!tx.parts_[i].is_clean() &&
             OB_FAIL(snapshot.parts_.push_back(ObTxLSEpochPair(tx.parts_[i].id_, tx.parts_[i].epoch_)))) {
           TRANS_LOG(WARN, "push snapshot parts fail", K(ret), K(tx), K(snapshot));
         }
       }
-    } else {
-      snapshot.core_.tx_id_.reset();
-      snapshot.core_.scn_ = 0;
     }
     snapshot.valid_ = true;
   }
@@ -611,9 +611,12 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
       snapshot.snapshot_lsid_ = lsid;
       snapshot.uncertain_bound_ = 0;
       snapshot.parts_.reset();
-      if (tx.state_ != ObTxDesc::State::IDLE) {
+      // If tx id is valid , record tx_id and scn
+      if (tx.tx_id_.is_valid()) {
         snapshot.core_.tx_id_ = tx.tx_id_;
         snapshot.core_.scn_ = ObSequence::get_max_seq_no();
+      }
+      if (tx.state_ != ObTxDesc::State::IDLE) {
         ARRAY_FOREACH(tx.parts_, i) {
           if (tx.parts_[i].id_ == lsid && !tx.parts_[i].is_clean()) {
             if (OB_FAIL(snapshot.parts_.push_back(ObTxLSEpochPair(lsid, tx.parts_[i].epoch_)))) {
@@ -621,9 +624,6 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
             }
           }
         }
-      } else {
-        snapshot.core_.tx_id_.reset();
-        snapshot.core_.scn_ = 0;
       }
       snapshot.valid_ = true;
     } else {
