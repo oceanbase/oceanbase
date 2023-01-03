@@ -9611,6 +9611,8 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
             if (OB_SUCC(ret) && call_expr->get_expr() == columns.at(i).ref_expr_) {
               call_expr->set_expr(real_exprs.at(i));
             }
+          } else if (udf_info.param_exprs_.at(j)->get_param_count() > 0) {
+            OZ (recursive_replace_expr(udf_info.param_exprs_.at(j), columns.at(i), real_exprs.at(i)));
           }
         }
       }
@@ -14801,6 +14803,25 @@ bool ObPLResolver::check_with_rowid(const ObString &routine_name, bool is_for_tr
     }
   }
   return with_rowid;
+}
+
+int ObPLResolver::recursive_replace_expr(ObRawExpr *expr,
+                                         ObQualifiedName &qualified_name,
+                                         ObRawExpr *real_expr)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(expr));
+  CK (OB_NOT_NULL(real_expr));
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    CK (OB_NOT_NULL(expr->get_param_expr(i)));
+    if (OB_FAIL(ret)) {
+    } else if (expr->get_param_expr(i) == qualified_name.ref_expr_) {
+      expr->get_param_expr(i) = real_expr;
+    } else if (expr->get_param_expr(i)->get_param_count() > 0) {
+      OZ (recursive_replace_expr(expr->get_param_expr(i), qualified_name, real_expr));
+    }
+  }
+  return ret;
 }
 
 }
