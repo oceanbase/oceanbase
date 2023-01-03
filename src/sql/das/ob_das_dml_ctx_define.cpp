@@ -151,7 +151,6 @@ int ObDASDMLIterator::get_next_spatial_index_row(ObNewRow *&row)
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("can't get geo col idx", K(ret), K(geo_col_id));
         } else if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
-                                                                  write_buffer.get_tenant_id(),
                                                                   *row_projector_, *sr, *spatial_rows))) {
           LOG_WARN("generate spatial_index_rows failed", K(ret), K(geo_col_id), K(geo_wkb));
         }
@@ -180,7 +179,9 @@ int ObDASDMLIterator::get_next_row(ObNewRow *&row)
 
   if (OB_SUCC(ret) && das_ctdef_->table_param_.get_data_table().is_spatial_index()) {
     if (OB_FAIL(get_next_spatial_index_row(row))) {
-      LOG_WARN("get next spatial index row failed", K(ret), K(das_ctdef_->table_param_.get_data_table()));
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next spatial index row failed", K(ret), K(das_ctdef_->table_param_.get_data_table()));
+      }
     }
   } else {
     if (OB_SUCC(ret)) {

@@ -58,7 +58,6 @@ public:
   static int generate_spatial_index_rows(ObIAllocator &allocator,
                                          const ObDASDMLBaseCtDef &das_ctdef,
                                          const ObString &wkb_str,
-                                         uint64_t tenant_id,
                                          const IntFixedArray &row_projector,
                                          const ObDASWriteBuffer::DmlRow &dml_row,
                                          ObSpatIndexRow &spat_rows);

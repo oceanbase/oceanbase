@@ -295,7 +295,6 @@ int ObDASUtils::generate_spatial_index_rows(
     ObIAllocator &allocator,
     const ObDASDMLBaseCtDef &das_ctdef,
     const ObString &wkb_str,
-    uint64_t tenant_id,
     const IntFixedArray &row_projector,
     const ObDASWriteBuffer::DmlRow &dml_row,
     ObSpatIndexRow &spat_rows)
@@ -310,11 +309,11 @@ int ObDASUtils::generate_spatial_index_rows(
   if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
     LOG_WARN("failed to get srid", K(ret), K(wkb_str));
   } else if (srid != 0 &&
-      OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(tenant_id, srs_guard))) {
-    LOG_WARN("failed to get srs guard", K(ret), K(tenant_id), K(srid));
+      OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(MTL_ID(), srs_guard))) {
+    LOG_WARN("failed to get srs guard", K(ret), K(MTL_ID()), K(srid));
   } else if (srid != 0 &&
       OB_FAIL(srs_guard.get_srs_item(srid, srs_item))) {
-    LOG_WARN("failed to get srs item", K(ret), K(tenant_id), K(srid));
+    LOG_WARN("failed to get srs item", K(ret), K(MTL_ID()), K(srid));
   } else if (((srid == 0) || !(srs_item->is_geographical_srs())) &&
               OB_FAIL(OTSRS_MGR.get_srs_bounds(srid, srs_item, srs_bound))) {
     LOG_WARN("failed to get srs bound", K(ret), K(srid));

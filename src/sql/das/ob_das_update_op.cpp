@@ -94,7 +94,9 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
 
   if (OB_UNLIKELY(das_ctdef_->table_param_.get_data_table().is_spatial_index())) {
     if (OB_FAIL(get_next_spatial_index_row(row))) {
-      LOG_WARN("get next spatial index row failed", K(ret));
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next spatial index row failed", K(ret));
+      }
     }
   } else if (!got_old_row_) {
     got_old_row_ = true;
@@ -222,7 +224,6 @@ int ObDASUpdIterator::get_next_spatial_index_row(ObNewRow *&row)
         int64_t geo_idx = cur_proj.at(rowkey_num);
         ObString geo_wkb = sr->cells()[geo_idx].get_string();
         if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
-                                                            write_buffer.get_tenant_id(),
                                                             cur_proj, *sr, *spatial_rows))) {
           LOG_WARN("generate spatial_index_rows failed", K(ret), K(geo_idx), K(geo_wkb), K(rowkey_num));
         }
