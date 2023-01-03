@@ -926,6 +926,7 @@ do {\
       for (int64_t i = 0; i < str_len; i++) {                                   \
         if (OB_UNLIKELY(src_str[i] == '\0')) {                                  \
           yyerror(yylloc, yyextra, "mismatch strlen, may cased by '\0' in str");\
+          return PARSER_SYNTAX_ERROR;                                           \
         }                                                                       \
       }                                                                         \
     }                                                                           \
