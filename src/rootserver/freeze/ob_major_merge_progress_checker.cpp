@@ -94,10 +94,7 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_uncompacted, boo
     for (;OB_SUCC(ret) && (iter != table_compaction_map_.end()); ++iter) {
       const ObTableCompactionInfo &compaction_info = iter->second;
       if (!compaction_info.is_verified()) {
-        if (0 == compaction_info.tablet_cnt_) {
-          // treat table that has no tablet as verified
-          ++ele_count;
-        } else if (compaction_info.finish_compaction()) {
+        if (compaction_info.finish_compaction()) {
           if (OB_FAIL(unverified_tables.push_back(compaction_info))) {
             LOG_WARN("fail to push back", KR(ret), K(compaction_info));
           }
