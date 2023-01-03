@@ -417,7 +417,9 @@ int ObTabletMemtableMgr::unset_logging_blocked_for_active_memtable(ObIMemtable *
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(get_active_memtable(handle))) {
-    LOG_WARN("fail to get active memtable", K(ret));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to get active memtable", K(ret));
+    }
   } else if (OB_FAIL(handle.get_memtable(active_memtable))) {
     LOG_WARN("fail to get active memtable", K(ret));
   } else {
@@ -603,7 +605,9 @@ int ObTabletMemtableMgr::get_first_frozen_memtable(ObTableHandleV2 &handle) cons
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(get_first_frozen_memtable_(handle))) {
-    LOG_WARN("fail to get first frozen memtable", K(ret));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to get first frozen memtable", K(ret));
+    }
   }
 
   return ret;
@@ -830,6 +834,7 @@ int ObTabletMemtableMgr::get_memtables_v2(
 int ObTabletMemtableMgr::get_first_frozen_memtable_(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
+
   for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; i++) {
     ObTableHandleV2 m_handle;
     const ObMemtable *memtable = nullptr;
@@ -848,6 +853,12 @@ int ObTabletMemtableMgr::get_first_frozen_memtable_(ObTableHandleV2 &handle) con
       break;
     }
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (!handle.is_valid()) {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+
   return ret;
 }
 

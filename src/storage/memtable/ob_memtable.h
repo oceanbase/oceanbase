@@ -435,6 +435,8 @@ public:
   int set_migration_clog_checkpoint_ts(const int64_t clog_checkpoint_ts);
   int64_t get_migration_clog_checkpoint_ts() { return ATOMIC_LOAD(&migration_clog_checkpoint_ts_); }
   int resolve_right_boundary_for_migration();
+  void unset_logging_blocked_for_active_memtable();
+  void resolve_left_boundary_for_active_memtable();
 
   /* multi source data operations */
   virtual int get_multi_source_data_unit(ObIMultiSourceDataUnit *multi_source_data_unit, ObIAllocator *allocator);
