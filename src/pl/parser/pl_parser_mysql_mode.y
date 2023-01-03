@@ -423,10 +423,14 @@ sql_stmt:
     {
       //read sql query string直到读到token';'或者END_P
       do_parse_sql_stmt($$, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
-      if(OB_UNLIKELY(NULL == $$->children_[0] || NULL == $$->children_[0]->children_[1])){
-        YY_UNEXPECTED_ERROR("value node in SET statement is NULL");
-      } else {
-        obpl_mysql_wrap_get_user_var_into_subquery(parse_ctx, $$->children_[0]->children_[1]);
+      if(T_VARIABLE_SET == $$->type_) {
+        for(int64_t i = 0; i < $$->num_child_; ++i) {
+          if(OB_UNLIKELY(NULL == $$->children_[i] || NULL == $$->children_[i]->children_[1])) {
+            YY_UNEXPECTED_ERROR("value node in SET statement is NULL");
+          } else {
+            obpl_mysql_wrap_get_user_var_into_subquery(parse_ctx, $$->children_[i]->children_[1]);
+          }
+        }
       }
     }
   | COMMIT

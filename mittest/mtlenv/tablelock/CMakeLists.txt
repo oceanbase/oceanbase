@@ -1,0 +1,5 @@
+storage_unittest(test_obj_lock)
+storage_unittest(test_obj_lock_map)
+storage_unittest(test_lock_memtable)
+storage_unittest(test_mem_ctx_table_lock)
+storage_unittest(test_lock_table_callback)
