@@ -566,6 +566,8 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
     if (OB_ISNULL(pw_gi_spec_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("gi is null", K(ret));
+    } else if (static_cast<ObTableModifySpec&>(op).use_dist_das()) {
+      // avoid das dml collected and processed by gi
     } else  {
       LOG_TRACE("set partition wise insert op");
       dml_spec_ = static_cast<ObTableModifySpec *>(&op);
