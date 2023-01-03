@@ -685,7 +685,8 @@ private:
                      const ObPLBlockNS &ns,
                      int64_t &cursor,
                      ObPLCompileUnitAST &func,
-                     bool check_mode = false);
+                     bool check_mode = false,
+                     bool for_external_cursor = false);
   int resolve_questionmark_cursor(const int64_t symbol_idx, 
                                   ObPLBlockNS &ns, 
                                   int64_t &cursor);

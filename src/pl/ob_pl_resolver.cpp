@@ -12781,7 +12781,7 @@ int ObPLResolver::resolve_cursor(
     } else if (db_name == resolve_ctx_.session_info_.get_database_name()
                && package_name == ns.get_package_name()) {
       // package_name is not null and equal to current ns, search local
-      OZ (resolve_cursor(cursor_name, ns, index, func), cursor_name);
+      OZ (resolve_cursor(cursor_name, ns, index, func, false, true), cursor_name);
     } else {
       // search global cursor
       const ObPLCursor *cursor = NULL;
@@ -12811,7 +12811,7 @@ int ObPLResolver::resolve_cursor(
                  K(db_name), K(package_name), K(cursor_name));
         LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
       } else if (package_name == ns.get_package_name()) {
-        OZ (resolve_cursor(cursor_name, ns, index, func), cursor_name);
+        OZ (resolve_cursor(cursor_name, ns, index, func, false, true), cursor_name);
       } else {
         // search global cursor
         const ObPLCursor *cursor = NULL;
@@ -12901,7 +12901,7 @@ int ObPLResolver::resolve_questionmark_cursor(
 
 int ObPLResolver::resolve_cursor(
   const ObString &name, const ObPLBlockNS &ns,
-  int64_t &cursor, ObPLCompileUnitAST &func, bool check_mode)
+  int64_t &cursor, ObPLCompileUnitAST &func, bool check_mode, bool for_external_cursor)
 {
   int ret = OB_SUCCESS;
   cursor = OB_INVALID_INDEX;
@@ -12910,7 +12910,11 @@ int ObPLResolver::resolve_cursor(
   CK (OB_NOT_NULL(symbol_table));
   CK (OB_NOT_NULL(cursor_table));
   for (int64_t i = 0;
-       OB_SUCC(ret) && OB_INVALID_INDEX == cursor && i < ns.get_cursors().count(); ++i) {
+       OB_SUCC(ret)
+       && (for_external_cursor ? ns.get_block_type() != ObPLBlockNS::BLOCK_ROUTINE : true)
+       && OB_INVALID_INDEX == cursor
+       && i < ns.get_cursors().count();
+       ++i) {
     const ObPLVar *var = NULL;
     const ObPLCursor *cur = cursor_table->get_cursor(ns.get_cursors().at(i));
     CK (OB_NOT_NULL(cur));
@@ -12956,14 +12960,20 @@ int ObPLResolver::resolve_cursor(
       && OB_INVALID_INDEX == cursor
       && (!check_mode || ns.get_block_type() != ObPLBlockNS::BLOCK_ROUTINE)) {
     if (OB_NOT_NULL(ns.get_pre_ns())) {
-      OZ (SMART_CALL(resolve_cursor(name, *ns.get_pre_ns(), cursor, func, check_mode)), name);
+      OZ (SMART_CALL(resolve_cursor(name,
+                                    *ns.get_pre_ns(),
+                                    cursor,
+                                    func,
+                                    check_mode,
+                                    for_external_cursor)), K(name));
     } else if (OB_NOT_NULL(ns.get_external_ns())
                && OB_NOT_NULL(ns.get_external_ns()->get_parent_ns())) {
       OZ (SMART_CALL(resolve_cursor(name,
                                     *(ns.get_external_ns()->get_parent_ns()),
                                     cursor,
                                     func,
-                                    check_mode)), name);
+                                    check_mode,
+                                    for_external_cursor)), K(name));
     } else if (check_mode) {
       LOG_DEBUG("can not found cursor", K(name));
     } else {
