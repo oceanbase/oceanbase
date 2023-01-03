@@ -1592,6 +1592,7 @@ public:
       alter_constraint_type_(CONSTRAINT_NO_OPERATION),
       index_arg_list_(),
       foreign_key_arg_list_(),
+      allocator_(),
       alter_table_schema_(&allocator_),
       tz_info_wrap_(),
       nls_formats_{},
@@ -1622,7 +1623,6 @@ public:
         index_arg->~ObIndexArg();
       }
     }
-    allocator_.clear();
   }
   bool is_valid() const;
   bool has_rename_action() const
@@ -1684,8 +1684,8 @@ public:
   AlterConstraintType alter_constraint_type_;
   common::ObSArray<ObIndexArg *> index_arg_list_;
   common::ObSArray<ObCreateForeignKeyArg> foreign_key_arg_list_;
-  share::schema::AlterTableSchema alter_table_schema_;
   common::ObArenaAllocator allocator_;
+  share::schema::AlterTableSchema alter_table_schema_;
   common::ObTimeZoneInfo tz_info_;//unused now
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
