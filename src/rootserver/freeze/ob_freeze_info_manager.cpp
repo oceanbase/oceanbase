@@ -343,7 +343,7 @@ int ObFreezeInfoManager::set_freeze_info()
 
   LOG_INFO("finish set freeze info", KR(ret), K(frozen_status), K_(tenant_id));
   ROOTSERVICE_EVENT_ADD("root_service", "root_major_freeze", K_(tenant_id), 
-                        K(ret), K(new_frozen_scn));
+                        K(ret), "new_frozen_scn", new_frozen_scn.get_val_for_inner_table_field());
   return ret;
 }
 

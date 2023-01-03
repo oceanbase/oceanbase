@@ -424,8 +424,8 @@ int ObMajorMergeScheduler::start_zones_merge(const ObZoneArray &to_merge, const 
         } else if (OB_FAIL(zone_merge_mgr_->start_zone_merge(to_merge.at(i), expected_epoch))) {
           LOG_WARN("fail to start zone merge", KR(ret), "zone", to_merge.at(i), K(expected_epoch));
         } else {
-          ROOTSERVICE_EVENT_ADD("daily_merge", "start_merge", K_(tenant_id),
-                                "zone", to_merge.at(i), K(global_broadcast_scn)) ;
+          ROOTSERVICE_EVENT_ADD("daily_merge", "start_merge", K_(tenant_id), "zone", to_merge.at(i),
+              "global_broadcast_scn", global_broadcast_scn.get_val_for_inner_table_field()) ;
         }
       }
     }
@@ -453,7 +453,7 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
     LOG_WARN("fail to check merge status", KR(ret), K_(tenant_id), K(global_broadcast_scn));
     int64_t time_interval = 10L * 60 * 1000 * 1000;  // record every 10 minutes
     if (TC_REACH_TIME_INTERVAL(time_interval)) {
-      ROOTSERVICE_EVENT_ADD("daily_merge", "merge_process", K_(tenant_id), 
+      ROOTSERVICE_EVENT_ADD("daily_merge", "merge_process", K_(tenant_id),
                             "check merge progress fail", ret,
                             "global_broadcast_scn", global_broadcast_scn.get_val_for_inner_table_field(),
                             "service_addr", GCONF.self_addr_);
@@ -464,7 +464,7 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
     if (TC_REACH_TIME_INTERVAL(time_interval)) {
       ROOTSERVICE_EVENT_ADD("daily_merge", "verification", K_(tenant_id),
                             "check verification fail", ret,
-                            "global_broadcast_scn", global_broadcast_scn,
+                            "global_broadcast_scn", global_broadcast_scn.get_val_for_inner_table_field(),
                             "service_addr", GCONF.self_addr_);
     }
   }
@@ -573,8 +573,10 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
                 LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch), K(cur_merged_scn),
                   K(cur_all_merged_scn), K(info));
               } else {
-                ROOTSERVICE_EVENT_ADD("daily_merge", "zone_merge_finish", K_(tenant_id), "last_merged_scn", cur_merged_scn,
-                                      "all_merged_scn", cur_all_merged_scn, K(zone));
+                ROOTSERVICE_EVENT_ADD("daily_merge", "zone_merge_finish", K_(tenant_id),
+                    "last_merged_scn", cur_merged_scn.get_val_for_inner_table_field(),
+                    "all_merged_scn", cur_all_merged_scn.get_val_for_inner_table_field(),
+                    K(zone));
               }
             }
           }
