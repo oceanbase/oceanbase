@@ -4979,7 +4979,8 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
           LOG_USER_ERROR(OB_ERR_COLUMN_SPEC, ident_name.length(), ident_name.ptr());
           LOG_WARN("precision of double overflow", K(ret), K(scale), K(precision));
         } else if (OB_UNLIKELY(OB_DECIMAL_NOT_SPECIFIED != scale &&
-                   precision > OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH)) {
+                   precision > OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH ||
+                   (0 == scale && 0 == precision))) {
           ret = OB_ERR_TOO_BIG_DISPLAYWIDTH;
           LOG_USER_ERROR(OB_ERR_TOO_BIG_DISPLAYWIDTH,
                          ident_name.ptr(),
