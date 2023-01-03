@@ -447,7 +447,11 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       // eg: select cast(18446744073709551615 as signed) -> -1
       //     because exprlicit case need CM_NO_RANGE_CHECK
       type_ctx.set_cast_mode(explicit_cast_cm & ~CM_EXPLICIT_CAST);
-      type1.set_calc_accuracy(type.get_accuracy());
+      if (lib::is_mysql_mode() && !ob_is_numeric_type(type.get_type()) && type1.is_double()) {
+        // for double type cast non-numeric type, no need set calc accuracy to dst type.
+      } else {
+        type1.set_calc_accuracy(type.get_accuracy());
+      }
 
       // in engine 3.0, let implicit cast do the real cast
       bool need_extra_cast_for_src_type = false;

@@ -842,7 +842,8 @@ public:
 
   static int check_need_cast_expr(const ObExprResType &src_res_type,
                                   const ObExprResType &dst_res_type,
-                                  bool &need_cast);
+                                  bool &need_cast,
+                                  bool &is_scale_adjust_cast);
   static int build_add_expr(ObRawExprFactory &expr_factory,
                             ObRawExpr *param_expr1,
                             ObRawExpr *param_expr2,

@@ -381,6 +381,9 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     // demands that we set the calculation type here.
     for (int64_t i = 0; i < types.count(); ++i) {
       types.at(i).set_calc_meta(types.at(i));
+      if (lib::is_mysql_mode() && types.at(i).is_double()) {
+        types.at(i).set_calc_accuracy(types.at(i).get_accuracy());
+      }
     }
     if (OB_FAIL(ret)) {
     } else if (ObExprOperator::NOT_ROW_DIMENSION != row_dimension) {

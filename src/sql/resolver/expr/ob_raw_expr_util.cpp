@@ -3441,11 +3441,13 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
   int ret = OB_SUCCESS;
   new_expr = &expr;
   bool need_cast = false;
+  bool is_scale_adjust_cast = false;
   const ObExprResType &src_type = expr.get_result_type();
   CK(OB_NOT_NULL(session) && OB_NOT_NULL(expr_factory));
-  OZ(ObRawExprUtils::check_need_cast_expr(src_type, dst_type, need_cast));
+  OZ(ObRawExprUtils::check_need_cast_expr(src_type, dst_type, need_cast, is_scale_adjust_cast));
   if (OB_SUCC(ret) && need_cast) {
-    if (T_FUN_SYS_CAST == expr.get_expr_type() && expr.has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
+    if (T_FUN_SYS_CAST == expr.get_expr_type() && expr.has_flag(IS_OP_OPERAND_IMPLICIT_CAST) &&
+          !is_scale_adjust_cast) {
       ret = OB_ERR_UNEXPECTED;
 #ifdef DEBUG
       LOG_ERROR("try to add implicit cast again, check if type deduction is correct",
@@ -6594,10 +6596,12 @@ bool ObRawExprUtils::is_sharable_expr(const ObRawExpr &expr)
 
 int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
                                          const ObExprResType &dst_type,
-                                         bool &need_cast)
+                                         bool &need_cast,
+                                         bool &is_scale_adjust_cast)
 {
   int ret = OB_SUCCESS;
   need_cast = false;
+  is_scale_adjust_cast = false;
   ObObjType in_type  = src_type.get_type();
   ObObjType out_type = dst_type.get_type();
   ObCollationType in_cs_type  = src_type.get_collation_type();
@@ -6617,9 +6621,15 @@ int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
           src_type.get_scale() != dst_type.get_scale() &&
           src_type.get_precision() != PRECISION_UNKNOWN_YET) {
       // for the conversion between doubles with increased scale in mysql mode,
-      // it is necessary to explicitly add the cast expression
+      // there are tow cases need to explicitly add the cast expression:
+      // case 1: the scale of dst_type is unknow(-1), the scale represents the largest float/double
+      //         scale in mysql.
+      // case 2: dst_scale is greater than src_scale, need to be aligned
       need_cast = (SCALE_UNKNOWN_YET == dst_type.get_scale()) ||
                      (src_type.get_scale() < dst_type.get_scale());
+      if (need_cast) {
+        is_scale_adjust_cast = true;
+      }
     }
   } else if (ob_is_enumset_tc(out_type)) {
     //no need add cast, will add column_conv later
