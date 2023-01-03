@@ -16,6 +16,7 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/tablet/ob_tablet_filter.h"
+#include "share/ob_service_epoch_proxy.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase
@@ -364,11 +365,20 @@ int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
     ObMySQLTransaction trans;
     int64_t affected_rows = 0;
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-    if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
+    int64_t estimated_timeout_us = 0;
+    ObTimeoutCtx timeout_ctx;
+    // set trx_timeout and query_timeout based on tablet_replica_cnt
+    if (OB_FAIL(ObTabletMetaTableCompactionOperator::get_estimated_timeout_us(tenant_id,
+                                                     estimated_timeout_us))) {
+      LOG_WARN("fail to get estimated_timeout_us", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(estimated_timeout_us))) {
+      LOG_WARN("fail to set trx timeout", KR(ret), K(estimated_timeout_us));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(estimated_timeout_us))) {
+      LOG_WARN("fail to set abs timeout", KR(ret), K(estimated_timeout_us));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
       LOG_WARN("fail to start transaction", KR(ret), K(tenant_id), K(meta_tenant_id));
     } else {
       ObSqlString sql;
-      // TODO tenant may have a great many tablets, so we should use batch splitting strategy to update
       if (OB_FAIL(sql.assign_fmt("UPDATE %s SET report_scn = '%lu' WHERE tenant_id = '%ld' "
           "AND compaction_scn >= '%lu' AND status != '%ld'",
               OB_ALL_TABLET_META_TABLE_TNAME,
@@ -383,6 +393,111 @@ int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
     }
     handle_trans_stat(trans, ret);
     LOG_INFO("finish to batch update report scn", KR(ret), K(tenant_id), K(affected_rows));
+  }
+  return ret;
+}
+
+int ObTabletMetaTableCompactionOperator::batch_update_status(
+    const uint64_t tenant_id,
+    const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    // do nothing
+  } else {
+    ObMySQLTransaction trans;
+    int64_t affected_rows = 0;
+    bool is_match = true;
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    int64_t estimated_timeout_us = 0;
+    ObTimeoutCtx timeout_ctx;
+    // set trx_timeout and query_timeout based on tablet_replica_cnt
+    if (OB_FAIL(ObTabletMetaTableCompactionOperator::get_estimated_timeout_us(tenant_id,
+                                                     estimated_timeout_us))) {
+      LOG_WARN("fail to get estimated_timeout_us", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(estimated_timeout_us))) {
+      LOG_WARN("fail to set trx timeout", KR(ret), K(estimated_timeout_us));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(estimated_timeout_us))) {
+      LOG_WARN("fail to set abs timeout", KR(ret), K(estimated_timeout_us));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
+      LOG_WARN("fail to start transaction", KR(ret), K(tenant_id), K(meta_tenant_id));
+    } else if (OB_FAIL(ObServiceEpochProxy::check_service_epoch_with_trans(trans, tenant_id,
+                 ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
+      LOG_WARN("fail to check service_epoch with trans", KR(ret), K(tenant_id), K(expected_epoch));
+    } else if (is_match) {
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt("UPDATE %s SET status = '%ld' WHERE tenant_id = '%ld' "
+                  "AND status = '%ld'",
+                  OB_ALL_TABLET_META_TABLE_TNAME,
+                  (int64_t)ObTabletReplica::ScnStatus::SCN_STATUS_IDLE,
+                  tenant_id,
+                  (int64_t)ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(trans.write(meta_tenant_id, sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
+      }
+    }
+    handle_trans_stat(trans, ret);
+    LOG_INFO("finish to batch update status", KR(ret), K(tenant_id), K(affected_rows));
+  }
+  return ret;
+}
+
+int ObTabletMetaTableCompactionOperator::get_estimated_timeout_us(
+    const uint64_t tenant_id,
+    int64_t &estimated_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  int64_t tablet_replica_cnt = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::get_tablet_replica_cnt(tenant_id,
+                                                          tablet_replica_cnt))) {
+    LOG_WARN("fail to get tablet replica cnt", KR(ret), K(tenant_id));
+  } else {
+    estimated_timeout_us = tablet_replica_cnt * 1000L; // 1ms for each tablet replica
+    estimated_timeout_us = MAX(estimated_timeout_us, THIS_WORKER.get_timeout_remain());
+    estimated_timeout_us = MIN(estimated_timeout_us, 3600 * 1000 * 1000L);
+    estimated_timeout_us = MAX(estimated_timeout_us, GCONF.rpc_timeout);
+  }
+  return ret;
+}
+
+int ObTabletMetaTableCompactionOperator::get_tablet_replica_cnt(
+    const uint64_t tenant_id,
+    int64_t &tablet_replica_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    ObSqlString sql;
+    SMART_VAR(ObISQLClient::ReadResult, res) {
+      ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql.append_fmt("SELECT COUNT(*) as cnt from %s WHERE tenant_id = '%lu' ",
+                                 OB_ALL_TABLET_META_TABLE_TNAME,
+                                 tenant_id))) {
+        LOG_WARN("failed to append fmt", K(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, meta_tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("get next result failed", KR(ret), K(tenant_id), K(sql));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "cnt", tablet_replica_cnt, int64_t);
+      }
+    }
   }
   return ret;
 }

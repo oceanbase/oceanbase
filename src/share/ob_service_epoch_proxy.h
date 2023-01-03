@@ -67,6 +67,11 @@ public:
                                              const int64_t tenant_id,
                                              const char *name,
                                              int64_t &epoch_value);
+  static int check_service_epoch_with_trans(ObMySQLTransaction &trans,
+                                            const int64_t tenant_id,
+                                            const char *name,
+                                            const int64_t expected_epoch,
+                                            bool &is_match);
 
 public:
   constexpr static const char * const FREEZE_SERVICE_EPOCH = "freeze_service_epoch";

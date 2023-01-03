@@ -15,6 +15,7 @@
 #include "rootserver/freeze/ob_tenant_major_freeze.h"
 
 #include "share/ob_errno.h"
+#include "share/ob_tablet_meta_table_compaction_operator.h"
 
 namespace oceanbase
 {
@@ -245,7 +246,10 @@ int ObTenantMajorFreeze::clear_merge_error()
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
     const int64_t expected_epoch = merge_scheduler_.get_epoch();
-    if (OB_FAIL(zone_merge_mgr_.set_merge_error(error_type, expected_epoch))) {
+    if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_,
+                                                                         expected_epoch))) {
+      LOG_WARN("fail to batch update status", KR(ret), K_(tenant_id), K(expected_epoch));
+    } else if (OB_FAIL(zone_merge_mgr_.set_merge_error(error_type, expected_epoch))) {
       LOG_WARN("fail to set merge error", KR(ret), K_(tenant_id), K(error_type), K(expected_epoch));
     }
   }

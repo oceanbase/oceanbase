@@ -105,6 +105,8 @@ public:
       const uint64_t tenant_id,
       const uint64_t global_braodcast_scn_val,
       const ObTabletReplica::ScnStatus &except_status);
+  // designed for 'clear merge error'. it updates all tablets' status to SCN_STATUS_IDLE
+  static int batch_update_status(const uint64_t tenant_id, const int64_t expected_epoch);
   static int get_unique_status(
       const uint64_t tenant_id,
       common::ObIArray<ObTabletLSPair> &pairs,
@@ -151,6 +153,8 @@ private:
   static int construct_unequal_tablet_id_array(
       sqlclient::ObMySQLResult &result,
       common::ObIArray<ObTabletID> &unequal_tablet_id_array);
+  static int get_estimated_timeout_us(const uint64_t tenant_id, int64_t &estimated_timeout_us);
+  static int get_tablet_replica_cnt(const uint64_t tenant_id, int64_t &tablet_replica_cnt);
 private:
   const static int64_t MAX_BATCH_COUNT = 150;
 };

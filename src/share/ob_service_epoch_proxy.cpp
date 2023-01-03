@@ -170,5 +170,27 @@ int ObServiceEpochProxy::inner_get_service_epoch_(
   return ret;
 }
 
+int ObServiceEpochProxy::check_service_epoch_with_trans(
+    ObMySQLTransaction &trans,
+    const int64_t tenant_id,
+    const char *name,
+    const int64_t expected_epoch,
+    bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = true;
+  int64_t persistent_epoch = -1;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || (expected_epoch < 0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(expected_epoch));
+  } else if (OB_FAIL(ObServiceEpochProxy::select_service_epoch_for_update(trans, tenant_id,
+                                            name, persistent_epoch))) {
+    LOG_WARN("fail to select service_epoch for update", KR(ret), K(tenant_id));
+  } else if (persistent_epoch != expected_epoch) {
+    is_match = false;
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase
