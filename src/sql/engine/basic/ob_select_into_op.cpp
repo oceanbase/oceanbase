@@ -142,7 +142,7 @@ int ObSelectIntoOp::inner_open()
 
 int ObSelectIntoOp::inner_get_next_row()
 {
-  int ret = OB_SUCCESS;
+  int ret = 0 == top_limit_cnt_ ? OB_ITER_END : OB_SUCCESS;
   int64_t row_count = 0;
   const ObItemType into_type = MY_SPEC.into_type_;
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
@@ -200,6 +200,11 @@ int ObSelectIntoOp::inner_get_next_batch(const int64_t max_row_cnt)
   }
   bool stop_loop = false;
   bool is_iter_end = false;
+  if (0 == top_limit_cnt_) {
+    brs_.size_ = 0;
+    brs_.end_ = true;
+    stop_loop = true;
+  }
   while (OB_SUCC(ret) && !stop_loop) {
     clear_evaluated_flag();
     int64_t rowkey_batch_size = min(batch_size, top_limit_cnt_ - row_count);
