@@ -1154,6 +1154,7 @@ int ObMultiVersionMicroBlockRowScanner::cache_cur_micro_row(const bool found_fir
       if (is_row_empty(prev_micro_row_)) { // Save static meta information when first cached
         prev_micro_row_.row_flag_ = row_.row_flag_;
         prev_micro_row_.count_ = row_.count_;
+        prev_micro_row_.have_uncommited_row_ = row_.have_uncommited_row_;
       }
       // The positive scan scans from new to old (trans_version is negative), so cur_row is older than prev_row
       // So just add the nop column (column for which the value has not been decided)
@@ -1183,6 +1184,7 @@ int ObMultiVersionMicroBlockRowScanner::cache_cur_micro_row(const bool found_fir
       } else if (!is_row_empty(row_)) {
         prev_micro_row_.row_flag_ = row_.row_flag_;
         prev_micro_row_.count_ = row_.count_;
+        prev_micro_row_.have_uncommited_row_ = row_.have_uncommited_row_;
         const int64_t end_cell_pos =
             row_.row_flag_.is_delete() ? read_info_->get_schema_rowkey_count() : row_.count_;
         for (int64_t i = 0; OB_SUCC(ret) && i < end_cell_pos; ++i) {
@@ -1196,6 +1198,7 @@ int ObMultiVersionMicroBlockRowScanner::cache_cur_micro_row(const bool found_fir
     } else if (!is_row_empty(row_)) {
       prev_micro_row_.row_flag_ = row_.row_flag_;
       prev_micro_row_.count_ = row_.count_;
+      prev_micro_row_.have_uncommited_row_ = row_.have_uncommited_row_;
       if (row_.row_flag_.is_delete()) {
         for (int64_t i = read_info_->get_schema_rowkey_count(); i < prev_micro_row_.count_; ++i) {
           prev_micro_row_.storage_datums_[i].set_nop();
