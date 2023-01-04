@@ -30,6 +30,7 @@ int ObIndexInfoCache::get_index_info_entry(
     const uint64_t table_id, const uint64_t index_id, IndexInfoEntry*& entry) const
 {
   int ret = OB_SUCCESS;
+  entry = NULL;
   if (table_id != table_id_ || OB_UNLIKELY(OB_INVALID_ID == index_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_id is invalid", K(index_id), K_(table_id), K(ret));

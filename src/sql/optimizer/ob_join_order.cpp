@@ -476,6 +476,10 @@ int ObJoinOrder::get_hint_index_ids(const uint64_t ref_table_id, const ObIndexHi
         }
       }
     }
+    if (OB_SUCC(ret) && is_virtual_table(ref_table_id) && !valid_index_ids.empty() &&
+        OB_FAIL(add_var_to_array_no_dup(valid_index_ids, ref_table_id))) {
+      LOG_WARN("failed add primary key id to array no dup", K(ret));
+    }
   }
   return ret;
 }
@@ -971,7 +975,7 @@ int ObJoinOrder::create_access_path(const uint64_t table_id, const uint64_t ref_
     const ObIndexInfoCache& index_info_cache, PathHelper& helper, AccessPath*& access_path)
 {
   int ret = OB_SUCCESS;
-  IndexInfoEntry* index_info_entry;
+  IndexInfoEntry* index_info_entry = NULL;
   access_path = NULL;
   AccessPath* ap = NULL;
   bool is_nl_with_extended_range = false;
