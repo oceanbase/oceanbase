@@ -284,7 +284,7 @@ private:
   struct ObTenantBucket {
     ObDList<ObTenantInfo> info_list_;
     SpinRWLock lock_;
-    ObTenantBucket() : info_list_(), lock_()
+    ObTenantBucket() : info_list_(), lock_(ObLatchIds::TENANT_MGR_TENANT_BUCKET_LOCK)
     {}
     int get_the_node(const uint64_t tenant_id, ObTenantInfo*& node)
     {

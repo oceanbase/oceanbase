@@ -366,6 +366,9 @@ WAIT_EVENT_DEF(
 WAIT_EVENT_DEF(FREEZE_ASYNC_WORKER_LOCK_WAIT, 16008, "freeze async worker lock wait", "", "", "", CONCURRENCY,
     "FREEZE_ASYNC_WORKER_LOCK_WAIT", true)
 
+WAIT_EVENT_DEF(TENANT_MGR_TENANT_BUCKET_LOCK_WAIT, 16056, "tenant mgr tenant bucket lock wait", "", "", "", CONCURRENCY,
+    "TENANT_MGR_TENANT_BUCKET_LOCK_WAIT", true)
+
 // replication group
 WAIT_EVENT_DEF(RG_TRANSFER_LOCK_WAIT, 17000, "transfer lock wait", "src_rg", "dst_rg", "transfer_pkey", CONCURRENCY,
     "transfer lock wait", false)

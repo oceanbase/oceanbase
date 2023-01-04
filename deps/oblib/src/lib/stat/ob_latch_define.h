@@ -209,6 +209,9 @@ LATCH_DEF(ARCHIVE_RESTORE_QUEUE_LOCK, 115, "archive restore queue lock", LATCH_F
 LATCH_DEF(XA_STMT_LOCK, 116, "xa stmt lock", LATCH_FIFO, 2000, 0, XA_STMT_LOCK_WAIT, "xa stmt lock")
 LATCH_DEF(XA_QUEUE_LOCK, 117, "xa queue lock", LATCH_FIFO, 2000, 0, XA_QUEUE_LOCK_WAIT, "xa queue lock")
 
+LATCH_DEF(TENANT_MGR_TENANT_BUCKET_LOCK, 290, "tenant mgr tenant bucket lock", LATCH_READ_PREFER, INT64_MAX, 0,
+    TENANT_MGR_TENANT_BUCKET_LOCK_WAIT, "tenant mgr tenant bucket lock")
+
 LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif
 
