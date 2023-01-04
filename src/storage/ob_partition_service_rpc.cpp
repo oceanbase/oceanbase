@@ -1266,6 +1266,31 @@ void ObFetchTableInfoResult::reset()
   gc_table_keys_.reset();
 }
 
+int ObFetchTableInfoResult::assign(const ObFetchTableInfoResult &other)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(table_keys_.assign(other.table_keys_))) {
+    LOG_WARN("Failed to assign table_keys", K(ret));
+  } else if (OB_FAIL(gc_table_keys_.assign(other.gc_table_keys_))) {
+    LOG_WARN("failed to assign gc_table_keys_", K(ret));
+  } else {
+    multi_version_start_ = other.multi_version_start_;
+    is_ready_for_read_ = other.is_ready_for_read_;
+  }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = E(EventTable::EN_FETCH_TABLE_INFO_RPC) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      table_keys_.reset();
+      gc_table_keys_.reset();
+      STORAGE_LOG(ERROR, "fake EN_FETCH_TABLE_INFO_RPC", K(ret));
+    }
+  }
+#endif
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObFetchTableInfoResult, table_keys_, multi_version_start_, is_ready_for_read_, gc_table_keys_);
 OB_SERIALIZE_MEMBER(ObSplitDestPartitionResult, status_, progress_, schema_version_, src_pkey_, dest_pkey_);
 OB_SERIALIZE_MEMBER(ObFetchLogicBaseMetaArg, table_key_, task_count_);

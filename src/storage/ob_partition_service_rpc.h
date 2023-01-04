@@ -95,6 +95,7 @@ public:
   common::ObSArray<int> return_array_;
 
   OB_UNIS_VERSION(3);
+  DISALLOW_COPY_AND_ASSIGN(ObMemberChangeBatchResult);
 };
 
 struct ObMemberChangeBatchArg {
@@ -112,6 +113,7 @@ public:
   share::ObTaskId task_id_;
 
   OB_UNIS_VERSION(3);
+  DISALLOW_COPY_AND_ASSIGN(ObMemberChangeBatchArg);
 };
 
 struct ObModifyQuorumBatchResult {
@@ -126,6 +128,7 @@ public:
   common::ObSArray<int> return_array_;
 
   OB_UNIS_VERSION(3);
+  DISALLOW_COPY_AND_ASSIGN(ObModifyQuorumBatchResult);
 };
 
 struct ObModifyQuorumArg {
@@ -161,6 +164,7 @@ public:
   share::ObTaskId task_id_;
 
   OB_UNIS_VERSION(3);
+  DISALLOW_COPY_AND_ASSIGN(ObModifyQuorumBatchArg);
 };
 
 struct ObRemoveReplicaArg {
@@ -195,6 +199,7 @@ struct ObRemoveReplicaArgs {
 
   common::ObSArray<ObRemoveReplicaArg> arg_array_;
   OB_UNIS_VERSION(1);
+  DISALLOW_COPY_AND_ASSIGN(ObRemoveReplicaArgs);
 };
 
 struct ObFetchMacroBlockArg {
@@ -219,6 +224,7 @@ public:
   TO_STRING_KV(K_(table_key), "arg_count", arg_list_.count());
   storage::ObITable::TableKey table_key_;
   common::ObSArray<ObFetchMacroBlockArg> arg_list_;
+  DISALLOW_COPY_AND_ASSIGN(ObFetchMacroBlockListArg);
 };
 
 struct ObFetchPartitionInfoArg {
@@ -252,6 +258,7 @@ struct ObFetchPartitionInfoResult {
   common::ObVersion major_version_;   // max{major table major freeze version}
   bool is_log_sync_;
   OB_UNIS_VERSION(OB_FETCH_PARTITION_INFO_RESULT_VERSION_V2);
+  DISALLOW_COPY_AND_ASSIGN(ObFetchPartitionInfoResult);
 };
 
 struct ObFetchTableInfoArg {
@@ -318,11 +325,13 @@ struct ObFetchTableInfoResult {
   TO_STRING_KV(K_(multi_version_start), K_(is_ready_for_read), K_(table_keys), K_(gc_table_keys));
 
   void reset();
+  int assign(const ObFetchTableInfoResult &other);
   ObSArray<storage::ObITable::TableKey> table_keys_;
   int64_t multi_version_start_;
   bool is_ready_for_read_;
   ObSArray<storage::ObITable::TableKey> gc_table_keys_;
   OB_UNIS_VERSION(2);
+  DISALLOW_COPY_AND_ASSIGN(ObFetchTableInfoResult);
 };
 
 struct ObSplitDestPartitionResult {
@@ -522,6 +531,7 @@ struct ObPGPartitionMetaInfo {
   ObSArray<uint64_t> table_id_list_;  // major table and index table
   ObSArray<ObFetchTableInfoResult> table_info_;
   OB_UNIS_VERSION(OB_PG_PARTITION_META_INFO_RESULT_VERSION_V2);
+  DISALLOW_COPY_AND_ASSIGN(ObPGPartitionMetaInfo);
 };
 
 struct ObFetchPGInfoResult {
@@ -551,6 +561,7 @@ struct ObFetchPGInfoResult {
   int64_t pg_file_id_;
   int64_t compat_version_;
   OB_UNIS_VERSION(1);
+  DISALLOW_COPY_AND_ASSIGN(ObFetchPGInfoResult);
 };
 
 struct ObFetchReplicaInfoArg {
@@ -602,6 +613,7 @@ struct ObBatchFetchReplicaInfoArg {
 
   ObSArray<ObFetchReplicaInfoArg> replica_info_arg_;
   OB_UNIS_VERSION(1);
+  DISALLOW_COPY_AND_ASSIGN(ObBatchFetchReplicaInfoArg);
 };
 
 struct ObBatchFetchReplicaInfoRes {
@@ -615,6 +627,7 @@ struct ObBatchFetchReplicaInfoRes {
 
   ObSArray<ObFetchReplicaInfoRes> replica_info_res_;
   OB_UNIS_VERSION(1);
+  DISALLOW_COPY_AND_ASSIGN(ObBatchFetchReplicaInfoRes);
 };
 
 struct ObSuspendPartitionArg {
@@ -698,6 +711,7 @@ struct ObFetchPGRecoveryPointMetaInfoArg {
   common::ObPGKey pg_key_;
   common::ObSArray<storage::ObRecoveryPointKey> recovery_point_key_array_;
   OB_UNIS_VERSION(1);
+  DISALLOW_COPY_AND_ASSIGN(ObFetchPGRecoveryPointMetaInfoArg);
 };
 
 struct ObFetchPGRecoveryPointMetaInfoRes {
@@ -710,6 +724,7 @@ struct ObFetchPGRecoveryPointMetaInfoRes {
   int assign(const ObFetchPGRecoveryPointMetaInfoRes& res);
   storage::ObRecoveryPointMetaInfo recovery_point_meta_info_;
   OB_UNIS_VERSION(1);
+  DISALLOW_COPY_AND_ASSIGN(ObFetchPGRecoveryPointMetaInfoRes);
 };
 
 class ObPartitionServiceRpcProxy : public obrpc::ObRpcProxy {
