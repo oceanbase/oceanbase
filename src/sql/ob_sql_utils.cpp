@@ -3839,7 +3839,7 @@ int ObSQLUtils::handle_audit_record(
     }
   }
   session.update_stat_from_audit_record();
-  session.reset_audit_record();
+  session.reset_audit_record(need_retry);
   return ret;
 }
 

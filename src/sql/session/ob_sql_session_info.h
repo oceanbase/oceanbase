@@ -492,7 +492,7 @@ public:
   {
     return inner_flag_;
   }
-  void reset_audit_record();
+  void reset_audit_record(bool need_retry);
   ObAuditRecordData& get_audit_record();  // try_cnt will be changed !
   ObAuditRecordData &get_raw_audit_record();
   const ObAuditRecordData& get_raw_audit_record() const;

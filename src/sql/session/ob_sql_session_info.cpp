@@ -1136,9 +1136,18 @@ void ObSQLSessionInfo::update_alive_time_stat()
   ;
 }
 
-void ObSQLSessionInfo::reset_audit_record()
+void ObSQLSessionInfo::reset_audit_record(bool need_retry)
 {
-  MEMSET(&audit_record_, 0, sizeof(audit_record_));
+  if (!need_retry) {
+    MEMSET(&audit_record_, 0, sizeof(audit_record_));
+  } else {
+    // memset without try_cnt_ and exec_timestamp_
+    int64_t try_cnt = audit_record_.try_cnt_;
+    ObExecTimestamp exec_timestamp = audit_record_.exec_timestamp_;
+    MEMSET(&audit_record_, 0, sizeof(audit_record_));
+    audit_record_.try_cnt_ = try_cnt;
+    audit_record_.exec_timestamp_ = exec_timestamp;
+  }
 }
 
 void ObSQLSessionInfo::set_session_type_with_flag()
