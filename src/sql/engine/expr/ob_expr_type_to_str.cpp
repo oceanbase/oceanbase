@@ -345,20 +345,26 @@ int ObExprSetToStr::calc_to_str_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
         LOG_WARN("alloc memory failed", K(ret), K(buf), K(need_size));
       } else {
         uint64_t index = 1ULL;
-        for (int64_t i = 0; OB_SUCC(ret) && i < element_num && set_val >= index; ++i, index = index << 1) {
+        for (int64_t i = 0;
+             OB_SUCC(ret) && i < element_num && i < EFFECTIVE_COUNT && set_val >= index;
+             ++i, index = index << 1) {
           if (set_val & (index)) {
             const ObString& element_val = str_values.at(i);
             MEMCPY(buf + pos, element_val.ptr(), element_val.length());
             pos += element_val.length();
-            MEMCPY(buf + pos, sep.ptr(), sep.length());
-            pos += sep.length();
+            if ((i + 1) < element_num && (i + 1) < EFFECTIVE_COUNT &&
+                ((index << 1) <= set_val)) {
+              // skip setting last seperator
+              MEMCPY(buf + pos, sep.ptr(), sep.length());
+              pos += sep.length();
+            }
           }
         }
         if (0 == pos) {
           res_datum.set_enumset_inner(buf, static_cast<ObString::obstr_size_t>(pos));
         } else {
           // remove the last comma
-          res_datum.set_enumset_inner(buf, static_cast<ObString::obstr_size_t>(pos - sep.length()));
+          res_datum.set_enumset_inner(buf, static_cast<ObString::obstr_size_t>(pos));
         }
       }
     }
