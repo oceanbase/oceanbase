@@ -600,7 +600,7 @@ int ObTableInsertUp::calc_insert_row(ObExecContext& ctx, ObExprCtx& expr_ctx, co
       LOG_WARN("copy cur row fail", K(ret), K(insert_row));
     } else if (OB_FAIL(calculate_row(expr_ctx, *const_cast<ObNewRow*>(insert_row))) ||
                OB_FAIL(validate_row(expr_ctx, expr_ctx.column_conv_ctx_, *const_cast<ObNewRow*>(insert_row)))) {
-      LOG_WARN("calculate or validate row failed", K(ret), K(*insert_row));
+      LOG_WARN("calculate or validate row failed", K(ret), KPC(insert_row));
       int64_t err_col_idx = (expr_ctx.err_col_idx_) % column_ids_.count();
       log_user_error_inner(ret, err_col_idx, update_ctx->found_rows_ + 1, ctx);
     } else {
