@@ -544,6 +544,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12316	__all_virtual_privilege	2	201001	1
 12317	__all_virtual_tablet_pointer_status	2	201001	1
 12318	__all_virtual_storage_meta_memory_status	2	201001	1
+12319	__all_virtual_kvcache_store_memblock	2	201001	1
 12320	__all_virtual_mock_fk_parent_table	2	201001	1
 12321	__all_virtual_mock_fk_parent_table_history	2	201001	1
 12322	__all_virtual_mock_fk_parent_table_column	2	201001	1
@@ -969,6 +970,7 @@ select * from  oceanbase.__all_virtual_disk_stat limit 1;
 select * from  oceanbase.__all_virtual_engine limit 1;
 select * from  oceanbase.__all_virtual_io_stat limit 1;
 select * from  oceanbase.__all_virtual_kvcache_info limit 1;
+select * from  oceanbase.__all_virtual_kvcache_store_memblock limit 1;
 select * from  oceanbase.__all_virtual_latch limit 1;
 select * from  oceanbase.__all_virtual_long_ops_status limit 1;
 select * from  oceanbase.__all_virtual_macro_block_marker_status limit 1;

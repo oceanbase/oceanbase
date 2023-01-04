@@ -184,6 +184,7 @@
 #include "observer/virtual_table/ob_all_virtual_ls_archive_stat.h"
 #include "observer/virtual_table/ob_all_virtual_dml_stats.h"
 #include "observer/virtual_table/ob_tenant_virtual_privilege.h"
+#include "observer/virtual_table/ob_all_virtual_kvcache_store_memblock.h"
 #include "observer/virtual_table/ob_information_query_response_time.h"
 #include "observer/virtual_table/ob_all_virtual_kvcache_handle_leak_info.h"
 #include "observer/virtual_table/ob_all_virtual_schema_memory.h"
@@ -2217,6 +2218,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               load_data_stat->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(load_data_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_KVCACHE_STORE_MEMBLOCK_TID: {
+            ObAllVirtualKVCacheStoreMemblock *kvcache_store_memblock = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualKVCacheStoreMemblock, kvcache_store_memblock))) {
+              SERVER_LOG(ERROR, "Fail to create __all_virtual_kvcache_store_memblock", K(ret));
+            } else {
+              kvcache_store_memblock->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(kvcache_store_memblock);
             }
             break;
           }

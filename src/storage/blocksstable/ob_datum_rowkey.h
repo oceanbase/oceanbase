@@ -38,6 +38,7 @@ public:
   OB_INLINE bool is_memtable_valid() const { return store_rowkey_.is_valid() && is_valid(); }
   OB_INLINE int32_t get_datum_cnt() const { return datum_cnt_; }
   OB_INLINE const ObStorageDatum *get_datum_ptr() { return datums_; }
+  OB_INLINE const ObStorageDatum& get_datum(const int64_t idx) const { OB_ASSERT(idx < datum_cnt_); return datums_[idx]; }
   OB_INLINE int64_t get_deep_copy_size() const;
   OB_INLINE int deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const;
   OB_INLINE int deep_copy(ObDatumRowkey &dest, char *buf, const int64_t buf_len) const;

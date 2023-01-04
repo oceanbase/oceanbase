@@ -29,6 +29,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "ob_bloom_filter_cache.h"
 #include "ob_micro_block_reader_helper.h"
+#include "share/cache/ob_kvcache_pre_warmer.h"
 
 namespace oceanbase
 {
@@ -159,10 +160,13 @@ protected:
 private:
   int append_row(const ObDatumRow &row, const int64_t split_size);
   int check_order(const ObDatumRow &row);
+  int init_hash_index_builder();
+  int append_row_and_hash_index(const ObDatumRow &row);
   int build_micro_block_desc(
       const ObMicroBlock &micro_block,
       ObMicroBlockDesc &micro_block_desc,
       ObMicroBlockHeader &header_for_rewrite);
+  int build_hash_index_block(ObMicroBlockDesc &micro_block_desc);
   int build_micro_block_desc_with_rewrite(
       const ObMicroBlock &micro_block,
       ObMicroBlockDesc &micro_block_desc,
@@ -198,6 +202,7 @@ protected:
 private:
   ObIMicroBlockWriter *micro_writer_;
   ObMicroBlockReaderHelper reader_helper_;
+  ObMicroBlockHashIndexBuilder hash_index_builder_;
   ObMicroBlockBufferHelper micro_helper_;
   ObTableReadInfo read_info_;
   ObMacroBlock macro_blocks_[2];
@@ -221,6 +226,7 @@ private:
   ObIMacroBlockFlushCallback *callback_;
   ObDataIndexBlockBuilder *builder_;
   ObMicroBlockAdaptiveSplitter micro_block_adaptive_splitter_;
+  ObDataBlockCachePreWarmer data_block_pre_warmer_;
 };
 
 }//end namespace blocksstable

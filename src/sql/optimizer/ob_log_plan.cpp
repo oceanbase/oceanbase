@@ -4220,8 +4220,10 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_index_back_row_count(ap->index_back_row_count_);
     scan->set_estimate_method(ap->est_cost_info_.row_est_method_);
     scan->set_pre_query_range(ap->pre_query_range_);
+    scan->set_skip_scan(OptSkipScanState::SS_DISABLE != ap->use_skip_scan_);
     if (!ap->is_inner_path_ &&
-               OB_FAIL(scan->set_query_ranges(ap->get_cost_table_scan_info().ranges_))) {
+        OB_FAIL(scan->set_query_ranges(ap->get_cost_table_scan_info().ranges_,
+                                       ap->get_cost_table_scan_info().ss_ranges_))) {
       LOG_WARN("failed to set query ranges", K(ret));
     } else if (OB_FAIL(scan->set_range_columns(ap->get_cost_table_scan_info().range_columns_))) {
       LOG_WARN("failed to set range column", K(ret));
@@ -6715,7 +6717,9 @@ int ObLogPlan::check_scalar_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> &
     if (OB_ISNULL(cur_aggr = aggrs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (T_FUN_COUNT != cur_aggr->get_expr_type()) {
+    } else if (T_FUN_COUNT != cur_aggr->get_expr_type()
+               && T_FUN_MIN != cur_aggr->get_expr_type()
+               && T_FUN_MAX != cur_aggr->get_expr_type()) {
       can_push = false;
     } else if (cur_aggr->is_param_distinct() || 1 < cur_aggr->get_real_param_count()) {
       /* mysql mode, support count(distinct c1, c2). if this distinct can be eliminated,
@@ -11767,6 +11771,26 @@ const ColumnItem *ObLogPlan::get_column_item_by_id(uint64_t table_id, uint64_t c
     }
   }
   return column_item;
+}
+
+
+int ObLogPlan::get_column_exprs(uint64_t table_id, ObIArray<ObColumnRefRawExpr*> &column_exprs) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_stmt()));
+  } else if (OB_FAIL(get_stmt()->get_column_exprs(table_id, column_exprs))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
+      if (table_id == column_items_.at(i).table_id_
+          && OB_FAIL(column_exprs.push_back(column_items_.at(i).expr_))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObLogPlan::generate_column_expr(ObRawExprFactory &expr_factory,

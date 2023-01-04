@@ -122,6 +122,7 @@ public:
   ObKVCacheInstHandle();
   virtual ~ObKVCacheInstHandle();
   void reset();
+  bool is_valid() const;
   inline ObKVCacheInst *get_inst() { return inst_; }
   ObKVCacheInstHandle(const ObKVCacheInstHandle &other);
   ObKVCacheInstHandle& operator = (const ObKVCacheInstHandle& other);
@@ -146,8 +147,7 @@ public:
   int clean_garbage_inst();
   int refresh_score();
   int set_priority(const int64_t cache_id, const int64_t old_priority, const int64_t new_priority);
-  int get_tenant_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles);
-  int get_all_cache_info(ObIArray<ObKVCacheInstHandle> &inst_handles);
+  int get_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles);
   void print_all_cache_info();
   void print_tenant_cache_info(const uint64_t tenant_id);
 
@@ -162,6 +162,8 @@ private:
   typedef ObFixedHashMap<uint64_t, ObTenantMBList *> TenantMBListMap;
   void add_inst_ref(ObKVCacheInst *inst);
   void de_inst_ref(ObKVCacheInst *inst);
+  int inner_push_inst_handle(const KVCacheInstMap::iterator &iter, ObIArray<ObKVCacheInstHandle> &inst_handles);
+private:
   DRWLock lock_;
   KVCacheInstMap  inst_map_;
   ObFixedQueue<ObKVCacheInst> inst_pool_;

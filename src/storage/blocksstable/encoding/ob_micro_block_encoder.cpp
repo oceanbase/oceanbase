@@ -619,7 +619,6 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
     if (OB_SUCC(ret)) {
       header_->row_count_ = static_cast<uint32_t>(datum_rows_.count());
       header_->encoding_has_out_row_column_ = has_out_row_column_;
-
       const int64_t header_size = header_->header_size_;
       char *data = data_buffer_.data() + header_size;
       FOREACH(e, encoders_) {
@@ -957,7 +956,6 @@ int ObMicroBlockEncoder::copy_and_append_row(const ObDatumRow &src, int64_t &sto
       LOG_WARN("append row to array failed", K(ret), K(src));
     }
   }
-
   return ret;
 }
 

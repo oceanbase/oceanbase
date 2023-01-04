@@ -355,6 +355,7 @@ ObMacroBlockWriter::ObMacroBlockWriter()
   :data_store_desc_(nullptr),
    micro_writer_(nullptr),
    reader_helper_(),
+   hash_index_builder_(),
    micro_helper_(),
    read_info_(),
    current_index_(0),
@@ -372,7 +373,8 @@ ObMacroBlockWriter::ObMacroBlockWriter()
    datum_row_(),
    check_datum_row_(),
    callback_(nullptr),
-   builder_(NULL)
+   builder_(NULL),
+   data_block_pre_warmer_()
 {
   //macro_blocks_, macro_handles_
 }
@@ -391,6 +393,7 @@ void ObMacroBlockWriter::reset()
     micro_writer_ = nullptr;
   }
   reader_helper_.reset();
+  hash_index_builder_.reset();
   micro_helper_.reset();
   read_info_.reset();
   macro_blocks_[0].reset();
@@ -415,6 +418,7 @@ void ObMacroBlockWriter::reset()
   micro_block_adaptive_splitter_.reset();
   allocator_.reset();
   rowkey_allocator_.reset();
+  data_block_pre_warmer_.reset();
 }
 
 
@@ -435,58 +439,59 @@ int ObMacroBlockWriter::open(
   } else {
     STORAGE_LOG(DEBUG, "open macro block writer: ", K(data_store_desc), K(start_seq));
     ObSSTableIndexBuilder *sstable_index_builder = data_store_desc.sstable_index_builder_;
-
-    if (OB_NOT_NULL(sstable_index_builder)) {
+    callback_ = callback;
+    data_store_desc_ = &data_store_desc;
+    current_macro_seq_ = start_seq.get_data_seq();
+    if (OB_FAIL(init_hash_index_builder())) {
+      STORAGE_LOG(WARN, "Failed to build hash_index builder", K(ret));
+    } else if (OB_FAIL(build_micro_writer(data_store_desc_,
+                                          allocator_,
+                                          micro_writer_,
+                                          GCONF.micro_block_merge_verify_level))) {
+      STORAGE_LOG(WARN, "fail to build micro writer", K(ret));
+    } else if (OB_FAIL(read_info_.init(
+                       allocator_,
+                       data_store_desc.row_column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+                       data_store_desc.schema_rowkey_col_cnt_,
+                       lib::is_oracle_mode(),
+                       data_store_desc.col_desc_array_,
+                       true))) {
+      STORAGE_LOG(WARN, "failed to init read info", K(data_store_desc), K(ret));
+    } else if (OB_FAIL(datum_row_.init(allocator_, read_info_.get_request_count()))) {
+      STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K_(read_info));
+    } else if (OB_FAIL(micro_helper_.open(data_store_desc, read_info_, allocator_))) {
+      STORAGE_LOG(WARN, "Failed to open micro helper", K(ret), K_(read_info));
+    } else if (OB_FAIL(check_datum_row_.init(allocator_, read_info_.get_request_count()))) {
+      STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K_(read_info));
+    } else if (OB_FAIL(reader_helper_.init(allocator_))) {
+      STORAGE_LOG(WARN, "Failed to init reader helper", K(ret));
+    } else {
+      //TODO huronghui.hrh@oceanbase.com use 4.1.0.0 for version judgment
+      const bool is_use_adaptive = !data_store_desc_->is_major_merge()
+       || data_store_desc_->major_working_cluster_version_ >= DATA_VERSION_4_1_0_0;
+      if (OB_FAIL(micro_block_adaptive_splitter_.init(data_store_desc.macro_store_size_, is_use_adaptive))) {
+        STORAGE_LOG(WARN, "Failed to init micro block adaptive split", K(ret), K(data_store_desc.macro_store_size_));
+      }
+    }
+    if (OB_SUCC(ret) && data_store_desc_->is_major_merge()) {
+      if (OB_ISNULL(curr_micro_column_checksum_ = static_cast<int64_t *>(
+          allocator_.alloc(sizeof(int64_t) * data_store_desc_->row_column_count_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to allocate memory for curr micro block column checksum", K(ret));
+      } else {
+       MEMSET(curr_micro_column_checksum_, 0,
+           sizeof(int64_t) * data_store_desc_->row_column_count_);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(sstable_index_builder)) {
       if (OB_FAIL(sstable_index_builder->new_index_builder(builder_, data_store_desc, allocator_))) {
         STORAGE_LOG(WARN, "fail to alloc index builder", K(ret));
+      } else if (data_store_desc.need_pre_warm_) {
+        data_block_pre_warmer_.init(read_info_);
       }
     } else {
       builder_ = nullptr;
-    }
-
-    if (OB_SUCC(ret)) {
-      callback_ = callback;
-      data_store_desc_ = &data_store_desc;
-      current_macro_seq_ = start_seq.get_data_seq();
-      if (OB_FAIL(build_micro_writer(data_store_desc_,
-                                     allocator_,
-                                     micro_writer_,
-                                     GCONF.micro_block_merge_verify_level))) {
-        STORAGE_LOG(WARN, "fail to build micro writer", K(ret));
-      } else if (OB_FAIL(read_info_.init(
-                         allocator_,
-                         data_store_desc.row_column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
-                         data_store_desc.schema_rowkey_col_cnt_,
-                         lib::is_oracle_mode(),
-                         data_store_desc.col_desc_array_,
-                         true))) {
-        STORAGE_LOG(WARN, "failed to init read info", K(data_store_desc), K(ret));
-      } else if (OB_FAIL(datum_row_.init(allocator_, read_info_.get_request_count()))) {
-        STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K_(read_info));
-      } else if (OB_FAIL(micro_helper_.open(data_store_desc, read_info_, allocator_))) {
-        STORAGE_LOG(WARN, "Failed to open micro helper", K(ret), K_(read_info));
-      } else if (OB_FAIL(check_datum_row_.init(allocator_, read_info_.get_request_count()))) {
-        STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K_(read_info));
-      } else if (OB_FAIL(reader_helper_.init(allocator_))) {
-        STORAGE_LOG(WARN, "Failed to init reader helper", K(ret));
-      } else {
-        //TODO huronghui.hrh@oceanbase.com use 4.1.0.0 for version judgment
-        const bool is_use_adaptive = !data_store_desc_->is_major_merge()
-         || data_store_desc_->major_working_cluster_version_ >= DATA_VERSION_4_1_0_0;
-        if (OB_FAIL(micro_block_adaptive_splitter_.init(data_store_desc.macro_store_size_, is_use_adaptive))) {
-          STORAGE_LOG(WARN, "Failed to init micro block adaptive split", K(ret), K(data_store_desc.macro_store_size_));
-        }
-      }
-      if (OB_SUCC(ret) && data_store_desc_->is_major_merge()) {
-        if (OB_ISNULL(curr_micro_column_checksum_ = static_cast<int64_t *>(
-            allocator_.alloc(sizeof(int64_t) * data_store_desc_->row_column_count_)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          STORAGE_LOG(WARN, "fail to allocate memory for curr micro block column checksum", K(ret));
-        } else {
-          MEMSET(curr_micro_column_checksum_, 0,
-              sizeof(int64_t) * data_store_desc_->row_column_count_);
-        }
-      }
     }
   }
   return ret;
@@ -522,17 +527,17 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
   } else if (OB_FAIL(check_order(row))) {
     STORAGE_LOG(WARN, "macro block writer fail to check order.", K(row));
   }
-  if (OB_SUCC(ret) ){
+  if (OB_SUCC(ret)) {
     is_macro_or_micro_block_reused_ = false;
     const ObStorageDatumUtils &datum_utils = read_info_.get_datum_utils();
-    if (OB_FAIL(micro_writer_->append_row(*row_to_append))) {
+    if (OB_FAIL(append_row_and_hash_index(*row_to_append))) {
       if (OB_BUF_NOT_ENOUGH == ret) {
         if (0 == micro_writer_->get_row_count()) {
           ret = OB_NOT_SUPPORTED;
           STORAGE_LOG(ERROR, "The single row is too large, ", K(ret), K(row));
         } else if (OB_FAIL(build_micro_block())) {
           STORAGE_LOG(WARN, "Fail to build micro block, ", K(ret));
-        } else if (OB_FAIL(micro_writer_->append_row(*row_to_append))) {
+        } else if (OB_FAIL(OB_FAIL(append_row_and_hash_index(*row_to_append)))) {
           STORAGE_LOG(ERROR, "Fail to append row to micro block, ", K(ret), K(row));
         } else if (OB_FAIL(save_last_key(*row_to_append))) {
           STORAGE_LOG(WARN, "Fail to save last key, ", K(ret), K(row));
@@ -844,6 +849,44 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
   return ret;
 }
 
+int ObMacroBlockWriter::init_hash_index_builder()
+{
+  int ret = OB_SUCCESS;
+  if (data_store_desc_->need_build_hash_index_for_micro_block_
+        && OB_FAIL(hash_index_builder_.init(data_store_desc_))) {
+    STORAGE_LOG(WARN, "Failed to build hash_index builder", K(ret));
+  }
+  return ret;
+}
+
+int ObMacroBlockWriter::append_row_and_hash_index(const ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(micro_writer_->append_row(row))) {
+    if (ret != OB_BUF_NOT_ENOUGH) {
+      STORAGE_LOG(WARN, "Failed to append row in micro writer", K(ret), K(row));
+    }
+  } else if (hash_index_builder_.is_valid()) {
+    if (OB_UNLIKELY(FLAT_ROW_STORE != data_store_desc_->row_store_type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected row store type", K(ret), K(data_store_desc_->row_store_type_));
+    } else {
+      int64_t hash_index_size = hash_index_builder_.estimate_size(true);
+      if (OB_UNLIKELY(!micro_writer_->has_enough_space_for_hash_index(hash_index_size))) {
+        ret = OB_BUF_NOT_ENOUGH;
+      } else if (OB_FAIL(hash_index_builder_.add(row))) {
+        if (ret != OB_NOT_SUPPORTED) {
+          STORAGE_LOG(WARN, "Failed to append hash index", K(ret), K(row));
+        } else {
+          ret = OB_SUCCESS;
+        }
+        hash_index_builder_.reset();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMacroBlockWriter::append_index_micro_block(ObMicroBlockDesc &micro_block_desc)
 {
   // used to append normal index micro block
@@ -867,6 +910,7 @@ int ObMacroBlockWriter::append_index_micro_block(ObMicroBlockDesc &micro_block_d
 int ObMacroBlockWriter::build_micro_block()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t block_size = 0;
   ObMicroBlockDesc micro_block_desc;
   if (micro_writer_->get_row_count() <= 0) {
@@ -874,21 +918,40 @@ int ObMacroBlockWriter::build_micro_block()
     STORAGE_LOG(WARN, "micro_block_writer is empty", K(ret));
   } else if (OB_FAIL(micro_writer_->build_micro_block_desc(micro_block_desc))) {
     STORAGE_LOG(WARN, "failed to build micro block desc", K(ret));
-  } else if (FALSE_IT(micro_block_desc.last_rowkey_ = last_key_)) {
-  } else if (FALSE_IT(block_size = micro_block_desc.buf_size_)) {
-  } else if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(micro_block_desc))) {
-    micro_writer_->dump_diagnose_info(); // ignore dump error
-    STORAGE_LOG(WARN, "failed to compress and encrypt micro block", K(ret), K(micro_block_desc));
+  } else if (OB_FAIL(build_hash_index_block(micro_block_desc))) {
+    STORAGE_LOG(WARN, "Failed to build hash index block", K(ret));
   } else {
-    if (OB_FAIL(write_micro_block(micro_block_desc))) {
-      STORAGE_LOG(WARN, "fail to write micro block ", K(ret), K(micro_block_desc));
-    } else if (OB_FAIL(micro_block_adaptive_splitter_.update_compression_info(micro_block_desc.row_count_,
-       block_size, micro_block_desc.buf_size_))) {
-      STORAGE_LOG(WARN, "Fail to update_compression_info", K(ret), K(micro_block_desc));
+    micro_block_desc.last_rowkey_ = last_key_;
+    block_size = micro_block_desc.buf_size_;
+    if (data_block_pre_warmer_.is_valid()
+        && OB_TMP_FAIL(data_block_pre_warmer_.reserve_kvpair(micro_block_desc))) {
+      if (OB_BUF_NOT_ENOUGH != tmp_ret) {
+        STORAGE_LOG(WARN, "Fail to reserve data block cache value", K(tmp_ret));
+      }
     }
+
+    if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(micro_block_desc))) {
+      micro_writer_->dump_diagnose_info(); // ignore dump error
+      STORAGE_LOG(WARN, "failed to compress and encrypt micro block", K(ret), K(micro_block_desc));
+    } else {
+      if (OB_FAIL(write_micro_block(micro_block_desc))) {
+        STORAGE_LOG(WARN, "fail to write micro block ", K(ret), K(micro_block_desc));
+      } else if (OB_FAIL(micro_block_adaptive_splitter_.update_compression_info(micro_block_desc.row_count_,
+          block_size, micro_block_desc.buf_size_))) {
+        STORAGE_LOG(WARN, "Fail to update_compression_info", K(ret), K(micro_block_desc));
+      }
+      if (OB_FAIL(ret) || !data_block_pre_warmer_.is_valid() || OB_TMP_FAIL(tmp_ret)) {
+      } else if (OB_TMP_FAIL(data_block_pre_warmer_.update_and_put_kvpair(micro_block_desc))) {
+        STORAGE_LOG(WARN, "Fail to build data cache key and put into cache", K(tmp_ret));
+      }
+    }
+    data_block_pre_warmer_.reuse();
   }
   if (OB_SUCC(ret)) {
     micro_writer_->reuse();
+    if (data_store_desc_->need_build_hash_index_for_micro_block_) {
+      hash_index_builder_.reuse();
+    }
     if (data_store_desc_->need_prebuild_bloomfilter_ && micro_rowkey_hashs_.count() > 0) {
       micro_rowkey_hashs_.reuse();
     }
@@ -898,7 +961,8 @@ int ObMacroBlockWriter::build_micro_block()
       data_store_desc_->merge_info_->new_micro_count_in_new_macro_++;
     }
   }
-  STORAGE_LOG(DEBUG, "build micro block desc", K(data_store_desc_->tablet_id_), K(micro_block_desc), "lbt", lbt(), K(ret));
+  STORAGE_LOG(DEBUG, "build micro block desc", K(data_store_desc_->tablet_id_), K(micro_block_desc), "lbt", lbt(),
+                                               K(ret), K(tmp_ret));
   return ret;
 }
 
@@ -923,6 +987,29 @@ int ObMacroBlockWriter::build_micro_block_desc(
     LOG_WARN("fail to build micro block desc v2", K(ret), K(micro_block), K(micro_block_desc));
   }
   STORAGE_LOG(DEBUG, "build micro block desc", K(micro_block), K(micro_block_desc));
+  return ret;
+}
+
+int ObMacroBlockWriter::build_hash_index_block(ObMicroBlockDesc &micro_block_desc)
+{
+  int ret = OB_SUCCESS;
+  if (hash_index_builder_.is_valid()) {
+    if (OB_UNLIKELY(FLAT_ROW_STORE != data_store_desc_->row_store_type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected row store type", K(ret), K(data_store_desc_->row_store_type_));
+    } else if (OB_FAIL(micro_writer_->append_hash_index(hash_index_builder_))) {
+      if (ret != OB_NOT_SUPPORTED) {
+        LOG_WARN("Failed to append hash index to micro block writer", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+      hash_index_builder_.reset();
+    } else {
+      const int64_t hash_index_size = hash_index_builder_.estimate_size();
+      micro_block_desc.buf_size_ += hash_index_size;
+      micro_block_desc.data_size_ += hash_index_size;
+    }
+  }
   return ret;
 }
 
@@ -1045,6 +1132,7 @@ int ObMacroBlockWriter::write_micro_block(ObMicroBlockDesc &micro_block_desc)
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(micro_block_desc.macro_id_ = macro_handles_[current_index_].get_macro_id())) {
     } else if (OB_FAIL(macro_blocks_[current_index_].write_micro_block(micro_block_desc, data_offset))) {
       STORAGE_LOG(WARN, "Fail to write micro block, ", K(ret), K(micro_block_desc));
     } else if (OB_UNLIKELY(micro_block_desc.block_offset_ != data_offset)) {

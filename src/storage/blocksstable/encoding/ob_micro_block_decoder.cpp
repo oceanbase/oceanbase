@@ -2036,43 +2036,12 @@ int ObMicroBlockDecoder::get_rows(
     LOG_WARN("invalid argument", K(ret), KP(row_ids), KP(cell_datas),
              K(cols.count()), K(datums.count()));
   } else {
-    common::ObObj cell;
     for (int64_t i = 0; OB_SUCC(ret) && i < cols.count(); i++) {
       int32_t col_id = cols.at(i);
-      if (OB_UNLIKELY(col_id >= header_->column_count_)) {
-        ret = OB_INDEX_OUT_OF_RANGE;
-        LOG_WARN("Vector store col id greate than store cnt", K(ret), K(header_->column_count_), K(col_id));
-      } else if (!decoders_[col_id].decoder_->can_vectorized()) {
-        // normal path
-        int64_t row_len = 0;
-        const char *row_data = NULL;
-        const int row_header_size = ObRowHeader::get_serialized_size();
-        int64_t row_id = common::OB_INVALID_INDEX;
-        common::ObDatum *col_datums = datums.at(i);
-        for (int64_t idx = 0; OB_SUCC(ret) && idx < row_cap; idx++) {
-          row_id = row_ids[idx];
-          if (OB_FAIL(row_index_->get(row_id, row_data, row_len))) {
-            LOG_WARN("get row data failed", K(ret), K(row_id));
-          } else {
-            ObBitStream bs(reinterpret_cast<unsigned char *>(const_cast<char *>(row_data)), row_len);
-            if (OB_FAIL(decoders_[col_id].decode(cell, row_id, bs, row_data, row_len))) {
-              LOG_WARN("Decode cell failed", K(ret));
-            } else if (OB_FAIL(col_datums[idx].from_obj(cell))) {
-              LOG_WARN("Failed to convert object from datum", K(ret), K(cell));
-            }
-          }
-        }
-      } else if (OB_FAIL(decoders_[col_id].batch_decode(
-                  row_index_,
-                  row_ids,
-                  cell_datas,
-                  row_cap,
-                  datums.at(i)))) {
-        LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(row_cap),
-                 "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
-      }
-
-      if (OB_SUCC(ret) && nullptr != col_params.at(i)) {
+      common::ObDatum *col_datums = datums.at(i);
+      if (OB_FAIL(get_col_datums(col_id, row_ids, cell_datas, row_cap, col_datums))) {
+        LOG_WARN("Failed to get col datums", K(ret), K(i), K(col_id), K(row_cap));
+      } else if (nullptr != col_params.at(i)) {
         // need padding
         if (OB_FAIL(storage::pad_on_datums(
                     col_params.at(i)->get_accuracy(),
@@ -2108,6 +2077,75 @@ int ObMicroBlockDecoder::get_row_count(
               count))) {
     LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(row_cap),
              "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+  }
+  return ret;
+}
+
+int ObMicroBlockDecoder::get_min_or_max(
+    int32_t col_id,
+    const int64_t *row_ids,
+    const char **cell_datas,
+    const int64_t row_cap,
+    ObDatum *datum_buf,
+    ObMicroBlockAggInfo<ObDatum> &agg_info)
+{
+  int ret = OB_SUCCESS;
+  decoder_allocator_.reuse();
+  if (OB_FAIL(get_col_datums(col_id, row_ids, cell_datas, row_cap, datum_buf))) {
+    LOG_WARN("Failed to get col datums", K(ret), K(col_id), K(row_cap));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
+      if (datum_buf[i].is_nop()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected datum, can not process in batch", K(ret), K(i));
+      } else {
+        agg_info.update_min_or_max(datum_buf[i]);
+        LOG_DEBUG("update min/max", K(i), K(datum_buf[i]), K(agg_info));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockDecoder::get_col_datums(
+    int32_t col_id,
+    const int64_t *row_ids,
+    const char **cell_datas,
+    const int64_t row_cap,
+    common::ObDatum *col_datums)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(col_id >= header_->column_count_)) {
+    ret = OB_INDEX_OUT_OF_RANGE;
+    LOG_WARN("Vector store col id greate than store cnt", K(ret), K(header_->column_count_), K(col_id));
+  } else if (!decoders_[col_id].decoder_->can_vectorized()) {
+    // normal path
+    common::ObObj cell;
+    int64_t row_len = 0;
+    const char *row_data = NULL;
+    const int row_header_size = ObRowHeader::get_serialized_size();
+    int64_t row_id = common::OB_INVALID_INDEX;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < row_cap; idx++) {
+      row_id = row_ids[idx];
+      if (OB_FAIL(row_index_->get(row_id, row_data, row_len))) {
+        LOG_WARN("get row data failed", K(ret), K(row_id));
+      } else {
+        ObBitStream bs(reinterpret_cast<unsigned char *>(const_cast<char *>(row_data)), row_len);
+        if (OB_FAIL(decoders_[col_id].decode(cell, row_id, bs, row_data, row_len))) {
+          LOG_WARN("Decode cell failed", K(ret));
+        } else if (OB_FAIL(col_datums[idx].from_obj(cell))) {
+          LOG_WARN("Failed to convert object from datum", K(ret), K(cell));
+        }
+      }
+    }
+  } else if (OB_FAIL(decoders_[col_id].batch_decode(
+              row_index_,
+              row_ids,
+              cell_datas,
+              row_cap,
+              col_datums))) {
+    LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(row_cap),
+              "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
   }
   return ret;
 }

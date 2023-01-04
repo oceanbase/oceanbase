@@ -243,10 +243,10 @@ int ObMemtableScanIterator::prepare_scan()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected invalid datum range", K(ret), K(range));
   } else if (OB_FAIL(ObMemtableKey::build(
-              start_key, *out_cols, &range.get_start_key().get_store_rowkey(), *context_->allocator_))) {
+              start_key, *out_cols, &range.get_start_key().get_store_rowkey(), *context_->get_range_allocator()))) {
     TRANS_LOG(WARN, "start key build fail", K(param_->table_id_), K(range));
   } else if (OB_FAIL(ObMemtableKey::build(
-              end_key, *out_cols, &range.get_end_key().get_store_rowkey(), *context_->allocator_))) {
+              end_key, *out_cols, &range.get_end_key().get_store_rowkey(), *context_->get_range_allocator()))) {
     TRANS_LOG(WARN, "end key build fail", K(param_->table_id_), K(range));
   } else {
     ObMvccEngine& mvcc_engine = ((ObMemtable*)memtable_)->get_mvcc_engine();
@@ -742,10 +742,10 @@ int ObMemtableMultiVersionScanIterator::init(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected invalid datum range", K(ret), K(range));
   } else if (OB_FAIL(ObMemtableKey::build_without_hash(
-                  start_key_, *columns, &range->get_start_key().get_store_rowkey(), *context.allocator_))) {
+                  start_key_, *columns, &range->get_start_key().get_store_rowkey(), *context.get_range_allocator()))) {
     TRANS_LOG(WARN, "start key build fail", K(param.table_id_), K(range->get_start_key()));
   } else if (OB_FAIL(ObMemtableKey::build_without_hash(
-                         end_key_, *columns, &range->get_end_key().get_store_rowkey(), *context.allocator_))) {
+                         end_key_, *columns, &range->get_end_key().get_store_rowkey(), *context.get_range_allocator()))) {
     TRANS_LOG(WARN, "end key build fail", K(param.table_id_), K(range->get_end_key()));
   } else {
     TRANS_LOG(DEBUG, "init multi version scan iterator", K(param), K(*range));

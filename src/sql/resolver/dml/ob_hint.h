@@ -700,6 +700,9 @@ public:
   const ObTableInHint &get_table() const { return table_; }
   ObString &get_index_name() { return index_name_; }
   const ObString &get_index_name() const { return index_name_; }
+  bool is_use_index_hint()  const { return T_NO_INDEX_HINT != get_hint_type(); }
+  bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type(); }
+
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name));
 
 private:

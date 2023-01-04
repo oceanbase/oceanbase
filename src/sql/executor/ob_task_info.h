@@ -87,13 +87,15 @@ class ObGranuleTaskInfo
 public:
 	ObGranuleTaskInfo()
 	  : ranges_(),
+      ss_ranges_(),
 	    tablet_loc_(nullptr),
 	    task_id_(0)
 	{ }
 	virtual ~ObGranuleTaskInfo() { }
-	TO_STRING_KV(K_(ranges), K_(task_id));
+	TO_STRING_KV(K_(ranges), K_(ss_ranges), K_(task_id));
 public:
   common::ObSEArray<common::ObNewRange, 1> ranges_;
+  common::ObSEArray<common::ObNewRange, 1> ss_ranges_;
   ObDASTabletLoc *tablet_loc_;
   //just for print
   int64_t task_id_;

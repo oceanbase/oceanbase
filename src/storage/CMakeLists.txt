@@ -28,6 +28,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_macro_block_writer.cpp
   blocksstable/ob_data_macro_block_merge_writer.cpp
   blocksstable/ob_micro_block_cache.cpp
+  blocksstable/ob_micro_block_hash_index.cpp
   blocksstable/ob_micro_block_reader.cpp
   blocksstable/ob_micro_block_row_exister.cpp
   blocksstable/ob_micro_block_row_getter.cpp
@@ -346,6 +347,8 @@ ob_set_subtarget(ob_storage access
   access/ob_multiple_merge.cpp
   access/ob_multiple_multi_scan_merge.cpp
   access/ob_multiple_scan_merge.cpp
+  access/ob_multiple_skip_scan_merge.cpp
+  access/ob_multiple_multi_skip_scan_merge.cpp
   access/ob_table_scan_iterator.cpp
   access/ob_store_row_iterator.cpp
   access/ob_i_sample_iterator.cpp

@@ -280,17 +280,15 @@ struct LogJoinHint
 struct LogTableHint
 {
   LogTableHint() :  table_(NULL),
-                    index_type_(T_INVALID),
                     parallel_hint_(NULL),
                     use_das_hint_(NULL) {}
   LogTableHint(const TableItem *table) :  table_(table),
-                                          index_type_(T_INVALID),
                                           parallel_hint_(NULL),
                                           use_das_hint_(NULL) {}
   int assign(const LogTableHint &other);
   int init_index_hints(ObSqlSchemaGuard &schema_guard);
-  bool is_no_index_hint() const { return T_NO_INDEX_HINT == index_type_; }
-  bool is_index_hint() const { return T_INDEX_HINT == index_type_; }
+  bool is_use_index_hint() const { return !index_hints_.empty() && NULL != index_hints_.at(0)
+                                          && index_hints_.at(0)->is_use_index_hint(); }
   bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_
                                 || NULL != use_das_hint_ || !join_filter_hints_.empty(); }
   int get_join_filter_hint(const ObRelIds &left_tables,
@@ -299,14 +297,13 @@ struct LogTableHint
   int add_join_filter_hint(const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
                            const ObJoinFilterHint &hint);
+  int allowed_skip_scan(const uint64_t index_id, bool &allowed) const;
 
-  TO_STRING_KV(K_(table), K_(index_type),
-               K_(index_list), K_(index_hints),
+  TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
                K_(parallel_hint), K_(use_das_hint),
                K_(join_filter_hints), K_(left_tables));
 
   const TableItem *table_;
-  ObItemType index_type_;
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> index_list_;
   common::ObSEArray<const ObIndexHint*, 4, common::ModulePageAllocator, true> index_hints_;
   const ObTableParallelHint *parallel_hint_;
@@ -397,6 +394,9 @@ struct ObLogPlanHint
                             bool &can_use,
                             const ObJoinFilterHint *&force_hint) const;
   int check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const;
+  int check_use_skip_scan(uint64_t table_id,  uint64_t index_id,
+                          bool &force_skip_scan,
+                          bool &force_no_skip_scan) const;
   const LogJoinHint* get_join_hint(const ObRelIds &join_tables) const;
   const ObIArray<LogJoinHint> &get_join_hints() const { return join_hints_; }
   SetAlgo get_valid_set_algo() const;

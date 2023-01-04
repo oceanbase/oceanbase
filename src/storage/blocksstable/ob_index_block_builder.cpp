@@ -454,8 +454,11 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &index_desc,
     STORAGE_LOG(WARN, "Failed to init index row", K(ret), K(index_desc));
   } else {
     index_store_desc_.sstable_index_builder_ = this;
+    index_store_desc_.need_pre_warm_ = true;
     callback_ = callback;
     optimization_mode_ = mode;
+    index_store_desc_.need_build_hash_index_for_micro_block_ = false;
+    container_store_desc_.need_build_hash_index_for_micro_block_ = false;
     is_inited_ = true;
   }
   STORAGE_LOG(DEBUG, "init sstable index builder", K(ret), K(index_desc), K_(index_store_desc));
@@ -1089,12 +1092,14 @@ ObBaseIndexBlockBuilder::ObBaseIndexBlockBuilder()
   :is_inited_(false),
    is_closed_(false),
    index_store_desc_(nullptr),
+   idx_read_info_(),
    row_builder_(),
    last_rowkey_(),
    rowkey_allocator_("BaseBuilder", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
    allocator_(nullptr),
    micro_writer_(nullptr),
    macro_writer_(nullptr),
+   index_block_pre_warmer_(),
    row_count_(0),
    row_count_delta_(0),
    max_merged_trans_version_(0),
@@ -1119,6 +1124,7 @@ void ObBaseIndexBlockBuilder::reset()
 {
   is_closed_ = false;
   index_store_desc_ = nullptr;
+  idx_read_info_.reset();
   last_rowkey_.reset();
   rowkey_allocator_.reset();
   if (OB_NOT_NULL(micro_writer_)) {
@@ -1133,6 +1139,7 @@ void ObBaseIndexBlockBuilder::reset()
     next_level_builder_ = nullptr;
   }
   macro_writer_ = nullptr;
+  index_block_pre_warmer_.reset();
   allocator_ = nullptr;
   level_ = 0;
   reset_accumulative_info();
@@ -1153,11 +1160,21 @@ int ObBaseIndexBlockBuilder::init(ObDataStoreDesc &index_store_desc,
     allocator_ = &allocator;
     macro_writer_ = macro_writer;
     level_ = level;
-    if (OB_FAIL(row_builder_.init(*index_store_desc_))) {
+    if (!idx_read_info_.is_valid() && OB_FAIL(idx_read_info_.init(allocator,
+        index_store_desc_->row_column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+        index_store_desc_->schema_rowkey_col_cnt_,
+        lib::is_oracle_mode(),
+        index_store_desc_->col_desc_array_,
+        true))) {
+      STORAGE_LOG(WARN, "Fail to init index read info", K(ret));
+    } else if (OB_FAIL(row_builder_.init(*index_store_desc_))) {
       STORAGE_LOG(WARN, "fail to init ObBaseIndexBlockBuilder", K(ret));
     } else if (OB_FAIL(ObMacroBlockWriter::build_micro_writer(index_store_desc_, allocator, micro_writer_))) {
       STORAGE_LOG(WARN, "fail to build micro writer", K(ret));
     } else {
+      if (index_store_desc_->need_pre_warm_) {
+        index_block_pre_warmer_.init(idx_read_info_);
+      }
       is_inited_ = true;
     }
   }
@@ -1241,6 +1258,7 @@ int ObBaseIndexBlockBuilder::append_row(
 int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tree_info)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObBaseIndexBlockBuilder *root_builder = nullptr;
   ObIndexTreeRootBlockDesc &desc = tree_info.root_desc_;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1271,6 +1289,12 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
       STORAGE_LOG(WARN, "fail to build root block", K(ret));
     } else if (FALSE_IT(micro_block_desc.last_rowkey_ = root_builder->last_rowkey_)) {
     } else if (OB_UNLIKELY(micro_block_desc.get_block_size() >= ObMetaDiskAddr::ROOT_BLOCK_SIZE_LIMIT)) {
+      if (index_block_pre_warmer_.is_valid()
+          && OB_TMP_FAIL(index_block_pre_warmer_.reserve_kvpair(micro_block_desc, root_builder->level_+1))) {
+        if (OB_BUF_NOT_ENOUGH != tmp_ret) {
+          STORAGE_LOG(WARN, "Fail to reserve kvpair", K(tmp_ret));
+        }
+      }
       if (OB_FAIL(macro_writer_->append_index_micro_block(micro_block_desc))) {
         micro_writer->dump_diagnose_info(); // ignore dump error
         STORAGE_LOG(WARN, "fail to append root block", K(ret), K(micro_block_desc));
@@ -1283,6 +1307,10 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
                                              root_row_desc.block_size_))) {
           STORAGE_LOG(WARN, "fail to set block address", K(ret), K(root_row_desc));
         }
+      }
+      if (OB_FAIL(ret) || OB_TMP_FAIL(tmp_ret) || !index_block_pre_warmer_.is_valid()) {
+      } else if (OB_TMP_FAIL(index_block_pre_warmer_.update_and_put_kvpair(micro_block_desc))) {
+        STORAGE_LOG(WARN, "Fail to update and put kvpair", K(tmp_ret));
       }
     } else {
       char *&root_buf = desc.buf_;
@@ -1341,19 +1369,34 @@ void ObBaseIndexBlockBuilder::clean_status()
 int ObBaseIndexBlockBuilder::append_index_micro_block()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObMicroBlockDesc micro_block_desc;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "invalid base index builder", K(ret), K(is_inited_));
   } else if (OB_FAIL(build_index_micro_block(micro_block_desc))) {
     STORAGE_LOG(WARN, "fail to build index micro block", K(ret));
-  } else if (OB_FAIL(macro_writer_->append_index_micro_block(micro_block_desc))) {
-    micro_writer_->dump_diagnose_info(); // ignore dump error
-    STORAGE_LOG(WARN, "fail to append index micro block", K(ret), K(micro_block_desc));
-  } else if (OB_FAIL(append_next_row(micro_block_desc))) {
-    STORAGE_LOG(WARN, "fail to append next row", K(ret), K(micro_block_desc));
-  } else if (FALSE_IT(clean_status())) {
+  } else {
+    if (index_block_pre_warmer_.is_valid()
+        && OB_TMP_FAIL(index_block_pre_warmer_.reserve_kvpair(micro_block_desc, level_+1))) {
+      if (OB_BUF_NOT_ENOUGH != tmp_ret) {
+        STORAGE_LOG(WARN, "Fail to reserve kvpair", K(tmp_ret));
+      }
+    }
+    if (OB_FAIL(macro_writer_->append_index_micro_block(micro_block_desc))) {
+      micro_writer_->dump_diagnose_info(); // ignore dump error
+      STORAGE_LOG(WARN, "fail to append index micro block", K(ret), K(micro_block_desc));
+    } else if (OB_FAIL(append_next_row(micro_block_desc))) {
+      STORAGE_LOG(WARN, "fail to append next row", K(ret), K(micro_block_desc));
+    } else if (FALSE_IT(clean_status())) {
+    }
+    if (OB_FAIL(ret) || OB_TMP_FAIL(tmp_ret) || !index_block_pre_warmer_.is_valid()) {
+    } else if (OB_TMP_FAIL(index_block_pre_warmer_.update_and_put_kvpair(micro_block_desc))) {
+      STORAGE_LOG(WARN, "Fail to build index block cache key and put into cache", K(tmp_ret));
+    }
+    index_block_pre_warmer_.reuse();
   }
+
   return ret;
 }
 
@@ -1465,6 +1508,7 @@ void ObBaseIndexBlockBuilder::row_desc_to_meta(
   macro_meta.val_.is_last_row_last_flag_ = macro_row_desc.is_last_row_last_flag_;
 }
 
+
 //===================== ObBaseIndexBlockBuilder(private) ================
 void ObBaseIndexBlockBuilder::reset_accumulative_info()
 {
@@ -1550,7 +1594,6 @@ ObDataIndexBlockBuilder::ObDataIndexBlockBuilder()
     sstable_allocator_(nullptr),
     leaf_store_desc_(),
     micro_helper_(),
-    idx_read_info_(),
     macro_row_desc_(),
     root_micro_block_desc_(nullptr),
     macro_meta_list_(nullptr),
@@ -1573,7 +1616,6 @@ void ObDataIndexBlockBuilder::reset()
   sstable_builder_ = nullptr;
   leaf_store_desc_.reset();
   micro_helper_.reset();
-  idx_read_info_.reset();
   root_micro_block_desc_ = nullptr;
   macro_meta_list_ = nullptr;
   if (OB_NOT_NULL(meta_block_writer_)) {
@@ -1836,19 +1878,32 @@ int ObDataIndexBlockBuilder::append_index_micro_block(ObMacroBlock &macro_block,
                                                       const MacroBlockId &block_id)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObMicroBlockDesc leaf_block_desc; // n-1 level index block
   int64_t data_offset = 0;
   int64_t leaf_block_size = 0;
   if (OB_FAIL(build_index_micro_block(leaf_block_desc))) {
     STORAGE_LOG(WARN, "fail to build n-1 level micro block", K(ret));
-  } else if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(leaf_block_desc))) {
-    STORAGE_LOG(WARN, "fail to compress and encrypt micro block", K(ret));
-  } else if (OB_FAIL(macro_block.write_index_micro_block(leaf_block_desc, true, data_offset))) {
-    STORAGE_LOG(WARN, "fail to write n-1 level index block", K(ret), K(leaf_block_desc));
   } else {
-    leaf_block_desc.macro_id_ = block_id;
-    leaf_block_desc.block_offset_ = data_offset;
-    leaf_block_size = leaf_block_desc.get_block_size();
+    if (OB_TMP_FAIL(index_block_pre_warmer_.reserve_kvpair(leaf_block_desc, 1))) {
+      if (OB_BUF_NOT_ENOUGH != tmp_ret) {
+        STORAGE_LOG(WARN, "Fail to reserve index block value", K(tmp_ret));
+      }
+    }
+    if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(leaf_block_desc))) {
+      STORAGE_LOG(WARN, "fail to compress and encrypt micro block", K(ret));
+    } else if (OB_FAIL(macro_block.write_index_micro_block(leaf_block_desc, true, data_offset))) {
+      STORAGE_LOG(WARN, "fail to write n-1 level index block", K(ret), K(leaf_block_desc));
+    } else {
+      leaf_block_desc.macro_id_ = block_id;
+      leaf_block_desc.block_offset_ = data_offset;
+      leaf_block_size = leaf_block_desc.get_block_size();
+      if (OB_TMP_FAIL(tmp_ret)) {
+      } else if (OB_TMP_FAIL(index_block_pre_warmer_.update_and_put_kvpair(leaf_block_desc))) {
+        STORAGE_LOG(WARN, "Fail to build index block cache key and put into cache", K(tmp_ret));
+      }
+    }
+    index_block_pre_warmer_.reuse();
   }
 
   if (OB_FAIL(ret)) {

@@ -1279,6 +1279,9 @@ public:
                               uint64_t table_id,
                               const share::schema::ObTableSchema &index_table_schema,
                               common::ObIArray<ColumnItem> &index_columns);
+  int get_column_exprs(uint64_t table_id, ObIArray<ObColumnRefRawExpr*> &column_exprs) const;
+  ObColumnRefRawExpr *get_column_expr_by_id(uint64_t table_id, uint64_t column_id) const;
+  const ColumnItem *get_column_item_by_id(uint64_t table_id, uint64_t column_id) const;
   inline common::ObIArray<ColumnItem> &get_column_items() { return column_items_; }
   int generate_column_expr(ObRawExprFactory &expr_factory,
                            const uint64_t &table_id,
@@ -1336,8 +1339,6 @@ public:
   int allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops);
 
 protected:
-  ObColumnRefRawExpr *get_column_expr_by_id(uint64_t table_id, uint64_t column_id) const;
-  const ColumnItem *get_column_item_by_id(uint64_t table_id, uint64_t column_id) const;
   int update_plans_interesting_order_info(ObIArray<CandidatePlan> &candidate_plans,
                                           const int64_t check_scope);
 

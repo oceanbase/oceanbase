@@ -49,7 +49,7 @@ bool ObMicroBlockHeader::is_valid() const
 {
   bool valid_data =
       header_size_ == get_serialize_size(column_count_, has_column_checksum_)
-      && version_ >= MICRO_BLOCK_HEADER_VERSION
+      && version_ >= MICRO_BLOCK_HEADER_VERSION_1
       && MICRO_BLOCK_HEADER_MAGIC == magic_
       && column_count_ >= rowkey_column_count_
       && rowkey_column_count_ > 0
@@ -296,7 +296,10 @@ bool ObMicroBlockHeader::has_out_row_column() const
       : encoding_has_out_row_column_;
 }
 
-
+bool ObMicroBlockHeader::is_contain_hash_index() const
+{
+  return version_ >= MICRO_BLOCK_HEADER_VERSION_2 && contains_hash_index_ == 1;
+}
 
 }//end namespace blocksstable
 }//end namespace oceanbase

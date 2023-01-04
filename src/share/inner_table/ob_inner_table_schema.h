@@ -826,6 +826,7 @@ public:
   static int all_virtual_privilege_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_pointer_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_storage_meta_memory_status_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_kvcache_store_memblock_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mock_fk_parent_table_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mock_fk_parent_table_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mock_fk_parent_table_column_schema(share::schema::ObTableSchema &table_schema);
@@ -2745,6 +2746,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_privilege_schema,
   ObInnerTableSchema::all_virtual_tablet_pointer_status_schema,
   ObInnerTableSchema::all_virtual_storage_meta_memory_status_schema,
+  ObInnerTableSchema::all_virtual_kvcache_store_memblock_schema,
   ObInnerTableSchema::all_virtual_mock_fk_parent_table_schema,
   ObInnerTableSchema::all_virtual_mock_fk_parent_table_history_schema,
   ObInnerTableSchema::all_virtual_mock_fk_parent_table_column_schema,
@@ -7105,6 +7107,7 @@ const uint64_t cluster_distributed_vtables [] = {
   OB_ALL_VIRTUAL_TABLET_DDL_KV_INFO_TID,
   OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_TID,
   OB_ALL_VIRTUAL_STORAGE_META_MEMORY_STATUS_TID,
+  OB_ALL_VIRTUAL_KVCACHE_STORE_MEMBLOCK_TID,
   OB_ALL_VIRTUAL_KVCACHE_HANDLE_LEAK_INFO_TID,
   OB_ALL_VIRTUAL_SCHEMA_MEMORY_TID,
   OB_ALL_VIRTUAL_SCHEMA_SLOT_TID,

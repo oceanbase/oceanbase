@@ -607,6 +607,12 @@ int ObOptEstCost::calculate_filter_selectivity(ObCostTableScanInfo &est_cost_inf
     LOG_WARN("failed to calculate selectivity", K(est_cost_info.pushdown_prefix_filters_), K(ret));
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
                                                              *est_cost_info.sel_ctx_,
+                                                             est_cost_info.ss_postfix_range_filters_,
+                                                             est_cost_info.ss_postfix_range_filters_sel_,
+                                                             all_predicate_sel))) {
+    LOG_WARN("failed to calculate selectivity", K(est_cost_info.ss_postfix_range_filters_), K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
+                                                             *est_cost_info.sel_ctx_,
                                                              est_cost_info.postfix_filters_,
                                                              est_cost_info.postfix_filter_sel_,
                                                              all_predicate_sel))) {
@@ -622,6 +628,7 @@ int ObOptEstCost::calculate_filter_selectivity(ObCostTableScanInfo &est_cost_inf
         K(est_cost_info.prefix_filters_), K(est_cost_info.pushdown_prefix_filters_),
         K(est_cost_info.postfix_filters_), K(est_cost_info.table_filters_),
         K(est_cost_info.prefix_filter_sel_), K(est_cost_info.pushdown_prefix_filter_sel_),
+        K(est_cost_info.ss_postfix_range_filters_), K(est_cost_info.ss_postfix_range_filters_sel_),
         K(est_cost_info.postfix_filter_sel_), K(est_cost_info.table_filter_sel_));
   }
   return ret;

@@ -497,6 +497,14 @@ struct EstimateCostInfo {
     DISALLOW_COPY_AND_ASSIGN(Path);
   };
 
+
+  enum OptSkipScanState
+  {
+    SS_DISABLE = 0,
+    SS_UNSET,
+    SS_HINT_ENABLE,
+    SS_NDV_SEL_ENABLE
+  };
   class AccessPath : public Path
   {
   public:
@@ -529,7 +537,8 @@ struct EstimateCostInfo {
         est_records_(),
         range_prefix_count_(0),
         table_opt_info_(),
-        for_update_(false)
+        for_update_(false),
+        use_skip_scan_(OptSkipScanState::SS_UNSET)
     {
     }
     virtual ~AccessPath() {
@@ -562,7 +571,7 @@ struct EstimateCostInfo {
       return NULL == table_opt_info_ ? false :
             OptimizationMethod::RULE_BASED != table_opt_info_->optimization_method_;
     }
-    const ObRangesArray &get_query_ranges() const;
+    const ObIArray<ObNewRange> &get_query_ranges() const;
     virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
       BUF_PRINTF("@");
@@ -589,7 +598,8 @@ struct EstimateCostInfo {
                  K_(sample_info),
                  K_(range_prefix_count),
                  K_(for_update),
-                 K_(use_das));
+                 K_(use_das),
+                 K_(use_skip_scan));
   public:
     //member variables
     uint64_t table_id_;
@@ -616,6 +626,7 @@ struct EstimateCostInfo {
     int64_t range_prefix_count_; // prefix count
     BaseTableOptInfo *table_opt_info_;
     bool for_update_;
+    OptSkipScanState use_skip_scan_;
   private:
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
   };
@@ -1335,7 +1346,8 @@ struct NullAwareAntiJoinInfo {
                                const ObIndexInfoCache &index_info_cache,
                                PathHelper &helper,
                                AccessPath *&ap,
-                               bool use_das);
+                               bool use_das,
+                               OptSkipScanState use_skip_scan);
                           
     int will_use_das(const uint64_t table_id,
                      const uint64_t ref_id,
@@ -1344,6 +1356,13 @@ struct NullAwareAntiJoinInfo {
                      PathHelper &helper,
                      bool &create_das_path,
                      bool &create_basic_path);
+
+    int will_use_skip_scan(const uint64_t table_id,
+                           const uint64_t ref_id,
+                           const uint64_t index_id,
+                           const ObIndexInfoCache &index_info_cache,
+                           PathHelper &helper,
+                           OptSkipScanState &use_skip_scan);
 
     int get_access_path_ordering(const uint64_t table_id,
                                  const uint64_t ref_table_id,
@@ -1891,7 +1910,8 @@ struct NullAwareAntiJoinInfo {
                        const common::ObIArray<ObRawExpr*> &where_conditions);
 
     int fill_query_range_info(const QueryRangeInfo &range_info,
-                              ObCostTableScanInfo &est_cost_info);
+                              ObCostTableScanInfo &est_cost_info,
+                              bool use_skip_scan);
 
     int compute_table_location_for_paths(ObIArray<AccessPath *> &access_paths,
                                          ObIArray<ObTablePartitionInfo*> &tbl_part_infos);
@@ -2067,7 +2087,8 @@ struct NullAwareAntiJoinInfo {
                      const ObQueryRange* query_range,
                      ObCostTableScanInfo &est_scan_cost_info,
                      bool &is_nl_with_extended_range,
-                     bool is_link = false);
+                     bool is_link = false,
+                     bool use_skip_scan = false);
 
     int can_extract_unprecise_range(const uint64_t table_id,
                                     const ObRawExpr *filter,

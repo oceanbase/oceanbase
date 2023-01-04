@@ -61,6 +61,7 @@ ob_set_subtarget(ob_share cache
   cache/ob_working_set_mgr.cpp
   cache/ob_kvcache_hazard_version.cpp
   cache/ob_kvcache_handle_ref_checker.cpp
+  cache/ob_kvcache_pre_warmer.cpp
 )
 
 ob_set_subtarget(ob_share scheduler

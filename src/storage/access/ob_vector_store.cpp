@@ -56,12 +56,6 @@ void ObVectorStore::reset()
   default_row_.reset();
 }
 
-void ObVectorStore::reuse()
-{
-  ObBlockBatchedRowStore::reuse();
-  count_ = 0;
-}
-
 int ObVectorStore::init(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;

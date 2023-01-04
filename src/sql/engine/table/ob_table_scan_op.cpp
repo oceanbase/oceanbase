@@ -237,6 +237,7 @@ void ObTableScanOpInput::reset()
 {
   tablet_loc_ = nullptr;
   key_ranges_.reset();
+  ss_key_ranges_.reset();
   mbr_filters_.reset();
   range_array_pos_.reset();
   not_need_extract_query_range_ = false;
@@ -247,7 +248,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanOpInput)
   int len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               key_ranges_,
-              not_need_extract_query_range_);
+              not_need_extract_query_range_,
+              ss_key_ranges_);
   return len;
 }
 
@@ -256,7 +258,8 @@ OB_DEF_SERIALIZE(ObTableScanOpInput)
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
               key_ranges_,
-              not_need_extract_query_range_);
+              not_need_extract_query_range_,
+              ss_key_ranges_);
   return ret;
 }
 
@@ -273,6 +276,18 @@ OB_DEF_DESERIALIZE(ObTableScanOpInput)
       if (OB_FAIL(key_ranges_.at(i).deserialize(
                   exec_ctx_.get_allocator(), buf, data_len, pos))) {
         LOG_WARN("range deserialize failed", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &cnt))) {
+        LOG_WARN("decode failed", K(ret));
+      } else if (OB_FAIL(ss_key_ranges_.prepare_allocate(cnt))) {
+        LOG_WARN("array prepare allocate failed", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i++) {
+        if (OB_FAIL(ss_key_ranges_.at(i).deserialize(exec_ctx_.get_allocator(),
+                                                     buf, data_len, pos))) {
+          LOG_WARN("range deserialize failed", K(ret));
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -761,6 +776,7 @@ int ObTableScanOp::prepare_all_das_tasks()
           LOG_WARN("prepare das task failed", K(ret));
         } else {
           MY_INPUT.key_ranges_.reuse();
+          MY_INPUT.ss_key_ranges_.reuse();
         }
       }
     }
@@ -962,7 +978,7 @@ int ObTableScanOp::prepare_batch_scan_range()
       LOG_WARN("prepare single scan range failed", K(ret));
     }
   }
-  LOG_DEBUG("after prepare batch scan range", K(MY_INPUT.key_ranges_));
+  LOG_DEBUG("after prepare batch scan range", K(MY_INPUT.key_ranges_), K(MY_INPUT.ss_key_ranges_));
   return ret;
 }
 
@@ -996,6 +1012,7 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
 {
   int ret = OB_SUCCESS;
   ObQueryRangeArray key_ranges;
+  ObQueryRangeArray ss_key_ranges;
   ObGetMethodArray get_method;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObIAllocator &range_allocator = (table_rescan_allocator_ != nullptr ?
@@ -1039,20 +1056,51 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
                 get_method,
                 ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
       LOG_WARN("failed to extract pre query ranges", K(ret));
+    } else if (OB_FAIL(MY_CTDEF.pre_query_range_.get_ss_tablet_ranges(range_allocator,
+                                  ctx_,
+                                  ss_key_ranges,
+                                  ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
+      LOG_WARN("failed to final extract index skip query range", K(ret));
     }
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
-    ObNewRange *key_range = key_ranges.at(i);
-    key_range->table_id_ = MY_CTDEF.scan_ctdef_.ref_table_id_;
-    key_range->group_idx_ = group_idx;
-    if (OB_FAIL(MY_INPUT.key_ranges_.push_back(*key_range))) {
-      LOG_WARN("store key range in TSC input failed", K(ret));
+  if (OB_FAIL(ret)) {
+  } else if (!ss_key_ranges.empty()) {
+    // index skip scan, ranges from extract_pre_query_range/get_ss_tablet_ranges,
+    //  prefix range and postfix range is single range
+    if (1 != ss_key_ranges.count() || 1 != key_ranges.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected index skip scan range", K(ret), K(key_ranges), K(ss_key_ranges));
+    } else {
+      key_ranges.at(0)->table_id_ = MY_CTDEF.scan_ctdef_.ref_table_id_;
+      key_ranges.at(0)->group_idx_ = group_idx;
+      ss_key_ranges.at(0)->table_id_ = MY_CTDEF.scan_ctdef_.ref_table_id_;
+      ss_key_ranges.at(0)->group_idx_ = group_idx;
+      if (OB_FAIL(MY_INPUT.key_ranges_.push_back(*key_ranges.at(0)))
+          || OB_FAIL(MY_INPUT.ss_key_ranges_.push_back(*ss_key_ranges.at(0)))) {
+        LOG_WARN("store key range in TSC input failed", K(ret));
+      }
+    }
+  } else {
+    ObNewRange whole_range;
+    ObNewRange *key_range = NULL;
+    whole_range.set_whole_range();
+    whole_range.table_id_ = MY_CTDEF.scan_ctdef_.ref_table_id_;
+    whole_range.group_idx_ = group_idx;
+    for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
+      key_range = key_ranges.at(i);
+      key_range->table_id_ = MY_CTDEF.scan_ctdef_.ref_table_id_;
+      key_range->group_idx_ = group_idx;
+      if (OB_FAIL(MY_INPUT.key_ranges_.push_back(*key_range))
+          || OB_FAIL(MY_INPUT.ss_key_ranges_.push_back(whole_range))) {
+        LOG_WARN("store key range in TSC input failed", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret) && MY_SPEC.is_vt_mapping_) {
     OZ(OB_FAIL(vt_result_converter_->convert_key_ranges(MY_INPUT.key_ranges_)));
   }
-  LOG_TRACE("prepare single scan range", K(ret), K(key_ranges), K(MY_INPUT.key_ranges_));
+  LOG_TRACE("prepare single scan range", K(ret), K(key_ranges), K(MY_INPUT.key_ranges_),
+                                         K(MY_INPUT.ss_key_ranges_));
   return ret;
 }
 
@@ -1338,6 +1386,7 @@ int ObTableScanOp::inner_rescan()
   output_row_cnt_ = 0;
   iter_end_ = false;
   MY_INPUT.key_ranges_.reuse();
+  MY_INPUT.ss_key_ranges_.reuse();
   MY_INPUT.mbr_filters_.reuse();
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("rescan operator failed", K(ret));
@@ -1381,6 +1430,7 @@ int ObTableScanOp::close_and_reopen()
       tsc_rtdef_.lookup_rtdef_->stmt_allocator_.set_alloc(&das_ref_.get_das_alloc());
     }
     MY_INPUT.key_ranges_.reuse();
+    MY_INPUT.ss_key_ranges_.reuse();
     MY_INPUT.mbr_filters_.reuse();
   }
   return ret;
@@ -1460,6 +1510,7 @@ int ObTableScanOp::local_iter_reuse()
   } else {
     tsc_rtdef_.scan_rtdef_.scan_allocator_.set_alloc(table_rescan_allocator_);
     MY_INPUT.key_ranges_.reuse();
+    MY_INPUT.ss_key_ranges_.reuse();
     MY_INPUT.mbr_filters_.reuse();
   }
   return ret;
@@ -1833,13 +1884,19 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObNewRange> &scan_ranges = scan_op->get_scan_param().key_ranges_;
+  ObIArray<ObNewRange> &ss_ranges = scan_op->get_scan_param().ss_key_ranges_;
   ObIArray<ObSpatialMBR> &mbr_filters = scan_op->get_scan_param().mbr_filters_;
   const ObIArray<ObNewRange> &input_ranges = MY_INPUT.key_ranges_;
+  const ObIArray<ObNewRange> &input_ss_ranges = MY_INPUT.ss_key_ranges_;
   const ObIArray<ObSpatialMBR> &input_filters = MY_INPUT.mbr_filters_;
   ObDASGroupScanOp *batch_op = DAS_GROUP_SCAN_OP(scan_op);
   bool add_all = false;
   bool prune_all = true;
-  if (ObPartitionLevel::PARTITION_LEVEL_MAX == MY_SPEC.part_level_
+  if (OB_UNLIKELY(input_ranges.count() != input_ss_ranges.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ranges and skip scan postfix ranges mismatch", K(ret), K(input_ranges.count()),
+                                                             K(input_ss_ranges.count()));
+  } else if (ObPartitionLevel::PARTITION_LEVEL_MAX == MY_SPEC.part_level_
       || ObPartitionLevel::PARTITION_LEVEL_ZERO == MY_SPEC.part_level_
       || (input_ranges.count() <= 1)) {
     add_all = true;
@@ -1857,6 +1914,8 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
       prune_all = false;
       if (OB_FAIL(scan_ranges.push_back(input_ranges.at(i)))) {
         LOG_WARN("store input range to scan param failed", K(ret));
+      } else if (OB_FAIL(ss_ranges.push_back(input_ss_ranges.at(i)))) {
+        LOG_WARN("store input skip scan range to scan param failed", K(ret));
       } else if (!input_ranges.at(i).is_physical_rowid_range_) {
         //do nothing
       } else if (OB_UNLIKELY(MY_SPEC.get_columns_desc().count() < 1)) {
@@ -1885,15 +1944,20 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
   }
   if (OB_SUCC(ret) && prune_all && !input_ranges.empty()) {
     ObNewRange false_range;
+    ObNewRange whole_range;
     false_range.set_false_range();
     false_range.group_idx_ = input_ranges.at(0).group_idx_;
+    whole_range.set_whole_range();
     if (OB_FAIL(scan_ranges.push_back(false_range))) {
       LOG_WARN("store false range to scan ranges failed", K(ret));
+    } else if (OB_FAIL(ss_ranges.push_back(whole_range))) {
+      LOG_WARN("store whole range to skip scan ranges failed", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
     LOG_DEBUG("range after pruning", K(input_ranges), K(scan_ranges), K_(group_size),
-              "tablet_id", scan_op->get_tablet_id());
+              "tablet_id", scan_op->get_tablet_id(),
+              K(input_ss_ranges), K(ss_ranges));
   }
   return ret;
 }
@@ -2057,9 +2121,11 @@ int ObTableScanOp::reassign_task_ranges(ObGranuleTaskInfo &info)
   if (MY_SPEC.gi_above_ && !iter_end_) {
     if (OB_UNLIKELY(MY_SPEC.get_query_range().is_contain_geo_filters())) {
       MY_INPUT.key_ranges_.reuse();
+      MY_INPUT.ss_key_ranges_.reuse();
       MY_INPUT.mbr_filters_.reuse();
     } else if (!MY_INPUT.get_need_extract_query_range()) {
-      if (OB_FAIL(MY_INPUT.key_ranges_.assign(info.ranges_))) {
+      if (OB_FAIL(MY_INPUT.key_ranges_.assign(info.ranges_)) ||
+          OB_FAIL(MY_INPUT.ss_key_ranges_.assign(info.ss_ranges_))) {
         LOG_WARN("assign the range info failed", K(ret), K(info));
       } else if (MY_SPEC.is_vt_mapping_) {
         if (OB_FAIL(vt_result_converter_->convert_key_ranges(MY_INPUT.key_ranges_))) {
@@ -2069,6 +2135,7 @@ int ObTableScanOp::reassign_task_ranges(ObGranuleTaskInfo &info)
     } else {
       // use prepare() to set key ranges if px do not extract query range
       MY_INPUT.key_ranges_.reuse();
+      MY_INPUT.ss_key_ranges_.reuse();
       MY_INPUT.mbr_filters_.reuse();
       LOG_DEBUG("do prepare!!!");
     }

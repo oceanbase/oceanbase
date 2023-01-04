@@ -122,7 +122,6 @@ protected:
   common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> tables_;
   blocksstable::ObDatumRow cur_row_;
   blocksstable::ObDatumRow unprojected_row_;
-  blocksstable::ObDatumRow full_row_;
   const ObIArray<int32_t> *out_cols_projector_;
   int64_t curr_scan_index_;
   blocksstable::ObDatumRowkey curr_rowkey_;

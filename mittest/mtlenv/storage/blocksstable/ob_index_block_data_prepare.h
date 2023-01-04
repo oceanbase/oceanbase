@@ -390,6 +390,7 @@ void TestIndexBlockDataPrepare::prepare_data()
   index_desc.schema_version_ = 10;
   ASSERT_TRUE(index_desc.is_valid());
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(index_desc));
+  root_index_builder_->index_store_desc_.need_pre_warm_ = false;  // close index block pre warm
 
   ASSERT_EQ(OB_SUCCESS, writer.open(desc, start_seq));
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_, &allocator_));

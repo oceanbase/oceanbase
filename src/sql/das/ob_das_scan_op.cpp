@@ -592,6 +592,7 @@ int ObDASScanOp::reuse_iter()
     LOG_WARN("reuse lookup iterator failed", K(ret));
   } else {
     scan_param_.key_ranges_.reuse();
+    scan_param_.ss_key_ranges_.reuse();
     scan_param_.mbr_filters_.reuse();
   }
   return ret;
@@ -612,7 +613,8 @@ int ObDASScanOp::set_lookup_tablet_id(const ObTabletID &tablet_id)
 OB_SERIALIZE_MEMBER((ObDASScanOp, ObIDASTaskOp),
                     scan_param_.key_ranges_,
                     scan_ctdef_,
-                    scan_rtdef_);
+                    scan_rtdef_,
+                    scan_param_.ss_key_ranges_);
 
 ObDASScanResult::ObDASScanResult()
   : ObIDASTaskResult(),
@@ -1179,6 +1181,7 @@ int ObLocalIndexLookupOp::reset_lookup_state(bool need_switch_param)
   if (lookup_iter_ != nullptr) {
     scan_param_.need_switch_param_ = need_switch_param;
     scan_param_.key_ranges_.reuse();
+    scan_param_.ss_key_ranges_.reuse();
   }
   if (OB_SUCC(ret) && lookup_memctx_ != nullptr) {
     lookup_memctx_->reset_remain_one_page();

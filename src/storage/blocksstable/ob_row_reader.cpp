@@ -554,7 +554,8 @@ int ObRowReader::analyze_cluster_info()
 
 uint64_t ObRowReader::get_cluster_offset(const int64_t cluster_idx) const
 {
-  return get_offset_func[row_header_->get_offset_type()](cluster_offset_, cluster_idx);
+  return cluster_idx == 0 ? sizeof(ObRowHeader) :
+             get_offset_func[row_header_->get_offset_type()](cluster_offset_, cluster_idx);
 }
 
 uint64_t ObRowReader::get_cluster_end_pos(const int64_t cluster_idx) const

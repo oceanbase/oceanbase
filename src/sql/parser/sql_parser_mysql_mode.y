@@ -166,7 +166,9 @@ COALESCE_SQ NO_COALESCE_SQ COUNT_TO_EXISTS NO_COUNT_TO_EXISTS LEFT_TO_ANTI NO_LE
 ELIMINATE_JOIN NO_ELIMINATE_JOIN PUSH_LIMIT NO_PUSH_LIMIT PULLUP_EXPR NO_PULLUP_EXPR
 WIN_MAGIC NO_WIN_MAGIC 
 // optimize hint
-INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT LEADING_HINT ORDERED
+INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT
+INDEX_SS_HINT INDEX_SS_ASC_HINT INDEX_SS_DESC_HINT
+LEADING_HINT ORDERED
 USE_NL USE_MERGE USE_HASH NO_USE_HASH NO_USE_MERGE NO_USE_NL
 USE_NL_MATERIALIZATION NO_USE_NL_MATERIALIZATION
 USE_HASH_AGGREGATION NO_USE_HASH_AGGREGATION 
@@ -8679,6 +8681,18 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 | NO_USE_DAS_HINT '(' qb_name_option relation_factor_in_hint ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_DAS_HINT, 2, $3, $4);
+}
+| INDEX_SS_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_SS_HINT, 3, $3, $4, $5);
+}
+| INDEX_SS_ASC_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_SS_ASC_HINT, 3, $3, $4, $5);
+}
+| INDEX_SS_DESC_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_SS_DESC_HINT, 3, $3, $4, $5);
 }
 | LEADING_HINT '(' qb_name_option relation_factor_in_leading_hint_list ')'
 {

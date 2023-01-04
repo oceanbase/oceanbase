@@ -10697,7 +10697,34 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12319: __all_virtual_kvcache_store_memblock
+def_table_schema(
+  owner = 'zhaoruizhe.zrz',
+  table_name = '__all_virtual_kvcache_store_memblock',
+  table_id = '12319',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('cache_id', 'int'),
+    ('cache_name', 'varchar:OB_MAX_KVCACHE_NAME_LENGTH'),
+    ('memblock_ptr', 'varchar:32'),
+    ('ref_count', 'int'),
+    ('status', 'int'),
+    ('policy', 'int'),
+    ('kv_cnt', 'int'),
+    ('get_cnt', 'int'),
+    ('recent_get_cnt', 'int'),
+    ('priority', 'int'),
+    ('score', 'number:38:3'),
+    ('align_size', 'int'),
+  ],
+  vtable_route_policy = 'distributed',
+  partition_columns = ['svr_ip', 'svr_port'],
+)
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12320',

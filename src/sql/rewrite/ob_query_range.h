@@ -239,6 +239,7 @@ private:
     {
     }
 
+    int init_search_state(int64_t column_count, bool init_as_full_range);
     bool has_intersect(const common::ObObj &start,
                        bool include_start,
                        const common::ObObj &end,
@@ -293,7 +294,8 @@ private:
         : key_part_head_(NULL),
           is_equal_range_(false),
           is_standard_range_(true),
-          is_precise_get_(false)
+          is_precise_get_(false),
+          skip_scan_offset_(-1)
     {
       //将is_standard_range_初始化为true的原因是我们认为当表达式条件为空的时候也是一个简单range
     }
@@ -304,6 +306,7 @@ private:
       is_equal_range_ = false;
       is_standard_range_ = true;
       is_precise_get_ = false;
+      skip_scan_offset_ = -1;
     }
 
     int assign(const ObRangeGraph &other)
@@ -313,6 +316,7 @@ private:
       is_equal_range_ = other.is_equal_range_;
       is_standard_range_ = other.is_standard_range_;
       is_precise_get_ = other.is_precise_get_;
+      skip_scan_offset_ = other.skip_scan_offset_;
       return ret;
     }
 
@@ -320,6 +324,7 @@ private:
     bool is_equal_range_;
     bool is_standard_range_;
     bool is_precise_get_;
+    int64_t skip_scan_offset_;
   };
 
   struct ExprFinalInfo {
@@ -408,6 +413,10 @@ public:
                         ObQueryRangeArray &ranges,
                         ObGetMethodArray &get_methods,
                         const common::ObDataTypeCastParams &dtc_params) const;
+  int get_ss_tablet_ranges(common::ObIAllocator &allocator,
+                           ObExecContext &exec_ctx,
+                           ObQueryRangeArray &ss_ranges,
+                           const ObDataTypeCastParams &dtc_params) const;
   int get_tablet_ranges(common::ObIAllocator &allocator,
                         ObExecContext &exec_ctx,
                         ObQueryRangeArray &ranges,
@@ -447,7 +456,23 @@ public:
   bool is_precise_get() const { return table_graph_.is_precise_get_; }
   common::ObGeoRelationType get_geo_relation(ObItemType type) const;
   const common::ObIArray<ObRawExpr*> &get_range_exprs() const { return range_exprs_; }
-  int check_graph_type();
+  const common::ObIArray<ObRawExpr*> &get_ss_range_exprs() const { return ss_range_exprs_; }
+  int check_graph_type(ObKeyPart &key_part_head);
+  int check_skip_scan_range(ObKeyPart *key_part_head,
+                            const bool is_standard_range,
+                            const int64_t max_precise_pos,
+                            ObKeyPart *&ss_head,
+                            int64_t &skip_scan_offset,
+                            int64_t &ss_max_precise_pos);
+  int reset_skip_scan_range();
+  bool is_precise_get(const ObKeyPart &key_part_head,
+                      int64_t &max_precise_pos,
+                      bool ignore_head = false);
+  int fill_range_exprs(const int64_t max_precise_pos,
+                       const int64_t ss_offset,
+                       const int64_t ss_max_precise_pos);
+  bool is_ss_range() const {  return table_graph_.skip_scan_offset_ > -1; }
+  int64_t get_skip_scan_offset() const {  return table_graph_.skip_scan_offset_; }
 
   static bool can_be_extract_range(ObItemType cmp_type, const ObExprResType &col_type,
                             const ObExprCalcType &res_type, common::ObObjType data_type,
@@ -692,7 +717,8 @@ private:
   inline int get_single_key_value(const ObKeyPart *key,
                                   ObExecContext &exec_ctx,
                                   ObSearchState &search_state,
-                                  const common::ObDataTypeCastParams &dtc_params) const;
+                                  const common::ObDataTypeCastParams &dtc_params,
+                                  int64_t skip_offset = 0) const;
   int gen_simple_get_range(const ObKeyPart &root,
                            common::ObIAllocator &allocator,
                            ObExecContext &exec_ctx,
@@ -704,6 +730,16 @@ private:
                             ObQueryRangeArray &ranges,
                             ObGetMethodArray &get_methods,
                             const common::ObDataTypeCastParams &dtc_params) const;
+
+  const ObKeyPart* get_ss_key_part_head() const;
+
+  int gen_skip_scan_range(ObIAllocator &allocator,
+                          ObExecContext &exec_ctx,
+                          const ObDataTypeCastParams &dtc_params,
+                          const ObKeyPart *ss_root,
+                          int64_t post_column_count,
+                          ObQueryRangeArray &ss_ranges) const;
+
   int cold_cast_cur_node(const ObKeyPart *cur,
                          common::ObIAllocator &allocator,
                          const common::ObDataTypeCastParams &dtc_params,
@@ -768,6 +804,7 @@ private:
   KeyPartStore key_part_store_;
   //this flag used by optimizer, so don't need to serialize it
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> range_exprs_;
+  common::ObFixedArray<ObRawExpr*, common::ObIAllocator> ss_range_exprs_;
   MbrFilterArray mbr_filters_;
   bool has_exec_param_;
   bool is_equal_and_;

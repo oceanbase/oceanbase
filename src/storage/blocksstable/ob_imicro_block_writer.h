@@ -20,6 +20,7 @@
 #include "ob_datum_rowkey.h"
 #include "storage/ob_i_store.h"
 #include "ob_macro_block_id.h"
+#include "ob_micro_block_hash_index.h"
 #include "ob_micro_block_header.h"
 
 namespace oceanbase
@@ -93,7 +94,8 @@ public:
     block_size_upper_bound_(DEFAULT_UPPER_BOUND),
     contain_uncommitted_row_(false),
     has_out_row_column_(false),
-    is_last_row_last_flag_(false)
+    is_last_row_last_flag_(false),
+    header_(nullptr)
   {
   }
   virtual ~ObIMicroBlockWriter() {}
@@ -106,6 +108,16 @@ public:
   virtual int64_t get_original_size() const = 0;
   virtual void reset() = 0;
   virtual void dump_diagnose_info() const {};
+  virtual int append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder)
+  {
+    int ret = OB_NOT_SUPPORTED;
+    STORAGE_LOG(WARN, "Unspported micro block format for hash index", K(ret));
+    return ret;
+  }
+  virtual bool has_enough_space_for_hash_index(const int64_t hash_index_size) const
+  {
+    return false;
+  }
   virtual void reuse()
   {
     row_count_delta_ = 0;
@@ -207,6 +219,7 @@ protected:
   bool contain_uncommitted_row_;
   bool has_out_row_column_;
   bool is_last_row_last_flag_;
+  ObMicroBlockHeader *header_;
 };
 
 } // end namespace blocksstable

@@ -735,12 +735,12 @@ int ObOptSelectivity::update_table_meta_info(const OptTableMetas &base_table_met
   int ret = OB_SUCCESS;
   const OptTableMeta *base_table_meta = base_table_metas.get_table_meta_by_table_id(table_id);
   OptTableMeta *table_meta = NULL;
-  const ObDMLStmt *stmt = NULL;
+  const ObLogPlan *log_plan = NULL;
   ObSEArray<OptSelInfo, 8> column_sel_infos;
   filtered_rows = filtered_rows < 1.0 ? 1.0 : filtered_rows;
-  if (OB_ISNULL(base_table_meta) || OB_ISNULL(stmt = ctx.get_stmt())) {
+  if (OB_ISNULL(base_table_meta) || OB_ISNULL(log_plan = ctx.get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(base_table_meta), K(stmt));
+    LOG_WARN("get unexpected null", K(ret), K(base_table_meta), K(log_plan));
   } else if (OB_FAIL(update_table_metas.copy_table_meta_info(*base_table_meta, table_meta))) {
     LOG_WARN("failed to copy table meta info", K(ret));
   } else {
@@ -794,7 +794,7 @@ int ObOptSelectivity::update_table_meta_info(const OptTableMetas &base_table_met
         // update null number
         if (null_num > 0) {
           bool null_reject = false;
-          const ObColumnRefRawExpr *column_expr = stmt->get_column_expr_by_id(
+          const ObColumnRefRawExpr *column_expr = log_plan->get_column_expr_by_id(
                   table_meta->get_table_id(), column_meta.get_column_id());
           if (OB_ISNULL(column_expr)) {
             ret = OB_ERR_UNEXPECTED;
@@ -3512,7 +3512,7 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
                                              ObQueryRangeArray &ranges)
 {
   int ret = OB_SUCCESS;
-  const ObDMLStmt *stmt = ctx.get_stmt();
+  const ObLogPlan *log_plan = ctx.get_plan();
   const ParamStore *params = ctx.get_params();
   ObExecContext *exec_ctx = ctx.get_opt_ctx().get_exec_ctx();
   ObIAllocator &allocator = ctx.get_allocator();
@@ -3520,10 +3520,10 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
   const ColumnItem* column_item = NULL;
   ObGetMethodArray get_methods;
 
-  if (OB_ISNULL(stmt) || OB_ISNULL(exec_ctx) ||
-      OB_ISNULL(column_item = stmt->get_column_item_by_id(table_id, column_id))) {
+  if (OB_ISNULL(log_plan) || OB_ISNULL(exec_ctx) ||
+      OB_ISNULL(column_item = log_plan->get_column_item_by_id(table_id, column_id))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(stmt), K(exec_ctx), K(column_item));
+    LOG_WARN("get unexpected null", K(ret), K(log_plan), K(exec_ctx), K(column_item));
   } else if (OB_FAIL(column_items.push_back(*column_item))) {
     LOG_WARN("failed to push back column item", K(ret));
   } else if (OB_FAIL(query_range.preliminary_extract_query_range(column_items,

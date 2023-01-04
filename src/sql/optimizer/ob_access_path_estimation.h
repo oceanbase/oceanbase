@@ -15,6 +15,7 @@
 
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_optimizer_context.h"
+#include "sql/optimizer/ob_join_order.h"
 namespace oceanbase {
 namespace sql {
 class AccessPath;
@@ -68,6 +69,16 @@ private:
   static int process_storage_estimation(ObOptimizerContext &ctx,
                                         ObTableMetaInfo &meta,
                                         ObIArray<AccessPath *>& paths);
+
+  static int calc_skip_scan_prefix_ndv(AccessPath &ap, double &prefix_ndv);
+
+  static int get_skip_scan_prefix_exprs(ObIArray<ColumnItem> &column_items,
+                                        int64_t skip_scan_offset,
+                                        ObIArray<ObRawExpr*> &prefix_exprs);
+
+  static int update_use_skip_scan(ObCostTableScanInfo &est_cost_info,
+                                  ObIArray<ObExprSelPair> &all_predicate_sel,
+                                  OptSkipScanState &use_skip_scan);
 
   static int do_storage_estimation(ObOptimizerContext &ctx,
                                    ObBatchEstTasks &tasks);

@@ -9485,7 +9485,10 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_NO_INDEX_HINT:
     case T_FULL_HINT:
     case T_USE_DAS_HINT:
-    case T_NO_USE_DAS_HINT: {
+    case T_NO_USE_DAS_HINT:
+    case T_INDEX_SS_HINT:
+    case T_INDEX_SS_ASC_HINT:
+    case T_INDEX_SS_DESC_HINT:  {
       if (OB_FAIL(resolve_index_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve index hint", K(ret));
       }

@@ -303,7 +303,7 @@ int ObIndexTreePrefetcher::prefetch_block_data(
       macro_id == micro_handle.macro_block_id_ &&
       offset == micro_handle.micro_info_.offset_ &&
       index_block_info.row_header_->get_block_size() == micro_handle.micro_info_.size_) {
-    LOG_DEBUG("Cur micro handle is still valid");
+    LOG_DEBUG("Cur micro handle is still valid", K(index_block_info), K(micro_handle));
     if (is_data) {
       EVENT_INC(ObStatEventIds::DATA_BLOCK_CACHE_HIT);
     } else {
@@ -366,6 +366,14 @@ int ObIndexTreePrefetcher::prefetch_block_data(
         micro_handle.macro_block_id_ = macro_id;
         micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
         micro_handle.io_handle_ = macro_handle;
+
+        if (is_data && OB_FAIL(micro_block_handle_mgr_.put_micro_block_handle(
+                    tenant_id,
+                    macro_id,
+                    *index_block_info.row_header_,
+                    micro_handle))) {
+          STORAGE_LOG(WARN, "failed to put handle cache", K(ret), K(tenant_id), K(macro_id), K(index_block_info));
+        }
       }
     }
   }
@@ -374,6 +382,256 @@ int ObIndexTreePrefetcher::prefetch_block_data(
       EVENT_INC(ObStatEventIds::DATA_BLOCK_READ_CNT);
     } else {
       EVENT_INC(ObStatEventIds::INDEX_BLOCK_READ_CNT);
+    }
+  }
+  return ret;
+}
+
+////////////////////////////////// ObIndexTreeMultiPrefetcher /////////////////////////////////////////////
+
+void ObIndexTreeMultiPrefetcher::reset()
+{
+  ObIndexTreePrefetcher::reset();
+  fetch_rowkey_idx_ = 0;
+  prefetch_rowkey_idx_ = 0;
+  prefetched_rowkey_cnt_ = 0;
+  rowkeys_ = nullptr;
+  ext_read_handles_.reset();
+}
+
+void ObIndexTreeMultiPrefetcher::reuse()
+{
+  ObIndexTreePrefetcher::reuse();
+  fetch_rowkey_idx_ = 0;
+  prefetch_rowkey_idx_ = 0;
+  prefetched_rowkey_cnt_ = 0;
+  rowkeys_ = nullptr;
+}
+
+int ObIndexTreeMultiPrefetcher::init(
+    const int iter_type,
+    ObSSTable &sstable,
+    const ObTableIterParam &iter_param,
+    ObTableAccessContext &access_ctx,
+    const void *query_range)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObIndexTreeMultiPrefetcher has been inited", K(ret));
+  } else if (OB_UNLIKELY(ObStoreRowIterator::IteratorMultiGet != iter_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(iter_type));
+  } else {
+    sstable_ = &sstable;
+    access_ctx_ = &access_ctx;
+    iter_param_ = &iter_param;
+    index_read_info_ = iter_param.get_full_read_info()->get_index_read_info();
+    data_version_ = sstable_->is_major_sstable() ? sstable_->get_snapshot_version() : sstable_->get_key().get_end_scn().get_val_for_tx();
+    data_block_cache_ = &(ObStorageCacheSuite::get_instance().get_block_cache());
+    index_block_cache_ = &(ObStorageCacheSuite::get_instance().get_index_block_cache());
+    ext_read_handles_.set_allocator(access_ctx.stmt_allocator_);
+    rowkeys_ = static_cast<const common::ObIArray<blocksstable::ObDatumRowkey> *> (query_range);
+    index_tree_height_ = sstable_->get_meta().get_index_tree_height();
+    int32_t range_count = rowkeys_->count();
+    max_handle_prefetching_cnt_ = min(range_count, MAX_MULTIGET_MICRO_DATA_HANDLE_CNT);
+    if (0 == range_count) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("range count should be greater than 0", K(ret), K(range_count));
+    } else if (OB_FAIL(ext_read_handles_.prepare_reallocate(max_handle_prefetching_cnt_))) {
+      LOG_WARN("Fail to init read_handles", K(ret), K(max_handle_prefetching_cnt_));
+    } else if (OB_FAIL(micro_block_handle_mgr_.init(range_count > 1, false, *access_ctx.stmt_allocator_))) {
+      LOG_WARN("failed to init block handle mgr", K(ret));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObIndexTreeMultiPrefetcher::switch_context(
+    const int iter_type,
+    const ObTableReadInfo &index_read_info,
+    ObSSTable &sstable,
+    ObTableAccessContext &access_ctx,
+    const void *query_range)
+{
+  int ret = OB_SUCCESS;
+  bool is_multi_range = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_UNLIKELY(ObStoreRowIterator::IteratorMultiGet != iter_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(iter_type));
+  } else {
+    sstable_ = &sstable;
+    access_ctx_ = &access_ctx;
+    data_version_ = sstable_->is_major_sstable() ? sstable_->get_snapshot_version() : sstable_->get_key().get_end_scn().get_val_for_tx();
+    rowkeys_ = static_cast<const common::ObIArray<blocksstable::ObDatumRowkey> *> (query_range);
+    index_read_info_ = &index_read_info;
+    max_handle_prefetching_cnt_ = min(rowkeys_->count(), MAX_MULTIGET_MICRO_DATA_HANDLE_CNT);
+    if (OB_FAIL(ext_read_handles_.prepare_reallocate(max_handle_prefetching_cnt_))) {
+      LOG_WARN("Fail to init read_handles", K(ret), K(max_handle_prefetching_cnt_));
+    } else if (!is_rescan_) {
+      is_rescan_ = true;
+      for (int64_t i = 0; i < ext_read_handles_.count(); ++i) {
+        ext_read_handles_.at(i).reset();
+      }
+      micro_block_handle_mgr_.reset();
+      if (OB_FAIL(micro_block_handle_mgr_.init(true, false, *access_ctx.stmt_allocator_))) {
+        LOG_WARN("failed to init block handle mgr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIndexTreeMultiPrefetcher::multi_prefetch()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObIndexTreeMultiPrefetcher not init", K(ret));
+  } else {
+    const int64_t rowkey_cnt = rowkeys_->count();
+    for (int64_t i = fetch_rowkey_idx_;
+         OB_SUCC(ret) && prefetched_rowkey_cnt_ < rowkey_cnt && i < fetch_rowkey_idx_ + max_handle_prefetching_cnt_;
+         ++i) {
+      const bool is_rowkey_to_fetched = i == fetch_rowkey_idx_;
+      const bool is_empty_handle = i >= prefetch_rowkey_idx_;
+      ObSSTableReadHandleExt &read_handle = ext_read_handles_[i % max_handle_prefetching_cnt_];
+      if (is_empty_handle && prefetch_rowkey_idx_ < rowkey_cnt) {
+        read_handle.reuse();
+        read_handle.rowkey_ = &rowkeys_->at(prefetch_rowkey_idx_);
+        read_handle.range_idx_ = prefetch_rowkey_idx_;
+        read_handle.is_get_ = true;
+        prefetch_rowkey_idx_++;
+
+        if (OB_FAIL(lookup_in_cache(read_handle))) {
+          LOG_WARN("Failed to lookup_in_cache", K(ret));
+        } else if (ObSSTableRowState::IN_BLOCK == read_handle.row_state_) {
+          if (OB_FAIL(sstable_->get_index_tree_root(*index_read_info_, index_block_))) {
+            LOG_WARN("Fail to get index block root", K(ret));
+          } else if (!index_scanner_.is_valid() && OB_FAIL(init_index_scanner(index_scanner_))) {
+            LOG_WARN("Fail to init index scanner", K(ret));
+          } else if (OB_FAIL(drill_down(ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID, read_handle, false, is_rowkey_to_fetched))) {
+            LOG_WARN("Fail to prefetch next level", K(ret), K(index_block_), K(read_handle), KPC(this));
+          } else {
+            EVENT_INC(ObStatEventIds::INDEX_BLOCK_READ_CNT);
+          }
+        } else {
+          mark_cur_rowkey_prefetched(read_handle);
+        }
+      } else if (read_handle.cur_prefetch_end_) {
+        continue;
+      } else if (read_handle.cur_level_ >= index_tree_height_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Fail to prefetch, unexpected cur level", K(ret), K(read_handle.cur_level_), K(index_tree_height_), K(read_handle), KPC(this));
+      } else if (ObSSTableRowState::IN_BLOCK == read_handle.row_state_) {
+        bool stop_prefetch = false;
+        int64_t tenant_id = MTL_ID();
+        ObMicroIndexInfo &cur_index_info = read_handle.index_block_info_;
+        ObMicroBlockDataHandle &next_handle = read_handle.get_read_handle();
+        if (OB_UNLIKELY(!cur_index_info.is_valid() ||
+            nullptr == read_handle.micro_handle_ ||
+            &next_handle == read_handle.micro_handle_ ||
+            ObSSTableMicroBlockState::IN_BLOCK_IO != read_handle.micro_handle_->block_state_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Fail to prefetch, unexpected read handle", K(ret), K(read_handle), KPC(this));
+        } else if (OB_FAIL(micro_block_handle_mgr_.get_micro_block_handle(
+                    tenant_id,
+                    cur_index_info,
+                    cur_index_info.is_data_block(),
+                    next_handle))) {
+          //not in cache yet, stop this rowkey prefetching if it's not the rowkey to be feteched
+          ret = OB_SUCCESS;
+          if (is_rowkey_to_fetched) {
+            if (OB_FAIL(read_handle.micro_handle_->get_index_block_data(*index_read_info_, index_block_))) {
+              LOG_WARN("Fail to get index block data", K(ret), KPC(read_handle.micro_handle_));
+            }
+          } else {
+            stop_prefetch = true;
+          }
+        } else if (FALSE_IT(read_handle.set_cur_micro_handle(next_handle))) {
+        } else if (OB_FAIL(read_handle.micro_handle_->get_cached_index_block_data(*index_read_info_, index_block_))) {
+          LOG_WARN("Fail to get cached index block data", K(ret), KPC(read_handle.micro_handle_));
+        }
+        if (OB_SUCC(ret) && !stop_prefetch) {
+          if (OB_FAIL(drill_down(cur_index_info.get_macro_id(), read_handle, cur_index_info.is_leaf_block(), is_rowkey_to_fetched))) {
+            LOG_WARN("Fail to prefetch next level", K(ret), K(index_block_), K(read_handle), KPC(this));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIndexTreeMultiPrefetcher::drill_down(
+    const MacroBlockId &macro_id,
+    ObSSTableReadHandleExt &read_handle,
+    const bool cur_level_is_leaf,
+    const bool force_prefetch)
+{
+  int ret = OB_SUCCESS;
+  ObMicroIndexInfo index_block_info;
+  EVENT_INC(ObStatEventIds::INDEX_BLOCK_READ_CNT);
+  read_handle.cur_level_++;
+  if (OB_FAIL(index_scanner_.open(macro_id, index_block_, *read_handle.rowkey_, read_handle.range_idx_))) {
+    LOG_WARN("Fail to open index block scanner", K(ret), K(index_block_), K(read_handle));
+  } else if (cur_level_is_leaf && read_handle.cur_level_ != index_tree_height_ - 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Fail to prefetch, unexpected level", K(ret), K(cur_level_is_leaf),
+             K(read_handle.cur_level_), K(index_tree_height_));
+  } else if (OB_FAIL(index_scanner_.get_next(index_block_info))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("Fail to get index block row", K(ret), K_(index_scanner));
+    } else {
+      mark_cur_rowkey_prefetched(read_handle);
+      read_handle.row_state_ = ObSSTableRowState::NOT_EXIST;
+      ret = OB_SUCCESS;
+    }
+  } else if (cur_level_is_leaf != index_block_info.is_data_block()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Fail to prefetch, unexpected level", K(ret), K(cur_level_is_leaf), K(index_block_info));
+  } else if (index_block_info.is_macro_node() && OB_FAIL(check_bloom_filter(index_block_info, read_handle))) {
+    LOG_WARN("Fail to check bloom filter", K(ret), K(index_block_info), K(read_handle));
+  } else if (ObSSTableRowState::NOT_EXIST == read_handle.row_state_) {
+    mark_cur_rowkey_prefetched(read_handle);
+  } else {
+    // hold block cache of the parent temporaliy to avoid freed
+    ObMicroBlockDataHandle &next_handle = read_handle.get_read_handle();
+    if (OB_FAIL(prefetch_block_data(index_block_info, next_handle, cur_level_is_leaf))) {
+      LOG_WARN("fail to prefetch_block_data", K(ret), K(read_handle), K(index_block_info), K(cur_level_is_leaf));
+    } else if (FALSE_IT(read_handle.set_cur_micro_handle(next_handle))) {
+    } else if (cur_level_is_leaf) {
+      mark_cur_rowkey_prefetched(read_handle);
+      read_handle.index_block_info_ = index_block_info;
+    } else if (force_prefetch || ObSSTableMicroBlockState::IN_BLOCK_CACHE == next_handle.block_state_) {
+      if (ObSSTableMicroBlockState::IN_BLOCK_CACHE == next_handle.block_state_) {
+        LOG_DEBUG("cur handle is in cache", K(read_handle), K(index_block_info), K(next_handle));
+        if (OB_FAIL(next_handle.get_cached_index_block_data(*index_read_info_, index_block_))) {
+          LOG_WARN("Fail to get index block data", K(ret), K(next_handle));
+        }
+      } else {
+        LOG_DEBUG("cur handle is not in cache, force prefetch", K(read_handle), K(index_block_info), K(next_handle));
+        if (OB_FAIL(next_handle.get_index_block_data(*index_read_info_, index_block_))) {
+          LOG_WARN("Fail to get index block data", K(ret), K(next_handle));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(drill_down(
+                    index_block_info.get_macro_id(),
+                    read_handle,
+                    index_block_info.is_leaf_block(),
+                    force_prefetch))) {
+          LOG_WARN("Faile to prefetch data block", K(ret), K(read_handle));
+        }
+      }
+    } else {
+      LOG_DEBUG("cur handle is not in cache, has submit io", K(read_handle), K(index_block_info), K(next_handle));
+      read_handle.index_block_info_ = index_block_info;
     }
   }
   return ret;

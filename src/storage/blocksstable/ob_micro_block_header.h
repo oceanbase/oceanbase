@@ -30,7 +30,9 @@ public:
   uint16_t rowkey_column_count_;
   struct {
     uint16_t has_column_checksum_ : 1;
-    uint16_t reserved16_          : 15;
+    uint8_t contains_hash_index_   : 1;
+    uint16_t hash_index_offset_from_end_ : 10;
+    uint16_t reserved16_          : 4;
   };
   uint32_t row_count_;
   uint8_t row_store_type_;
@@ -96,6 +98,7 @@ public:
   bool contain_uncommitted_rows() const { return contain_uncommitted_rows_; }
   bool has_out_row_column() const;
   bool is_last_row_last_flag() const { return is_last_row_last_flag_; }
+  bool is_contain_hash_index() const;
 }__attribute__((packed));
 }//end namespace blocksstable
 }//end namespace oceanbase

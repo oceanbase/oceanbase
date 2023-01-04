@@ -20,6 +20,7 @@
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
+#include "share/cache/ob_kvcache_pre_warmer.h"
 
 namespace oceanbase
 {
@@ -265,10 +266,12 @@ private:
   int new_next_builder(ObBaseIndexBlockBuilder *&next_builder);
   virtual int append_next_row(const ObMicroBlockDesc &micro_block_desc);
   int64_t calc_basic_micro_block_data_offset(const uint64_t column_cnt);
+
 protected:
   bool is_inited_;
   bool is_closed_;
   ObDataStoreDesc *index_store_desc_;
+  ObTableReadInfo idx_read_info_;
   ObIndexBlockRowBuilder row_builder_;
   ObDatumRowkey last_rowkey_;
   common::ObArenaAllocator rowkey_allocator_;
@@ -276,6 +279,7 @@ protected:
   ObIMicroBlockWriter *micro_writer_;
   ObMacroBlockWriter *macro_writer_;
   // accumulative info
+  ObIndexBlockCachePreWarmer index_block_pre_warmer_;
   int64_t row_count_;
   int64_t row_count_delta_;
   int64_t max_merged_trans_version_;
@@ -299,8 +303,7 @@ public:
            ObSSTableIndexBuilder &sstable_builder);
   int append_row(const ObMicroBlockDesc &micro_block_desc,
                  const ObMacroBlock &macro_block);
-  int generate_macro_row(ObMacroBlock &macro_block,
-                         const MacroBlockId &id);
+  int generate_macro_row(ObMacroBlock &macro_block, const MacroBlockId &id);
   int append_macro_block(const ObMacroBlockDesc &macro_desc);
   int close(const ObDatumRowkey &last_key,
             ObMacroBlocksWriteCtx *data_write_ctx);
@@ -324,7 +327,6 @@ private:
   ObIAllocator *sstable_allocator_;
   ObDataStoreDesc leaf_store_desc_;
   ObMicroBlockBufferHelper micro_helper_;
-  ObTableReadInfo idx_read_info_;
   ObIndexBlockRowDesc macro_row_desc_;
   ObIndexMicroBlockDesc *root_micro_block_desc_;
   ObMacroMetasArray *macro_meta_list_;

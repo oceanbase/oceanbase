@@ -19,6 +19,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+
 int ObIMicroBlockReader::locate_range(
     const ObDatumRange &range,
     const bool is_left_border,

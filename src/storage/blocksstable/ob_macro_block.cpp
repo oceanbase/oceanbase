@@ -15,6 +15,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "ob_block_manager.h"
 #include "ob_macro_block.h"
+#include "ob_micro_block_hash_index.h"
 #include "observer/ob_server_struct.h"
 #include "share/ob_encryption_util.h"
 #include "share/ob_force_print_log.h"
@@ -232,6 +233,19 @@ int ObDataStoreDesc::init(
       STORAGE_LOG(INFO, "success to set major working cluster version", K(tmp_ret), K(merge_type), K(cluster_version), K(major_working_cluster_version_));
     }
 
+    if (OB_SUCC(ret)) {
+      bool need_build_hash_index = merge_schema.get_table_type() == USER_TABLE
+                                       && !is_major_merge();
+      if (need_build_hash_index
+              && OB_FAIL(ObMicroBlockHashIndexBuilder::need_build_hash_index(merge_schema, need_build_hash_index))) {
+        STORAGE_LOG(WARN, "Failed to judge whether to build hash index", K(ret));
+        need_build_hash_index_for_micro_block_ = false;
+        ret = OB_SUCCESS;
+      } else {
+        need_build_hash_index_for_micro_block_ = need_build_hash_index;
+      }
+    }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(col_desc_array_.init(row_column_count_))) {
       STORAGE_LOG(WARN, "Failed to reserve column desc array", K(ret));
@@ -275,6 +289,7 @@ void ObDataStoreDesc::reset()
   rowkey_column_count_ = 0;
   schema_rowkey_col_cnt_ = 0;
   row_store_type_ = ENCODING_ROW_STORE;
+  need_build_hash_index_for_micro_block_ = false;
   encoder_opt_.reset();
   schema_version_ = 0;
   merge_info_ = NULL;
@@ -291,6 +306,7 @@ void ObDataStoreDesc::reset()
   major_working_cluster_version_ = 0;
   sstable_index_builder_ = nullptr;
   is_ddl_ = false;
+  need_pre_warm_ = false;
   col_desc_array_.reset();
   datum_utils_.reset();
   allocator_.reset();
@@ -308,6 +324,7 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc &desc)
   row_column_count_ = desc.row_column_count_;
   rowkey_column_count_ = desc.rowkey_column_count_;
   row_store_type_ = desc.row_store_type_;
+  need_build_hash_index_for_micro_block_ = desc.need_build_hash_index_for_micro_block_;
   schema_version_ = desc.schema_version_;
   schema_rowkey_col_cnt_ = desc.schema_rowkey_col_cnt_;
   encoder_opt_ = desc.encoder_opt_;
@@ -323,6 +340,7 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc &desc)
   MEMCPY(encrypt_key_, desc.encrypt_key_, sizeof(encrypt_key_));
   major_working_cluster_version_ = desc.major_working_cluster_version_;
   is_ddl_ = desc.is_ddl_;
+  need_pre_warm_ = desc.need_pre_warm_;
   col_desc_array_.reset();
   datum_utils_.reset();
   sstable_index_builder_ = desc.sstable_index_builder_;

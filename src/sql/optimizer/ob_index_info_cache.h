@@ -28,6 +28,7 @@ public:
       contain_always_false_(false),
       query_range_(NULL),
       ranges_(),
+      ss_ranges_(),
       equal_prefix_count_(0),
       equal_prefix_null_count_(0),
       range_prefix_count_(0),
@@ -48,6 +49,8 @@ public:
   bool get_contain_always_false() const { return contain_always_false_; }
   
   ObQueryRangeArray& get_ranges() { return ranges_; }
+  ObQueryRangeArray& get_ss_ranges() { return ss_ranges_; }
+  const ObQueryRangeArray& get_ss_ranges() const { return ss_ranges_; }
   void set_query_range(ObQueryRange *query_range) { query_range_ = query_range; }
   common::ObIArray<ColumnItem> &get_range_columns() { return range_columns_; }
   common::ObIArray<ObExprConstraint> &get_expr_constraints() { return expr_constraints_; }
@@ -88,6 +91,7 @@ private:
   bool contain_always_false_;
   ObQueryRange *query_range_;
   ObQueryRangeArray ranges_;
+  ObQueryRangeArray ss_ranges_; // for index skip scan, postfix range
   int64_t equal_prefix_count_;
   int64_t equal_prefix_null_count_;
   int64_t range_prefix_count_;

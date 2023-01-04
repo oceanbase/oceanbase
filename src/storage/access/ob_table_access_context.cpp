@@ -60,6 +60,7 @@ ObTableAccessContext::ObTableAccessContext()
     limit_param_(NULL),
     stmt_allocator_(NULL),
     allocator_(NULL),
+    range_allocator_(nullptr),
     scan_mem_(nullptr),
     table_scan_stat_(NULL),
     table_store_stat_(),
@@ -144,6 +145,7 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
   }
   if (OB_SUCC(ret)) {
     stmt_allocator_ = scan_param.allocator_;
+    range_allocator_ = nullptr;
     ls_id_ = scan_param.ls_id_;
     tablet_id_ = scan_param.tablet_id_;
     query_flag_ = scan_param.scan_flag_;
@@ -190,6 +192,7 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     timeout_ = ctx.timeout_;
     allocator_ = &allocator;
     stmt_allocator_ = &stmt_allocator;
+    range_allocator_ = nullptr;
     trans_version_range_ = trans_version_range;
     ls_id_ = ctx.ls_id_;
     tablet_id_ = ctx.tablet_id_;
@@ -217,6 +220,7 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     timeout_ = ctx.timeout_;
     allocator_ = &allocator;
     stmt_allocator_ = &allocator;
+    range_allocator_ = nullptr;
     trans_version_range_ = trans_version_range;
     ls_id_ = ctx.ls_id_;
     tablet_id_ = ctx.tablet_id_;
@@ -252,6 +256,7 @@ void ObTableAccessContext::reset()
     scan_mem_ = NULL;
   }
   allocator_ = NULL;
+  range_allocator_ = nullptr;
   table_scan_stat_ = NULL;
   table_store_stat_.reset();
   out_cnt_ = 0;
@@ -284,6 +289,7 @@ void ObTableAccessContext::reuse()
     scan_mem_->reuse_arena();
   }
   allocator_ = NULL;
+  range_allocator_ = nullptr;
   table_scan_stat_ = NULL;
   out_cnt_ = 0;
   trans_version_range_.reset();

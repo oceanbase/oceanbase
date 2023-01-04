@@ -56,6 +56,7 @@ struct ObDataStoreDesc
   int64_t row_column_count_;
   int64_t rowkey_column_count_;
   ObRowStoreType row_store_type_;
+  bool need_build_hash_index_for_micro_block_;
   int64_t schema_version_;
   int64_t schema_rowkey_col_cnt_;
   ObMicroBlockEncoderOpt encoder_opt_;
@@ -77,6 +78,7 @@ struct ObDataStoreDesc
   // which still use freezeinfo without cluster version
   int64_t major_working_cluster_version_;
   bool is_ddl_;
+  bool need_pre_warm_;
   common::ObArenaAllocator allocator_;
   common::ObFixedArray<share::schema::ObColDesc, common::ObIAllocator> col_desc_array_;
   blocksstable::ObStorageDatumUtils datum_utils_;

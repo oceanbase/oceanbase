@@ -47,6 +47,8 @@ const char *ObLogTableScan::get_name() const
   }
   if (sample_method != SampleInfo::NO_SAMPLE) {
     name = (sample_method == SampleInfo::ROW_SAMPLE) ? "ROW SAMPLE SCAN" : "BLOCK SAMPLE SCAN";
+  } else if (is_skip_scan()) {
+    name = use_das() ? "DISTRIBUTED INDEX SKIP SCAN" : "INDEX SKIP SCAN";
   } else if (use_das()) {
     name = is_get ? "DISTRIBUTED TABLE GET" : "DISTRIBUTED TABLE SCAN";
   } else {
@@ -1165,6 +1167,17 @@ int ObLogTableScan::print_range_annotation(char *buf,
     ret = print_ranges(buf, buf_len, pos, ranges_);
   }
 
+  if (OB_SUCC(ret) && is_skip_scan()) {
+    int64_t skip_scan_offset = get_pre_query_range()->get_skip_scan_offset();
+    if (OB_FAIL(BUF_PRINTF("\n      prefix_columns_cnt = %ld , skip_scan_range", skip_scan_offset))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (ss_ranges_.empty() && OB_FAIL(BUF_PRINTF("(MIN ; MAX)"))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(print_ranges(buf, buf_len, pos, ss_ranges_))) {
+      LOG_WARN("failed to print index skip ranges", K(ret));
+    } else { /* Do nothing */ }
+  }
+
   if (OB_SUCC(ret)) {
     if (!range_conds_.empty()) {
       //print range condition
@@ -1204,10 +1217,13 @@ int ObLogTableScan::print_limit_offset_annotation(char *buf,
   return ret;
 }
 
-int ObLogTableScan::set_query_ranges(ObRangesArray ranges)
+int ObLogTableScan::set_query_ranges(ObIArray<ObNewRange> &ranges,
+                                     ObIArray<ObNewRange> &ss_ranges)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(append(ranges_, ranges))) {
+    LOG_WARN("Failed to do append to ranges_ in set_query_ranges()");
+  } else if (OB_FAIL(append(ss_ranges_, ss_ranges))) {
     LOG_WARN("Failed to do append to ranges_ in set_query_ranges()");
   } else { /* Do nothing =*/ }
   return ret;
@@ -1233,6 +1249,7 @@ int ObLogTableScan::print_used_hint(planText &plan_text)
     const ObLogPlanHint &plan_hint = get_plan()->get_log_plan_hint();
     const LogTableHint *table_hint = plan_hint.get_log_table_hint(table_id_);
     const ObHint *hint = plan_hint.get_normal_hint(T_USE_LATE_MATERIALIZATION);
+    int64_t idx = OB_INVALID_INDEX;
     if (NULL != hint
         && ((need_late_materialization() && hint->is_enable_hint()) ||
             (!need_late_materialization() && hint->is_disable_hint()))
@@ -1248,34 +1265,30 @@ int ObLogTableScan::print_used_hint(planText &plan_text)
       LOG_WARN("failed to print table parallel hint", K(ret));
     } else if (table_hint->index_list_.empty()) {
       /*do nothing*/
-    } else if (OB_UNLIKELY(table_hint->index_list_.count() != table_hint->index_hints_.count()
-                           || (!table_hint->is_index_hint() && !table_hint->is_no_index_hint()))) {
+    } else if (OB_UNLIKELY(table_hint->index_list_.count() != table_hint->index_hints_.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected log index hint", K(ret), K(*table_hint));
-    } else {
-      int64_t idx = OB_INVALID_INDEX;
+    } else if (table_hint->is_use_index_hint()) {// print used use index hint
       if (ObOptimizerUtil::find_item(table_hint->index_list_, index_table_id_, &idx)) {
         if (OB_UNLIKELY(idx < 0 || idx >= table_hint->index_list_.count())
             || OB_ISNULL(hint = table_hint->index_hints_.at(idx))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected idx", K(ret), K(idx), K(table_hint->index_list_));
-        } else if (table_hint->is_index_hint() &&
-                  OB_FAIL(hint->print_hint(plan_text))) {
+        } else if (!is_skip_scan() && T_INDEX_SS_HINT == hint->get_hint_type()) {
+          /* is not index skip scan but exist index_ss hint */
+        } else if (OB_FAIL(hint->print_hint(plan_text))) {
           LOG_WARN("failed to print indedx hint", K(ret), K(*hint));
         }
       }
-
-      // print all no index
-      if (OB_SUCC(ret) && table_hint->is_no_index_hint()) {
-        for (int64_t i = 0 ; OB_SUCC(ret) && i < table_hint->index_list_.count(); ++i) {
-          if (idx == i) {
-            /*do nothing*/
-          } else if (OB_ISNULL(hint = table_hint->index_hints_.at(i))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected NULL", K(ret), K(hint));
-          } else if (OB_FAIL(hint->print_hint(plan_text))) {
-            LOG_WARN("failed to print indedx hint", K(ret), K(*hint));
-          }
+    } else {// print all no index
+      for (int64_t i = 0 ; OB_SUCC(ret) && i < table_hint->index_list_.count(); ++i) {
+        if (idx == i) {
+          /*do nothing*/
+        } else if (OB_ISNULL(hint = table_hint->index_hints_.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL", K(ret), K(hint));
+        } else if (OB_FAIL(hint->print_hint(plan_text))) {
+          LOG_WARN("failed to print indedx hint", K(ret), K(*hint));
         }
       }
     }
@@ -1291,6 +1304,21 @@ int ObLogTableScan::print_outline_data(planText &plan_text)
   int64_t &pos = plan_text.pos;
   TableItem *table_item = NULL;
   ObString qb_name;
+  const ObString *index_name = NULL;
+  ObItemType index_type = T_INDEX_HINT;
+  if (is_skip_scan()) {
+    index_type = T_INDEX_SS_HINT;
+    if (ref_table_id_ == index_table_id_) {
+      index_name = &ObIndexHint::PRIMARY_KEY;
+    } else {
+      index_name = &get_index_name();
+    }
+  } else if (ref_table_id_ == index_table_id_) {
+    index_type = T_FULL_HINT;
+  } else {
+    index_type = T_INDEX_HINT;
+    index_name = &get_index_name();
+  }
   const ObDMLStmt *stmt = NULL;
   const ObTableParallelHint *parallel_hint = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
@@ -1325,11 +1353,11 @@ int ObLogTableScan::print_outline_data(planText &plan_text)
              && static_cast<ObLogJoin*>(get_parent())->is_late_mat()) {
     // late materialization right table, do not print index hint.
   } else {
-    ObIndexHint index_hint(ref_table_id_ == index_table_id_ ? T_FULL_HINT: T_INDEX_HINT);
+    ObIndexHint index_hint(index_type);
     index_hint.set_qb_name(qb_name);
     index_hint.get_table().set_table(*table_item);
-    if (T_INDEX_HINT == index_hint.get_hint_type()) {
-      index_hint.get_index_name().assign(get_index_name().ptr(), get_index_name().length());
+    if (NULL != index_name) {
+      index_hint.get_index_name().assign_ptr(index_name->ptr(), index_name->length());
     }
     if (OB_FAIL(index_hint.print_hint(plan_text))) {
       LOG_WARN("failed to print index hint", K(ret));

@@ -101,6 +101,7 @@ int ObPartitionMerger::init_data_store_desc(ObTabletMergeCtx &ctx)
     merge_info_.concurrent_cnt_ = ctx.parallel_merge_ctx_.get_concurrent_cnt();
     merge_info_.is_full_merge_ = ctx.is_full_merge_;
     data_store_desc_.merge_info_ = &merge_info_;
+    data_store_desc_.need_pre_warm_ = true;
   }
   return ret;
 }

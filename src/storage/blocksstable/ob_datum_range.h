@@ -59,6 +59,8 @@ public:
                               common::ObIAllocator &allocator,
                               common::ObStoreRange &store_range) const;
   OB_INLINE int to_multi_version_range(common::ObIAllocator &allocator, ObDatumRange &dest) const;
+  OB_INLINE int prepare_memtable_readable(const common::ObIArray<share::schema::ObColDesc> &col_descs,
+                                          common::ObIAllocator &allocator);
   // !!Attension only compare start key
   OB_INLINE int compare(const ObDatumRange &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret) const;
   // maybe we will need serialize
@@ -269,6 +271,18 @@ OB_INLINE int ObDatumRange::to_multi_version_range(common::ObIAllocator &allocat
     dest.group_idx_ = group_idx_;
   }
 
+  return ret;
+}
+
+OB_INLINE int ObDatumRange::prepare_memtable_readable(const common::ObIArray<share::schema::ObColDesc> &col_descs,
+                                          common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(start_key_.prepare_memtable_readable(col_descs, allocator))) {
+    STORAGE_LOG(WARN, "Failed to prepare start key", K(ret), K(start_key_), K(col_descs));
+  } else if (OB_FAIL(end_key_.prepare_memtable_readable(col_descs, allocator))) {
+    STORAGE_LOG(WARN, "Failed to prepare end key", K(ret), K(end_key_), K(col_descs));
+  }
   return ret;
 }
 

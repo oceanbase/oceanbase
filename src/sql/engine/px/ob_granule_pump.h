@@ -94,15 +94,20 @@ class ObGITaskSet {
 public:
   struct ObGITaskInfo
   {
-    ObGITaskInfo() : tablet_loc_(nullptr), range_(), idx_(0), hash_value_(0) {}
-    ObGITaskInfo(ObDASTabletLoc *tablet_loc, common::ObNewRange range, int64_t idx) :
-        tablet_loc_(tablet_loc), range_(range), idx_(idx), hash_value_(0) {}
+    ObGITaskInfo() : tablet_loc_(nullptr), range_(), ss_range_(), idx_(0), hash_value_(0) {}
+    ObGITaskInfo(ObDASTabletLoc *tablet_loc,
+                 common::ObNewRange range,
+                 common::ObNewRange ss_range,
+                 int64_t idx) :
+        tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0) {}
     TO_STRING_KV(KPC(tablet_loc_),
                  K(range_),
+                 K(ss_range_),
                  K(idx_),
                  K(hash_value_));
     ObDASTabletLoc *tablet_loc_;
     common::ObNewRange range_;
+    common::ObNewRange ss_range_;
     int64_t idx_;
     uint64_t hash_value_;
   };
@@ -124,6 +129,7 @@ public:
   int set_block_order(bool asc);
   int construct_taskset(common::ObIArray<ObDASTabletLoc*> &taskset_tablets,
                         common::ObIArray<ObNewRange> &taskset_ranges,
+                        common::ObIArray<ObNewRange> &ss_ranges,
                         common::ObIArray<int64_t> &taskset_idxs,
                         ObGIRandomType random_type);
 public:
@@ -169,6 +175,7 @@ public :
   static int get_query_range(ObExecContext &ctx,
                              const ObQueryRange &tsc_pre_query_range,
                              ObIArray<ObNewRange> &ranges,
+                             ObIArray<ObNewRange> &ss_ranges,
                              int64_t table_id,
                              int64_t op_id,
                              bool partition_granule,

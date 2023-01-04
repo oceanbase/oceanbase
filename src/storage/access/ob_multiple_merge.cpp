@@ -107,8 +107,6 @@ int ObMultipleMerge::init(
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
   } else if (OB_FAIL(unprojected_row_.init(*context.stmt_allocator_, param.get_out_col_cnt()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
-  } else if (OB_FAIL(full_row_.init(*context.stmt_allocator_, param.get_max_out_col_cnt()))) {
-    STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
   } else if (OB_FAIL(nop_pos_.init(*context.stmt_allocator_, param.get_max_out_col_cnt()))) {
     STORAGE_LOG(WARN, "Fail to init nop pos, ", K(ret));
   } else if (NULL != param.op_ && (NULL == param.output_exprs_ || NULL == param.row2exprs_projector_
@@ -140,7 +138,6 @@ int ObMultipleMerge::init(
     for (int64_t i = cur_row_.get_column_count(); i < param.get_out_col_cnt(); ++i) {
       cur_row_.storage_datums_[i].set_nop();
     }
-    full_row_.count_ = param.get_max_out_col_cnt();
     unprojected_row_.count_ = 0;
     get_table_param_ = get_table_param;
     if (OB_SUCC(ret)) {

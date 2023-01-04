@@ -329,6 +329,17 @@ void ObKVMemBlockHandle::set_full(const double base_mb_score)
   score_ += base_mb_score;
   ATOMIC_STORE((uint32_t*)(&status_), FULL);
 }
+
+
+/*
+ * -------------------------------------------------ObKVCacheStoreMemblockInfo------------------------------------------------
+ */
+bool ObKVCacheStoreMemblockInfo::is_valid() const
+{
+  return tenant_id_ != OB_INVALID_TENANT_ID && cache_id_ >= 0;
+}
+
+
 }//end namespace common
 }//end namespace oceanbase
 

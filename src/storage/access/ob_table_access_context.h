@@ -81,6 +81,9 @@ struct ObTableAccessContext
   inline bool is_limit_end() const {
     return (nullptr != limit_param_ && limit_param_->limit_ >= 0 && (out_cnt_ - limit_param_->offset_ >= limit_param_->limit_));
   }
+  inline common::ObIAllocator *get_range_allocator() {
+    return nullptr == range_allocator_ ? allocator_ : range_allocator_;
+  }
   // used for query
   int init(ObTableScanParam &scan_param,
            ObStoreCtx &ctx,
@@ -107,6 +110,7 @@ struct ObTableAccessContext
     KP_(limit_param),
     KP_(stmt_allocator),
     KP_(allocator),
+    KP_(range_allocator),
     KP_(table_scan_stat),
     K_(out_cnt),
     K_(trans_version_range),
@@ -135,6 +139,8 @@ public:
   common::ObIAllocator *stmt_allocator_;
   // storage scan/rescan interface level allocator, will be reclaimed in every scan/rescan call
   common::ObIAllocator *allocator_;
+  // scan/rescan level alloctor in storage, will be reclaimed in every reuse/open call
+  common::ObIAllocator *range_allocator_;
   lib::MemoryContext scan_mem_; // scan/rescan level memory entity, only for query
   common::ObTableScanStatistic *table_scan_stat_;
   ObTableStoreStat table_store_stat_;

@@ -162,6 +162,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_files_table.cpp
   virtual_table/ob_all_virtual_id_service.cpp
   virtual_table/ob_all_virtual_io_stat.cpp
+  virtual_table/ob_all_virtual_kvcache_store_memblock.cpp
   virtual_table/ob_all_virtual_load_data_stat.cpp
   virtual_table/ob_all_virtual_lock_wait_stat.cpp
   virtual_table/ob_all_virtual_long_ops_status.cpp

@@ -182,9 +182,11 @@ struct ObCostTableScanInfo
      is_inner_path_(false),
      can_use_batch_nlj_(false),
      ranges_(),
+     ss_ranges_(),
      range_columns_(),
      prefix_filters_(),
      pushdown_prefix_filters_(),
+     ss_postfix_range_filters_(),
      postfix_filters_(),
      table_filters_(),
      table_metas_(NULL),
@@ -195,6 +197,8 @@ struct ObCostTableScanInfo
      postfix_filter_sel_(1.0),
      table_filter_sel_(1.0),
      join_filter_sel_(1.0),
+     ss_prefix_ndv_(1.0),
+     ss_postfix_range_filters_sel_(1.0),
      batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE)
   { }
   virtual ~ObCostTableScanInfo()
@@ -208,7 +212,8 @@ struct ObCostTableScanInfo
                K_(is_virtual_table), K_(is_unique),
                K_(is_inner_path), K_(can_use_batch_nlj),
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
-               K_(postfix_filter_sel), K_(table_filter_sel));
+               K_(postfix_filter_sel), K_(table_filter_sel),
+               K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel));
   // the following information need to be set before estimating cost
   uint64_t table_id_; // table id
   uint64_t ref_table_id_; // ref table id
@@ -220,6 +225,7 @@ struct ObCostTableScanInfo
   bool is_inner_path_;
   bool can_use_batch_nlj_;
   ObRangesArray ranges_;  // all the ranges
+  ObRangesArray ss_ranges_;  // skip scan ranges
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> range_columns_; // all the range columns
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> access_column_items_; // all the access columns
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> index_access_column_items_; // all the access columns
@@ -227,6 +233,7 @@ struct ObCostTableScanInfo
   //这几个filter的分类参考OptimizerUtil::classify_filters()
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> prefix_filters_; // filters match index prefix
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> pushdown_prefix_filters_; // filters match index prefix along pushed down filter
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> ss_postfix_range_filters_;  // range conditions extract postfix range for skip scan
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> postfix_filters_; // filters evaluated before index back, but not index prefix
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> table_filters_;  // filters evaluated after index back
 
@@ -241,6 +248,8 @@ struct ObCostTableScanInfo
   double postfix_filter_sel_;
   double table_filter_sel_;
   double join_filter_sel_;
+  double ss_prefix_ndv_;  // skip scan prefix columns NDV
+  double ss_postfix_range_filters_sel_;
   common::ObSimpleBatch::ObBatchType batch_type_;
   SampleInfo sample_info_;
 private:
@@ -1020,6 +1029,9 @@ protected:
                                               const ObCostTableScanInfo &est_cost_info,
                                               bool is_scan_index,
                                               double &res);
+
+  int cost_skip_scan_prefix_scan_one_row(const ObCostTableScanInfo &est_cost_info,
+                                         double &cost);
 protected:
   const double (&comparison_params_)[common::ObMaxTC + 1];
   const double (&hash_params_)[common::ObMaxTC + 1];

@@ -140,8 +140,8 @@ public:
   void reload_priority();
   int reload_wash_interval();
   int64_t get_suitable_bucket_num();
-  int get_tenant_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles);
-  int get_all_cache_info(ObIArray<ObKVCacheInstHandle> &inst_handles);
+  int get_cache_inst_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles);
+  int get_memblock_info(const uint64_t tenant_id, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos);
   void print_all_cache_info();
   int erase_cache();
   virtual int erase_cache(const uint64_t tenant_id) override;

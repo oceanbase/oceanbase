@@ -17,7 +17,7 @@ namespace oceanbase
 namespace blocksstable
 {
 
-  /**
+/**
  * -------------------------------------------------------------------ObMicroBlockDesc-------------------------------------------------------------------
  */
 bool ObMicroBlockDesc::is_valid() const

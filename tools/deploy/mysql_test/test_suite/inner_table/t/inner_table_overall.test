@@ -212,6 +212,7 @@ select * from  oceanbase.__all_virtual_disk_stat limit 1;
 select * from  oceanbase.__all_virtual_engine limit 1;
 select * from  oceanbase.__all_virtual_io_stat limit 1;
 select * from  oceanbase.__all_virtual_kvcache_info limit 1;
+select * from  oceanbase.__all_virtual_kvcache_store_memblock limit 1;
 select * from  oceanbase.__all_virtual_latch limit 1;
 select * from  oceanbase.__all_virtual_long_ops_status limit 1;
 select * from  oceanbase.__all_virtual_macro_block_marker_status limit 1;

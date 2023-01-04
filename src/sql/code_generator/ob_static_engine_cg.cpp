@@ -3426,7 +3426,12 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   CK(OB_NOT_NULL(schema_guard));
   if (OB_SUCC(ret) && NULL != op.get_pre_query_range()) {
     OZ(spec.tsc_ctdef_.pre_query_range_.deep_copy(*op.get_pre_query_range()));
-    op.get_pre_query_range()->is_get(spec.tsc_ctdef_.scan_ctdef_.is_get_);
+    if (OB_FAIL(ret)) {
+    } else if (!op.is_skip_scan() && OB_FAIL(spec.tsc_ctdef_.pre_query_range_.reset_skip_scan_range())) {
+      LOG_WARN("reset skip scan range failed", K(ret));
+    } else if (OB_FAIL(spec.tsc_ctdef_.pre_query_range_.is_get(spec.tsc_ctdef_.scan_ctdef_.is_get_))) {
+      LOG_WARN("extract the query range whether get failed", K(ret));
+    }
   }
 
   bool is_equal_and = true;
@@ -3462,8 +3467,11 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     }
     root = root->and_next_;
   }
-  spec.tsc_ctdef_.pre_query_range_.set_is_equal_and(is_equal_and);
-  spec.tsc_ctdef_.pre_query_range_.get_equal_offs().assign(equal_offs);
+  // TODO @baixian.zr the above optimization is overrided by ObTscCgService::generate_tsc_ctdef before this commit
+  // but after the deep copy of pre_query_range_ is removed in ObTscCgService::generate_tsc_ctdef,
+  // error is returned in such sql 'set global x=y', should fix this;
+  // spec.tsc_ctdef_.pre_query_range_.set_is_equal_and(is_equal_and);
+  // spec.tsc_ctdef_.pre_query_range_.get_equal_offs().assign(equal_offs);
 
   OZ(ob_write_string(phy_plan_->get_allocator(), op.get_table_name(), tbl_name));
   OZ(ob_write_string(phy_plan_->get_allocator(), op.get_index_name(), index_name));

@@ -51,6 +51,8 @@ public:
         filter_before_index_back_(),
         table_partition_info_(NULL),
         ranges_(),
+        ss_ranges_(),
+        is_skip_scan_(),
         limit_count_expr_(NULL),
         limit_offset_expr_(NULL),
         sample_info_(),
@@ -314,6 +316,8 @@ public:
   bool is_index_scan() const { return ref_table_id_ != index_table_id_; }
   bool is_table_whole_range_scan() const { return !is_index_scan() && (NULL == pre_query_range_ ||
                                                   (1 == ranges_.count() && ranges_.at(0).is_whole_range())); }
+  void set_skip_scan(bool is_skip_scan) { is_skip_scan_ = is_skip_scan; }
+  bool is_skip_scan() const { return is_skip_scan_; }
   virtual bool is_table_scan() const override { return true; }
   bool is_whole_range_scan() const {return NULL == pre_query_range_
                                             || (1 == ranges_.count() && ranges_.at(0).is_whole_range()); }
@@ -323,7 +327,7 @@ public:
   void set_is_multi_part_table_scan(bool multi_part_tsc)
   { is_multi_part_table_scan_ = multi_part_tsc; }
   bool get_is_multi_part_table_scan() { return is_multi_part_table_scan_; }
-  int set_query_ranges(ObRangesArray ranges);
+  int set_query_ranges(ObIArray<ObNewRange> &ranges, ObIArray<ObNewRange> &ss_ranges);
   virtual int inner_replace_generated_agg_expr(
         const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs);
   inline common::ObIArray<bool> &get_filter_before_index_flags() { return filter_before_index_back_; }
@@ -487,6 +491,8 @@ protected: // memeber variables
                                                //because its used in EXCHANGE stage, and
                                                //copy_without_child used before this
   ObRangesArray ranges_;//For explain. Code generator and executor cannot use this.
+  ObRangesArray ss_ranges_;//For explain. Code generator and executor cannot use this.
+  bool is_skip_scan_;
 
   // limit params from upper limit op
   ObRawExpr *limit_count_expr_;

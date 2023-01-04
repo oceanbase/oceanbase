@@ -74,13 +74,13 @@ public:
   bool wash();
   int get_avg_cache_item_size(const uint64_t tenant_id, const int64_t cache_id,
                               int64_t &avg_cache_item_size);
-  
+
   int get_washable_size(const uint64_t tenant_id, int64_t &washable_size, const int64_t ratio = 0);
   void flush_washable_mbs();
   void flush_washable_mbs(const uint64_t tenant_id);
   void flush_washable_mbs(const int64_t cache_id);
   void flush_washable_mbs(const uint64_t tenant_id, const int64_t cache_id);
-  
+
   int sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_size,
                     const bool wash_single_mb,
                     lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks);
@@ -95,7 +95,7 @@ public:
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle, const uint32_t seq_num);
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle);
   virtual void de_handle_ref(ObKVMemBlockHandle *mb_handle);
-  int64_t get_handle_ref_cnt(ObKVMemBlockHandle *mb_handle);
+  int64_t get_handle_ref_cnt(const ObKVMemBlockHandle *mb_handle);
   virtual int64_t get_block_size() const { return block_size_; }
   // implement functions of ObIMBWrapperMgr
   virtual int alloc(ObKVCacheInst &inst, const enum ObKVCachePolicy policy,
@@ -104,14 +104,17 @@ public:
   virtual ObKVMemBlockHandle *&get_curr_mb(ObKVCacheInst &inst, const enum ObKVCachePolicy policy);
   virtual bool mb_status_match(ObKVCacheInst &inst,
       const enum ObKVCachePolicy policy, ObKVMemBlockHandle *mb_handle);
+  int get_memblock_info(const uint64_t tenant_id, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos);
+  int print_tenant_memblock_info(ObDLink *link);
   static const int64_t MAX_RATIO = 6;
-  
+
 private:
   int try_flush_washable_mb(
     const uint64_t tenant_id, 
     lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks, 
     const int64_t cache_id = -1, 
     const int64_t size_need_washed = INT64_MAX);
+  int inner_push_memblock_info(const ObKVMemBlockHandle &handle, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos);
 
 private:
   static const int64_t SYNC_WASH_MB_TIMEOUT_US = 100 * 1000; // 100ms

@@ -200,7 +200,6 @@ int ObMultipleScanMerge::construct_iters()
 
 void ObMultipleScanMerge::reset()
 {
-  ObMultipleMerge::reset();
   if (nullptr != access_ctx_ && nullptr != access_ctx_->stmt_allocator_) {
     if (nullptr != simple_merge_) {
       simple_merge_->~ObScanSimpleMerger();
@@ -219,6 +218,7 @@ void ObMultipleScanMerge::reset()
   consumer_cnt_ = 0;
   range_ = NULL;
   cow_range_.reset();
+  ObMultipleMerge::reset();
 }
 
 void ObMultipleScanMerge::reuse()

@@ -887,22 +887,6 @@ int ObKVGlobalCache::set_checker_cache_name(const char *cache_name)
   return ret;
 }
 
-int ObKVGlobalCache::get_tenant_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ", K(ret));
-  } else if (0 == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument, ", K(tenant_id), K(ret));
-  } else if (OB_FAIL(insts_.get_tenant_cache_info(tenant_id, inst_handles))) {
-    COMMON_LOG(WARN, "Fail to get all cache info, ", K(ret));
-  }
-  return ret;
-}
-
-
 void ObKVGlobalCache::print_all_cache_info()
 {
   if (OB_UNLIKELY(!inited_)) {
@@ -913,17 +897,38 @@ void ObKVGlobalCache::print_all_cache_info()
   }
 }
 
-int ObKVGlobalCache::get_all_cache_info(ObIArray<ObKVCacheInstHandle> &inst_handles)
+int ObKVGlobalCache::get_cache_inst_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited", K(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
+  } else if (OB_FAIL(insts_.get_cache_info(tenant_id, inst_handles))) {
+    COMMON_LOG(WARN, "Fail to get all cache info", K(ret));
+  }
+
+  return ret;
+}
+
+int ObKVGlobalCache::get_memblock_info(const uint64_t tenant_id, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ", K(ret));
-  } else if (OB_FAIL(insts_.get_all_cache_info(inst_handles))) {
-    COMMON_LOG(WARN, "Fail to get all cache info, ", K(ret));
+    COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited", K(ret));
+  } else if (0 == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
+  } else if (OB_FAIL(store_.get_memblock_info(tenant_id, memblock_infos))) {
+    COMMON_LOG(WARN, "Fail to get all memblock info", K(ret));
   }
   return ret;
 }
+
 
 int ObKVGlobalCache::get_cache_id(const char *cache_name, int64_t &cache_id)
 {

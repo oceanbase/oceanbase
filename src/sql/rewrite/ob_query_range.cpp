@@ -73,6 +73,7 @@ ObQueryRange::ObQueryRange()
       query_range_ctx_(NULL),
       key_part_store_(allocator_),
       range_exprs_(allocator_),
+      ss_range_exprs_(allocator_),
       mbr_filters_(allocator_),
       has_exec_param_(true),
       is_equal_and_(false),
@@ -93,6 +94,7 @@ ObQueryRange::ObQueryRange(ObIAllocator &alloc)
       query_range_ctx_(NULL),
       key_part_store_(allocator_),
       range_exprs_(allocator_),
+      ss_range_exprs_(allocator_),
       mbr_filters_(allocator_),
       has_exec_param_(true),
       is_equal_and_(false),
@@ -131,6 +133,7 @@ void ObQueryRange::reset()
   contain_geo_filters_ = false;
   table_graph_.reset();
   range_exprs_.reset();
+  ss_range_exprs_.reset();
   inner_allocator_.reset();
   has_exec_param_ = true;
   is_equal_and_ = false;
@@ -290,17 +293,10 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
     if (OB_SUCC(ret) && NULL != root) {
       if (OB_FAIL(refine_large_range_graph(root))) {
         LOG_WARN("failed to refine large range graph", K(ret));
-      } else if (OB_FAIL(remove_useless_range_graph(root))) {
-        LOG_WARN("failed to remove useless range", K(ret));
+      } else if (OB_FAIL(check_graph_type(*root))) {
+        LOG_WARN("check graph type failed", K(ret));
       } else if (OB_FAIL(generate_expr_final_info())) {
-        LOG_WARN("failed to generate final exprs");
-      } else {
-        SQL_REWRITE_LOG(DEBUG, "root key part", K(*root));
-        int64_t max_pos = -1;
-        table_graph_.key_part_head_ = root;
-        table_graph_.is_standard_range_ = is_standard_graph(root);
-        OZ(is_strict_equal_graph(root, 0, max_pos, table_graph_.is_equal_range_));
-        OZ(check_graph_type());
+      LOG_WARN("failed to generate final exprs");
       }
     }
   }
@@ -418,24 +414,13 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
       // no range left
     } else if (OB_FAIL(refine_large_range_graph(temp_result))) {
       LOG_WARN("failed to refine large range graph", K(ret));
-    } else if (OB_FAIL(remove_useless_range_graph(temp_result))) {
-      LOG_WARN("failed to remove useless range", K(ret));
+    } else if (OB_FAIL(check_graph_type(*temp_result))) {
+      LOG_WARN("check graph type failed", K(ret));
     } else if (OB_FAIL(generate_expr_final_info())) {
       LOG_WARN("failed to generate final exprs");
-    } else {
-      int64_t max_pos = -1;
-      table_graph_.key_part_head_ = temp_result;
-      table_graph_.is_standard_range_ = is_standard_graph(temp_result);
-      if (OB_FAIL(is_strict_equal_graph(temp_result,
-              0,
-              max_pos,
-              table_graph_.is_equal_range_))) {
-        LOG_WARN("is strict equal graph failed", K(ret));
-      } else if (OB_FAIL(check_graph_type())) {
-        LOG_WARN("check graph type failed", K(ret));
-      }
     }
   }
+
   if (OB_SUCC(ret)) {
     if (query_range_ctx_->need_final_extact_) {
       state_ = NEED_PREPARE_PARAMS;
@@ -715,63 +700,172 @@ int ObQueryRange::check_is_get(ObKeyPart &key_part,
   return ret;
 }
 
-int ObQueryRange::check_graph_type()
+//  1. check range graph type: is_standard_range_/is_equal_range_/is_precise_get_/is_skip_scan_
+//  3. remove useless key part
+int ObQueryRange::check_graph_type(ObKeyPart &key_part_head)
 {
   int ret = OB_SUCCESS;
-  table_graph_.is_precise_get_ = true;
-  if (OB_ISNULL(query_range_ctx_) || OB_ISNULL(table_graph_.key_part_head_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("query isn't init", K_(query_range_ctx), K_(table_graph_.key_part_head));
+  int64_t max_pos = -1;
+  int64_t max_precise_pos = -1;
+  int64_t ss_max_precise_pos = -1;
+  table_graph_.key_part_head_ = &key_part_head;
+  table_graph_.is_standard_range_ = is_standard_graph(&key_part_head);
+  table_graph_.is_precise_get_ = is_precise_get(key_part_head, max_precise_pos);
+  table_graph_.skip_scan_offset_ = -1;
+  ObKeyPart *ss_head = NULL;
+  if (OB_FAIL(check_skip_scan_range(&key_part_head,
+                                    table_graph_.is_standard_range_,
+                                    max_precise_pos,
+                                    ss_head,
+                                    table_graph_.skip_scan_offset_,
+                                    ss_max_precise_pos))) {
+    LOG_WARN("failed to check skip scan", K(ret));
+  } else if (OB_FAIL(is_strict_equal_graph(&key_part_head, 0, max_pos, table_graph_.is_equal_range_))) {
+    LOG_WARN("is strict equal graph failed", K(ret));
+  } else if (OB_FAIL(remove_useless_range_graph(is_ss_range() ? ss_head : &key_part_head))) {
+    LOG_WARN("failed to remove useless range", K(ret));
+  } else if (OB_FAIL(remove_precise_range_expr(is_ss_range() ? ss_max_precise_pos : max_precise_pos))) {
+    LOG_WARN("remove precise range expr failed", K(ret));
+  } else if (OB_FAIL(fill_range_exprs(max_precise_pos, table_graph_.skip_scan_offset_, ss_max_precise_pos))) {
+    LOG_WARN("failed to fill range exprs", K(ret));
   }
-  if (OB_SUCC(ret)) {
-    int64_t max_pos = -1;
-    int64_t depth = -1;
-    int64_t column_count = column_count_;
-    bool is_terminated = false;
-    for (ObKeyPart *cur = table_graph_.key_part_head_; !is_terminated && NULL != cur; cur = cur->and_next_) {
-      if (cur->pos_.offset_ != (++depth)) {
-        table_graph_.is_precise_get_ = false;
-        max_pos = depth;
-        is_terminated = true;
-      } else if (NULL != cur->or_next_ || NULL != cur->item_next_) {
-        table_graph_.is_precise_get_ = false;
-      } else if (cur->is_like_key() || cur->is_geo_key()) {
-        table_graph_.is_precise_get_ = false;
-      } else if (!cur->is_equal_condition()) {
-        table_graph_.is_precise_get_ = false;
-      } else {
+  return ret;
+}
+
+int ObQueryRange::check_skip_scan_range(ObKeyPart *key_part_head,
+                                        const bool is_standard_range,
+                                        const int64_t max_precise_pos,
+                                        ObKeyPart *&ss_head,
+                                        int64_t &skip_scan_offset,
+                                        int64_t &ss_max_precise_pos)
+{
+  int ret = OB_SUCCESS;
+  ss_head = NULL;
+  skip_scan_offset = -1;
+  ss_max_precise_pos = -1;
+  if (!is_standard_range) {
+    /* only standard range can extract skip scan range */
+  } else {
+    ObKeyPart *cur = key_part_head;
+    // skip prefix precise range
+    while (NULL != cur && cur->pos_.offset_ < max_precise_pos) {
+      cur = cur->and_next_;
+    }
+    if (NULL != cur) {
+      ss_head = cur;
+      skip_scan_offset = ss_head->pos_.offset_;
+      is_precise_get(*ss_head, ss_max_precise_pos, true);
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::reset_skip_scan_range()
+{
+  int ret = OB_SUCCESS;
+  if (-1 == table_graph_.skip_scan_offset_) {
+    /* do nothing */
+  } else if (OB_ISNULL(table_graph_.key_part_head_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(table_graph_.key_part_head_));
+  } else {
+    int64_t max_precise_pos = -1;
+    table_graph_.is_precise_get_ = is_precise_get(*table_graph_.key_part_head_, max_precise_pos);
+    table_graph_.skip_scan_offset_ = -1;
+    ss_range_exprs_.reset();
+    if (OB_FAIL(remove_useless_range_graph(table_graph_.key_part_head_))) {
+      LOG_WARN("failed to remove useless range", K(ret));
+    } else if (OB_FAIL(remove_precise_range_expr(max_precise_pos))) {
+      LOG_WARN("remove precise range expr failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
+                                  int64_t &max_precise_pos,
+                                  bool ignore_head /* = false */)
+{
+  bool is_precise_get = true;
+  int64_t max_pos = -1;
+  int64_t depth = ignore_head ? key_part_head.pos_.offset_ - 1 : -1;
+  bool is_terminated = false;
+  for (const ObKeyPart *cur = &key_part_head; !is_terminated && NULL != cur; cur = cur->and_next_) {
+    if (cur->pos_.offset_ != (++depth)) {
+      is_precise_get = false;
+      max_pos = depth;
+      is_terminated = true;
+    } else if (NULL != cur->or_next_ || NULL != cur->item_next_) {
+      is_precise_get = false;
+    } else if (cur->is_like_key() || cur->is_geo_key()) {
+      is_precise_get = false;
+    } else if (!cur->is_equal_condition()) {
+      is_precise_get = false;
+    } else {
+      // do nothing
+    }
+    if (!is_terminated) {
+      if (is_strict_in_graph(cur)) {
         // do nothing
+      } else if (!is_general_graph(*cur)) {
+        max_pos = cur->pos_.offset_ + 1;
+        is_terminated = true;
+      } else if (has_scan_key(*cur)) {
+        max_pos = cur->pos_.offset_ + 1;
+        is_terminated = true;
       }
-      if (OB_SUCC(ret) && !is_terminated) {
-        if (is_strict_in_graph(cur)) {
-          // do nothing
-        } else if (!is_general_graph(*cur)) {
-          max_pos = cur->pos_.offset_ + 1;
-          is_terminated = true;
-        } else if (has_scan_key(*cur)) {
-          max_pos = cur->pos_.offset_ + 1;
-          is_terminated = true;
+    }
+  }
+
+  max_precise_pos = is_terminated ? max_pos : depth + 1;
+  if (is_precise_get && depth != column_count_ - 1) {
+    is_precise_get = false;
+  }
+  return is_precise_get;
+}
+
+int ObQueryRange::fill_range_exprs(const int64_t max_precise_pos,
+                                   const int64_t ss_offset,
+                                   const int64_t ss_max_precise_pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(query_range_ctx_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("query isn't init", K_(query_range_ctx));
+  } else {
+    ObSEArray<ObRawExpr*, 4> range_exprs;
+    ObSEArray<ObRawExpr*, 4> ss_range_exprs;
+    bool precise = true;
+    bool ss_precise = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < query_range_ctx_->precise_range_exprs_.count(); ++i) {
+      precise = true;
+      ss_precise = is_ss_range();
+      ObRangeExprItem &expr_item = query_range_ctx_->precise_range_exprs_.at(i);
+      for (int64_t j = 0 ; (precise || ss_precise) && j < expr_item.cur_pos_.count() ; ++j) {
+        if (expr_item.cur_pos_.at(j) >= max_precise_pos) {
+          precise = false;
+        }
+        if (ss_precise && (expr_item.cur_pos_.at(j) < ss_offset || expr_item.cur_pos_.at(j) >= ss_max_precise_pos)) {
+          ss_precise = false;
+        }
+      }
+
+      if (OB_SUCC(ret) && NULL != expr_item.cur_expr_) {
+        if (precise && OB_FAIL(range_exprs.push_back(const_cast<ObRawExpr*>(expr_item.cur_expr_)))) {
+          LOG_WARN("push back precise range expr failed", K(ret));
+        } else if (ss_precise && OB_FAIL(ss_range_exprs.push_back(const_cast<ObRawExpr*>(expr_item.cur_expr_)))) {
+          LOG_WARN("push back precise range expr failed", K(ret));
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      max_pos = is_terminated ? max_pos : depth + 1;
-      if (OB_FAIL(remove_precise_range_expr(max_pos))) {
-        LOG_WARN("remove precise range expr failed", K(ret));
-      } else if (table_graph_.is_precise_get_ && depth != column_count - 1) {
-        table_graph_.is_precise_get_ = false;
-      }
-    }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(range_exprs_.init(query_range_ctx_->precise_range_exprs_.count()))) {
-    LOG_WARN("init range exprs failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < query_range_ctx_->precise_range_exprs_.count(); ++i) {
-    const ObRawExpr *cur_expr = query_range_ctx_->precise_range_exprs_.at(i).cur_expr_;
-    if (NULL != cur_expr) {
-      if (OB_FAIL(range_exprs_.push_back(const_cast<ObRawExpr*>(cur_expr)))) {
-        LOG_WARN("push back precise range expr failed", K(ret));
-      }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(range_exprs_.assign(range_exprs))) {
+      LOG_WARN("failed to assign range exprs", K(ret));
+    } else if (OB_FAIL(ss_range_exprs_.assign(ss_range_exprs))) {
+      LOG_WARN("failed to assign skip scan range exprs", K(ret));
+    } else {
+      LOG_DEBUG("finish fill range exprs", K(max_precise_pos), K(range_exprs));
+      LOG_DEBUG("finish fill skip scan range exprs", K(ss_offset), K(ss_max_precise_pos), K(ss_range_exprs));
     }
   }
   return ret;
@@ -4737,6 +4831,31 @@ int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
   return ret;
 }
 
+int ObQueryRange::get_ss_tablet_ranges(common::ObIAllocator &allocator,
+                                       ObExecContext &exec_ctx,
+                                       ObQueryRangeArray &ss_ranges,
+                                       const ObDataTypeCastParams &dtc_params) const
+{
+  int ret = OB_SUCCESS;
+  ss_ranges.reuse();
+  const ObKeyPart *ss_head = get_ss_key_part_head();
+  if (NULL == ss_head) {
+    /* is not skip scan range */
+  } else if (OB_UNLIKELY(table_graph_.skip_scan_offset_ < 0
+                         || table_graph_.skip_scan_offset_ >= column_count_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected skip scan range", K(ret), K(table_graph_.skip_scan_offset_),
+                                           K(column_count_));
+  } else if (OB_FAIL(gen_skip_scan_range(allocator, exec_ctx, dtc_params, ss_head,
+                                         column_count_ - table_graph_.skip_scan_offset_,
+                                         ss_ranges))) {
+    LOG_WARN("get skip scan ranges failed", K(ret));
+  } else {
+    LOG_DEBUG("get skip range success", K(ss_ranges));
+  }
+  return ret;
+}
+
 int ObQueryRange::ObSearchState::tailor_final_range(int64_t column_count)
 {
   int ret = OB_SUCCESS;
@@ -4781,6 +4900,54 @@ int ObQueryRange::ObSearchState::tailor_final_range(int64_t column_count)
   return ret;
 }
 
+int ObQueryRange::ObSearchState::init_search_state(int64_t column_count, bool init_as_full_range)
+{
+  int ret = OB_SUCCESS;
+  void *start_ptr = NULL;
+  void *end_ptr = NULL;
+  if (OB_UNLIKELY(column_count <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected column count when init search state", K(ret), K(column_count));
+  } else if (OB_ISNULL(start_ptr = allocator_.alloc(sizeof(ObObj) * column_count))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc memory for start_ptr failed", K(ret));
+  } else if(OB_ISNULL(end_ptr = allocator_.alloc(sizeof(ObObj) * column_count))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc memory for end_ptr failed", K(ret));
+  } else if (OB_ISNULL(include_start_ = static_cast<bool*>(allocator_.alloc(sizeof(bool) * column_count)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc memory for search state start failed", K(ret));
+  } else if (OB_ISNULL(include_end_ = static_cast<bool*>(allocator_.alloc(sizeof(bool) * column_count)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc memory for search state end failed", K(ret));
+  } else {
+    start_ = new(start_ptr) ObObj[column_count];
+    end_ = new(end_ptr) ObObj[column_count];
+    if (init_as_full_range) {
+      max_exist_index_ = column_count;
+      last_include_start_ = true;
+      last_include_end_ = true;
+      for (int64_t i = 0; i < column_count; ++i) {
+        start_[i].set_min_value();
+        end_[i].set_max_value();
+        include_start_[i] = false;
+        include_end_[i] = false;
+      }
+    } else {
+      max_exist_index_ = 0;
+      last_include_start_ = false;
+      last_include_end_ = false;
+      for (int64_t i = 0; i < column_count; ++i) {
+        start_[i].set_min_value();
+        end_[i].set_max_value();
+        include_start_[i] = false;
+        include_end_[i] = false;
+      }
+    }
+  }
+  return ret;
+}
+
 // @notice 调用这个接口之前必须调用need_deep_copy()来判断是否可以不用拷贝就进行final extract
 int ObQueryRange::get_tablet_ranges(ObIAllocator &allocator,
                                     ObExecContext &exec_ctx,
@@ -4814,6 +4981,60 @@ int ObQueryRange::get_tablet_ranges(ObIAllocator &allocator,
   return ret;
 }
 
+// for standard range, check is skip scan range
+const ObKeyPart *ObQueryRange::get_ss_key_part_head() const
+{
+  const ObKeyPart *ss_head = NULL;
+  if (is_ss_range()) {
+    const ObKeyPart *cur = table_graph_.key_part_head_;
+    while (NULL != cur && cur->pos_.offset_ < table_graph_.skip_scan_offset_) {
+      cur = cur->and_next_;
+    }
+    if (NULL != cur && cur->pos_.offset_ == table_graph_.skip_scan_offset_) {
+      ss_head = cur;
+    }
+  }
+  return ss_head;
+}
+
+OB_NOINLINE int ObQueryRange::gen_skip_scan_range(ObIAllocator &allocator,
+                                                  ObExecContext &exec_ctx,
+                                                  const ObDataTypeCastParams &dtc_params,
+                                                  const ObKeyPart *ss_root,
+                                                  int64_t post_column_count,
+                                                  ObQueryRangeArray &ss_ranges) const
+{
+  int ret = OB_SUCCESS;
+  bool is_get_range = false;
+  ObSearchState search_state(allocator);
+  ObNewRange *ss_range = NULL;
+  if (OB_ISNULL(ss_root) || OB_UNLIKELY(1 > post_column_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected skip scan range", K(ret), K(ss_root), K(post_column_count));
+  } else if (OB_FAIL(search_state.init_search_state(post_column_count, true))) {
+    LOG_WARN("failed to init postfix search state", K(ret));
+  }
+  for (const ObKeyPart *cur = ss_root; OB_SUCC(ret) && NULL != cur && !search_state.is_empty_range_;
+       cur = cur->and_next_) {
+    if (OB_FAIL(get_single_key_value(cur, exec_ctx, search_state, dtc_params,
+                                     table_graph_.skip_scan_offset_))) {
+      LOG_WARN("get single key value failed", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if(OB_FAIL(search_state.tailor_final_range(post_column_count))) {
+    LOG_WARN("tailor final range failed", K(ret));
+  } else if (OB_FAIL(generate_single_range(search_state, post_column_count,
+                                           table_graph_.key_part_head_->id_.table_id_,
+                                           ss_range, is_get_range))) {
+    LOG_WARN("generate single range failed", K(ret));
+  } else if (OB_FAIL(ss_ranges.push_back(ss_range))) {
+    LOG_WARN("push back range to array failed", K(ret));
+  }
+  return ret;
+}
+
 OB_NOINLINE int ObQueryRange::gen_simple_scan_range(ObIAllocator &allocator,
                                                     ObExecContext &exec_ctx,
                                                     ObQueryRangeArray &ranges,
@@ -4822,34 +5043,8 @@ OB_NOINLINE int ObQueryRange::gen_simple_scan_range(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObSearchState search_state(allocator);
-  void *start_ptr = NULL;
-  void *end_ptr = NULL;
-
-  if (OB_ISNULL(start_ptr = search_state.allocator_.alloc(sizeof(ObObj) * column_count_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc memory for start_ptr failed", K(ret));
-  } else if(OB_ISNULL(end_ptr = search_state.allocator_.alloc(sizeof(ObObj) * column_count_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc memory for end_ptr failed", K(ret));
-  } else if (OB_ISNULL(search_state.include_start_ = static_cast<bool*>(search_state.allocator_.alloc(sizeof(bool) * column_count_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc memory for search state start failed", K(ret));
-  } else if (OB_ISNULL(search_state.include_end_ = static_cast<bool*>(search_state.allocator_.alloc(sizeof(bool) * column_count_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc memory for search state end failed", K(ret));
-  } else {
-    search_state.start_ = new(start_ptr) ObObj[column_count_];
-    search_state.end_ = new(end_ptr) ObObj[column_count_];
-    search_state.max_exist_index_ = column_count_;
-    search_state.last_include_start_ = true;
-    search_state.last_include_end_ = true;
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_count_; ++i) {
-    //将所有range都初始化成true
-    search_state.start_[i].set_min_value();
-    search_state.end_[i].set_max_value();
-    search_state.include_start_[i] = false;
-    search_state.include_end_[i] = false;
+  if (OB_FAIL(search_state.init_search_state(column_count_, true))) {
+    LOG_WARN("failed to init search state", K(ret));
   }
   for (ObKeyPart *cur = table_graph_.key_part_head_;
        OB_SUCC(ret) && NULL != cur && !search_state.is_empty_range_;
@@ -4943,7 +5138,8 @@ if (OB_SUCC(ret) ) { \
 inline int ObQueryRange::get_single_key_value(const ObKeyPart *key,
                                               ObExecContext &exec_ctx,
                                               ObSearchState &search_state,
-                                              const ObDataTypeCastParams &dtc_params) const
+                                              const ObDataTypeCastParams &dtc_params,
+                                              int64_t skip_offset /* default 0 */ ) const
 {
   int ret = OB_SUCCESS;
   for (const ObKeyPart *cur = key;
@@ -5028,7 +5224,7 @@ inline int ObQueryRange::get_single_key_value(const ObKeyPart *key,
       CAST_VALUE_TYPE(expect_type, cur->pos_.column_type_, start, include_start, end, include_end);
     }
     if (OB_SUCC(ret)) {
-      search_state.depth_ = static_cast<int>(cur->pos_.offset_);
+      search_state.depth_ = static_cast<int>(cur->pos_.offset_ - skip_offset);
       if (search_state.is_phy_rowid_range_ != cur->is_phy_rowid_key_part()) {
         if (search_state.is_phy_rowid_range_) {
           //do nothing
@@ -5078,36 +5274,15 @@ OB_NOINLINE int ObQueryRange::get_tablet_ranges(ObQueryRangeArray &ranges,
     } else if (OB_FAIL(get_methods.push_back(is_get_range))) {
       LOG_WARN("push back get_method failed", K(ret));
     } else {}
+  } else if (OB_FAIL(search_state.init_search_state(column_count_, false))) {
+    LOG_WARN("failed to init search state", K(ret));
   } else {
-    ret = OB_SUCCESS;
     search_state.depth_ = 0;
-    search_state.max_exist_index_ = 0;
-    search_state.last_include_start_ = false;
-    search_state.last_include_end_ = false;
     search_state.produce_range_ = true;
     search_state.is_equal_range_ = table_graph_.is_equal_range_;
-    search_state.start_ = static_cast<ObObj *>(search_state.allocator_.alloc(sizeof(ObObj) * column_count_));
-    search_state.end_ = static_cast<ObObj *>(search_state.allocator_.alloc(sizeof(ObObj) * column_count_));
-    search_state.include_start_ = static_cast<bool*>(search_state.allocator_.alloc(sizeof(bool) * column_count_));
-    search_state.include_end_ = static_cast<bool*>(search_state.allocator_.alloc(sizeof(bool) * column_count_));
-    if (OB_ISNULL(search_state.start_) || OB_ISNULL(search_state.end_)
-        || OB_ISNULL(search_state.include_start_) || OB_ISNULL(search_state.include_end_)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc memory failed", K(search_state.start_), K(search_state.end_),
-               K_(search_state.include_start), K_(search_state.include_end), K_(column_count));
-    } else {
-      for (int i = 0; i < column_count_; ++i) {
-        new(search_state.start_ + i) ObObj();
-        new(search_state.end_ + i) ObObj();
-        (search_state.start_ + i)->set_max_value();
-        (search_state.end_ + i)->set_min_value();
-        search_state.include_start_[i] = false;
-        search_state.include_end_[i] = false;
-      }
-      if (OB_FAIL(and_first_search(search_state, table_graph_.key_part_head_, ranges,
-                                                get_methods, dtc_params))) {
-        LOG_WARN("and_first_search failed", K(ret));
-      }
+    if (OB_FAIL(and_first_search(search_state, table_graph_.key_part_head_, ranges,
+                                 get_methods, dtc_params))) {
+      LOG_WARN("and_first_search failed", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -5873,6 +6048,7 @@ OB_DEF_SERIALIZE(ObQueryRange)
       LOG_WARN("serialize srid map failed", K(ret));
     }
   }
+  OB_UNIS_ENCODE(table_graph_.skip_scan_offset_);
   return ret;
 }
 
@@ -5907,6 +6083,7 @@ OB_DEF_SERIALIZE_SIZE(ObQueryRange)
   if (map_count > 0) {
     len += get_columnId_map_size();
   }
+  OB_UNIS_ADD_LEN(table_graph_.skip_scan_offset_);
   return len;
 }
 
@@ -5949,6 +6126,7 @@ OB_DEF_DESERIALIZE(ObQueryRange)
       LOG_WARN("deserialize range graph failed", K(ret));
     }
   }
+  OB_UNIS_DECODE(table_graph_.skip_scan_offset_);
   return ret;
 }
 
@@ -6059,8 +6237,9 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
   contain_geo_filters_ = other.contain_geo_filters_;
   has_exec_param_ = other.has_exec_param_;
   is_equal_and_ = other.is_equal_and_;
-
   if (OB_FAIL(range_exprs_.assign(other.range_exprs_))) {
+    LOG_WARN("assign range exprs failed", K(ret));
+  } else if (OB_FAIL(ss_range_exprs_.assign(other.ss_range_exprs_))) {
     LOG_WARN("assign range exprs failed", K(ret));
   } else if (OB_FAIL(table_graph_.assign(other_graph))) {
     LOG_WARN("Deep copy range columns failed", K(ret));

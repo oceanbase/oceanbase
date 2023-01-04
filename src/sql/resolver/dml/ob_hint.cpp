@@ -780,6 +780,9 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_FULL_HINT:           return "FULL";
     case T_NO_INDEX_HINT:       return "NO_INDEX";
     case T_USE_DAS_HINT:        return is_enable_hint ? "USE_DAS" : "NO_USE_DAS";
+    case T_INDEX_SS_HINT:       return "INDEX_SS";
+    case T_INDEX_SS_ASC_HINT:   return "INDEX_SS_ASC";
+    case T_INDEX_SS_DESC_HINT:  return "INDEX_SS_DESC";
     case T_LEADING:             return is_enable_hint ? "LEADING" : "ORDERED";
     case T_USE_MERGE:           return is_enable_hint ? "USE_MERGE" : "NO_USE_MERGE";
     case T_USE_HASH:            return is_enable_hint ? "USE_HASH" : "NO_USE_HASH";

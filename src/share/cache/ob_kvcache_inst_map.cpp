@@ -116,6 +116,11 @@ void ObKVCacheInstHandle::reset()
   inst_ = NULL;
 }
 
+bool ObKVCacheInstHandle::is_valid() const
+{
+  return (nullptr != map_) && (nullptr != inst_);
+}
+
 ObKVCacheInstHandle::ObKVCacheInstHandle(const ObKVCacheInstHandle &other)
 {
   map_ = other.map_;
@@ -425,7 +430,7 @@ int ObKVCacheInstMap::set_priority(const int64_t cache_id, const int64_t old_pri
   return ret;
 }
 
-int ObKVCacheInstMap::get_tenant_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles)
+int ObKVCacheInstMap::get_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -437,15 +442,9 @@ int ObKVCacheInstMap::get_tenant_cache_info(const uint64_t tenant_id, ObIArray<O
   } else {
     DRWLock::RDLockGuard rd_guard(lock_);
     for (KVCacheInstMap::iterator iter = inst_map_.begin(); OB_SUCC(ret) && iter != inst_map_.end(); ++iter) {
-      if (iter->first.tenant_id_ == tenant_id) {
-        ObKVCacheInstHandle handle;
-        handle.inst_ = iter->second;
-        handle.map_ = this;
-        handle.inst_->status_.map_size_ = iter->second->node_allocator_.allocated();
-        add_inst_ref(handle.inst_);
-        if (OB_FAIL(inst_handles.push_back(handle))) {
-          COMMON_LOG(WARN, "Fail to push info to array, ", K(ret));
-        }
+      if (iter->first.tenant_id_ != tenant_id && OB_SYS_TENANT_ID != tenant_id) {
+      } else if (OB_FAIL(inner_push_inst_handle(iter, inst_handles))) {
+        COMMON_LOG(WARN, "Fail to inner push cache inst", K(ret));
       }
     }
   }
@@ -519,29 +518,6 @@ void ObKVCacheInstMap::print_all_cache_info()
       COMMON_LOG(WARN, "Set tenant id fail", K(ret));
     }
   }
-}
-
-int ObKVCacheInstMap::get_all_cache_info(ObIArray<ObKVCacheInstHandle> &inst_handles)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "The ObKVCacheInstMap has not been inited, ", K(ret));
-  } else {
-    DRWLock::RDLockGuard rd_guard(lock_);
-    for (KVCacheInstMap::iterator iter = inst_map_.begin();
-        OB_SUCC(ret) && iter != inst_map_.end(); ++iter) {
-      ObKVCacheInstHandle handle;
-      handle.inst_ = iter->second;
-      handle.map_ = this;
-      handle.inst_->status_.map_size_ = iter->second->node_allocator_.allocated();
-      add_inst_ref(handle.inst_);
-      if (OB_FAIL(inst_handles.push_back(handle))) {
-        COMMON_LOG(WARN, "Fail to push info to array, ", K(ret));
-      }
-    }
-  }
-  return ret;
 }
 
 int ObKVCacheInstMap::set_hold_size(const uint64_t tenant_id, const char *cache_name,
@@ -716,6 +692,22 @@ void ObKVCacheInstMap::de_inst_ref(ObKVCacheInst *inst)
   if (OB_UNLIKELY(NULL != inst)) {
     (void) ATOMIC_SAF(&inst->ref_cnt_, 1);
   }
+}
+
+int ObKVCacheInstMap::inner_push_inst_handle(const KVCacheInstMap::iterator &iter, ObIArray<ObKVCacheInstHandle> &inst_handles)
+{
+  INIT_SUCC(ret);
+
+  ObKVCacheInstHandle handle;
+  handle.inst_ = iter->second;
+  handle.map_ = this;
+  handle.inst_->status_.map_size_ = iter->second->node_allocator_.allocated();
+  add_inst_ref(handle.inst_);
+  if (OB_FAIL(inst_handles.push_back(handle))) {
+    COMMON_LOG(WARN, "Fail to push back inst handle to array", K(ret));
+  }
+
+  return ret;
 }
 
 

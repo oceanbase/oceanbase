@@ -29,9 +29,18 @@ struct ObMicroIndexInfo;
 namespace storage
 {
 
+static const int64_t AGG_ROW_MODE_COUNT_THRESHOLD = 3;
+static const double AGG_ROW_MODE_RATIO_THRESHOLD = 0.5;
+
 class ObAggCell
 {
 public:
+  enum ObAggCellType
+  {
+    COUNT,
+    MINMAX,
+    FIRST_ROW,
+  };
   ObAggCell(
       const int32_t col_idx,
       const share::schema::ObColumnParam *col_param,
@@ -40,6 +49,7 @@ public:
   virtual ~ObAggCell();
   virtual void reset();
   virtual void reuse();
+  virtual ObAggCellType get_type() const = 0;
   virtual int process(blocksstable::ObDatumRow &row) = 0;
   virtual int process(
       blocksstable::ObIMicroBlockReader *reader,
@@ -47,6 +57,7 @@ public:
       const int64_t row_count) = 0;
   virtual int process(const blocksstable::ObMicroIndexInfo &index_info) = 0;
   virtual int fill_result(sql::ObEvalCtx &ctx, bool need_padding);
+  OB_INLINE int32_t get_col_idx() const { return col_idx_; }
   TO_STRING_KV(K_(col_idx), K_(datum), KPC(col_param_), K_(expr));
 protected:
   int fill_default_if_need(blocksstable::ObStorageDatum &datum);
@@ -69,6 +80,7 @@ public:
       common::ObIAllocator &allocator);
   virtual ~ObFirstRowAggCell() { reset(); };
   virtual void reset() override;
+  virtual ObAggCellType get_type() const override { return FIRST_ROW; }
   virtual int process(blocksstable::ObDatumRow &row) override;
   virtual int process(
       blocksstable::ObIMicroBlockReader *reader,
@@ -76,7 +88,7 @@ public:
       const int64_t row_count) override;
   virtual int process(const blocksstable::ObMicroIndexInfo &index_info) override;
   virtual int fill_result(sql::ObEvalCtx &ctx, bool need_padding) override;
-  TO_STRING_KV(K_(col_idx), K_(datum), K_(col_param), K_(expr), K_(aggregated));
+  INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(aggregated));
 private:
   bool aggregated_;
 };
@@ -93,6 +105,7 @@ public:
   virtual ~ObCountAggCell() { reset(); };
   virtual void reset() override;
   virtual void reuse() override;
+  virtual ObAggCellType get_type() const override { return COUNT; }
   virtual int process(blocksstable::ObDatumRow &row) override;
   virtual int process(
       blocksstable::ObIMicroBlockReader *reader,
@@ -100,12 +113,60 @@ public:
       const int64_t row_count) override;
   virtual int process(const blocksstable::ObMicroIndexInfo &index_info) override;
    virtual int fill_result(sql::ObEvalCtx &ctx, bool need_padding) override;
-   TO_STRING_KV(K_(col_idx), K_(datum), K_(col_param), K_(expr), K_(exclude_null), K_(row_count));
+   INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(exclude_null), K_(row_count));
 private:
   bool exclude_null_;
   int64_t row_count_;
 };
-// TODO sum/min/max
+
+class ObAggDatumBuf {
+public:
+  ObAggDatumBuf(common::ObIAllocator &allocator);
+  ~ObAggDatumBuf() { reset(); };
+    int init(const int64_t size);
+    void reuse();
+    void reset();
+    OB_INLINE ObDatum *get_datums() { return datums_; }
+    TO_STRING_KV(K_(size), K_(datums), K_(buf));
+  private:
+    int64_t size_;
+    ObDatum *datums_;
+    char *buf_;
+    common::ObIAllocator &allocator_;
+};
+
+class ObMinMaxAggCell : public ObAggCell
+{
+public:
+  ObMinMaxAggCell(
+      bool is_min,
+      const int32_t col_idx,
+      const share::schema::ObColumnParam *col_param,
+      sql::ObExpr *expr,
+      common::ObIAllocator &allocator);
+  virtual ~ObMinMaxAggCell() { reset(); };
+  virtual void reset() override;
+  virtual void reuse() override;
+  virtual ObAggCellType get_type() const override { return MINMAX; }
+  int init(sql::ObPushdownOperator *op, sql::ObExpr *col_expr, const int64_t batch_size);
+  virtual int process(blocksstable::ObDatumRow &row) override;
+  virtual int process(
+      blocksstable::ObIMicroBlockReader *reader,
+      int64_t *row_ids,
+      const int64_t row_count) override;
+  virtual int process(const blocksstable::ObMicroIndexInfo &index_info) override;
+  INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(is_min), K_(cmp_fun), K_(agg_datum_buf));
+private:
+  int deep_copy_datum(const blocksstable::ObStorageDatum &src);
+  int process(blocksstable::ObStorageDatum &datum);
+  bool is_min_;
+  ObDatumCmpFuncType cmp_fun_;
+  ObAggDatumBuf agg_datum_buf_;
+  const char **cell_data_ptrs_;
+  common::ObArenaAllocator datum_allocator_;
+};
+
+// TODO sum
 
 class ObAggRow
 {
@@ -119,7 +180,8 @@ public:
   bool need_exclude_null() const { return need_exclude_null_; };
   // void set_firstrow_aggregated(bool aggregated) { is_firstrow_aggregated_ = aggregated; }
   // bool is_firstrow_aggregated() const { return is_firstrow_aggregated_; }
-  ObAggCell* at(int64_t idx) { return agg_cells_.at(idx); }
+  OB_INLINE ObAggCell* at(int64_t idx) { return agg_cells_.at(idx); }
+  OB_INLINE common::ObIArray<ObAggCell*>& get_agg_cells() { return agg_cells_; }
   TO_STRING_KV(K_(agg_cells));
 private:
   common::ObFixedArray<ObAggCell *, common::ObIAllocator> agg_cells_;
@@ -158,11 +220,14 @@ public:
            !index_info.is_right_border();
   }
   OB_INLINE void set_end() { iter_end_flag_ = IterEndState::ITER_END; }
-  TO_STRING_KV(K_(agg_row));
+  int check_agg_in_row_mode(const ObTableIterParam &iter_param);
+  TO_STRING_KV(K_(is_firstrow_aggregated), K_(agg_row), K_(agg_flat_row_mode), K_(row_buf));
 
 private:
   bool is_firstrow_aggregated_;
   ObAggRow agg_row_;
+  bool agg_flat_row_mode_;
+  blocksstable::ObDatumRow row_buf_;
 };
 
 } /* namespace storage */

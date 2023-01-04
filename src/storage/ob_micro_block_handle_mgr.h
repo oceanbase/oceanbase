@@ -44,6 +44,9 @@ struct ObMicroBlockDataHandle {
   int get_index_block_data(
       const ObTableReadInfo &read_info,
       blocksstable::ObMicroBlockData &index_block);
+  int get_cached_index_block_data(
+      const ObTableReadInfo &read_info,
+      blocksstable::ObMicroBlockData &index_block);
   TO_STRING_KV(K_(tenant_id), K_(macro_block_id), K_(micro_info),
                K_(block_state), K_(block_index), K_(cache_handle), K_(io_handle));
   uint64_t tenant_id_;
@@ -78,6 +81,11 @@ public:
       const uint64_t tenant_id,
       const blocksstable::ObMicroIndexInfo &index_block_info,
       const bool is_data_block,
+      ObMicroBlockDataHandle &micro_block_handle);
+  int put_micro_block_handle(
+      const uint64_t tenant_id,
+      const blocksstable::MacroBlockId &macro_id,
+      const blocksstable::ObIndexBlockRowHeader &idx_header,
       ObMicroBlockDataHandle &micro_block_handle);
 private:
   // allocator for index micro block prefetch failed and async io

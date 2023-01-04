@@ -115,6 +115,29 @@ int ObMicroBlockDataHandle::get_index_block_data(
   return ret;
 }
 
+int ObMicroBlockDataHandle::get_cached_index_block_data(
+    const ObTableReadInfo &read_info,
+    ObMicroBlockData &index_block)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!read_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid columns info", K(ret), K(read_info));
+  } else if (ObSSTableMicroBlockState::IN_BLOCK_CACHE != block_state_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Fail to get block data, unexpected block state", K(ret), K(block_state_));
+  } else {
+    const ObMicroBlockData *pblock = NULL;
+    if (NULL == (pblock = cache_handle_.get_block_data())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Fail to get cache block, ", K(ret));
+    } else {
+      index_block = *pblock;
+    }
+  }
+  return ret;
+}
+
 int ObMicroBlockDataHandle::get_loaded_block_data(ObMicroBlockData &block_data)
 {
   int ret = OB_SUCCESS;
@@ -279,6 +302,31 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
             LOG_WARN("Fail to put handle cache", K(ret), K(key));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockHandleMgr::put_micro_block_handle(
+    const uint64_t tenant_id,
+    const blocksstable::MacroBlockId &macro_id,
+    const blocksstable::ObIndexBlockRowHeader &idx_header,
+    ObMicroBlockDataHandle &micro_block_handle)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "block handle mgr is not inited", K(ret));
+  } else if (is_multi_) {
+    if (is_ordered_) {
+      *last_handle_ = micro_block_handle;
+    } else {
+      const int64_t offset = idx_header.get_block_offset();
+      const int64_t size = idx_header.get_block_size();
+      ObMicroBlockCacheKey key(tenant_id, macro_id, offset, size);
+      if (OB_FAIL(handle_cache_->put_handle(key, micro_block_handle))) {
+        STORAGE_LOG(WARN, "failed to put handle cache", K(ret), K(key));
       }
     }
   }

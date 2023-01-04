@@ -28,30 +28,21 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
 {
   int ret = OB_SUCCESS;
   ObDASScanCtDef &scan_ctdef = tsc_ctdef.scan_ctdef_;
-  if (op.get_pre_query_range() != nullptr) {
-    if (OB_FAIL(tsc_ctdef.pre_query_range_.deep_copy(*op.get_pre_query_range()))) {
-      LOG_WARN("deep copy tsc ctdef pre query range failed", K(ret));
-    } else if (OB_FAIL(op.get_pre_query_range()->is_get(scan_ctdef.is_get_))) {
-      LOG_WARN("extract the query range whether get failed", K(ret));
-    }
+  ObQueryFlag query_flag;
+  if (op.is_need_feedback() &&
+      (op.get_plan()->get_optimizer_context().get_phy_plan_type() == OB_PHY_PLAN_LOCAL ||
+        op.get_plan()->get_optimizer_context().get_phy_plan_type() == OB_PHY_PLAN_REMOTE)) {
+    ++(cg_.phy_plan_->get_access_table_num());
+    query_flag.is_need_feedback_ = true;
   }
-  if (OB_SUCC(ret)) {
-    ObQueryFlag query_flag;
-    if (op.is_need_feedback() &&
-        (op.get_plan()->get_optimizer_context().get_phy_plan_type() == OB_PHY_PLAN_LOCAL ||
-         op.get_plan()->get_optimizer_context().get_phy_plan_type() == OB_PHY_PLAN_REMOTE)) {
-      ++(cg_.phy_plan_->get_access_table_num());
-      query_flag.is_need_feedback_ = true;
-    }
 
-    ObOrderDirection scan_direction = op.get_scan_direction();
-    if (is_descending_direction(scan_direction)) {
-      query_flag.scan_order_ = ObQueryFlag::Reverse;
-    } else {
-      query_flag.scan_order_ = ObQueryFlag::Forward;
-    }
-    tsc_ctdef.scan_flags_ = query_flag;
+  ObOrderDirection scan_direction = op.get_scan_direction();
+  if (is_descending_direction(scan_direction)) {
+    query_flag.scan_order_ = ObQueryFlag::Reverse;
+  } else {
+    query_flag.scan_order_ = ObQueryFlag::Forward;
   }
+  tsc_ctdef.scan_flags_ = query_flag;
   if (OB_SUCC(ret) && (OB_NOT_NULL(op.get_flashback_query_expr()))) {
     if (OB_FAIL(cg_.generate_rt_expr(*op.get_flashback_query_expr(),
                                      tsc_ctdef.flashback_item_.flashback_query_expr_))) {

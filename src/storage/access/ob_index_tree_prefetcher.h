@@ -91,7 +91,7 @@ public:
     return ret;
   }
   TO_STRING_KV(K_(is_get), K_(is_bf_contain), K_(row_state), K_(range_idx),
-               K_(micro_begin_idx), K_(micro_end_idx), KP_(query_range));
+               K_(micro_begin_idx), K_(micro_end_idx), KP_(query_range), KPC_(micro_handle));
 
 public:
   bool is_get_;
@@ -185,11 +185,117 @@ protected:
   const ObTableReadInfo *index_read_info_;
   common::ObFixedArray<int32_t, common::ObIAllocator> agg_projector_;
   common::ObFixedArray<share::schema::ObColumnSchemaV2, common::ObIAllocator> agg_column_schema_;
-private:
   static const int64_t DEFAULT_GET_MICRO_DATA_HANDLE_CNT = 2;
   ObIndexBlockRowScanner index_scanner_;
+  private:
   ObMicroBlockDataHandle micro_handles_[DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
   MacroBlockId macro_id_;
+};
+
+class ObIndexTreeMultiPrefetcher : public ObIndexTreePrefetcher
+{
+public:
+  static const int32_t MAX_MULTIGET_MICRO_DATA_HANDLE_CNT = 32;
+  struct ObSSTableReadHandleExt : public ObSSTableReadHandle {
+    ObSSTableReadHandleExt() :
+      ObSSTableReadHandle(),
+      cur_level_(-1),
+      cur_prefetch_end_(false),
+      index_block_info_(),
+      micro_handle_idx_(0)
+    {}
+    ~ObSSTableReadHandleExt()
+    {}
+    void reuse()
+    {
+      ObSSTableReadHandle::reuse();
+      cur_level_ = -1;
+      cur_prefetch_end_ = false;
+      index_block_info_.reset();
+      micro_handle_idx_ = 0;
+    }
+    void reset()
+    {
+      ObSSTableReadHandle::reset();
+      cur_level_ = -1;
+      cur_prefetch_end_ = false;
+      index_block_info_.reset();
+      micro_handle_idx_ = 0;
+      for (int64_t i = 0; i < DEFAULT_GET_MICRO_DATA_HANDLE_CNT; ++i) {
+        micro_handles_[i].reset();
+      }
+    }
+    OB_INLINE ObMicroBlockDataHandle& get_read_handle()
+    {
+      return micro_handles_[micro_handle_idx_ % DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
+    }
+    OB_INLINE void set_cur_micro_handle(ObMicroBlockDataHandle &handle)
+    {
+      micro_handle_ = &handle;
+      micro_handle_idx_++;
+    }
+    INHERIT_TO_STRING_KV("ObSSTableReadHandle", ObSSTableReadHandle, KPC_(rowkey),
+        K_(cur_level), K_(cur_prefetch_end), K_(index_block_info), K_(micro_handle_idx), K_(micro_handles));
+    int16_t cur_level_;
+    bool cur_prefetch_end_;
+    ObMicroIndexInfo index_block_info_;
+    int64_t micro_handle_idx_;
+    ObMicroBlockDataHandle micro_handles_[DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
+  };
+  typedef ObReallocatedFixedArray<ObSSTableReadHandleExt> ReadHandleExtArray;
+  ObIndexTreeMultiPrefetcher() :
+      index_tree_height_(0),
+      fetch_rowkey_idx_(0),
+      prefetch_rowkey_idx_(0),
+      prefetched_rowkey_cnt_(0),
+      rowkeys_(nullptr),
+      ext_read_handles_()
+  {}
+  virtual ~ObIndexTreeMultiPrefetcher() { reset(); }
+  virtual void reset() override;
+  virtual void reuse() override;
+  virtual int init(
+      const int iter_type,
+      ObSSTable &sstable,
+      const ObTableIterParam &iter_param,
+      ObTableAccessContext &access_ctx,
+      const void *query_range) override;
+  virtual int switch_context(
+      const int iter_type,
+      const ObTableReadInfo &index_read_info,
+      ObSSTable &sstable,
+      ObTableAccessContext &access_ctx,
+      const void *query_range) override;
+  int multi_prefetch();
+  OB_INLINE bool is_prefetch_end() { return prefetched_rowkey_cnt_ >= rowkeys_->count(); }
+  OB_INLINE void mark_cur_rowkey_prefetched(ObSSTableReadHandleExt &read_handle)
+  {
+    read_handle.cur_prefetch_end_ = true;
+    prefetched_rowkey_cnt_++;
+  }
+  OB_INLINE void mark_cur_rowkey_fetched(ObSSTableReadHandleExt &read_handle)
+  {
+    fetch_rowkey_idx_++;
+  }
+  OB_INLINE ObSSTableReadHandleExt &current_read_handle()
+  { return ext_read_handles_[fetch_rowkey_idx_ % MAX_MULTIGET_MICRO_DATA_HANDLE_CNT]; }
+  OB_INLINE ObMicroBlockDataHandle &current_micro_handle()
+  { return *ext_read_handles_[fetch_rowkey_idx_ % MAX_MULTIGET_MICRO_DATA_HANDLE_CNT].micro_handle_; }
+  INHERIT_TO_STRING_KV("ObIndexTreePrefetcher", ObIndexTreePrefetcher, K_(index_tree_height),
+      K_(fetch_rowkey_idx), K_(prefetch_rowkey_idx), K_(prefetched_rowkey_cnt), K_(max_handle_prefetching_cnt));
+  int16_t index_tree_height_;
+  int32_t fetch_rowkey_idx_;
+  int32_t prefetch_rowkey_idx_;
+  int64_t prefetched_rowkey_cnt_;
+  int32_t max_handle_prefetching_cnt_;
+  const common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;
+  ReadHandleExtArray ext_read_handles_;
+private:
+  int drill_down(
+      const MacroBlockId &macro_id,
+      ObSSTableReadHandleExt &read_handle,
+      const bool cur_level_is_leaf,
+      const bool force_prefetch);
 };
 
 class ObIndexTreeMultiPassPrefetcher : public ObIndexTreePrefetcher
