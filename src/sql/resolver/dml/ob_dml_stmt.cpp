@@ -3904,14 +3904,25 @@ int ObDMLStmt::adjust_subquery_list()
   ObSEArray<ObRawExpr*, 8> nest_sunquery_exprs;
   if (OB_FAIL(get_relation_exprs(relation_exprs))) {
     LOG_WARN("failed to get relation exprs", K(ret));
-  } else if (FALSE_IT(subquery_exprs_.reset())) {
-  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(relation_exprs, subquery_exprs_))) {
-    LOG_WARN("failed to extract query ref expr", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::extract_target_level_query_ref_expr(
-                 subquery_exprs_, current_level_, subquery_exprs_, nest_sunquery_exprs))) {
-    LOG_WARN("failed to extract level query ref expr", K(ret));
   } else {
-    ObRawExpr* expr = NULL;
+    subquery_exprs_.reset();
+    ObRawExpr *expr = NULL;
+    // extract query ref expr will use flag, call extract_info first
+    for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+      if (OB_ISNULL(expr = relation_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expr", K(ret));
+      } else if (OB_FAIL(expr->extract_info())) {
+        LOG_WARN("failed to extract info", K(*expr));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(relation_exprs, subquery_exprs_))) {
+      LOG_WARN("failed to extract query ref expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::extract_target_level_query_ref_expr(
+                   subquery_exprs_, current_level_, subquery_exprs_, nest_sunquery_exprs))) {
+      LOG_WARN("failed to extract level query ref expr", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < nest_sunquery_exprs.count(); ++i) {
       if (OB_ISNULL(expr = nest_sunquery_exprs.at(i)) || !expr->is_query_ref_expr()) {
         ret = OB_ERR_UNEXPECTED;
