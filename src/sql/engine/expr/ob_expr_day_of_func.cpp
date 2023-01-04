@@ -51,7 +51,7 @@ ObExprDayOfWeek::~ObExprDayOfWeek()
 int ObExprDayOfWeek::calc_dayofweek(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
 {
   int ret = OB_SUCCESS;
-  if (ObExprTimeBase::calc(expr, ctx, expr_datum, DT_WDAY, true)) {
+  if (OB_FAIL(ObExprTimeBase::calc(expr, ctx, expr_datum, DT_WDAY, true))) {
     LOG_WARN("calc day of week failed", K(ret));
   } else if (!expr_datum.is_null()) {
     expr_datum.set_int32(expr_datum.get_int32() % 7 + 1);
@@ -440,7 +440,7 @@ int ObExprSubtime::calc_result2(common::ObObj& result, const common::ObObj& date
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (ObTimeType == result_type || !param_with_date) { // a#, subtime(时间1, 时间2)
+      } else if (ObTimeType == result_type || !param_with_date) { // a#, subtime(time1, time2)
         if (ObVarcharType == result_type) {
           t_val1 = ObTimeConverter::ob_time_to_time(ot1);
           if (IS_NEG_TIME(ot1.mode_)) {
@@ -462,7 +462,7 @@ int ObExprSubtime::calc_result2(common::ObObj& result, const common::ObObj& date
             result.set_time(int_usec);
           }
         }
-      } else { // b#, subtime(日期时间1, 时间2)
+      } else { // b#, subtime(datetime1, time2)
         const ObTimeZoneInfo *tz_info = NULL;
         if (OB_ISNULL(tz_info = get_timezone_info(expr_ctx.my_session_))) {
           ret = OB_ERR_UNEXPECTED;
