@@ -566,9 +566,12 @@ int ObPartIteratorV2::next(const ObPartition*& part)
           LOG_WARN("idx is invalid", K(ret), K(actual_idx));
         } else {
           ObString part_name(n, buf_);
-          part_.set_part_name(part_name);
-          part_.set_part_id(0);
-          part = &part_;
+          if (OB_FAIL(part_.set_part_name(part_name))) {
+            LOG_WARN("fail to set part name", K(ret), K(part_name));
+          } else {
+            part_.set_part_id(0);
+            part = &part_;
+          }
         }
       } else if (PARTITION_LEVEL_ONE == part_level || PARTITION_LEVEL_TWO == part_level) {
         if (OB_ISNULL(part_array)) {
@@ -578,10 +581,13 @@ int ObPartIteratorV2::next(const ObPartition*& part)
             LOG_WARN("snprintf failed", K(n), LITERAL_K(BUF_LEN));
           } else {
             ObString part_name(n, buf_);
-            part_.set_part_name(part_name);
-            part_.set_part_id(actual_idx);
-            part_.set_mapping_pg_part_id(actual_idx);
-            part = &part_;
+            if (OB_FAIL(part_.set_part_name(part_name))) {
+              LOG_WARN("fail to set part name", K(ret), K(part_name));
+            } else {
+              part_.set_part_id(actual_idx);
+              part_.set_mapping_pg_part_id(actual_idx);
+              part = &part_;
+            }
           }
         } else {
           part = part_array[actual_idx];
@@ -649,7 +655,9 @@ int ObSubPartIteratorV2::next_for_template(const ObSubPartition*& subpart)
         LOG_WARN("snprintf failed", K(n), LITERAL_K(BUF_LEN));
       } else {
         ObString subpart_name(n, buf_);
-        subpart_.set_part_name(subpart_name);
+        if (OB_FAIL(subpart_.set_part_name(subpart_name))) {
+          LOG_WARN("fail to set subpart name", K(ret), K(subpart_name));
+        }
       }
     }
     if (OB_SUCC(ret)) {

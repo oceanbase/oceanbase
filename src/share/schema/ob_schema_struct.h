@@ -7937,6 +7937,18 @@ private:
 };
 
 common::ObIAllocator *&schema_stack_allocator();
+class ObSchemaStackAllocatorGuard {
+public:
+  ObSchemaStackAllocatorGuard() = delete;
+  explicit ObSchemaStackAllocatorGuard(ObIAllocator *allocator)
+  {
+    schema_stack_allocator() = allocator;
+  }
+  ~ObSchemaStackAllocatorGuard()
+  {
+    schema_stack_allocator() = NULL;
+  }
+};
 
 struct ObObjectStruct {
   ObObjectStruct() : type_(ObObjectType::INVALID), id_(common::OB_INVALID_ID){};

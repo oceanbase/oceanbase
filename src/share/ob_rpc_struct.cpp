@@ -33,7 +33,7 @@ OB_SERIALIZE_MEMBER(Bool, v_);
 OB_SERIALIZE_MEMBER(Int64, v_);
 OB_SERIALIZE_MEMBER(UInt64, v_);
 
-static const char* upgrade_stage_str[OB_UPGRADE_STAGE_MAX] = {"NULL", "NONE", "PREUPGRADE", "DBUPGRADE", "POSTUPRADE"};
+static const char* upgrade_stage_str[OB_UPGRADE_STAGE_MAX] = {"NULL", "NONE", "PREUPGRADE", "DBUPGRADE", "POSTUPGRADE"};
 
 const char* get_upgrade_stage_str(ObUpgradeStage stage)
 {

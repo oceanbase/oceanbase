@@ -6638,6 +6638,9 @@
 #        logging.warn("invalid job status: {0}".format(results[0][0]))
 #        raise e
 #
+#      if times >= 180:
+#        logging.warn("run upgrade job timeout")
+#        raise e
 #      times = times + 1
 #      time.sleep(10)
 #  except Exception, e:

@@ -2719,7 +2719,7 @@ int ObAdminUpgradeCmd::execute(const Bool& upgrade)
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (admin_set_config.execute(set_config_arg)) {
+    } else if (OB_FAIL(admin_set_config.execute(set_config_arg))) {
       LOG_WARN("execute set config failed", K(ret));
     } else {
       LOG_INFO("change upgrade parameters",
@@ -2752,7 +2752,7 @@ int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg& arg
     LOG_WARN("assign _upgrade_stage config value failed", K(ret), K(arg));
   } else if (OB_FAIL(set_config_arg.items_.push_back(upgrade_stage_item))) {
     LOG_WARN("add _upgrade_stage config item failed", K(ret), K(arg));
-  } else if (admin_set_config.execute(set_config_arg)) {
+  } else if (OB_FAIL(admin_set_config.execute(set_config_arg))) {
     LOG_WARN("execute set config failed", K(ret));
   } else {
     LOG_INFO("change upgrade parameters", K(ret), "_upgrade_stage", arg.stage_);
