@@ -429,6 +429,14 @@ public:
   };
   int set_client_version(const common::ObString& client_version);
   int set_driver_version(const common::ObString& driver_version);
+  int64_t get_sys_vars_encode_max_size()
+  {
+    return sys_vars_encode_max_size_;
+  }
+  void set_sys_vars_encode_max_size(int64_t size)
+  {
+    sys_vars_encode_max_size_ = size;
+  }
   void set_sql_mode(const ObSQLMode sql_mode, bool is_inc = true)
   {
     // Compatibility mode store in sql_mode_ but controlled by ob_compatibility_mode variable,
@@ -2130,6 +2138,7 @@ private:
   bool is_first_gen_;  // is first generate sys_var_in_pc_str_;
   share::ObSysVarFactory sys_var_fac_;
   char trace_id_buff_[64];  // this buffer is used for performance.
+  int64_t sys_vars_encode_max_size_;
 
   //==============these members need serialization==============
   common::ObConsistencyLevel consistency_level_;
