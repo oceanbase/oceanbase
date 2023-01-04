@@ -225,7 +225,8 @@ ObExecContext::ObExecContext()
       fixed_id_(OB_INVALID_ID),
       expr_partition_id_(OB_INVALID_ID),
       iters_(256, allocator_),
-      check_status_times_(0)
+      check_status_times_(0),
+      is_mini_task_(false)
 {}
 
 ObExecContext::~ObExecContext()
