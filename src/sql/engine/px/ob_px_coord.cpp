@@ -192,6 +192,8 @@ int ObPxCoord::rescan(ObExecContext& ctx) const
     LOG_WARN("fail setup loop proc", K(ret));
   } else if (OB_FAIL(register_first_buffer_cache(ctx, *px_ctx, root_dfo))) {
     LOG_WARN("failed to register first buffer cache", K(ret));
+  } else {
+    px_ctx->is_filtered_has_set_ = false;
   }
   return ret;
 }

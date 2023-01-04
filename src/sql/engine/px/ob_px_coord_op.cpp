@@ -145,6 +145,7 @@ int ObPxCoordOp::rescan()
 {
   int ret = OB_SUCCESS;
   ObDfo* root_dfo = NULL;
+  startup_passed_ = spec_.startup_filters_.empty();
   if (OB_FAIL(terminate_running_dfos(coord_info_.dfo_mgr_))) {
     LOG_WARN("fail to release px resources in QC inner_close", K(ret));
   } else if (FALSE_IT(clear_interrupt())) {
