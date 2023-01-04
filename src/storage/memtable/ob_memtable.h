@@ -437,6 +437,8 @@ public:
   int set_migration_clog_checkpoint_scn(const share::SCN &clog_checkpoint_scn);
   share::SCN get_migration_clog_checkpoint_scn() { return migration_clog_checkpoint_scn_.atomic_get(); }
   int resolve_right_boundary_for_migration();
+  void unset_logging_blocked_for_active_memtable();
+  void resolve_left_boundary_for_active_memtable();
 
   /* multi source data operations */
   virtual int get_multi_source_data_unit(

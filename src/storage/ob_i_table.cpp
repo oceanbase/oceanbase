@@ -285,7 +285,7 @@ int ObTableHandleV2::get_data_memtable(memtable::ObMemtable *&memtable)
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
    } else if (!table_->is_data_memtable()) {
-     ret = OB_ENTRY_NOT_EXIST;
+     ret = OB_ERR_UNEXPECTED;
      STORAGE_LOG(WARN, "not data memtable", K(ret), K(table_->get_key()));
   } else {
     memtable = static_cast<memtable::ObMemtable*>(table_);
