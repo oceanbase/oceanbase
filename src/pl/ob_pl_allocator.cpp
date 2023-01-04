@@ -147,6 +147,7 @@ int ObPLPkgAllocator::copy_all_element_with_new_allocator(ObIAllocator *allocato
               break;
             }
             case PL_RECORD_TYPE:
+            case PL_OPAQUE_TYPE:
               break;
             default:
               ret = OB_ERR_UNEXPECTED;
