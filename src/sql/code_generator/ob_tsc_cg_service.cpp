@@ -526,20 +526,19 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogPlan *log_plan,
       // pushdown filter only support scan now
       if (pd_blockscan) {
         if (log_op_def::LOG_TABLE_SCAN == op_type) {
-        } else if (log_op_def::LOG_TABLE_LOOKUP == op_type) {
-          pd_blockscan = false;
         } else {
           pd_blockscan = false;
         }
       }
+      LOG_DEBUG("chaser debug pd block", K(op_type), K(pd_blockscan));
       if (!pd_blockscan) {
         pd_filter = false;
-      }
-      LOG_DEBUG("chaser debug pd block", K(op_type), K(pd_blockscan));
-
-      if (pd_filter) {
-        FOREACH_CNT_X(e, access_exprs, pd_filter) {
-          if (T_ORA_ROWSCN != (*e)->get_expr_type()) {
+      } else {
+        FOREACH_CNT_X(e, access_exprs, pd_blockscan || pd_filter) {
+          if (T_ORA_ROWSCN == (*e)->get_expr_type()) {
+            pd_blockscan = false;
+            pd_filter = false;
+          } else {
             auto col = static_cast<ObColumnRefRawExpr *>(*e);
             if (col->is_virtual_generated_column() || col->is_lob_column()) {
               pd_filter = false;
