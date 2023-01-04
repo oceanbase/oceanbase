@@ -820,7 +820,12 @@ int ObLogReplayService::do_replay_task_(ObLogReplayTask *replay_task,
       replay_status->dec_pending_task(replay_task->log_size_);
     }
   } else if (OB_FAIL(ls_adapter_->replay(replay_task))) {
-    CLOG_LOG(WARN, "ls do replay failed", K(ret), KPC(replay_task));
+    if (replay_task->retry_cost_ > 60 * 1000 *1000 &&
+        REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+      CLOG_LOG(ERROR, "ls do replay retry failed last for long time", K(ret), KPC(replay_task));
+    } else {
+      CLOG_LOG(WARN, "ls do replay failed", K(ret), KPC(replay_task));
+    }
   }
   if (OB_SUCC(ret) && need_replay) {
     if (replay_task->is_post_barrier_) {
