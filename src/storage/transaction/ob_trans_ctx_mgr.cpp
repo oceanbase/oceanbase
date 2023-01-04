@@ -4030,7 +4030,11 @@ int ObPartTransCtxMgr::leader_takeover(const ObPartitionKey& partition, const in
     TRANS_LOG(WARN, "ObPartTransCtxMgr not inited");
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(ObTransCtxMgrImpl::leader_takeover(partition, checkpoint))) {
-    TRANS_LOG(ERROR, "participant leader takeover error", KR(ret), K(partition));
+    if (OB_PARTITION_NOT_EXIST == ret) {
+      TRANS_LOG(WARN, "participant leader takeover failed", KR(ret), K(partition));
+    } else {
+      TRANS_LOG(ERROR, "participant leader takeover error", KR(ret), K(partition));
+    }
   } else {
     // do nothing
   }
