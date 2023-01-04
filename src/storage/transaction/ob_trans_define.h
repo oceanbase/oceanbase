@@ -3438,67 +3438,6 @@ private:
   int64_t base_timestamp_;
 };
 
-class ObLightTransCtxItem {
-public:
-  ObLightTransCtxItem()
-  {
-    reset();
-  }
-  ~ObLightTransCtxItem()
-  {
-    destroy();
-  }
-  void reset();
-  void destroy()
-  {
-    reset();
-  }
-  bool get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, ObTransCtx*& ctx);
-  bool get_and_remove_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, ObTransCtx*& ctx);
-  bool remove_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id);
-  bool add_trans_ctx(ObTransCtx* ctx);
-  ObTransCtx* get_trans_ctx()
-  {
-    return trans_ctx_;
-  }
-
-private:
-  common::ObLatch lock_;
-  ObTransCtx* trans_ctx_;
-};
-
-class ObLightTransCtxMgr {
-public:
-  ObLightTransCtxMgr()
-  {
-    reset();
-  }
-  ~ObLightTransCtxMgr()
-  {
-    destroy();
-  }
-  void reset();
-  void destroy()
-  {
-    reset();
-  }
-  int init(ObPartTransCtxMgr* part_trans_ctx_mgr);
-  int leader_takeover(const common::ObPartitionKey& partition);
-  int remove_partition(const common::ObPartitionKey& partition);
-  uint64_t get_index(const common::ObPartitionKey& partition, const ObTransID& trans_id);
-  bool get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, ObTransCtx*& ctx);
-  bool get_and_remove_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, ObTransCtx*& ctx);
-  bool remove_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id);
-  bool add_trans_ctx(ObTransCtx* ctx);
-
-public:
-  static const int64_t LIGHT_TRANS_CTX_MGR_TABLE_SIZE = 400000;
-
-private:
-  ObLightTransCtxItem item_array_[LIGHT_TRANS_CTX_MGR_TABLE_SIZE];
-  ObPartTransCtxMgr* part_trans_ctx_mgr_;
-};
-
 typedef common::ObSEArray<ObElrTransInfo, 1, TransModulePageAllocator> ObElrTransInfoArray;
 typedef common::ObSEArray<ObPartitionLogInfo, 10, TransModulePageAllocator> PartitionLogInfoArray;
 typedef common::ObSEArray<int64_t, 10, TransModulePageAllocator> ObRedoLogIdArray;

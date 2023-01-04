@@ -137,8 +137,6 @@ int ObTransService::init(const ObAddr& self, ObIPartitionLocationCache* location
     TRANS_LOG(WARN, "big trans worker init failed", KR(ret));
   } else if (OB_FAIL(msg_handler_.init(this, &part_trans_ctx_mgr_, &coord_trans_ctx_mgr_, location_adapter_, rpc_))) {
     TRANS_LOG(WARN, "ObTransMsgHandler init error", K(ret));
-  } else if (OB_FAIL(light_trans_ctx_mgr_.init(&part_trans_ctx_mgr_))) {
-    TRANS_LOG(WARN, "ObLightTransCtxMgr init error", K(ret));
   } else {
     partition_service_ = partition_service;
     schema_service_ = schema_service;
@@ -198,8 +196,6 @@ int ObTransService::init(const ObAddr& self, ObITransRpc* rpc, ObILocationAdapte
     TRANS_LOG(WARN, "thread pool init error", KR(ret));
   } else if (OB_FAIL(big_trans_worker_.init())) {
     TRANS_LOG(WARN, "big trans worker init failed", KR(ret));
-  } else if (OB_FAIL(light_trans_ctx_mgr_.init(&part_trans_ctx_mgr_))) {
-    TRANS_LOG(WARN, "ObLightTransCtxMgr init error", K(ret));
   } else {
     use_def_ = false;
     rpc_ = rpc;
@@ -357,7 +353,6 @@ void ObTransService::destroy()
     dup_table_rpc_.destroy();
     big_trans_worker_.destroy();
     part_trans_same_leader_batch_rpc_mgr_.destroy();
-    light_trans_ctx_mgr_.destroy();
     is_inited_ = false;
     TRANS_LOG(INFO, "transaction service destroyed");
   }
@@ -4662,7 +4657,6 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
         const bool is_xa_redo = !log.get_xid().empty();
         // bool alloc = (0 == log.get_log_no());
         bool alloc = true;
-        bool light_mgr_ret = false;
         if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
                 trans_id,
                 for_replay,
@@ -4706,13 +4700,8 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
               replay_redo_log_succ = true;
               tmp_trans_id = trans_id;
             }
-            if (light_trans_ctx_mgr_.add_trans_ctx(ctx)) {
-              light_mgr_ret = true;
-            }
           }
-          if (!light_mgr_ret) {
-            (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
-          }
+          (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
         }
       }
     }
@@ -4727,23 +4716,16 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
         const ObTransID& trans_id = log.get_trans_id();
         const uint64_t tenant_id = log.get_tenant_id();
         bool alloc = true;
-        bool light_mgr_ret = true;
-        if (!light_trans_ctx_mgr_.get_trans_ctx(partition, trans_id, ctx)) {
-          light_mgr_ret = false;
-          if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
-                  trans_id,
-                  for_replay,
-                  is_readonly,
-                  is_bounded_staleness_read,
-                  need_completed_dirty_txn,
-                  alloc,
-                  ctx))) {
-            TRANS_LOG(WARN, "get transaction context error", KR(ret), K(partition), K(trans_id), K(alloc));
-          }
-        } else {
-          alloc = false;
+        if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
+                trans_id,
+                for_replay,
+                is_readonly,
+                is_bounded_staleness_read,
+                need_completed_dirty_txn,
+                alloc,
+                ctx))) {
+          TRANS_LOG(WARN, "get transaction context error", KR(ret), K(partition), K(trans_id), K(alloc));
         }
-        // ret must be true if light_mgr_ret is ture
         if (OB_SUCC(ret)) {
           part_ctx = static_cast<ObPartTransCtx*>(ctx);
           const int64_t log_checkpoint = log.get_checkpoint();
@@ -4771,18 +4753,7 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
               OB_FAIL(part_ctx->replay_prepare_log(log, timestamp, log_id, batch_committed, checkpoint))) {
             TRANS_LOG(WARN, "replay prepare log error", KR(ret), K(log), K(timestamp), K(log_id));
           }
-          if (!light_mgr_ret) {
-            (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
-          } else if (log.is_batch_commit_trans()) {
-            if (!light_trans_ctx_mgr_.remove_trans_ctx(partition, trans_id)) {
-              TRANS_LOG(WARN,
-                  "[prepare] fail to remove ctx from lightweight trans ctx mgr",
-                  K(ret),
-                  K(partition),
-                  K(trans_id));
-            }
-            (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
-          }
+          (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
         }
       }
     }
@@ -4797,20 +4768,16 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
       } else {
         const ObTransID &trans_id = log.get_trans_id();
         bool alloc = false;
-        bool light_mgr_ret = true;
-        if (!light_trans_ctx_mgr_.get_trans_ctx(partition, trans_id, ctx)) {
-          light_mgr_ret = false;
-          if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
-                                                        trans_id,
-                                                        for_replay,
-                                                        is_readonly,
-                                                        is_bounded_staleness_read,
-                                                        need_completed_dirty_txn,
-                                                        alloc,
-                                                        ctx))) {
-            TRANS_LOG(WARN, "get transaction context error",
-                KR(ret), K(partition), K(trans_id), K(alloc));
-          }
+        if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
+                trans_id,
+                for_replay,
+                is_readonly,
+                is_bounded_staleness_read,
+                need_completed_dirty_txn,
+                alloc,
+                ctx))) {
+          TRANS_LOG(WARN, "get transaction context error",
+              KR(ret), K(partition), K(trans_id), K(alloc));
         }
         if (OB_SUCC(ret)) {
           part_ctx = static_cast<ObPartTransCtx *>(ctx);
@@ -4818,9 +4785,7 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
             TRANS_LOG(WARN, "replay record log error", KR(ret), K(log), K(timestamp), K(log_id));
           }
         }
-        if (!light_mgr_ret) {
-          (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
-        }
+        (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
       }
     }
     if (OB_SUCCESS == ret && ((log_type & OB_LOG_TRANS_COMMIT) != 0)) {
@@ -4833,26 +4798,22 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
       } else {
         const ObTransID& trans_id = log.get_trans_id();
         bool alloc = false;
-        bool light_mgr_ret = true;
         int tmp_ret = OB_SUCCESS;
-        if (!light_trans_ctx_mgr_.get_trans_ctx(partition, trans_id, ctx)) {
-          light_mgr_ret = false;
-          if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
-                  trans_id,
-                  for_replay,
-                  is_readonly,
-                  is_bounded_staleness_read,
-                  need_completed_dirty_txn,
-                  alloc,
-                  ctx))) {
-            tmp_ret = ret;
-            if (OB_TRANS_CTX_NOT_EXIST != ret) {
-              TRANS_LOG(WARN, "get transaction context error", KR(ret), K(partition), K(trans_id));
-            } else {
-              // rewrite ret
-              ret = OB_SUCCESS;
-              TRANS_LOG(WARN, "ignore commit log", K(log), K(timestamp), K(log_id));
-            }
+        if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
+                trans_id,
+                for_replay,
+                is_readonly,
+                is_bounded_staleness_read,
+                need_completed_dirty_txn,
+                alloc,
+                ctx))) {
+          tmp_ret = ret;
+          if (OB_TRANS_CTX_NOT_EXIST != ret) {
+            TRANS_LOG(WARN, "get transaction context error", KR(ret), K(partition), K(trans_id));
+          } else {
+            // rewrite ret
+            ret = OB_SUCCESS;
+            TRANS_LOG(WARN, "ignore commit log", K(log), K(timestamp), K(log_id));
           }
         }
         if (OB_SUCCESS == tmp_ret) {
@@ -4871,9 +4832,7 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
           if (OB_SUCC(ret) && OB_FAIL(part_ctx->replay_commit_log(log, timestamp, log_id))) {
             TRANS_LOG(WARN, "replay commit log error", KR(ret), K(log), K(timestamp), K(log_id));
           }
-          if (!light_mgr_ret) {
-            (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
-          }
+          (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
         }
       }
     }
@@ -4886,26 +4845,22 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
       } else {
         const ObTransID& trans_id = log.get_trans_id();
         bool alloc = false;
-        bool light_mgr_ret = true;
         int tmp_ret = OB_SUCCESS;
-        if (!light_trans_ctx_mgr_.get_trans_ctx(partition, trans_id, ctx)) {
-          light_mgr_ret = false;
-          if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
-                  trans_id,
-                  for_replay,
-                  is_readonly,
-                  is_bounded_staleness_read,
-                  need_completed_dirty_txn,
-                  alloc,
-                  ctx))) {
-            tmp_ret = ret;
-            if (OB_TRANS_CTX_NOT_EXIST != ret) {
-              TRANS_LOG(WARN, "get transaction context error", KR(ret), K(partition), K(trans_id));
-            } else {
-              // rewrite ret
-              ret = OB_SUCCESS;
-              TRANS_LOG(WARN, "ignore abort log", K(log), K(timestamp), K(log_id));
-            }
+        if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
+                trans_id,
+                for_replay,
+                is_readonly,
+                is_bounded_staleness_read,
+                need_completed_dirty_txn,
+                alloc,
+                ctx))) {
+          tmp_ret = ret;
+          if (OB_TRANS_CTX_NOT_EXIST != ret) {
+            TRANS_LOG(WARN, "get transaction context error", KR(ret), K(partition), K(trans_id));
+          } else {
+            // rewrite ret
+            ret = OB_SUCCESS;
+            TRANS_LOG(WARN, "ignore abort log", K(log), K(timestamp), K(log_id));
           }
         }
         if (OB_SUCCESS == tmp_ret) {
@@ -4913,9 +4868,7 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
           if (OB_FAIL(part_ctx->replay_abort_log(log, timestamp, log_id))) {
             TRANS_LOG(WARN, "replay abort log error", KR(ret), K(log), K(timestamp), K(log_id));
           }
-          if (!light_mgr_ret) {
-            (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
-          }
+          (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
         }
       }
     }
@@ -4929,23 +4882,21 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
         const ObTransID& trans_id = log.get_trans_id();
         bool alloc = false;
         int tmp_ret = OB_SUCCESS;
-        if (!light_trans_ctx_mgr_.get_and_remove_trans_ctx(partition, trans_id, ctx)) {
-          if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
-                  trans_id,
-                  for_replay,
-                  is_readonly,
-                  is_bounded_staleness_read,
-                  need_completed_dirty_txn,
-                  alloc,
-                  ctx))) {
-            tmp_ret = ret;
-            if (OB_TRANS_CTX_NOT_EXIST != ret) {
-              TRANS_LOG(WARN, "get transaction context error", KR(ret), K(partition), K(trans_id));
-            } else {
-              // rewrite ret
-              ret = OB_SUCCESS;
-              TRANS_LOG(WARN, "ignore clear log", K(log), K(timestamp), K(log_id));
-            }
+        if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
+                trans_id,
+                for_replay,
+                is_readonly,
+                is_bounded_staleness_read,
+                need_completed_dirty_txn,
+                alloc,
+                ctx))) {
+          tmp_ret = ret;
+          if (OB_TRANS_CTX_NOT_EXIST != ret) {
+            TRANS_LOG(WARN, "get transaction context error", KR(ret), K(partition), K(trans_id));
+          } else {
+            // rewrite ret
+            ret = OB_SUCCESS;
+            TRANS_LOG(WARN, "ignore clear log", K(log), K(timestamp), K(log_id));
           }
         }
         if (OB_SUCCESS == tmp_ret) {
@@ -5896,13 +5847,6 @@ int ObTransService::leader_takeover(
     } else {
       TRANS_LOG(ERROR, "participant partition leader takeover error", KR(ret), K(partition));
     }
-  } else if (OB_FAIL(light_trans_ctx_mgr_.leader_takeover(partition))) {
-    if (OB_PARTITION_NOT_EXIST == ret) {
-      TRANS_LOG(WARN, "light trans ctx manager leader takeover error", KR(ret), K(partition));
-      ret = OB_SUCCESS;
-    } else {
-      TRANS_LOG(ERROR, "light trans ctx manager leader takeover error", KR(ret), K(partition));
-    }
   // leader implicitly commits a transaction
   } else if (OB_FAIL(update_publish_version(partition, ObClockGenerator::getRealClock(), true))) {
     TRANS_LOG(ERROR, "update publish version error", KR(ret), K(partition));
@@ -6022,8 +5966,6 @@ int ObTransService::remove_partition(const ObPartitionKey& partition, const bool
       } else {
         TRANS_LOG(INFO, "slave participant remove partition error", KR(ret), K(partition), K(graceful));
       }
-    } else if (OB_FAIL(light_trans_ctx_mgr_.remove_partition(partition))) {
-      TRANS_LOG(WARN, "remove partition from lightweight trans ctx manager error", KR(ret), K(partition), K(graceful));
     } else if (OB_FAIL(part_trans_ctx_mgr_.remove_partition(partition, graceful))) {
       TRANS_LOG(WARN, "participant remove partition error", KR(ret), K(partition), K(graceful));
     } else if (OB_FAIL(coord_trans_ctx_mgr_.remove_partition(partition, graceful))) {

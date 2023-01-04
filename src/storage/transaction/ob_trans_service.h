@@ -809,7 +809,6 @@ private:
   ObPartTransSameLeaderBatchRpcMgr part_trans_same_leader_batch_rpc_mgr_;
   ObTransMsgHandler msg_handler_;
   ObXARpc xa_rpc_;
-  ObLightTransCtxMgr light_trans_ctx_mgr_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransService);
