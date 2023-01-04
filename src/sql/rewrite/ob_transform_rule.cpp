@@ -219,6 +219,8 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt>& parent_stm
       LOG_WARN("failed to formalize stmt", K(ret));
     } else if (OB_FAIL(trans.transform_heuristic_rule(reinterpret_cast<ObDMLStmt *&>(temp_stmt)))) {
       LOG_WARN("failed to transform heuristic rule", K(ret));
+    } else if (OB_FAIL(temp_stmt->push_down_query_hint())) {
+      LOG_WARN("failed to push down query hint", K(ret));
     } else if (OB_FAIL(temp_stmt->check_and_convert_hint(*session_info))) {
       LOG_WARN("failed to check and convert hint", K(ret));
     } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {

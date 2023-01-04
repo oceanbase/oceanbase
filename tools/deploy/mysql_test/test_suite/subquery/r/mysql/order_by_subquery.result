@@ -68,10 +68,7 @@ ERROR 21000: Subquery returns more than 1 row
 select * from t1 order by c1,(select c1 from t5 order by c1,(select c1 from t3));
 ERROR 21000: Subquery returns more than 1 row
 (select * from t1 order by c1,(select c1 from t5 order by c1,(select c1 from t3))) intersect (select * from t1 order by c1,(select c1 from t5 order by c1,(select c1 from t3)));
-c1	c2	c3
-1	1	1
-2	2	2
-3	3	3
+ERROR 21000: Subquery returns more than 1 row
 (select * from t1 order by c1,(select c1 from t5 order by c1)) intersect (select * from t1 order by c1,(select c1 from t5 order by c1));
 c1	c2	c3
 1	1	1

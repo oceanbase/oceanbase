@@ -1882,6 +1882,8 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(stmt->distribute_hint_in_query_ctx(&exec_ctx.get_allocator()))) {
       LOG_WARN("Failed to distribute hint in query context", K(ret));
+    } else if (OB_FAIL(stmt->push_down_query_hint())) {
+      LOG_WARN("failed to push down query hint", K(ret));
     } else if (OB_ISNULL(exec_ctx.get_sql_ctx()) || OB_ISNULL(exec_ctx.get_sql_ctx()->trans_happened_route_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(phy_plan));

@@ -20089,44 +20089,59 @@ Outputs & filters:
 
 SQL: (select (select c1 from t1) from  t2 order by ((select c1 from t1))) union (select 1); 
 
-======================================================
-|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
-------------------------------------------------------
-|0 |MERGE UNION DISTINCT     |        |301      |700 |
-|1 | SUBPLAN FILTER          |        |300      |601 |
-|2 |  PX COORDINATOR         |        |300      |206 |
-|3 |   EXCHANGE OUT DISTR    |:EX10000|300      |192 |
-|4 |    PX PARTITION ITERATOR|        |300      |192 |
-|5 |     TABLE SCAN          |t2      |300      |192 |
-|6 |  PX COORDINATOR         |        |500      |354 |
-|7 |   EXCHANGE OUT DISTR    |:EX20000|500      |331 |
-|8 |    PX PARTITION ITERATOR|        |500      |331 |
-|9 |     TABLE SCAN          |t1      |500      |331 |
-|10| EXPRESSION              |        |1        |1   |
-======================================================
+=======================================================
+|ID|OPERATOR                  |NAME    |EST. ROWS|COST|
+-------------------------------------------------------
+|0 |MERGE UNION DISTINCT      |        |301      |1096|
+|1 | SUBPLAN FILTER           |        |300      |996 |
+|2 |  SUBPLAN FILTER          |        |300      |601 |
+|3 |   PX COORDINATOR         |        |300      |206 |
+|4 |    EXCHANGE OUT DISTR    |:EX10000|300      |192 |
+|5 |     PX PARTITION ITERATOR|        |300      |192 |
+|6 |      TABLE SCAN          |t2      |300      |192 |
+|7 |   PX COORDINATOR         |        |500      |354 |
+|8 |    EXCHANGE OUT DISTR    |:EX20000|500      |331 |
+|9 |     PX PARTITION ITERATOR|        |500      |331 |
+|10|      TABLE SCAN          |t1      |500      |331 |
+|11|  PX COORDINATOR          |        |500      |354 |
+|12|   EXCHANGE OUT DISTR     |:EX30000|500      |331 |
+|13|    PX PARTITION ITERATOR |        |500      |331 |
+|14|     TABLE SCAN           |t1      |500      |331 |
+|15| EXPRESSION               |        |1        |1   |
+=======================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([UNION([1])]), filter(nil)
   1 - output([?]), filter(nil), 
       exec_params_(nil), onetime_exprs_([cast(subquery(1), BIGINT(20, 0))]), init_plan_idxs_(nil)
-  2 - output([1]), filter(nil)
-  3 - output([1]), filter(nil), dop=1
-  4 - output([1]), filter(nil), 
-      force partition granule, asc.
+  2 - output([1]), filter(nil),
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), dop=1
   5 - output([1]), filter(nil), 
+      force partition granule, asc.
+  6 - output([1]), filter(nil),
       access([t2.c1]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
-  6 - output([t1.c1]), filter(nil)
-  7 - output([t1.c1]), filter(nil), dop=1
-  8 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  7 - output([t1.c1]), filter(nil)
+  8 - output([t1.c1]), filter(nil), dop=1
   9 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  10 - output([t1.c1]), filter(nil),
       access([t1.c1]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
-  10 - output([?]), filter(nil)
+  11 - output([t1.c1]), filter(nil)
+  12 - output([t1.c1]), filter(nil), dop=1
+  13 - output([t1.c1]), filter(nil),
+      force partition granule, asc.
+  14 - output([t1.c1]), filter(nil),
+      access([t1.c1]), partitions(p[0-4]),
+      is_index_back=false,
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  15 - output([?]), filter(nil)
       values({?})
 
 *************** Case 591(end)  ************** 
@@ -25249,40 +25264,72 @@ Outputs & filters:
 SQL: (select c1 from t1 order by c2,(select c1 from t3 order by c1)) intersect (select c1 from t2 order by c2,(select c1 from t3 order by c1)); 
 
 ============================================================
-|ID|OPERATOR                       |NAME    |EST. ROWS|COST|
+|ID|OPERATOR                  |NAME         |EST. ROWS|COST|
 ------------------------------------------------------------
-|0 |PX COORDINATOR                 |        |300      |1380|
-|1 | EXCHANGE OUT DISTR            |:EX10001|300      |1366|
-|2 |  MERGE INTERSECT DISTINCT     |        |300      |1366|
-|3 |   SORT                        |        |500      |966 |
-|4 |    PX PARTITION ITERATOR      |        |500      |331 |
-|5 |     TABLE SCAN                |t1      |500      |331 |
-|6 |   EXCHANGE IN MERGE SORT DISTR|        |300      |206 |
-|7 |    EXCHANGE OUT DISTR (PKEY)  |:EX10000|300      |192 |
-|8 |     PX PARTITION ITERATOR     |        |300      |192 |
-|9 |      TABLE SCAN               |t2      |300      |192 |
+|0 |HASH INTERSECT DISTINCT   |             |300      |2829|
+|1 | SORT                     |             |500      |1339|
+|2 |  SUBPLAN FILTER          |             |500      |607 |
+|3 |   PX COORDINATOR         |             |500      |389 |
+|4 |    EXCHANGE OUT DISTR    |:EX10000     |500      |342 |
+|5 |     PX PARTITION ITERATOR|             |500      |342 |
+|6 |      TABLE SCAN          |t1(idx_t1_c2)|500      |342 |
+|7 |   PX COORDINATOR         |             |200      |149 |
+|8 |    EXCHANGE OUT DISTR    |:EX20000     |200      |140 |
+|9 |     PX PARTITION ITERATOR|             |200      |140 |
+|10|      TABLE SCAN          |t3           |200      |140 |
+|11| SORT                     |             |300      |838 |
+|12|  SUBPLAN FILTER          |             |300      |417 |
+|13|   PX COORDINATOR         |             |300      |227 |
+|14|    EXCHANGE OUT DISTR    |:EX30000     |300      |198 |
+|15|     PX PARTITION ITERATOR|             |300      |198 |
+|16|      TABLE SCAN          |t2           |300      |198 |
+|17|   PX COORDINATOR         |             |200      |149 |
+|18|    EXCHANGE OUT DISTR    |:EX40000     |200      |140 |
+|19|     PX PARTITION ITERATOR|             |200      |140 |
+|20|      TABLE SCAN          |t3           |200      |140 |
 ============================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([INTERSECT([1])]), filter(nil)
-  1 - output([INTERSECT([1])]), filter(nil), dop=1
-  2 - output([INTERSECT([1])]), filter(nil)
-  3 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  4 - output([t1.c1]), filter(nil), 
-      affinitize, force partition granule, asc.
-  5 - output([t1.c1]), filter(nil), 
-      access([t1.c1]), partitions(p[0-4]), 
-      is_index_back=false, 
-      range_key([t1.c1]), range(MIN ; MAX)always true
-  6 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC]), Local Order
-  7 - (#keys=1, [t2.c1]), output([t2.c1]), filter(nil), dop=1
-  8 - output([t2.c1]), filter(nil), 
+  1 - output([t1.c1]), filter(nil), sort_keys([t1.c2, ASC])
+  2 - output([t1.c1], [t1.c2]), filter(nil),
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  3 - output([t1.c1], [t1.c2]), filter(nil)
+  4 - output([t1.c1], [t1.c2]), filter(nil), dop=1
+  5 - output([t1.c1], [t1.c2]), filter(nil),
       force partition granule, asc.
-  9 - output([t2.c1]), filter(nil), 
-      access([t2.c1]), partitions(p[0-2]), 
+  6 - output([t1.c1], [t1.c2]), filter(nil),
+      access([t1.c1], [t1.c2]), partitions(p[0-4]),
+      is_index_back=false, 
+      range_key([t1.c2], [t1.c1]), range(MIN,MIN ; MAX,MAX)always true
+  7 - output([t3.c1]), filter(nil)
+  8 - output([t3.c1]), filter(nil), dop=1
+  9 - output([t3.c1]), filter(nil),
+      force partition granule, asc.
+  10 - output([t3.c1]), filter(nil),
+      access([t3.c1]), partitions(p[0-1]),
+      is_index_back=false,
+      range_key([t3.c1]), range(MIN ; MAX)always true
+  11 - output([t2.c1]), filter(nil), sort_keys([t2.c2, ASC])
+  12 - output([t2.c1], [t2.c2]), filter(nil),
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  13 - output([t2.c1], [t2.c2]), filter(nil)
+  14 - output([t2.c1], [t2.c2]), filter(nil), dop=1
+  15 - output([t2.c1], [t2.c2]), filter(nil),
+      force partition granule, asc.
+  16 - output([t2.c1], [t2.c2]), filter(nil),
+      access([t2.c1], [t2.c2]), partitions(p[0-2]),
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
+  17 - output([t3.c1]), filter(nil)
+  18 - output([t3.c1]), filter(nil), dop=1
+  19 - output([t3.c1]), filter(nil),
+      force partition granule, asc.
+  20 - output([t3.c1]), filter(nil),
+      access([t3.c1]), partitions(p[0-1]),
+      is_index_back=false,
+      range_key([t3.c1]), range(MIN ; MAX)always true
 
 *************** Case 778(end)  ************** 
 

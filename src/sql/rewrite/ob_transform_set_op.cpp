@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "common/ob_common_utility.h"
@@ -68,8 +67,22 @@ int ObTransformSetOp::remove_order_by_for_set(ObDMLStmt*& stmt, bool& trans_happ
         LOG_WARN("stmt is NULL", K(stmt), K(child_stmt), K(ret));
       } else if (NULL == child_stmt->get_limit_expr() && NULL == child_stmt->get_limit_percent_expr() &&
                  !child_stmt->is_contains_assignment() && child_stmt->has_order_by()) {
-        child_stmt->get_order_items().reset();
-        trans_happened = true;
+        bool can_remove = true;
+        for (int64_t j = 0; OB_SUCC(ret) && can_remove && j < child_stmt->get_order_item_size(); ++j) {
+          const OrderItem &order_item = child_stmt->get_order_item(j);
+          if (OB_ISNULL(order_item.expr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("order expr is null");
+          } else if (order_item.expr_->has_flag(CNT_SUB_QUERY)) {
+            can_remove = false;
+            // in case the subquery returns more than one rows,
+            // we should keep the subquery which may returns error
+          }
+        }
+        if (OB_SUCC(ret) && can_remove) {
+          child_stmt->get_order_items().reset();
+          trans_happened = true;
+        }
       }
     }
   }
