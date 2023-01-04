@@ -777,7 +777,7 @@ int ObTabletBindingHelper::replay_get_tablet(const ObTabletMapKey &key, ObTablet
   if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("failed to get tablet", K(ret), K(key));
-    } else if (trans_flags_.log_ts_ < tablet_change_checkpoint_ts) {
+    } else if (trans_flags_.log_ts_ <= tablet_change_checkpoint_ts) {
       LOG_WARN("tablet already deleted", K(ret), K(key), K(trans_flags_), K(tablet_change_checkpoint_ts));
     } else {
       ret = OB_EAGAIN;

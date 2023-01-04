@@ -1106,7 +1106,7 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("failed to get tablet", K(ret), K(key));
-    } else if (log_ts < tablet_change_checkpoint_ts) {
+    } else if (log_ts <= tablet_change_checkpoint_ts) {
       LOG_WARN("tablet already deleted", K(ret), K(key), K(log_ts), K(tablet_change_checkpoint_ts));
     } else {
       ret = OB_EAGAIN;
