@@ -600,6 +600,8 @@ int ObConnectByPump::calc_prior_and_check_cycle(PumpNode& node, bool set_refacto
             node.is_cycle_ = true;
             if (is_nocycle_) {
               ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("CONNECT BY loop in user data", K(ret), K(*check_row));
             }
           } else {
             LOG_WARN("fail to check cycle", K(ret), K(node), K(prior_exprs_result_row_));
@@ -632,8 +634,6 @@ int ObConnectByPump::check_cycle(const ObNewRow& row, bool set_refactored)
         }
       } else if (OB_HASH_EXIST == ret) {
         ret = OB_ERR_CBY_LOOP;
-        LOG_WARN("CONNECT BY loop in user data", K(ret), K(row));
-
       } else {
         LOG_WARN("Failed to find in hashset", K(ret));
       }

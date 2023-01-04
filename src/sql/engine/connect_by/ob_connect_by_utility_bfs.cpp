@@ -552,7 +552,7 @@ int ObConnectByPumpBFS::check_cycle_path(const ObNewRow& row)
       LOG_WARN("fail to compare prior_exprs_result", K(row), K(cur_node), K(ret));
     } else if (cmp_result.is_true()) {
       ret = OB_ERR_CBY_LOOP;
-      LOG_WARN("CONNECT BY loop in user data", K(row), K(cur_node), K(ret));
+      LOG_WARN("CONNECT BY loop in user data", K(ret), K(cur_node), K(row));
     }
   }
   return ret;
