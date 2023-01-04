@@ -2224,33 +2224,63 @@ int ObPhyRestoreMacroIndexStoreV2::check_table_exist(const ObITable::TableKey &t
 }
 
 int ObPhyRestoreMacroIndexStoreV2::check_major_macro_block_exist(
-    const ObITable::TableKey &table_key, const int64_t data_version, const int64_t data_seq, bool &is_exist) const
+    const int64_t data_version, const int64_t data_seq, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
   is_exist = false;
-  common::ObArray<ObBackupTableMacroIndex> *index_list = NULL;
+  const common::ObArray<ObBackupTableMacroIndex> *index_list = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "macro index store do not init", K(ret));
-  } else if (!table_key.is_valid() && !table_key.is_major_sstable()) {
+  } else if (data_version < 0 || data_seq < 0) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "get invalid args", K(ret), K(table_key), K(data_version), K(data_seq));
-  } else if (OB_FAIL(index_map_.get_refactored(table_key, index_list))) {
+    STORAGE_LOG(WARN, "get invalid args", K(ret), K(data_version), K(data_seq));
+  } else if (OB_FAIL(get_macro_index_list_(data_version, index_list))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      STORAGE_LOG(INFO, "macro index not exist, may be empty sstable", K(ret), K(table_key));
+      STORAGE_LOG(INFO, "macro index not exist, may be empty sstable", K(ret), K(data_version), K(data_seq));
     } else {
-      STORAGE_LOG(WARN, "fail to get refactored", K(ret), K(table_key));
+      STORAGE_LOG(WARN, "fail to get refactored", K(ret), K(data_version), K(data_seq));
     }
   } else if (OB_ISNULL(index_list)) {
-    STORAGE_LOG(INFO, "no table key exist", K(ret), K(table_key));
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "index list should not be null", K(ret), K(data_version), K(data_seq));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && index_list->count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_list->count(); ++i) {
       const ObBackupTableMacroIndex &index = index_list->at(i);
       if (data_version == index.data_version_ && data_seq == index.data_seq_) {
         is_exist = true;
         break;
       }
+    }
+  }
+  return ret;
+}
+
+int ObPhyRestoreMacroIndexStoreV2::get_macro_index_list_(
+    const int64_t data_version, const common::ObArray<ObBackupTableMacroIndex> *&index_list) const
+{
+  int ret = OB_SUCCESS;
+  index_list = nullptr;
+  bool found = false;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "macro index store do not init", K(ret));
+  } else {
+    for (MacroIndexMap::const_iterator iter = index_map_.begin(); iter != index_map_.end() && !found; ++iter) {
+      const ObITable::TableKey &table_key = iter->first;
+      if (table_key.version_.version_ < data_version) {
+        // do nothing
+      } else {
+        index_list = iter->second;
+        found = true;
+      }
+    }
+
+    if (OB_SUCC(ret) && !found) {
+      ret = OB_HASH_NOT_EXIST;
+      LOG_WARN("do not get macro index list", K(ret), K(data_version));
     }
   }
   return ret;
