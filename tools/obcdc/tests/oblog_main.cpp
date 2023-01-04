@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -424,7 +424,7 @@ int ObLogMain::verify_record_info_(ILogRecord *br)
     }
 
     // Calibration timestamp and checkpoint
-    int64_t precise_timestamp = oblog_br->get_precise_timestamp();
+    int64_t precise_timestamp = ObBinlogRecordPrinter::get_precise_timestamp(*br);
     int64_t timestamp_sec = precise_timestamp / 1000000;
     int64_t timestamp_usec = precise_timestamp % 1000000;
     int64_t expect_checkpoint1 = last_heartbeat_timestamp_micro_sec_ / 1000000;

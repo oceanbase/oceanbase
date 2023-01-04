@@ -15,6 +15,10 @@ set(SRC_LIST
   ob_log_binlog_record.h ob_log_binlog_record.cpp
   ob_log_binlog_record_pool.h ob_log_binlog_record_pool.cpp
   ob_log_binlog_record_queue.h ob_log_binlog_record_queue.cpp
+  ob_log_batch_buffer.h ob_log_batch_buffer.cpp
+  ob_log_batch_buffer_task.h ob_log_batch_buffer_task.cpp
+  ob_log_block.h ob_log_block.cpp
+  ob_log_buf.h ob_log_buf.cpp
   ob_log_cluster_id_filter.cpp ob_log_cluster_id_filter.h
   ob_log_common.h
   ob_log_config.h ob_log_config.cpp
@@ -22,6 +26,7 @@ set(SRC_LIST
   ob_log_ddl_parser.h ob_log_ddl_parser.cpp
   ob_log_dlist.h
   ob_log_dml_parser.h ob_log_dml_parser.cpp
+  ob_log_factory.h ob_log_factory.cpp
   ob_log_fake_common_config.h
   ob_log_fetch_log_rpc.h ob_log_fetch_log_rpc.cpp
   ob_log_fetch_stat_info.h ob_log_fetch_stat_info.cpp
@@ -37,13 +42,12 @@ set(SRC_LIST
   ob_log_fetcher_idle_pool.h ob_log_fetcher_idle_pool.cpp
   ob_log_formatter.h ob_log_formatter.cpp
   ob_log_entry_task_pool.h ob_log_entry_task_pool.cpp
-  ob_log_row_list.h ob_log_row_list.cpp
-  ob_log_row_data_index.h ob_log_row_data_index.cpp
   ob_log_store_service.h
   ob_log_store_service_stat.h ob_log_store_service_stat.cpp
+  ob_log_store_key.h ob_log_store_key.cpp
+  ob_log_store_task.h ob_log_store_task.cpp
+  ob_log_reader.h ob_log_reader.cpp
   ob_log_storager.h ob_log_storager.cpp
-  ob_log_reader_plug_in.h ob_log_reader_plug_in.cpp
-  ob_log_data_processor.h ob_log_data_processor.cpp
   ob_log_hbase_mode.h ob_log_hbase_mode.cpp
   ob_log_work_mode.h ob_log_work_mode.cpp
   ob_log_instance.h ob_log_instance.cpp
@@ -52,6 +56,7 @@ set(SRC_LIST
   ob_log_meta_manager.h ob_log_meta_manager.cpp
   ob_log_mysql_connector.h ob_log_mysql_connector.cpp
   ob_log_mysql_proxy.h ob_log_mysql_proxy.cpp
+  ob_log_rollback_section.cpp
   ob_log_part_fetch_ctx.h ob_log_part_fetch_ctx.cpp
   ob_log_part_fetch_mgr.h ob_log_part_fetch_mgr.cpp
   ob_log_part_mgr.h ob_log_part_mgr.cpp
@@ -89,7 +94,10 @@ set(SRC_LIST
   ob_log_trace_id.h ob_log_trace_id.cpp
   ob_log_trans_ctx.h ob_log_trans_ctx.cpp
   ob_log_trans_ctx_mgr.h ob_log_trans_ctx_mgr.cpp
+  ob_log_trans_dispatch_ctx.h ob_log_trans_dispatch_ctx.cpp
   ob_log_trans_log.h ob_log_trans_log.cpp
+  ob_log_trans_msg_sorter.h ob_log_trans_msg_sorter.cpp
+  ob_log_trans_redo_dispatcher.h ob_log_trans_redo_dispatcher.cpp
   ob_log_trans_stat_mgr.h ob_log_trans_stat_mgr.cpp
   ob_log_utils.h ob_log_utils.cpp
   ob_map_queue.h
@@ -125,6 +133,8 @@ else()
   target_link_libraries(obcdc
     PUBLIC obcdc_base
     PRIVATE
+    -Wl,--no-undefined
+    -Wl,--no-allow-shlib-undefined
     -Wl,--whole-archive
     $<TARGET_OBJECTS:obcdc_objects>
     -Wl,--no-whole-archive

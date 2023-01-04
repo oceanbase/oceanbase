@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -62,13 +62,13 @@ public:
       const bool enable_verify_mode,
       const bool enable_print_detail);
   void destroy();
+  static int64_t get_precise_timestamp(ILogRecord &br);
 
 private:
   int open_file_(const char *data_file, int &fd);
   int rotate_data_file();
 
 private:
-  static int64_t get_precise_timestamp_(ILogRecord &br);
   static void console_print_statements(ILogRecord *br, ObLogBR *oblog_br);
   static void console_print_heartbeat(ILogRecord *br, ObLogBR *oblog_br);
   static void console_print_commit(ILogRecord *br, ObLogBR *oblog_br);
@@ -84,8 +84,7 @@ private:
       const bool enable_verify_mode,
       const bool enable_print_detail,
       bool &need_rotate_file);
-  static int output_data_file_column_data(const bool is_serilized,
-      ILogRecord *br,
+  static int output_data_file_column_data(ILogRecord *br,
       ITableMeta *table_meta,
       const int64_t index,
       char *ptr,

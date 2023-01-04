@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -29,6 +29,7 @@
 #include "ob_log_storager.h"            // IObLogStorager
 #include "ob_log_tenant.h"              // ObLogTenantGuard, ObLogTenant
 #include "ob_log_config.h"              // TCONF
+#include "ob_log_resource_collector.h"  // IObLogResourceCollector
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -302,7 +303,7 @@ int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool
   // Retry until exit or success
   else if (OB_FAIL(get_schema_(
       schema_getter_,
-      dml_stmt_task->get_table_version(),
+      dml_stmt_task->get_global_schema_version(),
       dml_stmt_task->get_table_id(),
       stop_flag,
       schema_guard,
@@ -360,12 +361,20 @@ int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool
     }
     br->set_is_valid(false);
   } else if (OB_FAIL(get_tenant_compat_mode(table_schema->get_tenant_id(), compat_mode, stop_flag))) {
-    LOG_ERROR("get_tenant_compat_mode fail", KR(ret), "tenant_id", table_schema->get_tenant_id(),
-        "compat_mode", print_compat_mode(compat_mode), KPC(table_schema));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("get_tenant_compat_mode fail", KR(ret), "tenant_id", table_schema->get_tenant_id(),
+          "compat_mode", print_compat_mode(compat_mode), KPC(table_schema));
+    }
   } else {
     share::CompatModeGuard g(compat_mode);
 
-    if (OB_FAIL(set_meta_info_(schema_guard, table_schema, db_schema_info, br, stop_flag))) {
+    if (OB_FAIL(set_meta_info_(
+        dml_stmt_task->get_global_schema_version(),
+        table_schema,
+        db_schema_info,
+        schema_guard,
+        br,
+        stop_flag))) {
       // Failed to get schema, ignore the data
       if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
         LOG_INFO("[IGNORE_DATA] schema error when set_meta_info, tenant may be dropped", KR(ret),
@@ -430,9 +439,8 @@ int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(DmlStmtTask *stmt_task
 {
   int ret = OB_SUCCESS;
   is_ignore = false;
-  ObLogRowDataIndex *row_data_index = NULL;
   ObLogEntryTask *log_entry_task = NULL;
-  bool is_rollback = false;
+  PartTransTask *part_trans_task = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("ObLogFormatter has not been initialized");
@@ -440,38 +448,46 @@ int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(DmlStmtTask *stmt_task
   } else if (OB_ISNULL(stmt_task)) {
     LOG_ERROR("invalid arguments", K(stmt_task));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_ISNULL(row_data_index = &(stmt_task->get_row_data_index()))) {
-    LOG_ERROR("row_data_index is NULL", KPC(stmt_task));
-    ret = OB_INVALID_ARGUMENT;
   } else if (OB_ISNULL(log_entry_task = &(stmt_task->get_redo_log_entry_task()))) {
     LOG_ERROR("log_entry_task is NULL", KPC(stmt_task));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(br_pool_->alloc(false/*is_serilized*/, br, row_data_index, log_entry_task))) {
+  } else if (OB_ISNULL(part_trans_task = static_cast<PartTransTask*>(log_entry_task->get_host()))) {
+    LOG_ERROR("part_trans_task is NULL", K(log_entry_task));
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(br_pool_->alloc(br, log_entry_task))) {
     LOG_ERROR("alloc binlog record from pool fail", KR(ret), K(stmt_task));
   } else if (OB_ISNULL(br)) {
     LOG_ERROR("alloc binlog record fail", K(br));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    is_rollback = row_data_index->is_rollback();
-
     // select ... for update to record T_DML_LOCK log to prevent loss of row lock information on the standby machine in the event of a master/standby switchover, no synchronization required
     if (T_DML_LOCK == stmt_task->get_dml_type()) {
       is_ignore = true;
-    } else if (is_rollback) {
-      is_ignore = true;
     } else {
-      RecordType type = get_record_type(stmt_task->get_dml_type());
+      RecordType record_type = get_record_type(stmt_task->get_dml_type());
       const uint64_t tenant_id = extract_tenant_id(stmt_task->get_host().get_partition().get_table_id());
+      const uint64_t cluster_id = part_trans_task->get_cluster_id();
+      const uint64_t row_index = stmt_task->get_row_index();
+      const ObString &trace_id = part_trans_task->get_trace_id();
+      const ObString &trace_info = part_trans_task->get_trace_info();
+      ObString dml_unique_id;
+      const int64_t schema_version = part_trans_task->get_global_schema_version();
+      const int64_t commit_version = part_trans_task->get_global_trans_version();
 
-      if (OB_FAIL(br->init_dml_data_first(type, tenant_id))) {
-        LOG_ERROR("br init_dml_data_first fail", KR(ret), K(type), K(tenant_id), K(*stmt_task));
+      if (OB_FAIL(init_dml_unique_id_(*stmt_task, *log_entry_task, *part_trans_task, dml_unique_id))) {
+        LOG_ERROR("init_dml_unique_id_ fail", KR(ret), KPC(stmt_task), KPC(log_entry_task), KPC(part_trans_task),
+            K(dml_unique_id));
+      } else if (OB_FAIL(br->init_data(static_cast<RecordType>(record_type), cluster_id, tenant_id,
+              row_index, trace_id, trace_info, dml_unique_id, schema_version, commit_version))) {
+        LOG_ERROR("ObLogBR init_data fail", KR(ret), K(record_type), K(cluster_id), K(tenant_id),
+            K(trace_id), K(trace_info), K(dml_unique_id), K(schema_version), K(commit_version));
       } else {
-        LOG_DEBUG("br init_dml_data succ", KR(ret), K(type), K(tenant_id), K(stmt_task), K(*stmt_task));
+        LOG_DEBUG("br init_data succ", KR(ret), K(record_type), K(tenant_id), K(stmt_task), K(*stmt_task));
       }
     }
 
     if (OB_SUCC(ret)) {
-      row_data_index->set_binlog_record(br);
+      stmt_task->set_binlog_record(br);
     }
   }
 
@@ -507,6 +523,7 @@ int ObLogFormatter::finish_format_(PartTransTask &part_trans_task,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  stop_flag = stop_flag;
 
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
@@ -515,29 +532,26 @@ int ObLogFormatter::finish_format_(PartTransTask &part_trans_task,
     int64_t formatted_stmt_num = redo_log_entry_task.inc_formatted_stmt_num();
     const bool is_all_stmt_formatted = formatted_stmt_num >= stmt_num;
     const uint64_t tenant_id = part_trans_task.get_tenant_id();
+    int64_t row_ref_cnt = 0;
 
     if (is_all_stmt_formatted) {
-      if (OB_FAIL(redo_log_entry_task.link_row_list())) {
+      if (OB_FAIL(redo_log_entry_task.link_row_list(row_ref_cnt))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("redo_log_entry_task link_row_list fail", KR(ret), K(redo_log_entry_task));
         }
       } else {
         LOG_DEBUG("[FORMATT]", K(tenant_id), K(stmt_num), K(redo_log_entry_task), K(part_trans_task));
+        IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
 
-        if (is_memory_working_mode(working_mode_)) {
-          if (OB_FAIL(handle_memory_data_sync_work_mode_(part_trans_task, redo_log_entry_task, stop_flag))) {
+        if (0 == row_ref_cnt) {
+          if (OB_ISNULL(resource_collector)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("resource collector is NULL", KR(ret));
+          } else if (OB_FAIL(resource_collector->revert_log_entry_task(&redo_log_entry_task))) {
             if (OB_IN_STOP_STATE != ret) {
-              LOG_ERROR("handle_memory_data_sync_work_mode_ fail", KR(ret), K(part_trans_task), K(redo_log_entry_task));
+              LOG_ERROR("revert LogEntryTask fail", KR(ret), K(redo_log_entry_task));
             }
-          }
-        } else if (is_storage_working_mode(working_mode_)) {
-          if (OB_FAIL(handle_storage_data_sync_work_mode_(part_trans_task, redo_log_entry_task, stop_flag))) {
-            if (OB_IN_STOP_STATE != ret) {
-              LOG_ERROR("handle_storage_data_sync_work_mode_ fail", KR(ret), K(part_trans_task), K(redo_log_entry_task));
-            }
-          }
-        } else {
-          ret = OB_NOT_SUPPORTED;
+          } else {}
         }
       }
 
@@ -552,66 +566,14 @@ int ObLogFormatter::finish_format_(PartTransTask &part_trans_task,
   return ret;
 }
 
-int ObLogFormatter::handle_memory_data_sync_work_mode_(PartTransTask &part_trans_task,
-    ObLogEntryTask &log_entry_task,
-    volatile bool &stop_flag)
-{
-  int ret = OB_SUCCESS;
-  bool is_unserved_part_trans_task_can_be_recycled = false;
-
-  if (OB_FAIL(part_trans_task.handle_log_entry_task_callback(ObLogEntryTask::FORMATTER_CB,
-      log_entry_task,
-      is_unserved_part_trans_task_can_be_recycled))) {
-    LOG_ERROR("handle_log_entry_task_callback fail", KR(ret), K(log_entry_task), K(part_trans_task), K(stop_flag));
-  } else if (is_unserved_part_trans_task_can_be_recycled) {
-    LOG_DEBUG("handle_log_entry_task_callback: part_trans_task is revert", K(part_trans_task));
-    part_trans_task.revert();
-  } else {}
-
-  return ret;
-}
-
-int ObLogFormatter::handle_storage_data_sync_work_mode_(PartTransTask &part_trans_task,
-    ObLogEntryTask &redo_log_entry_task,
-    volatile bool &stop_flag)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(dispatch_to_storager_(redo_log_entry_task, stop_flag))) {
-    if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("dispatch_to_storager_ fail", KR(ret), K(redo_log_entry_task), K(part_trans_task));
-    }
-  } else {
-    // succ
-  }
-
-  return ret;
-}
-
-int ObLogFormatter::dispatch_to_storager_(ObLogEntryTask &log_entry_task,
-    volatile bool &stop_flag)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(storager_)) {
-    LOG_ERROR("storager_ is NULL");
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    RETRY_FUNC(stop_flag, (*storager_), push, log_entry_task, DATA_OP_TIMEOUT);
-  }
-
-  return ret;
-}
-
 // @retval OB_SUCCESS                  success
 // @retval OB_TENANT_HAS_BEEN_DROPPED  tenant dropped
 // #retval other error code            fail
-int ObLogFormatter::set_meta_info_(ObLogSchemaGuard &schema_guard,
+int ObLogFormatter::set_meta_info_(
+    const int64_t global_schema_version,
     const TableSchemaType *&simple_table_schema,
     const DBSchemaInfo &db_schema_info,
+    ObLogSchemaGuard &schema_guard,
     ObLogBR *br,
     volatile bool &stop_flag)
 {
@@ -630,14 +592,15 @@ int ObLogFormatter::set_meta_info_(ObLogSchemaGuard &schema_guard,
     IDBMeta *db_meta = NULL;
     ITableMeta *table_meta = NULL;
 
-    if (OB_FAIL(meta_manager_->get_table_meta(simple_table_schema, *schema_getter_, table_meta, stop_flag))
+    if (OB_FAIL(meta_manager_->get_table_meta(global_schema_version, simple_table_schema, *schema_getter_, table_meta, stop_flag))
         || NULL == table_meta) {
       if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
         LOG_WARN("schema error when get_table_meta, tenant may by dropped", KR(ret),
+            K(global_schema_version),
             "table_id", simple_table_schema->get_table_id(),
             "table_name", simple_table_schema->get_table_name());
       } else if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("get_table_meta fail", KR(ret), "table_id", simple_table_schema->get_table_id(),
+        LOG_ERROR("get_table_meta fail", KR(ret), K(global_schema_version), "table_id", simple_table_schema->get_table_id(),
             "table_name", simple_table_schema->get_table_name(), KPC(simple_table_schema), K(table_meta));
         ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
       }
@@ -1499,6 +1462,44 @@ int ObLogFormatter::get_schema_(IObLogSchemaGetter *schema_getter,
       // Get database schema information, including name and version
       RETRY_FUNC(stop_flag, schema_guard, get_database_schema_info, db_id, db_schema_info,
           GET_SCHEMA_TIMEOUT);
+    }
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::init_dml_unique_id_(DmlStmtTask &stmt_task,
+    ObLogEntryTask &log_entry_task,
+    PartTransTask &part_trans_task,
+    common::ObString &dml_unique_id)
+{
+  int ret = OB_SUCCESS;
+  const ObString &pkey_and_log_id_str = part_trans_task.get_pkey_and_log_id_str();
+  int32_t log_offset = OB_INVALID_INDEX;
+  const uint64_t row_no = stmt_task.get_row_index();
+
+  if (OB_FAIL(log_entry_task.get_log_offset(log_offset))) {
+    LOG_ERROR("log_entry_task get_log_offset fail", KR(ret), K(log_entry_task), K(log_offset));
+  } else {
+    DmlStmtUniqueID dml_stmt_unique_id(pkey_and_log_id_str, log_offset, row_no);
+
+    if (OB_UNLIKELY(! dml_stmt_unique_id.is_valid())) {
+      LOG_ERROR("dml_stmt_unique_id is not valid", K(dml_stmt_unique_id));
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      common::ObIAllocator &allocator= log_entry_task.get_allocator();
+      const int64_t buf_len = dml_stmt_unique_id.get_dml_unique_id_length();
+      char *buf = static_cast<char*>(allocator.alloc(buf_len));
+      int64_t pos = 0;
+
+      if (OB_ISNULL(buf)) {
+        LOG_ERROR("allocate memory for trans id buffer fail", K(buf));
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else if (OB_FAIL(dml_stmt_unique_id.customized_to_string(buf, buf_len, pos))) {
+        LOG_ERROR("dml_stmt_unique_id customized_to_string fail", KR(ret), K(buf), K(buf_len), K(pos));
+      } else {
+        dml_unique_id.assign_ptr(buf, static_cast<int32_t>(pos));
+      }
     }
   }
 

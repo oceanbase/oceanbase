@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -18,6 +18,7 @@
 #include "ob_log_instance.h"            // IObLogErrHandler
 #include "ob_log_part_trans_parser.h"   // IObLogPartTransParser
 #include "ob_ms_queue_thread.h"         // BitSet
+#include "ob_log_resource_collector.h"  // IObLogResourceCollector
 
 using namespace oceanbase::common;
 
@@ -182,6 +183,8 @@ int ObLogDmlParser::handle(void *data,
 
       if (OB_FAIL(part_trans_parser_->parse(*task, stop_flag))) {
         LOG_ERROR("parse task fail", KR(ret), KPC(task), "compat_mode", print_compat_mode(compat_mode));
+      } else if (OB_FAIL(task->set_redo_log_parsed())) {
+        LOG_ERROR("failed to set log_entry_task parsed", KR(ret), KP(task), KPC(task));
       } else if (OB_FAIL(dispatch_task_(*task, *part_trans_task, stop_flag))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("dispatch_task_ fail", KR(ret), KPC(task), KPC(part_trans_task));
@@ -232,17 +235,18 @@ int ObLogDmlParser::handle_empty_stmt_(ObLogEntryTask &log_entry_task,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-  bool is_unserved_part_trans_task_can_be_recycled = false;
+  IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
 
-  if (OB_FAIL(part_trans_task.handle_log_entry_task_callback(ObLogEntryTask::DML_PARSER_CB,
-      log_entry_task,
-      is_unserved_part_trans_task_can_be_recycled))) {
-    LOG_ERROR("handle_log_entry_task_callback fail", KR(ret), K(log_entry_task),
-        K(is_unserved_part_trans_task_can_be_recycled), K(part_trans_task), K(stop_flag));
-  } else if (is_unserved_part_trans_task_can_be_recycled) {
-    LOG_DEBUG("handle_log_entry_task_callback: part_trans_task is revert", K(part_trans_task));
-    part_trans_task.revert();
-  } else {}
+  if (OB_ISNULL(resource_collector)) {
+    LOG_ERROR("resource_collector is NULL");
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(log_entry_task.set_redo_log_formatted())) {
+    LOG_ERROR("set_redo_log_formatted fail", KR(ret), K(log_entry_task), K(part_trans_task), K(stop_flag));
+  } else if (OB_FAIL(resource_collector->revert_log_entry_task(&log_entry_task))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("revert log_entry_task fail", KR(ret));
+    }
+  }
 
   return ret;
 }

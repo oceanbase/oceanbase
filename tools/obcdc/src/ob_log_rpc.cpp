@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -230,7 +230,7 @@ int ObLogRpc::reload_ssl_config()
             ca_cert = client.get_root_ca().ptr();
             public_cert = client.public_cert_.content_.ptr();
             private_key = client.private_key_.content_.ptr();
-            ssl_key_expired_time = client.private_key_.key_expired_time_;
+            ssl_key_expired_time = client.public_cert_.key_expired_time_;
           }
         }
 

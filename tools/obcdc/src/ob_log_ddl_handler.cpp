@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -45,6 +45,8 @@ using namespace share::schema;
 
 namespace liboblog
 {
+
+int64_t ObLogDDLHandler::g_ddl_data_op_timeout_msec = ObLogConfig::default_ddl_data_op_timeout_msec * _MSEC_;
 
 ////////////////////////////// ObLogDDLHandler::TaskQueue //////////////////////////////
 
@@ -293,6 +295,14 @@ int64_t ObLogDDLHandler::get_part_trans_task_count() const
   return ddl_fetch_queue_.size();
 }
 
+void ObLogDDLHandler::configure(const ObLogConfig &config)
+{
+  int64_t ddl_data_op_timeout_msec = config.ddl_data_op_timeout_msec;
+
+  ATOMIC_STORE(&g_ddl_data_op_timeout_msec, ddl_data_op_timeout_msec * _MSEC_);
+  LOG_INFO("[CONFIG]", K(ddl_data_op_timeout_msec));
+}
+
 void *ObLogDDLHandler::handle_thread_func_(void *arg)
 {
   if (NULL != arg) {
@@ -307,7 +317,7 @@ int ObLogDDLHandler::next_task_(PartTransTask *&task)
 {
   int ret = OB_SUCCESS;
   // Get the next task to be processed
-  RETRY_FUNC(stop_flag_, ddl_fetch_queue_, next_ready_to_handle, DATA_OP_TIMEOUT, task,
+  RETRY_FUNC(stop_flag_, ddl_fetch_queue_, next_ready_to_handle, ATOMIC_LOAD(&g_ddl_data_op_timeout_msec), task,
       wait_formatted_cond_);
 
   // Unconditionally pop out

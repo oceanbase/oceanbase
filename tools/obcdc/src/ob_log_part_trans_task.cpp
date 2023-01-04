@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -25,15 +25,17 @@
 
 #include "ob_log_binlog_record.h"                   // ObLogBR
 #include "ob_log_binlog_record_pool.h"              // ObLogBRPool
-#include "ob_log_row_data_index.h"                  // ObLogRowDataIndex
 #include "ob_log_utils.h"                           // obj2str
 #include "ob_log_common.h"                          // ALL_DDL_OPERATION_TABLE_DDL_STMT_STR_COLUMN_ID
 #include "ob_obj2str_helper.h"                      // ObObj2strHelper
 #include "ob_log_instance.h"                        // TCTX
 #include "ob_log_part_trans_dispatcher.h"           // PartTransDispatcher
 #include "ob_log_config.h"
-#include "ob_log_store_service.h"
-#include "ob_log_resource_collector.h"
+#include "ob_log_part_trans_parser.h"               // IObLogPartTransParser
+#include "ob_log_batch_buffer.h"                    // IObLogBatchBuffer
+#include "ob_log_store_task.h"                      // ObLogStoreTask
+#include "ob_log_factory.h"                         // ObLogStoreTaskFactory ReadLogBufFactory
+#include "ob_log_resource_collector.h"              // IObLogResourceCollector
 
 #define PARSE_INT64(name, obj, val, INVALID_VALUE, check_value) \
     do { \
@@ -656,11 +658,9 @@ int DmlStmtUniqueID::customized_to_string(char* buf, const int64_t buf_len, int6
 
 DmlStmtTask::DmlStmtTask(PartTransTask &host,
     ObLogEntryTask &redo_log_entry_task,
-    ObLogRowDataIndex &row_data_index,
     MutatorRow &row) :
     IStmtTask(STMT_TYPE_DML, host),
     redo_log_entry_task_(redo_log_entry_task),
-    row_data_index_(row_data_index),
     row_(row)
 {
   // set hash value
@@ -676,9 +676,19 @@ void DmlStmtTask::reset()
   row_.reset();
 }
 
+int64_t DmlStmtTask::get_global_schema_version() const
+{
+  return host_.get_global_schema_version();
+}
+
 int64_t DmlStmtTask::get_part_id() const
 {
   return get_host().get_partition().get_partition_id();
+}
+
+int64_t DmlStmtTask::get_row_seq_for_rollback() const
+{
+  return get_row_sql_no();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -705,8 +715,7 @@ DdlStmtTask::DdlStmtTask(PartTransTask &host, MutatorRow &row, const int64_t clu
     ddl_op_database_id_(OB_INVALID_ID),
     ddl_op_tablegroup_id_(OB_INVALID_ID),
     ddl_exec_tenant_id_(OB_INVALID_TENANT_ID),
-    cluster_id_(cluster_id),
-    br_(NULL)
+    cluster_id_(cluster_id)
 {
   // set hash value
   IStmtTask::set_hash_value(row.rowkey_.murmurhash(host.get_partition().hash()));
@@ -1031,7 +1040,6 @@ int DdlStmtTask::build_ddl_binlog_record_(ObLogBR *br,
   int ret = OB_SUCCESS;
   const int64_t global_trans_version = get_host().get_global_trans_version();
   uint64_t cluster_id = get_host().get_cluster_id();
-  const common::ObVersion &freeze_version = get_host().get_freeze_version();
   // DDL tenant_id records the tenant ID of the partition to which it belongs, not the executor tenant ID, to ensure that in schema split
   // scenarios, incremental backup DDLs are not incorrectly distributed to the tenant to which they belong, causing loci to get stuck
   const uint64_t tenant_id = get_host().get_tenant_id();
@@ -1048,11 +1056,11 @@ int DdlStmtTask::build_ddl_binlog_record_(ObLogBR *br,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(init_ddl_unique_id_(ddl_unique_id))) {
     LOG_ERROR("init_ddl_unique_id_ fail", KR(ret), K(ddl_unique_id));
-  } else if (OB_FAIL(br->init_data(EDDL, cluster_id, tenant_id, ddl_op_schema_version_,
-          trace_id, trace_info, ddl_unique_id, freeze_version, global_trans_version,
+  } else if (OB_FAIL(br->init_data(EDDL, cluster_id, tenant_id, row_index,
+          trace_id, trace_info, ddl_unique_id, ddl_op_schema_version_, global_trans_version,
           part_trans_task_count))) {
     LOG_ERROR("ObLogBR::init_data EDDL fail", KR(ret), K(global_trans_version),
-        K(cluster_id), K(freeze_version), K(tenant_id), K(ddl_op_schema_version_),
+        K(cluster_id), K(tenant_id), K(ddl_op_schema_version_),
         K(trace_id), K(trace_info), K(ddl_unique_id), K(part_trans_task_count));
   } else if (OB_ISNULL(br_data = (br->get_data()))) {
     LOG_ERROR("get binlog record data fail", K(br));
@@ -1248,12 +1256,11 @@ void DdlStmtTask::reset()
 
 ObLogEntryTask::ObLogEntryTask() :
     host_(NULL),
+    participant_(NULL),
     partition_(),
     trans_id_(),
-    log_id_(OB_INVALID_ID),
-    log_offset_(0),
-    meta_node_(NULL),
-    redo_node_(),
+    redo_node_(NULL),
+    is_big_row_(false),
     stmt_list_(),
     formatted_stmt_num_(0),
     row_ref_cnt_(0),
@@ -1269,12 +1276,11 @@ ObLogEntryTask::~ObLogEntryTask()
 void ObLogEntryTask::reset()
 {
   host_ = NULL;
+  participant_ = NULL;
   partition_.reset();
   trans_id_.reset();
-  log_id_ = OB_INVALID_ID;
-  log_offset_ = 0;
-  meta_node_ = NULL;
-  redo_node_.reset();
+  redo_node_ = NULL;
+  is_big_row_ = false;
   stmt_list_.reset();
   formatted_stmt_num_ = 0;
   row_ref_cnt_ = 0;
@@ -1286,41 +1292,27 @@ bool ObLogEntryTask::is_valid() const
 {
   bool bool_ret = false;
 
-  bool_ret = (NULL != meta_node_)
-    && (meta_node_->is_valid())
-    && (redo_node_.is_valid());
+  bool_ret = (NULL != redo_node_)
+    && (redo_node_->is_valid());
 
   return bool_ret;
 }
 
 int ObLogEntryTask::init(const common::ObPartitionKey &pkey,
+    const char *participant,
     const transaction::ObTransID &trans_id,
-    const uint64_t log_id,
-    const int32_t log_offset,
-    DmlRedoLogMetaNode *meta_node,
-    char *mutator_row_data,
-    const int64_t mutator_row_size,
-    const int64_t redo_data_size)
+    DmlRedoLogNode *redo_node)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(OB_INVALID_ID == log_id)
-      || OB_UNLIKELY(log_offset < 0)
-      || OB_ISNULL(meta_node)
-      || OB_ISNULL(mutator_row_data)
-      || OB_UNLIKELY(mutator_row_size <=0)
-      || OB_UNLIKELY(redo_data_size <=0)) {
-    LOG_ERROR("invalid argument", K(log_id), K(log_offset), K(mutator_row_data), K(mutator_row_size),
-        K(redo_data_size));
+  if (OB_ISNULL(redo_node)) {
+    LOG_ERROR("invalid argument", K(redo_node));
     ret = OB_INVALID_ARGUMENT;
   } else {
     partition_ = pkey;
+    participant_ = participant;
     trans_id_ = trans_id;
-    log_id_ = log_id;
-    log_offset_ = log_offset;
-    meta_node_ = meta_node;
-
-    redo_node_.reset(mutator_row_data, mutator_row_size, redo_data_size);
+    redo_node_ = redo_node;
 
     LOG_DEBUG("LogEntryTask init", K(this), KPC(this));
   }
@@ -1328,27 +1320,99 @@ int ObLogEntryTask::init(const common::ObPartitionKey &pkey,
   return ret;
 }
 
-int ObLogEntryTask::append_redo_log(const int64_t log_no,
-    const uint64_t log_id,
-    const char *redo_data,
-    const int64_t redo_data_size)
+int ObLogEntryTask::get_status(bool &is_stored)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(meta_node_)) {
-    LOG_ERROR("meta_node_ is NULL");
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_UNLIKELY(! meta_node_->is_valid())
-      || OB_UNLIKELY(! redo_node_.is_valid())) {
-    LOG_ERROR("meta_node_ or redo_node_ is not valid", KPC(meta_node_), K(redo_node_));
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(meta_node_->update_redo_meta(log_no, log_id))) {
-    LOG_ERROR("meta_node_ update_redo_meta fail", KR(ret), K(log_no), K(log_id));
-  } else if (OB_FAIL(redo_node_.append_redo_log(redo_data, redo_data_size))) {
-    LOG_ERROR("redo node append data fail", KR(ret), K(redo_node_), K(log_no), K(log_id),
-        K(redo_data_size));
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("invalid redo_node", K(redo_node_));
+    ret = OB_INVALID_DATA;
   } else {
-    // succ
+    is_stored = redo_node_->is_stored();
+  }
+
+  return ret;
+}
+
+int ObLogEntryTask::get_storage_key(std::string &key)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("invalid redo_node", K(redo_node_));
+    ret = OB_INVALID_DATA;
+  } else if (OB_ISNULL(participant_)) {
+    LOG_ERROR("invalid argument");
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    uint64_t store_log_id = redo_node_->get_store_log_id();
+    int32_t log_offset = redo_node_->get_log_offset();
+
+    key.append(participant_);
+    key.append("_");
+    key.append(std::to_string(store_log_id));
+    key.append("_");
+    key.append(std::to_string(log_offset));
+  }
+
+  return ret;
+}
+
+int ObLogEntryTask::get_log_id(uint64_t &log_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("invalid redo_node", K(redo_node_));
+    ret = OB_INVALID_DATA;
+  } else {
+    log_id = redo_node_->get_store_log_id();
+  }
+
+  return ret;
+}
+
+int ObLogEntryTask::get_log_offset(int32_t &log_offset)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("invalid redo_node", K(redo_node_));
+    ret = OB_INVALID_DATA;
+  } else {
+    log_offset = redo_node_->get_log_offset();
+  }
+
+  return ret;
+}
+
+int ObLogEntryTask::get_data_len(int64_t &data_len)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("invalid redo_node", K(redo_node_));
+    ret = OB_INVALID_DATA;
+  } else {
+    data_len = redo_node_->get_data_len();
+  }
+
+  return ret;
+}
+
+int ObLogEntryTask::set_data_and_readed_status(bool is_big_row, char *data, int64_t data_len)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("invalid redo_node", K(redo_node_));
+    ret = OB_INVALID_DATA;
+  } else if (OB_FAIL(redo_node_->set_data_info(data, data_len))) {
+    LOG_ERROR("redo_node_ set_data_info failed", KR(ret), K(data), K(data_len));
+  } else {
+    // Firset set_data_info, then set is_readed status
+    redo_node_->set_readed();
+    is_big_row_ = is_big_row;
   }
 
   return ret;
@@ -1365,10 +1429,43 @@ void *ObLogEntryTask::alloc(const int64_t size)
   return alloc_ret;
 }
 
+// NOTE: For ObArenaAllocator: virtual void free(void *ptr) do nothing
 void ObLogEntryTask::free(void *ptr)
 {
   arena_allocator_.free(ptr);
   ptr = NULL;
+}
+
+int ObLogEntryTask::rc_callback()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("invalid redo_node", K(redo_node_));
+    ret = OB_INVALID_DATA;
+  } else {
+    const bool is_stored = redo_node_->is_stored();
+
+    if (is_stored) {
+      if (is_big_row_) {
+        // big row
+        char *data = redo_node_->get_data();
+
+        if (OB_ISNULL(data)) {
+          LOG_ERROR("data is NULL");
+          ret = OB_ERR_UNEXPECTED;
+        } else {
+          ob_free(data);
+          data = NULL;
+        }
+      } else {
+      }
+    } else {
+      // data is in memory, do nothing
+    }
+  }
+
+  return ret;
 }
 
 int ObLogEntryTask::add_stmt(const uint64_t row_index, IStmtTask *stmt_task)
@@ -1388,40 +1485,145 @@ int ObLogEntryTask::add_stmt(const uint64_t row_index, IStmtTask *stmt_task)
   return ret;
 }
 
+// The DML STMT is incremented strictly according to SQL_NO/SEQ_NO. We only need to find the first statement greater than SQL_NO/SEQ_NO and rollback that statement and subsequent statements
+int ObLogEntryTask::revert_by_rollback_savepoint(const uint64_t current_log_id,
+    const uint64_t rollback_log_id,
+    const uint64_t row_index,
+    const int64_t rollback_no)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(revert_dml_stmt_(current_log_id, rollback_log_id, rollback_no))) {
+    LOG_ERROR("revert_dml_stmt_ fail", KR(ret), K(row_index), K(rollback_no));
+  }
+
+  return ret;
+}
+
+// TODO Later optimization: rollback List supports sorting by LogID to speed up rollback
+int ObLogEntryTask::revert_by_rollback_savepoints(const uint64_t current_log_id,
+    const RollbackList &rollback_list)
+{
+  int ret = OB_SUCCESS;
+  RollbackNode *rollback_node = rollback_list.head_;
+
+  while (NULL != rollback_node) {
+    uint64_t rollback_log_id = rollback_node->get_log_id();
+    const common::ObArray<int64_t>& rollback_seqs = rollback_node->get_rollback_seqs();
+
+    if (rollback_log_id <= current_log_id) {
+      // rollback_log_id < current_log_id: we can not rollback
+      // rollback_log_id == current_log_id: we hava rollbacked based on
+      // revert_by_rollback_savepoint(const uint64_t, const int64_t) API
+    } else {
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < rollback_seqs.size(); idx++) {
+        const int64_t rollback_no = rollback_seqs[idx];
+
+        if (OB_FAIL(revert_dml_stmt_(current_log_id, rollback_log_id, rollback_no))) {
+          LOG_ERROR("revert_dml_stmt_ fail", KR(ret), K(rollback_no));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      rollback_node = static_cast<RollbackNode *>(rollback_node->next_);
+    }
+  }
+
+  return ret;
+}
+
+int ObLogEntryTask::revert_dml_stmt_(const uint64_t current_log_id,
+    const uint64_t rollback_log_id,
+    const int64_t rollback_no)
+{
+  int ret = OB_SUCCESS;
+  const int64_t total_stmt_num = stmt_list_.num_;
+  int64_t stmt_num = 0;
+  bool found = false;
+  IStmtTask *stmt_task = stmt_list_.head_;
+  IStmtTask *pre_task = NULL;
+
+  while (OB_SUCC(ret) && NULL != stmt_task && !found) {
+    DmlStmtTask *dml_task = dynamic_cast<DmlStmtTask *>(stmt_task);
+
+    if (OB_ISNULL(dml_task)) {
+      LOG_ERROR("dynamic cast to DmlStmtTask fail", K(stmt_task), K(dml_task));
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      const int64_t stmt_no = dml_task->get_row_seq_for_rollback();
+      // Statement that SQL_NO/SEQ_NO is less thean or equal to SQL_NO/SEQ_NO by rollback savepoint is not processed
+      if (stmt_no <= rollback_no) {
+        pre_task = stmt_task;
+        stmt_num++;
+        stmt_task = stmt_task->get_next();
+      } else {
+        found = true;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && found) {
+    if (NULL == pre_task) {
+      stmt_list_.head_ = NULL;
+      stmt_list_.tail_ = NULL;
+    } else {
+      pre_task->set_next(NULL);
+      stmt_list_.tail_ = pre_task;
+    }
+    stmt_list_.num_ = stmt_num;
+
+    while (OB_SUCC(ret) && NULL != stmt_task) {
+      DmlStmtTask *dml_task = dynamic_cast<DmlStmtTask *>(stmt_task);
+      if (OB_ISNULL(dml_task)) {
+        LOG_ERROR("dynamic cast to DmlStmtTask fail", K(stmt_task), K(dml_task));
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        stmt_task = stmt_task->get_next();
+        dml_task->~DmlStmtTask();
+        free(dml_task);
+        dml_task = NULL;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    _LOG_INFO("[SAVEPOINT][DML] PART_TRANS=%s/%s CUR_LOG_ID=%ld ROLLBACK[LOG_ID=%ld SEQ=%ld] STMT_CNT=%ld/%ld",
+        participant_, to_cstring(trans_id_), current_log_id, rollback_log_id, rollback_no, total_stmt_num, stmt_num);
+  }
+
+  return ret;
+}
+
 int64_t ObLogEntryTask::inc_formatted_stmt_num()
 {
   return ATOMIC_AAF(&formatted_stmt_num_, 1);
 }
 
-int ObLogEntryTask::link_row_list()
+int ObLogEntryTask::link_row_list(int64_t &row_ref_cnt)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(meta_node_)) {
-    LOG_ERROR("meta_node_ is NULL", KPC(meta_node_));
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("redo_node is NULL", KPC(redo_node_));
     ret = OB_ERR_UNEXPECTED;
   } else {
     DmlStmtTask *stmt_task = static_cast<DmlStmtTask *>(stmt_list_.head_);
-    meta_node_->valid_row_num_ = 0;
+    redo_node_->set_valid_row_num(0);
 
-    while (OB_SUCCESS == ret && NULL != stmt_task) {
+    while (OB_SUCC(ret) && NULL != stmt_task) {
       DmlStmtTask *next_stmt = static_cast<DmlStmtTask *>(stmt_task->get_next());
-      ObLogRowDataIndex &row_data_index = stmt_task->get_row_data_index();
-      ObLogBR *br = row_data_index.get_binlog_record();
-      const bool is_rollback_stmt = row_data_index.is_rollback();
+      ObLogBR *br = stmt_task->get_binlog_record();
       bool need_link = true;
 
-      if (is_rollback_stmt) {
-        meta_node_->is_contain_rollback_row_ = true;
-        LOG_DEBUG("handle rollback stmt", K(meta_node_), K(is_rollback_stmt), K(row_data_index));
-      } else if (OB_ISNULL(br)) {
-        LOG_ERROR("binlog record in statement is invalid", K(row_data_index), KPC(stmt_task), K(br));
+      if (OB_ISNULL(br)) {
+        LOG_ERROR("binlog record in statement is invalid", KPC(stmt_task), K(br));
         ret = OB_ERR_UNEXPECTED;
       } else if (! br->is_valid()) {
         // ignore invalid br
         need_link = false;
         // recycle Binlog Record
-        LOG_DEBUG("br is not valid", K(*this), "valid_row_num", meta_node_->valid_row_num_);
+        LOG_DEBUG("br is not valid", K(*this), "valid_row_num", redo_node_->get_valid_row_num());
 
         if (OB_FAIL(revert_binlog_record_(br))) {
           if (OB_IN_STOP_STATE != ret) {
@@ -1435,24 +1637,32 @@ int ObLogEntryTask::link_row_list()
       }
 
       if (OB_SUCC(ret) && need_link) {
-        meta_node_->valid_row_num_++;
-        row_data_index.set_next(NULL);
+        redo_node_->inc_valid_row_num();
+        stmt_task->set_next(NULL);
 
-        if (NULL == meta_node_->row_head_) {
-          meta_node_->row_head_ = &row_data_index;
-          meta_node_->row_tail_ = &row_data_index;
+        if (NULL == redo_node_->get_row_head()) {
+          redo_node_->set_row_head(stmt_task);
+          redo_node_->set_row_tail(stmt_task);
         } else {
-          meta_node_->row_tail_->set_next(&row_data_index);
-          meta_node_->row_tail_ = &row_data_index;
+          redo_node_->get_row_tail()->next_ = stmt_task;
+          redo_node_->set_row_tail(stmt_task);
         }
       }
 
-      if (OB_SUCCESS == ret) {
+      if (OB_SUCC(ret)) {
         stmt_task = next_stmt;
       }
     } // while
 
-    set_row_ref_cnt(meta_node_->valid_row_num_);
+    if (OB_SUCC(ret)) {
+      // Note: First set ref count before set formatted status, to avoid Sortter has get Dml Stmt
+      set_row_ref_cnt(redo_node_->get_valid_row_num());
+      row_ref_cnt = row_ref_cnt_;
+
+      if (OB_FAIL(set_redo_log_formatted())) {
+        LOG_ERROR("set_redo_log_formatted fail", KR(ret));
+      }
+    }
   }
 
   return ret;
@@ -1481,15 +1691,43 @@ int ObLogEntryTask::revert_binlog_record_(ObLogBR *br)
   return ret;
 }
 
+int ObLogEntryTask::set_redo_log_parsed()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("redo_node is NULL", KPC(redo_node_));
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    redo_node_->set_parsed();
+  }
+
+  return ret;
+}
+
+int ObLogEntryTask::set_redo_log_formatted()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("redo_node is NULL", KPC(redo_node_));
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    redo_node_->set_formatted();
+  }
+
+  return ret;
+}
+
 int ObLogEntryTask::get_valid_row_num(int64_t &valid_row_num)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(meta_node_)) {
-    LOG_ERROR("meta_node_ is NULL", KPC(meta_node_));
+  if (OB_ISNULL(redo_node_)) {
+    LOG_ERROR("redo_node_ is NULL", KPC(redo_node_));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    valid_row_num = meta_node_->get_valid_row_num();
+    valid_row_num = redo_node_->get_valid_row_num();
   }
 
   return ret;
@@ -1503,46 +1741,6 @@ int64_t ObLogEntryTask::dec_row_ref_cnt()
 void ObLogEntryTask::set_row_ref_cnt(const int64_t row_ref_cnt)
 {
   (void)ATOMIC_SET(&row_ref_cnt_, row_ref_cnt);
-}
-
-const char *ObLogEntryTask::print_callback_module(const CallBackModule cb)
-{
-  const char *str = "NONE";
-
-  switch(cb) {
-    case DML_PARSER_CB:
-      str = "DmlParserCallback";
-      break;
-
-    case FORMATTER_CB:
-      str = "FormatterCallback";
-      break;
-
-    case STORAGER_CB:
-      str = "StoragerCallback";
-      break;
-
-    default:
-      str = "NONE";
-      break;
-  }
-
-  return str;
-}
-
-bool ObLogEntryTask::is_dml_parser(const CallBackModule cb)
-{
-  return DML_PARSER_CB == cb;
-}
-
-bool ObLogEntryTask::is_formatter(const CallBackModule cb)
-{
-  return FORMATTER_CB == cb;
-}
-
-bool ObLogEntryTask::is_storager(const CallBackModule cb)
-{
-  return STORAGER_CB == cb;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -1560,17 +1758,18 @@ PartTransTask::PartTransTask() :
     trans_id_str_(),
     prepare_log_id_(OB_INVALID_ID),
     cluster_id_(0),
-    freeze_version_(),
+    cluster_version_(0),
     pkey_and_log_id_str_(),
     row_no_(0),
     sorted_redo_list_(),
-    sorted_dml_row_list_(),
-    log_entry_task_(NULL),
+    big_row_dml_redo_node_(),
+    rollback_list_(),
     global_trans_version_(OB_INVALID_VERSION),
     is_trans_committed_(false),
     is_trans_ready_to_commit_(false),
     checkpoint_seq_(0),
     global_trans_seq_(0),
+    global_schema_version_(OB_INVALID_VERSION),
     participants_(NULL),
     participant_count_(0),
     local_schema_version_(OB_INVALID_VERSION),
@@ -1581,13 +1780,13 @@ PartTransTask::PartTransTask() :
     is_data_ready_(false),
     wait_formatted_cond_(NULL),
     wait_data_ready_cond_(),
-    dml_ready_redo_node_num_(0),
     allocator_(),
     trace_id_(),
     trace_info_(),
     prev_trans_arr_(),
     follow_trans_arr_(),
-    reserve_field_(0)
+    reserve_field_(0),
+    output_br_count_by_turn_(0)
 {
 }
 
@@ -1688,17 +1887,18 @@ void PartTransTask::reset()
   trans_id_str_.reset();
   prepare_log_id_ = OB_INVALID_ID;
   cluster_id_ = 0;
-  freeze_version_.reset();
+  cluster_version_ = 0;
   pkey_and_log_id_str_.reset();
   row_no_ = 0;
   sorted_redo_list_.reset();
-  sorted_dml_row_list_.reset();
-  log_entry_task_ = NULL;
+  big_row_dml_redo_node_.reset();
+  rollback_list_.reset();
   global_trans_version_ = OB_INVALID_VERSION;
   is_trans_committed_ = false;
   is_trans_ready_to_commit_ = false;
   checkpoint_seq_ = 0;
   global_trans_seq_ = 0;
+  global_schema_version_ = OB_INVALID_VERSION;
   participants_ = NULL;
   participant_count_ = 0;
 
@@ -1711,7 +1911,6 @@ void PartTransTask::reset()
   ref_cnt_ = 0;
   is_data_ready_ = false;
   wait_formatted_cond_ = NULL;
-  dml_ready_redo_node_num_ = 0;
 
   // The trace_id memory does not need to be freed separately, the allocator frees it all together
   trace_id_.reset();
@@ -1723,6 +1922,7 @@ void PartTransTask::reset()
   // reuse memory
   allocator_.reset();
   reserve_field_ = 0;
+  output_br_count_by_turn_ = 0;
 }
 
 int PartTransTask::push_redo_log(const common::ObPartitionKey &pkey,
@@ -1732,16 +1932,14 @@ int PartTransTask::push_redo_log(const common::ObPartitionKey &pkey,
     const int32_t log_offset,
     const int64_t tstamp,
     const char *buf,
-    const int64_t buf_len,
-    bool &need_dispatch_log_entry_task,
-    ObLogEntryTask *&redo_log_entry_task)
+    const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   ObMemtableMutatorMeta meta;
   int64_t pos = 0;
   const bool is_ddl_part = is_ddl_partition(pkey);
-  need_dispatch_log_entry_task = false;
-  redo_log_entry_task = NULL;
+  const uint64_t tenant_id = pkey.get_tenant_id();
+  const bool need_store_data = need_store_data_();
 
   if (OB_UNLIKELY(log_no < 0)
       || OB_UNLIKELY(OB_INVALID_ID == log_id)
@@ -1770,7 +1968,7 @@ int PartTransTask::push_redo_log(const common::ObPartitionKey &pkey,
 
     if (meta.is_row_start()) {
       // If it is the start of a row, a new redo node is generated
-      if (OB_FAIL(push_redo_on_row_start_(trans_id, meta, log_no, log_id, log_offset, redo_data, redo_data_size))) {
+      if (OB_FAIL(push_redo_on_row_start_(need_store_data, trans_id, meta, log_no, log_id, log_offset, redo_data, redo_data_size))) {
         if (OB_ENTRY_EXIST == ret) {
           // redo log duplicate
         } else {
@@ -1792,32 +1990,97 @@ int PartTransTask::push_redo_log(const common::ObPartitionKey &pkey,
       }
     }
 
+    // TODO AUTO mode
     if (OB_SUCC(ret)) {
-      // 1. DML data, a redo data aggregation will be dispatched
-      // 2. duplicate redo logs won't dispatch
-      if (! is_ddl_part) {
-        if (ObTransRowFlag::is_normal_row(row_flags) || ObTransRowFlag::is_big_row_end(row_flags)) {
-          if (OB_ISNULL(log_entry_task_)) {
-            LOG_ERROR("log_entry_task_ is NULL", K(partition_), K(trans_id_), K(log_entry_task_));
-            ret = OB_ERR_UNEXPECTED;
-          } else {
-            redo_log_entry_task = log_entry_task_;
-            need_dispatch_log_entry_task = true;
-            // reset log_entry_task_
-            log_entry_task_ = NULL;
+      uint64_t store_log_id = OB_INVALID_ID;
+      int32_t store_log_offset = -1;
+      const char *data_buf = NULL;
+      int64_t data_len = 0;
+      bool is_row_completed = true;
+      DmlRedoLogNode *big_row_redo = NULL;
 
-            const bool is_test_mode_on = TCONF.test_mode_on != 0;
-            if (is_test_mode_on) {
-              LOG_INFO("LogEntryTask-alloc", "LogEntryTask", *redo_log_entry_task);
-            }
+      if (! is_ddl_part) {
+        if (ObTransRowFlag::is_normal_row(row_flags)) {
+          store_log_id = log_id;
+          store_log_offset = log_offset;
+          data_buf = redo_data;
+          data_len = redo_data_size;
+        } else if (ObTransRowFlag::is_big_row_end(row_flags)) {
+          if (need_store_data) {
+            big_row_redo = &big_row_dml_redo_node_;
+          } else {
+            big_row_redo = static_cast<DmlRedoLogNode*>(sorted_redo_list_.last_push_node_);
           }
+          if (OB_ISNULL(big_row_redo)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("big_row_redo is NULL", KR(ret), K(need_store_data), K(big_row_redo), K(sorted_redo_list_));
+          } else if (OB_UNLIKELY(! big_row_redo->is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("big_row_redo_ is not valid", KR(ret), KPC(big_row_redo));
+          } else {
+            store_log_id = big_row_redo->get_store_log_id();
+            store_log_offset = big_row_redo->get_log_offset();
+            data_buf = big_row_redo->get_data();
+            data_len = big_row_redo->get_data_len();
+          }
+        } else {
+          is_row_completed = false;
         }
+
+        if (OB_SUCC(ret) && is_row_completed) {
+          if (1 == TCONF.skip_parse_rollback_savepoint) {
+          } else if (OB_FAIL(parse_rollback_savepoint_(store_log_id, store_log_offset, data_buf, data_len))) {
+            LOG_ERROR("parse_rollback_savepoint_ fail", KR(ret), K(store_log_id), K(store_log_offset));
+          } else {}
+        } // have_savepoint
+
+        // 1. DML data, a redo data aggregation will be dispatched
+        // 2. duplicate redo logs won't dispatch
+        if (OB_SUCC(ret) && need_store_data && is_row_completed) {
+          if (OB_FAIL(get_and_submit_store_task_(tenant_id, row_flags, store_log_id, store_log_offset,
+                  data_buf, data_len))) {
+            LOG_ERROR("get_and_submit_store_task_ fail", KR(ret), K(tenant_id), K(row_flags),
+                K(store_log_id), K(store_log_offset));
+          }
+        } // need_store_data
       }
     }
   }
 
   LOG_DEBUG("push redo log", KR(ret), K(is_ddl_part), K(pkey), K(log_no), K(log_id), K(tstamp), K(buf_len), K(meta),
-      K(trans_id), K(redo_log_entry_task), KPC(redo_log_entry_task), K(sorted_redo_list_));
+      K(trans_id), K(sorted_redo_list_));
+
+  return ret;
+}
+
+bool PartTransTask::need_store_data_() const
+{
+  bool bool_ret = false;
+  const WorkingMode working_mode = TCTX.working_mode_;
+
+  if (is_memory_working_mode(working_mode)) {
+    bool_ret = false;
+  } else if (is_storage_working_mode(working_mode)) {
+    bool_ret = true;
+  } else {
+    // TODO AUTO MODE
+  }
+
+  return bool_ret;
+}
+
+int PartTransTask::free_big_row_()
+{
+  int ret = OB_SUCCESS;
+  char *data = big_row_dml_redo_node_.get_data();
+
+  if (OB_ISNULL(data)) {
+    LOG_ERROR("data is NULL", K(big_row_dml_redo_node_));
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ob_free(data);
+    big_row_dml_redo_node_.reset();
+  }
 
   return ret;
 }
@@ -1842,7 +2105,8 @@ int PartTransTask::init_trans_id_info_(const common::ObPartitionKey &pkey,
   return ret;
 }
 
-int PartTransTask::push_redo_on_row_start_(const transaction::ObTransID &trans_id,
+int PartTransTask::push_redo_on_row_start_(const bool need_store_data,
+    const transaction::ObTransID &trans_id,
     const ObMemtableMutatorMeta &meta,
     const int64_t log_no,
     const uint64_t log_id,
@@ -1863,7 +2127,7 @@ int PartTransTask::push_redo_on_row_start_(const transaction::ObTransID &trans_i
       }
     }
   } else {
-    if (OB_FAIL(push_dml_redo_on_row_start_(trans_id, meta, log_no, log_id, log_offset, redo_data, redo_data_size,
+    if (OB_FAIL(push_dml_redo_on_row_start_(need_store_data, meta, log_no, log_id, log_offset, redo_data, redo_data_size,
             mutator_row_size))) {
       if (OB_ENTRY_EXIST != ret) {
         LOG_ERROR("push_dml_redo_on_row_start_ fail", KR(ret), K(trans_id), K(meta), K(log_no), K(log_id),
@@ -1902,7 +2166,7 @@ int PartTransTask::push_ddl_redo_on_row_start_(const ObMemtableMutatorMeta &meta
     node->reset(log_no, log_id, mutator_row_data, mutator_row_size, redo_data_size);
 
     // Push to redo list
-    if (OB_FAIL(sorted_redo_list_.push(node))) {
+    if (OB_FAIL(sorted_redo_list_.push(true/*is_data_in_memory*/, node))) {
       if (OB_ENTRY_EXIST == ret) {
         // redo log duplicate
       } else {
@@ -1927,7 +2191,7 @@ int PartTransTask::push_ddl_redo_on_row_start_(const ObMemtableMutatorMeta &meta
   return ret;
 }
 
-int PartTransTask::push_dml_redo_on_row_start_(const transaction::ObTransID &trans_id,
+int PartTransTask::push_dml_redo_on_row_start_(const bool need_store_data,
     const memtable::ObMemtableMutatorMeta &meta,
     const int64_t log_no,
     const uint64_t log_id,
@@ -1937,45 +2201,55 @@ int PartTransTask::push_dml_redo_on_row_start_(const transaction::ObTransID &tra
     const int64_t mutator_row_size)
 {
   int ret = OB_SUCCESS;
-  ObLogEntryTask *redo_log_entry_task = NULL;
   char *mutator_row_data = NULL;
-  DmlRedoLogMetaNode *meta_node = NULL;
+  DmlRedoLogNode *meta_node = NULL;
+  const uint8_t row_flags = meta.get_flags();
 
-  if (OB_ISNULL(meta_node = static_cast<DmlRedoLogMetaNode *>(allocator_.alloc(sizeof(DmlRedoLogMetaNode))))) {
-    LOG_ERROR("allocate memory for DmlRedoLogMetaNode fail", "size", sizeof(DmlRedoLogMetaNode));
+  if (OB_ISNULL(meta_node = static_cast<DmlRedoLogNode *>(allocator_.alloc(sizeof(DmlRedoLogNode))))) {
+    LOG_ERROR("allocate memory for DmlRedoLogNode fail", "size", sizeof(DmlRedoLogNode));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    // reset redo log meta node
-    meta_node->reset(log_no, log_id);
-
-    // Push to redo list
-    if (OB_FAIL(sorted_redo_list_.push(meta_node))) {
-      if (OB_ENTRY_EXIST == ret) {
-        // redo log duplicate]
+    if (! need_store_data) {
+      // The allocator of PartTransTask alloc memory
+      if (OB_ISNULL(mutator_row_data = static_cast<char *>(allocator_.alloc(mutator_row_size)))) {
+        LOG_ERROR("allocate memory for mutator row data fail", K(mutator_row_size), K(meta));
+        ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        LOG_ERROR("push node into redo log list fail", KR(ret), K(sorted_redo_list_), KPC(meta_node));
+        // Fill the data carried in this redo log
+        (void)MEMCPY(mutator_row_data, redo_data, redo_data_size);
+
+        meta_node->init_for_data_memory(log_no, log_id, log_offset, mutator_row_data, mutator_row_size, redo_data_size);
+      }
+    } else {
+      // need store
+      // reset redo log meta node
+      meta_node->init_for_data_persistence(log_no, log_id, log_offset, mutator_row_size);
+
+      // For big row, save the memory in temp DmlRedoLogNode
+      if (ObTransRowFlag::is_big_row_start(row_flags)) {
+        if (OB_ISNULL(mutator_row_data = static_cast<char *>(ob_malloc(mutator_row_size, "CDCBigRowMut")))) {
+          LOG_ERROR("allocate memory for mutator row data fail", K(mutator_row_size), K(meta));
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          // Fill the data carried in this redo
+          (void)MEMCPY(mutator_row_data, redo_data, redo_data_size);
+
+          big_row_dml_redo_node_.init_for_data_memory(log_no, log_id, log_offset,
+              mutator_row_data, mutator_row_size, redo_data_size);
+        }
+      } else {
+        // do nothing
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(get_log_entry_task_(redo_log_entry_task))) {
-      LOG_ERROR("get_log_entry_task_ fail", KR(ret), KPC(redo_log_entry_task));
-    } else if (OB_ISNULL(mutator_row_data = static_cast<char *>(redo_log_entry_task->alloc(mutator_row_size)))) {
-      LOG_ERROR("allocate memory for mutator row data fail", K(mutator_row_size), K(meta));
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else {
-      // Fill the data carried in this redo
-      (void)MEMCPY(mutator_row_data, redo_data, redo_data_size);
-
-      if (OB_FAIL(redo_log_entry_task->init(partition_, trans_id, log_id, log_offset, meta_node,
-              mutator_row_data, mutator_row_size, redo_data_size))) {
-        LOG_ERROR("redo_log_entry_task init fail", KR(ret), KPC(redo_log_entry_task));
-      } else if (OB_UNLIKELY(NULL != log_entry_task_)) {
-        LOG_ERROR("log_entry_task_ is not NULL, unexcepted", KPC(log_entry_task_));
-        ret = OB_ERR_UNEXPECTED;
+    // Push to redo list
+    if (OB_FAIL(sorted_redo_list_.push(! need_store_data/*is_data_in_memory*/, meta_node))) {
+      if (OB_ENTRY_EXIST == ret) {
+        // redo log duplicate]
       } else {
-        log_entry_task_ = redo_log_entry_task;
+        LOG_ERROR("push node into redo log list fail", KR(ret), K(sorted_redo_list_), KPC(meta_node));
       }
     }
   }
@@ -1986,27 +2260,13 @@ int PartTransTask::push_dml_redo_on_row_start_(const transaction::ObTransID &tra
       allocator_.free(meta_node);
       meta_node = NULL;
     }
-  }
 
-  return ret;
-}
-
-int PartTransTask::get_log_entry_task_(ObLogEntryTask *&log_entry_task)
-{
-  int ret = OB_SUCCESS;
-  log_entry_task = NULL;
-  IObLogEntryTaskPool *log_entry_task_pool = TCTX.log_entry_task_pool_;
-
-  if (OB_ISNULL(log_entry_task_pool)) {
-    LOG_ERROR("log_entry_task_pool_ is NULL");
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(log_entry_task_pool->alloc(log_entry_task, this))) {
-    LOG_ERROR("log_entry_task_pool_ alloc fail", KR(ret), KPC(log_entry_task), KPC(this));
-  } else if (OB_ISNULL(log_entry_task)) {
-    LOG_ERROR("log_entry_task is NULL", KPC(log_entry_task), KPC(this));
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    // succ
+    if (ObTransRowFlag::is_big_row_start(row_flags)) {
+      if (NULL != mutator_row_data) {
+        ob_free(mutator_row_data);
+        mutator_row_data = NULL;
+      }
+    }
   }
 
   return ret;
@@ -2081,7 +2341,7 @@ int PartTransTask::push_dml_redo_on_not_row_start_(const memtable::ObMemtableMut
     const int64_t redo_data_size)
 {
   int ret = OB_SUCCESS;
-  DmlRedoLogMetaNode *last_redo = static_cast<DmlRedoLogMetaNode *>(sorted_redo_list_.last_push_node_);
+  DmlRedoLogNode *last_redo = static_cast<DmlRedoLogNode *>(sorted_redo_list_.last_push_node_);
 
   if (sorted_redo_list_.log_num_ <= 0) {
     ret = OB_LOG_MISSING;
@@ -2089,18 +2349,111 @@ int PartTransTask::push_dml_redo_on_not_row_start_(const memtable::ObMemtableMut
     LOG_ERROR("last redo node is invalid", K(sorted_redo_list_));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    if (OB_ISNULL(log_entry_task_)) {
-      LOG_ERROR("log_entry_task_ is NULL", K(log_entry_task_));
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      if (OB_FAIL(log_entry_task_->append_redo_log(log_no, log_id, redo_data, redo_data_size))) {
-        LOG_ERROR("log_entry_task_ append_redo_log fail", KR(ret), KPC(log_entry_task_), K(log_no), K(log_id),
+    const bool is_stored = last_redo->is_stored();
+
+    if (! is_stored) {
+      if (OB_FAIL(last_redo->append_redo_log(log_no, log_id, redo_data, redo_data_size))) {
+        LOG_ERROR("last redo append data fail", KR(ret), KPC(last_redo), K(log_no), K(log_id),
             K(redo_data_size));
+      }
+    } else {
+      if (OB_FAIL(last_redo->update_redo_meta(log_no, log_id))) {
+        LOG_ERROR("update_redo_meta fail", KR(ret), K(log_no), K(log_id));
+      } else if (OB_UNLIKELY(! big_row_dml_redo_node_.is_valid())) {
+        LOG_ERROR("big_row_dml_redo_node_ is not valid", K(big_row_dml_redo_node_));
+        ret = OB_INVALID_ARGUMENT;
+      } else if (OB_FAIL(big_row_dml_redo_node_.append_redo_log(log_no, log_id, redo_data, redo_data_size))) {
+        LOG_ERROR("big_row_dml_redo_node_ append_redo_log fail", KR(ret), K(log_no), K(log_id),
+            K(redo_data_size));
+      } else {}
+    }
+
+    if (OB_SUCC(ret)) {
+      LOG_DEBUG("LOB data append success", K(meta), K(log_no), K(log_id), K(redo_data_size),
+          KPC(last_redo));
+    }
+  }
+
+  return ret;
+}
+
+int PartTransTask::parse_rollback_savepoint_(const uint64_t log_id,
+    const int32_t log_offset,
+    const char *data_buf,
+    const int64_t data_len)
+{
+  int ret = OB_SUCCESS;
+  IObLogPartTransParser *part_trans_parser = TCTX.part_trans_parser_;
+  RollbackNode *rollback_node = static_cast<RollbackNode *>(allocator_.alloc(sizeof(RollbackNode)));
+  if (OB_ISNULL(part_trans_parser)) {
+    LOG_ERROR("part_trans_parser is NULL");
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(rollback_node)) {
+    LOG_ERROR("rollback_node is NULL");
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    new(rollback_node) RollbackNode(log_id);
+    bool is_rollback_node_valid = false;
+
+    if (OB_FAIL(part_trans_parser->parse_rollback(log_id, log_offset, data_buf, data_len, *this,
+            is_rollback_node_valid, *rollback_node))) {
+      LOG_ERROR("part_trans_parser parse_rollback fail", KR(ret), K(log_id), K(log_offset));
+    } else if (is_rollback_node_valid) {
+      if (OB_FAIL(rollback_list_.add(rollback_node))) {
+        LOG_ERROR("rollback_list_ add fail", KR(ret), KPC(rollback_node), K(rollback_list_));
       } else {
-        LOG_DEBUG("LOB data append success", K(meta), K(log_no), K(log_id), K(redo_data_size),
-            KPC(last_redo));
+        LOG_INFO("rollback_list add succ", KPC(rollback_node), K(rollback_list_));
+      }
+    } else {}
+  }
+
+  return ret;
+}
+
+int PartTransTask::get_and_submit_store_task_(const uint64_t tenant_id,
+    const uint8_t row_flags,
+    const uint64_t store_log_id,
+    const int32_t store_log_offset,
+    const char *data_buf,
+    const int64_t data_len)
+{
+  int ret = OB_SUCCESS;
+  ObLogStoreTask *store_task = NULL;
+
+  // Allocate ObLogStoreTask and init
+  if (OB_ISNULL(store_task = ObLogStoreTaskFactory::alloc())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("store_task is NULL", KR(ret));
+  } else if (OB_FAIL(store_task->init(tenant_id, pkey_str_, store_log_id, store_log_offset,
+          data_buf, data_len, this))) {
+    LOG_ERROR("store_task init fail", KR(ret), K(tenant_id), K(pkey_str_), K(store_log_id), K(store_log_offset),
+        K(data_len));
+  } else {}
+
+  // Dispatch to BatchBuffer
+  if (OB_SUCC(ret)) {
+    IObLogBatchBuffer *batch_buffer = TCTX.batch_buffer_;
+    LOG_DEBUG("batch_buffer submit", KPC(store_task));
+
+    if (OB_ISNULL(batch_buffer)) {
+      LOG_ERROR("batch_buffer is NULL");
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(batch_buffer->submit(store_task))) {
+      LOG_ERROR("batch_buffer submit fail", KR(ret));
+    } else {}
+  }
+
+  if (OB_SUCC(ret)) {
+    if (ObTransRowFlag::is_big_row_end(row_flags)) {
+      if (OB_FAIL(free_big_row_())) {
+        LOG_ERROR("free_big_row_ failed", KR(ret));
       }
     }
+  }
+
+  if (OB_FAIL(ret)) {
+    ObLogStoreTaskFactory::free(store_task);
+    store_task = NULL;
   }
 
   return ret;
@@ -2111,7 +2464,6 @@ int PartTransTask::prepare(const common::ObPartitionKey &partition,
     const ObTransID &trans_id,
     const uint64_t prepare_log_id,
     const uint64_t cluster_id,
-    const common::ObVersion freeze_version,
     const ObString &trace_id,
     const ObString &trace_info,
     const transaction::ObElrTransInfoArray &elt_trans_info_array)
@@ -2145,11 +2497,10 @@ int PartTransTask::prepare(const common::ObPartitionKey &partition,
     timestamp_ = timestamp;
     prepare_log_id_ = prepare_log_id;
     cluster_id_ = cluster_id;
-    freeze_version_ = freeze_version;
   }
 
   LOG_DEBUG("PartTransTask::prepare", KR(ret), K(partition), K(type_), K(sorted_redo_list_),
-      K(timestamp), K(trans_id), K(prepare_log_id), K(cluster_id), K(freeze_version), K(trace_id),
+      K(timestamp), K(trans_id), K(prepare_log_id), K(cluster_id), K(trace_id),
       "count", prev_trans_arr_.count(), K(elt_trans_info_array));
 
   return ret;
@@ -2195,6 +2546,10 @@ int PartTransTask::commit(const int64_t global_trans_version,
     else if (OB_FAIL(handle_elr_follow_trans_(part_trans_dispatcher))) {
       LOG_ERROR("handle_elr_follow_trans_ fail", KR(ret), K(partition_), K(prepare_log_id_), K(trans_id_),
           K(prev_trans_arr_), K(follow_trans_arr_));
+    }
+
+    if (! is_ddl_part) {
+      set_ref_cnt(sorted_redo_list_.get_node_number() + 1);
     }
   }
 
@@ -2484,180 +2839,96 @@ int PartTransTask::try_to_set_data_ready_status()
   if (OB_UNLIKELY(! is_dml_trans())) {
     LOG_ERROR("Not a dml trans is unexcepted", KPC(this));
     ret = OB_STATE_NOT_MATCH;
-  } else if (ATOMIC_LOAD(&is_data_ready_)) {
+  } else if (is_data_ready()) {
     // do nothing
   } else if (is_contain_empty_redo_log()) {
     set_data_ready();
   } else {
-    // Ensure the correctness of concurrent processing of Formatter/Storager
+    // Ensure the correctness of concurrent processing of Storager
     // and PartTransDispatcher-try_to_set_data_ready_status
     ObByteLockGuard guard(data_ready_lock_);
-    const int64_t total_node_num = sorted_redo_list_.get_node_number();
-    const int64_t cur_ready_node_num = ATOMIC_LOAD(&dml_ready_redo_node_num_);
     const bool is_part_trans_served = is_served();
-    bool is_data_ready = false;
 
     if (OB_UNLIKELY(! is_part_trans_served)) {
       LOG_ERROR("part trans unserved is unexcepted", K(is_part_trans_served), KPC(this));
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(check_dml_redo_node_ready_and_handle_(total_node_num, cur_ready_node_num, is_data_ready))) {
-      LOG_ERROR("check_dml_redo_node_ready_and_handle_ fail", KR(ret), K(total_node_num), K(cur_ready_node_num),
-          K(is_data_ready), KPC(this));
+    } else if (OB_FAIL(check_dml_redo_node_ready_and_handle_())) {
+      LOG_ERROR("check_dml_redo_node_ready_and_handle_ fail", KR(ret), KPC(this));
     } else {}
   }
 
   return ret;
 }
 
-int PartTransTask::handle_log_entry_task_callback(const ObLogEntryTask::CallBackModule cb_module,
-    ObLogEntryTask &log_entry_task,
-    bool &is_unserved_part_trans_task_can_be_recycled)
+int PartTransTask::handle_log_callback()
 {
   int ret = OB_SUCCESS;
-  int64_t valid_row_num = 0;
 
   if (OB_UNLIKELY(is_ddl_part())) {
     LOG_ERROR("Not a dml part is unexcepted", KPC(this));
     ret = OB_STATE_NOT_MATCH;
   } else {
     ObByteLockGuard guard(data_ready_lock_);
-
-    const int64_t total_node_num = sorted_redo_list_.get_node_number();
-    const int64_t cur_ready_node_num = ATOMIC_AAF(&dml_ready_redo_node_num_, 1);
+    sorted_redo_list_.inc_ready_node_num();
     const bool is_part_trans_served = is_served();
 
-    if (cur_ready_node_num > total_node_num) {
-      LOG_ERROR("cur_ready_node_num is greater than sorted_redo_list_ total_node_num",
-          K(cur_ready_node_num), K(total_node_num), K(log_entry_task), KPC(this));
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(log_entry_task.get_valid_row_num(valid_row_num))) {
-      LOG_ERROR("log_entry_task get_valid_row_num fail", KR(ret), K(valid_row_num));
-    } else if (is_part_trans_served) {
+    if (is_part_trans_served) {
       if (! is_trans_committed()) {
         // do nothing
-      } else if (cur_ready_node_num < total_node_num) {
-        // do nothing
       } else {
-        bool is_data_ready = false;
-
-        if (OB_FAIL(check_dml_redo_node_ready_and_handle_(total_node_num, cur_ready_node_num, is_data_ready))) {
-          LOG_ERROR("check_dml_redo_node_ready_and_handle_ fail", KR(ret), K(total_node_num), K(cur_ready_node_num),
-              K(is_data_ready), KPC(this));
+        if (OB_FAIL(check_dml_redo_node_ready_and_handle_())) {
+          LOG_ERROR("check_dml_redo_node_ready_and_handle_ fail", KR(ret), KPC(this));
         }
       }
     } else {
-      if (OB_FAIL(handle_unserved_part_trans_(is_unserved_part_trans_task_can_be_recycled))) {
-        LOG_ERROR("handle_unserved_part_trans_ fail", KR(ret), K(is_unserved_part_trans_task_can_be_recycled), KPC(this));
+      if (OB_FAIL(handle_unserved_trans_())) {
+        LOG_ERROR("handle_unserved_trans_ fail", KR(ret), KPC(this));
       }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    bool need_revert_log_entry_task = false;
-    if (ObLogEntryTask::is_dml_parser(cb_module) || ObLogEntryTask::is_storager(cb_module)) {
-      need_revert_log_entry_task = true;
-    } else if (ObLogEntryTask::is_formatter(cb_module)) {
-      if (0 == valid_row_num) {
-        need_revert_log_entry_task = true;
-      }
-    } else {}
-
-    if (need_revert_log_entry_task) {
-      IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
-
-      if (OB_ISNULL(resource_collector)) {
-        LOG_ERROR("resource_collector is NULL");
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(resource_collector->revert_log_entry_task(&log_entry_task))) {
-        if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("revert_log_entry_task fail", KR(ret), K(log_entry_task));
-        }
-      } else {}
     }
   }
 
   return ret;
 }
 
-int PartTransTask::check_dml_redo_node_ready_and_handle_(const int64_t total_node_num,
-    const int64_t cur_ready_node_num,
-    bool &is_data_ready)
+int PartTransTask::check_dml_redo_node_ready_and_handle_()
 {
   int ret = OB_SUCCESS;
+  bool is_equal = false;
 
   if (OB_UNLIKELY(is_ddl_part())) {
     LOG_ERROR("Not a dml part is unexcepted", KPC(this));
     ret = OB_STATE_NOT_MATCH;
-  } else if (ATOMIC_LOAD(&is_data_ready_)) {
+  } else if (is_data_ready()) {
     // Double check, do nothing when data is ready
-    is_data_ready = is_data_ready_;
+  } else if (OB_FAIL(sorted_redo_list_.check_node_num_equality(is_equal))) {
+    LOG_ERROR("sorted_redo_list_ check_node_num_equality fail", KR(ret));
+  } else if (is_equal) {
+    set_data_ready();
   } else {
-    is_data_ready = (cur_ready_node_num == total_node_num);
-
-    if (is_data_ready) {
-      if (OB_FAIL(handle_when_all_dml_redo_node_ready_())) {
-        LOG_ERROR("handle_when_all_dml_redo_node_ready_ fail", KR(ret));
-      } else {
-        // Only when processing is complete can the status be set to avoid concurrent processing by Sequencer
-        set_data_ready();
-      }
-    }
+    // do nothing
+    LOG_DEBUG("check_dml_redo_node_ready_and_handle_ not equal", K(is_equal), K_(sorted_redo_list), KPC(this));
   }
 
   return ret;
 }
 
-int PartTransTask::handle_when_all_dml_redo_node_ready_()
+int PartTransTask::handle_unserved_trans()
 {
   int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(is_ddl_part())) {
-    LOG_ERROR("Not a dml part is unexcepted", KPC(this));
-    ret = OB_ERR_UNEXPECTED;
-  } else if (sorted_redo_list_.log_num_ > 0 && OB_UNLIKELY(! sorted_redo_list_.is_valid())) {
-    LOG_ERROR("redo log list is invalid", K(sorted_redo_list_), KPC(this));
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    DmlRedoLogMetaNode *dml_redo_meta = static_cast<DmlRedoLogMetaNode *>(sorted_redo_list_.head_);
-
-    while (OB_SUCC(ret) && NULL != dml_redo_meta) {
-      if (! dml_redo_meta->is_contain_valid_row()) {
-        // do nothing
-      } else if (OB_FAIL(sorted_dml_row_list_.push(dml_redo_meta->get_row_head(), dml_redo_meta->get_row_tail(),
-              dml_redo_meta->get_valid_row_num(), dml_redo_meta->is_contain_rollback_row()))) {
-        LOG_ERROR("sorted_dml_row_list_ push fail", KR(ret), KPC(dml_redo_meta), K(sorted_redo_list_));
-      } else {
-        // succ
-      }
-
-      LOG_DEBUG("[DML_REDO_META]", KR(ret), K_(partition), K_(trans_id), KPC(dml_redo_meta), K(sorted_dml_row_list_));
-
-      if (OB_SUCC(ret)) {
-        dml_redo_meta = static_cast<DmlRedoLogMetaNode *>(dml_redo_meta->next_);
-      }
-    } // while
-  }
-
-  return ret;
-}
-
-int PartTransTask::handle_unserved_part_trans(bool &is_unserved_part_trans_task_can_be_recycled)
-{
-  int ret = OB_SUCCESS;
-  // Ensure the correctness of concurrent processing of Formatter, Storager and PartTransDispatcher
+  // Ensure the correctness of concurrent processing of Storager and PartTransDispatcher
   ObByteLockGuard guard(data_ready_lock_);
 
   // set unserved statue
   set_unserved_();
 
-  if (OB_FAIL(handle_unserved_part_trans_(is_unserved_part_trans_task_can_be_recycled))) {
-    LOG_ERROR("handle_unserved_part_trans_ fail", KR(ret), K(is_unserved_part_trans_task_can_be_recycled), KPC(this));
+  if (OB_FAIL(handle_unserved_trans_())) {
+    LOG_ERROR("handle_unserved_trans_ fail", KR(ret), KPC(this));
   }
 
   return ret;
 }
 
-int PartTransTask::handle_unserved_part_trans_(bool &is_unserved_part_trans_task_can_be_recycled)
+int PartTransTask::handle_unserved_trans_()
 {
   int ret = OB_SUCCESS;
   IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
@@ -2668,36 +2939,18 @@ int PartTransTask::handle_unserved_part_trans_(bool &is_unserved_part_trans_task
   } else if (OB_ISNULL(resource_collector)) {
     LOG_ERROR("resource_collector is NULL");
     ret = OB_ERR_UNEXPECTED;
-  } else if (ATOMIC_LOAD(&is_data_ready_)) {
+  } else if (is_data_ready()) {
     LOG_ERROR("data is already ready, not expected", KPC(this));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    const int64_t total_node_num = sorted_redo_list_.get_node_number();
-    const int64_t cur_ready_node_num = ATOMIC_LOAD(&dml_ready_redo_node_num_);
-    bool is_data_ready = false;
-
-    if (OB_FAIL(check_dml_redo_node_ready_and_handle_(total_node_num, cur_ready_node_num, is_data_ready))) {
-      LOG_ERROR("check_dml_redo_node_ready_and_handle_ fail", KR(ret), K(total_node_num), K(cur_ready_node_num),
-          K(is_data_ready), KPC(this));
-    } else if (is_data_ready) {
-      // Get PartTransTask status only when all dml redo node ready
-      is_unserved_part_trans_task_can_be_recycled = true;
-
-      // set unserved Part Transaction ref cnt
-      set_ref_cnt(get_br_num() + 1);
-      ObLogRowDataIndex *row_data_index = get_sorted_dml_row_list().get_head();
-
-      while (OB_SUCC(ret) && NULL != row_data_index) {
-        if (OB_FAIL(resource_collector->revert_unserved_task(false/*is_rollback_row*/, *row_data_index))) {
-          if (OB_IN_STOP_STATE != ret) {
-            LOG_ERROR("revert_unserved_task fail", KR(ret), KPC(row_data_index));
-          }
+    if (OB_FAIL(check_dml_redo_node_ready_and_handle_())) {
+      LOG_ERROR("check_dml_redo_node_ready_and_handle_ fail", KR(ret), KPC(this));
+    } else if (is_data_ready()) {
+      if (OB_FAIL(resource_collector->revert(this))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("revert PartTransTask fail", KR(ret));
         }
-
-        if (OB_SUCC(ret)) {
-          row_data_index = row_data_index->get_next();
-        }
-      } // while
+      }
     } else {}
   }
 
@@ -2981,6 +3234,7 @@ int PartTransTask::wait_formatted(const int64_t timeout, ObCond &cond)
 void PartTransTask::set_data_ready()
 {
   LOG_DEBUG("[STAT] [TRANS_TASK] SET_DATA_READY", K_(is_data_ready), "task", *this);
+  sorted_redo_list_.init_iterator();
   (void)ATOMIC_SET(&is_data_ready_, true);
   wait_data_ready_cond_.signal();
 }
@@ -3086,7 +3340,7 @@ int PartTransTask::init_participant_array_(const PartitionLogInfoArray &particip
 {
   int ret = OB_SUCCESS;
   int64_t part_count = participants.count();
-  ObPartitionLogInfo *part_array = NULL;
+  transaction::ObPartitionLogInfo *part_array = NULL;
 
   if (OB_UNLIKELY(NULL != participants_) || OB_UNLIKELY(participant_count_ > 0)) {
     LOG_ERROR("participant has been initialized", K(participants_), K(participant_count_));
@@ -3096,8 +3350,8 @@ int PartTransTask::init_participant_array_(const PartitionLogInfoArray &particip
     part_count = 0;
     part_array = NULL;
   } else {
-    int64_t alloc_size = part_count * sizeof(ObPartitionLogInfo);
-    part_array = static_cast<ObPartitionLogInfo *>(allocator_.alloc(alloc_size));
+    int64_t alloc_size = part_count * sizeof(transaction::ObPartitionLogInfo);
+    part_array = static_cast<transaction::ObPartitionLogInfo *>(allocator_.alloc(alloc_size));
 
     if (OB_ISNULL(part_array)) {
       LOG_ERROR("allocate memory for participant array fail", K(part_count), K(alloc_size),
@@ -3105,7 +3359,7 @@ int PartTransTask::init_participant_array_(const PartitionLogInfoArray &particip
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       for (int64_t index = 0; OB_SUCC(ret) && index < participants.count(); index++) {
-        new(part_array + index) ObPartitionLogInfo(participants.at(index));
+        new(part_array + index) transaction::ObPartitionLogInfo(participants.at(index));
       }
     }
   }
@@ -3240,7 +3494,7 @@ int PartTransTask::revert_by_rollback_savepoint(const uint64_t row_index, const 
 
 // DDL transactions stmt order is dependent on schema version and cannot be guaranteed to be strictly incremented by sql no
 // need to traverse stmt list
-int PartTransTask::revert_ddl_stmt_(const int32_t rollback_to_seq)
+int PartTransTask::revert_ddl_stmt_(const int64_t rollback_to_seq)
 {
   int ret = OB_SUCCESS;
   uint32_t major_version = 0;
@@ -3259,7 +3513,7 @@ int PartTransTask::revert_ddl_stmt_(const int32_t rollback_to_seq)
       LOG_ERROR("dynamic cast to DdlStmtTask fail", K(stmt_task), K(ddl_task));
       ret = OB_ERR_UNEXPECTED;
     } else {
-      const int32_t stmt_seq_for_rollback = ddl_task->get_row_seq_for_rollback();
+      const int64_t stmt_seq_for_rollback = ddl_task->get_row_seq_for_rollback();
       IStmtTask *next = stmt_task->get_next();
       const bool need_not_rollback = stmt_seq_for_rollback <= rollback_to_seq;
       // stmt less than or equal to the sql_no specified by the rollback savepoint is not processed
@@ -3271,7 +3525,7 @@ int PartTransTask::revert_ddl_stmt_(const int32_t rollback_to_seq)
         pre_task = stmt_task;
         stmt_num++;
         _LOG_DEBUG("[SAVEPOINT][DDL] ddl_stmt need not revert, schema_version=%ld,"
-            "rollback_to_seq=%d, stmt_sql_no=%d", ddl_task->get_op_schema_version(),
+            "rollback_to_seq=%ld, stmt_sql_no=%ld", ddl_task->get_op_schema_version(),
             rollback_to_seq, stmt_seq_for_rollback);
       } else {
         if (NULL != pre_task) {
@@ -3293,9 +3547,48 @@ int PartTransTask::revert_ddl_stmt_(const int32_t rollback_to_seq)
   }
 
   if (OB_SUCC(ret)) {
-    _LOG_INFO("[SAVEPOINT][DDL] ROLLBACK_TO_SEQ=%d STMT_CNT=%ld/%ld",
+    _LOG_INFO("[SAVEPOINT][DDL] ROLLBACK_TO_SEQ=%ld STMT_CNT=%ld/%ld",
         rollback_to_seq, total_stmt_num, stmt_num);
   }
+
+  return ret;
+}
+
+int PartTransTask::next_redo_to_dispatch(DmlRedoLogNode *&dml_redo_node, bool &is_last_redo)
+{
+  int ret = OB_SUCCESS;
+  RedoLogMetaNode *redo_meta = NULL;
+
+  if (OB_FAIL(sorted_redo_list_.next_dml_redo(redo_meta, is_last_redo))) {
+    if (OB_EMPTY_RESULT != ret) {
+      LOG_ERROR("failed to get next dml_redo_meta to dispatch", KR(ret), KPC(this));
+    }
+  } else if (OB_ISNULL(dml_redo_node = static_cast<DmlRedoLogNode*>(redo_meta))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("failed to cast RedoLogMetaNode(get from sorted_redo_list_) to DmlRedoLogNode", KR(ret), KPC(redo_meta));
+  } else { /* success */ }
+
+  return ret;
+}
+
+int PartTransTask::next_dml_stmt(DmlStmtTask *&dml_stmt_task)
+{
+  int ret = OB_SUCCESS;
+  ObLink *dml_task = NULL;
+
+  if (sorted_redo_list_.is_dml_stmt_iter_end()) {
+    ret = OB_ITER_END;
+  } else if (OB_FAIL(sorted_redo_list_.next_dml_stmt(dml_task))) {
+    if (OB_ITER_END != ret && OB_NEED_RETRY != ret) {
+      LOG_ERROR("failed to get next dml stmt with valid br", KR(ret), K_(sorted_redo_list));
+    }
+  } else if (OB_ISNULL(dml_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("dml_task get from SortedRedoList should not be null", KR(ret), K(dml_task));
+  } else if (OB_ISNULL(dml_stmt_task = static_cast<DmlStmtTask*>(dml_task))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("cast ObLink to DmlStmtTask failed", KR(ret), KP(dml_task));
+  } else { /* succ */ }
 
   return ret;
 }

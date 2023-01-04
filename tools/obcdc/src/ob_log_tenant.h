@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -144,6 +144,10 @@ public:
       int64_t &new_seq,
       int64_t &new_schema_version,
       volatile bool &stop_flag);
+
+  int alloc_global_trans_schema_version(const bool is_ddl_trans,
+      const int64_t base_schema_version,
+      int64_t &new_schema_version);
 
   // Delete a tenant
   // Supports multiple calls, guaranteeing only one will return tenant_can_be_dropped = true

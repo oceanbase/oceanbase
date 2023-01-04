@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -9,8 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
-// Copyright 2020-2030 Alibaba Inc. All Rights Reserved.
 
 #ifndef OCEANBASE_LIBOBLOG_OB_LOG_ROCKSDB_IMPL_H_
 #define OCEANBASE_LIBOBLOG_OB_LOG_ROCKSDB_IMPL_H_

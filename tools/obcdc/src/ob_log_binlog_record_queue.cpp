@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -144,7 +144,7 @@ int BRQueue::pop(ILogRecord *&record,
     ret = OB_ERR_UNEXPECTED;
   } else {
     record = next_br->get_data();
-    major_version = next_br->get_major_version();
+    major_version = 0;
     tenant_id = next_br->get_tenant_id();
   }
 

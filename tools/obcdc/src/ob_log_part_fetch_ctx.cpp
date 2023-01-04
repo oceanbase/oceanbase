@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -45,7 +45,7 @@ int64_t PartFetchCtx::g_svr_list_update_interval =
     ObLogConfig::default_svr_list_update_interval_sec * _SEC_;
 int64_t PartFetchCtx::g_leader_info_update_interval =
     ObLogConfig::default_leader_info_update_interval_sec * _SEC_;
-int64_t PartFetchCtx::g_heartbeat_interval = ObLogConfig::default_heartbeat_interval_sec * _SEC_;
+int64_t PartFetchCtx::g_heartbeat_interval = ObLogConfig::default_heartbeat_interval_msec * _MSEC_;
 int64_t PartFetchCtx::g_blacklist_history_clear_interval=
     ObLogConfig::default_blacklist_history_clear_interval_min * _MIN_;
 
@@ -64,7 +64,7 @@ void PartFetchCtx::configure(const ObLogConfig &config)
   // update global class variables
   int64_t svr_list_update_interval_sec = config.svr_list_update_interval_sec;
   int64_t leader_info_update_interval_sec = config.leader_info_update_interval_sec;
-  int64_t heartbeat_interval_sec = config.heartbeat_interval_sec;
+  int64_t heartbeat_interval_msec = config.heartbeat_interval_msec;
   int64_t blacklist_history_clear_interval_min = config.blacklist_history_clear_interval_min;
 
   ATOMIC_STORE(&g_svr_list_update_interval, svr_list_update_interval_sec * _SEC_);
@@ -73,8 +73,8 @@ void PartFetchCtx::configure(const ObLogConfig &config)
   ATOMIC_STORE(&g_leader_info_update_interval, leader_info_update_interval_sec * _SEC_);
   LOG_INFO("[CONFIG]", K(leader_info_update_interval_sec));
 
-  ATOMIC_STORE(&g_heartbeat_interval, heartbeat_interval_sec * _SEC_);
-  LOG_INFO("[CONFIG]", K(heartbeat_interval_sec));
+  ATOMIC_STORE(&g_heartbeat_interval, heartbeat_interval_msec * _MSEC_);
+  LOG_INFO("[CONFIG]", K(heartbeat_interval_msec));
 
   ATOMIC_STORE(&g_blacklist_history_clear_interval, blacklist_history_clear_interval_min * _MIN_);
   LOG_INFO("[CONFIG]", K(blacklist_history_clear_interval_min));

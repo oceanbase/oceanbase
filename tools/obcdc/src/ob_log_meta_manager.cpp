@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -111,7 +111,9 @@ void ObLogMetaManager::destroy()
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // #retval other error code             fail
-int ObLogMetaManager::get_table_meta(const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
+int ObLogMetaManager::get_table_meta(
+    const int64_t global_schema_version,
+    const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
     IObLogSchemaGetter &schema_getter,
     ITableMeta *&table_meta,
     volatile bool &stop_flag)
@@ -138,11 +140,10 @@ int ObLogMetaManager::get_table_meta(const share::schema::ObSimpleTableSchemaV2 
         ret = OB_SUCCESS;
         // refresh ObTableSchema when build meta for the first time
         const int64_t table_id = simple_table_schema->get_table_id();
-        const int64_t schema_version = simple_table_schema->get_schema_version();
         const share::schema::ObTableSchema *table_schema = NULL;
         ObLogSchemaGuard schema_mgr;
 
-        RETRY_FUNC(stop_flag, schema_getter, get_schema_guard_and_full_table_schema, table_id, schema_version, GET_SCHEMA_TIMEOUT,
+        RETRY_FUNC(stop_flag, schema_getter, get_schema_guard_and_full_table_schema, table_id, global_schema_version, GET_SCHEMA_TIMEOUT,
                 schema_mgr, table_schema);
 
         if (OB_FAIL(ret)) {
@@ -150,6 +151,7 @@ int ObLogMetaManager::get_table_meta(const share::schema::ObSimpleTableSchemaV2 
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("get_schema_guard_and_full_table_schema fail", KR(ret),
                 "schema_version", simple_table_schema->get_schema_version(),
+                K(global_schema_version),
                 "table_id", simple_table_schema->get_table_id(),
                 "table_name", simple_table_schema->get_table_name(), KPC(table_schema));
           }
@@ -157,6 +159,7 @@ int ObLogMetaManager::get_table_meta(const share::schema::ObSimpleTableSchemaV2 
           // tenant has been dropped
           LOG_WARN("table_schema is null, tenant may be dropped", K(table_schema),
               "schema_version", simple_table_schema->get_schema_version(),
+              K(global_schema_version),
               "tenant_id", simple_table_schema->get_tenant_id(),
               "table_id", simple_table_schema->get_table_id(),
               "table_name", simple_table_schema->get_table_name(), KPC(simple_table_schema));
@@ -534,7 +537,7 @@ int ObLogMetaManager::build_table_meta_(const share::schema::ObTableSchema *tabl
     } else if (OB_FAIL(build_column_metas_(tmp_table_meta, table_schema, *tb_schema_info,
           schema_mgr, stop_flag))) {
       // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
-      if (OB_IN_FATAL_STATE != ret) {
+      if (OB_IN_FATAL_STATE != ret && OB_IN_STOP_STATE != ret) {
         LOG_ERROR("build_column_metas_ fail", KR(ret), KP(tmp_table_meta), KPC(tb_schema_info));
       }
     } else {
@@ -754,18 +757,44 @@ int ObLogMetaManager::set_column_meta_(IColMeta *col_meta,
     uint16_t type_flag = 0;
     ObScale decimals = 0; // FIXME: does liboblog need this?
     EMySQLFieldType mysql_type = MYSQL_TYPE_NOT_DEFINED;
+    const ColumnType col_type = column_schema.get_data_type();
 
     if (OB_FAIL(ObSMUtils::get_mysql_type(column_schema.get_data_type(),
         mysql_type, type_flag, decimals))) {
       LOG_ERROR("get_mysql_type fail", KR(ret), "ob_type", column_schema.get_data_type());
     } else {
-      //mysql treat it as MYSQL_TYPE_STRING, it is not suitable for liboblog
-      if (ObEnumType == column_schema.get_data_type()) {
-        mysql_type = obmysql::MYSQL_TYPE_ENUM;
-      } else if (ObSetType == column_schema.get_data_type()) {
-        mysql_type = obmysql::MYSQL_TYPE_SET;
+      if (ObEnumType == col_type || ObSetType == col_type) {
+        // get extended_type_info from column schema and convert it to array of std::string
+        const ObIArray<ObString> &extended_type_info = column_schema.get_extended_type_info();
+        std::vector<const char *> extended_type_info_vec;
+        for (int64_t i = 0; i < extended_type_info.count(); i++) {
+          const ObString &extended_type_info_item = extended_type_info.at(i);
+          extended_type_info_vec.push_back(extended_type_info_item.ptr());
+        }
+        col_meta->setValuesOfEnumSet(extended_type_info_vec);
+
+        //mysql treat it as MYSQL_TYPE_STRING, it is not suitable for liboblog
+        if (ObEnumType == col_type) {
+          mysql_type = obmysql::MYSQL_TYPE_ENUM;
+        } else if (ObSetType == col_type) {
+          mysql_type = obmysql::MYSQL_TYPE_SET;
+        } else if (ObNumberType == col_type || ObUNumberType == col_type) {
+          col_meta->setScale(column_schema.get_data_scale());
+          col_meta->setPrecision(column_schema.get_data_precision());
+        }
       }
       bool signed_flag = ((type_flag & UNSIGNED_FLAG) == 0);
+
+
+      if (ObBitType == col_type) {
+        // the length of BIT type is required,
+        // the "length" of the BIT type is store in precision
+        col_meta->setLength(column_schema.get_data_precision());
+      } else {
+        // for types with valid length(string\enumset\rowid\json\raw\lob\geo),
+        // get_data_length returns the valid length, returns 0 for other types.
+        col_meta->setLength(column_schema.get_data_length());
+      }
 
       col_meta->setName(column_schema.get_column_name());
       col_meta->setType(static_cast<int>(mysql_type));
@@ -1141,8 +1170,10 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
           if (OB_FAIL(set_unique_keys_from_all_index_table_(valid_uk_table_count, *table_schema, tb_schema_info,
                   schema_mgr, stop_flag, is_uk_column_array, uk_info))) {
             // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
-            LOG_ERROR("set_unique_keys_from_all_index_table_ fail", KR(ret), K(valid_uk_table_count),
-                K(is_uk_column_array));
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("set_unique_keys_from_all_index_table_ fail", KR(ret), K(valid_uk_table_count),
+                  K(is_uk_column_array));
+            }
           }
           // Set the UKs() field value if it contains a valid unique index
           else if (valid_uk_table_count > 0) {
@@ -1249,6 +1280,11 @@ int ObLogMetaManager::set_unique_keys_from_all_index_table_(int64_t &valid_uk_ta
       LOG_ERROR("get_index_tid_array fail", KR(ret), "table_name", table_schema.get_table_name(),
           "table_id", table_schema.get_table_id());
     } else {
+      LOG_DEBUG("set_unique_keys_from_all_index_table_ begin",
+          "table_id", table_schema.get_table_id(),
+          "table_name", table_schema.get_table_name(),
+          K(simple_index_infos));
+
       // Iterate through all index tables to find the unique index table
       for (int64_t index = 0; OB_SUCC(ret) && index < index_table_count; index++) {
         const share::schema::ObTableSchema *index_table_schema = NULL;
@@ -1267,6 +1303,12 @@ int ObLogMetaManager::set_unique_keys_from_all_index_table_(int64_t &valid_uk_ta
               "table_name", table_schema.get_table_name(),
               "index_table_id", simple_index_infos.at(index).table_id_, K(index_table_count), K(index));
           ret = OB_ERR_UNEXPECTED;
+        } else if (index_table_schema->is_dropped_schema()) {
+          LOG_INFO("index table is dropped, need filter", "table_id", table_schema.get_table_id(),
+              "table_name", table_schema.get_table_name(),
+              "index_table_id", simple_index_infos.at(index).table_id_,
+              "index_table_name", index_table_schema->get_table_name(),
+              K(index_table_count), K(index));
         }
         // Handling uniquely indexed tables
         else if (index_table_schema->is_unique_index()) {

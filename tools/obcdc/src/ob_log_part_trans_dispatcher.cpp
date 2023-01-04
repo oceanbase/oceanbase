@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -548,12 +548,10 @@ int PartTransDispatcher::remove_task(const bool is_ddl_part, const PartTransID &
       task->revert();
       task = NULL;
     } else {
-      bool is_unserved_part_trans_task_can_be_recycled = false;
-      if (OB_FAIL(task->handle_unserved_part_trans(is_unserved_part_trans_task_can_be_recycled))) {
-        LOG_ERROR("handle_unserved_part_trans fail", KR(ret), K(task));
-      } else if (is_unserved_part_trans_task_can_be_recycled) {
-        task->revert();
-        task = NULL;
+      if (OB_FAIL(task->handle_unserved_trans())) {
+        LOG_ERROR("handle_unserved_trans fail", KR(ret));
+      } else {
+        // Note, task may be recycled, we can not handle it
       }
     }
 

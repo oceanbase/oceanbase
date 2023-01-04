@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -9,6 +9,8 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
+#include <cstdlib>                                  // std::abs
 
 #include "ob_obj2str_helper.h"
 #include "ob_log_timezone_info_getter.h"
@@ -407,10 +409,12 @@ int ObObj2strHelper::convert_mysql_timestamp_to_utc_(const common::ObObj &obj,
   char *ptr = NULL;
   // external output of utc integer time, compatible with mysql, splitting seconds and microseconds with a decimal point
   // Microsecond precision length of 6
+  // server record UTC Timestamp with standard timezone(+0000). and obcdc will output this with
+  // format "second.usec"
   const int64_t usec_mod_val = 1000000;
 
   if (OB_FAIL(common::databuff_printf(buf, MAX_TIMESTAMP_UTC_LONG_STR_LENGTH, pos, "%ld.%06ld",
-          utc_time / usec_mod_val, utc_time % usec_mod_val))) {
+          utc_time / usec_mod_val, std::abs(utc_time) % usec_mod_val))) {
     OBLOG_LOG(ERROR, "databuff_printf fail", K(pos), K(utc_time), K(usec_mod_val));
   } else if (OB_ISNULL(ptr = (char *)allocator.alloc(pos))) {
     OBLOG_LOG(ERROR, "allocate memory fail", "size", pos);

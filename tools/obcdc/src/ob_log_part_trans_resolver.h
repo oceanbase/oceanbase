@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -430,10 +430,6 @@ private:
       int64_t &pos);
   // Handle the compatibility issue of the last redo log being empty
   bool is_last_redo_with_empty_content_(const transaction::ObTransRedoLog &redo_log) const;
-
-  ////////////////////////////////////////////////////////////////////////
-  // DML-ObLogEntryTask related implementations
-  int dispatch_log_entry_task_(ObLogEntryTask *log_entry_task);
 
 private:
   bool                      offlined_ CACHE_ALIGNED;     // Is the partition deleted

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -113,10 +113,12 @@ public:
   DEF_INT(formatter_batch_stmt_count, OB_CLUSTER_PARAMETER, "100", "[1,]", "formatter batch stmt count");
   DEF_INT(committer_queue_length, OB_CLUSTER_PARAMETER, "102400", "[1,]", "committer queue length");
   DEF_INT(committer_thread_num, OB_CLUSTER_PARAMETER, "1", "[1,]", "committer thread number");
+  DEF_CAP(batch_buf_size, OB_CLUSTER_PARAMETER, "20MB", "[2MB,]", "batch buf size");
+  DEF_INT(batch_buf_count, OB_CLUSTER_PARAMETER, "10", "[5,]", "batch buf count");
   DEF_INT(storager_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "storager thread number");
   DEF_INT(storager_queue_length, OB_CLUSTER_PARAMETER, "102400", "[1,]", "storager queue length");
-  DEF_INT(data_processor_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "data_processor thread number");
-  DEF_INT(data_processor_queue_length, OB_CLUSTER_PARAMETER, "102400", "[1,]", "data_processor queue length");
+  DEF_INT(reader_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "reader thread number");
+  DEF_INT(reader_queue_length, OB_CLUSTER_PARAMETER, "102400", "[1,]", "reader queue length");
   DEF_INT(cached_schema_version_count, OB_CLUSTER_PARAMETER, "32", "[1,]", "cached schema version count");
   DEF_INT(history_schema_version_count, OB_CLUSTER_PARAMETER, "16", "[1,]", "history schema version count");
   DEF_INT(resource_collector_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "resource collector thread number");
@@ -131,6 +133,7 @@ public:
       "storager task count upper bound");
   DEF_INT(storager_mem_percentage, OB_CLUSTER_PARAMETER, "2", "[1,]",
       "storager memory percentage");
+  T_DEF_BOOL(skip_parse_rollback_savepoint, OB_CLUSTER_PARAMETER, 0, "0:not_skip, 1:skip")
   T_DEF_BOOL(skip_recycle_data, OB_CLUSTER_PARAMETER, 0, "0:not_skip, 1:skip")
   DEF_INT(part_trans_task_reusable_count_upper_bound, OB_CLUSTER_PARAMETER, "10240", "[1,]",
       "reusable partition trans task count upper bound");
@@ -162,7 +165,7 @@ public:
   // cluster id black list, using vertical line separation, for example cluster_id_black_list=100|200|300
   // Default value: 2^31 - 10000, this is a special cluster ID agreed in OCP for deleting historical data scenarios
   // liboblog filters REDO data from deleted historical data scenarios by default
-  DEF_STR(cluster_id_black_list, OB_CLUSTER_PARAMETER, "2147473648", "cluster id black list");
+  DEF_STR(cluster_id_black_list, OB_CLUSTER_PARAMETER, "|", "cluster id black list");
 
   // minimum value of default cluster id blacklist value
   // The minimum value is: 2^31 - 10000 = 2147473648
@@ -208,6 +211,7 @@ public:
 
   DEF_INT(log_clean_cycle_time_in_hours, OB_CLUSTER_PARAMETER, "24", "[0,]",
       "clean log cycle time in hours, 0 means not to clean log");
+  DEF_INT(max_log_file_count, OB_CLUSTER_PARAMETER, "40", "[0,]", "max log file count, 0 means no limit");
 
   T_DEF_BOOL(skip_dirty_data, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
@@ -293,7 +297,7 @@ public:
   T_DEF_INT_INFT(heartbeater_batch_count, OB_CLUSTER_PARAMETER, 2000, 1, "heartbeater batch count");
   T_DEF_INT_INFT(svr_list_update_interval_sec, OB_CLUSTER_PARAMETER, 600, 1, "svr list update interval in seconds");
   T_DEF_INT_INFT(leader_info_update_interval_sec, OB_CLUSTER_PARAMETER, 600, 1, "leader update interval in seconds");
-  T_DEF_INT_INFT(heartbeat_interval_sec, OB_CLUSTER_PARAMETER, 1, 1, "leader update interval in seconds");
+  T_DEF_INT_INFT(heartbeat_interval_msec, OB_CLUSTER_PARAMETER, 100, 1, "leader update interval in milliseconds");
 
   T_DEF_INT_INFT(stream_life_time_sec, OB_CLUSTER_PARAMETER, 60, 1, "fetch log stream life time in seconds");
   T_DEF_INT_INFT(stream_max_partition_count, OB_CLUSTER_PARAMETER, 5000, 1, "fetch log stream max partition count");
@@ -317,8 +321,17 @@ public:
 
   // Upper limit of progress difference between partitions, in seconds
   T_DEF_INT_INFT(progress_limit_sec_for_dml, OB_CLUSTER_PARAMETER, 3, 1, "dml progress limit in seconds");
-  T_DEF_INT_INFT(progress_limit_sec_for_ddl, OB_CLUSTER_PARAMETER, 3600, 1, "ddl progress limit in seconds");
 
+  // The Sys Tenant is not filtered by default
+  T_DEF_BOOL(enable_filter_sys_tenant, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
+  // When all servers are added to the blacklist because of exceptions, the LS FetchCtx is dispatched into IDEL Pool mode.
+  // If the RS servers continues to be disconnected, we cannot refresh new server list for FetchCtx by SQL. So The LS FetchCtx cannot fetch log.
+  // If set enable_continue_use_cache_server_list is true, we can continue use cache server to fetch log.
+  // A means of fault tolerance for LDG
+  T_DEF_BOOL(enable_continue_use_cache_server_list, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
+  T_DEF_INT_INFT(progress_limit_sec_for_ddl, OB_CLUSTER_PARAMETER, 3600, 1, "ddl progress limit in seconds");
 
   // Partition timeout in seconds
   // If the logs are not fetched after a certain period of time, the stream will be cut
@@ -344,6 +357,8 @@ public:
   T_DEF_INT_INFT(timer_task_count_upper_limit, OB_CLUSTER_PARAMETER, 1024, 1, "max timer task count");
   // Timer task timing time
   T_DEF_INT_INFT(timer_task_wait_time_msec, OB_CLUSTER_PARAMETER, 100, 1, "timer task wait time in milliseconds");
+  // DDL DATA OP TIMEOUT msec
+  T_DEF_INT_INFT(ddl_data_op_timeout_msec, OB_CLUSTER_PARAMETER, 100, 1, "ddl data op timeout in milliseconds");
 
   // the upper limit observer takes  for the log rpc processing time
   // Print RPC chain statistics logs if this limit is exceeded
@@ -390,6 +405,9 @@ public:
   T_DEF_BOOL(print_partition_serve_info, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   // Print partition not in service information
   T_DEF_BOOL(print_participant_not_serve_info, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+  // Print participant check status when ObLogPartMgr::query_part_status_()
+  T_DEF_BOOL(print_participant_check_statue, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
   // Print the svr list of each partition update, off by default
   T_DEF_BOOL(print_partition_server_list_update_info, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   // Whether to use the new partitioning algorithm
@@ -399,6 +417,16 @@ public:
   // Whether to sequentially output within a transaction
   // Not on by default (partition-by-partition output)
   T_DEF_BOOL(enable_output_trans_order_by_sql_operation, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+  // redo dispatcher memory limit
+  DEF_CAP(redo_dispatcher_memory_limit, OB_CLUSTER_PARAMETER, "1G", "[128M,]", "redo dispatcher memory limit");
+  // redo diepatcher memory limit ratio for output br by sql operation(compare with redo_dispatcher_memory_limit)
+  T_DEF_INT_INFT(redo_dispatched_memory_limit_exceed_ratio, OB_CLUSTER_PARAMETER, 2, 1,
+      "redo_dispatcher_memory_limit ratio for output by sql operation order");
+  // sorter thread num
+  T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
+  // sorter thread
+  T_DEF_INT_INFT(msg_sorter_task_count_upper_limit, OB_CLUSTER_PARAMETER, 200000, 1, "trans msg sorter thread num");
+
   // ------------------------------------------------------------------------
   // Test mode, used only in obtest and other test tool scenarios
   T_DEF_BOOL(test_mode_on, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
@@ -467,8 +495,8 @@ public:
   // INNER_HEARTBEAT_INTERVAL
   T_DEF_INT_INFT(output_inner_heartbeat_interval_msec, OB_CLUSTER_PARAMETER, 100, 1, "output heartbeat interval in seconds");
 
-  // Output heartbeat interval to external, default 3s
-  T_DEF_INT_INFT(output_heartbeat_interval_sec, OB_CLUSTER_PARAMETER, 3, 1, "output heartbeat interval in seconds");
+  // Output heartbeat interval to external, default 1s
+  T_DEF_INT_INFT(output_heartbeat_interval_msec, OB_CLUSTER_PARAMETER, 1000, 1, "output heartbeat interval in seconds");
 
   // Whether to have incremental backup mode
   // Off by default; if it is, then incremental backup mode

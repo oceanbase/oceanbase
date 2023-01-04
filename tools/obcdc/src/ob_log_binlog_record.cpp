@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -29,15 +29,12 @@ const char *ObLogBR::COLUMN_UNCHANGED_LABEL_PTR = NULL;
 
 ObLogBR::ObLogBR() : ObLogResourceRecycleTask(ObLogResourceRecycleTask::BINLOG_RECORD_TASK),
                      data_(NULL),
-                     is_serilized_(false),
                      host_(NULL),
-                     log_entry_task_(NULL),
-                     next_(NULL),
+                     next_br_(NULL),
                      valid_(true),
-                     precise_timestamp_(0),
-                     freeze_version_(),
                      tenant_id_(OB_INVALID_TENANT_ID),
-                     ddl_schema_version_(OB_INVALID_VERSION),
+                     schema_version_(OB_INVALID_VERSION),
+                     commit_version_(0),
                      part_trans_task_count_(0)
 {
 }
@@ -91,12 +88,11 @@ void ObLogBR::reset()
   }
 
   host_ = NULL;
-  log_entry_task_ = NULL;
-  next_ = NULL;
+  next_br_ = NULL;
   valid_ = true;
-  precise_timestamp_ = 0;
-  freeze_version_.reset();
   tenant_id_ = OB_INVALID_TENANT_ID;
+  schema_version_ = OB_INVALID_VERSION;
+  commit_version_ = 0;
   part_trans_task_count_ = 0;
 }
 
@@ -136,65 +132,14 @@ int ObLogBR::set_db_meta(IDBMeta *db_meta)
   return ret;
 }
 
-int ObLogBR::init_dml_data_first(const RecordType type,
-    const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(data_)) {
-    LOG_ERROR("ILogRecord has not been created");
-    ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(EUNKNOWN == type)
-        || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
-    LOG_ERROR("invalid argument", K(type), K(tenant_id));
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(init_binlog_record_first_(type))) {
-    LOG_ERROR("init_binlog_record_first_ fail", KR(ret), K(type), K(tenant_id));
-  } else {
-    tenant_id_ = tenant_id;
-    set_next(NULL);
-    valid_ = true;
-  }
-
-  return ret;
-}
-
-int ObLogBR::init_dml_data_second(const RecordType type,
-    const uint64_t cluster_id,
-    const int64_t tenant_id,
-    const common::ObString &trace_id,
-    const common::ObString &trace_info,
-    const common::ObString &unique_id,
-    const common::ObVersion &freeze_version,
-    const int64_t commit_version)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(data_)) {
-    LOG_ERROR("ILogRecord has not been created");
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(init_binlog_record_second_(type, cluster_id, trace_id, trace_info, unique_id, commit_version))) {
-    LOG_ERROR("init_binlog_record_second_ fail", KR(ret), K(type), K(cluster_id), K(trace_id), K(trace_info),
-        K(unique_id), K(commit_version));
-  } else {
-    LOG_DEBUG("init_dml_data_second succ", "type", print_record_type(type), K(cluster_id), K(tenant_id),
-        K(trace_id), K(trace_info), K(unique_id), K(commit_version));
-
-    set_precise_timestamp(commit_version);
-    freeze_version_ = freeze_version;
-  }
-
-  return ret;
-}
-
 int ObLogBR::init_data(const RecordType type,
     const uint64_t cluster_id,
-    const uint64_t tenant_id,
-    const int64_t ddl_schema_version,
+    const int64_t tenant_id,
+    const uint64_t row_index,
     const common::ObString &trace_id,
     const common::ObString &trace_info,
     const common::ObString &unique_id,
-    const common::ObVersion &freeze_version,
+    const int64_t schema_version,
     const int64_t commit_version,
     const int64_t part_trans_task_count,
     const common::ObString *major_version_str)
@@ -207,63 +152,13 @@ int ObLogBR::init_data(const RecordType type,
   } else if (OB_UNLIKELY(EUNKNOWN == type)
       || OB_UNLIKELY(! is_valid_cluster_id_(cluster_id))
       || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
-      || OB_UNLIKELY(commit_version <= 0)
-      || OB_UNLIKELY(OB_INVALID_TIMESTAMP == ddl_schema_version)) {
-    LOG_ERROR("invalid argument", K(type), K(cluster_id), K(commit_version), K(tenant_id), K(ddl_schema_version));
+      || OB_UNLIKELY(OB_INVALID_TIMESTAMP == schema_version)
+      || OB_UNLIKELY(commit_version <= 0)) {
+    LOG_ERROR("invalid argument", K(type), K(cluster_id), K(tenant_id), K(schema_version), K(commit_version));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(verify_part_trans_task_count_(type, part_trans_task_count))) {
     LOG_ERROR("verify_part_trans_task_count_ fail", KR(ret), K(type),
         "type", print_record_type(type), K(part_trans_task_count));
-  } else if (OB_FAIL(init_binlog_record_(type, cluster_id, trace_id, trace_info, unique_id,
-          commit_version, major_version_str))) {
-    LOG_ERROR("init_binlog_record_ fail", KR(ret), K(type), K(cluster_id), K(tenant_id), K(trace_id), K(trace_info),
-        K(unique_id), K(commit_version), K(major_version_str));
-  } else {
-    set_precise_timestamp(commit_version);
-    tenant_id_ = tenant_id;
-    freeze_version_ = freeze_version;
-    ddl_schema_version_ = ddl_schema_version;
-    set_next(NULL);
-    part_trans_task_count_ = part_trans_task_count;
-    valid_ = true;
-  }
-
-  return ret;
-}
-
-int ObLogBR::init_binlog_record_(const RecordType type,
-    const uint64_t cluster_id,
-    const common::ObString &trace_id,
-    const common::ObString &trace_info,
-    const common::ObString &unique_id,
-    const int64_t commit_version,
-    const common::ObString *major_version_str)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(data_)) {
-    LOG_ERROR("ILogRecord has not been created");
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(init_binlog_record_first_(type))) {
-    LOG_ERROR("init_binlog_record_first_ fail", KR(ret), K(type));
-  } else if (OB_FAIL(init_binlog_record_second_(type, cluster_id, trace_id, trace_info, unique_id,
-          commit_version, major_version_str))) {
-    LOG_ERROR("init_binlog_record_second_ fail", KR(ret), K(type), K(cluster_id), K(trace_id), K(trace_info),
-        K(unique_id), K(commit_version), K(major_version_str));
-  } else {
-    // succ
-  }
-
-  return ret;
-}
-
-int ObLogBR::init_binlog_record_first_(const RecordType type)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(data_)) {
-    LOG_ERROR("ILogRecord has not been created");
-    ret = OB_NOT_INIT;
   } else {
     // set to invalid_data
     int src_category = SRC_NO;
@@ -280,25 +175,7 @@ int ObLogBR::init_binlog_record_first_(const RecordType type)
     // means that two consecutive statements operate on different fields
     // set this field to true for performance
     data_->setFirstInLogevent(true);
-  }
 
-  return ret;
-}
-
-int ObLogBR::init_binlog_record_second_(const RecordType type,
-    const uint64_t cluster_id,
-    const common::ObString &trace_id,
-    const common::ObString &trace_info,
-    const common::ObString &unique_id,
-    const int64_t commit_version,
-    const common::ObString *major_version_str)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(data_)) {
-    LOG_ERROR("ILogRecord has not been created");
-    ret = OB_NOT_INIT;
-  } else {
     // treate cluster_id as thread_id
     // convert from 64 bit to 32 bit
     data_->setThreadId(static_cast<uint32_t>(cluster_id));
@@ -328,6 +205,14 @@ int ObLogBR::init_binlog_record_second_(const RecordType type,
         data_->putFilterRuleVal(major_version_str->ptr(), major_version_str->length());
       }
     }
+
+    set_next(NULL);
+    valid_ = true;
+    tenant_id_ = tenant_id;
+    row_index_ = row_index;
+    schema_version_ = schema_version;
+    commit_version_ = commit_version;
+    part_trans_task_count_ = part_trans_task_count;
   }
 
   return ret;

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -292,6 +292,7 @@ int ObLogFetcherIdlePool::handle_task_(PartFetchCtx *task, bool &need_dispatch)
     LOG_DEBUG("[STAT] [IDLE_POOL] [RECYCLE_FETCH_TASK]", K(task), KPC(task));
   } else {
     need_dispatch = false;
+    const bool enable_continue_use_cache_server_list = (1 == TCONF.enable_continue_use_cache_server_list);
 
     // If there is no leader information, update the leader
     // Note: Leader information is not required for fetching logs, so it is not part of the work that must be done by the Idle pool
@@ -320,6 +321,11 @@ int ObLogFetcherIdlePool::handle_task_(PartFetchCtx *task, bool &need_dispatch)
         // After all the above conditions are met, allow distribution to the fetch log stream
         need_dispatch = true;
       }
+    }
+
+    if (enable_continue_use_cache_server_list) {
+      need_dispatch = true;
+      LOG_DEBUG("enable_continue_use_cache_server_list", KPC(task), K(need_dispatch));
     }
   }
   return ret;

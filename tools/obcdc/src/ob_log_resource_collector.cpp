@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -21,13 +21,14 @@
 #include "ob_log_binlog_record_pool.h"  // ObLogBRPool
 #include "ob_log_trans_ctx.h"           // TransCtx
 #include "ob_log_trans_ctx_mgr.h"       // IObLogTransCtxMgr
-#include "ob_log_row_data_index.h"      // ObLogRowDataIndex
 #include "ob_log_store_service.h"       // IObStoreService
+#include "ob_log_store_key.h"           // ObLogStoreKey
 #include "ob_log_binlog_record.h"       // ObLogBR
 #include "ob_log_meta_manager.h"        // IObLogMetaManager
 #include "ob_log_instance.h"
 #include "ob_log_tenant.h"
 #include "ob_log_config.h"
+#include "ob_log_trans_redo_dispatcher.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;
@@ -43,6 +44,7 @@ ObLogResourceCollector::ObLogResourceCollector() :
     trans_ctx_mgr_(NULL),
     meta_manager_(NULL),
     store_service_(NULL),
+    err_handler_(NULL),
     br_thread_num_(0),
     br_count_(0),
     total_part_trans_task_count_(0),
@@ -64,7 +66,8 @@ int ObLogResourceCollector::init(const int64_t thread_num,
     IObLogBRPool *br_pool,
     IObLogTransCtxMgr *trans_ctx_mgr,
     IObLogMetaManager *meta_manager,
-    IObStoreService *store_service)
+    IObStoreService *store_service,
+    IObLogErrHandler *err_handler)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -77,9 +80,10 @@ int ObLogResourceCollector::init(const int64_t thread_num,
       || OB_ISNULL(br_pool)
       || OB_ISNULL(trans_ctx_mgr)
       || OB_ISNULL(meta_manager)
-      || OB_ISNULL(store_service)) {
+      || OB_ISNULL(store_service)
+      || OB_ISNULL(err_handler)) {
     LOG_ERROR("invalid arguments", K(thread_num), K(thread_num_for_br), K(queue_size),
-        K(br_pool), K(trans_ctx_mgr), K(meta_manager), K(store_service));
+        K(br_pool), K(trans_ctx_mgr), K(meta_manager), K(store_service), K(err_handler));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(RCThread::init(thread_num, queue_size))) {
     LOG_ERROR("init ResourceCollector threads fail", KR(ret), K(thread_num), K(queue_size));
@@ -88,6 +92,7 @@ int ObLogResourceCollector::init(const int64_t thread_num,
     trans_ctx_mgr_ = trans_ctx_mgr;
     meta_manager_ = meta_manager;
     store_service_ = store_service;
+    err_handler_ = err_handler;
     br_thread_num_ = thread_num_for_br;
     br_count_ = 0;
     total_part_trans_task_count_ = 0;
@@ -110,6 +115,7 @@ void ObLogResourceCollector::destroy()
   trans_ctx_mgr_ = NULL;
   meta_manager_ = NULL;
   store_service_ = NULL;
+  err_handler_ = NULL;
   br_thread_num_ = 0;
   br_count_ = 0;
   total_part_trans_task_count_ = 0;
@@ -207,44 +213,18 @@ int ObLogResourceCollector::revert(const int record_type, ObLogBR *br)
   return ret;
 }
 
-int ObLogResourceCollector::revert_unserved_task(const bool is_rollback_row,
-    ObLogRowDataIndex &row_data_index)
-{
-  int ret = OB_SUCCESS;
-  ObLogBR *br = row_data_index.get_binlog_record();
-
-  if (OB_UNLIKELY(! row_data_index.is_valid())) {
-    LOG_ERROR("row_data_index is not valid", K(row_data_index));
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    // Storager mode, br is NULL
-    if (NULL == br) {
-      if (! is_rollback_row) {
-        if (OB_FAIL(del_store_service_data_(row_data_index))) {
-          LOG_ERROR("del_store_service_data_", KR(ret), K(row_data_index));
-        }
-      }
-    } else {
-      // Memory mode
-      if (OB_FAIL(dec_ref_cnt_and_try_to_recycle_log_entry_task_(*br))) {
-        LOG_ERROR("dec_ref_cnt_and_try_to_recycle_log_entry_task_ fail", KR(ret));
-      } else if (OB_FAIL(revert_single_binlog_record_(br))) {
-        LOG_ERROR("revert binlog record fail", KR(ret), K(br));
-      } else {
-        br = NULL;
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObLogResourceCollector::revert_log_entry_task(ObLogEntryTask *log_entry_task)
 {
   int ret = OB_SUCCESS;
+  PartTransTask* part_trans_task = NULL;
 
-  if (OB_FAIL(revert_log_entry_task_(log_entry_task))) {
+  if (OB_ISNULL(part_trans_task = static_cast<PartTransTask *>(log_entry_task->get_host()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("host of log_entry_task is invalid, failed cast to PartTransTask" ,KR(ret), KPC(log_entry_task));
+  } else if (OB_FAIL(revert_log_entry_task_(log_entry_task))) {
     LOG_ERROR("revert_log_entry_task_ fail", KR(ret), KPC(log_entry_task));
+  } else if (OB_FAIL(dec_ref_cnt_and_try_to_revert_task_(part_trans_task))) {
+    LOG_ERROR("dec_ref_cnt_and_try_to_revert_task_ fail", KR(ret), KPC(part_trans_task));
   } else {
     log_entry_task = NULL;
   }
@@ -287,22 +267,72 @@ int ObLogResourceCollector::dec_ref_cnt_and_try_to_revert_task_(PartTransTask *p
 int ObLogResourceCollector::revert_log_entry_task_(ObLogEntryTask *log_entry_task)
 {
   int ret = OB_SUCCESS;
- IObLogEntryTaskPool *log_entry_task_pool = TCTX.log_entry_task_pool_;
+  IObLogEntryTaskPool *log_entry_task_pool = TCTX.log_entry_task_pool_;
+  IObLogTransRedoDispatcher *trans_redo_dispatcher = TCTX.trans_redo_dispatcher_;
+  int64_t data_len = 0;
+  bool is_log_entry_stored = false;
 
   if (OB_ISNULL(log_entry_task)) {
     LOG_ERROR("log_entry_task is NULL");
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_ISNULL(log_entry_task_pool)) {
-    LOG_ERROR("log_entry_task_pool is NULL");
+  } else if (OB_ISNULL(log_entry_task_pool) || OB_ISNULL(trans_redo_dispatcher)) {
+    LOG_ERROR("log_entry_task_pool or trans_redo_dispatcher is NULL");
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(log_entry_task->get_status(is_log_entry_stored))) {
+    LOG_ERROR("log_entry_task get_status fail", KR(ret), KPC(log_entry_task), K(is_log_entry_stored));
+  } else if (OB_FAIL(log_entry_task->get_data_len(data_len))) {
+    LOG_ERROR("ObLogEntryTask get_data_len fail", K(log_entry_task));
+  } else if (OB_FAIL(log_entry_task->rc_callback())) {
+    LOG_ERROR("ObLogEntryTask rc_callback fail", K(log_entry_task));
   } else {
+    trans_redo_dispatcher->dec_dispatched_redo_memory(data_len);
+
     const bool is_test_mode_on = TCONF.test_mode_on != 0;
     if (is_test_mode_on) {
       LOG_INFO("LogEntryTask-free", "LogEntryTask", *log_entry_task, "addr", log_entry_task);
     }
 
-    log_entry_task->~ObLogEntryTask();
+    if (is_log_entry_stored) {
+      const bool skip_recycle_data = TCONF.skip_recycle_data != 0;
+      if (! skip_recycle_data) {
+        const uint64_t tenant_id = log_entry_task->get_tenant_id();
+        std::string key;
+
+        if (OB_FAIL(log_entry_task->get_storage_key(key))) {
+          LOG_ERROR("get_storage_key fail", KR(ret), "key", key.c_str());
+        } else if (OB_FAIL(del_store_service_data_(tenant_id, key))) {
+          LOG_ERROR("del_store_service_data_ fail", KR(ret), KPC(log_entry_task));
+        } else {}
+      }
+    }
+
     log_entry_task_pool->free(log_entry_task);
+  }
+
+  return ret;
+}
+
+int ObLogResourceCollector::del_store_service_data_(const uint64_t tenant_id,
+    std::string &key)
+{
+  int ret = OB_SUCCESS;
+  ObLogTenantGuard guard;
+  ObLogTenant *tenant = NULL;
+  void *column_family_handle = NULL;
+
+  if (OB_FAIL(TCTX.get_tenant_guard(tenant_id, guard))) {
+    LOG_ERROR("get_tenant_guard fail", KR(ret), K(tenant_id));
+  } else {
+    tenant = guard.get_tenant();
+    column_family_handle = tenant->get_cf();
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(store_service_->del(column_family_handle, key))) {
+      LOG_ERROR("store_service_ del fail", KR(ret), K(tenant_id), K(key.c_str()));
+    } else {
+      LOG_DEBUG("store_service_ del succ", K(tenant_id), K(key.c_str()));
+    }
   }
 
   return ret;
@@ -438,8 +468,12 @@ int ObLogResourceCollector::handle(void *data,
     if (recycle_task->is_part_trans_task()) {
       PartTransTask *task = static_cast<PartTransTask *>(recycle_task);
 
+      if (! task->is_served()) {
+        if (OB_FAIL(revert_unserved_part_trans_task_(thread_index, *task))) {
+          LOG_ERROR("revert_unserved_part_trans_task_ fail", KR(ret), K(thread_index), KPC(task));
+        }
       // DML/DDL
-      if (task->is_ddl_trans() || task->is_dml_trans()) {
+      } else if (task->is_ddl_trans() || task->is_dml_trans()) {
         // Guaranteed reference count of 0
         if (OB_UNLIKELY(0 != task->get_ref_cnt())) {
           LOG_ERROR("can not revert part trans task, ref_cnt is not zero", K(*task));
@@ -529,32 +563,27 @@ int ObLogResourceCollector::handle(void *data,
     }
   }
 
+  // Failure to withdraw
+  if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret && NULL != err_handler_) {
+    err_handler_->handle_error(ret, "ResourceCollector thread exits, thread_index=%ld, err=%d",
+        thread_index, ret);
+    stop_flag = true;
+  }
+
   return ret;
 }
 
 int ObLogResourceCollector::revert_dml_binlog_record_(ObLogBR &br)
 {
   int ret = OB_SUCCESS;
-  PartTransTask *part_trans_task = NULL;
-  ObLogRowDataIndex *row_data_index = NULL;
-  const bool is_serilized = br.is_serilized();
+  ObLogEntryTask *log_entry_task = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("ResourceCollector has not been initialized");
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(row_data_index = static_cast<ObLogRowDataIndex *>(br.get_host()))) {
-    LOG_ERROR("row_data_index is NULL", K(br));
+  } else if (OB_ISNULL(log_entry_task = static_cast<ObLogEntryTask *>(br.get_host()))) {
+    LOG_ERROR("log_entry_task is NULL", K(br));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_ISNULL(part_trans_task = static_cast<PartTransTask*>(row_data_index->get_host()))) {
-    LOG_ERROR("part_trans_task is NULL", KPC(row_data_index));
-    ret = OB_ERR_UNEXPECTED;
-  } else if (is_serilized) {
-    const bool skip_recycle_data = TCONF.skip_recycle_data != 0;
-    if (! skip_recycle_data) {
-      if (OB_FAIL(del_store_service_data_(*row_data_index))) {
-        LOG_ERROR("del_store_service_data_ fail", KR(ret), KPC(row_data_index));
-      }
-    }
   } else {
     if (OB_FAIL(dec_ref_cnt_and_try_to_recycle_log_entry_task_(br))) {
       LOG_ERROR("dec_ref_cnt_and_try_to_recycle_log_entry_task_ fail", KR(ret));
@@ -564,46 +593,6 @@ int ObLogResourceCollector::revert_dml_binlog_record_(ObLogBR &br)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(revert_single_binlog_record_(&br))) {
       LOG_ERROR("revert_single_binlog_record_ fail", KR(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dec_ref_cnt_and_try_to_revert_task_(part_trans_task))) {
-      if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("dec_ref_cnt_and_try_to_revert_task_ fail", KR(ret), KPC(part_trans_task));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObLogResourceCollector::del_store_service_data_(ObLogRowDataIndex &row_data_index)
-{
-  int ret = OB_SUCCESS;
-  std::string key;
-
-  if (OB_FAIL(row_data_index.get_storage_key(key))) {
-    LOG_ERROR("get_storage_key fail", KR(ret), "key", key.c_str());
-  } else {
-    const uint64_t tenant_id = row_data_index.get_tenant_id();
-    ObLogTenantGuard guard;
-    ObLogTenant *tenant = NULL;
-    void *column_family_handle = NULL;
-
-    if (OB_FAIL(TCTX.get_tenant_guard(tenant_id, guard))) {
-      LOG_ERROR("get_tenant_guard fail", KR(ret), K(tenant_id));
-    } else {
-      tenant = guard.get_tenant();
-      column_family_handle = tenant->get_cf();
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(store_service_->del(column_family_handle, key))) {
-        LOG_ERROR("store_service_ del fail", KR(ret), K(key.c_str()), K(row_data_index));
-      } else {
-        LOG_DEBUG("store_service_ del succ", K(key.c_str()), K(row_data_index));
-      }
     }
   }
 
@@ -645,10 +634,14 @@ int ObLogResourceCollector::del_trans_(const uint64_t tenant_id,
 int ObLogResourceCollector::dec_ref_cnt_and_try_to_recycle_log_entry_task_(ObLogBR &br)
 {
   int ret = OB_SUCCESS;
-  ObLogEntryTask *log_entry_task = static_cast<ObLogEntryTask *>(br.get_log_entry_task());
+  ObLogEntryTask *log_entry_task = static_cast<ObLogEntryTask *>(br.get_host());
+  PartTransTask *part_trans_task = NULL;
 
   if (OB_ISNULL(log_entry_task)) {
     LOG_ERROR("log_entry_task is NULL");
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(part_trans_task = static_cast<PartTransTask *>(log_entry_task->get_host()))) {
+    LOG_ERROR("part_trans_task is NULL", KPC(log_entry_task));
     ret = OB_ERR_UNEXPECTED;
   } else {
     if (TCONF.test_mode_on) {
@@ -661,6 +654,14 @@ int ObLogResourceCollector::dec_ref_cnt_and_try_to_recycle_log_entry_task_(ObLog
         LOG_ERROR("revert_log_entry_task_ fail", KR(ret), KPC(log_entry_task));
       } else {
         log_entry_task = NULL;
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(dec_ref_cnt_and_try_to_revert_task_(part_trans_task))) {
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("dec_ref_cnt_and_try_to_revert_task_ fail", KR(ret), KPC(part_trans_task));
+          }
+        }
       }
     }
   }
@@ -716,30 +717,26 @@ int ObLogResourceCollector::revert_single_binlog_record_(ObLogBR *br)
     LOG_ERROR("br is NULL");
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const bool is_serilized = br->is_serilized();
+    ILogRecord *br_data = NULL;
 
-    if (! is_serilized) {
-      ILogRecord *br_data = NULL;
+    if (OB_ISNULL(br_data = br->get_data())) {
+      LOG_ERROR("binlog record data is invalid", K(br));
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      ITableMeta *tblMeta = NULL;
+      // recycle Table Meta of binlog record
+      if (0 != br_data->getTableMeta(tblMeta)) {
+        LOG_ERROR("getTableMeta fail");
+        ret = OB_ERR_UNEXPECTED;
+      } else if (NULL != tblMeta) {
+        meta_manager_->revert_table_meta(tblMeta);
+        br_data->setTableMeta(NULL);
+      }
 
-      if (OB_ISNULL(br_data = br->get_data())) {
-        LOG_ERROR("binlog record data is invalid", K(br));
-        ret = OB_INVALID_ARGUMENT;
-      } else {
-        ITableMeta *tblMeta = NULL;
-        // recycle Table Meta of binlog record
-        if (0 != br_data->getTableMeta(tblMeta)) {
-          LOG_ERROR("getTableMeta fail");
-          ret = OB_ERR_UNEXPECTED;
-        } else if (NULL != tblMeta) {
-          meta_manager_->revert_table_meta(tblMeta);
-          br_data->setTableMeta(NULL);
-        }
-
-        // recycle DB Meta of binlog record
-        if (NULL != br_data->getDBMeta()) {
-          meta_manager_->revert_db_meta(br_data->getDBMeta());
-          br_data->setDBMeta(NULL);
-        }
+      // recycle DB Meta of binlog record
+      if (NULL != br_data->getDBMeta()) {
+        meta_manager_->revert_db_meta(br_data->getDBMeta());
+        br_data->setDBMeta(NULL);
       }
     }
 
@@ -755,6 +752,48 @@ int ObLogResourceCollector::revert_single_binlog_record_(ObLogBR *br)
 int64_t ObLogResourceCollector::get_part_trans_task_count() const
 {
   return ATOMIC_LOAD(&total_part_trans_task_count_);
+}
+
+int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t thread_idx, PartTransTask &task)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = task.get_tenant_id();
+  const char *participant = task.get_participant_key_str();
+  SortedRedoLogList &sorted_redo_list =  task.get_sorted_redo_list();
+  DmlRedoLogNode *dml_redo_node = static_cast<DmlRedoLogNode *>(sorted_redo_list.head_);
+
+  while (OB_SUCC(ret) && NULL != dml_redo_node) {
+    if (dml_redo_node->is_stored()) {
+      uint64_t store_log_id = dml_redo_node->get_store_log_id();
+      int32_t store_log_offset = dml_redo_node->get_log_offset();
+      ObLogStoreKey store_key;
+      std::string key;
+
+      if (OB_FAIL(store_key.init(tenant_id, participant, store_log_id, store_log_offset))) {
+        LOG_ERROR("store_key init fail", KR(ret), K(store_key));
+      } else if (OB_FAIL(store_key.get_key(key))) {
+        LOG_ERROR("get_storage_key fail", KR(ret), "key", key.c_str());
+      } else if (OB_FAIL(del_store_service_data_(tenant_id, key))) {
+        LOG_ERROR("del_store_service_data_ fail", KR(ret), K(task));
+      } else {}
+    }
+
+    if (OB_SUCC(ret)) {
+      dml_redo_node = static_cast<DmlRedoLogNode *>(dml_redo_node->get_next());
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(recycle_part_trans_task_(thread_idx, &task))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("recycle_part_trans_task_ failed", KR(ret), K(thread_idx), K(task));
+      }
+    } else {
+      // no more access to task
+    }
+  }
+
+  return ret;
 }
 
 void ObLogResourceCollector::do_stat_(PartTransTask &task,

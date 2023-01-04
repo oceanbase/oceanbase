@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -24,6 +24,8 @@
 #include <stdlib.h>                                     // strtoll
 #include <openssl/md5.h>                                // MD5
 #include <StrArray.h>                                   // StrArray
+#include <MetaInfo.h>                                   // ITableMeta
+#include <LogMsgFactory.h>
 
 #include "lib/string/ob_string.h"                       // ObString
 #include "lib/utility/serialization.h"                  // serialization
@@ -584,7 +586,15 @@ bool is_lob_type(const int ctype)
 
 bool is_json_type(const int ctype)
 {
-  return (ctype == oceanbase::obmysql::MYSQL_TYPE_JSON);
+  return (oceanbase::obmysql::MYSQL_TYPE_JSON == ctype);
+}
+
+bool is_enum_type(const int ctype) {
+  return (oceanbase::obmysql::MYSQL_TYPE_ENUM == ctype);
+}
+
+bool is_set_type(const int ctype) {
+  return (oceanbase::obmysql::MYSQL_TYPE_SET == ctype);
 }
 
 double get_delay_sec(const int64_t tstamp)
@@ -1046,7 +1056,7 @@ int split_int64(const ObString &str, const char delimiter, ObIArray<int64_t> &re
 
   if (str.length() <= 0) {
     // empty string
-  } else if (OB_ISNULL(buffer = ob_malloc(buf_len))) {
+  } else if (OB_ISNULL(buffer = ob_log_malloc(buf_len))) {
     LOG_ERROR("allocate memory for buffer fail", K(buffer), K(str.length()));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -1281,6 +1291,46 @@ int BackupTableHelper::get_table_ids_on_backup_mode(common::ObIArray<uint64_t> &
   return ret;
 }
 
+ObLogTimeMonitor::ObLogTimeMonitor(const char* log_msg_prefix, bool enable)
+{
+  enable_ = enable;
+  if (enable_) {
+    log_msg_prefix_ = log_msg_prefix;
+    start_time_usec_ = get_timestamp();
+  } else {
+    log_msg_prefix_ = NULL;;
+    start_time_usec_ = 0;
+  }
+  last_mark_time_usec_ = start_time_usec_;
+}
+
+ObLogTimeMonitor::~ObLogTimeMonitor()
+{
+  if (enable_) {
+    int64_t cost_time = get_timestamp() - start_time_usec_;
+    _LOG_INFO("[TIME_MONITOR] %s: cost:%ld; start:%ld, start_ts:%s", log_msg_prefix_, cost_time, start_time_usec_, TS_TO_STR(start_time_usec_));
+    enable_ = false;
+    log_msg_prefix_ = NULL;
+    start_time_usec_ = 0;
+    last_mark_time_usec_ = 0;
+  }
+}
+
+int64_t ObLogTimeMonitor::mark_and_get_cost(const char *log_msg_suffix, bool need_print)
+{
+  int64_t cost = 0;
+  if (enable_) {
+    int64_t cur_ts = get_timestamp();
+    cost = cur_ts - last_mark_time_usec_;
+    if (need_print) {
+      _LOG_INFO("[TIME_MONITOR] %s-%s: cost %ld", log_msg_prefix_, log_msg_suffix, cost);
+    }
+    last_mark_time_usec_ = cur_ts;
+  }
+  return cost;
+}
+
+
 bool is_backup_mode()
 {
   return (TCONF.enable_backup_mode != 0);
@@ -1349,6 +1399,7 @@ int get_br_value(ILogRecord *br,
 }
 
 int get_mem_br_value(ILogRecord *br,
+    std::string &key_string,
     ObArray<BRColElem> &new_values)
 {
   int ret = OB_SUCCESS;
@@ -1357,15 +1408,29 @@ int get_mem_br_value(ILogRecord *br,
     LOG_ERROR("invalid argument");
     ret = OB_INVALID_ARGUMENT;
   } else {
+    int record_type = br->recordType();
     int64_t new_cols_count = 0;
+    BinLogBuf *old_cols = br->oldCols((unsigned int &)new_cols_count);
     BinLogBuf *new_cols = br->newCols((unsigned int &)new_cols_count);
     int64_t index = 0;
 
     while (OB_SUCC(ret) && index < new_cols_count) {
       const char *new_col_value = new_cols[index].buf;
+      const char *old_col_value = old_cols[index].buf;
       size_t new_col_value_len = static_cast<size_t>(new_cols[index].buf_used_size);
 
       BRColElem new_col_elem(new_col_value, new_col_value_len);
+      // LOG_DEBUG("new_row_value ", KP(br), KP(new_cols[index].buf));
+      if (EDELETE == record_type) {
+        _LOG_INFO("key_str: %s, binlog: ptr=%p, col_idx=%ld; old_col_value=%s, old_col_ptr=%p",
+          key_string.c_str(), &br, index, old_col_value, &(old_cols[index].buf));
+      } else if (EINSERT == record_type) {
+        _LOG_INFO("key_str: %s, binlog: ptr=%p, col_idx=%ld; new_col_value=%s, new_col_ptr=%p;",
+          key_string.c_str(), &br, index, new_col_value, &(new_cols[index].buf));
+      } else if (EUPDATE == record_type) {
+        _LOG_INFO("key_str: %s, binlog: ptr=%p, col_idx=%ld; new_col_value=%s, new_col_ptr=%p; old_col_value=%s, old_col_ptr=%p",
+          key_string.c_str(), &br, index, new_col_value, &(new_cols[index].buf), old_col_value, &(old_cols[index].buf));
+      }
 
       if (OB_FAIL(new_values.push_back(new_col_elem))) {
         LOG_ERROR("new_values push_back fail", KR(ret));
@@ -1374,8 +1439,93 @@ int get_mem_br_value(ILogRecord *br,
       }
     }
   }
+
   return ret;
 }
+
+int print_unserilized_br_value(ILogRecord *binlog_record,
+    const char* key_c_str,
+    const char* trans_id_c_str)
+{
+  int ret = OB_SUCCESS;
+  ObArray<BRColElem> new_values;
+  bool is_table_meta_null = false;
+  ITableMeta *table_meta = NULL;
+  std::string key_str(key_c_str);
+  std::string trans_id_str(trans_id_c_str);
+  std::string key = key_str + trans_id_str;
+
+  if (0 != binlog_record->getTableMeta(table_meta)) {
+    LOG_ERROR("getTableMeta fail");
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    int64_t col_count = 0;
+
+    if (NULL == table_meta) {
+      is_table_meta_null = true;
+    } else {
+      col_count = table_meta->getColCount();
+    }
+
+    if (OB_ISNULL(binlog_record)) {
+      LOG_ERROR("invalid argument", K(binlog_record));
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(get_mem_br_value(binlog_record, key, new_values))) {
+      LOG_ERROR("get_mem_br_value fail", KR(ret));
+    } else {
+      LOG_INFO("ObLogBR info", "key", key.c_str(), K(new_values), K(is_table_meta_null),
+          K(col_count));
+    }
+  }
+
+  return ret;
+}
+
+int print_serilized_br_value(std::string &key,
+    const std::string &drc_message_factory_binlog_record_type,
+    const char *br_string,
+    const size_t br_string_len)
+{
+  int ret = OB_SUCCESS;
+  ILogRecord *binlog_record = LogMsgFactory::createLogRecord(drc_message_factory_binlog_record_type, false/*creating_binlog_record*/);
+  ObArray<BRColElem> new_values;
+  ITableMeta *table_meta = NULL;
+
+  if (OB_ISNULL(binlog_record)) {
+    LOG_ERROR("invalid argument", K(binlog_record));
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(binlog_record->parse(br_string, br_string_len))) {
+    LOG_ERROR("binlog_record parse fail", K(ret), K(binlog_record));
+  } else if (OB_FAIL(get_br_value(binlog_record, new_values))) {
+    LOG_ERROR("get_mem_br_value fail", KR(ret));
+  } else if (OB_ISNULL(table_meta = LogMsgFactory::createTableMeta())) {
+    LOG_ERROR("table_meta is NULL");
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (0 != binlog_record->getTableMeta(table_meta)) {
+    LOG_ERROR("getTableMeta fail");
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    bool is_table_meta_null = false;
+    int64_t col_count = 0;
+
+    if (NULL == table_meta) {
+      is_table_meta_null = true;
+    } else {
+      col_count = table_meta->getColCount();
+    }
+
+    LOG_INFO("store_service_ serilized but before put", "key", key.c_str(), K(new_values), K(is_table_meta_null),
+        K(col_count));
+  }
+
+  if (NULL != table_meta) {
+    LogMsgFactory::destroy(table_meta);
+  }
+
+  return ret;
+}
+
+
 
 int c_str_to_int(const char* str, int64_t &num)
 {

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -18,6 +18,7 @@
 
 #include "ob_log_part_mgr.h"                    // IObLogPartMgr
 #include "ob_log_trans_ctx_mgr.h"               // IObLogTransCtxMgr
+#include "ob_log_binlog_record.h"
 
 #define _TCTX_STAT(level, tag, args...) _OBLOG_LOG(level, "[STAT] [TRANS_CTX] " tag, ##args)
 #define _TCTX_ISTAT(tag, args...) _TCTX_STAT(INFO, tag, ##args)
@@ -92,17 +93,19 @@ TransCtx::TransCtx() :
     participant_count_(0),
     ready_participant_objs_(NULL),
     ready_participant_count_(0),
-    br_committer_queue_cond_(),
     total_br_count_(0),
     committed_br_count_(0),
     valid_part_trans_task_count_(0),
     revertable_participant_count_(0),
+    is_trans_sorted_(false),
+    br_out_queue_(),
     allocator_(ObModIds::OB_LOG_TRANS_CTX, PAGE_SIZE),
     lock_()
 {}
 
 TransCtx::~TransCtx()
 {
+  reset();
 }
 
 void TransCtx::reset()
@@ -126,6 +129,7 @@ void TransCtx::reset()
   committed_br_count_ = 0;
   valid_part_trans_task_count_ = 0;
   revertable_participant_count_ = 0;
+  is_trans_sorted_ = false;
 
   allocator_.reset();
 }
@@ -569,13 +573,13 @@ int TransCtx::inc_part_trans_count_on_serving_(bool &is_serving,
   return ret;
 }
 
-int TransCtx::sequence(const int64_t seq)
+int TransCtx::sequence(const int64_t seq, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
 
-  if (OB_UNLIKELY(seq < 0)) {
-    LOG_ERROR("invalid argument", K(seq));
+  if (OB_UNLIKELY(seq < 0) || OB_UNLIKELY(schema_version < 0)) {
+    LOG_ERROR("invalid argument", K(seq), K(schema_version));
     ret = OB_INVALID_ARGUMENT;
   } else if (TRANS_CTX_STATE_PARTICIPANT_READY != state_) {
     LOG_ERROR("state not match which is not DEP_PARSED", "state", print_state());
@@ -588,13 +592,14 @@ int TransCtx::sequence(const int64_t seq)
     PartTransTask *task = ready_participant_objs_;
     while (NULL != task) {
       task->set_global_trans_seq(seq);
+      task->set_global_schema_version(schema_version);
       task = task->next_task();
     }
 
-    _TCTX_DSTAT("[SEQUENCE] COMMIT_VERSION=%ld TRANS_ID=%s SEQ=%ld",
+    _TCTX_DSTAT("[SEQUENCE] COMMIT_VERSION=%ld TRANS_ID=%s SEQ=%ld SCHEMA_VERSION=%ld",
         trx_sort_elem_.get_global_trans_version(),
         to_cstring(trans_id_),
-        seq_);
+        seq_, schema_version);
   }
 
   return ret;
@@ -777,6 +782,62 @@ void TransCtx::destroy_participant_array_()
     participant_count_ = 0;
   }
 }
+
+int TransCtx::append_sorted_br(ObLogBR *br)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(br)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("binlog that will append to output queue should not be null", KR(ret), KP(br));
+  } else if (OB_FAIL(br_out_queue_.push(const_cast<ObLogBR*>(br)))) {
+    LOG_ERROR("failed to push br into output queue", KR(ret));
+  } else {
+    inc_total_br_count_();
+  }
+
+  return ret;
+}
+
+// note: call this function before any br output
+int TransCtx::has_valid_br(volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+
+  while (OB_SUCC(ret) && !stop_flag) {
+    if (total_br_count_ > 0) {
+      break;
+    } else if (is_trans_sorted_ && (0 >= total_br_count_)) {
+      // must duble check to make sure total_br_count less than 0 in case of concurrenct scenes
+      ret = OB_EMPTY_RESULT;
+    } else {
+      usleep(2 * 1000); // sleep 2ms
+    }
+  }
+
+  return ret;
+}
+
+int TransCtx::pop_br_for_committer(ObLogBR *&br)
+{
+  int ret = OB_SUCCESS;
+  common::ObLink* br_task = NULL;
+
+  if (OB_FAIL(br_out_queue_.pop(br_task))) {
+    // may get OB_EAGAIN, handle by caller
+  } else if (OB_ISNULL(br_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get null br from br_out_queue", KR(ret), KPC(this), "trans_sort_finish", is_trans_sorted());
+  } else if (OB_ISNULL(br = static_cast<ObLogBR*>(br_task))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("failed to cast ObLink to ObLogBR", KP(br_task), KPC(this));
+  } else {
+    /* succ pop br from br_queue */
+  }
+
+  return ret;
+}
+
 
 } // namespace liboblog
 } // namespace oceanbase

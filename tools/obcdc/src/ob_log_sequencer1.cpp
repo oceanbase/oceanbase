@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -24,8 +24,6 @@
 #include "ob_log_trans_ctx_mgr.h"       // IObLogTransCtxMgr
 #include "ob_log_trans_stat_mgr.h"      // IObLogTransStatMgr
 #include "ob_log_committer.h"           // IObLogCommitter
-#include "ob_log_data_processor.h"      // IObLogDataProcessor
-#include "ob_log_row_data_index.h"      // ObLogRowDataIndex
 
 #define _STAT(level, tag_str, args...) _OBLOG_SEQUENCER_LOG(level, "[STAT] [SEQ] " tag_str, ##args)
 #define STAT(level, tag_str, args...) OBLOG_SEQUENCER_LOG(level, "[STAT] [SEQ] " tag_str, ##args)
@@ -47,6 +45,7 @@
     } while (0)
 
 using namespace oceanbase::common;
+using namespace oceanbase::lib;
 using namespace oceanbase::transaction;
 
 namespace oceanbase
@@ -62,7 +61,8 @@ ObLogSequencer::ObLogSequencer()
     trans_ctx_mgr_(NULL),
     trans_stat_mgr_(NULL),
     trans_committer_(NULL),
-    data_processor_(NULL),
+    redo_dispatcher_(NULL),
+    msg_sorter_(NULL),
     err_handler_(NULL),
     global_checkpoint_(OB_INVALID_TIMESTAMP),
     last_global_checkpoint_(OB_INVALID_TIMESTAMP),
@@ -97,7 +97,8 @@ int ObLogSequencer::init(const int64_t thread_num,
     IObLogTransCtxMgr &trans_ctx_mgr,
     IObLogTransStatMgr &trans_stat_mgr,
     IObLogCommitter &trans_committer,
-    IObLogDataProcessor &data_processor,
+    IObLogTransRedoDispatcher &redo_dispatcher,
+    IObLogTransMsgSorter &br_sorter,
     IObLogErrHandler &err_handler)
 {
   int ret = OB_SUCCESS;
@@ -117,7 +118,8 @@ int ObLogSequencer::init(const int64_t thread_num,
     trans_ctx_mgr_ = &trans_ctx_mgr;
     trans_committer_ = &trans_committer;
     trans_stat_mgr_ = &trans_stat_mgr;
-    data_processor_ = &data_processor;
+    redo_dispatcher_ = &redo_dispatcher;
+    msg_sorter_ = &br_sorter;
     err_handler_ = &err_handler;
     global_checkpoint_ = OB_INVALID_TIMESTAMP;
     last_global_checkpoint_ = OB_INVALID_TIMESTAMP;
@@ -148,7 +150,8 @@ void ObLogSequencer::destroy()
   trans_ctx_mgr_ = NULL;
   trans_stat_mgr_ = NULL;
   trans_committer_ = NULL;
-  data_processor_ = NULL;
+  redo_dispatcher_ = NULL;
+  msg_sorter_ = NULL;
   err_handler_ = NULL;
   global_checkpoint_ = OB_INVALID_TIMESTAMP;
   last_global_checkpoint_ = OB_INVALID_TIMESTAMP;
@@ -231,6 +234,7 @@ void ObLogSequencer::get_task_count(SeqStatInfo &stat_info)
   stat_info.dml_part_trans_task_count_ = ATOMIC_LOAD(&dml_part_trans_task_count_);
   stat_info.hb_part_trans_task_count_ = ATOMIC_LOAD(&hb_part_trans_task_count_);
   stat_info.queue_part_trans_task_count_ = ATOMIC_LOAD(&queue_part_trans_task_count_);
+  stat_info.sequenced_trans_count_ = trans_queue_.size();
 }
 
 // A thread is responsible for continually rotating the sequence of transactions that need sequence
@@ -239,6 +243,8 @@ void ObLogSequencer::run1()
   const int64_t SLEEP_US = 1000;
   lib::set_thread_name("ObLogSequencerTrans");
   int ret = OB_SUCCESS;
+  bool enable_monitor = false;
+  ObLogTimeMonitor monitor("Sequencer-deal-trans", enable_monitor);
 
   while (OB_SUCC(ret) && ! lib::ThreadPool::has_set_stop()) {
     // Global checkpoint not updated or initial value, do nothing
@@ -250,6 +256,7 @@ void ObLogSequencer::run1()
       while (OB_SUCC(ret) && ! trans_queue_.empty()) {
         TrxSortElem top_trx_sort_elem = trans_queue_.top();
         const int64_t global_trans_version = top_trx_sort_elem.get_global_trans_version();
+        monitor.mark_and_get_cost("begin", true);
 
         if (global_trans_version <= ATOMIC_LOAD(&global_checkpoint_)) {
           if (OB_FAIL(handle_to_be_sequenced_trans_(top_trx_sort_elem, lib::ThreadPool::has_set_stop()))) {
@@ -257,6 +264,7 @@ void ObLogSequencer::run1()
               LOG_ERROR("handle_to_be_sequenced_trans_ fail", KR(ret), K(top_trx_sort_elem));
             }
           } else {
+            monitor.mark_and_get_cost("end", true);
             trans_queue_.pop();
           }
         } else {
@@ -267,7 +275,8 @@ void ObLogSequencer::run1()
     lib::this_routine::usleep(SLEEP_US);
 
     if (REACH_TIME_INTERVAL(PRINT_SEQ_INFO_INTERVAL)) {
-      ISTAT("[OUTPUT]", K(global_checkpoint_), K(last_global_checkpoint_), K(global_seq_), "size", trans_queue_.size());
+      ISTAT("[OUTPUT]", "DELAY", TS_TO_DELAY(global_checkpoint_),
+          K(global_checkpoint_), K(last_global_checkpoint_), K(global_seq_), "size", trans_queue_.size());
     }
   }
 
@@ -282,7 +291,11 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  bool enable_monitor = false;
+  ObLogTimeMonitor monitor("Sequencer::handle_tobe_sequenced_trans", enable_monitor);
   TransCtx *trans_ctx = trx_sort_elem.get_trans_ctx_host();
+  const int64_t new_seq = ATOMIC_FAA(&global_seq_, 1);
+  int64_t new_schema_version = 0;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("ObLogSequencer has not been initialized");
@@ -290,13 +303,11 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
   } else if (OB_ISNULL(trans_ctx)) {
     LOG_ERROR("trans_ctx is NULL", K(trx_sort_elem));
     ret = OB_ERR_UNEXPECTED;
-  // sequence
-  } else if (OB_FAIL(trans_ctx->sequence(ATOMIC_FAA(&global_seq_, 1)))) {
-    LOG_ERROR("trans_ctx sequence fail", KR(ret), K(trx_sort_elem));
   } else {
     const int64_t participant_count = trans_ctx->get_ready_participant_count();
     PartTransTask *participant_list = trans_ctx->get_participant_objs();
     const bool is_dml_trans = participant_list->is_dml_trans();
+    const int64_t local_schema_version = participant_list->get_local_schema_version();
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObLogTenantGuard guard;
     ObLogTenant *tenant = NULL;
@@ -309,12 +320,20 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
     } else if (OB_ISNULL(tenant = guard.get_tenant())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant is NULL, unexpected error", KR(ret), K(guard));
+    } else if (OB_FAIL(tenant->alloc_global_trans_schema_version(! is_dml_trans, local_schema_version, new_schema_version))) {
+      LOG_ERROR("tenant alloc_global_trans_schema_version fail", KR(ret), KPC(tenant), KPC(trans_ctx),
+          K(is_dml_trans), K(local_schema_version), K(new_schema_version));
+    // sequence
+    } else if (OB_FAIL(trans_ctx->sequence(new_seq, new_schema_version))) {
+      LOG_ERROR("trans_ctx sequence fail", KR(ret), K(trx_sort_elem), K(new_seq), K(new_schema_version));
     } else {
+      monitor.mark_and_get_cost("sequence_done", true);
       if (OB_FAIL(trans_ctx->wait_data_ready(WAIT_TIMEOUT, stop_flag))) {
         if (OB_IN_STOP_STATE != ret && OB_TIMEOUT != ret) {
           LOG_ERROR("trans_ctx wait_data_ready fail", KR(ret));
         }
       }
+      monitor.mark_and_get_cost("data_ready", true);
 
       // TODO non-block
       if (is_dml_trans) {
@@ -322,27 +341,26 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
           if (OB_UNLIKELY(! trans_ctx->is_data_ready())) {
             LOG_ERROR("trans_ctx is not date ready", KPC(trans_ctx));
             ret = OB_ERR_UNEXPECTED;
-          } else if (OB_FAIL(handle_dml_trans_(tenant_id, *trans_ctx, stop_flag))) {
+          } else if (OB_FAIL(handle_dml_trans_(*tenant, *trans_ctx, stop_flag))) {
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("handle_dml_trans_ fail", KR(ret), K(tenant_id), KPC(trans_ctx));
             }
           } else {
+            monitor.mark_and_get_cost("dml-done", true);
             // succ
           }
         } // while
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(push_task_into_committer_(participant_list, participant_count, stop_flag, tenant))) {
-          if (OB_IN_STOP_STATE != ret) {
-            LOG_ERROR("push_task_into_committer_ fail", KR(ret), K(tenant_id), K(participant_list),
-                K(participant_count), K(tenant));
-          }
-        } else {
-          // No further operation is possible after that and may be recalled at any time
+      } else if (OB_FAIL(push_task_into_committer_(participant_list, participant_count, stop_flag, tenant))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("push_task_into_committer_ fail", KR(ret), K(tenant_id), K(participant_list),
+              K(participant_count), K(tenant));
         }
+      } else {
+        monitor.mark_and_get_cost("ddl-done", true);
+        // No further operation is possible after that and may be recalled at any time
       }
     }
+    LOG_DEBUG("handle_to_be_sequenced_trans_ end", KR(ret), KPC(trans_ctx));
   }
 
   return ret;
@@ -637,19 +655,21 @@ int ObLogSequencer::handle_not_served_trans_(PartTransTask &part_trans_task,
   return ret;
 }
 
-int ObLogSequencer::push_task_into_data_processor_(ObLogRowDataIndex &row_data_index,
-    volatile bool &stop_flag)
+int ObLogSequencer::push_task_into_br_sorter_(TransCtx &trans_ctx, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("sequencer has not been initialized");
-    ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(data_processor_)) {
-    LOG_ERROR("data_processor_ is NULL", K(data_processor_));
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    RETRY_FUNC(stop_flag, (*data_processor_), push, row_data_index, DATA_OP_TIMEOUT);
+  RETRY_FUNC_ON_ERROR(OB_NEED_RETRY, stop_flag, (*msg_sorter_), submit, &trans_ctx);
+
+  return ret;
+}
+
+int ObLogSequencer::push_task_into_redo_dispatcher_(TransCtx &trans_ctx, volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(redo_dispatcher_->dispatch_trans_redo(trans_ctx, stop_flag))) {
+    LOG_ERROR("failed to dispatch trans redo", KR(ret), K(trans_ctx), K(stop_flag));
   }
 
   return ret;
@@ -719,293 +739,31 @@ int ObLogSequencer::handle_participants_ready_trans_(const bool is_dml_trans,
   return ret;
 }
 
-int ObLogSequencer::handle_dml_trans_(const uint64_t tenant_id, TransCtx &trans_ctx, volatile bool &stop_flag)
+int ObLogSequencer::handle_dml_trans_(ObLogTenant &tenant, TransCtx &trans_ctx, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  const int64_t tenant_id = tenant.get_tenant_id();
+  PartTransTask* participant_list = trans_ctx.get_participant_objs();
+  const int64_t participant_count = trans_ctx.get_ready_participant_count();
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("ObLogSequencer has not been initialized");
     ret = OB_NOT_INIT;
-  } else {
-    uint64_t total_br_count = 0;
-    ObLogRowDataIndex *br_head = NULL;
-    ObLogRowDataIndex *br_tail = NULL;
-    PartTransTask *participants = trans_ctx.get_participant_objs();
-    // Process all participants
-    // String all Binlog Records of all participants into a chain
-    PartTransTask *part = participants;
-    int64_t valid_part_trans_task_count = 0;
-
-    if (OB_FAIL(build_binlog_record_list_(trans_ctx, part, br_head, br_tail,
-            total_br_count, valid_part_trans_task_count, stop_flag))) {
-      LOG_ERROR("build_binlog_record_list_", KR(ret), K(part), K(br_head), K(br_tail),
-          K(total_br_count), K(valid_part_trans_task_count));
-    } else {
-      trans_ctx.set_total_br_count(total_br_count);
-      trans_ctx.set_valid_part_trans_task_count(valid_part_trans_task_count);
+  } else if (OB_FAIL(push_task_into_br_sorter_(trans_ctx, stop_flag))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("push trans into sorter failed", KR(ret), K(trans_ctx), K(stop_flag));
     }
-
-    // Concurrent reading of persistent data
-    if (OB_SUCC(ret) && total_br_count > 0) {
-      ObLogRowDataIndex *br = br_head;
-
-      while (OB_SUCC(ret) && NULL != br) {
-        ObLogRowDataIndex *br_next = br->get_next();
-
-        if (OB_FAIL(push_task_into_data_processor_(*br, stop_flag))) {
-          LOG_ERROR("push_task_into_data_processor_ fail", KR(ret), KPC(br));
-        } else {
-          br = br_next;
-        }
-      }
+  } else if (OB_FAIL(push_task_into_committer_(participant_list, participant_count, stop_flag, &tenant))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("push_task_into_committer_ fail", KR(ret), K(tenant_id), K(participant_list),
+          K(participant_count), K(tenant));
     }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(do_trans_stat_(tenant_id, total_br_count))) {
-        LOG_ERROR("do trans stat fail", KR(ret), K(tenant_id), K(total_br_count));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObLogSequencer::build_binlog_record_list_(TransCtx &trans_ctx,
-    PartTransTask *part,
-    ObLogRowDataIndex *&br_head,
-    ObLogRowDataIndex *&br_tail,
-    uint64_t &valid_br_num,
-    int64_t &valid_part_trans_task_count,
-    volatile bool &stop_flag)
-{
-  int ret = OB_SUCCESS;
-  const bool enable_output_trans_order_by_sql_operation = TCONF.enable_output_trans_order_by_sql_operation != 0;
-
-  if (enable_output_trans_order_by_sql_operation) {
-    if (OB_FAIL(build_binlog_record_list_order_by_sql_no_(trans_ctx, part, br_head, br_tail, valid_br_num,
-            valid_part_trans_task_count, stop_flag))) {
-      LOG_ERROR("build_binlog_record_list_order_by_sql_no_", KR(ret), KPC(part), K(br_head), K(br_tail),
-          K(valid_br_num), K(valid_part_trans_task_count));
+  } else if (OB_FAIL(push_task_into_redo_dispatcher_(trans_ctx, stop_flag))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("push trans into redo dispatcher failed", KR(ret), K(trans_ctx), K(stop_flag));
     }
   } else {
-    if (OB_FAIL(build_binlog_record_list_order_by_partition_(trans_ctx, part, br_head, br_tail, valid_br_num,
-            valid_part_trans_task_count, stop_flag))) {
-      LOG_ERROR("build_binlog_record_list_order_by_partition_", KR(ret), KPC(part), K(br_head), K(br_tail),
-          K(valid_br_num), K(valid_part_trans_task_count));
-    }
-  }
-
-  return ret;
-}
-
-int ObLogSequencer::build_binlog_record_list_order_by_partition_(TransCtx &trans_ctx,
-    PartTransTask *part,
-    ObLogRowDataIndex *&br_head,
-    ObLogRowDataIndex *&br_tail,
-    uint64_t &valid_br_num,
-    int64_t &valid_part_trans_task_count,
-    volatile bool &stop_flag)
-{
-  int ret = OB_SUCCESS;
-
-  // Binlog Record with a chain of all valid partition transactions
-  while (! stop_flag && OB_SUCCESS == ret && NULL != part) {
-    PartTransTask *next = part->next_task();
-    int64_t valid_part_br_num = 0;
-
-    // Set the reference count for each participant to ensure it is the number of Binlog Records + 1
-    // because the reference count is reduced by one for each Binlog Record recycled
-    // To ensure that the participants are valid when the Commit message is updated, need to add an extra reference count here
-    part->set_ref_cnt(part->get_br_num() + 1);
-
-    if (OB_FAIL(handle_br_of_part_trans_task_(trans_ctx, part, valid_part_br_num, br_head, br_tail))) {
-      LOG_ERROR("handle_br_of_part_trans_task_ fail", K(part), K(br_head), K(br_tail));
-    } else {
-      part = next;
-      valid_br_num += valid_part_br_num;
-      if (valid_part_br_num > 0) {
-        ++valid_part_trans_task_count;
-      }
-    }
-  } // while
-
-  return ret;
-}
-
-int ObLogSequencer::handle_br_of_part_trans_task_(TransCtx &trans_ctx,
-    PartTransTask *part,
-    int64_t &valid_br_num,
-    ObLogRowDataIndex *&br_head,
-    ObLogRowDataIndex *&br_tail)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogSequencer has not been initialized");
-    ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(part)) {
-    LOG_ERROR("part is NULL");
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    ObLogRowDataIndex *row_data_index = part->get_sorted_dml_row_list().get_head();
-    const int64_t part_row_num = part->get_sorted_dml_row_list().get_row_num();
-    valid_br_num = 0;
-
-    // Iterate through all statements and validate the Binlog Record in each statement
-    // Pick out the invalid Binlog Records and recycle them
-    // form a chain of valid ones and set the exact index
-    while (OB_SUCCESS == ret && NULL != row_data_index) {
-      ObLogRowDataIndex *next_row_data_index = row_data_index->get_next();
-      LOG_DEBUG("handle row_data_index", KPC(row_data_index), KPC(next_row_data_index));
-
-      if (OB_FAIL(add_dml_br_to_binlog_record_list_(trans_ctx, row_data_index, br_head, br_tail))) {
-        LOG_ERROR("add_dml_br_to_binlog_record_list_ fail", KR(ret), KPC(row_data_index), KPC(part),
-            "binlog_record:", row_data_index->get_binlog_record(),
-            "sql_no", row_data_index->get_row_seq_no(),
-            K(br_head), K(br_tail), K(valid_br_num));
-      } else {
-        valid_br_num++;
-        row_data_index = next_row_data_index;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(valid_br_num != part_row_num)) {
-        LOG_ERROR("valid_br_num is not equal to part_row_num, unexpected", K(valid_br_num), K(part_row_num), KPC(part));
-        ret = OB_ERR_UNEXPECTED;
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObLogSequencer::build_binlog_record_list_order_by_sql_no_(TransCtx &trans_ctx,
-    PartTransTask *part,
-    ObLogRowDataIndex *&br_head,
-    ObLogRowDataIndex *&br_tail,
-    uint64_t &valid_br_num,
-    int64_t &valid_part_trans_task_count,
-    volatile bool &stop_flag)
-{
-  int ret = OB_SUCCESS;
-  std::priority_queue<ObLogRowDataIndex*, std::vector<ObLogRowDataIndex*>, StmtSequerenceCompFunc> heap;
-  // 1. Initialise the minimal heap: place the head node of the statement chain for each partitioned transaction into the array to be sorted
-  PartTransTask *part_trans_task = part;
-
-  while (OB_SUCCESS == ret && NULL != part_trans_task && ! stop_flag) {
-    // Set the reference count, otherwise the PartTransTask structure cannot be recycled
-    part_trans_task->set_ref_cnt(part_trans_task->get_br_num() + 1);
-
-    ObLogRowDataIndex *row_data_index =
-      static_cast<ObLogRowDataIndex *>(part_trans_task->get_sorted_dml_row_list().get_head());
-    if (NULL != row_data_index) {
-      heap.push(row_data_index);
-    }
-    part_trans_task = part_trans_task->next_task();
-  }
-
-  // 2. Output elements from the priority queue one by one, string them into the binlog_record list, and then string the next element in
-  while (OB_SUCCESS == ret && !heap.empty() && ! stop_flag) {
-    // 2.1. get smallest row index
-    ObLogRowDataIndex *row_data_index = heap.top();
-    heap.pop();
-    if (heap.empty()) {
-      // If the heap is empty, then there are no other partitions and only need to iterate over this partition; otherwise need to put this partition into the heap and compare it with the other partitions
-      while (OB_SUCCESS == ret && ! stop_flag && NULL != row_data_index) {
-        ObLogRowDataIndex *next_row_data_index = row_data_index->get_next();
-        // Add to binlog_record list and update statistics after success
-        if (OB_FAIL(add_br_to_br_list_and_statics_(trans_ctx, row_data_index, br_head, br_tail, valid_br_num, valid_part_trans_task_count))) {
-          LOG_ERROR("add binlog record to br_list fail", KR(ret), K(trans_ctx), KPC(row_data_index),
-              K(valid_br_num), K(valid_part_trans_task_count));
-        } else {
-          row_data_index = next_row_data_index;
-        }
-      }
-    } else {
-      ObLogRowDataIndex *next_row_data_index = row_data_index->get_next();
-      // 2.2 After popping the smallest element, the heap is still not empty, indicating that there is data from other partitions and the sorting needs to continue
-      // 2.2.1. Add to binlog_record list and update statistics after success
-      if (OB_FAIL(add_br_to_br_list_and_statics_(trans_ctx, row_data_index, br_head, br_tail, valid_br_num, valid_part_trans_task_count))) {
-          LOG_ERROR("add binlog record to br_list fail", KR(ret), K(trans_ctx), KPC(row_data_index),
-              K(br_head), K(br_tail), K(valid_br_num), K(valid_part_trans_task_count));
-      } else {
-        // 2.2.1. Add the next stmt element to the array: if the next of the current statement is not empty, add the statement of the current partition
-        ObLogRowDataIndex *next_stmt = next_row_data_index;
-        if (NULL != next_stmt) {
-          // Put in the new element and add it to the previous heap
-          // If the popped element next is not empty, add next to the array and execute step 2.
-          heap.push(next_stmt);
-        }
-        // 2.2.3. If the element popped is empty, the statement for that partition (ObLogRowDataIndex) has been processed and step 2 is executed directly to continue processing statements for other partitions.
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObLogSequencer::add_br_to_br_list_and_statics_(TransCtx &trans_ctx,
-    ObLogRowDataIndex *row_data_index,
-    ObLogRowDataIndex *&br_head,
-    ObLogRowDataIndex *&br_tail,
-    uint64_t &valid_br_num,
-    int64_t &valid_part_trans_task_count)
-{
-  int ret = OB_SUCCESS;
-  PartTransTask *part_trans_task = NULL;
-
-  if (OB_ISNULL(row_data_index)) {
-    LOG_ERROR("row_data_index is NULL");
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_ISNULL(part_trans_task = static_cast<PartTransTask *>(row_data_index->get_host()))) {
-    LOG_ERROR("part_trans_task is NULL");
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(add_dml_br_to_binlog_record_list_(trans_ctx, row_data_index, br_head, br_tail))) {
-    LOG_ERROR("add_dml_br_to_binlog_record_list_ fail", KR(ret), KPC(row_data_index), KPC(part_trans_task),
-      "binlog_record:", row_data_index->get_binlog_record(),
-      "sql_no", row_data_index->get_row_seq_no(),
-      K(br_head), K(br_tail), K(valid_br_num), K(valid_part_trans_task_count));
-  } else {
-    const bool is_test_mode_on = TCONF.test_mode_on != 0;
-    if (is_test_mode_on) {
-      LOG_DEBUG("log dml stmt info under test mode ", K(part_trans_task), "sql_no:", row_data_index->get_row_seq_no());
-    }
-
-    valid_br_num++;
-    if (! part_trans_task->has_valid_binlog_record()) {
-      part_trans_task->set_has_valid_binlog_record();
-      valid_part_trans_task_count++;
-    }
-  }
-
-  return ret;
-}
-
-int ObLogSequencer::add_dml_br_to_binlog_record_list_(TransCtx &trans_ctx,
-    ObLogRowDataIndex *row_data_index,
-    ObLogRowDataIndex *&br_head,
-    ObLogRowDataIndex *&br_tail)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(row_data_index)) {
-    LOG_ERROR("row_data_index is NULL");
-    ret = OB_ERR_UNEXPECTED;
-  } else if (! row_data_index->is_valid()) {
-    LOG_ERROR("row_data_index is not valid, unexpected", KPC(row_data_index));
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    row_data_index->set_next(NULL);
-    row_data_index->set_br_commit_seq(ATOMIC_FAA(&br_committer_queue_seq_, 1), &trans_ctx);
-
-    if (NULL == br_head) {
-      br_head = row_data_index;
-      br_tail = row_data_index;
-    } else {
-      br_tail->set_next(row_data_index);
-      br_tail = row_data_index;
-    }
+    // TODO  statistic
   }
 
   return ret;

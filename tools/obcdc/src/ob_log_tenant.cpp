@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -261,6 +261,26 @@ int ObLogTenant::alloc_global_trans_seq_and_schema_version(const int64_t base_sc
 
   if (stop_flag) {
     ret = OB_IN_STOP_STATE;
+  }
+
+  return ret;
+}
+
+int ObLogTenant::alloc_global_trans_schema_version(const bool is_ddl_trans,
+    const int64_t base_schema_version,
+    int64_t &new_schema_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t cur_schema_version = global_seq_and_schema_version_.hi;
+
+  if (is_ddl_trans) {
+    int64_t max_schema_version = std::max(cur_schema_version, base_schema_version);
+    global_seq_and_schema_version_.hi = max_schema_version;
+    new_schema_version = max_schema_version;
+    LOG_DEBUG("ObLogTenant alloc_global_trans_seq_and_schema_version", K(cur_schema_version),
+        K(base_schema_version), K(new_schema_version));
+  } else {
+    new_schema_version = cur_schema_version;
   }
 
   return ret;

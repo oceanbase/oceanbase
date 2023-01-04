@@ -179,13 +179,17 @@ LOG_MOD_END(RS)
 
 // liboblog submodules
 LOG_MOD_BEGIN(TLOG)
-DEFINE_LOG_SUB_MOD(FETCHER)    // fetcher
-DEFINE_LOG_SUB_MOD(PARSER)     // Parser
-DEFINE_LOG_SUB_MOD(SEQUENCER)  // Sequencer
-DEFINE_LOG_SUB_MOD(FORMATTER)  // Formatter
-DEFINE_LOG_SUB_MOD(COMMITTER)  // committer
-DEFINE_LOG_SUB_MOD(TAILF)      // oblog_tailf
-DEFINE_LOG_SUB_MOD(SCHEMA)     // schema
+DEFINE_LOG_SUB_MOD(FETCHER)                 // fetcher
+DEFINE_LOG_SUB_MOD(PARSER)                  // Parser
+DEFINE_LOG_SUB_MOD(SEQUENCER)               // Sequencer
+DEFINE_LOG_SUB_MOD(FORMATTER)               // Formatter
+DEFINE_LOG_SUB_MOD(COMMITTER)               // committer
+DEFINE_LOG_SUB_MOD(TAILF)                   // oblog_tailf
+DEFINE_LOG_SUB_MOD(SCHEMA)                  // schema
+DEFINE_LOG_SUB_MOD(STORAGER)                // storager
+DEFINE_LOG_SUB_MOD(READER)                  // reader
+DEFINE_LOG_SUB_MOD(DISPATCHER)              // redo_dispatcher
+DEFINE_LOG_SUB_MOD(SORTER)                  // br_sorter
 LOG_MOD_END(TLOG)
 
 // easy submodules
@@ -554,6 +558,14 @@ LOG_MOD_END(STORAGETEST)
 #define _OBLOG_TAILF_LOG(level, fmt, args...) _OB_SUB_MOD_LOG(TLOG, TAILF, level, fmt, ##args)
 #define OBLOG_SCHEMA_LOG(level, fmt, args...) OB_SUB_MOD_LOG(TLOG, SCHEMA, level, fmt, ##args)
 #define _OBLOG_SCHEMA_LOG(level, fmt, args...) _OB_SUB_MOD_LOG(TLOG, SCHEMA, level, fmt, ##args)
+#define OBLOG_STORAGER_LOG(level, fmt, args...) OB_SUB_MOD_LOG(TLOG, STORAGER, level, fmt, ##args)
+#define _OBLOG_STORAGER_LOG(level, fmt, args...) _OB_SUB_MOD_LOG(TLOG, STORAGER, level, fmt, ##args)
+#define OBLOG_READER_LOG(level, fmt, args...) OB_SUB_MOD_LOG(TLOG, READER, level, fmt, ##args)
+#define _OBLOG_READER_LOG(level, fmt, args...) _OB_SUB_MOD_LOG(TLOG, READER, level, fmt, ##args)
+#define OBLOG_DISPATCHER_LOG(level, fmt, args...) OB_SUB_MOD_LOG(TLOG, DISPATCHER, level, fmt, ##args)
+#define _OBLOG_DISPATCHER_LOG(level, fmt, args...) _OB_SUB_MOD_LOG(TLOG, DISPATCHER, level, fmt, ##args)
+#define OBLOG_SORTER_LOG(level, fmt, args...) OB_SUB_MOD_LOG(TLOG, SORTER, level, fmt, ##args)
+#define _OBLOG_SORTER_LOG(level, fmt, args...) _OB_SUB_MOD_LOG(TLOG, SORTER, level, fmt, ##args)
 
 // used for the log return for user;
 // if you want to return ERROR message for user, and the error message parameters returned

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -24,7 +24,6 @@
 #include "ob_log_cluster_id_filter.h"       // IObLogClusterIDFilter
 #include "ob_log_config.h"                  // TCONF
 #include "ob_log_instance.h"                // TCTX
-#include "ob_log_dml_parser.h"              // IObLogDmlParser
 
 using namespace oceanbase::common;
 using namespace oceanbase::clog;
@@ -185,7 +184,7 @@ int ObLogPartTransResolver::read(const clog::ObLogEntry& log_entry,
     const int64_t log_entry_index = 0;
 
     if (is_barrier_log) {
-      // TODO
+      // TODO barrier log
     } else if (OB_FAIL(read_log_(log_entry_wrapper, log_entry_index, begin_time, pos, missing_info, tsi, serve_info, log_type))) {
       if (OB_ITEM_NOT_SETTED != ret) {
         LOG_ERROR("read_log_ fail", KR(ret), K(log_entry_wrapper), K(log_entry_index), K(begin_time), K(pos), K(serve_info),
@@ -619,7 +618,6 @@ int ObLogPartTransResolver::decode_trans_log_header_(const clog::ObLogEntry& log
   return ret;
 }
 
-// TODO
 // The first log of the new partition is treated as a barrier log
 bool ObLogPartTransResolver::is_barrier_log_(const uint64_t log_id,
     const clog::ObLogEntry& log_entry)
@@ -937,14 +935,11 @@ int ObLogPartTransResolver::parse_redo_log_(const int32_t log_offset,
 
     // Push redo logs to partition task
     if (OB_SUCCESS == ret) {
-      bool need_dispatch_row_data = false;
-      ObLogEntryTask *redo_log_entry_task = NULL;
 
       if (OB_ISNULL(task)) {
         LOG_ERROR("invalid task", K(task));
         ret = OB_INVALID_ERROR;
-      } else if (OB_FAIL(task->push_redo_log(pkey_, trans_id, log_no, log_id, log_offset, tstamp, data, data_len,
-              need_dispatch_row_data, redo_log_entry_task))) {
+      } else if (OB_FAIL(task->push_redo_log(pkey_, trans_id, log_no, log_id, log_offset, tstamp, data, data_len))) {
         if (OB_ENTRY_EXIST == ret) {
           // redo log duplication
         }
@@ -966,10 +961,6 @@ int ObLogPartTransResolver::parse_redo_log_(const int32_t log_offset,
         } else {
           LOG_ERROR("push redo log fail", KR(ret), K(pkey_), K(task), K(log_id),
               K(tstamp), K(log_no));
-        }
-      } else if (need_dispatch_row_data) {
-        if (OB_FAIL(dispatch_log_entry_task_(redo_log_entry_task))) {
-          LOG_ERROR("dispatch_log_entry_task_ fail", KR(ret), K(redo_log_entry_task));
         }
       } else {
         // do nothing
@@ -1254,7 +1245,7 @@ int ObLogPartTransResolver::prepare_normal_trans_task_(PartTransTask &task,
 
   if (! need_handle_prepare_task) {
     // do nothing
-  } else if (OB_FAIL(task.prepare(pkey_, tstamp, trans_id, log_id, cluster_id, freeze_version, trace_id, trace_info,
+  } else if (OB_FAIL(task.prepare(pkey_, tstamp, trans_id, log_id, cluster_id, trace_id, trace_info,
           elt_trans_info_array))) {
     LOG_ERROR("prepare normal trans fail", KR(ret), K(pkey_), K(trans_id), K(log_id), K(tstamp),
         K(cluster_id), K(freeze_version), K(task), K(trace_id), K(trace_info), K(elt_trans_info_array));
@@ -1297,27 +1288,6 @@ int ObLogPartTransResolver::prepare_normal_trans_task_(PartTransTask &task,
         // succ
       }
     }
-  }
-
-  return ret;
-}
-
-int ObLogPartTransResolver::dispatch_log_entry_task_(ObLogEntryTask *log_entry_task)
-{
-  int ret = OB_SUCCESS;
-  IObLogDmlParser *dml_parser = TCTX.dml_parser_;
-// TODO
-  bool stop_flag = false;
-
-  if (OB_ISNULL(log_entry_task)) {
-    LOG_ERROR("log_entry_task is NULL", K(log_entry_task));
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_ISNULL(dml_parser)) {
-    LOG_ERROR("dml_parser is NULL", K(dml_parser));
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    // succ
-    RETRY_FUNC(stop_flag, *dml_parser, push, *log_entry_task, DATA_OP_TIMEOUT);
   }
 
   return ret;
@@ -1373,7 +1343,7 @@ int ObLogPartTransResolver::check_redo_log_list_(
       for (int64_t idx = 0; OB_SUCCESS == ret && idx < actual_all_redos.count(); idx++) {
         uint64_t curr_id = static_cast<uint64_t>(actual_all_redos.at(idx));
 
-        if (OB_ISNULL(sorted_redos.head_) || curr_id < sorted_redos.head_->start_log_id_) {
+        if (OB_ISNULL(sorted_redos.head_) || curr_id < sorted_redos.head_->get_start_log_id()) {
           if (OB_FAIL(missing_info.push_back_missing_log_id(curr_id))) {
             LOG_ERROR("push log id into missing fail", KR(ret), K(curr_id), K(missing_info));
           }

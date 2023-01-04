@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -149,6 +149,29 @@ int ObLogTableMatcher::tenant_match_pattern_(const bool is_black,
       else {
         // Matched.
         matched = true;
+
+        // 这里影响tenant_id集合的维护和DDL语句的过滤逻辑
+        // 如果是黑名单匹配:
+        // 1. tt1.*.*格式，说明该租户全部数据要过滤
+        // 2. tt1.*.*_t格式，只过滤该租户_t结尾的表数据，但是租户信息不会过滤
+        //    同样tt1.db1.*格式，只过滤该租户db1的全部数据, 但是租户信息不会过滤
+        // 3. 配置影子表：*.*.*_t|*.*.*_[0-9][a-z], 此时对于租户黑名单匹配时候,不会过滤
+        if (is_black) {
+          // 始终保证pattern都是\0结尾的字符串,参见build_patterns_()实现
+          // 因此构建相同的格式, ObString::case_compare会比较长度
+          char tmp_str[2];
+          tmp_str[0] = '*';
+          tmp_str[1] = '\0';
+          ObString match_all_str(0, 2, tmp_str);
+
+          if ((0 == strcmp(pattern.database_pattern_.ptr(), tmp_str))
+              && (0 == strcmp(pattern.table_pattern_.ptr(), tmp_str))) {
+            // 依赖fnmatch匹配结果
+          } else {
+            // 只要存在db或者table不是*,那么说明该租户不能过滤
+            matched = false;
+          }
+        }
       }
 
       if (matched) {
@@ -217,8 +240,12 @@ int ObLogTableMatcher::tenant_match(const char* tenant_name,
   matched = false;
 
   // Tenant matching is only considered for whitelisting, as tenants may be duplicated
+  // The tenant blacklist matching mechanism is supported
   if (OB_FAIL(tenant_match_pattern_(false, tenant_name, white_matched, fnmatch_flags))) {
     OBLOG_LOG(ERROR, "match white pattern fail", KR(ret), K(tenant_name), K(white_matched),
+        K(fnmatch_flags));
+  } else if (white_matched && OB_FAIL(tenant_match_pattern_(true, tenant_name, black_matched, fnmatch_flags))) {
+    OBLOG_LOG(ERROR, "tenant match black pattern fail", K(ret), K(tenant_name), K(black_matched),
         K(fnmatch_flags));
   } else {
     //make blacklists always mismatch

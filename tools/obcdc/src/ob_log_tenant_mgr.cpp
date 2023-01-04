@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -1030,6 +1030,7 @@ int ObLogTenantMgr::add_all_tenants(const int64_t start_tstamp,
     bool is_new_created_tenant = false;
     bool is_new_tenant_by_restore = false;
     const int64_t total_tenant_count = tenant_ids.count();
+    const bool enable_filter_sys_tenant = (1 == TCONF.enable_filter_sys_tenant);
     ISTAT("[ADD_ALL_TENANTS] BEGIN", K(sys_schema_version), K(start_tstamp), K(total_tenant_count),
         K(tenant_ids));
 
@@ -1039,15 +1040,20 @@ int ObLogTenantMgr::add_all_tenants(const int64_t start_tstamp,
       bool add_tenant_succ = false;
       ObLogSchemaGuard schema_guard;
       const char *tenant_name = NULL;
-      if (OB_FAIL(add_tenant(tenant_id, is_new_created_tenant, is_new_tenant_by_restore, start_tstamp,
-          sys_schema_version, schema_guard, tenant_name, timeout, add_tenant_succ))) {
-        if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
-          LOG_INFO("tenant has dropped, ignore it", KR(ret), K(tenant_id), K(sys_schema_version),
-              K(index), K(start_tstamp));
-          ret = OB_SUCCESS;
-        } else {
-          LOG_ERROR("add tenant fail", KR(ret), K(tenant_id), K(start_tstamp),K(sys_schema_version),
-              K(index));
+
+      if (1 == tenant_id && enable_filter_sys_tenant) {
+        ISTAT("[FILTE] sys tenant is filtered", K(tenant_id), K(enable_filter_sys_tenant));
+      } else {
+        if (OB_FAIL(add_tenant(tenant_id, is_new_created_tenant, is_new_tenant_by_restore, start_tstamp,
+                sys_schema_version, schema_guard, tenant_name, timeout, add_tenant_succ))) {
+          if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+            LOG_INFO("tenant has dropped, ignore it", KR(ret), K(tenant_id), K(sys_schema_version),
+                K(index), K(start_tstamp));
+            ret = OB_SUCCESS;
+          } else {
+            LOG_ERROR("add tenant fail", KR(ret), K(tenant_id), K(start_tstamp),K(sys_schema_version),
+                K(index));
+          }
         }
       }
 

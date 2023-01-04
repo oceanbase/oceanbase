@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -177,7 +177,7 @@ int ObBinlogRecordPrinter::print_binlog_record(ILogRecord *br)
 
     // Heartbeat timestamp taken directly from the br
     if (HEARTBEAT == br->recordType() && heartbeat_file_fd_ >= 0) {
-      if (OB_FAIL(output_heartbeat_file(heartbeat_file_fd_, get_precise_timestamp_(*br)))) {
+      if (OB_FAIL(output_heartbeat_file(heartbeat_file_fd_, get_precise_timestamp(*br)))) {
         LOG_ERROR("output_heartbeat_file fail", K(ret), K(heartbeat_file_fd_), K(oblog_br));
       }
     } else if (data_file_fd_ >= 0) {
@@ -195,7 +195,7 @@ int ObBinlogRecordPrinter::print_binlog_record(ILogRecord *br)
   return ret;
 }
 
-int64_t ObBinlogRecordPrinter::get_precise_timestamp_(ILogRecord &br)
+int64_t ObBinlogRecordPrinter::get_precise_timestamp(ILogRecord &br)
 {
   int64_t timestamp_sec = br.getTimestamp();
   uint32_t timestamp_usec = br.getRecordUsec();
@@ -356,23 +356,7 @@ int ObBinlogRecordPrinter::output_data_file(ILogRecord *br,
       }
     } else if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type) {
       ri++;
-      const bool is_serilized = oblog_br->is_serilized();
-      ITableMeta *table_meta = NULL;
-
-      if (is_serilized) {
-        if (OB_ISNULL(table_meta = LogMsgFactory::createTableMeta())) {
-          LOG_ERROR("table_meta is NULL");
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (0 != br->getTableMeta(table_meta)) {
-          LOG_ERROR("table_meta is NULL", KPC(oblog_br));
-          ret = OB_ERR_UNEXPECTED;
-        }
-      }
-
+      ITableMeta *table_meta = br->getTableMeta();
       int64_t column_count = table_meta ? table_meta->getColCount() : -1;
       const char *pks = table_meta ? (table_meta->getPKs()) : "NULL";
       const char *uks = table_meta ? (table_meta->getUKs()) : "NULL";
@@ -401,7 +385,7 @@ int ObBinlogRecordPrinter::output_data_file(ILogRecord *br,
       }
 
       for (int64_t index = 0; OB_SUCC(ret) && index < column_count; index++) {
-        ret = output_data_file_column_data(is_serilized, br, table_meta, index, ptr, size, ri, only_print_hex, enable_print_hex,
+        ret = output_data_file_column_data(br, table_meta, index, ptr, size, ri, only_print_hex, enable_print_hex,
             enable_print_lob_md5, enable_print_detail, pos);
       }
 
@@ -410,12 +394,6 @@ int ObBinlogRecordPrinter::output_data_file(ILogRecord *br,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(verify_begin_trans_id_(*oblog_br, begin_trans_id))) {
           LOG_ERROR("verify_begin_trans_id_ fail", KR(ret), K(oblog_br), K(begin_trans_id));
-        }
-      }
-
-      if (is_serilized) {
-        if (NULL != table_meta) {
-          LogMsgFactory::destroy(table_meta);
         }
       }
     }
@@ -462,17 +440,17 @@ int ObBinlogRecordPrinter::verify_begin_trans_id_(ObLogBR &oblog_br,
   static const int64_t TRANS_ID_BUF_LENGTH = 1024;
   char trans_id_buf[TRANS_ID_BUF_LENGTH];
   int64_t pos = 0;
-  ObLogRowDataIndex *row_data_index = NULL;
+  ObLogEntryTask *log_entry_task = NULL;
   PartTransTask *task = NULL;
 
   if (OB_ISNULL(begin_trans_id)) {
     LOG_ERROR("begin_trans_id is null");
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_ISNULL(row_data_index = static_cast<ObLogRowDataIndex *>(oblog_br.get_host()))) {
-    LOG_ERROR("row_data_index is NULL", KPC(row_data_index));
+  } else if (OB_ISNULL(log_entry_task = static_cast<ObLogEntryTask *>(oblog_br.get_host()))) {
+    LOG_ERROR("log_entry_task is NULL", KPC(log_entry_task));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_ISNULL(task = static_cast<PartTransTask *>(row_data_index->get_host()))) {
-    LOG_ERROR("part trans task is NULL", KPC(task), KPC(row_data_index));
+  } else if (OB_ISNULL(task = static_cast<PartTransTask *>(log_entry_task->get_host()))) {
+    LOG_ERROR("part trans task is NULL", KPC(task), KPC(log_entry_task));
     ret = OB_ERR_UNEXPECTED;
   } else {
     const transaction::ObTransID &trans_id = task->get_trans_id();
@@ -494,8 +472,7 @@ int ObBinlogRecordPrinter::verify_begin_trans_id_(ObLogBR &oblog_br,
   return ret;
 }
 
-int ObBinlogRecordPrinter::output_data_file_column_data(const bool is_serilized,
-    ILogRecord *br,
+int ObBinlogRecordPrinter::output_data_file_column_data(ILogRecord *br,
     ITableMeta *table_meta,
     const int64_t index,
     char *ptr,
@@ -512,27 +489,10 @@ int ObBinlogRecordPrinter::output_data_file_column_data(const bool is_serilized,
   int ret = OB_SUCCESS;
   int64_t new_cols_count = 0;
   int64_t old_cols_count = 0;
-  StrArray *new_ser_cols = NULL;
-  StrArray *old_ser_cols = NULL;
-  BinLogBuf *new_cols = NULL;
-  BinLogBuf *old_cols = NULL;
-
-  if (is_serilized) {
-    // Parsing deserialised data
-    new_ser_cols = br->parsedNewCols();
-    if (NULL != new_ser_cols) {
-      new_cols_count = new_ser_cols->size();
-    }
-    old_ser_cols = br->parsedOldCols();
-    if (NULL != old_ser_cols) {
-      old_cols_count = old_ser_cols->size();
-    }
-  } else {
-    new_cols = br->newCols((unsigned int &)new_cols_count);
-    old_cols = br->oldCols((unsigned int &)old_cols_count);
-  }
-
+  BinLogBuf *new_cols = br->newCols((unsigned int &)new_cols_count);
+  BinLogBuf *old_cols = br->oldCols((unsigned int &)old_cols_count);
   IColMeta *col_meta = table_meta ? table_meta->getCol((int)index) : NULL;
+  StrArray *values_of_enum_set = col_meta ? col_meta->getValuesOfEnumSet() : NULL;
   const char *cname = col_meta ? col_meta->getName() : "NULL";
   int ctype = col_meta ? col_meta->getType() : -1;
   const char *is_pk = col_meta ? (col_meta->isPK() ? "true" : "false") : "NULL";
@@ -540,10 +500,15 @@ int ObBinlogRecordPrinter::output_data_file_column_data(const bool is_serilized,
   const char *is_not_null = col_meta ? (col_meta->isNotNull() ? "true" : "false") : "NULL";
 //  const char *default_val = col_meta ? col_meta->getDefault() : "NULL";
   const char *is_signed = col_meta ? (col_meta->isSigned() ? "true" : "false") : "NULL";
+  const long scale = col_meta ? col_meta->getScale(): 0;
+  const long precision = col_meta ? col_meta->getPrecision(): 0;
+  const long col_data_length = col_meta ? col_meta->getLength(): 0;
   bool is_generated_column = col_meta ? col_meta->isGenerated() : false;
   bool is_hidden_row_key_column = col_meta ? col_meta->isHiddenRowKey() : false;
   bool is_lob = is_lob_type(ctype);
   bool is_json = is_json_type(ctype);
+  bool is_enum_or_set = is_enum_type(ctype) || is_set_type(ctype);
+  std::string enum_set_values_str;
 
   int64_t column_index = index + 1;
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_name:%s", column_index, cname);
@@ -552,30 +517,46 @@ int ObBinlogRecordPrinter::output_data_file_column_data(const bool is_serilized,
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_signed:%s", column_index, is_signed);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_encoding:%s", column_index, encoding);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_not_null:%s", column_index, is_not_null);
-  if (enable_print_detail && is_hidden_row_key_column) {
-    ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_hidden_rowkey:%d", column_index, is_hidden_row_key_column);
+  if (enable_print_detail) {
+    if (is_hidden_row_key_column) {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_hidden_rowkey:%d", column_index, is_hidden_row_key_column);
+    }
+    // print the length of varchar only in print detail mode,
+    // because there have been many test cases with varchar type before the varchar length info is added into column meta
+
+    if (oceanbase::obmysql::MYSQL_TYPE_VAR_STRING == ctype || oceanbase::obmysql::MYSQL_TYPE_BIT == ctype) {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_define_length:%ld", column_index, col_data_length);
+    } else if (is_enum_or_set) {
+      const std::string delim = ",";
+      for (int i = 0; i < values_of_enum_set->size(); i++) {
+        enum_set_values_str += (*values_of_enum_set)[i];
+        if (i != values_of_enum_set->size() - 1) {
+          enum_set_values_str += delim;
+        }
+      }
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_extend_info:%s", column_index, enum_set_values_str.c_str());
+    }
+    //  print precision & scale only in print detail mode, becacuse INT in oracle mode is also a kind of NUMBER(DECIMAL)
+    //  whose precision is 38 and scale is 0, more importantly, the default precision(-1, PRECISION_UNKNOWN_YET)
+    //  and scale(-85, ORA_NUMBER_SCALE_UNKNOWN_YET) of NUMBER in oracle mode is confusing, so we decide not to
+    //  modify test results for oracle mode temporarily for convenience and efficiency.
+    //  TODO
+    else if ((oceanbase::obmysql::MYSQL_TYPE_DECIMAL == ctype) || (oceanbase::obmysql::MYSQL_TYPE_NEWDECIMAL == ctype)) {
+      // Not sure if MYSQL_TYPE_DECIMAL is deprecated, DECIMAL in mysql & oracle mode should be MYSQL_TYPE_NEWDECIMAL
+      ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_precision:%ld", column_index, precision);
+      ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_scale:%ld", column_index, scale);
+    }
   }
   if (is_generated_column) {
     ROW_PRINTF(ptr, size, pos, ri, "[C%ld] is_generated_column:%d", column_index, is_generated_column);
   }
   // FIXME: does not check the value of the field until the length of the default value can be obtained
-//  ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_default_value:%s", column_index, default_val);
+  //  ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_default_value:%s", column_index, default_val);
 
   if (OB_SUCC(ret)) {
     if (index < new_cols_count) {
-      const char *new_col_value = NULL;
-      size_t new_col_value_len = 0;
-
-      if (is_serilized) {
-        ret = new_ser_cols->elementAt(index, new_col_value, new_col_value_len);
-        // TODO Deserialization ends with /0, length minus 1
-        if (NULL != new_col_value) {
-          new_col_value_len -= 1;
-        }
-      } else {
-        new_col_value = new_cols[index].buf;
-        new_col_value_len = new_cols[index].buf_used_size;
-      }
+      const char *new_col_value = new_cols[index].buf;
+      size_t new_col_value_len = new_cols[index].buf_used_size;
 
       if (OB_FAIL(ret)) {
       } else if ((is_lob || is_json) && enable_print_lob_md5) {
@@ -599,22 +580,10 @@ int ObBinlogRecordPrinter::output_data_file_column_data(const bool is_serilized,
     }
 
     if (OB_SUCCESS == ret && index < old_cols_count) {
-      const char *old_col_value = NULL;
-      size_t old_col_value_len = 0;
+      const char *old_col_value = old_cols[index].buf;
+      size_t old_col_value_len = old_cols[index].buf_used_size;
 
-      if (is_serilized) {
-        ret = old_ser_cols->elementAt(index, old_col_value, old_col_value_len);
-        // TODO Deserialization ends with /0, length minus 1
-        if (NULL != old_col_value) {
-          old_col_value_len -= 1;
-        }
-      } else {
-        old_col_value = old_cols[index].buf;
-        old_col_value_len = old_cols[index].buf_used_size;
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (EMySQLFieldType::MYSQL_TYPE_BIT == ctype) {
+      if (EMySQLFieldType::MYSQL_TYPE_BIT == ctype) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_old_hex:", column_index);
         pos--;
 
@@ -637,18 +606,6 @@ int ObBinlogRecordPrinter::output_data_file_column_data(const bool is_serilized,
           }
         }
       }
-    }
-  }
-
-  if (is_serilized) {
-    if (NULL != new_ser_cols) {
-      delete new_ser_cols;
-      new_ser_cols = NULL;
-    }
-
-    if (NULL != old_ser_cols) {
-      delete old_ser_cols;
-      old_ser_cols = NULL;
     }
   }
 
@@ -682,7 +639,7 @@ void ObBinlogRecordPrinter::console_print_begin(ILogRecord *br, ObLogBR *oblog_b
 {
   int ret = OB_SUCCESS;
   if (NULL != br && NULL != oblog_br) {
-    int64_t delta = ObTimeUtility::current_time() - oblog_br->get_precise_timestamp();
+    int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp(*br);
     double delay_sec = static_cast<double>(delta) / 1000000.0;
     int64_t timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
     int64_t filter_rv_count = 0;
@@ -704,7 +661,7 @@ void ObBinlogRecordPrinter::console_print_begin(ILogRecord *br, ObLogBR *oblog_b
 void ObBinlogRecordPrinter::console_print_commit(ILogRecord *br, ObLogBR *oblog_br)
 {
   if (NULL != br && NULL != oblog_br) {
-    int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp_(*br);
+    int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp(*br);
     double delay_sec = static_cast<double>(delta) / 1000000.0;
     int64_t timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
 
@@ -715,7 +672,7 @@ void ObBinlogRecordPrinter::console_print_commit(ILogRecord *br, ObLogBR *oblog_
 void ObBinlogRecordPrinter::console_print_heartbeat(ILogRecord *br, ObLogBR *oblog_br)
 {
   if (NULL != br && NULL != oblog_br) {
-    int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp_(*br);
+    int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp(*br);
     double delay_sec = static_cast<double>(delta) / 1000000.0;
     int64_t timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
 
@@ -741,7 +698,7 @@ void ObBinlogRecordPrinter::console_print_statements(ILogRecord *br, ObLogBR *ob
       trace_id.assign_ptr(filter_rv[2].buf, filter_rv[2].buf_used_size);
     }
 
-    int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp_(*br);
+    int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp(*br);
     double delay_sec = static_cast<double>(delta) / 1000000.0;
     int64_t timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
 

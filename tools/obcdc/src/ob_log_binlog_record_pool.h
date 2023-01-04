@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -27,9 +27,7 @@ public:
 
 public:
   // If host is valid, then set host to binlog record: ObLogBR::set_host()
-  // is_serilized = false, to allocate in-memory ILogRecord, i.e. for serialization
-  // is_serilized = true, for allocating deserialized ILogRecord
-  virtual int alloc(const bool is_serilized, ObLogBR *&br, void *host = NULL, void *log_entry_task = NULL) = 0;
+  virtual int alloc(ObLogBR *&br, void *host = NULL) = 0;
   virtual void free(ObLogBR *br) = 0;
   virtual void print_stat_info() const = 0;
 };
@@ -39,14 +37,13 @@ public:
 class ObLogBRPool : public IObLogBRPool
 {
   typedef common::ObSmallObjPool<ObLogUnserilizedBR> UnserilizedBRObjPool;
-  typedef common::ObSmallObjPool<ObLogSerilizedBR> SerilizedBRObjPool;
 
 public:
   ObLogBRPool();
   virtual ~ObLogBRPool();
 
 public:
-  int alloc(const bool is_serilized, ObLogBR *&br, void *host = NULL, void *log_entry_task = NULL);
+  int alloc(ObLogBR *&br, void *host = NULL);
   void free(ObLogBR *br);
   void print_stat_info() const;
 
@@ -57,7 +54,6 @@ public:
 private:
   bool        inited_;
   UnserilizedBRObjPool   unserilized_pool_;
-  SerilizedBRObjPool     serilized_pool_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogBRPool);

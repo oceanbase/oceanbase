@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -237,6 +237,8 @@ const char *print_compat_mode(const share::ObWorker::CompatMode &compat_mode);
 const char *get_ctype_string(int ctype);
 bool is_lob_type(const int ctype);
 bool is_json_type(const int ctype);
+bool is_enum_type(const int ctype);
+bool is_set_type(const int ctype);
 int64_t get_non_hidden_column_count(const oceanbase::share::schema::ObTableSchema &table_schema);
 
 double get_delay_sec(const int64_t tstamp);
@@ -523,12 +525,37 @@ struct BRColElem
   const char *col_value_;
   size_t col_value_len_;
 };
+
+class ObLogTimeMonitor
+{
+public:
+  ObLogTimeMonitor(const char* log_msg_prefix, bool enable = true);
+  ~ObLogTimeMonitor();
+  // return cost to last mark time
+  int64_t mark_and_get_cost(const char *log_msg_suffix, bool need_print = false);
+private:
+  bool enable_;
+  const char* log_msg_prefix_;
+  int64_t start_time_usec_;
+  int64_t last_mark_time_usec_;
+};
+
 int get_br_value(ILogRecord *br,
     ObArray<BRColElem> &new_values);
 int get_mem_br_value(ILogRecord *br,
+    std::string &key_str,
     ObArray<BRColElem> &new_values);
+int print_unserilized_br_value(ILogRecord *br,
+    const char* key_c_str,
+    const char* trans_id_c_str);
+int print_serilized_br_value(std::string &key,
+    const std::string &drc_message_factory_binlog_record_type,
+    const char *br_string,
+    const size_t br_string_len);
 
 int c_str_to_int(const char* str, int64_t &num);
+
+typedef int32_t offset_t;
 
 void cal_version_components(const uint64_t version,
     uint32_t &major,

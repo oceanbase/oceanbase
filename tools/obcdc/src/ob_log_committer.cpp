@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -15,7 +15,6 @@
 #include "ob_log_committer.h"
 
 #include "lib/string/ob_string.h"                     // ObString
-#include "common/ob_range.h"                          // ObVersion
 #include "storage/transaction/ob_trans_define.h"      // ObTransID
 
 #include "ob_log_binlog_record_queue.h" // BRQueue
@@ -28,7 +27,6 @@
 #include "ob_log_binlog_record_pool.h"  // IObLogBRPool
 #include "ob_log_config.h"              // ObLogConfig
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
-#include "ob_log_row_data_index.h"      // ObLogRowDataIndex
 
 #define _STAT(level, fmt, args...) _OBLOG_COMMITTER_LOG(level, "[STAT] [COMMITTER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_COMMITTER_LOG(level, "[STAT] [COMMITTER] " fmt, ##args)
@@ -69,7 +67,7 @@ ObLogCommitter::CheckpointTask::~CheckpointTask()
 /////////////////////////////////////// ObLogCommitter ///////////////////////////////////////
 
 int64_t ObLogCommitter::g_output_heartbeat_interval =
-    ObLogConfig::default_output_heartbeat_interval_sec * _SEC_;
+    ObLogConfig::default_output_heartbeat_interval_msec * _MSEC_;
 
 ObLogCommitter::ObLogCommitter() :
     inited_(false),
@@ -84,7 +82,6 @@ ObLogCommitter::ObLogCommitter() :
     stop_flag_(true),
     trans_committer_queue_(),
     trans_committer_queue_cond_(),
-    br_committer_queue_(),
     checkpoint_queue_(),
     checkpoint_queue_cond_(),
     checkpoint_queue_allocator_(),
@@ -126,8 +123,6 @@ int ObLogCommitter::init(const int64_t start_seq,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(trans_committer_queue_.init(start_seq, OB_MALLOC_MIDDLE_BLOCK_SIZE))) {
     LOG_ERROR("init trans_committer_queue_ fail", KR(ret), K(start_seq));
-  } else if (OB_FAIL(br_committer_queue_.init(start_seq, OB_MALLOC_BIG_BLOCK_SIZE))) {
-    LOG_ERROR("init br_committer_queue_ fail", KR(ret), K(start_seq));
   } else if (OB_FAIL(checkpoint_queue_.init(start_seq, OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_ERROR("init checkpoint_queue fail", KR(ret), K(start_seq));
   } else if (OB_FAIL(global_heartbeat_info_queue_.init(start_seq, OB_MALLOC_NORMAL_BLOCK_SIZE))) {
@@ -170,7 +165,6 @@ void ObLogCommitter::destroy()
   resource_collector_ = NULL;
 
   (void)trans_committer_queue_.destroy();
-  (void)br_committer_queue_.destroy();
   (void)checkpoint_queue_.destroy();
   checkpoint_queue_allocator_.destroy();
 
@@ -322,40 +316,6 @@ int ObLogCommitter::push(PartTransTask *task,
   } else {
     LOG_ERROR("unknown part trans task", K(*task));
     ret = OB_NOT_SUPPORTED;
-  }
-
-  return ret;
-}
-
-int ObLogCommitter::push_br_task(ObLogBR &task)
-{
-  int ret = OB_SUCCESS;
-  ObLogRowDataIndex *row_data_index = static_cast<ObLogRowDataIndex *>(task.get_host());
-
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("committer has not been initialized");
-    ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(row_data_index)) {
-    LOG_ERROR("row_data_index is NULL");
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    const int64_t trans_seq = row_data_index->get_br_commit_seq();
-    TransCtx *trans_ctx = static_cast<TransCtx *>(row_data_index->get_trans_ctx_host());
-
-    if (OB_ISNULL(trans_ctx)) {
-      LOG_ERROR("trans_ctx is NULL");
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(br_committer_queue_.set(trans_seq, &task))) {
-      LOG_ERROR("br_committer_queue_ set fail", KR(ret), K(trans_seq), K(task),
-          "begin_sn", br_committer_queue_.begin_sn(),
-          "end_sn", br_committer_queue_.end_sn());
-    } else {
-      LOG_DEBUG("br_committer_queue_ set succ", K(trans_seq), K(task),
-          "begin_sn", br_committer_queue_.begin_sn(),
-          "end_sn", br_committer_queue_.end_sn());
-
-      trans_ctx->br_committer_queue_signal();
-    }
   }
 
   return ret;
@@ -688,32 +648,31 @@ int ObLogCommitter::dispatch_heartbeat_binlog_record_(const int64_t heartbeat_ti
 {
   int ret = OB_SUCCESS;
   ObLogBR *br = NULL;
-  // heartbeat ObLogBR does not require cluster_id, freeze_version, tenant_id
+  // heartbeat ObLogBR does not require cluster_id, tenant_id
   const uint64_t cluster_id = 1;
-  const ObVersion freeze_version = ObVersion(1);
   const uint64_t tenant_id = 1;
-  const int64_t ddl_schema_version = 0;
+  const uint64_t row_index = 0;
   ObString trace_id;
   ObString trace_info;
   ObString unique_id;
-  const uint64_t row_index = 0;
-  const bool is_serilized = false;
-
-  ISTAT("[HEARTBEAT]", "DELAY", TS_TO_DELAY(heartbeat_timestamp), "heartbeat", TS_TO_STR(heartbeat_timestamp));
+  const int64_t ddl_schema_version = 0;
+  if (REACH_TIME_INTERVAL(3 * _SEC_)) {
+    ISTAT("[HEARTBEAT]", "DELAY", TS_TO_DELAY(heartbeat_timestamp), "heartbeat", TS_TO_STR(heartbeat_timestamp));
+  }
 
   if (OB_ISNULL(tag_br_alloc_)) {
     LOG_ERROR("invalid tag_br_alloc_ fail", KR(ret), K(tag_br_alloc_));
     ret = OB_INVALID_ERROR;
-  } else if (OB_FAIL(tag_br_alloc_->alloc(is_serilized, br, NULL))) {
+  } else if (OB_FAIL(tag_br_alloc_->alloc(br, NULL))) {
     LOG_ERROR("alloc binlog record for HEARTBEAT fail", KR(ret));
   } else if (OB_ISNULL(br)) {
     LOG_ERROR("alloc binlog record for HEARTBEAT fail", KR(ret), K(br));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(br->init_data(HEARTBEAT, cluster_id, tenant_id, ddl_schema_version, trace_id, trace_info, unique_id,
-          freeze_version, heartbeat_timestamp))) {
+  } else if (OB_FAIL(br->init_data(HEARTBEAT, cluster_id, tenant_id, row_index, trace_id, trace_info, unique_id,
+          ddl_schema_version, heartbeat_timestamp))) {
     LOG_ERROR("init HEARTBEAT binlog record fail", KR(ret), K(heartbeat_timestamp),
-        K(cluster_id), K(freeze_version), K(tenant_id), K(ddl_schema_version), K(trace_id), K(trace_info),
-        K(unique_id), K(row_index));
+        K(cluster_id), K(tenant_id), K(row_index), K(ddl_schema_version), K(trace_id), K(trace_info),
+        K(unique_id));
   } else if (OB_FAIL(push_br_queue_(br))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("push_br_queue_ fail", KR(ret));
@@ -1086,7 +1045,6 @@ int ObLogCommitter::handle_dml_task_(PartTransTask *participants)
   } else {
     const uint64_t cluster_id = participants->get_cluster_id();
     int64_t global_trans_version = participants->get_global_trans_version();
-    const common::ObVersion &freeze_version = participants->get_freeze_version();
     const uint64_t tenant_id = extract_tenant_id(participants->get_partition().get_table_id());
     TransCtx *trans_ctx = NULL;
     const ObTransID &trans_id = participants->get_trans_id();
@@ -1112,7 +1070,7 @@ int ObLogCommitter::handle_dml_task_(PartTransTask *participants)
     if (OB_SUCC(ret)) {
       valid_br_num = trans_ctx->get_total_br_count();
       part_trans_task_count = trans_ctx->get_ready_participant_count();
-      valid_part_trans_task_count = trans_ctx->get_valid_part_trans_task_count();
+      valid_part_trans_task_count = trans_ctx->get_ready_participant_count();
     }
 
     // Statistical Information
@@ -1124,13 +1082,13 @@ int ObLogCommitter::handle_dml_task_(PartTransTask *participants)
 
     // Place the Binlog Record chain in the user queue
     // Binlog Record may be recycled at any time
-    if (OB_SUCCESS == ret && valid_br_num > 0) {
+    if (OB_SUCCESS == ret) {
       if (OB_FAIL(commit_binlog_record_list_(*trans_ctx, cluster_id, valid_part_trans_task_count,
-              freeze_version, tenant_id, global_trans_version))) {
+              tenant_id, global_trans_version))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("commit_binlog_record_list_ fail", KR(ret), KPC(trans_ctx),
               K(valid_br_num), K(valid_part_trans_task_count),
-              K(freeze_version), K(tenant_id), K(global_trans_version));
+              K(tenant_id), K(global_trans_version));
         }
       } else {
         // succ
@@ -1214,7 +1172,6 @@ int ObLogCommitter::do_trans_stat_(const common::ObPartitionKey &pkey,
 int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
     const uint64_t cluster_id,
     const int64_t part_trans_task_count,
-    const common::ObVersion &freeze_version,
     const uint64_t tenant_id,
     const int64_t global_trans_version)
 {
@@ -1227,7 +1184,6 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
   ObString unique_id ;
   const ObTransID trans_id = trans_ctx.get_trans_id();
   const ObString &trans_id_str = trans_ctx.get_trans_id_str();
-  const int64_t total_br_count = trans_ctx.get_total_br_count();
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("committer has not been initialized");
@@ -1235,37 +1191,43 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
   } else if (OB_UNLIKELY(global_trans_version <= 0)) {
     LOG_ERROR("invalid argument", K(global_trans_version));
     ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(trans_ctx.has_valid_br(stop_flag_))) {
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+      LOG_DEBUG("trans has no valid br to output, skip this trans", K(trans_ctx));
+    } else {
+      LOG_ERROR("failed to wait for valid br", KR(ret), K(trans_ctx));
+    }
   } else {
     ObLogBR *begin_br = NULL;
     ObLogBR *commit_br = NULL;
-    const int64_t ddl_schema_version = 0;
     const uint64_t row_index = 0;
-    const bool is_serilized = false;
+    const int64_t ddl_schema_version = 0;
 
     // Assign BEGIN and COMMIT, place them at the beginning and end
     // BEGIN/COMMIT does not need to set host information
-    if (OB_FAIL(tag_br_alloc_->alloc(is_serilized, begin_br, NULL))) {
+    if (OB_FAIL(tag_br_alloc_->alloc(begin_br, NULL))) {
       LOG_ERROR("alloc begin binlog record fail", KR(ret));
     } else if (OB_ISNULL(begin_br)) {
       LOG_ERROR("alloc begin binlog record fail", KR(ret), K(begin_br));
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(tag_br_alloc_->alloc(is_serilized, commit_br, NULL))) {
+    } else if (OB_FAIL(tag_br_alloc_->alloc(commit_br, NULL))) {
       LOG_ERROR("alloc commit binlog record fail", KR(ret));
     } else if (OB_ISNULL(commit_br)) {
       LOG_ERROR("alloc commit binlog record fail", KR(ret), K(commit_br));
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(begin_br->init_data(EBEGIN, cluster_id, tenant_id, ddl_schema_version, trace_id, trace_info, trans_id_str,
-            freeze_version, global_trans_version, part_trans_task_count, &trans_ctx.get_major_version_str()))) {
+    } else if (OB_FAIL(begin_br->init_data(EBEGIN, cluster_id, tenant_id, row_index, trace_id, trace_info, trans_id_str,
+            ddl_schema_version, global_trans_version, part_trans_task_count, &trans_ctx.get_major_version_str()))) {
       LOG_ERROR("init begin binlog record fail", KR(ret), K(global_trans_version), K(cluster_id),
-          K(freeze_version), K(tenant_id), K(ddl_schema_version), K(trace_id), K(trace_info), K(trans_id_str),
-          K(row_index), K(part_trans_task_count), "major_version:", trans_ctx.get_major_version_str());
-    } else if (OB_FAIL(commit_br->init_data(ECOMMIT, cluster_id, tenant_id, ddl_schema_version, trace_id, trace_info, unique_id,
-            freeze_version, global_trans_version, part_trans_task_count))) {
+          K(tenant_id), K(row_index), K(trace_id), K(trace_info), K(trans_id_str),
+          K(ddl_schema_version), K(part_trans_task_count), "major_version:", trans_ctx.get_major_version_str());
+    } else if (OB_FAIL(commit_br->init_data(ECOMMIT, cluster_id, tenant_id, row_index, trace_id, trace_info, unique_id,
+            ddl_schema_version, global_trans_version, part_trans_task_count))) {
       LOG_ERROR("init commit binlog record fail", KR(ret), K(global_trans_version), K(cluster_id),
-          K(freeze_version), K(tenant_id), K(ddl_schema_version), K(trace_id), K(trace_info), K(unique_id),
-          K(row_index), K(part_trans_task_count));
+          K(tenant_id), K(row_index), K(trace_id), K(trace_info), K(unique_id),
+          K(ddl_schema_version), K(part_trans_task_count));
     } else {
-      LOG_DEBUG("commit trans begin", K(trans_ctx.get_total_br_count()));
+      LOG_DEBUG("commit trans begin", K(trans_ctx));
       // push begin br to queue
       if (OB_FAIL(push_br_queue_(begin_br))) {
         if (OB_IN_STOP_STATE != ret) {
@@ -1276,20 +1238,27 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
       // push data
       while (! stop_flag_ && OB_SUCC(ret) && ! trans_ctx.is_all_br_committed()) {
         ObLogBR *br_task = NULL;
+        uint64_t retry_count = 0;
 
-        if (OB_FAIL(next_ready_br_task_(br_task))) {
-          LOG_ERROR("next_ready_br_task_ fail", KR(ret), KPC(br_task));
-        } else if (NULL == br_task) {
-          trans_ctx.br_committer_queue_timedwait(DATA_OP_TIMEOUT);
+        if (OB_FAIL(next_ready_br_task_(trans_ctx, br_task))) {
+          if (OB_EAGAIN == ret) {
+            usleep(10*1000);
+            ret = OB_SUCCESS;
+            if (OB_UNLIKELY(0 == (++retry_count) % 100)) {
+              LOG_DEBUG("waiting for next ready br", KR(ret), K(trans_ctx));
+            }
+          } else {
+            LOG_ERROR("next_ready_br_task_ fail", KR(ret), KPC(br_task));
+          }
         } else {
           // Single br down, next reset to NULL
           br_task->set_next(NULL);
-          trans_ctx.inc_committed_br_count();
-
           if (OB_FAIL(push_br_queue_(br_task))) {
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("push_br_queue_ fail", KR(ret), K(br_task));
             }
+          } else {
+            trans_ctx.inc_committed_br_count();
           }
         }
       } // while
@@ -1300,6 +1269,9 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("push_br_queue_ fail", KR(ret), K(commit_br));
           }
+        } else if (trans_ctx.get_total_br_count() != trans_ctx.get_committed_br_count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("expected all br commit but not", KR(ret), K(trans_ctx));
         }
       }
     }
@@ -1316,38 +1288,26 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
       }
     }
 
-    LOG_DEBUG("commit_binlog_record_list", K(trans_id), K(trans_id_str), K(global_trans_version), K(cluster_id),
-        K(freeze_version), K(tenant_id), K(ddl_schema_version), K(trace_id), K(unique_id),
-        K(row_index), K(part_trans_task_count),
-        K(total_br_count), "br_committer_queue_cnt", get_br_committer_queue_count());
+    LOG_DEBUG("commit_binlog_record_list", KR(ret), K(trans_id), K(trans_id_str), K(global_trans_version), K(cluster_id),
+        K(tenant_id), K(ddl_schema_version), K(trace_id), K(unique_id),
+        K(row_index), K(part_trans_task_count), K(trans_ctx));
   }
 
   return ret;
 }
 
-int ObLogCommitter::next_ready_br_task_(ObLogBR *&br_task)
+int ObLogCommitter::next_ready_br_task_(TransCtx &trans_ctx, ObLogBR *&br_task)
 {
   int ret = OB_SUCCESS;
-  bool br_popped = false;
-  bool use_lock = true;
-  BRCommitQueuePopFunc br_pop_func;
-  br_task = NULL;
 
-  if (OB_FAIL(br_committer_queue_.pop(br_pop_func, br_task, br_popped, use_lock))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_ERROR("pop from CheckpointQueue fail", KR(ret), KPC(br_task), K(br_popped), K(use_lock),
-          "begin_sn", br_committer_queue_.begin_sn(), "end_sn", br_committer_queue_.end_sn());
-    } else {
-      // no element, normal
-      ret = OB_SUCCESS;
-      br_task = NULL;
-    }
-  } else if (! br_popped) {
-    // No pop element
-    br_task = NULL;
+  if (OB_FAIL(trans_ctx.pop_br_for_committer(br_task))) {
+    // ERROR will handle by caller, note: OB_EAGIN means waiting sorter append br to trans_ctx or no more br
   } else if (OB_ISNULL(br_task)) {
     LOG_ERROR("invalid task", K(br_task));
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(br_task->get_data())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get invalid br_task from trans_br_queue", KR(ret), KPC(br_task), KP(br_task), KP(br_task->get_data()));
   } else {
     // success
   }
@@ -1371,20 +1331,18 @@ int ObLogCommitter::push_br_queue_(ObLogBR *br)
 }
 
 void ObLogCommitter::get_part_trans_task_count(int64_t &ddl_part_trans_task_count,
-    int64_t &dml_part_trans_task_count,
-    int64_t &br_count) const
+    int64_t &dml_part_trans_task_count) const
 {
   dml_part_trans_task_count = ATOMIC_LOAD(&dml_part_trans_task_count_);
   ddl_part_trans_task_count = ATOMIC_LOAD(&ddl_part_trans_task_count_);
-  br_count = br_committer_queue_.end_sn() - br_committer_queue_.begin_sn();
 }
 
 void ObLogCommitter::configure(const ObLogConfig &cfg)
 {
-  int64_t output_heartbeat_interval_sec = cfg.output_heartbeat_interval_sec;
+  int64_t output_heartbeat_interval_msec = cfg.output_heartbeat_interval_msec;
 
-  ATOMIC_STORE(&g_output_heartbeat_interval, output_heartbeat_interval_sec * _SEC_);
-  LOG_INFO("[CONFIG]", K(output_heartbeat_interval_sec));
+  ATOMIC_STORE(&g_output_heartbeat_interval, output_heartbeat_interval_msec * _MSEC_);
+  LOG_INFO("[CONFIG]", K(output_heartbeat_interval_msec));
 }
 
 } // namespace liboblog

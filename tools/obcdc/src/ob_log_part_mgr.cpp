@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -1961,6 +1961,7 @@ int ObLogPartMgr::check_part_status_(const common::ObPartitionKey &pkey,
   ObLogSchemaGuard schema_guard;
   part_status = PART_STATUS_INVALID;
   IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+  const bool print_participant_check_statue = (TCONF.print_participant_check_statue != 0);
 
   if (OB_ISNULL(schema_getter)) {
     LOG_ERROR("invalid schema getter", K(schema_getter));
@@ -1981,15 +1982,19 @@ int ObLogPartMgr::check_part_status_(const common::ObPartitionKey &pkey,
   // Partition is considered deleted if the tenant does not exist
   if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
     part_status = PART_DELETED;
-    ISTAT("[INC_TRANS_COUNT] [CHECK_PART_STATUS] tenant has been dropped, "
-        "partition status set to PART_DELETED",
-        KR(ret), K(tenant_id_), K(pkey), K(part_status), K(schema_version));
+    if (print_participant_check_statue) {
+      ISTAT("[INC_TRANS_COUNT] [CHECK_PART_STATUS] tenant has been dropped, "
+          "partition status set to PART_DELETED",
+          KR(ret), K_(tenant_id), K(pkey), K(part_status), K(schema_version));
+    }
     ret = OB_SUCCESS;
   }
 
   if (OB_SUCCESS == ret) {
-    _ISTAT("[INC_TRANS_COUNT] [CHECK_PART_STATUS] TENANT=%lu PKEY=%s STATUS=%s SCHEMA_VERSION=%ld",
-        tenant_id_, to_cstring(pkey), print_part_status(part_status), schema_version);
+    if (print_participant_check_statue) {
+      _ISTAT("[INC_TRANS_COUNT] [CHECK_PART_STATUS] TENANT=%lu PKEY=%s STATUS=%s SCHEMA_VERSION=%ld",
+          tenant_id_, to_cstring(pkey), print_part_status(part_status), schema_version);
+    } else {}
   }
 
   return ret;

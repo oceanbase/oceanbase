@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -1415,6 +1415,10 @@ int ObLogSysTableHelper::query_cluster_min_observer_version(uint64_t &min_observ
       } else {
         min_observer_version = std::min(min_observer_version, server_version);
       }
+    }
+
+    if (OB_INVALID_ID == min_observer_version) {
+      ret = OB_NEED_RETRY;
     }
   }
 

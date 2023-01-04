@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -134,9 +134,11 @@ private:
       const TableSchemaType &table_schema);
   int init_row_value_array_(const int64_t row_value_num);
   void destroy_row_value_array_();
-  int set_meta_info_(ObLogSchemaGuard &schema_guard,
+  int set_meta_info_(
+      const int64_t global_schema_version,
       const TableSchemaType *&simple_table_schema,
       const DBSchemaInfo &db_schema_info,
+      ObLogSchemaGuard &schema_guard,
       ObLogBR *br,
       volatile bool &stop_flag);
   int build_row_value_(RowValue *rv,
@@ -192,14 +194,11 @@ private:
   int init_binlog_record_for_dml_stmt_task_(DmlStmtTask *stmt_task,
       ObLogBR *&br,
       bool &is_ignore);
-  int handle_memory_data_sync_work_mode_(PartTransTask &part_trans_task,
-      ObLogEntryTask &redo_log_entry_task,
-      volatile bool &stop_flag);
-  int handle_storage_data_sync_work_mode_(PartTransTask &part_trans_task,
-      ObLogEntryTask &redo_log_entry_task,
-      volatile bool &stop_flag);
-  int dispatch_to_storager_(ObLogEntryTask &log_entry_task,
-      volatile bool &stop_flag);
+
+  int init_dml_unique_id_(DmlStmtTask &stmt_task,
+      ObLogEntryTask &log_entry_task,
+      PartTransTask &part_trans_task,
+      common::ObString &dml_unique_id);
 
 private:
   bool                      inited_;

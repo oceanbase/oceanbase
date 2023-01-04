@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -101,6 +101,67 @@ struct TransTpsRpsStatInfo
                K_(rps_stat_info));
 };
 
+
+struct DispatcherStatInfo
+{
+  int64_t dispatched_trans_count_;
+  int64_t dispatched_redo_count_;
+
+  void reset()
+  {
+    ATOMIC_SET(&dispatched_trans_count_, 0);
+    ATOMIC_SET(&dispatched_redo_count_, 0);
+  }
+
+  void inc_dispatched_trans_count()
+  {
+    ATOMIC_INC(&dispatched_trans_count_);
+  }
+
+  void inc_dispatched_redo_count()
+  {
+    ATOMIC_INC(&dispatched_redo_count_);
+  }
+
+  void get_and_reset_dispatcher_stat(int64_t &trans_count, int64_t &redo_count)
+  {
+    trans_count = ATOMIC_TAS(&dispatched_trans_count_, 0);
+    redo_count = ATOMIC_TAS(&dispatched_redo_count_, 0);
+  }
+
+  void calc_and_print_stat(int64_t delta_time);
+};
+
+struct SorterStatInfo
+{
+  int64_t sorted_trans_count_;
+  int64_t sorted_br_count_;
+
+  void reset()
+  {
+    ATOMIC_SET(&sorted_trans_count_, 0);
+    ATOMIC_SET(&sorted_br_count_, 0);
+  }
+
+  void inc_sorted_trans_count()
+  {
+    ATOMIC_INC(&sorted_trans_count_);
+  }
+
+  void inc_sorted_br_count()
+  {
+    ATOMIC_INC(&sorted_br_count_);
+  }
+
+  void get_and_reset_sorter_stat(int64_t &trans_count, int64_t &br_count)
+  {
+    trans_count = ATOMIC_TAS(&sorted_trans_count_, 0);
+    br_count = ATOMIC_TAS(&sorted_br_count_, 0);
+  }
+
+  void calc_and_print_stat(int64_t delta_time);
+};
+
 class IObLogTransStatMgr
 {
 public:
@@ -127,6 +188,12 @@ public:
   // release record
   virtual void do_drc_release_tps_stat() = 0;
   virtual void do_drc_release_rps_stat() = 0;
+  // dispatch_redo
+  virtual void do_dispatch_trans_stat() = 0;
+  virtual void do_dispatch_redo_stat() = 0;
+  // sorter
+  virtual void do_sort_trans_stat() = 0;
+  virtual void do_sort_br_stat() = 0;
 
   // print stat info
   virtual void print_stat_info() = 0;
@@ -156,6 +223,10 @@ public:
   void do_drc_consume_rps_stat();
   void do_drc_release_tps_stat();
   void do_drc_release_rps_stat();
+  void do_dispatch_trans_stat();
+  void do_dispatch_redo_stat();
+  void do_sort_trans_stat();
+  void do_sort_br_stat();
 
   void print_stat_info();
 
@@ -293,6 +364,9 @@ private:
   // drc 消费统计信息
   TransTpsRpsStatInfo   next_record_stat_ CACHE_ALIGNED;     // Statistics next_record: tps and rps information
   TransTpsRpsStatInfo   release_record_stat_ CACHE_ALIGNED;  // Statistics release_record: tps and rps information
+  DispatcherStatInfo    dispatcher_stat_ CACHE_ALIGNED;
+  SorterStatInfo        sorter_stat_ CACHE_ALIGNED;
+
   // 记录统计时间
   int64_t               last_stat_time_ CACHE_ALIGNED;
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -22,6 +22,8 @@
 
 #include "ob_log_trans_ctx.h"                       // TransCtx
 #include "ob_log_part_trans_task.h"                 // PartTransTask
+#include "ob_log_trans_redo_dispatcher.h"           // ObLogRedoDispatcher
+#include "ob_log_trans_msg_sorter.h"                // ObLogTransMsgSorter
 
 using namespace oceanbase::logmessage;
 namespace oceanbase
@@ -58,12 +60,14 @@ public:
       dml_part_trans_task_count_ = 0;
       hb_part_trans_task_count_ = 0;
       queue_part_trans_task_count_ = 0;
+      sequenced_trans_count_ = 0;
     }
     int64_t total_part_trans_task_count_ CACHE_ALIGNED;
     int64_t ddl_part_trans_task_count_ CACHE_ALIGNED;
     int64_t dml_part_trans_task_count_ CACHE_ALIGNED;
     int64_t hb_part_trans_task_count_ CACHE_ALIGNED;
     int64_t queue_part_trans_task_count_ CACHE_ALIGNED;
+    int64_t sequenced_trans_count_ CACHE_ALIGNED;
   };
 
 public:
@@ -89,7 +93,6 @@ public:
 class IObLogTransCtxMgr;
 class IObLogTransStatMgr;
 class IObLogCommitter;
-class IObLogDataProcessor;
 class IObLogErrHandler;
 class ObLogTenant;
 
@@ -121,7 +124,8 @@ public:
       IObLogTransCtxMgr &trans_ctx_mgr,
       IObLogTransStatMgr &trans_stat_mgr,
       IObLogCommitter &trans_committer,
-      IObLogDataProcessor &data_processor,
+      IObLogTransRedoDispatcher &redo_dispatcher,
+      IObLogTransMsgSorter &br_sorter,
       IObLogErrHandler &err_handler);
   void destroy();
 
@@ -155,9 +159,11 @@ private:
       TransCtx *trans_ctx,
       volatile bool &stop_flag);
   // Once the participants are gathered, the entire DML transaction is processed
-  int handle_dml_trans_(const uint64_t tenant_id, TransCtx &trans_ctx, volatile bool &stop_flag);
+  // TODO
+  int handle_dml_trans_(ObLogTenant &tenant, TransCtx &trans_ctx, volatile bool &stop_flag);
   int recycle_resources_after_trans_ready_(TransCtx &trans_ctx, ObLogTenant &tenant);
-  int push_task_into_data_processor_(ObLogRowDataIndex &row_data_index, volatile bool &stop_flag);
+  int push_task_into_br_sorter_(TransCtx &trans_ctx, volatile bool &stop_flag);
+  int push_task_into_redo_dispatcher_(TransCtx &trans_ctx, volatile bool &stop_flag);
   int push_task_into_committer_(PartTransTask *task,
       const int64_t task_count,
       volatile bool &stop_flag,
@@ -165,57 +171,7 @@ private:
   void do_stat_for_part_trans_task_count_(PartTransTask &part_trans_task,
       const int64_t task_count);
 
-  // Constructs a chain of all statement binlogs of partitioned transactions in a distributed transaction for output to the user queue
-  int build_binlog_record_list_(TransCtx &trans_ctx,
-      PartTransTask *part,
-      ObLogRowDataIndex *&br_head,
-      ObLogRowDataIndex *&br_tail,
-      uint64_t &valid_br_num,
-      int64_t &valid_part_trans_task_count,
-      volatile bool &stop_flag);
-  // Build the binlog_record list in the order of the partitions in the PartTransTask list
-  int build_binlog_record_list_order_by_partition_(TransCtx &trans_ctx,
-      PartTransTask *part,
-      ObLogRowDataIndex *&br_head,
-      ObLogRowDataIndex *&br_tail,
-      uint64_t &valid_br_num,
-      int64_t &valid_part_trans_task_count,
-      volatile bool &stop_flag);
-  int handle_br_of_part_trans_task_(TransCtx &trans_ctx,
-      PartTransTask *part,
-      int64_t &valid_br_num,
-      ObLogRowDataIndex *&br_head,
-      ObLogRowDataIndex *&br_tail);
-  // Build a binlog_record chain by sequencing statements within a transaction according to sql_no
-  int build_binlog_record_list_order_by_sql_no_(TransCtx &trans_ctx,
-      PartTransTask *part,
-      ObLogRowDataIndex *&br_head,
-      ObLogRowDataIndex *&br_tail,
-      uint64_t &valid_br_num,
-      int64_t &valid_part_trans_task_count,
-      volatile bool &stop_flag);
-  // Add DML binlog_record to br_list and count information/print logs etc.
-  int add_br_to_br_list_and_statics_(TransCtx &trans_ctx,
-      ObLogRowDataIndex *row_data_index,
-      ObLogRowDataIndex *&br_head,
-      ObLogRowDataIndex *&br_tail,
-      uint64_t &valid_br_num,
-      int64_t &valid_part_trans_task_count);
-  // Add the DML binlog_record to the binlog_record list for output to the user queue
-  int add_dml_br_to_binlog_record_list_(TransCtx &trans_ctx,
-      ObLogRowDataIndex *row_data_index,
-      ObLogRowDataIndex *&br_head,
-      ObLogRowDataIndex *&br_tail);
-
-  struct StmtSequerenceCompFunc
-  {
-    // Statement sort operator: current sort based on sql_no, used to find the minimum value of the heap, used only for sorting DML statements
-    bool operator()(const ObLogRowDataIndex *task1, const ObLogRowDataIndex *task2)
-    {
-      return task1->get_row_seq_no() > task2->get_row_seq_no();
-    }
-  };
-
+  // TODO add
   // 1. statistics on transaction tps and rps (rps before and after Formatter filtering)
   // 2. count tenant rps information
   int do_trans_stat_(const uint64_t tenant_id, const int64_t total_stmt_cnt);
@@ -228,7 +184,8 @@ private:
   IObLogTransCtxMgr         *trans_ctx_mgr_;
   IObLogTransStatMgr        *trans_stat_mgr_;
   IObLogCommitter           *trans_committer_;
-  IObLogDataProcessor       *data_processor_;
+  IObLogTransRedoDispatcher *redo_dispatcher_;
+  IObLogTransMsgSorter      *msg_sorter_;
   IObLogErrHandler          *err_handler_;
 
   int64_t                   global_checkpoint_ CACHE_ALIGNED;

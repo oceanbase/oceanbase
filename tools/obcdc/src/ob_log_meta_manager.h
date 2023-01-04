@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -63,7 +63,9 @@ public:
   // @retval OB_SUCCESS                   success
   // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
   // #retval other error code             fail
-  virtual int get_table_meta(const share::schema::ObSimpleTableSchemaV2 *table_schema,
+  virtual int get_table_meta(
+      const int64_t global_schema_version,
+      const share::schema::ObSimpleTableSchemaV2 *table_schema,
       IObLogSchemaGetter &schema_getter,
       ITableMeta *&table_meta,
       volatile bool &stop_flag) = 0;
@@ -108,7 +110,9 @@ public:
   virtual ~ObLogMetaManager();
 
 public:
-  virtual int get_table_meta(const share::schema::ObSimpleTableSchemaV2 *table_schema,
+  virtual int get_table_meta(
+      const int64_t global_schema_version,
+      const share::schema::ObSimpleTableSchemaV2 *table_schema,
       IObLogSchemaGetter &schema_getter,
       ITableMeta *&table_meta,
       volatile bool &stop_flag);
@@ -326,6 +330,7 @@ ObLogMetaManager::MetaInfo<Type>::MetaInfo() :
     fifo_allocator_()
 {
   fifo_allocator_.init(&base_allocator_, common::OB_MALLOC_NORMAL_BLOCK_SIZE);
+  fifo_allocator_.set_label(common::ObModIds::OB_LOG_META_INFO);
 }
 
 template <class Type>

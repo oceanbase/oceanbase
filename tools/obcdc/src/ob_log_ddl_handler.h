@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -21,6 +21,7 @@
 #include "ob_log_utils.h"                         // _SEC_
 #include "ob_log_part_trans_task.h"               // PartTransTask
 #include "ob_log_part_trans_task_queue.h"         // SafePartTransTaskQueue
+#include "ob_log_config.h"                        // ObLogConfig
 
 namespace oceanbase
 {
@@ -53,6 +54,8 @@ public:
       uint64_t &ddl_min_handle_log_id) = 0;
 
   virtual int64_t get_part_trans_task_count() const = 0;
+
+  virtual void configure(const ObLogConfig &config) = 0;
 };
 
 ///////////////////////////////// ObLogDDLHandler /////////////////////////////////
@@ -74,6 +77,7 @@ class ObLogDDLHandler : public IObLogDDLHandler
   {
     DATA_OP_TIMEOUT = 1 * _SEC_,
   };
+  static int64_t g_ddl_data_op_timeout_msec;
 
 public:
   ObLogDDLHandler();
@@ -88,6 +92,7 @@ public:
       int64_t &ddl_min_progress,
       uint64_t &ddl_min_handle_log_id);
   virtual int64_t get_part_trans_task_count() const;
+  virtual void configure(const ObLogConfig &config);
 
 public:
   int init(IObLogDdlParser *ddl_parser,

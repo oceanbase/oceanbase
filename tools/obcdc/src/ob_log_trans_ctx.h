@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -19,6 +19,7 @@
 #include "lib/container/ob_se_array.h"            // ObSEArray
 #include "lib/allocator/page_arena.h"             // ObArenaAllocator
 #include "lib/lock/ob_spin_lock.h"                // ObSpinLock
+#include "lib/queue/ob_link_queue.h"              // ObSpLinkQueue
 #include "common/ob_partition_key.h"              // ObPartitionKey
 #include "storage/transaction/ob_trans_define.h"  // ObTransID
 
@@ -156,15 +157,16 @@ public:
                       bool &is_part_trans_served,
                       bool &is_all_participants_ready);
 
-  /// Sequence the trans
-  /// Set the sequence number and set the status to SEQUENCED
+  /// Sequence the transaction
+  /// Set the sequence number and schema verison, and set the status to SEQUENCED
   /// Requires that all participants are gathered, i.e. the status is PARTICIPANT_READY
   ///
   /// @param seq                sequence
+  /// @param schema_version     schema version
   ///
   /// @retval OB_SUCCESS        Success
   /// @retval other_error_code  Fail
-  int sequence(const int64_t seq);
+  int sequence(const int64_t seq, const int64_t schema_version);
 
   /// Wait all participant which has been data ready
   /// Requires that sequencing has been completed, i.e., the status is SEQUENCED
@@ -210,12 +212,12 @@ public:
   PartTransTask *get_participant_objs() { return ready_participant_objs_; }
   int64_t get_ready_participant_count() const { return ready_participant_count_; }
 
-  void br_committer_queue_signal() { br_committer_queue_cond_.signal(); }
-  void br_committer_queue_timedwait(const int64_t time) { br_committer_queue_cond_.timedwait(time); }
   int64_t get_total_br_count() const { return total_br_count_; }
+  void inc_total_br_count_() { ATOMIC_INC(&total_br_count_); }
   void set_total_br_count(const int64_t total_br_count) { total_br_count_ = total_br_count; }
-  bool is_all_br_committed() const { return ATOMIC_LOAD(&total_br_count_) == ATOMIC_LOAD(&committed_br_count_); }
+  bool is_all_br_committed() const { return is_trans_sorted() && (ATOMIC_LOAD(&total_br_count_) == ATOMIC_LOAD(&committed_br_count_)); }
   void inc_committed_br_count() { ATOMIC_INC(&committed_br_count_); }
+  int get_committed_br_count() const { return ATOMIC_LOAD(&committed_br_count_); }
   int64_t get_valid_part_trans_task_count() const { return valid_part_trans_task_count_; }
   void set_valid_part_trans_task_count(const int64_t valid_part_trans_task_count) { valid_part_trans_task_count_ = valid_part_trans_task_count; }
 
@@ -233,6 +235,16 @@ public:
   int set_ready_participant_count(const int64_t count);
   int64_t get_revertable_participant_count() const;
   int set_ready_participant_objs(PartTransTask *part_trans_task);
+  int append_sorted_br(ObLogBR *br);
+  bool is_trans_sorted() const { return is_trans_sorted_; }
+  void set_trans_sorted() { is_trans_sorted_ = true; }
+  /// check if trans has valid br
+  /// note: call this function before any br output
+  /// @retval OB_SUCCESS      trans has valid br to output
+  /// @retval OB_EMPTY_RESULT trans doesn't has valid br until sorter process finish
+  /// @retval other_err_code  unexpected error
+  int has_valid_br(volatile bool &stop_flag);
+  int pop_br_for_committer(ObLogBR *&br);
   // for unittest end
 
 public:
@@ -282,7 +294,8 @@ public:
       K_(ready_participant_count),
       K_(total_br_count),
       K_(committed_br_count),
-      K_(revertable_participant_count));
+      K_(revertable_participant_count),
+      K_(is_trans_sorted));
 
 private:
   // Prepare the transaction context
@@ -321,6 +334,8 @@ private:
 
   // sequence info
   int64_t                   seq_;                       //Global sequence number of the distributed transaction
+  int64_t                   total_clog_size_;
+  int64_t                   total_stored_clog_size_;
 
   // Participant Information
   TransPartInfo             *participants_;            // Participant Information
@@ -328,13 +343,14 @@ private:
   PartTransTask             *ready_participant_objs_;  // List of added participant objects
   int64_t                   ready_participant_count_;  // Amount of added participant objects
 
-  common::ObCond            br_committer_queue_cond_;
   int64_t                   total_br_count_ CACHE_ALIGNED;
   int64_t                   committed_br_count_ CACHE_ALIGNED;
   int64_t                   valid_part_trans_task_count_;   // Number of valid participants count
 
   // status info
   int64_t                   revertable_participant_count_;  // Number of participants able to be released
+  bool                      is_trans_sorted_;
+  common::ObSpLinkQueue     br_out_queue_;
 
   // allocator
   common::ObArenaAllocator  allocator_;

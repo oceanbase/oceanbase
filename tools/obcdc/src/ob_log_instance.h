@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -54,8 +54,9 @@ class IObLogDdlParser;
 class IObLogPartTransParser;
 class IObLogSequencer;
 class IObLogFormatter;
+class IObLogBatchBuffer;
 class IObLogStorager;
-class IObLogDataProcessor;
+class IObLogReader;
 class IObLogCommitter;
 class PartTransTask;
 class IObLogStartSchemaMatcher;
@@ -66,6 +67,8 @@ class IObLogBRPool;
 class IObLogResourceCollector;
 class IObLogTenantMgr;
 class ObLogTenantGuard;
+class IObLogTransRedoDispatcher;
+class IObLogTransMsgSorter;
 
 typedef ObLogTransTaskPool<PartTransTask> PartTransTaskPool;
 
@@ -320,7 +323,8 @@ public:
   ObLogSysTableHelper       *systable_helper_;
   IObLogCommitter           *committer_;
   IObLogStorager            *storager_;
-  IObLogDataProcessor       *data_processor_;
+  IObLogBatchBuffer         *batch_buffer_;
+  IObLogReader              *reader_;
   IObLogFormatter           *formatter_;
   IObLogSequencer           *sequencer_;
   IObLogPartTransParser     *part_trans_parser_;
@@ -333,6 +337,8 @@ public:
   // The tz information of the sys tenant is placed in instance because of the refresh schema dependency
   ObTZInfoMap               tz_info_map_;
   ObTimeZoneInfoWrap        tz_info_wrap_;
+  IObLogTransRedoDispatcher *trans_redo_dispatcher_;
+  IObLogTransMsgSorter      *trans_msg_sorter_;
 
   // Functions exposed to the outside via TCTX
 public:

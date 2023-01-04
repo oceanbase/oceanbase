@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -34,6 +34,14 @@ public:
   virtual int parse(PartTransTask &task, volatile bool &stop_flag) = 0;
 
   virtual int parse(ObLogEntryTask &task, volatile bool &stop_flag) = 0;
+
+  virtual int parse_rollback(const uint64_t log_id,
+      const int32_t log_offset,
+      const char *redo_data,
+      const int64_t redo_data_len,
+      PartTransTask &part_trans_task,
+      bool &is_rollback_node_valid,
+      RollbackNode &rollback_node) = 0;
 };
 
 
@@ -52,6 +60,13 @@ public:
 public:
   virtual int parse(PartTransTask &task, volatile bool &stop_flag);
   virtual int parse(ObLogEntryTask &task, volatile bool &stop_flag);
+  virtual int parse_rollback(const uint64_t log_id,
+      const int32_t log_offset,
+      const char *redo_data,
+      const int64_t redo_data_len,
+      PartTransTask &part_trans_task,
+      bool &is_rollback_node_valid,
+      RollbackNode &rollback_node);
 
 public:
   int init(IObLogBRPool *br_pool,
@@ -67,12 +82,14 @@ private:
   int handle_ddl_part_rollback_savepoint_(const uint64_t row_index,
       PartTransTask &part_trans_task,
       MutatorRow &row);
-  int handle_dml_part_rollback_savepoint_(const uint64_t row_index,
+  int handle_dml_part_rollback_savepoint_(const uint64_t log_id,
+      const uint64_t row_index,
       PartTransTask &part_trans_task,
       ObLogEntryTask &log_entry_task,
       MutatorRow &row);
   int parse_ddl_redo_log_(PartTransTask &task, volatile bool &stop_flag);
   int parse_stmts_(ObLogTenant *tenant,
+      const uint64_t log_id,
       const char *redo_data,
       const int64_t redo_data_len,
       ObLogEntryTask &redo_log_entry_task,
@@ -96,8 +113,7 @@ private:
   int parse_dml_stmts_(const uint64_t row_index,
       MutatorRow &row,
       ObLogEntryTask &redo_log_entry_task,
-      PartTransTask &part_trans_task,
-      const bool is_rollback = false);
+      PartTransTask &part_trans_task);
   int64_t get_row_seq_(PartTransTask &task, MutatorRow &row) const;
 
 private:

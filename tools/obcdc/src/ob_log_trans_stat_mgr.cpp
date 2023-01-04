@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -81,6 +81,38 @@ double TransTpsRpsStatInfo::calc_rps(const int64_t delta_time)
   return rps_stat_info_.calc_rps(delta_time);
 }
 
+void DispatcherStatInfo::calc_and_print_stat(int64_t delta_time)
+{
+  int64_t dispatched_trans_count = 0;
+  int64_t dispatched_redo_count = 0;
+
+  get_and_reset_dispatcher_stat(dispatched_trans_count, dispatched_redo_count);
+
+  if (delta_time > 0) {
+    double dispatch_trans_tps = (double)(dispatched_trans_count) * 1000000.0 / (double)delta_time;
+    double dispatch_redo_tps = (0 == dispatched_trans_count) ? (double)dispatched_redo_count
+            :(double)(dispatched_redo_count) * 1000000.0 / (double)delta_time;
+    _ISTAT("[DISPATCHER_STAT] DISPATCH_TRANS_TPS=%.3lf DISPATCH_REDO_TPS=%.3lf ",
+      dispatch_trans_tps, dispatch_redo_tps);
+  }
+}
+
+void SorterStatInfo::calc_and_print_stat(int64_t delta_time)
+{
+  int64_t sorted_trans_count = 0;
+  int64_t sorted_br_count = 0;
+
+  get_and_reset_sorter_stat(sorted_trans_count, sorted_br_count);
+
+  if (delta_time > 0) {
+    double sort_trans_tps = (double)(sorted_trans_count) * 1000000.0 / (double)delta_time;
+    double sort_br_tps = (0 == sorted_trans_count) ? (double)sorted_br_count
+            :(double)(sorted_br_count) * 1000000.0 / (double)delta_time;
+    _ISTAT("[SORTER_STAT] SORT_TRANS_TPS=%.3lf SORT_BR_TPS=%.3lf ",
+      sort_trans_tps, sort_br_tps);
+  }
+}
+
 ///////////////////////////// TransTpsRpsStatInfo ///////////////////////////
 ObLogTransStatMgr::ObLogTransStatMgr() :
     inited_(false),
@@ -91,6 +123,8 @@ ObLogTransStatMgr::ObLogTransStatMgr() :
     tenant_stat_info_pool_(),
     next_record_stat_(),
     release_record_stat_(),
+    dispatcher_stat_(),
+    sorter_stat_(),
     last_stat_time_(0)
 {
 }
@@ -118,6 +152,8 @@ int ObLogTransStatMgr::init()
     rps_stat_info_after_filter_.reset();
     next_record_stat_.reset();
     release_record_stat_.reset();
+    dispatcher_stat_.reset();
+    sorter_stat_.reset();
     last_stat_time_ = 0;
     inited_ = true;
   }
@@ -137,6 +173,8 @@ void ObLogTransStatMgr::destroy()
     tenant_stat_info_pool_.destroy();
     next_record_stat_.reset();
     release_record_stat_.reset();
+    dispatcher_stat_.reset();
+    sorter_stat_.reset();
     last_stat_time_ = 0;
     inited_ = false;
   }
@@ -177,6 +215,26 @@ void ObLogTransStatMgr::do_drc_release_rps_stat()
   release_record_stat_.do_rps_stat(1);
 }
 
+void ObLogTransStatMgr::do_dispatch_trans_stat()
+{
+  dispatcher_stat_.inc_dispatched_trans_count();
+}
+
+void ObLogTransStatMgr::do_dispatch_redo_stat()
+{
+  dispatcher_stat_.inc_dispatched_redo_count();
+}
+
+void ObLogTransStatMgr::do_sort_trans_stat()
+{
+  sorter_stat_.inc_sorted_trans_count();
+}
+
+void ObLogTransStatMgr::do_sort_br_stat()
+{
+  sorter_stat_.inc_sorted_br_count();
+}
+
 void ObLogTransStatMgr::print_stat_info()
 {
   int ret = OB_SUCCESS;
@@ -184,6 +242,10 @@ void ObLogTransStatMgr::print_stat_info()
   int64_t current_timestamp = get_timestamp();
   int64_t local_last_stat_time = last_stat_time_;
   int64_t delta_time = current_timestamp - local_last_stat_time;
+
+  // calc and print stat info of dispatcher and sorter
+  dispatcher_stat_.calc_and_print_stat(delta_time);
+  sorter_stat_.calc_and_print_stat(delta_time);
 
   double create_tps = tps_stat_info_.calc_tps(delta_time);
   double create_rps_before_filter = rps_stat_info_before_filter_.calc_rps(delta_time);

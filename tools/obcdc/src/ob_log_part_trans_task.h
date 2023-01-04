@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -24,12 +24,13 @@
 #include "storage/ob_i_store.h"                     // ObRowDml
 
 #include "ob_log_trans_log.h"                       // SortedRedoLogList
-#include "ob_log_row_list.h"                        // SortedDmlRowList
+#include "ob_log_rollback_section.h"                // RollbackList
 #include "ob_log_lighty_list.h"                     // LightyList
 #include "ob_small_arena.h"                         // ObSmallArena
 #include "ob_log_task_pool.h"                       // TransTaskBase
 #include "ob_log_utils.h"                           // is_ddl_table
 #include "ob_log_resource_recycle_task.h"           // ObLogResourceRecycleTask
+#include "ob_log_callback.h"                        // ObILogCallback
 
 namespace oceanbase
 {
@@ -47,7 +48,6 @@ namespace liboblog
 class PartTransTask;
 class ObLogBR;
 class ObLogEntryTask;
-class ObLogRowDataIndex;
 
 class IStmtTask : public ObLink   // Inheritance of ObLink is only used for Sequencer
 {
@@ -64,6 +64,7 @@ public:
     host_(host),
     hash_value_(common::OB_INVALID_ID),
     row_index_(OB_INVALID_ID),
+    br_(NULL),
     next_(NULL)
   {}
 
@@ -91,6 +92,10 @@ public:
   uint64_t get_row_index() const { return row_index_; }
   void set_row_index(const uint64_t row_index) { row_index_ = row_index; }
 
+  ObLogBR *get_binlog_record() { return br_; }
+  const ObLogBR *get_binlog_record() const { return br_; }
+  void set_binlog_record(ObLogBR *br) { br_ = br; }
+
   static const char* print_stmt_type(const int type)
   {
     const char *type_str = "UNKNOWN";
@@ -115,6 +120,7 @@ public:
       "type_str", print_stmt_type(type_),
       K_(hash_value),
       K_(row_index),
+      KP_(br),
       K_(host),
       KP_(next));
 
@@ -123,6 +129,7 @@ protected:
   PartTransTask     &host_;        // part trans task the stmt belongs to
   uint64_t          hash_value_;   // HASH value
   uint64_t          row_index_;    // row index for the stmt in the trans it belongs
+  ObLogBR           *br_;
   IStmtTask         *next_;
 
 private:
@@ -290,12 +297,12 @@ class DmlStmtTask : public IStmtTask
 public:
   DmlStmtTask(PartTransTask &host,
       ObLogEntryTask &redo_log_entry_task,
-      ObLogRowDataIndex &row_data_index,
       MutatorRow &row);
   virtual ~DmlStmtTask();
 
   void reset();
 
+  int64_t get_global_schema_version() const;
   int64_t get_table_version() const { return row_.table_version_; }
   uint64_t get_table_id() const { return row_.table_id_; }
   int64_t get_part_id() const;
@@ -319,19 +326,17 @@ public:
   }
 
   ObLogEntryTask &get_redo_log_entry_task() { return redo_log_entry_task_; }
-  ObLogRowDataIndex &get_row_data_index() { return row_data_index_; }
 
   int32_t get_row_sql_no() const { return row_.sql_no_; }
+  int64_t get_row_seq_for_rollback() const;
 
 public:
   TO_STRING_KV("IStmtTask", static_cast<const IStmtTask &>(*this),
       K_(row),
-      K_(redo_log_entry_task),
-      K_(row_data_index));
+      K_(redo_log_entry_task));
 
 private:
   ObLogEntryTask          &redo_log_entry_task_;
-  ObLogRowDataIndex       &row_data_index_;
   MutatorRow              &row_;
 private:
   DISALLOW_COPY_AND_ASSIGN(DmlStmtTask);
@@ -399,13 +404,7 @@ public:
   uint64_t get_exec_tenant_id() const { return ddl_exec_tenant_id_; }
   int64_t get_cluster_id() const { return cluster_id_; }
   int32_t get_row_sql_no() const { return row_.sql_no_; }
-  // get row seq info for rollback to savepoint feature, use seq_no if cluster_version
-  // is greater than 320, otherwise use sql_no
   int64_t get_row_seq_for_rollback() const;
-
-  ObLogBR *get_binlog_record() { return br_; }
-  const ObLogBR *get_binlog_record() const { return br_; }
-  void set_binlog_record(ObLogBR *br) { br_ = br; }
 
 public:
   // tennat_id(UINT64_MAX: 20) + schema_version(INT64_MAX:19)
@@ -475,8 +474,6 @@ private:
   // record cluster ID
   int64_t     cluster_id_;
 
-  ObLogBR     *br_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(DdlStmtTask);
 };
@@ -495,17 +492,9 @@ public:
 
 public:
   int init(const common::ObPartitionKey &pkey,
+      const char *participant,
       const transaction::ObTransID &trans_id,
-      const uint64_t log_id,
-      const int32_t log_offset,
-      DmlRedoLogMetaNode *meta_node,
-      char *data,
-      const int64_t size,
-      const int64_t pos);
-  int append_redo_log(const int64_t log_no,
-      const uint64_t log_id,
-      const char *buf,
-      const int64_t buf_len);
+      DmlRedoLogNode *redo_node);
 
   uint64_t hash() const
   {
@@ -515,6 +504,9 @@ public:
   }
 
 public:
+  int get_status(bool &is_stored);
+  int get_storage_key(std::string &key);
+
   inline void *get_host() { return host_; }
   inline void set_host(void *host) { host_ = host; }
 
@@ -523,78 +515,73 @@ public:
   bool is_ddl_part() const { return is_ddl_table(partition_.get_table_id()); }
 
   const transaction::ObTransID &get_trans_id() const { return trans_id_; }
-  uint64_t get_log_id() const { return log_id_; }
-  int32_t get_log_offset() const { return log_offset_; }
 
-  DmlRedoLogMetaNode *get_meta_node() { return meta_node_; }
   int get_valid_row_num(int64_t &valid_row_num);
 
   common::ObIAllocator &get_allocator() { return arena_allocator_; }
   void *alloc(const int64_t size);
   void free(void *ptr);
 
-  const DmlRedoLogNode &get_redo_log_node() const { return redo_node_; }
-  DmlRedoLogNode &get_redo_log_node() { return redo_node_; }
+  const DmlRedoLogNode *get_redo_log_node() const { return redo_node_; }
+  int get_log_id(uint64_t &log_id);
+  int get_log_offset(int32_t &log_offset);
+  int get_data_len(int64_t &data_len);
+
+  int set_data_and_readed_status(bool is_big_row, char *data, int64_t data_len);
+  int rc_callback();
 
   const StmtList &get_stmt_list() const { return stmt_list_; }
   StmtList &get_stmt_list() { return stmt_list_; }
   int64_t get_stmt_num() const { return stmt_list_.num_; }
   int add_stmt(const uint64_t row_index, IStmtTask *stmt_task);
 
+  int revert_by_rollback_savepoint(const uint64_t current_log_id,
+      const uint64_t rollback_log_id,
+      const uint64_t row_index,
+      const int64_t rollback_no);
+
+  int revert_by_rollback_savepoints(const uint64_t current_log_id,
+      const RollbackList &rollback_list);
+
   // Increases the number of statements that complete the formatting and returns the result after the increase
   int64_t inc_formatted_stmt_num();
 
-  // 1. iterate through the formatted DmlStmt, concatenating all row indices
+  // 1. iterate through the formatted DmlStmt, concatenating all DmlStmtTask
   // 2. Recycle directly for invalid binlog records
-  // 3. Linkup row indexes of rollback stmt as well, for savepoint-rollback
-  int link_row_list();
+  // return row ref cnt
+  int link_row_list(int64_t &row_ref_cnt);
+
+  int set_redo_log_parsed();
+  int set_redo_log_formatted();
 
   int64_t dec_row_ref_cnt();
   void set_row_ref_cnt(const int64_t ref_cnt);
   int64_t get_row_ref_cnt() const { return ATOMIC_LOAD(&row_ref_cnt_); }
 
-  enum CallBackModule
-  {
-    NONE            = -1,
-
-    DML_PARSER_CB   = 0,
-    FORMATTER_CB    = 1,
-    STORAGER_CB     = 2,
-  };
-  static const char *print_callback_module(const CallBackModule cb);
-  static bool is_dml_parser(const CallBackModule cb);
-  static bool is_formatter(const CallBackModule cb);
-  static bool is_storager(const CallBackModule cb);
-
   TO_STRING_KV(K_(partition),
       K_(trans_id),
-      K_(log_id),
-      K_(log_offset),
-      K_(meta_node),
-      K_(redo_node),
+      KPC_(redo_node),
       K_(stmt_list),
       K_(formatted_stmt_num),
       K_(row_ref_cnt));
 
 private:
   int revert_binlog_record_(ObLogBR *br);
+  int revert_dml_stmt_(const uint64_t current_log_id,
+      const uint64_t rollback_log_id,
+      const int64_t rollback_no);
 
 private:
   void                   *host_;            // PartTransTask host
 
+  const char             *participant_;
+
   common::ObPartitionKey partition_;        // Partition key
   transaction::ObTransID trans_id_;         // Transaction ID
 
-  // Log ID, for redo data
-  // 1. non-LOB record corresponding to LogEntry log_id
-  // 2. First LogEntry log_id for LOB records
-  uint64_t           log_id_;
-  // for not aggre log: log_offset_=0
-  // for aggre log: log_offset_ record offset
-  int32_t            log_offset_;
+  DmlRedoLogNode     *redo_node_;           // dml redo log node
+  bool               is_big_row_;
 
-  DmlRedoLogMetaNode *meta_node_;           // meta node
-  DmlRedoLogNode     redo_node_;            // data node
   StmtList           stmt_list_;            // statement list
   int64_t            formatted_stmt_num_;   // Number of statements that formatted
   int64_t            row_ref_cnt_;          // reference count
@@ -614,7 +601,7 @@ struct TransCommitInfo;
 
 // Partitioned transaction tasks
 // Distinguish between DDL transactions, DML transactions and heartbeats to facilitate differentiation of transaction types when parsing
-class PartTransTask : public TransTaskBase<PartTransTask>, public ObLogResourceRecycleTask
+class PartTransTask : public TransTaskBase<PartTransTask>, public ObLogResourceRecycleTask, public ObILogCallback
 {
 public:
   enum TaskType
@@ -665,9 +652,7 @@ public:
       const int32_t log_offset,
       const int64_t tstamp,
       const char *buf,
-      const int64_t buf_len,
-      bool &need_dispatch_log_entry_task,
-      ObLogEntryTask *&redo_log_entry_task);
+      const int64_t buf_len);
 
   /// Prepare normal transaction tasks, the transaction type may be DDL or DML
   ///
@@ -690,7 +675,6 @@ public:
       const transaction::ObTransID &trans_id,
       const uint64_t prepare_log_id,
       const uint64_t cluster_id,
-      const common::ObVersion freeze_version,
       const ObString &trace_id,
       const ObString &trace_info,
       const transaction::ObElrTransInfoArray &elt_trans_info_array);
@@ -741,24 +725,19 @@ public:
   /// @retval Other error codes     Fail
   int try_to_set_data_ready_status();
 
-  /// DmlParser/Formatter/Storager handle ObLogEntryTask callback
+  /// Storager handle log callback
   ///
-  /// @param [in] log_entry_task       ObLogEntryTask
-  /// @param [out] is_unserved_part_trans_task_can_be_recycled
   ///
   /// @retval OB_SUCCESS  succ
   /// @retval other       fail
-  int handle_log_entry_task_callback(const ObLogEntryTask::CallBackModule cb_module,
-      ObLogEntryTask &log_entry_task,
-      bool &is_unserved_part_trans_task_can_be_recycled);
+  int handle_log_callback();
 
-  /// PartTransDispatcher::remove_task call
+  /// PartTransDispatcher::remove_task() call
   ///
-  /// @param [out] is_unserved_part_trans_task_can_be_recycled
   ///
-  /// @retval OB_SUCCESS  succ
-  /// @retval other       fail
-  int handle_unserved_part_trans(bool &is_unserved_part_trans_task_can_be_recycled);
+  /// @retval OB_SUCCESS  Success
+  /// @retval other       Fail
+  int handle_unserved_trans();
 
   // Initialize partition heartbeat task information
   // Set the type to: TASK_TYPE_PART_HEARTBEAT
@@ -798,9 +777,6 @@ public:
   SortedRedoLogList &get_sorted_redo_list() { return sorted_redo_list_; }
   bool is_contain_empty_redo_log() const { return 0 == sorted_redo_list_.get_node_number(); }
 
-  SortedDmlRowList &get_sorted_dml_row_list() { return sorted_dml_row_list_; }
-  int64_t get_br_num() const { return sorted_dml_row_list_.get_row_num(); }
-
   void set_checkpoint_seq(const int64_t seq) { checkpoint_seq_ = seq; }
   int64_t get_checkpoint_seq() const { return checkpoint_seq_; }
 
@@ -832,8 +808,6 @@ public:
 
   uint64_t get_prepare_log_id() const { return prepare_log_id_; }
   uint64_t get_cluster_id() const { return cluster_id_; }
-
-  const common::ObVersion &get_freeze_version() const { return freeze_version_; }
 
   void set_partition(const common::ObPartitionKey &partition) { partition_ = partition; }
   const common::ObPartitionKey &get_partition() const { return partition_; }
@@ -886,6 +860,9 @@ public:
   void set_formatted();
   int wait_formatted(const int64_t timeout, common::ObCond &cond);
 
+  // data_ready means:
+  // (1) all redo of current PartTransTask are collected(already in storage if needed)
+  // (2) then iterator of sorted_redo_list is inited(will be used in redo_dispatcher and sorter)
   void set_data_ready();
   int wait_data_ready(const int64_t timeout);
 
@@ -895,6 +872,9 @@ public:
 
   void set_global_trans_seq(const int64_t seq) { global_trans_seq_ = seq; }
   int64_t get_global_trans_seq() const { return global_trans_seq_; }
+
+  void set_global_schema_version(const int64_t global_schema_version) { global_schema_version_ = global_schema_version; }
+  int64_t get_global_schema_version() const { return global_schema_version_; }
 
   void set_next_task(PartTransTask *next) { next_task_ = next; }
   PartTransTask *next_task() { return next_task_; }
@@ -944,6 +924,37 @@ public:
 
   int revert_by_rollback_savepoint(const uint64_t row_index, const int64_t rollback_no);
   bool is_served() const { return SERVED == serve_state_; }
+  void is_part_trans_sort_finish() const { sorted_redo_list_.is_dml_stmt_iter_end(); }
+  bool is_part_dispatch_finish() const { return sorted_redo_list_.is_dispatch_finish(); }
+  void inc_sorted_br() { ATOMIC_INC(&output_br_count_by_turn_); }
+  // get and reset sorted br count
+  int64_t get_and_reset_sorted_br() { return ATOMIC_TAS(&output_br_count_by_turn_, 0); }
+  /// get next dml_redo_node to dispatch(to reader or parser)
+  /// note: if is_last_redo is true, dispatcher can't access PartTransTask because trans may be recycled any time
+  /// @param dml_redo_node    [out] dml_redo_node to dispatch
+  /// @param is_last_redo     [out] is last redo node in current PartTransTask
+  /// @retval OB_SUCCESS      succ get redo_node
+  /// @retval OB_EMPTY_RESULT no more redo to dispatch:
+  ///                           (1) no redo in this part_trans_task or
+  ///                           (2) all redo dispatched then call this functin again(should not happen)
+  /// @retval other_code      unexpected error
+  int next_redo_to_dispatch(DmlRedoLogNode *&dml_redo_node, bool &is_last_redo);
+  /// get next dml stmt for sorter, the br in dml_stmt_task will append to br_commit_queue in trans_ctx.
+  /// Theoretically this function faces the same problem with next_redo_to_dispatch, however it can safely access by sorter after the last stmt is outputed,
+  /// THe safety is guaranteed by:
+  ///   (1) sorter will set Trans state to TRANS_SORTED  after get OB_ITER_END from all participants
+  ///   (2) resource_collector will just decrement ref-count of TransCtx if all br of PartTransTask are consumed
+  ///   (3) committer will recycle all participants(PartTransTask) after Trans state is TRANS_SORTED
+  /// note: should think about whether change this function or not while changing the recycle logic of PartTrasnTask
+  ///
+  /// @param dml_stmt_task    [out] dml_stmt_task get from next formatted redo(if contains valid br)
+  /// @retval OB_SUCCESS      succ get dml_stmt_task
+  /// @retval OB_ITER_END     all stmt are output:
+  ///                           (1) part_trans_task has no valid br at all or
+  ///                           (2) all br are outputed to sorter(the caller)
+  /// @retval OB_NEED_RETRY   the redo node to find stmt is not formatted
+  int next_dml_stmt(DmlStmtTask *&dml_stmt_task);
+  RollbackList& get_rollback_list() { return rollback_list_; }
 
   TO_STRING_KV("state", serve_state_,
       "type", print_task_type(type_),
@@ -956,12 +967,11 @@ public:
       K_(cluster_id),
       K_(row_no),
       K_(sorted_redo_list),
-      K_(sorted_dml_row_list),
-      "dml_ready_num", dml_ready_redo_node_num_,
       K_(global_trans_version),
       K_(is_trans_committed),
       K_(checkpoint_seq),
       K_(global_trans_seq),
+      K_(global_schema_version),
       KP_(participants),
       K_(participant_count),
       K_(local_schema_version),
@@ -982,8 +992,14 @@ private:
   bool is_base_trans_info_valid_() const;
   int set_commit_info_(const int64_t global_trans_version,
       const transaction::PartitionLogInfoArray &participants);
+  // 1. memory mode: all data is in memory,
+  // 2. storage mode: all data need be stored
+  // 3. auto mode:
+  bool need_store_data_() const;
+  int free_big_row_();
   // Handling of row start
-  int push_redo_on_row_start_(const transaction::ObTransID &trans_id,
+  int push_redo_on_row_start_(const bool need_store_data,
+      const transaction::ObTransID &trans_id,
       const memtable::ObMemtableMutatorMeta &meta,
       const int64_t log_no,
       const uint64_t log_id,
@@ -996,7 +1012,7 @@ private:
       const char *redo_data,
       const int64_t redo_data_size,
       const int64_t mutator_row_size);
-  int push_dml_redo_on_row_start_(const transaction::ObTransID &trans_id,
+  int push_dml_redo_on_row_start_(const bool need_store_data,
       const memtable::ObMemtableMutatorMeta &meta,
       const int64_t log_no,
       const uint64_t log_id,
@@ -1004,7 +1020,6 @@ private:
       const char *redo_data,
       const int64_t redo_data_size,
       const int64_t mutator_row_size);
-  int get_log_entry_task_(ObLogEntryTask *&log_entry_task);
   // handle non-row-start for lob
   int push_redo_on_not_row_start_(const memtable::ObMemtableMutatorMeta &meta,
       const int64_t log_no,
@@ -1021,7 +1036,17 @@ private:
       const uint64_t log_id,
       const char *redo_data,
       const int64_t redo_data_size);
-  int revert_ddl_stmt_(const int32_t sql_no);
+  int parse_rollback_savepoint_(const uint64_t log_id,
+      const int32_t log_offset,
+      const char *data_buf,
+      const int64_t data_len);
+  int get_and_submit_store_task_(const uint64_t tenant_id,
+      const uint8_t row_flags,
+      const uint64_t log_id,
+      const int32_t log_offset,
+      const char *data_buf,
+      const int64_t data_len);
+  int revert_ddl_stmt_(const int64_t seq_no);
   int handle_elr_prev_trans_(PartTransDispatcher &part_trans_dispatcher,
       const int64_t first_log_ts);
   int handle_elr_follow_trans_(PartTransDispatcher &part_trans_dispatcher);
@@ -1034,17 +1059,10 @@ private:
   int init_trans_id_info_(const common::ObPartitionKey &pkey,
     const transaction::ObTransID &trans_id);
 
-  int check_dml_redo_node_ready_and_handle_(const int64_t total_node_num,
-      const int64_t cur_ready_node_num,
-      bool &is_data_ready);
-  /// 1. when all DML redo node is formatted in Memory-Mode
-  /// 2. when all DML redo node is stored in Storage-Mode
-  ///
-  /// @retval OB_SUCCESS  succ
-  /// @retval other       fail
-  int handle_when_all_dml_redo_node_ready_();
-  int handle_unserved_part_trans_(bool &is_unserved_part_trans_task_can_be_recycled);
+  int check_dml_redo_node_ready_and_handle_();
+  int handle_unserved_trans_();
   void set_unserved_() { serve_state_ = UNSERVED; }
+  bool is_data_ready() const { return ATOMIC_LOAD(&is_data_ready_); }
 
 private:
   ServedState             serve_state_;
@@ -1059,14 +1077,15 @@ private:
   ObString                trans_id_str_;          // string value of trans ID
   uint64_t                prepare_log_id_;        // Prepare log ID, if there is no Prepare transaction for a single partition, the last one shall prevail
   uint64_t                cluster_id_;            // cluster ID
-  common::ObVersion       freeze_version_;        // freeze version
+  uint64_t                cluster_version_;       // cluster version when trans start, should be same for all TransLog in the same Trans
 
   ObString                pkey_and_log_id_str_;   // store pkey + logId to_cstring
   uint64_t                row_no_;                // for alloc global row_no
 
   SortedRedoLogList       sorted_redo_list_;      // ordered redo list
-  SortedDmlRowList        sorted_dml_row_list_;   // DML: Ordered list of RowDataIndex
-  ObLogEntryTask          *log_entry_task_;       // DML records the task currently being processed
+  DmlRedoLogNode          big_row_dml_redo_node_; // For big row
+
+  RollbackList            rollback_list_;         // Rollback list
 
   int64_t                 global_trans_version_;  // Global transaction version, transaction commit version
 
@@ -1087,6 +1106,7 @@ private:
   // Transaction serial number assigned by sequencer globally
   // Distributed transaction level, partitioned transactions within a distributed transaction have the same number
   int64_t                 global_trans_seq_;
+  int64_t                 global_schema_version_;
 
   // participants info
   transaction::ObPartitionLogInfo *participants_;
@@ -1107,17 +1127,13 @@ private:
   common::ObByteLock      data_ready_lock_;
 
   // For DDL partition: whether the formatting is complete
-  // For DML partition: whether the formatting or storage is complete
+  // For DML partition: whether the all logs which need store have stored
   // Note: DML partition: empty redo scene, is_data_ready_ = true
   bool                    is_data_ready_;
 
   // To optimise memory usage, the condition variable is passed in externally
   common::ObCond          *wait_formatted_cond_;
   common::ObCond          wait_data_ready_cond_;
-
-  // 1. Increase it when DML redo node is formatted in Memory-Mode
-  // 2. Increase it when DML redo node is stored in Storage-Mode
-  int64_t                 dml_ready_redo_node_num_;
 
   ObSmallArena            allocator_;              // allocator
 
@@ -1132,6 +1148,7 @@ private:
   // An 8 bit reserved field:
   // The lowest bit currently represents whether the partition contains a valid DML binlog_record (for DML only)
   int8_t                  reserve_field_;           // reserved field
+  int64_t                 output_br_count_by_turn_; // sorted br count in each statistic round
 
 private:
   DISALLOW_COPY_AND_ASSIGN(PartTransTask);

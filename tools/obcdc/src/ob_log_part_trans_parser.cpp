@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -19,7 +19,7 @@
 #include "ob_log_meta_manager.h"        // IObLogMetaManager
 #include "ob_log_instance.h"            // TCTX
 #include "ob_log_config.h"              // TCONF
-#include "ob_log_row_data_index.h"      // ObLogRowDataIndex
+#include "lib/allocator/page_arena.h"   // PageArena
 
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;
@@ -101,6 +101,7 @@ int ObLogPartTransParser::parse(ObLogEntryTask &task, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   PartTransTask *part_trans_task = NULL;
+  uint64_t log_id = OB_INVALID_ID;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("not init", K(inited_));
@@ -108,6 +109,8 @@ int ObLogPartTransParser::parse(ObLogEntryTask &task, volatile bool &stop_flag)
   } else if (OB_UNLIKELY(! task.is_valid())) {
     LOG_ERROR("invalid task", K(task));
     ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(task.get_log_id(log_id))) {
+    LOG_ERROR("task get_log_id fail", KR(ret), K(task), K(log_id));
   } else if (OB_ISNULL(part_trans_task = static_cast<PartTransTask *>(task.get_host()))) {
     LOG_ERROR("part_trans_task is NULL", K(part_trans_task));
     ret = OB_ERR_UNEXPECTED;
@@ -115,6 +118,7 @@ int ObLogPartTransParser::parse(ObLogEntryTask &task, volatile bool &stop_flag)
     ObLogTenant *tenant = NULL;
     ObLogTenantGuard guard;
     // Incremental within PartTransTask
+    // TODO
     uint64_t &row_no = part_trans_task->get_row_no();
     const uint64_t tenant_id = part_trans_task->get_tenant_id();
 
@@ -135,21 +139,88 @@ int ObLogPartTransParser::parse(ObLogEntryTask &task, volatile bool &stop_flag)
     }
 
     if (OB_SUCC(ret)) {
-      const DmlRedoLogNode &redo_node = task.get_redo_log_node();
+      const DmlRedoLogNode *redo_node = task.get_redo_log_node();
 
-      if (OB_UNLIKELY(! redo_node.is_valid())) {
+      if (OB_ISNULL(redo_node)) {
+        LOG_ERROR("redo_node is NULL");
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_UNLIKELY(! redo_node->is_valid())) {
         LOG_ERROR("redo_node is invalid", "redo_node", redo_node);
         ret = OB_INVALID_DATA;
         // Calibrate data for completeness
-      } else if (OB_UNLIKELY(! redo_node.check_data_integrity())) {
-        LOG_ERROR("redo data is not valid", K(redo_node));
+      } else if (OB_UNLIKELY(! redo_node->check_data_integrity())) {
+        LOG_ERROR("redo data is not valid", KPC(redo_node));
         ret = OB_INVALID_DATA;
-      } else if (OB_FAIL(parse_stmts_(tenant, redo_node.data_, redo_node.size_, task, *part_trans_task, row_no, stop_flag))) {
-        LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), "redo_node", redo_node, K(task), K(row_no));
+      } else if (OB_FAIL(parse_stmts_(tenant, log_id, redo_node->get_data(), redo_node->get_data_len(),
+              task, *part_trans_task, row_no, stop_flag))) {
+        LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), K(log_id), KPC(redo_node), K(task), K(row_no));
       } else {
-        LOG_DEBUG("[PARSE] log_entry_task parse succ", K(task));
+        LOG_DEBUG("[PARSE] LogEntryTask parse succ", K(task));
       }
     }
+
+    // try to rolllback statement based on RollbackList
+    if (OB_SUCC(ret)) {
+      RollbackList& rollback_list = part_trans_task->get_rollback_list();
+
+      if (OB_FAIL(task.revert_by_rollback_savepoints(log_id, rollback_list))) {
+        LOG_ERROR("task revert_by_rollback_savepoints", KR(ret), K(log_id), K(task));
+      } else {}
+    }
+  }
+
+  return ret;
+}
+
+int ObLogPartTransParser::parse_rollback(const uint64_t log_id,
+    const int32_t log_offset,
+    const char *redo_data,
+    const int64_t redo_data_len,
+    PartTransTask &part_trans_task,
+    bool &is_rollback_node_valid,
+    RollbackNode &rollback_node)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(redo_data) || OB_UNLIKELY(redo_data_len <= 0)) {
+    LOG_ERROR("invalid argument", K(redo_data), K(redo_data_len));
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    ObArenaAllocator arena_allocator;
+    int64_t pos = 0;
+    int64_t hit_count = 0;
+
+    while (OB_SUCC(ret) && pos < redo_data_len) {
+      MutatorRow *row = NULL;
+      int64_t rollback_to_seq = -1; // rollback to savepoint seq
+
+      if (OB_ISNULL(row = static_cast<MutatorRow *>(arena_allocator.alloc(sizeof(MutatorRow))))) {
+        LOG_ERROR("alloc memory for MutatorRow fail", K(sizeof(MutatorRow)));
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        new (row) MutatorRow(arena_allocator);
+
+        if (OB_FAIL(row->deserialize(redo_data, redo_data_len, pos))) {
+          LOG_ERROR("deserialize mutator row fail", KR(ret), KPC(row), K(redo_data_len), K(pos));
+        } else if (is_rollback_savepoint_stmt_(*row)) {
+          rollback_to_seq = get_row_seq_(part_trans_task, *row);
+
+          if (OB_FAIL(rollback_node.push(rollback_to_seq))) {
+            LOG_ERROR("rollback_node push fail", KR(ret), K(rollback_to_seq));
+          } else {
+            is_rollback_node_valid = true;
+            LOG_INFO("handle dml rollback savepoint", K(hit_count), K(rollback_to_seq), K(rollback_node),
+                K(log_id), K(log_offset),
+                KPC(row), K(part_trans_task));
+          }
+        } else {
+          LOG_DEBUG("handle dml normal stmt", K(hit_count),
+              K(log_id), K(log_offset),
+              KPC(row), K(part_trans_task));
+        }
+        ++hit_count;
+      }
+    } // while
   }
 
   return ret;
@@ -172,7 +243,7 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, volatile bool
     ObLogTenant *tenant = NULL;
     ObLogTenantGuard guard;
     // just declear here
-    ObLogEntryTask redo_log_entry_task;
+    ObLogEntryTask invalid_redo_log_entry_task;
 
     // DDL data/non-PG partitioned data need to be deserialized in whole rows, not filtered
     // otherwise need to get tenant structure and perform filtering
@@ -196,8 +267,8 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, volatile bool
           LOG_ERROR("redo_node is invalid", "redo_node", *redo_node, "redo_index", redo_num);
           ret = OB_INVALID_DATA;
           // Verify that the Redo log serial number is accurate
-        } else if (OB_UNLIKELY(redo_node->start_log_no_ != redo_num)) {
-          LOG_ERROR("redo log_no is incorrect", "start_redo_no", redo_node->start_log_no_,
+        } else if (OB_UNLIKELY(redo_node->get_start_log_no() != redo_num)) {
+          LOG_ERROR("redo log_no is incorrect", "start_redo_no", redo_node->get_start_log_no(),
               "expected_redo_no", redo_num, KPC(redo_node));
           ret = OB_INVALID_DATA;
         }
@@ -205,11 +276,12 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, volatile bool
         else if (OB_UNLIKELY(! redo_node->check_data_integrity())) {
           LOG_ERROR("redo data is not valid", KPC(redo_node));
           ret = OB_INVALID_DATA;
-        } else if (OB_FAIL(parse_stmts_(tenant, redo_node->data_, redo_node->size_, redo_log_entry_task, task, row_index, stop_flag))) {
+        } else if (OB_FAIL(parse_stmts_(tenant, redo_node->get_start_log_id(), redo_node->get_data(), redo_node->get_data_len(),
+                invalid_redo_log_entry_task, task, row_index, stop_flag))) {
           LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), "redo_node", *redo_node, K(task), K(row_index));
         } else {
           redo_num += redo_node->get_log_num();
-          redo_node = static_cast<DdlRedoLogNode *>(redo_node->next_);
+          redo_node = static_cast<DdlRedoLogNode *>(redo_node->get_next());
         }
       } // while
     }
@@ -219,6 +291,7 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, volatile bool
 }
 
 int ObLogPartTransParser::parse_stmts_(ObLogTenant *tenant,
+    const uint64_t log_id,
     const char *redo_data,
     const int64_t redo_data_len,
     ObLogEntryTask &redo_log_entry_task,
@@ -280,17 +353,14 @@ int ObLogPartTransParser::parse_stmts_(ObLogTenant *tenant,
               }
             } else {
               // Non-incrementing row_index
-              if (OB_FAIL(handle_dml_part_rollback_savepoint_(row_index, task, redo_log_entry_task, *row))) {
-                LOG_ERROR("handle_dml_part_rollback_savepoint_ failed", KR(ret), K(row_index), K(task),
+              if (OB_FAIL(handle_dml_part_rollback_savepoint_(log_id, row_index, task, redo_log_entry_task, *row))) {
+                LOG_ERROR("handle_dml_part_rollback_savepoint_ failed", KR(ret), K(log_id), K(row_index), K(task),
                     K(redo_log_entry_task), KPC(row));
               }
             }
-
-            if (is_ddl_trans) {
-              row->~MutatorRow();
-              task.free(row);
-              row = NULL;
-            }
+            row->~MutatorRow();
+            task.free(row);
+            row = NULL;
           }
           // For DDL partitions, only parse data from the same table and filter data from other unrelated
           // tables such as index tables; prevent the generation of non-DDL type statements.
@@ -361,26 +431,33 @@ int ObLogPartTransParser::handle_ddl_part_rollback_savepoint_(const uint64_t row
     LOG_ERROR("task revert_stmt_by_rollback_savepoint failed", KR(ret), K(rollback_to_seq), K(task));
   } else {
     // succ
-    LOG_DEBUG("handle rollback savepoint succ", K(row), K(task));
+    LOG_DEBUG("handle ddl rollback savepoint succ", K(row), K(task));
   }
 
   return ret;
 }
 
-int ObLogPartTransParser::handle_dml_part_rollback_savepoint_(const uint64_t row_index,
+int ObLogPartTransParser::handle_dml_part_rollback_savepoint_(const uint64_t log_id,
+    const uint64_t row_index,
     PartTransTask &part_trans_task,
     ObLogEntryTask &log_entry_task,
     MutatorRow &row)
 {
   int ret = OB_SUCCESS;
-  const bool is_rollback = true;
+  const int32_t flag = row.flag_;
+  const int64_t rollback_to_seq = get_row_seq_(part_trans_task, row);
 
-  if (OB_FAIL(parse_dml_stmts_(row_index, row, log_entry_task, part_trans_task, is_rollback))) {
-    LOG_ERROR("parse_dml_stmts_ fail", KR(ret), K(row_index), K(row), K(log_entry_task), K(part_trans_task),
-        K(is_rollback));
+  if (OB_UNLIKELY(! part_trans_task.is_dml_trans())) {
+    LOG_ERROR("part_trans_task is not dml trans, unexcepted", K(row_index), K(part_trans_task), K(row));
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_UNLIKELY(1 != flag) || OB_UNLIKELY(rollback_to_seq < 0) || OB_UNLIKELY(OB_INVALID_ID == row_index)) {
+    LOG_ERROR("invalid argument", K(flag), K(rollback_to_seq), K(row_index), K(row));
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(log_entry_task.revert_by_rollback_savepoint(log_id/*current_log_id*/, log_id/*rollback_log_id*/,
+      row_index, rollback_to_seq))) {
+    LOG_ERROR("task revert_stmt_by_rollback_savepoint failed", KR(ret), K(rollback_to_seq), K(log_entry_task));
   } else {
-    LOG_DEBUG("handle dml rollback savepoint succ", K(row), K(row_index), K(log_entry_task), K(part_trans_task),
-        K(is_rollback));
+    LOG_DEBUG("handle dml rollback savepoint succ", K(row), K(row_index), K(log_entry_task), K(part_trans_task));
   }
 
   return ret;
@@ -527,7 +604,7 @@ int ObLogPartTransParser::parse_ddl_stmts_(const uint64_t row_index, MutatorRow 
     if (OB_ISNULL(stmt_task)) {
       LOG_ERROR("allocate memory for DdlStmtTask fail", "size", sizeof(DdlStmtTask));
       ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_FAIL(br_pool_->alloc(false/*is_serilized*/, br, &task))) {
+    } else if (OB_FAIL(br_pool_->alloc(br, &task))) {
       LOG_ERROR("alloc binlog record from pool fail", KR(ret), K(br_pool_));
     } else if (OB_ISNULL(br)) {
       LOG_ERROR("alloc binlog record fail", K(br));
@@ -597,44 +674,25 @@ int ObLogPartTransParser::parse_ddl_stmts_(const uint64_t row_index, MutatorRow 
 int ObLogPartTransParser::parse_dml_stmts_(const uint64_t row_index,
     MutatorRow &row,
     ObLogEntryTask &redo_log_entry_task,
-    PartTransTask &task,
-    const bool is_rollback)
+    PartTransTask &task)
 {
   int ret = OB_SUCCESS;
   // DmlStmtTask needs to allocate memory based on LogEntryTask
   DmlStmtTask *stmt_task = static_cast<DmlStmtTask *>(redo_log_entry_task.alloc(sizeof(DmlStmtTask)));
-  // Row indexes exist globally and require memory allocation based on PartTransTask
-  ObLogRowDataIndex *row_data_index = static_cast<ObLogRowDataIndex *>(task.alloc(sizeof(ObLogRowDataIndex)));
-  const uint64_t tenant_id = task.get_tenant_id();
-  const char *participant_key_str = task.get_participant_key_str();
-  const uint64_t log_id = redo_log_entry_task.get_log_id();
-  const int32_t log_offset = redo_log_entry_task.get_log_offset();
-  const int32_t row_seq_no = get_row_seq_(task, row);
 
-  if (OB_ISNULL(stmt_task) || OB_ISNULL(row_data_index)) {
-    LOG_ERROR("allocate memory for DmlStmtTask or ObLogRowDataIndex fail", "Dmlsize", sizeof(DmlStmtTask),
-        "RowIndexSize", sizeof(ObLogRowDataIndex));
+  if (OB_ISNULL(stmt_task)) {
+    LOG_ERROR("allocate memory for DmlStmtTask fail", "Dmlsize", sizeof(DmlStmtTask));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    new (row_data_index) ObLogRowDataIndex();
+    new (stmt_task) DmlStmtTask(task, redo_log_entry_task, row);
 
-    if (OB_FAIL(row_data_index->init(tenant_id, participant_key_str, log_id, log_offset, row_index, is_rollback, row_seq_no))) {
-      LOG_ERROR("row_data_index init fail", KR(ret), K(tenant_id), K(row_data_index),
-          K(participant_key_str), K(log_id), K(log_offset), K(row_index), K(is_rollback), K(row_seq_no),
-          K(task), K(redo_log_entry_task));
+    if (OB_FAIL(redo_log_entry_task.add_stmt(row_index, stmt_task))) {
+      LOG_ERROR("add stmt into trans task fail", KR(ret), K(task), K(row_index), "stmt_task", *stmt_task);
     } else {
-      new (stmt_task) DmlStmtTask(task, redo_log_entry_task, *row_data_index, row);
+      // Update the Local Schema version of PartTransTask
+      task.update_local_schema_version(stmt_task->get_table_version());
 
-      row_data_index->set_host(&task);
-
-      if (OB_FAIL(redo_log_entry_task.add_stmt(row_index, stmt_task))) {
-        LOG_ERROR("add stmt into trans task fail", KR(ret), K(task), K(row_index), "stmt_task", *stmt_task);
-      } else {
-        // Update the Local Schema version of PartTransTask
-        task.update_local_schema_version(stmt_task->get_table_version());
-
-        LOG_DEBUG("add_stmt succ", KPC(stmt_task), K(redo_log_entry_task));
-      }
+      LOG_DEBUG("add_stmt succ", K(row_index), KPC(stmt_task));
     }
   }
 
@@ -643,12 +701,6 @@ int ObLogPartTransParser::parse_dml_stmts_(const uint64_t row_index,
       stmt_task->~DmlStmtTask();
       redo_log_entry_task.free(stmt_task);
       stmt_task = NULL;
-    }
-
-    if (NULL != row_data_index) {
-      row_data_index->~ObLogRowDataIndex();
-      task.free(row_data_index);
-      row_data_index = NULL;
     }
   }
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -52,13 +52,10 @@ public:
       const int64_t timeout,
       ObLogTenant *tenant = NULL) = 0;
 
-  virtual int push_br_task(ObLogBR &task) = 0;
-
   virtual int64_t get_dml_trans_count() const = 0;
 
   virtual void get_part_trans_task_count(int64_t &ddl_part_trans_task_count,
-      int64_t &dml_part_trans_task_count,
-      int64_t &br_count) const = 0;
+      int64_t &dml_part_trans_task_count) const = 0;
 
   // update config of committer
   virtual void configure(const ObLogConfig &cfg) = 0;
@@ -78,7 +75,6 @@ class IObLogBRPool;
 class ObLogCommitter : public IObLogCommitter
 {
   typedef common::ObExtendibleRingBuffer<PartTransTask> TransCommitterQueue;
-  typedef common::ObExtendibleRingBuffer<ObLogBR> BRCommitterQueue;
   struct CheckpointTask;
   typedef common::ObExtendibleRingBuffer<CheckpointTask> CheckpointQueue;
   // Record global heartbeat corresponding checkpoint_seq, easy to troubleshoot global checkpoint not advancing problem
@@ -106,14 +102,10 @@ public:
       const int64_t task_count,
       const int64_t timeout,
       ObLogTenant *tenant = NULL);
-  int push_br_task(ObLogBR &task);
   int64_t get_dml_trans_count() const { return ATOMIC_LOAD(&dml_trans_count_); }
   void get_part_trans_task_count(int64_t &ddl_part_trans_task_count,
-      int64_t &dml_part_trans_task_count,
-      int64_t &br_count) const;
+      int64_t &dml_part_trans_task_count) const;
   void configure(const ObLogConfig &cfg);
-  int64_t get_br_committer_queue_count() const { return br_committer_queue_.end_sn() - br_committer_queue_.begin_sn(); }
-  BRCommitterQueue &get_br_committer_queue() { return br_committer_queue_; }
 
 public:
   int init(const int64_t start_seq,
@@ -155,7 +147,6 @@ private:
   int commit_binlog_record_list_(TransCtx &trans_ctx,
       const uint64_t cluster_id,
       const int64_t part_trans_task_count,
-      const common::ObVersion &freeze_version,
       const uint64_t tenant_id,
       const int64_t global_trans_version);
   int push_br_queue_(ObLogBR *br);
@@ -164,7 +155,7 @@ private:
   int record_global_heartbeat_info_(PartTransTask &task);
   int handle_when_trans_ready_(PartTransTask *task,
       int64_t &commit_trans_count);
-  int next_ready_br_task_(ObLogBR *&br_task);
+  int next_ready_br_task_(TransCtx &trans_ctx, ObLogBR *&br_task);
 
 private:
   struct CheckpointTask
@@ -218,16 +209,6 @@ private:
     }
   };
 
-  struct BRCommitQueuePopFunc
-  {
-    // Operators to determine if Ready
-    bool operator()(const int64_t sn, ObLogBR *task)
-    {
-      UNUSED(sn);
-      return NULL != task;
-    }
-  };
-
 private:
   bool                      inited_;
   BRQueue                   *br_queue_;
@@ -245,8 +226,6 @@ private:
 
   TransCommitterQueue       trans_committer_queue_; // Queue of distribute trans
   common::ObCond            trans_committer_queue_cond_;
-
-  BRCommitterQueue          br_committer_queue_;
 
   // Globally unique sequence queue for generating checkpoint
   //
