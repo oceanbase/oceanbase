@@ -117,10 +117,7 @@ public:
     return init_array_size<>(rollup_col_idxs_, count);
   }
 
-  int add_udf_meta(ObAggUdfMeta& meta)
-  {
-    return agg_udf_meta_.push_back(meta);
-  }
+  int add_udf_meta(ObAggUdfMeta &meta, ObIAllocator &allocator);
 
   void set_est_group_cnt(const int64_t cnt)
   {

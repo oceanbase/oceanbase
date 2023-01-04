@@ -1434,7 +1434,7 @@ int ObCodeGeneratorImpl::convert_group_by(ObLogGroupBy& op, const PhyOpsDesc& ch
               LOG_WARN("assign array failed", K(ret));
             } else if (OB_FAIL(agg_udf_meta.calculable_results_.assign(const_results))) {
               LOG_WARN("assign const result failed", K(ret));
-            } else if (OB_FAIL(phy_op->add_udf_meta(agg_udf_meta))) {
+            } else if (OB_FAIL(phy_op->add_udf_meta(agg_udf_meta, phy_plan_->get_allocator()))) {
               LOG_WARN("add udf meta to group by failed", K(ret));
             }
           }

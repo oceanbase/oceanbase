@@ -107,6 +107,21 @@ void ObUDF::reset()
 
 OB_SERIALIZE_MEMBER(ObUDF, tenant_id_, name_, ret_, dl_, type_);
 
+int ObUDFMeta::deep_copy(ObIAllocator &allocator, const ObUDFMeta &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_write_string(allocator, other.name_, name_))) {
+    LOG_WARN("fail to deep copy name", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.dl_, dl_))) {
+    LOG_WARN("fail to deep copy dl", K(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    ret_ = other.ret_;
+    type_ = other.type_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObUDFMeta, tenant_id_, name_, ret_, dl_, type_);
 
 }  // namespace schema

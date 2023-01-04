@@ -171,7 +171,8 @@ public:
       : udf_meta_(meta), udf_attributes_(), udf_attributes_types_(), calculable_results_()
   {}
   virtual ~ObAggUdfMeta() = default;
-  ObAggUdfMeta& operator=(const ObAggUdfMeta& other);
+  ObAggUdfMeta &operator=(const ObAggUdfMeta &other);
+  int deep_copy(common::ObIAllocator &allocator, const ObAggUdfMeta &other);
   TO_STRING_KV(K_(udf_meta), K_(udf_attributes), K_(udf_attributes_types), K_(calculable_results));
   share::schema::ObUDFMeta udf_meta_;                         /* all the info we need about udf*/
   common::ObSEArray<common::ObString, 16> udf_attributes_;    /* udf's input, args' name */

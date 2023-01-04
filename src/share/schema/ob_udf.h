@@ -205,6 +205,8 @@ public:
     return *this;
   }
 
+  int deep_copy(ObIAllocator &allocator, const ObUDFMeta &other);
+
   TO_STRING_KV(K_(tenant_id), K_(name), K_(ret), K_(dl), K_(type));
 
   uint64_t tenant_id_;

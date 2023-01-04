@@ -217,6 +217,28 @@ ObAggUdfMeta& ObAggUdfMeta::operator=(const ObAggUdfMeta& other)
   return *this;
 }
 
+int ObAggUdfMeta::deep_copy(ObIAllocator &allocator, const ObAggUdfMeta &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(udf_meta_.deep_copy(allocator, other.udf_meta_))) {
+    LOG_WARN("failed to deep copy udf meta", K(ret), K(other));
+  } else if (OB_FAIL(udf_attributes_types_.assign(other.udf_attributes_types_))) {
+    LOG_WARN("assign searray error", K(ret));
+  } else if (OB_FAIL(calculable_results_.assign(other.calculable_results_))) {
+    LOG_WARN("assign searray error", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.udf_attributes_.count(); ++i) {
+      ObString udf_attribute;
+      if (OB_FAIL(ob_write_string(allocator, other.udf_attributes_.at(i), udf_attribute))) {
+        LOG_WARN("failed to deep copy udf attribute", K(ret));
+      } else if (OB_FAIL(udf_attributes_.push_back(udf_attribute))) {
+        LOG_WARN("failed to add udf attribute", K(ret), K(udf_attribute));
+      }
+    }
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObAggUdfMeta, udf_meta_, udf_attributes_, udf_attributes_types_, calculable_results_);
 
 // we will des/ser the sql_calc_ at the operator group

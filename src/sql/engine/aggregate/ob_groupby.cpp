@@ -146,6 +146,18 @@ int ObGroupBy::init_op_ctx(ObExecContext& ctx) const
   return ret;
 }
 
+int ObGroupBy::add_udf_meta(ObAggUdfMeta &meta, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObAggUdfMeta udf_meta;
+  if (OB_FAIL(udf_meta.deep_copy(allocator, meta))) {
+    LOG_WARN("failed to deep copy udf meta", K(ret));
+  } else if (OB_FAIL(agg_udf_meta_.push_back(udf_meta))) {
+    LOG_WARN("failed to add agg udf meta", K(ret));
+  }
+  return ret;
+}
+
 int ObGroupBy::is_same_group(
     const ObRowStore::StoredRow& row1, const ObNewRow& row2, bool& result, int64_t& first_diff_pos) const
 {
