@@ -961,7 +961,7 @@ void ObObj::print_str_with_repeat(char* buf, int64_t buf_len, int64_t& pos) cons
   int32_t repeats = 0;
   int8_t cnt_space = 0;  // There is no space for whole multibyte character, then add trailing spaces.
   if (NULL != uptr && real_len > 0) {
-    while (' ' == uptr[real_len - 1]) {
+    while (real_len > 0 && ' ' == uptr[real_len - 1]) {
       --real_len;
       ++cnt_space;
     }
