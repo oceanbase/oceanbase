@@ -45,14 +45,6 @@ public:
   {
     return inited_;
   }
-  bool is_valid() const
-  {
-    return valid_;
-  }
-  void set_valid(bool valid)
-  {
-    valid_ = valid;
-  }
   int64_t inc_ref_count();
   void dec_ref_count();
   int64_t get_ref_count() const
@@ -172,7 +164,6 @@ private:
 
   ObPsStmtId next_ps_stmt_id_;
   bool inited_;
-  bool valid_;
   int64_t tenant_id_;
   common::ObAddr host_;
   share::ObIPartitionLocationCache* location_cache_;
