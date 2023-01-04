@@ -79,11 +79,18 @@ int ObLSAdapter::replay(ObLogReplayTask *replay_task)
     if (common::OB_INVALID_TIMESTAMP == replay_task->first_handle_ts_) {
       replay_task->first_handle_ts_ = start_ts;
       replay_task->print_error_ts_ = start_ts;
-    } else if ((start_ts - replay_task->print_error_ts_) > MAX_SINGLE_RETRY_WARNING_TIME_THRESOLD) {
+    } else {
       replay_task->retry_cost_ = start_ts - replay_task->first_handle_ts_;
-      CLOG_LOG(WARN, "single replay task retry cost too much time. replay may be delayed",
-                KPC(replay_task));
-      replay_task->print_error_ts_ = start_ts;
+      if ((start_ts - replay_task->print_error_ts_) > MAX_SINGLE_RETRY_WARNING_TIME_THRESOLD) {
+        if (replay_task->retry_cost_ > 100 * 1000 *1000 && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+          CLOG_LOG(ERROR, "single replay task retry cost too much time. replay may be delayed",
+                   K(ret), KPC(replay_task));
+        } else {
+          CLOG_LOG(WARN, "single replay task retry cost too much time. replay may be delayed",
+                   K(ret), KPC(replay_task));
+        }
+        replay_task->print_error_ts_ = start_ts;
+      }
     }
   }
   replay_task->replay_cost_ = ObTimeUtility::fast_current_time() - start_ts;

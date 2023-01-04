@@ -506,6 +506,8 @@ void ObLogReplayTask::reset()
   is_raw_write_ = false;
   first_handle_ts_ = common::OB_INVALID_TIMESTAMP;
   print_error_ts_ = common::OB_INVALID_TIMESTAMP;
+  replay_cost_ = common::OB_INVALID_TIMESTAMP;
+  retry_cost_ = common::OB_INVALID_TIMESTAMP;
   log_buf_ = NULL;
 }
 

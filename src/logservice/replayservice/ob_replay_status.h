@@ -141,8 +141,8 @@ public:
   bool is_raw_write_;
   int64_t first_handle_ts_;
   int64_t print_error_ts_;
-  int64_t replay_cost_; //此任务重试的总耗时时间
-  int64_t retry_cost_; //此任务回放成功时的当次处理时间
+  int64_t replay_cost_; //此任务回放成功时的当次处理时间
+  int64_t retry_cost_; //此任务重试的总耗时时间
   void *log_buf_;
 
   TO_STRING_KV(K(ls_id_),
