@@ -12130,6 +12130,32 @@ int ObObjCaster::can_cast_in_oracle_mode(
   return ret;
 }
 
+int ObObjCaster::get_obj_param_text(const ObObjParam &obj_param,
+                                    const ObString raw_text, ObIAllocator &allocator,
+                                    ObCollationType cs_type, ObString &res)
+{
+  int ret = OB_SUCCESS;
+  if (obj_param.is_string_type()) {
+    res = obj_param.get_string();
+  } else if (obj_param.is_numeric_type()) {
+    if (obj_param.get_raw_text_pos() >= 0 && obj_param.get_raw_text_len() >= 0
+        && obj_param.get_raw_text_pos() + obj_param.get_raw_text_len() <= raw_text.length()) {
+      res.assign_ptr(raw_text.ptr() + obj_param.get_raw_text_pos(), obj_param.get_raw_text_len());
+    } else {
+      // raw_text_pos_ and raw_text_len_ are not set in ps mode.
+      ObCastMode cast_mode = CM_NONE;
+      ObObj result;
+      ObCastCtx cast_ctx(&allocator, NULL, cast_mode, cs_type);
+      if (OB_FAIL(to_type(ObVarcharType, cast_ctx, obj_param, result))) {
+        LOG_WARN("to varchar type failed", K(ret));
+      } else {
+        res = result.get_string();
+      }
+    }
+  }
+  return ret;
+}
+
 const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
 {
   // null

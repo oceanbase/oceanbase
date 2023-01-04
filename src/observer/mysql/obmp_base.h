@@ -118,7 +118,7 @@ protected:
   int setup_user_resource_group(
       ObSMConnection &conn,
       const uint64_t tenant_id,
-      const uint64_t user_id);
+      sql::ObSQLSessionInfo *session);
   int response_row(sql::ObSQLSessionInfo &session,
                    common::ObNewRow &row,
                    const ColumnsFieldIArray *fields);

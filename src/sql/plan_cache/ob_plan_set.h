@@ -109,7 +109,9 @@ public:
         all_plan_const_param_constraints_(alloc_),
         all_pre_calc_constraints_(),
         multi_stmt_rowkey_pos_(alloc_),
-        pre_cal_expr_handler_(NULL)
+        pre_cal_expr_handler_(NULL),
+        res_map_rule_id_(common::OB_INVALID_ID),
+        res_map_rule_param_idx_(common::OB_INVALID_INDEX)
   {}
   virtual ~ObPlanSet();
 
@@ -224,6 +226,11 @@ protected:
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
   // pre calculable expression list handler.
   PreCalcExprHandler* pre_cal_expr_handler_;
+
+public:
+  //variables for resource map rule
+  uint64_t res_map_rule_id_;
+  int64_t res_map_rule_param_idx_;
 };
 
 class ObSqlPlanSet : public ObPlanSet

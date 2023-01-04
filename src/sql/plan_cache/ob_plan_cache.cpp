@@ -217,6 +217,40 @@ struct ObGetKVEntryBySQLIDOp : public ObKVEntryTraverseOp
 };
 
 
+struct ObGetPcvSetByTabNameOp : public ObKVEntryTraverseOp
+{
+  explicit ObGetPcvSetByTabNameOp(uint64_t db_id, common::ObString tab_name,
+                                  LCKeyValueArray *key_val_list,
+                                  const CacheRefHandleID ref_handle)
+    : ObKVEntryTraverseOp(key_val_list, ref_handle),
+      db_id_(db_id),
+      tab_name_(tab_name)
+  {
+  }
+  virtual int check_entry_match(LibCacheKVEntry &entry, bool &is_match)
+  {
+    int ret = common::OB_SUCCESS;
+    is_match = false;
+    if (entry.first->namespace_ >= ObLibCacheNameSpace::NS_CRSR
+        && entry.first->namespace_ <= ObLibCacheNameSpace::NS_PKG) {
+      ObPlanCacheKey *key = static_cast<ObPlanCacheKey*>(entry.first);
+      ObPCVSet *node = static_cast<ObPCVSet*>(entry.second);
+      if (db_id_ == common::OB_INVALID_ID) {
+        // do nothing
+      } else if (db_id_ != key->db_id_) {
+        // skip entry that has non-matched db_id
+      } else if (OB_FAIL(node->check_contains_table(db_id_, tab_name_, is_match))) {
+        LOG_WARN("fail to check table name", K(ret), K(db_id_), K(tab_name_));
+      } else {
+        // do nothing
+      }
+    }
+    return ret;
+  }
+  uint64_t db_id_;
+  common::ObString tab_name_;
+};
+
 struct ObGetTableIdOp
 {
   explicit ObGetTableIdOp(uint64_t table_id)
@@ -1126,6 +1160,21 @@ int ObPlanCache::cache_evict_plan_by_sql_id(uint64_t db_id, common::ObString sql
   return ret;
 }
 
+
+int ObPlanCache::evict_plan_by_table_name(uint64_t tenant_id, uint64_t database_id, ObString tab_name)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalReqTimeService::check_req_timeinfo();
+  SQL_PC_LOG(DEBUG, "cache evict plan by table name start");
+  LCKeyValueArray to_evict_keys;
+  ObGetPcvSetByTabNameOp get_ids_op(database_id, tab_name, &to_evict_keys, PCV_GET_PLAN_KEY_HANDLE);
+  if (OB_FAIL(foreach_cache_evict(get_ids_op))) {
+    SQL_PC_LOG(WARN, "failed to foreach cache evict", K(ret));
+  }
+  SQL_PC_LOG(DEBUG, "cache evict plan baseline by sql id end");
+
+  return ret;
+}
 
 // Delete the cache according to the evict mechanism
 // 1. calc evict_num : (mem_used - mem_lwm) / (mem_used / cache_value_count)

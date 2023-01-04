@@ -864,6 +864,10 @@ public:
   int close_ps_stmt(ObPsStmtId stmt_id);
 
   bool is_encrypt_tenant();
+  int64_t get_expect_group_id() const { return expect_group_id_; }
+  void set_expect_group_id(int64_t group_id) { expect_group_id_ = group_id; }
+	bool get_group_id_not_expected() const { return group_id_not_expected_; }
+  void set_group_id_not_expected(bool value) { group_id_not_expected_ = value; }
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
@@ -1130,6 +1134,10 @@ private:
   //and remove the record when the SQL execution ends
   //in order to access exec ctx through session during SQL execution
   ObExecContext *cur_exec_ctx_;
+  int64_t expect_group_id_;
+  // When try packet retry failed, set this flag true and retry at current thread.
+  // This situation is unexpected and will report a warning to user.
+  bool group_id_not_expected_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

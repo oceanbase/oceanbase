@@ -27,5 +27,6 @@ int ObResourceManager::init()
   int ret = OB_SUCCESS;
   OZ(res_plan_mgr_.init());
   OZ(res_mapping_rule_mgr_.init());
+  OZ(res_col_mapping_rule_mgr_.init());
   return ret;
 }

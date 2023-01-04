@@ -374,7 +374,7 @@ int ObInnerTableSchema::user_dependencies_ora_schema(ObTableSchema &table_schema
   return ret;
 }
 
-int ObInnerTableSchema::dba_rsrc_plans_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_rsrc_plans_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -383,7 +383,7 @@ int ObInnerTableSchema::dba_rsrc_plans_schema(ObTableSchema &table_schema)
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_RSRC_PLANS_TID);
+  table_schema.set_table_id(OB_DBA_RSRC_PLANS_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -394,7 +394,7 @@ int ObInnerTableSchema::dba_rsrc_plans_schema(ObTableSchema &table_schema)
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLANS_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLANS_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -424,7 +424,7 @@ int ObInnerTableSchema::dba_rsrc_plans_schema(ObTableSchema &table_schema)
   return ret;
 }
 
-int ObInnerTableSchema::dba_rsrc_plan_directives_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_rsrc_plan_directives_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -433,7 +433,7 @@ int ObInnerTableSchema::dba_rsrc_plan_directives_schema(ObTableSchema &table_sch
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_RSRC_PLAN_DIRECTIVES_TID);
+  table_schema.set_table_id(OB_DBA_RSRC_PLAN_DIRECTIVES_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -444,7 +444,7 @@ int ObInnerTableSchema::dba_rsrc_plan_directives_schema(ObTableSchema &table_sch
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLAN_DIRECTIVES_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLAN_DIRECTIVES_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -474,7 +474,7 @@ int ObInnerTableSchema::dba_rsrc_plan_directives_schema(ObTableSchema &table_sch
   return ret;
 }
 
-int ObInnerTableSchema::dba_rsrc_group_mappings_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_rsrc_group_mappings_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -483,7 +483,7 @@ int ObInnerTableSchema::dba_rsrc_group_mappings_schema(ObTableSchema &table_sche
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_RSRC_GROUP_MAPPINGS_TID);
+  table_schema.set_table_id(OB_DBA_RSRC_GROUP_MAPPINGS_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -494,7 +494,7 @@ int ObInnerTableSchema::dba_rsrc_group_mappings_schema(ObTableSchema &table_sche
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_GROUP_MAPPINGS_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_GROUP_MAPPINGS_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -624,7 +624,7 @@ int ObInnerTableSchema::user_recyclebin_ora_schema(ObTableSchema &table_schema)
   return ret;
 }
 
-int ObInnerTableSchema::dba_rsrc_consumer_groups_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_rsrc_consumer_groups_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -633,7 +633,7 @@ int ObInnerTableSchema::dba_rsrc_consumer_groups_schema(ObTableSchema &table_sch
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_RSRC_CONSUMER_GROUPS_TID);
+  table_schema.set_table_id(OB_DBA_RSRC_CONSUMER_GROUPS_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -644,7 +644,7 @@ int ObInnerTableSchema::dba_rsrc_consumer_groups_schema(ObTableSchema &table_sch
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_CONSUMER_GROUPS_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_CONSUMER_GROUPS_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }

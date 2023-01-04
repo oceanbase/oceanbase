@@ -1034,6 +1034,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
       }
       ret = tmp_ret;
     }
+  } else if (FALSE_IT(ctx_.enable_sql_resource_manage_ = true)) {
   } else if (OB_FAIL(gctx_.sql_engine_->stmt_execute(stmt_id_,
                                                       stmt_type_,
                                                       *params_,
@@ -1623,6 +1624,26 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
       need_response_error = false;
       if (OB_FAIL(do_process_single(session, params_, has_more_result, force_sync_resp, async_resp_used))) {
         LOG_WARN("fail to do process", K(ret), K(ctx_.cur_sql_));
+      }
+      if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+        int bak_ret = ret;
+        ObSMConnection *conn = get_conn();
+        ObSQLSessionInfo *sess = NULL;
+        if (OB_ISNULL(conn)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null conn ptr", K(ret));
+        } else if (OB_FAIL(get_session(sess))) {
+          LOG_WARN("get session fail", K(ret));
+        } else if (OB_ISNULL(sess)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session is NULL or invalid", K(ret));
+        } else {
+          // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+          if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
+            LOG_WARN("fail setup user resource group", K(ret));
+          }
+        }
+        ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }
     }
     if (enable_trace_log) {

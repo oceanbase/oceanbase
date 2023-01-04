@@ -3271,7 +3271,6 @@ public:
   {
     return param_meta_;
   }
-
   // others.
   INHERIT_TO_STRING_KV(N_OBJ, ObObj, N_ACCURACY, accuracy_,
                        N_FLAG, res_flags_, K_(raw_text_pos), K_(raw_text_len), K_(param_meta));

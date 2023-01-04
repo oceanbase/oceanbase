@@ -258,7 +258,7 @@ int ObMPConnect::process()
       LOG_WARN("update_proxy_sys_vars failed", K(ret));
     } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
       LOG_WARN("fail to update charset sys vars", K(ret));
-    } else if (OB_FAIL(setup_user_resource_group(*conn, tenant_id, session->get_user_id()))) {
+    } else if (OB_FAIL(setup_user_resource_group(*conn, tenant_id, session))) {
       LOG_WARN("fail setup user resource group", K(ret));
     } else {
       // set connection info to session

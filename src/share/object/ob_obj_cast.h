@@ -398,6 +398,12 @@ public:
                                    int64_t &pos);
   static int can_cast_in_oracle_mode(const ObObjType dest_type, const ObCollationType dest_coll_type,
                                      const ObObjType src_type, const ObCollationType src_coll_type);
+  // for resource management.
+  static int get_obj_param_text(const ObObjParam &obj_param,
+                                const common::ObString raw_text,
+                                common::ObIAllocator &allocator,
+                                common::ObCollationType cs_type,
+                                common::ObString &res);
 private:
   inline static int64_t get_idx_of_collate(ObCollationType cs_type)
   {

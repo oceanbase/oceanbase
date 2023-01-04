@@ -30,6 +30,7 @@
 #include "share/schema/ob_udt_info.h"
 #include "sql/resolver/ob_stmt.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
+#include "share/resource_manager/ob_resource_manager.h"
 
 namespace oceanbase
 {

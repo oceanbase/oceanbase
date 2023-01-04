@@ -493,6 +493,23 @@ int ObPCVSet::check_raw_param_for_dup_col(ObPlanCacheCtx &pc_ctx, bool &contain_
   }
   return ret;
 }
+int ObPCVSet::check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains)
+{
+  int ret = OB_SUCCESS;
+  DLIST_FOREACH(pcv, pcv_list_) {
+    if (OB_ISNULL(pcv)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(pcv), K(ret));
+    } else if (OB_FAIL(pcv->check_contains_table(db_id, tab_name, contains))) {
+      LOG_WARN("fail to check table name", K(ret), K(db_id), K(tab_name));
+    } else if (!contains) {
+      // continue find
+    } else {
+      break;
+    }
+  }
+  return ret;
+}
 
 }
 }

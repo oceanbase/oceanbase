@@ -173,7 +173,9 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       got_conn_res_(false),
       tx_level_temp_table_(false),
       mem_context_(nullptr),
-      cur_exec_ctx_(nullptr)
+      cur_exec_ctx_(nullptr),
+      expect_group_id_(OB_INVALID_ID),
+      group_id_not_expected_(false)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
 }
@@ -336,6 +338,8 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     coninfo_set_by_sess_ = false;
     is_ob20_protocol_ = false;
   }
+  expect_group_id_ = OB_INVALID_ID;
+  group_id_not_expected_ = false;
 }
 
 void ObSQLSessionInfo::clean_status()

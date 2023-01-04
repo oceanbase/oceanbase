@@ -281,6 +281,256 @@ int ObInnerTableSchema::query_response_time_schema(ObTableSchema &table_schema)
   return ret;
 }
 
+int ObInnerTableSchema::dba_rsrc_plans_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_RSRC_PLANS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLANS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(NULL AS NUMBER) AS PLAN_ID,       PLAN,       CAST(NULL AS NUMBER) AS NUM_PLAN_DIRECTIVES,       CAST(NULL AS CHAR(128)) AS CPU_METHOD,       CAST(NULL AS CHAR(128)) AS MGMT_METHOD,       CAST(NULL AS CHAR(128)) AS ACTIVE_SESS_POOL_MTH,       CAST(NULL AS CHAR(128)) AS PARALLEL_DEGREE_LIMIT_MTH,       CAST(NULL AS CHAR(128)) AS QUEUING_MTH,       CAST(NULL AS CHAR(3)) AS SUB_PLAN,       COMMENTS,       CAST(NULL AS CHAR(128)) AS STATUS,       CAST(NULL AS CHAR(3)) AS MANDATORY     FROM        oceanbase.__all_res_mgr_plan )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_rsrc_plan_directives_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_RSRC_PLAN_DIRECTIVES_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLAN_DIRECTIVES_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       PLAN,       GROUP_OR_SUBPLAN,       CAST(NULL AS CHAR(14)) AS TYPE,       CAST(NULL AS NUMBER) AS CPU_P1,       CAST(NULL AS NUMBER) AS CPU_P2,       CAST(NULL AS NUMBER) AS CPU_P3,       CAST(NULL AS NUMBER) AS CPU_P4,       CAST(NULL AS NUMBER) AS CPU_P5,       CAST(NULL AS NUMBER) AS CPU_P6,       CAST(NULL AS NUMBER) AS CPU_P7,       CAST(NULL AS NUMBER) AS CPU_P8,       MGMT_P1,       CAST(NULL AS NUMBER) AS MGMT_P2,       CAST(NULL AS NUMBER) AS MGMT_P3,       CAST(NULL AS NUMBER) AS MGMT_P4,       CAST(NULL AS NUMBER) AS MGMT_P5,       CAST(NULL AS NUMBER) AS MGMT_P6,       CAST(NULL AS NUMBER) AS MGMT_P7,       CAST(NULL AS NUMBER) AS MGMT_P8,       CAST(NULL AS NUMBER) AS ACTIVE_SESS_POOL_P1,       CAST(NULL AS NUMBER) AS QUEUEING_P1,       CAST(NULL AS NUMBER) AS PARALLEL_TARGET_PERCENTAGE,       CAST(NULL AS NUMBER) AS PARALLEL_DEGREE_LIMIT_P1,       CAST(NULL AS CHAR(128)) AS SWITCH_GROUP,       CAST(NULL AS CHAR(5)) AS SWITCH_FOR_CALL,       CAST(NULL AS NUMBER) AS SWITCH_TIME,       CAST(NULL AS NUMBER) AS SWITCH_IO_MEGABYTES,       CAST(NULL AS NUMBER) AS SWITCH_IO_REQS,       CAST(NULL AS CHAR(5)) AS SWITCH_ESTIMATE,       CAST(NULL AS NUMBER) AS MAX_EST_EXEC_TIME,       CAST(NULL AS NUMBER) AS UNDO_POOL,       CAST(NULL AS NUMBER) AS MAX_IDLE_TIME,       CAST(NULL AS NUMBER) AS MAX_IDLE_BLOCKER_TIME,       CAST(NULL AS NUMBER) AS MAX_UTILIZATION_LIMIT,       CAST(NULL AS NUMBER) AS PARALLEL_QUEUE_TIMEOUT,       CAST(NULL AS NUMBER) AS SWITCH_TIME_IN_CALL,       CAST(NULL AS NUMBER) AS SWITCH_IO_LOGICAL,       CAST(NULL AS NUMBER) AS SWITCH_ELAPSED_TIME,       CAST(NULL AS NUMBER) AS PARALLEL_SERVER_LIMIT,       UTILIZATION_LIMIT,       CAST(NULL AS CHAR(12)) AS PARALLEL_STMT_CRITICAL,       CAST(NULL AS NUMBER) AS SESSION_PGA_LIMIT,       CAST(NULL AS CHAR(6)) AS PQ_TIMEOUT_ACTION,       COMMENTS,       CAST(NULL AS CHAR(128)) AS STATUS,       CAST('YES' AS CHAR(3)) AS MANDATORY     FROM        oceanbase.__all_res_mgr_directive )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_rsrc_group_mappings_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_RSRC_GROUP_MAPPINGS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_GROUP_MAPPINGS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       ATTRIBUTE,       VALUE,       CONSUMER_GROUP,       CAST(NULL AS CHAR(128)) AS STATUS     FROM        oceanbase.__all_res_mgr_mapping_rule )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_rsrc_consumer_groups_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_RSRC_CONSUMER_GROUPS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_CONSUMER_GROUPS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CONSUMER_GROUP_ID,       CONSUMER_GROUP,       CAST(NULL AS CHAR(128)) AS CPU_METHOD,       CAST(NULL AS CHAR(128)) AS MGMT_METHOD,       CAST(NULL AS CHAR(3)) AS INTERNAL_USE,       COMMENTS,       CAST(NULL AS CHAR(128)) AS CATEGORY,       CAST(NULL AS CHAR(128)) AS STATUS,       CAST(NULL AS CHAR(3)) AS MANDATORY     FROM        oceanbase.__all_res_mgr_consumer_group )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::v_rsrc_plan_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_V_RSRC_PLAN_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_V_RSRC_PLAN_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT           CAST(NULL as NUMBER) AS ID,           B.plan NAME,           CAST('TRUE' AS CHAR(5)) AS IS_TOP_PLAN,           CAST('ON' AS CHAR(3)) AS CPU_MANAGED,           CAST(NULL AS CHAR(3)) AS INSTANCE_CAGING,           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_ACTIVE,           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_TOTAL,           CAST(NULL AS CHAR(32)) AS PARALLEL_EXECUTION_MANAGED         FROM oceanbase.__tenant_virtual_global_variable A, oceanbase.dba_rsrc_plans B         WHERE A.variable_name = 'resource_manager_plan' AND A.value = B.plan )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::cdb_ob_column_checksum_error_info_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

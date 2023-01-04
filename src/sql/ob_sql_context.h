@@ -500,6 +500,10 @@ public:
   ObRawExpr *flashback_query_expr_;
   ObSpmCacheCtx spm_ctx_;
   bool is_execute_call_stmt_;
+  bool enable_sql_resource_manage_;
+  uint64_t res_map_rule_id_;
+  int64_t res_map_rule_param_idx_;
+  uint64_t res_map_rule_version_;
   bool is_text_ps_mode_;
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
@@ -536,7 +540,9 @@ public:
       prepare_param_count_(0),
       is_prepare_stmt_(false),
       has_nested_sql_(false),
-      tz_info_(NULL)
+      tz_info_(NULL),
+      res_map_rule_id_(common::OB_INVALID_ID),
+      res_map_rule_param_idx_(common::OB_INVALID_INDEX)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -573,6 +579,8 @@ public:
     is_prepare_stmt_ = false;
     has_nested_sql_ = false;
     tz_info_ = NULL;
+    res_map_rule_id_ = common::OB_INVALID_ID;
+    res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -643,6 +651,8 @@ public:
   bool is_prepare_stmt_;
   bool has_nested_sql_;
   const common::ObTimeZoneInfo *tz_info_;
+  uint64_t res_map_rule_id_;
+  int64_t res_map_rule_param_idx_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

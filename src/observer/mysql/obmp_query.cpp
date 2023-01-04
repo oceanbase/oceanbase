@@ -135,9 +135,6 @@ int ObMPQuery::process()
   } else if (OB_ISNULL(sess)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL or invalid", K_(sql), K(sess), K(ret));
-  } else if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
-      OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess->get_user_id()))) {
-    LOG_WARN("fail setup user resource group", K(ret));
   } else {
     lib::CompatModeGuard g(sess->get_compatibility_mode() == ORACLE_MODE ?
                              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
@@ -385,6 +382,20 @@ int ObMPQuery::process()
     if (!session.get_in_transaction()) {
         // transcation ends, end trace
         FLT_END_TRACE();
+    }
+  }
+
+  if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+    int tmp_ret = OB_SUCCESS;
+    // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+    // because we have to reset conn.group_id_ according to user_name.
+    // Otherwise, suppose we execute a query with a mapping rule on the column in the query at first,
+    // we switch to the defined consumer group, batch_group for example,
+    // and after that, the next query will also be executed with batch_group.
+    if (OB_UNLIKELY(OB_SUCCESS !=
+            (tmp_ret = setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess)))) {
+      LOG_WARN("fail setup user resource group", K(tmp_ret), K(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
 
@@ -744,6 +755,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       task_ctx.set_query_sys_begin_schema_version(retry_ctrl_.get_sys_local_schema_version());
       task_ctx.set_min_cluster_version(GET_MIN_CLUSTER_VERSION());
       ctx_.retry_times_ = retry_ctrl_.get_retry_times();
+      ctx_.enable_sql_resource_manage_ = true;
       //storage::ObPartitionService* ps = static_cast<storage::ObPartitionService *> (GCTX.par_ser_);
       //bool is_read_only = false;
       if (OB_FAIL(ret)) {

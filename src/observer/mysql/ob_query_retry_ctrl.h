@@ -293,6 +293,7 @@ private:
   static void long_wait_retry_proc(ObRetryParam &v);
   static void short_wait_retry_proc(ObRetryParam &v);
   static void force_local_retry_proc(ObRetryParam &v);
+  static void switch_consumer_group_retry_proc(ObRetryParam &v);
 
 
   // processors for inner SQL error codes only

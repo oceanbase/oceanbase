@@ -1278,6 +1278,11 @@ public:
   static int st_geometry_columns_schema(share::schema::ObTableSchema &table_schema);
   static int st_spatial_reference_systems_schema(share::schema::ObTableSchema &table_schema);
   static int query_response_time_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_rsrc_plans_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_rsrc_plan_directives_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_rsrc_group_mappings_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_rsrc_consumer_groups_schema(share::schema::ObTableSchema &table_schema);
+  static int v_rsrc_plan_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_column_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_tablet_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_ls_schema(share::schema::ObTableSchema &table_schema);
@@ -1456,12 +1461,12 @@ public:
   static int all_dependencies_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_dependencies_ora_schema(share::schema::ObTableSchema &table_schema);
   static int user_dependencies_ora_schema(share::schema::ObTableSchema &table_schema);
-  static int dba_rsrc_plans_schema(share::schema::ObTableSchema &table_schema);
-  static int dba_rsrc_plan_directives_schema(share::schema::ObTableSchema &table_schema);
-  static int dba_rsrc_group_mappings_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_rsrc_plans_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_rsrc_plan_directives_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_rsrc_group_mappings_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_recyclebin_ora_schema(share::schema::ObTableSchema &table_schema);
   static int user_recyclebin_ora_schema(share::schema::ObTableSchema &table_schema);
-  static int dba_rsrc_consumer_groups_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_rsrc_consumer_groups_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_ls_locations_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_tablet_to_ls_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_tablet_replicas_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -3218,6 +3223,11 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::st_geometry_columns_schema,
   ObInnerTableSchema::st_spatial_reference_systems_schema,
   ObInnerTableSchema::query_response_time_schema,
+  ObInnerTableSchema::dba_rsrc_plans_schema,
+  ObInnerTableSchema::dba_rsrc_plan_directives_schema,
+  ObInnerTableSchema::dba_rsrc_group_mappings_schema,
+  ObInnerTableSchema::dba_rsrc_consumer_groups_schema,
+  ObInnerTableSchema::v_rsrc_plan_schema,
   ObInnerTableSchema::cdb_ob_column_checksum_error_info_schema,
   ObInnerTableSchema::cdb_ob_tablet_checksum_error_info_schema,
   ObInnerTableSchema::dba_ob_ls_schema,
@@ -3396,12 +3406,12 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::all_dependencies_ora_schema,
   ObInnerTableSchema::dba_dependencies_ora_schema,
   ObInnerTableSchema::user_dependencies_ora_schema,
-  ObInnerTableSchema::dba_rsrc_plans_schema,
-  ObInnerTableSchema::dba_rsrc_plan_directives_schema,
-  ObInnerTableSchema::dba_rsrc_group_mappings_schema,
+  ObInnerTableSchema::dba_rsrc_plans_ora_schema,
+  ObInnerTableSchema::dba_rsrc_plan_directives_ora_schema,
+  ObInnerTableSchema::dba_rsrc_group_mappings_ora_schema,
   ObInnerTableSchema::dba_recyclebin_ora_schema,
   ObInnerTableSchema::user_recyclebin_ora_schema,
-  ObInnerTableSchema::dba_rsrc_consumer_groups_schema,
+  ObInnerTableSchema::dba_rsrc_consumer_groups_ora_schema,
   ObInnerTableSchema::dba_ob_ls_locations_ora_schema,
   ObInnerTableSchema::dba_ob_tablet_to_ls_ora_schema,
   ObInnerTableSchema::dba_ob_tablet_replicas_ora_schema,
@@ -4425,6 +4435,11 @@ const uint64_t tenant_space_tables [] = {
   OB_ST_GEOMETRY_COLUMNS_TID,
   OB_ST_SPATIAL_REFERENCE_SYSTEMS_TID,
   OB_QUERY_RESPONSE_TIME_TID,
+  OB_DBA_RSRC_PLANS_TID,
+  OB_DBA_RSRC_PLAN_DIRECTIVES_TID,
+  OB_DBA_RSRC_GROUP_MAPPINGS_TID,
+  OB_DBA_RSRC_CONSUMER_GROUPS_TID,
+  OB_V_RSRC_PLAN_TID,
   OB_DBA_OB_LS_TID,
   OB_DBA_OB_TABLE_LOCATIONS_TID,
   OB_DBA_OB_FREEZE_INFO_TID,
@@ -4592,12 +4607,12 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_DEPENDENCIES_ORA_TID,
   OB_DBA_DEPENDENCIES_ORA_TID,
   OB_USER_DEPENDENCIES_ORA_TID,
-  OB_DBA_RSRC_PLANS_TID,
-  OB_DBA_RSRC_PLAN_DIRECTIVES_TID,
-  OB_DBA_RSRC_GROUP_MAPPINGS_TID,
+  OB_DBA_RSRC_PLANS_ORA_TID,
+  OB_DBA_RSRC_PLAN_DIRECTIVES_ORA_TID,
+  OB_DBA_RSRC_GROUP_MAPPINGS_ORA_TID,
   OB_DBA_RECYCLEBIN_ORA_TID,
   OB_USER_RECYCLEBIN_ORA_TID,
-  OB_DBA_RSRC_CONSUMER_GROUPS_TID,
+  OB_DBA_RSRC_CONSUMER_GROUPS_ORA_TID,
   OB_DBA_OB_LS_LOCATIONS_ORA_TID,
   OB_DBA_OB_TABLET_TO_LS_ORA_TID,
   OB_DBA_OB_TABLET_REPLICAS_ORA_TID,
@@ -6223,6 +6238,11 @@ const char* const tenant_space_table_names [] = {
   OB_ST_GEOMETRY_COLUMNS_TNAME,
   OB_ST_SPATIAL_REFERENCE_SYSTEMS_TNAME,
   OB_QUERY_RESPONSE_TIME_TNAME,
+  OB_DBA_RSRC_PLANS_TNAME,
+  OB_DBA_RSRC_PLAN_DIRECTIVES_TNAME,
+  OB_DBA_RSRC_GROUP_MAPPINGS_TNAME,
+  OB_DBA_RSRC_CONSUMER_GROUPS_TNAME,
+  OB_V_RSRC_PLAN_TNAME,
   OB_DBA_OB_LS_TNAME,
   OB_DBA_OB_TABLE_LOCATIONS_TNAME,
   OB_DBA_OB_FREEZE_INFO_TNAME,
@@ -6390,12 +6410,12 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_DEPENDENCIES_ORA_TNAME,
   OB_DBA_DEPENDENCIES_ORA_TNAME,
   OB_USER_DEPENDENCIES_ORA_TNAME,
-  OB_DBA_RSRC_PLANS_TNAME,
-  OB_DBA_RSRC_PLAN_DIRECTIVES_TNAME,
-  OB_DBA_RSRC_GROUP_MAPPINGS_TNAME,
+  OB_DBA_RSRC_PLANS_ORA_TNAME,
+  OB_DBA_RSRC_PLAN_DIRECTIVES_ORA_TNAME,
+  OB_DBA_RSRC_GROUP_MAPPINGS_ORA_TNAME,
   OB_DBA_RECYCLEBIN_ORA_TNAME,
   OB_USER_RECYCLEBIN_ORA_TNAME,
-  OB_DBA_RSRC_CONSUMER_GROUPS_TNAME,
+  OB_DBA_RSRC_CONSUMER_GROUPS_ORA_TNAME,
   OB_DBA_OB_LS_LOCATIONS_ORA_TNAME,
   OB_DBA_OB_TABLET_TO_LS_ORA_TNAME,
   OB_DBA_OB_TABLET_REPLICAS_ORA_TNAME,
@@ -9238,10 +9258,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 215;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 554;
-const int64_t OB_SYS_VIEW_COUNT = 606;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1380;
+const int64_t OB_SYS_VIEW_COUNT = 611;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1385;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1383;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1388;
 
 } // end namespace share
 } // end namespace oceanbase

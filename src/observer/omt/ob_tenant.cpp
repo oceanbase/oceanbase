@@ -1853,6 +1853,7 @@ void ObTenant::check_resource_manager_plan()
   ObString plan_name;
   ObResourcePlanManager &plan_mgr = G_RES_MGR.get_plan_mgr();
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+  ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
   char data[OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
   ObDataBuffer allocator(data, OB_MAX_RESOURCE_PLAN_NAME_LENGTH);
   if (!cgroup_ctrl_.is_valid()) {
@@ -1872,6 +1873,10 @@ void ObTenant::check_resource_manager_plan()
              K(id_), K(plan_name), K(ret));
   } else if (OB_FAIL(rule_mgr.refresh_resource_mapping_rule(id_, plan_name))) {
     LOG_WARN("refresh resource mapping rule fail."
+             "Tenant resource isolation may not work",
+             K(id_), K(plan_name), K(ret));
+  } else if (OB_FAIL(col_rule_mgr.refresh_resource_column_mapping_rule(id_, plan_name))) {
+    LOG_WARN("refresh resource column mapping rule fail."
              "Tenant resource isolation may not work",
              K(id_), K(plan_name), K(ret));
   }

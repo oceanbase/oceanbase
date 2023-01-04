@@ -261,6 +261,7 @@ public:
                                 common::ObIArray<PCVSchemaObj> &schema_array);
 
   int lift_tenant_schema_version(int64_t new_schema_version);
+  int check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains);
 private:
   //used for add plan
   //check table version, view table version, merged version

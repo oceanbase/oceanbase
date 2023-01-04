@@ -43,7 +43,11 @@ int ObCgroupCtrl::init()
   if (GCONF.enable_cgroup == false) {
     // not init cgroup when config set to false
   } else if (OB_FAIL(init_cgroup_root_dir_(root_cgroup_))) {
-    LOG_WARN("init cgroup dir failed", K(ret), K(root_cgroup_));
+	  if (OB_FILE_NOT_EXIST == ret) {
+      LOG_WARN("init cgroup dir failed", K(ret), K(root_cgroup_));
+    } else {
+      LOG_ERROR("init cgroup dir failed", K(ret), K(root_cgroup_));
+    }
   } else if (OB_FAIL(init_cgroup_dir_(other_cgroup_))) {
     LOG_WARN("init other cgroup dir failed", K(ret), K_(other_cgroup));
   } else {
@@ -283,7 +287,7 @@ int ObCgroupCtrl::get_group_info_by_group_id(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
   if (OB_FAIL(rule_mgr.get_group_name_by_id(tenant_id, group_id, group_name))) {
-    LOG_WARN("fail get group name", K(group_name));
+    LOG_WARN("fail get group name", K(tenant_id), K(group_id), K(group_name));
   }
   return ret;
 }

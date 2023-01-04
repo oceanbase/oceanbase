@@ -152,6 +152,42 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObResourceMappingRule);
 };
 
+class ObResourceIdNameMappingRule
+{
+public:
+  ObResourceIdNameMappingRule() :
+      tenant_id_(common::OB_INVALID_ID),
+      group_id_(),
+      group_name_()
+  {}
+  ~ObResourceIdNameMappingRule() = default;
+public:
+  void set_tenant_id(uint64_t tenant_id)
+  {
+    tenant_id_ = tenant_id;
+  }
+  void set_group_id(uint64_t group_id)
+  {
+    group_id_ = group_id;
+  }
+  int set_group_name(const common::ObString &name)
+  {
+    return group_name_.set_group_name(name);
+  }
+  int assign(const ObResourceIdNameMappingRule &other);
+  TO_STRING_KV(K_(tenant_id),
+               K_(group_id),
+               "group_name", group_name_.get_group_name());
+public:
+  uint64_t tenant_id_;
+  uint64_t group_id_;
+  ObGroupName group_name_;
+private:
+  char group_name_buf_[common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
+  DISALLOW_COPY_AND_ASSIGN(ObResourceIdNameMappingRule);
+};
+
+
 class ObResourceUserMappingRule
 {
 public:
@@ -194,6 +230,57 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObResourceUserMappingRule);
 };
 
+
+class ObResourceColumnMappingRule
+{
+public:
+  ObResourceColumnMappingRule() :
+      tenant_id_(common::OB_INVALID_ID),
+      database_id_(common::OB_INVALID_ID),
+      table_name_(),
+      column_name_(),
+      literal_value_(),
+      user_name_(),
+      group_id_(),
+      case_mode_(common::OB_NAME_CASE_INVALID)
+  {}
+  ~ObResourceColumnMappingRule() = default;
+public:
+  void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  void set_database_id(uint64_t database_id) { database_id_ = database_id; }
+  void set_table_name(common::ObString table_name) {table_name_ = table_name; }
+  void set_column_name(common::ObString column_name) {column_name_ = column_name; }
+  void set_literal_value(common::ObString literal_value) {literal_value_ = literal_value; }
+  void set_user_name(common::ObString user_name) { user_name_ = user_name; }
+  void set_group_id(uint64_t group_id) { group_id_ = group_id; }
+  void set_case_mode(common:: ObNameCaseMode case_mode) { case_mode_ = case_mode; }
+  int write_string_values(uint64_t tenant_id,
+                          common::ObString table_name, common::ObString column_name,
+                          common::ObString literal_value, common::ObString user_name);
+  void reset_table_column_name();
+  void reset_user_name_literal();
+  void reset()
+  {
+    reset_table_column_name();
+    reset_user_name_literal();
+  }
+  int assign(const ObResourceColumnMappingRule &other);
+  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_name), K_(column_name),
+              K_(literal_value), K_(user_name), K_(group_id), K_(case_mode));
+public:
+  uint64_t tenant_id_;
+  uint64_t database_id_;
+  common::ObString table_name_;
+  common::ObString column_name_;
+  common::ObString literal_value_;
+  common::ObString user_name_;
+  uint64_t group_id_;
+  common:: ObNameCaseMode case_mode_;
+
+private:
+  //char group_name_buf_[common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
+  DISALLOW_COPY_AND_ASSIGN(ObResourceColumnMappingRule);
+};
 
 }
 }

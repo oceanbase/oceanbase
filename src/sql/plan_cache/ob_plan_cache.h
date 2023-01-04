@@ -201,6 +201,7 @@ public:
   int add_exists_cache_obj_by_sql(ObILibCacheCtx &ctx,
                                   ObILibCacheObject *cache_obj);
   int evict_plan(uint64_t table_id);
+  int evict_plan_by_table_name(uint64_t tenant_id, uint64_t database_id, ObString tab_name);
 
   /**
    * memory related

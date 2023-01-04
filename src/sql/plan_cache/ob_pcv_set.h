@@ -95,6 +95,7 @@ public:
   ObPlanCacheKey &get_plan_cache_key() { return pc_key_; }
   const ObString &get_sql() { return sql_; }
   int deep_copy_sql(const common::ObString &sql);
+  int check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains);
 
   TO_STRING_KV(K_(is_inited));
 

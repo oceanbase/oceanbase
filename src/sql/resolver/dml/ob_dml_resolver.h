@@ -426,6 +426,10 @@ protected:
    *
    */
   int resolve_is_expr(ObRawExpr *&expr);
+  int check_equal_conditions_for_resource_group(const ObIArray<ObRawExpr*> &filters);
+  int recursive_check_equal_condition(const ObRawExpr &expr);
+  int check_column_with_res_mapping_rule(const ObColumnRefRawExpr *col_expr,
+                                         const ObConstRawExpr *const_expr);
   int resolve_autoincrement_column_is_null(ObRawExpr *&expr);
   int resolve_partition_expr(const ParseNode &part_expr_node, ObRawExpr *&expr, common::ObIArray<ObQualifiedName> &columns);
 

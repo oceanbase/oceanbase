@@ -434,7 +434,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_DUP_RESTART_SPEC, -4382,-1, "HY000", "duplicate RESTA
 DEFINE_ERROR(OB_GTI_NOT_READY, -4383, -1, "HY000", "transaction id is not ready");
 DEFINE_ERROR(OB_STACK_OVERFLOW, -4385, -1, "HY000", "stack overflow");
 DEFINE_ERROR(OB_NOT_ALLOW_REMOVING_LEADER, -4386, -1, "HY000", "Do not allow removing leader");
-DEFINE_ERROR(OB_NEED_SWITCH_CONSUMER_GROUP, -4387, -1, "HY000", "Need switch consumer group");
+DEFINE_ERROR(OB_NEED_SWITCH_CONSUMER_GROUP, -4387, 13937, "HY000", "Failed to switch resource group");
 DEFINE_ERROR(OB_UNEXPECT_INTERNAL_ERROR, -4388, -1, "HY000", "Unexpected internal error happen, please checkout the internal errcode");
 DEFINE_ERROR(OB_ERR_TOO_MUCH_TIME, -4389, -1, "HY000", "Porcessing time is too long");
 DEFINE_ERROR(OB_ERR_REMOTE_SCHEMA_NOT_FULL, -4390, -1, "HY000", "Schema of remote server is not refreshed yet");

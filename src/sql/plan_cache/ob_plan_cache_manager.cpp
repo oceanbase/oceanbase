@@ -464,6 +464,20 @@ void ObPlanCacheManager::ObPlanCacheEliminationTask::run_free_cache_obj_task()
   }
 }
 
+int ObPlanCacheManager::evict_plan_by_table_name(uint64_t tenant_id, uint64_t database_id, ObString tab_name)
+{
+  int ret = OB_SUCCESS;
+  observer::ObReqTimeGuard req_timeinfo_guard;
+  ObPlanCache *plan_cache = get_plan_cache(tenant_id);
+  if (NULL != plan_cache) {
+    if (OB_FAIL(plan_cache->evict_plan_by_table_name(tenant_id, database_id, tab_name))) {
+      SQL_PC_LOG(WARN, "fail to evict plan by table name", K(ret));
+    }
+    plan_cache->dec_ref_count();
+  }
+  return ret;
+}
+
 int ObPlanCacheManager::flush_plan_cache_by_sql_id(uint64_t tenant_id,
                                                    uint64_t db_id,
                                                    common::ObString sql_id) {

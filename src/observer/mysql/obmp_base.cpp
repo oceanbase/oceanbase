@@ -403,11 +403,23 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
 int ObMPBase::setup_user_resource_group(
     ObSMConnection &conn,
     const uint64_t tenant_id,
-    const uint64_t user_id)
+    sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   uint64_t group_id = 0;
-  if (!is_valid_tenant_id(tenant_id)) {
+  uint64_t user_id = session->get_user_id();
+  if (OB_INVALID_ID != session->get_expect_group_id()) {
+    // Session->expected_group_id_ is set when hit plan cache or resolve a query, and find that
+    // expcted group is consistent with current group.
+    // Set group_id of req_ so that the req_ will be put in the corresponding queue when do packet retry.
+    if (NULL != req_) {
+      req_->set_group_id(session->get_expect_group_id());
+    }
+    // also set conn.group_id_. It means use current consumer group when execute next query for first time.
+    conn.group_id_ = session->get_expect_group_id();
+    // reset to invalid because session.expected_group_id is single_use.
+    session->set_expect_group_id(OB_INVALID_ID);
+  } else if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid tenant", K(tenant_id), K(ret));
   } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(

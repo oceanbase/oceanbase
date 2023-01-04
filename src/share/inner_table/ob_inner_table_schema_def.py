@@ -22651,11 +22651,163 @@ def_table_schema(
 # 21309: CDB_OB_DATAFILE
 # 21310: DBA_OB_DATAFILE
 
-# 21311: DBA_RSRC_PLANS
-# 21312: DBA_RSRC_PLAN_DIRECTIVES
-# 21313: DBA_RSRC_GROUP_MAPPINGS
-# 21314: DBA_RSRC_CONSUMER_GROUPS
-# 21315: V$RSRC_PLAN
+def_table_schema(
+  owner           = 'dachuan.sdc',
+  table_name      = 'DBA_RSRC_PLANS',
+  table_id        = '21311',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(NULL AS NUMBER) AS PLAN_ID,
+      PLAN,
+      CAST(NULL AS NUMBER) AS NUM_PLAN_DIRECTIVES,
+      CAST(NULL AS CHAR(128)) AS CPU_METHOD,
+      CAST(NULL AS CHAR(128)) AS MGMT_METHOD,
+      CAST(NULL AS CHAR(128)) AS ACTIVE_SESS_POOL_MTH,
+      CAST(NULL AS CHAR(128)) AS PARALLEL_DEGREE_LIMIT_MTH,
+      CAST(NULL AS CHAR(128)) AS QUEUING_MTH,
+      CAST(NULL AS CHAR(3)) AS SUB_PLAN,
+      COMMENTS,
+      CAST(NULL AS CHAR(128)) AS STATUS,
+      CAST(NULL AS CHAR(3)) AS MANDATORY
+    FROM
+       oceanbase.__all_res_mgr_plan
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'dachuan.sdc',
+  table_name      = 'DBA_RSRC_PLAN_DIRECTIVES',
+  table_id        = '21312',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      PLAN,
+      GROUP_OR_SUBPLAN,
+      CAST(NULL AS CHAR(14)) AS TYPE,
+      CAST(NULL AS NUMBER) AS CPU_P1,
+      CAST(NULL AS NUMBER) AS CPU_P2,
+      CAST(NULL AS NUMBER) AS CPU_P3,
+      CAST(NULL AS NUMBER) AS CPU_P4,
+      CAST(NULL AS NUMBER) AS CPU_P5,
+      CAST(NULL AS NUMBER) AS CPU_P6,
+      CAST(NULL AS NUMBER) AS CPU_P7,
+      CAST(NULL AS NUMBER) AS CPU_P8,
+      MGMT_P1,
+      CAST(NULL AS NUMBER) AS MGMT_P2,
+      CAST(NULL AS NUMBER) AS MGMT_P3,
+      CAST(NULL AS NUMBER) AS MGMT_P4,
+      CAST(NULL AS NUMBER) AS MGMT_P5,
+      CAST(NULL AS NUMBER) AS MGMT_P6,
+      CAST(NULL AS NUMBER) AS MGMT_P7,
+      CAST(NULL AS NUMBER) AS MGMT_P8,
+      CAST(NULL AS NUMBER) AS ACTIVE_SESS_POOL_P1,
+      CAST(NULL AS NUMBER) AS QUEUEING_P1,
+      CAST(NULL AS NUMBER) AS PARALLEL_TARGET_PERCENTAGE,
+      CAST(NULL AS NUMBER) AS PARALLEL_DEGREE_LIMIT_P1,
+      CAST(NULL AS CHAR(128)) AS SWITCH_GROUP,
+      CAST(NULL AS CHAR(5)) AS SWITCH_FOR_CALL,
+      CAST(NULL AS NUMBER) AS SWITCH_TIME,
+      CAST(NULL AS NUMBER) AS SWITCH_IO_MEGABYTES,
+      CAST(NULL AS NUMBER) AS SWITCH_IO_REQS,
+      CAST(NULL AS CHAR(5)) AS SWITCH_ESTIMATE,
+      CAST(NULL AS NUMBER) AS MAX_EST_EXEC_TIME,
+      CAST(NULL AS NUMBER) AS UNDO_POOL,
+      CAST(NULL AS NUMBER) AS MAX_IDLE_TIME,
+      CAST(NULL AS NUMBER) AS MAX_IDLE_BLOCKER_TIME,
+      CAST(NULL AS NUMBER) AS MAX_UTILIZATION_LIMIT,
+      CAST(NULL AS NUMBER) AS PARALLEL_QUEUE_TIMEOUT,
+      CAST(NULL AS NUMBER) AS SWITCH_TIME_IN_CALL,
+      CAST(NULL AS NUMBER) AS SWITCH_IO_LOGICAL,
+      CAST(NULL AS NUMBER) AS SWITCH_ELAPSED_TIME,
+      CAST(NULL AS NUMBER) AS PARALLEL_SERVER_LIMIT,
+      UTILIZATION_LIMIT,
+      CAST(NULL AS CHAR(12)) AS PARALLEL_STMT_CRITICAL,
+      CAST(NULL AS NUMBER) AS SESSION_PGA_LIMIT,
+      CAST(NULL AS CHAR(6)) AS PQ_TIMEOUT_ACTION,
+      COMMENTS,
+      CAST(NULL AS CHAR(128)) AS STATUS,
+      CAST('YES' AS CHAR(3)) AS MANDATORY
+    FROM
+       oceanbase.__all_res_mgr_directive
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'dachuan.sdc',
+  table_name      = 'DBA_RSRC_GROUP_MAPPINGS',
+  table_id        = '21313',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      ATTRIBUTE,
+      VALUE,
+      CONSUMER_GROUP,
+      CAST(NULL AS CHAR(128)) AS STATUS
+    FROM
+       oceanbase.__all_res_mgr_mapping_rule
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'dachuan.sdc',
+  table_name      = 'DBA_RSRC_CONSUMER_GROUPS',
+  table_id        = '21314',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CONSUMER_GROUP_ID,
+      CONSUMER_GROUP,
+      CAST(NULL AS CHAR(128)) AS CPU_METHOD,
+      CAST(NULL AS CHAR(128)) AS MGMT_METHOD,
+      CAST(NULL AS CHAR(3)) AS INTERNAL_USE,
+      COMMENTS,
+      CAST(NULL AS CHAR(128)) AS CATEGORY,
+      CAST(NULL AS CHAR(128)) AS STATUS,
+      CAST(NULL AS CHAR(3)) AS MANDATORY
+    FROM
+       oceanbase.__all_res_mgr_consumer_group
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner          = 'dachuan.sdc',
+    table_name     = 'V$RSRC_PLAN',
+    table_id       = '21315',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """SELECT
+          CAST(NULL as NUMBER) AS ID,
+          B.plan NAME,
+          CAST('TRUE' AS CHAR(5)) AS IS_TOP_PLAN,
+          CAST('ON' AS CHAR(3)) AS CPU_MANAGED,
+          CAST(NULL AS CHAR(3)) AS INSTANCE_CAGING,
+          CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_ACTIVE,
+          CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_TOTAL,
+          CAST(NULL AS CHAR(32)) AS PARALLEL_EXECUTION_MANAGED
+        FROM oceanbase.__tenant_virtual_global_variable A, oceanbase.dba_rsrc_plans B
+        WHERE A.variable_name = 'resource_manager_plan' AND A.value = B.plan
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner           = 'donglou.zl',
@@ -37754,6 +37906,7 @@ def_table_schema(
 def_table_schema(
   owner = 'xiaochu.yh',
   table_name      = 'DBA_RSRC_PLANS',
+  name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25157',
   table_type      = 'SYSTEM_VIEW',
@@ -37783,6 +37936,7 @@ def_table_schema(
 def_table_schema(
   owner = 'xiaochu.yh',
   table_name      = 'DBA_RSRC_PLAN_DIRECTIVES',
+  name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25158',
   table_type      = 'SYSTEM_VIEW',
@@ -37846,6 +38000,7 @@ def_table_schema(
 def_table_schema(
   owner = 'xiaochu.yh',
   table_name      = 'DBA_RSRC_GROUP_MAPPINGS',
+  name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25159',
   table_type      = 'SYSTEM_VIEW',
@@ -38021,6 +38176,7 @@ def_table_schema(
 def_table_schema(
   owner = 'xiaochu.yh',
   table_name      = 'DBA_RSRC_CONSUMER_GROUPS',
+  name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25162',
   table_type      = 'SYSTEM_VIEW',

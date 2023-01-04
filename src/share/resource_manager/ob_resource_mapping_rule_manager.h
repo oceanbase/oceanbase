@@ -35,6 +35,7 @@ class ObResourceMappingRuleManager
 public:
   typedef common::ObArray<ObResourceMappingRule> ObResourceMappingRuleSet;
   typedef common::ObArray<ObResourceUserMappingRule> ObResourceUserMappingRuleSet;
+  typedef common::ObArray<ObResourceIdNameMappingRule> ObResourceIdNameMappingRuleSet;
 public:
   ObResourceMappingRuleManager() = default;
   virtual ~ObResourceMappingRuleManager() = default;

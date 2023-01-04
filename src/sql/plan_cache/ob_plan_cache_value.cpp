@@ -28,6 +28,7 @@
 #include "sql/udr/ob_udr_utils.h"
 #include "share/ob_duplicate_scope_define.h"
 #include "pl/ob_pl_stmt.h"
+#include "share/resource_manager/ob_resource_manager.h"
 using namespace oceanbase::share::schema;
 using namespace oceanbase::common;
 using namespace oceanbase::pl;
@@ -519,7 +520,63 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
             } else {
               SQL_PC_LOG(TRACE, "failed to select plan in plan set", K(ret));
             }
-          } else {
+          } else if (NULL != params) {
+            // set res map rule
+            uint64_t rule_id = plan_set->res_map_rule_id_;
+            int64_t param_idx = plan_set->res_map_rule_param_idx_;
+            uint64_t tenant_id = OB_INVALID_ID;
+            ObString param_text;
+            ObCollationType cs_type = CS_TYPE_INVALID;
+            if (rule_id != OB_INVALID_ID && param_idx != OB_INVALID_INDEX
+                && pc_ctx.sql_ctx_.enable_sql_resource_manage_) {
+              if (OB_UNLIKELY(param_idx < 0 || param_idx >= params->count())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_ERROR("unexpected res map rule param idx", K(ret), K(rule_id), K(param_idx), K(params->count()));
+              } else if (OB_FAIL(session->get_collation_connection(cs_type))) {
+                LOG_WARN("get collation connection failed", K(ret));
+              } else if (OB_INVALID_ID == (tenant_id = session->get_effective_tenant_id())) {
+                ret = OB_ERR_UNEXPECTED;
+                SQL_PC_LOG(ERROR, "got effective tenant id is invalid", K(ret));
+              } else if (OB_FAIL(ObObjCaster::get_obj_param_text(
+                                      params->at(plan_set->res_map_rule_param_idx_),
+                                      pc_ctx.raw_sql_, pc_ctx.allocator_,
+                                      cs_type, param_text))) {
+                LOG_WARN("get obj param text failed", K(ret));
+              } else {
+                uint64_t group_id = G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_group_id(
+                                      tenant_id,
+                                      plan_set->res_map_rule_id_,
+                                      session->get_user_name(),
+                                      param_text);
+                if (OB_INVALID_ID == group_id) {
+                   // OB_INVALID_ID means current user+param_value is not defined in mapping rule,
+                   // get group_id according to current user.
+                  if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
+                                tenant_id, session->get_user_id(), group_id))) {
+                    LOG_WARN("get group id by user failed", K(ret));
+                  } else if (OB_INVALID_ID == group_id) {
+                    // if not set consumer_group for current user, use OTHER_GROUP by default.
+                    group_id = 0;
+                  }
+                }
+                if (OB_SUCC(ret)) {
+                  session->set_expect_group_id(group_id);
+                  if (group_id == THIS_WORKER.get_group_id()) {
+                    // do nothing if equals to current group id.
+                  } else if (session->get_is_in_retry()
+                            && OB_NEED_SWITCH_CONSUMER_GROUP
+                                == session->get_retry_info().get_last_query_retry_err()) {
+                    LOG_ERROR("use unexpected group when retry, maybe set packet retry failed before",
+                              K(group_id), K(THIS_WORKER.get_group_id()), K(rule_id), K(param_idx));
+                  } else {
+                    ret = OB_NEED_SWITCH_CONSUMER_GROUP;
+                  }
+                  LOG_TRACE("get expect rule id", K(ret), K(group_id),
+                            K(THIS_WORKER.get_group_id()), K(session->get_expect_group_id()),
+                            K(pc_ctx.raw_sql_));
+                }
+              }
+            }
             break; //这个地方建议保留，如果去掉，需要另外加标记在for()中判断，并且不使用上面的for循环的宏；
           }
         }
@@ -1029,8 +1086,28 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
   } else if (is_old_version) {
     ret = OB_OLD_SCHEMA_VERSION;
     SQL_PC_LOG(DEBUG, "view or table is old version", K(ret));
+  /* Consider this concurrent scene:
+     1. No mapping is defined on t.c1 at first.
+     2. Thread1 resolve select * from t where c1 = 1; and generate a plan with rule_id = INVALID
+     3. User define a mapping rule on t.c1.
+     4. Thread2 load the new mapping rule on t.c1 into cache and evict all plans related with t
+     5. Thread1 add the plan into plan cache. The plan is marked without a mapping rule
+        but there is actually a mapping rule on t.c1 now
+     Solution:
+     1. When start to resolve a sql, record the current version of mapping rule.
+     2. Before adding a plan into plan cache, check whether the recorded version is same as current version,
+        and not add into plan cache if not same.
+     THERE IS A FLAW of this solution. If step 4 accurs right in the gap between check version and add plan in plan cache,
+     a stale plan will be added into plan cache. Since the gap is quite small, we think the flaw is acceptable.
+  */
+  } else if (pc_ctx.sql_ctx_.res_map_rule_version_ != 0) {
+    int64_t latest_rule_version = G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_version(MTL_ID());
+    if (pc_ctx.sql_ctx_.res_map_rule_version_ != latest_rule_version) {
+      ret = OB_OLD_SCHEMA_VERSION;
+      SQL_PC_LOG(TRACE, "resource map rule version is outdated, not add to plan cache.", K(ret),
+                K(pc_ctx.sql_ctx_.res_map_rule_version_), K(latest_rule_version));
+    }
   }
-
   if (OB_FAIL(ret)) {//do nothing
   } else if (OB_FAIL(get_outline_param_index(pc_ctx.exec_ctx_, outline_param_idx))) {
     LOG_WARN("fail to judge concurrent limit sql", K(ret));
@@ -1976,6 +2053,22 @@ int ObPlanCacheValue::rm_space_for_neg_num(ParseNode *param_node, ObIAllocator &
     param_node->str_len_ = pos;
 
     LOG_DEBUG("rm space for neg num", K(idx), K(ObString(param_node->str_len_, param_node->str_value_)));
+  }
+  return ret;
+}
+
+int ObPlanCacheValue::check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; !contains && i < stored_schema_objs_.count(); i++) {
+    if (OB_ISNULL(stored_schema_objs_.at(i))) {
+      // do nothing
+    } else {
+      if ((stored_schema_objs_.at(i)->database_id_ == db_id) &&
+              (stored_schema_objs_.at(i)->table_name_ == tab_name)) {
+        contains = true;
+      }
+    }
   }
   return ret;
 }

@@ -173,6 +173,24 @@ public:
   }
 };
 
+class ObSwitchConsumerGroupRetryPolicy : public ObRetryPolicy
+{
+public:
+  ObSwitchConsumerGroupRetryPolicy() = default;
+  ~ObSwitchConsumerGroupRetryPolicy() = default;
+  virtual void test(ObRetryParam &v) const override
+  {
+    try_packet_retry(v);
+    if (RETRY_TYPE_LOCAL == v.retry_type_) {
+      LOG_WARN("set retry packet failed, retry at local",
+        K(v.ctx_.multi_stmt_item_.is_part_of_multi_stmt()),
+        K(v.ctx_.multi_stmt_item_.get_seq_num()));
+      v.session_.set_group_id_not_expected(true);
+      v.result_.get_exec_context().set_need_disconnect(false);
+    }
+  }
+};
+
 class ObBeforeRetryCheckPolicy : public ObRetryPolicy
 {
 public:
@@ -710,6 +728,12 @@ void ObQueryRetryCtrl::force_local_retry_proc(ObRetryParam &v)
   retry_obj.test(force_local_retry);
 }
 
+void ObQueryRetryCtrl::switch_consumer_group_retry_proc(ObRetryParam &v)
+{
+  ObRetryObject retry_obj(v);
+  ObSwitchConsumerGroupRetryPolicy switch_group_retry;
+  retry_obj.test(switch_group_retry);
+}
 
 /////// For inner SQL only ///////////////
 void ObQueryRetryCtrl::inner_try_lock_row_conflict_proc(ObRetryParam &v)
@@ -940,8 +964,9 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SQL",      OB_ERR_INSUFFICIENT_PX_WORKER,      px_thread_not_enough_proc,  short_wait_retry_proc);
   // create a new interval part when inserting a row which has no matched part,
   // wait and retry, will see new part
-  ERR_RETRY_FUNC("SQL",      OB_NO_PARTITION_FOR_INTERVAL_PART,  short_wait_retry_proc,      short_wait_retry_proc);
-  ERR_RETRY_FUNC("SQL",      OB_SQL_RETRY_SPM,                   force_local_retry_proc,     force_local_retry_proc);
+  ERR_RETRY_FUNC("SQL",      OB_NO_PARTITION_FOR_INTERVAL_PART,  short_wait_retry_proc,             short_wait_retry_proc);
+  ERR_RETRY_FUNC("SQL",      OB_SQL_RETRY_SPM,                   force_local_retry_proc,            force_local_retry_proc);
+  ERR_RETRY_FUNC("SQL",      OB_NEED_SWITCH_CONSUMER_GROUP,      switch_consumer_group_retry_proc,  empty_proc);
 
   /* ddl */
 

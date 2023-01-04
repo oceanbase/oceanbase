@@ -1941,6 +1941,8 @@ int ObSysVarOnCheckFuncs::check_update_resource_manager_plan(ObExecContext &ctx,
       // maybe NULL, do nothing
     } else if (OB_FAIL(val.get_string(plan))) {
       LOG_WARN("fail to get sql mode str", K(ret), K(val), K(sys_var));
+    } else if (0 == plan.length()) {
+      // do nothing.
     } else {
       // check if plan exists
       ObResourceManagerProxy proxy;

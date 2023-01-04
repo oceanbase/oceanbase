@@ -191,6 +191,7 @@ int ObPxTaskProcess::process()
             ? obmysql::REQUEST_SUCC : ret;
         session->get_cur_sql_id(audit_record.sql_id_, OB_MAX_SQL_ID_LENGTH + 1);
         audit_record.db_id_ = session->get_database_id();
+        audit_record.user_group_ = THIS_WORKER.get_group_id();
         audit_record.execution_id_ = GCTX.sql_engine_->get_execution_id();
         audit_record.client_addr_ = session->get_client_addr();
         audit_record.user_client_addr_ = session->get_user_client_addr();

@@ -324,6 +324,7 @@ ob_set_subtarget(ob_share resource_manager
   resource_manager/ob_resource_manager.cpp
   resource_manager/ob_resource_manager_proxy.cpp
   resource_manager/ob_resource_mapping_rule_manager.cpp
+  resource_manager/ob_resource_col_mapping_rule_manager.cpp
   resource_manager/ob_resource_plan_info.cpp
   resource_manager/ob_resource_plan_manager.cpp
 )

@@ -25,6 +25,7 @@ namespace common
 class ObMySQLTransaction;
 class ObString;
 class ObObj;
+class ObMySQLProxy;
 }
 namespace share
 {
@@ -93,10 +94,29 @@ public:
     uint64_t tenant_id,
     const common::ObString &attribute,
     const common::ObString &value,
+    const common::ObString &consumer_group,
+    const sql::ObSQLSessionInfo &session);
+  int replace_user_mapping_rule(
+    common::ObMySQLTransaction &trans,
+    uint64_t tenant_id,
+    const common::ObString &attribute,
+    const common::ObString &value,
     const common::ObString &consumer_group);
+  int replace_column_mapping_rule(
+    common::ObMySQLTransaction &trans,
+    uint64_t tenant_id,
+    const common::ObString &attribute,
+    const common::ObString &value,
+    const common::ObString &consumer_group,
+    const sql::ObSQLSessionInfo &session);
+  int update_resource_mapping_version(common::ObMySQLTransaction &trans, uint64_t tenant_id);
   int get_all_resource_mapping_rules(
       uint64_t tenant_id,
       common::ObIArray<ObResourceMappingRule> &rules);
+  int get_all_resource_mapping_rules_for_plan(
+      uint64_t tenant_id,
+      const common::ObString &plan,
+      common::ObIArray<ObResourceIdNameMappingRule> &rules);
   int get_all_resource_mapping_rules_by_user(
       uint64_t tenant_id,
       const common::ObString &plan,
@@ -105,6 +125,33 @@ public:
       uint64_t tenant_id,
       const common::ObString &plan,
       bool &exist);
+  int get_resource_mapping_version(uint64_t tenant_id, int64_t &current_version);
+  int get_all_resource_mapping_rules_by_column(
+      uint64_t tenant_id,
+      const common::ObString &plan,
+      common::ObIArray<ObResourceColumnMappingRule> &rules);
+  int get_next_element(
+      const common::ObString &value,
+      int64_t &pos,
+      char wrapper,
+      common::ObString end_chars,
+      common::ObString &element,
+      bool &is_wrapped);
+  void upper_db_table_name(
+      const bool need_modify_case,
+      const bool is_oracle_mode,
+      const common::ObNameCaseMode case_mode,
+      const bool is_wrapped,
+      common::ObString& name);
+  int parse_column_mapping_rule(
+      common::ObString &value,
+      const sql::ObSQLSessionInfo *session,
+      common::ObString &db_name,
+      common::ObString &table_name,
+      common::ObString &column_name,
+      common::ObString &literal_value,
+      common::ObString &user_name,
+      const common::ObNameCaseMode case_mode);
 private:
   int allocate_consumer_group_id(
       common::ObMySQLTransaction &trans,
@@ -127,12 +174,34 @@ private:
       const common::ObString &group,
       bool &exist);
   int check_if_user_exist(
-      common::ObMySQLTransaction &trans,
       uint64_t tenant_id,
       const common::ObString &user_name,
       bool &exist);
+  int check_if_column_exist(
+      uint64_t tenant_id,
+      const common::ObString &db_name,
+      const common::ObString &table_name,
+      const common::ObString &column_name);
+  int formalize_column_mapping_value(
+      const common::ObString &db_name,
+      const common::ObString &table_name,
+      const common::ObString &column_name,
+      const common::ObString &literal_value,
+      const common::ObString &user_name,
+      bool is_oracle_mode,
+      ObIAllocator &allocator,
+      common::ObString &formalized_value);
+  int check_if_column_and_user_exist(
+      common::ObMySQLTransaction &trans,
+      uint64_t tenant_id,
+      common::ObString &value,
+      const sql::ObSQLSessionInfo &session,
+      ObIAllocator &allocator,
+      bool &exist,
+      common::ObString &formalized_value);
   // helper func, 便于集中获取百分比的值，数值范围为 [0, 100]
   int get_percentage(const char *name, const common::ObObj &obj, int64_t &v);
+
 public:
   class TransGuard {
   public:

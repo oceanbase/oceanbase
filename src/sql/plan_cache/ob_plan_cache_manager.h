@@ -104,6 +104,7 @@ public:
   int flush_ps_cache(const uint64_t tenant_id);
   int flush_lib_cache(const uint64_t tenant_id);
   int flush_lib_cache_by_ns(const uint64_t tenant_id, const ObLibCacheNameSpace ns);
+  int evict_plan_by_table_name(uint64_t tenant_id, uint64_t database_id, common::ObString tab_name);
 
 
   PlanCacheMap &get_plan_cache_map() {return pcm_;}

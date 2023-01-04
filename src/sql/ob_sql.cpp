@@ -77,6 +77,8 @@
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/udr/ob_udr_analyzer.h"
 #include "common/ob_smart_call.h"
+#include "share/resource_manager/ob_resource_manager.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase
 {
@@ -2081,6 +2083,21 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     resolver_ctx.statement_id_ = context.statement_id_;
     resolver_ctx.param_list_ = &plan_ctx->get_param_store();
     resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
+    // disable sql resouce management in:
+    // 1. remote query
+    // 2. inner sql
+    // 3. prepare in ps
+    // 4. multi stmt
+    if (NULL != GCTX.cgroup_ctrl_ && GCTX.cgroup_ctrl_->is_valid()
+        && context.enable_sql_resource_manage_
+        && !context.is_remote_sql_
+        && !result.get_session().is_inner()
+        && !(context.is_prepare_protocol_ && context.is_prepare_stage_)
+        && !(context.multi_stmt_item_.is_part_of_multi_stmt() && context.multi_stmt_item_.get_seq_num() > 0)) {
+      resolver_ctx.enable_res_map_ = true;
+      context.res_map_rule_version_ = G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_version(
+        result.get_session().get_effective_tenant_id());
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -2145,10 +2162,20 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       context.all_pre_calc_constraints_ = &(resolver_ctx.query_ctx_->all_pre_calc_constraints_);
       context.all_expr_constraints_ = &(resolver_ctx.query_ctx_->all_expr_constraints_);
       context.cur_stmt_ = stmt;
-
+      context.res_map_rule_id_ = resolver_ctx.query_ctx_->res_map_rule_id_;
+      context.res_map_rule_param_idx_ = resolver_ctx.query_ctx_->res_map_rule_param_idx_;
       LOG_DEBUG("got plan const param constraints", K(resolver_ctx.query_ctx_->all_plan_const_param_constraints_));
       LOG_DEBUG("got all const param constraints", K(resolver_ctx.query_ctx_->all_possible_const_param_constraints_));
-
+      LOG_TRACE("set sql context rule id", K(ret), K(context.res_map_rule_id_), K(context.res_map_rule_param_idx_),
+                K(&context), K(&resolver_ctx), K(context.is_prepare_stage_), K(context.is_prepare_protocol_),
+                K(NULL != GCTX.cgroup_ctrl_ && GCTX.cgroup_ctrl_->is_valid()),
+                K(result.get_session().is_inner()),
+                K(context.multi_stmt_item_.is_part_of_multi_stmt()),
+                K(context.multi_stmt_item_.get_seq_num()));
+      if (result.get_session().get_group_id_not_expected()) {
+        LOG_USER_WARN(OB_NEED_SWITCH_CONSUMER_GROUP);
+        result.get_session().set_group_id_not_expected(false);
+      }
       NG_TRACE(resolve_end);
       //add ref obj schema version to PL and ps info
       if (OB_SUCC(ret)) {
@@ -2991,7 +3018,8 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
         || OB_REACH_MAX_CONCURRENT_NUM == ret
         || OB_ARRAY_BINDING_ROLLBACK == ret
         || OB_ERR_PROXY_REROUTE == ret
-        || OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
+        || OB_BATCHED_MULTI_STMT_ROLLBACK == ret
+        || OB_NEED_SWITCH_CONSUMER_GROUP == ret) {
       /*do nothing*/
     } else if (!pc_ctx.is_ps_mode_
                && OB_PC_LOCK_CONFLICT == ret
@@ -3054,7 +3082,8 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
     }
   }
   FLT_SET_TAG(hit_plan, pc_ctx.sql_ctx_.plan_cache_hit_);
-  if (OB_ERR_PROXY_REROUTE == ret || OB_REACH_MAX_CONCURRENT_NUM == ret) {
+  if (OB_ERR_PROXY_REROUTE == ret || OB_REACH_MAX_CONCURRENT_NUM == ret
+      || OB_NEED_SWITCH_CONSUMER_GROUP == ret) {
     // 如果sql需要二次路由，不应该断连接
     need_disconnect = false;
   }

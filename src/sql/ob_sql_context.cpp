@@ -233,6 +233,10 @@ ObSqlCtx::ObSqlCtx()
     is_protocol_weak_read_(false),
     flashback_query_expr_(nullptr),
     is_execute_call_stmt_(false),
+    enable_sql_resource_manage_(false),
+    res_map_rule_id_(OB_INVALID_ID),
+    res_map_rule_param_idx_(OB_INVALID_INDEX),
+    res_map_rule_version_(0),
     is_text_ps_mode_(false),
     reroute_info_(nullptr)
 {
@@ -269,6 +273,10 @@ void ObSqlCtx::reset()
   is_ddl_from_primary_ = false;
   can_reroute_sql_ = false;
   is_sensitive_ = false;
+  enable_sql_resource_manage_ = false;
+  res_map_rule_id_ = OB_INVALID_ID;
+  res_map_rule_param_idx_ = OB_INVALID_INDEX;
+  res_map_rule_version_ = 0;
   is_protocol_weak_read_ = false;
   if (nullptr != reroute_info_) {
     reroute_info_->reset();
