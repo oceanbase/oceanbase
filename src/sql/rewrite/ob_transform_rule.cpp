@@ -169,9 +169,15 @@ int ObTransformRule::accept_transform(
   if (OB_SUCC(ret)) {
     if (trans_stmt_cost < stmt_cost_ * COST_BASE_TRANSFORM_THRESHOLD) {
       LOG_TRACE("accept transform because the cost is decreased", K_(stmt_cost), K(trans_stmt_cost));
-      stmt = trans_stmt;
-      stmt_cost_ = trans_stmt_cost;
-      trans_happened = true;
+      ObDMLStmt *reset_temp1 = NULL;
+      ObDMLStmt *reset_temp2 = NULL;
+      if (OB_FAIL(ObTransformRule::adjust_transformed_stmt(parent_stmts, trans_stmt, reset_temp1, reset_temp2))) {
+        LOG_WARN("failed to adjust transformed stmt", K(ret));
+      } else {
+        stmt = trans_stmt;
+        stmt_cost_ = trans_stmt_cost;
+        trans_happened = true;
+      }
     } else {
       LOG_TRACE("reject transform because the cost is increased", K_(stmt_cost), K(trans_stmt_cost));
     }
@@ -204,15 +210,21 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt>& parent_stm
     ObOptimizerPartitionLocationCache optimizer_location_cache(*ctx_->allocator_, ctx_->partition_location_cache_);
     ObDMLStmt* optimizer_stmt = NULL;
     ObDMLStmt* temp_stmt = NULL;
+    ObDMLStmt* orig_stmt = NULL;
+    ObDMLStmt* reset_temp1 = NULL;
+    ObDMLStmt* reset_temp2 = NULL;
     lib::MemoryContext mem_context = nullptr;
     lib::ContextParam param;
     param.set_mem_attr(session_info->get_effective_tenant_id(), "CostBasedRewrit", ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-    if (OB_FAIL(ObTransformRule::adjust_transformed_stmt(parent_stmts, stmt, optimizer_stmt))) {
+    if (OB_FAIL(ObTransformRule::adjust_transformed_stmt(parent_stmts, stmt, orig_stmt, optimizer_stmt))) {
       LOG_WARN("failed to adjust transformed stmt", K(ret));
     } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*stmt_factory, *expr_factory, optimizer_stmt, temp_stmt))) {
       LOG_WARN("failed to deep copy stmt", K(ret));
+    } else if (NULL != orig_stmt && stmt != orig_stmt  // reset stmt
+               && OB_FAIL(adjust_transformed_stmt(parent_stmts, orig_stmt, reset_temp1, reset_temp2))) {
+      LOG_WARN("failed to adjust transformed stmt", K(ret));
     } else if (OB_FAIL(temp_stmt->formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     } else if (OB_FAIL(temp_stmt->formalize_stmt_expr_reference())) {
@@ -275,26 +287,35 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt>& parent_stm
   return ret;
 }
 
+// replace orgin_stmt by stmt, get root_stmt
 int ObTransformRule::adjust_transformed_stmt(
-    ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt* stmt, ObDMLStmt*& transformed_stmt)
+    ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt* stmt, ObDMLStmt*& orgin_stmt, ObDMLStmt*& root_stmt)
 {
   int ret = OB_SUCCESS;
-  transformed_stmt = NULL;
+  root_stmt = NULL;
+  orgin_stmt = NULL;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null stmt", K(ret));
   } else if (0 == parent_stmts.count()) {
-    transformed_stmt = stmt;
+    root_stmt = stmt;
   } else {
     ObParentDMLStmt& parent = parent_stmts.at(parent_stmts.count() - 1);
-    ObDMLStmt* parent_stmt = parent.stmt_;
-    if (OB_ISNULL(parent_stmt)) {
+    ObSEArray<ObSelectStmt*, 4> child_stmts;
+    ObDMLStmt* parent_stmt = NULL;
+    if (OB_ISNULL(parent_stmt = parent.stmt_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null stmt", K(ret));
-    } else if (OB_FAIL(parent_stmt->set_child_stmt(parent.pos_, static_cast<ObSelectStmt*>(stmt)))) {
+    } else if (OB_FAIL(parent_stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    } else if (OB_UNLIKELY(child_stmts.count() <= parent.pos_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected pos", K(ret), K(child_stmts.count()), K(parent.pos_));
+    } else if (OB_FAIL(parent_stmt->set_child_stmt(parent.pos_, static_cast<ObSelectStmt *>(stmt)))) {
       LOG_WARN("failed to set child stmt", K(ret));
     } else {
-      transformed_stmt = parent_stmts.at(0).stmt_;
+      orgin_stmt = child_stmts.at(parent.pos_);
+      root_stmt = parent_stmts.at(0).stmt_;
     }
   }
   return ret;

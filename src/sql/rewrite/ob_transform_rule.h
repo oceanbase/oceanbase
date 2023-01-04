@@ -215,7 +215,7 @@ private:
   int transform_children(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, const int64_t current_level, ObDMLStmt*& stmt);
   int adjust_transformed_stmt(
-      common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt* stmt, ObDMLStmt*& transformed_stmt);
+      common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt* stmt, ObDMLStmt*& orgin_stmt, ObDMLStmt*& root_stmt);
 
   int evaluate_cost(common::ObIArray<ObParentDMLStmt>& parent_stms, ObDMLStmt*& stmt, double& plan_cost);
 

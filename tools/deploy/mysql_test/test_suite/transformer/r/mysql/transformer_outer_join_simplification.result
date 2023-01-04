@@ -35683,9 +35683,9 @@ Query Plan
 |2 |  TABLE SCAN           |t1  |6        |37  |
 |3 |  MATERIAL             |    |18       |142 |
 |4 |   NESTED-LOOP JOIN    |    |18       |102 |
-|5 |    TABLE SCAN         |t4  |6        |37  |
+|5 |    TABLE SCAN         |t3  |6        |37  |
 |6 |    MATERIAL           |    |6        |44  |
-|7 |     TABLE SCAN        |t3  |6        |37  |
+|7 |     TABLE SCAN        |t4  |6        |37  |
 |8 | MATERIAL              |    |6        |44  |
 |9 |  TABLE SCAN           |t2  |6        |37  |
 ================================================
@@ -35701,11 +35701,11 @@ Outputs & filters:
   3 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil)
   4 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       conds([t4.c1 != t3.c1]), nl_params_(nil)
-  5 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
-      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-  6 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil)
-  7 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
+  5 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil),
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
+  6 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil)
+  7 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil),
+      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
   8 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil)
   9 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
@@ -35769,9 +35769,9 @@ Query Plan
 |4 |    TABLE SCAN           |t1   |6        |37  |
 |5 |    MATERIAL             |     |18       |142 |
 |6 |     NESTED-LOOP JOIN    |     |18       |102 |
-|7 |      TABLE SCAN         |t4   |6        |37  |
+|7 |      TABLE SCAN         |t3   |6        |37  |
 |8 |      MATERIAL           |     |6        |44  |
-|9 |       TABLE SCAN        |t3   |6        |37  |
+|9 |       TABLE SCAN        |t4   |6        |37  |
 |10|   MATERIAL              |     |6        |44  |
 |11|    TABLE SCAN           |t2   |6        |37  |
 ===================================================
@@ -35791,11 +35791,11 @@ Outputs & filters:
   5 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil)
   6 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       conds([t4.c1 != t3.c1]), nl_params_(nil)
-  7 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
-      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-  8 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil)
-  9 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
+  7 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil),
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
+  8 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil)
+  9 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil),
+      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
   10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil)
   11 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
@@ -35863,9 +35863,9 @@ Query Plan
 |6 |     TABLE SCAN           |t1  |6        |37  |
 |7 |     MATERIAL             |    |18       |101 |
 |8 |      NESTED-LOOP JOIN    |    |18       |94  |
-|9 |       TABLE SCAN         |t4  |6        |37  |
+|9 |       TABLE SCAN         |t3  |6        |37  |
 |10|       MATERIAL           |    |6        |38  |
-|11|        TABLE SCAN        |t3  |6        |37  |
+|11|        TABLE SCAN        |t4  |6        |37  |
 |12|    MATERIAL              |    |6        |38  |
 |13|     TABLE SCAN           |t2  |6        |37  |
 ===================================================
@@ -35888,11 +35888,11 @@ Outputs & filters:
   7 - output([t3.c1], [t4.c1]), filter(nil)
   8 - output([t3.c1], [t4.c1]), filter(nil), 
       conds([t4.c1 != t3.c1]), nl_params_(nil)
-  9 - output([t4.c1]), filter(nil), 
-      access([t4.c1]), partitions(p0)
-  10 - output([t3.c1]), filter(nil)
-  11 - output([t3.c1]), filter(nil), 
+  9 - output([t3.c1]), filter(nil),
       access([t3.c1]), partitions(p0)
+  10 - output([t4.c1]), filter(nil)
+  11 - output([t4.c1]), filter(nil),
+      access([t4.c1]), partitions(p0)
   12 - output([t2.c1]), filter(nil)
   13 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p0)
@@ -36007,9 +36007,9 @@ Query Plan
 |6 |     TABLE SCAN           |t1  |6        |37  |
 |7 |     MATERIAL             |    |18       |101 |
 |8 |      NESTED-LOOP JOIN    |    |18       |94  |
-|9 |       TABLE SCAN         |t4  |6        |37  |
+|9 |       TABLE SCAN         |t3  |6        |37  |
 |10|       MATERIAL           |    |6        |38  |
-|11|        TABLE SCAN        |t3  |6        |37  |
+|11|        TABLE SCAN        |t4  |6        |37  |
 |12|    MATERIAL              |    |6        |38  |
 |13|     TABLE SCAN           |t2  |6        |37  |
 ===================================================
@@ -36031,11 +36031,11 @@ Outputs & filters:
   7 - output([t3.c1], [t4.c1]), filter(nil)
   8 - output([t3.c1], [t4.c1]), filter(nil), 
       conds([t4.c1 != t3.c1]), nl_params_(nil)
-  9 - output([t4.c1]), filter(nil), 
-      access([t4.c1]), partitions(p0)
-  10 - output([t3.c1]), filter(nil)
-  11 - output([t3.c1]), filter(nil), 
+  9 - output([t3.c1]), filter(nil),
       access([t3.c1]), partitions(p0)
+  10 - output([t4.c1]), filter(nil)
+  11 - output([t4.c1]), filter(nil),
+      access([t4.c1]), partitions(p0)
   12 - output([t2.c1]), filter(nil)
   13 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p0)
@@ -39339,8 +39339,8 @@ Query Plan
 |1 | MERGE OUTER JOIN    |    |6        |122 |
 |2 |  TABLE SCAN         |t1  |6        |37  |
 |3 |  MERGE JOIN         |    |6        |80  |
-|4 |   TABLE SCAN        |t4  |6        |37  |
-|5 |   TABLE SCAN        |t3  |6        |37  |
+|4 |   TABLE SCAN        |t3  |6        |37  |
+|5 |   TABLE SCAN        |t4  |6        |37  |
 |6 | TABLE SCAN          |t2  |6        |37  |
 ==============================================
 
@@ -39354,10 +39354,10 @@ Outputs & filters:
       access([t1.c1], [t1.c2]), partitions(p0)
   3 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       equal_conds([t4.c1 = t3.c1]), other_conds(nil)
-  4 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
-      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-  5 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
+  4 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil),
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
+  5 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil),
+      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
   6 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
 
@@ -39415,8 +39415,8 @@ Query Plan
 |3 |   MERGE OUTER JOIN    |     |6        |122 |
 |4 |    TABLE SCAN         |t1   |6        |37  |
 |5 |    MERGE JOIN         |     |6        |80  |
-|6 |     TABLE SCAN        |t4   |6        |37  |
-|7 |     TABLE SCAN        |t3   |6        |37  |
+|6 |     TABLE SCAN        |t3   |6        |37  |
+|7 |     TABLE SCAN        |t4   |6        |37  |
 |8 |   TABLE SCAN          |t2   |6        |37  |
 =================================================
 
@@ -39434,10 +39434,10 @@ Outputs & filters:
       access([t1.c1], [t1.c2]), partitions(p0)
   5 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       equal_conds([t4.c1 = t3.c1]), other_conds(nil)
-  6 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
-      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-  7 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
+  6 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil),
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
+  7 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil),
+      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
   8 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
 
@@ -39499,8 +39499,8 @@ Query Plan
 |5 |    MERGE OUTER JOIN    |    |2        |115 |
 |6 |     TABLE SCAN         |t1  |4        |37  |
 |7 |     MERGE JOIN         |    |4        |77  |
-|8 |      TABLE SCAN        |t4  |5        |37  |
-|9 |      TABLE SCAN        |t3  |5        |37  |
+|8 |      TABLE SCAN        |t3  |5        |37  |
+|9 |      TABLE SCAN        |t4  |5        |37  |
 |10|    TABLE SCAN          |t2  |2        |37  |
 =================================================
 
@@ -39521,10 +39521,10 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
   7 - output([t3.c1], [t4.c1]), filter(nil), 
       equal_conds([t4.c1 = t3.c1]), other_conds(nil)
-  8 - output([t4.c1]), filter(nil), 
-      access([t4.c1]), partitions(p0)
-  9 - output([t3.c1]), filter(nil), 
+  8 - output([t3.c1]), filter(nil),
       access([t3.c1]), partitions(p0)
+  9 - output([t4.c1]), filter(nil),
+      access([t4.c1]), partitions(p0)
   10 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p0)
 
@@ -39633,8 +39633,8 @@ Query Plan
 |5 |    MERGE OUTER JOIN    |    |2        |115 |
 |6 |     TABLE SCAN         |t1  |4        |37  |
 |7 |     MERGE JOIN         |    |4        |77  |
-|8 |      TABLE SCAN        |t4  |5        |37  |
-|9 |      TABLE SCAN        |t3  |5        |37  |
+|8 |      TABLE SCAN        |t3  |5        |37  |
+|9 |      TABLE SCAN        |t4  |5        |37  |
 |10|    TABLE SCAN          |t2  |2        |37  |
 =================================================
 
@@ -39654,10 +39654,10 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
   7 - output([t3.c1], [t4.c1]), filter(nil), 
       equal_conds([t4.c1 = t3.c1]), other_conds(nil)
-  8 - output([t4.c1]), filter(nil), 
-      access([t4.c1]), partitions(p0)
-  9 - output([t3.c1]), filter(nil), 
+  8 - output([t3.c1]), filter(nil),
       access([t3.c1]), partitions(p0)
+  9 - output([t4.c1]), filter(nil),
+      access([t4.c1]), partitions(p0)
   10 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p0)
 
@@ -64685,9 +64685,9 @@ Query Plan
 |1 | TABLE SCAN                 |t1  |8        |38  |
 |2 | MATERIAL                   |    |1        |80  |
 |3 |  NESTED-LOOP JOIN CARTESIAN|    |1        |79  |
-|4 |   TABLE SCAN               |t3  |1        |39  |
+|4 |   TABLE SCAN               |t2  |1        |40  |
 |5 |   MATERIAL                 |    |1        |40  |
-|6 |    TABLE SCAN              |t2  |1        |40  |
+|6 |    TABLE SCAN              |t3  |1        |39  |
 =====================================================
 
 Outputs & filters: 
@@ -64699,11 +64699,11 @@ Outputs & filters:
   2 - output([t2.c2], [t3.c2]), filter(nil)
   3 - output([t2.c2], [t3.c2]), filter(nil), 
       conds(nil), nl_params_(nil)
-  4 - output([t3.c2]), filter([t3.c1 = 1]), 
-      access([t3.c1], [t3.c2]), partitions(p0)
-  5 - output([t2.c2]), filter(nil)
-  6 - output([t2.c2]), filter([t2.c1 = 1]), 
+  4 - output([t2.c2]), filter([t2.c1 = 1]),
       access([t2.c1], [t2.c2]), partitions(p0)
+  5 - output([t3.c2]), filter(nil)
+  6 - output([t3.c2]), filter([t3.c1 = 1]),
+      access([t3.c1], [t3.c2]), partitions(p0)
 
 select t1.c2, t2.c2, t3.c2 from t1 left join (t2 left join t3 on t2.c1 = t3.c1) on t1.c1 = 1 and t2.c1 = 1 and t3.c1 = 1;
 +------+------+------+
@@ -64771,9 +64771,9 @@ Query Plan
 |3 |   TABLE SCAN                 |t1   |8        |38  |
 |4 |   MATERIAL                   |     |1        |80  |
 |5 |    NESTED-LOOP JOIN CARTESIAN|     |1        |79  |
-|6 |     TABLE SCAN               |t3   |1        |39  |
+|6 |     TABLE SCAN               |t2   |1        |40  |
 |7 |     MATERIAL                 |     |1        |40  |
-|8 |      TABLE SCAN              |t2   |1        |40  |
+|8 |      TABLE SCAN              |t3   |1        |39  |
 ========================================================
 
 Outputs & filters: 
@@ -64789,11 +64789,11 @@ Outputs & filters:
   4 - output([t2.c2], [t3.c2]), filter(nil)
   5 - output([t2.c2], [t3.c2]), filter(nil), 
       conds(nil), nl_params_(nil)
-  6 - output([t3.c2]), filter([t3.c1 = 1]), 
-      access([t3.c1], [t3.c2]), partitions(p0)
-  7 - output([t2.c2]), filter(nil)
-  8 - output([t2.c2]), filter([t2.c1 = 1]), 
+  6 - output([t2.c2]), filter([t2.c1 = 1]),
       access([t2.c1], [t2.c2]), partitions(p0)
+  7 - output([t3.c2]), filter(nil)
+  8 - output([t3.c2]), filter([t3.c1 = 1]),
+      access([t3.c1], [t3.c2]), partitions(p0)
 
 insert into t14_temp (select t1.c2, t2.c2, t3.c2 from t1 left join (t2 left join t3 on t2.c1 = t3.c1) on t1.c1 = 1 and t2.c1 = 1 and t3.c1 = 1);
 
@@ -68043,10 +68043,10 @@ Query Plan
 |2 |  TABLE SCAN    |t1  |8        |38  |
 |3 | MERGE JOIN     |    |8        |151 |
 |4 |  MERGE JOIN    |    |8        |99  |
-|5 |   SORT         |    |8        |46  |
-|6 |    TABLE SCAN  |t3  |8        |38  |
-|7 |   SORT         |    |9        |47  |
-|8 |    TABLE SCAN  |t2  |9        |38  |
+|5 |   SORT         |    |9        |47  |
+|6 |    TABLE SCAN  |t2  |9        |38  |
+|7 |   SORT         |    |8        |46  |
+|8 |    TABLE SCAN  |t3  |8        |38  |
 |9 |  SORT          |    |8        |46  |
 |10|   TABLE SCAN   |t4  |8        |38  |
 =========================================
@@ -68062,12 +68062,12 @@ Outputs & filters:
       equal_conds([t3.c1 = t4.c1]), other_conds(nil)
   4 - output([t2.c1], [t2.c2], [t3.c1], [t3.c2]), filter(nil), 
       equal_conds([t2.c1 = t3.c1]), other_conds(nil)
-  5 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  6 - output([t3.c1], [t3.c2]), filter(nil), 
-      access([t3.c1], [t3.c2]), partitions(p0)
-  7 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
-  8 - output([t2.c1], [t2.c2]), filter(nil), 
+  5 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
+  6 - output([t2.c1], [t2.c2]), filter(nil),
       access([t2.c1], [t2.c2]), partitions(p0)
+  7 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
+  8 - output([t3.c1], [t3.c2]), filter(nil),
+      access([t3.c1], [t3.c2]), partitions(p0)
   9 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
   10 - output([t4.c1], [t4.c2]), filter(nil), 
       access([t4.c1], [t4.c2]), partitions(p0)
@@ -68143,10 +68143,10 @@ Query Plan
 |4 |    TABLE SCAN    |t1   |8        |38  |
 |5 |   MERGE JOIN     |     |8        |151 |
 |6 |    MERGE JOIN    |     |8        |99  |
-|7 |     SORT         |     |8        |46  |
-|8 |      TABLE SCAN  |t3   |8        |38  |
-|9 |     SORT         |     |9        |47  |
-|10|      TABLE SCAN  |t2   |9        |38  |
+|7 |     SORT         |     |9        |47  |
+|8 |      TABLE SCAN  |t2   |9        |38  |
+|9 |     SORT         |     |8        |46  |
+|10|      TABLE SCAN  |t3   |8        |38  |
 |11|    SORT          |     |8        |46  |
 |12|     TABLE SCAN   |t4   |8        |38  |
 ============================================
@@ -68166,12 +68166,12 @@ Outputs & filters:
       equal_conds([t3.c1 = t4.c1]), other_conds(nil)
   6 - output([t2.c1], [t2.c2], [t3.c1], [t3.c2]), filter(nil), 
       equal_conds([t2.c1 = t3.c1]), other_conds(nil)
-  7 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  8 - output([t3.c1], [t3.c2]), filter(nil), 
-      access([t3.c1], [t3.c2]), partitions(p0)
-  9 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
-  10 - output([t2.c1], [t2.c2]), filter(nil), 
+  7 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
+  8 - output([t2.c1], [t2.c2]), filter(nil),
       access([t2.c1], [t2.c2]), partitions(p0)
+  9 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
+  10 - output([t3.c1], [t3.c2]), filter(nil),
+      access([t3.c1], [t3.c2]), partitions(p0)
   11 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
   12 - output([t4.c1], [t4.c2]), filter(nil), 
       access([t4.c1], [t4.c2]), partitions(p0)
@@ -69998,9 +69998,9 @@ Query Plan
 |3 |   TABLE SCAN    |t1  |8        |38  |
 |4 |  MERGE JOIN     |    |8        |98  |
 |5 |   SORT          |    |8        |46  |
-|6 |    TABLE SCAN   |t4  |8        |38  |
+|6 |    TABLE SCAN   |t3  |8        |38  |
 |7 |   SORT          |    |8        |46  |
-|8 |    TABLE SCAN   |t3  |8        |38  |
+|8 |    TABLE SCAN   |t4  |8        |38  |
 |9 | SORT            |    |9        |47  |
 |10|  TABLE SCAN     |t2  |9        |38  |
 ==========================================
@@ -70016,12 +70016,12 @@ Outputs & filters:
       access([t1.c1], [t1.c2]), partitions(p0)
   4 - output([t3.c1], [t3.c2], [t4.c1], [t4.c2]), filter(nil), 
       equal_conds([t3.c1 = t4.c1]), other_conds(nil)
-  5 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
-  6 - output([t4.c1], [t4.c2]), filter(nil), 
-      access([t4.c1], [t4.c2]), partitions(p0)
-  7 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  8 - output([t3.c1], [t3.c2]), filter(nil), 
+  5 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
+  6 - output([t3.c1], [t3.c2]), filter(nil),
       access([t3.c1], [t3.c2]), partitions(p0)
+  7 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
+  8 - output([t4.c1], [t4.c2]), filter(nil),
+      access([t4.c1], [t4.c2]), partitions(p0)
   9 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
   10 - output([t2.c1], [t2.c2]), filter(nil), 
       access([t2.c1], [t2.c2]), partitions(p0)
@@ -70098,9 +70098,9 @@ Query Plan
 |5 |     TABLE SCAN    |t1   |8        |38  |
 |6 |    MERGE JOIN     |     |8        |98  |
 |7 |     SORT          |     |8        |46  |
-|8 |      TABLE SCAN   |t4   |8        |38  |
+|8 |      TABLE SCAN   |t3   |8        |38  |
 |9 |     SORT          |     |8        |46  |
-|10|      TABLE SCAN   |t3   |8        |38  |
+|10|      TABLE SCAN   |t4   |8        |38  |
 |11|   SORT            |     |9        |47  |
 |12|    TABLE SCAN     |t2   |9        |38  |
 =============================================
@@ -70120,12 +70120,12 @@ Outputs & filters:
       access([t1.c1], [t1.c2]), partitions(p0)
   6 - output([t3.c1], [t3.c2], [t4.c1], [t4.c2]), filter(nil), 
       equal_conds([t3.c1 = t4.c1]), other_conds(nil)
-  7 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
-  8 - output([t4.c1], [t4.c2]), filter(nil), 
-      access([t4.c1], [t4.c2]), partitions(p0)
-  9 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  10 - output([t3.c1], [t3.c2]), filter(nil), 
+  7 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
+  8 - output([t3.c1], [t3.c2]), filter(nil),
       access([t3.c1], [t3.c2]), partitions(p0)
+  9 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
+  10 - output([t4.c1], [t4.c2]), filter(nil),
+      access([t4.c1], [t4.c2]), partitions(p0)
   11 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
   12 - output([t2.c1], [t2.c2]), filter(nil), 
       access([t2.c1], [t2.c2]), partitions(p0)
@@ -71856,9 +71856,9 @@ Query Plan
 |5 |   MERGE JOIN                    |    |1        |120 |
 |6 |    MERGE JOIN                   |    |1        |80  |
 |7 |     SORT                        |    |1        |40  |
-|8 |      TABLE SCAN                 |t1  |1        |39  |
+|8 |      TABLE SCAN                 |t3  |1        |39  |
 |9 |     SORT                        |    |1        |40  |
-|10|      TABLE SCAN                 |t3  |1        |39  |
+|10|      TABLE SCAN                 |t1  |1        |39  |
 |11|    SORT                         |    |1        |40  |
 |12|     TABLE SCAN                  |t2  |1        |40  |
 ==========================================================
@@ -71878,12 +71878,12 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   6 - output([t1.c1], [t1.c2], [t3.c1], [t3.c2]), filter(nil), 
       equal_conds([t1.c1 = t3.c1]), other_conds(nil)
-  7 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
-  8 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1]), 
-      access([t1.c1], [t1.c2]), partitions(p0)
-  9 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  10 - output([t3.c1], [t3.c2]), filter([t3.c1 > 1]), 
+  7 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
+  8 - output([t3.c1], [t3.c2]), filter([t3.c1 > 1]),
       access([t3.c1], [t3.c2]), partitions(p0)
+  9 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
+  10 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1]),
+      access([t1.c1], [t1.c2]), partitions(p0)
   11 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
   12 - output([t2.c1], [t2.c2]), filter([t2.c1 > 1]), 
       access([t2.c1], [t2.c2]), partitions(p0)
@@ -71984,9 +71984,9 @@ Query Plan
 |7 |     MERGE JOIN                    |     |1        |120 |
 |8 |      MERGE JOIN                   |     |1        |80  |
 |9 |       SORT                        |     |1        |40  |
-|10|        TABLE SCAN                 |t1   |1        |39  |
+|10|        TABLE SCAN                 |t3   |1        |39  |
 |11|       SORT                        |     |1        |40  |
-|12|        TABLE SCAN                 |t3   |1        |39  |
+|12|        TABLE SCAN                 |t1   |1        |39  |
 |13|      SORT                         |     |1        |40  |
 |14|       TABLE SCAN                  |t2   |1        |40  |
 =============================================================
@@ -72010,12 +72010,12 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   8 - output([t1.c1], [t1.c2], [t3.c1], [t3.c2]), filter(nil), 
       equal_conds([t1.c1 = t3.c1]), other_conds(nil)
-  9 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
-  10 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1]), 
-      access([t1.c1], [t1.c2]), partitions(p0)
-  11 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  12 - output([t3.c1], [t3.c2]), filter([t3.c1 > 1]), 
+  9 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
+  10 - output([t3.c1], [t3.c2]), filter([t3.c1 > 1]),
       access([t3.c1], [t3.c2]), partitions(p0)
+  11 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
+  12 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1]),
+      access([t1.c1], [t1.c2]), partitions(p0)
   13 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
   14 - output([t2.c1], [t2.c2]), filter([t2.c1 > 1]), 
       access([t2.c1], [t2.c2]), partitions(p0)

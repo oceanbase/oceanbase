@@ -2777,28 +2777,28 @@ Outputs & filters:
 
 ***************   Case 110   ***************
 SQL: select * from (t1 left join t2 on t1.c1 = t2.c1) full join (t3 left join t4 on t4.c1 = t3.c1) on t1.c1 = t4.c1 where t2.c1 is NULL and t3.c1 is NULL and t4.c1 = 0; 
-=================================================
-|ID|OPERATOR                |NAME|EST. ROWS|COST|
--------------------------------------------------
-|0 |MERGE JOIN              |    |0        |179 |
-|1 | NESTED-LOOP OUTER JOIN |    |1        |126 |
-|2 |  NESTED-LOOP OUTER JOIN|    |1        |89  |
-|3 |   TABLE GET            |t4  |1        |53  |
-|4 |   TABLE GET            |t1  |1        |36  |
-|5 |  TABLE GET             |t2  |1        |36  |
-|6 | TABLE GET              |t3  |1        |53  |
-=================================================
+===========================================
+|ID|OPERATOR          |NAME|EST. ROWS|COST|
+-------------------------------------------
+|0 |MERGE JOIN        |    |100      |627 |
+|1 | MERGE OUTER JOIN |    |100      |448 |
+|2 |  TABLE SCAN      |t4  |100      |92  |
+|3 |  MERGE OUTER JOIN|    |100      |269 |
+|4 |   TABLE SCAN     |t1  |100      |90  |
+|5 |   TABLE SCAN     |t2  |100      |92  |
+|6 | TABLE SCAN       |t3  |100      |92  |
+===========================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3], [t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
-      equal_conds([t4.c1 = t3.c1]), other_conds([(T_OP_IS, t2.c1, NULL, 0)])
+  0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3], [t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), startup_filter([0]),
+      equal_conds([t4.c1 = t3.c1]), other_conds(nil)
   1 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
-      conds(nil), nl_params_([t1.c1])
-  2 - output([t1.c1], [t1.c2], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
-      conds(nil), nl_params_([t4.c1])
-  3 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
+      equal_conds([t1.c1 = t4.c1]), other_conds(nil)
+  2 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil),
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
+  3 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3]), filter(nil),
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   4 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0)
   5 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 

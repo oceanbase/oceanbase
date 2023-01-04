@@ -92,7 +92,6 @@ int ObTransformEliminateOuterJoin::recursive_eliminate_outer_join_in_table_item(
     bool& trans_happened)
 {
   int ret = OB_SUCCESS;
-  bool do_trans = false;
   bool is_stack_overflow = false;
   bool is_my_joined_table_type = false;
   JoinedTable* process_join = NULL;
@@ -113,9 +112,13 @@ int ObTransformEliminateOuterJoin::recursive_eliminate_outer_join_in_table_item(
     LOG_WARN("check joined table type failed", K(ret));
   } else if (is_my_joined_table_type) {
     process_join = static_cast<JoinedTable*>(cur_table_item);
+    bool is_happened = false;
     ret = do_eliminate_outer_join(
-        stmt, process_join, from_item_list, joined_table_list, conditions, should_move_to_from_list, do_trans);
+        stmt, process_join, from_item_list, joined_table_list, conditions, should_move_to_from_list, is_happened);
     if (OB_SUCC(ret)) {
+      trans_happened |= is_happened;
+      bool child_should_move_to_from_list =
+          is_happened && should_move_to_from_list && INNER_JOIN == process_join->joined_type_;
       TableItem* l_child = process_join->left_table_;
       TableItem* r_child = process_join->right_table_;
       ObSEArray<ObRawExpr*, 4> left_child_conditions;
@@ -129,7 +132,7 @@ int ObTransformEliminateOuterJoin::recursive_eliminate_outer_join_in_table_item(
                      from_item_list,
                      joined_table_list,
                      left_child_conditions,
-                     do_trans & should_move_to_from_list,
+                     child_should_move_to_from_list,
                      trans_happened)))) {
         LOG_WARN("failed to process the left child", K(ret), K(r_child));
       } else {
@@ -144,17 +147,12 @@ int ObTransformEliminateOuterJoin::recursive_eliminate_outer_join_in_table_item(
                        from_item_list,
                        joined_table_list,
                        right_child_conditions,
-                       do_trans & should_move_to_from_list,
+                       child_should_move_to_from_list,
                        trans_happened)))) {
           LOG_WARN("failed to process the right child", K(ret), K(r_child));
         } else {
           /*do nothing*/
         }
-      }
-      if (do_trans && should_move_to_from_list) {
-        trans_happened = true;
-      } else {
-        /*do nothing*/
       }
     } else {
       /*do nothing*/
@@ -233,6 +231,7 @@ int ObTransformEliminateOuterJoin::do_eliminate_outer_join(ObDMLStmt* stmt, Join
       if (OB_FAIL(can_be_eliminated(stmt, cur_joined_table, conditions, can_eliminate))) {
         LOG_WARN("failed to test eliminated left join condition", K(ret));
       } else if (can_eliminate) {
+        trans_happened = true;
         TableItem* temp = cur_joined_table->left_table_;
         cur_joined_table->left_table_ = cur_joined_table->right_table_;
         cur_joined_table->right_table_ = temp;
@@ -246,6 +245,7 @@ int ObTransformEliminateOuterJoin::do_eliminate_outer_join(ObDMLStmt* stmt, Join
         if (OB_FAIL(can_be_eliminated(stmt, cur_joined_table, conditions, can_eliminate))) {
           LOG_WARN("failed to test eliminated right join condition", K(ret));
         } else if (can_eliminate) {
+          trans_happened = true;
           if (cur_joined_table->joined_type_ == LEFT_OUTER_JOIN) {
             cur_joined_table->joined_type_ = INNER_JOIN;
           } else {
@@ -270,6 +270,7 @@ int ObTransformEliminateOuterJoin::do_eliminate_outer_join(ObDMLStmt* stmt, Join
       if (OB_FAIL(can_be_eliminated(stmt, cur_joined_table, conditions, can_eliminate))) {
         LOG_WARN("failed to test eliminated left join condition", K(ret));
       } else if (can_eliminate) {
+        trans_happened = true;
         cur_joined_table->joined_type_ = INNER_JOIN;
       } else {
         /*do nothing*/
@@ -394,7 +395,7 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_foreign_primary_join(
                  is_simple_condition))) {
     LOG_WARN("check is simple join condition failed", K(ret));
   } else if (!is_simple_condition) {
-    /*on condition不是简单的列相等连接，不能消除，do nothing*/
+    /* do nothing */
   } else if (OB_FAIL(stmt->get_table_rel_ids(*(joined_table->left_table_),left_table_ids))) {
     LOG_WARN("failed to get left table rel ids", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*(joined_table->right_table_), right_table_ids))) {

@@ -13708,7 +13708,7 @@ Query Plan
 ---------------------------------------------------------------------------------------------
 |0 |SCALAR GROUP BY                       |                  |1              |5285272607    |
 |1 | NESTED-LOOP JOIN CARTESIAN           |                  |1348           |5285272350    |
-|2 |  SUBPLAN SCAN                        |VIEW9             |1              |114861662     |
+|2 |  SUBPLAN SCAN                        |VIEW20            |1              |114861662     |
 |3 |   SCALAR GROUP BY                    |                  |1              |114861662     |
 |4 |    HASH JOIN                         |                  |98010000       |96140537      |
 |5 |     TABLE SCAN                       |SUBQUERY2_t2(idx3)|100000         |27937         |
@@ -13740,7 +13740,7 @@ Query Plan
 |31|            NESTED-LOOP ANTI JOIN     |                  |49253          |148523        |
 |32|             TABLE SCAN               |SUBQUERY1_t3      |100000         |66272         |
 |33|             MATERIAL                 |                  |2              |2             |
-|34|              SUBPLAN SCAN            |VIEW10            |2              |2             |
+|34|              SUBPLAN SCAN            |VIEW21            |2              |2             |
 |35|               MERGE UNION DISTINCT   |                  |2              |1             |
 |36|                EXPRESSION            |                  |1              |1             |
 |37|                EXPRESSION            |                  |1              |1             |
@@ -13818,12 +13818,12 @@ Outputs & filters:
   30 - output([1]), filter(nil), 
       conds([SUBQUERY1_t3.col_int_key = SUBQUERY1_t2.col_int_key OR ?], [lnnvl(cast(SUBQUERY1_t3.col_varchar = SUBQUERY1_t2.col_varchar_key, TINYINT(-1, 0)))]), nl_params_(nil)
   31 - output([SUBQUERY1_t3.col_int_key], [SUBQUERY1_t3.col_varchar]), filter(nil), 
-      conds([(T_OP_OR, cast(SUBQUERY1_t3.col_varchar_20_key, DECIMAL(-1, -1)) = VIEW10.5, (T_OP_IS, cast(SUBQUERY1_t3.col_varchar_20_key, DECIMAL(-1, -1)), NULL, 0), (T_OP_IS, VIEW10.5, NULL, 0))]), nl_params_(nil)
+      conds([(T_OP_OR, cast(SUBQUERY1_t3.col_varchar_20_key, DECIMAL(-1, -1)) = VIEW21.5, (T_OP_IS, cast(SUBQUERY1_t3.col_varchar_20_key, DECIMAL(-1, -1)), NULL, 0), (T_OP_IS, VIEW21.5, NULL, 0))]), nl_params_(nil)
   32 - output([SUBQUERY1_t3.col_int_key], [SUBQUERY1_t3.col_varchar], [SUBQUERY1_t3.col_varchar_20_key]), filter(nil), 
       access([SUBQUERY1_t3.col_int_key], [SUBQUERY1_t3.col_varchar], [SUBQUERY1_t3.col_varchar_20_key]), partitions(p0)
-  33 - output([VIEW10.5]), filter(nil)
-  34 - output([VIEW10.5]), filter(nil), 
-      access([VIEW10.5])
+  33 - output([VIEW21.5]), filter(nil)
+  34 - output([VIEW21.5]), filter(nil),
+      access([VIEW21.5])
   35 - output([cast(UNION([1]), DECIMAL(1, 0))]), filter(nil)
   36 - output([5]), filter(nil)
       values({5})
