@@ -550,7 +550,7 @@ int ObTransformFullOuterJoin::create_select_items_for_semi_join(ObDMLStmt* stmt,
       }
     } else { /*do nothing.*/
     }
-    if (OB_FAIL(output_select_items.push_back(select_item))) {
+    if (OB_SUCC(ret) && OB_FAIL(output_select_items.push_back(select_item))) {
       LOG_WARN("failed to push back to select items.", K(ret));
     } else { /*do nothing.*/
     }

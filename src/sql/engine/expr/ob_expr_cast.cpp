@@ -233,7 +233,9 @@ int ObExprCast::check_target_type_precision_valid(const ObExprResType& type, con
   if (ob_is_interval_tc(type.get_type()) && CM_IS_EXPLICIT_CAST(cast_mode)) {
     ObPrecision precision = type.get_precision();
     ObScale scale = type.get_scale();
-    if (!ObIntervalScaleUtil::scale_check(precision) || !ObIntervalScaleUtil::scale_check(scale)) {
+    // interval year to month has no precision
+    if (!ObIntervalScaleUtil::scale_check(scale) ||
+        (ObIntervalYMType != type.get_type() && !ObIntervalScaleUtil::scale_check(precision))) {
       ret = OB_ERR_DATETIME_INTERVAL_PRECISION_OUT_OF_RANGE;
       LOG_WARN("target interval type precision out of range", K(ret), K(type));
     }
@@ -449,6 +451,9 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2, ObExprResType& ds
       ret = OB_NOT_SUPPORTED;
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    } else if (ObIntervalYMType == obj_type) {
+      // interval year to month type has no precision
+      dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
     } else {
       dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
       dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);

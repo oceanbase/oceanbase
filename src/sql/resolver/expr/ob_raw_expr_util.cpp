@@ -4044,6 +4044,7 @@ int ObRawExprUtils::create_real_cast_expr(ObRawExprFactory& expr_factory, ObRawE
   int ret = OB_SUCCESS;
   ObConstRawExpr* dst_expr = NULL;
   ParseNode parse_node;
+  memset(&parse_node, 0, sizeof(ParseNode));
   ObObj val;
 
   if (OB_ISNULL(src_expr) || OB_ISNULL(session_info)) {
