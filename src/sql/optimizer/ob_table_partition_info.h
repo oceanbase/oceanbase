@@ -45,7 +45,7 @@ public:
       const common::ObIArray<ObRawExpr*>& filter_exprs, const uint64_t table_id, const uint64_t ref_table_id,
       // const uint64_t index_table_id,
       const ObPartHint* part_hint, const common::ObDataTypeCastParams& dtc_params, const bool is_dml_table,
-      common::ObIArray<ObRawExpr*>* sort_exprs = NULL);
+      common::ObIArray<ObRawExpr*>* sort_exprs = NULL, const ParamStore *params = NULL);
 
   int init_table_location_with_rowid(ObSqlSchemaGuard& schema_guard, const common::ObIArray<int64_t>& param_idx,
       const uint64_t table_id, const uint64_t ref_table_id, ObSQLSessionInfo& session_info, const bool is_dml_table);

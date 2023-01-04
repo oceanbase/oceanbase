@@ -483,7 +483,8 @@ public:
         use_calc_part_by_rowid_(false),
         is_valid_range_columns_part_range_(false),
         is_valid_range_columns_subpart_range_(false),
-        report_err_for_pruned_partition_not_exist_(false)
+        report_err_for_pruned_partition_not_exist_(false),
+        params_(NULL)
   {}
 
   // Used in situations where the optimizer does not adjust the destructor, to ensure that
@@ -557,7 +558,8 @@ public:
         use_calc_part_by_rowid_(false),
         is_valid_range_columns_part_range_(false),
         is_valid_range_columns_subpart_range_(false),
-        report_err_for_pruned_partition_not_exist_(false)
+        report_err_for_pruned_partition_not_exist_(false),
+        params_(NULL)
   {}
   virtual ~ObTableLocation()
   {
@@ -578,7 +580,7 @@ public:
   int init(SchemaGuardType& schema_guard, ObDMLStmt& stmt, ObSQLSessionInfo* session_info,
       const common::ObIArray<ObRawExpr*>& filter_exprs, const uint64_t table_id, const uint64_t ref_table_id,
       const ObPartHint* part_hint, const common::ObDataTypeCastParams& dtc_params, const bool is_dml_table,
-      common::ObIArray<ObRawExpr*>* sort_exprs = NULL)
+      common::ObIArray<ObRawExpr*>* sort_exprs = NULL, const ParamStore *params = NULL)
   {
     int ret = common::OB_SUCCESS;
     const share::schema::ObTableSchema* table_schema = NULL;
@@ -593,7 +595,8 @@ public:
                    part_hint,
                    dtc_params,
                    is_dml_table,
-                   sort_exprs))) {
+                   sort_exprs,
+                   params))) {
       SQL_OPT_LOG(WARN, "failed to init", K(ret), K(ref_table_id));
     }
     return ret;
@@ -601,7 +604,7 @@ public:
   int init(const share::schema::ObTableSchema* table_schema, ObDMLStmt& stmt, ObSQLSessionInfo* session_info,
       const common::ObIArray<ObRawExpr*>& filter_exprs, const uint64_t table_id, const uint64_t ref_table_id,
       const ObPartHint* part_hint, const common::ObDataTypeCastParams& dtc_params, const bool is_dml_table,
-      common::ObIArray<ObRawExpr*>* sort_exprs = NULL);
+      common::ObIArray<ObRawExpr*>* sort_exprs = NULL, const ParamStore *params = NULL);
 
   int get_is_weak_read(ObExecContext& exec_ctx, bool& is_weak_read) const;
 
@@ -1145,6 +1148,7 @@ private:
   bool is_valid_range_columns_subpart_range_;
 
   bool report_err_for_pruned_partition_not_exist_;
+  const ParamStore *params_;
 };
 
 }  // namespace sql

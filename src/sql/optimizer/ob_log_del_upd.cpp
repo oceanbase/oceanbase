@@ -773,7 +773,6 @@ int ObLogDelUpd::check_output_dep_specific(ObRawExprCheckDep& checker)
       for (int64_t k = 0; OB_SUCC(ret) && k < table_columns.index_dml_infos_.count(); ++k) {
         const IndexDMLInfo& index_dml_info = table_columns.index_dml_infos_.at(k);
         if (0 == k) {
-          // index dml info中的expr是主表的expr的指针拷贝，所以这里只用检查主表的expr
           const ObIArray<ObColumnRefRawExpr*>& columns = index_dml_info.column_exprs_;
           int64_t M = columns.count();
           for (int64_t j = 0; OB_SUCC(ret) && j < M; ++j) {
@@ -1055,7 +1054,9 @@ int ObLogDelUpd::calculate_table_location(uint64_t loc_table_id, uint64_t ref_ta
                    ref_table_id,
                    part_hint,
                    dtc_params,
-                   true))) {
+                   true,
+                   NULL,
+                   params))) {
       LOG_WARN("Failed to initialize table location", K(ret));
     } else if (OB_FAIL(table_partition_info.calc_phy_table_loc_and_select_leader(
                    *exec_ctx, schema_guard, *params, *location_cache, dtc_params, ref_table_id, UNORDERED))) {

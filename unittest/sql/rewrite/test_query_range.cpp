@@ -513,7 +513,7 @@ void ObQueryRangeTest::get_query_range(const char* sql_expr, const char*& json_e
   //_OB_LOG(WARN, "expr: %s", CSJ(expr));
   query_range.reset();
   OB_LOG(INFO, "get query range sql", K(final_sql));
-  OK(pre_query_range.preliminary_extract_query_range(range_columns, expr, dtc_params));
+  OK(pre_query_range.preliminary_extract_query_range(range_columns, expr, dtc_params, &params));
   char* ser_buf = NULL;
   int64_t ser_len = pre_query_range.get_serialize_size();
   int64_t pos = 0;
@@ -583,7 +583,7 @@ void ObQueryRangeTest::get_query_range_filter(
   OB_ASSERT(expr);
   query_range.reset();
   OB_LOG(INFO, "get query range sql", K(final_sql));
-  OK(query_range.preliminary_extract_query_range(range_columns, exprs, dtc_params));
+  OK(query_range.preliminary_extract_query_range(range_columns, exprs, dtc_params, &params));
   databuff_printf(buf, BUF_LEN, pos, "\n**rowkey num = %ld**  \n", cols_num);
   databuff_printf(buf, BUF_LEN, pos, "**filter count = %ld**\n", query_range.get_range_exprs().count());
 

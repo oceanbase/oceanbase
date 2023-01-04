@@ -961,6 +961,7 @@ ObTableLocation& ObTableLocation::operator=(const ObTableLocation& other)
     is_valid_range_columns_part_range_ = other.is_valid_range_columns_part_range_;
     is_valid_range_columns_subpart_range_ = other.is_valid_range_columns_subpart_range_;
     report_err_for_pruned_partition_not_exist_ = other.report_err_for_pruned_partition_not_exist_;
+    params_ = other.params_;
     for (int64_t i = 0; OB_SUCC(ret) && i < other.list_part_array_.count(); i++) {
       ObListPartMapValue value;
       value.part_id_ = other.list_part_array_.at(i).part_id_;
@@ -1188,6 +1189,7 @@ void ObTableLocation::reset()
   part_expr_param_idxs_.reset();
   is_valid_range_columns_part_range_ = false;
   is_valid_range_columns_subpart_range_ = false;
+  params_ = NULL;
 }
 
 int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_t table_id, uint64_t ref_table_id,
@@ -1385,7 +1387,7 @@ int ObTableLocation::init(const ObTableSchema* table_schema, ObDMLStmt& stmt, Ob
     const ObIArray<ObRawExpr*>& filter_exprs, const uint64_t table_id, const uint64_t ref_table_id,
     const ObPartHint* part_hint, const ObDataTypeCastParams& dtc_params,
     const bool is_dml_table, /*whether the ref_table is modified*/
-    common::ObIArray<ObRawExpr*>* sort_exprs)
+    common::ObIArray<ObRawExpr*>* sort_exprs, const ParamStore *params)
 {
   int ret = OB_SUCCESS;
   table_id_ = table_id;
@@ -1397,6 +1399,7 @@ int ObTableLocation::init(const ObTableSchema* table_schema, ObDMLStmt& stmt, Ob
   is_contain_select_for_update_ = stmt.get_query_ctx()->is_contain_select_for_update_;
   is_contain_mv_ = stmt.get_query_ctx()->is_contain_mv_;
   is_partitioned_ = true;
+  params_ = params;
   // direction_ = direction;
   if (stmt.is_insert_stmt()) {
     report_err_for_pruned_partition_not_exist_ = true;
@@ -2700,7 +2703,7 @@ int ObTableLocation::get_query_range_node(const ColumnIArray& partition_columns,
     LOG_ERROR("Allocate memory failed", K(ret));
   } else {
     ObPLQueryRangeNode* node = static_cast<ObPLQueryRangeNode*>(calc_node);
-    if (OB_FAIL(node->pre_query_range_.preliminary_extract_query_range(partition_columns, filter_exprs, dtc_params))) {
+    if (OB_FAIL(node->pre_query_range_.preliminary_extract_query_range(partition_columns, filter_exprs, dtc_params, params_))) {
       LOG_WARN("Failed to pre extract query range", K(ret));
     } else if (node->pre_query_range_.is_precise_whole_range()) {
       // pre query range is whole range, indicate that there are no partition condition in filters,
@@ -4119,9 +4122,9 @@ int ObTableLocation::calc_partition_ids_by_rowkey(ObExecContext& exec_ctx, ObPar
         LOG_WARN("calc sub partition id by row failed", K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !use_calc_part_by_rowid_) {
       int64_t part_idx = exec_ctx.get_part_row_manager().get_part_idx();
-      if (OB_UNLIKELY(part_idx < rowkey_lists.count())) {
+      if (OB_UNLIKELY(part_idx >= 0 && part_idx < rowkey_lists.count())) {
         if (OB_FAIL(rowkey_lists.at(part_idx).push_back(i))) {
           LOG_WARN("store rowkey to rowkey_lists failed", K(ret));
         }
@@ -5689,6 +5692,23 @@ int ObTableLocation::calculate_partition_ids_with_rowid(ObExecContext& exec_ctx,
       }
     } else if (OB_FAIL(calc_partition_ids_by_rowkey(exec_ctx, &schema_guard, rowkey_arr, part_ids, rowkey_list))) {
       LOG_WARN("failed to calc partition ids", K(ret));
+    } else if (part_ids.empty()) {
+      int64_t fake_id = first_partition_id_;
+      if (part_hint_ids_.count() > 0) {
+        fake_id = part_hint_ids_.at(0);
+      }
+      if (is_partitioned_ && is_virtual_table(ref_table_id_)) {
+        if (OB_FAIL(get_vt_partition_id(exec_ctx, ref_table_id_, NULL, &fake_id))) {
+          LOG_WARN("Get virtual table fake id error", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(part_ids.push_back(fake_id))) {
+          LOG_WARN("Add fake partition id error", K(ret));
+        } else {
+          LOG_TRACE("get all partition ids", K(part_ids));
+        }
+      }
     } else {
       LOG_TRACE("get all partition ids", K(part_ids));
     }

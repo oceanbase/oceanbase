@@ -1034,13 +1034,15 @@ int ObQueryRange::get_row_key_part(const ObRawExpr* l_expr, const ObRawExpr* r_e
     for (int i = 0; OB_SUCC(ret) && !b_flag && i < num; ++i) {
       res_type.set_calc_meta(result_type.get_row_calc_cmp_types().at(i));
       tmp_key_part = NULL;
-      if (OB_FAIL(get_basic_query_range(l_row->get_param_expr(i),
-              r_row->get_param_expr(i),
-              NULL,
-              i < num - 1 ? c_type : cmp_type,
-              res_type,
-              tmp_key_part,
-              dtc_params))) {
+      if (OB_FAIL(check_null_param_compare_in_row(l_row->get_param_expr(i), r_row->get_param_expr(i), tmp_key_part))) {
+        LOG_WARN("failed to check null param compare in row", K(ret));
+      } else if (tmp_key_part == NULL && OB_FAIL(get_basic_query_range(l_row->get_param_expr(i),
+                                             r_row->get_param_expr(i),
+                                             NULL,
+                                             i < num - 1 ? c_type : cmp_type,
+                                             res_type,
+                                             tmp_key_part,
+                                             dtc_params))) {
         LOG_WARN("Get basic query key part failed", K(ret), K(*l_row), K(*r_row), K(c_type));
       } else if (T_OP_ROW == l_row->get_param_expr(i)->get_expr_type() ||
                  T_OP_ROW == r_row->get_param_expr(i)->get_expr_type()) {
@@ -1826,6 +1828,38 @@ int ObQueryRange::preliminary_extract(
       query_range_ctx_->cur_expr_is_precise_ = false;
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     }
+  }
+  return ret;
+}
+
+int ObQueryRange::check_null_param_compare_in_row(
+    const ObRawExpr *l_expr, const ObRawExpr *r_expr, ObKeyPart *&out_key_part)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) || OB_ISNULL(query_range_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), KP(l_expr), KP(r_expr), KP(query_range_ctx_));
+  } else if ((l_expr->has_flag(IS_COLUMN) && (r_expr->is_const_expr() || r_expr->has_flag(IS_PARAM))) ||
+             ((l_expr->is_const_expr() || l_expr->has_flag(IS_PARAM)) && r_expr->has_flag(IS_COLUMN))) {
+    const ObRawExpr *const_expr = l_expr->has_flag(IS_COLUMN) ? r_expr : l_expr;
+    if (const_expr->has_flag(CNT_EXEC_PARAM)) {
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else {
+      ObObj const_val = static_cast<const ObConstRawExpr *>(const_expr)->get_value();
+      if (const_val.is_unknown()) {
+        if (NULL == query_range_ctx_->params_) {
+          GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        } else if (OB_FAIL(get_param_value(const_val, *query_range_ctx_->params_))) {
+          LOG_WARN("failed to get param value", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (const_val.is_null()) {
+          GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        }
+      }
+    }
+  } else { /*do nothing*/
   }
   return ret;
 }

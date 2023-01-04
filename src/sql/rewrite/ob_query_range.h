@@ -454,6 +454,8 @@ private:
   int refine_large_range_graph(ObKeyPart *&key_part);
   int compute_range_size(const ObIArray<ObKeyPart*> &key_parts, const ObIArray<uint64_t> &or_count,
       ObIArray<ObKeyPart*> &next_key_parts, ObIArray<uint64_t> &next_or_count, uint64_t &range_size);
+  int check_null_param_compare_in_row(const ObRawExpr *l_expr, const ObRawExpr *r_expr,
+      ObKeyPart *&out_key_part);
 private:
   static const int64_t COMMON_KEY_PART_NUM = 256;
   static const int64_t RANGE_BUCKET_SIZE = 1000;

@@ -665,7 +665,9 @@ int ObLogInsert::calculate_table_location()
                    get_index_tid(),
                    part_hint_,
                    dtc_params,
-                   true))) {
+                   true,
+                   NULL,
+                   params))) {
       LOG_WARN("Failed to initialize table location", K(ret));
     } else if (OB_FAIL(table_partition_info_.calc_phy_table_loc_and_select_leader(
                    *exec_ctx, schema_guard, *params, *location_cache, dtc_params, get_index_tid(), direction))) {

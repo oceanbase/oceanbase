@@ -446,7 +446,7 @@ int ObIndexSkylineDim::add_index_back_dim(const bool is_index_back, const bool h
     dim->set_interesting_order(has_interest_order);
     dim->set_extract_range(can_extract_range);
     dim->set_index_column_cnt(index_column_cnt);
-    if (!has_interest_order && !can_extract_range) {
+    if (!has_interest_order && !can_extract_range && is_index_back) {
       if (OB_FAIL(dim->add_filter_column_ids(filter_column_ids))) {
         LOG_WARN("failed to add restrcit_ids", K(ret));
       }

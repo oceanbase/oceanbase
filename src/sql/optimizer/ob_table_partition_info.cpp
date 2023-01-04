@@ -52,7 +52,7 @@ int ObTablePartitionInfo::init_table_location(ObSqlSchemaGuard& schema_guard, Ob
     const uint64_t ref_table_id,
     // const uint64_t index_table_id,
     const ObPartHint* part_hint_, const common::ObDataTypeCastParams& dtc_params, bool is_dml_table,
-    ObIArray<ObRawExpr*>* sort_exprs)
+    ObIArray<ObRawExpr*>* sort_exprs, const ParamStore *params)
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret)) {
@@ -65,7 +65,8 @@ int ObTablePartitionInfo::init_table_location(ObSqlSchemaGuard& schema_guard, Ob
             part_hint_,
             dtc_params,
             is_dml_table,
-            sort_exprs))) {
+            sort_exprs,
+            params))) {
       LOG_WARN("fail to init table location", K(ret));
     }
   }

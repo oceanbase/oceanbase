@@ -243,7 +243,9 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id, const uint64_t 
                    ref_table_id,
                    part_hint,
                    dtc_params,
-                   is_dml_table))) {
+                   is_dml_table,
+                   NULL,
+                   params))) {
       LOG_WARN("Failed to initialize table location", K(ret));
     } else if (has_array_binding_param(*params)) {
       ObSEArray<int64_t, 16> partition_ids;

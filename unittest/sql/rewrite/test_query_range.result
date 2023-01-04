@@ -1695,7 +1695,7 @@ count of rang columns = 1
 [{"range":"table_id:3003,(MAX;MIN)"}]
 
 [149] f like ?[h%] AND f like ?[aaa]
-query range need to deep copy
+query range not need to deep copy
 is not min_to_max_range
 ranges.count() = 1
 get_methods.count() = 1
@@ -1728,7 +1728,7 @@ count of rang columns = 1
 [{"range":"table_id:3003,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
 
 [152] f > ?[a] AND f like ?[h%]
-query range need to deep copy
+query range not need to deep copy
 is not min_to_max_range
 ranges.count() = 1
 get_methods.count() = 1

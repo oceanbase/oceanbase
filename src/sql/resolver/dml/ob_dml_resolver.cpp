@@ -10181,7 +10181,7 @@ int ObDMLResolver::process_part_str(ObIAllocator& calc_buf, const ObString& part
   int32_t part_len = part_str.length();
   int64_t buf_len = part_len + part_len / 10 * 2;
   int32_t real_len = 0;
-  int64_t offset = 0;
+  uint64_t offset = 0;
   if (OB_ISNULL(buf = static_cast<char*>(calc_buf.alloc(buf_len))) ||
       OB_ISNULL(tmp_buf = static_cast<char*>(calc_buf.alloc(part_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -10194,10 +10194,14 @@ int ObDMLResolver::process_part_str(ObIAllocator& calc_buf, const ObString& part
       if (i < part_len && ISSPACE(part_ptr[i])) {
         /*do nothing*/
       } else if (part_ptr[i] == ',' || i == part_len) {
-        if (0 == STRNCASECMP(tmp_buf, "SYSTIMESTAMP", 12) || 0 == STRNCASECMP(tmp_buf, "CURRENT_DATE", 12) ||
-            0 == STRNCASECMP(tmp_buf, "LOCALTIMESTAMP", 14) || 0 == STRNCASECMP(tmp_buf, "CURRENT_TIMESTAMP", 17) ||
-            0 == STRNCASECMP(tmp_buf, "SESSIONTIMEZONE", 15) || 0 == STRNCASECMP(tmp_buf, "DBTIMEZONE", 10) ||
-            0 == STRNCASECMP(tmp_buf, "CONNECT_BY_ISLEAF", 17) || 0 == STRNCASECMP(tmp_buf, "CONNECT_BY_ISCYCLE", 18)) {
+        if (0 == STRNCASECMP(tmp_buf, "SYSTIMESTAMP", std::min(offset, strlen("SYSTIMESTAMP"))) ||
+            0 == STRNCASECMP(tmp_buf, "CURRENT_DATE", std::min(offset, strlen("CURRENT_DATE"))) ||
+            0 == STRNCASECMP(tmp_buf, "LOCALTIMESTAMP", std::min(offset, strlen("LOCALTIMESTAMP"))) ||
+            0 == STRNCASECMP(tmp_buf, "CURRENT_TIMESTAMP", std::min(offset, strlen("CURRENT_TIMESTAMP"))) ||
+            0 == STRNCASECMP(tmp_buf, "SESSIONTIMEZONE", std::min(offset, strlen("SESSIONTIMEZONE"))) ||
+            0 == STRNCASECMP(tmp_buf, "DBTIMEZONE", std::min(offset, strlen("DBTIMEZONE"))) ||
+            0 == STRNCASECMP(tmp_buf, "CONNECT_BY_ISLEAF", std::min(offset, strlen("CONNECT_BY_ISLEAF"))) ||
+            0 == STRNCASECMP(tmp_buf, "CONNECT_BY_ISCYCLE", std::min(offset, strlen("CONNECT_BY_ISCYCLE")))) {
           buf[real_len++] = '\"';
           for (int64_t j = 0; j < offset; ++j) {
             tmp_buf[j] = toupper(tmp_buf[j]);
