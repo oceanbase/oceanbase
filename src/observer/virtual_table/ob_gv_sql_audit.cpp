@@ -862,8 +862,11 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord& record)
           cells[cell_idx].set_varchar(record.data_.sched_info_.get_ptr(), static_cast<ObString::obstr_size_t>(len));
           cells[cell_idx].set_default_collation_type();
         } break;
-        case PS_STMT_ID: {
+        case PS_CLIENT_STMT_ID: {
           cells[cell_idx].set_int(record.data_.ps_stmt_id_);
+        } break;
+        case PS_INNER_STMT_ID: {
+          cells[cell_idx].set_int(record.data_.ps_inner_stmt_id_);
         } break;
         case TRANSACTION_HASH: {
           cells[cell_idx].set_uint64(record.data_.trans_hash_);

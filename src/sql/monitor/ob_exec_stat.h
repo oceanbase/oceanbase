@@ -312,6 +312,7 @@ struct ObAuditRecordData {
     MEMSET(this, 0, sizeof(*this));
     consistency_level_ = common::INVALID_CONSISTENCY;
     ps_stmt_id_ = OB_INVALID_STMT_ID;
+    ps_inner_stmt_id_ = OB_INVALID_STMT_ID;
     trans_hash_ = 0;
     request_type_ = EXECUTE_INVALID;
     is_batched_multi_stmt_ = false;
@@ -402,6 +403,7 @@ struct ObAuditRecordData {
   ObTableScanStat table_scan_stat_;
   ObSchedInfo sched_info_;  // px sched info
   int64_t ps_stmt_id_;
+  int64_t ps_inner_stmt_id_;
   int64_t request_type_;
   uint64_t trans_hash_;
   bool is_batched_multi_stmt_;
