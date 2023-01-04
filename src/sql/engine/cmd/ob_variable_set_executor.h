@@ -57,7 +57,7 @@ private:
             const ObVariableSetStmt::VariableSetNode& node, int& ret_ac);
   int set_names_charset(ObExecContext& ctx,const ObVariableSetStmt::NamesSetNode& names_set_node);
   int get_global_sys_var_character_set_client(ObExecContext& ctx, common::ObString& character_set_client) const;
-
+  int global_variable_timezone_formalize(ObExecContext &ctx, ObObj &val);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetExecutor);
 };

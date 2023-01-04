@@ -316,7 +316,12 @@ int ObVariableSetExecutor::set_variable(ObExecContext& ctx, ObSQLSessionInfo* se
       }
 
       if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_GLOBAL) {
-        if (OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
+        if (set_var.var_name_ == OB_SV_TIME_ZONE) {
+          if (OB_FAIL(global_variable_timezone_formalize(ctx, value_obj))) {
+            LOG_WARN("failed to formalize global variables", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
           LOG_WARN("failed to update global variables", K(ret));
         } else {
         }
@@ -571,6 +576,50 @@ int ObVariableSetExecutor::update_global_variables(
     } else {
     }
   }
+  return ret;
+}
+
+// formalize : '+8:00' ---> '+08:00'
+int ObVariableSetExecutor::global_variable_timezone_formalize(ObExecContext &ctx, ObObj &in_val)
+{
+  int ret = OB_SUCCESS;
+
+  int32_t sec_val = 0;
+  int ret_more = OB_SUCCESS;
+  bool check_timezone_valid = false;
+  bool is_oralce_mode = false;
+  ObSQLSessionInfo *session = ctx.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get session info", K(ret), K(session));
+  } else {
+    is_oralce_mode = is_oracle_compatible(session->get_sql_mode());
+    ObString str = in_val.get_string();
+    if (OB_FAIL(ObTimeConverter::str_to_offset(str, sec_val, ret_more, is_oralce_mode, check_timezone_valid))) {
+      if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
+        LOG_WARN("fail to convert time zone", K(sec_val), K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else {
+      int64_t pos = 0;
+      const int64_t buf_len = 16;
+      char *tmp_buf = reinterpret_cast<char *>(ctx.get_allocator().alloc(buf_len));
+      if (OB_ISNULL(tmp_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory", K(ret), K(tmp_buf));
+      } else {
+        int32_t offset_min = static_cast<int32_t>(SEC_TO_MIN(sec_val));
+        const char *fmt_str = (offset_min < 0 ? "-%02d:%02d" : "+%02d:%02d");
+        if (OB_FAIL(databuff_printf(tmp_buf, buf_len, pos, fmt_str, abs(offset_min) / 60, abs(offset_min) % 60))) {
+          LOG_ERROR("fail to print offset_min information to tmp_buf", K(ret), K(tmp_buf), K(offset_min));
+        } else {
+          in_val.set_varchar(tmp_buf, pos);
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
