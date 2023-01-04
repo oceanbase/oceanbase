@@ -4050,6 +4050,9 @@ int ObPartitionStore::remove_unneed_store_within_trans(const TableStoreMap &new_
       // exist in new table store map
     } else if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("Failed to get table store", K(ret), K(index_id));
+    } else if (OB_UNLIKELY(index_id == meta_->pkey_.get_table_id())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected new store map without main table during migratation", K(ret), K(index_id));
     } else {
       int64_t subcmd = ObIRedoModule::gen_subcmd(OB_REDO_LOG_PARTITION, REDO_LOG_DROP_INDEX_SSTABLE_OF_STORE);
       const ObStorageLogAttribute log_attr(
