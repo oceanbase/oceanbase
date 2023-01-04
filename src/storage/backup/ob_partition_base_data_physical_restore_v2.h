@@ -52,6 +52,8 @@ public:
   }
   virtual bool is_inited() const;
   int check_table_exist(const ObITable::TableKey &table_key, bool &is_exist) const;
+  int check_major_macro_block_exist(
+      const ObITable::TableKey &table_key, const int64_t data_version, const int64_t data_seq, bool &is_exist) const;
 
   TO_STRING_KV(K_(is_inited));
 

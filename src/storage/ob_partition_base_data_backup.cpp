@@ -3138,7 +3138,22 @@ int ObBackupPhysicalPGCtx::check_table_exist(
   return ret;
 }
 
-int ObBackupPhysicalPGCtx::get_tenant_pg_data_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path)
+int ObBackupPhysicalPGCtx::check_major_macro_block_exist(const ObITable::TableKey &table_key,
+    const int64_t data_version, const int64_t data_seq, const ObPhyRestoreMacroIndexStoreV2 &macro_index_store,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  if (OB_UNLIKELY(!macro_index_store.is_inited() || !table_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(macro_index_store), K(table_key));
+  } else if (OB_FAIL(macro_index_store.check_major_macro_block_exist(table_key, data_version, data_seq, is_exist))) {
+    STORAGE_LOG(WARN, "failed to check table exist", K(ret), K(table_key), K(data_version), K(data_seq));
+  }
+  return ret;
+}
+
+int ObBackupPhysicalPGCtx::get_tenant_pg_data_path(const ObBackupBaseDataPathInfo &path_info, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   path.reset();
@@ -3429,12 +3444,16 @@ int ObBackupCopyPhysicalTask::fetch_backup_macro_block_arg(const share::ObPhysic
             } else if (OB_ISNULL(macro_index)) {
               ret = OB_ERR_UNEXPECTED;
               STORAGE_LOG(WARN, "phaysical restore macro index should not be NULL", K(ret), KP(macro_index));
-            } else if (OB_FAIL(backup_pg_ctx_->check_table_exist(table_key, *macro_index, is_exist))) {
-              STORAGE_LOG(WARN, "failed to check table exist", K(ret), K(macro_arg));
+            } else if (OB_FAIL(backup_pg_ctx_->check_major_macro_block_exist(table_key,
+                           macro_arg.fetch_arg_.data_version_,
+                           macro_arg.fetch_arg_.data_seq_,
+                           *macro_index,
+                           is_exist))) {
+              STORAGE_LOG(WARN, "failed to check major macro block exist", K(ret), K(table_key), K(macro_arg));
             } else if (!is_exist) {
               macro_arg.need_copy_ = true;
             } else {
-              macro_arg.need_copy_ = full_meta.meta_->data_version_ > backup_arg.prev_data_version_;
+              macro_arg.need_copy_ = false;
             }
             break;
           }
@@ -3702,6 +3721,8 @@ int ObBackupCopyPhysicalTask::backup_block_data(
     LOG_WARN("failed to check macro block", K(ret), K(data), K(meta));
   } else if (OB_FAIL(macro_file.append_macroblock_data(meta, data, block_index))) {
     STORAGE_LOG(WARN, "append macro data fail", K(ret), K(meta), K(data.length()));
+  } else {
+    STORAGE_LOG(INFO, "backup macro block data", K(ret), K(block_index));
   }
   return ret;
 }

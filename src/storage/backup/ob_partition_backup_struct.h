@@ -81,7 +81,7 @@ public:
   void reset();
   bool is_valid() const;
   TO_STRING_KV(K_(sstable_macro_index), K_(data_version), K_(data_seq), K_(backup_set_id), K_(sub_task_id), K_(offset),
-      K_(data_length), KP_(table_key_ptr));
+      K_(data_length), KPC_(table_key_ptr));
 
   // need serialize
   int64_t sstable_macro_index_;

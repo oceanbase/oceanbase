@@ -66,7 +66,7 @@ struct ObBackupMacroBlockArg final {
   ObBackupMacroBlockArg();
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(fetch_arg), KP_(table_key_ptr), K_(need_copy));
+  TO_STRING_KV(K_(fetch_arg), KPC_(table_key_ptr), K_(need_copy));
 
   obrpc::ObFetchMacroBlockArg fetch_arg_;
   const ObITable::TableKey* table_key_ptr_;
@@ -465,7 +465,9 @@ public:
   int fetch_prev_macro_index(const ObPhyRestoreMacroIndexStoreV2& macro_index_store,
       const ObBackupMacroBlockArg& macro_arg, ObBackupTableMacroIndex& macro_index);
   int check_table_exist(
-      const ObITable::TableKey& table_key, const ObPhyRestoreMacroIndexStoreV2& macro_index_store, bool& is_exist);
+      const ObITable::TableKey &table_key, const ObPhyRestoreMacroIndexStoreV2 &macro_index_store, bool &is_exist);
+  int check_major_macro_block_exist(const ObITable::TableKey &table_key, const int64_t data_version,
+      const int64_t data_seq, const ObPhyRestoreMacroIndexStoreV2 &macro_index_store, bool &is_exist);
   bool is_opened() const
   {
     return is_opened_;
