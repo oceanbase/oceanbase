@@ -2006,7 +2006,7 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
     // find first digit.
     for (; pos < end && isspace(*pos); ++pos) {}
     const char *first_digit = pos;
-    if (!('-' == *pos || isdigit(*pos))) {
+    if (pos < end && !('-' == *pos || isdigit(*pos))){
       for (int i = 0; OB_SUCC(ret) && i < TOTAL_PART_CNT; ++i) {
         ob_time.parts_[i] = 0;
       }
@@ -2014,7 +2014,7 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
       ret = OB_ERR_TRUNCATED_WRONG_VALUE;
       LOG_WARN("time string is invalid", K(ret), K(str));
     } else {
-      if ('-' == *pos) {
+      if (pos < end && '-' == *pos) {
         ++pos;
       }
       bool has_done = false;
