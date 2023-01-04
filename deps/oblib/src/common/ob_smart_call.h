@@ -69,7 +69,6 @@ inline int call_with_new_stack(void * arg_, int(*func_) (void*))
 {
   int ret = OB_SUCCESS;
 #if defined(__x86_64__) || defined(__aarch64__)
-  OB_LOG(INFO, "smart_call", KCSTRING(lbt()));
   void *ori_stack_addr = nullptr;
   size_t ori_stack_size = 0;
   void *stack_addr = nullptr;
@@ -92,7 +91,6 @@ inline int call_with_new_stack(void * arg_, int(*func_) (void*))
     lib::g_stack_allocer.dealloc(stack_addr);
     all_stack_size -= stack_size;
   }
-  OB_LOG(INFO, "smart_call finish");
 #else
   ret = func_(arg_);
 #endif
