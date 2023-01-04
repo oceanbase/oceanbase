@@ -934,7 +934,7 @@ int ObSQLSessionInfo::get_inner_ps_stmt_id(ObPsStmtId cli_stmt_id, ObPsStmtId& i
   int ret = OB_SUCCESS;
   ObPsSessionInfo* ps_session_info = NULL;
   if (OB_FAIL(ps_session_info_map_.get_refactored(cli_stmt_id, ps_session_info))) {
-    LOG_WARN("get inner ps stmt id failed", K(ret), K(cli_stmt_id), K(lbt()));
+    LOG_WARN("get inner ps stmt id failed", K(ret), K(cli_stmt_id));
   } else if (OB_ISNULL(ps_session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ps session info is null", K(cli_stmt_id), "session_id", get_sessid(), K(ret));
@@ -1149,6 +1149,8 @@ void ObSQLSessionInfo::reset_audit_record(bool need_retry)
     audit_record_.try_cnt_ = try_cnt;
     audit_record_.exec_timestamp_ = exec_timestamp;
   }
+  audit_record_.ps_stmt_id_ = OB_INVALID_STMT_ID;
+  audit_record_.ps_inner_stmt_id_ = OB_INVALID_STMT_ID;
 }
 
 void ObSQLSessionInfo::set_session_type_with_flag()
