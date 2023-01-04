@@ -171,9 +171,9 @@ DEF_BOOL(enable_upgrade_mode, OB_CLUSTER_PARAMETER, "False",
     "Value: True: turned on; False: turned off;",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(schema_history_expire_time, OB_CLUSTER_PARAMETER, "7d", "[1m, 30d]",
-    "the hour of expire time for schema history, from 1hour to 30days, "
-    "with default 7days. Range: [1h, 30d]",
+DEF_TIME(schema_history_expire_time, OB_CLUSTER_PARAMETER, "30d", "[1m, 365d]",
+    "the hour of expire time for schema history, from 1m to 365days, "
+    "with default 30days. Range: [1m, 365d]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(default_compress_func, OB_CLUSTER_PARAMETER, "zstd_1.3.8", common::ObConfigCompressFuncChecker,
