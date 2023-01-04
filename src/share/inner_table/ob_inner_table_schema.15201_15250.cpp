@@ -218,7 +218,7 @@ int ObInnerTableSchema::all_virtual_dam_cleanup_jobs_real_agent_ora_schema(ObTab
       100, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1430,7 +1430,7 @@ int ObInnerTableSchema::all_virtual_context_real_agent_ora_schema(ObTableSchema 
       OB_MAX_CONTEXT_STRING_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1460,7 +1460,7 @@ int ObInnerTableSchema::all_virtual_context_real_agent_ora_schema(ObTableSchema 
       OB_MAX_CONTEXT_STRING_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1475,7 +1475,7 @@ int ObInnerTableSchema::all_virtual_context_real_agent_ora_schema(ObTableSchema 
       OB_MAX_CONTEXT_STRING_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1699,7 +1699,7 @@ int ObInnerTableSchema::all_virtual_global_context_value_ora_schema(ObTableSchem
       OB_MAX_CONTEXT_STRING_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1714,7 +1714,7 @@ int ObInnerTableSchema::all_virtual_global_context_value_ora_schema(ObTableSchem
       OB_MAX_CONTEXT_VALUE_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1729,7 +1729,7 @@ int ObInnerTableSchema::all_virtual_global_context_value_ora_schema(ObTableSchem
       OB_MAX_CONTEXT_STRING_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4857,7 +4857,7 @@ int ObInnerTableSchema::all_virtual_core_all_table_ora_schema(ObTableSchema &tab
       OB_MAX_TABLE_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -5082,7 +5082,7 @@ int ObInnerTableSchema::all_virtual_core_all_table_ora_schema(ObTableSchema &tab
       MAX_TABLE_COMMENT_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -5487,7 +5487,7 @@ int ObInnerTableSchema::all_virtual_core_all_table_ora_schema(ObTableSchema &tab
       MAX_TABLE_COMMENT_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -5936,7 +5936,7 @@ int ObInnerTableSchema::all_virtual_core_column_table_ora_schema(ObTableSchema &
       OB_MAX_COLUMN_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9537,7 +9537,7 @@ int ObInnerTableSchema::all_virtual_backup_job_ora_schema(ObTableSchema &table_s
       OB_MAX_EXECUTOR_TENANT_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9911,7 +9911,7 @@ int ObInnerTableSchema::all_virtual_backup_job_history_ora_schema(ObTableSchema 
       OB_MAX_EXECUTOR_TENANT_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -12573,7 +12573,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_schema(ObTableSchema &table_schema)
       OB_MAX_SQL_ID_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -12588,7 +12588,7 @@ int ObInnerTableSchema::all_virtual_ash_ora_schema(ObTableSchema &table_schema)
       OB_MAX_TRACE_ID_BUFFER_SIZE, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -13580,7 +13580,7 @@ int ObInnerTableSchema::all_virtual_log_archive_progress_ora_schema(ObTableSchem
       OB_MAX_BACKUP_DEST_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -13595,7 +13595,7 @@ int ObInnerTableSchema::all_virtual_log_archive_progress_ora_schema(ObTableSchem
       OB_MAX_DEFAULT_VALUE_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
   table_schema.set_index_using_type(USING_BTREE);
@@ -13954,7 +13954,7 @@ int ObInnerTableSchema::all_virtual_log_archive_history_ora_schema(ObTableSchema
       OB_MAX_BACKUP_DEST_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -13969,7 +13969,7 @@ int ObInnerTableSchema::all_virtual_log_archive_history_ora_schema(ObTableSchema
       OB_MAX_DEFAULT_VALUE_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
   table_schema.set_index_using_type(USING_BTREE);
@@ -14358,7 +14358,7 @@ int ObInnerTableSchema::all_virtual_log_archive_piece_files_ora_schema(ObTableSc
       OB_MAX_BACKUP_DEST_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
   table_schema.set_index_using_type(USING_BTREE);
@@ -15059,7 +15059,7 @@ int ObInnerTableSchema::all_virtual_restore_job_history_ora_schema(ObTableSchema
       OB_INNER_TABLE_DEFAULT_VALUE_LENTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -15074,7 +15074,7 @@ int ObInnerTableSchema::all_virtual_restore_job_history_ora_schema(ObTableSchema
       OB_MAX_TENANT_NAME_LENGTH_STORE, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -15104,7 +15104,7 @@ int ObInnerTableSchema::all_virtual_restore_job_history_ora_schema(ObTableSchema
       OB_MAX_TENANT_NAME_LENGTH_STORE, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -15134,7 +15134,7 @@ int ObInnerTableSchema::all_virtual_restore_job_history_ora_schema(ObTableSchema
       OB_MAX_CLUSTER_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -16390,7 +16390,7 @@ int ObInnerTableSchema::all_virtual_outline_real_agent_ora_schema(ObTableSchema 
       OB_MAX_OUTLINE_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -16405,7 +16405,7 @@ int ObInnerTableSchema::all_virtual_outline_real_agent_ora_schema(ObTableSchema 
       OB_MAX_OUTLINE_SIGNATURE_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -16450,7 +16450,7 @@ int ObInnerTableSchema::all_virtual_outline_real_agent_ora_schema(ObTableSchema 
       OB_MAX_USERNAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -16480,7 +16480,7 @@ int ObInnerTableSchema::all_virtual_outline_real_agent_ora_schema(ObTableSchema 
       OB_SERVER_VERSION_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -16540,7 +16540,7 @@ int ObInnerTableSchema::all_virtual_outline_real_agent_ora_schema(ObTableSchema 
       OB_MAX_OUTLINE_PARAMS_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -16570,7 +16570,7 @@ int ObInnerTableSchema::all_virtual_outline_real_agent_ora_schema(ObTableSchema 
       OB_MAX_SQL_ID_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 

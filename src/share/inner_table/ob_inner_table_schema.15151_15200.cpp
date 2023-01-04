@@ -2864,7 +2864,7 @@ int ObInnerTableSchema::all_virtual_def_sub_part_real_agent_ora_schema(ObTableSc
       OB_MAX_PARTITION_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4731,7 +4731,7 @@ int ObInnerTableSchema::all_virtual_tenant_time_zone_transition_type_real_agent_
       8, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 

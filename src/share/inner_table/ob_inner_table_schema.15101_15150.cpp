@@ -3832,7 +3832,7 @@ int ObInnerTableSchema::all_virtual_package_sys_agent_schema(ObTableSchema &tabl
       OB_MAX_PACKAGE_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -5118,7 +5118,7 @@ int ObInnerTableSchema::all_virtual_table_real_agent_ora_schema(ObTableSchema &t
       OB_MAX_TABLE_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -5343,7 +5343,7 @@ int ObInnerTableSchema::all_virtual_table_real_agent_ora_schema(ObTableSchema &t
       MAX_TABLE_COMMENT_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -5748,7 +5748,7 @@ int ObInnerTableSchema::all_virtual_table_real_agent_ora_schema(ObTableSchema &t
       MAX_TABLE_COMMENT_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -6227,7 +6227,7 @@ int ObInnerTableSchema::all_virtual_column_real_agent_ora_schema(ObTableSchema &
       OB_MAX_COLUMN_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -6706,7 +6706,7 @@ int ObInnerTableSchema::all_virtual_database_real_agent_ora_schema(ObTableSchema
       OB_MAX_DATABASE_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -7079,7 +7079,7 @@ int ObInnerTableSchema::all_virtual_part_real_agent_ora_schema(ObTableSchema &ta
       OB_MAX_PARTITION_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -7588,7 +7588,7 @@ int ObInnerTableSchema::all_virtual_sub_part_real_agent_ora_schema(ObTableSchema
       OB_MAX_PARTITION_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -7813,7 +7813,7 @@ int ObInnerTableSchema::all_virtual_sub_part_real_agent_ora_schema(ObTableSchema
       MAX_VALUE_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -7977,7 +7977,7 @@ int ObInnerTableSchema::all_virtual_package_real_agent_ora_schema(ObTableSchema 
       OB_MAX_PACKAGE_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -8934,7 +8934,7 @@ int ObInnerTableSchema::all_virtual_user_real_agent_ora_schema(ObTableSchema &ta
       1024, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -8949,7 +8949,7 @@ int ObInnerTableSchema::all_virtual_user_real_agent_ora_schema(ObTableSchema &ta
       1024, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -8964,7 +8964,7 @@ int ObInnerTableSchema::all_virtual_user_real_agent_ora_schema(ObTableSchema &ta
       1024, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9293,7 +9293,7 @@ int ObInnerTableSchema::all_virtual_synonym_real_agent_ora_schema(ObTableSchema 
       OB_MAX_SYNONYM_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9308,7 +9308,7 @@ int ObInnerTableSchema::all_virtual_synonym_real_agent_ora_schema(ObTableSchema 
       OB_MAX_SYNONYM_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9442,7 +9442,7 @@ int ObInnerTableSchema::all_virtual_foreign_key_real_agent_ora_schema(ObTableSch
       OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -12372,7 +12372,7 @@ int ObInnerTableSchema::all_virtual_tenant_keystore_real_agent_ora_schema(ObTabl
       OB_MAX_ENCRYPTED_KEY_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
