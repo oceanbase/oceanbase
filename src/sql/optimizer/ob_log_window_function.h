@@ -53,7 +53,7 @@ public:
   int match_parallel_condition(bool& can_parallel);
 
 private:
-  ObSEArray<ObWinFunRawExpr*, 4> win_exprs_;
+  ObSEArray<ObWinFunRawExpr*, 4, common::ModulePageAllocator, true> win_exprs_;
   bool is_parallel_;
 };
 }  // namespace sql
