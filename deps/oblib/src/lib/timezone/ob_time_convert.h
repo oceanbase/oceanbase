@@ -134,6 +134,7 @@ extern const int64_t USECS_PER_MIN;
 #define TIME_MIN_LENGTH 10
 #define DATE_MIN_LENGTH 10
 // max timestamp is 253402272000
+#define MONTHNAME_MAX_LENGTH 9  // September is longest
 #define TIMESTAMP_VALUE_LENGTH 12
 #define SEC_TO_USEC(secs) ((secs)*USECS_PER_SEC)
 #define USEC_TO_SEC(usec) ((usec) / USECS_PER_SEC)
