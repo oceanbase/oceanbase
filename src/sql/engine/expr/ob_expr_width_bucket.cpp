@@ -46,7 +46,11 @@ int ObExprWidthBucket::calc_result_typeN(ObExprResType &type,
     LOG_WARN("first argument should be of numeric or date/datetime type",K(ret));
   } else if (OB_LIKELY(NOT_ROW_DIMENSION == row_dimension_)) {
     type.set_type(ObNumberType);
+    const ObAccuracy &acc =
+            ObAccuracy::DDL_DEFAULT_ACCURACY2[common::ORACLE_MODE][common::ObNumberType];
     common::ObObjType calc_type = types[0].get_type();
+    type.set_scale(acc.get_scale());
+    type.set_precision(acc.get_precision());
     if (ob_is_numeric_type(calc_type)) {
       calc_type = ObNumberType;
     } else {
