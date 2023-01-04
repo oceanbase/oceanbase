@@ -11016,6 +11016,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12367: __all_virtual_kv_hotkey_stat
 # 12368: __all_virtual_backup_transferring_tablets
+# 12369: __all_virtual_io_scheduler
 
 #
 # 余留位置
