@@ -153,7 +153,7 @@ public:
 class ObBLValue : public ObBlackListHashValue
 {
 public:
-  ObBLValue() {}
+  ObBLValue() : update_ts_(0) {}
   int init(const ObBLKey &key)
   {
     int ret = OB_SUCCESS;
