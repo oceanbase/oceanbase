@@ -2469,6 +2469,7 @@ int ObLogArchiveScheduler::do_stop_tenant_log_archive_backup_v2_(
       LOG_WARN("failed to get log archive backup info", K(ret), K(tenant_id), K(inner_table_version_));
     } else if (inner_table_version_ >= OB_BACKUP_INNER_TABLE_V2) {
       if (is_dropped_tenant) {
+        // 'max_ts' is 0 when this new tenant has not started archive.
         max_ts = backup_info.status_.checkpoint_ts_;  // tenant is dropped, cannot use gts;
       }
       if (OB_FAIL(info_mgr.get_non_frozen_backup_piece(trans, for_update, cur_key, tenant_non_frozen_piece))) {
@@ -2477,12 +2478,20 @@ int ObLogArchiveScheduler::do_stop_tenant_log_archive_backup_v2_(
         tenant_non_frozen_piece.prev_piece_info_.max_ts_ = max_ts;
         tenant_non_frozen_piece.cur_piece_info_.start_ts_ = max_ts;
         tenant_non_frozen_piece.prev_piece_info_.status_ = ObBackupPieceStatus::BACKUP_PIECE_FROZEN;
+        if (0 >= max_ts) {
+          // This tenant has not started archive.
+          tenant_non_frozen_piece.prev_piece_info_.file_status_ = ObBackupFileStatus::BACKUP_FILE_INCOMPLETE;
+        }
       }
 
       if (OB_SUCC(ret)) {
         tenant_non_frozen_piece.cur_piece_info_.checkpoint_ts_ = backup_info.status_.checkpoint_ts_;
         tenant_non_frozen_piece.cur_piece_info_.max_ts_ = max_ts;
         tenant_non_frozen_piece.cur_piece_info_.status_ = ObBackupPieceStatus::BACKUP_PIECE_FROZEN;
+        if (0 >= max_ts) {
+          // This tenant has not started archive.
+          tenant_non_frozen_piece.cur_piece_info_.file_status_ = ObBackupFileStatus::BACKUP_FILE_INCOMPLETE;
+        }
         backup_info.status_.status_ = ObLogArchiveStatus::STOP;
         if (OB_FAIL(info_mgr.update_backup_piece(trans, tenant_non_frozen_piece))) {
           LOG_WARN("failed to update backup piece", K(ret), K(tenant_non_frozen_piece));
