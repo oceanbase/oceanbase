@@ -382,7 +382,13 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     for (int64_t i = 0; i < types.count(); ++i) {
       types.at(i).set_calc_meta(types.at(i));
       if (lib::is_mysql_mode() && types.at(i).is_double()) {
-        types.at(i).set_calc_accuracy(types.at(i).get_accuracy());
+        const ObPrecision p = types.at(i).get_precision();
+        const ObScale s = types.at(i).get_scale();
+        // check whether the precision and scale is valid
+        if ((PRECISION_UNKNOWN_YET == p && s == SCALE_UNKNOWN_YET) ||
+              (s >= 0 && s <= OB_MAX_DOUBLE_FLOAT_SCALE && p >= s)) {
+          types.at(i).set_calc_accuracy(types.at(i).get_accuracy());
+        }
       }
     }
     if (OB_FAIL(ret)) {
