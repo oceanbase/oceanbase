@@ -183,6 +183,12 @@ int ObVariableSetResolver::resolve_set_variable(
         LOG_WARN("resolve variable value failed", K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(var_node.value_expr_) && var_node.value_expr_->has_flag(CNT_AGG)) {
+        ret = OB_ERR_INVALID_GROUP_FUNC_USE;
+        LOG_WARN("invalid scope for agg function", K(ret));
+      }
+    }
   }
   return ret;
 }
