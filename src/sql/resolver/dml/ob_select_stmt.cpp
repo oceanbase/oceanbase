@@ -1252,6 +1252,24 @@ int ObSelectStmt::get_select_exprs(ObIArray<ObRawExpr*>& select_exprs, const boo
   return ret;
 }
 
+int ObSelectStmt::get_select_exprs_without_lob(ObIArray<ObRawExpr*>& select_exprs) const
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *expr = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_items_.count(); ++i) {
+    if (OB_ISNULL(expr = select_items_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null select expr", K(ret));
+    } else if (ObLongTextType == expr->get_data_type() || ObLobType == expr->get_data_type()) {
+      /*do nothing*/
+    } else if (OB_FAIL(select_exprs.push_back(expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else { /*do nothing*/
+    }
+  }
+  return ret;
+}
+
 int ObSelectStmt::inner_get_share_exprs(ObIArray<ObRawExpr*>& candi_share_exprs) const
 {
   int ret = OB_SUCCESS;

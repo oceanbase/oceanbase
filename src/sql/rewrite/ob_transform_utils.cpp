@@ -3011,7 +3011,7 @@ int ObTransformUtils::check_stmt_unique(ObSelectStmt* stmt, ObSQLSessionInfo* se
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is null", K(ret));
-  } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
+  } else if (OB_FAIL(stmt->get_select_exprs_without_lob(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(SMART_CALL(
                  check_stmt_unique(stmt, session_info, schema_checker, select_exprs, is_strict, is_unique)))) {
@@ -6746,7 +6746,7 @@ int ObTransformUtils::recursive_set_stmt_unique(ObSelectStmt* select_stmt, ObTra
   } else if (is_unique) {
     if (OB_ISNULL(unique_keys)) {
       // do nothing
-    } else if (OB_FAIL(select_stmt->get_select_exprs(*unique_keys))) {
+    } else if (OB_FAIL(select_stmt->get_select_exprs_without_lob(*unique_keys))) {
       LOG_WARN("failed to get select exprs", K(ret));
     }
   } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {

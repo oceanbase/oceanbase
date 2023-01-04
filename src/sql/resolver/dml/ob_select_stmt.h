@@ -620,6 +620,7 @@ public:
   }
   int get_select_exprs(ObIArray<ObRawExpr*>& select_exprs, const bool is_for_outout = false);
   int get_select_exprs(ObIArray<ObRawExpr*>& select_exprs, const bool is_for_outout = false) const;
+  int get_select_exprs_without_lob(ObIArray<ObRawExpr*>& select_exprs) const;
   int inner_get_share_exprs(ObIArray<ObRawExpr*>& candi_share_exprs) const override;
   const common::ObIArray<ObAggFunRawExpr*>& get_aggr_items() const
   {
