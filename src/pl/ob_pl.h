@@ -631,7 +631,7 @@ class ObPLCtxGuard
 {
 public:
   ObPLCtxGuard(ObPLCtx *ctx, int& ret) : ctx_(ctx), ret_(ret) {
-    if (OB_NOT_NULL(ctx)) {
+    if (OB_SUCCESS == ret_ && OB_NOT_NULL(ctx)) {
       ret_ = objects_.assign(ctx->get_objects());
       ctx_->clear();
     }
@@ -639,7 +639,9 @@ public:
 
   ~ObPLCtxGuard() {
     if (OB_SUCCESS == ret_ && OB_NOT_NULL(ctx_)) {
-      ret_ = ctx_->get_objects().assign(objects_);
+      for (int64_t i = 0; OB_SUCCESS == ret_ && i < objects_.count(); ++i) {
+        ret_ = ctx_->add(objects_.at(i));
+      }
     }
   }
 
