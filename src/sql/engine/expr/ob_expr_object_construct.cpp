@@ -19,6 +19,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_user_type.h"
+#include "sql/ob_spi.h"
 
 namespace oceanbase
 {
@@ -99,8 +100,10 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
   const ObExprObjectConstructInfo *info
                   = static_cast<ObExprObjectConstructInfo *>(expr.extra_info_);
   ObObj result;
+  ObSQLSessionInfo *session = nullptr;
   CK(OB_NOT_NULL(info));
   CK(expr.arg_cnt_ >= info->elem_types_.count());
+  CK(OB_NOT_NULL(session = ctx.exec_ctx_.get_my_session()));
   ObObj *objs = nullptr;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(expr.eval_param_value(ctx))) {
@@ -126,6 +129,14 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
     new(record)pl::ObPLRecord(info->udt_id_, expr.arg_cnt_);
     for (int64_t i = 0; i < expr.arg_cnt_; ++i) {
       record->get_element()[i] = objs[i];
+      if (OB_SUCC(ret) &&
+          (ObCharType == info->elem_types_.at(i).get_type() || ObNCharType == info->elem_types_.at(i).get_type())) {
+        OZ (ObSPIService::spi_pad_char_or_varchar(session,
+                                                  info->elem_types_.at(i).get_type(),
+                                                  info->elem_types_.at(i).get_accuracy(),
+                                                  &ctx.exec_ctx_.get_allocator(),
+                                                  &(record->get_element()[i])));
+      }
     }
     result.set_extend(reinterpret_cast<int64_t>(record),
                       pl::PL_RECORD_TYPE, pl::ObRecordType::get_init_size(expr.arg_cnt_));
