@@ -179,7 +179,9 @@ int ObExprFromBase64::eval_from_base64_batch(const ObExpr &expr, ObEvalCtx &ctx,
       const ObString & in_raw = arg->get_string();
       ObLength in_raw_len = in_raw.length();
       const char *buf = in_raw.ptr();
-      if (NULL == buf) {
+      if (arg->is_null()) {
+        res[j].set_null();
+      } else if (NULL == buf) {
         res[j].set_string(nullptr, 0);
       } else {
         char *output_buf = nullptr;
