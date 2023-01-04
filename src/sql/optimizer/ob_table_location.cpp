@@ -3003,6 +3003,7 @@ int ObTableLocation::record_insert_partition_info(
   int ret = OB_SUCCESS;
   bool has_auto_inc_part_key = false;
   bool partkey_has_subquery = false;
+  bool has_assign_user_var = false;
   ObInsertStmt& insert_stmt = static_cast<ObInsertStmt&>(stmt);
   ObSEArray<ColumnItem, 4> partition_columns;
   ObSEArray<ColumnItem, 4> gen_cols;  // actual not used in insert stmt
@@ -3011,7 +3012,10 @@ int ObTableLocation::record_insert_partition_info(
     LOG_WARN("failed to check whether insert stmt has part key", K(ret));
   } else if (OB_FAIL(insert_stmt.part_key_has_auto_inc(has_auto_inc_part_key))) {
     LOG_WARN("check to check whether part key containts auto inc column", K(ret));
-  } else if ((insert_stmt.has_part_key_sequence() || partkey_has_subquery || has_auto_inc_part_key) &&
+  } else if (OB_FAIL(insert_stmt.has_ref_assign_user_var(has_assign_user_var))) {
+    LOG_WARN("failed to check stmt has ref assign user var", K(ret));
+  } else if ((insert_stmt.has_part_key_sequence() || partkey_has_subquery || has_auto_inc_part_key ||
+                 has_assign_user_var) &&
              PARTITION_LEVEL_ZERO != table_schema->get_part_level()) {
     part_get_all_ = true;
   } else if (OB_FAIL(get_partition_column_info(stmt,
