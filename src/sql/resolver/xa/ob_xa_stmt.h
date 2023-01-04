@@ -28,7 +28,7 @@ public:
       xid_string_(),
       gtrid_string_(),
       bqual_string_(),
-      format_id_(1),
+      format_id_(-1),
       flags_(0)
   {
   }
@@ -99,8 +99,22 @@ public:
 
   bool is_valid_oracle_xid()
   {
-    return gtrid_string_.length() > 0 && gtrid_string_.length() <= MAX_GTRID_LENGTH
-           && bqual_string_.length() > 0 && bqual_string_.length() <= MAX_BQUAL_LENGTH;
+    return 0 <= format_id_
+           && 0 < gtrid_string_.length()
+           && MAX_GTRID_LENGTH >= gtrid_string_.length()
+           && 0 < bqual_string_.length()
+           && MAX_BQUAL_LENGTH >= bqual_string_.length();
+  }
+
+  static bool is_valid_oracle_xid(const int64_t format_id,
+                                  const common::ObString &gtrid_string,
+                                  const common::ObString &bqual_string)
+  {
+    return 0 <= format_id
+           && 0 < gtrid_string.length()
+           && MAX_GTRID_LENGTH >= gtrid_string.length()
+           && 0 < bqual_string.length()
+           && MAX_BQUAL_LENGTH >= bqual_string.length();
   }
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(xid_string), K_(gtrid_string),
