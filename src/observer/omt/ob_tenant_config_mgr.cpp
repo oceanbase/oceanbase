@@ -20,6 +20,7 @@
 #include "ob_tenant.h"
 #include "share/ob_rpc_struct.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -302,12 +303,13 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
   DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
   DRWLock::WRLockGuard guard(rwlock_);
   ObTenant *tenant = NULL;
+  bool has_dropped = false;
   if (is_virtual_tenant_id(tenant_id)) {
   } else if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
     LOG_WARN("get tenant config failed", K(tenant_id), K(ret));
-  } else if (OB_SUCC(GCTX.omt_->get_tenant(tenant_id, tenant))) {
-    // https://work.aone.alibaba-inc.com/issue/31717023
-    // 判断租户是否在这台机器上，避免启动时没有刷到租户时删掉了租户配置项
+  } else if (OB_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(tenant_id, has_dropped))) {
+    LOG_WARN("failed to check tenant has been dropped", K(tenant_id));
+  } else if (!has_dropped) {
     LOG_WARN("tenant still exist, try to delete tenant config later...", K(tenant_id));
   } else {
     static const int DEL_TRY_TIMES = 30;
