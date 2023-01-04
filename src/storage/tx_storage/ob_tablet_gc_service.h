@@ -53,7 +53,6 @@ public:
   void set_tablet_gc_trigger();
   uint8_t get_tablet_persist_trigger_and_reset();
   int get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_create_tablet_ids,
-                               const share::SCN checkpoint_scn,
                                bool only_deleted = false);
   int flush_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids,
                                  const share::SCN checkpoint_scn);

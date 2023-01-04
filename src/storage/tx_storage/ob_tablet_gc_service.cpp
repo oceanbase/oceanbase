@@ -159,34 +159,33 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
             STORAGE_LOG(INFO, "no any log callback and no need to update clog checkpoint",
               K(freezer->get_ls_id()), K(checkpoint_scn), KPC(ls), K(ls->get_ls_meta()));
           }
-          // 2. get gc tablet
-          else if ((times == 0 || ObTabletGCHandler::is_tablet_gc_trigger(tablet_persist_trigger))
-                   && OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(deleted_tablet_ids, checkpoint_scn, only_deleted))) {
+          // 2. get gc tablet. persist tablet must gc tablet
+          else if (OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(deleted_tablet_ids, only_deleted))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls), KR(ret));
           }
-          // 3. get unpersist_tablet_ids
-          else if (OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(unpersist_tablet_ids, checkpoint_scn, !only_deleted))) {
+          // 3. check and gc deleted_tablet_ids. tablet_change_ts cannot update when gc tablet failed.
+          else if (!deleted_tablet_ids.empty() && OB_FAIL(tablet_gc_handler->gc_tablets(deleted_tablet_ids))) {
+            need_retry = true;
+            STORAGE_LOG(WARN, "failed to gc tablet", KR(ret), K(deleted_tablet_ids));
+          }
+          // 4. get unpersist_tablet_ids
+          else if ((times == 0 || ObTabletGCHandler::is_set_tablet_persist_trigger(tablet_persist_trigger))
+                   && OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(unpersist_tablet_ids, !only_deleted))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls), KR(ret));
           }
-          // 4. flush unpersit_tablet_ids
-          else if (OB_FAIL(tablet_gc_handler->flush_unpersist_tablet_ids(unpersist_tablet_ids, checkpoint_scn))) {
+          // 5. flush unpersit_tablet_ids
+          else if ((times == 0 || ObTabletGCHandler::is_set_tablet_persist_trigger(tablet_persist_trigger))
+                   && OB_FAIL(tablet_gc_handler->flush_unpersist_tablet_ids(unpersist_tablet_ids, checkpoint_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to flush_unpersist_tablet_ids", KPC(ls), KR(ret), K(unpersist_tablet_ids));
           }
-          // 5. update tablet_change_checkpoint in log meta
-          else if (OB_FAIL(ls->set_tablet_change_checkpoint_scn(checkpoint_scn))) {
+          // 6. update tablet_change_checkpoint in log meta
+          else if ((times == 0 || ObTabletGCHandler::is_set_tablet_persist_trigger(tablet_persist_trigger))
+                   && OB_FAIL(ls->set_tablet_change_checkpoint_scn(checkpoint_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set_tablet_change_checkpoint_scn", KPC(ls), KR(ret), K(checkpoint_scn));
-          }
-          // 6. check and gc deleted_tablet_ids
-          else if (times == 0 || ObTabletGCHandler::is_tablet_gc_trigger(tablet_persist_trigger)) {
-            // to do check gc and gc tablets
-            if (!deleted_tablet_ids.empty() && OB_FAIL(tablet_gc_handler->gc_tablets(deleted_tablet_ids))) {
-              need_retry = true;
-              STORAGE_LOG(WARN, "failed to gc tablet", KR(ret), K(deleted_tablet_ids));
-            }
           }
           STORAGE_LOG(INFO, "[tabletgc] tablet in a ls persist and gc process end", KR(ret), KPC(ls), K(checkpoint_scn), K(deleted_tablet_ids), K(unpersist_tablet_ids));
           if (need_retry) {
@@ -268,7 +267,6 @@ uint8_t ObTabletGCHandler::get_tablet_persist_trigger_and_reset()
 }
 
 int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_tablet_ids,
-                                                const SCN checkpoint_scn,
                                                 bool only_deleted /* = false */)
 {
   int64_t ret = OB_SUCCESS;
@@ -305,15 +303,14 @@ int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObTabletIDArray &unpersi
         if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
           LOG_WARN("failed to get tx data", K(ret), K(tablet_id));
         } else if (only_deleted) {
-          if (ObTabletStatus::DELETED == tx_data.tablet_status_
-              && tx_data.tx_scn_ <= checkpoint_scn) {
-            STORAGE_LOG(INFO, "[tabletgc] get tx_data for gc", K(tx_data), K(tablet_meta), K(checkpoint_scn));
+          if (ObTabletStatus::DELETED == tx_data.tablet_status_) {
+            STORAGE_LOG(INFO, "[tabletgc] get tx_data for gc", K(tx_data), K(tablet_meta));
             if (OB_FAIL(unpersist_tablet_ids.push_back(tablet_id))) {
               STORAGE_LOG(WARN, "failed to push_back deleted tablet", KR(ret));
             }
           }
         } else if (tx_data.tx_scn_ > tablet_meta.clog_checkpoint_scn_) {
-          STORAGE_LOG(INFO, "[tabletgc] get tx_data for persist", K(tx_data), K(tablet_meta), K(checkpoint_scn));
+          STORAGE_LOG(INFO, "[tabletgc] get tx_data for persist", K(tx_data), K(tablet_meta));
           if (OB_FAIL(unpersist_tablet_ids.push_back(tablet_id))) {
             STORAGE_LOG(WARN, "failed to push_back", KR(ret));
           }

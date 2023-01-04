@@ -779,20 +779,20 @@ int ObTabletBindingHelper::replay_get_tablet(const ObTabletMapKey &key, ObTablet
 
   if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST != ret) {
-      LOG_WARN("failed to get tablet", K(ret), K(key));
+      LOG_WARN("failed to get tablet", KR(ret), K(key));
     } else if (trans_flags_.scn_ <= tablet_change_checkpoint_scn) {
-      LOG_WARN("tablet already deleted", K(ret), K(key), K(trans_flags_), K(tablet_change_checkpoint_scn));
+      LOG_WARN("tablet already gc", KR(ret), K(key), K(trans_flags_), K(tablet_change_checkpoint_scn));
     } else {
-      ret = OB_EAGAIN;
-      LOG_INFO("tablet does not exist, but need retry", K(ret), K(key), K(trans_flags_));
+      LOG_INFO("tablet already gc, trans_flags_.scn_ is not less than tablet_change_checkpoint_scn",
+               KR(ret), K(key), K(trans_flags_), K(tablet_change_checkpoint_scn));
     }
   } else {
     ObTabletTxMultiSourceDataUnit tx_data;
     if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
-      LOG_WARN("failed to get tablet tx data", K(ret), K(tablet_handle));
+      LOG_WARN("failed to get tablet tx data", KR(ret), K(tablet_handle));
     } else if (ObTabletStatus::DELETED == tx_data.tablet_status_) {
       ret = OB_TABLET_NOT_EXIST;
-      LOG_INFO("tablet is already deleted", K(ret), K(key), K(tx_data));
+      LOG_INFO("tablet is already deleted", KR(ret), K(key), K(tx_data));
     }
   }
 

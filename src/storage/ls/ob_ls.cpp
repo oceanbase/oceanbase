@@ -1175,42 +1175,52 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
                             ObTabletHandle &handle) const
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_meta_.ls_id_, tablet_id);
   const SCN tablet_change_checkpoint_scn = ls_meta_.get_tablet_change_checkpoint_scn();
   ObTabletHandle tablet_handle;
+  SCN min_scn;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ls is not inited", K(ret));
+    LOG_WARN("ls is not inited", KR(ret));
   } else if (OB_UNLIKELY(!tablet_id.is_valid() || !scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tablet_id), K(scn));
+    LOG_WARN("invalid args", KR(ret), K(tablet_id), K(scn));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("failed to get tablet", K(ret), K(key));
     } else if (scn <= tablet_change_checkpoint_scn) {
-      LOG_WARN("tablet already deleted", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
-    } else {
+      LOG_WARN("tablet already gc", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
+    } else if (OB_TMP_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_scn(ls_meta_.ls_id_, min_scn))) {
+      ret = tmp_ret;
+      LOG_WARN("failed to get_min_unreplayed_scn", KR(ret), K_(ls_meta), K(scn), K(tablet_id));
+    } else if (!min_scn.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("min_scn is invalid", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
+    } else if (scn > min_scn) {
       ret = OB_EAGAIN;
-      LOG_INFO("tablet does not exist, but need retry", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
+      LOG_INFO("tablet does not exist, but need retry", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(min_scn));
+    } else {
+      LOG_INFO("tablet already gc, but scn is more than min scn", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(min_scn));
     }
   } else {
     ObTabletTxMultiSourceDataUnit tx_data;
     if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
-      LOG_WARN("failed to get tablet tx data", K(ret), K(tablet_handle));
+      LOG_WARN("failed to get tablet tx data", KR(ret), K(tablet_handle));
     } else if (ObTabletStatus::CREATING == tx_data.tablet_status_) {
       ret = OB_EAGAIN;
-      LOG_INFO("tablet is CREATING, need retry", K(ret), K(key), K(tx_data), K(scn));
+      LOG_INFO("tablet is CREATING, need retry", KR(ret), K(key), K(tx_data), K(scn));
     } else if (ObTabletStatus::NORMAL == tx_data.tablet_status_) {
       // do nothing
     } else if (ObTabletStatus::DELETING == tx_data.tablet_status_) {
-      LOG_INFO("tablet is DELETING, just continue", K(ret), K(key), K(tx_data), K(scn));
+      LOG_INFO("tablet is DELETING, just continue", KR(ret), K(key), K(tx_data), K(scn));
     } else if (ObTabletStatus::DELETED == tx_data.tablet_status_) {
       ret = OB_TABLET_NOT_EXIST;
-      LOG_INFO("tablet is already deleted", K(ret), K(key), K(tx_data), K(scn));
+      LOG_INFO("tablet is already deleted", KR(ret), K(key), K(tx_data), K(scn));
     } else {
       ret = OB_EAGAIN;
-      LOG_INFO("tablet may be in creating procedure", K(ret), K(key), K(tx_data), K(scn));
+      LOG_INFO("tablet may be in creating procedure", KR(ret), K(key), K(tx_data), K(scn));
     }
   }
 
