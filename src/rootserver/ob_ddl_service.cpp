@@ -985,7 +985,10 @@ int ObDDLService::generate_schema(const ObCreateTableArg &arg, ObTableSchema &sc
     // todo: cons id should be globally unique, currently the only one in the table
     cst.set_constraint_id(i + 1);
     // Check whether the name of the constraint is repeated
-    if (!cst.get_constraint_name_str().empty()) {
+    if (cst.get_constraint_name_str().empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cst name is empty", K(ret));
+    } else {
       bool is_constraint_name_exist = true;
       if (OB_FAIL(
               check_constraint_name_is_exist(guard, schema, cst.get_constraint_name_str(), is_constraint_name_exist))) {
@@ -6120,7 +6123,10 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg, const int
         const ObCreateForeignKeyArg &foreign_key_arg = alter_table_arg.foreign_key_arg_list_.at(i);
         ObForeignKeyInfo foreign_key_info;
         // Check for duplicate foreign key constraint names
-        if (!foreign_key_arg.foreign_key_name_.empty()) {
+        if (foreign_key_arg.foreign_key_name_.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fk name is empty", K(ret));
+        } else {
           bool is_foreign_key_name_exist = true;
           if (OB_FAIL(check_constraint_name_is_exist(
                   schema_guard, *table_schema, foreign_key_arg.foreign_key_name_, is_foreign_key_name_exist))) {

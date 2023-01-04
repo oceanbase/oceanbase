@@ -4416,7 +4416,10 @@ int ObRootService::create_table(const ObCreateTableArg& arg, ObCreateTableRes& r
           const ObCreateForeignKeyArg& foreign_key_arg = arg.foreign_key_arg_list_.at(i);
           ObForeignKeyInfo foreign_key_info;
           // check for duplicate constraint names of foregin key
-          if (!foreign_key_arg.foreign_key_name_.empty()) {
+          if (foreign_key_arg.foreign_key_name_.empty()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fk name is empty", K(ret));
+          } else {
             bool is_foreign_key_name_exist = true;
             if (OB_FAIL(ddl_service_.check_constraint_name_is_exist(
                     schema_guard, table_schema, foreign_key_arg.foreign_key_name_, is_foreign_key_name_exist))) {

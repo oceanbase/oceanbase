@@ -5029,6 +5029,9 @@ int ObDDLResolver::resolve_check_constraint_node(
           SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
         }
       }
+    } else if (NULL == cst_name_node->str_value_ || 0 == cst_name_node->str_len_) {
+      ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
+      SQL_RESV_LOG(WARN, "zero-length constraint name is illegal", K(ret));
     } else {
       cst_name.assign_ptr(cst_name_node->str_value_, static_cast<int32_t>(cst_name_node->str_len_));
     }
@@ -5130,6 +5133,9 @@ int ObDDLResolver::resolve_pk_constraint_node(
                 cst_name, table_name_, *allocator_, CONSTRAINT_TYPE_PRIMARY_KEY))) {
           SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
         }
+      } else if (NULL == cst_name_node->str_value_ || 0 == cst_name_node->str_len_) {
+        ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
+        SQL_RESV_LOG(WARN, "zero-length constraint name is illegal", K(ret));
       } else {
         cst_name.assign_ptr(cst_name_node->str_value_, static_cast<int32_t>(cst_name_node->str_len_));
       }
@@ -6074,16 +6080,21 @@ int ObDDLResolver::resolve_foreign_key_name(const ParseNode* constraint_node, Ob
             K(constraint_node->num_child_),
             KP(constraint_node->children_));
       } else if (OB_NOT_NULL(constraint_name = constraint_node->children_[0])) {
-        foreign_key_name.assign_ptr(constraint_name->str_value_, static_cast<int32_t>(constraint_name->str_len_));
-        // check if fk name duplicated in create_table
-        ObForeignKeyNameHashWrapper fk_key(foreign_key_name);
-        if (OB_HASH_EXIST == (ret = current_foreign_key_name_set_.exist_refactored(fk_key))) {
-          SQL_RESV_LOG(WARN, "duplicate fk name", K(ret), K(foreign_key_name));
-          ret = OB_ERR_CANNOT_ADD_FOREIGN;
+        if (NULL == constraint_name->str_value_ || 0 == constraint_name->str_len_) {
+          ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
+          SQL_RESV_LOG(WARN, "zero-length constraint name is illegal", K(ret));
         } else {
-          ret = OB_SUCCESS;
-          if (OB_FAIL(current_foreign_key_name_set_.set_refactored(fk_key))) {
-            SQL_RESV_LOG(WARN, "set foreign key name to hash set failed", K(ret), K(foreign_key_name));
+          foreign_key_name.assign_ptr(constraint_name->str_value_, static_cast<int32_t>(constraint_name->str_len_));
+          // check if fk name duplicated in create_table
+          ObForeignKeyNameHashWrapper fk_key(foreign_key_name);
+          if (OB_HASH_EXIST == (ret = current_foreign_key_name_set_.exist_refactored(fk_key))) {
+            SQL_RESV_LOG(WARN, "duplicate fk name", K(ret), K(foreign_key_name));
+            ret = OB_ERR_CANNOT_ADD_FOREIGN;
+          } else {
+            ret = OB_SUCCESS;
+            if (OB_FAIL(current_foreign_key_name_set_.set_refactored(fk_key))) {
+              SQL_RESV_LOG(WARN, "set foreign key name to hash set failed", K(ret), K(foreign_key_name));
+            }
           }
         }
       } else if (OB_FAIL(create_fk_cons_name_automatically(foreign_key_name))) {
