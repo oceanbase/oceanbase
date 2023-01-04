@@ -1997,7 +1997,7 @@ int ObTransService::decide_read_snapshot_for_serializable_trans_(
         KR(ret),
         K(trans_desc),
         K(stmt_desc));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE isolation level");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE and REPEATABLE-READ isolation level");
   }
   // read_snapshot_type must be TRANSACTION_SNAPSHOT
   else if (OB_UNLIKELY(ObTransReadSnapshotType::TRANSACTION_SNAPSHOT != read_snapshot_type)) {
