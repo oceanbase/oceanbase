@@ -933,12 +933,13 @@ int ObHAFetchMacroBlockP::process()
           }
 #endif
 
-      SMART_VAR(storage::ObCopyMacroBlockObProducer, producer) {
-        if (OB_FAIL(producer.init(arg_.tenant_id_, arg_.ls_id_, arg_.table_key_, arg_.copy_macro_range_info_,
-            arg_.data_version_, arg_.backfill_tx_scn_))) {
-          LOG_WARN("failed to init macro block producer", K(ret), K(arg_));
+      SMART_VARS_2((storage::ObCopyMacroBlockObProducer, producer), (ObCopyMacroBlockRangeArg, arg)) {
+        if (OB_FAIL(arg.assign(arg_))) {
+          LOG_WARN("failed to assign copy macro block range arg", K(ret), K(arg_));
+        } else if (OB_FAIL(producer.init(arg.tenant_id_, arg.ls_id_, arg.table_key_, arg.copy_macro_range_info_,
+            arg.data_version_, arg.backfill_tx_scn_))) {
+          LOG_WARN("failed to init macro block producer", K(ret), K(arg));
         } else {
-
           while (OB_SUCC(ret)) {
             copy_macro_block_header.reset();
             if (OB_FAIL(producer.get_next_macro_block(data, copy_macro_block_header))) {
@@ -963,19 +964,20 @@ int ObHAFetchMacroBlockP::process()
           }
         }
         if (OB_SUCC(ret)) {
-          if (arg_.need_check_seq_) {
-            if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
-              LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+          if (arg.need_check_seq_) {
+            if (OB_FAIL(compare_ls_rebuild_seq(arg.tenant_id_, arg.ls_id_, arg.ls_rebuild_seq_))) {
+              LOG_WARN("failed to compare ls rebuild seq", K(ret), K(arg));
             }
           }
         }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (total_macro_block_count_ != arg_.copy_macro_range_info_.macro_block_count_) {
-        ret = OB_ERR_SYS;
-        STORAGE_LOG(ERROR, "macro block count not match",
-            K(ret), K(total_macro_block_count_), K(arg_.copy_macro_range_info_));
+
+        if (OB_SUCC(ret)) {
+          if (total_macro_block_count_ != arg.copy_macro_range_info_.macro_block_count_) {
+            ret = OB_ERR_SYS;
+            STORAGE_LOG(ERROR, "macro block count not match",
+                K(ret), K(total_macro_block_count_), K(arg.copy_macro_range_info_));
+          }
+        }
       }
     }
   }

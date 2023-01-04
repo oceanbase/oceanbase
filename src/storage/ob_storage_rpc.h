@@ -87,8 +87,8 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObCopyMacroBlockRangeArg &arg);
-
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(data_version), K_(backfill_tx_scn), K_(copy_macro_range_info));
+
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   storage::ObITable::TableKey table_key_;
