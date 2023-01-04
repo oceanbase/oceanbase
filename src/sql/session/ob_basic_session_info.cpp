@@ -3389,7 +3389,7 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema& sys_var_sch
           sys_var->get_max_val(),
           sys_var->get_flags(),
           true));
-      if (OB_NOT_NULL(sys_vars_[i]) && sys_vars_[i]->is_influence_plan()) {
+      if (OB_SUCC(ret) && OB_NOT_NULL(sys_vars_[i]) && sys_vars_[i]->is_influence_plan()) {
         OZ(influence_plan_var_indexs_.push_back(i));
       }
     }
