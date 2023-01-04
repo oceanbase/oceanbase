@@ -1492,9 +1492,11 @@ int ObLocationFetcher::init_batch_rpc_renew_struct(const common::ObIArray<const 
           if (OB_ISNULL(locality_manager_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("locality manager ptr is null", KR(ret));
+          } else if (!ObReplicaTypeCheck::is_paxos_replica_V2(location_array.at(j).replica_type_)) {
+            // skip
           } else if (OB_FAIL(locality_manager_->is_local_server(addr, is_local))) {
             LOG_WARN("fail to check is local server", K(ret), K(addr));
-          } else if (!is_local || !ObReplicaTypeCheck::is_paxos_replica_V2(location_array.at(j).replica_type_)) {
+          } else if (!is_local) {
             // nothing todo
           } else if (OB_FAIL(dest_map.get_refactored(addr, idx))) {
             if (OB_HASH_NOT_EXIST != ret) {
