@@ -586,7 +586,9 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext& ctx, ObPurgeRecycleBinStmt
     int64_t total_purge_count = 0;
     while (OB_SUCC(ret) && !is_tenant_finish) {
       int64_t start_time = ObTimeUtility::current_time();
-      if (OB_FAIL(common_rpc_proxy->purge_expire_recycle_objects(purge_recyclebin_arg, affected_rows))) {
+      // replcace timeout from hardcode 9s to 10 * GCONF.rpc_timeout
+      if (OB_FAIL(common_rpc_proxy->timeout(10 * GCONF.rpc_timeout)
+                      .purge_expire_recycle_objects(purge_recyclebin_arg, affected_rows))) {
         LOG_WARN("purge reyclebin objects failed", K(ret), K(affected_rows), K(purge_recyclebin_arg));
         is_tenant_finish = false;
       } else {
