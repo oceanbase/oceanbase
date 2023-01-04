@@ -45,6 +45,7 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_monitor.cpp
   sys_package/ob_dbms_upgrade.cpp
   sys_package/ob_dbms_sql.cpp
+  sys_package/ob_dbms_user_define_rule.cpp
 )
 
 ob_server_add_target(ob_pl)

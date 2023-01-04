@@ -233,6 +233,7 @@ ObSqlCtx::ObSqlCtx()
     is_protocol_weak_read_(false),
     flashback_query_expr_(nullptr),
     is_execute_call_stmt_(false),
+    is_text_ps_mode_(false),
     reroute_info_(nullptr)
 {
   sql_id_[0] = '\0';
@@ -279,6 +280,7 @@ void ObSqlCtx::reset()
   stmt_type_ = stmt::T_NONE;
   cur_plan_ = nullptr;
   is_execute_call_stmt_ = false;
+  is_text_ps_mode_ = false;
 }
 
 //release dynamic allocated memory
@@ -292,6 +294,7 @@ void ObSqlCtx::clear()
   multi_stmt_rowkey_pos_.reset();
   spm_ctx_.bl_key_.reset();
   cur_stmt_ = nullptr;
+  is_text_ps_mode_ = false;
 }
 
 OB_SERIALIZE_MEMBER(ObSqlCtx, stmt_type_);

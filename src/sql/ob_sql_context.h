@@ -500,6 +500,7 @@ public:
   ObRawExpr *flashback_query_expr_;
   ObSpmCacheCtx spm_ctx_;
   bool is_execute_call_stmt_;
+  bool is_text_ps_mode_;
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
 };

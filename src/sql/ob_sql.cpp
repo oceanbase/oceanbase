@@ -1921,7 +1921,7 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   // if get plan from plan cache, reset its auto-increment variable here
   // do not set variable for hidden primary key; its default value is 1
   if (OB_SUCC(ret)) {
-    if (!context.is_prepare_protocol_
+    if (!context.is_text_ps_mode_
         && OB_FAIL(after_get_plan(*pc_ctx, session, result.get_physical_plan(),
                                result.get_is_from_plan_cache(), NULL))) {
       LOG_WARN("fail to handle after get plan", K(ret));
@@ -4264,6 +4264,7 @@ int ObSql::handle_text_execute(const ObStmt *basic_stmt,
 {
   int ret = OB_SUCCESS;
   const ObExecuteStmt *exec_stmt = static_cast<const ObExecuteStmt*>(basic_stmt);
+  sql_ctx.is_text_ps_mode_ = true;
   if (OB_ISNULL(exec_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret), KPC(exec_stmt), KPC(basic_stmt));

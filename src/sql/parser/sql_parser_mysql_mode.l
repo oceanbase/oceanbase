@@ -1348,7 +1348,6 @@ BEGIN(in_c_comment);
     return QUESTIONMARK;
   }
 }
-
 ":"{identifier} {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
@@ -1365,7 +1364,6 @@ BEGIN(in_c_comment);
   if (OB_UNLIKELY(p->question_mark_ctx_.by_ordinal_)) {
     YY_UNEXPECTED_ERROR("Ordinal binding and Named binding cannot be combined\n");
   }
-  copy_and_replace_questionmark(p, yylloc->first_column, yylloc->last_column, yylval->node->value_);
   if (IS_FAST_PARAMETERIZE) {
     yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
     check_malloc(yylval->node->raw_text_);
