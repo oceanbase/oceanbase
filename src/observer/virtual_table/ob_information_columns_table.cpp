@@ -316,11 +316,12 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
         // Specify db_name and tbl_name at the same time
         const ObTableSchema *filter_table_schema = NULL;
         ObString table_name = start_key_obj_ptr[1].get_varchar();
-        if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_,
-                filter_database_schema->get_database_id(),
-                table_name,
-                false /*is_index*/,
-                filter_table_schema))) {
+        if (table_name.empty()) {
+        } else if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_,
+                       filter_database_schema->get_database_id(),
+                       table_name,
+                       false /*is_index*/,
+                       filter_table_schema))) {
           SERVER_LOG(WARN, "fail to get table", K(ret), K(tenant_id_), K(database_name), K(table_name));
         } else if (NULL == filter_table_schema) {
         } else if (OB_FAIL(filter_table_schema_array_.push_back(filter_table_schema))) {
