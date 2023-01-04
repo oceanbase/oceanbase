@@ -187,6 +187,11 @@ int ObRawExprDeduceType::calc_result_type_with_const_arg(ObNonTerminalRawExpr& e
           break;
       }  // end switch
     }
+    if (OB_FAIL(ret) && my_session_->is_ps_prepare_stage()) {
+      // the ps prepare stage does not do type deduction, and directly gives a default type.
+      result_type.set_null();
+      ret = OB_SUCCESS;
+    }
   }
 #undef GET_TYPE_ARRAY
   return ret;
@@ -379,6 +384,11 @@ int ObRawExprDeduceType::calc_result_type(
         LOG_WARN("fail to calc result type with const arguments", K(ret));
       }
     }
+    if (OB_FAIL(ret) && my_session_->is_ps_prepare_stage()) {
+      // the ps prepare stage does not do type deduction, and directly gives a default type.
+      result_type.set_null();
+      ret = OB_SUCCESS;
+    }
     // check parameters can cast to expected type
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < ori_types.count(); i++) {
@@ -387,7 +397,8 @@ int ObRawExprDeduceType::calc_result_type(
         const ObObjType to = types.at(i).get_calc_type();
         const ObCollationType to_cs_type = types.at(i).get_calc_collation_type();
         LOG_DEBUG("check parameters can cast to expected type", K(ret), K(i), K(from), K(to));
-        if (from != to && !cast_supported(from, from_cs_type, to, to_cs_type)) {
+        if (from != to && !cast_supported(from, from_cs_type, to, to_cs_type) &&
+            !my_session_->is_ps_prepare_stage()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("cast parameter to expected type not supported", K(ret), K(i), K(from), K(to));
         }
@@ -1197,7 +1208,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
           ObCollationType from_cs_type = child_expr->get_result_type().get_collation_type();
           const ObObjType to_type =
               ((ob_is_double_type(from_type) || ob_is_float_type(from_type)) ? from_type : ObNumberType);
-          if (from_type != to_type && !cast_supported(from_type, from_cs_type, to_type, CS_TYPE_BINARY)) {
+          if (from_type != to_type && !cast_supported(from_type, from_cs_type, to_type, CS_TYPE_BINARY) &&
+              !my_session_->is_ps_prepare_stage()) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("cast to expected type not supported", K(ret), K(from_type), K(to_type));
           } else {
@@ -1315,7 +1327,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
             const ObCollationType to_cs_type =
                 keep_from_type ? from_cs_type
                                : (T_FUN_GROUP_PERCENTILE_DISC == expr.get_expr_type() ? from_cs_type : CS_TYPE_BINARY);
-            if (from_type != to_type && !cast_supported(from_type, from_cs_type, to_type, to_cs_type)) {
+            if (from_type != to_type && !cast_supported(from_type, from_cs_type, to_type, to_cs_type) &&
+                !my_session_->is_ps_prepare_stage()) {
               ret = OB_ERR_INVALID_TYPE_FOR_OP;
               LOG_WARN("cast to expected type not supported", K(ret), K(from_type), K(to_type));
             } else {
@@ -1383,10 +1396,12 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
               to_type = ob_is_float_type(from_type1) ? from_type1 : from_type2;
             }
           }
-          if (from_type1 != to_type && !cast_supported(from_type1, from_cs_type1, to_type, to_cs_type)) {
+          if (from_type1 != to_type && !cast_supported(from_type1, from_cs_type1, to_type, to_cs_type) &&
+              !my_session_->is_ps_prepare_stage()) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("cast to expected type not supported", K(ret), K(from_type1), K(to_type));
-          } else if (from_type2 != to_type && !cast_supported(from_type2, from_cs_type2, to_type, to_cs_type)) {
+          } else if (from_type2 != to_type && !cast_supported(from_type2, from_cs_type2, to_type, to_cs_type) &&
+                     !my_session_->is_ps_prepare_stage()) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("cast to expected type not supported", K(ret), K(from_type2), K(to_type));
           } else {
@@ -2417,6 +2432,10 @@ int ObRawExprDeduceType::try_add_cast_expr(
     CK(NULL != new_expr);
     if (OB_SUCC(ret) && child_ptr != new_expr) {  // cast expr added
       OZ(parent.replace_param_expr(child_idx, new_expr));
+      if (OB_FAIL(ret) && my_session_->is_ps_prepare_stage()) {
+        ret = OB_SUCCESS;
+        LOG_DEBUG("ps prepare phase ignores type deduce error");
+      }
     }
   }
   return ret;

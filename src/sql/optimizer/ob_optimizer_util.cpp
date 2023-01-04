@@ -5153,7 +5153,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator* allocator, ObS
         ObSEArray<ObExprResType, 2> types;
         ObExprVersion dummy_op(*allocator);
         ObCollationType coll_type = CS_TYPE_INVALID;
-        if (share::is_oracle_mode()) {
+        bool skip_add_cast = false;
+        if (lib::is_oracle_mode()) {
           /*
            * Oracle has more strict constraints for data types used in set operator
            * https://docs.oracle.com/cd/B19306_01/server.102/b14200/queries004.htm
@@ -5167,12 +5168,19 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator* allocator, ObS
                       ob_is_oracle_numeric_type(right_type.get_type())) ||
                   (ob_is_oracle_temporal_type(left_type.get_type()) &&
                       (ob_is_oracle_temporal_type(right_type.get_type()))))) {
-            ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
-            LOG_WARN("expression must have same datatype as corresponding expression",
-                K(ret),
-                K(i),
-                K(left_type),
-                K(right_type));
+            if (session_info->is_ps_prepare_stage()) {
+              skip_add_cast = true;
+              LOG_WARN("ps prepare stage expression has different datatype", K(i), K(left_type), K(right_type));
+            } else {
+              ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
+              LOG_WARN("expression must have same datatype as corresponding expression",
+                  K(ret),
+                  K(session_info->is_ps_prepare_stage()),
+                  K(right_type.is_varchar_or_char()),
+                  K(i),
+                  K(left_type),
+                  K(right_type));
+            }
           } else if (left_type.is_character_type() && right_type.is_character_type() &&
                      (left_type.is_varchar_or_char() != right_type.is_varchar_or_char())) {
             ret = OB_ERR_CHARACTER_SET_MISMATCH;
@@ -5193,7 +5201,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator* allocator, ObS
         }
         const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
         if (OB_FAIL(ret)) {
-        } else if (to_left_type) {
+        } else if (to_left_type || skip_add_cast) {
           res_type = left_type;
         } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
           LOG_WARN("failed to push back", K(ret));
@@ -5201,9 +5209,15 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator* allocator, ObS
           LOG_WARN("failed to get collation connection", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(
                        res_type, &types.at(0), 2, coll_type, is_oracle_mode(), length_semantics, session_info))) {
-          LOG_WARN("failed to aggregate result type for merge", K(ret));
+          if (session_info->is_ps_prepare_stage()) {
+            skip_add_cast = true;
+            res_type = left_type;
+            LOG_WARN("failed to deduce type in ps prepare stage", K(types));
+          } else {
+            LOG_WARN("failed to aggregate result type for merge", K(ret));
+          }
         }
-        if (OB_FAIL(ret)) {
+        if (OB_FAIL(ret) || skip_add_cast) {
         } else if (ObMaxType == res_type.get_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("column type incompatible", K(left_type), K(right_type));

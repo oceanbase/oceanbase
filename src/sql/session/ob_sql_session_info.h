@@ -617,6 +617,14 @@ public:
   {
     return priv_user_id_;
   }
+  bool is_ps_prepare_stage() const
+  {
+    return is_ps_prepare_stage_;
+  }
+  void set_is_ps_prepare_stage(bool v)
+  {
+    is_ps_prepare_stage_ = v;
+  }
   int get_xa_last_result() const
   {
     return xa_last_result_;
@@ -745,6 +753,7 @@ private:
   // While only session got connection resource can release connection resource and decrease connections count.
   bool got_conn_res_;
   void *piece_cache_;
+  bool is_ps_prepare_stage_;
 };
 
 inline ObIExtraStatusCheck::Guard::Guard(ObSQLSessionInfo& session, ObIExtraStatusCheck& checker)

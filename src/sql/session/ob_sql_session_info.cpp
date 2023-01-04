@@ -146,7 +146,8 @@ ObSQLSessionInfo::ObSQLSessionInfo()
       min_proxy_version_ps_(0),
       is_ignore_stmt_(false),
       got_conn_res_(false),
-      piece_cache_(NULL)
+      piece_cache_(NULL),
+      is_ps_prepare_stage_(false)
 {}
 
 ObSQLSessionInfo::~ObSQLSessionInfo()

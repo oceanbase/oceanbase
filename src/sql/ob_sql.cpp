@@ -595,6 +595,8 @@ int ObSql::do_real_prepare(const ObString &sql, ObSqlCtx &context, ObResultSet &
   ObSQLSessionInfo &session = result.get_session();
   ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
   ParseMode parse_mode = context.is_dbms_sql_ ? DBMS_SQL_MODE : STD_MODE;
+  bool is_from_pl = result.is_simple_ps_protocol();
+  ObPsPrepareStatusGuard ps_status_guard(session, is_from_pl);
   CHECK_COMPATIBILITY_MODE(context.session_info_);
   if (OB_ISNULL(context.session_info_) || OB_ISNULL(context.schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
