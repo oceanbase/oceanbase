@@ -215,10 +215,17 @@ void ObPxPool::handle(ObLink *task)
   ATOMIC_DEC(&concurrency_);
 }
 
+void ObPxPool::set_px_thread_name()
+{
+  char buf[32];
+  snprintf(buf, 32, "PX_G%ld_%ld", group_id_, tenant_id_);
+  lib::set_thread_name_inner(buf);
+}
+
 void ObPxPool::run1()
 {
   int ret = OB_SUCCESS;
-  lib::set_thread_name("PxPoolTh", get_thread_idx());
+  set_px_thread_name();
   auto *pm = common::ObPageManager::thread_local_instance();
   if (OB_LIKELY(nullptr != pm)) {
     pm->set_tenant_ctx(tenant_id_, common::ObCtxIds::WORK_AREA);

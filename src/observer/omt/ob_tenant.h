@@ -72,7 +72,7 @@ public:
   void set_cgroup_ctrl(share::ObCgroupCtrl *cgroup_ctrl) { cgroup_ctrl_ = cgroup_ctrl; }
   int64_t get_pool_size() const { return get_thread_count(); }
   int submit(const RunFuncT &func);
-
+  void set_px_thread_name();
 private:
   void handle(common::ObLink *task);
 
