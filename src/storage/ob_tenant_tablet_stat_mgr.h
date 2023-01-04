@@ -220,6 +220,7 @@ class ObTabletStreamPool
 {
 public:
   typedef common::ObFixedQueue<ObTabletStreamNode> FreeList;
+  typedef common::ObDList<ObTabletStreamNode> LruList;
   enum NodeAllocType: int64_t {
     FIXED_ALLOC = 0,
     DYNAMIC_ALLOC
@@ -230,8 +231,11 @@ public:
   void destroy();
   int init(const int64_t max_free_list_num,
            const int64_t up_limit_node_num);
-  int alloc(ObTabletStreamNode *&node);
+  int alloc(ObTabletStreamNode *&node, bool &is_retired);
   void free(ObTabletStreamNode *node);
+  bool add_lru_list(ObTabletStreamNode *node) { return lru_list_.add_first(node); }
+  bool remove_lru_list(ObTabletStreamNode *node) { return lru_list_.remove(node); }
+  bool update_lru_list(ObTabletStreamNode *node) { return lru_list_.move_to_first(node); }
   OB_INLINE int64_t get_free_num() const { return free_list_.get_total(); }
   OB_INLINE int64_t get_allocated_num() const { return (max_free_list_num_ - get_free_num()) + allocated_dynamic_num_; }
   TO_STRING_KV(K_(max_free_list_num), K_(max_dynamic_node_num), K_(allocated_dynamic_num));
@@ -240,6 +244,7 @@ private:
   common::ObFIFOAllocator dynamic_allocator_;
   common::ObArenaAllocator free_list_allocator_;
   FreeList free_list_;
+  LruList lru_list_;
   int64_t max_free_list_num_;
   int64_t max_dynamic_node_num_;
   int64_t allocated_dynamic_num_;
@@ -304,7 +309,6 @@ private:
   TabletStatUpdater report_stat_task_;
   ObTabletStreamPool stream_pool_;
   TabletStreamMap stream_map_;
-  common::ObDList<ObTabletStreamNode> lru_list_;
   common::ObBucketLock bucket_lock_;
   ObTabletStat report_queue_[DEFAULT_MAX_PENDING_CNT];
   uint64_t report_cursor_;

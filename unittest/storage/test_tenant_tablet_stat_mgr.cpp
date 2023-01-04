@@ -296,7 +296,8 @@ TEST_F(TestTenantTabletStatMgr, basic_stream_pool)
   ASSERT_EQ(max_free_list_num, free_num);
 
   ObTabletStreamNode *fixed_node = nullptr;
-  ret = pool.alloc(fixed_node);
+  bool is_retired = false;
+  ret = pool.alloc(fixed_node, is_retired);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL != fixed_node);
   ASSERT_EQ(storage::ObTabletStreamPool::NodeAllocType::FIXED_ALLOC, fixed_node->flag_);
@@ -308,7 +309,7 @@ TEST_F(TestTenantTabletStatMgr, basic_stream_pool)
   common::ObSEArray<ObTabletStreamNode *, 500> free_nodes;
   for (int64_t i = 0; i < max_free_list_num; ++i) {
     ObTabletStreamNode *free_node = nullptr;
-    ret = pool.alloc(free_node);
+    ret = pool.alloc(free_node, is_retired);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_TRUE(NULL != free_node);
     ASSERT_EQ(storage::ObTabletStreamPool::NodeAllocType::FIXED_ALLOC, free_node->flag_);
@@ -318,7 +319,7 @@ TEST_F(TestTenantTabletStatMgr, basic_stream_pool)
   ASSERT_EQ(0, pool.get_free_num());
 
   ObTabletStreamNode *dynamic_node = nullptr;
-  ret = pool.alloc(dynamic_node);
+  ret = pool.alloc(dynamic_node, is_retired);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL != dynamic_node);
   ASSERT_EQ(storage::ObTabletStreamPool::NodeAllocType::DYNAMIC_ALLOC, dynamic_node->flag_);

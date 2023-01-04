@@ -266,6 +266,7 @@ ObTabletStreamPool::ObTabletStreamPool()
   : dynamic_allocator_(MTL_ID()),
     free_list_allocator_("FreeTbltStream"),
     free_list_(),
+    lru_list_(),
     max_free_list_num_(0),
     max_dynamic_node_num_(0),
     allocated_dynamic_num_(0),
@@ -283,12 +284,20 @@ void ObTabletStreamPool::destroy()
   is_inited_ = false;
   ObTabletStreamNode *node = nullptr;
 
+  DLIST_REMOVE_ALL_NORET(node, lru_list_) {
+    lru_list_.remove(node);
+    node->~ObTabletStreamNode();
+    node = nullptr;
+  }
+  lru_list_.reset();
+
   while (OB_SUCCESS == free_list_.pop(node)) {
     if (OB_NOT_NULL(node)) {
       node->~ObTabletStreamNode();
       node = nullptr;
     }
   }
+
   dynamic_allocator_.reset();
   free_list_.destroy();
   free_list_allocator_.reset();
@@ -336,11 +345,13 @@ int ObTabletStreamPool::init(
   return ret;
 }
 
-int ObTabletStreamPool::alloc(ObTabletStreamNode *&free_node)
+int ObTabletStreamPool::alloc(ObTabletStreamNode *&free_node, bool &is_retired)
 {
   int ret = OB_SUCCESS;
+  is_retired = false;
   void *buf = nullptr;
 
+  // 1. try to alloc node from free_list
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletStreamPool not inited", K(ret));
@@ -350,22 +361,32 @@ int ObTabletStreamPool::alloc(ObTabletStreamNode *&free_node)
   } else if (OB_FAIL(free_list_.pop(free_node))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to pop free node from free list", K(ret));
-    } else {
-      ret = OB_SUCCESS;
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (NULL == free_node) {
+  // 2. no free node in free_list, try to alloc node dynamically
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
     if (allocated_dynamic_num_ >= max_dynamic_node_num_) {
       ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("the number of allocated dynamic node has reached MAX", K(ret), K(max_dynamic_node_num_), K(allocated_dynamic_num_));
     } else if (OB_ISNULL(buf = dynamic_allocator_.alloc(sizeof(ObTabletStreamNode)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for free node", K(ret));
     } else {
       free_node = new (buf) ObTabletStreamNode(DYNAMIC_ALLOC);
       ++allocated_dynamic_num_;
+    }
+  }
+
+  // 3. dynamic node has reached the upper limit, try to retire the oldest node in lru_list
+  if (OB_SIZE_OVERFLOW == ret) {
+    ret = OB_SUCCESS;
+    if (lru_list_.is_empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lru list is unexpected null", K(ret));
+    } else {
+      free_node = lru_list_.get_last();
+      is_retired = true;
     }
   }
   return ret;
@@ -377,13 +398,14 @@ void ObTabletStreamPool::free(ObTabletStreamNode *node)
     int tmp_ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
       tmp_ret = OB_NOT_INIT;
-      LOG_ERROR("[MEMORY LEAK] ObTabletStreamPool is not inited, cannot free this node!!!", K(tmp_ret), KPC(node));
+      LOG_ERROR("[MEMORY LEAK] ObTabletStreamPool is not inited, cannot free this node!!!",
+          K(tmp_ret), KPC(node));
     } else if (DYNAMIC_ALLOC == node->flag_) {
       node->~ObTabletStreamNode();
       dynamic_allocator_.free(node);
       --allocated_dynamic_num_;
     } else {
-      node->reset();
+      node->~ObTabletStreamNode();
       OB_ASSERT(OB_SUCCESS == free_list_.push(node));
     }
   }
@@ -395,7 +417,6 @@ ObTenantTabletStatMgr::ObTenantTabletStatMgr()
   : report_stat_task_(*this),
     stream_pool_(),
     stream_map_(),
-    lru_list_(),
     bucket_lock_(),
     report_queue_(),
     report_cursor_(0),
@@ -465,11 +486,6 @@ void ObTenantTabletStatMgr::destroy()
   {
     ObBucketWLockAllGuard lock_guard(bucket_lock_);
     stream_map_.destroy();
-    DLIST_REMOVE_ALL_NORET(node, lru_list_) {
-      lru_list_.remove(node);
-      stream_pool_.free(node);
-    }
-    lru_list_.reset();
     stream_pool_.destroy();
     report_cursor_ = 0;
     pending_cursor_ = 0;
@@ -601,7 +617,7 @@ int ObTenantTabletStatMgr::update_tablet_stream(const ObTabletStat &report_stat)
     if (OB_ISNULL(stream_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("stream node is unexpected null", K(ret), K(report_stat));
-    } else if (!lru_list_.move_to_first(stream_node)) {
+    } else if (OB_UNLIKELY(!stream_pool_.update_lru_list(stream_node))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to add node to lru list", K(ret), K(stream_node));
     } else {
@@ -611,6 +627,7 @@ int ObTenantTabletStatMgr::update_tablet_stream(const ObTabletStat &report_stat)
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(stream_node)) {
+    stream_pool_.remove_lru_list(stream_node);
     stream_pool_.free(stream_node);
     stream_node = nullptr;
   }
@@ -620,34 +637,26 @@ int ObTenantTabletStatMgr::update_tablet_stream(const ObTabletStat &report_stat)
 int ObTenantTabletStatMgr::fetch_node(ObTabletStreamNode *&node)
 {
   int ret = OB_SUCCESS;
+  bool is_retired = false;
   node = nullptr;
-  if (OB_FAIL(stream_pool_.alloc(node))) {
-    if (OB_SIZE_OVERFLOW == ret) {
-      if (lru_list_.is_empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("lru list is unexpected null", K(ret));
-      } else {
-        ret = OB_SUCCESS;
-        ObTabletStatKey old_key = lru_list_.get_last()->stream_.get_tablet_stat_key();
-        ObBucketHashWLockGuard lock_guard(bucket_lock_, old_key.hash());
-        if (OB_FAIL(stream_map_.erase_refactored(old_key))) {
-          LOG_WARN("failed to erase tablet stat stream", K(ret), K(old_key));
-        } else {
-          node = lru_list_.remove_last();
-          node->stream_.reset();
-        }
-      }
+  if (OB_FAIL(stream_pool_.alloc(node, is_retired))) {
+    LOG_WARN("failed to alloc node", K(ret));
+  } else if (is_retired) { // get node from lru_list, should retire the old stat
+    ObTabletStatKey old_key = node->stream_.get_tablet_stat_key();
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, old_key.hash());
+    if (OB_FAIL(stream_map_.erase_refactored(old_key))) {
+      LOG_WARN("failed to erase tablet stat stream", K(ret), K(old_key));
     } else {
-      LOG_WARN("failed to get free node from stream pool", K(ret));
+      node->reset();
     }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(node)) {
-  } else if (!lru_list_.add_first(node)) {
+  } else if (OB_UNLIKELY(!stream_pool_.add_lru_list(node))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to add node to lru list", K(ret), KPC(node));
     stream_pool_.free(node);
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(node)) {
+    node = nullptr;
   }
   return ret;
 }
