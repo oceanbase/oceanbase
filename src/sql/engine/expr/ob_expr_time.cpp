@@ -16,6 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_day_of_func.h"
+#include "ob_expr_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -28,6 +29,8 @@ ObExprTime::ObExprTime(ObIAllocator& alloc) : ObFuncExprOperator(alloc, T_FUN_SY
 
 ObExprTime::~ObExprTime()
 {}
+
+static const char* monthnames[12] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
 int ObExprTime::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
 {
@@ -168,15 +171,19 @@ int ObExprTimeBase::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& exp
         res = res % 7 + 1;
         result.set_int32(res);
       } else if (DT_MON_NAME == dt_type_) {
-        int32_t mon = ot.parts_[DT_MON];
-        if (mon < 1 || mon > 12) {
-          LOG_WARN("invalid month value", K(ret), K(mon));
+        if(!ot.parts_[DT_MON]) {
           result.set_null();
         } else {
-          const char* month_name = ObExprMonthName::get_month_name(ot.parts_[DT_MON]);
-          result.set_string(common::ObVarcharType, month_name, strlen(month_name));
-          result.set_collation_type(result_type_.get_collation_type());
-          result.set_collation_level(result_type_.get_collation_level());
+          int idx = ot.parts_[DT_MON] - 1;
+          if(0 <= idx  && idx < 12) {
+            const char* month_name = monthnames[idx];
+            result.set_string(common::ObVarcharType, month_name, strlen(month_name));
+            result.set_collation_type(result_type_.get_collation_type());
+            result.set_collation_level(result_type_.get_collation_level());
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the parameter idx should be within a reasonable range");
+          }
         }
       } else {
         result.set_int32(ot.parts_[dt_type_]);
@@ -290,6 +297,21 @@ int ObExprTimeBase::calc(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum
         ret = OB_SUCCESS;
         expr_datum.set_null();
       }
+    } else if (expr.type_ == T_FUN_SYS_MONTH_NAME) {
+      if (!ot.parts_[DT_MON]) {
+        expr_datum.set_null();
+      } else {
+        int idx = ot.parts_[type] - 1;
+        if (0 <= idx && idx < 12) {
+          const ObString &month_name = monthnames[idx];
+          if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, expr_datum, month_name))) {
+            LOG_WARN("failed to exec set_expr_ascii_result");
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the parameter idx should be within a reasonable range", K(idx));
+        }
+      }
     } else if (with_date && !is_dayofmonth && ot.parts_[DT_DATE] + DAYS_FROM_ZERO_TO_BASE < 0) {
       expr_datum.set_null();
     } else {
@@ -366,39 +388,12 @@ ObExprMonthName::ObExprMonthName(ObIAllocator& alloc)
 ObExprMonthName::~ObExprMonthName()
 {}
 
-const ObExprMonthName::ObSqlMonthNameMap ObExprMonthName::MONTH_NAME_MAP[] = {{1, "January"},
-    {2, "February"},
-    {3, "March"},
-    {4, "April"},
-    {5, "May"},
-    {6, "June"},
-    {7, "July"},
-    {8, "August"},
-    {9, "September"},
-    {10, "October"},
-    {11, "November"},
-    {12, "December"}};
-
-OB_INLINE const char* ObExprMonthName::get_month_name(int month)
-{
-  return MONTH_NAME_MAP[month - 1].str_val;
-}
-
 int ObExprMonthName::calc_month_name(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
 {
   int ret = OB_SUCCESS;
   // NOTE: the last param should be true otherwise '2020-09-00' will not work
   if (OB_FAIL(calc(expr, ctx, expr_datum, DT_MON, true, true))) {
     LOG_WARN("eval month in monthname failed", K(ret), K(expr));
-  } else if (!expr_datum.is_null()) {
-    int32_t mon = expr_datum.get_int32();
-    if (mon < 1 || mon > 12) {
-      LOG_WARN("invalid month value", K(ret), K(expr));
-      expr_datum.set_null();
-    } else {
-      const char* month_name = get_month_name(mon);
-      expr_datum.set_string(month_name, strlen(month_name));
-    }
   }
 
   return ret;

@@ -178,15 +178,8 @@ public:
   virtual ~ObExprMonthName();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   static int calc_month_name(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  static const char* get_month_name(int month);
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMonthName);
-  typedef struct {
-    int32_t int_val;
-    const char* str_val;
-  } ObSqlMonthNameMap;
-  static const ObSqlMonthNameMap MONTH_NAME_MAP[12];
 };
 
 }  // namespace sql
