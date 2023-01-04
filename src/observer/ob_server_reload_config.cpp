@@ -271,6 +271,10 @@ int ObServerReloadConfig::operator()()
           K(data_disk_size), K(data_disk_percentage), K(reserved_size));
     }
   }
+
+  {
+    ObSysVariables::set_value("datadir", GCONF.data_dir);
+  }
   return real_ret;
 }
 
