@@ -3087,6 +3087,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
       user_var_val.reset();
       if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_name))) {
         LOG_WARN("fail to deserialize user var name", K(i), K(data_len), K(pos), K(ret));
+      } else if (OB_FAIL(name_pool_.write_string(user_var_name, &user_var_name))) {
+        LOG_WARN("fail to write user_var_name to string_buf_", K(user_var_name), K(ret));
       } else if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_val.meta_))) {
         LOG_WARN("fail to deserialize user var val meta", K(i), K(data_len), K(pos), K(ret));
       } else if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_val.value_))) {
@@ -3223,6 +3225,20 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
       need_serial_exec,
       sql_scope_flags,
       stmt_type_);
+  // deep copy string.
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(name_pool_.write_string(app_trace_id_, &app_trace_id_))) {
+      LOG_WARN("fail to write app_trace_id to string_buf_", K(app_trace_id_), K(ret));
+    } else if (OB_FAIL(name_pool_.write_string(thread_data_.user_name_, &thread_data_.user_name_))) {
+      LOG_WARN("fail to write username to string_buf_", K(thread_data_.user_name_), K(ret));
+    } else if (OB_FAIL(name_pool_.write_string(thread_data_.user_at_host_name_, &thread_data_.user_at_host_name_))) {
+      LOG_WARN("fail to write user_at_host_name to string_buf_", K(thread_data_.user_at_host_name_), K(ret));
+    } else if (OB_FAIL(name_pool_.write_string(thread_data_.user_at_client_ip_, &thread_data_.user_at_client_ip_))) {
+      LOG_WARN("fail to write user_at_client_ip to string_buf_", K(thread_data_.user_at_client_ip_), K(ret));
+    } else if (OB_FAIL(name_pool_.write_string(sys_var_in_pc_str_, &sys_var_in_pc_str_))) {
+      LOG_WARN("fail to write sys_var_in_pc_str to string_buf_", K(sys_var_in_pc_str_), K(ret));
+    }
+  }
   trans_flags_.set_need_serial_exec(need_serial_exec);
   is_deserialized_ = true;
   tz_info_wrap_.set_tz_info_map(tz_info_map);
