@@ -67,16 +67,16 @@ class ObMySQLRequestManager {
 public:
   static const int64_t SQL_AUDIT_PAGE_SIZE = (1LL << 21) - (1LL << 13);  // 2M - 8k
   static const int64_t MAX_PARAM_BUF_SIZE = 64 * 1024;
-  // number of deleted sql_audit records executing release_old one time
-  static const int32_t BATCH_RELEASE_COUNT = 50000;
   static const int32_t MAX_RELEASE_TIME = 5 * 1000;  // 5ms
   static const int64_t US_PER_HOUR = 3600000000;
-  static const int64_t MAX_QUEUE_SIZE = 10000000;           // 10m
+  // initialize the queue size. The normal mode is 1000w, and the mini mode is 10w
+  static const int64_t MAX_QUEUE_SIZE = 10000000;          // 1000w
   static const int64_t MINI_MODE_MAX_QUEUE_SIZE = 100000;  // 10w
-  // start to eliminate when sql_audit more than 9 millions records
-  static const int64_t HIGH_LEVEL_EVICT_SIZE = 9000000;  // 900w
-  // stop eliminate when sql_audit fewer than 8 millions records
-  static const int64_t LOW_LEVEL_EVICT_SIZE = 8000000;  // 800w
+  // the high and low watermarks eliminated by line are set as a percentage of the queue size
+  static constexpr float HIGH_LEVEL_EVICT_PERCENTAGE = 0.9;  // 90%
+  static constexpr float LOW_LEVEL_EVICT_PERCENTAGE = 0.8;   // 80%
+  // percentage of sql audits deleted for each release operation
+  static constexpr float BATCH_RELEASE_PERCENTAGE = 0.005;  // 0.005
   // interval between elimination
   static const int64_t EVICT_INTERVAL = 1000000;  // 1s
   typedef common::ObRaQueue::Ref Ref;
@@ -113,11 +113,11 @@ public:
   {
     return (int64_t)queue_.get_push_idx();
   }
-  int64_t get_size_used()
+  int64_t get_capacity() const
   {
-    return (int64_t)(queue_.get_push_idx() - queue_.get_pop_idx());
+    return (int64_t)queue_.get_capacity();
   }
-  int64_t get_size()
+  int64_t get_size_used() const
   {
     return (int64_t)queue_.get_size();
   }
@@ -140,7 +140,7 @@ public:
    * called when memory limit exceeded
    */
 
-  int release_old(int64_t limit = BATCH_RELEASE_COUNT)
+  int release_old(int64_t limit)
   {
     void* req = NULL;
     int64_t count = 0;

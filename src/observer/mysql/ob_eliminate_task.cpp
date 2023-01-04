@@ -131,17 +131,24 @@ void ObEliminateTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   common::ObConcurrentFIFOAllocator* allocator = NULL;
-  int64_t evict_high_level = 0;
-  int64_t evict_low_level = 0;
   bool is_change = false;
+  int64_t release_cnt = 0;
+  int64_t evict_high_mem_level = 0;
+  int64_t evict_low_mem_level = 0;
+  int64_t evict_high_size_level = 0;
+  int64_t evict_low_size_level = 0;
   if (OB_ISNULL(request_manager_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(request_manager_), K(ret));
   } else if (OB_FAIL(check_config_mem_limit(is_change))) {
     LOG_WARN("fail to check mem limit stat", K(ret));
-  } else if (OB_FAIL(calc_evict_mem_level(evict_low_level, evict_high_level))) {
+  } else if (OB_FAIL(calc_evict_mem_level(evict_low_mem_level, evict_high_mem_level))) {
     LOG_WARN("fail to get sql audit evict memory level", K(ret));
   } else {
+    int64_t queue_size = request_manager_->get_capacity();
+    release_cnt = queue_size * ObMySQLRequestManager::BATCH_RELEASE_PERCENTAGE;
+    evict_high_size_level = queue_size * ObMySQLRequestManager::HIGH_LEVEL_EVICT_PERCENTAGE;
+    evict_low_size_level = queue_size * ObMySQLRequestManager::LOW_LEVEL_EVICT_PERCENTAGE;
     allocator = request_manager_->get_allocator();
     if (OB_ISNULL(allocator)) {
       ret = OB_NOT_INIT;
@@ -152,19 +159,19 @@ void ObEliminateTask::runTimerTask()
     int64_t start_time = obsys::ObSysTimeUtil::getTime();
     int64_t evict_batch_count = 0;
     // Eliminate by memory
-    if (evict_high_level < allocator->allocated()) {
+    if (evict_high_mem_level < allocator->allocated()) {
       LOG_INFO("sql audit evict mem start",
-          K(evict_low_level),
-          K(evict_high_level),
+          K(evict_low_mem_level),
+          K(evict_high_mem_level),
           "size_used",
           request_manager_->get_size_used(),
           "mem_used",
           allocator->allocated());
       int64_t last_time_allocated = allocator->allocated();
-      while (evict_low_level < allocator->allocated()) {
-        request_manager_->release_old();
+      while (evict_low_mem_level < allocator->allocated()) {
+        request_manager_->release_old(release_cnt);
         evict_batch_count++;
-        if ((evict_low_level < allocator->allocated()) && (last_time_allocated == allocator->allocated())) {
+        if ((evict_low_mem_level < allocator->allocated()) && (last_time_allocated == allocator->allocated())) {
           LOG_INFO("release old cannot free more memory");
           break;
         }
@@ -172,16 +179,17 @@ void ObEliminateTask::runTimerTask()
       }
     }
     // Eliminate according to the number of sql audit records
-    if (request_manager_->get_size_used() > ObMySQLRequestManager::HIGH_LEVEL_EVICT_SIZE) {
-      evict_batch_count = (request_manager_->get_size_used() - ObMySQLRequestManager::LOW_LEVEL_EVICT_SIZE) /
-                          ObMySQLRequestManager::BATCH_RELEASE_COUNT;
+    if (request_manager_->get_size_used() > evict_high_size_level) {
+      evict_batch_count = (request_manager_->get_size_used() - evict_low_size_level) / release_cnt;
       LOG_INFO("sql audit evict record start",
+          K(evict_high_size_level),
+          K(evict_low_size_level),
           "size_used",
           request_manager_->get_size_used(),
           "mem_used",
           allocator->allocated());
       for (int i = 0; i < evict_batch_count; i++) {
-        request_manager_->release_old();
+        request_manager_->release_old(release_cnt);
       }
     }
     // if sql_audit_memory_limit changed, need refresh total_limit_ in ObConcurrentFIFOAllocator;
@@ -190,7 +198,8 @@ void ObEliminateTask::runTimerTask()
     }
     int64_t end_time = obsys::ObSysTimeUtil::getTime();
     LOG_INFO("sql audit evict task end",
-        K(evict_high_level),
+        K(evict_high_mem_level),
+        K(evict_high_size_level),
         K(evict_batch_count),
         "elapse_time",
         end_time - start_time,

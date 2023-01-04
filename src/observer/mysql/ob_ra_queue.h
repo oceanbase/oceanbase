@@ -92,6 +92,10 @@ public:
   {
     return ATOMIC_LOAD(&pop_);
   }
+  uint64_t get_capacity() const
+  {
+    return capacity_;
+  }
   uint64_t get_size() const
   {
     uint64_t pop_idx = get_pop_idx();
