@@ -72,8 +72,13 @@ class ObPlAggUdfFunction
   int get_package_udf_id(const ObString &routine_name,
                          const share::schema::ObRoutineInfo *&routine_info);
 
+  int pick_routine(ObSEArray<const ObIRoutineInfo *, 4> &routine_infos,
+                    const ObIRoutineInfo *&routine_info,
+                    ObIArray<ObExprResType> &param_type);
+
   int get_package_routine_info(const ObString &routine_name,
-                               const share::schema::ObRoutineInfo *&routine_info);
+                               const share::schema::ObRoutineInfo *&routine_info,
+                               ObIArray<ObExprResType> &param_type);
 
   int check_types(const ObObj *obj_params,
                   int64_t param_num,
