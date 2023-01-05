@@ -416,7 +416,9 @@ int ObDDLTableMergeTask::process()
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->set_commit_success(merge_param_.start_scn_))) {
-        LOG_WARN("set is commit success failed", K(ret));
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("set is commit success failed", K(ret));
+        }
       } else {
         LOG_INFO("commit ddl sstable succ", K(ddl_param), K(merge_param_));
       }
