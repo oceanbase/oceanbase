@@ -280,6 +280,7 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   ObMigrationStatus migration_status;
   can_do_restore = false;
   bool is_normal = false;
+  bool is_exist = true;
   if (is_stop()) { 
     // when remove ls, set ls restore handler stop
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
@@ -292,8 +293,16 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
   } else if (restore_status.is_restore_none()) {
   } else if (restore_status.is_restore_failed()) {
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+    if (REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000)) {
       LOG_WARN("ls restore failed, tenant restore can't continue", K(result_mgr_));
+    }
+  } else if (OB_FAIL(check_restore_job_exist_(is_exist))) {
+  } else if (!is_exist) {
+    if (OB_FAIL(ls_->set_restore_status(ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_FAILED), get_rebuild_seq()))) {
+      LOG_WARN("failed to set restore status", K(ret), KPC(ls_));
+      if (OB_STATE_NOT_MATCH == ret && OB_FAIL(update_rebuild_seq())) {
+        LOG_WARN("failed to update rebuild seq", K(ret));
+      }
     }
   } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
     LOG_WARN("fail to get migration status", K(ret));
@@ -303,6 +312,31 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   } else {
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
       LOG_WARN("ls is in migration, restore wait later", KPC(ls_));
+    }
+  }
+  return ret;
+}
+
+int ObLSRestoreHandler::check_restore_job_exist_(bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy_ = nullptr;
+  share::ObPhysicalRestoreTableOperator restore_table_operator;
+  const uint64_t tenant_id = ls_->get_tenant_id();
+  ObPhysicalRestoreJob job_info;
+  is_exist = true;
+  if (OB_ISNULL(sql_proxy_ = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql prxoy must not be null", K(ret));
+  } else if (OB_FAIL(restore_table_operator.init(sql_proxy_, tenant_id))) {
+    LOG_WARN("failed to init restore table operator", K(ret), K(tenant_id));
+  } else if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id, job_info))) {
+    if (ret == OB_ENTRY_NOT_EXIST) {
+      is_exist = false;
+      ret = OB_SUCCESS;
+      LOG_INFO("restore job is not exist", K(tenant_id), K(is_exist));
+    } else {
+      LOG_WARN("failed to get job by tenant", K(ret), K(tenant_id));
     }
   }
   return ret;
@@ -1179,8 +1213,19 @@ int ObILSRestoreState::get_follower_server_(ObIArray<ObStorageHASrcInfo> &follow
   ObStorageHASrcInfo follower_info;
   follower_info.cluster_id_ = cluster_id_;
   const int64_t expire_renew_time = INT64_MAX;
-  if (OB_FAIL(location_service_->get(follower_info.cluster_id_, tenant_id, ls_->get_ls_id(), expire_renew_time, is_cache_hit, location))) {
+  logservice::ObLogHandler *log_handler = nullptr;
+  int64_t paxos_replica_num = 0;
+  common::ObMemberList member_list;
+  if (OB_ISNULL(log_handler = ls_->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log handler should not be NULL", K(ret));
+  } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num))) {
+    LOG_WARN("failed to get paxos member list", K(ret));
+  } else if (OB_FAIL(location_service_->get(follower_info.cluster_id_, tenant_id, ls_->get_ls_id(), expire_renew_time, is_cache_hit, location))) {
     LOG_WARN("fail to get location", K(ret), KPC(ls_));
+  } else if (location.get_replica_locations().count() != paxos_replica_num) {
+    ret = OB_REPLICA_NUM_NOT_MATCH;
+    LOG_WARN("replica num not match, ls may in migration", K(ret), K(location), K(member_list), K(paxos_replica_num));
   } else {
     const ObIArray<share::ObLSReplicaLocation> &replica_locations = location.get_replica_locations();
     for (int64_t i = 0; OB_SUCC(ret) && i < replica_locations.count(); ++i) {
@@ -1194,8 +1239,7 @@ int ObILSRestoreState::get_follower_server_(ObIArray<ObStorageHASrcInfo> &follow
   }
   return ret;
 }
-
-int ObILSRestoreState::request_follower_restore_status_(bool &finish)
+int ObILSRestoreState::check_all_follower_restore_finish_(bool &finish)
 {
   int ret = OB_SUCCESS;
   ObArray<ObStorageHASrcInfo> follower;
@@ -1211,24 +1255,31 @@ int ObILSRestoreState::request_follower_restore_status_(bool &finish)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage_rpc should not be NULL", K(ret), KP(ls_service));
   } else if (OB_FAIL(get_follower_server_(follower))) {
-    LOG_WARN("fail to get follower server", K(ret));
-  }
-  bool is_finish = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < follower.count(); ++i) {
-    const ObStorageHASrcInfo &follower_info = follower.at(i);
-    is_finish = false;
-    if (OB_FAIL(storage_rpc->inquire_restore(ls_restore_arg_->get_tenant_id(), follower_info, ls_->get_ls_id(),
-        ls_restore_status_, restore_resp))) {
-      LOG_WARN("fail to inquire restore status", K(ret), K(follower_info), K(tablet_ids), KPC(ls_));
-    } else if (OB_FAIL(check_follower_restore_finish(ls_restore_status_, restore_resp.restore_status_, is_finish))) {
-      LOG_WARN("fail to check follower restore finish", K(ret), KPC(ls_), K(ls_restore_status_), K(restore_resp));
-    } else if (is_finish) { // do nothing
-    } else {
+    if (ret == OB_REPLICA_NUM_NOT_MATCH) {
       finish = false;
-      if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-        LOG_INFO("follower restore status not match leader status", K(ls_restore_status_), K(restore_resp));
+      ret = OB_SUCCESS;
+      LOG_INFO("replica num not match, wait add replica.", K(follower), KPC(ls_));
+    } else {
+      LOG_WARN("fail to get follower server", K(ret));
+    }
+  } else {
+    bool is_finish = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < follower.count(); ++i) {
+      const ObStorageHASrcInfo &follower_info = follower.at(i);
+      is_finish = false;
+      if (OB_FAIL(storage_rpc->inquire_restore(ls_restore_arg_->get_tenant_id(), follower_info, ls_->get_ls_id(),
+          ls_restore_status_, restore_resp))) {
+        LOG_WARN("fail to inquire restore status", K(ret), K(follower_info), K(tablet_ids), KPC(ls_));
+      } else if (OB_FAIL(check_follower_restore_finish(ls_restore_status_, restore_resp.restore_status_, is_finish))) {
+        LOG_WARN("fail to check follower restore finish", K(ret), KPC(ls_), K(ls_restore_status_), K(restore_resp));
+      } else if (is_finish) { // do nothing
+      } else {
+        finish = false;
+        if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+          LOG_INFO("follower restore status not match leader status", K(ls_restore_status_), K(restore_resp));
+        }
+        break;
       }
-      break;
     }
   }
   return ret;
@@ -1250,6 +1301,20 @@ int ObILSRestoreState::check_follower_restore_finish(const share::ObLSRestoreSta
   } else if (leader_status.get_status() < follower_status.get_status()) {
     // when switch leader, follower state may ahead leader
     is_finish = true;
+  }
+  return ret;
+}
+
+bool ObILSRestoreState::check_leader_restore_finish_(
+    const share::ObLSRestoreStatus &leader_status, const share::ObLSRestoreStatus &follower_status)
+{
+  bool ret = false;
+  if (!leader_status.is_valid() || leader_status.is_restore_failed()) {
+    // leader may restore failed or switch leader
+  } else if (leader_status.is_restore_none()) {
+    ret= true;
+  } else if (leader_status.get_status() > follower_status.get_status()) {
+    ret = true;
   }
   return ret;
 }
@@ -1764,7 +1829,7 @@ int ObLSRestoreSysTabletState::follower_restore_sys_tablet_()
   if (tablet_mgr_.has_no_task()) {
     if (OB_FAIL(request_leader_status_(leader_restore_status))) {
       LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
-    } else if (leader_restore_status.is_wait_restore_sys_tablets()
+    } else if (check_leader_restore_finish_(leader_restore_status, ls_restore_status_)
       && OB_FAIL(do_restore_sys_tablet())) {
       LOG_WARN("fail to do restore sys tablet", K(ret), KPC(ls_));
     }
@@ -1940,7 +2005,7 @@ int ObLSRestoreCreateUserTabletState::follower_create_user_tablet_()
     bool all_finish = false;
     if (OB_FAIL(request_leader_status_(leader_restore_status))) {
       LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
-    } else if (leader_restore_status.is_wait_restore_tablets_meta()) {
+    } else if (check_leader_restore_finish_(leader_restore_status, ls_restore_status_)) {
       if (OB_FAIL(reload_miss_tablet_(all_finish))) {
         LOG_WARN("fail to check follower restore tablet all finish", K(ret), KPC(ls_));
       } else if (all_finish) {
@@ -2092,7 +2157,7 @@ int ObLSQuickRestoreState::follower_quick_restore_()
     bool all_finish = false;
     if (OB_FAIL(request_leader_status_(leader_restore_status))) {
       LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
-    } else if (leader_restore_status.is_wait_quick_restore()) {
+    } else if (check_leader_restore_finish_(leader_restore_status, ls_restore_status_)) {
       if (OB_FAIL(reload_miss_tablet_(all_finish))) {
         LOG_WARN("fail to check follower restore tablet all finish", K(ret), KPC(ls_));
       } else if (all_finish) {
@@ -2246,7 +2311,7 @@ int ObLSQuickRestoreFinishState::leader_quick_restore_finish_()
   } else if (ls_restore_arg_->get_restore_type().is_normal_restore()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_MAJOR_DATA);
     bool all_finish = false;
-    if (OB_FAIL(request_follower_restore_status_(all_finish))) {
+    if (OB_FAIL(check_all_follower_restore_finish_(all_finish))) {
       LOG_WARN("fail to request follower restore meta result", K(ret), KPC(ls_));
     } else if (!all_finish) {
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
@@ -2275,7 +2340,7 @@ int ObLSQuickRestoreFinishState::follower_quick_restore_finish_()
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_MAJOR_DATA);
     if (OB_FAIL(request_leader_status_(leader_restore_status))) {
       LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
-    } else if ((leader_restore_status.is_restore_major_data() || leader_restore_status.is_wait_restore_major_data())
+    } else if (check_leader_restore_finish_(leader_restore_status, ls_restore_status_)
         && OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance statsu", K(ret), KPC(ls_), K(next_status));
     }
@@ -2360,7 +2425,7 @@ int ObLSRestoreMajorState::follower_restore_major_data_()
     bool all_finish = false;
     if (OB_FAIL(request_leader_status_(leader_restore_status))) {
       LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
-    } else if (leader_restore_status.is_wait_restore_major_data()) {
+    } else if (check_leader_restore_finish_(leader_restore_status, ls_restore_status_)) {
       if (OB_FAIL(reload_miss_tablet_(all_finish))) {
         LOG_WARN("fail to check follower restore tablet all finish", K(ret), KPC(ls_));
       } else if (all_finish) {
@@ -2486,7 +2551,7 @@ int ObLSRestoreWaitState::leader_wait_follower_()
     next_status = ObLSRestoreStatus::Status::RESTORE_NONE;
   }
   LOG_INFO("leader is wait follower", "leader current status", ls_restore_status_, "next status", next_status, KPC(ls_));
-  if (OB_FAIL(request_follower_restore_status_(all_finish))) {
+  if (OB_FAIL(check_all_follower_restore_finish_(all_finish))) {
     LOG_WARN("fail to request follower restore meta result", K(ret), KPC(ls_));
   } else if (!all_finish) {
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
@@ -2498,31 +2563,27 @@ int ObLSRestoreWaitState::leader_wait_follower_()
 int ObLSRestoreWaitState::follower_wait_leader_()
 {
   int ret = OB_SUCCESS;
-  ObLSRestoreStatus leader_restore_status;
-  leader_restore_status = ObLSRestoreStatus::Status::LS_RESTORE_STATUS_MAX;
   ObLSRestoreStatus next_status(ls_restore_status_);
-  if (OB_FAIL(request_leader_status_(leader_restore_status))) {
-    LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
-  } else if (!leader_restore_status.is_valid()) { // ls may switch leader
-  } else if ((leader_restore_status.is_restore_tablets_meta() || leader_restore_status.is_wait_restore_tablets_meta())
-      && ls_restore_status_.is_wait_restore_sys_tablets()) {
+  if (ls_restore_status_.is_wait_restore_sys_tablets()) {
     next_status = ObLSRestoreStatus::Status::RESTORE_TABLETS_META;
-  } else if ((leader_restore_status.is_quick_restore() || leader_restore_status.is_wait_quick_restore())
-      && ls_restore_status_.is_wait_restore_tablets_meta()) {
+  } else if (ls_restore_status_.is_wait_restore_tablets_meta()) {
     next_status = ObLSRestoreStatus::Status::QUICK_RESTORE;
-  } else if (leader_restore_status.is_restore_none()) {
-    next_status = ObLSRestoreStatus::Status::RESTORE_NONE;
-  } else if (leader_restore_status.is_quick_restore_finish() && ls_restore_status_.is_wait_quick_restore()) {
+  } else if (ls_restore_status_.is_wait_quick_restore()) {
     next_status = ObLSRestoreStatus::Status::QUICK_RESTORE_FINISH;
+  } else if (ls_restore_status_.is_wait_restore_major_data()) {
+    next_status = ObLSRestoreStatus::Status::RESTORE_NONE;
   }
 
-  LOG_INFO("follower is wait leader", K(leader_restore_status), K(next_status), KPC(ls_));
-
-  if (OB_FAIL(ret) || ls_restore_status_ == next_status) {
-  } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
-    LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
-  } else {
-    LOG_INFO("follower success advance status", K(next_status), KPC(ls_));
+  LOG_INFO("follower is wait leader", "follower current status", ls_restore_status_, "next status", next_status, KPC(ls_));
+  ObLSRestoreStatus leader_restore_status(ObLSRestoreStatus::Status::LS_RESTORE_STATUS_MAX);
+  if (OB_FAIL(request_leader_status_(leader_restore_status))) {
+    LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
+  } else if (check_leader_restore_finish_(leader_restore_status, ls_restore_status_)) {
+    if (OB_FAIL(advance_status_(*ls_, next_status))) {
+      LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
+    } else {
+      LOG_INFO("follower success advance status", K(next_status), K(leader_restore_status), KPC(ls_));
+    }
   }
   return ret;
 }

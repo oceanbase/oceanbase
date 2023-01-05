@@ -98,6 +98,7 @@ private:
   int check_before_do_restore_(bool &can_do_restore);
   int update_state_handle_();
   int check_meta_tenant_normal_(bool &is_normal);
+  int check_restore_job_exist_(bool &is_exist);
   int get_restore_state_handler_(const share::ObLSRestoreStatus &new_status, ObILSRestoreState *&new_state_handler);
   template <typename T>
   int construct_state_handler_(T *&new_handler);
@@ -141,9 +142,11 @@ protected:
 
   int notify_follower_restore_tablet_(const ObIArray<common::ObTabletID> &tablet_ids);
   int get_follower_server_(ObIArray<ObStorageHASrcInfo> &follower);
-  int request_follower_restore_status_(bool &finish);
+  int check_all_follower_restore_finish_(bool &finish);
   int check_follower_restore_finish(const share::ObLSRestoreStatus &leader_status, 
       const share::ObLSRestoreStatus &follower_status, bool &is_finish);
+  bool check_leader_restore_finish_(
+      const share::ObLSRestoreStatus &leader_status, const share::ObLSRestoreStatus &follower_status);
 
   int update_role_();
   bool is_switch_to_leader_(const ObRole &new_role);
