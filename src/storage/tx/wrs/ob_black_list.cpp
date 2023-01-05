@@ -234,8 +234,8 @@ void ObBLService::do_thread_task_(const int64_t begin_tstamp,
 int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
 {
   int ret = OB_SUCCESS;
-  uint64_t max_stale_time = 0;
-  uint64_t curr_time_ns = static_cast<uint64_t>(ObTimeUtility::current_time_ns());
+  int64_t max_stale_time = 0;
+  int64_t curr_time_ns = ObTimeUtility::current_time_ns();
 
   while (OB_SUCC(result->next())) {
     ObBLKey bl_key;
@@ -244,10 +244,9 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
       TRANS_LOG(WARN, "get_info_from_result_ fail ", KR(ret), K(result));
     } else if (LEADER == ls_info.ls_state_) {
       // 该日志流是leader，不能加入黑名单
-    } else if (OB_FAIL(get_tenant_max_stale_time_(bl_key.get_tenant_id(), max_stale_time))) {
-      TRANS_LOG(WARN, "get_tenant_max_stale_time_ fail ", KR(ret), K(bl_key));
     } else {
-      uint64_t max_stale_time_ns = max_stale_time * 1000;
+      max_stale_time = get_tenant_max_stale_time_(bl_key.get_tenant_id());
+      int64_t max_stale_time_ns = max_stale_time * 1000;
       if (curr_time_ns > ls_info.weak_read_scn_ + max_stale_time_ns) {
         // 时间戳落后，将对应日志流加入黑名单
         if (OB_FAIL(ls_bl_mgr_.update(bl_key, ls_info))) {
@@ -289,7 +288,7 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
   int64_t tenant_id = 0;
   int64_t id = ObLSID::INVALID_LS_ID;
   ObString ls_state_str;
-  uint64_t weak_read_scn = 0;
+  uint64_t weak_read_scn_uint = 0;
   int64_t migrate_status_int = -1;
 
   (void)GET_COL_IGNORE_NULL(result.get_varchar, "svr_ip", ip);
@@ -297,12 +296,13 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
   (void)GET_COL_IGNORE_NULL(result.get_int, "tenant_id", tenant_id);
   (void)GET_COL_IGNORE_NULL(result.get_int, "ls_id", id);
   (void)GET_COL_IGNORE_NULL(result.get_varchar, "ls_state", ls_state_str);
-  (void)GET_COL_IGNORE_NULL(result.get_uint, "weak_read_scn", weak_read_scn);
+  (void)GET_COL_IGNORE_NULL(result.get_uint, "weak_read_scn", weak_read_scn_uint);
   (void)GET_COL_IGNORE_NULL(result.get_int, "migrate_status", migrate_status_int);
 
   ObLSID ls_id(id);
   common::ObAddr server;
   ObRole ls_state = INVALID_ROLE;
+  int64_t weak_read_scn = static_cast<int64_t>(weak_read_scn_uint);
   ObMigrateStatus migrate_status = ObMigrateStatus(migrate_status_int);
 
   if (false == server.set_ip_addr(ip, static_cast<uint32_t>(port))) {
@@ -319,18 +319,9 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
   return ret;
 }
 
-int ObBLService::get_tenant_max_stale_time_(uint64_t tenant_id, uint64_t &max_stale_time)
+int64_t ObBLService::get_tenant_max_stale_time_(uint64_t tenant_id)
 {
-  int ret = OB_SUCCESS;
-  int64_t max_stale_time_int = ObWeakReadUtil::max_stale_time_for_weak_consistency(tenant_id,
-    ObWeakReadUtil::IGNORE_TENANT_EXIST_WARN);
-  if (max_stale_time_int <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    max_stale_time = 0;
-  } else {
-    max_stale_time = static_cast<uint64_t>(max_stale_time_int);
-  }
-  return ret;
+  return ObWeakReadUtil::max_stale_time_for_weak_consistency(tenant_id, ObWeakReadUtil::IGNORE_TENANT_EXIST_WARN);
 }
 
 void ObBLService::print_stat_()

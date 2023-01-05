@@ -123,7 +123,7 @@ public:
       weak_read_scn_(0),
       migrate_status_(OB_MIGRATE_STATUS_MAX)
       {}
-  int init(ObRole ls_state, uint64_t weak_read_scn, ObMigrateStatus migrate_status)
+  int init(ObRole ls_state, int64_t weak_read_scn, ObMigrateStatus migrate_status)
   {
     int ret = OB_SUCCESS;
     if (OB_MIGRATE_STATUS_MAX == migrate_status) {
@@ -144,7 +144,7 @@ public:
   // 日志流状态（角色）：LEADER、FOLLOWER，其他角色对于日志流是没有意义的
   ObRole ls_state_;
   // 弱读时间戳，如果落后超过一定时间就要加入黑名单，单位ns
-  uint64_t weak_read_scn_;
+  int64_t weak_read_scn_;
   // 迁移状态，正在迁移的日志流一定不可读
   ObMigrateStatus migrate_status_;
 };
@@ -367,7 +367,7 @@ private:
   int do_black_list_check_(sqlclient::ObMySQLResult *result);
   int do_clean_up_();
   int get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey &bl_key, ObLsInfo &ls_info);
-  int get_tenant_max_stale_time_(uint64_t tenant_id, uint64_t &max_stale_time);
+  int64_t get_tenant_max_stale_time_(uint64_t tenant_id);
   void print_stat_();
 
 private:

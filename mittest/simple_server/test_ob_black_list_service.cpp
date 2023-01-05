@@ -65,8 +65,7 @@ TEST_F(TestObBlackListService, black_list_inner_func)
     }
 
     // get max_stale_time_for_weak_consistency
-    uint64_t max_stale_time = 0;
-    ASSERT_EQ(OB_SUCCESS, bl_service.get_tenant_max_stale_time_(bl_key.get_tenant_id(), max_stale_time));
+    int64_t max_stale_time = bl_service.get_tenant_max_stale_time_(bl_key.get_tenant_id());
     LOG_INFO("get_tenant_max_stale_time_ ", K(bl_key), K(max_stale_time));
 
     // do blacklist check
