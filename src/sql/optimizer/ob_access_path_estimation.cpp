@@ -584,7 +584,8 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
   ObJoinOrder *join_order = NULL;
   ObLogPlan *log_plan = NULL;
   const ObTableMetaInfo *table_meta_info = NULL;
-  if (OB_ISNULL(ap.pre_query_range_) || !ap.pre_query_range_->is_ss_range()) {
+  if (OB_ISNULL(ap.pre_query_range_) || !ap.pre_query_range_->is_ss_range()
+      || OptSkipScanState::SS_DISABLE == ap.use_skip_scan_) {
     /* do nothing */
   } else if (OB_ISNULL(join_order = ap.parent_) || OB_ISNULL(log_plan = join_order->get_plan())
              || OB_ISNULL(table_meta_info = ap.est_cost_info_.table_meta_info_)) {
@@ -597,6 +598,8 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
       const double prefix_range_row_count = table_meta_info->table_row_count_
                                             * ap.est_cost_info_.prefix_filter_sel_
                                             * ap.est_cost_info_.pushdown_prefix_filter_sel_;
+      const EqualSets *temp_equal_sets = log_plan->get_selectivity_ctx().get_equal_sets();
+      const double temp_rows = log_plan->get_selectivity_ctx().get_current_rows();
       log_plan->get_selectivity_ctx().init_op_ctx(&join_order->get_output_equal_sets(), prefix_range_row_count);
       if (OB_FAIL(get_skip_scan_prefix_exprs(ap.est_cost_info_.range_columns_,
                                             ap.pre_query_range_->get_skip_scan_offset(),
@@ -619,6 +622,7 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
       } else {
         double refine_ndv = 1.0;
         prefix_ndv = std::max(refine_ndv, prefix_ndv);
+        log_plan->get_selectivity_ctx().init_op_ctx(temp_equal_sets, temp_rows);
       }
     }
   }
@@ -686,21 +690,27 @@ int ObAccessPathEstimation::update_use_skip_scan(ObCostTableScanInfo &est_cost_i
     } else {
       reset_skip_scan = true;
     }
-    if (OB_FAIL(ret) || !reset_skip_scan) {
-    } else if (OB_FAIL(append(est_cost_info.postfix_filters_, est_cost_info.ss_postfix_range_filters_))) {
-      LOG_WARN("failed to append exprs", K(ret));
-    } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
-                                                               *est_cost_info.sel_ctx_,
-                                                               est_cost_info.postfix_filters_,
-                                                               est_cost_info.postfix_filter_sel_,
-                                                               all_predicate_sel))) {
-      LOG_WARN("failed to calculate selectivity", K(est_cost_info.postfix_filters_), K(ret));
-    } else {
-      est_cost_info.ss_ranges_.reuse();
-      est_cost_info.ss_postfix_range_filters_.reuse();
-      est_cost_info.ss_prefix_ndv_ = 1.0;
-      est_cost_info.ss_postfix_range_filters_sel_ = 1.0;
-      use_skip_scan = OptSkipScanState::SS_DISABLE;
+    if (OB_SUCC(ret) && reset_skip_scan) {
+      const bool is_full_scan = est_cost_info.ref_table_id_ == est_cost_info.index_id_;
+      ObIArray<ObRawExpr*> &filters = is_full_scan ? est_cost_info.table_filters_
+                                                   : est_cost_info.postfix_filters_;
+      double &filter_sel = is_full_scan ? est_cost_info.table_filter_sel_
+                                        : est_cost_info.postfix_filter_sel_;
+      if (OB_FAIL(append(filters, est_cost_info.ss_postfix_range_filters_))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
+                                                                *est_cost_info.sel_ctx_,
+                                                                filters,
+                                                                filter_sel,
+                                                                all_predicate_sel))) {
+        LOG_WARN("failed to calculate selectivity", K(est_cost_info.postfix_filters_), K(ret));
+      } else {
+        est_cost_info.ss_ranges_.reuse();
+        est_cost_info.ss_postfix_range_filters_.reuse();
+        est_cost_info.ss_prefix_ndv_ = 1.0;
+        est_cost_info.ss_postfix_range_filters_sel_ = 1.0;
+        use_skip_scan = OptSkipScanState::SS_DISABLE;
+      }
     }
   }
   return ret;

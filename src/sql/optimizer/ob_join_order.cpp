@@ -9663,7 +9663,9 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
             ret = est_cost_info.table_filters_.push_back(filter);
           }
         } else {
-          ret = est_cost_info.table_filters_.push_back(filter);
+          if (!use_skip_scan || !ObOptimizerUtil::find_item(est_cost_info.ss_postfix_range_filters_, filter)) {
+            ret = est_cost_info.table_filters_.push_back(filter);
+          }
         }
       }
 
