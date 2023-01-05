@@ -5457,11 +5457,16 @@ int ObTransService::handle_trans_msg(const ObTransMsg& msg, ObTransRpcResult& re
                                  msg.get_sender(), trans_id, for_replay, is_readonly, alloc, ctx))) {
             TRANS_LOG(WARN, "get transaction context error", KR(ret), K(trans_id), K(msg));
             // do nothing
-          } else {
+          } else {  // part_ctx exist
             if (ctx->is_sp_trans()) {
               TRANS_LOG(INFO, "sp trans", KP(ctx), K(msg));
-              // rewrite ret
-              ret = OB_SUCCESS;
+              if (ctx->get_part_trans_action() >= ObPartTransAction::COMMIT) {
+                TRANS_LOG(INFO, "sp trans should finish", K(ret), KP(ctx), K(msg));
+                ret = OB_TRANS_CTX_NOT_EXIST;
+              } else {
+                // rewrite ret
+                ret = OB_SUCCESS;
+              }
             } else {
               TRANS_LOG(INFO, "not sp trans, need to double check scheduler context", KR(ret), K(msg));
             }
