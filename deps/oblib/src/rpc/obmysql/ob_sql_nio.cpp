@@ -28,6 +28,7 @@
 #include <sys/eventfd.h>
 #include <arpa/inet.h>
 #include <linux/futex.h>
+#include <netinet/tcp.h>
 #include "rpc/obrpc/ob_listener.h"
 
 using namespace oceanbase::common;
@@ -753,8 +754,12 @@ private:
   int do_accept_one(int fd) {
     int err = 0;
     ObSqlSock* s = NULL;
+    int enable_tcp_nodelay = 1;
     uint32_t epflag = EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLET | EPOLLRDHUP;
-    if (NULL == (s = alloc_sql_sock(fd))) {
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&enable_tcp_nodelay, sizeof(enable_tcp_nodelay)) < 0) {
+      err = errno;
+      LOG_WARN("set TCP_NODELAY failed", K(fd), KERRNOMSG(errno));
+    } else if (NULL == (s = alloc_sql_sock(fd))) {
       err = -ENOMEM;
       LOG_WARN("alloc_sql_sock fail", K(fd), K(err));
     } else if (0 != (err = epoll_regist(epfd_, fd, epflag, s))) {
