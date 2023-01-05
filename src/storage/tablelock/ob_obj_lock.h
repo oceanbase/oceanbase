@@ -114,6 +114,7 @@ public:
       const ObTableLockMode &lock_mode_in_same_trans,
       ObTxIDSet &conflict_tx_set,
       bool &conflict_with_dml_lock,
+      ObMalloc &allocator,
       const bool include_finish_tx = true,
       const bool only_check_dml_lock = false);
   share::SCN get_min_ddl_lock_committed_scn(const share::SCN &flushed_scn) const;
@@ -161,12 +162,24 @@ private:
   int recover_(
       const ObTableLockOp &lock_op,
       ObMalloc &allocator);
-  int lock_(
+  int fast_lock(
       const ObLockParam &param,
       const ObTableLockOp &lock_op,
       const ObTableLockMode &lock_mode_in_same_trans,
       bool &need_retry,
       ObMalloc &allocator,
+      ObTxIDSet &conflict_tx_set);
+  int slow_lock(
+      const ObLockParam &param,
+      const ObTableLockOp &lock_op,
+      const ObTableLockMode &lock_mode_in_same_trans,
+      bool &need_retry,
+      ObMalloc &allocator,
+      ObTxIDSet &conflict_tx_set);
+  int try_fast_lock_(
+      const ObTableLockOp &lock_op,
+      const ObTableLockMode &lock_mode_in_same_trans,
+      bool &need_retry,
       ObTxIDSet &conflict_tx_set);
   int unlock_(
       const ObTableLockOp &unlock_op,

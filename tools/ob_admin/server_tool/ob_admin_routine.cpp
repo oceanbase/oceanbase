@@ -626,7 +626,7 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
   }
 
   if (OB_FAIL(ret)) {
-  } else if (12 != sscanf(arg_str.c_str(),
+  } else if (8 != sscanf(arg_str.c_str(),
                           "%ld %ld %ld %ld %ld %ld %ld %ld",
                           &tenant_id_to_set, &ls_id_to_set, &obj_type,
                           &obj_id, &lock_mode, &owner_id, &create_tx_id, &op_type)) {
