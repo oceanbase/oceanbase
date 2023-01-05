@@ -2141,8 +2141,8 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
       LOG_WARN("PLS-00302: component 'A' must be declared", K(ret), K(access_ident), K(user_type));
     }
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected user type in find_sub_attr_by_name", K(ret), K(user_type));
+    ret = OB_ERR_COMPONENT_UNDECLARED;
+    LOG_USER_ERROR(OB_ERR_COMPONENT_UNDECLARED, attr_name.length(), attr_name.ptr());
   }
   return ret;
 }
