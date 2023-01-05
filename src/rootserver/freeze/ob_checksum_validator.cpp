@@ -304,7 +304,8 @@ int ObIndexChecksumValidator::validate_checksum(
     const SCN &frozen_scn,
     const hash::ObHashMap<ObTabletLSPair, ObTabletCompactionStatus> &tablet_compaction_map,
     int64_t &table_count,
-    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map)
+    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   if ((!frozen_scn.is_valid()) || (tablet_compaction_map.empty())) {
@@ -317,7 +318,7 @@ int ObIndexChecksumValidator::validate_checksum(
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("can only check index column checksum in primary cluster", KR(ret));
   } else if (OB_FAIL(check_all_table_verification_finished(frozen_scn, tablet_compaction_map, table_count,
-      table_compaction_map))) {
+      table_compaction_map, expected_epoch))) {
     LOG_WARN("fail to check all table verification finished", KR(ret), K_(tenant_id), K(frozen_scn));
   }
   return ret;
@@ -327,7 +328,8 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
     const SCN &frozen_scn,
     const hash::ObHashMap<ObTabletLSPair, ObTabletCompactionStatus> &tablet_compaction_map,
     int64_t &table_count,
-    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map)
+    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
@@ -399,7 +401,7 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
                   #endif
                   // both tables' all tablets finished compaction, we should validate column checksum.
                   if (OB_FAIL(ObTabletReplicaChecksumOperator::check_column_checksum(tenant_id_,
-                      *data_table_schema, *table_schema, frozen_scn, *sql_proxy_))) {
+                      *data_table_schema, *table_schema, frozen_scn, *sql_proxy_, expected_epoch))) {
                     if (OB_CHECKSUM_ERROR == ret) {
                       LOG_ERROR("ERROR! ERROR! ERROR! checksum error in index checksum", KR(ret), K(*data_table_schema),
                         K_(tenant_id), K(frozen_scn), K(*table_schema));
@@ -447,7 +449,11 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
           if (OB_CHECKSUM_ERROR == ret) {
             check_ret = ret;
           }
-          ret = OB_SUCCESS; // ignore ret, and continue check next table_schema
+          if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret) {
+            // do not ignore ret, therefore not continue to check next table_schema
+          } else {
+            ret = OB_SUCCESS; // ignore ret, and continue to check next table_schema
+          }
         }
       } // end for loop
 

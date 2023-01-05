@@ -457,13 +457,16 @@ int ObMajorMergeProgressChecker::get_associated_replica_num(
   return ret;
 }
 
-int ObMajorMergeProgressChecker::check_verification(const share::SCN &global_broadcast_scn)
+int ObMajorMergeProgressChecker::check_verification(
+    const share::SCN &global_broadcast_scn,
+    const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   if (!tablet_compaction_map_.empty()) {
     if (index_validator_.need_validate() && OB_FAIL(index_validator_.validate_checksum(global_broadcast_scn,
-        tablet_compaction_map_, table_count_, table_compaction_map_))) {
-      LOG_WARN("fail to validate checksum of index validator", KR(ret), K(global_broadcast_scn));
+        tablet_compaction_map_, table_count_, table_compaction_map_, expected_epoch))) {
+      LOG_WARN("fail to validate checksum of index validator", KR(ret), K(global_broadcast_scn),
+               K(expected_epoch));
     }
     // TODO @donglou.zl add cross-cluster validator
   } else {

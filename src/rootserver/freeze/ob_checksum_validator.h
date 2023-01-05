@@ -107,7 +107,8 @@ public:
   int validate_checksum(const share::SCN &frozen_scn,
                         const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                         int64_t &table_count,
-                        hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+                        hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                        const int64_t expected_epoch);
   virtual bool need_validate() const override;
 
 private:
@@ -115,7 +116,8 @@ private:
   int check_all_table_verification_finished(const share::SCN &frozen_scn,
                                             const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                             int64_t &table_count,
-                                            hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+                                            hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                            const int64_t expected_epoch);
   int check_table_compaction_finished(const share::schema::ObTableSchema &table_schema,
                                       const share::SCN &frozen_scn,
                                       const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,

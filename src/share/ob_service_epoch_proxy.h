@@ -72,6 +72,11 @@ public:
                                             const char *name,
                                             const int64_t expected_epoch,
                                             bool &is_match);
+  static int check_service_epoch(common::ObISQLClient &sql_proxy,
+                                 const int64_t tenant_id,
+                                 const char *name,
+                                 const int64_t expected_epoch,
+                                 bool &is_match);
 
 public:
   constexpr static const char * const FREEZE_SERVICE_EPOCH = "freeze_service_epoch";

@@ -23,6 +23,7 @@
 #include "observer/ob_server_struct.h"
 #include "share/tablet/ob_tablet_info.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_service_epoch_proxy.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 
 namespace oceanbase
@@ -988,7 +989,8 @@ int ObTabletReplicaChecksumOperator::check_column_checksum(
     const ObTableSchema &data_table_schema,
     const ObTableSchema &index_table_schema,
     const SCN &compaction_scn,
-    ObMySQLProxy &sql_proxy)
+    ObMySQLProxy &sql_proxy,
+    const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) 
@@ -1000,7 +1002,7 @@ int ObTabletReplicaChecksumOperator::check_column_checksum(
     const bool is_global_index = index_table_schema.is_global_index_table();
     if (is_global_index) {
       if (OB_FAIL(check_global_index_column_checksum(tenant_id, data_table_schema, index_table_schema,
-          compaction_scn, sql_proxy))) {
+          compaction_scn, sql_proxy, expected_epoch))) {
         LOG_WARN("fail to check global index column checksum", KR(ret), K(tenant_id), K(compaction_scn));
       }
     } else if (OB_UNLIKELY(index_table_schema.is_spatial_index())) {
@@ -1021,13 +1023,15 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
     const ObTableSchema &data_table_schema,
     const ObTableSchema &index_table_schema,
     const SCN &compaction_scn,
-    ObMySQLProxy &sql_proxy)
+    ObMySQLProxy &sql_proxy,
+    const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const int64_t default_column_cnt = ObTabletReplicaReportColumnMeta::DEFAULT_COLUMN_CNT;
   int64_t check_cnt = 0;
   bool need_verify = false;
+  bool is_match = true;
   uint64_t index_table_id = UINT64_MAX;
   uint64_t data_table_id = UINT64_MAX;
   // map element: <column_id, checksum_sum>
@@ -1089,6 +1093,16 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
           } else if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
             LOG_WARN("fail to get data table tablet checksum items", KR(ret), K(data_table_schema));
           }
+        } else if (OB_FAIL(ObServiceEpochProxy::check_service_epoch(sql_proxy, tenant_id,
+                           ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
+          LOG_WARN("fail to check service epoch", KR(ret), K(tenant_id), K(compaction_scn), K(expected_epoch));
+        } else if (!is_match) {
+          // Do not compare column checksum in case of OB_FREEZE_SERVICE_EPOCH_MISMATCH, since
+          // tablet repclia checksum items may be incomplete now.
+          // https://work.aone.alibaba-inc.com/issue/46876280
+          ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
+          LOG_WARN("no need to compare column checksum, cuz freeze_service_epoch mismatch",
+                    KR(ret), K(tenant_id), K(compaction_scn), K(expected_epoch));
         } else if (OB_FAIL(compare_column_checksum_(data_table_schema, index_table_schema, data_column_ckm_sum_map,
             index_column_ckm_sum_map, check_cnt, ckm_error_info))) {
           if (OB_CHECKSUM_ERROR == ret) {
