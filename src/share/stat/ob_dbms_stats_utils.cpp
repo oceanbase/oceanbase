@@ -292,33 +292,38 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
     LOG_WARN("get unexpected null", K(ret), K(ctx.get_my_session()));
   }
   while (OB_SUCC(ret) &&
-        (idx_tab_stat != table_stats.count() || idx_col_stat != column_stats.count())) {
+        (idx_tab_stat < table_stats.count() || idx_col_stat < column_stats.count())) {
     ObSEArray<ObOptTableStat*, 4> write_table_stats;
     ObSEArray<ObOptColumnStat*, 4> write_column_stats;
     if (OB_UNLIKELY(idx_tab_stat > table_stats.count() || idx_col_stat > column_stats.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpectd error", K(ret), K(idx_tab_stat), K(table_stats.count()),
                                       K(idx_col_stat), K(column_stats.count()));
-    } else if (table_stats.count() <= MAX_NUM_OF_WRITE_STATS &&
-               column_stats.count() <= MAX_NUM_OF_WRITE_STATS) {
-      if (OB_FAIL(write_table_stats.assign(table_stats))) {
-        LOG_WARN("failed to assign table stats", K(ret));
-      } else if (OB_FAIL(write_column_stats.assign(column_stats))) {
-        LOG_WARN("failed to assign column stats", K(ret));
-      } else {
-        idx_tab_stat = table_stats.count();
-        idx_col_stat = column_stats.count();
-      }
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < MAX_NUM_OF_WRITE_STATS && idx_tab_stat < table_stats.count(); ++i) {
         if (OB_FAIL(write_table_stats.push_back(table_stats.at(idx_tab_stat++)))) {
           LOG_WARN("failed to push back", K(ret));
         } else {/*do nothing*/}
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < MAX_NUM_OF_WRITE_STATS && idx_col_stat < column_stats.count(); ++i) {
-        if (OB_FAIL(write_column_stats.push_back(column_stats.at(idx_col_stat++)))) {
+      int64_t col_stat_cnt = 0;
+      int64_t hist_stat_cnt = 0;
+      while (OB_SUCC(ret) &&
+             col_stat_cnt < MAX_NUM_OF_WRITE_STATS &&
+             hist_stat_cnt < MAX_NUM_OF_WRITE_STATS &&
+             idx_col_stat < column_stats.count()) {
+        ObOptColumnStat *cur_opt_col_stat = column_stats.at(idx_col_stat);
+        if (OB_ISNULL(cur_opt_col_stat)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(cur_opt_col_stat));
+        } else if (OB_FAIL(write_column_stats.push_back(cur_opt_col_stat))) {
           LOG_WARN("failed to push back", K(ret));
-        } else {/*do nothing*/}
+        } else {
+          ++ col_stat_cnt;
+          ++ idx_col_stat;
+          if (cur_opt_col_stat->get_histogram().is_valid()) {
+            hist_stat_cnt += cur_opt_col_stat->get_histogram().get_bucket_size();
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
