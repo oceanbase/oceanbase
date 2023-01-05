@@ -306,7 +306,7 @@ int ObExprIs::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr&
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("const raw expr param2 or param3 is null", K(param2), K(param3));
   } else if (FALSE_IT(param1_type = rt_expr.args_[0]->datum_meta_.type_)) {
-  } else if (param3->get_value().is_true()) {  // special case: date value is '0000-00-00'.
+  } else if (param2->get_value().is_null() && param3->get_value().is_true()) {  // special case, date or datetime column with not null
     rt_expr.eval_func_ = ObExprIs::calc_is_date_int_null;
   } else if (param2->get_value().is_null()) {  // c1 is null
     rt_expr.eval_func_ = ObExprIs::calc_is_null;
