@@ -3524,7 +3524,7 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     palf_stat.end_ts_ns_ = get_end_ts_ns();
     palf_stat.max_lsn_ = get_max_lsn();
     palf_stat.max_ts_ns_ = get_max_ts_ns();
-    PALF_LOG(INFO, "PalfHandleImpl stat", K(palf_stat));
+    PALF_LOG(TRACE, "PalfHandleImpl stat", K(palf_stat));
   }
   return ret;
 }
