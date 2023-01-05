@@ -141,7 +141,7 @@ int ObTxCycleTwoPhaseCommitter::drive_self_2pc_phase(ObTxState next_phase)
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (!no_need_submit_log && !is_2pc_logging()) {
-    if (OB_TMP_FAIL(resubmit_2pc_log_())) {
+    if (OB_TMP_FAIL(submit_2pc_log_())) {
       TRANS_LOG(WARN, "submit log failed", K(ret));
     }
   }
@@ -227,7 +227,7 @@ int ObTxCycleTwoPhaseCommitter::handle_timeout()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  if (OB_TMP_FAIL(resubmit_2pc_log_())) {
+  if (OB_TMP_FAIL(submit_2pc_log_())) {
     TRANS_LOG(WARN, "resubmit 2pc log failed", KR(tmp_ret));
   }
 

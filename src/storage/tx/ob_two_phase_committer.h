@@ -362,7 +362,7 @@ private:
   // Because the submit_log may fail, we need retry to submit the log under
   // exception.
   int decide_2pc_log_type_(bool &need_submit, ObTwoPhaseCommitLogType &log_type);
-  int resubmit_2pc_log_();
+  int submit_2pc_log_();
 
   // Means we collect all downstream responses
   bool all_downstream_collected_();

@@ -1147,7 +1147,7 @@ int ObTxCycleTwoPhaseCommitter::on_pre_commit()
   return ret;
 }
 
-int ObTxCycleTwoPhaseCommitter::resubmit_2pc_log_()
+int ObTxCycleTwoPhaseCommitter::submit_2pc_log_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1159,7 +1159,7 @@ int ObTxCycleTwoPhaseCommitter::resubmit_2pc_log_()
   } else if (need_submit && OB_TMP_FAIL(submit_log(log_type))) {
     TRANS_LOG(WARN, "submit log failed", KR(tmp_ret), K(log_type));
   } else if (need_submit) {
-    TRANS_LOG(INFO, "resubmit 2pc log succeed", KR(tmp_ret), K(log_type), KPC(this));
+    // TRANS_LOG(INFO, "resubmit 2pc log succeed", KR(tmp_ret), K(log_type), KPC(this));
   }
 
   return ret;
