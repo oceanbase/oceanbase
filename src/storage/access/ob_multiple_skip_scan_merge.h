@@ -81,6 +81,7 @@ private:
   int64_t datums_cnt_;
   blocksstable::ObStorageDatum *datums_;
   common::ObArenaAllocator range_allocator_;
+  common::ObArenaAllocator rowkey_allocator_;
 };
 
 }

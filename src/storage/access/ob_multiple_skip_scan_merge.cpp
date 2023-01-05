@@ -25,7 +25,8 @@ ObMultipleSkipScanMerge::ObMultipleSkipScanMerge()
     scan_rows_range_(),
     datums_cnt_(0),
     datums_(nullptr),
-    range_allocator_("SKIP_SCAN")
+    range_allocator_("SS_RANGE"),
+    rowkey_allocator_("SS_ROWKEY")
 {
 }
 
@@ -81,6 +82,7 @@ void ObMultipleSkipScanMerge::reset()
   }
   datums_ = nullptr;
   range_allocator_.reset();
+  rowkey_allocator_.reset();
   ObMultipleScanMerge::reset();
 }
 
@@ -89,6 +91,7 @@ void ObMultipleSkipScanMerge::reuse()
   state_ = SCAN_ROWKEY;
   reuse_datums();
   range_allocator_.reuse();
+  rowkey_allocator_.reuse();
   ObMultipleScanMerge::reuse();
 }
 
@@ -378,6 +381,7 @@ int ObMultipleSkipScanMerge::update_scan_rows_range(blocksstable::ObDatumRow &ro
 int ObMultipleSkipScanMerge::update_scan_rowkey_range()
 {
   int ret = OB_SUCCESS;
+  rowkey_allocator_.reuse();
   if (OB_UNLIKELY(!scan_rows_range_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected scan rows range", K(ret), K(scan_rows_range_));
@@ -386,7 +390,7 @@ int ObMultipleSkipScanMerge::update_scan_rowkey_range()
         end_key_of_scan_rowkey_range() :
         start_key_of_scan_rowkey_range();
     for (int64_t i = 0; OB_SUCC(ret) && i < ss_rowkey_prefix_cnt_; ++i) {
-      if (OB_FAIL(rowkey_datums[i].deep_copy(scan_rows_range_.start_key_.get_datum(i), range_allocator_))) {
+      if (OB_FAIL(rowkey_datums[i].deep_copy(scan_rows_range_.start_key_.get_datum(i), rowkey_allocator_))) {
         STORAGE_LOG(WARN, "Fail to deep copy start key's datum", K(ret), K(i), K(scan_rowkey_range_));
       }
     }
@@ -408,7 +412,7 @@ int ObMultipleSkipScanMerge::update_scan_rowkey_range()
         if (OB_ISNULL(col_descs = access_param_->iter_param_.get_out_col_descs())) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "Unexpected null out cols", K(ret));
-        } else if (OB_FAIL(scan_rowkey_range_.prepare_memtable_readable(*col_descs, range_allocator_))) {
+        } else if (OB_FAIL(scan_rowkey_range_.prepare_memtable_readable(*col_descs, rowkey_allocator_))) {
           STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(scan_rowkey_range_));
         } else if (OB_FAIL(ObMultipleScanMerge::open(scan_rowkey_range_))) {
           STORAGE_LOG(WARN, "Fail to open scan rowkey range", K(ret), K(scan_rowkey_range_));
