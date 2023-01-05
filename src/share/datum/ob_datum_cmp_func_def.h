@@ -323,7 +323,8 @@ struct ObDatumTypeCmp<ObGeometryType, ObGeometryType> : public ObDefined<>
 {
   inline static int cmp(const ObDatum &l, const ObDatum &r)
   {
-    return ObCharset::strcmpsp(CS_TYPE_BINARY, l.ptr_, l.len_, r.ptr_, r.len_, false);
+    int res = ObCharset::strcmpsp(CS_TYPE_BINARY, l.ptr_, l.len_, r.ptr_, r.len_, false);
+    return res > 0 ? 1 : (res < 0 ? -1 : 0);
   }
 };
 

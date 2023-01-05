@@ -6260,20 +6260,23 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
   }
 
   const ColumnIdInfoMap& input_srid = other.get_columnId_map();
-  ColumnIdInfoMap::const_iterator iter = input_srid.begin();
-  if (!columnId_map_.created()) {
-    if (OB_FAIL(columnId_map_.create(OB_DEFAULT_SRID_BUKER, &map_alloc_, &bucket_allocator_wrapper_))) {
-      LOG_WARN("Init columnId_map_ failed", K(ret));
+  if (input_srid.created()) {
+    ColumnIdInfoMap::const_iterator iter = input_srid.begin();
+    if (!columnId_map_.created()) {
+      if (OB_FAIL(columnId_map_.create(OB_DEFAULT_SRID_BUKER, &map_alloc_, &bucket_allocator_wrapper_))) {
+        LOG_WARN("Init columnId_map_ failed", K(ret));
+      }
+    } else if (OB_FAIL(columnId_map_.reuse())) {
+      LOG_WARN("reuse columnId_map_ failed", K(ret));
     }
-  } else if (OB_FAIL(columnId_map_.reuse())) {
-    LOG_WARN("reuse columnId_map_ failed", K(ret));
-  }
-  while (OB_SUCC(ret) && iter != input_srid.end()) {
-    if (OB_FAIL(columnId_map_.set_refactored(iter->first, iter->second))) {
-      LOG_WARN("set srid map failed", K(ret), K(iter->first));
+    while (OB_SUCC(ret) && iter != input_srid.end()) {
+      if (OB_FAIL(columnId_map_.set_refactored(iter->first, iter->second))) {
+        LOG_WARN("set srid map failed", K(ret), K(iter->first));
+      }
+      iter++;
     }
-    iter++;
   }
+
   FOREACH_X(it, other.mbr_filters_, OB_SUCC(ret) && it != other.mbr_filters_.end()) {
     if (OB_FAIL(mbr_filters_.push_back(*it))) {
       LOG_WARN("store mbr_filters_ failed", K(ret));

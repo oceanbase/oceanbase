@@ -157,7 +157,7 @@ int ObTenantSrs::refresh_srs(bool is_sys)
     LOG_INFO("srs exist min version 4.1", K(tenant_data_version));
   } else if (OB_FAIL(fetch_all_srs(srs, is_sys))) {
     if (ret == OB_ERR_EMPTY_QUERY ) {
-      LOG_INFO("srs table is empty", K(is_sys));
+      LOG_DEBUG("srs table is empty", K(is_sys));
     } else {
       LOG_WARN("failed to fetch ObSrsCacheSnapShot", K(ret), K(is_sys));
     }
@@ -257,8 +257,10 @@ void ObTenantSrs::TenantSrsUpdateTask::runTimerTask()
   if (OB_ISNULL(tenant_srs_)) {
     LOG_WARN("failed to do srs update task. tenant_srs is null");
   } else if (OB_FAIL(tenant_srs_->refresh_sys_srs())) {
-    LOG_WARN("failed to refresh sys srs", K(ret), K(tenant_srs_->remote_sys_srs_version_),
-             K(tenant_srs_->local_sys_srs_version_));
+    if (ret != OB_ERR_EMPTY_QUERY) {
+      LOG_WARN("failed to refresh sys srs", K(ret), K(tenant_srs_->remote_sys_srs_version_),
+              K(tenant_srs_->local_sys_srs_version_));
+    }
   }
 }
 
