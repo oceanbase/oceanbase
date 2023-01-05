@@ -19475,7 +19475,7 @@ static size_t ob_strnxfrm_gb18030(const ObCharsetInfo *cs, uchar *dst,
       ++src;
     }
   }
-  return ob_strxfrm_pad(cs, ds, dst, de, nweights, flags);
+  return ob_strxfrm_pad_desc_and_reverse(cs, ds, dst, de, nweights, flags, 0);
 }
 
 size_t ob_varlen_encoding_gb18030_for_memcmp(const struct ObCharsetInfo* cs,		
