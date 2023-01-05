@@ -1173,7 +1173,9 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
   }
 
   // 添加plan到cache中失败的场景下，需要继续折叠batch参数，因为添加plan失败并不会影响当前plan继续执行
-  if ((OB_SUCC(ret) || OB_SUCCESS != add_plan_ret) && is_multi_stmt_batch) {
+  if (plan.is_prcr() || plan.is_sfc() || plan.is_pkg() || plan.is_anon()) {
+    // do nothing
+  } else if ((OB_SUCC(ret) || OB_SUCCESS != add_plan_ret) && is_multi_stmt_batch) {
     int save_ret = ret;
     if (OB_FAIL(match_and_generate_ext_params(batch_plan_set, pc_ctx, outline_param_idx))) {
       LOG_TRACE("fail to match and generate ext_params", K(ret));
