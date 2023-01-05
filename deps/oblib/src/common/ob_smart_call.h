@@ -44,7 +44,6 @@ inline void SStart(context_detail::transfer_t from)
 inline int call_with_new_stack(SContext& sctx)
 {
   int ret = OB_SUCCESS;
-  OB_LOG(INFO, "smart_call", K(lbt()));
   void* ori_stack_addr = nullptr;
   size_t ori_stack_size = 0;
   void* stack_addr = nullptr;
@@ -69,7 +68,6 @@ inline int call_with_new_stack(SContext& sctx)
     lib::g_stack_allocer.dealloc(stack_addr);
     all_stack_size -= stack_size;
   }
-  OB_LOG(INFO, "smart_call finish");
   return ret;
 }
 
