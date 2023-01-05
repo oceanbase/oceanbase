@@ -269,6 +269,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   allocator/ob_mem_leak_checker.cpp
   allocator/ob_mod_define.cpp
   allocator/ob_page_manager.cpp
+  allocator/ob_slice_alloc.cpp
   allocator/ob_tc_malloc.cpp
 )
 ob_add_new_object_target(ob_malloc_object ob_malloc_object_list)

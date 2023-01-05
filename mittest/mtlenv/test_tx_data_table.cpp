@@ -168,6 +168,8 @@ public:
 
   void do_multiple_init_iterator_test();
 
+  void do_print_leak_slice_test();
+
 
 private:
   void insert_tx_data_();
@@ -801,6 +803,40 @@ void TestTxDataTable::fake_ls_(ObLS &ls)
   ls.ls_meta_.rebuild_seq_ = 0;
 }
 
+void TestTxDataTable::do_print_leak_slice_test()
+{
+  const int32_t CONCURRENCY = 4;
+  ObMemAttr attr;
+  ObSliceAlloc slice_allocator;
+
+  slice_allocator.init(128, OB_MALLOC_NORMAL_BLOCK_SIZE, default_blk_alloc, attr);
+  slice_allocator.set_nway(CONCURRENCY);
+  std::vector<std::thread> alloc_threads;
+
+  for (int i = 0; i < CONCURRENCY; i++) {
+    alloc_threads.push_back(std::thread([&slice_allocator](){
+      int64_t alloc_times = 1123;
+      std::vector<void*> allocated_mem_ptr;
+      while (--alloc_times > 0) {
+        void *ret = slice_allocator.alloc();
+        if (nullptr != ret) {
+          allocated_mem_ptr.push_back(ret);
+        }
+      }
+
+      STORAGE_LOG(INFO, "unfreed slice", KP(allocated_mem_ptr[0]));
+      for (int k = 1; k < allocated_mem_ptr.size(); k++) {
+        slice_allocator.free(allocated_mem_ptr[k]);
+      }
+    }));
+  }
+
+  for (int i = 0; i < CONCURRENCY; i++) {
+    alloc_threads[i].join();
+  }
+
+  slice_allocator.destroy();
+}
 
 TEST_F(TestTxDataTable, basic_test)
 {
@@ -814,8 +850,9 @@ TEST_F(TestTxDataTable, undo_status_test) { do_undo_status_test(); }
 
 TEST_F(TestTxDataTable, serialize_test) { do_tx_data_serialize_test(); }
 
-// TEST_F(TestTxDataTable, iterate_init_test) { do_multiple_init_iterator_test(); }
+// TEST_F(TestTxDataTable, print_leak_slice) { do_print_leak_slice_test(); }
 
+// TEST_F(TestTxDataTable, iterate_init_test) { do_multiple_init_iterator_test(); }
 
 
 }  // namespace storage
