@@ -35,6 +35,26 @@ namespace observer
 {
 class ObService;
 class ObTabletTableUpdater;
+struct TSITabletTableUpdatStatistics
+{
+public:
+  TSITabletTableUpdatStatistics() { reset(); }
+  void reset();
+  void calc(int64_t succ_cnt,
+            int64_t fail_cnt,
+            int64_t remove_task_cnt,
+            int64_t update_task_cnt,
+            int64_t wait_us,
+            int64_t exec_us);
+  void dump();
+private:
+  int64_t suc_cnt_;
+  int64_t fail_cnt_;
+  int64_t remove_task_cnt_;
+  int64_t update_task_cnt_;
+  int64_t total_wait_us_;
+  int64_t total_exec_us_;
+};
 class ObTabletTableUpdateTask : public ObIUniqTaskQueueTask<ObTabletTableUpdateTask>
 {
 public:
@@ -44,26 +64,22 @@ public:
       : tenant_id_(OB_INVALID_TENANT_ID),
         ls_id_(),
         tablet_id_(),
-        add_timestamp_(OB_INVALID_TIMESTAMP),
-        add_task_cnt_(OB_INVALID_COUNT) {}
+        add_timestamp_(OB_INVALID_TIMESTAMP){}
   explicit ObTabletTableUpdateTask(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t add_timestamp,
-      const int64_t add_task_cnt)
+      const int64_t add_timestamp)
       : tenant_id_(tenant_id),
         ls_id_(ls_id),
         tablet_id_(tablet_id),
-        add_timestamp_(add_timestamp),
-        add_task_cnt_(add_task_cnt) {}
+        add_timestamp_(add_timestamp) {}
   virtual ~ObTabletTableUpdateTask();
   int init(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t add_timestamp,
-      const int64_t add_task_cnt);
+      const int64_t add_timestamp);
   void reset();
   // operator-related functions for ObTabletTableUpdateTask
   bool is_valid() const;
@@ -76,7 +92,6 @@ public:
   inline const share::ObLSID &get_ls_id() const { return ls_id_; }
   inline const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   inline int64_t get_add_timestamp() const { return add_timestamp_; }
-  inline int64_t get_add_task_count() const { return add_task_cnt_; }
 
   // other functions
   bool need_process_alone() const { return false; }
@@ -93,14 +108,13 @@ public:
   // TODO: need to realize barrier related functions
   bool is_barrier() const;
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(add_timestamp), K_(add_task_cnt));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(add_timestamp));
 private:
-  const int64_t TABLET_CHECK_INTERVAL = 120l * 1000 * 1000; //2 minutes
+  const int64_t TABLET_CHECK_INTERVAL = 2 * 3600 * 1000L * 1000L; //2 hour
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   int64_t add_timestamp_;
-  int64_t add_task_cnt_;
 };
 
 typedef ObUniqTaskQueue<ObTabletTableUpdateTask, ObTabletTableUpdater> ObTabletTableUpdateTaskQueue;
