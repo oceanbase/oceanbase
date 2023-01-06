@@ -28,6 +28,7 @@ namespace checkpoint
 
 class ObTabletGCHandler
 {
+  friend class ObTabletGCService;
 public:
   ObTabletGCHandler()
     : ls_(NULL),
@@ -50,7 +51,6 @@ public:
   static bool is_tablet_gc_trigger(uint8_t tablet_persist_trigger)
   { return 0 != (tablet_persist_trigger & 2); }
   void set_tablet_persist_trigger();
-  void set_tablet_gc_trigger();
   uint8_t get_tablet_persist_trigger_and_reset();
   int get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_create_tablet_ids,
                                bool only_deleted = false);
@@ -71,6 +71,7 @@ private:
   bool is_finish() { obsys::ObWLockGuard lock(wait_lock_, false); return lock.acquired(); }
   void set_stop() { ATOMIC_STORE(&update_enabled_, false); }
   void set_start() { ATOMIC_STORE(&update_enabled_, true); }
+  void set_tablet_gc_trigger();
 
 public:
   obsys::ObRWLock wait_lock_;

@@ -450,7 +450,6 @@ int ObTabletGCHandler::offline()
 void ObTabletGCHandler::online()
 {
   set_tablet_persist_trigger();
-  set_tablet_gc_trigger();
   set_start();
   STORAGE_LOG(INFO, "tablet gc handler online", KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
 }

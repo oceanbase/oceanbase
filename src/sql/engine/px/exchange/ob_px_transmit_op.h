@@ -1,4 +1,5 @@
 /**
+
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -148,7 +149,6 @@ private:
   int broadcast_eof_row();
   int next_row();
   int set_rollup_hybrid_keys(ObSliceIdxCalc &slice_calc);
-  bool is_dml_type_match_iter_end(bool need_drive_dml_query);
   int fetch_first_row();
   int set_expect_range_count();
 

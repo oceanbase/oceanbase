@@ -179,7 +179,7 @@ int ObLSMemberTable::on_commit_create_tablets(const obrpc::ObBatchCreateTabletAr
     if (OB_FAIL(tablet_svr->on_abort_create_tablets(*arg, trans_flags))) {
       LOG_WARN("fail to on_abort_create_tablets", KR(ret), KPC(arg), K(trans_flags));
     } else {
-      ls->get_tablet_gc_handler()->set_tablet_gc_trigger();
+      ls->get_tablet_gc_handler()->set_tablet_persist_trigger();
     }
   }
   if (OB_FAIL(ret)) {
@@ -358,7 +358,7 @@ int ObLSMemberTable::on_commit_remove_tablets(const obrpc::ObBatchRemoveTabletAr
     if (OB_FAIL(tablet_svr->on_commit_remove_tablets(*arg, trans_flags))) {
       LOG_WARN("fail to on_commit_remove_tablets", KR(ret), KPC(arg), K(trans_flags));
     } else {
-      ls->get_tablet_gc_handler()->set_tablet_gc_trigger();
+      ls->get_tablet_gc_handler()->set_tablet_persist_trigger();
     }
   } else if (OB_FAIL(tablet_svr->on_abort_remove_tablets(*arg, trans_flags))) {
     LOG_WARN("fail to on_abort_remove_tablets", KR(ret), KPC(arg), K(trans_flags));
