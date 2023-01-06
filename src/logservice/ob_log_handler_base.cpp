@@ -40,7 +40,7 @@ int ObLogHandlerBase::prepare_switch_role(common::ObRole &curr_role,
   } else {
     curr_role = role_;
     curr_proposal_id = proposal_id_;
-    PALF_LOG(INFO, "prepare_switch_role success", K(ret), K_(id), K(curr_role), K(curr_proposal_id),
+    PALF_LOG(TRACE, "prepare_switch_role success", K(ret), K_(id), K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id));
   }
   return ret;
