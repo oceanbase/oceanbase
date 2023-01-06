@@ -298,6 +298,7 @@ ob_set_subtarget(ob_storage tx_table
   tx_table/ob_tx_ctx_memtable.cpp
   tx_table/ob_tx_ctx_memtable_mgr.cpp
   tx_table/ob_tx_ctx_table.cpp
+  tx_table/ob_tx_data_hash_map.cpp
   tx_table/ob_tx_data_memtable.cpp
   tx_table/ob_tx_data_memtable_mgr.cpp
   tx_table/ob_tx_data_table.cpp
@@ -452,6 +453,10 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_partition_rows_merger.cpp
 )
 
+ob_set_subtarget(ob_storage concurrency_control
+  concurrency_control/ob_multi_version_garbage_collector.cpp
+)
+
 ob_set_subtarget(ob_storage memtable
   memtable/ob_lock_wait_mgr.cpp
   memtable/ob_memtable.cpp
@@ -463,6 +468,7 @@ ob_set_subtarget(ob_storage memtable
   memtable/ob_multi_source_data.cpp
   memtable/ob_redo_log_generator.cpp
   memtable/ob_row_compactor.cpp
+  memtable/ob_concurrent_control.cpp
 )
 
 ob_set_subtarget(ob_storage memtable_mvcc

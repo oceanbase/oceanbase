@@ -708,6 +708,12 @@ int ObMvccRowCallback::del()
     dec_unsynced_cnt_();
   }
 
+  // set block_frozen_memtable if the first callback is linked to a logging_blocked memtable
+  // to prevent the case where the first callback is removed but the block_frozen_memtable pointer is still existed
+  // clear block_frozen_memtable once a callback is deleted
+  transaction::ObPartTransCtx *part_ctx = static_cast<transaction::ObPartTransCtx *>(get_trans_ctx());
+  part_ctx->clear_block_frozen_memtable();
+
   ret = remove();
   return ret;
 }

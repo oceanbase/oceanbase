@@ -124,6 +124,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     epoch_ = epoch;
     pending_write_ = 0;
     set_role_state(for_replay);
+    block_frozen_memtable_ = nullptr;
 
     if (is_follower_()) {
       mt_ctx_.trans_replay_begin();
@@ -232,6 +233,7 @@ void ObPartTransCtx::destroy()
     timeout_task_.destroy();
     clog_encrypt_info_.destroy();
     trace_info_.reset();
+    block_frozen_memtable_ = nullptr;
     is_inited_ = false;
   }
 }
@@ -1285,7 +1287,7 @@ int ObPartTransCtx::check_scheduler_status()
   return OB_SUCCESS;
 }
 
-int ObPartTransCtx::recover_tx_ctx_table_info(const ObTxCtxTableInfo &ctx_info)
+int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
@@ -1297,7 +1299,7 @@ int ObPartTransCtx::recover_tx_ctx_table_info(const ObTxCtxTableInfo &ctx_info)
   //   TRANS_LOG(WARN, "unexpected null ptr", K(*this));
   } else if (OB_FAIL(mt_ctx_.recover_from_table_lock_durable_info(ctx_info.table_lock_info_))) {
     TRANS_LOG(ERROR, "recover_from_table_lock_durable_info failed", K(ret));
-  } else if (OB_FAIL(ctx_tx_data_.recover_tx_data(&ctx_info.state_info_))) {
+  } else if (OB_FAIL(ctx_tx_data_.recover_tx_data(ctx_info.state_info_))) {
     TRANS_LOG(WARN, "recover tx data failed", K(ret), K(ctx_tx_data_));
   } else {
     trans_id_ = ctx_info.tx_id_;
@@ -1478,28 +1480,31 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
   bool final_log_submitting = false;
 
   if (is_freeze) {
-    // spin lock
-    CtxLockGuard guard(lock_);
-    tg.click();
-    ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, true);
+    bool need_submit = !is_logging_blocked();
+    if (need_submit) {
+      // spin lock
+      CtxLockGuard guard(lock_);
+      tg.click();
+      ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, true);
 
-    is_tx_committing = ObTxState::INIT != get_downstream_state();
-    final_log_submitting = final_log_cb_.is_valid();
-    if (!is_tx_committing && !final_log_submitting) {
-      (void)mt_ctx_.merge_multi_callback_lists_for_immediate_logging();
-      ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
-      if (OB_SUCC(ret) || OB_BLOCK_FROZEN == ret) {
-        ret = submit_multi_data_source_();
+      is_tx_committing = ObTxState::INIT != get_downstream_state();
+      final_log_submitting = final_log_cb_.is_valid();
+      if (!is_tx_committing && !final_log_submitting) {
+        (void)mt_ctx_.merge_multi_callback_lists_for_immediate_logging();
+        ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
+        if (OB_SUCC(ret) || OB_BLOCK_FROZEN == ret) {
+          ret = submit_multi_data_source_();
+        }
+        try_submit = true;
       }
-      try_submit = true;
+      tg.click();
+      ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, false);
+      if (try_submit) {
+        REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, OB_Y(ret), OB_ID(arg2), is_freeze,
+                             OB_ID(used), tg.get_diff(), OB_ID(ctx_ref), get_ref());
+      }
     }
-    tg.click();
-    ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, false);
-    if (try_submit) {
-      REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, OB_Y(ret), OB_ID(arg2), is_freeze,
-                           OB_ID(used), tg.get_diff(),
-                           OB_ID(ctx_ref), get_ref());
-    }
+  } else if (!mt_ctx_.pending_log_size_too_large()) {
   } else if (OB_FAIL(lock_.try_lock())) {
     // try lock
     if (OB_EAGAIN == ret) {
@@ -1508,19 +1513,16 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
       TRANS_LOG(ERROR, "try lock error, unexpected error", K(ret), K(*this));
     }
   } else {
-
     CtxLockGuard guard(lock_, false);
     tg.click();
 
-    if (mt_ctx_.pending_log_size_too_large()) {
-      is_tx_committing = ObTxState::INIT != get_downstream_state();
-      final_log_submitting = final_log_cb_.is_valid();
+    is_tx_committing = ObTxState::INIT != get_downstream_state();
+    final_log_submitting = final_log_cb_.is_valid();
 
-      if (!is_tx_committing && !final_log_submitting) {
-        (void)mt_ctx_.merge_multi_callback_lists_for_immediate_logging();
-        ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
-        try_submit = true;
-      }
+    if (!is_tx_committing && !final_log_submitting) {
+      (void)mt_ctx_.merge_multi_callback_lists_for_immediate_logging();
+      ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
+      try_submit = true;
     }
     tg.click();
     if (try_submit) {
@@ -1531,9 +1533,34 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
   }
   if (OB_BLOCK_FROZEN == ret) {
     ret = OB_SUCCESS;
+  } else {
+    clear_block_frozen_memtable();
   }
 
   return ret;
+}
+
+int ObPartTransCtx::set_block_frozen_memtable(memtable::ObMemtable *memtable)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(memtable)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "memtable cannot be null", K(ret), KPC(this));
+  } else {
+    ATOMIC_STORE(&block_frozen_memtable_, memtable);
+  }
+  return ret;
+}
+
+void ObPartTransCtx::clear_block_frozen_memtable()
+{
+  ATOMIC_STORE(&block_frozen_memtable_, nullptr);
+}
+
+bool ObPartTransCtx::is_logging_blocked()
+{
+  memtable::ObMemtable *memtable = ATOMIC_LOAD(&block_frozen_memtable_);
+  return OB_NOT_NULL(memtable) && memtable->get_logging_blocked();
 }
 
 void ObPartTransCtx::get_audit_info(int64_t &lock_for_read_elapse) const
@@ -5597,32 +5624,19 @@ int ObPartTransCtx::supplement_undo_actions_if_exist_()
   int ret = OB_SUCCESS;
 
   ObTxTable *tx_table = nullptr;
-  ObTxData *tmp_tx_data = nullptr;
+  ObTxDataGuard tmp_tx_data_guard;
+  tmp_tx_data_guard.reset();
   ctx_tx_data_.get_tx_table(tx_table);
 
-  if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data))) {
+  if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data_guard))) {
     TRANS_LOG(WARN, "deep copy tx data in ctx tx data failed.", KR(ret), K(ctx_tx_data_), KPC(this));
-  } else if (OB_FAIL(tx_table->supplement_undo_actions_if_exist(tmp_tx_data))) {
+  } else if (OB_FAIL(tx_table->supplement_undo_actions_if_exist(tmp_tx_data_guard.tx_data()))) {
     TRANS_LOG(
       WARN,
       "supplement undo actions to a tx data when replaying a transaction from the middle failed.",
       KR(ret), K(ctx_tx_data_), KPC(this));
-  } else if (OB_FAIL(ctx_tx_data_.replace_tx_data(tmp_tx_data))) {
+  } else if (OB_FAIL(ctx_tx_data_.replace_tx_data(tmp_tx_data_guard.tx_data()))) {
     TRANS_LOG(WARN, "replace tx data in ctx tx data failed.", KR(ret), K(ctx_tx_data_), KPC(this));
-  }
-
-  // tmp_tx_data should be null because replace_tx_data should set it as nullptr if succeed.
-  // we free it if not null to avoid memory leak
-  if (OB_NOT_NULL(tmp_tx_data)) {
-    if (OB_SUCC(ret)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "unexpected error happend when supplement undo actions", KR(ret),
-                K(ctx_tx_data_), KPC(this));
-    }
-    int tmp_ret = ctx_tx_data_.free_tmp_tx_data(tmp_tx_data);
-    TRANS_LOG(WARN, "error happend when supplement undo actions", KR(ret), KR(tmp_ret),
-              K(ctx_tx_data_), KPC(this));
-
   }
 
   return ret;
@@ -5825,34 +5839,30 @@ int ObPartTransCtx::rollback_to_savepoint_(const int64_t from_scn,
    *  2. add UndoAction into tx_ctx's tx_data
    *  3. insert UndoAction into tx_data_table after log sync success
    */
+  ObTxDataGuard tmp_tx_data_guard;
+  tmp_tx_data_guard.reset();
   if (is_follower_()) { /* Follower */
     ObUndoAction undo_action(from_scn, to_scn);
-    ObTxData *tmp_tx_data = nullptr;
     if (OB_FAIL(ctx_tx_data_.add_undo_action(undo_action))) {
       TRANS_LOG(WARN, "recrod undo info fail", K(ret), K(from_scn), K(to_scn), KPC(this));
-    } else if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data))) {
+    } else if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data_guard))) {
       TRANS_LOG(WARN, "deep copy tx data failed", KR(ret), K(*this));
-    } else if (FALSE_IT(tmp_tx_data->end_scn_ = exec_info_.max_applying_log_ts_)) {
-    } else if (OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(tmp_tx_data))) {
+    } else if (FALSE_IT(tmp_tx_data_guard.tx_data()->end_scn_ = exec_info_.max_applying_log_ts_)) {
+    } else if (OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(tmp_tx_data_guard.tx_data()))) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ctx_tx_data_.free_tmp_tx_data(tmp_tx_data))) {
-        TRANS_LOG(WARN, "free tmp tx data failed", KR(tmp_ret), KPC(this));
-      }
     }
   } else if (OB_UNLIKELY(exec_info_.max_submitted_seq_no_ > to_scn)) { /* Leader */
     ObUndoAction undo_action(from_scn, to_scn);
     ObUndoStatusNode *undo_status = NULL;
-    ObTxData *tmp_tx_data = NULL;
-    if (OB_FAIL(ctx_tx_data_.prepare_add_undo_action(undo_action, tmp_tx_data, undo_status))) {
+    if (OB_FAIL(ctx_tx_data_.prepare_add_undo_action(undo_action, tmp_tx_data_guard, undo_status))) {
       TRANS_LOG(WARN, "prepare add undo action fail", K(ret), KPC(this));
-    } else if (OB_FAIL(submit_rollback_to_log_(from_scn, to_scn, tmp_tx_data))) {
+    } else if (OB_FAIL(submit_rollback_to_log_(from_scn, to_scn, tmp_tx_data_guard.tx_data()))) {
       TRANS_LOG(WARN, "submit undo redolog fail", K(ret), K(from_scn), K(to_scn), KPC(this));
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ctx_tx_data_.cancel_add_undo_action(tmp_tx_data, undo_status))) {
+      if (OB_TMP_FAIL(ctx_tx_data_.cancel_add_undo_action(undo_status))) {
         TRANS_LOG(ERROR, "cancel add undo action failed", KR(tmp_ret), KPC(this));
       }
-    } else if (OB_FAIL(ctx_tx_data_.commit_add_undo_action(undo_action, *undo_status))) {
+    } else if (OB_FAIL(ctx_tx_data_.commit_add_undo_action(undo_action, undo_status))) {
       TRANS_LOG(ERROR, "oops, commit add undo action fail", K(ret), KPC(this));
       ob_abort();
     }

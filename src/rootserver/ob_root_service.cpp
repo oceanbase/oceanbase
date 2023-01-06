@@ -1491,22 +1491,6 @@ int ObRootService::submit_create_inner_schema_task()
   return ret;
 }
 
-int ObRootService::submit_async_minor_freeze_task(const ObRootMinorFreezeArg &arg)
-{
-  int ret = OB_SUCCESS;
-  ObMinorFreezeTask task(arg);
-  task.set_retry_times(0); //not repeat
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(task_queue_.add_async_task(task))) {
-    LOG_WARN("submit async minor freeze task fail", K(ret));
-  } else {
-    LOG_INFO("submit async minor freeze task success", K(ret));
-  }
-  return ret;
-}
-
 int ObRootService::schedule_check_server_timer_task()
 {
   int ret = OB_SUCCESS;
@@ -4580,10 +4564,7 @@ int ObRootService::root_minor_freeze(const ObRootMinorFreezeArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(root_minor_freeze_.try_minor_freeze(arg.tenant_ids_,
-                                                         arg.server_list_,
-                                                         arg.zone_,
-                                                         arg.tablet_id_))) {
+  } else if (OB_FAIL(root_minor_freeze_.try_minor_freeze(arg))) {
     LOG_WARN("minor freeze failed", K(ret), K(arg));
   }
   ROOTSERVICE_EVENT_ADD("root_service", "root_minor_freeze", K(ret), K(arg));

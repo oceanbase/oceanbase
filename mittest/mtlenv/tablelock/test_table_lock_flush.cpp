@@ -128,6 +128,7 @@ static void mock_store_ctx(ObStoreCtx &store_ctx,
   ObTxTableGuard tx_guard;
   tx_guard.tx_table_ = (ObTxTable*)0x01;
   ObTxSnapshot snapshot;
+  concurrent_control::ObWriteFlag write_flag;
   snapshot.version_ = share::SCN::base_scn();
   store_ctx.mvcc_acc_ctx_.init_write(part_ctx,
                                      part_ctx.mt_ctx_,
@@ -137,7 +138,8 @@ static void mock_store_ctx(ObStoreCtx &store_ctx,
                                      tx_guard,
                                      snapshot,
                                      50000,
-                                     10000);
+                                     10000,
+                                     write_flag);
 }
 
 TEST_F(TestTableLockFlush, checkpoint)

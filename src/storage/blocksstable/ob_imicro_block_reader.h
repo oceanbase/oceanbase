@@ -273,9 +273,8 @@ public:
   virtual int get_multi_version_info(
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
-      ObMultiVersionRowFlag &flag,
-      transaction::ObTransID &trans_id,
-      int64_t &version,
+      const ObRowHeader *&row_header,
+      int64_t &trans_version,
       int64_t &sql_sequence) = 0;
   int locate_range(
       const ObDatumRange &range,

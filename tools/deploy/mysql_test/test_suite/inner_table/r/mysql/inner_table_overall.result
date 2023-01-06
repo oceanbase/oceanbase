@@ -217,6 +217,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 413	__all_spatial_reference_systems	0	201001	1
 416	__all_column_checksum_error_info	0	201001	1
 443	__all_tenant_rewrite_rules	0	201001	1
+444	__all_reserved_snapshot	0	201001	1
 445	__all_cluster_event_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1

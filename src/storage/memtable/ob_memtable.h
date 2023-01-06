@@ -461,6 +461,9 @@ public:
   // Print stat data in log.
   // For memtable debug.
   int print_stat() const;
+  int check_cleanout(bool &is_all_cleanout,
+                     bool &is_all_delay_cleanout,
+                     int64_t &count);
   int dump2text(const char *fname);
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(timestamp), K_(state),
                        K_(freeze_clock), K_(max_schema_version), K_(write_ref_cnt), K_(local_allocator),
@@ -482,10 +485,11 @@ private:
 
   int lock_row_on_frozen_stores_(
       storage::ObStoreCtx &ctx,
+      const ObTxNodeArg &arg,
       const ObMemtableKey *key,
       ObMvccRow *value,
       const storage::ObTableReadInfo &read_info,
-      storage::ObStoreRowLockState &lock_state);
+      ObMvccWriteResult &res);
 
   int remove_unused_callback_for_uncommited_txn_();
 

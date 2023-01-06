@@ -461,7 +461,6 @@ bool ObTxDataMemtableMgr::is_flushing() const
 int ObTxDataMemtableMgr::get_memtable_range(int64_t &memtable_head, int64_t &memtable_tail)
 {
   int ret = OB_SUCCESS;
-  MemMgrRLockGuard lock_guard(lock_);
   memtable_head = memtable_head_;
   memtable_tail = memtable_tail_;
   return ret;

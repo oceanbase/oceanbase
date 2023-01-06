@@ -95,6 +95,22 @@ int ObMvccRow::check_double_insert_(const share::SCN ,
 {
   return OB_SUCCESS;
 }
+}
+
+namespace concurrent_control
+{
+int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
+                                 const int64_t ,
+                                 const ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const int64_t ,
+                                 const ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const int64_t )
+{
+  return OB_SUCCESS;
+}
+
 } // end memtable
 
 class TestMemtable : public testing::Test
@@ -210,6 +226,7 @@ public:
     ObStoreCtx store_ctx;
     ObTxSnapshot snapshot;
     ObTxTableGuard tx_table_guard;
+    concurrent_control::ObWriteFlag write_flag;
     tx_table_guard.init((ObTxTable*)0x100);
     snapshot.version_.convert_for_gts(snapshot_version);
     store_ctx.mvcc_acc_ctx_.init_write(trans_ctx_,
@@ -220,7 +237,8 @@ public:
                                        tx_table_guard,
                                        snapshot,
                                        INT64_MAX,
-                                       INT64_MAX);
+                                       INT64_MAX,
+                                       write_flag);
     ObTableStoreIterator table_iter;
     store_ctx.table_iter_ = &table_iter;
     ObStoreRow write_row;

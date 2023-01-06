@@ -94,6 +94,7 @@ public:
 
   int get_neighbour_major_freeze(const int64_t snapshot_version, NeighbourFreezeInfo &info);
 
+  int64_t get_min_reserved_snapshot_for_tx();
   int get_min_reserved_snapshot(
       const ObTabletID &tablet_id,
       const int64_t merged_version,

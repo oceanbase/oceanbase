@@ -246,7 +246,8 @@ DEF_TO_STRING(ObDMLBaseParam)
        K_(is_ignore),
        K_(prelock),
        KPC_(encrypt_meta),
-       K_(is_batch_stmt));
+       K_(is_batch_stmt),
+       K_(write_flag));
   J_OBJ_END();
   return pos;
 }

@@ -137,6 +137,7 @@ void MockTxEnv::get_store_ctx(MyTxCtx &my_ctx,
   snapshot.version_ = share::SCN::base_scn();
   int64_t tx_lock_timeout = 0;
   ObTxTableGuard tx_table_guard;
+  concurrent_control::ObWriteFlag write_flag;
   tx_table_guard.tx_table_ = tx_table;
   store_ctx.ls_id_ = my_ctx.tx_ctx_.ls_id_;
   store_ctx.mvcc_acc_ctx_.init_write(my_ctx.tx_ctx_,
@@ -147,7 +148,8 @@ void MockTxEnv::get_store_ctx(MyTxCtx &my_ctx,
                                      tx_table_guard,
                                      snapshot,
                                      timeout,
-                                     timeout);
+                                     timeout,
+                                     write_flag);
   store_ctx.replay_log_scn_ = share::SCN::base_scn();
 }
 

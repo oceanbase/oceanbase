@@ -586,7 +586,10 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   } else if (plan->is_plain_insert()
           && session->get_tx_isolation() != ObTxIsolationLevel::SERIAL
           && session->get_tx_isolation() != ObTxIsolationLevel::RR) {
+    auto &tx_desc = *session->get_tx_desc();
     snapshot.init_none_read();
+    snapshot.core_.tx_id_ = tx_desc.get_tx_id();
+    snapshot.core_.scn_ = common::ObSequence::get_max_seq_no();
   } else {
     auto &tx_desc = *session->get_tx_desc();
     int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);

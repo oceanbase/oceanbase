@@ -794,24 +794,24 @@ void ObTxTable::destroy()
   is_inited_ = false;
 }
 
-int ObTxTable::alloc_tx_data(ObTxData *&tx_data) {
+int ObTxTable::alloc_tx_data(ObTxDataGuard &tx_data_guard) {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret));
-  } else if (OB_FAIL(tx_data_table_.alloc_tx_data(tx_data))) {
+  } else if (OB_FAIL(tx_data_table_.alloc_tx_data(tx_data_guard))) {
     LOG_WARN("allocate tx data from tx data table fail.", KR(ret));
   }
   return ret;
 }
 
-int ObTxTable::deep_copy_tx_data(ObTxData *in_tx_data, ObTxData *&out_tx_data)
+int ObTxTable::deep_copy_tx_data(const ObTxDataGuard &in_tx_data_guard, ObTxDataGuard &out_tx_data_guard)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret));
-  } else if (OB_FAIL(tx_data_table_.deep_copy_tx_data(in_tx_data, out_tx_data))) {
+  } else if (OB_FAIL(tx_data_table_.deep_copy_tx_data(in_tx_data_guard, out_tx_data_guard))) {
     LOG_WARN("deep copy tx data from tx data table fail", KR(ret));
   }
   return ret;
@@ -979,19 +979,30 @@ int ObTxTable::lock_for_read(const transaction::ObLockForReadArg &lock_for_read_
   return ret;
 }
 
-int ObTxTable::get_recycle_scn(SCN &recycle_scn)
+int ObTxTable::get_recycle_scn(SCN &real_recycle_scn)
 {
   int ret = OB_SUCCESS;
+  real_recycle_scn = SCN::min_scn();
   int64_t prev_epoch = ATOMIC_LOAD(&epoch_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "this tx table is not inited", KR(ret));
-  } else if (OB_FAIL(tx_data_table_.get_recycle_scn(recycle_scn))) {
-    STORAGE_LOG(WARN, "get recycle ts failed", KR(ret), "ls_id", ls_->get_ls_id());
+  SCN tablet_recycle_scn = SCN::min_scn();
+  SCN delay_recycle_scn = SCN::max_scn();
+  if (OB_FAIL(tx_data_table_.get_recycle_scn(tablet_recycle_scn))) {
+    TRANS_LOG(WARN, "get recycle scn from tx data table failed.", KR(ret));
   } else if (TxTableState::ONLINE != ATOMIC_LOAD(&state_) || prev_epoch != ATOMIC_LOAD(&epoch_)) {
-    recycle_scn.set_min();
+    real_recycle_scn = SCN::min_scn();
     ret = OB_REPLICA_NOT_READABLE;
     STORAGE_LOG(WARN, "this tx table is migrating or has migrated", KR(ret), "ls_id", ls_->get_ls_id());
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      delay_recycle_scn.convert_for_tx(ObTimeUtil::current_time_ns() -
+                                       (tenant_config->_tx_result_retention * 1000L * 1000L * 1000L));
+    }
+    if (delay_recycle_scn < tablet_recycle_scn) {
+      real_recycle_scn = delay_recycle_scn;
+    } else {
+      real_recycle_scn = tablet_recycle_scn;
+    }
   }
   return ret;
 }
@@ -1028,7 +1039,7 @@ int ObTxTable::cleanout_tx_node(const transaction::ObTransID &tx_id,
   return ret;
 }
 
-int ObTxTable::supplement_undo_actions_if_exist(ObTxData *&tx_data)
+int ObTxTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
 {
   return tx_data_table_.supplement_undo_actions_if_exist(tx_data);
 }

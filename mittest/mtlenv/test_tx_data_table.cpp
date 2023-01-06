@@ -14,6 +14,7 @@
 
 #define protected public
 #define private public
+#define UNITTEST
 
 #include <iostream>
 #include <thread>
@@ -51,9 +52,21 @@ class MockTxDataTable;
 class MockTxTable;
 static const uint64_t TEST_TENANT_ID = 1;
 
-// shrink select interval to push more points in cur_commit_scns
+// shrink select interval to push more points in cur_commit_versions
 // then the code will merge commit versions array with step_len larger than 1
-int64_t ObTxDataMemtableScanIterator::PERIODICAL_SELECT_INTERVAL_NS = 10LL;
+int64_t ObTxDataMemtable::PERIODICAL_SELECT_INTERVAL_NS = 10LL;
+
+int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_commit_versions)
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
+{
+  recycle_scn = SCN::max_scn();
+  return OB_SUCCESS;
+}
 
 class MockTxDataMemtableMgr : public ObTxDataMemtableMgr
 {
@@ -166,8 +179,6 @@ public:
 
   void do_repeat_insert_test();
 
-  void do_multiple_init_iterator_test();
-
   void do_print_leak_slice_test();
 
 
@@ -179,7 +190,7 @@ private:
 
   void test_serialize_with_action_cnt_(int cnt);
 
-  void generate_past_commit_scn_(ObCommitSCNsArray &past_commit_scns);
+  void generate_past_commit_version_(ObCommitVersionsArray &past_commit_versions);
 
   void set_freezer_();
 
@@ -189,15 +200,11 @@ private:
                      ObTxDataMemtable *&freezing_memtable,
                      ObTxDataMemtable *&active_memtable);
 
-  void check_commit_scn_row_(ObTxDataMemtableScanIterator &iter, ObTxDataMemtable *freezing_memtable);
-
-  void make_freezing_to_frozen(ObTxDataMemtableMgr *memtable_mgr);
-
   void test_serialize_with_action_cnt(int cnt);
 
   void insert_rollback_tx_data_();
 
-  void test_commit_scns_serialize_();
+  void test_commit_versions_serialize_();
 
   void fake_ls_(ObLS &ls);
 
@@ -230,12 +237,14 @@ void TestTxDataTable::insert_tx_data_()
 
   while (true) {
     int64_t int_tx_id = 0;
-    if ((int_tx_id = ATOMIC_AAF(&tx_data_num, -1)) < 0) { break; }
+    if ((int_tx_id = ATOMIC_AAF(&tx_data_num, -1)) <= 0) { break; }
     tx_id = int_tx_id;
     bool is_abort_tx = int_tx_id % 5 == 0;
 
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    tx_data_guard.reset();
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -252,7 +261,6 @@ void TestTxDataTable::insert_tx_data_()
     }
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table_.insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 }
 
@@ -267,8 +275,10 @@ void TestTxDataTable::insert_rollback_tx_data_()
   ASSERT_NE(nullptr, memtable);
 
   for (int i = 0; i < 200; i++) {
+    ObTxDataGuard tx_data_guard;
     ObTxData *tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data));
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -283,12 +293,6 @@ void TestTxDataTable::insert_rollback_tx_data_()
     tx_data->state_ = ObTxData::RUNNING;
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table_.insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
-    {
-      ObTxDataGuard guard;
-      memtable->get_tx_data(tx_id, guard);
-      ASSERT_EQ(max_end_scn, guard.tx_data().end_scn_);
-    }
   }
 }
 
@@ -300,8 +304,9 @@ void TestTxDataTable::insert_abort_tx_data_()
 
   tx_id = INT64_MAX - 3;
 
-  tx_data = nullptr;
-  ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data));
+  ObTxDataGuard tx_data_guard;
+  ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
+  ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
   // fill in data
   tx_data->tx_id_ = tx_id;
@@ -311,15 +316,14 @@ void TestTxDataTable::insert_abort_tx_data_()
   tx_data->state_ = ObTxData::ABORT;
 
   ASSERT_EQ(OB_SUCCESS, tx_data_table_.insert(tx_data));
-  ASSERT_EQ(nullptr, tx_data);
 }
 
-void TestTxDataTable::generate_past_commit_scn_(ObCommitSCNsArray &past_commit_scns)
+void TestTxDataTable::generate_past_commit_version_(ObCommitVersionsArray &past_commit_versions)
 {
   share::SCN start_scn = share::SCN::minus(insert_start_scn, 300LL * ONE_SEC_NS);
   share::SCN commit_version = share::SCN::plus(start_scn, 2LL * ONE_SEC_NS);
   for (int i = 0; i < 500; i++) {
-    past_commit_scns.array_.push_back(ObCommitSCNsArray::Node(start_scn, commit_version));
+    past_commit_versions.array_.push_back(ObCommitVersionsArray::Node(start_scn, commit_version));
     start_scn = share::SCN::plus(start_scn, 1LL * ONE_SEC_NS + (rand64(ObTimeUtil::current_time_ns()) % ONE_SEC_NS));
     commit_version = share::SCN::plus(std::max(commit_version, start_scn), (rand64(ObTimeUtil::current_time_ns()) % (2LL * ONE_SEC_NS)));
   }
@@ -370,177 +374,67 @@ void TestTxDataTable::check_freeze_(ObTxDataMemtableMgr *memtable_mgr,
   freezing_memtable->set_state(ObTxDataMemtable::State::FROZEN);
 }
 
-void TestTxDataTable::check_commit_scn_row_(ObTxDataMemtableScanIterator &iter, ObTxDataMemtable *freezing_memtable)
-{
-  // int ret = OB_SUCCESS;
-  ObCommitSCNsArray cur_commit_scns ;
-  ObCommitSCNsArray past_commit_scns;
-  ObCommitSCNsArray merged_commit_scns;
-  auto &cur_array = cur_commit_scns.array_;
-  auto &past_array = past_commit_scns.array_;
-  auto &merged_array = merged_commit_scns.array_;
-  share::SCN max_commit_version = share::SCN::min_scn();
-  share::SCN max_start_scn = share::SCN::min_scn();
-
-  // check sort commit version result
-  {
-    ASSERT_EQ(OB_SUCCESS, freezing_memtable->do_sort_by_start_scn_());
-    share::SCN pre_start_scn = share::SCN::min_scn();
-    ObTxData *last_commit_tx_data = nullptr;
-    auto cur_node = freezing_memtable->sort_list_head_.next_;
-    ASSERT_NE(nullptr, cur_node);
-    int64_t cnt = 0;
-    while (nullptr != cur_node) {
-      ObTxData *tx_data = ObTxData::get_tx_data_by_sort_list_node(cur_node);
-      ASSERT_GE(tx_data->start_scn_, pre_start_scn);
-      if (ObTxData::COMMIT == tx_data->state_) {
-        last_commit_tx_data = tx_data;
-        max_commit_version = std::max(max_commit_version, tx_data->commit_version_);
-        max_start_scn = std::max(max_start_scn, tx_data->start_scn_);
-      }
-      STORAGETEST_LOG(DEBUG,
-                      "check_commit_scn_row",
-                      KPC(tx_data),
-                      KTIME(tx_data->start_scn_.convert_to_ts()),
-                      KTIME(tx_data->end_scn_.convert_to_ts()));
-      pre_start_scn = tx_data->start_scn_;
-      cur_node = cur_node->next_;
-      cnt++;
-    }
-    last_commit_tx_data->commit_version_ = share::SCN::plus(max_commit_version, 1);
-    max_commit_version = last_commit_tx_data->commit_version_;
-    ASSERT_EQ(cnt, inserted_cnt);
-    fprintf(stdout, "total insert %ld tx data\n", cnt);
-
-    ASSERT_EQ(OB_SUCCESS, iter.fill_in_cur_commit_scns_(cur_commit_scns));
-    STORAGETEST_LOG(INFO, "cur_commit_scns count", K(cur_commit_scns.array_.count()));
-    ASSERT_NE(0, cur_commit_scns.array_.count());
-    for (int i = 1; i < cur_array.count() - 1; i++) {
-      ASSERT_GE(cur_array.at(i).start_scn_,
-                share::SCN::plus(cur_array.at(i - 1).start_scn_, iter.PERIODICAL_SELECT_INTERVAL_NS));
-      ASSERT_GE(cur_array.at(i).commit_version_, cur_array.at(i - 1).commit_version_);
-    }
-    int i = cur_array.count() - 1;
-    ASSERT_GE(cur_array.at(i).start_scn_, cur_array.at(i-1).start_scn_);
-    ASSERT_GE(cur_array.at(i).commit_version_, cur_array.at(i-1).commit_version_);
-    ASSERT_EQ(cur_array.at(i).start_scn_, max_start_scn);
-    ASSERT_EQ(cur_array.at(i).commit_version_, max_commit_version);
-  }
-
-  // generate a fake past commit versions
-  {
-    generate_past_commit_scn_(past_commit_scns);
-    ASSERT_NE(0, past_commit_scns.array_.count());
-    ASSERT_EQ(true, past_commit_scns.is_valid());
-  }
-
-  // check merged result
-  {
-    share::SCN recycle_scn = share::SCN::minus(insert_start_scn, 100LL * ONE_SEC_NS/*100 seconds*/);
-    ASSERT_EQ(OB_SUCCESS, iter.merge_cur_and_past_commit_verisons_(recycle_scn, cur_commit_scns,
-                                                                   past_commit_scns,
-                                                                   merged_commit_scns));
-    for (int i = 0; i < merged_array.count(); i++) {
-      STORAGE_LOG(INFO, "print merged array", K(merged_array.at(i)));
-    }
-    ASSERT_EQ(true, merged_commit_scns.is_valid());
-    fprintf(stdout,
-            "merge commit versions finish. past array count = %ld current array count = %ld merged array count = %ld\n",
-            past_array.count(),
-            cur_array.count(),
-            merged_array.count());
-  }
-
-  // check commit versions serialization and deserialization
-  {
-    int64_t m_size = merged_commit_scns.get_serialize_size();
-    ObArenaAllocator allocator;
-    ObTxLocalBuffer buf_(allocator);
-    buf_.reserve(m_size);
-
-    int64_t pos = 0;
-    ASSERT_EQ(OB_SUCCESS, merged_commit_scns.serialize(buf_.get_ptr(), m_size, pos));
-
-    // void *ptr = allocator_.alloc(sizeof(ObCommitSCNsArray));
-    ObCommitSCNsArray deserialize_commit_scns;
-    pos = 0;
-    ASSERT_EQ(OB_SUCCESS, deserialize_commit_scns.deserialize(buf_.get_ptr(), m_size, pos));
-
-    const auto &deserialize_array = deserialize_commit_scns.array_;
-    ASSERT_EQ(merged_array.count(), deserialize_array.count());
-    for (int i = 0; i < merged_commit_scns.array_.count(); i++) {
-      ASSERT_EQ(merged_array.at(i), deserialize_array.at(i));
-    }
-  }
-
-  share::SCN sstable_end_scn = share::SCN::min_scn();
-  share::SCN upper_trans_scn = share::SCN::min_scn();
-  tx_data_table_.calc_upper_trans_version_cache_.commit_scns_ = merged_commit_scns;
-
-  // check the situation when sstable_end_scn is greater than the greatest start_scn in
-  // merged_array
-  {
-    sstable_end_scn = share::SCN::plus(max_start_scn, 1);
-    upper_trans_scn.set_max();
-    ASSERT_EQ(OB_SUCCESS,
-              tx_data_table_.calc_upper_trans_scn_(sstable_end_scn, upper_trans_scn));
-    ASSERT_EQ(max_commit_version, upper_trans_scn);
-  }
-
-  // check the normal calculation
-  {
-    share::SCN second_max_start_scn = share::SCN::minus(merged_array.at(merged_array.count() - 2).start_scn_, 1);
-    for (int i = 0; i < 100; i++) {
-      sstable_end_scn =
-          share::SCN::minus(second_max_start_scn, rand64(ObTimeUtil::current_time_ns()) % (1100LL * ONE_SEC_NS));
-      upper_trans_scn = share::SCN::max_scn();
-      ASSERT_EQ(OB_SUCCESS,
-                tx_data_table_.calc_upper_trans_scn_(sstable_end_scn, upper_trans_scn));
-      ASSERT_NE(SCN::max_scn(), upper_trans_scn);
-      ASSERT_NE(max_commit_version, upper_trans_scn);
-    }
-  }
-}
-
 void TestTxDataTable::do_basic_test()
 {
-  tx_data_table_.TEST_print_alloc_size_();
   // init tx data table
   ASSERT_EQ(OB_SUCCESS, tx_data_table_.init(ls_));
   set_freezer_();
 
   ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
   init_memtable_mgr_(memtable_mgr);
+  fprintf(stdout, "start insert tx data\n");
   insert_tx_data_();
+  fprintf(stdout, "start insert rollback tx data\n");
   insert_rollback_tx_data_();
+  fprintf(stdout, "start insert abort tx data\n");
   insert_abort_tx_data_();
 
+  fprintf(stdout, "start freezing\n");
   ObTxDataMemtable *freezing_memtable = nullptr;
   ObTxDataMemtable *active_memtable = nullptr;
   check_freeze_(memtable_mgr, freezing_memtable, active_memtable);
   inserted_cnt = freezing_memtable->get_tx_data_count();
 
-  // sort tx data by trans id
-  ObTxDataMemtableScanIterator iter(tx_data_table_.get_read_schema().iter_param_);
-  ASSERT_EQ(OB_SUCCESS, iter.init(freezing_memtable));
+  const int64_t range_cnt = 4;
+  ObSEArray<common::ObStoreRange, range_cnt> range_array;
+  ASSERT_EQ(OB_SUCCESS, freezing_memtable->pre_process_for_merge());
+  ASSERT_EQ(OB_SUCCESS, freezing_memtable->get_split_ranges(nullptr, nullptr, range_cnt, range_array));
+  int64_t pre_range_end_key = 0;
+  for (int i = 0; i < range_cnt; i++) {
+    auto &range = range_array[i];
+    int64_t start_key = 0;
+    int64_t end_key = 0;
+    ASSERT_EQ(OB_SUCCESS, range.get_start_key().get_obj_ptr()[0].get_int(start_key));
+    ASSERT_EQ(OB_SUCCESS, range.get_end_key().get_obj_ptr()[0].get_int(end_key));
+    ASSERT_EQ(pre_range_end_key, start_key);
+    ASSERT_GE(end_key, start_key);
+    pre_range_end_key = end_key;
+  }
+
+  ObTxData *fake_tx_data = nullptr;
 
   // check sort result
   {
     transaction::ObTransID pre_tx_id = INT64_MIN;
-    auto cur_node = freezing_memtable->sort_list_head_.next_;
-    ASSERT_NE(nullptr, cur_node);
+    ObTxData *cur_tx_data = freezing_memtable->sort_list_head_.next_;
+    ASSERT_NE(nullptr, cur_tx_data);
     int64_t cnt = 0;
-    while (nullptr != cur_node) {
-      auto tx_id = ObTxData::get_tx_data_by_sort_list_node(cur_node)->tx_id_;
-      ASSERT_GT(tx_id.get_id(), pre_tx_id.get_id());
+    while (nullptr != cur_tx_data) {
+      auto tx_id = cur_tx_data->tx_id_;
+      if (INT64_MAX == tx_id) {
+        fake_tx_data = cur_tx_data;
+      }
+      ASSERT_GE(tx_id.get_id(), pre_tx_id.get_id());
+
       pre_tx_id = tx_id;
-      cur_node = cur_node->next_;
+      cur_tx_data = cur_tx_data->sort_list_node_.next_;
       cnt++;
     }
-    ASSERT_EQ(inserted_cnt, cnt);
-  }
 
-  check_commit_scn_row_(iter, freezing_memtable);
+    // there is a fake tx data inserted into link hash map after pre-process for upper_trans_version
+    // calculation
+    ASSERT_EQ(inserted_cnt + 1, cnt);
+  }
 
   // free memtable
   freezing_memtable->reset();
@@ -555,15 +449,16 @@ void TestTxDataTable::do_undo_status_test()
   // the last undo action covers all the previous undo actions
   {
     ObTxData *tx_data = nullptr;
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     tx_data->tx_id_ = rand();
-    for (int i = 1; i <= 1000; i++) {
+    for (int i = 1; i <= 1001; i++) {
       transaction::ObUndoAction undo_action(10 * (i + 1), 10 * i);
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
-    ASSERT_EQ(1000 / 7 + 1, tx_data->undo_status_list_.undo_node_cnt_);
+    ASSERT_EQ(1000 / TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE + 1, tx_data->undo_status_list_.undo_node_cnt_);
 
     {
       transaction::ObUndoAction undo_action(10000000, 10);
@@ -580,8 +475,9 @@ void TestTxDataTable::do_undo_status_test()
     // the last undo action covers eight previous undo actions
     // so the undo status just have one undo status node
     ObTxData *tx_data = nullptr;
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data));
+  ObTxDataGuard tx_data_guard;
+  ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
+  ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
     tx_data->tx_id_ = rand();
 
     for (int i = 1; i <= 14; i++) {
@@ -605,7 +501,9 @@ void TestTxDataTable::do_undo_status_test()
 void TestTxDataTable::test_serialize_with_action_cnt_(int cnt)
 {
     ObTxData *tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
     tx_data->tx_id_ = transaction::ObTransID(269381);
     tx_data->commit_version_.convert_for_logservice(ObTimeUtil::current_time_ns());
     tx_data->end_scn_.convert_for_logservice(ObTimeUtil::current_time_ns());
@@ -632,36 +530,40 @@ void TestTxDataTable::test_serialize_with_action_cnt_(int cnt)
     ASSERT_EQ(OB_SUCCESS, tx_data->serialize(buf, serialize_size, pos));
 
     ObTxData *new_tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(new_tx_data));
+    ObTxDataGuard new_tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(new_tx_data_guard));
+    ASSERT_NE(nullptr, new_tx_data = new_tx_data_guard.tx_data());
     new_tx_data->tx_id_ = transaction::ObTransID(269381);
     pos = 0;
     ASSERT_EQ(OB_SUCCESS, new_tx_data->deserialize(buf, serialize_size, pos,
                                                    *tx_data_table_.get_slice_allocator()));
     ASSERT_TRUE(new_tx_data->equals_(*tx_data));
-    tx_data_table_.free_tx_data(tx_data);
-    tx_data_table_.free_tx_data(new_tx_data);
+    tx_data->dec_ref();
+    new_tx_data->dec_ref();
 }
 
 
 void TestTxDataTable::do_tx_data_serialize_test()
 {
-  // init tx data table
   ASSERT_EQ(OB_SUCCESS, tx_data_table_.init(ls_));
+  ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
+  set_freezer_();
+  init_memtable_mgr_(memtable_mgr);
 
   test_serialize_with_action_cnt_(0);
-  test_serialize_with_action_cnt_(7);
-  test_serialize_with_action_cnt_(8);
-  test_serialize_with_action_cnt_(7 * 10000);
-  test_serialize_with_action_cnt_(7 * 10000 + 1);
-  test_commit_scns_serialize_();
+  test_serialize_with_action_cnt_(TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE);
+  test_serialize_with_action_cnt_(TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE + 1);
+  test_serialize_with_action_cnt_(TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE * 100);
+  test_serialize_with_action_cnt_(TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE * 100 + 1);
+  test_commit_versions_serialize_();
 }
 
-void TestTxDataTable::test_commit_scns_serialize_()
+void TestTxDataTable::test_commit_versions_serialize_()
 {
-  ObCommitSCNsArray cur_array;
-  ObCommitSCNsArray past_array;
-  ObCommitSCNsArray merged_array;
-  ObCommitSCNsArray deserialized_array;
+  ObCommitVersionsArray cur_array;
+  ObCommitVersionsArray past_array;
+  ObCommitVersionsArray merged_array;
+  ObCommitVersionsArray deserialized_array;
 
   share::SCN start_scn;
   start_scn.convert_for_logservice(ObTimeUtil::current_time_ns());
@@ -672,7 +574,7 @@ void TestTxDataTable::test_commit_scns_serialize_()
   STORAGE_LOG(INFO, "start generate past array");
   for (int64_t i = 0; i < array_cnt; i++) {
     start_scn = share::SCN::plus(start_scn, (rand64(ObTimeUtil::current_time_ns()) % MOD));
-    ObCommitSCNsArray::Node node(start_scn, share::SCN::plus(start_scn, (rand64(ObTimeUtil::current_time_ns()) % MOD)));
+    ObCommitVersionsArray::Node node(start_scn, share::SCN::plus(start_scn, (rand64(ObTimeUtil::current_time_ns()) % MOD)));
     STORAGE_LOG(INFO, "", K(node));
     ASSERT_EQ(OB_SUCCESS, past_array.array_.push_back(node));
   }
@@ -681,15 +583,19 @@ void TestTxDataTable::test_commit_scns_serialize_()
   STORAGE_LOG(INFO, "start generate cur array");
   for (int i = 0; i < array_cnt; i++) {
     start_scn = share::SCN::plus(start_scn, (rand64(ObTimeUtil::current_time_ns()) % MOD));
-    ObCommitSCNsArray::Node node(start_scn, share::SCN::plus(start_scn, (rand64(ObTimeUtil::current_time_ns()) % MOD)));
+    ObCommitVersionsArray::Node node(start_scn, share::SCN::plus(start_scn, (rand64(ObTimeUtil::current_time_ns()) % MOD)));
     STORAGE_LOG(DEBUG, "", K(node));
     ASSERT_EQ(OB_SUCCESS, cur_array.array_.push_back(node));
   }
   ASSERT_EQ(true, cur_array.is_valid());
 
-  ObTxDataMemtableScanIterator iter(tx_data_table_.get_read_schema().iter_param_);
-  ASSERT_EQ(OB_SUCCESS, iter.merge_cur_and_past_commit_verisons_(recycle_scn, cur_array, past_array,
-                                                                 merged_array));
+  ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
+  ASSERT_NE(nullptr, memtable_mgr);
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr->get_active_memtable(table_handle));
+  ObTxDataMemtable *tx_data_memtable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, table_handle.get_tx_data_memtable(tx_data_memtable));
+  ASSERT_EQ(OB_SUCCESS, tx_data_memtable->merge_cur_and_past_commit_verisons_(recycle_scn, cur_array, past_array, merged_array));
   ASSERT_EQ(true, merged_array.is_valid());
 
   int64_t serialize_size = merged_array.get_serialize_size();
@@ -730,7 +636,9 @@ void TestTxDataTable::do_repeat_insert_test() {
   for (int i = 1; i <= 100; i++) {
     tx_id = transaction::ObTransID(269381);
     tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -751,45 +659,6 @@ void TestTxDataTable::do_repeat_insert_test() {
 
   memtable_mgr->destroy();
 
-}
-
-void TestTxDataTable::do_multiple_init_iterator_test()
-{
-  ASSERT_EQ(OB_SUCCESS, tx_data_table_.init(ls_));
-  set_freezer_();
-
-  ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
-  init_memtable_mgr_(memtable_mgr);
-  tx_data_num = 10240;
-  insert_tx_data_();
-
-  ObTxDataMemtable *freezing_memtable = nullptr;
-  ObTxDataMemtable *active_memtable = nullptr;
-  check_freeze_(memtable_mgr, freezing_memtable, active_memtable);
-  inserted_cnt = freezing_memtable->get_tx_data_count();
-
-  // sort tx data by trans id
-  {
-    ObTxDataMemtableScanIterator iter1(tx_data_table_.get_read_schema().iter_param_);
-    ASSERT_EQ(OB_SUCCESS, iter1.init(freezing_memtable));
-
-    ObTxDataMemtableScanIterator iter2(tx_data_table_.get_read_schema().iter_param_);
-    ASSERT_EQ(OB_STATE_NOT_MATCH, iter2.init(freezing_memtable));
-
-    // iter1 can init succeed because of the reset function in init()
-    ASSERT_EQ(OB_SUCCESS, iter1.init(freezing_memtable));
-
-    // iter2 still can not init
-    ASSERT_EQ(OB_STATE_NOT_MATCH, iter2.init(freezing_memtable));
-
-    iter1.reset();
-    // now iter2 can successfully init
-    ASSERT_EQ(OB_SUCCESS, iter2.init(freezing_memtable));
-  }
-
-  // iter3 can successfully init due to the destruct function of iterator
-  ObTxDataMemtableScanIterator iter3(tx_data_table_.get_read_schema().iter_param_);
-  ASSERT_EQ(OB_SUCCESS, iter3.init(freezing_memtable));
 }
 
 void TestTxDataTable::fake_ls_(ObLS &ls)
@@ -852,8 +721,6 @@ TEST_F(TestTxDataTable, serialize_test) { do_tx_data_serialize_test(); }
 
 // TEST_F(TestTxDataTable, print_leak_slice) { do_print_leak_slice_test(); }
 
-// TEST_F(TestTxDataTable, iterate_init_test) { do_multiple_init_iterator_test(); }
-
 
 }  // namespace storage
 }  // namespace oceanbase
@@ -861,7 +728,8 @@ TEST_F(TestTxDataTable, serialize_test) { do_tx_data_serialize_test(); }
 int main(int argc, char **argv)
 {
   int ret = 1;
-  system("rm -f test_tx_data_table.log");
+  system("rm -f test_tx_data_table.log*");
+  system("rm -fr run_*");
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_tx_data_table.log", true);
   logger.set_log_level(OB_LOG_LEVEL_INFO);

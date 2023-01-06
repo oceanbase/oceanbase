@@ -437,6 +437,20 @@ int ObFreezer::tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
+
+  if (tablet_id.is_ls_inner_tablet()) {
+    if (OB_FAIL(freeze_ls_inner_tablet_(tablet_id))) {
+      TRANS_LOG(WARN, "freeze ls inner tablet failed", KR(ret), K(ls_id), K(tablet_id));
+    }
+  } else if (OB_FAIL(freeze_normal_tablet_(tablet_id, result))) {
+    TRANS_LOG(WARN, "freeze normal tablet failed", KR(ret), K(ls_id), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObFreezer::freeze_normal_tablet_(const ObTabletID &tablet_id, ObFuture<int> *result)
+{
+  int ret = OB_SUCCESS;
   ObTabletHandle handle;
   ObTablet *tablet = nullptr;
   ObTabletMemtableMgr *memtable_mgr = nullptr;
@@ -453,7 +467,6 @@ int ObFreezer::tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result)
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_UNLIKELY(!enable_)) {
-    ret = OB_NOT_RUNNING;
     LOG_WARN("freezer is offline, can not freeze now", K(ret), K(ls_id));
   } else if (OB_FAIL(guard.try_set_tablet_freeze_begin())) {
     // no need freeze now, a ls freeze is running or will be running
@@ -507,6 +520,18 @@ int ObFreezer::tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result)
     }
   }
 
+  return ret;
+}
+
+int ObFreezer::freeze_ls_inner_tablet_(const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_ls_tx_svr())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "[Freezer] ls_tx_svr is unexpected nullptr", KR(ret), K(get_ls_id()), K(tablet_id));
+  } else if (OB_FAIL(get_ls_tx_svr()->flush_ls_inner_tablet(tablet_id))) {
+    TRANS_LOG(WARN, "[Freezer] freeze ls inner tablet failed", KR(ret), K(get_ls_id()), K(tablet_id));
+  }
   return ret;
 }
 

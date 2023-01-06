@@ -4898,6 +4898,7 @@ public:
   {
     tenant_ids_.reset();
     tablet_id_.reset();
+    ls_id_.reset();
   }
 
   bool is_valid() const
@@ -4905,10 +4906,11 @@ public:
     return true;
   }
 
-  TO_STRING_KV(K_(tenant_ids), K_(tablet_id));
+  TO_STRING_KV(K_(tenant_ids), K_(ls_id), K_(tablet_id));
 
   common::ObSArray<uint64_t> tenant_ids_;
   common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
 };
 
 struct ObRootMinorFreezeArg
@@ -4924,6 +4926,7 @@ public:
     server_list_.reset();
     zone_.reset();
     tablet_id_.reset();
+    ls_id_.reset();
   }
 
   bool is_valid() const
@@ -4931,12 +4934,13 @@ public:
     return true;
   }
 
-  TO_STRING_KV(K_(tenant_ids), K_(server_list), K_(zone), K_(tablet_id));
+  TO_STRING_KV(K_(tenant_ids), K_(server_list), K_(zone), K_(tablet_id), K_(ls_id));
 
   common::ObSArray<uint64_t> tenant_ids_;
   common::ObSArray<common::ObAddr> server_list_;
   common::ObZone zone_;
   common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
 };
 
 struct ObSyncPGPartitionMTFinishArg

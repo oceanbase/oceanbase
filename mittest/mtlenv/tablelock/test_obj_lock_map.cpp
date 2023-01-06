@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #define protected public
 #define private public
+#define UNITTEST
 
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/tablelock/ob_obj_lock.h"

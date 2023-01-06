@@ -814,6 +814,8 @@ int ObTransService::register_mds_into_ctx(ObTxDesc &tx_desc,
   ObStoreCtx store_ctx;
   ObTxReadSnapshot snapshot;
   snapshot.init_none_read();
+  concurrent_control::ObWriteFlag write_flag;
+  write_flag.set_is_mds();
   if (OB_UNLIKELY(!tx_desc.is_valid() ||
                   !ls_id.is_valid() ||
                   OB_ISNULL(buf) ||
@@ -821,7 +823,7 @@ int ObTransService::register_mds_into_ctx(ObTxDesc &tx_desc,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_desc), K(ls_id), KP(buf), K(buf_len));
   } else if (FALSE_IT(store_ctx.ls_id_ = ls_id)) {
-  } else if (OB_FAIL(get_write_store_ctx(tx_desc, snapshot, store_ctx))) {
+  } else if (OB_FAIL(get_write_store_ctx(tx_desc, snapshot, write_flag, store_ctx))) {
     TRANS_LOG(WARN, "get store ctx failed", KR(ret), K(tx_desc), K(ls_id));
   } else {
     do {

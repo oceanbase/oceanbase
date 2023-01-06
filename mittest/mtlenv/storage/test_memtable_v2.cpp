@@ -388,7 +388,20 @@ public:
     store_ctx->mvcc_acc_ctx_.abs_lock_timeout_ = abs_expire_time;
     store_ctx->mvcc_acc_ctx_.tx_scn_ = ObSequence::inc_and_get_max_seq_no();
   }
-
+  void start_pdml_stmt(ObStoreCtx *store_ctx,
+                       const share::SCN snapshot_scn,
+                       const int64_t read_seq_no,
+                       const int64_t expire_time = 10000000000)
+  {
+    ObSequence::inc();
+    store_ctx->mvcc_acc_ctx_.type_ = ObMvccAccessCtx::T::WRITE;
+    store_ctx->mvcc_acc_ctx_.snapshot_.tx_id_ = store_ctx->mvcc_acc_ctx_.tx_id_;
+    store_ctx->mvcc_acc_ctx_.snapshot_.version_ = snapshot_scn;
+    store_ctx->mvcc_acc_ctx_.snapshot_.scn_ = read_seq_no;
+    const int64_t abs_expire_time = expire_time + ::oceanbase::common::ObTimeUtility::current_time();
+    store_ctx->mvcc_acc_ctx_.abs_lock_timeout_ = abs_expire_time;
+    store_ctx->mvcc_acc_ctx_.tx_scn_ = ObSequence::inc_and_get_max_seq_no();
+  }
   void print_callback(ObStoreCtx *wtx)
   {
     TRANS_LOG(INFO, "========== START PRINT CALLBACK ===========", K(wtx->mvcc_acc_ctx_.tx_id_));
@@ -2963,6 +2976,47 @@ TEST_F(TestMemtableV2, test_fast_commit_with_no_delay_cleanout)
   memtable->destroy();
 }
 
+TEST_F(TestMemtableV2, test_seq_set_violation)
+{
+  int ret = OB_SUCCESS;
+  ObMemtable *memtable = create_memtable();
+
+  TRANS_LOG(INFO, "######## CASE1: write row into memtable");
+  ObDatumRowkey rowkey;
+  ObStoreRow write_row;
+  ObStoreRow write_row2;
+  EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
+                                 2, /*value*/
+                                 rowkey,
+                                 write_row));
+  EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
+                                 3, /*value*/
+                                 rowkey,
+                                 write_row2));
+
+  ObTransID write_tx_id = ObTransID(1);
+  ObStoreCtx *wtx = start_tx(write_tx_id);
+
+  int64_t read_seq_no = ObSequence::get_max_seq_no();
+  share::SCN scn_3000;
+  scn_3000.convert_for_tx(3000);
+  start_pdml_stmt(wtx, scn_3000, read_seq_no, 1000000000/*expire_time*/);
+  EXPECT_EQ(OB_SUCCESS, (ret = memtable->set(*wtx,
+                                             tablet_id_.id(),
+                                             read_info_,
+                                             columns_,
+                                             write_row)));
+
+  start_pdml_stmt(wtx, scn_3000, read_seq_no, 1000000000/*expire_time*/);
+  EXPECT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, (ret = memtable->set(*wtx,
+                                                               tablet_id_.id(),
+                                                               read_info_,
+                                                               columns_,
+                                                               write_row)));
+  memtable->destroy();
+}
+
+
 } // namespace unittest
 
 namespace storage
@@ -3000,10 +3054,11 @@ int ObTxCtxTable::release_ref_()
 namespace memtable
 {
 int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &,
+                                           const ObTxNodeArg &,
                                            const ObMemtableKey *,
                                            ObMvccRow *,
                                            const storage::ObTableReadInfo &read_info,
-                                           ObStoreRowLockState &lock_state)
+                                           ObMvccWriteResult &)
 {
   if (unittest::TestMemtableV2::is_sstable_contains_lock_) {
     return OB_TRY_LOCK_ROW_CONFLICT;

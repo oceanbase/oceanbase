@@ -303,6 +303,7 @@ int ObTableService::do_put(ObTableServiceCtx &ctx, const ObTableOperation &table
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       if (OB_FAIL(access_service->put_rows(
           ls_id,
           tablet_id,
@@ -446,6 +447,7 @@ int ObTableService::multi_put(ObTableServiceCtx &ctx,
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       const int64_t N = batch_operation.count();
       NG_TRACE_EXT(insertup_calc_new_row, OB_ID(input_count), N);
       for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
@@ -824,6 +826,7 @@ int ObTableService::execute_delete(ObTableServiceGetCtx &ctx, const ObTableOpera
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       if (OB_FAIL(access_service->delete_rows(
           ls_id,
           tablet_id,
@@ -920,6 +923,7 @@ int ObTableService::multi_delete(ObTableServiceGetCtx &ctx, const ObTableBatchOp
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       int64_t result_idx = 0;
       while(OB_SUCC(ret) && !delete_row_iter.has_finished()) {
         affected_rows = 0;
@@ -1012,6 +1016,7 @@ int ObTableService::execute_insert(
       dml_param.schema_version_ = insert_iter.get_schema_version();
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       if (ObTableOperationType::INSERT_OR_UPDATE == table_operation.type()) {
         // use insert row with duplicate rows
         ObSEArray<uint64_t, COMMON_COLUMN_NUM> rowkey_column_ids;
@@ -1122,6 +1127,7 @@ int ObTableService::multi_insert(ObTableServiceCtx &ctx, const ObTableBatchOpera
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       const int64_t N = batch_operation.count();
       for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
         insert_iter.continue_iter();
@@ -1324,6 +1330,7 @@ int ObTableService::execute_replace(ObTableServiceCtx &ctx, const ObTableOperati
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       ObIArray<uint64_t> &full_column_ids = replace_iter.get_column_ids();
       const int64_t rowkey_column_cnt = table_operation.entity().get_rowkey_size();
       ObSEArray<uint64_t, COMMON_COLUMN_NUM> rowkey_column_ids;
@@ -1375,6 +1382,7 @@ int ObTableService::multi_replace(ObTableServiceCtx &ctx, const ObTableBatchOper
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       // fill column ids
       ObIArray<uint64_t> &column_ids = replace_iter.get_column_ids();
       ObSEArray<uint64_t, COMMON_COLUMN_NUM> rowkey_column_ids;
@@ -1451,6 +1459,7 @@ int ObTableService::execute_update(ObTableServiceGetCtx &ctx,
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       if (OB_FAIL(access_service->update_rows(
           ls_id,
           tablet_id,
@@ -1550,6 +1559,7 @@ int ObTableService::execute_increment_by_update(
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       if (OB_FAIL(access_service->update_rows(
           ls_id,
           tablet_id,
@@ -1659,6 +1669,7 @@ int ObTableService::multi_update(ObTableServiceGetCtx &ctx, const ObTableBatchOp
       dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
       dml_param.table_param_ = &table_param;
       dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      dml_param.write_flag_.set_is_table_api();
       while(OB_SUCC(ret) && !update_row_iter.has_finished()) {
         affected_rows = 0;
         update_row_iter.continue_iter();

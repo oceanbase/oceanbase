@@ -28,6 +28,7 @@
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "sql/session/ob_user_resource_mgr.h"
 #include "sql/monitor/full_link_trace/ob_flt_control_info_mgr.h"
+#include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -468,6 +469,21 @@ void ObSQLSessionMgr::try_check_session()
       OZ (check_session_leak());
     }
   }
+}
+
+int ObSQLSessionMgr::get_min_active_snapshot_version(share::SCN &snapshot_version)
+{
+  int ret = OB_SUCCESS;
+
+  concurrency_control::GetMinActiveSnapshotVersionFunctor min_active_txn_version_getter;
+
+  if (OB_FAIL(for_each_session(min_active_txn_version_getter))) {
+    LOG_WARN("fail to get min active snapshot version", K(ret));
+  } else {
+    snapshot_version = min_active_txn_version_getter.get_min_active_snapshot_version();
+  }
+
+  return ret;
 }
 
 int ObSQLSessionMgr::check_session_leak()

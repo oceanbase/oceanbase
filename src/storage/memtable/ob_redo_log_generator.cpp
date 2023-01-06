@@ -93,6 +93,12 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
       if (!iter->need_fill_redo() || !iter->need_submit_log()) {
       } else if (iter->is_logging_blocked()) {
         ret = (data_node_count == 0) ? OB_BLOCK_FROZEN : OB_EAGAIN;
+        if (OB_BLOCK_FROZEN == ret) {
+          // To prevent unnecessary submit_log actions for freeze
+          // Becasue the first callback is linked to a logging_blocked memtable
+          transaction::ObPartTransCtx *part_ctx = static_cast<transaction::ObPartTransCtx *>(mem_ctx_->get_trans_ctx());
+          part_ctx->set_block_frozen_memtable(static_cast<memtable::ObMemtable *>(iter->get_memtable()));
+        }
       } else {
         bool fake_fill = false;
         if (MutatorType::MUTATOR_ROW == iter->get_mutator_type()) {

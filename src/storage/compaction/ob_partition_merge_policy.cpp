@@ -187,6 +187,7 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
       && OB_FAIL(deal_with_minor_result(merge_type, ls, tablet, result))) {
     LOG_WARN("failed to deal with minor merge result", K(ret));
   }
+
   return ret;
 }
 
@@ -281,6 +282,7 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       result.schedule_major_ = true;
     }
   }
+
   return ret;
 }
 

@@ -33,3 +33,6 @@ ob_unittest_observer(test_lock_table_persistence test_lock_table_persistence.cpp
 ob_unittest_observer(test_tx_recover test_tx_recovery.cpp)
 ob_unittest_observer(test_tx_recover2 test_tx_recovery2.cpp)
 ob_unittest_observer(test_tx_recover3 test_tx_recovery3.cpp)
+ob_unittest_observer(test_big_tx_data test_big_tx_data.cpp)
+ob_unittest_observer(test_fast_commit_report fast_commit_report.cpp)
+ob_unittest_observer(test_mvcc_gc test_mvcc_gc.cpp)

@@ -36,6 +36,7 @@ public:
   virtual ~ObTxTableMergePrepareTask();
   int init();
 private:
+  int pre_process_tx_data_table_merge_(ObTabletMergeCtx &ctx);
   virtual int inner_init_ctx(ObTabletMergeCtx &ctx, bool &skip_merge_task_flag) override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTxTableMergePrepareTask);

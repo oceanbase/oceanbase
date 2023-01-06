@@ -28,6 +28,7 @@
 #include "storage/memtable/ob_memtable_util.h"
 #include "storage/memtable/ob_memtable_context.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/memtable/ob_concurrent_control.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
@@ -1123,12 +1124,16 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
+                                           const ObTxNodeArg &arg,
                                            const ObMemtableKey *key,
                                            ObMvccRow *value,
                                            const storage::ObTableReadInfo &read_info,
-                                           ObStoreRowLockState &lock_state)
+                                           ObMvccWriteResult &res)
 {
   int ret = OB_SUCCESS;
+  const int64_t reader_seq_no = ctx.mvcc_acc_ctx_.snapshot_.scn_;
+  ObStoreRowLockState &lock_state = res.lock_state_;
+
   if (OB_ISNULL(value) || !ctx.mvcc_acc_ctx_.is_write() || NULL == key) {
     TRANS_LOG(WARN, "invalid param", KP(value), K(ctx), KP(key));
     ret = OB_INVALID_ARGUMENT;
@@ -1142,7 +1147,8 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
     const ObIArray<ObITable *> *stores = nullptr;
     common::ObSEArray<ObITable *, 4> iter_tables;
     ctx.table_iter_->resume();
-    auto my_tx_id = ctx.mvcc_acc_ctx_.get_tx_id();
+    ObTransID my_tx_id = ctx.mvcc_acc_ctx_.get_tx_id();
+
     while (OB_SUCC(ret)) {
       ObITable *table_ptr = nullptr;
       if (OB_FAIL(ctx.table_iter_->get_next(table_ptr))) {
@@ -1160,9 +1166,14 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
+      // lock_is_decided means we have found either the lock that is locked by
+      // an active txn or the latest unlocked txn data. And after we have found
+      // either of the above situations, whether the row is locked is determined.
+      bool lock_is_decided = false;
+
       stores = &iter_tables;
       // ignore active memtable
-      for (int64_t i = stores->count() - 2; OB_SUCC(ret) && i >= 0; i--) {
+      for (int64_t i = stores->count() - 2; OB_SUCC(ret) && !lock_is_decided && i >= 0; i--) {
         lock_state.reset();
         if (NULL == stores->at(i)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1189,6 +1200,9 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
         }
         if (OB_SUCC(ret)) {
           row_locked |= lock_state.is_locked_;
+          lock_is_decided =
+            (lock_state.is_locked_) || // row is locked by an active txn(may be other or yourself)
+            (!lock_state.trans_version_.is_min()); // row is committed(the row is indead unlocked)
           if (lock_state.is_locked_ && my_tx_id != lock_state.lock_trans_id_) {
             ret = OB_TRY_LOCK_ROW_CONFLICT;
           } else if (max_trans_version < lock_state.trans_version_) {
@@ -1214,6 +1228,19 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
 
         value->set_lower_lock_scaned();
         TRANS_LOG(DEBUG, "lower lock check finish", K(*value), K(*stores));
+      } else {
+        // there is the lock on frozen stores.
+        if (res.has_insert() &&     // we only need check when the node is exactly inserted
+            OB_FAIL(concurrent_control::check_sequence_set_violation(ctx.mvcc_acc_ctx_.write_flag_,
+                                                                     reader_seq_no,
+                                                                     my_tx_id,
+                                                                     arg.data_->dml_flag_,
+                                                                     arg.seq_no_,
+                                                                     lock_state.lock_trans_id_,
+                                                                     lock_state.lock_dml_flag_,
+                                                                     lock_state.lock_data_sequence_))) {
+          TRANS_LOG(WARN, "check sequence set violation failed", K(ret), KPC(this));
+        }
       }
     }
   }
@@ -2086,6 +2113,21 @@ int ObMemtable::print_stat() const
   return ret;
 }
 
+int ObMemtable::check_cleanout(bool &is_all_cleanout,
+                               bool &is_all_delay_cleanout,
+                               int64_t &count)
+{
+  int ret = OB_SUCCESS;
+
+  TRANS_LOG(INFO, "check_cleanout", K_(key));
+
+  query_engine_.check_cleanout(is_all_cleanout,
+                               is_all_delay_cleanout,
+                               count);
+
+  return ret;
+}
+
 int ObMemtable::dump2text(const char *fname)
 {
   int ret = OB_SUCCESS;
@@ -2381,14 +2423,14 @@ int ObMemtable::set_(ObStoreCtx &ctx,
     } else {
       ObMemtableData mtd(new_row.flag_.get_dml_flag(), len, buf);
       ObTxNodeArg arg(&mtd,        /*memtable_data*/
-          NULL == old_row ? NULL : &old_row_data,
-          timestamp_,  /*memstore_version*/
-          ctx.mvcc_acc_ctx_.tx_scn_  /*seq_no*/);
+                      NULL == old_row ? NULL : &old_row_data,
+                      timestamp_,  /*memstore_version*/
+                      ctx.mvcc_acc_ctx_.tx_scn_  /*seq_no*/);
       if (OB_FAIL(mvcc_write_(ctx,
-              &mtk,
-              read_info,
-              arg,
-              is_new_locked))) {
+                              &mtk,
+                              read_info,
+                              arg,
+                              is_new_locked))) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret &&
             OB_TRANSACTION_SET_VIOLATION != ret) {
           TRANS_LOG(WARN, "mvcc write fail", K(mtk), K(ret));
@@ -2494,6 +2536,7 @@ int ObMemtable::mvcc_write_(storage::ObStoreCtx &ctx,
   ObMvccWriteResult res;
   ObIMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
   SCN snapshot_version = ctx.mvcc_acc_ctx_.get_snapshot_version();
+  transaction::ObTxSnapshot &snapshot = ctx.mvcc_acc_ctx_.snapshot_;
 
   if (OB_FAIL(mvcc_engine_.create_kv(key,
                                      &stored_key,
@@ -2502,7 +2545,8 @@ int ObMemtable::mvcc_write_(storage::ObStoreCtx &ctx,
                                      is_new_add))) {
     TRANS_LOG(WARN, "create kv failed", K(ret), K(arg), K(*key), K(ctx));
   } else if (OB_FAIL(mvcc_engine_.mvcc_write(*mem_ctx,
-                                             snapshot_version,
+                                             ctx.mvcc_acc_ctx_.write_flag_,
+                                             snapshot,
                                              *value,
                                              arg,
                                              res))) {
@@ -2521,10 +2565,11 @@ int ObMemtable::mvcc_write_(storage::ObStoreCtx &ctx,
       TRANS_LOG(WARN, "mvcc write fail", K(ret));
     }
   } else if (OB_FAIL(lock_row_on_frozen_stores_(ctx,
+                                                arg,
                                                 key,
                                                 value,
                                                 read_info,
-                                                res.lock_state_))) {
+                                                res))) {
     if (OB_UNLIKELY(!res.is_new_locked_) && OB_TRY_LOCK_ROW_CONFLICT == ret) {
       TRANS_LOG(ERROR, "double lock detected", K(*key), K(*value), K(ctx));
     }

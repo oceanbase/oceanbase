@@ -30,7 +30,9 @@ class ObSimpleClusterTestBase : public testing::Test
 public:
   static const int64_t TRANS_TIMEOUT = 5 * 1000 * 1000;
   // set_bootstrap_and_create_tenant_warn_log 默认bootstrap和创建租户使用WARN日志，加速启动
-  ObSimpleClusterTestBase(const std::string &env_prefix = "run_");
+  ObSimpleClusterTestBase(const std::string &env_prefix = "run_",
+                          const char *log_disk_size = "10G",
+                          const char *memory_limit = "10G");
   virtual ~ObSimpleClusterTestBase();
 
   int start();
@@ -38,7 +40,9 @@ public:
   observer::ObServer& get_curr_observer() { return cluster_->get_observer(); }
   observer::ObSimpleServer& get_curr_simple_server() { return *cluster_; }
 
-  int create_tenant(const char *tenant_name = "tt1");
+  int create_tenant(const char *tenant_name = "tt1",
+                    const char *memory_size = "2G",
+                    const char *log_disk_size = "2G");
   int delete_tenant(const char *tenant_name = "tt1");
   int get_tenant_id(uint64_t &tenant_id, const char *tenant_name = "tt1");
   int exec_write_sql_sys(const char *sql_str, int64_t &affected_rows);

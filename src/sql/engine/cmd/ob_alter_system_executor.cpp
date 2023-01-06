@@ -74,6 +74,7 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
       } else {
         arg.zone_ = stmt.get_zone();
         arg.tablet_id_ = stmt.get_tablet_id();
+        arg.ls_id_ = stmt.get_ls_id();
       }
       if (OB_SUCC(ret)) {
         // get all tenants to freeze

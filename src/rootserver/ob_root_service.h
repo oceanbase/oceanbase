@@ -703,7 +703,6 @@ public:
   int submit_upgrade_task(const obrpc::ObUpgradeJobArg &arg);
   int submit_upgrade_storage_format_version_task();
   int submit_create_inner_schema_task();
-  int submit_async_minor_freeze_task(const obrpc::ObRootMinorFreezeArg &arg);
   int submit_update_all_server_config_task();
   int submit_max_availability_mode_task(const common::ObProtectionLevel level, const int64_t cluster_version);
 

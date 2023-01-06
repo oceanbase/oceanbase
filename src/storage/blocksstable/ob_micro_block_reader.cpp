@@ -467,13 +467,12 @@ int ObMicroBlockReader::get_row_count(int64_t &row_count)
 int ObMicroBlockReader::get_multi_version_info(
     const int64_t row_idx,
     const int64_t schema_rowkey_cnt,
-    ObMultiVersionRowFlag &flag,
-    transaction::ObTransID &trans_id,
+    const ObRowHeader *&row_header,
     int64_t &trans_version,
     int64_t &sql_sequence)
 {
   int ret = OB_SUCCESS;
-  const ObRowHeader *row_header = nullptr;
+  row_header = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -491,11 +490,10 @@ int ObMicroBlockReader::get_multi_version_info(
     LOG_WARN("fail to setup row", K(ret), K(row_idx), K(index_data_[row_idx + 1]),
              K(index_data_[row_idx]), KP(data_begin_));
   } else {
-    trans_id = row_header->get_trans_id();
-    flag = row_header->get_row_multi_version_flag();
-
     ObStorageDatum datum;
-    const int64_t read_col_idx = flag.is_uncommitted_row() ? schema_rowkey_cnt + 1 : schema_rowkey_cnt;
+    const int64_t read_col_idx =
+      row_header->get_row_multi_version_flag().is_uncommitted_row()
+      ? schema_rowkey_cnt + 1 : schema_rowkey_cnt;
     if (OB_FAIL(flat_row_reader_.read_column(
                 data_begin_ + index_data_[row_idx],
                 index_data_[row_idx + 1] - index_data_[row_idx],
@@ -503,9 +501,10 @@ int ObMicroBlockReader::get_multi_version_info(
                 datum))) {
       LOG_WARN("fail to read column", K(ret), K(read_col_idx));
     } else {
-      if (!flag.is_uncommitted_row()) { // get trans_version for committed row
+      if (!row_header->get_row_multi_version_flag().is_uncommitted_row()) {
+        // get trans_version for committed row
         sql_sequence = 0;
-        trans_version = flag.is_ghost_row() ? 0 : -datum.get_int();
+        trans_version = row_header->get_row_multi_version_flag().is_ghost_row() ? 0 : -datum.get_int();
       } else {
         // get sql_sequence for uncommitted row
         trans_version = INT64_MAX;

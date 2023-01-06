@@ -202,7 +202,7 @@ public:
   struct Item
   {
   public:
-    Item(Host* host): MAGIC_CODE_(ITEM_MAGIC_CODE), host_(host) {}
+    Item(Host *host): MAGIC_CODE_(ITEM_MAGIC_CODE), host_(host) {}
     ~Item(){}
     uint32_t MAGIC_CODE_;
     ObBlockSlicer* host_;
@@ -353,6 +353,7 @@ public:
         }
       }
     }
+
     return NULL == ret? NULL: (void*)(ret + 1);
 #endif
   }

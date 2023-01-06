@@ -204,6 +204,7 @@ protected:
       const int64_t timeout,
       transaction::ObTxDesc &tx_desc,
       const transaction::ObTxReadSnapshot &snapshot,
+      const concurrent_control::ObWriteFlag write_flag,
       ObStoreCtxGuard &ctx_guard);
   int check_read_allowed_(
       const share::ObLSID &ls_id,

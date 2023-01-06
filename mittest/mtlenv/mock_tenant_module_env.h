@@ -70,6 +70,8 @@
 #include "share/scn.h"
 #include "mock_gts_source.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
+#include "storage/tx/wrs/ob_tenant_weak_read_service.h"
 
 namespace oceanbase
 {
@@ -79,6 +81,7 @@ namespace storage
 {
 using namespace transaction;
 using namespace logservice;
+using namespace concurrency_control;
 
 int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
 {
@@ -650,6 +653,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, storage::ObTenantSSTableMergeInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, storage::ObTenantFreezeInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSharedMacroBlockMgr::mtl_init,  mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObMultiVersionGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     }
     if (OB_FAIL(ret)) {
 

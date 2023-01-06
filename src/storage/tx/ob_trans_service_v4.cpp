@@ -998,6 +998,7 @@ int ObTransService::get_read_store_ctx(const SCN snapshot_version,
 
 int ObTransService::get_write_store_ctx(ObTxDesc &tx,
                                         const ObTxReadSnapshot &snapshot,
+                                        const concurrent_control::ObWriteFlag write_flag,
                                         storage::ObStoreCtx &store_ctx)
 {
   int ret = OB_SUCCESS;
@@ -1045,7 +1046,8 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
       tx_table_guard,
       snap,
       store_ctx.timeout_,
-      tx.lock_timeout_us_
+      tx.lock_timeout_us_,
+      write_flag
     );
     if (tx.get_active_ts() <= 0) {
       tx.active_ts_ = ObClockGenerator::getClock();

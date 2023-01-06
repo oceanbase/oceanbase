@@ -17,6 +17,7 @@
 #include "lib/hash/ob_hashset.h"
 #include "share/ob_iserver_trace.h"
 #include "share/ob_server_table_operator.h"
+#include "lib/function/ob_function.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,7 @@ public:
   virtual int check_server_permanent_offline(const common::ObAddr &server, bool &is_offline) const;
   virtual int is_server_stopped(const common::ObAddr &server, bool &is_stopped) const;
   int refresh();
+  int for_each_server_status(const ObFunction<int(const ObServerStatus &status)> &functor);
 
 private:
   int find_server_status(const ObAddr &addr, ObServerStatus &status) const;
@@ -67,6 +69,7 @@ class ObAllServerTracer : public share::ObIServerTrace
 public:
   static ObAllServerTracer &get_instance();
   int init(int tg_id, ObServerTraceTask &trace_task);
+  int for_each_server_status(const ObFunction<int(const ObServerStatus &status)> &functor);
   virtual int is_server_exist(const common::ObAddr &server, bool &exist) const;
   virtual int check_server_alive(const common::ObAddr &server, bool &is_alive) const;
   virtual int check_in_service(const common::ObAddr &addr, bool &service_started) const;

@@ -344,7 +344,7 @@ public:
   // get_tx_ctx_table_info returns OB_TRANS_CTX_NOT_EXIST if the tx ctx table need not to be
   // dumped.
   int get_tx_ctx_table_info(ObTxCtxTableInfo &info);
-  int recover_tx_ctx_table_info(const ObTxCtxTableInfo &ctx_info);
+  int recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info);
 
   // leader switch related
   bool need_callback_scheduler_();
@@ -503,7 +503,6 @@ private:
   int get_prev_log_lsn_(const ObTxLogBlock &log_block, ObTxLogType prev_log_type, palf::LSN &lsn);
 
   // int init_tx_data_(const share::ObLSID&ls_id, const ObTransID &tx_id);
-  // int free_tx_data_(ObTxData *&tx_data);
 
   bool is_local_tx_() const { return TransType::SP_TRANS == exec_info_.trans_type_; }
   void set_trans_type_(int64_t trans_type) { exec_info_.trans_type_ = trans_type; }
@@ -657,6 +656,9 @@ public:
    */
   int end_access();
   int rollback_to_savepoint(const int64_t op_sn, const int64_t from_scn, const int64_t to_scn);
+  int set_block_frozen_memtable(memtable::ObMemtable *memtable);
+  void clear_block_frozen_memtable();
+  bool is_logging_blocked();
 private:
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
@@ -721,6 +723,9 @@ private:
   common::ObDList<ObTxLogCb> free_cbs_;
   common::ObDList<ObTxLogCb> busy_cbs_;
   ObTxLogCb final_log_cb_;
+  // flag if the first callback is linked to a logging_block memtable
+  // to prevent unnecessary submit_log actions for freeze
+  memtable::ObMemtable *block_frozen_memtable_;
   // The semantic of the rec_log_ts means the log ts of the first state change
   // after the previous checkpoint. So we use the current strategy to maintain
   // the rec_log_ts:

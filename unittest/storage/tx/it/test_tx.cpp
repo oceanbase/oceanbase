@@ -27,6 +27,21 @@ using namespace ::testing;
 using namespace transaction;
 using namespace share;
 
+namespace concurrent_control
+{
+int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
+                                 const int64_t ,
+                                 const ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const int64_t ,
+                                 const ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const int64_t )
+{
+  return OB_SUCCESS;
+}
+}
+
 namespace common
 {
 void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)

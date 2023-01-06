@@ -221,7 +221,6 @@ void ObTxCommitData::reset()
   commit_version_.reset();
   start_scn_.reset();
   end_scn_.reset();
-  is_in_tx_data_table_ = false;
 }
 
 const char* ObTxCommitData::get_state_string(int32_t state)
@@ -355,7 +354,15 @@ int ObTxData::deserialize_(const char *buf,
 
 void ObTxData::reset()
 {
+  if (OB_NOT_NULL(slice_allocator_) || ref_cnt_ != 0) {
+    int ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "this tx data should not be reset", KR(ret), KP(this), KP(slice_allocator_), K(ref_cnt_));
+    // TODO : @gengli remove ob_abort
+    ob_abort();
+  }
   ObTxCommitData::reset();
+  slice_allocator_ = nullptr;
+  ref_cnt_ = 0;
   undo_status_list_.reset();
 }
 
@@ -372,7 +379,6 @@ ObTxData &ObTxData::operator=(const ObTxData &rhs)
   start_scn_ = rhs.start_scn_;
   end_scn_ = rhs.end_scn_;
   undo_status_list_ = rhs.undo_status_list_;
-  is_in_tx_data_table_ = rhs.is_in_tx_data_table_;
   return *this;
 }
 
@@ -383,7 +389,6 @@ ObTxData &ObTxData::operator=(const ObTxCommitData &rhs)
   commit_version_ = rhs.commit_version_;
   start_scn_ = rhs.start_scn_;
   end_scn_ = rhs.end_scn_;
-  is_in_tx_data_table_ = rhs.is_in_tx_data_table_;
   undo_status_list_.reset();
   return *this;
 }
@@ -440,7 +445,6 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
     merge_undo_actions_(tx_data_table, node, new_undo_action);
     // generate new node if current node cannot be inserted
     if (OB_ISNULL(node) || node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
-      // STORAGE_LOG(DEBUG, "generate new undo status node");
       ObUndoStatusNode *new_node = nullptr;
       if (OB_NOT_NULL(undo_node)) {
         new_node = undo_node;
@@ -448,6 +452,7 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
       } else if (OB_FAIL(tx_data_table->alloc_undo_status_node(new_node))) {
         STORAGE_LOG(WARN, "alloc_undo_status_node() fail", KR(ret));
       }
+
       if (OB_SUCC(ret)) {
         new_node->next_ = node;
         undo_status_list_.head_ = new_node;
@@ -455,13 +460,7 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
         undo_status_list_.undo_node_cnt_++;
       }
     }
-
     node->undo_actions_[node->size_++] = new_undo_action;
-    if (undo_status_list_.undo_node_cnt_ * TX_DATA_SLICE_SIZE > OB_MAX_TX_SERIALIZE_SIZE) {
-      ret = OB_SIZE_OVERFLOW;
-      STORAGE_LOG(WARN, "Too many undo actions. The size of tx data is overflow.", KR(ret),
-                  K(undo_status_list_.undo_node_cnt_), KPC(this));
-    }
   }
 
   if (OB_NOT_NULL(undo_node)) {
@@ -574,10 +573,9 @@ bool ObTxData::equals_(ObTxData &rhs)
 void ObTxData::print_to_stderr(const ObTxData &tx_data)
 {
   fprintf(stderr,
-          "TX_DATA:{tx_id=%-20ld in_tx_data_table=%-6s start_log_scn=%-20s end_log_scn=%-20s commit_version=%-20s "
+          "TX_DATA:{tx_id=%-20ld start_log_scn=%-20s end_log_scn=%-20s commit_version=%-20s "
           "state=%s",
           tx_data.tx_id_.get_id(),
-          tx_data.is_in_tx_data_table_ ? "True" : "False",
           to_cstring(tx_data.start_scn_),
           to_cstring(tx_data.end_scn_),
           to_cstring(tx_data.commit_version_),
@@ -593,10 +591,9 @@ void ObTxData::dump_2_text(FILE *fd) const
   }
 
   fprintf(fd,
-          "TX_DATA:\n{\n    tx_id=%-20ld\n    in_tx_data_table=%-6s\n    start_log_scn=%-20s\n    end_log_scn=%-20s\n  "
+          "TX_DATA:\n{\n    tx_id=%-20ld\n    start_log_scn=%-20s\n    end_log_scn=%-20s\n  "
           "  commit_version=%-20s\n    state=%s\n",
           tx_id_.get_id(),
-          is_in_tx_data_table_ ? "True" : "False",
           to_cstring(start_scn_),
           to_cstring(end_scn_),
           to_cstring(commit_version_),
@@ -612,43 +609,14 @@ DEF_TO_STRING(ObTxData)
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(K_(tx_id),
+       K_(ref_cnt),
        "state", get_state_string(state_),
-       "in_tx_data_table", is_in_tx_data_table_ ? "True" : "False",
        K_(commit_version),
        K_(start_scn),
        K_(end_scn),
        K_(undo_status_list));
   J_OBJ_END();
   return pos;
-}
-
-TxDataHashNode *TxDataHashMapAllocHandle::alloc_node(ObTxData *tx_data)
-{
-  void *hash_node_ptr = reinterpret_cast<void *>(ObTxData::get_hash_node_by_tx_data(tx_data));
-  return new (hash_node_ptr) TxDataHashNode();
-}
-void TxDataHashMapAllocHandle::free_node(TxDataHashNode *node)
-{
-  if (nullptr != node) {
-    // free undo status node first
-    ObTxData *tx_data = ObTxData::get_tx_data_by_hash_node(node);
-    free_undo_list_(tx_data->undo_status_list_.head_);
-    tx_data->undo_status_list_.head_ = nullptr;
-
-    // free slice memory
-    void *slice_ptr = reinterpret_cast<void *>(node);
-    slice_allocator_->free(slice_ptr);
-  }
-}
-
-void TxDataHashMapAllocHandle::free_undo_list_(ObUndoStatusNode *node_ptr)
-{
-  ObUndoStatusNode *node_to_free = nullptr;
-  while (nullptr != node_ptr) {
-    node_to_free = node_ptr;
-    node_ptr = node_ptr->next_;
-    slice_allocator_->free(reinterpret_cast<void *>(node_to_free));
-  }
 }
 
 DEF_TO_STRING(ObUndoStatusNode)

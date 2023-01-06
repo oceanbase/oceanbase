@@ -13,6 +13,9 @@
 #ifndef OCEANBASE_TRANSACTION_TEST_BASIC_FAKE_DEFINE_
 #define OCEANBASE_TRANSACTION_TEST_BASIC_FAKE_DEFINE_
 
+#define protected public
+#define private public
+
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "lib/utility/ob_defer.h"
@@ -27,74 +30,92 @@
 namespace oceanbase {
 using namespace share;
 using namespace memtable;
+
+
 namespace transaction {
 
 class ObFakeTxDataTable : public ObTxDataTable {
 public:
-  ObFakeTxDataTable() : map_() { IGNORE_RETURN map_.init(); }
+  ObFakeTxDataTable() : map_(1 << 20 /*2097152*/)
+  {
+    IGNORE_RETURN map_.init();
+    ObMemAttr mem_attr;
+    mem_attr.label_ = "TX_DATA_TABLE";
+    mem_attr.tenant_id_ = 1;
+    mem_attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
+    ObMemtableMgrHandle memtable_mgr_handle;
+    OB_ASSERT(OB_SUCCESS == slice_allocator_.init(
+                                sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, mem_attr));
+    slice_allocator_.set_nway(ObTxDataTable::TX_DATA_MAX_CONCURRENCY);
+    is_inited_ = true;
+  }
   virtual int init(ObLS *ls, ObTxCtxTable *tx_ctx_table) override
-  { return OB_SUCCESS; }
+  {
+    return OB_SUCCESS;
+  }
   virtual int start() override { return OB_SUCCESS; }
   virtual void stop() override {}
   virtual void reset() override {}
   virtual void destroy() override {}
-  virtual int alloc_tx_data(ObTxData *&tx_data) override
+  virtual int alloc_tx_data(ObTxDataGuard &tx_data_guard) override
   {
-    return map_.alloc_value(tx_data);
+    void *ptr = slice_allocator_.alloc();
+    ObTxData *tx_data = new (ptr) ObTxData();
+    tx_data->ref_cnt_ = 100;
+    tx_data->slice_allocator_ = &slice_allocator_;
+    tx_data->flag_ = 269381;
+    tx_data_guard.init(tx_data);
+    return OB_ISNULL(tx_data) ? OB_ALLOCATE_MEMORY_FAILED : OB_SUCCESS;
   }
-  virtual int deep_copy_tx_data(ObTxData *from, ObTxData *&to) override
+  virtual int deep_copy_tx_data(const ObTxDataGuard &from_guard, ObTxDataGuard &to_guard) override
   {
     int ret = OB_SUCCESS;
-    OZ (map_.alloc_value(to));
+    void *ptr = slice_allocator_.alloc();
+    ObTxData *to = new (ptr) ObTxData();
+    ObTxData *from = (ObTxData*)from_guard.tx_data();
+    to->ref_cnt_ = 100;
+    to->slice_allocator_ = &slice_allocator_;
+    to->flag_ = 269381;
+    to_guard.init(to);
     OX (*to = *from);
     OZ (deep_copy_undo_status_list_(from->undo_status_list_, to->undo_status_list_));
     return ret;
   }
-  virtual void free_tx_data(ObTxData *tx_data) override
+  virtual void free_tx_data(ObTxData *tx_data)
   {
-    map_.free_value(tx_data);
   }
   virtual int alloc_undo_status_node(ObUndoStatusNode *&undo_status_node) override
   {
-    undo_status_node = new ObUndoStatusNode();
+    void *ptr = ob_malloc(TX_DATA_SLICE_SIZE);
+    undo_status_node = new (ptr) ObUndoStatusNode();
     return OB_SUCCESS;
   }
   virtual int free_undo_status_node(ObUndoStatusNode *&undo_status_node) override
   {
-    delete undo_status_node;
     return OB_SUCCESS;
   }
   virtual int insert(ObTxData *&tx_data) override
   {
     int ret = OB_SUCCESS;
-    ObTxData *old = NULL;
-    if (OB_SUCC(map_.get(tx_data->tx_id_, old))) {
-      OX (map_.revert(old));
-      OZ (map_.del(tx_data->tx_id_));
-    } else if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    }
-    OZ (map_.insert_and_get(tx_data->tx_id_, tx_data));
-    OX (map_.revert(tx_data));
+    OZ (map_.insert(tx_data->tx_id_, tx_data));
     return ret;
   }
   virtual int check_with_tx_data(const ObTransID tx_id, ObITxDataCheckFunctor &fn) override
   {
     int ret = OB_SUCCESS;
-    ObTxData *tx_data = NULL;
-    OZ (map_.get(tx_id, tx_data));
-    OZ (fn(*tx_data));
-    if (OB_NOT_NULL(tx_data)) { map_.revert(tx_data); }
+    ObTxDataGuard tx_data_guard;
+    OZ (map_.get(tx_id, tx_data_guard));
+    OZ (fn(*tx_data_guard.tx_data()));
     if (OB_ENTRY_NOT_EXIST == ret) { ret = OB_TRANS_CTX_NOT_EXIST; }
     return ret;
   }
-  common::ObLinkHashMap<ObTransID, ObTxData> map_;
+  ObTxDataHashMap map_;
 };
 
 class ObFakeTxTable : public ObTxTable {
 public:
   ObFakeTxTable() : ObTxTable(tx_data_table_) {}
-private:
+public:
   ObFakeTxDataTable tx_data_table_;
 };
 

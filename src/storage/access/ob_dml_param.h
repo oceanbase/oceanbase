@@ -181,7 +181,8 @@ struct ObDMLBaseParam
         encrypt_meta_(NULL),
         encrypt_meta_legacy_(),
         spec_seq_no_(-1),
-        snapshot_()
+        snapshot_(),
+        write_flag_()
   {
   }
 
@@ -209,6 +210,8 @@ struct ObDMLBaseParam
   int64_t spec_seq_no_;
   // transaction snapshot
   transaction::ObTxReadSnapshot snapshot_;
+  // write flag for inner write processing
+  concurrent_control::ObWriteFlag write_flag_;
   bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0); }
   DECLARE_TO_STRING;
 };

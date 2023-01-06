@@ -484,8 +484,10 @@ int ObTxNode::write(ObTxDesc &tx,
   write_store_ctx.ls_ = &mock_ls_;
   write_store_ctx.ls_id_ = ls_id_;
   write_store_ctx.table_iter_ = iter;
+  concurrent_control::ObWriteFlag write_flag;
   OZ(txs_.get_write_store_ctx(tx,
                               snapshot,
+                              write_flag,
                               write_store_ctx));
   write_store_ctx.mvcc_acc_ctx_.tx_table_guard_.init(&fake_tx_table_);
   ObArenaAllocator allocator;
@@ -517,8 +519,10 @@ int ObTxNode::write_begin(ObTxDesc &tx,
   iter->add_tables(&mtb, 1);
   write_store_ctx.ls_id_ = ls_id_;
   write_store_ctx.table_iter_ = iter;
+  concurrent_control::ObWriteFlag write_flag;
   OZ(txs_.get_write_store_ctx(tx,
                               snapshot,
+                              write_flag,
                               write_store_ctx));
   return ret;
 }

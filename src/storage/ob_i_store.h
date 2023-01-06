@@ -224,19 +224,27 @@ struct ObStoreRowLockState
 {
 public:
   ObStoreRowLockState()
-    : is_locked_(false), trans_version_(share::SCN::min_scn()), lock_trans_id_(),
-    lock_data_sequence_(0), is_delayed_cleanout_(false),
-    mvcc_row_(NULL)
-  {}
+    : is_locked_(false),
+    trans_version_(share::SCN::min_scn()),
+    lock_trans_id_(),
+    lock_data_sequence_(0),
+    lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
+    is_delayed_cleanout_(false),
+    mvcc_row_(NULL) {}
   void reset();
-  TO_STRING_KV(K_(is_locked), K_(trans_version), K_(lock_trans_id),
-               K_(lock_data_sequence), K_(is_delayed_cleanout),
+  TO_STRING_KV(K_(is_locked),
+               K_(trans_version),
+               K_(lock_trans_id),
+               K_(lock_data_sequence),
+               K_(lock_dml_flag),
+               K_(is_delayed_cleanout),
                KP_(mvcc_row));
 
   bool is_locked_;
   share::SCN trans_version_;
   transaction::ObTransID lock_trans_id_;
   int64_t lock_data_sequence_;
+  blocksstable::ObDmlFlag lock_dml_flag_;
   bool is_delayed_cleanout_;
   memtable::ObMvccRow *mvcc_row_;
 };

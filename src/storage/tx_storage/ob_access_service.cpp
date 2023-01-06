@@ -110,6 +110,8 @@ int ObAccessService::pre_check_lock(
           transaction::ObTransVersion::INVALID_TRANS_VERSION;
   transaction::ObTxReadSnapshot snapshot;
   snapshot.init_none_read();
+  concurrent_control::ObWriteFlag write_flag;
+  write_flag.set_is_table_lock();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob access service is not running.", K(ret));
@@ -122,6 +124,7 @@ int ObAccessService::pre_check_lock(
                                                 param.expired_time_, /*timeout*/
                                                 tx_desc,
                                                 snapshot,
+                                                write_flag,
                                                 ctx_guard))) {
     LOG_WARN("fail to check query allowed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
@@ -143,6 +146,9 @@ int ObAccessService::lock_obj(
   ObLS *ls = nullptr;
   transaction::ObTxReadSnapshot snapshot;
   snapshot.init_none_read();
+    concurrent_control::ObWriteFlag write_flag;
+  write_flag.set_is_table_lock();
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob access service is not running.", K(ret));
@@ -155,6 +161,7 @@ int ObAccessService::lock_obj(
                                                 param.expired_time_, /*timeout*/
                                                 tx_desc,
                                                 snapshot,
+                                                write_flag,
                                                 ctx_guard))) {
     LOG_WARN("fail to check query allowed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
@@ -177,6 +184,9 @@ int ObAccessService::unlock_obj(
   int64_t user_specified_snapshot = transaction::ObTransVersion::INVALID_TRANS_VERSION;
   transaction::ObTxReadSnapshot snapshot;
   snapshot.init_none_read();
+  concurrent_control::ObWriteFlag write_flag;
+  write_flag.set_is_table_lock();
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob access service is not running.", K(ret));
@@ -189,6 +199,7 @@ int ObAccessService::unlock_obj(
                                                 param.expired_time_, /*timeout*/
                                                 tx_desc,
                                                 snapshot,
+                                                write_flag,
                                                 ctx_guard))) {
     LOG_WARN("fail to check query allowed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
@@ -339,6 +350,7 @@ int ObAccessService::get_write_store_ctx_guard_(
     const int64_t timeout,
     transaction::ObTxDesc &tx_desc,
     const transaction::ObTxReadSnapshot &snapshot,
+    const concurrent_control::ObWriteFlag write_flag,
     ObStoreCtxGuard &ctx_guard)
 {
   int ret = OB_SUCCESS;
@@ -355,7 +367,7 @@ int ObAccessService::get_write_store_ctx_guard_(
     auto &ctx = ctx_guard.get_store_ctx();
     ctx.ls_ = ls;
     ctx.timeout_ = timeout;
-    if (OB_FAIL(ls->get_write_store_ctx(tx_desc, snapshot, ctx))) {
+    if (OB_FAIL(ls->get_write_store_ctx(tx_desc, snapshot, write_flag, ctx))) {
       LOG_WARN("can not get write store ctx", K(ret), K(ls_id), K(snapshot), K(tx_desc));
     }
   }
@@ -497,6 +509,7 @@ int ObAccessService::check_write_allowed_(
                                                 dml_param.timeout_,
                                                 tx_desc,
                                                 dml_param.snapshot_,
+                                                dml_param.write_flag_,
                                                 ctx_guard))) {
     LOG_WARN("get write store ctx failed", K(ret), K(ls_id), K(dml_param), K(tx_desc));
   } else if (FALSE_IT(ctx_guard.get_store_ctx().tablet_id_ = tablet_id)) {

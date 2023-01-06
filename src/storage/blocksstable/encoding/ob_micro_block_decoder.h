@@ -203,8 +203,7 @@ public:
   virtual int get_multi_version_info(
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
-      ObMultiVersionRowFlag &flag,
-      transaction::ObTransID &trans_id,
+      const ObRowHeader *&row_header,
       int64_t &version,
       int64_t &sql_sequence);
   int compare_rowkey(

@@ -288,6 +288,8 @@ private:
   void set_ls_freeze_begin_();
   void set_ls_freeze_end_();
   int check_ls_state(); // must be used under the protection of ls_lock
+  int freeze_normal_tablet_(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
+  int freeze_ls_inner_tablet_(const ObTabletID &tablet_id);
 private:
   // flag whether the logsteram is freezing
   // the first bit: 1, freeze; 0, not freeze

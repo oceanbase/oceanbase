@@ -1018,7 +1018,7 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
   } else {
     ObMultiVersionRowFlag flag;
     int64_t trans_version = 0;
-    transaction::ObTransID trans_id;
+    const ObRowHeader *row_header = nullptr;
     int64_t sql_sequence = 0;
     bool can_read = true;
     bool is_determined_state = false;
@@ -1030,17 +1030,20 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
     } else if (OB_FAIL(reader_->get_multi_version_info(
                 current_,
                 read_info_->get_schema_rowkey_count(),
-                flag,
-                trans_id,
+                row_header,
                 trans_version,
                 sql_sequence))) {
       LOG_WARN("fail to get multi version info", K(ret), K(current_), KPC_(read_info),
                K(sql_sequence_col_idx_), K_(macro_id));
+    } else if (OB_ISNULL(row_header)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("row header is null", K(ret));
+    } else if (FALSE_IT(flag = row_header->get_row_multi_version_flag())) {
     } else if (flag.is_uncommitted_row()) {
       have_uncommited_row = true;  // TODO @lvling check transaction status instead
       auto &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
       transaction::ObLockForReadArg lock_for_read_arg(acc_ctx,
-                                                      trans_id,
+                                                      row_header->get_trans_id(),
                                                       sql_sequence,
                                                       context_->query_flag_.read_latest_);
 
@@ -1048,13 +1051,13 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
                                   can_read,
                                   trans_version,
                                   is_determined_state))) {
-          STORAGE_LOG(WARN, "fail to check transaction status", K(ret), K(trans_id), K_(macro_id));
+          STORAGE_LOG(WARN, "fail to check transaction status", K(ret), KPC(row_header), K_(macro_id));
         }
     }
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(flag, is_ghost_row_flag))) {
-      LOG_WARN("fail to check ghost row", K(ret), K_(current), K(trans_id),
+      LOG_WARN("fail to check ghost row", K(ret), K_(current), KPC(row_header),
                K(trans_version), K(sql_sequence), K_(macro_id));
     } else if (OB_UNLIKELY(is_ghost_row_flag)) {
       can_read = false;
@@ -1677,6 +1680,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::read_uncommitted_row(
     bool &can_read, const ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
+  const ObRowHeader *row_header = nullptr;
   ObMultiVersionRowFlag flag;
   int64_t trans_version = 0;
   int64_t sql_sequence = 0;
@@ -1685,12 +1689,16 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::read_uncommitted_row(
   if (OB_FAIL(reader_->get_multi_version_info(
               current_,
               read_info_->get_schema_rowkey_count(),
-              flag,
-              read_trans_id_,
+              row_header,
               trans_version,
               sql_sequence))) {
     LOG_WARN("fail to get multi version info", K(ret), K(current_),
              KPC_(read_info), K_(macro_id));
+  } else if (OB_ISNULL(row_header)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("row header is null", K(ret));
+  } else if (FALSE_IT(flag = row_header->get_row_multi_version_flag())) {
+  } else if (FALSE_IT(read_trans_id_ = row_header->get_trans_id())) {
   } else if (flag.is_uncommitted_row()) { // uncommitted row
     bool read_row_flag = false;
     if (OB_UNLIKELY(read_trans_id_ != last_trans_id_)) { // another uncommitted trans
@@ -1959,18 +1967,23 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::find_uncommitted_row()
         LOG_DEBUG("find uncommitted row failed", K(ret));
       }
     } else {
+      const ObRowHeader *row_header = nullptr;
       ObMultiVersionRowFlag flag;
       int64_t trans_version = 0;
       int64_t sql_sequence = 0;
       if (OB_FAIL(reader_->get_multi_version_info(
                   current_,
                   read_info_->get_schema_rowkey_count(),
-                  flag,
-                  last_trans_id_, // record the trans_id
+                  row_header,
                   trans_version,
                   sql_sequence))) {
         LOG_WARN("fail to get multi version info", K(ret), K(current_),
                  KPC_(read_info), K_(macro_id));
+      } else if (OB_ISNULL(row_header)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("row header is null", K(ret));
+      } else if (FALSE_IT(flag = row_header->get_row_multi_version_flag())) {
+      } else if (FALSE_IT(last_trans_id_ = row_header->get_trans_id())) {
       } else if (flag.is_uncommitted_row()) { // uncommitted
         //get trans status & committed_trans_version_
         int64_t state;

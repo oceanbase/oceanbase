@@ -70,6 +70,7 @@ DEFINE_LOG_SUB_MOD(STANDBY)              // primary and standby cluster
 DEFINE_LOG_SUB_MOD(REASY)                 // libreasy
 DEFINE_LOG_SUB_MOD(COORDINATOR)          // leader coordinator
 DEFINE_LOG_SUB_MOD(OBTRACE)                // trace
+DEFINE_LOG_SUB_MOD(MVCC)                 // concurrency_control
 LOG_MOD_END(ROOT)
 
 //statement of WRS's sub_modules
@@ -413,6 +414,8 @@ LOG_MOD_END(PL)
 #define _COORDINATOR_LOG(level, _fmt_, args...) _OB_MOD_LOG(COORDINATOR, level, _fmt_, ##args)
 #define OBTRACE_LOG(level, info_string, args...) OB_MOD_LOG(OBTRACE, level, info_string, ##args)
 #define _OBTRACE_LOG(level, _fmt_, args...) _OB_MOD_LOG(OBTRACE, level, _fmt_, ##args)
+#define MVCC_LOG(level, info_string, args...) OB_MOD_LOG(MVCC, level, info_string, ##args)
+#define _MVCC_LOG(level, _fmt_, args...) _OB_MOD_LOG(MVCC, level, _fmt_, ##args)
 
 //dfine ParMod_SubMod_LOG
 #define WRS_CLUSTER_LOG(level, info_string, args...) OB_SUB_MOD_LOG(WRS, CLUSTER, level,        \

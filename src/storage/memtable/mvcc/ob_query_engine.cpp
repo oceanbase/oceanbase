@@ -50,6 +50,43 @@ void ObQueryEngine::TableIndex::destroy()
   keybtree_.destroy();
 }
 
+void ObQueryEngine::TableIndex::check_cleanout(bool &is_all_cleanout,
+                                               bool &is_all_delay_cleanout,
+                                               int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  Iterator<keybtree::BtreeIterator> iter;
+  ObStoreRowkeyWrapper scan_start_key_wrapper(&ObStoreRowkey::MIN_STORE_ROWKEY);
+  ObStoreRowkeyWrapper scan_end_key_wrapper(&ObStoreRowkey::MAX_STORE_ROWKEY);
+  iter.reset();
+  const_cast<ObMemtableKey *>(iter.get_key())->encode(nullptr);
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "not init", "this", this);
+  } else if (OB_FAIL(keybtree_.set_key_range(iter.get_read_handle(),
+                                             scan_start_key_wrapper, 1,
+                                             scan_end_key_wrapper, 1, INT64_MAX))) {
+    TRANS_LOG(ERROR, "set key range to btree scan handle fail", KR(ret));
+  } else {
+    blocksstable::ObRowReader row_reader;
+    blocksstable::ObDatumRow datum_row;
+    is_all_cleanout = true;
+    is_all_delay_cleanout = true;
+    count = 0;
+    for (int64_t row_idx = 0; OB_SUCC(ret) && OB_SUCC(iter.next_internal(true)); row_idx++) {
+      const ObMemtableKey *key = iter.get_key();
+      ObMvccRow *row = iter.get_value();
+      for (ObMvccTransNode *node = row->get_list_head(); OB_SUCC(ret) && OB_NOT_NULL(node); node = node->prev_) {
+        if (node->is_delayed_cleanout()) {
+          is_all_cleanout = false;
+        } else {
+          is_all_delay_cleanout = false;
+        }
+        count++;
+      }
+    }
+  }
+}
+
 void ObQueryEngine::TableIndex::dump2text(FILE* fd)
 {
   int ret = OB_SUCCESS;
@@ -700,6 +737,17 @@ int ObQueryEngine::estimate_row_count(const ObMemtableKey *start_key, const int 
   }
   ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
   return ret;
+}
+
+void ObQueryEngine::check_cleanout(bool &is_all_cleanout,
+                                   bool &is_all_delay_cleanout,
+                                   int64_t &count)
+{
+  if (OB_NOT_NULL(index_)) {
+    index_->check_cleanout(is_all_cleanout,
+                           is_all_delay_cleanout,
+                           count);
+  }
 }
 
 void ObQueryEngine::dump2text(FILE *fd)

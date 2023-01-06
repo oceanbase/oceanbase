@@ -80,6 +80,9 @@ namespace transaction {
     class ObTableLockService;
   }
 }
+namespace concurrency_control {
+  class ObMultiVersionGarbageCollector; // MVCC GC
+}
 
 namespace logservice
 {
@@ -210,6 +213,7 @@ namespace detector
       storage::ObTenantFreezeInfoMgr*,               \
       transaction::ObTxLoopWorker *,                 \
       storage::ObAccessService*,                     \
+      concurrency_control::ObMultiVersionGarbageCollector*, \
       sql::ObUDRMgr*,                        \
       ObTestModule*                                  \
   )

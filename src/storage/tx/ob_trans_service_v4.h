@@ -78,6 +78,7 @@ int get_read_store_ctx(const share::SCN snapshot_version,
                        ObStoreCtx &store_ctx);
 int get_write_store_ctx(ObTxDesc &tx,
                         const ObTxReadSnapshot &snapshot,
+                        const concurrent_control::ObWriteFlag write_flag,
                         storage::ObStoreCtx &store_ctx);
 int revert_store_ctx(storage::ObStoreCtx &store_ctx);
 

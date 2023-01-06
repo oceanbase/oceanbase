@@ -76,9 +76,13 @@ uint32_t get_local_addr(const char *dev_name)
 }
 
 ObSimpleServer::ObSimpleServer(const std::string &env_prefix,
+                               const char *log_disk_size,
+                               const char *memory_limit,
                                ObServer &server,
                                const std::string &dir_prefix)
   : server_(server),
+    log_disk_size_(log_disk_size),
+    memory_limit_(memory_limit),
     data_dir_(dir_prefix),
     run_dir_(env_prefix)
 {
@@ -130,7 +134,9 @@ int ObSimpleServer::simple_init()
   rs_list_ = local_ip_ + ":" + std::to_string(opts.rpc_port_) + ":" + std::to_string(opts.mysql_port_);
   opts.rs_list_ = rs_list_.c_str();
   // NOTE: memory_limit must keep same with log_disk_size
-  opts.optstr_ = "log_disk_size=10G,memory_limit=10G,cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time=1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_size=10G,stack_size=512K";
+  optstr_ = std::string();
+  optstr_ = optstr_ + "log_disk_size=" + std::string(log_disk_size_) + ",memory_limit=" + std::string(memory_limit_) + ",cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time=1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_size=10G,stack_size=512K";
+  opts.optstr_ = optstr_.c_str();
   //opts.devname_ = "eth0";
   opts.use_ipv6_ = false;
 

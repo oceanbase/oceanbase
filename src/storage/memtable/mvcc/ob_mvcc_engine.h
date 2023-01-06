@@ -68,7 +68,8 @@ public:
   // OB_TRANSACTION_SET_VIOLATION if encountering lost update. The interesting
   // implementation about mvcc_write is located in ob_mvcc_row.cpp/.h
   int mvcc_write(ObIMemtableCtx &ctx,
-                 const share::SCN snapshot_version,
+                 const concurrent_control::ObWriteFlag write_flag,
+                 const transaction::ObTxSnapshot &snapshot,
                  ObMvccRow &value,
                  const ObTxNodeArg &arg,
                  ObMvccWriteResult &res);

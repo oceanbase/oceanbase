@@ -305,7 +305,10 @@ DEF_INT(px_workers_per_cpu_quota, OB_CLUSTER_PARAMETER, "10", "[0,20]",
         "the maximum number of threads that can be scheduled concurrently. Range: [0, 20]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(undo_retention, OB_TENANT_PARAMETER, "1800", "[0, 4294967295]",
-        "the low threshold value of undo retention. The system retains undo for at least the time specified in this config. Range: [0, 4294967295]",
+        "the low threshold value of undo retention. The system retains undo for at least the time specified in this config when active txn protection is banned. Range: [0, 4294967295]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_mvcc_gc_using_min_txn_snapshot, OB_TENANT_PARAMETER, "True",
+        "specifies enable mvcc gc using active txn snapshot",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_rowsets_enabled, OB_TENANT_PARAMETER, "True",
          "specifies whether vectorized sql execution engine is activated",
@@ -656,6 +659,10 @@ DEF_TIME(_ob_trans_rpc_timeout, OB_CLUSTER_PARAMETER, "3s", "[0s, 3600s]",
 DEF_BOOL(enable_early_lock_release, OB_TENANT_PARAMETER, "True",
          "enable early lock release",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_tx_result_retention, OB_TENANT_PARAMETER, "300", "[0, 36000]",
+        "The tx data can be recycled after at least _tx_result_retention seconds. "
+        "Range: [0, 36000]",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
          "get gts ahead interval. Range: [0s, 1s]",
@@ -780,7 +787,7 @@ DEF_BOOL(_enable_compaction_diagnose, OB_CLUSTER_PARAMETER, "False",
 DEF_STR(_force_skip_encoding_partition_id, OB_CLUSTER_PARAMETER, "",
         "force the specified partition to major without encoding row store, only for emergency!",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_private_buffer_size, OB_CLUSTER_PARAMETER, "256K", "[0B,)"
+DEF_CAP(_private_buffer_size, OB_CLUSTER_PARAMETER, "16K", "[0B,)"
          "the trigger remaining data size within transaction for immediate logging, 0B represents not trigger immediate logging"
          "Range: [0B, total size of memory]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

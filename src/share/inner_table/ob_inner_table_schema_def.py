@@ -5191,7 +5191,29 @@ def_table_schema(
   ],
 )
 
-# 444 : __all_reserved_snapshot
+def_table_schema(
+  owner = 'handora.qc',
+  table_name    = '__all_reserved_snapshot',
+  table_id      = '444',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('snapshot_type', 'uint'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'uint'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('create_time', 'uint'),
+    ('snapshot_version', 'uint'),
+    ('status', 'uint'),
+  ],
+)
+
 def_table_schema(
     owner = 'yanmu.ztl',
     table_name = '__all_cluster_event_history',

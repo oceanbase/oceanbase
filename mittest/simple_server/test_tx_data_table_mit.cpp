@@ -50,6 +50,7 @@ namespace oceanbase
 using namespace transaction;
 using namespace storage;
 using namespace palf;
+using namespace share;
 
 namespace unittest
 {
@@ -174,21 +175,19 @@ void ObTxDataTableTest::check_start_tx_scn(ObTxDataTable *tx_data_table)
   // MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   // guard.switch_to(RunCtx.tenant_id_);
 
-  // share::SCN pre_start_tx_scn = share::SCN::min_scn();
-  // while (!ATOMIC_LOAD(&stop)) {
-  //   share::SCN start_tx_scn = share::SCN::min_scn();
-  //   share::SCN recycle_scn = share::SCN::min_scn();
-  //   ASSERT_EQ(OB_SUCCESS, tx_data_table->get_start_tx_scn(start_tx_scn));
-  //   STORAGE_LOG(INFO, "GENGLI ", K(tx_data_table->get_ls_id()), K(pre_start_tx_scn), K(start_tx_scn));
-  //   ASSERT_LE(pre_start_tx_scn, start_tx_scn);
-  //   ASSERT_EQ(OB_SUCCESS, tx_data_table->get_recycle_scn(recycle_scn));
-  //   STORAGE_LOG(INFO, "GENGLI ", K(tx_data_table->get_ls_id()), K(recycle_scn), K(start_tx_scn));
-  //   ASSERT_LE(start_tx_scn, recycle_scn);
-  //   pre_start_tx_scn = start_tx_scn;
-  //   OB_LOG(INFO, "check start tx scn : ", K(start_tx_scn), K(recycle_scn));
+  SCN pre_start_tx_scn = SCN::min_scn();
+  while (!ATOMIC_LOAD(&stop)) {
+    SCN start_tx_scn = SCN::min_scn();
+    SCN recycle_scn = SCN::min_scn();
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->get_start_tx_scn(start_tx_scn));
+    ASSERT_LE(pre_start_tx_scn, start_tx_scn);
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->get_recycle_scn(recycle_scn));
+    ASSERT_LE(start_tx_scn, recycle_scn);
+    pre_start_tx_scn = start_tx_scn;
+    OB_LOG(INFO, "check start tx scn : ", K(start_tx_scn), K(recycle_scn));
 
   //   ::sleep(1);
-  // }
+  }
 }
 
 void ObTxDataTableTest::check_tx_data_minor_succeed()
@@ -316,6 +315,7 @@ public:
 
 void ObTxDataTableRestartTest::select_existed_data()
 {
+  sleep(10);
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
 
   int ret = OB_SUCCESS;

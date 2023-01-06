@@ -125,6 +125,9 @@ public:
   virtual void runTimerTask();
   void try_check_session();
 
+  // get min active snapshot version for all session
+  int get_min_active_snapshot_version(share::SCN &snapshot_version);
+
   //used for guarantee the unique sessid when observer generates sessid
   static uint64_t extract_server_id(uint32_t sessid);
   static bool is_server_sessid(uint32_t sessid) {return SERVER_SESSID_TAG & sessid;}

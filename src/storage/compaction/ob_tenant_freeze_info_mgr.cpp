@@ -34,6 +34,7 @@
 #include "share/ob_zone_merge_table_operator.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
@@ -420,6 +421,39 @@ int ObTenantFreezeInfoMgr::get_multi_version_duration(int64_t &duration) const
   return ret;
 }
 
+int64_t ObTenantFreezeInfoMgr::get_min_reserved_snapshot_for_tx()
+{
+  int ret = OB_SUCCESS;
+  int64_t snapshot_version = INT64_MAX;
+  uint64_t data_version = 0;
+
+  // is_gc_disabled means whether gc using globally reserved snapshot is disabled,
+  // and it may be because of disk usage or lost connection to inner table
+  bool is_gc_disabled = MTL(concurrency_control::ObMultiVersionGarbageCollector *)->
+    is_gc_disabled();
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+
+  if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(MTL_ID()),
+                                   data_version))) {
+    STORAGE_LOG(WARN, "get min data version failed", KR(ret),
+                K(gen_meta_tenant_id(MTL_ID())));
+    // we disable the gc when fetch min data version failed
+    is_gc_disabled = true;
+  }
+
+  if (data_version >= DATA_VERSION_4_1_0_0
+      && tenant_config->_mvcc_gc_using_min_txn_snapshot
+      && !is_gc_disabled) {
+    share::SCN snapshot_for_active_tx =
+      MTL(concurrency_control::ObMultiVersionGarbageCollector *)->
+      get_reserved_snapshot_for_active_txn();
+    snapshot_version = snapshot_for_active_tx.get_val_for_tx();
+  }
+
+  return snapshot_version;
+}
+
 int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     const ObTabletID &tablet_id,
     const int64_t merged_version,
@@ -450,8 +484,11 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
         ret = OB_SUCCESS;
       }
     }
+
     snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L * 1000L);
+    snapshot_version = std::min(snapshot_version, get_min_reserved_snapshot_for_tx());
     snapshot_version = std::min(snapshot_version, freeze_info.freeze_version);
+
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
       bool related = false;
       const ObSnapshotInfo &snapshot = snapshots.at(i);
@@ -497,12 +534,21 @@ int ObTenantFreezeInfoMgr::diagnose_min_reserved_snapshot(
         ret = OB_SUCCESS;
       }
     }
+
     snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L * 1000L);
     snapshot_from_type = "undo_retention";
+
+    const int64_t snapshot_version_for_tx = get_min_reserved_snapshot_for_tx();
+    if (snapshot_version_for_tx < snapshot_version) {
+      snapshot_version = snapshot_version_for_tx;
+      snapshot_from_type = "snapshot_for_tx";
+    }
+
     if (freeze_info.freeze_version < snapshot_version) {
       snapshot_version = freeze_info.freeze_version;
       snapshot_from_type = "major_freeze_ts";
     }
+
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
       bool related = false;
       const ObSnapshotInfo &snapshot = snapshots.at(i);

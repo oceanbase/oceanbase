@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_STORAGE_OB_TX_TABLE_ITERATOR
 #define OCEANBASE_STORAGE_OB_TX_TABLE_ITERATOR
 
+#include "lib/container/ob_array.h"
+#include "logservice/archiveservice/ob_archive_util.h"
 #include "storage/memtable/ob_memtable_iterator.h"
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
@@ -31,8 +33,9 @@ namespace transaction
 }
 namespace storage
 {
+class ObTxTable;
 class ObTxDataMemtable;
-class ObTxDataSortListNode;
+class ObTxDataLinkNode;
 class ObSSTableArray;
 struct TxDataReadSchema;
 
@@ -78,29 +81,25 @@ enum TX_CTX_SSTABLE_COL_IDX : int64_t
  *
  */
 
-
 class ObTxDataMemtableScanIterator : public memtable::ObIMemtableIterator
 {
 private:
   static const int64_t BUF_LENGTH = 1024;
-  static int64_t PERIODICAL_SELECT_INTERVAL_NS;
 
 public:
-  ObTxDataMemtableScanIterator(const ObTableIterParam &iter_param)
+  ObTxDataMemtableScanIterator(const ObTableIterParam &iter_param, const blocksstable::ObDatumRange &range)
     : is_inited_(false),
       iter_param_(iter_param),
-      dump_tx_data_done_(false),
-      cur_max_commit_version_(),
-      pre_start_scn_(),
-      tx_data_row_cnt_(0),
+      range_(range),
+      iterate_row_cnt_(0),
+      start_tx_id_(0),
+      end_tx_id_(0),
+      row_cnt_to_dump_(0),
       pre_tx_data_(nullptr),
-      arena_allocator_(),
       cur_node_(nullptr),
-      row_(),
-      buf_(arena_allocator_),
       tx_data_memtable_(nullptr),
       key_datum_(),
-      DEBUG_iter_commit_ts_cnt_(0) {}
+      DEBUG_drop_tx_data_cnt_(0) {}
 
   ~ObTxDataMemtableScanIterator() { reset(); }
 
@@ -123,25 +122,27 @@ public:
   virtual void reuse();
 
 private:
-  int get_next_tx_data_row_(const blocksstable::ObDatumRow *&row);
+  int get_next_tx_data_(ObTxData *&tx_data);
 
-  int get_next_commit_scn_row_(const blocksstable::ObDatumRow *&row);
+  int drop_and_get_tx_data_(ObTxData *&tx_data);
 
-  int prepare_commit_scn_list_();
+  int get_next_commit_version_row_(const blocksstable::ObDatumRow *&row);
 
-  int periodical_get_next_commit_scn_(ObCommitSCNsArray::Node &node);
+  int prepare_commit_version_list_();
 
-  int fill_in_cur_commit_scns_(ObCommitSCNsArray &cur_commit_scns);
+  int periodical_get_next_commit_version_(ObCommitVersionsArray::Node &node);
 
-  int get_past_commit_scns_(ObCommitSCNsArray &past_commit_scns);
+  int fill_in_cur_commit_versions_(ObCommitVersionsArray &cur_commit_versions);
 
-  int deserialize_commit_scns_array_from_row_(const blocksstable::ObDatumRow *row, ObCommitSCNsArray &past_commit_scns);
+  int get_past_commit_versions_(ObCommitVersionsArray &past_commit_versions);
 
+  int deserialize_commit_versions_array_from_row_(const blocksstable::ObDatumRow *row,
+                                                  ObCommitVersionsArray &past_commit_versions);
 
   int merge_cur_and_past_commit_verisons_(const share::SCN recycle_scn,
-                                          ObCommitSCNsArray &cur_commit_scns,
-                                          ObCommitSCNsArray &past_commit_scns,
-                                          ObCommitSCNsArray &merged_commit_scns);
+                                          ObCommitVersionsArray &cur_commit_versions,
+                                          ObCommitVersionsArray &past_commit_versions,
+                                          ObCommitVersionsArray &merged_commit_versions);
 
   /**
    * @brief get node from data_arr and push_back it to merged_arr
@@ -156,41 +157,59 @@ private:
   int merge_pre_process_node_(const int64_t step_len,
                               const share::SCN start_scn_limit,
                               const share::SCN recycle_scn,
-                              const ObIArray<ObCommitSCNsArray::Node> &data_arr,
+                              const ObIArray<ObCommitVersionsArray::Node> &data_arr,
                               share::SCN &max_commit_version,
-                              ObIArray<ObCommitSCNsArray::Node> &merged_arr);
+                              ObIArray<ObCommitVersionsArray::Node> &merged_arr);
 
-  int set_row_with_merged_commit_scns_(ObCommitSCNsArray &merged_commit_scns,
+  int set_row_with_merged_commit_versions_(ObCommitVersionsArray &merged_commit_versions,
                                            const blocksstable::ObDatumRow *&row);
 
-  int DEBUG_check_past_and_cur_arr(ObCommitSCNsArray &cur_commit_versions,
-                                   ObCommitSCNsArray &past_commit_versions);
+  int init_iterate_range_(ObTxDataMemtable *tx_data_memtable);
 
-  int DEBUG_try_calc_upper_and_check_(ObCommitSCNsArray &merged_commit_versions);
+  int DEBUG_check_past_and_cur_arr(ObCommitVersionsArray &cur_commit_versions,
+                                   ObCommitVersionsArray &past_commit_versions);
+
+  int DEBUG_try_calc_upper_and_check_(ObCommitVersionsArray &merged_commit_versions);
 
   int DEBUG_fake_calc_upper_trans_version(const share::SCN sstable_end_scn,
                                           share::SCN &upper_trans_version,
-                                          ObCommitSCNsArray &merged_commit_versions);
+                                          ObCommitVersionsArray &merged_commit_versions);
 
   void DEBUG_print_start_scn_list_();
-  void DEBUG_print_merged_commit_versions_(ObCommitSCNsArray &merged_commit_versions);
+
+  int init_iterate_count_(ObTxDataMemtable *tx_data_memtable);
 
 private:
+  class TxData2DatumRowConverter {
+  public:
+    TxData2DatumRowConverter() :
+    serialize_buffer_(nullptr), buffer_len_(0), tx_data_(nullptr), generate_size_(0) {}
+    ~TxData2DatumRowConverter() { reset(); }
+    OB_NOINLINE int init(ObTxData *tx_data);
+    void reset();
+    int generate_next_now(const blocksstable::ObDatumRow *&row);
+    TO_STRING_KV(KP_(serialize_buffer), K_(buffer_len), KPC_(tx_data),
+                 K_(generate_size), K_(datum_row));
+  private:
+    char *serialize_buffer_;
+    int64_t buffer_len_;
+    ObTxData *tx_data_;
+    int64_t generate_size_;
+    blocksstable::ObDatumRow datum_row_;
+  };
   bool is_inited_;
   const ObTableIterParam &iter_param_;
-  bool dump_tx_data_done_;
-  share::SCN cur_max_commit_version_;
-  share::SCN pre_start_scn_;
-  int64_t tx_data_row_cnt_;
+  const blocksstable::ObDatumRange &range_;
+  int64_t iterate_row_cnt_;
+  int64_t start_tx_id_;
+  int64_t end_tx_id_;
+  int64_t row_cnt_to_dump_;
   ObTxData *pre_tx_data_;
-  ObArenaAllocator arena_allocator_;
-  ObTxDataSortListNode *cur_node_;
-  blocksstable::ObDatumRow row_;
-  ObTxLocalBuffer buf_;
+  ObTxDataLinkNode *cur_node_;
+  TxData2DatumRowConverter tx_data_2_datum_converter_;
   ObTxDataMemtable *tx_data_memtable_;
   blocksstable::ObStorageDatum key_datum_;
-  int64_t DEBUG_iter_commit_ts_cnt_;
-  share::SCN DEBUG_last_start_scn_;
+  int64_t DEBUG_drop_tx_data_cnt_;
 };
 
 /**
@@ -219,15 +238,17 @@ private:
                              ObSSTableArray &sstables,
                              const ObTableIterParam &iter_param,
                              ObTableAccessContext &access_context,
-                             ObTxData &tx_data);
-  int deserialize_tx_data_from_store_row_(const blocksstable::ObDatumRow *row, ObTxData &tx_data);
+                             ObStringHolder &temp_buffer,
+                             int64_t &total_need_buffer_cnt);
+  OB_NOINLINE int deserialize_tx_data_from_store_buffers_(ObTxData &tx_data);
 
 private:
-  const ObTableIterParam & iter_param_;
+  const ObTableIterParam &iter_param_;
   SliceAllocator &slice_allocator_;
   transaction::ObTransID tx_id_;
   ObArenaAllocator arena_allocator_;
   blocksstable::ObStorageDatum key_datums_[2];
+  ObArray<ObStringHolder> tx_data_buffers_;
 };
 
 /**
@@ -239,7 +260,7 @@ public:
       : iter_param_(iter_param), table_(table), key_datums_() {}
   virtual ~ObCommitVersionsGetter() {}
 
-  int get_next_row(ObCommitSCNsArray &commit_scns);
+  int get_next_row(ObCommitVersionsArray &commit_versions);
 
 private:
   const ObTableIterParam &iter_param_;
@@ -302,7 +323,6 @@ private:
   transaction::ObLSTxCtxIterator ls_tx_ctx_iter_;
   const int64_t MAX_VALUE_LENGTH_;
   bool is_inited_;
-
 };
 
 }  // namespace storage

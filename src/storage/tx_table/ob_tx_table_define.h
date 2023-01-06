@@ -29,6 +29,27 @@ const int64_t MAX_TX_CTX_TABLE_VALUE_LENGTH = OB_MAX_USER_ROW_LENGTH -
   MAX_TX_CTX_TABLE_ID_LENGTH - MAX_TX_CTX_TABLE_META_LENGTH;
 static_assert(MAX_TX_CTX_TABLE_VALUE_LENGTH > 0, "MAX_TX_CTX_TABLE_VALUE_LENGTH is not enough");
 
+
+struct TxDataDefaultAllocator : public ObIAllocator {
+  void *alloc(const int64_t size) override {
+    common::ObMemAttr attr;
+    attr.tenant_id_ = MTL_ID();
+    attr.label_ = "TxData";
+    if (size <= 0) {
+      abort();
+    }
+    return ob_malloc(size, attr);
+  }
+  void* alloc(const int64_t size, const ObMemAttr &attr) override { return ob_malloc(size, attr); }
+  void free(void *ptr) override { ob_free(ptr); }
+  static TxDataDefaultAllocator &get_default_allocator() {
+    static TxDataDefaultAllocator default_allocator;
+    return default_allocator;
+  }
+};
+
+#define DEFAULT_TX_DATA_ALLOCATOR TxDataDefaultAllocator::get_default_allocator()
+
 struct ObTxCtxTableCommonHeader
 {
 public:
@@ -190,7 +211,7 @@ public:
   VIRTUAL_TO_STRING_KV("ObITxDataCheckFunctor", "tx_table");
 };
 
-class ObCommitSCNsArray
+class ObCommitVersionsArray
 {
 private:
   const static int64_t UNIS_VERSION = 1;
@@ -220,7 +241,7 @@ public:
 
   void reset() { array_.reset(); }
 
-  ObCommitSCNsArray &operator=(const ObCommitSCNsArray& rhs)
+  ObCommitVersionsArray &operator=(const ObCommitVersionsArray& rhs)
   {
     this->array_.reset();
     for (int i = 0; i < rhs.array_.count(); i++) {
@@ -236,7 +257,7 @@ public:
 
   bool is_valid();
 
-  static void print_to_stderr(const ObCommitSCNsArray &commit_versions)
+  static void print_to_stderr(const ObCommitVersionsArray &commit_versions)
   {
     fprintf(stderr, "pre-process data for upper trans version calculation : ");
     for (int i = 0; i < commit_versions.array_.count(); i++) {
@@ -268,16 +289,16 @@ public:
       : is_inited_(false),
         cache_version_(),
         lock_(common::ObLatchIds::TX_TABLE_LOCK),
-        commit_scns_() {}
+        commit_versions_() {}
 
   void reset()
   {
     is_inited_ = false;
     cache_version_.reset();
-    commit_scns_.reset();
+    commit_versions_.reset();
   }
 
-  TO_STRING_KV(K_(is_inited), K_(cache_version), K_(commit_scns));
+  TO_STRING_KV(K_(is_inited), K_(cache_version), K_(commit_versions));
 
 public:
   bool is_inited_;
@@ -287,7 +308,7 @@ public:
   
   mutable common::TCRWLock lock_;
 
-  ObCommitSCNsArray commit_scns_;
+  ObCommitVersionsArray commit_versions_;
 };
 
 } // storage

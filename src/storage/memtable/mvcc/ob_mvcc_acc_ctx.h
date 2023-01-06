@@ -17,6 +17,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
+#include "storage/memtable/ob_concurrent_control.h"
 
 namespace oceanbase
 {
@@ -48,6 +49,7 @@ public:
       tx_ctx_(NULL),
       mem_ctx_(NULL),
       tx_scn_(-1),
+      write_flag_(),
       handle_start_time_(OB_INVALID_TIMESTAMP)
   {}
   ~ObMvccAccessCtx() {
@@ -59,6 +61,7 @@ public:
     tx_ctx_ = NULL;
     mem_ctx_ = NULL;
     tx_scn_ = -1;
+    write_flag_.reset();
     handle_start_time_ = OB_INVALID_TIMESTAMP;
   }
   void reset() {
@@ -75,6 +78,7 @@ public:
     tx_ctx_ = NULL;
     mem_ctx_ = NULL;
     tx_scn_ = -1;
+    write_flag_.reset();
     handle_start_time_ = OB_INVALID_TIMESTAMP;
   }
   bool is_valid() const {
@@ -141,7 +145,8 @@ public:
                   const storage::ObTxTableGuard &tx_table_guard,
                   const transaction::ObTxSnapshot &snapshot,
                   const int64_t abs_lock_timeout,
-                  const int64_t tx_lock_timeout)
+                  const int64_t tx_lock_timeout,
+                  const concurrent_control::ObWriteFlag write_flag)
   {
     reset();
     type_ = T::WRITE;
@@ -154,6 +159,7 @@ public:
     snapshot_ = snapshot;
     abs_lock_timeout_ = abs_lock_timeout;
     tx_lock_timeout_ = tx_lock_timeout;
+    write_flag_ = write_flag;
   }
   void init_replay(transaction::ObPartTransCtx &tx_ctx,
                    ObMemtableCtx &mem_ctx,
@@ -212,7 +218,8 @@ public:
                KPC_(tx_desc),
                KP_(tx_ctx),
                KP_(mem_ctx),
-               K_(tx_scn));
+               K_(tx_scn),
+               K_(write_flag));
 private:
   void warn_tx_ctx_leaky_();
 public: // NOTE: those field should only be accessed by txn relative routine
@@ -235,10 +242,11 @@ public: // NOTE: those field should only be accessed by txn relative routine
   storage::ObTxTableGuard tx_table_guard_;
   // specials for MvccWrite
   transaction::ObTransID tx_id_;
-  transaction::ObTxDesc *tx_desc_;      // the txn descriptor
-  transaction::ObPartTransCtx *tx_ctx_; // the txn context
-  ObMemtableCtx *mem_ctx_;              // memtable-ctx
-  int64_t tx_scn_;                      // the change's number of this modify
+  transaction::ObTxDesc *tx_desc_;             // the txn descriptor
+  transaction::ObPartTransCtx *tx_ctx_;        // the txn context
+  ObMemtableCtx *mem_ctx_;                     // memtable-ctx
+  int64_t tx_scn_;                             // the change's number of this modify
+  concurrent_control::ObWriteFlag write_flag_; // the write flag of the write process
 
   // this was used for runtime mertic
   int64_t handle_start_time_;

@@ -30,7 +30,11 @@ public:
   static const int64_t MAX_WAIT_TENANT_SCHEMA_TIME = 20_s;
 
 public:
-  ObSimpleServer(const std::string &env_prefix, ObServer &server = ObServer::get_instance(), const std::string &dir_prefix = "./store_");
+  ObSimpleServer(const std::string &env_prefix,
+                 const char *log_disk_size = "10G",
+                 const char *memory_limit = "10G",
+                 ObServer &server = ObServer::get_instance(),
+                 const std::string &dir_prefix = "./store_");
   ~ObSimpleServer() { reset(); }
   ObServer& get_observer() { return server_; }
   int simple_init();
@@ -59,8 +63,11 @@ private:
   std::string local_ip_;
   int rpc_port_;
   int mysql_port_;
+  const char *log_disk_size_;
+  const char *memory_limit_;
   std::string data_dir_;
   std::string rs_list_;
+  std::string optstr_;
   std::string run_dir_;
   common::sqlclient::ObSingleMySQLConnectionPool sql_conn_pool_;
   common::ObMySQLProxy sql_proxy_;

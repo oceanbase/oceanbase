@@ -83,7 +83,7 @@ int ObTxLogCb::init(const ObLSID &key,
     ls_id_ = key;
     trans_id_ = trans_id;
     ctx_ = ctx;
-    tx_data_ = nullptr;
+    tx_data_guard_.reset();
     is_callbacked_ = false;
   }
 
@@ -98,7 +98,7 @@ void ObTxLogCb::reset()
   ls_id_.reset();
   trans_id_.reset();
   ctx_ = NULL;
-  tx_data_ = nullptr;
+  tx_data_guard_.reset();
   callbacks_.reset();
   is_callbacked_ = false;
   cb_arg_array_.reset();
@@ -109,7 +109,7 @@ void ObTxLogCb::reset()
 void ObTxLogCb::reuse()
 {
   ObTxBaseLogCb::reuse();
-  tx_data_ = nullptr;
+  tx_data_guard_.reset();
   callbacks_.reset();
   is_callbacked_ = false;
   cb_arg_array_.reset();

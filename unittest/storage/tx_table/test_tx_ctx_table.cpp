@@ -14,6 +14,7 @@
 
 #define protected public
 #define private public
+#define UNITTEST
 
 #include <vector>
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -259,7 +260,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ObSliceAlloc slice_allocator;
   ObMemAttr attr;
   attr.tenant_id_ = MTL_ID();
-  slice_allocator.init(TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, attr);
+  slice_allocator.init(sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, attr);
 
   ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01));
 

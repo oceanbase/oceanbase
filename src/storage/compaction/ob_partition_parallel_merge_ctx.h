@@ -50,7 +50,7 @@ public:
   virtual ~ObParallelMergeCtx();
   void reset();
   bool is_valid() const;
-  int init(compaction::ObTabletMergeCtx &merge_ctx);
+  OB_NOINLINE int init(compaction::ObTabletMergeCtx &merge_ctx);// will be mocked in mittest
   int init(const compaction::ObMediumCompactionInfo &medium_info);
   OB_INLINE int64_t get_concurrent_cnt() const { return concurrent_cnt_; }
   int get_merge_range(const int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
@@ -65,7 +65,7 @@ private:
   static const int64_t PARALLEL_MERGE_TARGET_TASK_CNT = 20;
   //TODO @hanhui parallel in ai
   int init_serial_merge();
-  int init_parallel_mini_merge(compaction::ObTabletMergeCtx &merge_ctx);
+  OB_NOINLINE int init_parallel_mini_merge(compaction::ObTabletMergeCtx &merge_ctx);// will be mocked in mittest
   int init_parallel_mini_minor_merge(compaction::ObTabletMergeCtx &merge_ctx);
   int init_parallel_major_merge(compaction::ObTabletMergeCtx &merge_ctx);
   int calc_mini_minor_parallel_degree(const int64_t tablet_size,

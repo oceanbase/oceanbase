@@ -499,6 +499,7 @@ public:
   static int all_spatial_reference_systems_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_rewrite_rules_schema(share::schema::ObTableSchema &table_schema);
+  static int all_reserved_snapshot_schema(share::schema::ObTableSchema &table_schema);
   static int all_cluster_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
@@ -1866,6 +1867,7 @@ public:
   static int all_spatial_reference_systems_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_rewrite_rules_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_reserved_snapshot_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_cluster_event_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -2084,6 +2086,7 @@ public:
   static int all_spatial_reference_systems_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_rewrite_rules_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_reserved_snapshot_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_cluster_event_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_stat_all_virtual_plan_cache_stat_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_session_event_all_virtual_session_event_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -2421,6 +2424,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_spatial_reference_systems_schema,
   ObInnerTableSchema::all_column_checksum_error_info_schema,
   ObInnerTableSchema::all_tenant_rewrite_rules_schema,
+  ObInnerTableSchema::all_reserved_snapshot_schema,
   ObInnerTableSchema::all_cluster_event_history_schema,
   NULL,};
 
@@ -3895,6 +3899,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TID,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_TID,
   OB_ALL_TENANT_REWRITE_RULES_TID,
+  OB_ALL_RESERVED_SNAPSHOT_TID,
   OB_TENANT_VIRTUAL_ALL_TABLE_TID,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TID,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TID,
@@ -5074,6 +5079,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_META_TID,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_META_TID,
   OB_ALL_TENANT_REWRITE_RULES_AUX_LOB_META_TID,
+  OB_ALL_RESERVED_SNAPSHOT_AUX_LOB_META_TID,
   OB_ALL_TABLE_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TID,
@@ -5271,7 +5277,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_SERVICE_EPOCH_AUX_LOB_PIECE_TID,
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_PIECE_TID,
-  OB_ALL_TENANT_REWRITE_RULES_AUX_LOB_PIECE_TID,  };
+  OB_ALL_TENANT_REWRITE_RULES_AUX_LOB_PIECE_TID,
+  OB_ALL_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TID,  };
 
 const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_TID,
@@ -5698,6 +5705,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_TNAME,
   OB_ALL_TENANT_REWRITE_RULES_TNAME,
+  OB_ALL_RESERVED_SNAPSHOT_TNAME,
   OB_TENANT_VIRTUAL_ALL_TABLE_TNAME,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME,
@@ -6877,6 +6885,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_META_TNAME,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_META_TNAME,
   OB_ALL_TENANT_REWRITE_RULES_AUX_LOB_META_TNAME,
+  OB_ALL_RESERVED_SNAPSHOT_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TNAME,
@@ -7074,7 +7083,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_SERVICE_EPOCH_AUX_LOB_PIECE_TNAME,
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_PIECE_TNAME,
-  OB_ALL_TENANT_REWRITE_RULES_AUX_LOB_PIECE_TNAME,  };
+  OB_ALL_TENANT_REWRITE_RULES_AUX_LOB_PIECE_TNAME,
+  OB_ALL_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TNAME,  };
 
 const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_CORE_META_TABLE_TID,
@@ -9212,6 +9222,14 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_RESERVED_SNAPSHOT_TID,
+    OB_ALL_RESERVED_SNAPSHOT_AUX_LOB_META_TID,
+    OB_ALL_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_reserved_snapshot_aux_lob_meta_schema,
+    ObInnerTableSchema::all_reserved_snapshot_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_CLUSTER_EVENT_HISTORY_TID,
     OB_ALL_CLUSTER_EVENT_HISTORY_AUX_LOB_META_TID,
     OB_ALL_CLUSTER_EVENT_HISTORY_AUX_LOB_PIECE_TID,
@@ -9256,12 +9274,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 215;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 554;
+const int64_t OB_SYS_TABLE_COUNT = 216;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 555;
 const int64_t OB_SYS_VIEW_COUNT = 611;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1385;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1387;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1388;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1390;
 
 } // end namespace share
 } // end namespace oceanbase

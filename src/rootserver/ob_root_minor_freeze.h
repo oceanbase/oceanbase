@@ -46,11 +46,7 @@ public:
   void start();
   void stop();
   int destroy();
-
-  int try_minor_freeze(const common::ObIArray<uint64_t> &tenant_ids,
-                       const common::ObIArray<common::ObAddr> &server_list,
-                       const common::ObZone &zone,
-                       const common::ObTabletID &tablet_id) const;
+  int try_minor_freeze(const obrpc::ObRootMinorFreezeArg &arg) const;
 private:
   typedef struct MinorFreezeParam
   {
@@ -67,10 +63,10 @@ private:
     bool is_empty() const { return params_.count() <= 0; }
     const common::ObIArray<MinorFreezeParam> &get_params() const { return params_; }
 
-    int add_server(const common::ObAddr &server);
-    int add_tenant_server(const uint64_t tenant_id,
-                          const common::ObTabletID &tablet_id,
-                          const common::ObAddr &server);
+    int push_back_param(const common::ObAddr &server,
+                        const uint64_t tenant_id = 0,
+                        share::ObLSID ls_id = share::INVALID_LS,
+                        const common::ObTabletID &tablet_id = ObTabletID(ObTabletID::INVALID_TABLET_ID));
 
     TO_STRING_KV(K_(params));
   private:
@@ -84,6 +80,10 @@ private:
                                 const common::ObZone &zone,
                                 bool &server_in_zone) const;
 
+  int init_params_by_ls_or_tablet(const uint64_t tenant_id,
+                                  share::ObLSID ls_id,
+                                  const common::ObTabletID &tablet_id,
+                                  ParamsContainer &params) const;
   int init_params_by_tenant(const common::ObIArray<uint64_t> &tenant_ids,
                             const common::ObZone &zone,
                             const common::ObIArray<common::ObAddr> &server_list,
@@ -94,10 +94,6 @@ private:
 
   int init_params_by_server(const common::ObIArray<common::ObAddr> &server_list,
                             ParamsContainer &params) const;
-
-  int init_params_by_tablet_id(const uint64_t tenant_id,
-                               const common::ObTabletID &tablet_id,
-                               ParamsContainer &params) const;
 
   int do_minor_freeze(const ParamsContainer &params) const;
 

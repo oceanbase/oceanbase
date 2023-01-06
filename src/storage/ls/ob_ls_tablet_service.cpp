@@ -837,6 +837,7 @@ int ObLSTabletService::table_scan(ObTableScanIterator &iter, ObTableScanParam &p
     }
   }
   NG_TRACE(S_table_scan_end);
+
   return ret;
 }
 
@@ -2390,7 +2391,7 @@ int ObLSTabletService::insert_rows(
   }
   NG_TRACE(S_insert_rows_end);
 
-  return ret;
+   return ret;
 }
 
 int ObLSTabletService::insert_row(

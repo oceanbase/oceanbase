@@ -472,14 +472,14 @@ void ObSSTablePrinter::print_store_row(
       }
     } else {
       // pre-process data for upper trans version calculation
-      void *p = op_alloc(ObCommitSCNsArray);
-      ObCommitSCNsArray *commit_versions = new (p) ObCommitSCNsArray();
+      void *p = op_alloc(ObCommitVersionsArray);
+      ObCommitVersionsArray *commit_versions = new (p) ObCommitVersionsArray();
 
       if (OB_FAIL(commit_versions->deserialize(str.ptr(), str.length(), pos))) {
         STORAGE_LOG(WARN, "deserialize commit versions failed", KR(ret), K(str));
         hex_dump(str.ptr(), str.length(), true, OB_LOG_LEVEL_WARN);
       } else {
-        ObCommitSCNsArray::print_to_stderr(*commit_versions);
+        ObCommitVersionsArray::print_to_stderr(*commit_versions);
       }
     }
   } else {

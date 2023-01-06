@@ -81,21 +81,7 @@ int clear_tx_data(ObTxDataTable *tx_data_table)
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "tx data memtable is nullptr.", KR(ret), K(memtable_handles[i]));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < 10; i++) {
-          tx_id = i;
-          if (tx_data_memtable->contain_tx_data(tx_id)) {
-            ObTxData *existed_tx_data = nullptr;
-            if (OB_FAIL(tx_data_memtable->get_tx_data(tx_id.tx_id_, existed_tx_data))) {
-              STORAGE_LOG(WARN, "get tx data from tx data memtable failed.", KR(ret), K(i), KPC(tx_data_memtable));
-            } else if (OB_ISNULL(existed_tx_data)) {
-              ret = OB_ERR_UNEXPECTED;
-              STORAGE_LOG(WARN, "existed tx data is unexpected nullptr", KR(ret),
-                          KPC(tx_data_memtable));
-            } else if (OB_FAIL(tx_data_memtable->remove(tx_id.tx_id_))) {
-              STORAGE_LOG(ERROR, "remove tx data from tx data memtable failed.", KR(ret), K(tx_id), KPC(tx_data_memtable));
-            }
-          }
-        }
+        tx_data_memtable->TEST_reset_tx_data_map_();
       }
     }
   }
@@ -1060,8 +1046,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
   for (int64_t i = 1; i <= 4; i++) {
     tx_id = i;
 
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data_guard));
+    tx_data = tx_data_guard.tx_data();
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -1080,7 +1067,6 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
     }
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table->insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 
   ObVersionRange trans_version_range;
@@ -1229,8 +1215,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   for (int64_t i = 1; i <= 5; i++) {
     tx_id = i;
 
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -1249,7 +1236,6 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
     }
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table->insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 
   ObVersionRange trans_version_range;
@@ -1398,8 +1384,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   for (int64_t i = 1; i <= 5; i++) {
     tx_id = i;
 
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -1419,7 +1406,6 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
     }
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table->insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 
   ObVersionRange trans_version_range;
@@ -1654,8 +1640,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
   for (int64_t i = 1; i <= 4; i++) {
     tx_id = i;
 
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -1665,7 +1652,6 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
     tx_data->state_ = ObTxData::COMMIT;
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table->insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 
   ObVersionRange trans_version_range;
@@ -1868,8 +1854,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
   for (int64_t i = 1; i <= 4; i++) {
     tx_id = i;
 
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -1879,7 +1866,6 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
     tx_data->state_ = ObTxData::COMMIT;
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table->insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 
   prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
@@ -1997,8 +1983,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
   for (int64_t i = 1; i <= 4; i++) {
     tx_id = i;
 
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -2015,7 +2002,6 @@ TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
     }
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table->insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 
   ObVersionRange trans_version_range;
@@ -2404,8 +2390,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
   for (int64_t i = 1; i < 3; i++) {
     tx_id = i;
 
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -2415,7 +2402,6 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
     tx_data->state_ = ObTxData::COMMIT;
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table->insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 
   ObVersionRange trans_version_range;
@@ -2633,8 +2619,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
   transaction::ObTransID tx_id;
   for (int64_t i = 1; i < 3; i++) {
     tx_id = i;
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
     // fill in data
     tx_data->tx_id_ = tx_id;
     tx_data->commit_version_.convert_for_tx(INT64_MAX);
@@ -2642,7 +2629,6 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
     tx_data->end_scn_.convert_for_tx(100);
     tx_data->state_ = ObTxData::ABORT;
     ASSERT_EQ(OB_SUCCESS, tx_data_table->insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 
   ObVersionRange trans_version_range;
@@ -2880,8 +2866,9 @@ TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   for (int64_t i = 1; i <= 4; i++) {
     tx_id = i;
 
-    tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data));
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table->alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -2898,7 +2885,6 @@ TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
     }
 
     ASSERT_EQ(OB_SUCCESS, tx_data_table->insert(tx_data));
-    ASSERT_EQ(nullptr, tx_data);
   }
 
   ObVersionRange trans_version_range;

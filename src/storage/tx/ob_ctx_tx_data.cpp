@@ -39,7 +39,6 @@ namespace transaction
 int ObCtxTxData::init(ObLSTxCtxMgr *ctx_mgr, int64_t tx_id)
 {
   int ret = OB_SUCCESS;
-  ObTxTable *tx_table = nullptr;
   if (OB_ISNULL(ctx_mgr) || tx_id < 0) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(ctx_mgr), K(tx_id));
@@ -52,13 +51,13 @@ int ObCtxTxData::init(ObLSTxCtxMgr *ctx_mgr, int64_t tx_id)
     } else if (OB_ISNULL(tx_table = ctx_mgr_->get_tx_table())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "tx table is null", KR(ret), K(ctx_mgr_->get_ls_id()), K(*this));
-    } else if (OB_FAIL(tx_table->alloc_tx_data(tx_data_))) {
+    } else if (OB_FAIL(tx_table->alloc_tx_data(tx_data_guard_))) {
       TRANS_LOG(WARN, "get tx data failed", KR(ret), K(ctx_mgr_->get_ls_id()));
-    } else if (OB_ISNULL(tx_data_)) {
+    } else if (OB_ISNULL(tx_data_guard_.tx_data())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "tx data is unexpected null", KR(ret), K(ctx_mgr_->get_ls_id()));
     } else {
-      tx_data_->tx_id_ = tx_id;
+      tx_data_guard_.tx_data()->tx_id_ = tx_id;
     }
   }
   return ret;
@@ -67,26 +66,14 @@ int ObCtxTxData::init(ObLSTxCtxMgr *ctx_mgr, int64_t tx_id)
 void ObCtxTxData::reset()
 {
   ctx_mgr_ = nullptr;
-  tx_data_ = nullptr;
+  tx_data_guard_.reset();
   read_only_ = false;
   tx_commit_data_.reset();
 }
 
 void ObCtxTxData::destroy()
 {
-  int ret = OB_SUCCESS;
-  if (tx_data_ != nullptr) {
-    ObTxTable *tx_table = nullptr;
-    GET_TX_TABLE_(tx_table);
-    if (OB_FAIL(ret)) {
-
-    } else if (OB_FAIL(free_tx_data_(tx_table, tx_data_))) {
-      TRANS_LOG(WARN, "free tx data failed", K(ret), K(*this));
-
-    } else {
-      tx_data_ = nullptr;
-    }
-  }
+  reset();
 }
 
 int ObCtxTxData::insert_into_tx_table()
@@ -105,14 +92,12 @@ int ObCtxTxData::insert_into_tx_table()
     if (OB_FAIL(ret)) {
     } else {
       tg.click();
-      tx_commit_data_ = *tx_data_;
-      if (OB_FAIL(insert_tx_data_(tx_table, tx_data_))) {
+      tx_commit_data_ = *(tx_data_guard_.tx_data());
+      if (OB_FAIL(insert_tx_data_(tx_table, tx_data_guard_.tx_data()))) {
         TRANS_LOG(WARN, "insert tx data failed", K(ret), K(*this));
       } else {
         tg.click();
         read_only_ = true;
-        tx_data_ = NULL;
-        tx_commit_data_.is_in_tx_data_table_ = true;
       }
     }
   }
@@ -123,24 +108,27 @@ int ObCtxTxData::insert_into_tx_table()
   return ret;
 }
 
-int ObCtxTxData::recover_tx_data(const ObTxData *tmp_tx_data)
+int ObCtxTxData::recover_tx_data(const ObTxData &tmp_tx_data)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
+  ObTxTable *tx_table = nullptr;
+  GET_TX_TABLE_(tx_table);
 
-  if (OB_FAIL(check_tx_data_writable_())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
-  } else if (OB_ISNULL(tmp_tx_data)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KP(tmp_tx_data));
+  } else if (OB_FAIL(tx_table->alloc_tx_data(tx_data_guard_))) {
+    TRANS_LOG(WARN, "alloc tx data failed", KR(ret), K(tmp_tx_data));
   } else {
-    *tx_data_ = *tmp_tx_data;
+    ObTxData *tx_data = tx_data_guard_.tx_data();
+    *tx_data = tmp_tx_data;
   }
 
   return ret;
 }
 
-int ObCtxTxData::replace_tx_data(ObTxData *&tmp_tx_data)
+int ObCtxTxData::replace_tx_data(ObTxData *tmp_tx_data)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
@@ -153,17 +141,16 @@ int ObCtxTxData::replace_tx_data(ObTxData *&tmp_tx_data)
   } else if (OB_ISNULL(tmp_tx_data)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(tmp_tx_data));
-  } else if (OB_FAIL(free_tx_data_(tx_table, tx_data_))) {
-    TRANS_LOG(WARN, "free tx data failed", K(ret), K(*this));
   } else {
-    tx_data_ = tmp_tx_data;
-    tmp_tx_data = nullptr;
+    tx_data_guard_.reset();
+    if (OB_FAIL(tx_data_guard_.init(tmp_tx_data))) {
+      TRANS_LOG(WARN, "init tx data guard failed", KR(ret), KPC(tmp_tx_data));
+    }
   }
-
   return ret;
 }
 
-int ObCtxTxData::deep_copy_tx_data_out(ObTxData *&tmp_tx_data)
+int ObCtxTxData::deep_copy_tx_data_out(ObTxDataGuard &tmp_tx_data_guard)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -174,9 +161,9 @@ int ObCtxTxData::deep_copy_tx_data_out(ObTxData *&tmp_tx_data)
     ObTxTable *tx_table = nullptr;
     GET_TX_TABLE_(tx_table)
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(deep_copy_tx_data_(tx_table, tmp_tx_data))) {
-      TRANS_LOG(WARN, "deep copy tx data failed", K(ret), KPC(tmp_tx_data), K(*this));
-    } else if (OB_ISNULL(tmp_tx_data)) {
+    } else if (OB_FAIL(deep_copy_tx_data_(tx_table, tmp_tx_data_guard))) {
+      TRANS_LOG(WARN, "deep copy tx data failed", K(ret), K(tmp_tx_data_guard), K(*this));
+    } else if (OB_ISNULL(tmp_tx_data_guard.tx_data())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "copied tmp tx data is null", KR(ret), K(*this));
     }
@@ -185,9 +172,8 @@ int ObCtxTxData::deep_copy_tx_data_out(ObTxData *&tmp_tx_data)
   return ret;
 }
 
-int ObCtxTxData::alloc_tmp_tx_data(storage::ObTxData *&tmp_tx_data)
+int ObCtxTxData::alloc_tmp_tx_data(storage::ObTxDataGuard &tmp_tx_data_guard)
 {
-
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
 
@@ -197,7 +183,7 @@ int ObCtxTxData::alloc_tmp_tx_data(storage::ObTxData *&tmp_tx_data)
     ObTxTable *tx_table = nullptr;
     GET_TX_TABLE_(tx_table)
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tx_table->alloc_tx_data(tmp_tx_data))) {
+    } else if (OB_FAIL(tx_table->alloc_tx_data(tmp_tx_data_guard))) {
       TRANS_LOG(WARN, "alloc tx data failed", K(ret));
     }
   }
@@ -212,21 +198,14 @@ int ObCtxTxData::free_tmp_tx_data(ObTxData *&tmp_tx_data)
 
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
-  } else {
-    ObTxTable *tx_table = nullptr;
-    GET_TX_TABLE_(tx_table)
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(free_tx_data_(tx_table, tmp_tx_data))) {
-      TRANS_LOG(WARN, "free tx data failed", K(ret), KPC(tmp_tx_data), K(*this));
-    } else {
-      tmp_tx_data = nullptr;
-    }
+  } else if (OB_FAIL(revert_tx_data_(tmp_tx_data))) {
+    TRANS_LOG(WARN, "free tx data failed", K(ret), KPC(tmp_tx_data), K(*this));
   }
 
   return ret;
 }
 
-int ObCtxTxData::insert_tmp_tx_data(ObTxData *&tmp_tx_data)
+int ObCtxTxData::insert_tmp_tx_data(ObTxData *tmp_tx_data)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -239,8 +218,6 @@ int ObCtxTxData::insert_tmp_tx_data(ObTxData *&tmp_tx_data)
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(insert_tx_data_(tx_table, tmp_tx_data))) {
       TRANS_LOG(WARN, "insert tx data failed", K(ret), KPC(tmp_tx_data), K(*this));
-    } else {
-      tmp_tx_data = nullptr;
     }
   }
 
@@ -266,7 +243,7 @@ int ObCtxTxData::set_state(int32_t state)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    ATOMIC_STORE(&tx_data_->state_, state);
+    ATOMIC_STORE(&(tx_data_guard_.tx_data()->state_), state);
   }
 
   return ret;
@@ -280,7 +257,7 @@ int ObCtxTxData::set_commit_version(const SCN &commit_version)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->commit_version_.atomic_store(commit_version);
+    tx_data_guard_.tx_data()->commit_version_.atomic_store(commit_version);
   }
 
   return ret;
@@ -295,7 +272,7 @@ int ObCtxTxData::set_start_log_ts(const SCN &start_ts)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->start_scn_.atomic_store(tmp_start_ts);
+    tx_data_guard_.tx_data()->start_scn_.atomic_store(tmp_start_ts);
   }
 
   return ret;
@@ -309,7 +286,7 @@ int ObCtxTxData::set_end_log_ts(const SCN &end_scn)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->end_scn_.atomic_store(end_scn);
+    tx_data_guard_.tx_data()->end_scn_.atomic_store(end_scn);
   }
 
   return ret;
@@ -318,19 +295,22 @@ int ObCtxTxData::set_end_log_ts(const SCN &end_scn)
 int32_t ObCtxTxData::get_state() const
 {
   RLockGuard guard(lock_);
-  return (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->state_): ATOMIC_LOAD(&tx_commit_data_.state_));
+  const ObTxData *tx_data = tx_data_guard_.tx_data();
+  return (NULL != tx_data ? ATOMIC_LOAD(&tx_data->state_): ATOMIC_LOAD(&tx_commit_data_.state_));
 }
 
 const SCN ObCtxTxData::get_commit_version() const
 {
   RLockGuard guard(lock_);
-  return (NULL != tx_data_ ? tx_data_->commit_version_.atomic_load() : tx_commit_data_.commit_version_.atomic_load());
+  const ObTxData *tx_data = tx_data_guard_.tx_data();
+  return (NULL != tx_data ? tx_data->commit_version_.atomic_load() : tx_commit_data_.commit_version_.atomic_load());
 }
 
 const SCN ObCtxTxData::get_start_log_ts() const
 {
   RLockGuard guard(lock_);
-  SCN ctx_scn = (NULL != tx_data_ ? tx_data_->start_scn_.atomic_load() : tx_commit_data_.start_scn_.atomic_load());
+  const ObTxData *tx_data = tx_data_guard_.tx_data();
+  SCN ctx_scn = (NULL != tx_data ? tx_data->start_scn_.atomic_load() : tx_commit_data_.start_scn_.atomic_load());
   if (ctx_scn.is_max()) {
    ctx_scn.reset();
   }
@@ -340,7 +320,8 @@ const SCN ObCtxTxData::get_start_log_ts() const
 const SCN ObCtxTxData::get_end_log_ts() const
 {
   RLockGuard guard(lock_);
-  SCN ctx_scn = (NULL != tx_data_ ? tx_data_->end_scn_.atomic_load() : tx_commit_data_.end_scn_.atomic_load());
+  const ObTxData *tx_data = tx_data_guard_.tx_data();
+  SCN ctx_scn = (NULL != tx_data ? tx_data->end_scn_.atomic_load() : tx_commit_data_.end_scn_.atomic_load());
   if (ctx_scn.is_max()) {
    ctx_scn.reset();
   }
@@ -350,11 +331,12 @@ const SCN ObCtxTxData::get_end_log_ts() const
 ObTransID ObCtxTxData::get_tx_id() const
 {
   RLockGuard guard(lock_);
-  return (NULL != tx_data_ ? tx_data_->tx_id_ : tx_commit_data_.tx_id_);
+  const ObTxData *tx_data = tx_data_guard_.tx_data();
+  return (NULL != tx_data ? tx_data->tx_id_ : tx_commit_data_.tx_id_);
 }
 
 int ObCtxTxData::prepare_add_undo_action(ObUndoAction &undo_action,
-                                         storage::ObTxData *&tmp_tx_data,
+                                         storage::ObTxDataGuard &tmp_tx_data_guard,
                                          storage::ObUndoStatusNode *&tmp_undo_status)
 {
   int ret = OB_SUCCESS;
@@ -375,42 +357,36 @@ int ObCtxTxData::prepare_add_undo_action(ObUndoAction &undo_action,
     } else if (OB_ISNULL(tmp_undo_status)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "undo status is null", KR(ret), KPC(this));
-    } else if (OB_FAIL(tx_table->deep_copy_tx_data(tx_data_, tmp_tx_data))) {
+    } else if (OB_FAIL(tx_table->deep_copy_tx_data(tx_data_guard_, tmp_tx_data_guard))) {
       TRANS_LOG(WARN, "copy tx data fail", K(ret), KPC(this));
-    } else if (OB_ISNULL(tmp_tx_data)) {
+    } else if (OB_ISNULL(tmp_tx_data_guard.tx_data())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "copied tx_data is null", KR(ret), KPC(this));
-    } else if (OB_FAIL(tmp_tx_data->add_undo_action(tx_table, undo_action))) {
+    } else if (OB_FAIL(tmp_tx_data_guard.tx_data()->add_undo_action(tx_table, undo_action))) {
       TRANS_LOG(WARN, "add undo action fail", K(ret), KPC(this));
     }
 
-    if (OB_FAIL(ret)) {
-      if (tmp_undo_status) {
-        tx_table->get_tx_data_table()->free_undo_status_node(tmp_undo_status);
-      }
-      if (tmp_tx_data) {
-        tx_table->free_tx_data(tmp_tx_data);
-      }
+    if (OB_FAIL(ret) && OB_NOT_NULL(tmp_undo_status)) {
+      tx_table->get_tx_data_table()->free_undo_status_node(tmp_undo_status);
     }
   }
   return ret;
 }
 
-int ObCtxTxData::cancel_add_undo_action(storage::ObTxData *tmp_tx_data, storage::ObUndoStatusNode *tmp_undo_status)
+int ObCtxTxData::cancel_add_undo_action(storage::ObUndoStatusNode *tmp_undo_status)
 {
   int ret = OB_SUCCESS;
   ObTxTable *tx_table = nullptr;
   GET_TX_TABLE_(tx_table);
   if (OB_SUCC(ret)) {
-    tx_table->free_tx_data(tmp_tx_data);
     ret = tx_table->get_tx_data_table()->free_undo_status_node(tmp_undo_status);
   }
   return ret;
 }
 
-int ObCtxTxData::commit_add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode &tmp_undo_status)
+int ObCtxTxData::commit_add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status)
 {
-  return add_undo_action(undo_action, &tmp_undo_status);
+  return add_undo_action(undo_action, tmp_undo_status);
 }
 
 int ObCtxTxData::add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status)
@@ -425,7 +401,7 @@ int ObCtxTxData::add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatu
     GET_TX_TABLE_(tx_table);
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(tx_data_->add_undo_action(tx_table, undo_action, tmp_undo_status))) {
+    } else if (OB_FAIL(tx_data_guard_.tx_data()->add_undo_action(tx_table, undo_action, tmp_undo_status))) {
       TRANS_LOG(WARN, "add undo action failed", K(ret), K(undo_action), KP(tmp_undo_status), K(*this));
     };
   }
@@ -436,7 +412,7 @@ int ObCtxTxData::add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatu
 int ObCtxTxData::Guard::get_tx_data(const ObTxData *&tx_data) const
 {
   int ret = OB_SUCCESS;
-  auto tmp_tx_data = host_.tx_data_;
+  auto tmp_tx_data = host_.tx_data_guard_.tx_data();
   if (NULL == tmp_tx_data) {
     ret = OB_TRANS_CTX_NOT_EXIST;
   } else {
@@ -456,12 +432,9 @@ int ObCtxTxData::check_tx_data_writable_()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(tx_data_)) {
+  if (OB_ISNULL(tx_data_guard_.tx_data())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tx_data_ is not valid", K(this));
-  } else if (tx_data_->is_in_tx_data_table_) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "tx_data has inserted into tx table", K(ret), K(this));
   } else if (read_only_) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "try to write a read-only tx_data", K(ret), K(this));
@@ -469,7 +442,7 @@ int ObCtxTxData::check_tx_data_writable_()
   return ret;
 }
 
-int ObCtxTxData::insert_tx_data_(ObTxTable *tx_table, ObTxData *&tx_data)
+int ObCtxTxData::insert_tx_data_(ObTxTable *tx_table, ObTxData *tx_data)
 {
   int ret = OB_SUCCESS;
 
@@ -481,43 +454,38 @@ int ObCtxTxData::insert_tx_data_(ObTxTable *tx_table, ObTxData *&tx_data)
     // no need to insert, do nothing
   } else if (OB_FAIL(tx_table->insert(tx_data))) {
     TRANS_LOG(WARN, "insert into tx_table failed", K(ret), KPC(tx_data));
-  } else {
-    tx_data = nullptr;
   }
 
   return ret;
 }
 
-int ObCtxTxData::free_tx_data_(ObTxTable *tx_table, ObTxData *&tx_data)
+int ObCtxTxData::revert_tx_data_(ObTxData *&tx_data)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(tx_table)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KP(tx_table));
-  } else if (OB_ISNULL(tx_data)) {
+  if (OB_ISNULL(tx_data)) {
     TRANS_LOG(INFO, "tx_data is nullptr, no need to free", KP(tx_data), K(*this));
     // no need to free, do nothing
   } else {
-    tx_table->free_tx_data(tx_data);
     tx_data = nullptr;
   }
   return ret;
 }
 
-int ObCtxTxData::deep_copy_tx_data_(ObTxTable *tx_table, storage::ObTxData *&tx_data)
+int ObCtxTxData::deep_copy_tx_data_(ObTxTable *tx_table, storage::ObTxDataGuard &out_tx_data_guard)
 {
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(tx_table)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(tx_table));
-  } else if (OB_ISNULL(tx_data_)) {
+  } else if (OB_ISNULL(tx_data_guard_.tx_data())) {
     TRANS_LOG(INFO, "tx_data_ is nullptr, no need to deep copy tx data", K(*this));
     // no need to free, do nothing
-  } else if (OB_FAIL(tx_table->deep_copy_tx_data(tx_data_, tx_data))) {
-    TRANS_LOG(WARN, "deep copy tx data failed", K(ret), KPC(tx_data), K(*this));
+  } else if (OB_FAIL(tx_table->deep_copy_tx_data(tx_data_guard_, out_tx_data_guard))) {
+    TRANS_LOG(WARN, "deep copy tx data failed", K(ret), K(tx_data_guard_), K(out_tx_data_guard), K(*this));
   }
+
   return ret;
 }
 

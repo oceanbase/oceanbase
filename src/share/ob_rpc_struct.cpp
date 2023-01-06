@@ -4158,7 +4158,8 @@ OB_SERIALIZE_MEMBER(ObRootMajorFreezeArg,
 
 OB_SERIALIZE_MEMBER(ObMinorFreezeArg,
                     tenant_ids_,
-                    tablet_id_);
+                    tablet_id_,
+                    ls_id_);
 
 int ObMinorFreezeArg::assign(const ObMinorFreezeArg &other)
 {
@@ -4167,6 +4168,7 @@ int ObMinorFreezeArg::assign(const ObMinorFreezeArg &other)
     LOG_WARN("assign tenant_ids_ failed", K(ret), K(other.tenant_ids_));
   } else {
     tablet_id_ = other.tablet_id_;
+    ls_id_ = other.ls_id_;
   }
   return ret;
 }
@@ -4175,7 +4177,8 @@ OB_SERIALIZE_MEMBER(ObRootMinorFreezeArg,
                     tenant_ids_,
                     server_list_,
                     zone_,
-                    tablet_id_);
+                    tablet_id_,
+                    ls_id_);
 
 int ObRootMinorFreezeArg::assign(const ObRootMinorFreezeArg &other)
 {
@@ -4188,6 +4191,7 @@ int ObRootMinorFreezeArg::assign(const ObRootMinorFreezeArg &other)
     LOG_WARN("assign zone_ failed", K(ret), K(other.zone_));
   } else {
     tablet_id_ = other.tablet_id_;
+    ls_id_ = other.ls_id_;
   }
   return ret;
 }

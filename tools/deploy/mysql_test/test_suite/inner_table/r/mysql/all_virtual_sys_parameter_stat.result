@@ -265,6 +265,7 @@ _max_schema_slot_num
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
 _minor_compaction_interval
+_mvcc_gc_using_min_txn_snapshot
 _ob_ddl_timeout
 _ob_elr_fast_freeze_threshold
 _ob_enable_fast_freeze
@@ -304,6 +305,7 @@ _sqlexec_disable_hash_based_distagg_tiv
 _storage_meta_memory_limit_percentage
 _temporary_file_io_area_size
 _trace_control_info
+_tx_result_retention
 _upgrade_stage
 _xa_gc_interval
 _xa_gc_timeout

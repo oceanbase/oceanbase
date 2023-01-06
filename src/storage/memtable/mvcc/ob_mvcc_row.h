@@ -215,7 +215,8 @@ struct ObMvccRow
   // is_new_locked returns whether node represents the first lock for the operation
   // conflict_tx_id if write failed this field indicate the txn-id which hold the lock of current row
   int mvcc_write(ObIMemtableCtx &ctx,
-                 const share::SCN snapshot_version,
+                 const concurrent_control::ObWriteFlag write_flag,
+                 const transaction::ObTxSnapshot &snapshot,
                  ObMvccTransNode &node,
                  ObMvccWriteResult &res);
 
@@ -332,8 +333,9 @@ struct ObMvccRow
 
   // ===================== ObMvccRow Private Function =====================
   int mvcc_write_(ObIMemtableCtx &ctx,
+                  const concurrent_control::ObWriteFlag write_flag,
                   ObMvccTransNode &node,
-                  const share::SCN snapshot_version,
+                  const transaction::ObTxSnapshot &snapshot,
                   ObMvccWriteResult &res);
 
   // ===================== ObMvccRow Protection Code =====================

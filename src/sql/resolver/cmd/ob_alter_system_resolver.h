@@ -56,7 +56,7 @@ public:
   static int get_tenant_ids(const ParseNode &t_node, common::ObIArray<uint64_t> &tenant_ids);
 
 
-  static int resolve_tablet_id(const ParseNode &tenants_tablet_node, ObFreezeStmt &freeze_stmt);
+  static int resolve_tablet_id(const ParseNode *opt_tablet_id, ObTabletID &tablet_id);
   static int resolve_tenant(const ParseNode &tenants_node, 
                             const uint64_t tenant_id,
                             common::ObSArray<uint64_t> &tenant_ids,
@@ -71,8 +71,6 @@ public:
     virtual ~name() {}                                                  \
     virtual int resolve(const ParseNode &parse_tree);                   \
   };
-
-DEF_SIMPLE_CMD_RESOLVER(ObFreezeResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObFlushCacheResolver);
 
@@ -187,6 +185,23 @@ public:
 private:
   int check_param_valid(int64_t tenant_id,
       const common::ObString &name_node, const common::ObString &value_node);
+};
+
+class ObFreezeResolver : public ObSystemCmdResolver {
+public:
+  ObFreezeResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
+  virtual ~ObFreezeResolver() {}
+  virtual int resolve(const ParseNode &parse_tree);
+private:
+  int resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_v2);
+  int resolve_minor_freeze_(ObFreezeStmt *freeze_stmt,
+                            ParseNode *opt_tenant_list_or_ls_or_tablet_id,
+                            ParseNode *opt_server_list,
+                            ParseNode *opt_zone_desc);
+
+  int resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_or_ls_or_tablet_id);
+  int resolve_server_list_(ObFreezeStmt *freeze_stmt, ParseNode *opt_server_list);
+
 };
 
 DEF_SIMPLE_CMD_RESOLVER(ObBackupDatabaseResolver);

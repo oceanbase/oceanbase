@@ -394,6 +394,7 @@ const char *ObCompactionTimeGuard::ObTabletCompactionEventStr[] = {
     "COMPACTION_POLICY",
     "GET_SCHEMA",
     "CALC_PROGRESSIVE_PARAM",
+    "PRE_PROCESS_TX_TABLE",
     "GET_PARALLEL_RANGE",
     "EXECUTE",
     "CREATE_SSTABLE",

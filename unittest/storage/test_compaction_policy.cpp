@@ -626,7 +626,11 @@ int TestCompactionPolicy::prepare_freeze_info(
   if (OB_ISNULL(mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mgr is unexpected null", K(ret));
-  } else if (OB_FAIL(mgr->update_info(snapshot_gc_ts, freeze_infos, snapshots, min_major_snapshot, changed))) {
+  } else if (OB_FAIL(mgr->update_info(snapshot_gc_ts,
+                                      freeze_infos,
+                                      snapshots,
+                                      min_major_snapshot,
+                                      changed))) {
     LOG_WARN("failed to update info", K(ret));
   }
   return ret;

@@ -50,6 +50,8 @@ int ObSimpleServerRestartHelper::run()
   char log_file_name[name_len];
   char rs_log_file_name[name_len];
   char election_log_file_name[name_len];
+  char trace_log_file_name[name_len];
+  char audit_log_file_name[name_len];
   char filter_str[name_len];
   memset(log_file_name, 0, name_len);
   memset(rs_log_file_name, 0, name_len);
@@ -68,9 +70,12 @@ int ObSimpleServerRestartHelper::run()
     sprintf(log_file_name, "%s_born.log", test_file_name_);
     sprintf(rs_log_file_name, "%s_born_rs.log", test_file_name_);
     sprintf(election_log_file_name, "%s_born_election.log", test_file_name_);
+    sprintf(trace_log_file_name, "%s_born_trace.log", test_file_name_);
+    sprintf(audit_log_file_name, "%s_born_audit.log", test_file_name_);
     sprintf(filter_str, "%s*", born_case_name_);
 
-    OB_LOGGER.set_file_name(log_file_name, true, false, rs_log_file_name, election_log_file_name);
+    OB_LOGGER.set_file_name(
+        log_file_name, true, false, rs_log_file_name, election_log_file_name, trace_log_file_name, audit_log_file_name);
     OB_LOGGER.set_log_level(log_level_);
     ::testing::InitGoogleTest(&argc_, argv_);
 
@@ -84,7 +89,7 @@ int ObSimpleServerRestartHelper::run()
     int status = 0;
     wait(&status);
     if (0 != status) {
-      fprintf(stdout, "Child process exit with error code\n");
+      fprintf(stdout, "Child process exit with error code : %d\n", status);
       ret = status;
       return ret;
     } else {
@@ -96,9 +101,12 @@ int ObSimpleServerRestartHelper::run()
     sprintf(log_file_name, "%s_restart.log", test_file_name_);
     sprintf(rs_log_file_name, "%s_restart_rs.log", test_file_name_);
     sprintf(election_log_file_name, "%s_restart_election.log", test_file_name_);
+    sprintf(trace_log_file_name, "%s_restart_trace.log", test_file_name_);
+    sprintf(audit_log_file_name, "%s_restart_audit.log", test_file_name_);
     sprintf(filter_str, "%s*", restart_case_name_);
 
-    OB_LOGGER.set_file_name(log_file_name, true, false, rs_log_file_name, election_log_file_name);
+    OB_LOGGER.set_file_name(
+        log_file_name, true, false, rs_log_file_name, election_log_file_name, trace_log_file_name, audit_log_file_name);
     OB_LOGGER.set_log_level(log_level_);
     ::testing::InitGoogleTest(&argc_, argv_);
 

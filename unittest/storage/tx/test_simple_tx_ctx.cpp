@@ -14,6 +14,8 @@
 #include <vector>
 #define private public
 #define protected public
+#define UNITTEST
+
 #include "storage/tx/ob_mock_tx_ctx.h"
 
 namespace oceanbase

@@ -25,6 +25,7 @@
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable_context.h"
+#include "storage/memtable/ob_concurrent_control.h"
 #include "storage/tx/ob_trans_ctx.h"
 #include "storage/tx/ob_trans_event.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
@@ -369,8 +370,8 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           to_cstring(max_elr_trans_version_),
                           max_elr_trans_id_.get_id(),
                           latest_compact_ts_,
-                          total_trans_node_cnt_,
                           last_compact_cnt_,
+                          total_trans_node_cnt_,
                           max_modify_count_,
                           min_modify_count_);
   return pos;
@@ -878,8 +879,9 @@ int ObMvccRow::wakeup_waiter(const ObTabletID &tablet_id,
 }
 
 int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
+                           const concurrent_control::ObWriteFlag write_flag,
                            ObMvccTransNode &writer_node,
-                           const SCN snapshot_version,
+                           const transaction::ObTxSnapshot &snapshot,
                            ObMvccWriteResult &res)
 {
   int ret = OB_SUCCESS;
@@ -889,7 +891,9 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
   ObTxTableGuard *tx_table_guard = ctx.get_tx_table_guard();
   ObTxTable *tx_table = tx_table_guard->get_tx_table();
   int64_t read_epoch = tx_table_guard->epoch();
-  ObTransID write_tx_id = ctx.get_tx_id();
+  ObTransID writer_tx_id = ctx.get_tx_id();
+  const SCN snapshot_version = snapshot.version_;
+  const int64_t reader_seq_no = snapshot.scn_;
   bool &can_insert = res.can_insert_;
   bool &need_insert = res.need_insert_;
   bool &is_new_locked = res.is_new_locked_;
@@ -938,7 +942,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
         //         so we need look for the next one
         iter = iter->prev_;
         need_retry = true;
-      } else if (data_tx_id == write_tx_id) {
+      } else if (data_tx_id == writer_tx_id) {
         // Case 4: the newest node is not decided and locked by itself, so we
         //         can insert into it
         bool is_lock_node = false;
@@ -968,6 +972,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
         lock_state.is_locked_ = true;
         lock_state.lock_trans_id_ = data_tx_id;
         lock_state.lock_data_sequence_ = iter->get_seq_no();
+        lock_state.lock_dml_flag_ = iter->get_dml_flag();
         lock_state.is_delayed_cleanout_ = iter->is_delayed_cleanout();
         lock_state.mvcc_row_ = this;
       }
@@ -976,9 +981,19 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
 
   if (OB_SUCC(ret)) {
     if (can_insert && need_insert) {
-      if (OB_SUCC(check_double_insert_(snapshot_version,
-                                       writer_node,
-                                       list_head_))) {
+      if (nullptr != list_head_ &&
+          OB_FAIL(concurrent_control::check_sequence_set_violation(write_flag,
+                                                                   reader_seq_no,
+                                                                   writer_tx_id,
+                                                                   writer_node.get_dml_flag(),
+                                                                   writer_node.get_seq_no(),
+                                                                   list_head_->get_tx_id(),
+                                                                   list_head_->get_dml_flag(),
+                                                                   list_head_->get_seq_no()))) {
+        TRANS_LOG(WARN, "check sequence set violation failed", K(ret), KPC(this));
+      } else if (OB_SUCC(check_double_insert_(snapshot_version,
+                                              writer_node,
+                                              list_head_))) {
         ATOMIC_STORE(&(writer_node.prev_), list_head_);
         ATOMIC_STORE(&(writer_node.next_), NULL);
         if (NULL != list_head_) {
@@ -1045,11 +1060,13 @@ void ObMvccRow::mvcc_undo()
 }
 
 int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
-                          const SCN snapshot_version,
+                          const concurrent_control::ObWriteFlag write_flag,
+                          const transaction::ObTxSnapshot &snapshot,
                           ObMvccTransNode &node,
                           ObMvccWriteResult &res)
 {
   int ret = OB_SUCCESS;
+  const SCN snapshot_version = snapshot.version_;
   lock_begin(ctx);
 
   if (max_trans_version_.atomic_load() > snapshot_version
@@ -1059,7 +1076,11 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
     TRANS_LOG(WARN, "transaction set violation", K(ret),
               K(snapshot_version), "txNode_to_write", node,
               "memtableCtx", ctx, "mvccRow", PC(this));
-  } else if (OB_FAIL(mvcc_write_(ctx, node, snapshot_version, res))) {
+  } else if (OB_FAIL(mvcc_write_(ctx,
+                                 write_flag,
+                                 node,
+                                 snapshot,
+                                 res))) {
     TRANS_LOG(WARN, "mvcc write failed", K(ret), K(node), K(ctx));
   } else if (!res.can_insert_) {
     // Case1: Cannot insert because of write-write conflict
@@ -1111,7 +1132,7 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
     if (OB_ISNULL(iter)) {
       // Case 1: head is empty, so node currently is not be locked
       lock_state.is_locked_ = false;
-      lock_state.trans_version_ = get_max_trans_version();
+      lock_state.trans_version_.set_min();
       lock_state.lock_trans_id_.reset();
       need_retry = false;
     } else {
@@ -1135,10 +1156,11 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
         need_retry = true;
       } else {
         lock_state.is_locked_ = true;
-        lock_state.trans_version_ = get_max_trans_version();
+        lock_state.trans_version_.set_min();
         lock_state.lock_trans_id_= data_tx_id;
-        lock_state.is_delayed_cleanout_ = iter->is_delayed_cleanout();
         lock_state.lock_data_sequence_ = iter->get_seq_no();
+        lock_state.lock_dml_flag_ = iter->get_dml_flag();
+        lock_state.is_delayed_cleanout_ = iter->is_delayed_cleanout();
         need_retry = false;
       }
     }

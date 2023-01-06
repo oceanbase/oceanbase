@@ -57,8 +57,17 @@ public:
   int stop();
   void wait();
 
+  // freeze all the ls of this tenant.
+  // return the first failed code.
+  int tenant_freeze();
+
+  int ls_freeze(const share::ObLSID &ls_id);
   // freeze a tablet
   int tablet_freeze(const common::ObTabletID &tablet_id,
+                    const bool is_force_freeze = false,
+                    const bool is_sync = false);
+  int tablet_freeze(share::ObLSID ls_id,
+                    const common::ObTabletID &tablet_id,
                     const bool is_force_freeze = false,
                     const bool is_sync = false);
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.

@@ -460,6 +460,7 @@ void ObReplayRestartTest::restart_test()
       // 场景一： keep alive日志没有被回放，min_start_scn为初始值状态，跳过计算upper_trans_version
       ASSERT_EQ(SCN::min_scn(), tx_data_table->calc_upper_info_.min_start_scn_in_ctx_);
       upper_trans_version.set_min();
+      FLOG_INFO("get upper trans version, situation 1:", K(SSTABLE_END_SCN));
       ASSERT_EQ(OB_SUCCESS,
                 tx_data_table->get_upper_trans_version_before_given_scn(SSTABLE_END_SCN, upper_trans_version));
     }
@@ -478,6 +479,7 @@ void ObReplayRestartTest::restart_test()
         }
       }
       upper_trans_version.set_min();
+      FLOG_INFO("get upper trans version, situation 2:", K(SSTABLE_END_SCN));
       ASSERT_EQ(OB_SUCCESS,
                 tx_data_table->get_upper_trans_version_before_given_scn(SSTABLE_END_SCN, upper_trans_version));
       ASSERT_GE(upper_trans_version, SCN::max_scn());
@@ -526,8 +528,12 @@ void ObReplayRestartTest::restart_test()
       ASSERT_GT(max_decided_scn, tx_data_table->calc_upper_info_.keep_alive_scn_);
 
       upper_trans_version.set_min();
+      FLOG_INFO("get upper trans version, situation 3:", K(SSTABLE_END_SCN));
       ASSERT_EQ(OB_SUCCESS,
                 tx_data_table->get_upper_trans_version_before_given_scn(SSTABLE_END_SCN, upper_trans_version));
+
+
+      ::sleep(10);
       STORAGE_LOG(INFO, "finish restart test", K(upper_trans_version), K(SSTABLE_END_SCN), K(tx_data_table->calc_upper_info_));
       ASSERT_LT(upper_trans_version, SCN::max_scn());
     }

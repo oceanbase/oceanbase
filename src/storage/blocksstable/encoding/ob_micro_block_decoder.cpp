@@ -1814,12 +1814,11 @@ int ObMicroBlockDecoder::get_row_count(int64_t &row_count)
 int ObMicroBlockDecoder::get_multi_version_info(
     const int64_t row_idx,
     const int64_t schema_rowkey_cnt,
-    ObMultiVersionRowFlag &flag,
-    transaction::ObTransID &trans_id,
+    const ObRowHeader *&row_header,
     int64_t &version,
     int64_t &sql_sequence)
 {
-  UNUSEDx(row_idx, schema_rowkey_cnt, flag, trans_id, version, sql_sequence);
+  UNUSEDx(row_idx, schema_rowkey_cnt, row_header, version, sql_sequence);
   return OB_NOT_SUPPORTED;
 }
 

@@ -154,6 +154,7 @@ int ObLSTxService::get_read_store_ctx(const SCN &snapshot,
 
 int ObLSTxService::get_write_store_ctx(ObTxDesc &tx,
                                        const ObTxReadSnapshot &snapshot,
+                                       const concurrent_control::ObWriteFlag write_flag,
                                        storage::ObStoreCtx &store_ctx) const
 {
   int ret = OB_SUCCESS;
@@ -161,7 +162,7 @@ int ObLSTxService::get_write_store_ctx(ObTxDesc &tx,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
-    ret = trans_service_->get_write_store_ctx(tx, snapshot, store_ctx);
+    ret = trans_service_->get_write_store_ctx(tx, snapshot, write_flag, store_ctx);
   }
   return ret;
 }
@@ -568,6 +569,7 @@ int ObLSTxService::traversal_flush()
   }
   return ret;
 }
+
 
 void ObLSTxService::reset_() {
   WLockGuard guard(rwlock_);

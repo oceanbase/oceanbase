@@ -37,6 +37,9 @@ namespace storage
 class ObLS;
 class ObTxTable
 {
+  // Delay recycle tx data 5 minutes
+  const static int64_t TX_DATA_DELAY_RECYCLE_TIME_NS = 5L * 60L * 1000L * 1000L * 1000L;
+
 public:
   static const int64_t INVALID_READ_EPOCH = -1;
   static const int64_t CHECK_AND_ONLINE_PRINT_INVERVAL_US = 5 * 1000 * 1000; // 5 seconds
@@ -67,7 +70,7 @@ public:
         prepare_online_ts_(0),
         state_(OFFLINE),
         ls_(nullptr),
-        tx_data_table_(tx_data_table) {}
+    tx_data_table_(tx_data_table) {}
   ~ObTxTable() {}
 
   int init(ObLS *ls);
@@ -89,17 +92,14 @@ public:
   // memory of tx_data needs to be allocated by this function
   //
   // @param [out] tx_data, a tx data allocated by slice allocator
-  int alloc_tx_data(ObTxData *&tx_data);
+  int alloc_tx_data(ObTxDataGuard &tx_data_guard);
 
-  void free_tx_data(ObTxData *tx_data) { tx_data_table_.free_tx_data(tx_data); }
-
-  int deep_copy_tx_data(ObTxData *in_tx_data, ObTxData *&out_tx_data);
+  int deep_copy_tx_data(const ObTxDataGuard &in_tx_data_guard, ObTxDataGuard &out_tx_data_guard);
 
   // insert a tx data to tx data memtable
   //
   // @param [in] tx_data, which to be inserted
   int insert(ObTxData *&tx_data);
-
 
   // =============== Interface for sstable to get txn information =====================
 
@@ -228,7 +228,7 @@ public:
    *
    * @param[in & out] tx_data The pointer of tx data to be supplemented which is in tx ctx.
    */
-  int supplement_undo_actions_if_exist(ObTxData *&tx_data);
+  int supplement_undo_actions_if_exist(ObTxData *tx_data);
 
   int prepare_for_safe_destroy();
 

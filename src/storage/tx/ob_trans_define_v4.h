@@ -560,6 +560,7 @@ public:
   void set_can_elr(const bool can_elr) { can_elr_ = can_elr; }
   bool is_can_elr() const { return can_elr_; }
   bool need_rollback() { return state_ == State::ABORTED; }
+  share::SCN get_snapshot_version() { return snapshot_version_; }
   ObITxCallback *cancel_commit_cb();
 };
 

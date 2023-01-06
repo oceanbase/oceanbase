@@ -238,8 +238,12 @@ private:
 
   int register_self();
   int check_server_empty(const obrpc::ObCheckServerEmptyArg &arg, const bool wait_log_scan, bool &server_empty);
-  int tenant_freeze(const uint64_t tenant_id);
-  int tablet_freeze(const uint64_t tenant_id, const common::ObTabletID &tablet_id);
+
+  int handle_server_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
+  int handle_tenant_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
+  int handle_ls_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
+  int tenant_freeze_(const uint64_t tenant_id);
+  int ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
 private:
   bool inited_;
   bool in_register_process_;

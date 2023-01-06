@@ -540,9 +540,6 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt &stmt,
                 session.get_effective_tenant_id(),
                 main_table_tid, with_unique_local_idx))) {
       LOG_WARN("fail check if table with local unqiue index", K(main_table_tid), K(ret));
-    } else if (with_unique_local_idx) {
-      is_use_pdml = false;
-      ctx_.add_plan_note(PDML_DISABLED_BY_LOCAL_UK);
     } else if (stmt::T_UPDATE == stmt.get_stmt_type()) {
       for (int i = 0; OB_SUCC(ret) && is_use_pdml && i <
           table_infos.at(0)->column_exprs_.count(); i++) {

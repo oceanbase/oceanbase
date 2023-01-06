@@ -307,7 +307,8 @@ int ObMvccEngine::create_kv(
 }
 
 int ObMvccEngine::mvcc_write(ObIMemtableCtx &ctx,
-                             const SCN snapshot_version,
+                             const concurrent_control::ObWriteFlag write_flag,
+                             const transaction::ObTxSnapshot &snapshot,
                              ObMvccRow &value,
                              const ObTxNodeArg &arg,
                              ObMvccWriteResult &res)
@@ -318,7 +319,8 @@ int ObMvccEngine::mvcc_write(ObIMemtableCtx &ctx,
   if (OB_FAIL(build_tx_node_(ctx, arg, node))) {
     TRANS_LOG(WARN, "build tx node failed", K(ret), K(ctx), K(arg));
   } else if (OB_FAIL(value.mvcc_write(ctx,
-                                      snapshot_version,
+                                      write_flag,
+                                      snapshot,
                                       *node,
                                       res))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret &&

@@ -103,7 +103,7 @@ struct ObMvccWriteResult {
   // row)
   bool need_insert_;
   // is_new_locked_ indicates whether you are locking the row for the first
-  // time(mainly used for detecting errors)
+  // time for your txn(mainly used for deadlock detector and detecting errors)
   bool is_new_locked_;
   // lock_state_ is used for deadlock detector and lock wait mgr
   storage::ObStoreRowLockState lock_state_;

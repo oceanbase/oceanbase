@@ -151,6 +151,9 @@ public:
     ~TableIndex() { destroy(); }
     int init();
     void destroy();
+    void check_cleanout(bool &is_all_cleanout,
+                        bool &is_all_delay_cleanout,
+                        int64_t &count);
     void dump2text(FILE* fd);
     int dump_keyhash(FILE *fd) const;
     int dump_keybtree(FILE *fd);
@@ -232,6 +235,9 @@ public:
                ? index->btree_alloc_memory() + btree_allocator_.get_allocated()
                : 0;
   }
+  void check_cleanout(bool &is_all_cleanout,
+                      bool &is_all_delay_cleanout,
+                      int64_t &count);
   void dump2text(FILE *fd);
   int get_table_index(TableIndex *&return_ptr) const;
   int set_table_index(const int64_t obj_cnt, TableIndex *&return_ptr);

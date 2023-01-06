@@ -430,4 +430,5 @@ void MockObTxCtx::set_exiting_()
 }
 
 } // end namespace transaction
+
 } // end namespace oceanbase

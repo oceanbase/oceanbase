@@ -945,58 +945,12 @@ int ObService::minor_freeze(const obrpc::ObMinorFreezeArg &arg,
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (arg.ls_id_.is_valid() || arg.tablet_id_.is_valid()) {
+    ret = handle_ls_freeze_req_(arg);
+  } else if (arg.tenant_ids_.count() > 0) {
+    ret = handle_tenant_freeze_req_(arg);
   } else {
-    if (arg.tablet_id_.is_valid()) {
-      // minor feeeze tablet
-      if (1 == arg.tenant_ids_.count()) {
-        uint64_t tenant_id = arg.tenant_ids_.at(0);
-        if (OB_UNLIKELY(OB_FAIL(tablet_freeze(tenant_id, arg.tablet_id_)))) {
-          LOG_WARN("fail to freeze tablet", K(ret), K(tenant_id), K(arg.tablet_id_));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("only one tenant is needed", K(ret), K(arg.tenant_ids_), K(arg.tablet_id_));
-      }
-    } else if (arg.tenant_ids_.count() > 0) {
-      // minor freeze tenants
-      for (int i = 0; i < arg.tenant_ids_.count(); ++i) {
-        int tmp_ret = OB_SUCCESS;
-        uint64_t tenant_id = arg.tenant_ids_.at(i);
-        if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = tenant_freeze(tenant_id)))) {
-          LOG_WARN("fail to freeze tenant", K(tmp_ret), K(tenant_id));
-        }
-        // record the first error code
-        if (OB_SUCCESS != tmp_ret && OB_SUCC(ret)) {
-          ret = tmp_ret;
-        }
-      }
-    } else {
-      // for minor freeze server
-      // freeze all tenants
-      if (OB_ISNULL(GCTX.omt_)) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "failed to get multi tenant from GCTX", K(ret));
-      } else {
-        omt::TenantIdList all_tenants;
-        GCTX.omt_->get_tenant_ids(all_tenants);
-        for (int i = 0; i < all_tenants.size(); ++i) {
-          int tmp_ret = OB_SUCCESS;
-          uint64_t tenant_id = all_tenants[i];
-          if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = tenant_freeze(tenant_id)))) {
-            if (OB_TENANT_NOT_IN_SERVER == tmp_ret) {
-              LOG_INFO("skip freeze stopped tenant", K(tmp_ret), K(tenant_id));
-              tmp_ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("fail to freeze tenant", K(tmp_ret), K(tenant_id));
-            }
-          }
-          // record the first error code
-          if (OB_SUCCESS != tmp_ret && OB_SUCC(ret)) {
-            ret = tmp_ret;
-          }
-        }
-      }
-    }
+    ret = handle_server_freeze_req_(arg);
   }
 
   result = ret;
@@ -1005,7 +959,65 @@ int ObService::minor_freeze(const obrpc::ObMinorFreezeArg &arg,
   return ret;
 }
 
-int ObService::tablet_freeze(const uint64_t tenant_id, const common::ObTabletID &tablet_id)
+int ObService::handle_server_freeze_req_(const obrpc::ObMinorFreezeArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.omt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "failed to get multi tenant from GCTX", K(ret));
+  } else {
+    omt::TenantIdList all_tenants;
+    GCTX.omt_->get_tenant_ids(all_tenants);
+    for (int i = 0; i < all_tenants.size(); ++i) {
+      int tmp_ret = OB_SUCCESS;
+      uint64_t tenant_id = all_tenants[i];
+      if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = tenant_freeze_(tenant_id)))) {
+        if (OB_TENANT_NOT_IN_SERVER == tmp_ret) {
+          LOG_INFO("skip freeze stopped tenant", K(tmp_ret), K(tenant_id));
+          tmp_ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to freeze tenant", K(tmp_ret), K(tenant_id));
+        }
+      }
+      // record the first error code
+      if (OB_SUCCESS != tmp_ret && OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::handle_tenant_freeze_req_(const obrpc::ObMinorFreezeArg &arg)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; i < arg.tenant_ids_.count(); ++i) {
+    int tmp_ret = OB_SUCCESS;
+    uint64_t tenant_id = arg.tenant_ids_.at(i);
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = tenant_freeze_(tenant_id)))) {
+      LOG_WARN("fail to freeze tenant", K(tmp_ret), K(tenant_id));
+    }
+    // record the first error code
+    if (OB_SUCCESS != tmp_ret && OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
+  }
+  return ret;
+}
+
+int ObService::handle_ls_freeze_req_(const obrpc::ObMinorFreezeArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (1 != arg.tenant_ids_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only one tenant is needed", K(ret), K(arg.tenant_ids_), K(arg.tablet_id_));
+  } else if (OB_FAIL(ls_freeze_(arg.tenant_ids_.at(0), arg.ls_id_, arg.tablet_id_))) {
+    LOG_WARN("fail to freeze tablet", K(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObService::ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
 
@@ -1017,10 +1029,24 @@ int ObService::tablet_freeze(const uint64_t tenant_id, const common::ObTabletID 
       if (OB_ISNULL(freezer = MTL(storage::ObTenantFreezer*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ObTenantFreezer shouldn't be null", K(ret), K(tenant_id));
-      } else if (OB_FAIL(freezer->tablet_freeze(tablet_id))) {
-        LOG_WARN("fail to freeze tablet", K(ret), K(tenant_id), K(tablet_id));
+      } else if (tablet_id.is_valid()) {
+        // tablet freeze
+        if (OB_FAIL(freezer->tablet_freeze(ls_id, tablet_id))) {
+          LOG_WARN("fail to freeze tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+        } else {
+          LOG_INFO("succeed to freeze tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+        }
       } else {
-        LOG_INFO("succeed to freeze tablet", K(ret), K(tenant_id), K(tablet_id));
+        // logstream freeze
+        if (OB_FAIL(freezer->ls_freeze(ls_id))) {
+          if (OB_ENTRY_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to freeze ls", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+          }
+        } else {
+          LOG_INFO("succeed to freeze ls", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+        }
       }
     }
   }
@@ -1028,7 +1054,7 @@ int ObService::tablet_freeze(const uint64_t tenant_id, const common::ObTabletID 
   return ret;
 }
 
-int ObService::tenant_freeze(const uint64_t tenant_id)
+int ObService::tenant_freeze_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 

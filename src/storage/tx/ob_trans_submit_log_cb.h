@@ -80,8 +80,15 @@ public:
   void destroy() { reset(); }
   ObTxLogType get_last_log_type() const;
   ObTransCtx *get_ctx() { return ctx_; }
-  void set_tx_data(ObTxData *tx_data) { tx_data_ = tx_data; }
-  ObTxData* get_tx_data() { return tx_data_; }
+  void set_tx_data(ObTxData *tx_data)
+  {
+    if (OB_ISNULL(tx_data)) {
+      tx_data_guard_.reset();
+    } else {
+      tx_data_guard_.init(tx_data);
+    }
+  }
+  ObTxData* get_tx_data() { return tx_data_guard_.tx_data(); }
   void set_callbacks(const memtable::ObCallbackScope &callbacks) { callbacks_ = callbacks; }
   memtable::ObCallbackScope& get_callbacks() { return callbacks_; }
   void set_callbacked() { is_callbacked_ = true; }
@@ -103,7 +110,7 @@ public:
                        K_(trans_id),
                        K_(ls_id),
                        KP_(ctx),
-                       KP_(tx_data),
+                       K_(tx_data_guard),
                        K(is_callbacked_),
                        K(mds_range_),
                        K(cb_arg_array_));
@@ -116,7 +123,7 @@ private:
   share::ObLSID ls_id_;
   ObTransID trans_id_;
   ObTransCtx *ctx_;
-  ObTxData *tx_data_;
+  ObTxDataGuard tx_data_guard_;
   memtable::ObCallbackScope callbacks_;
   bool is_callbacked_;
   ObTxMDSRange mds_range_;

@@ -272,12 +272,15 @@ ObMvccWriteGuard::~ObMvccWriteGuard()
     int ret = OB_SUCCESS;
     auto tx_ctx = ctx_->get_trans_ctx();
     ctx_->write_done();
-    if (OB_NOT_NULL(memtable_) && memtable_->is_frozen_memtable()) {
-      if (OB_FAIL(tx_ctx->submit_redo_log(true/*is_freeze*/))) {
+    if (OB_NOT_NULL(memtable_)) {
+      bool is_freeze = memtable_->is_frozen_memtable();
+      if (OB_FAIL(tx_ctx->submit_redo_log(is_freeze))) {
         if (REACH_TIME_INTERVAL(100 * 1000)) {
-          TRANS_LOG(WARN, "failed to submit freeze log", K(ret), KPC(tx_ctx));
+          TRANS_LOG(WARN, "failed to submit log if neccesary", K(ret), K(is_freeze), KPC(tx_ctx));
         }
-        memtable_->get_freezer()->set_need_resubmit_log(true);
+        if (is_freeze) {
+          memtable_->get_freezer()->set_need_resubmit_log(true);
+        }
       }
     }
   }

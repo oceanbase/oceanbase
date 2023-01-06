@@ -441,7 +441,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_view_stmt view_name opt_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option
 %type <node> name_list
 %type <node> partition_role ls_role zone_desc opt_zone_desc server_or_zone opt_server_or_zone opt_partitions opt_subpartitions add_or_alter_zone_options alter_or_change_or_modify
-%type <node> ls opt_tenant_list_and_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
+%type <node> ls opt_tenant_list_or_ls_or_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
 %type <node> opt_tenant_list_v2
 %type <node> suspend_or_resume tenant_name opt_tenant_name cache_name opt_cache_name file_id opt_file_id cancel_task_type
 %type <node> sql_id_expr opt_sql_id
@@ -13854,7 +13854,7 @@ ALTER SYSTEM CHECKPOINT
   malloc_non_terminal_node($$, result->malloc_pool_, T_FREEZE, 2, type, NULL);
 }
 |
-ALTER SYSTEM MINOR FREEZE opt_tenant_list_and_tablet_id opt_server_list opt_zone_desc
+ALTER SYSTEM MINOR FREEZE opt_tenant_list_or_ls_or_tablet_id opt_server_list opt_zone_desc
 {
   ParseNode *type = NULL;
   malloc_terminal_node(type, result->malloc_pool_, T_INT);
@@ -15098,16 +15098,21 @@ LS opt_equal_mark INTNUM
 }
 ;
 
-opt_tenant_list_and_tablet_id:
+opt_tenant_list_or_ls_or_tablet_id:
 tenant_list_tuple opt_tablet_id
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TENANT_TABLET, 2, $1, $2);
+}
+| tenant_list_tuple ls opt_tablet_id
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TENANT_LS_TABLET, 3, $1, $2, $3);
 }
 | /*EMPTY*/
 {
   $$ = NULL;
 }
 ;
+
 
 ls_server_or_server_or_zone_or_tenant:
 ls ip_port tenant_name

@@ -80,11 +80,15 @@ std::string ObSimpleClusterTestBase::env_prefix_;
 std::string ObSimpleClusterTestBase::curr_dir_;
 bool ObSimpleClusterTestBase::enable_env_warn_log_ = false;
 
-ObSimpleClusterTestBase::ObSimpleClusterTestBase(const std::string &env_prefix)
+ObSimpleClusterTestBase::ObSimpleClusterTestBase(const std::string &env_prefix,
+                                                 const char *log_disk_size,
+                                                 const char *memory_limit)
 {
   if (cluster_ == nullptr) {
     env_prefix_ = env_prefix + "_test_data"; //+ std::to_string(ObTimeUtility::current_time()) + "_";
-    cluster_ = std::make_shared<observer::ObSimpleServer>(env_prefix_);
+    cluster_ = std::make_shared<observer::ObSimpleServer>(env_prefix_,
+                                                          log_disk_size,
+                                                          memory_limit);
     curr_dir_ = get_current_dir_name();
   }
 }
@@ -180,7 +184,9 @@ int ObSimpleClusterTestBase::close()
   return ret;
 }
 
-int ObSimpleClusterTestBase::create_tenant(const char *tenant_name)
+int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
+                                           const char *memory_size,
+                                           const char *log_disk_size)
 {
   SERVER_LOG(INFO, "create tenant start");
   int32_t log_level;
@@ -216,7 +222,8 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name)
   {
     ObSqlString sql;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.assign_fmt("create resource unit box_ym_%s max_cpu 2, memory_size '2G', log_disk_size='2G';", tenant_name))) {
+    } else if (OB_FAIL(sql.assign_fmt("create resource unit box_ym_%s max_cpu 8, memory_size '%s', log_disk_size='%s';",
+                                      tenant_name, memory_size, log_disk_size))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));

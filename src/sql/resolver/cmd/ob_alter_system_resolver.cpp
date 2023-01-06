@@ -270,11 +270,29 @@ int ObAlterSystemResolverUtil::resolve_ls_id(const ParseNode *parse_tree, int64_
 {
   int ret = OB_SUCCESS;
   if (NULL == parse_tree) {
+    ret = OB_ERR_NULL_VALUE;
     LOG_WARN("node should not be null");
   } else if (OB_FAIL(sanity_check(parse_tree, T_LS))) {
     LOG_WARN("sanity check failed");
   } else {
     ls_id = parse_tree->children_[0]->value_;
+    FLOG_INFO("resolve ls id", K(ls_id));
+  }
+  return ret;
+}
+
+int ObAlterSystemResolverUtil::resolve_tablet_id(const ParseNode *opt_tablet_id, ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (NULL == opt_tablet_id) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("opt_tablet_id should not be null");
+  } else if (OB_FAIL(sanity_check(opt_tablet_id, T_TABLET_ID))) {
+    LOG_WARN("sanity check failed");
+  } else {
+    tablet_id = opt_tablet_id->children_[0]->value_;
+    FLOG_INFO("resolve tablet_id", K(tablet_id));
   }
   return ret;
 }
@@ -416,32 +434,11 @@ int ObAlterSystemResolverUtil::resolve_tenant(
   return ret;
 }
 
-// resolve tablet id
-int ObAlterSystemResolverUtil::resolve_tablet_id(const ParseNode &tenants_tablet_node, ObFreezeStmt &freeze_stmt)
-{
-  int ret = OB_SUCCESS;
-  ObTabletID &tablet_id = freeze_stmt.get_tablet_id();
-
-  if (OB_UNLIKELY(NULL == tenants_tablet_node.children_)
-      || OB_UNLIKELY(0 == tenants_tablet_node.num_child_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children of tenant should not be null", KR(ret));
-  } else if (OB_NOT_NULL(tenants_tablet_node.children_[1]) 
-             && OB_NOT_NULL(tenants_tablet_node.children_[1]->children_[0])) {
-    tablet_id = tenants_tablet_node.children_[1]->children_[0]->value_;
-    FLOG_INFO("resolve tablet_id", K(tablet_id));
-  }
-
-  return ret;
-}
 
 int ObFreezeResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObFreezeStmt *freeze_stmt = NULL;
-  ParseNode *servers_node = NULL;
-  ParseNode *tenants_and_tablet_node = NULL;
-  ParseNode *zone_node = NULL;
   if (OB_UNLIKELY(NULL == parse_tree.children_)
       || OB_UNLIKELY(parse_tree.num_child_ < 2)) {
     ret = OB_ERR_UNEXPECTED;
@@ -460,37 +457,35 @@ int ObFreezeResolver::resolve(const ParseNode &parse_tree)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrong freeze type", K(parse_tree.children_[0]->type_));
   } else {
-    const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
     stmt_ = freeze_stmt;
     if (1 == parse_tree.children_[0]->value_) { // MAJOR FREEZE
+      freeze_stmt->set_major_freeze(true);
       if (OB_UNLIKELY(2 != parse_tree.num_child_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("wrong freeze parse tree", K(parse_tree.num_child_));
       } else {
-        freeze_stmt->set_major_freeze(true);
-        tenants_and_tablet_node = parse_tree.children_[1];
-
-        if (NULL == tenants_and_tablet_node) {
-          // if tenants_and_tablet_node == null, add owned tenant_id
-          if (OB_FAIL(freeze_stmt->get_tenant_ids().push_back(cur_tenant_id))) {
-            LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
-          }
-        } else {
-          if (OB_SYS_TENANT_ID != cur_tenant_id) {
-            ret = OB_ERR_NO_PRIVILEGE;		
-            LOG_WARN("Only sys tenant can add suffix opt(tenant=name)", KR(ret), K(cur_tenant_id));
-          }
+        ParseNode *opt_tenant_list_v2 = parse_tree.children_[1];
+        if (OB_FAIL(resolve_major_freeze_(freeze_stmt, opt_tenant_list_v2))) {
+          LOG_WARN("resolve major freeze failed", KR(ret), KP(opt_tenant_list_v2));
         }
       }
-    } else if (2 == parse_tree.children_[0]->value_) { // MINOR FREEZE
+    } else if (2 == parse_tree.children_[0]->value_) {  // MINOR FREEZE
+      freeze_stmt->set_major_freeze(false);
       if (OB_UNLIKELY(4 != parse_tree.num_child_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("wrong freeze parse tree", K(parse_tree.num_child_));
       } else {
-        freeze_stmt->set_major_freeze(false);
-        tenants_and_tablet_node = parse_tree.children_[1];
-        servers_node = parse_tree.children_[2];
-        zone_node = parse_tree.children_[3];
+        ParseNode *opt_tenant_list_or_ls_or_tablet_id = parse_tree.children_[1];
+        ParseNode *opt_server_list = parse_tree.children_[2];
+        ParseNode *opt_zone_desc = parse_tree.children_[3];
+        if (OB_FAIL(resolve_minor_freeze_(
+                freeze_stmt, opt_tenant_list_or_ls_or_tablet_id, opt_server_list, opt_zone_desc))) {
+          LOG_WARN("resolve minor freeze failed",
+                   KR(ret),
+                   KP(opt_tenant_list_or_ls_or_tablet_id),
+                   KP(opt_server_list),
+                   KP(opt_zone_desc));
+        }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -498,60 +493,146 @@ int ObFreezeResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
-  // resolve zone
-  if (OB_SUCC(ret) && (NULL != zone_node)) {
-    if (OB_FAIL(Util::resolve_zone(zone_node, freeze_stmt->get_zone()))) {
-      LOG_WARN("resolve zone failed", K(ret));
+  return ret;
+}
+
+int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_v2)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
+
+  if (NULL == opt_tenant_list_v2) {
+    // if opt_tenant_list_v2 == NULL, add owned tenant_id
+    if (OB_FAIL(freeze_stmt->get_tenant_ids().push_back(cur_tenant_id))) {
+      LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
     }
-  }
-
-  // resolve tenant and tablet id
-  if (OB_SUCC(ret) && (NULL != tenants_and_tablet_node)) {
-    const uint64_t tenant_id = session_info_->get_effective_tenant_id();
-
-    if ((T_TENANT_LIST == tenants_and_tablet_node->type_)
-        || (T_TENANT_TABLET == tenants_and_tablet_node->type_)) {
-      if (OB_UNLIKELY(nullptr == tenants_and_tablet_node->children_)
-          || OB_UNLIKELY(0 == tenants_and_tablet_node->num_child_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("children of tenant should not be null", KR(ret));
-      } else {
-        bool affect_all = false;
-        if (T_TENANT_LIST == tenants_and_tablet_node->type_) {
-          if (OB_FAIL(Util::resolve_tenant(*tenants_and_tablet_node, tenant_id, freeze_stmt->get_tenant_ids(), affect_all))) {
-            LOG_WARN("fail to resolve tenant", KR(ret));
-          } else if (affect_all) {
-            freeze_stmt->set_freeze_all(affect_all);
-          }
-        } else if (T_TENANT_TABLET == tenants_and_tablet_node->type_) {
-          const ParseNode *tenants_node = tenants_and_tablet_node->children_[0];
-          if (OB_UNLIKELY(nullptr == tenants_node)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("tenants_node is nullptr", KR(ret));
-          } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, tenant_id, freeze_stmt->get_tenant_ids(), affect_all))) {
-            LOG_WARN("fail to resolve tenant", KR(ret));
-          } else if (affect_all) {
-            freeze_stmt->set_freeze_all(affect_all);
-          }
-          if (FAILEDx(Util::resolve_tablet_id(*tenants_and_tablet_node, *freeze_stmt))) {
-            LOG_WARN("fail to resolve tablet id", KR(ret));
-          }
-        }
+  } else if (OB_SYS_TENANT_ID != cur_tenant_id) {
+    ret = OB_ERR_NO_PRIVILEGE;
+    LOG_WARN("Only sys tenant can add suffix opt(tenant=name)", KR(ret), K(cur_tenant_id));
+  } else if ((T_TENANT_LIST == opt_tenant_list_v2->type_)) {
+    // if opt_tenant_list_v2 != NULL && type == T_TENANT_LIST, resolve it
+    if (OB_UNLIKELY(nullptr == opt_tenant_list_v2->children_) || OB_UNLIKELY(0 == opt_tenant_list_v2->num_child_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("children of tenant should not be null", KR(ret));
+    } else {
+      bool affect_all = false;
+      if (OB_FAIL(Util::resolve_tenant(*opt_tenant_list_v2, cur_tenant_id, freeze_stmt->get_tenant_ids(), affect_all))) {
+        LOG_WARN("fail to resolve tenant", KR(ret));
+      } else if (affect_all) {
+        freeze_stmt->set_freeze_all(affect_all);
       }
     }
+  } else {
+    LOG_WARN("invalid type when resolve opt_tenant_list_v2", K(T_TENANT_LIST), K(opt_tenant_list_v2->type_));
   }
 
-  // resolve observer list
-  if (OB_SUCC(ret) && (NULL != servers_node)) {
-    if (OB_UNLIKELY(NULL == servers_node->children_)
-        || OB_UNLIKELY(0 == servers_node->num_child_)) {
+  return ret;
+}
+
+int ObFreezeResolver::resolve_minor_freeze_(ObFreezeStmt *freeze_stmt,
+                                            ParseNode *opt_tenant_list_or_ls_or_tablet_id,
+                                            ParseNode *opt_server_list,
+                                            ParseNode *opt_zone_desc)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(opt_tenant_list_or_ls_or_tablet_id) &&
+      OB_FAIL(resolve_tenant_ls_tablet_(freeze_stmt, opt_tenant_list_or_ls_or_tablet_id))) {
+    LOG_WARN("resolve tenant ls table failed", KR(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(opt_server_list) && OB_FAIL(resolve_server_list_(freeze_stmt, opt_server_list))) {
+    LOG_WARN("resolve server list failed", KR(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(opt_zone_desc) &&
+      OB_FAIL(Util::resolve_zone(opt_zone_desc, freeze_stmt->get_zone()))) {
+    LOG_WARN("resolve zone desc failed", KR(ret));
+  }
+
+  return ret;
+}
+
+int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
+                                                ParseNode *opt_tenant_list_or_ls_or_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
+
+  if (OB_ISNULL(opt_tenant_list_or_ls_or_tablet_id->children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children of tenant should not be null", KR(ret));
+  } else {
+    bool affect_all = false;
+    const ParseNode *tenant_list_tuple = nullptr;
+    const ParseNode *opt_tablet_id = nullptr;
+    const ParseNode *ls_id = nullptr;
+
+    switch (opt_tenant_list_or_ls_or_tablet_id->type_) {
+      case T_TENANT_TABLET:
+        if (opt_tenant_list_or_ls_or_tablet_id->num_child_ != 2) {
+          LOG_WARN("invalid child num", K(opt_tenant_list_or_ls_or_tablet_id->num_child_));
+        } else {
+          tenant_list_tuple = opt_tenant_list_or_ls_or_tablet_id->children_[0];
+          opt_tablet_id = opt_tenant_list_or_ls_or_tablet_id->children_[1];
+          if (OB_ISNULL(tenant_list_tuple)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("tenant list is nullptr", KR(ret), KP(tenant_list_tuple), KP(ls_id), KP(opt_tablet_id));
+          }
+        }
+        break;
+      case T_TENANT_LS_TABLET:
+        if (opt_tenant_list_or_ls_or_tablet_id->num_child_ != 3) {
+          LOG_WARN("invalid child num", K(opt_tenant_list_or_ls_or_tablet_id->num_child_));
+        } else {
+          tenant_list_tuple = opt_tenant_list_or_ls_or_tablet_id->children_[0];
+          ls_id = opt_tenant_list_or_ls_or_tablet_id->children_[1];
+          opt_tablet_id = opt_tenant_list_or_ls_or_tablet_id->children_[2];
+          if (OB_ISNULL(tenant_list_tuple) || OB_ISNULL(ls_id)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("tenant_list or ls_id is nullptr", KR(ret), KP(tenant_list_tuple), KP(ls_id), KP(opt_tablet_id));
+          }
+        }
+        break;
+      default:
+        LOG_WARN("invalid parse node type",
+                 K(T_TENANT_TABLET),
+                 K(T_TENANT_LS_TABLET),
+                 K(opt_tenant_list_or_ls_or_tablet_id->type_));
+        break;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(tenant_list_tuple) &&
+               OB_FAIL(Util::resolve_tenant(
+                   *tenant_list_tuple, cur_tenant_id, freeze_stmt->get_tenant_ids(), affect_all))) {
+      LOG_WARN("fail to resolve tenant", KR(ret));
+    } else if (OB_NOT_NULL(ls_id) && OB_FAIL(Util::resolve_ls_id(ls_id, freeze_stmt->get_ls_id()))) {
+      LOG_WARN("fail to resolve tablet id", KR(ret));
+    } else if (OB_NOT_NULL(opt_tablet_id) &&
+               OB_FAIL(Util::resolve_tablet_id(opt_tablet_id, freeze_stmt->get_tablet_id()))) {
+      LOG_WARN("fail to resolve tablet id", KR(ret));
+    } else if (affect_all) {
+      freeze_stmt->set_freeze_all(affect_all);
+    }
+  }
+
+  return ret;
+}
+
+int ObFreezeResolver::resolve_server_list_(ObFreezeStmt *freeze_stmt, ParseNode *opt_server_list)
+{
+  int ret = OB_SUCCESS;
+    if (OB_ISNULL(opt_server_list->children_)
+        || OB_UNLIKELY(0 == opt_server_list->num_child_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("children of server_list should not be null");
     } else {
       ObString addr_str;
       ObAddr server;
-      for (int64_t i = 0; OB_SUCC(ret) && i < servers_node->num_child_; ++i) {
-        ParseNode *node = servers_node->children_[i];
+      for (int64_t i = 0; OB_SUCC(ret) && i < opt_server_list->num_child_; ++i) {
+        ParseNode *node = opt_server_list->children_[i];
         if (OB_ISNULL(node)) {
           LOG_WARN("children of server_list should not be null");
         } else {
@@ -566,8 +647,6 @@ int ObFreezeResolver::resolve(const ParseNode &parse_tree)
         addr_str.reset();
       }
     }
-  }
-
   return ret;
 }
 

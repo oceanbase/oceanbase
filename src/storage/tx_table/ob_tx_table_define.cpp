@@ -271,7 +271,7 @@ int64_t ObTxCtxTableMeta::get_serialize_size_() const
   return len;
 }
 
-DEF_TO_STRING(ObCommitSCNsArray::Node)
+DEF_TO_STRING(ObCommitVersionsArray::Node)
 {
   int64_t pos = 0;
   J_KV(K_(start_scn),
@@ -279,20 +279,22 @@ DEF_TO_STRING(ObCommitSCNsArray::Node)
   return pos;
 }
 
-DEF_TO_STRING(ObCommitSCNsArray)
+DEF_TO_STRING(ObCommitVersionsArray)
 {
   int64_t pos = 0;
   J_KV(KP(this), K(array_.count()));
   return pos;
 }
 
-int ObCommitSCNsArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObCommitVersionsArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
+
   const int64_t len = get_serialize_size_();
+
   if (OB_UNLIKELY(OB_ISNULL(buf) || buf_len <= 0 || pos > buf_len)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "serialize ObCommitSCNsArray failed.", KR(ret), KP(buf), K(buf_len),
+    STORAGE_LOG(WARN, "serialize ObCommitVersionsArray failed.", KR(ret), KP(buf), K(buf_len),
                 K(pos));
   } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, UNIS_VERSION))) {
     STORAGE_LOG(WARN, "encode UNIS_VERSION failed.", KR(ret), KP(buf), K(buf_len), K(pos));
@@ -300,26 +302,30 @@ int ObCommitSCNsArray::serialize(char *buf, const int64_t buf_len, int64_t &pos)
     STORAGE_LOG(WARN, "encode length of commit versions array failed.", KR(ret), KP(buf),
                 K(buf_len), K(pos));
   } else if (OB_FAIL(serialize_(buf, buf_len, pos))) {
-    STORAGE_LOG(WARN, "serialize_ ObCommitSCNsArray failed.", KR(ret), KP(buf), K(buf_len),
+    STORAGE_LOG(WARN, "serialize_ ObCommitVersionsArray failed.", KR(ret), KP(buf), K(buf_len),
                 K(pos));
   }
 
   return ret;
 }
 
-int ObCommitSCNsArray::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+int ObCommitVersionsArray::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t version = 0;
   int64_t len = 0;
+  array_.reuse();
 
-  if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &version))) {
+  if (OB_UNLIKELY(nullptr == buf || data_len <= 0 || pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid arguments.", KP(buf), K(data_len), K(ret));
+  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &version))) {
     STORAGE_LOG(WARN, "decode version fail", K(version), K(data_len), K(pos), K(ret));
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &len))) {
-    STORAGE_LOG(WARN, "decode data len fail", K(len), K(data_len), K(pos), K(ret));
   } else if (version != UNIS_VERSION) {
     ret = OB_VERSION_NOT_MATCH;
     STORAGE_LOG(WARN, "object version mismatch", K(ret), K(version));
+  }  else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &len))) {
+    STORAGE_LOG(WARN, "decode data len fail", K(len), K(data_len), K(pos), K(ret));
   } else if (OB_UNLIKELY(len < 0)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "can't decode object with negative length", KR(ret), K(len));
@@ -331,7 +337,7 @@ int ObCommitSCNsArray::deserialize(const char *buf, const int64_t data_len, int6
     pos = 0;
     array_.reuse();
     if (OB_FAIL(deserialize_(buf + original_pos, len, pos))) {
-      STORAGE_LOG(WARN, "deserialize_ ObCommitSCNsArray fail", K(len), K(pos), K(ret));
+      STORAGE_LOG(WARN, "deserialize_ ObCommitVersionsArray fail", K(len), K(pos), K(ret));
     }
     pos += original_pos;
   }
@@ -339,7 +345,7 @@ int ObCommitSCNsArray::deserialize(const char *buf, const int64_t data_len, int6
   return ret;
 }
 
-int64_t ObCommitSCNsArray::get_serialize_size() const
+int64_t ObCommitVersionsArray::get_serialize_size() const
 {
   int64_t data_len = get_serialize_size_();
   int64_t len = 0;
@@ -349,7 +355,7 @@ int64_t ObCommitSCNsArray::get_serialize_size() const
   return len;
 }
 
-int ObCommitSCNsArray::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObCommitVersionsArray::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < array_.count(); i++) {
@@ -358,11 +364,11 @@ int ObCommitSCNsArray::serialize_(char *buf, const int64_t buf_len, int64_t &pos
   return ret;
 }
 
-int ObCommitSCNsArray::deserialize_(const char *buf, const int64_t data_len, int64_t &pos)
+int ObCommitVersionsArray::deserialize_(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
 
-  ObCommitSCNsArray::Node node;
+  ObCommitVersionsArray::Node node;
   while (OB_SUCC(ret) && pos < data_len) {
     LST_DO_CODE(OB_UNIS_DECODE, node.start_scn_, node.commit_version_);
     array_.push_back(node);
@@ -371,7 +377,7 @@ int ObCommitSCNsArray::deserialize_(const char *buf, const int64_t data_len, int
   return ret;
 }
 
-int64_t ObCommitSCNsArray::get_serialize_size_() const
+int64_t ObCommitVersionsArray::get_serialize_size_() const
 {
   int64_t len = 0;
   for (int i = 0; i < array_.count(); i++) {
@@ -380,7 +386,7 @@ int64_t ObCommitSCNsArray::get_serialize_size_() const
   return len;
 }
 
-bool ObCommitSCNsArray::is_valid()
+bool ObCommitVersionsArray::is_valid()
 {
   bool bool_ret = true;
   for (int i = 0; i < array_.count() - 1; i++) {
@@ -395,7 +401,6 @@ bool ObCommitSCNsArray::is_valid()
   }
   return bool_ret;
 }
-
 
 } // end namespace transaction
 } // end namespace oceanbase
