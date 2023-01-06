@@ -37,6 +37,7 @@
 #include "share/schema/ob_schema_mgr.h"
 #include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
+#include "share/ob_tenant_info_proxy.h" // ObAllTenantInfoProxy
 
 namespace oceanbase
 {
@@ -814,6 +815,38 @@ int ObRootInspection::inspect(bool &passed, const char* &warning_info)
   return ret;
 }
 
+
+// standby tenant may stay at lower data version,
+// root_inspection won't check standby tenant's schema.
+int ObRootInspection::construct_tenant_ids_(
+    common::ObIArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  tenant_ids.reset();
+  ObArray<uint64_t> standby_tenants;
+  ObArray<uint64_t> tmp_tenants;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(check_cancel())) {
+    LOG_WARN("check_cancel failed", KR(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::get_standby_tenants(sql_proxy_, standby_tenants))) {
+    LOG_WARN("fail to get standby tenants", KR(ret));
+  } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tmp_tenants))) {
+    LOG_WARN("get_tenant_ids failed", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenants.count(); i++) {
+      const uint64_t tenant_id = tmp_tenants.at(i);
+      if (has_exist_in_array(standby_tenants, tenant_id)) {
+        // skip
+      } else if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
+        LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
+      }
+    } // end for
+  }
+  return ret;
+}
+
 int ObRootInspection::check_zone()
 {
   int ret = OB_SUCCESS;
@@ -868,7 +901,7 @@ int ObRootInspection::check_sys_stat_()
     LOG_WARN("schema_service is null", KR(ret));
   } else if (OB_FAIL(check_cancel())) {
     LOG_WARN("check_cancel failed", KR(ret));
-  } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tenant_ids))) {
+  } else if (OB_FAIL(construct_tenant_ids_(tenant_ids))) {
     LOG_WARN("get_tenant_ids failed", KR(ret));
   } else {
     int backup_ret = OB_SUCCESS;
@@ -930,7 +963,7 @@ int ObRootInspection::check_sys_param_()
     LOG_WARN("schema_service is null", KR(ret));
   } else if (OB_FAIL(check_cancel())) {
     LOG_WARN("check_cancel failed", KR(ret));
-  } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tenant_ids))) {
+  } else if (OB_FAIL(construct_tenant_ids_(tenant_ids))) {
     LOG_WARN("get_tenant_ids failed", KR(ret));
   } else {
     int backup_ret = OB_SUCCESS;
@@ -1202,7 +1235,7 @@ int ObRootInspection::check_sys_table_schemas_()
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
-  } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tenant_ids))) {
+  } else if (OB_FAIL(construct_tenant_ids_(tenant_ids))) {
     LOG_WARN("get_tenant_ids failed", KR(ret));
   } else {
     int backup_ret = OB_SUCCESS;
@@ -1818,7 +1851,7 @@ int ObRootInspection::check_data_version_()
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
-  } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tenant_ids))) {
+  } else if (OB_FAIL(construct_tenant_ids_(tenant_ids))) {
     LOG_WARN("get_tenant_ids failed", KR(ret));
   } else {
     int backup_ret = OB_SUCCESS;

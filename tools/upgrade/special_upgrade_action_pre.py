@@ -17,7 +17,7 @@ import actions
 import sys
 
 # 主库需要执行的升级动作
-def do_special_upgrade(conn, cur, tenant_id_list, timeout, user, passwd):
+def do_special_upgrade(conn, cur, timeout, user, passwd):
   # special upgrade action
 #升级语句对应的action要写在下面的actions begin和actions end这两行之间，
 #因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end

@@ -22,16 +22,19 @@ def check_data_version(cur, query_cur, timeout):
   current_data_version = actions.get_current_data_version()
   actions.wait_parameter_sync(cur, "compatible", current_data_version, 10)
 
-  # check target_data_version/current_data_version
-  sql = "select count(*) from oceanbase.__all_tenant"
+  # check target_data_version/current_data_version except standby tenant
+  sql = "select tenant_id from oceanbase.__all_tenant except select tenant_id from oceanbase.__all_virtual_tenant_info where tenant_role = 'STANDBY'"
   (desc, results) = query_cur.exec_query(sql)
-  if len(results) != 1 or len(results[0]) != 1:
+  if len(results) == 0:
     logging.warn('result cnt not match')
     raise e
-  tenant_count = results[0][0]
+  tenant_count = len(results)
+  tenant_ids_str = ''
+  for index, row in enumerate(results):
+    tenant_ids_str += """{0}{1}""".format((',' if index > 0 else ''), row[0])
 
   int_current_data_version = actions.get_version(current_data_version)
-  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(int_current_data_version)
+  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
   (desc, results) = query_cur.exec_query(sql)
   if len(results) != 1 or len(results[0]) != 1:
     logging.warn('result cnt not match')

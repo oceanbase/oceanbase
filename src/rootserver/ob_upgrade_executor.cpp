@@ -17,6 +17,7 @@
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "share/ob_tenant_info_proxy.h" //ObAllTenantInfoProxy
 
 namespace oceanbase
 {
@@ -1147,15 +1148,36 @@ int ObUpgradeExecutor::construct_tenant_ids_(
     common::ObIArray<uint64_t> &dst_tenant_ids)
 {
   int ret = OB_SUCCESS;
+  ObArray<uint64_t> standby_tenants;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::get_standby_tenants(sql_proxy_, standby_tenants))) {
+    LOG_WARN("fail to get standby tenants", KR(ret));
   } else if (src_tenant_ids.count() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < src_tenant_ids.count(); i++) {
+      const uint64_t tenant_id = src_tenant_ids.at(i);
+      if (has_exist_in_array(standby_tenants, tenant_id)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to upgrade a standby tenant", KR(ret), K(tenant_id));
+      }
+    } // end for
     // tenant_list is specified
-    if (OB_FAIL(dst_tenant_ids.assign(src_tenant_ids))) {
+    if (FAILEDx(dst_tenant_ids.assign(src_tenant_ids))) {
       LOG_WARN("fail to assign tenant_ids", KR(ret));
     }
-  } else if (OB_FAIL(schema_service_->get_tenant_ids(dst_tenant_ids))) {
-    LOG_WARN("fail to get tenant_ids", KR(ret));
+  } else {
+    ObArray<uint64_t> tenant_ids;
+    if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
+      LOG_WARN("fail to get tenant_ids", KR(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
+      const uint64_t tenant_id = tenant_ids.at(i);
+      if (has_exist_in_array(standby_tenants, tenant_id)) {
+        // skip
+      } else if (OB_FAIL(dst_tenant_ids.push_back(tenant_id))) {
+        LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
+      }
+    } // end for
   }
   return ret;
 }

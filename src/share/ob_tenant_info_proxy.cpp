@@ -185,6 +185,72 @@ int ObAllTenantInfoProxy::init_tenant_info(
   return ret;
 }
 
+// won't return sys/meta tenant
+int ObAllTenantInfoProxy::load_all_tenant_infos(
+    ObISQLClient *proxy,
+    common::ObIArray<ObAllTenantInfo> &tenant_infos)
+{
+  int ret = OB_SUCCESS;
+  tenant_infos.reset();
+  if (OB_ISNULL(proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("proxy is null", KR(ret), KP(proxy));
+  } else {
+    ObSqlString sql;
+    const uint64_t exec_tenant_id = OB_SYS_TENANT_ID;
+    if (OB_FAIL(sql.assign_fmt("select * from %s", OB_ALL_VIRTUAL_TENANT_INFO_TNAME))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(sql));
+    } else {
+      HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = NULL;
+        if (OB_FAIL(proxy->read(res, exec_tenant_id, sql.ptr()))) {
+          LOG_WARN("failed to read", KR(ret), K(exec_tenant_id), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get sql result", KR(ret));
+        } else {
+          ObAllTenantInfo tenant_info;
+          while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+            if (OB_FAIL(fill_cell(result, tenant_info))) {
+              LOG_WARN("failed to fill cell", KR(ret), K(sql));
+            } else if (OB_FAIL(tenant_infos.push_back(tenant_info))) {
+              LOG_WARN("fail to push back tenant info", KR(ret), K(tenant_info));
+            }
+          } // end while
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret;
+            LOG_WARN("fail to iterate tenant info", KR(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAllTenantInfoProxy::get_standby_tenants(
+    ObISQLClient *proxy,
+    common::ObIArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  tenant_ids.reset();
+  ObArray<ObAllTenantInfo> tenants;
+  if (OB_FAIL(load_all_tenant_infos(proxy, tenants))){
+    LOG_WARN("fail to load all tenant infos", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenants.count(); i++) {
+      const ObAllTenantInfo &tenant_info = tenants.at(i);
+      if (tenant_info.is_standby()
+          && OB_FAIL(tenant_ids.push_back(tenant_info.get_tenant_id()))) {
+        LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_info));
+      }
+    } // end for
+  }
+  return ret;
+}
+
 int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
                                            ObISQLClient *proxy,
                                            const bool for_update,

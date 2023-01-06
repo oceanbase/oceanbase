@@ -10,7 +10,7 @@ import mysql.connector
 from mysql.connector import errorcode
 import actions
 
-def do_upgrade(conn, cur, tenant_id_list, timeout, user, pwd):
+def do_upgrade(conn, cur, timeout, user, pwd):
   # upgrade action
 #升级语句对应的action要写在下面的actions begin和actions end这两行之间，
 #因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
@@ -150,16 +150,16 @@ def check_can_run_upgrade_job(cur, job_name):
 
 def check_upgrade_job_result(cur, job_name, timeout, max_used_job_id):
   try:
-    times = (timeout if timeout > 0 else 1800) / 10
+    times = (timeout if timeout > 0 else 3600) / 10
     while (times >= 0):
-      sql = """select job_status, rs_svr_ip, rs_svr_port from oceanbase.__all_rootservice_job
+      sql = """select job_status, rs_svr_ip, rs_svr_port, gmt_create from oceanbase.__all_rootservice_job
                where job_type = '{0}' and job_id > {1} order by job_id desc limit 1
             """.format(job_name, max_used_job_id)
       results = query(cur, sql)
 
       if (len(results) == 0):
         logging.info("upgrade job not created yet")
-      elif (len(results) != 1 or len(results[0]) != 3):
+      elif (len(results) != 1 or len(results[0]) != 4):
         logging.warn("row cnt not match")
         raise e
       elif ("INPROGRESS" == results[0][0]):
@@ -168,13 +168,23 @@ def check_upgrade_job_result(cur, job_name, timeout, max_used_job_id):
         if times % 10 == 0:
           ip = results[0][1]
           port = results[0][2]
+          gmt_create = results[0][3]
           sql = """select count(*) from oceanbase.__all_virtual_core_meta_table where role = 1 and svr_ip = '{0}' and svr_port = {1}""".format(ip, port)
           results = query(cur, sql)
           if (len(results) != 1 or len(results[0]) != 1):
             logging.warn("row/column cnt not match")
             raise e
           elif results[0][0] == 1:
-            logging.info("rs[{0}:{1}] still exist, keep waiting".format(ip, port))
+            sql = """select count(*) from oceanbase.__all_rootservice_event_history where gmt_create > '{0}' and event = 'full_rootservice'""".format(gmt_create)
+            results = query(cur, sql)
+            if (len(results) != 1 or len(results[0]) != 1):
+              logging.warn("row/column cnt not match")
+              raise e
+            elif results[0][0] > 0:
+              logging.warn("rs changed, should check if upgrade job is still running")
+              raise e
+            else:
+              logging.info("rs[{0}:{1}] still exist, keep waiting".format(ip, port))
           else:
             logging.warn("rs changed or not exist, should check if upgrade job is still running")
             raise e

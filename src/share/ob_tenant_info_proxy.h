@@ -116,6 +116,22 @@ public:
    */ 
   static int init_tenant_info(const ObAllTenantInfo &tenant_info, ObISQLClient *proxy);
   /**
+   * @description: get all normal tenant's tenant_info from inner table
+   * @param[in] proxy
+   * @param[out] tenant_infos
+   */
+  static int load_all_tenant_infos(
+             ObISQLClient *proxy,
+             common::ObIArray<ObAllTenantInfo> &tenant_infos);
+  /**
+   * @description: get all standby tenants from inner table
+   * @param[in] proxy
+   * @param[out] tenant_ids
+   */
+  static int get_standby_tenants(
+             ObISQLClient *proxy,
+             common::ObIArray<uint64_t> &tenant_ids);
+  /**
    * @description: get target tenant's tenant_info from inner table 
    * @param[in] tenant_id
    * @param[in] proxy

@@ -61,12 +61,6 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
     try:
       query_cur = actions.QueryCursor(cur)
       actions.check_server_version_by_cluster(cur)
-      # 获取租户id列表
-      tenant_id_list = actions.fetch_tenant_ids(query_cur)
-      if len(tenant_id_list) <= 0:
-        logging.error('distinct tenant id count is <= 0, tenant_id_count: %d', len(tenant_id_list))
-        raise MyError('no tenant id')
-      logging.info('there has %s distinct tenant ids: [%s]', len(tenant_id_list), ','.join(str(tenant_id) for tenant_id in tenant_id_list))
       conn.commit()
 
       if run_modules.MODULE_HEALTH_CHECK in my_module_set:
@@ -85,7 +79,7 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
       if run_modules.MODULE_TENANT_UPRADE in my_module_set:
         logging.info('================begin to run tenant upgrade action ===============')
         conn.autocommit = True
-        tenant_upgrade_action.do_upgrade(conn, cur, tenant_id_list, timeout, my_user, my_passwd)
+        tenant_upgrade_action.do_upgrade(conn, cur, timeout, my_user, my_passwd)
         conn.autocommit = False
         actions.refresh_commit_sql_list()
         logging.info('================succeed to run tenant upgrade action ===============')

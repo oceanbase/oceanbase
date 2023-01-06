@@ -536,12 +536,6 @@
 #    try:
 #      query_cur = actions.QueryCursor(cur)
 #      actions.check_server_version_by_cluster(cur)
-#      # 获取租户id列表
-#      tenant_id_list = actions.fetch_tenant_ids(query_cur)
-#      if len(tenant_id_list) <= 0:
-#        logging.error('distinct tenant id count is <= 0, tenant_id_count: %d', len(tenant_id_list))
-#        raise MyError('no tenant id')
-#      logging.info('there has %s distinct tenant ids: [%s]', len(tenant_id_list), ','.join(str(tenant_id) for tenant_id in tenant_id_list))
 #      conn.commit()
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
@@ -560,7 +554,7 @@
 #      if run_modules.MODULE_TENANT_UPRADE in my_module_set:
 #        logging.info('================begin to run tenant upgrade action ===============')
 #        conn.autocommit = True
-#        tenant_upgrade_action.do_upgrade(conn, cur, tenant_id_list, timeout, my_user, my_passwd)
+#        tenant_upgrade_action.do_upgrade(conn, cur, timeout, my_user, my_passwd)
 #        conn.autocommit = False
 #        actions.refresh_commit_sql_list()
 #        logging.info('================succeed to run tenant upgrade action ===============')
@@ -706,12 +700,6 @@
 #    try:
 #      query_cur = actions.QueryCursor(cur)
 #      actions.check_server_version_by_cluster(cur)
-#      # 获取租户id列表
-#      tenant_id_list = actions.fetch_tenant_ids(query_cur)
-#      if len(tenant_id_list) <= 0:
-#        logging.error('distinct tenant id count is <= 0, tenant_id_count: %d', len(tenant_id_list))
-#        raise MyError('no tenant id')
-#      logging.info('there has %s distinct tenant ids: [%s]', len(tenant_id_list), ','.join(str(tenant_id) for tenant_id in tenant_id_list))
 #
 #      if run_modules.MODULE_BEGIN_UPGRADE in my_module_set:
 #        logging.info('================begin to run begin upgrade action===============')
@@ -732,7 +720,7 @@
 #      if run_modules.MODULE_SPECIAL_ACTION in my_module_set:
 #        logging.info('================begin to run special action===============')
 #        conn.autocommit = True
-#        special_upgrade_action_pre.do_special_upgrade(conn, cur, tenant_id_list, timeout, my_user, my_passwd)
+#        special_upgrade_action_pre.do_special_upgrade(conn, cur, timeout, my_user, my_passwd)
 #        conn.autocommit = False
 #        actions.refresh_commit_sql_list()
 #        logging.info('================succeed to run special action===============')
@@ -1214,7 +1202,7 @@
 #import sys
 #
 ## 主库需要执行的升级动作
-#def do_special_upgrade(conn, cur, tenant_id_list, timeout, user, passwd):
+#def do_special_upgrade(conn, cur, timeout, user, passwd):
 #  # special upgrade action
 ##升级语句对应的action要写在下面的actions begin和actions end这两行之间，
 ##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
@@ -1258,7 +1246,7 @@
 #from mysql.connector import errorcode
 #import actions
 #
-#def do_upgrade(conn, cur, tenant_id_list, timeout, user, pwd):
+#def do_upgrade(conn, cur, timeout, user, pwd):
 #  # upgrade action
 ##升级语句对应的action要写在下面的actions begin和actions end这两行之间，
 ##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
@@ -1398,16 +1386,16 @@
 #
 #def check_upgrade_job_result(cur, job_name, timeout, max_used_job_id):
 #  try:
-#    times = (timeout if timeout > 0 else 1800) / 10
+#    times = (timeout if timeout > 0 else 3600) / 10
 #    while (times >= 0):
-#      sql = """select job_status, rs_svr_ip, rs_svr_port from oceanbase.__all_rootservice_job
+#      sql = """select job_status, rs_svr_ip, rs_svr_port, gmt_create from oceanbase.__all_rootservice_job
 #               where job_type = '{0}' and job_id > {1} order by job_id desc limit 1
 #            """.format(job_name, max_used_job_id)
 #      results = query(cur, sql)
 #
 #      if (len(results) == 0):
 #        logging.info("upgrade job not created yet")
-#      elif (len(results) != 1 or len(results[0]) != 3):
+#      elif (len(results) != 1 or len(results[0]) != 4):
 #        logging.warn("row cnt not match")
 #        raise e
 #      elif ("INPROGRESS" == results[0][0]):
@@ -1416,13 +1404,23 @@
 #        if times % 10 == 0:
 #          ip = results[0][1]
 #          port = results[0][2]
+#          gmt_create = results[0][3]
 #          sql = """select count(*) from oceanbase.__all_virtual_core_meta_table where role = 1 and svr_ip = '{0}' and svr_port = {1}""".format(ip, port)
 #          results = query(cur, sql)
 #          if (len(results) != 1 or len(results[0]) != 1):
 #            logging.warn("row/column cnt not match")
 #            raise e
 #          elif results[0][0] == 1:
-#            logging.info("rs[{0}:{1}] still exist, keep waiting".format(ip, port))
+#            sql = """select count(*) from oceanbase.__all_rootservice_event_history where gmt_create > '{0}' and event = 'full_rootservice'""".format(gmt_create)
+#            results = query(cur, sql)
+#            if (len(results) != 1 or len(results[0]) != 1):
+#              logging.warn("row/column cnt not match")
+#              raise e
+#            elif results[0][0] > 0:
+#              logging.warn("rs changed, should check if upgrade job is still running")
+#              raise e
+#            else:
+#              logging.info("rs[{0}:{1}] still exist, keep waiting".format(ip, port))
 #          else:
 #            logging.warn("rs changed or not exist, should check if upgrade job is still running")
 #            raise e
@@ -2420,16 +2418,19 @@
 #  current_data_version = actions.get_current_data_version()
 #  actions.wait_parameter_sync(cur, "compatible", current_data_version, 10)
 #
-#  # check target_data_version/current_data_version
-#  sql = "select count(*) from oceanbase.__all_tenant"
+#  # check target_data_version/current_data_version except standby tenant
+#  sql = "select tenant_id from oceanbase.__all_tenant except select tenant_id from oceanbase.__all_virtual_tenant_info where tenant_role = 'STANDBY'"
 #  (desc, results) = query_cur.exec_query(sql)
-#  if len(results) != 1 or len(results[0]) != 1:
+#  if len(results) == 0:
 #    logging.warn('result cnt not match')
 #    raise e
-#  tenant_count = results[0][0]
+#  tenant_count = len(results)
+#  tenant_ids_str = ''
+#  for index, row in enumerate(results):
+#    tenant_ids_str += """{0}{1}""".format((',' if index > 0 else ''), row[0])
 #
 #  int_current_data_version = actions.get_version(current_data_version)
-#  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0}".format(int_current_data_version)
+#  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
 #  (desc, results) = query_cur.exec_query(sql)
 #  if len(results) != 1 or len(results[0]) != 1:
 #    logging.warn('result cnt not match')

@@ -187,6 +187,7 @@ public:
 private:
   static const int64_t NAME_BUF_LEN = 64;
   typedef common::ObFixedLengthString<NAME_BUF_LEN> Name;
+  int construct_tenant_ids_(common::ObIArray<uint64_t> &tenant_ids);
   int check_zone();
   int check_sys_stat_();
   int check_sys_stat_(const uint64_t tenant_id);
