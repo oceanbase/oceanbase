@@ -339,6 +339,7 @@ void ObMinMaxAggCell::reset()
     cell_data_ptrs_ = nullptr;
   }
   ObAggCell::reset();
+  datum_allocator_.reset();
 }
 
 void ObMinMaxAggCell::reuse()
@@ -346,6 +347,7 @@ void ObMinMaxAggCell::reuse()
   datum_.reuse();
   datum_.set_null();
   ObAggCell::reuse();
+  datum_allocator_.reuse();
 }
 
 int ObMinMaxAggCell::init(sql::ObPushdownOperator *op, sql::ObExpr *col_expr, const int64_t batch_size)
@@ -470,7 +472,8 @@ ObAggRow::~ObAggRow()
 void ObAggRow::reset()
 {
   for (int64_t i = 0; i < agg_cells_.count(); ++i) {
-    if (agg_cells_.at(i)) {
+    if (OB_NOT_NULL(agg_cells_.at(i))) {
+      agg_cells_.at(i)->reset();
       allocator_.free(agg_cells_.at(i));
     }
   }
