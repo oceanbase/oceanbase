@@ -134,7 +134,7 @@ inline int call_with_new_stack(void * arg_, int(*func_) (void*))
     } else if (!is_overflow) {                                              \
       ret = func;                                                           \
     } else {                                                                \
-      ret = OB_STACK_OVERFLOW;                                              \
+      ret = OB_SIZE_OVERFLOW;                                               \
    }                                                                        \
     ret;                                                                    \
   })
