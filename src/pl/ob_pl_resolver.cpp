@@ -3505,10 +3505,20 @@ int ObPLResolver::resolve_cursor_for_loop(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("user type is null", K(ret));
       } else {
-        stmt->set_user_type(user_type);
-        stmt->set_index_index(func.get_symbol_table().get_count() - 1);
-        if (OB_FAIL(body_block->get_namespace().expand_data_type(user_type, stmt->get_expand_user_types()))) {
-          LOG_WARN("fail to expand data type", K(ret));
+        // cursor nested complex type, report not support
+        for (int64_t i = 0; OB_SUCC(ret) && i < user_type->get_member_count(); ++i) {
+          if (!user_type->get_member(i)->is_obj_type()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("cursor nested complex type", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
+          }
+        }
+        if (OB_SUCC(ret)) {
+          stmt->set_user_type(user_type);
+          stmt->set_index_index(func.get_symbol_table().get_count() - 1);
+          if (OB_FAIL(body_block->get_namespace().expand_data_type(user_type, stmt->get_expand_user_types()))) {
+            LOG_WARN("fail to expand data type", K(ret));
+          }
         }
       }
     }
