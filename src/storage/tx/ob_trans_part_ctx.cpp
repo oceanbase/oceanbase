@@ -2277,7 +2277,8 @@ int ObPartTransCtx::fill_redo_log_(char *buf,
                                    ObRedoLogSubmitHelper &helper)
 {
   int ret = OB_SUCCESS;
-  const bool log_for_lock_node = !(is_local_tx_() && (part_trans_action_ == ObPartTransAction::COMMIT));
+  const bool log_for_lock_node = true;
+  // const bool log_for_lock_node = !(is_local_tx_() && (part_trans_action_ == ObPartTransAction::COMMIT));
 
   if (OB_UNLIKELY(NULL == buf || buf_len < 0 || pos < 0 || buf_len < pos)) {
     ret = OB_INVALID_ARGUMENT;
