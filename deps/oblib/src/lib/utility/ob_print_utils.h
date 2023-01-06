@@ -43,6 +43,11 @@ int hex_to_cstr(const void *in_data,
                 const int64_t data_lenth,
                 char *buff,
                 const int64_t buff_size);
+int hex_to_cstr(const void *in_data,
+                const int64_t data_length,
+                char *buff,
+                const int64_t buff_size,
+                int64_t &pos);
 /**
  * convert the input buffer into hex string,  not include '\0'
  *

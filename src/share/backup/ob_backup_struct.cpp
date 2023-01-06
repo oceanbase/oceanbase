@@ -1310,7 +1310,7 @@ int ObBackupStorageInfo::parse_authorization_(const char *authorization)
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_storage_info_field_(token, access_key_, sizeof(access_key_)))) {
-          LOG_WARN("failed to set access id", K(ret), K(token));
+          LOG_WARN("failed to set access key", K(ret), K(token));
         }
       } else {
         ret = OB_INVALID_ARGUMENT;

@@ -52,6 +52,21 @@ int hex_to_cstr(const void *in_data,
                 const int64_t buff_size)
 {
   int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_FAIL(hex_to_cstr(in_data, data_length, buff, buff_size, pos))) {
+    LOG_WARN("fail to hex to cstr", K(ret), K(in_data));
+  }
+  return ret;
+}
+
+int hex_to_cstr(const void *in_data,
+                const int64_t data_length,
+                char *buff,
+                const int64_t buff_size,
+                int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  pos = 0;
   if (OB_ISNULL(in_data) || 0 != data_length % 2
       || OB_ISNULL(buff) || buff_size < data_length / 2 + 1) {
     ret = OB_INVALID_ARGUMENT;
@@ -69,6 +84,7 @@ int hex_to_cstr(const void *in_data,
     }
   }
   if (OB_SUCC(ret)) {
+    pos = data_length / 2;
     buff[data_length / 2] = '\0';
   }
   return ret;
