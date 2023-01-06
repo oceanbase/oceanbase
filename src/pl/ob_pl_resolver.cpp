@@ -6909,12 +6909,19 @@ int ObPLResolver::resolve_fetch(
                 if (!has_record_type) {
                   right = stmt->get_data_type(i);
                 } else {
-                  const ObRawExpr *raw_expr = func.get_expr(stmt->get_into(i));
-                  CK (return_type->get_record_member_count() == stmt->get_into().count());
-                  CK (OB_NOT_NULL(raw_expr));
-                  OV (raw_expr->get_result_type().is_ext(), OB_ERR_UNEXPECTED, KPC(raw_expr));
-                  OX (right.set_meta_type(raw_expr->get_result_type()));
-                  OX (right.set_accuracy(raw_expr->get_result_type().get_accuracy()));
+                  const ObRawExpr *raw_expr = NULL;
+                  if (return_type->get_record_member_count() != stmt->get_into().count()) {
+                    ret = OB_ERR_TYPE_MISMATCH_IN_FETCH;
+                    LOG_WARN("type not compatible",
+                            K(return_type->get_record_member_count()),
+                            K(stmt->get_into().count()),
+                            K(ret));
+                  } else {
+                    CK (OB_NOT_NULL(raw_expr = func.get_expr(stmt->get_into(i))));
+                    OV (raw_expr->get_result_type().is_ext(), OB_ERR_UNEXPECTED, KPC(raw_expr));
+                    OX (right.set_meta_type(raw_expr->get_result_type()));
+                    OX (right.set_accuracy(raw_expr->get_result_type().get_accuracy()));
+                  }
                 }
               }
 
