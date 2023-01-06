@@ -102,10 +102,10 @@ int ObLSTabletService::init(
   } else if (OB_ISNULL(ls) || OB_ISNULL(rs_reporter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls), KP(rs_reporter));
-  } else if (OB_FAIL(tablet_id_set_.init(ObTabletCommon::BUCKET_LOCK_BUCKET_CNT))) {
+  } else if (OB_FAIL(tablet_id_set_.init(ObTabletCommon::BUCKET_LOCK_BUCKET_CNT, MTL_ID()))) {
     LOG_WARN("fail to init tablet id set", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(ObTabletCommon::BUCKET_LOCK_BUCKET_CNT,
-      ObLatchIds::TABLET_BUCKET_LOCK))) {
+      ObLatchIds::TABLET_BUCKET_LOCK, "TabletSvrBucket", MTL_ID()))) {
     LOG_WARN("failed to init bucket lock", K(ret));
   } else if (OB_FAIL(set_allow_to_read_(ls))) {
     LOG_WARN("failed to set allow to read", K(ret));
@@ -894,8 +894,24 @@ int ObLSTabletService::refresh_tablet_addr(
   if (OB_UNLIKELY(!new_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(new_addr));
-  } else if (OB_FAIL(tablet_id_set_.set(tablet_id))) {
-    LOG_WARN("fail to set tablet id set", K(ret), K(tablet_id));
+  }
+
+  while (OB_SUCC(ret)) {
+    ret = tablet_id_set_.set(tablet_id);
+    if (OB_SUCC(ret)) {
+      break;
+    } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+      usleep(100 * 1000);
+      if (REACH_COUNT_INTERVAL(100)) {
+        LOG_ERROR("no memory for tablet id set, retry", K(ret), K(tablet_id));
+      }
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to set tablet id set", K(ret), K(tablet_id));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, new_addr, tablet_handle, tablet_handle))) {
     LOG_WARN("failed to add tablet to meta mem mgr", K(ret), K(key), K(new_addr), K(tablet_handle));
   }
