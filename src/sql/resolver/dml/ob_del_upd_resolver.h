@@ -151,12 +151,13 @@ protected:
                                               ObIArray<ObRawExpr *> &value_list);
   int resolve_check_constraints(const TableItem* table_item,
                                 common::ObIArray<ObRawExpr*> &check_exprs);
-  int resolve_view_check_exprs(const TableItem* table_item,
+  int resolve_view_check_exprs(uint64_t table_id,
+                               const TableItem* table_item,
                                const bool cascaded,
                                common::ObIArray<ObRawExpr*> &check_exprs);
   int get_pullup_column_map(ObDMLStmt &stmt,
                             ObSelectStmt &sel_stmt,
-                            uint64_t base_ref_id,
+                            uint64_t table_id,
                             ObIArray<ObRawExpr *> &view_columns,
                             ObIArray<ObRawExpr *> &base_columns);
   

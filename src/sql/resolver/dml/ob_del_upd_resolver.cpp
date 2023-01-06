@@ -2132,7 +2132,7 @@ int ObDelUpdResolver::view_pullup_part_exprs()
       if (OB_ISNULL(sel_stmt) || OB_ISNULL(t)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get select stmt for base table item failed", K(ret));
-      } else if (OB_FAIL(get_pullup_column_map(*stmt, *sel_stmt, t->ref_id_, view_columns, base_columns))) {
+      } else if (OB_FAIL(get_pullup_column_map(*stmt, *sel_stmt, table->table_id_, view_columns, base_columns))) {
         // link.zt seems to have problem, base_tid is better to be refined as table_id
         LOG_WARN("failed to get pullup column map", K(ret));
       } else if (OB_FAIL(copier.add_replaced_expr(base_columns, view_columns))) {
@@ -2264,7 +2264,8 @@ int ObDelUpdResolver::resolve_check_constraints(const TableItem* table_item,
   return ret;
 }
 
-int ObDelUpdResolver::resolve_view_check_exprs(const TableItem* table_item,
+int ObDelUpdResolver::resolve_view_check_exprs(uint64_t table_id,
+                                               const TableItem* table_item,
                                                const bool cascaded,
                                                common::ObIArray<ObRawExpr*> &check_exprs)
 {
@@ -2284,7 +2285,7 @@ int ObDelUpdResolver::resolve_view_check_exprs(const TableItem* table_item,
     LOG_WARN("get unexpected null", K(ret), K(del_upd_stmt), K(select_stmt));
   } else if (!cascaded && VIEW_CHECK_OPTION_NONE ==
                   (check_option = select_stmt->get_check_option())) {
-    if (OB_FAIL(resolve_view_check_exprs(table_item->view_base_item_, cascaded, check_exprs))) {
+    if (OB_FAIL(resolve_view_check_exprs(table_id, table_item->view_base_item_, cascaded, check_exprs))) {
       LOG_WARN("resolve view check exprs failed", K(ret));
     }
   } else {
@@ -2297,7 +2298,7 @@ int ObDelUpdResolver::resolve_view_check_exprs(const TableItem* table_item,
       // may have problem when a table is used twice by the view.
       if (OB_FAIL(get_pullup_column_map(*del_upd_stmt,
                                         *select_stmt,
-                                        table_item->get_base_table_item().ref_id_,
+                                        table_id,
                                         view_columns,
                                         base_columns))) {
         LOG_WARN("failed to get pullup column map", K(ret));
@@ -2312,7 +2313,7 @@ int ObDelUpdResolver::resolve_view_check_exprs(const TableItem* table_item,
     }
     if (OB_SUCC(ret)) {
       const bool new_cascaded = cascaded || VIEW_CHECK_OPTION_CASCADED == check_option;
-      if (OB_FAIL(resolve_view_check_exprs(table_item->view_base_item_, new_cascaded, check_exprs))) {
+      if (OB_FAIL(resolve_view_check_exprs(table_id, table_item->view_base_item_, new_cascaded, check_exprs))) {
         LOG_WARN("resolve view check exprs failed", K(ret));
       }
     }
@@ -2323,14 +2324,14 @@ int ObDelUpdResolver::resolve_view_check_exprs(const TableItem* table_item,
 
 int ObDelUpdResolver::get_pullup_column_map(ObDMLStmt &stmt,
                                             ObSelectStmt &sel_stmt,
-                                            uint64_t base_ref_id,
+                                            uint64_t table_id,
                                             ObIArray<ObRawExpr *> &view_columns,
                                             ObIArray<ObRawExpr *> &base_columns)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_column_size(); ++i) {
     ColumnItem &parent_column = stmt.get_column_items().at(i);
-    if (parent_column.base_tid_ == base_ref_id) {
+    if (parent_column.table_id_ == table_id) {
       for (int64_t j = 0; OB_SUCC(ret) && j < sel_stmt.get_column_size(); ++j) {
         ColumnItem &child_column = sel_stmt.get_column_items().at(j);
         if (child_column.base_tid_ == parent_column.base_tid_ &&
