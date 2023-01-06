@@ -17,6 +17,7 @@
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_get_compat_mode.h"
+#include "share/ob_ddl_task_executor.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
@@ -504,6 +505,7 @@ int ObUniqueIndexChecker::report_column_checksum(
 int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
 {
   int ret = OB_SUCCESS;
+  bool need_report_error_msg = true;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObUniqueIndexChecker has not been inited", K(ret));
@@ -531,7 +533,10 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
       LOG_WARN("switch to tenant guard failed", K(ret));
     }
   }
-  if (is_inited_) {
+  if (OB_SUCCESS != ret && share::ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    need_report_error_msg = false;
+  }
+  if (is_inited_ && need_report_error_msg) {
     int tmp_ret = OB_SUCCESS;
     const ObAddr &self_addr = GCTX.self_addr();
     bool keep_report_err_msg = true;
