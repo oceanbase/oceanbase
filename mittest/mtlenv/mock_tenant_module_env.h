@@ -547,7 +547,7 @@ int MockTenantModuleEnv::init_before_start_mtl()
   const int64_t ts_ns = ObTimeUtility::current_time_ns();
   env_dir_ = "./env_" + std::to_string(rpc_port_) + "_" + std::to_string(ts_ns);
   run_dir_ = "./run_" + std::to_string(rpc_port_) + "_" + std::to_string(ts_ns);
-
+  GCONF.cpu_count = 2;
   uint64_t start_time = 10000000;
   scramble_rand_.init(static_cast<uint64_t>(start_time), static_cast<uint64_t>(start_time / 2));
   if (OB_FAIL(init_dir())) {
@@ -581,7 +581,7 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance().init())) {
     STORAGE_LOG(ERROR, "init server checkpoint slog handler fail", K(ret));
-  } else if (OB_FAIL(multi_tenant_.init(self_addr_, 2, 2, nullptr, false))) {
+  } else if (OB_FAIL(multi_tenant_.init(self_addr_, nullptr, false))) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(sql_engine_.get_plan_cache_manager()->get_plan_cache_map().create(hash::cal_next_prime(512),
                             ObModIds::OB_HASH_BUCKET_PLAN_CACHE,

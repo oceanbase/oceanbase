@@ -208,14 +208,11 @@ ObMultiTenant::ObMultiTenant()
       bucket_lock_(),
       lock_(ObLatchIds::MULTI_TENANT_LOCK),
       tenants_(0, nullptr, ObModIds::OMT),
-      node_quota_(0),
-      times_of_workers_(0),
       balancer_(nullptr),
       myaddr_(),
       cpu_dump_(false),
       has_synced_(false)
 {
-  node_quota_ = DEFAULT_NODE_QUOTA;
 }
 
 static int init_compat_mode(lib::Worker::CompatMode &compat_mode)
@@ -239,8 +236,6 @@ static int init_compat_mode(lib::Worker::CompatMode &compat_mode)
 }
 
 int ObMultiTenant::init(ObAddr myaddr,
-                        double node_quota,
-                        int64_t times_of_workers,
                         ObMySQLProxy *sql_proxy,
                         bool mtl_bind_flag)
 {
@@ -251,16 +246,10 @@ int ObMultiTenant::init(ObAddr myaddr,
     LOG_WARN("ObMultiTenant has been inited", K(ret));
   } else if (OB_FAIL(SLOGGERMGR.get_server_slogger(server_slogger_))) {
     LOG_WARN("fail to get server slogger", K(ret));
-  } else if (node_quota <= 1 || times_of_workers < 1) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("node quota should greater than 1 and times of workers should greater than or equal to 1",
-      K(ret), K(node_quota), K(times_of_workers), K(ret));
   } else if (OB_FAIL(bucket_lock_.init(OB_TENANT_LOCK_BUCKET_NUM))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else {
     myaddr_ = myaddr;
-    node_quota_ = node_quota;
-    times_of_workers_ = times_of_workers;
     if (NULL != sql_proxy) {
       if (OB_FAIL(ObTenantNodeBalancer::get_instance().init(this, *sql_proxy, myaddr))) {
 
@@ -713,7 +702,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     ret = OB_NOT_INIT;
     LOG_WARN("group ctrl not init", K(ret));
   } else if (OB_ISNULL(tenant = OB_NEW(
-    ObTenant, ObModIds::OMT, tenant_id, times_of_workers_, *GCTX.cgroup_ctrl_))) {
+    ObTenant, ObModIds::OMT, tenant_id, GCONF.workers_per_cpu_quota.get_value(), *GCTX.cgroup_ctrl_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("new tenant fail", K(ret));
   } else if (FALSE_IT(create_step = ObTenantCreateStep::STEP_TENANT_NEWED)) { //step2
@@ -1899,11 +1888,6 @@ int ObMultiTenant::get_tenant_cpu(
   }
 
   return ret;
-}
-
-void ObMultiTenant::set_workers_per_cpu(int64_t v)
-{
-  times_of_workers_ = v;
 }
 
 void ObMultiTenant::set_group_sug_token()

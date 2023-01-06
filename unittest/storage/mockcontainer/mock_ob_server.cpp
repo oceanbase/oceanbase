@@ -242,8 +242,9 @@ int MockObServer::init(const char *schema_file,
 int MockObServer::init_multi_tenant()
 {
   int ret = OB_SUCCESS;
+  GCONF.cpu_count = 6;
 
-  if (OB_SUCCESS != (ret = multi_tenant_.init(self_addr_, 6))) {
+  if (OB_SUCCESS != (ret = multi_tenant_.init(self_addr_))) {
     STORAGE_LOG(WARN, "init multi_tenant failed", K(ret));
   } else if (OB_SUCCESS != (ret = multi_tenant_.create_tenant_without_unit(OB_SYS_TENANT_ID, 3, 3))) {
     STORAGE_LOG(WARN, "add sys tenant failed", K(ret));

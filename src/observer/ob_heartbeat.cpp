@@ -102,8 +102,7 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
     lease_request.zone_ = gctx_.config_->zone.str();
     lease_request.server_ = gctx_.self_addr();
     lease_request.sql_port_ = gctx_.config_->mysql_port;
-    lease_request.resource_info_.cpu_
-        = gctx_.omt_->get_node_quota();
+    lease_request.resource_info_.cpu_ = get_cpu_count();
     lease_request.resource_info_.report_cpu_assigned_ = svr_res_assigned.min_cpu_;
     lease_request.resource_info_.report_cpu_max_assigned_ = svr_res_assigned.max_cpu_;
     lease_request.resource_info_.report_mem_assigned_ = svr_res_assigned.memory_size_;

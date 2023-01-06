@@ -1728,24 +1728,7 @@ int ObServer::init_multi_tenant()
 {
   int ret = OB_SUCCESS;
 
-  // get node cpu count from sysconf if node_cpu_count config isn't
-  // specified.
-  int64_t node_cpu_count = get_cpu_num();
-  if (GCONF.cpu_count > "0") {
-    node_cpu_count = GCONF.cpu_count;
-    LOG_INFO("calc NODE CPU COUNT using config(node_cpu_count) for test",
-             K(node_cpu_count));
-  } else {
-    LOG_INFO("calc NODE CPU COUNT using sysconf function",
-             K(node_cpu_count));
-  }
-
-  const int64_t cpu_count = node_cpu_count;
-  const int64_t times_of_workers = GCONF.workers_per_cpu_quota;
-
   if (OB_FAIL(multi_tenant_.init(self_addr_,
-                                 static_cast<double>(cpu_count),
-                                 times_of_workers,
                                  &sql_proxy_))) {
     LOG_ERROR("init multi tenant fail", KR(ret));
 

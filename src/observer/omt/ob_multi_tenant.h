@@ -80,16 +80,12 @@ class ObMultiTenant
     : public share::ObThreadPool
 {
 public:
-  const     static int64_t DEFAULT_TIMES_OF_WORKERS = 10;
   const     static int64_t TIME_SLICE_PERIOD        = 10000;
-  constexpr static double  DEFAULT_NODE_QUOTA       = 16.;
 
 public:
   explicit ObMultiTenant();
 
   int init(common::ObAddr myaddr,
-           double node_quota = DEFAULT_NODE_QUOTA,
-           int64_t times_of_workers = DEFAULT_TIMES_OF_WORKERS,
            common::ObMySQLProxy *sql_proxy = NULL,
            bool mtl_bind_flag = true);
 
@@ -204,8 +200,6 @@ protected:
 
   mutable common::SpinRWLock lock_; // protect tenant list
   TenantList tenants_;
-  double node_quota_;
-  int64_t times_of_workers_;
   ObTenantNodeBalancer *balancer_;
   common::ObAddr myaddr_;
   bool cpu_dump_;
@@ -220,16 +214,6 @@ private:
 TenantList &ObMultiTenant::get_tenant_list()
 {
   return tenants_;
-}
-
-double ObMultiTenant::get_node_quota() const
-{
-  return node_quota_;
-}
-
-int64_t ObMultiTenant::get_times_of_workers() const
-{
-  return times_of_workers_;
 }
 
 int ObMultiTenant::lock_tenant_list(bool write)

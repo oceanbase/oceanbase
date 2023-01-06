@@ -60,7 +60,8 @@ TestBlockManager::TestBlockManager()
 int TestBlockManager::init_multi_tenant()
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCCESS != (ret = multi_tenant_.init(addr_, 6))) {
+  GCONF.cpu_count = 6;
+  if (OB_SUCCESS != (ret = multi_tenant_.init(addr_))) {
     STORAGE_LOG(WARN, "init multi_tenant failed", K(ret));
   } else {
     multi_tenant_.start();
