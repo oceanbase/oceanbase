@@ -95,7 +95,6 @@ public:
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
-  int deserialize_post_work();
   int64_t get_serialize_size() const;
   OB_INLINE const storage::ObMetaDiskAddr &get_macro_meta_addr() const
   {
@@ -153,7 +152,6 @@ private:
   int save_linked_block_list(
       const common::ObIArray<MacroBlockId> &list,
       common::ObIArray<MacroBlockId> &linked_list) const;
-  void reset_linked_block_list();
 
 private:
   friend class ObSSTable;

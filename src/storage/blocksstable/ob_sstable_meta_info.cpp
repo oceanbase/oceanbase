@@ -425,9 +425,9 @@ void ObSSTableMacroInfo::reset()
   macro_meta_info_.reset();
   data_block_ids_.reset();
   other_block_ids_.reset();
+  linked_block_ids_.reset();
   entry_id_.reset();
   is_meta_root_ = false;
-  reset_linked_block_list();
   nested_offset_ = 0;
   nested_size_ = 0;
 }
@@ -538,18 +538,6 @@ int ObSSTableMacroInfo::save_linked_block_list(
   return ret;
 }
 
-void ObSSTableMacroInfo::reset_linked_block_list()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < linked_block_ids_.count(); i++) {
-    const MacroBlockId &macro_id = linked_block_ids_.at(i);
-    if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
-      LOG_ERROR("fail to dec macro block ref cnt", K(ret), K(i), K(macro_id));
-    }
-  }
-  linked_block_ids_.reset();
-}
-
 int ObSSTableMacroInfo::deserialize(
     common::ObIAllocator *allocator,
     const ObMicroBlockDesMeta &des_meta,
@@ -590,20 +578,6 @@ int ObSSTableMacroInfo::deserialize(
   return ret;
 }
 
-int ObSSTableMacroInfo::deserialize_post_work()
-{
-  int ret = OB_SUCCESS;
-  if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK != entry_id_) { // linked block
-    ObLinkedMacroBlockItemReader block_reader;
-    if (OB_FAIL(read_block_ids(block_reader))) {
-      LOG_WARN("fail to read data block ids", K(ret));
-    } else if (OB_FAIL(save_linked_block_list(block_reader.get_meta_block_list(), linked_block_ids_))) {
-      LOG_WARN("fail to save linked block ids", K(ret), K_(linked_block_ids));
-    }
-  }
-  return ret;
-}
-
 int ObSSTableMacroInfo::deserialize_(
     common::ObIAllocator *allocator,
     const ObMicroBlockDesMeta &des_meta,
@@ -622,7 +596,12 @@ int ObSSTableMacroInfo::deserialize_(
     LOG_WARN("fail to deserialize entry block macro id", K(ret), KP(buf), K(data_len), K(pos));
   } else if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK != entry_id_) {
     linked_block_ids_.set_allocator(allocator);
-    // Here, do nothing. ID's array will be read from linked block at post work.
+    ObLinkedMacroBlockItemReader block_reader;
+    if (OB_FAIL(read_block_ids(block_reader))) {
+      LOG_WARN("fail to read data block ids", K(ret));
+    } else if (OB_FAIL(linked_block_ids_.assign(block_reader.get_meta_block_list()))) {
+      LOG_WARN("fail to save linked block ids", K(ret), K_(linked_block_ids));
+    }
   } else {
     if (pos < data_len && OB_FAIL(data_block_ids_.deserialize(buf, data_len, pos))) {
       LOG_WARN("fail to deserialize data block ids", K(ret), KP(buf), K(data_len), K(pos));
