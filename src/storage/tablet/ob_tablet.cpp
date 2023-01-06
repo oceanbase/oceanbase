@@ -3313,5 +3313,18 @@ int ObTablet::set_memtable_clog_checkpoint_scn(
 
   return ret;
 }
+
+int ObTablet::clear_memtables_on_table_store() // be careful to call this func
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    table_store_.clear_memtables();
+  }
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase
