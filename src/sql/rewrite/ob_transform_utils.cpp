@@ -1757,7 +1757,11 @@ int ObTransformUtils::get_outer_join_right_tables(const JoinedTable &joined_tabl
   } 
   if (OB_SUCC(ret) && (joined_table.is_left_join() ||
                        joined_table.is_full_join())) {
-    if (right->is_joined_table()) {
+    if (left->is_joined_table() &&
+        OB_FAIL(SMART_CALL(get_outer_join_right_tables(static_cast<JoinedTable&>(*left),
+                                                       table_ids)))) {
+      LOG_WARN("failed to visit left table", K(ret));
+    } else if (right->is_joined_table()) {
       if (OB_FAIL(append(table_ids, static_cast<JoinedTable *>(right)->single_table_ids_))) {
         LOG_WARN("failed to append tables ids", K(ret));
       }
@@ -1768,7 +1772,11 @@ int ObTransformUtils::get_outer_join_right_tables(const JoinedTable &joined_tabl
   
   if (OB_SUCC(ret) && (joined_table.is_right_join() ||
                        joined_table.is_full_join())) {
-    if (left->is_joined_table()) {
+    if (right->is_joined_table() &&
+               OB_FAIL(SMART_CALL(get_outer_join_right_tables(static_cast<JoinedTable&>(*right),
+                                                              table_ids)))) {
+      LOG_WARN("failed to visit right table", K(ret));
+    } else if (left->is_joined_table()) {
       if (OB_FAIL(append(table_ids, static_cast<JoinedTable *>(left)->single_table_ids_))) {
         LOG_WARN("failed to append tables ids", K(ret));
       }
