@@ -1519,6 +1519,7 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
       LOG_WARN("get get_audit_schema_in_owner failed", K(tenant_id), K(table_schema), K(ret));
     } else if (!audits.empty()) {
       common::ObSqlString public_sql_string;
+      ObSAuditSchema new_audit_schema;
       for (int64_t i = 0; OB_SUCC(ret) && i < audits.count(); ++i) {
         uint64_t new_audit_id = common::OB_INVALID_ID;
         const ObSAuditSchema *audit_schema = audits.at(i);
@@ -1531,8 +1532,9 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else if (OB_FAIL(schema_service_impl->fetch_new_audit_id(tenant_id, new_audit_id))) {
           LOG_WARN("Failed to fetch new_audit_id", K(ret));
+        } else if (OB_FAIL(new_audit_schema.assign(*audit_schema))) {
+          LOG_WARN("fail to assign audit schema", KR(ret));
         } else {
-          ObSAuditSchema new_audit_schema = *audit_schema;
           new_audit_schema.set_schema_version(new_schema_version);
           new_audit_schema.set_audit_id(new_audit_id);
           new_audit_schema.set_audit_type(AUDIT_TABLE);
@@ -1640,9 +1642,9 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
             } else if (OB_ISNULL(tmp_sequence_schema)) {
               ret = OB_NOT_INIT;
               LOG_WARN("sequence not found", K(ret), K(column_schema));
-            } else {
-              sequence_schema = *tmp_sequence_schema;
-            }
+            } else if (OB_FAIL(sequence_schema.assign(*tmp_sequence_schema))) {
+              LOG_WARN("fail to assign sequence schema", KR(ret));
+            } else {}
           }
           if (OB_SUCC(ret)) {
             sequence_schema.set_database_id(table_schema.get_database_id());
@@ -1786,6 +1788,7 @@ int ObDDLOperator::drop_sequence_in_drop_column(const ObColumnSchemaV2 &column_s
   if (column_schema.is_identity_column()) {
     ObSequenceDDLProxy ddl_operator(schema_service_);
     const ObSequenceSchema *temp_sequence_schema = NULL;
+    ObSequenceSchema sequence_schema;
     if (OB_FAIL(schema_guard.get_sequence_schema(column_schema.get_tenant_id(),
                                                  column_schema.get_sequence_id(),
                                                  temp_sequence_schema))) {
@@ -1797,15 +1800,17 @@ int ObDDLOperator::drop_sequence_in_drop_column(const ObColumnSchemaV2 &column_s
         // and then the error code conversion can be removed.
         ret = OB_SUCCESS;
       }
-    } else {
-      ObSequenceSchema sequence_schema = *temp_sequence_schema;
-      if (OB_FAIL(ddl_operator.drop_sequence(sequence_schema,
-                                             trans,
-                                             schema_guard,
-                                             NULL,
-                                             FROM_TABLE_DDL))) {
-        LOG_WARN("drop sequence fail", K(ret), K(column_schema));
-      }
+    } else if (OB_ISNULL(temp_sequence_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sequence not exist", KR(ret), K(column_schema));
+    } else if (OB_FAIL(sequence_schema.assign(*temp_sequence_schema))) {
+      LOG_WARN("fail to assign sequence schema", KR(ret));
+    } else if (OB_FAIL(ddl_operator.drop_sequence(sequence_schema,
+                                           trans,
+                                           schema_guard,
+                                           NULL,
+                                           FROM_TABLE_DDL))) {
+      LOG_WARN("drop sequence fail", K(ret), K(column_schema));
     }
   }
   return ret;
@@ -7925,6 +7930,7 @@ int ObDDLOperator::create_routine(ObRoutineInfo &routine_info,
     } else if (!audits.empty()) {
       ObSchemaService *schema_service = schema_service_.get_schema_service();
       common::ObSqlString public_sql_string;
+      ObSAuditSchema new_audit_schema;
       for (int64_t i = 0; OB_SUCC(ret) && i < audits.count(); ++i) {
         uint64_t new_audit_id = common::OB_INVALID_ID;
         const ObSAuditSchema *audit_schema = audits.at(i);
@@ -7937,8 +7943,9 @@ int ObDDLOperator::create_routine(ObRoutineInfo &routine_info,
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else if (OB_FAIL(schema_service->fetch_new_audit_id(tenant_id, new_audit_id))) {
           LOG_WARN("Failed to fetch new_audit_id", K(ret));
+        } else if (OB_FAIL(new_audit_schema.assign(*audit_schema))) {
+          LOG_WARN("fail to assign audit schema", KR(ret));
         } else {
-          ObSAuditSchema new_audit_schema = *audit_schema;
           new_audit_schema.set_schema_version(new_schema_version);
           new_audit_schema.set_audit_id(new_audit_id);
           new_audit_schema.set_audit_type(AUDIT_PROCEDURE);
@@ -8233,6 +8240,7 @@ int ObDDLOperator::create_package(const ObPackageInfo *old_package_info,
       } else if (!audits.empty()) {
         ObSchemaService *schema_service = schema_service_.get_schema_service();
         common::ObSqlString public_sql_string;
+        ObSAuditSchema new_audit_schema;
         for (int64_t i = 0; OB_SUCC(ret) && i < audits.count(); ++i) {
           uint64_t new_audit_id = common::OB_INVALID_ID;
           const ObSAuditSchema *audit_schema = audits.at(i);
@@ -8245,8 +8253,9 @@ int ObDDLOperator::create_package(const ObPackageInfo *old_package_info,
             LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
           } else if (OB_FAIL(schema_service->fetch_new_audit_id(tenant_id, new_audit_id))) {
             LOG_WARN("Failed to fetch new_audit_id", K(ret));
+          } else if (OB_FAIL(new_audit_schema.assign(*audit_schema))) {
+            LOG_WARN("fail to assign audit schema", KR(ret));
           } else {
-            ObSAuditSchema new_audit_schema = *audit_schema;
             new_audit_schema.set_schema_version(new_schema_version);
             new_audit_schema.set_audit_id(new_audit_id);
             new_audit_schema.set_audit_type(AUDIT_PACKAGE);
@@ -9531,6 +9540,7 @@ int ObDDLOperator::revise_not_null_constraint_info(
       const ObColumnSchemaV2 *col_schema = not_null_cols.at(i);
       uint64_t column_id = col_schema->get_column_id();
       bool cst_name_generated = false;
+      ObColumnSchemaV2 new_col_schema;
       if (OB_FAIL(ObTableSchema::create_cons_name_automatically_with_dup_check(cst_name,
             ori_table_schema->get_table_name_str(),
             allocator,
@@ -9550,6 +9560,8 @@ int ObDDLOperator::revise_not_null_constraint_info(
         LOG_WARN("create not null expr str failed", K(ret));
       } else if (OB_FAIL(schema_service->fetch_new_constraint_id(tenant_id, new_cst_id))) {
         LOG_WARN("failed to fetch new constraint id", K(ret));
+      } else if (OB_FAIL(new_col_schema.assign(*col_schema))) {
+        LOG_WARN("fail to assign column schema", KR(ret));
       } else {
         const bool only_history = false;
         const bool need_to_deal_with_cst_cols = true;
@@ -9565,13 +9577,10 @@ int ObDDLOperator::revise_not_null_constraint_info(
         cst.set_enable_flag(true);
         cst.set_validate_flag(CST_FK_VALIDATED);
 
-        ObColumnSchemaV2 new_col_schema = *col_schema;
         new_col_schema.set_schema_version(new_schema_version);
         new_col_schema.add_not_null_cst();
         new_col_schema.set_nullable(true);
-        if (OB_FAIL(new_col_schema.get_err_ret())) {
-          LOG_WARN("copy column schema failed", K(ret), K(col_schema->get_err_ret()));
-        } else if (OB_FAIL(cst.assign_not_null_cst_column_id(column_id))) {
+        if (OB_FAIL(cst.assign_not_null_cst_column_id(column_id))) {
           LOG_WARN("assign not null constraint column id failed", K(ret));
         } else if (OB_FAIL(schema_service->get_table_sql_service().add_single_constraint(
                   trans, cst, only_history,need_to_deal_with_cst_cols, do_cst_revise))) {
@@ -10183,9 +10192,10 @@ int ObDDLOperator::drop_all_label_se_labels_in_policy(uint64_t tenant_id,
     }
 
     if (OB_SUCC(ret) && label_schema->get_label_se_policy_id() == policy_id) {
-      ObLabelSeLabelSchema schema = *label_schema; //copy
-
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      ObLabelSeLabelSchema schema;
+      if (OB_FAIL(schema.assign(*label_schema))) {
+        LOG_WARN("fail to assign label schema", KR(ret));
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret));
       } else {
         schema.set_schema_version(new_schema_version);
@@ -10236,10 +10246,11 @@ int ObDDLOperator::drop_all_label_se_components_in_policy(uint64_t tenant_id,
     }
 
     if (OB_SUCC(ret) && component_schema->get_label_se_policy_id() == policy_id) {
-      ObLabelSeComponentSchema schema = *component_schema; //copy
+      ObLabelSeComponentSchema schema;
       ObSchemaOperationType ddl_type = OB_INVALID_DDL_OP;
-
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      if (OB_FAIL(schema.assign(*component_schema))) {
+        LOG_WARN("fail to assign component_schema", KR(ret));
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret));
       } else {
         schema.set_schema_version(new_schema_version);
@@ -10302,9 +10313,10 @@ int ObDDLOperator::drop_all_label_se_user_components(uint64_t tenant_id,
 
     if (OB_SUCC(ret) && (user_level_schema->get_user_id() == user_id
                          || user_level_schema->get_label_se_policy_id() == policy_id)) {
-      ObLabelSeUserLevelSchema schema = *user_level_schema; //copy
-
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      ObLabelSeUserLevelSchema schema;
+      if (OB_FAIL(schema.assign(*user_level_schema))) {
+        LOG_WARN("fail to assign ObLabelSeUserLevelSchema", KR(ret));
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret));
       } else {
         schema.set_schema_version(new_schema_version);

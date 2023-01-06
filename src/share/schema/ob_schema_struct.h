@@ -5134,6 +5134,11 @@ public:
   ObDbLinkSchema(const ObDbLinkSchema &src_schema);
   virtual ~ObDbLinkSchema() {}
   ObDbLinkSchema &operator=(const ObDbLinkSchema &other);
+  int assign(const ObDbLinkSchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator==(const ObDbLinkSchema &other) const;
 
   inline ObTenantDbLinkId get_tenant_dblink_id() const { return ObTenantDbLinkId(tenant_id_, dblink_id_); }
@@ -6523,6 +6528,11 @@ public:
   virtual ~ObTablespaceSchema();
   ObTablespaceSchema &operator=(const ObTablespaceSchema &src_schema);
   ObTablespaceSchema(const ObTablespaceSchema &src_schema);
+  int assign(const ObTablespaceSchema &src_schema)
+  {
+    *this = src_schema;
+    return get_err_ret();
+  }
   int64_t get_convert_size() const;
 
   inline void set_schema_version(int64_t version) { schema_version_ = version; }
@@ -6771,6 +6781,11 @@ public:
   ObLabelSePolicySchema(const ObLabelSePolicySchema &src_schema);
   virtual ~ObLabelSePolicySchema();
   ObLabelSePolicySchema &operator =(const ObLabelSePolicySchema &other);
+  int assign(const ObLabelSePolicySchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator ==(const ObLabelSePolicySchema &other) const;
   TO_STRING_KV(K_(tenant_id),
                K_(label_se_policy_id),
@@ -6827,6 +6842,11 @@ public:
   ObLabelSeComponentSchema(const ObLabelSeComponentSchema &src_schema);
   virtual ~ObLabelSeComponentSchema();
   ObLabelSeComponentSchema &operator =(const ObLabelSeComponentSchema &other);
+  int assign(const ObLabelSeComponentSchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator ==(const ObLabelSeComponentSchema &other) const;
   TO_STRING_KV(K_(tenant_id),
                K_(label_se_policy_id),
@@ -6897,6 +6917,11 @@ public:
   ObLabelSeLabelSchema(const ObLabelSeLabelSchema &src_schema);
   virtual ~ObLabelSeLabelSchema();
   ObLabelSeLabelSchema &operator =(const ObLabelSeLabelSchema &other);
+  int assign(const ObLabelSeLabelSchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator ==(const ObLabelSeLabelSchema &other) const;
   TO_STRING_KV(K_(tenant_id),
                K_(label_se_label_id),
@@ -6947,6 +6972,11 @@ public:
   ObLabelSeUserLevelSchema(const ObLabelSeUserLevelSchema &src_schema);
   virtual ~ObLabelSeUserLevelSchema();
   ObLabelSeUserLevelSchema &operator =(const ObLabelSeUserLevelSchema &other);
+  int assign(const ObLabelSeUserLevelSchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator ==(const ObLabelSeUserLevelSchema &other) const;
   TO_STRING_KV(K_(tenant_id),
                K_(label_se_user_level_id),
@@ -7248,6 +7278,12 @@ public:
       in_failure_ = src_schema.in_failure_;
     }
     return *this;
+  }
+
+  int assign(const ObSAuditSchema &src_schema)
+  {
+    *this = src_schema;
+    return get_err_ret();
   }
   ObSAuditSchema(const ObSAuditSchema &src_schema) : ObSchema()
   {

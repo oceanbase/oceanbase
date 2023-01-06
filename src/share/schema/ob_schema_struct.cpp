@@ -10334,7 +10334,7 @@ ObDbLinkSchema &ObDbLinkSchema::operator=(const ObDbLinkSchema &other)
     schema_version_ = other.schema_version_;
     driver_proto_ = other.driver_proto_;
     flag_ = other.flag_;
-    if        (OB_FAIL(deep_copy_str(other.dblink_name_, dblink_name_))) {
+    if (OB_FAIL(deep_copy_str(other.dblink_name_, dblink_name_))) {
       LOG_WARN("Fail to deep copy dblink name", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.cluster_name_, cluster_name_))) {
       LOG_WARN("Fail to deep copy cluster name", K(ret), K(other.cluster_name_));

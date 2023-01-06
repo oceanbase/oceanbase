@@ -7652,10 +7652,12 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
 
             if (OB_SUCC(ret)) {
               //copy attributes that can be change by alter table change ...
-              ObColumnSchemaV2 new_column_schema = *orig_column_schema;
+              ObColumnSchemaV2 new_column_schema;
               bool is_change_column_order = false;
               ObSEArray<ObString, 1> new_pk_column;
-              if (alter_column_schema->is_primary_key_) {
+              if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
+                LOG_WARN("fail to assign column schema", KR(ret));
+              } else if (alter_column_schema->is_primary_key_) {
                 if (!new_table_schema.is_heap_table()) {
                   ret = OB_ERR_MULTIPLE_PRI_KEY;
                   LOG_WARN("multiple primary key defined", K(ret));
@@ -8020,8 +8022,10 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
 
             if (OB_SUCC(ret)) {
               //copy attributes that can be change by alter table change ...
-              ObColumnSchemaV2 new_column_schema = *orig_column_schema;
-              if (OB_FAIL(fill_new_column_attributes(*alter_column_schema,
+              ObColumnSchemaV2 new_column_schema;
+              if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
+                LOG_WARN("fail to assign column schema", KR(ret));
+              } else if (OB_FAIL(fill_new_column_attributes(*alter_column_schema,
                                                      new_column_schema))) {
                 RS_LOG(WARN, "fail to fill new column attributes", K(ret));
               } else if (OB_FAIL(resolve_timestamp_column(alter_column_schema,
@@ -8134,9 +8138,10 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             }
 
             if (OB_SUCC(ret)) {
-              ObColumnSchemaV2 new_column_schema = *orig_column_schema;
-              //copy attributes that can be change by alter table modify ...
-              if (OB_FAIL(fill_new_column_attributes(*alter_column_schema,
+              ObColumnSchemaV2 new_column_schema;
+              if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
+                LOG_WARN("fail to assign column schema", KR(ret));
+              } else if (OB_FAIL(fill_new_column_attributes(*alter_column_schema,
                                                      new_column_schema))) {
                 RS_LOG(WARN, "fail to fill new column attributes", K(ret));
               } else if (OB_FAIL(check_modify_column_when_upgrade(new_column_schema, *orig_column_schema))) {
@@ -8195,9 +8200,10 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
 
             //column that has been modified, can't not modify again
             if (OB_SUCC(ret)) {
-              ObColumnSchemaV2 new_column_schema = *orig_column_schema;
-              // orig_column_schema is passed in resolve_timestamp_column to verify whether the now() is dropped.
-              if (OB_FAIL(resolve_timestamp_column(alter_column_schema,
+              ObColumnSchemaV2 new_column_schema;
+              if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
+                LOG_WARN("fail to assign column schema", KR(ret));
+              } else if (OB_FAIL(resolve_timestamp_column(alter_column_schema,
                                                    new_table_schema,
                                                    new_column_schema,
                                                    tz_info_wrap,
@@ -12295,8 +12301,10 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                     }
                   } else if (RENAME_TYPE_SEQUENCE == rename_oracle_obj_type) {
                     ObSequenceDDLProxy ddl_operator(*schema_service_);
-                    ObSequenceSchema tmp_sequence_schema = *sequence_schema;
-                    if (OB_FAIL(tmp_sequence_schema.set_sequence_name(to_table_item.table_name_))) {
+                    ObSequenceSchema tmp_sequence_schema;
+                    if (OB_FAIL(tmp_sequence_schema.assign(*sequence_schema))) {
+                      LOG_WARN("fail to assign sequence schema", KR(ret));
+                    } else if (OB_FAIL(tmp_sequence_schema.set_sequence_name(to_table_item.table_name_))) {
                       LOG_WARN("failed to set new sequence name to sequence_schema", K(ret), K(to_table_item.table_name_), KPC(sequence_schema));
                     } else if (OB_FAIL(ddl_operator.rename_sequence(tmp_sequence_schema, trans, &rename_sql))) {
                       LOG_WARN("failed to rename sequence", K(ret), K(tmp_sequence_schema));
@@ -12437,8 +12445,10 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("audit_schema is NULL", K(ret));
           } else {
-            ObSAuditSchema new_audit_schema = *audit_schema;
-            if (OB_FAIL(audit_schemas.push_back(new_audit_schema))) {
+            ObSAuditSchema new_audit_schema;
+            if (OB_FAIL(new_audit_schema.assign(*audit_schema))) {
+              LOG_WARN("fail to assign ObSAuditSchema", KR(ret));
+            } else if (OB_FAIL(audit_schemas.push_back(new_audit_schema))) {
               LOG_WARN("failed to add audit_schema!", K(new_audit_schema), K(ret));
             }
           }
@@ -15368,14 +15378,15 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
                                                                       hidden_column_id))) {
         LOG_WARN("failed to get hidden table column id", K(ret), K(orig_column_id));
       }
-      
       if (OB_SUCC(ret)) {
         const ObColumnSchemaV2 *col_schema = new_hidden_table_schema.get_column_schema(hidden_column_id);
+        ObColumnSchemaV2 new_col_schema;
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column schema not found", K(ret), K(hidden_column_id));
+        } else if (OB_FAIL(new_col_schema.assign(*col_schema))) {
+          LOG_WARN("fail to assign column schema", KR(ret));
         } else {
-          ObColumnSchemaV2 new_col_schema = *col_schema;
           new_col_schema.set_nullable(false);
           new_col_schema.drop_not_null_cst();
           new_hidden_table_schema.set_in_offline_ddl_white_list(true);
@@ -16103,37 +16114,6 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
       }
     }
   }
-
-#if 0
-  if (OB_SUCC(ret) && (orig_table_schema.is_primary_vp_table())) {
-    //reconstruct VP info
-    // only need to update all the vertical partition tables
-    // including the data_table_id of the main table itself.
-    uint64_t aux_vp_tid_array[OB_MAX_PARTITION_NUM];
-    int64_t aux_vp_cnt = OB_MAX_PARTITION_NUM;
-    if (OB_FAIL(orig_table_schema.get_aux_vp_tid_array(aux_vp_tid_array, aux_vp_cnt))) {
-      LOG_WARN("get_aux_vp_tid_array failed", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < aux_vp_cnt; ++i) {
-      const ObTableSchema *aux_vp_table_schema = NULL;
-      if (OB_FAIL(schema_guard.get_table_schema(aux_vp_tid_array[i], aux_vp_table_schema))) {
-        LOG_WARN("get_table_schema failed", "table id", aux_vp_tid_array[i], K(ret));
-      } else if (OB_ISNULL(aux_vp_table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table schema should not be null", K(ret));
-      } else if (aux_vp_table_schema->is_in_recyclebin()) {
-        continue;
-      } else {
-        ObTableSchema new_aux_vp_schema = *aux_vp_table_schema;
-        new_aux_vp_schema.set_data_table_id(new_table_id);
-        if (OB_FAIL(new_scheams.push_back(new_aux_vp_schema))) {
-          LOG_WARN("failed to add table schema!", K(ret));
-        }
-      }
-    }
-  }
-#endif
-
   return ret;
 }
 
@@ -20057,6 +20037,7 @@ int ObDDLService::create_tenant_end(const uint64_t tenant_id)
   int64_t sys_schema_version = OB_INVALID_VERSION;
   ObDDLSQLTransaction trans(schema_service_);
   DEBUG_SYNC(BEFORE_CREATE_TENANT_END);
+  ObTenantSchema new_tenant_schema;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
@@ -20087,8 +20068,9 @@ int ObDDLService::create_tenant_end(const uint64_t tenant_id)
              && !tenant_schema->is_restore()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("state not match", K(ret), K(tenant_id));
+  } else if (OB_FAIL(new_tenant_schema.assign(*tenant_schema))) {
+    LOG_WARN("fail to assign tenant schema", KR(ret));
   } else {
-    ObTenantSchema new_tenant_schema = *tenant_schema;
     ObDDLSQLTransaction tenant_trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     int64_t refreshed_schema_version = OB_INVALID_VERSION;
@@ -21271,10 +21253,12 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
     bool grant = true;
     ObArray<ObResourcePoolName> diff_pools;
     AlterLocalityOp alter_locality_op = ALTER_LOCALITY_OP_INVALID;
-    ObTenantSchema new_tenant_schema = *orig_tenant_schema;
+    ObTenantSchema new_tenant_schema;
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
 
-    if (is_meta_tenant(tenant_id)) {
+    if (OB_FAIL(new_tenant_schema.assign(*orig_tenant_schema))) {
+      LOG_WARN("fail to assign tenant schema", KR(ret));
+    } else if (is_meta_tenant(tenant_id)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not allowed to modify meta tenant's options manually", KR(ret), K(tenant_id));
     } else if (OB_FAIL(set_new_tenant_options(schema_guard, arg, new_tenant_schema,
@@ -21348,11 +21332,13 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
     // rename tenant
     const uint64_t tenant_id = orig_tenant_schema->get_tenant_id();
     const ObString new_tenant_name = arg.new_tenant_name_;
-    ObTenantSchema new_tenant_schema = *orig_tenant_schema;
+    ObTenantSchema new_tenant_schema;
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObDDLSQLTransaction trans(schema_service_);
     int64_t refreshed_schema_version = 0;
-    if (is_meta_tenant(tenant_id)) {
+    if (OB_FAIL(new_tenant_schema.assign(*orig_tenant_schema))) {
+      LOG_WARN("fail to assign tenant schema", KR(ret));
+    } else if (is_meta_tenant(tenant_id)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not allowed to modify meta tenant's options manually", KR(ret), K(tenant_id));
     } else if (orig_tenant_schema->is_restore()) {
@@ -22142,6 +22128,7 @@ int ObDDLService::lock_tenant(const ObString &tenant_name, const bool is_lock)
   ObSchemaGetterGuard schema_guard;
   const ObTenantSchema *tenant_schema = NULL;
   int64_t refreshed_schema_version = 0;
+  ObTenantSchema new_tenant_schema;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (tenant_name.length() <= 0) {
@@ -22159,9 +22146,10 @@ int ObDDLService::lock_tenant(const ObString &tenant_name, const bool is_lock)
     LOG_WARN("failed to get tenant schema version", KR(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", KR(ret), K(refreshed_schema_version));
+  } else if (OB_FAIL(new_tenant_schema.assign(*tenant_schema))) {
+    LOG_WARN("fail to assign tenant schema", KR(ret));
   } else {
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-    ObTenantSchema new_tenant_schema = *tenant_schema;
     new_tenant_schema.set_locked(is_lock);
     if (OB_FAIL(ddl_operator.alter_tenant(new_tenant_schema, trans))) {
       LOG_WARN("ddl_operator alter tenant failed", K(new_tenant_schema), K(ret));
@@ -22316,8 +22304,10 @@ int ObDDLService::modify_system_variable(const ObModifySysVarArg &arg)
   } else  {
     const ObSysVarSchema *old_schema = NULL;
     ObSysVarSchema new_schema;
-    ObSysVariableSchema new_sys_variable_schema = *sys_variable_schema;
-    if (OB_UNLIKELY(!new_sys_variable_schema.is_valid())) {
+    ObSysVariableSchema new_sys_variable_schema;
+    if (OB_FAIL(new_sys_variable_schema.assign(*sys_variable_schema))) {
+      LOG_WARN("fail to assign sys variable schema", KR(ret));
+    } else if (OB_UNLIKELY(!new_sys_variable_schema.is_valid())) {
       ret = new_sys_variable_schema.get_err_ret();
       LOG_WARN("new sys variable schema is invalid", K(ret));
     } else {
@@ -22335,23 +22325,24 @@ int ObDDLService::modify_system_variable(const ObModifySysVarArg &arg)
       if (OB_SUCC(ret) && !found) {
         if (OB_FAIL(sys_variable_schema->get_sysvar_schema(modify_var.get_name(), old_schema))) {
           LOG_WARN("get sysvar schema failed", K(ret), K(modify_var));
+        } else if (OB_ISNULL(old_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sys var schema is null", KR(ret), K(modify_var));
+        } else if (OB_FAIL(new_schema.assign(*old_schema))) {
+          LOG_WARN("fail to assign sys var schema", KR(ret));
+        } else if (OB_UNLIKELY(!new_schema.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("new schema is invalid", K(new_schema));
+        } else if(new_schema.get_value() != modify_var.get_value()) {
+          value_changed = true;
+          if(OB_FAIL(new_schema.set_value(modify_var.get_value()))) {
+            LOG_WARN("set new schema value failed", K(ret));
+          } else if (OB_FAIL(new_sys_variable_schema.add_sysvar_schema(new_schema))) {
+            LOG_WARN("add sysvar schema to new sys variable schema failed", K(ret));
+          }
         } else {
-          new_schema = *old_schema;
-          if (OB_UNLIKELY(!new_schema.is_valid())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("new schema is invalid", K(new_schema));
-          } else if(new_schema.get_value() != modify_var.get_value()) {
-            value_changed = true;
-            if(OB_FAIL(new_schema.set_value(modify_var.get_value()))) {
-              LOG_WARN("set new schema value failed", K(ret));
-            } else if (OB_FAIL(new_sys_variable_schema.add_sysvar_schema(new_schema))) {
-              LOG_WARN("add sysvar schema to new sys variable schema failed", K(ret));
-            }
-          }
-          else{
-            //new value == old value, no need to update sys var schema
-            //do nothing
-          }
+          //new value == old value, no need to update sys var schema
+          //do nothing
         }
       }
     }
@@ -22591,8 +22582,10 @@ int ObDDLService::alter_database(const ObAlterDatabaseArg &arg)
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      ObDatabaseSchema new_database_schema = *origin_database_schema;
-      if (OB_FAIL(set_new_database_options(arg, new_database_schema))) {
+      ObDatabaseSchema new_database_schema;
+      if (OB_FAIL(new_database_schema.assign(*origin_database_schema))) {
+        LOG_WARN("fail to assign database schema", KR(ret));
+      } else if (OB_FAIL(set_new_database_options(arg, new_database_schema))) {
         LOG_WARN("failed to set new database options", K(ret));
       }
       if (OB_SUCC(ret)) {
@@ -26572,9 +26565,11 @@ int ObDDLService::drop_dblink(const obrpc::ObDropDbLinkArg &arg, const ObString 
   } else {
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-    ObDbLinkBaseInfo dblink_info = *dblink_schema;
     int64_t refreshed_schema_version = 0;
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    ObDbLinkSchema dblink_info;
+    if (OB_FAIL(dblink_info.assign(*dblink_schema))) {
+      LOG_WARN("fail to assign ObDbLinkSchema", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed start transaction", KR(ret), K(tenant_id), K(refreshed_schema_version));
@@ -29765,15 +29760,13 @@ int ObDDLService::do_tablespace_ddl(const obrpc::ObTablespaceDDLArg &arg)
             ret = OB_TABLESPACE_NOT_EXIST;
             LOG_USER_ERROR(OB_TABLESPACE_NOT_EXIST, tablespace_name.length(), tablespace_name.ptr());
             LOG_WARN("tablespace does not exist", K(ret), K(tablespace_name), K(arg));
-          } else {
-            // deep copy
-            tablespace_schema = *ts_schema;
-            if (OB_FAIL(ddl_operator.drop_tablespace(tablespace_schema,
-                                                 trans,
-                                                 schema_guard,
-                                                 ddl_stmt_str))) {
-              LOG_WARN("fail drop tablespace", K(arg), K(ret));
-            }
+          } else if (OB_FAIL(tablespace_schema.assign(*ts_schema))) {
+            LOG_WARN("fail to assign tablespace schema", KR(ret));
+          } else if (OB_FAIL(ddl_operator.drop_tablespace(tablespace_schema,
+                                               trans,
+                                               schema_guard,
+                                               ddl_stmt_str))) {
+            LOG_WARN("fail drop tablespace", K(arg), K(ret));
           }
           break;
         }
