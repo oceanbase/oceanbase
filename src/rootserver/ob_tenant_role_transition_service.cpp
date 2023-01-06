@@ -420,10 +420,10 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(ObIArray<LSAccessModeInfo
         } else if (OB_FAIL(GCTX.location_service_->get_leader(
           GCONF.cluster_id, tenant_id_, info.ls_id_, false, leader))) {
           LOG_WARN("failed to get leader", KR(ret), K(tenant_id_), K(info));
-
         } else if (OB_FAIL(arg.init(tenant_id_, info.ls_id_))) {
           LOG_WARN("failed to init arg", KR(ret), K(tenant_id_), K(info));
         } else if (OB_FAIL(proxy.call(leader, timeout, GCONF.cluster_id, tenant_id_, arg))) {
+          //can not ignore error of each ls
           LOG_WARN("failed to send rpc", KR(ret), K(leader), K(timeout), K(tenant_id_), K(arg));
         } else {
           rpc_count++;
@@ -514,14 +514,18 @@ int ObTenantRoleTransitionService::do_change_ls_access_mode_(const ObIArray<LSAc
       if (OB_FAIL(arg.init(tenant_id_, info.ls_id_, info.mode_version_, target_access_mode, ref_scn))) {
         LOG_WARN("failed to init arg", KR(ret), K(info), K(target_access_mode), K(ref_scn));
       } else if (OB_FAIL(proxy.call(info.leader_addr_, timeout, GCONF.cluster_id, tenant_id_, arg))) {
+        //can not ignore of each ls
         LOG_WARN("failed to send rpc", KR(ret), K(info), K(timeout), K(tenant_id_), K(arg));
       }
     }//end for
     //result
     ObArray<int> return_code_array;
+    int tmp_ret = OB_SUCCESS;
     const int64_t rpc_count = ls_access_info.count();
-    if (FAILEDx(proxy.wait_all(return_code_array))) {
-      LOG_WARN("wait all batch result failed", KR(ret));
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+      LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
+    } else if (OB_FAIL(ret)) {
     } else if (rpc_count != return_code_array.count() ||
                rpc_count != proxy.get_args().count() ||
                rpc_count != proxy.get_results().count()) {

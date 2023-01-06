@@ -654,11 +654,16 @@ int ObAdminRefreshSchema::call_server(const ObAddr &server)
     arg.schema_info_ = schema_info_;
     ObArray<int> return_code_array;
     ObSwitchSchemaProxy proxy(*GCTX.srv_rpc_proxy_, &ObSrvRpcProxy::switch_schema);
+    int tmp_ret = OB_SUCCESS;
     const int64_t timeout_ts = ctx.get_timeout(0);
     if (OB_FAIL(proxy.call(server, timeout_ts, arg))) {
       LOG_WARN("notify switch schema failed", KR(ret), K(server), K_(schema_version), K_(schema_info));
-    } else if (OB_FAIL(proxy.wait_all(return_code_array))) {
-      LOG_WARN("fail to wait all", KR(ret), K(server));
+    }
+
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+      LOG_WARN("fail to wait all", KR(ret), KR(tmp_ret), K(server));
+    } else if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(return_code_array.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("return_code_array is empty", KR(ret), K(server));

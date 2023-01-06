@@ -149,8 +149,10 @@ private:
                         ObLSReplicaAddr &ls_replica_addr);
  int check_create_ls_result_(const int64_t rpc_count,
                             const int64_t paxos_replica_num,
+                            const ObIArray<int> &return_code_array,
                             common::ObMemberList &member_list);
  int check_set_memberlist_result_(const int64_t rpc_count,
+                            const ObIArray<int> &return_code_array,
                             const int64_t paxos_replica_num);
 
 private:
