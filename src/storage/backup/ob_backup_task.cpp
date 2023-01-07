@@ -77,7 +77,7 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(start_scn));
   } else {
-    ObLSMetaPackage ls_meta_package;
+    ObLSMeta ls_meta;
     int64_t i = 0;
     const int64_t start_ts = ObTimeUtility::current_time();
     do {
@@ -93,12 +93,12 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
         } else {
           LOG_WARN("failed to advance checkpoint by flush", K(ret), K(tenant_id), K(ls_id));
         }
-      } else if (OB_FAIL(ls->get_ls_meta_package(ls_meta_package))) {
-        LOG_WARN("failed to get ls meta package", K(ret), K(tenant_id), K(ls_id));
-      } else if (OB_FAIL(ls_meta_package.ls_meta_.check_valid_for_backup())) {
-        LOG_WARN("failed to check valid for backup", K(ret), K(ls_meta_package));
+      } else if (OB_FAIL(ls->get_ls_meta(ls_meta))) {
+        LOG_WARN("failed to get ls meta", K(ret), K(tenant_id), K(ls_id));
+      } else if (OB_FAIL(ls_meta.check_valid_for_backup())) {
+        LOG_WARN("failed to check valid for backup", K(ret), K(ls_meta));
       } else {
-        const SCN clog_checkpoint_scn = ls_meta_package.ls_meta_.get_clog_checkpoint_scn();
+        const SCN clog_checkpoint_scn = ls_meta.get_clog_checkpoint_scn();
         if (clog_checkpoint_scn >= start_scn) {
           LOG_INFO("clog checkpoint scn has passed start scn",
               K(i),
@@ -3793,17 +3793,17 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
     MTL_SWITCH(tenant_id) {
       storage::ObLSHandle ls_handle;
       storage::ObLS *ls = NULL;
-      ObLSMetaPackage cur_ls_meta;
+      ObLSMeta cur_ls_meta;
       if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
         LOG_WARN("failed to get ls handle", K(ret), K(tenant_id), K(ls_id));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("log stream not exist", K(ret), K(ls_id));
-      } else if (OB_FAIL(ls->get_ls_meta_package(cur_ls_meta))) {
-        LOG_WARN("failed to get ls meta package", K(ret), K(tenant_id), K(ls_id));
-      } else if (OB_FAIL(cur_ls_meta.ls_meta_.check_valid_for_backup())) {
+      } else if (OB_FAIL(ls->get_ls_meta(cur_ls_meta))) {
+        LOG_WARN("failed to get ls meta", K(ret), K(tenant_id), K(ls_id));
+      } else if (OB_FAIL(cur_ls_meta.check_valid_for_backup())) {
         LOG_WARN("failed to check valid for backup", K(ret), K(cur_ls_meta));
-      } else if (backup_clog_checkpoint_scn <= cur_ls_meta.ls_meta_.get_clog_checkpoint_scn()) {
+      } else if (backup_clog_checkpoint_scn <= cur_ls_meta.get_clog_checkpoint_scn()) {
         LOG_INFO("no need advance checkpoint", K_(param));
       } else if (OB_FAIL(advance_checkpoint_by_flush(tenant_id, ls_id, backup_clog_checkpoint_scn, ls))) {
         LOG_WARN("failed to advance checkpoint by flush", K(ret), K(ls_id), K(backup_clog_checkpoint_scn));
@@ -3824,16 +3824,16 @@ int ObLSBackupPrepareTask::fetch_cur_ls_rebuild_seq_(int64_t &rebuild_seq)
   const uint64_t tenant_id = param_.tenant_id_;
   const share::ObLSID &ls_id = param_.ls_id_;
   MTL_SWITCH(tenant_id) {
-    ObLSMetaPackage cur_ls_meta;
+    ObLSMeta cur_ls_meta;
     if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
       LOG_WARN("failed to get ls handle", K(ret), K(tenant_id), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream not exist", K(ret), K(ls_id));
-    } else if (OB_FAIL(ls->get_ls_meta_package(cur_ls_meta))) {
-      LOG_WARN("failed to get ls meta package", K(ret), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(ls->get_ls_meta(cur_ls_meta))) {
+      LOG_WARN("failed to get ls meta", K(ret), K(tenant_id), K(ls_id));
     } else {
-      rebuild_seq = cur_ls_meta.ls_meta_.get_rebuild_seq();
+      rebuild_seq = cur_ls_meta.get_rebuild_seq();
     }
   }
   return ret;

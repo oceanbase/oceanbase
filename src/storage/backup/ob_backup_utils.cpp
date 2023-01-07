@@ -334,7 +334,7 @@ int ObBackupUtils::check_ls_valid_for_backup(const uint64_t tenant_id, const sha
   ObLSService *ls_service = NULL;
   ObLSHandle handle;
   int64_t cur_rebuild_seq = 0;
-  ObLSMetaPackage ls_meta_package;
+  ObLSMeta ls_meta;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));
@@ -346,12 +346,12 @@ int ObBackupUtils::check_ls_valid_for_backup(const uint64_t tenant_id, const sha
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream not exist", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls->get_ls_meta_package(ls_meta_package))) {
-    LOG_WARN("failed to get ls meta package", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ls_meta_package.ls_meta_.check_valid_for_backup())) {
-    LOG_WARN("failed to check valid for backup", K(ret), K(ls_meta_package));
+  } else if (OB_FAIL(ls->get_ls_meta(ls_meta))) {
+    LOG_WARN("failed to get ls meta", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls_meta.check_valid_for_backup())) {
+    LOG_WARN("failed to check valid for backup", K(ret), K(ls_meta));
   } else {
-    cur_rebuild_seq = ls_meta_package.ls_meta_.get_rebuild_seq();
+    cur_rebuild_seq = ls_meta.get_rebuild_seq();
     if (local_rebuild_seq != cur_rebuild_seq) {
       ret = OB_REPLICA_CANNOT_BACKUP;
       LOG_WARN("rebuild seq has changed, can not backup", K(ret), K(tenant_id), K(ls_id), K(local_rebuild_seq), K(cur_rebuild_seq));
