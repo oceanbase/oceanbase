@@ -164,16 +164,6 @@ void ObPxTransmitOp::destroy()
   ObTransmitOp::destroy();
 }
 
-bool ObPxTransmitOp::is_dml_type_match_iter_end(bool need_drive_dml_query)
-{
-  // In the new engine, insert, update, and delete no longer do real dml in inner_open,
-  // do real dml in get_next_row, so the original early termination logic needs to be modified,
-  // and other dml operators can still retain this optimization, such as replace, merge, etc.
-  return child_->get_spec().is_dml_operator() &&
-         !child_->get_spec().is_pdml_operator() &&
-         !need_drive_dml_query;
-}
-
 int ObPxTransmitOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -226,9 +216,6 @@ int ObPxTransmitOp::fetch_first_row()
       OB_ISNULL(phy_plan = phy_plan_ctx->get_phy_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null phy_plan or phy_plan_ctx", K(phy_plan_ctx), K(phy_plan), K(ret));
-  } else if (is_dml_type_match_iter_end(phy_plan->need_drive_dml_query_)) {
-    iter_end_ = true;
-    LOG_TRACE("transmit iter end", K(ret), K(iter_end_));
   } else {
     const ObBatchRows *brs = NULL;
     if (is_vectorized()) {
