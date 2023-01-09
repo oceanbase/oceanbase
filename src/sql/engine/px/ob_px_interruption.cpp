@@ -186,7 +186,7 @@ int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code)
   } else if (OB_FAIL(manager->interrupt(task.get_qc_addr(),
                                         interrupt_id,
                                         int_code))) {
-    LOG_ERROR("fail send interrupt signal to qc",
+    LOG_WARN("fail send interrupt signal to qc",
               "addr", task.get_qc_addr(),
               K(int_code),
               K(orig_int_code),
