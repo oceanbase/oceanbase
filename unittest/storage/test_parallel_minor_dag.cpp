@@ -46,13 +46,16 @@ public:
 
   share::SCN get_start_log_ts(const int64_t idx);
   share::SCN get_end_log_ts(const int64_t idx);
-  void check_result(const int64_t sstable_cnt, const int64_t result_cnt);
+  void check_result(
+      const int64_t minor_compact_trigger,
+      const int64_t sstable_cnt,
+      const int64_t result_cnt);
 
   static const int64_t TENANT_ID = 1;
   static const int64_t TABLE_ID = 7777;
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 3;
   static const int64_t TEST_COLUMN_CNT = 6;
-  static const int64_t MAX_SSTABLE_CNT = 60;
+  static const int64_t MAX_SSTABLE_CNT = 64;
 
   common::ObArenaAllocator allocator_;
   ObTenantBase tenant_base_;
@@ -104,55 +107,59 @@ void check_result_valid(const ObGetMergeTablesResult &result)
   ASSERT_EQ(result.handle_.get_table(result.handle_.get_count() - 1)->get_end_scn(), result.scn_range_.end_scn_);
 }
 
-void TestParallelMinorDag::check_result(const int64_t sstable_cnt, const int64_t result_cnt)
+void TestParallelMinorDag::check_result(
+    const int64_t minor_compact_trigger,
+    const int64_t sstable_cnt,
+    const int64_t result_cnt)
 {
   ObGetMergeTablesResult result;
   ObArray<ObGetMergeTablesResult> result_array;
   ObMinorExecuteRangeMgr minor_range_mgr;
 
   ASSERT_EQ(OB_SUCCESS, prepare_merge_result(sstable_cnt, result));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(result, minor_range_mgr, result_array));
+  int ret = (minor_compact_trigger <= sstable_cnt) ? OB_SUCCESS : OB_NO_NEED_MERGE;
+  ASSERT_EQ(ret, ObPartitionMergePolicy::generate_parallel_minor_interval(minor_compact_trigger, result, minor_range_mgr, result_array));
 
-  COMMON_LOG(INFO, "generate_parallel_minor_interval", K(sstable_cnt), K(result_array));
+  for (int64_t i = 0; i < result_array.count(); ++i) {
+    const ObGetMergeTablesResult &cur_result = result_array.at(i);
+    int64_t table_cnt = cur_result.handle_.get_count();
+    COMMON_LOG(INFO, "generate_parallel_minor_interval: ", K(minor_compact_trigger), K(sstable_cnt), K(result_cnt), K(table_cnt), K(cur_result));
+  }
   ASSERT_EQ(result_array.count(), result_cnt);
-  int idx = 0;
-  int rest_cnt = sstable_cnt;
-  const int64_t minor_trigger = ObPartitionMergePolicy::OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG / 2;
-  if (sstable_cnt < ObPartitionMergePolicy::OB_MINOR_PARALLEL_SSTABLE_CNT_TRIGGER) {
+
+  if (OB_FAIL(ret)) {
+  } else if (sstable_cnt < ObPartitionMergePolicy::OB_MINOR_PARALLEL_SSTABLE_CNT_TRIGGER) {
     ASSERT_EQ(result_array.count(), 1);
     ASSERT_EQ(result_array.at(0).handle_.get_count(), sstable_cnt);
   } else {
+    const int64_t table_cnt_in_dag = sstable_cnt / result_cnt;
+    const int64_t table_cnt_in_last_dag = (sstable_cnt - table_cnt_in_dag * result_cnt) + table_cnt_in_dag;
+    int idx = 0;
     for (int i = 0; i < result_array.count(); ++i) {
-      check_result_valid(result_array.at(i));
-
-      ASSERT_EQ(result_array.at(i).scn_range_.start_scn_, get_start_log_ts(idx));
-      if (rest_cnt > ObPartitionMergePolicy::OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG + minor_trigger
-          && sstable_cnt >= minor_trigger) {
-        ASSERT_EQ(result_array.at(i).handle_.get_count(), ObPartitionMergePolicy::OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG);
-        idx += ObPartitionMergePolicy::OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG;
-        rest_cnt -= ObPartitionMergePolicy::OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG;
+      const ObGetMergeTablesResult &cur_result = result_array.at(i);
+      check_result_valid(cur_result);
+      ASSERT_EQ(cur_result.scn_range_.start_scn_, get_start_log_ts(idx));
+      if (i != result_array.count() - 1) {
+        ASSERT_EQ(table_cnt_in_dag, cur_result.handle_.get_count());
+        idx += table_cnt_in_dag;
       } else {
-        ASSERT_EQ(result_array.at(i).handle_.get_count(), rest_cnt);
-        idx = sstable_cnt;
+        ASSERT_EQ(table_cnt_in_last_dag, cur_result.handle_.get_count());
+        idx += table_cnt_in_last_dag;
       }
-      ASSERT_EQ(result_array.at(i).scn_range_.end_scn_, get_end_log_ts(idx - 1));
+      ASSERT_EQ(cur_result.scn_range_.end_scn_, get_end_log_ts(idx - 1));
     }
   }
 }
 
 TEST_F(TestParallelMinorDag, test_parallel_interval)
 {
-  check_result(20, 2);
-  check_result(19, 1);
-  check_result(36, 4);
-  check_result(35, 3);
-  check_result(32, 3);
-  check_result(12, 1);
-  check_result(18, 1);
-  check_result(22, 2);
-  check_result(3, 1);
-  check_result(9, 1);
-  check_result(40, 4);
+  for (int64_t minor_compact_trigger = 2; minor_compact_trigger <= 16; ++minor_compact_trigger) {
+    for (int64_t table_cnt = 2; table_cnt <= 64; ++table_cnt) {
+      int64_t res_cnt = (minor_compact_trigger > table_cnt) ? 0 :  MAX(1, table_cnt / 10);
+      COMMON_LOG(INFO, "check_result: ", K(minor_compact_trigger), K(table_cnt), K(res_cnt));
+      check_result(minor_compact_trigger, table_cnt, res_cnt);
+    }
+  }
 }
 
 #define CHECK_IN_RANGE(start_log_ts, end_log_ts, flag) \
@@ -223,7 +230,7 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(31, 41));
 
   ASSERT_EQ(OB_SUCCESS, prepare_merge_result(sstable_cnt, result));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
   ASSERT_EQ(result_array.count(), 2);
 
   ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 1);
@@ -238,7 +245,7 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(15, 19));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(37, 39));
 
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
   COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
   ASSERT_EQ(result_array.count(), 2);
 
@@ -248,34 +255,52 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   ASSERT_EQ(result_array.at(1).scn_range_.start_scn_.get_val_for_tx(), 19);
   ASSERT_EQ(result_array.at(1).scn_range_.end_scn_.get_val_for_tx(), 37);
 
-  // two runing ranges, candidates need > 8
   result_array.reset();
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 17));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(18, 34));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(result, minor_range_mgr, result_array));
-  COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
-  ASSERT_EQ(result_array.count(), 0);
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
+  ASSERT_EQ(result_array.count(), 1);
+
+  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 34);
+  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 41);
+
 
   result_array.reset();
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 17));
-  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(17, 31));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(result, minor_range_mgr, result_array));
-  COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(17, 37));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
   ASSERT_EQ(result_array.count(), 1);
-  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 31);
+  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 37);
   ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 41);
 
-  // one runing ranges, candidates need > 4
+
   result_array.reset();
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 34));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
   COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
   ASSERT_EQ(result_array.count(), 1);
   ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 34);
   ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 41);
+
+
+  result_array.reset();
+  minor_range_mgr.reset();
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(5, 25));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(31, 41));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(4, result, minor_range_mgr, result_array));
+  ASSERT_EQ(result_array.count(), 1);
+  ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 25);
+  ASSERT_EQ(result_array.at(0).scn_range_.end_scn_.get_val_for_tx(), 31);
+
+
+  result_array.reset();
+  minor_range_mgr.reset();
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(5, 25));
+  minor_range_mgr.exe_range_array_.push_back(construct_scn_range(31, 41));
+  ASSERT_EQ(OB_NO_NEED_MERGE, ObPartitionMergePolicy::generate_parallel_minor_interval(16, result, minor_range_mgr, result_array));
 }
 
 } // namespace unittest

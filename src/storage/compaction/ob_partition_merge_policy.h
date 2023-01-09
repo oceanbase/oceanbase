@@ -78,6 +78,7 @@ public:
       bool &can_merge,
       bool &need_force_freeze);
   static int generate_parallel_minor_interval(
+      const int64_t minor_compact_trigger,
       const ObGetMergeTablesResult &input_result,
       ObMinorExecuteRangeMgr &minor_range_mgr,
       ObIArray<ObGetMergeTablesResult> &parallel_result);
@@ -141,15 +142,21 @@ private:
       storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info);
 
   static int64_t cal_hist_minor_merge_threshold();
+  static int generate_input_result_array(
+      const ObGetMergeTablesResult &input_result,
+      ObMinorExecuteRangeMgr &minor_range_mgr,
+      int64_t &fixed_input_table_cnt,
+      common::ObIArray<ObGetMergeTablesResult> &input_result_array);
+
+  static int split_parallel_minor_range(
+      const int64_t table_count_threshold,
+      const ObGetMergeTablesResult &input_result,
+      common::ObIArray<ObGetMergeTablesResult> &parallel_result);
 
   static int deal_hist_minor_merge(
       const ObTablet &tablet,
       int64_t &max_snapshot_version);
 
-  static int push_result_with_merge(
-    const int64_t minor_trigger,
-    ObGetMergeTablesResult &input_result,
-    ObIArray<ObGetMergeTablesResult> &parallel_result);
   // diagnose part
   static int diagnose_minor_dag(
       storage::ObMergeType merge_type,
