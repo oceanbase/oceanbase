@@ -59,7 +59,7 @@ int Threads::do_set_thread_count(int64_t n_threads)
     } else if (n_threads == n_threads_) {
     } else {
       auto new_threads = reinterpret_cast<Thread**>(
-          ob_malloc(sizeof (Thread*) * n_threads, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::CO_STACK, OB_NORMAL_ALLOC)));
+          ob_malloc(sizeof (Thread*) * n_threads, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC)));
       if (new_threads == nullptr) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
@@ -170,7 +170,7 @@ int Threads::start()
     ob_abort();
   } else {
     threads_ = reinterpret_cast<Thread**>(
-      ob_malloc(sizeof (Thread*) * n_threads_, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::CO_STACK, OB_NORMAL_ALLOC)));
+      ob_malloc(sizeof (Thread*) * n_threads_, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC)));
     if (threads_ == nullptr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     }
@@ -213,7 +213,7 @@ int Threads::create_thread(Thread *&thread, std::function<void()> entry)
 {
   int ret = OB_SUCCESS;
   thread = nullptr;
-  const auto buf = ob_malloc(sizeof (Thread), ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::CO_STACK, OB_NORMAL_ALLOC));
+  const auto buf = ob_malloc(sizeof (Thread), ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC));
   if (buf == nullptr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
