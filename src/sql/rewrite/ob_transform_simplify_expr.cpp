@@ -172,24 +172,32 @@ int ObTransformSimplifyExpr::replace_is_null_condition(ObDMLStmt *stmt, bool &tr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data member or parameter is NULL", K(stmt), K(ctx_));
   } else if (stmt->is_sel_del_upd()) {
+    ObNotNullContext not_null_ctx(*ctx_, stmt);
+    if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_FROM))){
+      LOG_WARN("failed to generate not null context", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); ++i) {
-      ObRawExpr *cond = NULL;
-      if (OB_ISNULL(cond = stmt->get_condition_expr(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("condition expr is null", K(ret));
-      } else if (OB_FAIL(inner_replace_is_null_condition(
-                           stmt, stmt->get_condition_exprs().at(i), is_happened))) {
+      if (OB_FAIL(inner_replace_is_null_condition(
+                           stmt, stmt->get_condition_exprs().at(i), not_null_ctx, is_happened))) {
         LOG_WARN("failed to replace is null expr", K(ret));
       } else {
         trans_happened |= is_happened;
       }
     }
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
+      not_null_ctx.reset();
+      if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))){
+        LOG_WARN("failed to generate not null context", K(ret));
+      }
       ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
       for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
-        if (OB_FAIL(inner_replace_is_null_condition(
-                      sel_stmt, sel_stmt->get_having_exprs().at(i), is_happened))) {
+        if (OB_FAIL(not_null_ctx.remove_having_filter(sel_stmt->get_having_exprs().at(i)))){
+          LOG_WARN("failed to remove filter", K(ret));
+        } else if (OB_FAIL(inner_replace_is_null_condition(
+                      sel_stmt, sel_stmt->get_having_exprs().at(i), not_null_ctx, is_happened))) {
           LOG_WARN("failed to replace is null expr", K(ret));
+        } else if (OB_FAIL(not_null_ctx.add_having_filter(sel_stmt->get_having_exprs().at(i)))) {
+          LOG_WARN("failed to add filter", K(ret));
         } else {
           trans_happened |= is_happened;
         }
@@ -201,6 +209,7 @@ int ObTransformSimplifyExpr::replace_is_null_condition(ObDMLStmt *stmt, bool &tr
 
 int ObTransformSimplifyExpr::inner_replace_is_null_condition(ObDMLStmt *stmt,
                                                              ObRawExpr *&expr,
+                                                             ObNotNullContext &not_null_ctx,
                                                              bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -223,7 +232,10 @@ int ObTransformSimplifyExpr::inner_replace_is_null_condition(ObDMLStmt *stmt,
       if (OB_ISNULL(temp = op_expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(ret));
-      } else if (OB_FAIL(SMART_CALL(inner_replace_is_null_condition(stmt, temp, is_happened)))) {
+      } else if (OB_FAIL(SMART_CALL(inner_replace_is_null_condition(stmt,
+                                                                    temp,
+                                                                    not_null_ctx,
+                                                                    is_happened)))) {
         LOG_WARN("failed to replace is null expr", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -236,7 +248,7 @@ int ObTransformSimplifyExpr::inner_replace_is_null_condition(ObDMLStmt *stmt,
       && (T_OP_IS == expr->get_expr_type()
           || T_OP_IS_NOT == expr->get_expr_type())) {
     // do transforamtion for its own exprs
-    if (OB_FAIL(do_replace_is_null_condition(stmt, expr, is_happened))) {
+    if (OB_FAIL(do_replace_is_null_condition(stmt, expr, not_null_ctx, is_happened))) {
       LOG_WARN("failed to replace is null condition", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -256,6 +268,7 @@ int ObTransformSimplifyExpr::inner_replace_is_null_condition(ObDMLStmt *stmt,
 
 int ObTransformSimplifyExpr::do_replace_is_null_condition(ObDMLStmt *stmt,
                                                           ObRawExpr *&expr,
+                                                          ObNotNullContext &not_null_ctx,
                                                           bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -295,8 +308,7 @@ int ObTransformSimplifyExpr::do_replace_is_null_condition(ObDMLStmt *stmt,
           uint64_t table_id = col_expr->get_table_id();
           if (OB_FAIL(ctx_->session_info_->get_sql_auto_is_null(sql_auto_is_null))) {
             LOG_WARN("fail to get sql_auto_is_null system variable", K(ret));
-          } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_, stmt, col_expr, 
-                                                                NULLABLE_SCOPE::NS_FROM, 
+          } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, col_expr,
                                                                 is_not_null, &constraints))) {
             LOG_WARN("failed to check expr not null", K(ret));
           } else if (is_not_null) {

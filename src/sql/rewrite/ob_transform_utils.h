@@ -80,8 +80,23 @@ struct ObNotNullContext
   int add_joined_table(const JoinedTable *table);
   
   int add_filter(const ObIArray<ObRawExpr *> &filters);
+
+  int add_filter(ObRawExpr *filter);
   
   int remove_filter(ObRawExpr *filter);
+
+  int add_having_filter(const ObIArray<ObRawExpr *> &filters);
+
+  int add_having_filter(ObRawExpr *filter);
+
+  int remove_having_filter(ObRawExpr *filter);
+
+  inline void reset() {
+    group_clause_exprs_.reset();
+    right_table_ids_.reset();
+    filters_.reset();
+    having_filters_.reset();
+  }
 
 public:
   // params

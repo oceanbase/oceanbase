@@ -18,6 +18,8 @@
 namespace oceanbase {
 namespace sql {
 
+struct ObNotNullContext;
+
 class ObTransformSimplifyExpr : public ObTransformRule
 {
 public:
@@ -34,9 +36,11 @@ private:
   int replace_is_null_condition(ObDMLStmt *stmt, bool &trans_happened);
   int inner_replace_is_null_condition(ObDMLStmt *stmt,
                                       ObRawExpr *&expr,
+                                      ObNotNullContext &not_null_ctx,
                                       bool &trans_happened);
   int do_replace_is_null_condition(ObDMLStmt *stmt,
                                    ObRawExpr *&expr,
+                                   ObNotNullContext &not_null_ctx,
                                    bool &trans_happened);
   int replace_op_null_condition(ObDMLStmt *stmt, bool &trans_happened);
   int replace_cmp_null_condition(ObRawExpr *&expr,
