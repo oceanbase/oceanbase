@@ -16,6 +16,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_error_message_table_operator.h"
+#include "share/ob_ddl_common.h"
 #include "rootserver/ob_root_service.h"
 #include "share/scn.h"
 
@@ -314,11 +315,6 @@ int ObIndexBuildTask::init(
     if (ObDDLTaskStatus::VALIDATE_CHECKSUM == task_status) {
       sstable_complete_ts_ = ObTimeUtility::current_time();
     }
-    if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, create_index_arg_.inner_sql_exec_addr_))) {
-      LOG_WARN("get sys ls leader addr fail", K(ret));
-      ret = OB_SUCCESS; // ingore ret
-    }
-    set_sql_exec_addr(create_index_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     task_id_ = task_id;
     parent_task_id_ = parent_task_id;
     task_version_ = OB_INDEX_BUILD_TASK_VERSION;
@@ -375,7 +371,6 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("fail to get table schema", K(ret), K(data_schema), K(index_schema));
   } else {
-    set_sql_exec_addr(create_index_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     is_global_index_ = index_schema->is_global_index_table();
     is_unique_index_ = index_schema->is_unique_index();
     tenant_id_ = task_record.tenant_id_;
@@ -684,6 +679,12 @@ int ObIndexBuildTask::send_build_single_replica_request()
     ret = OB_NOT_INIT;
     LOG_WARN("ObIndexBuildTask has not been inited", K(ret));
   } else {
+    if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, create_index_arg_.inner_sql_exec_addr_))) {
+      LOG_WARN("get sys ls leader addr fail", K(ret), K(tenant_id_));
+      ret = OB_SUCCESS; // ingore ret
+    } else {
+      set_sql_exec_addr(create_index_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
+    }
     const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
     const int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout;
     ObIndexSSTableBuildTask task(

@@ -56,10 +56,6 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
   } else if (OB_FAIL(set_ddl_stmt_str(alter_table_arg_.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
   } else {
-    if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id, alter_table_arg_.inner_sql_exec_addr_))) {
-      ret = OB_SUCCESS; // ignore ret
-    }
-    set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     task_type_ = ddl_type;
     object_id_ = data_table_id;
     target_object_id_ = dest_table_id;
@@ -99,7 +95,6 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_FAIL(set_ddl_stmt_str(task_record.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
   } else {
-    set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to ddl_task, switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     task_id_ = task_record.task_id_;
     task_type_ = task_record.ddl_type_;
     object_id_ = data_table_id;
@@ -166,6 +161,13 @@ int ObTableRedefinitionTask::send_build_replica_request()
     ObSQLMode sql_mode = alter_table_arg_.sql_mode_;
     if (!modify_autoinc) {
       sql_mode = sql_mode | SMO_NO_AUTO_VALUE_ON_ZERO;
+    }
+    // get execute inner sql addr
+    if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, alter_table_arg_.inner_sql_exec_addr_))) {
+      LOG_WARN("get sys ls leader addr fail", K(ret), K(tenant_id_));
+      ret = OB_SUCCESS; // ignore ret
+    } else {
+      set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     }
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *orig_table_schema = nullptr;
