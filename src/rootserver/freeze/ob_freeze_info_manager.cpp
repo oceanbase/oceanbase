@@ -275,57 +275,61 @@ int ObFreezeInfoManager::inner_reload(ObFreezeInfo &freeze_info)
 int ObFreezeInfoManager::set_freeze_info()
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
+  SCN new_frozen_scn;
+  SCN remote_snapshot_gc_scn;
+  ObSimpleFrozenStatus frozen_status;
 
   ObRecursiveMutexGuard guard(lock_);
 
-  SCN new_frozen_scn;
-  SCN remote_snapshot_gc_scn;
-
+  int64_t tenant_schema_version = -1;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
-  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
-    LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id));
-  // 1. lock snapshot_gc_ts in __all_global_stat
-  } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
-             trans, tenant_id_, remote_snapshot_gc_scn))) {
-    LOG_WARN("fail to select for update", KR(ret));
-  // 2. acquire ddl lock, serialize with ddl operation
-  } else if (OB_FAIL(ObDDLSQLTransaction::lock_all_ddl_operation(trans, tenant_id_))) {
-    LOG_WARN("fail to acquire ddl lock", KR(ret), K_(tenant_id));
-  }
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret));
+  } else if (GCTX.schema_service_->get_tenant_refreshed_schema_version(tenant_id_, tenant_schema_version)) {
+    LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K_(tenant_id));
+  } else {
+    ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
+    ObDDLSQLTransaction trans(GCTX.schema_service_, false/*need_end_signal*/);
 
-  ObSimpleFrozenStatus frozen_status;
-  if (OB_SUCC(ret)) {
-    int64_t schema_version_in_frozen_ts = 0;
-    uint64_t data_version = 0;
-
-    // 3. generate new frozen_scn
-    if (OB_FAIL(generate_frozen_scn(freeze_info_, remote_snapshot_gc_scn, new_frozen_scn))) {
-      LOG_WARN("fail to generate frozen timestamp", KR(ret));
-    // 4. get schema_version at frozen_scn
-    } else if (OB_FAIL(get_schema_version(new_frozen_scn, schema_version_in_frozen_ts))) {
-      LOG_WARN("fail to get schema version", KR(ret), K(new_frozen_scn));
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
-      LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
+    // In 'ddl_sql_transaction.start()', it implements the semantics of 'lock_all_ddl_operation'.
+    if (OB_FAIL(trans.start(sql_proxy_, tenant_id_, tenant_schema_version))) {
+      LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(tenant_schema_version));
+    // 1. lock snapshot_gc_ts in __all_global_stat
+    } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
+              trans, tenant_id_, remote_snapshot_gc_scn))) {
+      LOG_WARN("fail to select for update", KR(ret));
     } else {
-      frozen_status.frozen_scn_ = new_frozen_scn;
-      frozen_status.schema_version_ = schema_version_in_frozen_ts;
-      frozen_status.data_version_ = data_version;
+      int64_t schema_version_in_frozen_ts = 0;
+      uint64_t data_version = 0;
 
-      // 5. insert freeze info
-      if (OB_FAIL(freeze_info_proxy.set_freeze_info(trans, frozen_status))) {
-        LOG_WARN("fail to set freeze info", KR(ret), K(frozen_status), K_(tenant_id));
+      // 2. generate new frozen_scn
+      if (OB_FAIL(generate_frozen_scn(freeze_info_, remote_snapshot_gc_scn, new_frozen_scn))) {
+        LOG_WARN("fail to generate frozen timestamp", KR(ret));
+      // 3. get schema_version at frozen_scn
+      } else if (OB_FAIL(get_schema_version(new_frozen_scn, schema_version_in_frozen_ts))) {
+        LOG_WARN("fail to get schema version", KR(ret), K(new_frozen_scn));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+        LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
+      } else {
+        frozen_status.frozen_scn_ = new_frozen_scn;
+        frozen_status.schema_version_ = schema_version_in_frozen_ts;
+        frozen_status.data_version_ = data_version;
+
+        // 4. insert freeze info
+        if (OB_FAIL(freeze_info_proxy.set_freeze_info(trans, frozen_status))) {
+          LOG_WARN("fail to set freeze info", KR(ret), K(frozen_status), K_(tenant_id));
+        }
       }
     }
-  }
 
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-      LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
+        LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
+      }
     }
   }
 

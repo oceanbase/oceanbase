@@ -211,9 +211,10 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
                                 .by(tenant_id)
                                 .dst_cluster_id(GCONF.cluster_id)
                                 .major_freeze(req, resp))) {
-          if (OB_LEADER_NOT_EXIST == ret) {
+          if (OB_LEADER_NOT_EXIST == ret || OB_EAGAIN == ret) {
             const int64_t idle_time = 200 * 1000 * (i + 1);
-            LOG_WARN("leader may switch, will retry", K(tenant_id), K(freeze_info), "ori_leader", leader, K(idle_time));
+            LOG_WARN("leader may switch or ddl confilict, will retry", KR(ret), K(tenant_id), K(freeze_info),
+              "ori_leader", leader, K(idle_time));
             USLEEP(idle_time);
             ret = OB_SUCCESS;
           } else if ((OB_MAJOR_FREEZE_NOT_FINISHED != ret) && (OB_FROZEN_INFO_ALREADY_EXIST != ret)) {
