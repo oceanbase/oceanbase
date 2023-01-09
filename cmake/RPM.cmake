@@ -54,7 +54,6 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
 install(PROGRAMS
   tools/import_time_zone_info.py
   ${CMAKE_BINARY_DIR}/src/observer/observer
-  $<$<STREQUAL:${ARCHITECTURE},"x86_64">:tools/mysql_tzinfo_to_sql>
   DESTINATION bin
   COMPONENT server)
 
