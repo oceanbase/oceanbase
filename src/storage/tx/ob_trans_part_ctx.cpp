@@ -1007,12 +1007,12 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
         const int64_t local_prepare_version = std::max(gts, max_read_ts);
         exec_info_.prepare_version_ = std::max(local_prepare_version, exec_info_.prepare_version_);
 
-        bool no_need_submit_log = true;
+        bool no_need_submit_log = is_sub2pc() || exec_info_.is_dup_tx_;
         if (get_upstream_state() < ObTxState::PREPARE && OB_FAIL(do_prepare(no_need_submit_log))) {
           TRANS_LOG(WARN, "drive into prepare phase failed in gts callback", K(ret), KPC(this));
-        } else {
-          // retry to submit prepare log in handle_timeout
-          TRANS_LOG(INFO, "invoke do_prepare in gts callback", K(ret), KPC(this));
+        }
+        if (OB_SUCC(ret) && !no_need_submit_log && OB_FAIL(submit_log_impl_(ObTxLogType::TX_PREPARE_LOG))) {
+          TRANS_LOG(WARN, "submit prepare log in gts callback failed", K(ret), KPC(this));
         }
       }
 
