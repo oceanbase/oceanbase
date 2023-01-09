@@ -624,12 +624,9 @@ int ObTenantFreezeInfoMgr::update_next_info_list(const ObIArray<FreezeInfo> &inf
     if (OB_SUCC(ret)) {
       if (OB_FAIL(next_info_list.push_back(next))) {
         STORAGE_LOG(WARN, "failed to push back freeze info", K(ret));
-      } else {
-        STORAGE_LOG(INFO, "update info", "freeze info", next);
       }
     }
   }
-
   return ret;
 }
 
@@ -643,8 +640,6 @@ int ObTenantFreezeInfoMgr::update_next_snapshots(const ObIArray<ObSnapshotInfo> 
   for (int64_t i = 0; OB_SUCC(ret) && i < snapshots.count(); ++i) {
     if (OB_FAIL(next_snapshots.push_back(snapshots.at(i)))) {
       STORAGE_LOG(WARN, "fail to push back snapshot", K(ret));
-    } else {
-      STORAGE_LOG(INFO, "update info", "snapshot", snapshots.at(i));
     }
   }
   return ret;
