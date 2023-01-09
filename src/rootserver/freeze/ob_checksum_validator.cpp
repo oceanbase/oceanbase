@@ -389,7 +389,7 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
                   data_compaction_info.all_index_verified_ = false;
                 } else if (cur_compaction_info.is_compacted() && data_compaction_info.is_compacted()) {
                   #ifdef ERRSIM
-                      ret = E(EventTable::EN_MEDIUM_VERIFY_GROUP_SKIP_SET_VERIFY) OB_SUCCESS;
+                      ret = OB_E(EventTable::EN_MEDIUM_VERIFY_GROUP_SKIP_SET_VERIFY) OB_SUCCESS;
                       if (OB_FAIL(ret)) {
                         if (!is_inner_table(table_id)) {
                           ret = OB_EAGAIN;

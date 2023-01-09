@@ -969,7 +969,7 @@ int ObGlobalUniqueIndexCallback::operator()(const int ret_code)
   arg.task_id_ = task_id_;
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;
       LOG_INFO("report replica build status errsim", K(ret));
     }
 #endif

@@ -1109,7 +1109,7 @@ int ObLSMigrationHandler::build_rebuild_task_()
 
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_GENERATE_REBUILD_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_GENERATE_REBUILD_TASK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_GENERATE_REBUILD_TASK_FAILED", K(ret));
       }

@@ -535,7 +535,7 @@ int ObComplementDataDag::report_replica_build_status()
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;
       LOG_INFO("report replica build status errsim", K(ret));
     }
 #endif

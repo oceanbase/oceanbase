@@ -558,7 +558,7 @@ int ObMediumCompactionScheduleFunc::submit_medium_clog(
   int ret = OB_SUCCESS;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_MEDIUM_COMPACTION_SUBMIT_CLOG_FAILED) ret;
+  ret = OB_E(EventTable::EN_MEDIUM_COMPACTION_SUBMIT_CLOG_FAILED) ret;
   if (OB_FAIL(ret)) {
     LOG_INFO("set update medium clog failed with errsim", KPC(this));
     return ret;
@@ -654,7 +654,7 @@ int ObMediumCompactionScheduleFunc::check_medium_checksum_table(
       }
     }
 #ifdef ERRSIM
-    ret = E(EventTable::EN_MEDIUM_REPLICA_CHECKSUM_ERROR) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_MEDIUM_REPLICA_CHECKSUM_ERROR) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       STORAGE_LOG(INFO, "ERRSIM EN_MEDIUM_REPLICA_CHECKSUM_ERROR", K(ret), K(ls_id), K(tablet_id));
     }
@@ -716,7 +716,7 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  ret = E(EventTable::EN_MEDIUM_CREATE_DAG) ret;
+  ret = OB_E(EventTable::EN_MEDIUM_CREATE_DAG) ret;
   if (OB_FAIL(ret)) {
     LOG_INFO("set create medium dag failed with errsim", K(ret));
     return ret;

@@ -1394,7 +1394,7 @@ int ObTabletMergeTask::process()
   ObTaskController::get().switch_task(share::ObTaskType::DATA_MAINTAIN);
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_COMPACTION_MERGE_TASK) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_COMPACTION_MERGE_TASK) OB_SUCCESS;
   if (OB_FAIL(ret)) {
     STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_MERGE_TASK");
     return ret;

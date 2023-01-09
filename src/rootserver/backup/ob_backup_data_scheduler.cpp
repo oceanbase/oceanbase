@@ -1369,7 +1369,7 @@ int ObUserTenantBackupJobMgr::persist_set_task_()
 
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_BACKUP_PERSIST_SET_TASK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_PERSIST_SET_TASK_FAILED) OB_SUCCESS;
     }
 #endif
 

@@ -433,7 +433,7 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
     }
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_BACKUP_READ_MACRO_BLOCK_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_BACKUP_READ_MACRO_BLOCK_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup", "fetch_macro_block_failed",
                               "logic_id", logic_id);
