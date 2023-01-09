@@ -138,6 +138,7 @@ int ObLockTable::recover_(const blocksstable::ObDatumRow &row)
   int64_t idx = row.storage_datums_[TABLE_LOCK_KEY_COLUMN].get_int();
   ObString obj_str = row.storage_datums_[TABLE_LOCK_KEY_COLUMN + 1].get_string();
   ObTableLockOp store_info;
+  const int64_t curr_timestamp = ObTimeUtility::current_time();
 
   ObTableHandleV2 handle;
   ObLockMemtable *memtable = nullptr;
@@ -147,6 +148,10 @@ int ObLockTable::recover_(const blocksstable::ObDatumRow &row)
     LOG_WARN("ObLockTable not inited", K(ret));
   } else if (OB_FAIL(store_info.deserialize(obj_str.ptr(), obj_str.length(), pos))) {
     LOG_WARN("failed to deserialize ObTableLockOp", K(ret));
+    // we may recover from a sstable that copy from other ls replica,
+    // the create timestamp need to be fixed.
+  } else if (FALSE_IT(store_info.create_timestamp_ = OB_MIN(store_info.create_timestamp_,
+                                                            curr_timestamp))) {
   } else if (OB_FAIL(get_lock_memtable(handle))) {
     LOG_WARN("get lock memtable failed", K(ret));
   } else if (OB_FAIL(handle.get_lock_memtable(memtable))) {
