@@ -502,7 +502,7 @@ int ObTransformAggrSubquery::check_subquery_select(ObSelectStmt &subquery,
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < subquery.get_select_item_size(); ++i) {
     ObRawExpr *select_expr = NULL;
-    if (OB_ISNULL(select_expr = subquery.get_select_item(0).expr_)) {
+    if (OB_ISNULL(select_expr = subquery.get_select_item(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select expr is null", K(ret));
     } else if (select_expr->get_expr_levels().has_member(subquery.get_current_level() - 1) ||
