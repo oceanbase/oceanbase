@@ -628,7 +628,7 @@ public:
   bool if_exist_;
   bool delay_to_drop_;
   bool force_drop_;
-  common::ObString object_name_;//Synchronize the name of the recycle bin in the main library
+  common::ObString object_name_;//no use in 4.0
   bool open_recyclebin_;
   uint64_t tenant_id_;          // drop tenant with tenant_id_ if it's valid.
 };

@@ -9772,6 +9772,7 @@ int ObRootService::check_all_ls_has_leader_(const char *print_str)
   bool has_ls_without_leader = false;
   ObTimeoutCtx ctx;
   const int64_t DEFAULT_RETRY_TIMEOUT = GCONF.internal_sql_execute_timeout;
+  ObSqlString last_error_msg;
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -9790,7 +9791,8 @@ int ObRootService::check_all_ls_has_leader_(const char *print_str)
         if (OB_FAIL(ls_status_op.check_all_ls_has_leader(
             sql_proxy_,
             print_str,
-            has_ls_without_leader))) {
+            has_ls_without_leader,
+            last_error_msg))) {
           LOG_WARN("fail to check all ls has leader", KR(ret), K(print_str));
         }
       } while (OB_OP_NOT_ALLOW == ret && has_ls_without_leader);
@@ -9798,7 +9800,9 @@ int ObRootService::check_all_ls_has_leader_(const char *print_str)
   }
   if (OB_TIMEOUT == ret) {
     ret = OB_OP_NOT_ALLOW;
-    if (!has_ls_without_leader) { // timeout without retry
+    if (!last_error_msg.empty()) {
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, last_error_msg.ptr());
+    } else {
       LOG_WARN("fail to check all ls has leader because inner sql timeout", KR(ret), K(print_str));
       char err_msg[OB_TMP_BUF_SIZE_256];
       (void)snprintf(err_msg, sizeof(err_msg), "check leader for all LS timeout, %s", print_str);

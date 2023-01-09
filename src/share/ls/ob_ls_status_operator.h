@@ -328,10 +328,12 @@ public:
   // @param [in] client: sql client for inner sql
   // @param [in] print_str: string of operation. Used to print LOG_USER_ERROR "'print_str' not allowed"
   // @param [out] has_ls_without_leader: whether there is an LS without a leader
+  // @param [out] valid_error_msg: if has ls without leader, print ls and tenant_id error message
   int check_all_ls_has_leader(
       ObISQLClient &client,
       const char *print_str,
-      bool &has_ls_without_leader);
+      bool &has_ls_without_leader,
+      common::ObSqlString &error_msg);
 private:
   int get_visible_member_list_str_(const ObMemberList &member_list,
                                   common::ObIAllocator &allocator,

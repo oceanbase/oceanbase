@@ -21594,23 +21594,17 @@ int ObDDLService::record_tenant_locality_event_history(
 
 /*
  * This interface includes 4 situations of primary and standalone cluster in total
- * primary cluster
+ * primary tenant
  * drop tenant force: The tenant is forced to be deleted, with the highest priority. Variable identification: drop_force
  * drop tenant and recyclebin is enable: put tenant into recyclebin. Variable identification: to_recyclebin
  * drop tenant and recyclebin is disable or drop tenant purge: Both cases take the path of delayed deletion
  * Variable identification: delay_to_drop
  * The priority of the 3 variables is reduced, and there can only be one state at the same time
  *
- * standalone cluster
- * It is not allowed to initiate related drop tenant operations, all need to be synchronized from the primary cluster,
- * the following is the synchronized operation
- *
- * drop tenant force is consistent with the behavior of the primary cluster
- * drop tenant When the primary cluster recycle bin is opened, that is, the primary cluster puts the tenant
- *  into the recycle bin, the standalone cluster will put the tenant into the recycle bin regardless of
- *  whether the recycle bin is opened or not.
- * drop tenant: When the primary cluster closes the recycle bin or drop tenant purge,
- * the standalone cluster must take the path of delayed deletion regardless of whether the recycle bin is opened or not.
+ * standby tenant
+ * drop tenant force: The tenant is forced to be deleted, with the highest priority. Variable identification: drop_force
+ * drop tenant and recyclebin is enable: put tenant into recyclebin. Variable identification: to_recyclebin
+ * drop tenant and recyclebin is disable: equal to drop tneant force;
  *
  * meta tenant can only be force dropped with its user tenant.
  */
@@ -21619,12 +21613,12 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
   int ret = OB_SUCCESS;
   ObDDLSQLTransaction trans(schema_service_);
   const bool if_exist = arg.if_exist_;
-  const bool drop_force = !arg.delay_to_drop_;
+  bool drop_force = !arg.delay_to_drop_;
+  const bool open_recyclebin = arg.open_recyclebin_;
   const ObTenantSchema *tenant_schema = NULL;
   ObSchemaGetterGuard schema_guard;
   ObArray<ObResourcePoolName> pool_names;
   ObArray<share::ObResourcePool*> pools;
-  ObRootService *rootservice = GCTX.root_service_;
   ret = OB_E(EventTable::EN_DROP_TENANT_FAILED) OB_SUCCESS;
   bool is_standby = false;
   uint64_t user_tenant_id = common::OB_INVALID_ID;
@@ -21634,11 +21628,6 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
-  } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-    LOG_WARN("failed to get is standby", K(ret));
-  } else if (OB_UNLIKELY(nullptr == rootservice)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rootservice is null", K(ret), KP(rootservice));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret));
   } else if (specify_tenant_id && OB_FAIL(schema_guard.get_tenant_info(arg.tenant_id_, tenant_schema))) {
@@ -21658,11 +21647,37 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
   } else if (!is_user_tenant(user_tenant_id)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can't drop sys or meta tenant", KR(ret), K(user_tenant_id));
-  } else if (tenant_schema->is_in_recyclebin() && !drop_force) {
+  } else if (drop_force) {
+    //is drop force, no need to check
+    //pay attention
+  } else if (tenant_schema->is_in_recyclebin()) {
     ret = OB_TENANT_NOT_EXIST;
-    LOG_USER_ERROR(OB_TENANT_NOT_EXIST, arg.tenant_name_.length(), arg.tenant_name_.ptr());
     LOG_WARN("tenant in recyclebin, can't delete it", K(arg), KR(ret));
-  } else if (OB_FAIL(schema_guard.get_schema_version(OB_SYS_TENANT_ID, refreshed_schema_version))) {
+    LOG_USER_ERROR(OB_TENANT_NOT_EXIST, arg.tenant_name_.length(), arg.tenant_name_.ptr());
+  } else if (tenant_schema->is_restore() ||
+          tenant_schema->is_creating() || tenant_schema->is_dropping()) {
+    // Due to the particularity of restore tenants, in order to avoid abnormal behavior of the cluster,
+    // restore tenants cannot be placed in the recycle bin.
+    // The creating state is the intermediate state of tenant creation, and it will become the normal state
+    // if it is successfully created
+    // The dropping state is the previous delayed deletion state. The two states are managed by the gc thread,
+    // responsible for deletion and cannot be placed in the recycle bin.
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("drop tenant to recyclebin is not supported", KR(ret), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "should drop tenant force, delay drop tenant");
+  } else {
+    ObAllTenantInfo tenant_info;
+    if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+          user_tenant_id, sql_proxy_, false, tenant_info))) {
+      LOG_WARN("failed to load tenant info", KR(ret), K(arg), K(user_tenant_id));
+    } else if (tenant_info.is_standby() && !open_recyclebin) {
+      //if standby tenant and no recyclebin, need drop force
+      drop_force = true;
+      FLOG_INFO("is standby tenant, need drop force", K(tenant_info));
+    }
+  }
+
+  if (FAILEDx(schema_guard.get_schema_version(OB_SYS_TENANT_ID, refreshed_schema_version))) {
     LOG_WARN("failed to get tenant schema version", KR(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", KR(ret), K(user_tenant_id), K(refreshed_schema_version));
@@ -21673,21 +21688,6 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
     * drop tenant && recyclebin enable: in recyclebin
     * (drop tenant && recyclebin disable) || drop tenant purge: delay delete
     */
-    bool open_recyclebin = arg.open_recyclebin_;
-    if (is_standby && arg.object_name_.empty()) {
-      // The delayed deletion of the standalone cluster synchronization is not affected by
-      // whether the standalone cluster recycle bin is opened, but is controlled by the primary cluster
-      // When the primary cluster is opened, it will enter the recycle bin, and use rpc
-      // when the standalone cluster is synchronized.
-      // When the primary cluster is closed, it will be deleted after a delay, and the recycle bin of
-      // the standalone cluster is set to be closed here, keeping it consistent with the primary cluster
-      // However, the operation of entering the recycle bin synchronized by the standalone cluster
-      // does not need to change open_recyclebin, and distinguish whether to enter the recycle bin
-      // through arg.object_name_.empty()
-      open_recyclebin = false;
-    } else {
-      open_recyclebin = arg.open_recyclebin_;
-    }
     const bool to_recyclebin = (arg.delay_to_drop_ && open_recyclebin);
     const bool delay_to_drop = (arg.delay_to_drop_ && !open_recyclebin);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
@@ -21695,7 +21695,7 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
     if (drop_force) {
       const uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
       if (OB_FAIL(drop_resource_pool_pre(
-              user_tenant_id, drop_ug_id_array, pool_names, is_standby, trans))) {
+              user_tenant_id, drop_ug_id_array, pool_names, trans))) {
         LOG_WARN("fail to drop resource pool pre", KR(ret));
       } else if (OB_FAIL(ddl_operator.drop_tenant(user_tenant_id, trans, &arg.ddl_stmt_str_))) {
         LOG_WARN("ddl_operator drop_tenant failed", K(user_tenant_id), KR(ret));
@@ -21733,58 +21733,31 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
         }
       }
     } else {// put tenant into recyclebin
-      ObTenantSchema new_tenant_schema = *tenant_schema;
+      ObTenantSchema new_tenant_schema;
       ObSqlString new_tenant_name;
-      if (tenant_schema->is_restore() ||
-          tenant_schema->is_creating() ||
-          tenant_schema->is_dropping()) {
-        // Due to the particularity of restore tenants, in order to avoid abnormal behavior of the cluster,
-        // restore tenants cannot be placed in the recycle bin.
-        // The creating state is the intermediate state of tenant creation, and it will become the normal state
-        // if it is successfully created
-        // The dropping state is the previous delayed deletion state. The two states are managed by the gc thread,
-        // responsible for deletion and cannot be placed in the recycle bin.
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("drop tenant to recyclebin is not supported", KR(ret), K(arg));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "should drop tenant force, delay drop tenant");
-      } else {
-        if (!arg.object_name_.empty()) {
-          //arg.object_name_ is not empty, it is the case that the standalone cluster synchronizes the primary cluster,
-          //and the recycle bin name is synchronized from the primary cluster
-          if (!is_standby) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("is not standby", K(ret));
-          } else if (OB_FAIL(new_tenant_name.assign(arg.object_name_))) {
-            LOG_WARN("fail to assign", K(ret));
-          }
-        } else {
-          // Otherwise, the primary cluster generates the name of the recycle bin by itself
-          if (OB_FAIL(ddl_operator.construct_new_name_for_recyclebin(
-                                   new_tenant_schema, new_tenant_name))) {
-            LOG_WARN("fail to construct new name", K(ret));
-          }
+      if (OB_FAIL(new_tenant_schema.assign(*tenant_schema))) {
+        LOG_WARN("failed to assign tenant schema", KR(ret), KPC(tenant_schema));
+      } else if (OB_FAIL(ddl_operator.construct_new_name_for_recyclebin(
+              new_tenant_schema, new_tenant_name))) {
+        LOG_WARN("fail to construct new name", K(ret));
+      } else if (to_recyclebin) {
+        //2. tenant in recyclebin
+        if (new_tenant_name.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant name is null", K(ret));
+        } else if (OB_FAIL(ddl_operator.drop_tenant_to_recyclebin(
+                new_tenant_name,
+                new_tenant_schema,
+                trans, &arg.ddl_stmt_str_))) {
+          LOG_WARN("fail to drop tenant in recyclebin", KR(ret), K(user_tenant_id));
         }
-        if (OB_SUCC(ret)) {
-          if (to_recyclebin) {
-            //2. tenant in recyclebin
-            if (new_tenant_name.empty()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("tenant name is null", K(ret));
-            } else if (OB_FAIL(ddl_operator.drop_tenant_to_recyclebin(
-                                          new_tenant_name,
-                                          new_tenant_schema,
-                                          trans, &arg.ddl_stmt_str_))) {
-              LOG_WARN("fail to drop tenant in recyclebin", KR(ret), K(user_tenant_id));
-            }
-          } else if (delay_to_drop) {
-            //3. tenant delay delete
-            if (OB_FAIL(ddl_operator.delay_to_drop_tenant(new_tenant_schema, trans,
-                                                          &arg.ddl_stmt_str_))) {
-              LOG_WARN("fail to delay_to drop tenant", K(ret));
-            } else {
-              // ObLSManager will process force_drop_tenant() logic each 100ms.
-            }
-          }
+      } else if (delay_to_drop) {
+        //3. tenant delay delete
+        if (OB_FAIL(ddl_operator.delay_to_drop_tenant(new_tenant_schema, trans,
+                &arg.ddl_stmt_str_))) {
+          LOG_WARN("fail to delay_to drop tenant", K(ret));
+        } else {
+          // ObLSManager will process force_drop_tenant() logic each 100ms.
         }
       }
     }
@@ -21802,8 +21775,8 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
     if (OB_SUCC(ret) && OB_NOT_NULL(tenant_schema)) {
       if (OB_FAIL(drop_resource_pool_final(
               tenant_schema->get_tenant_id(), drop_ug_id_array,
-              is_standby, pool_names))) {
-        LOG_WARN("fail to drop resource pool finsl", KR(ret));
+              pool_names))) {
+        LOG_WARN("fail to drop resource pool finsl", KR(ret), KPC(tenant_schema));
       }
     }
   }
@@ -21853,7 +21826,6 @@ int ObDDLService::try_drop_sys_ls_(const uint64_t meta_tenant_id,
 int ObDDLService::drop_resource_pool_pre(const uint64_t tenant_id,
                                          common::ObIArray<uint64_t> &drop_ug_id_array,
                                          ObIArray<ObResourcePoolName> &pool_names,
-                                         const bool is_standby,
                                          ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -21863,17 +21835,12 @@ int ObDDLService::drop_resource_pool_pre(const uint64_t tenant_id,
     LOG_WARN("get_pool_names_of_tenant failed", K(tenant_id), KR(ret));
   } else if (OB_FAIL(unit_mgr_->revoke_pools(trans, drop_ug_id_array, pool_names, tenant_id))) {
     LOG_WARN("revoke_pools failed", K(pool_names), K(tenant_id), KR(ret));
-  } else if (is_standby) {
-    if (OB_FAIL(unit_mgr_->drop_standby_resource_pool(pool_names, trans))) {
-      LOG_WARN("failed to drop standby resource pool", KR(ret), K(pool_names));
-    }
   }
   return ret;
 }
 
 int ObDDLService::drop_resource_pool_final(const uint64_t tenant_id,
                                            common::ObIArray<uint64_t> &drop_ug_id_array,
-                                           const bool is_standby,
                                            ObIArray<ObResourcePoolName> &pool_names)
 {
   int ret = OB_SUCCESS;
@@ -21883,11 +21850,6 @@ int ObDDLService::drop_resource_pool_final(const uint64_t tenant_id,
   } else if (OB_FAIL(unit_mgr_->commit_change_pool_owner(
           drop_ug_id_array, grant, pool_names, tenant_id))) {
     LOG_WARN("commit change pool owner failed", K(grant), K(pool_names), K(tenant_id), KR(ret));
-  } else if (is_standby) {
-    // delete resource pool memery strut
-    if (OB_FAIL(unit_mgr_->commit_drop_standby_resource_pool(pool_names))) {
-      LOG_WARN("failed to drop standby resource pool", KR(ret), K(pool_names));
-    }
   }
 
   // delete from __all_schema_status
@@ -22052,6 +22014,8 @@ int ObDDLService::purge_tenant(
   const ObTenantSchema *tenant_schema = NULL;
   ObArenaAllocator allocator(ObModIds::OB_TENANT_INFO);
   ObArray<ObResourcePoolName> pool_names;
+  ObAllTenantInfo tenant_info;
+  bool is_standby_tenant = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else if (arg.tenant_id_ != OB_SYS_TENANT_ID) {
@@ -22083,16 +22047,25 @@ int ObDDLService::purge_tenant(
       LOG_WARN("tenant not in recyclebin, can not be purge", K(arg), K(*tenant_schema), K(ret));
     }
   }
+  if (FAILEDx(ObAllTenantInfoProxy::load_tenant_info(
+          tenant_schema->get_tenant_id(), sql_proxy_, false, tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(arg), KPC(tenant_schema));
+  } else if (FALSE_IT(is_standby_tenant = tenant_info.is_standby())) {
+    //can not be there
+  }
 
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (is_standby_tenant) {
+    //drop tenant force
+    if (OB_FAIL(try_force_drop_tenant(*tenant_schema))) {
+      LOG_WARN("failed to try drop tenant force", KR(ret), KPC(tenant_schema));
+    }
+  } else {
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObDDLSQLTransaction trans(schema_service_);
     const uint64_t tenant_id = tenant_schema->get_tenant_id();
-    bool is_standby = false;
     int64_t refreshed_schema_version = 0;
-    if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-      LOG_WARN("fail to get is standby", K(ret));
-    } else if (OB_FAIL(schema_guard.get_schema_version(OB_SYS_TENANT_ID, refreshed_schema_version))) {
+    if (OB_FAIL(schema_guard.get_schema_version(OB_SYS_TENANT_ID, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret));
     } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(refreshed_schema_version));

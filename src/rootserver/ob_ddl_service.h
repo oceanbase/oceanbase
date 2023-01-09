@@ -1604,11 +1604,9 @@ private:
   int drop_resource_pool_pre(const uint64_t tenant_id,
                              common::ObIArray<uint64_t> &drop_ug_id_array,
                              ObIArray<share::ObResourcePoolName> &pool_names,
-                             const bool is_standby,
                              ObMySQLTransaction &trans);
   int drop_resource_pool_final(const uint64_t tenant_id,
                                common::ObIArray<uint64_t> &drop_ug_id_array,
-                               const bool is_standby,
                                ObIArray<share::ObResourcePoolName> &pool_names);
   // private funcs for drop column
   int get_all_dropped_column_ids(

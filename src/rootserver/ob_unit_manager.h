@@ -252,9 +252,6 @@ public:
                                                  common::ObMySQLTransaction &trans);
   //Delete the resource pool and associated unit in memory, and other memory structures
   virtual int delete_resource_pool_unit(share::ObResourcePool *pool);
-  virtual int drop_standby_resource_pool(const common::ObIArray<share::ObResourcePoolName> &pool_names,
-                                         common::ObMySQLTransaction &trans);
-  virtual int commit_drop_standby_resource_pool(const common::ObIArray<share::ObResourcePoolName> &pool_names);
   virtual int split_resource_pool(const share::ObResourcePoolName &pool_name,
                                   const common::ObIArray<common::ObString> &split_pool_list,
                                   const common::ObIArray<common::ObZone> &zone_list);
@@ -276,10 +273,6 @@ public:
       const bool is_bootstrap = false,
       const bool if_not_grant = false,
       const bool skip_offline_server = false);
-  virtual int grant_pools_for_standby(
-      common::ObISQLClient &client,
-      const common::ObIArray<share::ObResourcePoolName> &pool_names,
-      const uint64_t tenant_id);
   virtual int revoke_pools(
       common::ObISQLClient &client,
       common::ObIArray<uint64_t> &new_ug_id_array,

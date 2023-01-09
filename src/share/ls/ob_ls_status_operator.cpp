@@ -1174,7 +1174,8 @@ int ObLSStatusOperator::construct_ls_leader_info_sql_(common::ObSqlString &sql)
 int ObLSStatusOperator::check_all_ls_has_leader(
     ObISQLClient &client,
     const char *print_str,
-    bool &has_ls_without_leader)
+    bool &has_ls_without_leader,
+    ObSqlString &error_msg)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1206,12 +1207,13 @@ int ObLSStatusOperator::check_all_ls_has_leader(
             if (OB_SUCC(ret)) {
               has_ls_without_leader = true;
               ret = OB_OP_NOT_ALLOW;
+              int tmp_ret = OB_SUCCESS;
               LOG_WARN("find ls has no leader when check_all_ls_has_leader",
                   KR(ret), K(tenant_id), K(ls_id));
-              char err_msg[MAX_ERROR_LOG_PRINT_SIZE];
-              (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) has no leader, %s",
-                  tenant_id, ls_id, print_str);
-              LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+              if (OB_TMP_FAIL(error_msg.assign_fmt("Tenant(%lu) LS(%ld) has no leader, %s",
+                      tenant_id, ls_id, print_str))) {
+                LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(ls_id), K(print_str));
+              }
             }
           }
         } // end while

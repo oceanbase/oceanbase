@@ -90,7 +90,8 @@ private:
  int construct_ls_recovery_stat(const share::SCN &syn_scn,
                                 share::ObLSRecoveryStat &ls_stat);
  //wait other ls is larger than sycn ts
- int check_valid_to_operator_ls_(const share::SCN &syn_scn);
+ int check_valid_to_operator_ls_(const share::ObLSAttr &ls_attr,
+                                 const share::SCN &syn_scn);
  int check_can_do_recovery_();
  //check restore finish and update sync scn to recovery_unitl_scn
  int update_sys_ls_restore_finish_();
@@ -98,7 +99,8 @@ private:
  int report_sys_ls_recovery_stat_(const share::SCN &sync_scn);
  void try_tenant_upgrade_end_();
  int get_min_data_version_(uint64_t &compatible);
-
+ int process_ls_operator_in_trans_(const share::ObLSAttr &ls_attr,
+     const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
 private:
   bool inited_;
   uint64_t tenant_id_;

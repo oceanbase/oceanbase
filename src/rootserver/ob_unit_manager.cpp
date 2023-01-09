@@ -3007,61 +3007,7 @@ int ObUnitManager::delete_resource_pool_unit(share::ObResourcePool *pool)
   }
   return ret;
 }
-int ObUnitManager::drop_standby_resource_pool(const common::ObIArray<ObResourcePoolName> &pool_names,
-                                              ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  if (0 == pool_names.count() || !trans.is_started()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("pool names is empty or trans not start", K(ret),
-        K(pool_names), "started", trans.is_started());
-  } else if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
-  } else {
-    SpinRLockGuard guard(lock_);
-    //When the standby database deletes a tenant, it needs to delete resource_pool
-    for (int64_t i = 0; i < pool_names.count() && OB_SUCC(ret); ++i) {
-      share::ObResourcePool *pool = NULL;
-      if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
-        LOG_WARN("failed to get reource pool by name", K(ret), K(i), K(pool_names));
-      } else if (OB_ISNULL(pool)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool is null", K(ret), K(pool));
-      } else if (OB_FAIL(remove_resource_pool_unit_in_trans(
-              pool->resource_pool_id_, trans))) {
-        LOG_WARN("failed to remove resource pool and unit", K(ret), K(pool));
-      }
-    }
-  }
-  return ret;
-}
-int ObUnitManager::commit_drop_standby_resource_pool(const common::ObIArray<ObResourcePoolName> &pool_names)
-{
-  int ret = OB_SUCCESS;
-  if (0 == pool_names.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("pool names is empty or trans not start", K(ret), K(pool_names));
-  } else if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
-  } else {
-    SpinWLockGuard guard(lock_);
-    //When the standby database deletes a tenant, it needs to delete resource_pool
-    for (int64_t i = 0; i < pool_names.count() && OB_SUCC(ret); ++i) {
-      share::ObResourcePool *pool = NULL;
-      if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
-        LOG_WARN("failed to get reource pool by name", K(ret), K(i), K(pool_names));
-      } else if (OB_ISNULL(pool)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool is null", K(ret), K(pool));
-      } else if (OB_FAIL(delete_resource_pool_unit(pool))) {
-        LOG_WARN("failed to remove resource pool and unit", K(ret), K(pool));
-      }
-    }
-  }
-  return ret;
-}
+
 //After the 14x version,
 //the same tenant is allowed to have multiple unit specifications in a zone,
 //but it is necessary to ensure that these units can be scattered on each server in the zone,
@@ -3214,46 +3160,6 @@ int ObUnitManager::check_locality_for_logonly_unit(const share::schema::ObTenant
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("logonly replica already exist before logonly pool create", K(ret), K(zone_locality),
                  K(zone_with_logonly_unit));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUnitManager::grant_pools_for_standby(common::ObISQLClient &client,
-                                           const common::ObIArray<share::ObResourcePoolName> &pool_names,
-                                           const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("check inner stat failed", K(ret), K(inited_), K(loaded_));
-  } else if (common::STANDBY_CLUSTER != ObClusterInfoGetter::get_cluster_role_v2()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not standby cluster", K(ret), "cluster_role", ObClusterInfoGetter::get_cluster_role_v2());
-  } else {
-    SpinWLockGuard guard(lock_);
-    //If the grant pool has been successful, you only need to modify the table next time
-    share::ObResourcePool new_pool;
-    for (int64_t i = 0; OB_SUCC(ret) && i < pool_names.count(); ++i) {
-      share::ObResourcePool *pool = NULL;
-      if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
-        LOG_WARN("get resource pool by name failed", "pool_name", pool_names.at(i), K(ret));
-      } else if (NULL == pool) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pool is null", KP(pool), K(ret));
-      } else if (pool->is_granted_to_tenant()) {
-        ret = OB_RESOURCE_POOL_ALREADY_GRANTED;
-        LOG_USER_ERROR(OB_RESOURCE_POOL_ALREADY_GRANTED, to_cstring(pool_names.at(i)));
-        LOG_WARN("pool has already granted to other tenant, can't grant again",
-            K(ret), K(tenant_id), "pool", *pool);
-      } else if (OB_FAIL(new_pool.assign(*pool))) {
-        LOG_WARN("failed to assign new_pool", K(ret));
-      } else {
-        new_pool.tenant_id_ = tenant_id;
-        if (OB_FAIL(ut_operator_.update_resource_pool(client, new_pool))) {
-          LOG_WARN("update_resource_pool failed", K(new_pool), K(ret));
-        }
       }
     }
   }
