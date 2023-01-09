@@ -108,6 +108,11 @@ public:
     return cache_obj_;
   }
 
+  CacheRefHandleID get_ref_handle() const
+  {
+    return ref_handle_;
+  }
+
   int force_early_release(ObPlanCache *pc);
 
   // this function may be somewhat dangerous and may cause some memory leak.

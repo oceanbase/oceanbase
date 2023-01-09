@@ -62,7 +62,7 @@ int ObDASUtils::store_warning_msg(const ObWarningBuffer &wb, obrpc::ObRpcResultC
   return ret;
 }
 
-int ObDASUtils::check_nested_sql_mutating(ObTableID ref_table_id, ObExecContext &exec_ctx)
+int ObDASUtils::check_nested_sql_mutating(ObTableID ref_table_id, ObExecContext &exec_ctx, bool is_reading)
 {
   int ret = OB_SUCCESS;
   ObExecContext *cur_parent_ctx = exec_ctx.get_parent_ctx();
@@ -87,7 +87,8 @@ int ObDASUtils::check_nested_sql_mutating(ObTableID ref_table_id, ObExecContext 
     LOG_DEBUG("check nested sql mutating", K(cur_parent_ctx), K(parent_das_ctx), K(ref_table_id));
     FOREACH_X(node, parent_das_ctx.get_table_loc_list(), OB_SUCC(ret)) {
       ObDASTableLoc *table_loc = *node;
-      if (table_loc->loc_meta_->ref_table_id_ == ref_table_id && table_loc->is_writing_) {
+      if (table_loc->loc_meta_->ref_table_id_ == ref_table_id
+          && (table_loc->is_writing_ || (table_loc->is_reading_ && !is_reading && lib::is_mysql_mode()))) {
         ObSchemaGetterGuard schema_guard;
         const ObTableSchema *table_schema = NULL;
         uint64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();

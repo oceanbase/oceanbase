@@ -372,7 +372,11 @@ void ObPlanCacheObject::dump_deleted_log_info(const bool is_debug_log /* = true 
     }
   } else if (is_anon()) {
     const pl::ObPLFunction *pl_func = dynamic_cast<const pl::ObPLFunction *>(this);
-    raw_sql = ObTruncatedString(pl_func->get_stat().raw_sql_, OB_MAX_SQL_LENGTH).string();
+    if (OB_ISNULL(pl_func)) {
+      LOG_ERROR("the pl_func is null", K(this));
+    } else {
+      raw_sql = ObTruncatedString(pl_func->get_stat().raw_sql_, OB_MAX_SQL_LENGTH).string();
+    }
   } else {
     // do nothing
   }

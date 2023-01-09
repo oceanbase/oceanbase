@@ -1566,7 +1566,8 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
 int ObResolverUtils::resolve_sp_name(ObSQLSessionInfo &session_info,
                                      const ParseNode &sp_name_node,
                                      ObString &db_name,
-                                     ObString &sp_name)
+                                     ObString &sp_name,
+                                     bool need_db_name)
 {
   int ret = OB_SUCCESS;
   const ParseNode *sp_node = NULL;
@@ -1600,6 +1601,8 @@ int ObResolverUtils::resolve_sp_name(ObSQLSessionInfo &session_info,
       (lib::is_oracle_mode() ? OB_MAX_PL_IDENT_LENGTH : OB_MAX_MYSQL_PL_IDENT_LENGTH))) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_WARN("identifier is too long", K(sp_name), K(ret));
+    } else if (!need_db_name && lib::is_oracle_mode()) {
+      // do nothing
     } else if (NULL == (db_node = sp_name_node.children_[0])) {
       if (session_info.get_database_name().empty()) {
         ret = OB_ERR_NO_DB_SELECTED;

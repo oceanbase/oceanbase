@@ -120,6 +120,7 @@ ObPLException::ObPLException(int64_t error_code)
   new(&type_)ObPLConditionValue(ERROR_CODE, error_code);
 }
 
+
 ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
                                                int64_t pl_function,
                                                int64_t loc,
@@ -171,6 +172,8 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
       }
     }
     tl_eptr = unwind;
+
+
   }
   return unwind;
 }

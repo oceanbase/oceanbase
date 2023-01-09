@@ -1000,7 +1000,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     OZ (session.make_dbms_cursor(cursor, stmt_id_));
     CK (OB_NOT_NULL(cursor));
     OX (cursor->set_stmt_type(stmt::T_SELECT));
-    OX (cursor->set_stmt_id(inner_stmt_id));
+    OX (cursor->set_ps_sql(ctx_.cur_sql_));
     OZ (session.ps_use_stream_result_set(use_stream));
     if (use_stream) {
       OX (cursor->set_streaming());

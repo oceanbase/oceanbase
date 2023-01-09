@@ -849,7 +849,7 @@ private:
                      common::ObIArray<sql::ObUDFInfo> &udf_info,
                      common::ObIArray<sql::ObOpRawExpr*> &op_exprs,
                      bool is_prepare_protocol/*= false*/);
-  int check_expr_result_type(const ObRawExpr *expr, ObPLIntegerType &pl_integer_type);
+  int check_expr_result_type(const ObRawExpr *expr, ObPLIntegerType &pl_integer_type, bool &is_anonymos_arg);
   bool is_need_add_checker(const ObPLIntegerType &type, const ObRawExpr *expr);
   int add_pl_integer_checker_expr(ObRawExprFactory &expr_factory,
                                   const ObPLIntegerType &type,

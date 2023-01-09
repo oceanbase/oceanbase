@@ -418,7 +418,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     CK (OB_NOT_NULL(cursor));
     OX (cursor->set_stmt_type(stmt::T_SELECT));
     OZ (session.get_inner_ps_stmt_id(stmt_id_, inner_stmt_id));
-    OX (cursor->set_stmt_id(inner_stmt_id));
+    OX (cursor->set_ps_sql(sql_));
     OZ (session.ps_use_stream_result_set(use_stream));
     if (use_stream) {
       OX (cursor->set_streaming());

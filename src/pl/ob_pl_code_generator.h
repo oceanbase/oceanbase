@@ -201,6 +201,9 @@ public:
   int generate(ObPLFunction &pl_func);
   int generate(ObPLPackage &pl_package);
 
+  int generate_normal(ObPLFunction &pl_func);
+  int generate_simple(ObPLFunction &pl_func);
+
   int generate_global_string(const ObString &string, jit::ObLLVMValue &str, jit::ObLLVMValue &len);
   int generate_string(const ObString &string, jit::ObLLVMValue &str, jit::ObLLVMValue &len);
   int generate_empty_string(jit::ObLLVMValue &str, jit::ObLLVMValue &len);
@@ -216,7 +219,7 @@ public:
   int generate_sql(const ObPLSql &sql,
                    jit::ObLLVMValue &str,
                    jit::ObLLVMValue &length,
-                   jit::ObLLVMValue &id,
+                   jit::ObLLVMValue &ps_sql,
                    jit::ObLLVMValue &type,
                    jit::ObLLVMValue &for_update,
                    jit::ObLLVMValue &hidden_rowid,

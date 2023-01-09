@@ -228,6 +228,7 @@ DEFINE_LOG_SUB_MOD(SPI)                // service program interface
 DEFINE_LOG_SUB_MOD(PACK)               // package
 DEFINE_LOG_SUB_MOD(TYPE)               // type
 DEFINE_LOG_SUB_MOD(DEBUG)              // debug
+DEFINE_LOG_SUB_MOD(CACHE)              // cache
 LOG_MOD_END(PL)
 
 } //namespace common
@@ -583,7 +584,10 @@ LOG_MOD_END(PL)
                                                                 info_string, ##args)
 #define _PL_DEBUG_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, DEBUG, level,                   \
                                                                 _fmt_, ##args)
-
+#define PL_CACHE_LOG(level, info_string, args...) OB_SUB_MOD_LOG(PL, CACHE, level,                 \
+                                                                    info_string, ##args)
+#define _PL_CACHE_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, CACHE, level,                     \
+                                                                _fmt_, ##args)
 
 
 #define RPC_FRAME_LOG(level, _fmt_, args...)    \

@@ -259,7 +259,7 @@ int ObPLConditionTable::add_condition(const common::ObString &name, const ObPLCo
 
 int ObPLCursor::set(const ObString &sql,
                const ObIArray<int64_t> &expr_idxs,
-               ObPsStmtId id,
+               const ObString &ps_sql,
                sql::stmt::StmtType type,
                bool for_update,
                ObRecordType *record_type,
@@ -272,7 +272,7 @@ int ObPLCursor::set(const ObString &sql,
   int ret = OB_SUCCESS;
   set_sql(sql);
   set_sql_params(expr_idxs);
-  set_ps(id, type);
+  set_ps_sql(ps_sql, type);
   set_for_update(for_update);
   set_row_desc(record_type);
   set_cursor_type(cursor_type);
@@ -287,7 +287,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
                                 int64_t idx,
                                 const ObString &sql,
                                 const ObIArray<int64_t> &sql_params,
-                                ObPsStmtId ps_id,
+                                const ObString &ps_sql,
                                 sql::stmt::StmtType stmt_type,
                                 bool for_update,
                                 bool has_hidden_rowid,
@@ -312,7 +312,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
       cursor->set_index(idx);
       cursor->set_sql(sql);
       cursor->set_sql_params(sql_params);
-      cursor->set_ps(ps_id, stmt_type);
+      cursor->set_ps_sql(ps_sql, stmt_type);
       cursor->set_for_update(for_update);
       cursor->set_hidden_rowid(has_hidden_rowid);
       cursor->set_row_desc(row_desc);
@@ -1062,7 +1062,7 @@ int ObPLBlockNS::add_questionmark_cursor(const int64_t symbol_idx)
 {
   int ret = OB_SUCCESS;
   ObArray<int64_t> dummy_params;
-  ObPsStmtId dummy_ps_id = OB_INVALID_ID;
+  ObString dummy_sql;
   sql::stmt::StmtType dummy_stmt_type = sql::stmt::T_NONE;
   bool dummy_for_update = false;
   bool dummy_hidden_rowid = false;
@@ -1076,7 +1076,7 @@ int ObPLBlockNS::add_questionmark_cursor(const int64_t symbol_idx)
                                                     symbol_idx,
                                                     "?",
                                                     dummy_params,
-                                                    dummy_ps_id,
+                                                    dummy_sql,
                                                     dummy_stmt_type,
                                                     false,
                                                     false,
@@ -1095,7 +1095,7 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                             const ObPLDataType &type,
                             const ObString &sql,
                             const ObIArray<int64_t> &sql_params,
-                            ObPsStmtId ps_id,
+                            const ObString &ps_sql,
                             sql::stmt::StmtType stmt_type,
                             bool for_update,
                             bool has_hidden_rowid,
@@ -1127,7 +1127,7 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                                                       get_symbol_table()->get_count() - 1,
                                                       sql,
                                                       sql_params,
-                                                      ps_id,
+                                                      ps_sql,
                                                       stmt_type,
                                                       for_update,
                                                       has_hidden_rowid,
@@ -4042,7 +4042,6 @@ int ObPLFunctionAST::add_argument(const common::ObString &name,
     } else if (type.is_cursor_type()) {
       ObString dummy_sql;
       ObArray<int64_t> dummy_params;
-      ObPsStmtId dummy_ps_id = OB_INVALID_ID;
       sql::stmt::StmtType dummy_stmt_type = sql::stmt::T_NONE;
       bool dummy_for_update = false;
       bool dummy_hidden_rowid = false;
@@ -4054,7 +4053,7 @@ int ObPLFunctionAST::add_argument(const common::ObString &name,
                                         get_symbol_table().get_count() -1,
                                         dummy_sql,
                                         dummy_params,
-                                        dummy_ps_id,
+                                        dummy_sql,
                                         dummy_stmt_type,
                                         dummy_for_update,
                                         dummy_hidden_rowid,

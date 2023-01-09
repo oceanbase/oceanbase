@@ -44,7 +44,7 @@ int calc_digest_text(ObIAllocator &allocator,
     ObSqlCtx sql_ctx;
     sql_ctx.session_info_ = session;
     sql_ctx.schema_guard_ = schema_guard;
-    ObPlanCacheCtx pc_ctx(sql_str, false, allocator, sql_ctx, exec_ctx,
+    ObPlanCacheCtx pc_ctx(sql_str, PC_TEXT_MODE, allocator, sql_ctx, exec_ctx,
                           session->get_effective_tenant_id());
     ObParser parser(allocator, session->get_sql_mode(), cs_type);
     ParseResult parse_result;

@@ -1795,6 +1795,7 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
     char *buf = NULL;
     int32_t pos = 0;
     const bool is_transform_outline = true;
+    const bool is_parameterized_execute = false;
     ParseNode *type_node = NULL;
     if (OB_FAIL(parser.parse(query_sql, parse_result))) {
       LOG_WARN("Generate syntax tree failed", "sql", query_sql, K(ret));

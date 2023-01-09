@@ -491,10 +491,11 @@ int MockCacheObjectFactory::alloc(ObPhysicalPlan *&plan,
                                 uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObPlanCacheObject *cache_obj = NULL;
+  ObILibCacheObject *cache_obj = NULL;
   if (OB_FAIL(alloc(cache_obj, ObLibCacheNameSpace::NS_CRSR, tenant_id))) {
     LOG_WARN("alloc physical plan failed", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(cache_obj) || OB_UNLIKELY(!cache_obj->is_sql_crsr())) {
+  } else if (OB_ISNULL(cache_obj) ||
+             OB_UNLIKELY(ObLibCacheNameSpace::NS_CRSR != cache_obj->get_ns())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache object is invalid", KPC(cache_obj));
   } else {
@@ -512,10 +513,11 @@ int MockCacheObjectFactory::alloc(ObPLFunction *&func,
                                 uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObPlanCacheObject *cache_obj = NULL;
+  ObILibCacheObject *cache_obj = NULL;
   if (OB_FAIL(alloc(cache_obj, ns, tenant_id))) {
     LOG_WARN("alloc cache object failed", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(cache_obj) || OB_UNLIKELY(!cache_obj->is_prcr())) {
+  } else if (OB_ISNULL(cache_obj) ||
+             OB_UNLIKELY(ObLibCacheNameSpace::NS_PRCR != cache_obj->get_ns())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache object is invalid", KPC(cache_obj));
   } else {
@@ -532,10 +534,11 @@ int MockCacheObjectFactory::alloc(ObPLPackage *&package,
                                 uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObPlanCacheObject *cache_obj = NULL;
+  ObILibCacheObject *cache_obj = NULL;
   if (OB_FAIL(alloc(cache_obj, ObLibCacheNameSpace::NS_PKG, tenant_id))) {
     LOG_WARN("alloc cache object failed", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(cache_obj) || OB_UNLIKELY(!cache_obj->is_pkg())) {
+  } else if (OB_ISNULL(cache_obj) ||
+             OB_UNLIKELY(ObLibCacheNameSpace::NS_PKG != cache_obj->get_ns())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache object is invalid", KPC(cache_obj));
   } else {
@@ -548,7 +551,7 @@ int MockCacheObjectFactory::alloc(ObPLPackage *&package,
   return ret;
 }
 
-int MockCacheObjectFactory::alloc(ObPlanCacheObject *&cache_obj,
+int MockCacheObjectFactory::alloc(ObILibCacheObject *&cache_obj,
                                 ObLibCacheNameSpace ns, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -619,7 +622,7 @@ int MockCacheObjectFactory::alloc(ObPlanCacheObject *&cache_obj,
   return ret;
 }
 
-void MockCacheObjectFactory::free(ObPlanCacheObject *cache_obj)
+void MockCacheObjectFactory::free(ObILibCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cache_obj)) {
@@ -638,12 +641,12 @@ void MockCacheObjectFactory::free(ObPlanCacheObject *cache_obj)
   }
 }
 
-void MockCacheObjectFactory::inner_free(ObPlanCacheObject *cache_obj)
+void MockCacheObjectFactory::inner_free(ObILibCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
 
   lib::MemoryContext entity = cache_obj->get_mem_context();
-  WITH_CONTEXT(entity) { cache_obj->~ObPlanCacheObject(); }
+  WITH_CONTEXT(entity) { cache_obj->~ObILibCacheObject(); }
   cache_obj = NULL;
   DESTROY_CONTEXT(entity);
 }

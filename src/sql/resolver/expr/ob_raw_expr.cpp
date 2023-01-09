@@ -4242,7 +4242,7 @@ int ObPlQueryRefRawExpr::assign(const ObRawExpr &other)
     } else {
       const ObPlQueryRefRawExpr &tmp = static_cast<const ObPlQueryRefRawExpr &>(other);
       OZ (exprs_.assign(tmp.exprs_));
-      OX (id_ = tmp.id_);
+      OX (ps_sql_ = tmp.ps_sql_);
       OX (type_ = tmp.type_);
       OX (route_sql_ = tmp.route_sql_);
       OX (subquery_result_type_ = tmp.subquery_result_type_);
@@ -5691,7 +5691,7 @@ bool ObPlQueryRefRawExpr::inner_same_as(
       bool_ret = check_context->compare_query(*this, u_expr);
     } else {
       // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
-      bool_ret = (get_ps_id() == u_expr.get_ps_id() &&
+      bool_ret = (get_ps_sql() == u_expr.get_ps_sql() &&
                   get_stmt_type() == u_expr.get_stmt_type() &&
                   get_route_sql() == u_expr.get_route_sql() &&
                   get_subquery_result_type() == u_expr.get_subquery_result_type());
@@ -5703,7 +5703,7 @@ bool ObPlQueryRefRawExpr::inner_same_as(
 bool ObExprEqualCheckContext::compare_query(const ObPlQueryRefRawExpr &left,
                                             const ObPlQueryRefRawExpr &right)
 {
-  return left.get_ps_id() == right.get_ps_id() &&
+  return left.get_ps_sql() == right.get_ps_sql() &&
          left.get_stmt_type() == right.get_stmt_type() &&
          left.get_route_sql() == right.get_route_sql() &&
          left.get_subquery_result_type() == right.get_subquery_result_type();
@@ -5722,7 +5722,7 @@ int ObPlQueryRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int
     if (OB_FAIL(BUF_PRINTF("PL_SQ"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
-  } else if (OB_FAIL(BUF_PRINTF("subquery(%lu)", id_))) {
+  } else if (OB_FAIL(BUF_PRINTF("subquery(%.*s)", ps_sql_.length(), ps_sql_.ptr()))) {
     LOG_WARN("fail to BUF_PRINTF", K(ret));
   } else if (EXPLAIN_EXTENDED == type) {
     if (OB_FAIL(BUF_PRINTF("("))) {

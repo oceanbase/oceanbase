@@ -781,6 +781,7 @@ public:
   int create_trigger(share::schema::ObTriggerInfo &new_trigger_info,
                      common::ObMySQLTransaction &trans,
                      share::schema::ObErrorInfo &error_info,
+                     ObIArray<ObDependencyInfo> &dep_infos,
                      const common::ObString *ddl_stmt_str/*=NULL*/,
                      bool for_insert_errors,
                      bool is_update_table_schema_version = true,

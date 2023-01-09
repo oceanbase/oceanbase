@@ -21,6 +21,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "pl/ob_pl.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
+#include "pl/pl_cache/ob_pl_cache_mgr.h"
 
 namespace oceanbase
 {
@@ -595,7 +596,7 @@ int ObPlanCacheManager::flush_pl_cache(const uint64_t tenant_id)
   int64_t safe_timestamp = INT64_MAX;
   ObArray<AllocCacheObjInfo> deleted_objs;
   if (NULL != plan_cache) {
-    if (OB_FAIL(plan_cache->cache_evict_all_pl())) {
+    if (OB_FAIL(pl::ObPLCacheMgr::cache_evict_all_pl(plan_cache))) {
       SQL_PC_LOG(ERROR, "PL cache evict failed, please check", K(ret));
     } else if (OB_FAIL(observer::ObGlobalReqTimeService::get_instance()
                            .get_global_safe_timestamp(safe_timestamp))) {

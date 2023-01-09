@@ -366,29 +366,6 @@ private:
   bool enable_inner_part_parallel_exec_;
 };
 
-class ObPLPlanSet : public ObPlanSet
-{
-public:
-  ObPLPlanSet()
-    : ObPlanSet(PST_PRCD),
-      pl_obj_(NULL)
-  {}
-  virtual ~ObPLPlanSet() {}
-public:
-  virtual int add_cache_obj(ObPlanCacheObject &cache_object,
-                            ObPlanCacheCtx &pc_ctx,
-                            int64_t ol_param_idx,
-                            int &add_ret) override;
-  virtual int select_plan(ObPlanCacheCtx &pc_ctx,
-                          ObPlanCacheObject *&cache_obj) override;
-  virtual void remove_all_plan() override;
-  virtual int64_t get_mem_size() override;
-  virtual void reset() override;
-  virtual bool is_sql_planset() override;
-private:
-  sql::ObPlanCacheObject *pl_obj_;
-};
-
 inline ObPlanSetType ObPlanSet::get_plan_set_type_by_cache_obj_type(ObLibCacheNameSpace ns)
 {
   ObPlanSetType ret = PST_MAX;

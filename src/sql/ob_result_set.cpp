@@ -77,6 +77,7 @@ ObResultSet::~ObResultSet()
   }
   // Always called at the end of the ObResultSet destructor
   update_end_time();
+  is_init_ = false;
 }
 
 int ObResultSet::open_cmd()
@@ -920,7 +921,7 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
   return ret;
 }
 
-int ObResultSet::to_plan(const bool is_ps_mode, ObPhysicalPlan *phy_plan)
+int ObResultSet::to_plan(const PlanCacheMode mode, ObPhysicalPlan *phy_plan)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(phy_plan)) {
@@ -929,10 +930,12 @@ int ObResultSet::to_plan(const bool is_ps_mode, ObPhysicalPlan *phy_plan)
   } else {
     if (OB_FAIL(phy_plan->set_field_columns(field_columns_))) {
       LOG_WARN("Failed to copy field info to plan", K(ret));
-    } else if (is_ps_mode && OB_FAIL(phy_plan->set_param_fields(param_columns_))) {
+    } else if ((PC_PS_MODE == mode || PC_PL_MODE == mode)
+               && OB_FAIL(phy_plan->set_param_fields(param_columns_))) {
       // param fields is only needed ps mode
       LOG_WARN("failed to copy param field to plan", K(ret));
-    } else if (is_ps_mode && OB_FAIL(phy_plan->set_returning_param_fields(returning_param_columns_))) {
+    } else if ((PC_PS_MODE == mode || PC_PL_MODE == mode)
+               && OB_FAIL(phy_plan->set_returning_param_fields(returning_param_columns_))) {
       // returning param fields is only needed ps mode
       LOG_WARN("failed to copy returning param field to plan", K(ret));
     }

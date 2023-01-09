@@ -2346,12 +2346,22 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
               OX (ctx_.prepare_param_count_++);
             }
           } else {
-            /*
-             * 走到这里有三种情况：
-             * 1、PL里的sql语句，形如select * from t where a1=:a and a2=b，其中b是PL local变量
-             * 2、普通ps过来的sql语句，形如select * from t where a1=:a and a2=1
-             * */
             //prepare stmt不需要type，只需要计算?的个数
+            if (OB_SUCC(ret) && nullptr != ctx_.secondary_namespace_) {
+              const pl::ObPLSymbolTable* symbol_table = NULL;
+              const pl::ObPLVar* var = NULL;
+              CK (OB_NOT_NULL(symbol_table = ctx_.secondary_namespace_->get_symbol_table()));
+              CK (OB_NOT_NULL(var = symbol_table->get_symbol(val.get_unknown())));
+              if (OB_SUCC(ret)) {
+                if (0 == var->get_name().case_compare(pl::ObPLResolver::ANONYMOUS_ARG)) {
+                  CK (OB_NOT_NULL(var->get_type().get_meta_type()));
+                  CK (OB_NOT_NULL(var->get_type().get_data_type()));
+                  OX (c_expr->set_meta_type(*var->get_type().get_meta_type()));
+                  OX (c_expr->set_expr_obj_meta(*var->get_type().get_meta_type()));
+                  OX (c_expr->set_accuracy(var->get_type().get_data_type()->get_accuracy()));
+                }
+              }
+            }
             ObRawExpr *original_expr = c_expr;
             OZ (ObResolverUtils::resolve_external_param_info(*ctx_.external_param_info_,
                                                              ctx_.expr_factory_,
@@ -3339,6 +3349,17 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
       if (OB_ISNULL(ctx_.param_list_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param_list_ is null", K(ret), K(ctx_.param_list_));
+      } else if (ctx_.param_list_->empty() && nullptr != ctx_.secondary_namespace_) {
+        const pl::ObPLSymbolTable* symbol_table = NULL;
+        const pl::ObPLVar* var = NULL;
+        CK (OB_NOT_NULL(symbol_table = ctx_.secondary_namespace_->get_symbol_table()));
+        CK (OB_NOT_NULL(var = symbol_table->get_symbol(escape_node->value_)));
+        if (0 == var->get_name().case_compare(pl::ObPLResolver::ANONYMOUS_ARG) &&
+            NULL != var->get_pl_data_type().get_data_type() &&
+            ObNullType == var->get_pl_data_type().get_data_type()->get_obj_type()) {
+          ret = OB_ERR_INVALID_ESCAPE_CHAR_LENGTH;
+          LOG_WARN("invalid escape char length, expect 1, get 0", K(ret));
+        }
       } else if (escape_node->value_ < 0 || escape_node->value_ >= ctx_.param_list_->count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index is out of range", K(escape_node->value_), K(ctx_.param_list_->count()));
@@ -3607,6 +3628,10 @@ int ObRawExprResolverImpl::process_case_node(const ParseNode *node, ObRawExpr *&
           LOG_WARN("Add when expression failed", K(ret));
         } else if (OB_FAIL(case_expr->add_then_param_expr(then_expr))) {
           LOG_WARN("Add then expression failed", K(ret));
+        } else if(T_QUESTIONMARK == then_expr->get_expr_type()) {
+          if (then_expr->get_result_meta().get_type() != ObNullType) {
+            all_then_null = false;
+          }
         } else if (then_expr->get_expr_type() != T_NULL) {
           all_then_null = false;
         }
@@ -3632,7 +3657,11 @@ int ObRawExprResolverImpl::process_case_node(const ParseNode *node, ObRawExpr *&
         LOG_WARN("fail to recursive resolve", K(ret), K(node->children_[2]));
       }
       if (OB_SUCC(ret)){
-        if (default_expr->get_expr_type() != T_NULL) {
+        if (T_QUESTIONMARK == default_expr->get_expr_type()) {
+          if (default_expr->get_result_meta().get_type() != ObNullType) {
+            all_then_null = false;
+          }
+        } else if (default_expr->get_expr_type() != T_NULL) {
           all_then_null = false;
         }
         case_expr->set_default_param_expr(default_expr);

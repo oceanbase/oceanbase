@@ -89,13 +89,13 @@ int ObUDRUtils::refill_udr_exec_ctx(const ObUDRItemMgr::UDRItemRefGuard &item_gu
     OX (pc_ctx.rule_name_ = rule_item->get_rule_name());
     OX (pc_ctx.def_name_ctx_ = const_cast<QuestionMarkDefNameCtx *>(rule_item->get_question_mark_def_name_ctx()));
     OZ (cons_udr_param_store(dynamic_param_list, pc_ctx, param_store));
-    OZ (ObSql::construct_ps_param(param_store, pc_ctx));
+    OZ (ObSql::construct_parameterized_params(param_store, pc_ctx));
     OX (pc_ctx.normal_parse_const_cnt_ = param_store.count());
-    if (!pc_ctx.is_ps_mode_) {
+    if (pc_ctx.mode_ != PC_PS_MODE) {
       OX (context.is_prepare_protocol_ = true);
       OX (const_cast<ObString &>(pc_ctx.raw_sql_) = replacement);
-      OX (pc_ctx.is_ps_mode_ = true);
-      OX (pc_ctx.set_is_ps_execute_stage());
+      OX (pc_ctx.mode_ = PC_PS_MODE);
+      OX (pc_ctx.set_is_parameterized_execute());
     }
   }
   return ret;
@@ -134,7 +134,7 @@ int ObUDRUtils::cons_udr_param_store(const DynamicParamInfoArray& dynamic_param_
     if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(pc_ctx.sql_ctx_.session_info_));
-    } else if (pc_ctx.is_ps_mode_) {
+    } else if (PC_PS_MODE == pc_ctx.mode_) {
       ObSQLMode sql_mode = pc_ctx.sql_ctx_.session_info_->get_sql_mode();
       ObCollationType conn_coll = pc_ctx.sql_ctx_.session_info_->get_local_collation_connection();
       FPContext fp_ctx(conn_coll);
@@ -196,11 +196,11 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("node is null", K(ret));
       } else if (T_QUESTIONMARK == raw_param->type_) {
-        if (!pc_ctx.is_ps_mode_ || raw_param->value_ >= pc_ctx.fp_result_.ps_params_.count()) {
+        if (pc_ctx.mode_ != PC_PS_MODE || raw_param->value_ >= pc_ctx.fp_result_.parameterized_params_.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid argument", K(ret), K(raw_param->value_), K(dynamic_param_info.raw_param_idx_),
-          K(pc_ctx.is_ps_mode_), K(pc_ctx.fp_result_.ps_params_.count()));
-        } else if (OB_FAIL(param_store.push_back(*pc_ctx.fp_result_.ps_params_.at(raw_param->value_)))) {
+          K(pc_ctx.mode_), K(pc_ctx.fp_result_.parameterized_params_.count()));
+        } else if (OB_FAIL(param_store.push_back(*pc_ctx.fp_result_.parameterized_params_.at(raw_param->value_)))) {
           LOG_WARN("pushback param failed", K(ret));
         }
       } else if (OB_FAIL(ObResolverUtils::resolve_const(raw_param,

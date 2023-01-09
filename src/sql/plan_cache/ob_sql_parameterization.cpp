@@ -65,6 +65,7 @@ struct TransformTreeCtx
   int64_t assign_father_level_;
   const ObIArray<FixedParamValue> *udr_fixed_params_;
   bool ignore_scale_check_;
+  bool is_from_pl_;
   TransformTreeCtx();
 };
 
@@ -125,7 +126,8 @@ TransformTreeCtx::TransformTreeCtx() :
  is_project_list_scope_(false),
  assign_father_level_(ObSqlParameterization::NO_VALUES),
  udr_fixed_params_(NULL),
- ignore_scale_check_(false)
+ ignore_scale_check_(false),
+ is_from_pl_(false)
 {
 }
 
@@ -141,7 +143,8 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
                                                  ObMaxConcurrentParam::FixParamStore &fixed_param_store,
                                                  bool is_transform_outline,
                                                  SQL_EXECUTION_MODE execution_mode,
-                                                 const ObIArray<FixedParamValue> *udr_fixed_params)
+                                                 const ObIArray<FixedParamValue> *udr_fixed_params,
+                                                 bool is_from_pl)
 {
   int ret = OB_SUCCESS;
   ObCollationType collation_connection = CS_TYPE_INVALID;
@@ -180,6 +183,7 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
     ctx.is_project_list_scope_ = false;
     ctx.mode_ = execution_mode;
     ctx.assign_father_level_ = NO_VALUES;
+    ctx.is_from_pl_ = is_from_pl;
     if (OB_FAIL(transform_tree(ctx, session))) {
       if (OB_NOT_SUPPORTED != ret) {
         SQL_PC_LOG(WARN, "fail to transform syntax tree", K(ret));
@@ -352,11 +356,11 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
 SQL_EXECUTION_MODE ObSqlParameterization::get_sql_execution_mode(ObPlanCacheCtx &pc_ctx)
 {
   SQL_EXECUTION_MODE mode = INVALID_MODE;
-  if (pc_ctx.is_ps_mode_) {
-    if (pc_ctx.is_ps_execute_stage_) {
-      mode = pc_ctx.is_inner_sql_ ? PL_EXECUTE_MODE : PS_EXECUTE_MODE;
+  if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+    if (pc_ctx.is_parameterized_execute_) {
+      mode = (PC_PL_MODE == pc_ctx.mode_) ? PL_EXECUTE_MODE : PS_EXECUTE_MODE;
     } else {
-      mode = pc_ctx.is_inner_sql_ ? PL_PREPARE_MODE : PS_PREPARE_MODE;
+      mode = (PC_PL_MODE == pc_ctx.mode_) ? PL_PREPARE_MODE : PS_PREPARE_MODE;
     }
   } else {
     mode = TEXT_MODE;
@@ -534,7 +538,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               literal_prefix,
                               ctx.default_length_semantics_,
                               static_cast<ObCollationType>(server_collation),
-                              NULL, session_info.get_sql_mode()))) {
+                              NULL, session_info.get_sql_mode(), ctx.is_from_pl_))) {
             SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
           } else {
             //对于字符串值，其T_VARCHAR型的parse node有一个T_VARCHAR类型的子node，该子node描述字符串的charset等信息。
@@ -653,7 +657,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     }
 
     // transform `operand - const_num_val` to `operand + (-const_num_val)`
-    if (OB_SUCC(ret) && OB_FAIL(transform_minus_op(*(ctx.allocator_), ctx.tree_))) {
+    if (OB_SUCC(ret) && OB_FAIL(transform_minus_op(*(ctx.allocator_), ctx.tree_, ctx.is_from_pl_))) {
       LOG_WARN("failed to transform minums operation", K(ret));
     } else if (lib::is_oracle_mode()) {
       // in oracle mode, select +-1 from dual is prohibited, but with following orders, it can be executed successfully:
@@ -964,7 +968,8 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
       SQL_PC_LOG(WARN, "fail to normal parameterized parser tree", K(ret));
     }
   } else {
-    need_parameterized = (!pc_ctx.is_ps_mode_ || (is_prepare_mode(mode) && sql_info.ps_need_parameterized_));
+    need_parameterized = (!(PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
+                          || (is_prepare_mode(mode) && sql_info.ps_need_parameterized_));
   }
   if (OB_FAIL(ret)) {
   } else if (is_execute_mode(mode)) {
@@ -1006,8 +1011,8 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
         SQL_PC_LOG(WARN, "fail to transform_neg_param", K(ret));
       } else {
         pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_.assign_ptr(buf, pos);
-        pc_ctx.normal_parse_const_cnt_ = sql_info.total_;
         pc_ctx.ps_need_parameterized_ = sql_info.ps_need_parameterized_;
+        pc_ctx.normal_parse_const_cnt_ = sql_info.total_;
       }
     }
   }
@@ -1833,7 +1838,7 @@ int ObSqlParameterization::resolve_paramed_const(SelectItemTraverseCtx &ctx)
   return ret;
 }
 
-int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tree)
+int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tree, bool is_from_pl)
 {
   int ret = OB_SUCCESS;
   if (T_OP_MINUS != tree->type_) {
@@ -1852,28 +1857,31 @@ int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tr
              tree->children_[1]->value_ >= 0) {
     ParseNode *child = tree->children_[1];
     tree->type_ = T_OP_ADD;
+    if (!is_from_pl) {
+      if (T_INT == child->type_) {
+        child->value_ = -child->value_;
+      }
 
-    if (T_INT == child->type_) {
-      child->value_ = -child->value_;
-    }
+      char *new_str = static_cast<char *>(parse_malloc(child->str_len_ + 2, &alloc));
+      char *new_raw_text = static_cast<char *>(parse_malloc(child->text_len_ + 2, &alloc));
+      if (OB_ISNULL(new_str) || OB_ISNULL(new_raw_text)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(new_raw_text), K(new_str));
+      } else {
+        new_str[0] = '-';
+        new_raw_text[0] = '-';
+        MEMMOVE(new_str + 1, child->str_value_, child->str_len_);
+        MEMMOVE(new_raw_text + 1, child->raw_text_, child->text_len_);
+        new_str[child->str_len_ + 1] = '\0';
+        new_raw_text[child->text_len_ + 1] = '\0';
 
-    char *new_str = static_cast<char *>(parse_malloc(child->str_len_ + 2, &alloc));
-    char *new_raw_text = static_cast<char *>(parse_malloc(child->text_len_ + 2, &alloc));
-    if (OB_ISNULL(new_str) || OB_ISNULL(new_raw_text)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret), K(new_raw_text), K(new_str));
+        child->str_len_++;
+        child->text_len_ ++;
+        child->str_value_ = new_str;
+        child->raw_text_ = new_raw_text;
+        child->is_trans_from_minus_ = 1;
+      }
     } else {
-      new_str[0] = '-';
-      new_raw_text[0] = '-';
-      MEMMOVE(new_str + 1, child->str_value_, child->str_len_);
-      MEMMOVE(new_raw_text + 1, child->raw_text_, child->text_len_);
-      new_str[child->str_len_ + 1] = '\0';
-      new_raw_text[child->text_len_ + 1] = '\0';
-
-      child->str_len_++;
-      child->text_len_ ++;
-      child->str_value_ = new_str;
-      child->raw_text_ = new_raw_text;
       child->is_trans_from_minus_ = 1;
     }
   } else if (T_OP_MUL == tree->children_[1]->type_
@@ -1914,27 +1922,31 @@ int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tr
       // do nothing
     } else {
       tree->type_ = T_OP_ADD;
-      if (T_INT == const_node->type_) {
-        const_node->value_ = -const_node->value_;
-      }
-      char *new_str = static_cast<char *>(parse_malloc(const_node->str_len_ + 2, &alloc));
-      char *new_raw_text = static_cast<char *>(parse_malloc(const_node->text_len_ + 2, &alloc));
+      if (!is_from_pl) {
+        if (T_INT == const_node->type_) {
+          const_node->value_ = -const_node->value_;
+        }
+        char *new_str = static_cast<char *>(parse_malloc(const_node->str_len_ + 2, &alloc));
+        char *new_raw_text = static_cast<char *>(parse_malloc(const_node->text_len_ + 2, &alloc));
 
-      if (OB_ISNULL(new_str) || OB_ISNULL(new_raw_text)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc memory", K(ret), K(new_str), K(new_raw_text));
+        if (OB_ISNULL(new_str) || OB_ISNULL(new_raw_text)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory", K(ret), K(new_str), K(new_raw_text));
+        } else {
+          new_str[0] = '-';
+          new_raw_text[0] = '-';
+          MEMMOVE(new_str + 1, const_node->str_value_, const_node->str_len_);
+          MEMMOVE(new_raw_text + 1, const_node->raw_text_, const_node->text_len_);
+          new_str[const_node->str_len_ + 1] = '\0';
+          new_raw_text[const_node->text_len_]= '\0';
+
+          const_node->str_len_++;
+          const_node->text_len_++;
+          const_node->str_value_ = new_str;
+          const_node->raw_text_ = new_raw_text;
+          const_node->is_trans_from_minus_ = 1;
+        }
       } else {
-        new_str[0] = '-';
-        new_raw_text[0] = '-';
-        MEMMOVE(new_str + 1, const_node->str_value_, const_node->str_len_);
-        MEMMOVE(new_raw_text + 1, const_node->raw_text_, const_node->text_len_);
-        new_str[const_node->str_len_ + 1] = '\0';
-        new_raw_text[const_node->text_len_]= '\0';
-
-        const_node->str_len_++;
-        const_node->text_len_++;
-        const_node->str_value_ = new_str;
-        const_node->raw_text_ = new_raw_text;
         const_node->is_trans_from_minus_ = 1;
       }
     }

@@ -130,7 +130,8 @@ public:
                                    share::schema::ObMaxConcurrentParam::FixParamStore &fixed_param_store,
                                    bool is_transform_outline,
                                    SQL_EXECUTION_MODE execution_mode = INVALID_MODE,
-                                   const ObIArray<FixedParamValue> *udr_fixed_params = NULL);
+                                   const ObIArray<FixedParamValue> *udr_fixed_params = NULL,
+                                   bool is_from_pl = false);
   static int raw_fast_parameterize_sql(common::ObIAllocator &allocator,
                                        const ObSQLSessionInfo &session,
                                        const common::ObString &sql,
@@ -188,7 +189,7 @@ private:
   static int parameterize_fields(SelectItemTraverseCtx &ctx);
 
   static int resolve_paramed_const(SelectItemTraverseCtx &ctx);
-  static int transform_minus_op(ObIAllocator &, ParseNode *);
+  static int transform_minus_op(ObIAllocator &, ParseNode *, bool is_from_pl=false);
 
   static int find_leftest_const_node(ParseNode &cur_node, ParseNode *&const_node);
   static bool need_fast_parser(const ObString &sql);

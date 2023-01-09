@@ -4553,8 +4553,25 @@ bool ObAlterTriggerArg::is_valid() const
   return trigger_infos_.count() != 0;
 }
 
+int ObAlterTriggerArg::assign(const ObAlterTriggerArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(trigger_info_.assign(other.trigger_info_))) {
+    LOG_WARN("failed to copy trigger info", K(ret));
+  } else if (OB_FAIL(trigger_infos_.assign(other.trigger_infos_))) {
+    LOG_WARN("failed to copy trigger infos", K(ret));
+  } else {
+    trigger_database_ = other.trigger_database_;
+    is_set_status_ = other.is_set_status_;
+    is_alter_compile_ = other.is_alter_compile_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObAlterTriggerArg, ObDDLArg), trigger_database_,
-                    trigger_info_, trigger_infos_);
+                    trigger_info_, trigger_infos_, is_set_status_, is_alter_compile_);
 
 bool ObCreateUDTArg::is_valid() const
 {

@@ -8478,6 +8478,7 @@ int ObDDLOperator::del_routines_in_package(const ObPackageInfo &package_info,
 int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
                                   ObMySQLTransaction &trans,
                                   ObErrorInfo &error_info,
+                                  ObIArray<ObDependencyInfo> &dep_infos,
                                   const ObString *ddl_stmt_str,
                                   bool for_insert_errors,
                                   bool is_update_table_schema_version,
@@ -8512,6 +8513,16 @@ int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
           trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
           base_table_id, trigger_info.get_trigger_name());
     }
+  } else if (0 == dep_infos.count()) {
+    // create trigger in mysql mode or create trigger when truncate table, dep_infos.count() is 0,
+    // no need to deal with dependencies.
+  } else {
+    OZ (ObDependencyInfo::delete_schema_object_dependency(trans, trigger_info.get_tenant_id(),
+                                                          trigger_info.get_trigger_id(),
+                                                          trigger_info.get_schema_version(),
+                                                          trigger_info.get_object_type()));
+    OZ (insert_dependency_infos(trans, dep_infos, trigger_info.get_tenant_id(), trigger_info.get_trigger_id(),
+                                trigger_info.get_schema_version(), trigger_info.get_owner_id()));
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(error_info.handle_error_info(trans, &trigger_info))) {
@@ -8538,6 +8549,10 @@ int ObDDLOperator::drop_trigger(const ObTriggerInfo &trigger_info,
                                                              new_schema_version,
                                                              trans, ddl_stmt_str),
       trigger_info.get_trigger_name());
+  OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
+                                                        trigger_info.get_trigger_id(),
+                                                        new_schema_version,
+                                                        trigger_info.get_object_type()));
   if (OB_SUCC(ret) && !trigger_info.is_system_type() && is_update_table_schema_version) {
     uint64_t base_table_id = trigger_info.get_base_object_id();
     OZ (schema_service->get_table_sql_service().update_data_table_schema_version(trans,

@@ -131,20 +131,16 @@ public:
   int destroy(void);
   inline void reset() { destroy(); }
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
-                           common::ObISQLClient::ReadResult &res,
-                           bool is_user_sql = false, bool is_from_pl = false,
+                           common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
-                           common::ObISQLClient::ReadResult &res,
-                           bool is_user_sql = false, bool is_from_pl = false,
+                           common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_write(const uint64_t tenant_id, const char *sql,
-                            int64_t &affected_rows,
-                            bool is_user_sql = false,
+                            int64_t &affected_rows, bool is_user_sql = false,
                             const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
-                            int64_t &affected_rows,
-                            bool is_user_sql = false,
+                            int64_t &affected_rows, bool is_user_sql = false,
                             const common::ObAddr *sql_exec_addr = nullptr) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int register_multi_data_source(const uint64_t &tenant_id,
@@ -235,22 +231,8 @@ public:
   { resource_conn_id_ = OB_INVALID_ID; last_query_timestamp_ = 0; resource_svr_.reset(); }
 
 public:
-  int prepare(const uint64_t tenant_id,
-        const ObString &sql,
-        pl::ObPLBlockNS *secondary_namespace,
-        bool is_dynamic_sql,
-        bool is_dbms_sql,
-        bool is_cursor,
-        common::ObISQLClient::ReadResult &res);
-  int execute(const uint64_t tenant_id,
-          const ObPsStmtId client_stmt_id,
-          const sql::stmt::StmtType stmt_type,
-          ParamStore &params,
-          common::ObISQLClient::ReadResult &res,
-          bool is_from_pl = false,
-          bool is_dynamic = false,
-          bool is_forall = false,
-          int64_t array_binding_count = 0);
+
+  sql::ObSql *get_sql_engine() { return ob_sql_; }
 
   virtual int execute(const uint64_t tenant_id, sqlclient::ObIExecutor &executor) override;
 
@@ -271,17 +253,19 @@ public:
   int set_session_timeout(int64_t query_timeout, int64_t trx_timeout);
 
 public:
-  static int process_record(ObInnerSQLResult &res,
+  static int process_record(sql::ObResultSet &result_set,
+                            sql::ObSqlCtx &sql_ctx,
                             sql::ObSQLSessionInfo &session,
                             ObITimeRecord &time_record,
                             int last_ret,
                             int64_t execution_id,
                             int64_t ps_stmt_id,
-                            int64_t routine_id,
                             ObWaitEventDesc &max_wait_desc,
                             ObWaitEventStat &total_wait_desc,
                             sql::ObExecRecord &exec_record,
                             sql::ObExecTimestamp &exec_timestamp,
+                            bool has_tenant_resource,
+                            const ObString &ps_sql,
                             bool is_from_pl = false);
   static void record_stat(sql::ObSQLSessionInfo &session,
                           const sql::stmt::StmtType type,
@@ -310,7 +294,6 @@ private:
                   pl::ObPLBlockNS *secondary_namespace,
                   bool is_prepare_protocol = false,
                   bool is_prepare_stage = false,
-                  bool is_from_pl = false,
                   bool is_dynamic_sql = false,
                   bool is_dbms_sql = false,
                   bool is_cursor = false);
@@ -318,8 +301,7 @@ private:
                     int do_ret,
                     int64_t abs_timeout_us,
                     bool &need_retry,
-                    int64_t retry_cnt,
-                    bool is_from_pl);
+                    int64_t retry_cnt);
   template <typename T>
   int process_final(const T &sql,
                     ObInnerSQLResult &res,
@@ -327,30 +309,13 @@ private:
   // execute with retry
   int query(sqlclient::ObIExecutor &executor,
             ObInnerSQLResult &res,
-            ObVirtualTableIteratorFactory *vt_iter_factory = NULL,
-            bool is_from_pl = false);
+            ObVirtualTableIteratorFactory *vt_iter_factory = NULL);
   int do_query(sqlclient::ObIExecutor &executor, ObInnerSQLResult &res);
 
-  int prepare(const common::ObString &sql,
-              pl::ObPLBlockNS *secondary_namespace,
-              bool is_dynamic_sql,
-              bool is_dbms_sql,
-              bool is_cursor,
-              ObInnerSQLResult &res,
-              ObVirtualTableIteratorFactory *vt_iter_factory = NULL);
-  int do_prepare(const common::ObString &sql, ObInnerSQLResult &res);
-  int execute(ParamStore &params,
-              ObInnerSQLResult &res,
-              ObVirtualTableIteratorFactory *vt_iter_factory = NULL,
-              bool is_from_pl = false,
-              bool is_dynamic = false,
-              bool is_forall = false,
-              int64_t array_binding_count = 0);
-  int do_execute(const ParamStore &params, ObInnerSQLResult &res);
   int switch_tenant(const uint64_t tenant_id);
 
   // set timeout to session variable
-  int set_timeout(int64_t &abs_timeout_us, bool is_from_pl);
+  int set_timeout(int64_t &abs_timeout_us);
 
   lib::Worker::CompatMode get_compat_mode() const;
 
@@ -363,8 +328,8 @@ private:
   bool is_local_execute(const int64_t cluster_id, const uint64_t tenant_id);
 
   int execute_read_inner(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
-      common::ObISQLClient::ReadResult &res,
-      bool is_user_sql = false, bool is_from_pl = false, const common::ObAddr *sql_exec_addr = nullptr);
+                         common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
+                         const common::ObAddr *sql_exec_addr = nullptr);
   int execute_write_inner(const uint64_t tenant_id, const ObString &sql, int64_t &affected_rows,
       bool is_user_sql = false, const common::ObAddr *sql_exec_addr = nullptr);
   int start_transaction_inner(const uint64_t &tenant_id, bool with_snap_shot = false);

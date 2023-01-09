@@ -399,17 +399,17 @@ int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
 }
 
 int ObMySQLConnection::execute_read(const int64_t cluster_id, const uint64_t tenant_id,
-    const ObString &sql, ObISQLClient::ReadResult &res, bool is_user_sql, bool is_from_pl, const common::ObAddr *sql_exec_addr)
+    const ObString &sql, ObISQLClient::ReadResult &res, bool is_user_sql,
+    const common::ObAddr *sql_exec_addr)
 {
-  UNUSEDx(cluster_id, tenant_id, sql, res, is_user_sql, is_from_pl, sql_exec_addr);
+  UNUSEDx(cluster_id, tenant_id, sql, res, is_user_sql, sql_exec_addr);
   return OB_NOT_SUPPORTED;
 }
 
 int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,
-    ObISQLClient::ReadResult &res, bool is_user_sql, bool is_from_pl, const common::ObAddr *sql_exec_addr)
+    ObISQLClient::ReadResult &res, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
   UNUSED(is_user_sql);
-  UNUSED(is_from_pl);
   UNUSED(sql_exec_addr);
   int ret = OB_SUCCESS;
   ObMySQLReadContext *read_ctx = NULL;

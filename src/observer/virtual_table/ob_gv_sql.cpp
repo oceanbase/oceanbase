@@ -128,17 +128,17 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
         ++plan_id_array_idx_;
         ObCacheObjGuard guard(GV_SQL_HANDLE);
         int tmp_ret = plan_cache_->ref_cache_obj(plan_id, guard); //plan引用计数加1
-        ObPlanCacheObject *cache_obj = static_cast<ObPlanCacheObject*>(guard.get_cache_obj());
+
         //如果当前plan_id对应的plan已被淘汰, 则忽略继续获取下一个plan
         if (OB_HASH_NOT_EXIST == tmp_ret) {
           //do nothing;
         } else if (OB_SUCCESS != tmp_ret) {
           ret = tmp_ret;
-        } else if (OB_ISNULL(cache_obj)) {
+        } else if (OB_ISNULL(guard.get_cache_obj())) {
           ret = OB_ERR_UNEXPECTED;
           //SERVER_LOG(WARN, "cache object is NULL", K(ret));
-        } else if (OB_FAIL(fill_cells(cache_obj, *plan_cache_))) { //plan exist
-          SERVER_LOG(WARN, "fail to fill cells", K(cache_obj), K(tenant_id));
+        } else if (OB_FAIL(fill_cells(guard.get_cache_obj(), *plan_cache_))) { //plan exist
+          SERVER_LOG(WARN, "fail to fill cells", KPC(guard.get_cache_obj()), K(tenant_id));
         } else {
           is_filled = true;
         }
@@ -153,7 +153,7 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
   return ret;
 }
 
-int ObGVSql::fill_cells(const ObPlanCacheObject *cache_obj, const ObPlanCache &plan_cache)
+int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &plan_cache)
 {
   int ret = OB_SUCCESS;
   const int64_t col_count = output_column_ids_.count();

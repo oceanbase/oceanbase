@@ -38,7 +38,8 @@ public:
     : allocator_(allocator),
       connection_collation_(conn_collation)
   {}
-
+  int fast_parse(const ObString &stmt_block,
+                 ParseResult &parse_result);
   int parse(const common::ObString &stmt_block,
             const common::ObString &orig_stmt_block,
             ParseResult &parse_result,

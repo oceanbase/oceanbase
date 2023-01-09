@@ -26,6 +26,7 @@
 #include "sql/optimizer/ob_optimizer.h"
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
+#include "sql/ob_spi.h"
 #include "sql/udr/ob_udr_item_mgr.h"
 
 namespace test
@@ -55,6 +56,7 @@ class ObOptStatManager;
 namespace sql
 {
 struct ObStmtPrepareResult;
+class ObSPIService;
 class ObIVirtualTableIteratorFactory;
 struct ObSqlCtx;
 class ObResultSet;
@@ -208,6 +210,26 @@ public:
 
   int init_result_set(ObSqlCtx &context, ObResultSet &result_set);
 
+  int handle_sql_execute(const ObString &sql,
+                         ObSqlCtx &context,
+                         ObResultSet &result,
+                         ParamStore &params,
+                         PlanCacheMode mode);
+
+  int handle_pl_prepare(const ObString &sql,
+                        ObSPIService::PLPrepareCtx &pl_prepare_ctx,
+                        ObSPIService::PLPrepareResult &pl_prepare_result);
+
+  int handle_pl_execute(const ObString &sql,
+                        ObSQLSessionInfo &session_info,
+                        ParamStore &params,
+                        ObResultSet &result,
+                        ObSqlCtx &context,
+                        bool is_prepare_protocol,
+                        bool is_dynamic_sql);
+  static int construct_parameterized_params(const ParamStore &params,
+                                            ObPlanCacheCtx &phy_ctx);
+
 public:
   //for sql test only
   friend bool compare_stmt(const char *schema_file,  const char *str1, const char *str2);
@@ -229,23 +251,35 @@ public:
   }
 
   virtual ~ObSql() { destroy(); }
-  static int construct_ps_param(const ParamStore &params,
-                                ObPlanCacheCtx &phy_ctx);
 
 private:
   // disallow copy
   ObSql(const ObSql &other);
   ObSql &operator=(const ObSql &other);
 
+  class TimeoutGuard
+  {
+  public:
+    TimeoutGuard(ObSQLSessionInfo &session);
+    ~TimeoutGuard();
+  private:
+    ObSQLSessionInfo &session_;
+    int64_t worker_timeout_;
+    int64_t query_timeout_;
+    int64_t trx_timeout_;
+  };
+
 private:
+  int set_timeout_for_pl(ObSQLSessionInfo &session_info, int64_t &abs_timeout_us);
+
   int construct_param_store(const ParamStore &params,
                             ParamStore &param_store);
   int construct_ps_param_store(const ParamStore &params,
                                const ParamStore &fixed_params,
                                const ObIArray<int64_t> &fixed_param_idx,
                                ParamStore &param_store);
-  int construct_param_store_from_ps_param(const ObPlanCacheCtx &phy_ctx,
-                                          ParamStore &param_store);
+  int construct_param_store_from_parameterized_params(const ObPlanCacheCtx &phy_ctx,
+                                                      ParamStore &param_store);
   bool is_exist_in_fixed_param_idx(const int64_t idx,
                                    const ObIArray<int64_t> &fixed_param_idx);
   int do_real_prepare(const ObString &stmt,
@@ -255,8 +289,8 @@ private:
   int do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
                       share::schema::ObSchemaGetterGuard &schema_guard,
                       ObResultSet &result);
-  int fill_result_set(ObResultSet &result, ObSqlCtx *context, const bool is_ps_mode, ObStmt &stmt);
-  int fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, const bool is_ps_mode,
+  int fill_result_set(ObResultSet &result, ObSqlCtx *context, const PlanCacheMode mode, ObStmt &stmt);
+  int fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, const PlanCacheMode mode,
                              ObCollationType collation_type, const ObString &type_name,
                              ObStmt &basic_stmt, ObField &field);
   int pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
@@ -280,6 +314,12 @@ private:
                                  const ParamStore &params_store,
                                  ParamStore *&params);
 
+  int reconstruct_pl_params_store(ObIAllocator &allocator,
+                                  ObSqlCtx &context,
+                                  const ParamStore &origin_params,
+                                  ParamStore &pl_params,
+                                  ParamStore *&pl_ab_params);
+
   int reconstruct_ps_params_store(ObIAllocator &allocator,
                                   ObSqlCtx &context,
                                   const ParamStore &params,
@@ -296,7 +336,7 @@ private:
                            ObResultSet &result,
                            ObPlanCacheCtx &pc_ctx,
                            const int get_plan_err,
-                           bool is_psmode = false);
+                           PlanCacheMode mode = PC_INVALID_MODE);
   // @brief  Generate 'stmt' from syntax tree
   // @param parse_result[in]     syntax tree
   // @param select_item_param_infos           select_item_param_infos from fast parser
@@ -328,7 +368,7 @@ private:
                              ObSqlCtx &context,
                              ObResultSet &result,
                              const bool is_begin_commit_stmt,
-                             const bool is_ps_mode = false,
+                             const PlanCacheMode mode = PC_INVALID_MODE,
                              ParseResult *outline_parse_result = NULL);
 
   //generate physical_plan

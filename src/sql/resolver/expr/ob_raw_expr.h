@@ -4527,7 +4527,7 @@ class ObPlQueryRefRawExpr : public ObRawExpr
 public:
   ObPlQueryRefRawExpr()
     : ObRawExpr(),
-      id_(common::OB_INVALID_ID),
+      ps_sql_(ObString()),
       type_(stmt::T_NONE),
       route_sql_(ObString()),
       subquery_result_type_(),
@@ -4539,7 +4539,7 @@ public:
 
   ObPlQueryRefRawExpr(common::ObIAllocator &alloc)
     : ObRawExpr(alloc),
-      id_(common::OB_INVALID_ID),
+      ps_sql_(ObString()),
       type_(stmt::T_NONE),
       route_sql_(ObString()),
       subquery_result_type_(),
@@ -4558,14 +4558,14 @@ public:
   const ObRawExpr *get_param_expr(int64_t index) const;
   ObRawExpr *&get_param_expr(int64_t index);
 
-  inline void set_ps_id(ObPsStmtId id) { id_ = id; }
+  inline void set_ps_sql(const common::ObString &sql) { ps_sql_ = sql; }
   inline void set_stmt_type(stmt::StmtType type) { type_ = type; }
   inline void set_route_sql(const common::ObString &sql) { route_sql_ = sql; }
   inline void set_subquery_result_type(const sql::ObExprResType &type)
   { 
     subquery_result_type_ = type;
   }
-  inline ObPsStmtId get_ps_id() const { return id_; }
+  inline const common::ObString &get_ps_sql() const { return ps_sql_; }
   inline stmt::StmtType get_stmt_type() const { return type_; }
   inline const common::ObString &get_route_sql() const { return route_sql_; }
   inline const sql::ObExprResType &get_subquery_result_type() const
@@ -4593,7 +4593,7 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlQueryRefRawExpr);
 
-  ObPsStmtId id_; //prepare的语句id
+  common::ObString ps_sql_; //prepare后的参数化sql
   stmt::StmtType type_; //prepare的语句类型
 
   common::ObString route_sql_;

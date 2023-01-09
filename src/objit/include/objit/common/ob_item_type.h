@@ -2162,6 +2162,7 @@ typedef enum ObItemType
   T_SINGLE_COLUMN_GROUP,
   T_NORMAL_COLUMN_GROUP,
   T_TRACE_FORMAT,
+  T_TG_ALTER_OPTIONS,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

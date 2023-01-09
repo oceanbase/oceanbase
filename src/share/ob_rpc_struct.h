@@ -5496,19 +5496,25 @@ OB_UNIS_VERSION(1);
 public:
   ObAlterTriggerArg()
       :
-      ObDDLArg(), trigger_database_(), trigger_info_()
+      ObDDLArg(), trigger_database_(), trigger_info_(), trigger_infos_(),
+      is_set_status_(false),is_alter_compile_(false)
   {}
   virtual ~ObAlterTriggerArg()
   {}
   bool is_valid() const;
+  int assign(const ObAlterTriggerArg &other);
   TO_STRING_KV(K(trigger_database_),
       K(trigger_info_),
-      K(trigger_infos_))
+      K(trigger_infos_),
+      K(is_set_status_),
+      K(is_alter_compile_))
   ;
 public:
   common::ObString trigger_database_;           // 废弃
   share::schema::ObTriggerInfo trigger_info_;   // 废弃
   common::ObSArray<share::schema::ObTriggerInfo> trigger_infos_;
+  bool is_set_status_;
+  bool is_alter_compile_;
 };
 
 struct ObCreateUDTArg : public ObDDLArg

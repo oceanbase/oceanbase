@@ -127,23 +127,24 @@ typedef struct _ParseNode
   int32_t num_child_;   /* attributes for non-terninal node, which has children */
   int16_t param_num_; //记录该node对应的原始text中常量的个数, 暂时仅T_CAST_ARGUMENT使用
   union {
-    uint16_t flag_;
+    uint32_t flag_;
     struct {
-      uint16_t is_neg_ : 1;// 记录常量节点的父节点是否为T_OP_NEG节点, 1表示是, 0 表示不是
-      uint16_t is_hidden_const_ : 1; //1 表示某常量正常parse能识别但fast parse不能识别, 0 表示都能识别。
-      uint16_t is_tree_not_param_ :1; //1 表示该节点及其子节点常量均不能参数化, 0表示没该限制
-      uint16_t length_semantics_  :2; //2 for oralce [char|varbinary] (n b [bytes|char])
-      uint16_t is_val_paramed_item_idx_ :1; // T_PROJECT_STRING的vlaues是否是select_item_param_infos数组的下标
-      uint16_t is_copy_raw_text_ : 1; // 是否回填常量节点的raw_text_，用于select item常量参数化
-      uint16_t is_column_varchar_ : 1; // 投影列是否是一个常量字符串，用于select item常量参数化
-      uint16_t is_trans_from_minus_: 1; // 负数常量节点是否是从减号操作转换而来，比如1 - 2，词法阶段会生成一个-2
-      uint16_t is_assigned_from_child_: 1; // 常量节点是否由子节点赋值得到，用于处理int64_min
-      uint16_t is_num_must_be_pos_: 1; //
-      uint16_t is_date_unit_ : 1; //1 表示是date unit常量，在反拼的时候需要反拼为字符串
-      uint16_t is_literal_bool_ : 1; // indicate node is a literal TRUE/FALSE
-      uint16_t is_empty_ : 1; // 表示是否缺省该节点，1表示缺省，0表示没有缺省, opt_asc_desc节点中使用到
-      uint16_t is_multiset_ : 1; // for cast(multiset(...) as ...)
-      uint16_t reserved_ : 1;
+      uint32_t is_neg_ : 1;// 记录常量节点的父节点是否为T_OP_NEG节点, 1表示是, 0 表示不是
+      uint32_t is_hidden_const_ : 1; //1 表示某常量正常parse能识别但fast parse不能识别, 0 表示都能识别。
+      uint32_t is_tree_not_param_ :1; //1 表示该节点及其子节点常量均不能参数化, 0表示没该限制
+      uint32_t length_semantics_  :2; //2 for oralce [char|varbinary] (n b [bytes|char])
+      uint32_t is_val_paramed_item_idx_ :1; // T_PROJECT_STRING的vlaues是否是select_item_param_infos数组的下标
+      uint32_t is_copy_raw_text_ : 1; // 是否回填常量节点的raw_text_，用于select item常量参数化
+      uint32_t is_column_varchar_ : 1; // 投影列是否是一个常量字符串，用于select item常量参数化
+      uint32_t is_trans_from_minus_: 1; // 负数常量节点是否是从减号操作转换而来，比如1 - 2，词法阶段会生成一个-2
+      uint32_t is_assigned_from_child_: 1; // 常量节点是否由子节点赋值得到，用于处理int64_min
+      uint32_t is_num_must_be_pos_: 1; //
+      uint32_t is_date_unit_ : 1; //1 表示是date unit常量，在反拼的时候需要反拼为字符串
+      uint32_t is_literal_bool_ : 1; // indicate node is a literal TRUE/FALSE
+      uint32_t is_empty_ : 1; // 表示是否缺省该节点，1表示缺省，0表示没有缺省, opt_asc_desc节点中使用到
+      uint32_t is_multiset_ : 1; // for cast(multiset(...) as ...)
+      uint32_t is_forbid_anony_parameter_ : 1; // 1 表示禁止匿名块参数化
+      uint32_t reserved_;
     };
   };
   /* attributes for terminal node, it is real value */
@@ -211,6 +212,7 @@ typedef struct _PLParseInfo
 {
   bool is_pl_parse_;//用于标识当前parser逻辑是否为PLParse调用
   bool is_pl_parse_expr_; //用于标识当前parser逻辑是否在解析PLParser的expr
+  bool is_forbid_pl_fp_;
   int last_pl_symbol_pos_; //上一个pl变量的结束位置
   int plsql_line_;
   /*for mysql pl*/

@@ -283,8 +283,15 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
                 OZ (generator_.get_helper().create_store(result, dest_datum));
               } else {
                 ObLLVMValue allocator, src_datum;
+                const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(s.get_default_expr());
                 OZ (generator_.generate_null(ObIntType, allocator));
-                if (T_NULL == s.get_default_expr()->get_expr_type()) {
+                CK (NULL != s.get_symbol_table());
+                if (OB_FAIL(ret)) {
+                } else if (T_NULL == s.get_default_expr()->get_expr_type() ||
+                    (T_QUESTIONMARK == const_expr->get_expr_type() &&
+                    0 == s.get_symbol_table()->get_symbol(const_expr->get_value().get_unknown())->get_name().case_compare(ObPLResolver::ANONYMOUS_ARG) &&
+                    NULL != s.get_symbol_table()->get_symbol(const_expr->get_value().get_unknown())->get_pl_data_type().get_data_type() &&
+                    ObNullType == s.get_symbol_table()->get_symbol(const_expr->get_value().get_unknown())->get_pl_data_type().get_data_type()->get_obj_type())) {
                   /*
                    * allocator可以是null，因为这儿只是修改原复杂类型的属性信息
                    * 对于record来说把内部的元素初始化成一个null，
@@ -3395,7 +3402,7 @@ int ObPLCodeGenerator::init_spi_service()
     arg_types.reset();
     if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { //函数第一个参数必须是基础环境信息隐藏参数
       LOG_WARN("push_back error", K(ret));
-    } else if (OB_FAIL(arg_types.push_back(int64_type))) {
+    } else if (OB_FAIL(arg_types.push_back(char_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int64_type))) {
       LOG_WARN("push_back error", K(ret));
@@ -3564,7 +3571,7 @@ int ObPLCodeGenerator::init_spi_service()
     arg_types.reset();
     OZ (arg_types.push_back(pl_exec_context_pointer_type)); //函数第一个参数必须是基础环境信息隐藏参数
     OZ (arg_types.push_back(char_type)); //sql
-    OZ (arg_types.push_back(int64_type));//id
+    OZ (arg_types.push_back(char_type));//id
     OZ (arg_types.push_back(int64_type));//type
     OZ (arg_types.push_back(bool_type));//for_update
     OZ (arg_types.push_back(bool_type));//hidden_rowid
@@ -4435,7 +4442,7 @@ int ObPLCodeGenerator::generate_open(
     //sql & ps_id & stmt_type & params & param count
     ObLLVMValue str;
     ObLLVMValue len;
-    ObLLVMValue id;
+    ObLLVMValue ps_sql;
     ObLLVMValue type;
     ObLLVMValue for_update;
     ObLLVMValue hidden_rowid;
@@ -4449,10 +4456,10 @@ int ObPLCodeGenerator::generate_open(
     ObLLVMValue cursor_param_count;
     ObLLVMValue ret_err;
     OZ (args.push_back(get_vars().at(CTX_IDX)));
-    OZ (generate_sql(cursor_sql, str, len, id, type, for_update, hidden_rowid, sql_params,
+    OZ (generate_sql(cursor_sql, str, len, ps_sql, type, for_update, hidden_rowid, sql_params,
                      sql_param_count));
     OZ (args.push_back(str));
-    OZ (args.push_back(id));
+    OZ (args.push_back(ps_sql));
     OZ (args.push_back(type));
     OZ (args.push_back(for_update));
     OZ (args.push_back(hidden_rowid));
@@ -5086,20 +5093,20 @@ int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err)
     ObSEArray<ObLLVMValue, 16> args;
     ObLLVMValue str;
     ObLLVMValue len;
-    ObLLVMValue id;
+    ObLLVMValue ps_sql;
     ObLLVMValue type;
     ObLLVMValue for_update;
     ObLLVMValue hidden_rowid;
     ObLLVMValue params;
     ObLLVMValue count;
     OZ (args.push_back(get_vars().at(CTX_IDX)));
-    OZ (generate_sql(s, str, len, id, type, for_update, hidden_rowid, params, count));
+    OZ (generate_sql(s, str, len, ps_sql, type, for_update, hidden_rowid, params, count));
     if (OB_SUCC(ret)) {
       if (s.get_params().empty()) {
         OZ (args.push_back(str));
         OZ (args.push_back(type));
       } else {
-        OZ (args.push_back(id));
+        OZ (args.push_back(ps_sql));
         OZ (args.push_back(type));
         OZ (args.push_back(params));
         OZ (args.push_back(count));
@@ -6299,7 +6306,7 @@ int ObPLCodeGenerator::generate_loop_control(const ObPLLoopControl &control)
 int ObPLCodeGenerator::generate_sql(const ObPLSql &sql,
                                     jit::ObLLVMValue &str,
                                     jit::ObLLVMValue &length,
-                                    jit::ObLLVMValue &id,
+                                    jit::ObLLVMValue &ps_sql,
                                     jit::ObLLVMValue &type,
                                     jit::ObLLVMValue &for_update,
                                     jit::ObLLVMValue &hidden_rowid,
@@ -6319,8 +6326,8 @@ int ObPLCodeGenerator::generate_sql(const ObPLSql &sql,
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(helper_.get_int64(sql.get_ps_id(), id))) {
-      LOG_WARN("failed to get int64", K(ret));
+    if (OB_FAIL(generate_global_string(sql.get_ps_sql(), ps_sql, length))) {
+      LOG_WARN("failed to get_string", K(ret));
     } else if (OB_FAIL(helper_.get_int64(sql.get_stmt_type(), type))) {
       LOG_WARN("failed to get int64", K(ret));
     } else if (OB_FAIL(helper_.get_int8(sql.is_for_update(), for_update))) {
@@ -7735,6 +7742,51 @@ int ObPLCodeGenerator::generate(ObPLPackage &pl_package)
 }
 
 int ObPLCodeGenerator::generate(ObPLFunction &pl_func)
+{
+  int ret = OB_SUCCESS;
+  ObPLFunctionAST &ast = static_cast<ObPLFunctionAST&>(ast_);
+  if (debug_mode_
+      || !ast.get_is_all_sql_stmt()
+      || !ast_.get_obj_access_exprs().empty()) {
+    OZ (generate_normal(pl_func));
+  } else {
+    OZ (generate_simple(pl_func));
+  }
+  LOG_TRACE("generate pl function",
+    K(debug_mode_), K(ast.get_is_all_sql_stmt()), K(ast.get_obj_access_exprs().empty()));
+  return ret;
+}
+
+int ObPLCodeGenerator::generate_simple(ObPLFunction &pl_func)
+{
+  int ret = OB_SUCCESS;
+  ObPLFunctionAST &ast = static_cast<ObPLFunctionAST&>(ast_);
+  common::ObFixedArray<ObPLSqlInfo, common::ObIAllocator> &sql_infos = pl_func.get_sql_infos();
+  CK (!debug_mode_);
+  CK (ast.get_is_all_sql_stmt());
+  OZ (prepare_expression(pl_func));
+  OZ (final_expression(pl_func));
+  OZ (pl_func.set_variables(get_ast().get_symbol_table()));
+  OZ (pl_func.get_dependency_table().assign(get_ast().get_dependency_table()));
+  OX (pl_func.add_members(get_ast().get_flag()));
+  OX (pl_func.set_pipelined(get_ast().get_pipelined()));
+  OX (pl_func.set_action((uint64_t)(&ObPL::simple_execute)));
+  OX (pl_func.set_can_cached(get_ast().get_can_cached()));
+  OX (pl_func.set_is_all_sql_stmt(get_ast().get_is_all_sql_stmt()));
+
+  OX (sql_infos.set_capacity(static_cast<uint32_t>(ast.get_sql_stmts().count())));
+  for (int64_t i = 0; OB_SUCC(ret) && i < ast.get_sql_stmts().count(); ++i) {
+    const ObPLSqlStmt *sql_stmt = ast.get_sql_stmts().at(i);
+    ObPLSqlInfo sql_info(pl_func.get_allocator());
+    CK (OB_NOT_NULL(sql_stmt));
+    OZ (sql_info.generate(*sql_stmt, pl_func.get_expressions()));
+    OZ (sql_infos.push_back(sql_info));
+  }
+
+  return ret;
+}
+
+int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
 {
   int ret = OB_SUCCESS;
   // 初始化符号表

@@ -68,12 +68,10 @@ public:
 
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
-      bool is_from_pl = false,
       const common::ObAddr *sql_exec_addr = nullptr) override;
 
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
-      bool is_from_pl = false,
       const common::ObAddr *sql_exec_addr = nullptr) override;
 
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,

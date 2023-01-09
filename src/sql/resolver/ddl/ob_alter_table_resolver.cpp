@@ -5276,6 +5276,7 @@ int ObAlterTableResolver::resolve_modify_all_trigger(const ParseNode &node)
   CK (OB_NOT_NULL(alter_table_stmt) && OB_NOT_NULL(schema_checker_) && OB_NOT_NULL(allocator_));
   CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
   if (OB_SUCC(ret)) {
+    alter_table_stmt->get_tg_arg().is_set_status_ = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schema_->get_trigger_list().count(); ++i) {
       ObTriggerInfo new_tg_arg;
       OX (new_tg_arg.set_is_enable(is_enable));

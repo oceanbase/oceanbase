@@ -43,6 +43,11 @@ public:
 
   inline ObLibCacheNameSpace get_ns() const { return ns_; }
   inline void set_ns(ObLibCacheNameSpace ns) { ns_ = ns; }
+  inline bool is_sql_crsr() const { return ObLibCacheNameSpace::NS_CRSR == ns_; }
+  inline bool is_prcr() const { return ObLibCacheNameSpace::NS_PRCR == ns_; }
+  inline bool is_sfc() const { return ObLibCacheNameSpace::NS_SFC == ns_; }
+  inline bool is_pkg() const { return ObLibCacheNameSpace::NS_PKG == ns_; }
+  inline bool is_anon() const { return ObLibCacheNameSpace::NS_ANON == ns_; }
   inline bool is_valid_cache_obj() const { return ns_ > NS_INVALID && ns_ < NS_MAX; }
   inline uint64_t get_object_id() const { return object_id_; }
   inline int64_t get_mem_size() const { return allocator_.total(); }

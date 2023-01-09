@@ -1912,65 +1912,7 @@ void ObSqlPlanSet::remove_all_plan()
   IGNORE_RETURN dist_plans_.remove_all_plan();
 }
 
-int ObPLPlanSet::add_cache_obj(ObPlanCacheObject &cache_object,
-                               ObPlanCacheCtx &pc_ctx,
-                               int64_t ol_param_idx,
-                               int &add_ret)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(pc_ctx);
-  UNUSED(ol_param_idx);
-  if (OB_UNLIKELY(!cache_object.is_prcr() && !cache_object.is_sfc() && !cache_object.is_pkg() && !cache_object.is_anon())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cache object is invalid", K(cache_object));
-  } else if (OB_UNLIKELY(pl_obj_ != NULL)) {
-    ret = OB_SQL_PC_PLAN_DUPLICATE;
-  } else {
-    pl_obj_ = &cache_object;
-    pl_obj_->set_dynamic_ref_handle(PC_REF_PL_HANDLE);
-  }
-  add_ret = ret;
-  return ret;
-}
 
-int ObPLPlanSet::select_plan(ObPlanCacheCtx &pc_ctx, ObPlanCacheObject *&cache_obj)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(pc_ctx);
-  if (pl_obj_ != NULL) {
-    cache_obj = pl_obj_;
-    cache_obj->set_dynamic_ref_handle(pc_ctx.handle_id_);
-  } else {
-    cache_obj = NULL;
-    ret = OB_SQL_PC_NOT_EXIST;
-  }
-  return ret;
-}
-
-void ObPLPlanSet::remove_all_plan()
-{
-
-}
-
-int64_t ObPLPlanSet::get_mem_size()
-{
-  int64_t plan_set_mem = 0;
-  if (pl_obj_ != NULL) {
-    plan_set_mem += pl_obj_->get_mem_size();
-  }
-  return plan_set_mem;
-}
-
-void ObPLPlanSet::reset()
-{
-  pl_obj_ = NULL;
-  ObPlanSet::reset();
-}
-
-bool ObPLPlanSet::is_sql_planset()
-{
-  return false;
-}
 //add plan used
 int ObSqlPlanSet::get_phy_locations(const ObTablePartitionInfoArray &partition_infos,
                                     //ObIArray<ObDASTableLoc> &table_locs,

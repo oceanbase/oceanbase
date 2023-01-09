@@ -626,10 +626,15 @@ sp_call_name:
 ;
 
 ident:
-    IDENT { $$ = $1; }
+    IDENT
+    {
+      $$ = $1;
+      $$->str_off_ = @1.first_column;
+    }
   | unreserved_keyword
     {
       get_non_reserved_node($$, parse_ctx->mem_pool_, @1.first_column, @1.last_column);
+      $$->str_off_ = @1.first_column;
     }
 ;
 

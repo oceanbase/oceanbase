@@ -1778,14 +1778,14 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
     if (is_streaming()) {
       ObSPIResultSet *spi_result = get_cursor_handler();
       if (OB_NOT_NULL(spi_result)) {
-        if (OB_NOT_NULL(spi_result->get_mysql_result().get_result())) {
+        if (OB_NOT_NULL(spi_result->get_result_set())) {
           OZ (spi_result->set_cursor_env(session));
-          int close_ret = spi_result->get_mysql_result().close();
+          int close_ret = spi_result->close_result_set();
           if (OB_SUCCESS != close_ret) {
             LOG_WARN("close mysql result set failed", K(ret), K(close_ret));
           }
           ret = (OB_SUCCESS == ret ? close_ret : ret);
-          spi_result->get_mysql_result().reset();
+          //spi_result->get_mysql_result().reset();
           int reset_ret = spi_result->reset_cursor_env(session);
           ret = (OB_SUCCESS == ret ? reset_ret : ret);
         }
@@ -1978,18 +1978,24 @@ int ObPLCursorInfo::prepare_entity(ObSQLSessionInfo &session,
   return ret;
 }
 
-int ObPLCursorInfo::prepare_spi_result(ObSPIResultSet *&spi_result)
+int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_result)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(spi_cursor_)) {
-    OV (OB_NOT_NULL(entity_));
-    if (OB_SUCC(ret)) {
-      ObIAllocator &alloc = entity_->get_arena_allocator();
-      OX (spi_cursor_ = alloc.alloc(sizeof(ObSPIResultSet)));
-      OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->exec_ctx_));
+  CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(spi_cursor_)) {
+      OV (OB_NOT_NULL(entity_));
+      if (OB_SUCC(ret)) {
+        ObIAllocator &alloc = entity_->get_arena_allocator();
+        OX (spi_cursor_ = alloc.alloc(sizeof(ObSPIResultSet)));
+        OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
+      }
     }
   }
   OX (spi_result = new (spi_cursor_) ObSPIResultSet());
+  OZ (spi_result->init(*ctx->exec_ctx_->get_my_session()));
   return ret;
 }
 

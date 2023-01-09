@@ -421,12 +421,6 @@ public:
   virtual int deep_copy(const ObTriggerInfo &other);
   virtual int64_t get_convert_size() const;
 
-  static int gen_package_source(const ObTriggerInfo &trigger_info,
-                                const common::ObString &base_object_database,
-                                const common::ObString &base_object_name,
-                                common::ObString &spec_source,
-                                common::ObString &body_source,
-                                common::ObIAllocator &alloc);
   static int gen_package_source(const uint64_t tenant_id,
                                 const uint64_t tg_package_id,
                                 common::ObString &source,
@@ -442,6 +436,11 @@ public:
                            const ParseNode &parse_node,
                            const ObDataTypeCastParams &dtc_params,
                            ObString &procedure_source);
+  static int replace_table_name_in_body(ObTriggerInfo &trigger_info,
+                                        common::ObIAllocator &alloc,
+                                        const common::ObString &base_object_database,
+                                        const common::ObString &base_object_name,
+                                        bool is_oracle_mode);
   TO_STRING_KV(K(tenant_id_),
                K(trigger_id_),
                K(owner_id_),

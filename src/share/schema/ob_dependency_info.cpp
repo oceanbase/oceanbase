@@ -330,35 +330,38 @@ int ObDependencyInfo::collect_dep_infos(const ObIArray<ObSchemaObjVersion> &sche
   int ret = OB_SUCCESS;
   int64_t order = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < schema_objs.count(); ++i) {
-    ObDependencyInfo dep;
-    const ObSchemaObjVersion &s_objs = schema_objs.at(i);
-    if (!s_objs.is_valid()
-        // object may depend on self
-        || (is_pl
-        && dep_obj_type == s_objs.get_schema_object_type())) {
-      continue;
+    // if (ObObjectType::TRIGGER == dep_obj_type), the schema_objs.at(0) is the trigger itself, need to skip.
+    if (!(ObObjectType::TRIGGER == dep_obj_type && 0 == i)) {
+      ObDependencyInfo dep;
+      const ObSchemaObjVersion &s_objs = schema_objs.at(i);
+      if (!s_objs.is_valid()
+          // object may depend on self
+          || (is_pl
+          && dep_obj_type == s_objs.get_schema_object_type())) {
+        continue;
+      }
+      dep.set_dep_obj_id(OB_INVALID_ID);
+      dep.set_dep_obj_type(dep_obj_type);
+      dep.set_dep_obj_owner_id(OB_INVALID_ID);
+      dep.set_ref_obj_id(s_objs.get_object_id());
+      dep.set_ref_obj_type(s_objs.get_schema_object_type());
+      dep.set_order(order);
+      ++order;
+      dep.set_dep_timestamp(-1);
+      dep.set_ref_timestamp(s_objs.get_version());
+      dep.set_property(property);
+      if (dep_attrs.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH
+      || dep_reason.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dep attrs or dep reason is too long", K(ret),
+                                                        K(dep_attrs.length()),
+                                                        K(dep_reason.length()));
+      } else {
+        if (!dep_attrs.empty()) OZ (dep.set_dep_attrs(dep_attrs));
+        if (!dep_reason.empty()) OZ (dep.set_dep_reason(dep_reason));
+      }
+      OZ (deps.push_back(dep));
     }
-    dep.set_dep_obj_id(OB_INVALID_ID);
-    dep.set_dep_obj_type(dep_obj_type);
-    dep.set_dep_obj_owner_id(OB_INVALID_ID);
-    dep.set_ref_obj_id(s_objs.get_object_id());
-    dep.set_ref_obj_type(s_objs.get_schema_object_type());
-    dep.set_order(order);
-    ++order;
-    dep.set_dep_timestamp(-1);
-    dep.set_ref_timestamp(s_objs.get_version());
-    dep.set_property(property);
-    if (dep_attrs.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH
-    || dep_reason.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("dep attrs or dep reason is too long", K(ret),
-                                                      K(dep_attrs.length()),
-                                                      K(dep_reason.length()));
-    } else {
-      if (!dep_attrs.empty()) OZ (dep.set_dep_attrs(dep_attrs));
-      if (!dep_reason.empty()) OZ (dep.set_dep_reason(dep_reason));
-    }
-    OZ (deps.push_back(dep));
   }
   return ret;
 }

@@ -107,11 +107,11 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   int ret = OB_SUCCESS;
   ObPlanCacheObject *plan = NULL;
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
-  if (pc_ctx.is_ps_mode_) {
-    if (normal_parse_const_cnt_ != pc_ctx.fp_result_.ps_params_.count()) {
+  if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+    if (normal_parse_const_cnt_ != pc_ctx.fp_result_.parameterized_params_.count()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("param num is not equal", K_(normal_parse_const_cnt),
-               "ps_params_count", pc_ctx.fp_result_.ps_params_.count());
+               "parameterized_params_count", pc_ctx.fp_result_.parameterized_params_.count());
     }
   } else {
     if (normal_parse_const_cnt_ != pc_ctx.fp_result_.raw_params_.count()) {

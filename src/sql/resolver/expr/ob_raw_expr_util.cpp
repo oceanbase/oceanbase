@@ -1015,7 +1015,19 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
           }
         }
         if (OB_SUCC(ret)) {
-          if (T_QUESTIONMARK == iexpr->get_expr_type()) {
+          bool is_anonymos_const_var = false;
+          if (T_QUESTIONMARK == iexpr->get_expr_type() && nullptr != params.secondary_namespace_) {
+            ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(iexpr);
+            const pl::ObPLVar* var = NULL;
+            const pl::ObPLSymbolTable* symbol_table = params.secondary_namespace_->get_symbol_table();
+            if (!params.is_prepare_protocol_ &&
+                OB_NOT_NULL(symbol_table) &&
+                OB_NOT_NULL(var = symbol_table->get_symbol(c_expr->get_value().get_unknown())) &&
+                0 == var->get_name().case_compare(pl::ObPLResolver::ANONYMOUS_ARG)) {
+              OX (is_anonymos_const_var = true);
+            }
+          }
+          if (T_QUESTIONMARK == iexpr->get_expr_type() && !is_anonymos_const_var) {
             // 如果UDF出现在PL的DML语句中, 走到这里的ObjAccessRawExpr已经被替换为QuestionMark
             // 我们需要找到原始的ObjAccessRawExpr, 并设置fow_write属性
             ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(iexpr);
@@ -1040,6 +1052,10 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
                      && T_OBJ_ACCESS_REF != iexpr->get_expr_type()
                      && T_OP_GET_PACKAGE_VAR != iexpr->get_expr_type()
                      && T_OP_GET_SUBPROGRAM_VAR != iexpr->get_expr_type()) {
+            ret = OB_ER_SP_NOT_VAR_ARG;
+            LOG_WARN("OUT or INOUT argument for routine is not a variable",
+                     K(iexpr->get_expr_type()), K(ret));
+          } else if (T_QUESTIONMARK == iexpr->get_expr_type() && is_anonymos_const_var) {
             ret = OB_ER_SP_NOT_VAR_ARG;
             LOG_WARN("OUT or INOUT argument for routine is not a variable",
                      K(iexpr->get_expr_type()), K(ret));

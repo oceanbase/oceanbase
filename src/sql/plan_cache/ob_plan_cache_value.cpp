@@ -250,7 +250,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
       LOG_WARN("failed to assign user-defined rule infos", K(ret));
     } else {
       //deep copy special param raw text
-      if (pc_ctx.is_ps_mode_) {
+      if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
         if (OB_FAIL(not_param_var_.assign(pc_ctx.not_param_var_))) {
           LOG_WARN("fail to assign not param var", K(ret));
         }
@@ -279,7 +279,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
       //deep copy constructed sql
       if (OB_SUCC(ret)) {
         ObString outline_signature_str;
-        if (pc_ctx.is_ps_mode_) {
+        if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
           outline_signature_str = pc_ctx.raw_sql_;
         } else {
           outline_signature_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
@@ -302,13 +302,13 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
       }
       // deep copy constructed_sql_, used for baseline;
       if (OB_SUCC(ret)) {
-        if (pc_ctx.is_ps_mode_ && OB_FAIL(ob_write_string(*pc_alloc_,
-                                                          pc_ctx.raw_sql_,
-                                                          constructed_sql_))) {
+        if ((PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
+             && OB_FAIL(ob_write_string(*pc_alloc_, pc_ctx.raw_sql_, constructed_sql_))) {
           LOG_WARN("fail to deep copy param raw text", K(ret));
-        } else if (!pc_ctx.is_ps_mode_ && OB_FAIL(ob_write_string(*pc_alloc_,
-                                                                  pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_,
-                                                                  constructed_sql_))) {
+        } else if (!(PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
+                   && OB_FAIL(ob_write_string(*pc_alloc_,
+                                              pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_,
+                                              constructed_sql_))) {
           LOG_WARN("failed to write string", K(ret));
         }
       }
@@ -1494,11 +1494,11 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
   } else if (!need_param_) {
     // not needs to param, compare raw_sql
     is_same = (pc_ctx.raw_sql_==raw_sql_);
-  } else if (pc_ctx.is_ps_mode_) {
+  } else if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
     const ObObjParam *ps_param = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < not_param_var_.count(); ++i) {
       ps_param = NULL;
-      if (OB_FAIL(pc_ctx.fp_result_.ps_params_.at(not_param_var_[i].idx_, ps_param))) {
+      if (OB_FAIL(pc_ctx.fp_result_.parameterized_params_.at(not_param_var_[i].idx_, ps_param))) {
         LOG_WARN("fail to get ps param", K(not_param_info_[i].idx_), K(ret));
       } else if (OB_ISNULL(ps_param)) {
         ret = OB_INVALID_ARGUMENT;
@@ -1627,7 +1627,7 @@ int ObPlanCacheValue::create_new_plan_set(const ObPlanSetType plan_set_type,
   void *buff = nullptr;
   new_plan_set = nullptr;
 
-  int64_t mem_sz = plan_set_type == PST_SQL_CRSR ? sizeof(ObSqlPlanSet) : sizeof(ObPLPlanSet);
+  int64_t mem_sz =  sizeof(ObSqlPlanSet);
 
   if (OB_ISNULL(pc_alloc) ||
       (plan_set_type < PST_SQL_CRSR || plan_set_type >= PST_MAX)) {
@@ -1637,11 +1637,7 @@ int ObPlanCacheValue::create_new_plan_set(const ObPlanSetType plan_set_type,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ObPlanSet", K(ret));
   } else {
-    if (PST_SQL_CRSR == plan_set_type) {
-      new_plan_set = new(buff)ObSqlPlanSet();
-    } else {
-      new_plan_set = new(buff)ObPLPlanSet();
-    }
+    new_plan_set = new(buff)ObSqlPlanSet();
   }
 
   if (OB_SUCC(ret)) {

@@ -1058,10 +1058,15 @@ int ObDMLService::init_ins_rtdef(
   int ret = OB_SUCCESS;
   dml_rtctx.get_exec_ctx().set_dml_event(ObDmlEventType::DE_INSERTING);
   const ObDASTableLocMeta *loc_meta = get_table_loc_meta(ins_ctdef.multi_ctdef_);
-  if (OB_FAIL(init_das_dml_rtdef(dml_rtctx,
-                                 ins_ctdef.das_ctdef_,
-                                 ins_rtdef.das_rtdef_,
-                                 loc_meta))) {
+  if (lib::is_mysql_mode()
+      && OB_FAIL(ObDASUtils::check_nested_sql_mutating(ins_ctdef.das_ctdef_.index_tid_, dml_rtctx.get_exec_ctx()))) {
+    // MySql returns error, trigger the insert statement through udf,
+    // even if there is no data that meets the where condition which in insert-select
+    LOG_WARN("failed to check stmt table", K(ret), K(ins_ctdef.das_ctdef_.index_tid_));
+  } else if (OB_FAIL(init_das_dml_rtdef(dml_rtctx,
+                                       ins_ctdef.das_ctdef_,
+                                       ins_rtdef.das_rtdef_,
+                                       loc_meta))) {
     LOG_WARN("failed to init das dml rtdef", K(ret));
   } else if (OB_FAIL(init_related_das_rtdef(dml_rtctx, ins_ctdef.related_ctdefs_, ins_rtdef.related_rtdefs_))) {
     LOG_WARN("init related das ctdef failed", K(ret));
@@ -1094,10 +1099,15 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
   int ret = OB_SUCCESS;
   dml_rtctx.get_exec_ctx().set_dml_event(ObDmlEventType::DE_DELETING);
   const ObDASTableLocMeta *loc_meta = get_table_loc_meta(del_ctdef.multi_ctdef_);
-  if (OB_FAIL(init_das_dml_rtdef(dml_rtctx,
-                                 del_ctdef.das_ctdef_,
-                                 del_rtdef.das_rtdef_,
-                                 loc_meta))) {
+    if (lib::is_mysql_mode()
+      && OB_FAIL(ObDASUtils::check_nested_sql_mutating(del_ctdef.das_ctdef_.index_tid_, dml_rtctx.get_exec_ctx()))) {
+    // MySql returns error, trigger the delete statement through udf,
+    // even if there is no data that meets the where condition
+    LOG_WARN("failed to check stmt table", K(ret), K(del_ctdef.das_ctdef_.index_tid_));
+  } else if (OB_FAIL(init_das_dml_rtdef(dml_rtctx,
+                                       del_ctdef.das_ctdef_,
+                                       del_rtdef.das_rtdef_,
+                                       loc_meta))) {
     LOG_WARN("failed to init das dml rfdef", K(ret));
   } else if (OB_FAIL(init_related_das_rtdef(dml_rtctx, del_ctdef.related_ctdefs_, del_rtdef.related_rtdefs_))) {
     LOG_WARN("init related das ctdef failed", K(ret));
@@ -1182,10 +1192,15 @@ int ObDMLService::init_upd_rtdef(
   int ret = OB_SUCCESS;
   const ObDASTableLocMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
   dml_rtctx.get_exec_ctx().set_dml_event(ObDmlEventType::DE_UPDATING);
-  if (OB_FAIL(init_das_dml_rtdef(dml_rtctx,
-                                 upd_ctdef.dupd_ctdef_,
-                                 upd_rtdef.dupd_rtdef_,
-                                 loc_meta))) {
+  if (lib::is_mysql_mode()
+      && OB_FAIL(ObDASUtils::check_nested_sql_mutating(upd_ctdef.dupd_ctdef_.index_tid_, dml_rtctx.get_exec_ctx()))) {
+    // MySql returns error, trigger the update statement through udf,
+    // even if there is no data that meets the where condition
+    LOG_WARN("failed to check stmt table", K(ret), K(upd_ctdef.dupd_ctdef_.index_tid_));
+  } else if (OB_FAIL(init_das_dml_rtdef(dml_rtctx,
+                                       upd_ctdef.dupd_ctdef_,
+                                       upd_rtdef.dupd_rtdef_,
+                                       loc_meta))) {
     LOG_WARN("failed to init das dml rfdef", K(ret));
   } else if (OB_FAIL(init_related_das_rtdef(dml_rtctx, upd_ctdef.related_upd_ctdefs_, upd_rtdef.related_upd_rtdefs_))) {
     LOG_WARN("init related das ctdef failed", K(ret));

@@ -449,7 +449,7 @@ int ObExprGeneratorImpl::visit(ObPlQueryRefRawExpr &expr)
                "expr type", get_type_name(expr.get_expr_type()));
     } else {
       ObExprOpSubQueryInPl *pl_subquery = static_cast<ObExprOpSubQueryInPl*>(op);
-      OX (pl_subquery->set_ps_id(expr.get_ps_id()));
+      OZ (pl_subquery->deep_copy_ps_sql(expr.get_ps_sql()));
       OX (pl_subquery->set_stmt_type(expr.get_stmt_type()));
       OZ (pl_subquery->deep_copy_route_sql(expr.get_route_sql()));
       OX (pl_subquery->set_result_type(expr.get_subquery_result_type()));

@@ -140,11 +140,6 @@ public:
   ObPlanCacheObject(ObLibCacheNameSpace ns, lib::MemoryContext &mem_context);
   virtual ~ObPlanCacheObject() {}
 
-  inline bool is_sql_crsr() const { return ObLibCacheNameSpace::NS_CRSR == ns_; }
-  inline bool is_prcr() const { return ObLibCacheNameSpace::NS_PRCR == ns_; }
-  inline bool is_sfc() const { return ObLibCacheNameSpace::NS_SFC == ns_; }
-  inline bool is_pkg() const { return ObLibCacheNameSpace::NS_PKG == ns_; }
-  inline bool is_anon() const { return ObLibCacheNameSpace::NS_ANON == ns_; }
   inline int64_t get_dependency_table_size() const { return dependency_tables_.count(); }
   inline const DependenyTableStore &get_dependency_table() const { return dependency_tables_; }
   inline void set_sys_schema_version(int64_t schema_version) { sys_schema_version_ = schema_version; }

@@ -859,6 +859,7 @@ public:
   // trigger
   int create_trigger_in_trans(share::schema::ObTriggerInfo &new_trigger_info,
                               share::schema::ObErrorInfo &error_info,
+                              ObIArray<ObDependencyInfo> &dep_infos,
                               const common::ObString *ddl_stmt_str,
                               bool for_insert_errors,
                               share::schema::ObSchemaGetterGuard &schema_guard);

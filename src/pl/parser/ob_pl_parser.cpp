@@ -18,6 +18,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "sql/parser/parse_malloc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +42,80 @@ namespace oceanbase
 using namespace common;
 namespace pl
 {
+
+#define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
+int ObPLParser::fast_parse(const ObString &query,
+                      ParseResult &parse_result)
+{
+  ObActiveSessionGuard::get_stat().in_pl_parse_ = true;
+  int ret = OB_SUCCESS;
+  // 删除SQL语句末尾的空格
+  int64_t len = query.length();
+  while (len > 0 && ISSPACE(query[len - 1])) {
+    --len;
+  }
+  const ObString stmt_block(len, query.ptr());
+  ObParseCtx parse_ctx;
+  memset(&parse_ctx, 0, sizeof(ObParseCtx));
+  parse_ctx.global_errno_ = OB_SUCCESS;
+  parse_ctx.is_pl_fp_ = true;
+  parse_ctx.mem_pool_ = &allocator_;
+  parse_ctx.stmt_str_ = stmt_block.ptr();
+  parse_ctx.stmt_len_ = stmt_block.length();
+  parse_ctx.orig_stmt_str_ = query.ptr();
+  parse_ctx.orig_stmt_len_ = query.length();
+  parse_ctx.comp_mode_ = lib::is_oracle_mode();
+  parse_ctx.is_for_trigger_ = 0;
+  parse_ctx.is_dynamic_ = 0;
+  parse_ctx.is_inner_parse_ = 1;
+  parse_ctx.charset_info_ = ObCharset::get_charset(connection_collation_);
+  parse_ctx.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?
+        (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4) : false;
+  parse_ctx.connection_collation_ = connection_collation_;
+  parse_ctx.mysql_compatible_comment_ = false;
+  int64_t new_length = stmt_block.length() + 1;
+  char *buf = (char *)parse_malloc(new_length, parse_ctx.mem_pool_);
+  if (OB_UNLIKELY(NULL == buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("no memory for parser");
+  } else {
+    parse_ctx.no_param_sql_ = buf;
+    parse_ctx.no_param_sql_buf_len_ = new_length;
+  }
+  ret = parse_stmt_block(parse_ctx, parse_result.result_tree_);
+  if (OB_ERR_PARSE_SQL == ret) {
+    int err_len = 0;
+    const char *err_str = "", *global_errmsg = "";
+    int err_line = 0;
+    if (parse_ctx.cur_error_info_ != NULL) {
+      int first_column = parse_ctx.cur_error_info_->stmt_loc_.first_column_;
+      int last_column = parse_ctx.cur_error_info_->stmt_loc_.last_column_;
+      err_len = last_column - first_column + 1;
+      err_str = parse_ctx.stmt_str_ + first_column;
+      err_line = parse_ctx.cur_error_info_->stmt_loc_.last_line_ + 1;
+      global_errmsg = parse_ctx.global_errmsg_;
+    }
+    ObString stmt(parse_ctx.stmt_len_, parse_ctx.stmt_str_);
+    LOG_WARN("failed to parser pl stmt",
+             K(ret), K(err_line), K(global_errmsg), K(stmt));
+    LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
+                   err_len, err_str, err_line);
+  } else {
+    memmove(parse_ctx.no_param_sql_ + parse_ctx.no_param_sql_len_,
+                    parse_ctx.stmt_str_ + parse_ctx.copied_pos_,
+                    parse_ctx.stmt_len_ - parse_ctx.copied_pos_);
+    parse_ctx.no_param_sql_len_ += parse_ctx.stmt_len_ - parse_ctx.copied_pos_;
+    parse_result.no_param_sql_ = parse_ctx.no_param_sql_;
+    parse_result.no_param_sql_len_ = parse_ctx.no_param_sql_len_;
+    parse_ctx.no_param_sql_buf_len_ = parse_ctx.no_param_sql_buf_len_;
+    parse_result.param_node_num_ = parse_ctx.param_node_num_;
+    parse_result.param_nodes_ = parse_ctx.param_nodes_;
+    parse_result.tail_param_node_ = parse_ctx.tail_param_node_;
+  }
+  ObActiveSessionGuard::get_stat().in_pl_parse_ = false;
+  return ret;
+}
+
 int ObPLParser::parse(const ObString &stmt_block,
                       const ObString &orig_stmt_block, // for preprocess
                       ParseResult &parse_result,

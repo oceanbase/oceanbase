@@ -88,6 +88,14 @@ enum PackageAlterOptions
   PACKAGE_ALTER_NONEDITIONABLE
 };
 
+enum TriggerAlterOptions
+{
+  TRIGGER_ALTER_COMPILE = 0,
+  TRIGGER_ALTER_IF_ENABLE,
+  TRIGGER_ALTER_RENAME,
+  TRIGGER_ALTER_IF_EDITIONABLE
+};
+
 #ifdef __cplusplus
 }
 #endif

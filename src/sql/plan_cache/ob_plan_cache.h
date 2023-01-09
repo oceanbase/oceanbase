@@ -24,7 +24,6 @@
 #include "sql/plan_cache/ob_lib_cache_key_creator.h"
 #include "sql/plan_cache/ob_lib_cache_node_factory.h"
 #include "sql/plan_cache/ob_lib_cache_object_manager.h"
-
 namespace oceanbase
 {
 namespace rpc
@@ -35,6 +34,7 @@ namespace pl
 {
 class ObPLFunction;
 class ObPLPackage;
+class ObGetPLKVEntryOp;
 }  // namespace pl
 using common::ObPsStmtId;
 namespace sql
@@ -168,9 +168,7 @@ public:
            uint64_t tenant_id,
            PlanCacheMap* pcm);
   bool is_inited() { return inited_; }
-  
-  //添加pl 对象到Cache
-  int add_pl_cache(ObILibCacheObject *pl_object, ObPlanCacheCtx &pc_ctx);
+
   /**
    * Add new plan to PlanCache
    */
@@ -185,10 +183,6 @@ public:
   // cache object access functions
   /* 根据ObPlanCacheKey以及参数在plan cache中查询符合要求的执行计划 */
   int get_plan(common::ObIAllocator &allocator, ObPlanCacheCtx &pc_ctx, ObCacheObjGuard& guard);
-  //根据ObPlanCacheKey以及参数在plan cache中查询缓存的pl function
-  int get_pl_function(ObCacheObjGuard& guard, ObPlanCacheCtx &pc_ctx);
-  //根据ObPlanCacheKey以及参数在plan cache中查询缓存的pl package
-  int get_pl_package(ObCacheObjGuard& cacheobj_guard, ObPlanCacheCtx &pc_ctx);
   /* 根据ObPlanCacheKey以及参数在plan cache中查询符合要求的执行计划 */
   int get_ps_plan(ObCacheObjGuard& guard, const ObPsStmtId stmt_id, ObPlanCacheCtx &pc_ctx);
   int ref_cache_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard);
@@ -266,7 +260,6 @@ public:
    * cache evict
    */
   int cache_evict_all_plan();
-  int cache_evict_all_pl();
   int cache_evict_all_obj();
   //evict plan, adjust mem between hwm and lwm
   int cache_evict();
@@ -293,6 +286,7 @@ public:
   ObPlanCacheStat &get_plan_cache_stat() { return pc_stat_; }
   const ObPlanCacheStat &get_plan_cache_stat() const { return pc_stat_; }
   int remove_cache_obj_stat_entry(const ObCacheObjID cache_obj_id);
+  int remove_cache_node(ObILibCacheKey *key);
   ObLCObjectManager &get_cache_obj_mgr() { return co_mgr_; }
   ObLCNodeFactory &get_cache_node_factory() { return cn_factory_; }
   int alloc_cache_obj(ObCacheObjGuard& guard, ObLibCacheNameSpace ns, uint64_t tenant_id);
@@ -341,7 +335,7 @@ private:
   int add_cache_obj_stat(ObILibCacheCtx &ctx,
                          ObILibCacheObject *cache_obj);
   bool calc_evict_num(int64_t &plan_cache_evict_num);
-  int remove_cache_node(ObILibCacheKey *key);
+
   int batch_remove_cache_node(const LCKeyValueArray &to_evict);
   bool is_reach_memory_limit() { return get_mem_hold() > get_mem_limit(); }
   int construct_plan_cache_key(ObPlanCacheCtx &plan_ctx, ObLibCacheNameSpace ns);
@@ -361,7 +355,6 @@ private:
   int deal_add_ps_plan_result(int add_plan_ret,
                               ObPlanCacheCtx &pc_ctx,
                               const ObILibCacheObject &cache_object);
-  int get_pl_cache(ObPlanCacheCtx &pc_ctx, ObCacheObjGuard& guard);
   int check_after_get_plan(int tmp_ret, ObILibCacheCtx &ctx, ObILibCacheObject *cache_obj);
 private:
   const static int64_t SLICE_SIZE = 1024; //1k

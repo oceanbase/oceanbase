@@ -18,8 +18,8 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_compile.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "sql/resolver/ddl/ob_trigger_resolver.h"
 
 namespace oceanbase
 {
@@ -58,8 +58,11 @@ int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &st
                            ctx.get_sql_proxy(),
                            ctx.get_allocator(),
                            arg));
-  if (OB_SUCC(ret) && arg.error_info_.get_error_status() != ERROR_STATUS_NO_ERROR) {
-    OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
+  if (OB_SUCC(ret)) {
+    if (lib::is_oracle_mode() ||
+        (lib::is_mysql_mode() && arg.error_info_.get_error_status() != ERROR_STATUS_NO_ERROR)) {
+      OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
+    }
   }
   OZ (ctx.get_sql_ctx()->schema_guard_->reset());
   return ret;
@@ -93,7 +96,9 @@ int ObAlterTriggerExecutor::execute(ObExecContext &ctx, ObAlterTriggerStmt &stmt
   OV (OB_NOT_NULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx)), OB_NOT_INIT);
   OZ (task_exec_ctx->get_common_rpc(common_rpc_proxy));
   OV (OB_NOT_NULL(common_rpc_proxy));
-  OZ (common_rpc_proxy->alter_trigger(arg), common_rpc_proxy->get_server());
+  if (OB_SUCC(ret) && !arg.is_alter_compile_) {
+    OZ (common_rpc_proxy->alter_trigger(arg), common_rpc_proxy->get_server());
+  }
   return ret;
 }
 
@@ -104,56 +109,32 @@ int ObCreateTriggerExecutor::analyze_dependencies(ObSchemaGetterGuard &schema_gu
                                                   ObCreateTriggerArg &arg)
 {
   int ret = OB_SUCCESS;
-  uint64_t database_id = session_info->get_database_id();
   uint64_t tenant_id = arg.trigger_info_.get_tenant_id();
-  const ObString &trigger_name = arg.trigger_info_.get_trigger_name();
+  const ObString &trigger_name = arg.trigger_info_.get_trigger_name();\
   const ObString &db_name = arg.trigger_database_;
   const ObTriggerInfo *trigger_info = NULL;
-  if (OB_FAIL(schema_guard.get_trigger_info(tenant_id, database_id, trigger_name, trigger_info))) {
+  if (OB_FAIL(schema_guard.get_trigger_info(tenant_id, arg.trigger_info_.get_database_id(),
+                                            trigger_name, trigger_info))) {
     LOG_WARN("failed to get trigger info", K(ret));
-  } else if (NULL != trigger_info) {
-    HEAP_VARS_2((ObPLPackageAST, package_spec_ast, allocator),
-                (ObPLPackageAST, package_body_ast, allocator)) {
-      ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
-      const ObString &pkg_name = trigger_info->get_package_body_info().get_package_name();
-      ObPLCompiler compiler(allocator,
-                            *session_info,
-                            schema_guard,
-                            package_guard,
-                            *sql_proxy);
-      ObPackageInfo package_spec_info = trigger_info->get_package_spec_info();
-      OZ (package_spec_ast.init(db_name,
-                                package_spec_info.get_package_name(),
-                                PL_PACKAGE_SPEC,
-                                package_spec_info.get_database_id(),
-                                package_spec_info.get_package_id(),
-                                package_spec_info.get_schema_version(),
-                                NULL));
-      OZ (compiler.analyze_package(package_spec_info.get_source(),
-                                NULL, package_spec_ast, true));
-      OZ (package_body_ast.init(db_name,
-                                pkg_name,
-                                PL_PACKAGE_BODY,
-                                trigger_info->get_package_body_info().get_database_id(),
-                                trigger_info->get_package_body_info().get_package_id(),
-                                trigger_info->get_package_body_info().get_schema_version(),
-                                &package_spec_ast));
-      OZ (compiler.analyze_package(trigger_info->get_package_body_source(),
-                                   &(package_spec_ast.get_body()->get_namespace()),
-                                   package_body_ast,
-                                   true));
-      if (OB_FAIL(ret) && ret != OB_ERR_UNEXPECTED) {
-          LOG_USER_WARN(OB_ERR_TRIGGER_COMPILE_ERROR, "TRIGGER",
-                        db_name.length(), db_name.ptr(),
-                        trigger_name.length(), trigger_name.ptr());
-          ObPL::insert_error_msg(ret);
-          ret = OB_SUCCESS;
-      }
-      if (OB_SUCC(ret)) {
-        arg.trigger_info_.deep_copy(*trigger_info);
-        arg.error_info_.collect_error_info(&arg.trigger_info_);
-        arg.for_insert_errors_ = true;
-      }
+  } else if (NULL == trigger_info) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trigger info is null", K(db_name), K(trigger_name), K(ret));
+  } else {
+    if (OB_FAIL(ObTriggerResolver::analyze_trigger(schema_guard, session_info, sql_proxy,
+                                                   allocator, *trigger_info, db_name, arg.dependency_infos_, false))) {
+      LOG_WARN("analyze trigger failed", K(trigger_info), K(db_name), K(ret));
+    }
+    if (OB_FAIL(ret) && ret != OB_ERR_UNEXPECTED) {
+        LOG_USER_WARN(OB_ERR_TRIGGER_COMPILE_ERROR, "TRIGGER",
+                      db_name.length(), db_name.ptr(),
+                      trigger_name.length(), trigger_name.ptr());
+        ObPL::insert_error_msg(ret);
+        ret = OB_SUCCESS;
+    }
+    if (OB_SUCC(ret)) {
+      arg.trigger_info_.deep_copy(*trigger_info);
+      arg.error_info_.collect_error_info(&arg.trigger_info_);
+      arg.for_insert_errors_ = true;
     }
   }
   return ret;

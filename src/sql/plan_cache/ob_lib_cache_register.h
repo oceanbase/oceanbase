@@ -12,11 +12,11 @@
 
 #ifdef LIB_CACHE_OBJ_DEF
 LIB_CACHE_OBJ_DEF(NS_CRSR, "CRSR", ObPlanCacheKey, ObPCVSet, ObPhysicalPlan, ObNewModIds::OB_SQL_PHY_PLAN)  // physical plan cache
-LIB_CACHE_OBJ_DEF(NS_PRCR, "PRCR", ObPlanCacheKey, ObPCVSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // procedure cache
-LIB_CACHE_OBJ_DEF(NS_SFC, "SFC", ObPlanCacheKey, ObPCVSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)   // function cache
-LIB_CACHE_OBJ_DEF(NS_ANON, "ANON", ObPlanCacheKey, ObPCVSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // anonymous cache
-LIB_CACHE_OBJ_DEF(NS_TRGR, "TRGR", ObPlanCacheKey, ObPCVSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)   // trigger cache
-LIB_CACHE_OBJ_DEF(NS_PKG, "PKG", ObPlanCacheKey, ObPCVSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)    // package cache
+LIB_CACHE_OBJ_DEF(NS_PRCR, "PRCR", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // procedure cache
+LIB_CACHE_OBJ_DEF(NS_SFC, "SFC", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)   // function cache
+LIB_CACHE_OBJ_DEF(NS_ANON, "ANON", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // anonymous cache
+LIB_CACHE_OBJ_DEF(NS_TRGR, "TRGR", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)   // trigger cache
+LIB_CACHE_OBJ_DEF(NS_PKG, "PKG", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)    // package cache
 #endif /*LIB_CACHE_OBJ_DEF*/
 
 #ifndef OCEANBASE_SQL_PLAN_CACHE_OB_LIB_CACHE_REGISTER_

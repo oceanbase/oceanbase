@@ -437,6 +437,27 @@ int ObErrorInfo::handle_error_info(ObMySQLTransaction &trans, const IObErrorInfo
   return ret;
 }
 
+int ObErrorInfo::handle_error_info(const IObErrorInfo *info)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  if (OB_FAIL(collect_error_info(info))) {
+    LOG_WARN("collect error info failed", K(ret));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, get_tenant_id(), true))) {
+    LOG_WARN("fail start trans", K(ret));
+  } else if (OB_FAIL(handle_error_info(trans, info))) {
+    LOG_WARN("handle error info failed.", K(ret));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCCESS == ret))) {
+      LOG_WARN("trans end failed", K(ret), K(tmp_ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
 int ObErrorInfo::delete_error(const IObErrorInfo *info)
 {
   int ret = OB_SUCCESS;
