@@ -2109,26 +2109,23 @@ int ObPrefetchBackupInfoTask::inner_process_()
       } else if (OB_FAIL(task_mgr_->receive(task_id, need_copy_item_list))) {
         LOG_WARN("failed to receive items", K(ret), K(task_id), K(need_copy_item_list));
       } else {
-        LOG_INFO(
-            "receive backup items", K(task_id), K_(backup_data_type), "count", need_copy_item_list.count(), K_(param));
+        LOG_INFO("receive backup items", K(task_id), K_(backup_data_type), "need_copy_count", need_copy_item_list.count(),
+                "no_need_copy_count", no_need_copy_item_list.count(), K_(param));
       }
     }
     if (OB_SUCC(ret)) {
       ObArray<ObBackupProviderItem> items;
-      const bool has_remain = task_mgr_->has_remain();
       int64_t file_id = 0;
       if (OB_FAIL(task_mgr_->deliver(items, file_id))) {
         if (OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
-          const int64_t pending = task_mgr_->get_pending_count();
-          const int64_t ready = task_mgr_->get_ready_count();
-          if (has_remain && !is_run_out) {
+          if (!is_run_out) {
             if (OB_FAIL(generate_next_prefetch_dag_())) {
               LOG_WARN("failed to generate prefetch dag", K(ret));
             } else {
               LOG_INFO("generate next prefetch dag", K(items), K_(backup_data_type));
             }
-          } else if (is_run_out) {
+          } else {
             LOG_INFO("run out", K_(param), K_(backup_data_type), K(items));
           }
         } else {

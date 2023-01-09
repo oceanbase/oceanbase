@@ -36,8 +36,7 @@ public:
   int get_meta_obj_with_external_memory(
       const Key &key,
       common::ObIAllocator &allocator,
-      ObMetaObjGuard<T> &guard,
-      const bool force_alloc_new = false);
+      ObMetaObjGuard<T> &guard);
   int try_get_in_memory_meta_obj(const Key &key, bool &success, ObMetaObjGuard<T> &guard);
   int try_get_in_memory_meta_obj_and_addr(
       const Key &key,
@@ -518,8 +517,7 @@ template <typename Key, typename T>
 int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
     const Key &key,
     common::ObIAllocator &allocator,
-    ObMetaObjGuard<T> &guard,
-    const bool force_alloc_new)
+    ObMetaObjGuard<T> &guard)
 {
   int ret = common::OB_SUCCESS;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
@@ -529,21 +527,13 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
-  } else if (force_alloc_new) {
-    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
-    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
-      if (common::OB_ENTRY_NOT_EXIST != ret) {
-        STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
-      }
-    }
   } else if (OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
     } else {
       STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
     }
-  }
-  if (OB_SUCC(ret) && !is_in_memory) {
+  } else if (!is_in_memory) {
     t_ptr = ptr_hdl.get_resource_ptr();
     ObMetaDiskAddr disk_addr;
     void *buf = allocator.alloc(sizeof(T));

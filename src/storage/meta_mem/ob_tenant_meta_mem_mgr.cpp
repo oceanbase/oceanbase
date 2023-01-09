@@ -945,8 +945,7 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
     const WashTabletPriority &priority,
     const ObTabletMapKey &key,
     common::ObIAllocator &allocator,
-    ObTabletHandle &handle,
-    const bool force_alloc_new)
+    ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
   handle.reset();
@@ -956,7 +955,7 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
   } else if (OB_UNLIKELY(!key.is_valid() || is_used_obj_pool(&allocator))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key), KP(&allocator), KP(&allocator_));
-  } else if (OB_FAIL(tablet_map_.get_meta_obj_with_external_memory(key, allocator, handle, force_alloc_new))) {
+  } else if (OB_FAIL(tablet_map_.get_meta_obj_with_external_memory(key, allocator, handle))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get tablet", K(ret), K(key));
     }

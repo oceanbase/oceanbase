@@ -161,8 +161,7 @@ public:
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
       common::ObIAllocator &allocator,
-      ObTabletHandle &handle,
-      const bool force_alloc_new = false);
+      ObTabletHandle &handle);
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int has_tablet(const ObTabletMapKey &key, bool &is_exist);
   int del_tablet(const ObTabletMapKey &key);

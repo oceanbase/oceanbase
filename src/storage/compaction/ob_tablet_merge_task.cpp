@@ -648,8 +648,6 @@ int ObTabletMergeExecutePrepareTask::process()
     LOG_WARN("fail to init merge info", K(ret), K_(result), KPC(ctx_));
   } else if (OB_FAIL(ctx_->prepare_index_tree())) {
     LOG_WARN("fail to prepare sstable index tree", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ctx_->try_swap_tablet_handle())) {
-    LOG_WARN("failed to try swap tablet handle", K(ret));
   } else if (OB_FAIL(ObBasicTabletMergeDag::generate_merge_task(
       *static_cast<ObTabletMergeExecuteDag *>(get_dag()), *ctx_, this))) {
     LOG_WARN("Failed to generate_merge_sstable_task", K(ret));
@@ -819,9 +817,6 @@ int ObTabletMergePrepareTask::process()
   }
 
   if (OB_FAIL(ret) || skip_rest_operation) {
-  } else if (!is_mini_merge(ctx->param_.merge_type_)
-    && OB_FAIL(ctx->try_swap_tablet_handle())) {
-    LOG_WARN("failed to try swap tablet handle", K(ret));
   } else if (OB_FAIL(ObBasicTabletMergeDag::generate_merge_task(
       *merge_dag_, *ctx, this))) {
     LOG_WARN("Failed to generate_merge_sstable_task", K(ret));
