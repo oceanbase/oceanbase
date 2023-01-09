@@ -1082,6 +1082,9 @@ MutatorType ObMvccRowCallback::get_mutator_type() const
 int ObMvccRowCallback::get_redo(RedoDataNode &redo_node)
 {
   int ret = OB_SUCCESS;
+
+  ObRowLatchGuard guard(value_.latch_);
+
   if (NULL == key_.get_rowkey() || NULL == tnode_) {
     ret = OB_ENTRY_NOT_EXIST;
   } else if (!is_link_) {
