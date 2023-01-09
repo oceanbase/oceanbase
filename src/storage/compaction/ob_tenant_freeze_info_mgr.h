@@ -173,6 +173,7 @@ private:
                         common::ObIArray<FreezeInfo> &freeze_info);
 
     bool inited_;
+    bool check_tenant_status_;
     ObTenantFreezeInfoMgr &mgr_;
     common::ObISQLClient *sql_proxy_;
     share::ObSnapshotTableProxy snapshot_proxy_;

@@ -126,6 +126,7 @@ void TestMultiVersionMerge::SetUpTestCase()
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  MTL(ObTenantTabletScheduler*)->resume_major_merge();
 
   // create tablet
   obrpc::ObBatchCreateTabletArg create_tablet_arg;

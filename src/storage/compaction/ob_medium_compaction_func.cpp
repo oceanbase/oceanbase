@@ -173,6 +173,14 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
   }
   LOG_DEBUG("schedule next medium in primary cluster", K(ret), KPC(this), K(schedule_medium_flag),
       K(schedule_major_snapshot), K(adaptive_merge_reason), KPC(last_major), K(medium_list), K(max_sync_medium_scn));
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
+  if (OB_FAIL(ret) && tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+    FLOG_INFO("set schedule medium with errsim", KPC(this));
+    ret = OB_SUCCESS;
+    schedule_medium_flag = true;
+  }
+#endif
 
   if (OB_FAIL(ret) || !schedule_medium_flag) {
   } else if (ObMediumCompactionInfo::MAJOR_COMPACTION == medium_list.get_last_compaction_type()) {
@@ -275,6 +283,13 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
         }
       }
     }
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
+  if (OB_FAIL(ret) && tablet_.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+    FLOG_INFO("set schedule medium with errsim", KPC(this));
+    ret = OB_SUCCESS;
+  }
+#endif
     if (FAILEDx(prepare_medium_info(result, medium_info))) {
       if (OB_TABLE_IS_DELETED == ret) {
         ret = OB_SUCCESS;

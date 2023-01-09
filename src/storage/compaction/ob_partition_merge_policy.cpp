@@ -1315,6 +1315,7 @@ int ObAdaptiveMergePolicy::find_meta_major_tables(
         LOG_WARN("failed to add minor table to meta merge result", K(ret));
       }
     } // end of for
+
     if (OB_FAIL(ret)) {
     } else if (tx_determ_table_cnt < 2) {
       ret = OB_NO_NEED_MERGE;
@@ -1327,6 +1328,15 @@ int ObAdaptiveMergePolicy::find_meta_major_tables(
       ret = OB_NO_NEED_MERGE;
       LOG_INFO("chosen snapshot is abandoned", K(ret), K(result), K(tablet.get_multi_version_start()));
     }
+
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
+  if (OB_FAIL(ret) && tablet.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+    FLOG_INFO("set schedule medium with errsim", "tablet_id", tablet.get_tablet_meta().tablet_id_);
+    ret = OB_SUCCESS;
+  }
+#endif
+
   }
   return ret;
 }

@@ -150,7 +150,7 @@ constexpr ObMergeType ObTenantTabletScheduler::MERGE_TYPES[];
 
 ObTenantTabletScheduler::ObTenantTabletScheduler()
  : is_inited_(false),
-   major_merge_status_(true),
+   major_merge_status_(false),
    is_stop_(true),
    merge_loop_tg_id_(0),
    medium_loop_tg_id_(0),
@@ -979,7 +979,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
           schedule_stats_.schedule_cnt_++;
         }
 
-        if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
+        if (could_major_merge && OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
             ls,
             *tablet,
             major_frozen_scn))) {

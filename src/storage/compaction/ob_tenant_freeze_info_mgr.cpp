@@ -744,6 +744,7 @@ int64_t ObTenantFreezeInfoMgr::get_snapshot_gc_ts()
 
 ObTenantFreezeInfoMgr::ReloadTask::ReloadTask(ObTenantFreezeInfoMgr &mgr)
   : inited_(false),
+    check_tenant_status_(true),
     mgr_(mgr),
     sql_proxy_(NULL),
     snapshot_proxy_(),
@@ -862,13 +863,28 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
         scheduler->stop_major_merge();
         LOG_INFO("schedule zone to stop major merge", K(tenant_id), K(zone_merge_info), K(global_merge_info));
       } else {
-        scheduler->resume_major_merge();
-        const int64_t scheduler_frozen_version = scheduler->get_frozen_version();
-        if (zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx() > scheduler_frozen_version) {
-          FLOG_INFO("try to schedule merge", K(tenant_id), "zone", zone_merge_info.zone_, "broadcast_scn",
-            zone_merge_info.broadcast_scn_, K(scheduler_frozen_version));
-          if (OB_FAIL(scheduler->schedule_merge(zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx()))) {
-            LOG_WARN("fail to schedule merge", K(ret), K(zone_merge_info));
+        if (check_tenant_status_) {
+          bool is_restore = false;
+          if (OB_FAIL(ObMultiVersionSchemaService::get_instance().check_tenant_is_restore(nullptr, tenant_id, is_restore))) {
+            LOG_WARN("failed to check tenant is restore", K(ret));
+          } else if (is_restore) {
+            if (REACH_TENANT_TIME_INTERVAL(10L * 1000L * 1000L)) {
+              LOG_INFO("skip restoring tenant to schedule major merge", K(tenant_id), K(is_restore));
+            }
+          } else {
+            check_tenant_status_ = false;
+            LOG_INFO("finish check tenant restore", K(tenant_id), K(is_restore));
+          }
+        }
+        if (!check_tenant_status_) {
+          scheduler->resume_major_merge();
+          const int64_t scheduler_frozen_version = scheduler->get_frozen_version();
+          if (zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx() > scheduler_frozen_version) {
+            FLOG_INFO("try to schedule merge", K(tenant_id), "zone", zone_merge_info.zone_, "broadcast_scn",
+              zone_merge_info.broadcast_scn_, K(scheduler_frozen_version));
+            if (OB_FAIL(scheduler->schedule_merge(zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx()))) {
+              LOG_WARN("fail to schedule merge", K(ret), K(zone_merge_info));
+            }
           }
         }
       }
