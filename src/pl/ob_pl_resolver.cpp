@@ -7126,7 +7126,7 @@ int ObPLResolver::add_pl_integer_checker_expr(ObRawExprFactory &expr_factory,
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("child expr is null", K(ret));
-    } else if (OB_FAIL(add_pl_integer_checker_expr(expr_factory, child, need_replace))) {
+    } else if (OB_FAIL(SMART_CALL(add_pl_integer_checker_expr(expr_factory, child, need_replace)))) {
       LOG_WARN("failed to add pl integer checker expr", K(ret));
     } else if (need_replace) {
       expr->get_param_expr(i) = child;
@@ -7166,7 +7166,7 @@ int ObPLResolver::add_pl_integer_checker_expr(ObRawExprFactory &expr_factory,
         if (PL_SIMPLE_INTEGER == type && T_INT == left->get_expr_type() && T_INT == right->get_expr_type()) {
           type = PL_PLS_INTEGER;
         }
-        OZ (add_pl_integer_checker_expr(expr_factory, type, -2147483648, 2147483647, expr));
+        OZ (SMART_CALL(add_pl_integer_checker_expr(expr_factory, type, -2147483648, 2147483647, expr)));
         OX (need_replace = true);
       }
     }
