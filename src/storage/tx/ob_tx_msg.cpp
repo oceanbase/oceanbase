@@ -91,7 +91,7 @@ OB_DEF_DESERIALIZE(ObTxRollbackSPMsg)
     bool has_tx_ptr = false;
     OB_UNIS_DECODE(has_tx_ptr);
     if (has_tx_ptr) {
-      void *buffer = ob_malloc(sizeof(ObTxDesc));
+      void *buffer = ob_malloc(sizeof(ObTxDesc), "TxRollbackSP");
       if (OB_ISNULL(buffer)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {

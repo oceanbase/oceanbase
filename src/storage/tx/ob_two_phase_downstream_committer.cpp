@@ -337,7 +337,16 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request_impl_() {
     TRANS_LOG(WARN, "apply msg failed", K(ret), KPC(this));
   } else if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
     TRANS_LOG(WARN, "do prepare failed", K(ret), K(*this));
-  } else {
+    if (OB_TRANS_NEED_ROLLBACK == ret) {
+      if (OB_FAIL(drive_self_2pc_phase(ObTxState::ABORT))) {
+        TRANS_LOG(WARN, "drive abort failed", K(ret), K(*this));
+      } else if (OB_TMP_FAIL(post_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_RESP, OB_C2PC_UPSTREAM_ID))) {
+        TRANS_LOG(WARN, "post abort resp msg failed", K(tmp_ret), K(*this));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       ret = OB_ERR_UNEXPECTED;
@@ -345,9 +354,8 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request_impl_() {
       break;
     }
     case Ob2PCRole::INTERNAL: {
-
-      if (OB_TMP_FAIL(post_downstream_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ))) {
-        TRANS_LOG(WARN, "post prepare msg failed", KR(ret));
+      if (OB_TMP_FAIL(retransmit_downstream_msg_())) {
+        TRANS_LOG(WARN, "post downstream msg failed", KR(ret));
       }
       break;
     }

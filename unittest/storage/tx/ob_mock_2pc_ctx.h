@@ -94,6 +94,7 @@ protected:
   // decide final transaction state. In Oceanbase's optimized, do_pre_commit is used to
   // optimize single machine read latency and do/on_clear is used to maintain the state
   // to recovery
+  virtual int do_prepare_redo() override;
   virtual int do_prepare(bool &no_need_submit_log) override;
   virtual int on_prepare() override;
   virtual int do_pre_commit(bool& need_wait) override;

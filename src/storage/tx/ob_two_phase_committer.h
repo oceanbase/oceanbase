@@ -197,6 +197,7 @@ public:
   //
   // NB: The implementation need guarantee the method is failure atomic, So the
   // method should never report an error.
+  virtual int do_prepare_redo() = 0;
   virtual int do_prepare(bool &no_need_submit_log) = 0;
   virtual int do_pre_commit(bool& need_wait) = 0;
   virtual int do_commit() = 0;

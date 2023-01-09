@@ -74,7 +74,10 @@ int MockOb2pcCtx::commit(const MockObParticipants& participants)
   participants_.assign(participants.begin(), participants.end());
   return two_phase_commit();
 }
-
+int MockOb2pcCtx::do_prepare_redo()
+{
+  return OB_SUCCESS;
+}
 int MockOb2pcCtx::do_prepare(bool &no_need_submit_log)
 {
   no_need_submit_log = false;
