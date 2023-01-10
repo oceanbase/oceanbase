@@ -22,9 +22,12 @@ class ObGroupLookupOp : public ObLocalIndexLookupOp
 {
 public:
   ObGroupLookupOp() : ObLocalIndexLookupOp(ObNewRowIterator::IterType::ObGroupLookupOp),
+                      group_iter_(),
                       index_group_cnt_(1),
                       lookup_group_cnt_(1)
-  {}
+  {
+    lookup_iter_ = &group_iter_;
+  }
   virtual ~ObGroupLookupOp();
   virtual void reset() override
   {
@@ -45,10 +48,10 @@ public:
   virtual bool need_next_index_batch() const override;
   virtual int init_group_scan_iter(int64_t cur_group_idx,
                                    int64_t group_size,
-                                   ObIAllocator &allocator,
                                    ObExpr *group_id_expr);
   virtual int switch_lookup_scan_group() override;
 public:
+  ObGroupScanIter group_iter_;
   int64_t index_group_cnt_;  // number of groups fetched from index table
   int64_t lookup_group_cnt_; // number of groups fetched from lookup table
 };

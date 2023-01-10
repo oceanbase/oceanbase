@@ -123,7 +123,6 @@ int ObDASGroupScanOp::do_local_index_lookup()
       op->set_is_group_scan(true);
       OZ(op->init_group_scan_iter(cur_group_idx_,
                                   group_size_,
-                                  op_alloc_,
                                   scan_ctdef_->group_id_expr_));
     }
   }
@@ -266,29 +265,20 @@ int ObGroupLookupOp::init_group_range(int64_t cur_group_idx, int64_t group_size)
 
 int ObGroupLookupOp::init_group_scan_iter(int64_t cur_group_idx,
                                           int64_t group_size,
-                                          ObIAllocator &allocator,
                                           ObExpr *group_id_expr)
 {
   int ret = OB_SUCCESS;
-  void *buf = allocator.alloc(sizeof(ObGroupScanIter));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("group scan iter buf allocated failed", K(ret));
-  } else {
-    ObGroupScanIter *group_iter = new(buf)(ObGroupScanIter);
-    lookup_iter_ = group_iter;
-    bool is_vectorized = lookup_rtdef_->p_pd_expr_op_->is_vectorized();
+  bool is_vectorized = lookup_rtdef_->p_pd_expr_op_->is_vectorized();
 
-    int64_t max_row_store_size = is_vectorized ? lookup_rtdef_->eval_ctx_->max_batch_size_: 1;
-    group_iter->init_group_range(cur_group_idx, group_size);
-    OZ(group_iter->init_row_store(lookup_ctdef_->result_output_,
-                                  *lookup_rtdef_->eval_ctx_,
-                                  lookup_rtdef_->stmt_allocator_,
-                                  max_row_store_size,
-                                  group_id_expr,
-                                  &group_iter->get_result_tmp_iter(),
-                                  lookup_rtdef_->need_check_output_datum_));
-  }
+  int64_t max_row_store_size = is_vectorized ? lookup_rtdef_->eval_ctx_->max_batch_size_: 1;
+  group_iter_.init_group_range(cur_group_idx, group_size);
+  OZ(group_iter_.init_row_store(lookup_ctdef_->result_output_,
+                                *lookup_rtdef_->eval_ctx_,
+                                lookup_rtdef_->stmt_allocator_,
+                                max_row_store_size,
+                                group_id_expr,
+                                &group_iter_.get_result_tmp_iter(),
+                                lookup_rtdef_->need_check_output_datum_));
 
   return ret;
 }
