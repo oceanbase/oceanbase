@@ -1458,7 +1458,7 @@ int ObPlanCache::add_ps_plan(T *plan, ObPlanCacheCtx &pc_ctx)
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(WARN, "pc_ctx.raw_sql_.ptr() is NULL, cannot add plan to plan cache by sql", K(ret));
   } else {
-    pc_ctx.fp_result_.pc_key_.mode_ = PC_PS_MODE;
+    pc_ctx.fp_result_.pc_key_.mode_ = pc_ctx.mode_;
     pc_ctx.fp_result_.pc_key_.name_ = pc_ctx.raw_sql_;
     uint64_t old_stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
     // the remote plan uses key_id is 0 to distinguish, so if key_id is 0, it cannot be set to OB_INVALID_ID
