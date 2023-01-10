@@ -197,7 +197,7 @@ void ObSignalWorker::run1()
               DLOG(WARN, "read failed, errno=%d", errno);
             }
             break;
-          } else if (n != sizeof(&req)) {
+          } else if (n != sizeof(req)) {
             ret = OB_ERR_UNEXPECTED;
             DLOG(WARN, "unexpected nbytes, n=%ld", n);
             break;
