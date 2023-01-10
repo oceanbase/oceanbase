@@ -17,6 +17,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "share/ob_dml_sql_splicer.h"
+#include "share/schema/ob_table_param.h"
 
 namespace oceanbase
 {
@@ -75,6 +76,7 @@ public:
       const uint64_t execution_id,
       const uint64_t table_id,
       const int64_t ddl_task_id,
+      ObIArray<ObTabletID> &tablet_ids,
       ObMySQLProxy &sql_proxy,
       common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_map);
   static int check_column_checksum(
@@ -103,8 +105,15 @@ private:
   static int get_tablet_checksum_status(
       const ObSqlString &sql,
       const uint64_t tenant_id,
+      ObIArray<uint64_t> &batch_tablet_ids,
+      ObIArray<ObColDesc> &column_ids,
       common::ObMySQLProxy &sql_proxy,
-      common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_map);
+      common::hash::ObHashMap<uint64_t, ObArray<int64_t>> &tablet_columns_map,
+      common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_status_map);
+  static int construct_tablet_column_map(
+      const uint64_t tablet_id,
+      const int64_t column_id,
+      common::hash::ObHashMap<uint64_t, ObArray<int64_t>> &tablet_columns_map);
 };
 
 }  // end namespace share

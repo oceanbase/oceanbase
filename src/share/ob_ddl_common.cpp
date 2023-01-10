@@ -1293,7 +1293,7 @@ int ObCheckTabletDataComplementOp::do_check_tablets_merge_status(
     }
     // handle every addr tablet
     for (hash::ObHashMap<ObAddr, ObArray<ObTabletID>>::const_iterator ip_iter = ip_tablets_map.begin();
-      ip_iter != ip_tablets_map.end() && OB_SUCC(ret); ++ip_iter) {
+      OB_SUCC(ret) && ip_iter != ip_tablets_map.end(); ++ip_iter) {
       const ObAddr & dest_ip = ip_iter->first;
       const ObArray<ObTabletID> &tablet_array = ip_iter->second;
       if (OB_FAIL(arg.tablet_ids_.assign(tablet_array))) {
@@ -1307,13 +1307,14 @@ int ObCheckTabletDataComplementOp::do_check_tablets_merge_status(
         }
       }
     }
-    if (OB_SUCC(ret)) { // handle batch result
-      int tmp_ret = OB_SUCCESS;
-      common::ObArray<int> return_ret_array;
-      if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) {
-        LOG_WARN("rpc proxy wait failed", K(tmp_ret));
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
-      } else if (return_ret_array.count() != ip_tablets_map.size()) {
+    // handle batch result
+    int tmp_ret = OB_SUCCESS;
+    common::ObArray<int> return_ret_array;
+    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) {
+      LOG_WARN("rpc proxy wait failed", K(tmp_ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    } else if (OB_SUCC(ret)) {
+      if (return_ret_array.count() != ip_tablets_map.size()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("rpc proxy rsp size not equal to send size", K(ret), K(return_ret_array.count()), K(ip_tablets_map.size()));
       } else {
@@ -1398,7 +1399,7 @@ int ObCheckTabletDataComplementOp::check_tablet_merge_status(
     int64_t one_batch_build_succ_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
       const ObTabletID &tablet_id = tablet_ids.at(i);
-      if (construct_ls_tablet_map(tenant_id, tablet_id, ls_tablets_map)) {
+      if (OB_FAIL(construct_ls_tablet_map(tenant_id, tablet_id, ls_tablets_map))) {
         LOG_WARN("construct_tablet_ls_map fail", K(ret), K(tenant_id), K(tablet_id));
       } else {
         if ((i != 0 && i % batch_size == 0) /* reach batch size */ || i == tablet_ids.count() - 1 /* reach end */) {
@@ -1448,7 +1449,7 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
 {
   int ret = OB_SUCCESS;
   tablet_checksum_status = false;
-  common::hash::ObHashMap<uint64_t, bool> tablet_checksum_map;
+  common::hash::ObHashMap<uint64_t, bool> tablet_checksum_status_map;
   int64_t tablet_count = tablet_ids.count();
 
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == index_table_id ||
@@ -1456,24 +1457,25 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to check and wait complement task",
       K(ret), K(tenant_id), K(index_table_id), K(tablet_ids), K(execution_id), K(ddl_task_id));
-  } else if (OB_FAIL(tablet_checksum_map.create(tablet_count, ObModIds::OB_SSTABLE_CREATE_INDEX))) {
+  } else if (OB_FAIL(tablet_checksum_status_map.create(tablet_count, ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create column checksum map", K(ret));
   } else if (OB_FAIL(ObDDLChecksumOperator::get_tablet_checksum_record(
       tenant_id,
       execution_id,
       index_table_id,
       ddl_task_id,
+      tablet_ids,
       GCTX.root_service_->get_sql_proxy(),
-      tablet_checksum_map))) {
+      tablet_checksum_status_map))) {
     LOG_WARN("fail to get tablet checksum status",
       K(ret), K(tenant_id), K(execution_id), K(index_table_id), K(ddl_task_id));
   } else {
-    int tablet_idx = 0;
+    int64_t tablet_idx = 0;
     for (tablet_idx = 0; OB_SUCC(ret) && tablet_idx < tablet_count; ++tablet_idx) {
       const ObTabletID &tablet_id = tablet_ids.at(tablet_idx);
       uint64_t tablet_id_id = tablet_id.id();
       bool status = false;
-      if (OB_FAIL(tablet_checksum_map.get_refactored(tablet_id_id, status))) {
+      if (OB_FAIL(tablet_checksum_status_map.get_refactored(tablet_id_id, status))) {
         LOG_WARN("fail to get tablet checksum record from map", K(ret), K(tablet_id_id));
       } else if (!status) {
         break;
@@ -1488,8 +1490,8 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
       }
     }
   }
-  if (tablet_checksum_map.created()) {
-    tablet_checksum_map.destroy();
+  if (tablet_checksum_status_map.created()) {
+    tablet_checksum_status_map.destroy();
   }
   return ret;
 }
