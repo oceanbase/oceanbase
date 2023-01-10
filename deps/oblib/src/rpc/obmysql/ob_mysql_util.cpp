@@ -363,7 +363,7 @@ int ObMySQLUtil::int_cell_str(
       int64_t bytes_to_store_len = get_number_store_len(length);
       if (OB_UNLIKELY(pos + bytes_to_store_len + ffi.length() > len)) {
         ret = OB_SIZE_OVERFLOW;
-      } else if (zero_cnt > 0 && OB_UNLIKELY(pos + bytes_to_store_len + zero_cnt > len)) {
+      } else if (zero_cnt > 0 && OB_UNLIKELY(pos + bytes_to_store_len + zero_cnt + ffi.length() > len)) {
         ret = OB_SIZE_OVERFLOW;
       } else {
         MEMCPY(buf + pos + bytes_to_store_len, ffi.ptr(), ffi.length());
