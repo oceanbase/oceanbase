@@ -2257,21 +2257,23 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
             // json or max, do nothing
           }
         } else {}
+        ObCastMode def_cast_mode = CM_NONE;
+        ObRawExpr *cast_expr = NULL;
         if (!func_params.at(0)->get_result_type().has_result_flag(NOT_NULL_FLAG) ||
             !func_params.at(2)->get_result_type().has_result_flag(NOT_NULL_FLAG)) {
-          expr.unset_result_flag(NOT_NULL_FLAG);
+          res_type.unset_result_flag(NOT_NULL_FLAG);
         }
-        ObSysFunRawExpr *cast_expr = NULL;
-        if (OB_FAIL(ObRawExprUtils::create_cast_expr(*expr_factory_,
-                                                     func_params.at(0),
-                                                     res_type,
-                                                     cast_expr,
-                                                     my_session_))) {
+        res_type.set_calc_meta(res_type.get_obj_meta());
+        res_type.set_calc_accuracy(res_type.get_accuracy());
+        if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, my_session_, def_cast_mode))) {
+          LOG_WARN("get_default_cast_mode failed", K(ret));
+        } else if (OB_FAIL(try_add_cast_expr_above_for_deduce_type(*func_params.at(0), cast_expr, res_type, def_cast_mode))) {
           LOG_WARN("failed to create raw expr.", K(ret));
+        } else {
+          func_params.at(0) = cast_expr;
+          expr.set_result_type(func_params.at(0)->get_result_type());
+          expr.set_enum_set_values(func_params.at(0)->get_enum_set_values());
         }
-        func_params.at(0) = cast_expr;
-        expr.set_result_type(func_params.at(0)->get_result_type());
-        expr.set_enum_set_values(func_params.at(0)->get_enum_set_values());
       }
     } else {
       expr.set_result_type(func_params.at(0)->get_result_type());
@@ -2280,7 +2282,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
     }
     // lead和lag函数的第三个参数，应当转换为第一个参数的类型，加cast，这里不能在执行层转。
     // bug: https://work.aone.alibaba-inc.com/issue/24115140
-    if (func_params.count() == 3) {
+    if (OB_SUCC(ret) && func_params.count() == 3) {
       ObSysFunRawExpr *cast_expr = NULL;
       if (OB_ISNULL(expr_factory_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2295,7 +2297,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
         func_params.at(2) = cast_expr;
       }
     }
-    if (func_params.count() >= 2
+    if (OB_SUCC(ret) && func_params.count() >= 2
         && !func_params.at(1)->get_result_type().is_numeric_type()) {
       ObSysFunRawExpr *cast_expr = NULL;
       if (OB_ISNULL(expr_factory_)) {
