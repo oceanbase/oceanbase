@@ -547,7 +547,7 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
           SHARE_SCHEMA_LOG(WARN, "fail to print FULLTEXT KEY", K(ret));
         }
       } else if (index_schema->is_spatial_index()) {
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n  SPATIAL KEY "))) {
+          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " SPATIAL KEY "))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print SPATIAL KEY", K(ret));
           }
       } else {
