@@ -2215,7 +2215,18 @@ int ObAggregateFunction::get_result(ObNewRow &row, const common::ObTimeZoneInfo 
                       ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
                       LOG_WARN("result of string concatenation is too long", K(ret), K(pos), K(append_len), K(concat_str_max_len));
                     } else {
-                      LOG_USER_WARN(OB_ERR_CUT_VALUE_GROUP_CONCAT, gconcat_cur_row_num_ + 1);
+                      int64_t well_formed_len = 0;
+                      int32_t well_formed_error = 0;
+                      if (OB_FAIL(ObCharset::well_formed_len(cexpr->get_collation_type(),
+                                                             sep_str.ptr(),
+                                                             append_len,
+                                                             well_formed_len,
+                                                             well_formed_error))) {
+                        LOG_WARN("invalid string for charset", K(ret), K(cs_type), K(sep_str));
+                      } else {
+                        append_len = well_formed_len;
+                        LOG_USER_WARN(OB_ERR_CUT_VALUE_GROUP_CONCAT, gconcat_cur_row_num_ + 1);
+                      }
                     }
                   }
                   if (OB_FAIL(ret)) {
@@ -2260,7 +2271,18 @@ int ObAggregateFunction::get_result(ObNewRow &row, const common::ObTimeZoneInfo 
                           ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
                           LOG_WARN("result of string concatenation is too long", K(ret), K(concat_str_max_len));
                         } else {
-                          LOG_USER_WARN(OB_ERR_CUT_VALUE_GROUP_CONCAT, gconcat_cur_row_num_ + 1);
+                          int64_t well_formed_len = 0;
+                          int32_t well_formed_error = 0;
+                          if (OB_FAIL(ObCharset::well_formed_len(cexpr->get_collation_type(),
+                                                                 tmp_str.ptr(),
+                                                                 append_len,
+                                                                 well_formed_len,
+                                                                 well_formed_error))) {
+                            LOG_WARN("invalid string for charset", K(ret), K(cs_type), K(tmp_str));
+                          } else {
+                            append_len = well_formed_len;
+                            LOG_USER_WARN(OB_ERR_CUT_VALUE_GROUP_CONCAT, gconcat_cur_row_num_ + 1);
+                          }
                         }
                       }
                       if (OB_FAIL(ret)) {

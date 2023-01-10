@@ -69,7 +69,13 @@ set group_concat_max_len=10485;
 select length(group_concat(c1)) from t111_var;
 select group_concat(c1) from t111_var;
 
+set group_concat_max_len=29;
+select group_concat('中文' separator '分隔') from t111_var;
+set group_concat_max_len=23;
+select group_concat('中文' separator '分隔') from t111_var;
+
 set group_concat_max_len=1024;
+drop table t1, t111_var;
 --enable_warnings
 
 connection syscon;
