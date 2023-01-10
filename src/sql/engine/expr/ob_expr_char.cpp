@@ -73,11 +73,7 @@ int ObExprChar::calc_result_typeN(ObExprResType &type, ObExprResType *types, int
       types[i].set_calc_type(ObIntType);
     }
     ObExprOperator::calc_result_flagN(type, types, param_num);
-    //set length
-    CK( OB_INVALID_COUNT != type_ctx.get_max_allowed_packet());
-    if (OB_SUCC(ret)) {
-      type.set_length(static_cast<ObLength>(type_ctx.get_max_allowed_packet()));
-    }
+    type.set_length(static_cast<ObLength>(param_num * 4 - 4));
   }
   return ret;
 }

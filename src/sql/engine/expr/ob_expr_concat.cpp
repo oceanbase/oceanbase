@@ -208,6 +208,9 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
         max_len = OB_MAX_LONGTEXT_LENGTH / 4;
       } else {
         max_len = MIN(OB_MAX_VARCHAR_LENGTH, max_len);
+        if (max_len <= 0) {
+          max_len = OB_MAX_VARCHAR_LENGTH;
+        }
       }
       type.set_length(max_len);
     }
