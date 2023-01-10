@@ -105,7 +105,7 @@ int obpl_mysql_check_specific_node(const ParseNode *node, const ObItemType type,
 
 int obpl_mysql_wrap_node_into_subquery(ObParseCtx *_parse_ctx, ParseNode *node) {
   int ret = OB_PARSER_SUCCESS;
-  if (OB_NOT_NULL(node)) {
+  if (OB_NOT_NULL(node) && OB_NOT_NULL(node->str_value_)) {
     int max_query_len = node->str_len_ + 10;
     char *subquery = (char *)parse_malloc(max_query_len, _parse_ctx->mem_pool_);
     int len = 0;
