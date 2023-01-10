@@ -533,6 +533,7 @@ int ObIndexTreeMultiPrefetcher::multi_prefetch()
         int64_t tenant_id = MTL_ID();
         ObMicroIndexInfo &cur_index_info = read_handle.index_block_info_;
         ObMicroBlockDataHandle &next_handle = read_handle.get_read_handle();
+        ObMicroBlockDataHandle tmp_handle;
         if (OB_UNLIKELY(!cur_index_info.is_valid() ||
             nullptr == read_handle.micro_handle_ ||
             &next_handle == read_handle.micro_handle_ ||
@@ -543,7 +544,7 @@ int ObIndexTreeMultiPrefetcher::multi_prefetch()
                     tenant_id,
                     cur_index_info,
                     cur_index_info.is_data_block(),
-                    next_handle))) {
+                    tmp_handle))) {
           //not in cache yet, stop this rowkey prefetching if it's not the rowkey to be feteched
           ret = OB_SUCCESS;
           if (is_rowkey_to_fetched) {
@@ -553,9 +554,13 @@ int ObIndexTreeMultiPrefetcher::multi_prefetch()
           } else {
             stop_prefetch = true;
           }
-        } else if (FALSE_IT(read_handle.set_cur_micro_handle(next_handle))) {
-        } else if (OB_FAIL(read_handle.micro_handle_->get_cached_index_block_data(*index_read_info_, index_block_))) {
-          LOG_WARN("Fail to get cached index block data", K(ret), KPC(read_handle.micro_handle_));
+        } else {
+          // already in block cache, get block data
+          read_handle.micro_handle_->reset();
+          *read_handle.micro_handle_ = tmp_handle;
+          if (OB_FAIL(read_handle.micro_handle_->get_cached_index_block_data(*index_read_info_, index_block_))) {
+            LOG_WARN("Fail to get cached index block data", K(ret), KPC(read_handle.micro_handle_));
+          }
         }
         if (OB_SUCC(ret) && !stop_prefetch) {
           if (OB_FAIL(drill_down(cur_index_info.get_macro_id(), read_handle, cur_index_info.is_leaf_block(), is_rowkey_to_fetched))) {
