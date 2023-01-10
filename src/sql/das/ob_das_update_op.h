@@ -30,7 +30,7 @@ public:
   virtual int open_op() override;
   virtual int release_op() override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
-  virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more) override;
+  virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int init_task_info() override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
   virtual const ObDASBaseCtDef *get_ctdef() const override { return upd_ctdef_; }
@@ -50,6 +50,7 @@ private:
   const ObDASUpdCtDef *upd_ctdef_;
   ObDASUpdRtDef *upd_rtdef_;
   ObDASWriteBuffer write_buffer_;
+  int64_t affected_rows_;  // local execute result, no need to serialize
 };
 
 class ObDASUpdateResult : public ObIDASTaskResult
@@ -58,7 +59,7 @@ class ObDASUpdateResult : public ObIDASTaskResult
 public:
   ObDASUpdateResult();
   virtual ~ObDASUpdateResult();
-  virtual int init(const ObIDASTaskOp &op) override;
+  virtual int init(const ObIDASTaskOp &op, common::ObIAllocator &alloc) override;
   int64_t get_affected_rows() const { return affected_rows_; }
   void set_affected_rows(int64_t affected_rows) { affected_rows_ = affected_rows; }
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,

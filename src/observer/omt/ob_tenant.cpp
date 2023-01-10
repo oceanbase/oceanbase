@@ -1899,6 +1899,25 @@ void ObTenant::check_dtl()
   }
 }
 
+void ObTenant::check_das()
+{
+  int ret = OB_SUCCESS;
+  if (!is_virtual_tenant_id(id_)) {
+    ObTenantSwitchGuard guard(this);
+    if (OB_ISNULL(MTL(ObDataAccessService *))) {
+      LOG_WARN("failed to get das ptr", K(MTL_ID()));
+    } else {
+      double min_cpu = .0;
+      double max_cpu = .0;
+      if (OB_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), min_cpu, max_cpu))) {
+        LOG_WARN("failed to set das task max concurrency", K(MTL_ID()));
+      } else {
+        MTL(ObDataAccessService *)->set_max_concurrency(min_cpu);
+      }
+    }
+  }
+}
+
 void ObTenant::check_parallel_servers_target()
 {
   int ret = OB_SUCCESS;

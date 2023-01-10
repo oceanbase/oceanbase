@@ -41,7 +41,9 @@ namespace sql
 ObDASLockOp::ObDASLockOp(ObIAllocator &op_alloc)
   : ObIDASTaskOp(op_alloc),
     lock_ctdef_(nullptr),
-    lock_rtdef_(nullptr)
+    lock_rtdef_(nullptr),
+    lock_buffer_(),
+    affected_rows_(0)
 {
 }
 
@@ -68,6 +70,7 @@ int ObDASLockOp::open_op()
     }
   } else {
     lock_rtdef_->affected_rows_ += affected_rows;
+    affected_rows_ = affected_rows;
   }
   return ret;
 }
@@ -92,15 +95,16 @@ int ObDASLockOp::decode_task_result(ObIDASTaskResult *task_result)
   return ret;
 }
 
-int ObDASLockOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASLockOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
+  UNUSED(memory_limit);
 #if !defined(NDEBUG)
   CK(typeid(task_result) == typeid(ObDASLockResult));
 #endif
   if (OB_SUCC(ret)) {
     ObDASLockResult &lock_result = static_cast<ObDASLockResult&>(task_result);
-    lock_result.set_affected_rows(lock_rtdef_->affected_rows_);
+    lock_result.set_affected_rows(affected_rows_);
     has_more = false;
   }
   return ret;
@@ -158,9 +162,10 @@ ObDASLockResult::~ObDASLockResult()
 {
 }
 
-int ObDASLockResult::init(const ObIDASTaskOp &op)
+int ObDASLockResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
 {
   UNUSED(op);
+  UNUSED(alloc);
   return OB_SUCCESS;
 }
 

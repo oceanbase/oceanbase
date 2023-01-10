@@ -442,7 +442,7 @@ int ObDASScanOp::decode_task_result(ObIDASTaskResult *task_result)
 
 //远程执行返回的TSC result,通过RPC回包带回给DAS Scheduler，
 //如果结果集超过一个RPC，标记RPC包为has_more，剩余结果集通过DTL传输回DAS Scheduler
-int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
   bool added = false;
@@ -512,7 +512,7 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
         // simulate a datum store overflow error, send the remaining result through RPC
         has_more = true;
       } else if (OB_UNLIKELY(OB_FAIL(datum_store.try_add_batch(result_output, &eval_ctx,
-                                                      remain_row_cnt_, das::OB_DAS_MAX_PACKET_SIZE,
+                                                      remain_row_cnt_, memory_limit,
                                                       added)))) {
         LOG_WARN("try add row to datum store failed", K(ret));
       } else if (!added) {
@@ -528,6 +528,7 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
   }
+  memory_limit -= datum_store.get_mem_used();
   return ret;
 }
 
@@ -703,8 +704,9 @@ int ObDASScanResult::init_result_iter(const ExprFixedArray *output_exprs, ObEval
   return ret;
 }
 
-int ObDASScanResult::init(const ObIDASTaskOp &op)
+int ObDASScanResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
 {
+  UNUSED(alloc);
   int ret = OB_SUCCESS;
   const ObDASScanOp &scan_op = static_cast<const ObDASScanOp&>(op);
   uint64_t tenant_id = MTL_ID();

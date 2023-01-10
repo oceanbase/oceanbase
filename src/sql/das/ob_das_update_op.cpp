@@ -279,7 +279,9 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
 ObDASUpdateOp::ObDASUpdateOp(ObIAllocator &op_alloc)
   : ObIDASTaskOp(op_alloc),
     upd_ctdef_(nullptr),
-    upd_rtdef_(nullptr)
+    upd_rtdef_(nullptr),
+    write_buffer_(),
+    affected_rows_(0)
 {
 }
 
@@ -305,6 +307,7 @@ int ObDASUpdateOp::open_op()
     }
   } else {
     upd_rtdef_->affected_rows_ += affected_rows;
+    affected_rows_ = affected_rows;
   }
   return ret;
 }
@@ -329,15 +332,16 @@ int ObDASUpdateOp::decode_task_result(ObIDASTaskResult *task_result)
   return ret;
 }
 
-int ObDASUpdateOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASUpdateOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
+  UNUSED(memory_limit);
 #if !defined(NDEBUG)
   CK(typeid(task_result) == typeid(ObDASUpdateResult));
 #endif
   if (OB_SUCC(ret)) {
     ObDASUpdateResult &del_result = static_cast<ObDASUpdateResult&>(task_result);
-    del_result.set_affected_rows(upd_rtdef_->affected_rows_);
+    del_result.set_affected_rows(affected_rows_);
     has_more = false;
   }
   return ret;
@@ -392,9 +396,10 @@ ObDASUpdateResult::~ObDASUpdateResult()
 {
 }
 
-int ObDASUpdateResult::init(const ObIDASTaskOp &op)
+int ObDASUpdateResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
 {
   UNUSED(op);
+  UNUSED(alloc);
   return OB_SUCCESS;
 }
 

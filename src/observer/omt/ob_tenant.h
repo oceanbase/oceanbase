@@ -581,6 +581,7 @@ private:
   void check_resource_manager_plan();
   // clean buffer on time
   void check_dtl();
+  void check_das();
 
   int construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantModuleInitCtx *&ctx);
 

@@ -163,7 +163,7 @@ int ObDASBatchScanOp::decode_task_result(ObIDASTaskResult *task_result)
   return ret;
 }
 
-int ObDASBatchScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASBatchScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
   DASExpandIterator *expand_iter = nullptr;
@@ -174,7 +174,7 @@ int ObDASBatchScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_
   } else {
     result_ = expand_iter;
     result_outputs_ = &(expand_iter->get_output_exprs());
-    if (OB_FAIL(ObDASScanOp::fill_task_result(task_result, has_more))) {
+    if (OB_FAIL(ObDASScanOp::fill_task_result(task_result, has_more, memory_limit))) {
       LOG_WARN("fill task result failed", K(ret));
     }
   }

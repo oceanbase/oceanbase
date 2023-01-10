@@ -154,7 +154,7 @@ public:
   storage::ObTableScanParam &get_scan_param() { return scan_param_; }
   const storage::ObTableScanParam &get_scan_param() const { return scan_param_; }
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
-  virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more) override;
+  virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int fill_extra_result() override;
   virtual int init_task_info() override { return common::OB_SUCCESS; }
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
@@ -212,7 +212,7 @@ class ObDASScanResult : public ObIDASTaskResult, public common::ObNewRowIterator
 public:
   ObDASScanResult();
   virtual ~ObDASScanResult();
-  virtual int init(const ObIDASTaskOp &op) override;
+  virtual int init(const ObIDASTaskOp &op, common::ObIAllocator &alloc) override;
   virtual int get_next_row(ObNewRow *&row) override;
   virtual int get_next_row() override;
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;

@@ -505,7 +505,8 @@ struct ObInsRtDef : ObDMLBaseRtDef
       das_rtdef_(),
       related_rtdefs_()
   { }
-  TO_STRING_KV(K_(das_rtdef),
+  INHERIT_TO_STRING_KV("ObDMLBaseRtDef", ObDMLBaseRtDef,
+               K_(das_rtdef),
                K_(related_rtdefs));
   ObDASInsRtDef das_rtdef_;
   DASInsRtDefArray related_rtdefs_;

@@ -168,7 +168,7 @@ ObNewRowIterator *ObDASGroupScanOp::get_storage_scan_iter()
   return iter;
 }
 
-int ObDASGroupScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASGroupScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
   if (NULL == group_lookup_op_) {
@@ -177,7 +177,7 @@ int ObDASGroupScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_
     result_iter_ = group_lookup_op_;
     set_is_exec_remote(true);
   }
-  if (OB_FAIL(ObDASScanOp::fill_task_result(task_result, has_more))) {
+  if (OB_FAIL(ObDASScanOp::fill_task_result(task_result, has_more, memory_limit))) {
     LOG_WARN("fail to fill task result", K(ret));
   }
 

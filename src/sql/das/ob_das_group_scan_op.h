@@ -73,7 +73,7 @@ public:
   ObNewRowIterator *get_storage_scan_iter() override;
   int do_local_index_lookup() override;
   int decode_task_result(ObIDASTaskResult *task_result) override;
-  int fill_task_result(ObIDASTaskResult &task_result, bool &has_more) override;
+  int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   void set_is_exec_remote(bool v) { is_exec_remote_ = v; }
   virtual bool need_all_output() override { return is_exec_remote_; }
   TO_STRING_KV(K(iter_), KP(group_lookup_op_), K(group_size_), K(cur_group_idx_));

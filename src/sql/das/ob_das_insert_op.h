@@ -33,7 +33,7 @@ public:
   virtual int open_op() override;
   virtual int release_op() override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
-  virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more) override;
+  virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int init_task_info() override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
   virtual const ObDASBaseCtDef *get_ctdef() const override { return ins_ctdef_; }
@@ -65,6 +65,8 @@ private:
   ObDASInsRtDef *ins_rtdef_;
   ObDASWriteBuffer insert_buffer_;
   common::ObNewRowIterator *result_;
+  int64_t affected_rows_;  // local execute result, no need to serialize
+  bool is_duplicated_;  // local execute result, no need to serialize
 };
 
 typedef common::ObList<ObNewRowIterator *, common::ObIAllocator> ObDuplicatedIterList;
@@ -101,7 +103,7 @@ class ObDASInsertResult : public ObIDASTaskResult, public common::ObNewRowIterat
 public:
   ObDASInsertResult();
   virtual ~ObDASInsertResult();
-  virtual int init(const ObIDASTaskOp &op) override;
+  virtual int init(const ObIDASTaskOp &op, common::ObIAllocator &alloc) override;
   virtual int get_next_row(ObNewRow *&row) override;
   virtual int get_next_row() override;
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;

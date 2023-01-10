@@ -66,7 +66,9 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator>::write_rows(cons
 ObDASDeleteOp::ObDASDeleteOp(ObIAllocator &op_alloc)
   : ObIDASTaskOp(op_alloc),
     del_ctdef_(nullptr),
-    del_rtdef_(nullptr)
+    del_rtdef_(nullptr),
+    write_buffer_(),
+    affected_rows_(0)
 {
 }
 
@@ -92,6 +94,7 @@ int ObDASDeleteOp::open_op()
     }
   } else {
     del_rtdef_->affected_rows_ += affected_rows;
+    affected_rows_ = affected_rows;
   }
   return ret;
 }
@@ -116,15 +119,16 @@ int ObDASDeleteOp::decode_task_result(ObIDASTaskResult *task_result)
   return ret;
 }
 
-int ObDASDeleteOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASDeleteOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
+  UNUSED(memory_limit);
 #if !defined(NDEBUG)
   CK(typeid(task_result) == typeid(ObDASDeleteResult));
 #endif
   if (OB_SUCC(ret)) {
     ObDASDeleteResult &del_result = static_cast<ObDASDeleteResult&>(task_result);
-    del_result.set_affected_rows(del_rtdef_->affected_rows_);
+    del_result.set_affected_rows(affected_rows_);
     has_more = false;
   }
   return ret;
@@ -179,9 +183,10 @@ ObDASDeleteResult::~ObDASDeleteResult()
 {
 }
 
-int ObDASDeleteResult::init(const ObIDASTaskOp &op)
+int ObDASDeleteResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
 {
   UNUSED(op);
+  UNUSED(alloc);
   return OB_SUCCESS;
 }
 

@@ -60,6 +60,13 @@ const int64_t OB_DAS_MAX_PACKET_SIZE = 2 * 1024 * 1024l - 8 * 1024;
 const int64_t OB_DAS_MAX_TOTAL_PACKET_SIZE = 3 * OB_DAS_MAX_PACKET_SIZE;
 }  // namespace das
 
+enum class ObDasTaskStatus: uint8_t
+{
+  UNSTART = 0,
+  FAILED,
+  FINISHED
+};
+
 enum ObDASOpType
 {
   //can not adjust the order of DASOpType, append OpType at the last
