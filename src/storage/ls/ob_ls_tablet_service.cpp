@@ -3240,12 +3240,12 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(new_tablet_handle, disk_addr))) {
         LOG_WARN("fail to write update tablet slog", K(ret), K(new_tablet_handle), K(disk_addr));
+      } else if (OB_FAIL(old_tablet->set_memtable_clog_checkpoint_scn(param.tablet_meta_))) {
+        LOG_WARN("failed to set memtable clog checkpoint ts", K(ret), KPC(old_tablet), K(param));
       } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, disk_addr, old_tablet_handle, new_tablet_handle))) {
         LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(disk_addr));
         ob_usleep(1000 * 1000);
         ob_abort();
-      } else if (OB_FAIL(old_tablet->set_memtable_clog_checkpoint_scn(param.tablet_meta_))) {
-        LOG_WARN("failed to set memtable clog checkpoint ts", K(ret), KPC(old_tablet), K(param));
       } else {
         LOG_INFO("succeed to build ha tablet new table store", K(ret), K(key), K(disk_addr), K(param));
       }

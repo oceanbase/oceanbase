@@ -317,7 +317,7 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
     if (0 == write_ref) {
       SCN clog_checkpoint_scn;
       bool need_create_memtable = true;
-      const SCN migration_clog_checkpoint_scn = static_cast<memtable::ObMemtable *>(memtable)->get_migration_clog_checkpoint_scn();
+      SCN migration_clog_checkpoint_scn;
       ObIMemtableMgr *memtable_mgr = tablet_->get_memtable_mgr();
 
       if (OB_ISNULL(memtable_mgr)) {
@@ -325,6 +325,7 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
         LOG_WARN("memtable mgr is null", K(ret), K(bool_ret), K(ls_id), K(tablet_id), KP(memtable_mgr));
       } else if (OB_FAIL(memtable_mgr->get_newest_clog_checkpoint_scn(clog_checkpoint_scn))) {
         LOG_WARN("failed to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id), K(clog_checkpoint_scn));
+      } else if (FALSE_IT(migration_clog_checkpoint_scn = static_cast<memtable::ObMemtable *>(memtable)->get_migration_clog_checkpoint_scn())) {
       } else if (for_replay_ && !migration_clog_checkpoint_scn.is_min()) {
         static_cast<memtable::ObMemtable *>(memtable)->resolve_right_boundary();
         if (replay_scn_ <= clog_checkpoint_scn) {
