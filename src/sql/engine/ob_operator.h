@@ -601,21 +601,28 @@ protected:
 
   inline void begin_cpu_time_counting()
   {
-    // begin with current operator
-    ObActiveSessionGuard::get_stat().plan_line_id_ = spec_.id_;
     cpu_begin_time_ = rdtsc();
   }
   inline void end_cpu_time_counting()
   {
     total_time_ += (rdtsc() - cpu_begin_time_);
+  }
+  inline void begin_ash_line_id_reg()
+  {
+    // begin with current operator
+    ObActiveSessionGuard::get_stat().plan_line_id_ = spec_.id_;
+  }
+  inline void end_ash_line_id_reg()
+  {
     // move back to parent operator
+    // known issue: when switch from batch to row in same op,
+    // we shift line id to parent op un-intently. but we tolerate this inaccuracy
     if (OB_LIKELY(spec_.get_parent())) {
       common::ObActiveSessionGuard::get_stat().plan_line_id_ = spec_.get_parent()->id_;
     } else {
       common::ObActiveSessionGuard::get_stat().plan_line_id_ = -1;
     }
   }
-
   uint64_t cpu_begin_time_; // start of counting cpu time
   uint64_t total_time_; //  total time cost on this op, including io & cpu time
 protected:

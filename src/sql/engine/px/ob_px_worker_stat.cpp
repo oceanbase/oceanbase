@@ -85,17 +85,14 @@ int ObPxWorkerStatList::list_to_array(ObArray<ObPxWorkerStat> &stat_array,
   ObSpinLockGuard guard(lock_);
   stat_array.reserve(worker_stat_list_.get_size());
   DLIST_FOREACH(cur,worker_stat_list_) {
+    if (!is_sys_tenant(target_tenant_id) && cur->get_tenant_id() != target_tenant_id) {
+      continue;
+    }
     // sys tenant list all tenant stat
     // non-sys tennat list self tenant stat
-    if (is_sys_tenant(target_tenant_id) || cur->get_tenant_id() == target_tenant_id) {
-      if(OB_SUCCESS != stat_array.push_back(*cur)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to change stat_list to array", K(ret));
-      }
-    }
-
-    if (!is_sys_tenant(target_tenant_id) && cur->get_tenant_id() == target_tenant_id) {
-      break;
+    if(OB_SUCCESS != stat_array.push_back(*cur)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to change stat_list to array", K(ret));
     }
   }
   return ret;

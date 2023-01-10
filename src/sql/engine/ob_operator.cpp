@@ -906,10 +906,11 @@ int ObOperator::submit_op_monitor_node()
 int ObOperator::get_next_row()
 {
   int ret = OB_SUCCESS;
+  begin_cpu_time_counting();
+  begin_ash_line_id_reg();
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recusive", K(ret));
   } else {
-    begin_cpu_time_counting();
     if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(1);
     }
@@ -918,9 +919,11 @@ int ObOperator::get_next_row()
     } else if (OB_UNLIKELY(get_spec().is_vectorized())) {
       // Operator itself supports vectorization, while parent operator does NOT.
       // Use vectorize method to get next row.
+      end_cpu_time_counting();
       if (OB_FAIL(get_next_row_vectorizely())) {
         // do nothing
       }
+      begin_cpu_time_counting();
     } else {
       if (OB_UNLIKELY(!startup_passed_)) {
         bool filtered = false;
@@ -987,18 +990,21 @@ int ObOperator::get_next_row()
         }
       }
     }
-    end_cpu_time_counting();
   }
+  end_ash_line_id_reg();
+  end_cpu_time_counting();
   return ret;
 }
 
 int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&batch_rows)
 {
   int ret = OB_SUCCESS;
+  begin_cpu_time_counting();
+  begin_ash_line_id_reg();
+
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recusive", K(ret));
   } else {
-    begin_cpu_time_counting();
     if (OB_UNLIKELY(spec_.need_check_output_datum_ && brs_checker_)) {
       if (OB_FAIL(brs_checker_->check_datum_modified())) {
         LOG_WARN("check output datum failed", K(ret), "id", spec_.get_id(), "op_name", op_name());
@@ -1101,11 +1107,13 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         }
       }
     } else {
+      end_cpu_time_counting();
       // Operator does NOT support vectorization, while its parent does. Return
       // the batch with only 1 row
       if (OB_FAIL(get_next_batch_with_onlyone_row())) {
         // do nothing
       }
+      begin_cpu_time_counting();
     }
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(spec_.need_check_output_datum_) && brs_checker_ && !brs_.end_ && brs_.size_ > 0) {
@@ -1113,8 +1121,10 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
       }
       LOG_DEBUG("get next batch", "id", spec_.get_id(), "op_name", op_name(), K(brs_));
     }
-    end_cpu_time_counting();
   }
+
+  end_ash_line_id_reg();
+  end_cpu_time_counting();
   return ret;
 }
 
