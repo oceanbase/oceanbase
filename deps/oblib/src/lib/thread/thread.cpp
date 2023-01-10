@@ -128,10 +128,55 @@ void Thread::stop()
   stop_ = true;
 }
 
+void Thread::dump_pth() // for debug pthread join faileds
+{
+#ifndef OB_USE_ASAN
+  int ret = OB_SUCCESS;
+  int fd = 0;
+  int64_t len = 0;
+  ssize_t size = 0;
+  char path[PATH_SIZE];
+  len = (char*)stack_addr_ + stack_size_ - (char*)pth_;
+  snprintf(path, PATH_SIZE, "log/dump_pth.%p.%d", (char*)pth_, (int)tid_);
+  LOG_WARN("dump pth start", K(path), K(pth_), K(tid_), K(len), K(stack_addr_), K(stack_size_));
+  if (NULL == (char*)pth_ || len >= stack_size_ || len <= 0) {
+    LOG_WARN("invalid member", K(pth_), K(stack_addr_), K(stack_size_));
+  } else if ((fd = ::open(path, O_WRONLY | O_CREAT | O_TRUNC,
+                          S_IRUSR  | S_IWUSR | S_IRGRP)) < 0) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("fail to create file", KERRMSG, K(ret));
+  } else if (len != (size = write(fd, (char*)(pth_), len))) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("dump pth fail", K(errno), KERRMSG, K(len), K(size), K(ret));
+    if (0 != close(fd)) {
+      LOG_WARN("fail to close file fd", K(fd), K(errno), KERRMSG, K(ret));
+    }
+  } else if (::fsync(fd) != 0) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("sync pth fail", K(errno), KERRMSG, K(len), K(size), K(ret));
+    if (0 != close(fd)) {
+      LOG_WARN("fail to close file fd", K(fd), K(errno), KERRMSG, K(ret));
+    }
+  } else if (0 != close(fd)) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("fail to close file fd", K(fd), KERRMSG, K(ret));
+  } else {
+    LOG_WARN("dump pth done", K(path), K(pth_), K(tid_), K(size));
+  }
+#endif
+}
+
 void Thread::wait()
 {
+  int ret = OB_SUCCESS;
   if (pth_ != 0) {
-    pthread_join(pth_, nullptr);
+    if (OB_FAIL(pthread_join(pth_, nullptr))) {
+      LOG_ERROR("pthread_join failed", K(ret), K(errno));
+#ifndef OB_USE_ASAN
+      dump_pth();
+      abort();
+#endif
+    }
     destroy_stack();
     pth_ = 0;
     pid_ = 0;

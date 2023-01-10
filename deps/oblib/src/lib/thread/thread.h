@@ -24,6 +24,7 @@ namespace lib {
 class Thread {
 public:
   using Runnable = std::function<void()>;
+  static constexpr int PATH_SIZE = 128;
   Thread();
   Thread(int64_t stack_size);
   Thread(Runnable runnable, int64_t stack_size=0);
@@ -34,6 +35,7 @@ public:
   void stop();
   void wait();
   void destroy();
+  void dump_pth();
 
   pid_t get_pid() const;
   pid_t get_tid() const;
