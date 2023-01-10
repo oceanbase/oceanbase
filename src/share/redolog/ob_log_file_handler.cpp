@@ -290,6 +290,8 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
   } else if (OB_DATA_OUT_OF_RANGE == ret) {
     read_size = read_sz;
     ret = OB_SUCCESS;
+  } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+    LOG_WARN("underlying io memory not enough", K(ret), K(buf), K(read_sz), K(size), K(offset));
   } else {
     ret = OB_IO_ERROR;
     LOG_ERROR("fail to read", K(ret), K(buf), K(read_sz), K(size), K(offset), K(errno));

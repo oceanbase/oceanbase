@@ -202,7 +202,7 @@ int ObSharedMacroBlockMgr::write_block(
         LOG_WARN("fail to do write block", K(ret), K(write_info), K(block_info));
       } else {
         FLOG_INFO("successfully write small sstable",
-          K(ret), K(write_ctx.get_macro_block_list()), K(block_info), K(offset_));
+          K(ret), K(block_info), K(offset_), "old_block", write_ctx.get_macro_block_list());
         write_ctx.reset();
         if (OB_FAIL(write_ctx.add_macro_block_id(macro_handle_.get_macro_id()))) {
           LOG_WARN("fail to add macro block id into write_ctx",
