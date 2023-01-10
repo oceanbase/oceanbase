@@ -3008,10 +3008,12 @@ int ObDataTabletsMigrationTask::create_or_update_tablets_()
     LOG_WARN("data tablets migration task do not init", K(ret));
   } else if (ctx_->data_tablet_id_array_.empty()) {
     LOG_INFO("data tablet is is empty, no need create or update", KPC(ctx_));
-  } else if (OB_FAIL(ha_tablets_builder_.create_or_update_tablets())) {
-    LOG_WARN("failed to create or update tablets", K(ret), KPC(ctx_));
+  } else {
+    DEBUG_SYNC(BEFORE_MIGRATION_FETCH_TABLET_INFO);
+    if (OB_FAIL(ha_tablets_builder_.create_or_update_tablets())) {
+      LOG_WARN("failed to create or update tablets", K(ret), KPC(ctx_));
+    }
   }
-
   return ret;
 }
 
@@ -3087,7 +3089,12 @@ int ObDataTabletsMigrationTask::build_tablet_group_info_()
       tablet_group_id_array.reset();
 
       if (OB_FAIL(tablet_simple_info_map.get_refactored(tablet_id, tablet_simple_info))) {
-        LOG_WARN("failed to get tablet simple info", K(ret), K(tablet_id));
+        if (OB_HASH_NOT_EXIST == ret) {
+          FLOG_INFO("tablet do not exist in src ls, skip it", K(tablet_id));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get tablet simple info", K(ret), K(tablet_id));
+        }
       } else if (!tablet_simple_info.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet simple info is not valid", K(ret), K(tablet_simple_info));
