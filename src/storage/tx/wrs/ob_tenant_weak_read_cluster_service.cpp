@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "logservice/ob_log_service.h"
 
 #include "ob_tenant_weak_read_cluster_service.h"
 
@@ -119,22 +120,22 @@ void ObTenantWeakReadClusterService::destroy()
 int ObTenantWeakReadClusterService::check_leader_info_(int64_t &leader_epoch) const
 {
   int ret = OB_SUCCESS;
-  ObLSID ls_id;
-  ObLSHandle handle;
   ObRole role = INVALID_ROLE;
-  const int64_t cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;
-  if (OB_FAIL(GCTX.location_service_->nonblock_get(MTL_ID(), cluster_service_tablet_id_, ls_id))) {
-    LOG_WARN("get lsid error", K(ret), K_(cluster_service_tablet_id), "tenant_id", MTL_ID());
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
-    TRANS_LOG(WARN, "get log stream failed", K(ret), K_(cluster_service_tablet_id));
-  } else if (OB_FAIL(handle.get_ls()->get_log_handler()->get_role(role, leader_epoch))) {
-    TRANS_LOG(WARN, "get role failed", K(ret), K(ls_id));
-  } else if (!is_strong_leader(role)) {
+  int64_t tmp_epoch = OB_INVALID_TIMESTAMP;
+
+  if (OB_FAIL(MTL(logservice::ObLogService *)->get_palf_role(share::WRS_LS_ID, role, tmp_epoch))) {
+    TRANS_LOG(WARN, "get ObStandbyTimestampService role fail", KR(ret));
+  } else if (LEADER != role) {
     // not Leader
     ret = OB_NOT_MASTER;
     leader_epoch = 0;
   } else {
     // get leader info success
+    leader_epoch = tmp_epoch;
+  }
+
+  if (OB_FAIL(ret)) {
+    ret = OB_NOT_MASTER;
   }
   return ret;
 }

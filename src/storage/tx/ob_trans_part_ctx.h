@@ -420,7 +420,7 @@ private:
 
   int update_replaying_log_no_(const share::SCN &log_ts_ns, int64_t part_log_no);
   int check_and_merge_redo_lsns_(const palf::LSN &offset);
-  int try_submit_next_log_();
+  int try_submit_next_log_(const bool for_freeze = false);
   // redo lsns is stored when submit log, when log fails to majority
   // and is callbacked via on_failure, redo lsns should be fixed
   int fix_redo_lsns_(const ObTxLogCb *log_cb);

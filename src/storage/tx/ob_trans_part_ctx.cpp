@@ -2015,7 +2015,7 @@ void ObPartTransCtx::check_and_register_timeout_task_()
   }
 }
 
-int ObPartTransCtx::try_submit_next_log_()
+int ObPartTransCtx::try_submit_next_log_(const bool for_freeze)
 {
   int ret = OB_SUCCESS;
   ObTxLogType log_type = ObTxLogType::UNKNOWN;
@@ -2040,8 +2040,10 @@ int ObPartTransCtx::try_submit_next_log_()
     }
   }
 
-  // ignore retcode
-  (void)check_and_register_timeout_task_();
+  if (!for_freeze) {
+    // ignore retcode
+    (void)check_and_register_timeout_task_();
+  }
 
   return ret;
 }
@@ -2359,7 +2361,7 @@ int ObPartTransCtx::submit_redo_log_(ObTxLogBlock &log_block,
           need_undo_log = true;
         }
       } else if (OB_ENTRY_NOT_EXIST == ret || OB_BLOCK_FROZEN == ret) {
-        TRANS_LOG(INFO, "no redo log to be flushed", KR(ret), K(*this));
+        TRANS_LOG(TRACE, "no redo log to be flushed", KR(ret), K(*this));
         // rewrite ret
         ret = (OB_ENTRY_NOT_EXIST == ret) ? OB_SUCCESS : ret;
         has_redo = false;
@@ -3541,7 +3543,7 @@ int ObPartTransCtx::submit_log(const ObTwoPhaseCommitLogType &log_type)
 int ObPartTransCtx::try_submit_next_log()
 {
   CtxLockGuard guard(lock_);
-  return try_submit_next_log_();
+  return try_submit_next_log_(true);
 }
 
 bool ObPartTransCtx::is_2pc_logging() const { return is_2pc_logging_(); }

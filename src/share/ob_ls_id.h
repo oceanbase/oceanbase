@@ -32,6 +32,7 @@ public:
   static const int64_t LOCK_SERVICE_LS_ID = SYS_LS_ID;   // LS for Lock Service
   static const int64_t GAIS_LS_ID = SYS_LS_ID;           // LS for Global AutoInc Service
   static const int64_t DAS_ID_LS_ID = SYS_LS_ID;         // LS for DAS Id service
+  static const int64_t WRS_LS_ID = SYS_LS_ID;            // LS for Weak Read Service
   static const int64_t SCHEDULER_LS_ID = INT64_MAX;      // LS for Trans scheduler
 
   static const int64_t MIN_USER_LS_ID = 1000;
@@ -95,6 +96,7 @@ static const ObLSID GAIS_LS(ObLSID::GAIS_LS_ID);
 static const ObLSID SCHEDULER_LS(ObLSID::SCHEDULER_LS_ID);
 static const ObLSID LOCK_SERVICE_LS(ObLSID::LOCK_SERVICE_LS_ID);
 static const ObLSID DAS_ID_LS(ObLSID::DAS_ID_LS_ID);
+static const ObLSID WRS_LS_ID(ObLSID::WRS_LS_ID);
 
 static const int64_t OB_DEFAULT_LS_COUNT = 3;
 typedef common::ObSEArray<ObLSID, OB_DEFAULT_LS_COUNT> ObLSArray;
