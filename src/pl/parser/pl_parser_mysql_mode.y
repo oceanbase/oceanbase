@@ -247,7 +247,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> sp_name sp_call_name opt_sp_param_list opt_sp_fparam_list sp_param_list sp_fparam_list
 %type <node> sp_param sp_fparam
 %type <node> opt_sp_definer sp_create_chistics sp_create_chistic sp_chistic opt_parentheses user opt_host_name
-%type <node> param_type opt_sp_cparams opt_sp_cparam_list opt_cexpr sp_cparam opt_sp_cparam_with_assign
+%type <node> param_type sp_cparams opt_sp_cparam_list cexpr sp_cparam opt_sp_cparam_with_assign
 %type <ival> opt_sp_inout opt_if_exists
 %type <node> call_sp_stmt do_sp_stmt
 %type <node> sp_cond sp_hcond_list sp_hcond
@@ -543,14 +543,15 @@ call_sp_stmt:
 
 opt_sp_cparam_list:
     /* Empty */ { $$ = NULL; }
-  | '(' opt_sp_cparams ')'
+  | '(' ')' { $$ =NULL; }
+  | '(' sp_cparams ')'
     {
       merge_nodes($$, parse_ctx->mem_pool_, T_SP_CPARAM_LIST, $2);
     }
 ;
 
-opt_sp_cparams:
-    opt_sp_cparams ',' sp_cparam
+sp_cparams:
+    sp_cparams ',' sp_cparam
     {
       if ($1 == NULL || $3 == NULL) {
         YYERROR;
@@ -561,7 +562,7 @@ opt_sp_cparams:
 ;
 
 sp_cparam:
-  opt_cexpr opt_sp_cparam_with_assign
+  cexpr opt_sp_cparam_with_assign
   {
     if (NULL == $1 && NULL != $2) {
       YYERROR;
@@ -579,7 +580,7 @@ sp_cparam:
 
 opt_sp_cparam_with_assign:
     /*EMPTY*/ { $$ = NULL; }
-  | PARAM_ASSIGN_OPERATOR opt_cexpr
+  | PARAM_ASSIGN_OPERATOR cexpr
   {
     if (NULL == $2) YYERROR; $$ = $2;
       if (NULL != $2)
@@ -587,10 +588,13 @@ opt_sp_cparam_with_assign:
   }
 ;
 
-opt_cexpr:
+cexpr:
     {
       //same as expr in sql rule, and terminate when read ';'
       do_parse_sql_expr_rule($$, parse_ctx, 3, ',', ')', PARAM_ASSIGN_OPERATOR);
+      if (NULL == $$) {
+        YYERROR;
+      }
     }
 ;
 
@@ -2362,7 +2366,7 @@ ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *pref
   va_list va;
   bool is_break = false;
   int sql_str_len = -1;
-  int parenlevel = 0;
+  int parenlevel = (*(la_token->la_yychar) == '(' || *(la_token->la_yychar) == '[') ? 1 : 0;
   const char *sql_str = NULL;
   ParseResult parse_result;
   ParseNode *sql_node = NULL;
