@@ -56,7 +56,6 @@ OB_SERIALIZE_MEMBER(ObTransID, tx_id_);
 OB_SERIALIZE_MEMBER(ObStartTransParam, access_mode_, type_, isolation_, consistency_type_,
                     cluster_version_, is_inner_trans_, read_snapshot_type_);
 OB_SERIALIZE_MEMBER(ObElrTransInfo, trans_id_, commit_version_, result_);
-OB_SERIALIZE_MEMBER(MonotonicTs, mts_);
 OB_SERIALIZE_MEMBER(ObLSLogInfo, id_, offset_);
 
 OB_SERIALIZE_MEMBER(ObTransDesc, a_);

@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include "lib/coro/co_var.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/ob_unify_serialize.h"
 #include "lib/ob_define.h"
 #include "lib/time/ob_tsc_timestamp.h"
 
@@ -83,6 +84,31 @@ inline int64_t ObTimeUtility::current_monotonic_time()
 }
 
 typedef ObTimeUtility ObTimeUtil;
+
+typedef struct ObMonotonicTs
+{
+  OB_UNIS_VERSION(1);
+public:
+  explicit ObMonotonicTs(int64_t mts) : mts_(mts) {}
+  ObMonotonicTs() { reset(); }
+  ~ObMonotonicTs() { reset(); }
+  void reset() { mts_ = 0; }
+  bool is_valid() const { return mts_ > 0; }
+  bool operator!=(const struct ObMonotonicTs other) const { return  mts_ != other.mts_; }
+  bool operator==(const struct ObMonotonicTs other) const { return  mts_ == other.mts_; }
+  bool operator>(const struct ObMonotonicTs other) const { return  mts_ > other.mts_; }
+  bool operator>=(const struct ObMonotonicTs other) const { return  mts_ >= other.mts_; }
+  bool operator<(const struct ObMonotonicTs other) const { return  mts_ < other.mts_; }
+  bool operator<=(const struct ObMonotonicTs other) const { return  mts_ <= other.mts_; }
+  struct ObMonotonicTs operator+(const struct ObMonotonicTs other) const { return ObMonotonicTs(mts_ + other.mts_); }
+  struct ObMonotonicTs operator-(const struct ObMonotonicTs other) const { return ObMonotonicTs(mts_ - other.mts_); }
+  static struct ObMonotonicTs current_time() { return ObMonotonicTs(common::ObTimeUtility::current_time()); }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+public:
+  int64_t mts_;
+} ObMonotonicTs;
+
+
 } //common
 } //oceanbase
 

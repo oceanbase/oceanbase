@@ -14,10 +14,13 @@
 #include "lib/time/ob_tsc_timestamp.h"
 #include "lib/ob_abort.h"
 #include "lib/oblog/ob_log.h"
+#include "lib/utility/ob_print_utils.h"
 #include <ctime>
 
 using namespace oceanbase;
 using namespace oceanbase::common;
+
+OB_SERIALIZE_MEMBER(ObMonotonicTs, mts_);
 
 int64_t ObTimeUtility::current_time()
 {
@@ -81,4 +84,11 @@ int64_t ObTimeUtility::current_time_coarse()
   }
   return (static_cast<int64_t>(t.tv_sec) * 1000000L +
           static_cast<int64_t>(t.tv_nsec / 1000));
+}
+
+int64_t ObMonotonicTs::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  databuff_printf(buf, buf_len, pos, "[mts=%ld]", mts_);
+  return pos;
 }

@@ -859,27 +859,7 @@ private:
   ~ObTransVersion() {}
 };
 
-typedef struct MonotonicTs
-{
-  OB_UNIS_VERSION(1);
-public:
-  explicit MonotonicTs(int64_t mts) : mts_(mts) {}
-  MonotonicTs() { reset(); }
-  ~MonotonicTs() { reset(); }
-  void reset() { mts_ = 0; }
-  bool is_valid() const { return mts_ > 0; }
-  bool operator!=(const struct MonotonicTs other) const { return  mts_ != other.mts_; }
-  bool operator==(const struct MonotonicTs other) const { return  mts_ == other.mts_; }
-  bool operator>(const struct MonotonicTs other) const { return  mts_ > other.mts_; }
-  bool operator>=(const struct MonotonicTs other) const { return  mts_ >= other.mts_; }
-  bool operator<(const struct MonotonicTs other) const { return  mts_ < other.mts_; }
-  bool operator<=(const struct MonotonicTs other) const { return  mts_ <= other.mts_; }
-  struct MonotonicTs operator+(const struct MonotonicTs other) const { return MonotonicTs(mts_ + other.mts_); }
-  struct MonotonicTs operator-(const struct MonotonicTs other) const { return MonotonicTs(mts_ - other.mts_); }
-  static struct MonotonicTs current_time() { return MonotonicTs(common::ObTimeUtility::current_time()); }
-  TO_STRING_KV(K_(mts));
-  int64_t mts_;
-} MonotonicTs;
+typedef ObMonotonicTs MonotonicTs;
 
 class ObTransNeedWaitWrap
 {
@@ -898,7 +878,7 @@ public:
   MonotonicTs get_receive_gts_ts() const { return receive_gts_ts_; }
   int64_t get_need_wait_interval_us() const { return need_wait_interval_us_; }
   bool need_wait() const { return get_remaining_wait_interval_us() > 0; }
-  TO_STRING_KV(K_(receive_gts_ts), K_(need_wait_interval_us));
+  TO_STRING_KV(K(receive_gts_ts_), K_(need_wait_interval_us));
 private:
   MonotonicTs receive_gts_ts_;
   int64_t need_wait_interval_us_;
