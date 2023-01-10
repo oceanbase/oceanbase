@@ -44,7 +44,7 @@ __thread Worker *Worker::self_;
 
 Worker::Worker()
     : allocator_(nullptr),
-      req_flag_(false),
+      cur_request_(nullptr),
       worker_level_(INT32_MAX),
       curr_request_level_(0),
       group_id_(0),

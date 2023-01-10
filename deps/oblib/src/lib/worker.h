@@ -22,6 +22,7 @@
 
 namespace oceanbase
 {
+namespace rpc { class ObRequest; }
 namespace sql { class ObSQLSessionInfo; }
 namespace lib
 {
@@ -63,8 +64,9 @@ public:
   ObIAllocator &get_sql_arena_allocator() ;
   ObIAllocator &get_allocator() ;
 
-  void set_req_flag(bool v);
+  void set_req_flag(const rpc::ObRequest *cur_request);
   bool has_req_flag();
+  const rpc::ObRequest *get_cur_request();
 
   void set_worker_level(const int32_t level) { worker_level_ = level; }
   int32_t get_worker_level() const { return worker_level_; }
@@ -164,7 +166,7 @@ protected:
   // 可单独指定ctx_id, 此ctx_id保持不变
   ObIAllocator *allocator_;
 private:
-  bool req_flag_;
+  const rpc::ObRequest *cur_request_;
 
   int32_t worker_level_;
   int32_t curr_request_level_;
@@ -259,14 +261,19 @@ inline bool Worker::get_disable_wait_flag() const
   return disable_wait_;
 }
 
-inline void Worker::set_req_flag(bool v)
+inline void Worker::set_req_flag(const rpc::ObRequest *cur_request)
 {
-  req_flag_ = v;
+  cur_request_ = cur_request;
 }
 
 inline bool Worker::has_req_flag()
 {
-  return req_flag_;
+  return (NULL != cur_request_);
+}
+
+inline const rpc::ObRequest *Worker::get_cur_request()
+{
+  return cur_request_;
 }
 
 inline ObIAllocator &Worker::get_sql_arena_allocator()

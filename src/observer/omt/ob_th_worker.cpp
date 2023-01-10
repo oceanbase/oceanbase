@@ -277,7 +277,7 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
   int ret = OB_SUCCESS;
   reset_sql_throttle_current_priority();
   ObDiagTenantGuard diag_guard(*this, tenant_? tenant_->id(): OB_SYS_TENANT_ID);
-  set_req_flag(true);
+  set_req_flag(&req);
 
   memtable::TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = false;
   MTL(memtable::ObLockWaitMgr*)->setup(req.get_lock_wait_node(), req.get_receive_timestamp());
@@ -332,7 +332,7 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
             get_allocator().used(),
             pm_hold);
   }
-  set_req_flag(false);
+  set_req_flag(NULL);
 }
 
 void ObThWorker::set_th_worker_thread_name(uint64_t tenant_id)
