@@ -2719,6 +2719,9 @@ int ObPLResolver::resolve_question_mark_node(
   CK (OB_NOT_NULL(current_block_->get_symbol_table()));
   CK (OB_NOT_NULL(var = current_block_->get_symbol_table()->get_symbol(into_node->value_)));
   CK (var->get_name().prefix_match(ANONYMOUS_ARG));
+  if (NULL != var && var->is_readonly() && var->is_referenced()) {
+    OX (const_cast<ObPLVar*>(var)->set_name(ANONYMOUS_INOUT_ARG));
+  }
   OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, expr));
   CK (OB_NOT_NULL(expr));
   if (OB_SUCC(ret)) {
@@ -2871,7 +2874,13 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
               CK (OB_NOT_NULL(current_block_));
               CK (OB_NOT_NULL(symbol_table = current_block_->get_symbol_table()));
               CK (OB_NOT_NULL(var = symbol_table->get_symbol(const_expr->get_value().get_unknown())));
-              if (OB_SUCC(ret) && !var->get_name().prefix_match(ANONYMOUS_ARG)) {
+              if (OB_FAIL(ret)) {
+                // do nothing
+              } else if (var->get_name().prefix_match(ANONYMOUS_ARG)) {
+                if (!var->is_readonly()) {
+                  const_cast<ObPLVar*>(var)->set_name(ANONYMOUS_INOUT_ARG);
+                }
+              } else {
                 expected_type = &(var->get_type());
               }
             } else if (into_expr->is_obj_access_expr()) {
