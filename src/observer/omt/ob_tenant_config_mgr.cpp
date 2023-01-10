@@ -514,6 +514,7 @@ void ObTenantConfigMgr::get_lease_request(share::ObLeaseRequest &lease_request)
   } // for
 }
 
+// for __all_virtual_tenant_parameter_info
 int ObTenantConfigMgr::get_all_tenant_config_info(common::ObArray<TenantConfigInfo> &all_config)
 {
   int ret = OB_SUCCESS;
@@ -525,10 +526,18 @@ int ObTenantConfigMgr::get_all_tenant_config_info(common::ObArray<TenantConfigIn
     for (ObConfigContainer::const_iterator iter = tenant_config->get_container().begin();
          iter != tenant_config->get_container().end(); iter++) {
       TenantConfigInfo config_info(tenant_id);
-      if (OB_FAIL(config_info.set_name(iter->first.str()))) {
+      if (0 == ObString("compatible").case_compare(iter->first.str())
+          && !iter->second->value_updated()) {
+        if (OB_FAIL(config_info.set_value("0.0.0.0"))) {
+          LOG_WARN("set value fail", K(iter->second->str()), K(ret));
+        }
+      } else {
+        if (OB_FAIL(config_info.set_value(iter->second->str()))) {
+          LOG_WARN("set value fail", K(iter->second->str()), K(ret));
+        }
+      }
+      if (FAILEDx(config_info.set_name(iter->first.str()))) {
         LOG_WARN("set name fail", K(iter->first.str()), K(ret));
-      } else if (OB_FAIL(config_info.set_value(iter->second->str()))) {
-        LOG_WARN("set value fail", K(iter->second->str()), K(ret));
       } else if (OB_FAIL(config_info.set_info(iter->second->info()))) {
         LOG_WARN("set info fail", K(iter->second->info()), K(ret));
       } else if (OB_FAIL(config_info.set_section(iter->second->section()))) {

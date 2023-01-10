@@ -117,11 +117,11 @@
 #  sql = """alter system set {0} = '{1}'""".format(parameter, value)
 #  logging.info(sql)
 #  cur.execute(sql)
-#  wait_parameter_sync(cur, parameter, value, timeout)
+#  wait_parameter_sync(cur, False, parameter, value, timeout)
 #
 #def get_ori_enable_ddl(cur, timeout):
 #  ori_value_str = fetch_ori_enable_ddl(cur)
-#  wait_parameter_sync(cur, 'enable_ddl', ori_value_str, timeout)
+#  wait_parameter_sync(cur, False, 'enable_ddl', ori_value_str, timeout)
 #  ori_value = (ori_value_str == 'True')
 #  return ori_value
 #
@@ -187,9 +187,10 @@
 #  else:
 #    logging.info("check server version success")
 #
-#def check_parameter(cur, key, value):
-#  sql = """select * from oceanbase.GV$OB_PARAMETERS
-#           where name = '{0}' and value = '{1}'""".format(key, value)
+#def check_parameter(cur, is_tenant_config, key, value):
+#  table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+#  sql = """select * from oceanbase.{0}
+#           where name = '{1}' and value = '{2}'""".format(table_name, key, value)
 #  logging.info(sql)
 #  cur.execute(sql)
 #  result = cur.fetchall()
@@ -200,9 +201,10 @@
 #    bret = False
 #  return bret
 #
-#def wait_parameter_sync(cur, key, value, timeout):
-#  sql = """select count(*) as cnt from oceanbase.GV$OB_PARAMETERS
-#           where name = '{0}' and value != '{1}'""".format(key, value)
+#def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
+#  table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+#  sql = """select count(*) as cnt from oceanbase.{0}
+#           where name = '{1}' and value != '{2}'""".format(table_name, key, value)
 #  times = (timeout if timeout > 0 else 60) / 5
 #  while times >= 0:
 #    logging.info(sql)
@@ -227,11 +229,11 @@
 #  action_sql = "alter system begin upgrade"
 #  rollback_sql = "alter system end upgrade"
 #
-#  if not check_parameter(cur, "enable_upgrade_mode", "True"):
+#  if not check_parameter(cur, False, "enable_upgrade_mode", "True"):
 #    logging.info(action_sql)
 #    cur.execute(action_sql)
 #
-#  wait_parameter_sync(cur, "enable_upgrade_mode", "True", timeout)
+#  wait_parameter_sync(cur, False, "enable_upgrade_mode", "True", timeout)
 #
 #  global g_succ_sql_list
 #  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
@@ -240,11 +242,11 @@
 #  action_sql = "alter system begin rolling upgrade"
 #  rollback_sql = "alter system end upgrade"
 #
-#  if not check_parameter(cur, "_upgrade_stage", "DBUPGRADE"):
+#  if not check_parameter(cur, False, "_upgrade_stage", "DBUPGRADE"):
 #    logging.info(action_sql)
 #    cur.execute(action_sql)
 #
-#  wait_parameter_sync(cur, "_upgrade_stage", "DBUPGRADE", timeout)
+#  wait_parameter_sync(cur, False, "_upgrade_stage", "DBUPGRADE", timeout)
 #
 #  global g_succ_sql_list
 #  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
@@ -255,12 +257,12 @@
 #  action_sql = "alter system end rolling upgrade"
 #  rollback_sql = "alter system end upgrade"
 #
-#  if not check_parameter(cur, "_upgrade_stage", "POSTUPGRADE") or not check_parameter(cur, "min_observer_version", current_cluster_version):
+#  if not check_parameter(cur, False, "_upgrade_stage", "POSTUPGRADE") or not check_parameter(cur, False, "min_observer_version", current_cluster_version):
 #    logging.info(action_sql)
 #    cur.execute(action_sql)
 #
-#  wait_parameter_sync(cur, "min_observer_version", current_data_version, timeout)
-#  wait_parameter_sync(cur, "_upgrade_stage", "POSTUPGRADE", timeout)
+#  wait_parameter_sync(cur, False, "min_observer_version", current_data_version, timeout)
+#  wait_parameter_sync(cur, False, "_upgrade_stage", "POSTUPGRADE", timeout)
 #
 #  global g_succ_sql_list
 #  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
@@ -269,11 +271,11 @@
 #  action_sql = "alter system end upgrade"
 #  rollback_sql = ""
 #
-#  if not check_parameter(cur, "enable_upgrade_mode", "False"):
+#  if not check_parameter(cur, False, "enable_upgrade_mode", "False"):
 #    logging.info(action_sql)
 #    cur.execute(action_sql)
 #
-#  wait_parameter_sync(cur, "enable_upgrade_mode", "False", timeout)
+#  wait_parameter_sync(cur, False, "enable_upgrade_mode", "False", timeout)
 #
 #  global g_succ_sql_list
 #  g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
@@ -1319,7 +1321,7 @@
 #
 #  # 2. check if compatible match with current_data_version
 #  if not across_version:
-#    sql = "select count(*) from oceanbase.GV$OB_PARAMETERS where name = 'compatible' and value != '{0}'".format(current_data_version)
+#    sql = "select count(*) from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value != '{0}'".format(current_data_version)
 #    results = query(cur, sql)
 #    if len(results) < 1 or len(results[0]) < 1:
 #      logging.warn("row/column cnt not match")
@@ -1808,7 +1810,7 @@
 #      data_version_str = ''
 #      data_version = 0
 #      # check compatible is same
-#      sql = """select distinct value from GV$OB_PARAMETERS where name='compatible'"""
+#      sql = """select distinct value from oceanbase.__all_virtual_tenant_parameter_info where name='compatible'"""
 #      (desc, results) = query_cur.exec_query(sql)
 #      if len(results) != 1:
 #        fail_list.append('compatible is not sync')
@@ -2410,13 +2412,13 @@
 ## 1 检查版本号
 #def check_cluster_version(cur, timeout):
 #  current_cluster_version = actions.get_current_cluster_version()
-#  actions.wait_parameter_sync(cur, "min_observer_version", current_cluster_version, timeout)
+#  actions.wait_parameter_sync(cur, False, "min_observer_version", current_cluster_version, timeout)
 #
 ## 2 检查租户版本号
 #def check_data_version(cur, query_cur, timeout):
 #  # check compatible
 #  current_data_version = actions.get_current_data_version()
-#  actions.wait_parameter_sync(cur, "compatible", current_data_version, 10)
+#  actions.wait_parameter_sync(cur, True, "compatible", current_data_version, 10)
 #
 #  # check target_data_version/current_data_version except standby tenant
 #  sql = "select tenant_id from oceanbase.__all_tenant except select tenant_id from oceanbase.__all_virtual_tenant_info where tenant_role = 'STANDBY'"

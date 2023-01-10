@@ -14,13 +14,13 @@ import actions
 # 1 检查版本号
 def check_cluster_version(cur, timeout):
   current_cluster_version = actions.get_current_cluster_version()
-  actions.wait_parameter_sync(cur, "min_observer_version", current_cluster_version, timeout)
+  actions.wait_parameter_sync(cur, False, "min_observer_version", current_cluster_version, timeout)
 
 # 2 检查租户版本号
 def check_data_version(cur, query_cur, timeout):
   # check compatible
   current_data_version = actions.get_current_data_version()
-  actions.wait_parameter_sync(cur, "compatible", current_data_version, 10)
+  actions.wait_parameter_sync(cur, True, "compatible", current_data_version, 10)
 
   # check target_data_version/current_data_version except standby tenant
   sql = "select tenant_id from oceanbase.__all_tenant except select tenant_id from oceanbase.__all_virtual_tenant_info where tenant_role = 'STANDBY'"

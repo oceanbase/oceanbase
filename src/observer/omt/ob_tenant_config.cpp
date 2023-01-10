@@ -34,7 +34,7 @@ ObTenantConfig::ObTenantConfig() : ObTenantConfig(OB_INVALID_TENANT_ID)
 }
 
 ObTenantConfig::ObTenantConfig(uint64_t tenant_id)
-    : tenant_id_(tenant_id), current_version_(1),
+    : tenant_id_(tenant_id), current_version_(INITIAL_TENANT_CONF_VERSION),
       mutex_(),
       update_task_(), system_config_(), config_mgr_(nullptr),
       lock_(ObLatchIds::CONFIG_LOCK), is_deleting_(false)

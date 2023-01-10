@@ -109,11 +109,11 @@ def set_parameter(cur, parameter, value, timeout = 0):
   sql = """alter system set {0} = '{1}'""".format(parameter, value)
   logging.info(sql)
   cur.execute(sql)
-  wait_parameter_sync(cur, parameter, value, timeout)
+  wait_parameter_sync(cur, False, parameter, value, timeout)
 
 def get_ori_enable_ddl(cur, timeout):
   ori_value_str = fetch_ori_enable_ddl(cur)
-  wait_parameter_sync(cur, 'enable_ddl', ori_value_str, timeout)
+  wait_parameter_sync(cur, False, 'enable_ddl', ori_value_str, timeout)
   ori_value = (ori_value_str == 'True')
   return ori_value
 
@@ -179,9 +179,10 @@ def check_server_version_by_cluster(cur):
   else:
     logging.info("check server version success")
 
-def check_parameter(cur, key, value):
-  sql = """select * from oceanbase.GV$OB_PARAMETERS
-           where name = '{0}' and value = '{1}'""".format(key, value)
+def check_parameter(cur, is_tenant_config, key, value):
+  table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+  sql = """select * from oceanbase.{0}
+           where name = '{1}' and value = '{2}'""".format(table_name, key, value)
   logging.info(sql)
   cur.execute(sql)
   result = cur.fetchall()
@@ -192,9 +193,10 @@ def check_parameter(cur, key, value):
     bret = False
   return bret
 
-def wait_parameter_sync(cur, key, value, timeout):
-  sql = """select count(*) as cnt from oceanbase.GV$OB_PARAMETERS
-           where name = '{0}' and value != '{1}'""".format(key, value)
+def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
+  table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+  sql = """select count(*) as cnt from oceanbase.{0}
+           where name = '{1}' and value != '{2}'""".format(table_name, key, value)
   times = (timeout if timeout > 0 else 60) / 5
   while times >= 0:
     logging.info(sql)
@@ -219,11 +221,11 @@ def do_begin_upgrade(cur, timeout):
   action_sql = "alter system begin upgrade"
   rollback_sql = "alter system end upgrade"
 
-  if not check_parameter(cur, "enable_upgrade_mode", "True"):
+  if not check_parameter(cur, False, "enable_upgrade_mode", "True"):
     logging.info(action_sql)
     cur.execute(action_sql)
 
-  wait_parameter_sync(cur, "enable_upgrade_mode", "True", timeout)
+  wait_parameter_sync(cur, False, "enable_upgrade_mode", "True", timeout)
 
   global g_succ_sql_list
   g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
@@ -232,11 +234,11 @@ def do_begin_rolling_upgrade(cur, timeout):
   action_sql = "alter system begin rolling upgrade"
   rollback_sql = "alter system end upgrade"
 
-  if not check_parameter(cur, "_upgrade_stage", "DBUPGRADE"):
+  if not check_parameter(cur, False, "_upgrade_stage", "DBUPGRADE"):
     logging.info(action_sql)
     cur.execute(action_sql)
 
-  wait_parameter_sync(cur, "_upgrade_stage", "DBUPGRADE", timeout)
+  wait_parameter_sync(cur, False, "_upgrade_stage", "DBUPGRADE", timeout)
 
   global g_succ_sql_list
   g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
@@ -247,12 +249,12 @@ def do_end_rolling_upgrade(cur, timeout):
   action_sql = "alter system end rolling upgrade"
   rollback_sql = "alter system end upgrade"
 
-  if not check_parameter(cur, "_upgrade_stage", "POSTUPGRADE") or not check_parameter(cur, "min_observer_version", current_cluster_version):
+  if not check_parameter(cur, False, "_upgrade_stage", "POSTUPGRADE") or not check_parameter(cur, False, "min_observer_version", current_cluster_version):
     logging.info(action_sql)
     cur.execute(action_sql)
 
-  wait_parameter_sync(cur, "min_observer_version", current_data_version, timeout)
-  wait_parameter_sync(cur, "_upgrade_stage", "POSTUPGRADE", timeout)
+  wait_parameter_sync(cur, False, "min_observer_version", current_data_version, timeout)
+  wait_parameter_sync(cur, False, "_upgrade_stage", "POSTUPGRADE", timeout)
 
   global g_succ_sql_list
   g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
@@ -261,11 +263,11 @@ def do_end_upgrade(cur, timeout):
   action_sql = "alter system end upgrade"
   rollback_sql = ""
 
-  if not check_parameter(cur, "enable_upgrade_mode", "False"):
+  if not check_parameter(cur, False, "enable_upgrade_mode", "False"):
     logging.info(action_sql)
     cur.execute(action_sql)
 
-  wait_parameter_sync(cur, "enable_upgrade_mode", "False", timeout)
+  wait_parameter_sync(cur, False, "enable_upgrade_mode", "False", timeout)
 
   global g_succ_sql_list
   g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))

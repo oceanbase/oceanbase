@@ -34,6 +34,8 @@ class ObTenantConfigMgr;
 class ObTenantConfig : public ObCommonConfig
 {
 public:
+  static const int64_t INITIAL_TENANT_CONF_VERSION = 1;
+public:
   class TenantConfigUpdateTask : public common::ObTimerTask
   {
   public:

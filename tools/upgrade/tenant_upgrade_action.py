@@ -83,7 +83,7 @@ def upgrade_across_version(cur):
 
   # 2. check if compatible match with current_data_version
   if not across_version:
-    sql = "select count(*) from oceanbase.GV$OB_PARAMETERS where name = 'compatible' and value != '{0}'".format(current_data_version)
+    sql = "select count(*) from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value != '{0}'".format(current_data_version)
     results = query(cur, sql)
     if len(results) < 1 or len(results[0]) < 1:
       logging.warn("row/column cnt not match")

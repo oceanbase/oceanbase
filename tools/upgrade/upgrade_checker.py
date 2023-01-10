@@ -332,7 +332,7 @@ def check_data_version(query_cur):
       data_version_str = ''
       data_version = 0
       # check compatible is same
-      sql = """select distinct value from GV$OB_PARAMETERS where name='compatible'"""
+      sql = """select distinct value from oceanbase.__all_virtual_tenant_parameter_info where name='compatible'"""
       (desc, results) = query_cur.exec_query(sql)
       if len(results) != 1:
         fail_list.append('compatible is not sync')

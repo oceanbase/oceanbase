@@ -5598,7 +5598,7 @@ int ObDDLOperator::init_tenant_config_(
     ObConfigItem *item = NULL;
     char svr_ip[OB_MAX_SERVER_ADDR_SIZE] = "ANY";
     int64_t svr_port = 0;
-    int64_t config_version = 1; // hard code init version
+    int64_t config_version = omt::ObTenantConfig::INITIAL_TENANT_CONF_VERSION + 1;
     FOREACH_X(config, tenant_config.get_configs(), OB_SUCC(ret)) {
       const ObConfigStringKey key(config->key_.ptr());
       if (OB_ISNULL(hard_code_config->get_container().get(key))
