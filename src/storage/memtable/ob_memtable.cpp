@@ -231,6 +231,7 @@ void ObMemtable::destroy()
     }
   }
   ObITable::reset();
+  ObFreezeCheckpoint::reset();
   mvcc_engine_.destroy();
   time_guard.click();
   query_engine_.destroy();

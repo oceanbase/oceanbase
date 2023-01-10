@@ -91,7 +91,7 @@ public:
   {}
   ~TestMemtable()
   {
-    ObFreezeCheckpoint::remove_from_data_checkpoint(true);
+    ObFreezeCheckpoint::remove_from_data_checkpoint();
   }
 
   void set_rec_scn(share::SCN rec_scn)

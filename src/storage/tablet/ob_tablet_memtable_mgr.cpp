@@ -62,7 +62,7 @@ void ObTabletMemtableMgr::destroy()
       STORAGE_LOG(WARN, "memtable is nullptr", K(ret), KP(imemtable), K(pos));
     } else if (imemtable->is_data_memtable()) {
       memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
-      memtable->remove_from_data_checkpoint(true);
+      memtable->remove_from_data_checkpoint();
     }
   }
   reset_tables();
@@ -627,9 +627,7 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       if (!memtable->is_empty()) {
         memtable->set_read_barrier();
       }
-      // if empty memtable in prepare_list in data_checkpoint
-      // have been removed from data_checkpoint in release_head_empty_memtable
-      memtable->remove_from_data_checkpoint(true);
+      memtable->remove_from_data_checkpoint();
       memtable->set_is_flushed();
       memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
       release_head_memtable();

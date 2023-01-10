@@ -289,11 +289,11 @@ WAIT_EVENT_DEF(TENANT_MEM_USAGE_LOCK_WAIT, 15244, "latch: tenant memory usage lo
 WAIT_EVENT_DEF(TX_TABLE_LOCK_WAIT, 15245, "rwlock: tx table lock wait", "address", "number", "tries", CONCURRENCY, "rwlock: tx table lock wait", true)
 WAIT_EVENT_DEF(MEMTABLE_STAT_LOCK_WAIT, 15246, "spinlock: memtable stat lock wait", "address", "number", "tries", CONCURRENCY, "spinlock: memtable stat lock wait", true)
 WAIT_EVENT_DEF(DEADLOCK_DETECT_LOCK_WAIT, 15247, "spinlock: deadlock detect lock wait", "address", "number", "tries", CONCURRENCY, "spinlock: deadlock detect lock wait", true)
-WAIT_EVENT_DEF(CLOG_CKPT_RWLOCK_WAIT, 15248, "rwlock: clog checkpoint rwlock wait", "address", "number", "tries", CONCURRENCY, "rwlock: clog checkpoint rwlock wait", true)
 //WAIT_EVENT_DEF(BACKUP_DATA_SERVICE_COND_WAIT, 15248, "backup data service condition wait", "address", "", "", CONCURRENCY, "backup data service condition wait", true) used by backup
 //WAIT_EVENT_DEF(BACKUP_CLEAN_SERVICE_COND_WAIT, 15249, "backup clean service condition wait", "address", "", "", CONCURRENCY, "backup clean service condition wait", true)
 //WAIT_EVENT_DEF(BACKUP_ARCHIVE_SERVICE_COND_WAIT, 15250, "backup archive service condition wait", "address", "", "", CONCURRENCY, "backup archive service condition wait", true)
 WAIT_EVENT_DEF(SRS_LOCK_WAIT, 15251, "latch: srs lock wait", "address", "number", "tries", CONCURRENCY, "latch: srs lock wait", true)
+WAIT_EVENT_DEF(CLOG_CKPT_RWLOCK_WAIT, 15252, "rwlock: clog checkpoint rwlock wait", "address", "number", "tries", CONCURRENCY, "rwlock: clog checkpoint rwlock wait", true)
 
 //transaction
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,"wait end trans", false)

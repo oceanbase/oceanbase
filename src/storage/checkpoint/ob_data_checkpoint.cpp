@@ -122,6 +122,23 @@ ObFreezeCheckpoint *ObCheckpointDList::get_first_greater(const SCN rec_scn)
   return cur;
 }
 
+int ObCheckpointDList::get_need_freeze_checkpoints(const SCN rec_scn,
+  ObIArray<ObFreezeCheckpoint*> &freeze_checkpoints)
+{
+  int ret = OB_SUCCESS;
+  ObFreezeCheckpoint *head = checkpoint_list_.get_header();
+  ObFreezeCheckpoint *cur = head->get_next();
+  while (cur != head && cur->get_rec_scn() <= rec_scn) {
+    if (OB_FAIL(freeze_checkpoints.push_back(cur))) {
+      STORAGE_LOG(WARN, "push_back into freeze_checkpoints failed");
+      break;
+    } else {
+      cur = cur->get_next();
+    }
+  }
+  return ret;
+}
+
 int ObCheckpointDList::get_freezecheckpoint_info(
     ObIArray<checkpoint::ObFreezeCheckpointVTInfo> &freeze_checkpoint_array)
 {
@@ -191,7 +208,6 @@ int ObDataCheckpoint::safe_to_destroy(bool &is_safe_destroy)
   ls_frozen_list_.reset();
   active_list_.reset();
   prepare_list_.reset();
-  ls_ = nullptr;
 
   if (OB_FAIL(ret)) {
     is_safe_destroy = false;
@@ -228,12 +244,9 @@ int ObDataCheckpoint::flush(SCN recycle_scn, bool need_freeze)
 {
   int ret = OB_SUCCESS;
   if (need_freeze) {
-    if (get_rec_scn() <= recycle_scn) {
-      if (!is_flushing() &&
-          !has_prepared_flush_checkpoint() &&
-          OB_FAIL(ls_->logstream_freeze())) {
-        STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
-      }
+    if (OB_FAIL(freeze_base_on_needs_(recycle_scn))) {
+      STORAGE_LOG(WARN, "freeze_base_on_needs failed",
+                  K(ret), K(ls_->get_ls_id()), K(recycle_scn));
     }
   } else if (OB_FAIL(traversal_flush_())) {
     STORAGE_LOG(WARN, "traversal_flush failed", K(ret), K(ls_->get_ls_id()));
@@ -248,7 +261,7 @@ int ObDataCheckpoint::ls_freeze(SCN rec_scn)
   ObCheckPointService *checkpoint_srv = MTL(ObCheckPointService *);
   set_ls_freeze_finished_(false);
   if (OB_FAIL(checkpoint_srv->add_ls_freeze_task(this, rec_scn))) {
-    STORAGE_LOG(ERROR, "ls_freeze add task failed", K(ret));
+    STORAGE_LOG(WARN, "ls_freeze add task failed", K(ret));
     set_ls_freeze_finished_(true);
   }
   return ret;
@@ -536,11 +549,6 @@ int ObDataCheckpoint::unlink_from_prepare(ObFreezeCheckpoint *ob_freeze_checkpoi
   return ret;
 }
 
-bool ObDataCheckpoint::has_prepared_flush_checkpoint()
-{
-  return !prepare_list_.is_empty();
-}
-
 int ObDataCheckpoint::get_freezecheckpoint_info(
   ObIArray<checkpoint::ObFreezeCheckpointVTInfo> &freeze_checkpoint_array)
 {
@@ -700,6 +708,67 @@ int ObDataCheckpoint::transfer_from_active_to_prepare_(ObFreezeCheckpoint *ob_fr
   int ret = OB_SUCCESS;
   if (OB_FAIL(transfer_(ob_freeze_checkpoint, active_list_, prepare_list_, PREPARE))) {
     STORAGE_LOG(ERROR, "Transfer From Active To Frozen Failed");
+  }
+  return ret;
+}
+
+int ObDataCheckpoint::get_need_flush_tablets_(const share::SCN recycle_scn,
+                                              ObIArray<ObTabletID> &flush_tablets)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  ObSArray<ObFreezeCheckpoint*> need_freeze_checkpoints;
+  if (OB_FAIL(new_create_list_.get_need_freeze_checkpoints(
+    recycle_scn, need_freeze_checkpoints))) {
+    STORAGE_LOG(WARN, "get_need_freeze_checkpoints failed", K(ret));
+  } else if (OB_FAIL(active_list_.get_need_freeze_checkpoints(
+    recycle_scn, need_freeze_checkpoints))) {
+    STORAGE_LOG(WARN, "get_need_freeze_checkpoints failed", K(ret));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < need_freeze_checkpoints.count(); i++) {
+      if (OB_FAIL(flush_tablets.push_back(
+        need_freeze_checkpoints[i]->get_tablet_id()))) {
+        STORAGE_LOG(WARN, "get_flush_tablets failed", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDataCheckpoint::freeze_base_on_needs_(share::SCN recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  if (get_rec_scn() <= recycle_scn) {
+    if (!is_flushing() && prepare_list_.is_empty()) {
+      int64_t wait_flush_num =
+        new_create_list_.checkpoint_list_.get_size()
+        + active_list_.checkpoint_list_.get_size();
+      bool logstream_freeze = true;
+      ObSArray<ObTabletID> need_flush_tablets;
+      if (wait_flush_num > MAX_FREEZE_CHECKPOINT_NUM) {
+        if (OB_FAIL(get_need_flush_tablets_(recycle_scn, need_flush_tablets))) {
+          // do nothing
+        } else {
+          int need_flush_num = need_flush_tablets.count();
+          logstream_freeze =
+            need_flush_num * 100 / wait_flush_num <= TABLET_FREEZE_PERCENT;
+        }
+      }
+
+      if (logstream_freeze) {
+        if (OB_FAIL(ls_->logstream_freeze())) {
+          STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
+        }
+      } else {
+        for (int i = 0; OB_SUCC(ret) && i < need_flush_tablets.count(); i++) {
+          if (OB_FAIL(ls_->tablet_freeze(need_flush_tablets[i]))) {
+            STORAGE_LOG(WARN, "tablet freeze failed",
+                        K(ret), K(ls_->get_ls_id()), K(need_flush_tablets[i]));
+          }
+        }
+      }
+    }
   }
   return ret;
 }
