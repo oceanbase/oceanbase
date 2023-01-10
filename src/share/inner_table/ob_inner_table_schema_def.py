@@ -5245,6 +5245,7 @@ def_table_schema(
 # 447 : __all_ls_log_restore_stat
 # 448 : __all_backup_transferring_tablets
 
+# 449 : __all_wait_for_partition_split_tablet
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
