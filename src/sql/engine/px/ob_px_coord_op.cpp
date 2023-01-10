@@ -745,7 +745,8 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     }
   }
   //过滤掉4662的原因是，在QC希望所有dfo退出时会向所有dfo广播4662中断，这个错误码可能会被sqc report回来
-  if (OB_GOT_SIGNAL_ABORTING != coord_info_.first_error_code_
+  if (OB_SUCCESS != coord_info_.first_error_code_
+      && OB_GOT_SIGNAL_ABORTING != coord_info_.first_error_code_
       && OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER != coord_info_.first_error_code_) {
     ret = coord_info_.first_error_code_;
   }
