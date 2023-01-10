@@ -166,7 +166,6 @@ private:
       bool &is_valid);
   static int check_pure_index_or_hidden_tablets_info(
       const share::ObLSID &ls_id,
-      const common::ObTabletID &data_tablet_id,
       const obrpc::ObCreateTabletInfo &info,
       bool &is_valid);
   static int build_tablet_create_info(

@@ -1552,7 +1552,6 @@ int ObTabletCreateDeleteHelper::check_tablet_absence(
   ObSArray<int64_t> skip_idx;
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < arg.tablets_.count(); ++i) {
     const ObCreateTabletInfo &info = arg.tablets_.at(i);
-    const ObTabletID &data_tablet_id = info.data_tablet_id_;
     if (is_contain(skip_idx, i)) {
       // do nothing
     } else if (is_pure_data_tablets(info) || is_mixed_tablets(info)) {
@@ -1560,8 +1559,8 @@ int ObTabletCreateDeleteHelper::check_tablet_absence(
         LOG_WARN("failed to check create tablet info", K(ret), K(ls_id), K(info));
       }
     } else if (is_pure_aux_tablets(info)) {
-      if (OB_FAIL(check_pure_index_or_hidden_tablets_info(ls_id, data_tablet_id, info, is_valid))) {
-        LOG_WARN("failed to check create tablet info", K(ret), K(ls_id), K(data_tablet_id), K(info));
+      if (OB_FAIL(check_pure_index_or_hidden_tablets_info(ls_id, info, is_valid))) {
+        LOG_WARN("failed to check create tablet info", K(ret), K(ls_id), K(info));
       }
     } else if (is_pure_hidden_tablets(info)) {
       for (int64_t j = 0; OB_SUCC(ret) && j < info.tablet_ids_.count(); ++j) {
@@ -1575,8 +1574,8 @@ int ObTabletCreateDeleteHelper::check_tablet_absence(
           }
         }
       }
-      if (OB_SUCC(ret) && OB_FAIL(check_pure_index_or_hidden_tablets_info(ls_id, data_tablet_id, info, is_valid))) {
-        LOG_WARN("failed to check create tablet info", K(ret), K(ls_id), K(data_tablet_id), K(info));
+      if (OB_SUCC(ret) && OB_FAIL(check_pure_index_or_hidden_tablets_info(ls_id, info, is_valid))) {
+        LOG_WARN("failed to check create tablet info", K(ret), K(ls_id), K(info));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1624,7 +1623,6 @@ int ObTabletCreateDeleteHelper::check_pure_data_or_mixed_tablets_info(
 
 int ObTabletCreateDeleteHelper::check_pure_index_or_hidden_tablets_info(
     const ObLSID &ls_id,
-    const ObTabletID &data_tablet_id,
     const ObCreateTabletInfo &info,
     bool &is_valid)
 {
@@ -1648,16 +1646,6 @@ int ObTabletCreateDeleteHelper::check_pure_index_or_hidden_tablets_info(
       valid = false;
       LOG_INFO("tablet exists", K(ret), K(key));
     }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (!valid) {
-  } else if (FALSE_IT(key.tablet_id_ = data_tablet_id)) {
-  } else if (OB_FAIL(get_tablet(key, tablet_handle))) {
-    LOG_WARN("failed to get data tablet", K(ret), K(key));
-    valid = false;
-  } else {
-    valid = true;
   }
 
   if (OB_FAIL(ret)) {
@@ -1959,7 +1947,6 @@ int ObTabletCreateDeleteHelper::create_tablet(
     const ObMulSourceDataNotifyArg &trans_flags)
 {
   int ret = OB_SUCCESS;
-  const ObTabletID &data_tablet_id = info.data_tablet_id_;
 
   if (OB_UNLIKELY(!info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -2142,7 +2129,6 @@ int ObTabletCreateDeleteHelper::build_pure_hidden_tablets(
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = arg.id_;
-  const ObTabletID &data_tablet_id = info.data_tablet_id_;
   const ObSArray<ObTabletID> &hidden_tablet_ids = info.tablet_ids_;
   const ObSArray<ObTableSchema> &table_schemas = arg.table_schemas_;
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
@@ -2170,7 +2156,7 @@ int ObTabletCreateDeleteHelper::build_pure_hidden_tablets(
     if (OB_FAIL(do_create_tablet(hidden_tablet_id, hidden_tablet_id, lob_meta_tablet_id,
         lob_piece_tablet_id, empty_array, arg, trans_flags,
         table_schemas[info.table_schema_index_[i]], compat_mode, hidden_tablet_handle))) {
-      LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(hidden_tablet_id), K(data_tablet_id), K(PRINT_CREATE_ARG(arg)));
+      LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(hidden_tablet_id), K(PRINT_CREATE_ARG(arg)));
     }
   }
 
