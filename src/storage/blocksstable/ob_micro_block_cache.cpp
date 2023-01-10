@@ -425,8 +425,8 @@ int ObIMicroBlockIOCallback::process_block(
             block_buf + pos,
             block_size - pos))) {
           LOG_WARN("Fail to decompress data with preallocated buffer", K(ret));
-        } else if (need_write_extra_buf_ && cache_->write_extra_buf(*read_info_, block_buf, block_size, extra_size,
-                                                                    block_buf + block_size, micro_data)) {
+        } else if (need_write_extra_buf_ && OB_FAIL(cache_->write_extra_buf(*read_info_, block_buf, block_size,
+                                                    extra_size, block_buf + block_size, micro_data))) {
           LOG_WARN("Fail to writer extra buffer of block data", K(ret), K(header), KPC(cache_value));
         } else if (FALSE_IT(micro_block = cache_value)) {
         } else if (OB_FAIL(kvcache->put_kvpair(inst_handle, kvpair, cache_handle, false /* overwrite */))) {
