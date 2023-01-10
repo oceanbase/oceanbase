@@ -591,8 +591,10 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
       if (OB_FAIL(progress_checker_.check_table_status(exist_uncompacted, exist_unverified))) {
         LOG_WARN("fail to check table status", KR(ret), K_(tenant_id));
       } else if (exist_uncompacted) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("should not exist uncompacted table after all zone merged", KR(ret), K(exist_unverified));
+        all_merged = false;
+        FLOG_INFO("although all zone merged in check_merge_progress, there still exists uncompacted"
+                 " tables. this may be caused by new tables created in check_verification",
+                 K(all_merged), K(exist_unverified));
       } else if (exist_unverified) {
         all_merged = false;
         LOG_INFO("although finished compaction, but not finish verification", K(all_merged), K(exist_uncompacted));

@@ -110,7 +110,7 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_uncompacted, boo
       exist_uncompacted = uncompacted_tables.count() > 0;
       exist_unverified = unverified_tables.count() > 0;
       if (exist_uncompacted || exist_unverified) {
-        LOG_INFO("exists compaction/varification unfinished table", "uncompacted cnt", uncompacted_tables.count(),
+        FLOG_INFO("exists compaction/varification unfinished table", "uncompacted cnt", uncompacted_tables.count(),
           "unverified cnt", unverified_tables.count(), K(uncompacted_tables), K(unverified_tables));
       } else if (ele_count != table_count_) {
         ret = OB_INNER_STAT_ERROR;

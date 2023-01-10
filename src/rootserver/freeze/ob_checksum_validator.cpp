@@ -362,6 +362,14 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
           } else if (OB_FAIL(check_table_compaction_finished(*table_schema, frozen_scn, tablet_compaction_map,
               table_compaction_map, cur_compaction_info))) {
             LOG_WARN("fail to check table compaction finished", KR(ret), K(frozen_scn), KPC(table_schema));
+          }
+          if (OB_NOT_SUPPORTED == ret) {
+            // tablets of old table_schema cannot be found in __all_tablet_to_ls, which results in
+            // ret = OB_NOT_SUPPORTED. ignore ret and go on verification.
+            // this logic will be removed after log4100 branch is merged into master branch.
+            ret = OB_SUCCESS;
+          }
+          if (OB_FAIL(ret)) {
           } else if (cur_compaction_info.is_verified()) { // already finished verification, skip it!
           } else if (is_index_table(*simple_schema)) { // for index table, may need to check column checksum
             const uint64_t data_table_id = simple_schema->get_data_table_id();
@@ -377,11 +385,26 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
               if (OB_FAIL(check_table_compaction_finished(*data_table_schema, frozen_scn, tablet_compaction_map,
                   table_compaction_map, data_compaction_info))) {
                 LOG_WARN("fail to check table compaction finished", KR(ret), K(frozen_scn), KPC(data_table_schema));
+              }
+              if (OB_NOT_SUPPORTED == ret) {
+                // tablets of old table_schema cannot be found in __all_tablet_to_ls, which results in
+                // ret = OB_NOT_SUPPORTED. ignore ret and go on verification.
+                // this logic will be removed after log4100 branch is merged into master branch.
+                ret = OB_SUCCESS;
+              }
+              if (OB_FAIL(ret)) {
               } else if (data_compaction_info.is_verified()) {
-                ret = OB_ERR_UNEXPECTED;
-                // NOTICE: if a data table has a virtual index table and a valid index table, it may lead to this error.
-                LOG_WARN("not allow that data table is verified, while index table is not verified", KR(ret), K(table_id),
-                  K(data_table_id), K(cur_compaction_info), K(data_compaction_info));
+                // if a data table finished verification, then create index on this data table.
+                // we should skip verification for this index table, cuz the data table may already
+                // launched another medium compaction.
+                LOG_INFO("index table is not verified while data table is already verified, skip"
+                  " verification for this index table", K(table_id), K(data_table_id),
+                  K(cur_compaction_info), K(data_compaction_info));
+                if (cur_compaction_info.finish_compaction()) {
+                  if (OB_FAIL(handle_table_compaction_finished(table_schema, frozen_scn, table_compaction_map))) {
+                    LOG_WARN("fail to handle index table compaction finished", KR(ret), K(table_id), K(frozen_scn));
+                  }
+                }
               } else if (table_schema->has_tablet()) {
                 data_compaction_info.is_valid_data_table_ = true;
                 if (!cur_compaction_info.finish_compaction() || !data_compaction_info.finish_compaction()) {
@@ -510,7 +533,8 @@ int ObIndexChecksumValidator::update_data_table_verified(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(data_table_compaction));
   } else {
-    if (data_table_compaction.all_index_verified_) {
+    if (data_table_compaction.is_verified()) { // skip if already finished verification
+    } else if (data_table_compaction.all_index_verified_) {
       if (data_table_compaction.finish_compaction()) {
         ObSchemaGetterGuard schema_guard;
         const ObTableSchema *data_table_schema = nullptr;
@@ -531,6 +555,9 @@ int ObIndexChecksumValidator::update_data_table_verified(
       }
     } else {
       ObTableCompactionInfo new_compaction_info = data_table_compaction;
+      // why mark it as false: the next time to re-scan all table, we should re-check this data
+      // table's 'is_valid_data_table_', since this data table's index may be dropped
+      new_compaction_info.is_valid_data_table_ = false;
       //why mark it as true: cuz we can re-scan all table, to check this data table's 'all_index_verified_' again.
       new_compaction_info.all_index_verified_ = true;
       if (OB_FAIL(table_compaction_map.set_refactored(data_table_id, new_compaction_info, true/*overwrite*/))) {
