@@ -138,6 +138,10 @@ int ObExprTimeStampAdd::calc(const int64_t unit_value,
     } else {
       ot.parts_[DT_YEAR] = month / 12;
       ot.parts_[DT_MON] = month % 12 + 1;
+      int32_t days = ObTimeConverter::get_days_of_month(ot.parts_[DT_YEAR], ot.parts_[DT_MON]);
+      if (ot.parts_[DT_MDAY] > days) {
+        ot.parts_[DT_MDAY] = days;
+      }
       ot.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ot);
       if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot, cvrt_ctx, value))) {
         LOG_WARN("ob time to datetime failed", K(ret));

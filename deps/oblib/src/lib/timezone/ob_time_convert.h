@@ -585,7 +585,7 @@ public:
   static int check_dfm_deterministic(const ObString format,
                                     const ObCollationType format_coll_type,
                                     const bool need_tz, bool &complete);
-
+  static int32_t get_days_of_month(int32_t year, int32_t month);
   struct ObTimeDigits {
     ObTimeDigits()
       : ptr_(NULL), len_(0), value_(0)

@@ -5308,6 +5308,11 @@ int ObTimeConverter::check_dfm_deterministic(const ObString format,
   return ret;
 }
 
+int32_t ObTimeConverter::get_days_of_month(int32_t year, int32_t month)
+{
+  return DAYS_PER_MON[IS_LEAP_YEAR(year)][month];
+}
+
 int ObTimeConverter::set_ob_time_part_directly(ObTime &ob_time, int64_t &conflict_bitset, const int64_t part_offset, const int32_t part_value)
 {
   int ret = OB_SUCCESS;
