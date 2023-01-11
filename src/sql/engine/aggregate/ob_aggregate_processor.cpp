@@ -553,7 +553,8 @@ ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
       tmp_store_row_(nullptr),
       io_event_observer_(nullptr),
       removal_info_(),
-      support_fast_single_row_agg_(false)
+      support_fast_single_row_agg_(false),
+      op_eval_infos_(nullptr)
 {
 }
 
@@ -1180,6 +1181,8 @@ int ObAggregateProcessor::collect_result_batch(const ObIArray<ObExpr *> &group_e
     } // end for
     aggr_info.expr_->get_eval_info(eval_ctx_).projected_ = true;
   }
+  // clear operator evaluated flags to recalc expr after rollup set_null
+  clear_op_evaluated_flag();
   // project group expr result
   for (int64_t loop_idx = 0; OB_SUCC(ret) && loop_idx < loop_cnt; loop_idx++) {
     guard.set_batch_idx(output_brs.size_ + loop_idx);

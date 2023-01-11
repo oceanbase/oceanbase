@@ -242,6 +242,7 @@ int ObMergeGroupByOp::init()
         for (int64_t i = 0; !has_dup_group_expr_ && i < MY_SPEC.is_duplicate_rollup_expr_.count(); ++i) {
           has_dup_group_expr_ = MY_SPEC.is_duplicate_rollup_expr_.at(i);
         }
+        aggr_processor_.set_op_eval_infos(&eval_infos_);
       }
     }
   }
@@ -737,7 +738,6 @@ int ObMergeGroupByOp::inner_get_next_row()
       }
     }
   }
-  clear_evaluated_flag();
   LOG_TRACE("after inner_get_next_row", "aggr_hold_size",
             aggr_processor_.get_aggr_hold_size(), "aggr_used_size",
             aggr_processor_.get_aggr_used_size());
@@ -976,7 +976,6 @@ int ObMergeGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
     }
   }
 
-  clear_evaluated_flag();
   LOG_DEBUG("after inner_get_next_batch", "aggr_hold_size",
            aggr_processor_.get_aggr_hold_size(), "aggr_used_size",
            aggr_processor_.get_aggr_used_size(), K(output_batch_cnt), K(ret));
