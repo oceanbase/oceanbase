@@ -215,7 +215,6 @@ int ObMultiTenant::init(ObAddr myaddr, double node_quota, int64_t times_of_worke
   MTL_BIND(ObMySQLRequestManager::mtl_init, ObMySQLRequestManager::mtl_destroy);
   MTL_BIND(ObTenantWeakReadService::mtl_init, ObTenantWeakReadService::mtl_destroy);
   MTL_BIND(storage::ObPartitionService::mtl_init, storage::ObPartitionService::mtl_destroy);
-  MTL_BIND(ObTransAuditRecordMgr::mtl_init, ObTransAuditRecordMgr::mtl_destroy);
   MTL_BIND(ObTenantSqlMemoryManager::mtl_init, ObTenantSqlMemoryManager::mtl_destroy);
   MTL_BIND(ObPlanMonitorNodeList::mtl_init, ObPlanMonitorNodeList::mtl_destroy);
 

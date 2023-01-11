@@ -860,17 +860,6 @@ int ObScheTransCtx::start_stmt(
         (void)unregister_timeout_task_();
       }
     }
-
-    if (OB_NOT_NULL(trans_audit_record_)) {
-      const int64_t proxy_receive_sql_us = 0;  // stmt_desc.get_proxy_receive_us();
-      const int64_t server_receive_sql_us = stmt_desc.cur_query_start_time_;
-      (void)trans_audit_record_->set_start_stmt_info(sql_no_,
-          stmt_desc.phy_plan_type_,
-          stmt_desc.trace_id_adaptor_,
-          proxy_receive_sql_us,
-          server_receive_sql_us,
-          trans_receive_sql_us);
-    }
   }
 
   REC_TRANS_TRACE_EXT(tlog_,
@@ -1333,12 +1322,6 @@ int ObScheTransCtx::wait_end_stmt(const int64_t expired_time)
   }
   if (OB_FAIL(ret)) {
     need_print_trace_log_ = true;
-  }
-
-  if (OB_NOT_NULL(trans_audit_record_)) {
-    const int64_t trans_execute_sql_us = ObTimeUtility::current_time();
-    const int64_t lock_for_read_retry_count = -1;  // UNUSED
-    (void)trans_audit_record_->set_end_stmt_info(sql_no_, trans_execute_sql_us, lock_for_read_retry_count);
   }
 
   return ret;

@@ -80,62 +80,8 @@ int ObAllVirtualTransSQLAudit::extract_tenant_ids_()
 
 int ObAllVirtualTransSQLAudit::inner_get_next_row(ObNewRow*& row)
 {
-  int ret = OB_SUCCESS;
-
-  if (!audit_iter_.is_valid()) {
-    ++tenant_id_array_idx_;
-    if (tenant_id_array_idx_ >= tenant_id_array_.count()) {
-      ret = OB_ITER_END;
-    } else {
-      ObTransAuditRecordMgr* trans_audit_record_mgr = nullptr;
-      uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
-      // inc context ref count
-      if (with_tenant_ctx_ != nullptr) {  // free old memory
-        with_tenant_ctx_->~ObTenantSpaceFetcher();
-        allocator_->free(with_tenant_ctx_);
-        with_tenant_ctx_ = nullptr;
-      }
-      void* buff = nullptr;
-      if (nullptr == (buff = allocator_->alloc(sizeof(ObTenantSpaceFetcher)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SERVER_LOG(WARN, "failed to allocate memory", K(ret));
-      } else {
-        with_tenant_ctx_ = new (buff) ObTenantSpaceFetcher(tenant_id);
-        if (OB_FAIL(with_tenant_ctx_->get_ret())) {
-          SERVER_LOG(WARN, "failed to switch tenant context", K(tenant_id), K(ret));
-        } else {
-          trans_audit_record_mgr = with_tenant_ctx_->entity().get_tenant()->get<ObTransAuditRecordMgr*>();
-        }
-      }
-      if (OB_SUCC(ret) && OB_NOT_NULL(trans_audit_record_mgr) && OB_FAIL(audit_iter_.init(trans_audit_record_mgr))) {
-        SERVER_LOG(WARN, "audit_iter_ init error", K(ret));
-      }
-    }
-  }
-
-  ObTransAuditCommonInfo common_info;
-  ObTransAuditStmtInfo stmt_info;
-  if (OB_SUCC(ret) && audit_iter_.is_valid()) {
-    if (OB_FAIL(audit_iter_.get_next(common_info, stmt_info))) {
-      if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "ObAllVirtualTransSQLAudit iter error", K(ret));
-      } else if (tenant_id_array_idx_ >= tenant_id_array_.count()) {
-        SERVER_LOG(DEBUG, "ObAllVirtualTransSQLAudit iter end success");
-      } else {
-        ret = OB_SUCCESS;  // Continue next tenant
-      }
-    } else if (OB_FAIL(fill_cells_(common_info, stmt_info))) {
-      SERVER_LOG(WARN, "ObAllVirtualTransSQLAudit fill cells error", K(ret));
-    } else {
-      // do nothing
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    row = &cur_row_;
-  }
-
-  return ret;
+  UNUSED(row);
+  return OB_ITER_END;
 }
 
 int ObAllVirtualTransSQLAudit::fill_cells_(

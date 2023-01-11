@@ -146,101 +146,11 @@ void ObTransCtx::destroy()
     } else {
       partition_mgr_->desc_total_ctx_count();
     }
-    if (NULL != trans_audit_record_) {
-      int ret = OB_SUCCESS;
-      // backfill audit buffer
-      (void)trans_audit_record_->set_trans_audit_data(tenant_id_,
-          addr_,
-          trans_id_,
-          self_,
-          session_id_,
-          proxy_session_id_,
-          trans_type_,
-          get_uref(),
-          ctx_create_time_,
-          trans_expired_time_,
-          trans_param_,
-          get_type(),
-          get_status_(),
-          is_for_replay());
-      ObTransAuditRecordMgr* record_mgr = NULL;
-      if (OB_ISNULL(record_mgr = record_mgr_guard_.get_trans_audit_record_mgr())) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "failed to get trans audit record manager");
-      } else if (OB_FAIL(record_mgr->revert_record(trans_audit_record_))) {
-        TRANS_LOG(ERROR, "revert trans audit record failed, unexpected error", KR(ret));
-      } else {
-        // do nothing
-      }
-      trans_audit_record_ = NULL;
-    } else if (NULL != tlog_) {
+    if (NULL != tlog_) {
       ObTransTraceLogFactory::release(tlog_);
       tlog_ = NULL;
     }
-    record_mgr_guard_.destroy();
     is_inited_ = false;
-  }
-}
-
-int ObTransCtx::reset_trans_audit_record()
-{
-  int ret = OB_SUCCESS;
-  CtxLockGuard guard(lock_);
-  if (OB_NOT_NULL(trans_audit_record_)) {
-    (void)trans_audit_record_->set_trans_audit_data(tenant_id_,
-        addr_,
-        trans_id_,
-        self_,
-        session_id_,
-        proxy_session_id_,
-        trans_type_,
-        get_uref(),
-        ctx_create_time_,
-        trans_expired_time_,
-        trans_param_,
-        get_type(),
-        get_status_(),
-        is_for_replay());
-    ObTransAuditRecordMgr* record_mgr = NULL;
-    if (OB_ISNULL(record_mgr = record_mgr_guard_.get_trans_audit_record_mgr())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "failed to get trans audit record manager");
-    } else if (OB_FAIL(record_mgr->revert_record(trans_audit_record_))) {
-      TRANS_LOG(ERROR, "revert trans audit record failed, unexpected error", KR(ret));
-    }
-    trans_audit_record_ = NULL;
-    tlog_ = NULL;
-  }
-  record_mgr_guard_.destroy();
-  return ret;
-}
-
-int ObTransCtx::TransAuditRecordMgrGuard::set_tenant_id(uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_LIKELY(NULL == with_tenant_ctx_)) {
-    with_tenant_ctx_ = new (buf_) ObTenantSpaceFetcher(tenant_id);
-    if (OB_FAIL(with_tenant_ctx_->get_ret())) {
-      TRANS_LOG(WARN, "failed to switch tenant context", K(tenant_id), KR(ret));
-    }
-  }
-  return ret;
-}
-
-ObTransAuditRecordMgr* ObTransCtx::TransAuditRecordMgrGuard::get_trans_audit_record_mgr()
-{
-  ObTransAuditRecordMgr* mgr = NULL;
-  if (OB_NOT_NULL(with_tenant_ctx_)) {
-    mgr = with_tenant_ctx_->entity().get_tenant()->get<ObTransAuditRecordMgr*>();
-  }
-  return mgr;
-}
-
-void ObTransCtx::TransAuditRecordMgrGuard::destroy()
-{
-  if (OB_NOT_NULL(with_tenant_ctx_)) {
-    with_tenant_ctx_->~ObTenantSpaceFetcher();
-    with_tenant_ctx_ = NULL;
   }
 }
 
@@ -369,38 +279,6 @@ int ObTransCtx::alloc_audit_rec_and_trace_log_(ObTransService* trans_service, Ob
   } else if (!oceanbase::lib::is_trace_log_enabled()) {
     need_alloc = false;
     ret = OB_SUCCESS;
-  } else {
-    int32_t retry_times = 3;
-    ObTransAuditRecordMgr* record_mgr = NULL;
-    if (OB_FAIL(record_mgr_guard_.set_tenant_id(tenant_id_))) {
-      TRANS_LOG(WARN, "record_mgr_guard set tenant id error", KR(ret), K_(tenant_id));
-    } else if (OB_ISNULL(record_mgr = record_mgr_guard_.get_trans_audit_record_mgr())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "failed to get trans audit record manager");
-    } else {
-      ObTransAuditRecord* tmp_rec = NULL;
-      while (retry_times--) {
-        if (OB_FAIL(record_mgr->get_empty_record(tmp_rec))) {
-          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            TRANS_LOG(WARN, "get empty audit record failed", KR(ret));
-          }
-        } else if (OB_FAIL(tmp_rec->init(this))) {
-          TRANS_LOG(WARN, "set trans ctx in audit record failed", KR(ret));
-          int tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = record_mgr->revert_record(tmp_rec))) {
-            TRANS_LOG(WARN, "record_mgr revert audit record failed", K(tmp_ret));
-            ret = tmp_ret;
-            // if fail to revert, error is returned and the trans starts unsuccessfully
-            need_alloc = false;
-            break;
-          }
-        } else {
-          trans_audit_record_ = tmp_rec;
-          tmp_tlog = trans_audit_record_->get_trace_log();
-          break;  // success
-        }
-      }
-    }
   }
   // If fail to get recod but revert successfully, trace log needs to be allocated dynamically
   if (OB_FAIL(ret) && need_alloc) {

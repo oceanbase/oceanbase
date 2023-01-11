@@ -173,10 +173,6 @@ public:
       const common::ObVersion& freeze_version, const KillTransArg& arg, ObEndTransCallbackArray& cb_array)
       : arg_(arg), cb_array_(cb_array), freeze_version_(freeze_version)
   {}
-  void set_release_audit_mgr_lock(const bool release_audit_mgr_lock)
-  {
-    release_audit_mgr_lock_ = release_audit_mgr_lock;
-  }
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
   {
     int ret = OB_SUCCESS;
@@ -193,14 +189,6 @@ public:
       } else {
         TRANS_LOG(WARN, "kill transaction error", "ret", ret, K(trans_id), "context", *ctx_base);
       }
-
-      // explicitly release audit mgr lock
-      if (release_audit_mgr_lock_) {
-        if (OB_SUCCESS != (tmp_ret = ctx_base->reset_trans_audit_record())) {
-          TRANS_LOG(WARN, "reset trans audot record failed", KR(tmp_ret));
-        }
-        // ctx_base->get_record_mgr_guard().destroy();
-      }
     }
 
     return OB_SUCCESS == ret;
@@ -210,7 +198,6 @@ private:
   KillTransArg arg_;
   ObEndTransCallbackArray& cb_array_;
   ObVersion freeze_version_;
-  bool release_audit_mgr_lock_;
 };
 
 class StopPartitionFunctor {

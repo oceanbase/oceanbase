@@ -686,7 +686,6 @@ int ObPartitionTransCtxMgr::stop(const bool graceful)
 
       if (OB_SUCC(ret)) {
         KillTransCtxFunctor fn(arg, cb_array);
-        fn.set_release_audit_mgr_lock(true);
         if (OB_FAIL(ctx_map_mgr_.foreach_ctx(fn))) {
           TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
         }

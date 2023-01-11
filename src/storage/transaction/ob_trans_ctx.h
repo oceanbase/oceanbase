@@ -143,24 +143,6 @@ public:
 class ObTransCtx : public TransCtxHashValue
 {
   friend class CtxLock;
-
-protected:
-  class TransAuditRecordMgrGuard {
-  public:
-    TransAuditRecordMgrGuard() : with_tenant_ctx_(NULL){};
-    ~TransAuditRecordMgrGuard()
-    {
-      destroy();
-    }
-    int set_tenant_id(uint64_t tenant_id);
-    void destroy();
-    ObTransAuditRecordMgr* get_trans_audit_record_mgr();
-
-  private:
-    share::ObTenantSpaceFetcher* with_tenant_ctx_;
-    char buf_[sizeof(share::ObTenantSpaceFetcher)];
-  };
-
 public:
   ObTransCtx(const char* ctx_type_str = "unknow", const int64_t ctx_type = ObTransCtxType::UNKNOWN)
       : magic_number_(UNKNOWN_RESET_CTX_MAGIC_NUM),
@@ -369,10 +351,6 @@ public:
   {
     return ctx_type_;
   }
-  TransAuditRecordMgrGuard& get_record_mgr_guard()
-  {
-    return record_mgr_guard_;
-  }
   int reset_trans_audit_record();
 
 public:
@@ -524,7 +502,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTransCtx);
 
 protected:
-  TransAuditRecordMgrGuard record_mgr_guard_;
   int64_t magic_number_;
   const char* const ctx_type_str_;
   int64_t ctx_type_;

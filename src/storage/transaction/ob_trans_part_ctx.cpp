@@ -778,19 +778,8 @@ int ObPartTransCtx::start_task(const ObTransDesc& trans_desc, const int64_t snap
     }
   }
 
-  const ObStmtDesc& stmt_desc = trans_desc.get_cur_stmt_desc();
-  if (OB_NOT_NULL(trans_audit_record_)) {
-    const int64_t proxy_receive_sql_us = 0;  // stmt_desc.get_proxy_receive_us();
-    const int64_t server_receive_sql_us = stmt_desc.cur_query_start_time_;
-    (void)trans_audit_record_->set_start_stmt_info(sql_no,
-        stmt_desc.phy_plan_type_,
-        stmt_desc.trace_id_adaptor_,
-        proxy_receive_sql_us,
-        server_receive_sql_us,
-        trans_receive_sql_us);
-  }
-
   if (is_sp_trans_() || is_mini_sp_trans_()) {
+    const ObStmtDesc& stmt_desc = trans_desc.get_cur_stmt_desc();
     REC_TRANS_TRACE_EXT(tlog_,
         start_task,
         OB_ID(ret),
@@ -1020,11 +1009,6 @@ int ObPartTransCtx::end_task_(
         prepare_changing_leader_state_ = CHANGING_LEADER_STATE::LOGGING_NOT_FINISH;
       }
     }
-  }
-
-  if (OB_NOT_NULL(trans_audit_record_)) {
-    const int64_t trans_execute_sql_us = ObTimeUtility::fast_current_time();
-    (void)trans_audit_record_->set_end_stmt_info(sql_no, trans_execute_sql_us, get_lock_for_read_retry_count());
   }
 
   REC_TRANS_TRACE_EXT(tlog_, end_task, OB_ID(ret), ret, OB_ID(is_rollback), is_rollback, OB_ID(uref), get_uref());
