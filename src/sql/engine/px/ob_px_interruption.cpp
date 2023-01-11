@@ -150,7 +150,7 @@ int ObInterruptUtil::interrupt_qc(ObPxTask& task, int code)
   if (OB_ISNULL(manager)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(manager->interrupt(task.get_qc_addr(), interrupt_id, int_code))) {
-    LOG_ERROR("fail send interrupt signal to qc", "addr", task.get_qc_addr(), K(int_code), K(orig_int_code), K(ret));
+    LOG_WARN("fail send interrupt signal to qc", "addr", task.get_qc_addr(), K(int_code), K(orig_int_code), K(ret));
   } else {
     LOG_TRACE("task notify qc to interrupt",
         "qc_addr",
