@@ -356,7 +356,7 @@ int ObKVGlobalCache::alloc(ObIKVCacheStore<MBWrapper>& store, const int64_t cach
 }
 
 int ObKVGlobalCache::get(
-    const int64_t cache_id, const ObIKVCacheKey& key, const ObIKVCacheValue*& pvalue, ObKVMemBlockHandle*& mb_handle)
+    const int64_t cache_id, const ObIKVCacheKey& key, const ObIKVCacheValue*& pvalue, ObKVMemBlockHandle*& mb_handle, int64_t &get_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -364,13 +364,23 @@ int ObKVGlobalCache::get(
     COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ", K(ret));
   } else {
     revert(mb_handle);
-    if (OB_FAIL(map_.get(cache_id, key, pvalue, mb_handle))) {
+    if (OB_FAIL(map_.get(cache_id, key, pvalue, mb_handle, get_cnt))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         COMMON_LOG(WARN, "fail to get value from map, ", K(ret));
       }
     }
   }
   return ret;
+}
+
+int ObKVGlobalCache::get(
+  const int64_t cache_id,
+  const ObIKVCacheKey &key,
+  const ObIKVCacheValue *&pvalue,
+  ObKVMemBlockHandle *&mb_handle)
+{
+  int64_t get_cnt = 0;
+  return ObKVGlobalCache::get(cache_id, key, pvalue, mb_handle, get_cnt);
 }
 
 int ObKVGlobalCache::erase(const int64_t cache_id, const ObIKVCacheKey& key)

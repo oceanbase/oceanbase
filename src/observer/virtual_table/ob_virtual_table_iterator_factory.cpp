@@ -176,6 +176,7 @@
 #include "observer/virtual_table/ob_all_virtual_reserved_table_mgr.h"
 #include "observer/virtual_table/ob_all_virtual_dag_warning_history.h"
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
+#include "observer/virtual_table/ob_all_virtual_kv_hotkey_stat.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/table/ob_virtual_table_ctx.h"
@@ -2335,6 +2336,20 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam& params, ObVirtualTableIte
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator*>(trans_table_status);
               }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_KV_HOTKEY_STAT_TID: {
+            ObAllVirtualKvHotKeyStat* hotkey_stat = NULL;
+            uint64_t real_tenant_id = session->get_effective_tenant_id();
+            omt::ObTenantConfigGuard tenant_config(TENANT_CONF(real_tenant_id));
+            if (tenant_config->kv_hotkey_throttle_threshold == 0) {
+              ret = OB_INVALID_ARGUMENT;
+              SERVER_LOG(ERROR, "throttle service is closed", K(ret));
+            } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualKvHotKeyStat, hotkey_stat))) {
+              SERVER_LOG(ERROR, "ObVirtual open hotkey stat table failed", K(ret));
+            } else {
+              OX(vt_iter = static_cast<ObAllVirtualKvHotKeyStat*>(hotkey_stat));
             }
             break;
           }

@@ -201,7 +201,7 @@ int ObKVCacheMap::put(ObKVCacheInst& inst, const ObIKVCacheKey& key, const ObKVC
 }
 
 int ObKVCacheMap::get(
-    const int64_t cache_id, const ObIKVCacheKey& key, const ObIKVCacheValue*& pvalue, ObKVMemBlockHandle*& out_handle)
+    const int64_t cache_id, const ObIKVCacheKey& key, const ObIKVCacheValue*& pvalue, ObKVMemBlockHandle*& out_handle, int64_t &get_cnt)
 {
   int ret = OB_SUCCESS;
 
@@ -250,7 +250,7 @@ int ObKVCacheMap::get(
             }
             out_handle->get_cnt_++;
             out_handle->recent_get_cnt_++;
-            iter->get_cnt_++;
+            get_cnt = ++iter->get_cnt_;
           }
         } else {
           ret = OB_ENTRY_NOT_EXIST;
@@ -303,6 +303,13 @@ int ObKVCacheMap::get(
   }
 
   return ret;
+}
+
+int ObKVCacheMap::get(
+    const int64_t cache_id, const ObIKVCacheKey& key, const ObIKVCacheValue*& pvalue, ObKVMemBlockHandle*& out_handle)
+{
+  int64_t get_cnt = 0;
+  return ObKVCacheMap::get(cache_id, key, pvalue, out_handle, get_cnt);
 }
 
 int ObKVCacheMap::erase(ObKVCacheInst& inst, const ObIKVCacheKey& key)

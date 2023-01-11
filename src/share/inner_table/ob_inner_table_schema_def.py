@@ -10289,6 +10289,29 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
 )
 
+def_table_schema(
+  table_name = '__all_virtual_kv_hotkey_stat',
+  table_id = '12367',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns     = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('database_id', 'int'),
+    ('partition_id', 'int'),
+    ('table_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('hotkey', 'varchar:2048'),
+    ('hotkey_type', 'varchar:32'),
+  ],
+  normal_columns = [
+    ('hotkey_freq', 'int'),
+    ('throttle_percent', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+)
+
 ################################################################################
 # Oracle Virtual Table(15000,20000]
 ################################################################################
@@ -14873,6 +14896,48 @@ def_table_schema(
       a.ret_code as RET_CODE
       FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'GV$OB_KV_HOTKEY_STAT',
+  table_id        = '21367',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """
+  select
+    tenant_id as TENANT_ID,
+    database_id as DATABASE_ID,
+    partition_id as PARTITION_ID,
+    table_id as TABLE_ID,
+    svr_ip as SVR_IP,
+    svr_port as SVR_PORT,
+    hotkey as HOTKEY,
+    hotkey_type as HOTKEY_TYPE,
+    hotkey_freq as HOTKEY_FREQ,
+    throttle_percent AS THROTTLE_PERCENT
+  from oceanbase.__all_virtual_kv_hotkey_stat
+  where is_serving_tenant(svr_ip, svr_port, effective_tenant_id()) and (tenant_id = effective_tenant_id() or effective_tenant_id() = 1)
+  order by HOTKEY_FREQ desc, THROTTLE_PERCENT desc
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'V$OB_KV_HOTKEY_STAT',
+  table_id        = '21368',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """
+  SELECT * FROM oceanbase.GV$OB_KV_HOTKEY_STAT
+        WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " ")
 )
 

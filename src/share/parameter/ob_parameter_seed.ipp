@@ -1589,3 +1589,9 @@ DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
     "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE)); 
 
+// obkv throttle
+DEF_INT_WITH_CHECKER(kv_hotkey_throttle_threshold, OB_TENANT_PARAMETER, "0",
+    common::ObConfigKvHotkeyThresholdChecker,
+    "OBKV hotkey throttle threshold. The hotkey throttle function is disabled when this threshold is 0;"
+    "when this threshold is greater than 0, a row key will be considered to be throttled as the visits of this key are greater than the hotkey throttle threshold in the previous epoch.",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

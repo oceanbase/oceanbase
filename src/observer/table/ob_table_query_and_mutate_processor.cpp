@@ -20,6 +20,11 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
 #include "ob_htable_utils.h"
+#include "ob_table_hotkey_kvcache.h"
+#include "ob_table_throttle.h"
+#include "ob_table_throttle_manager.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
+
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -202,6 +207,7 @@ int ObTableQueryAndMutateP::try_process()
   int64_t affected_rows = 0;
   const ObTableOperation &mutation = mutations.at(0);
   bool is_index_supported = true;
+  HotKeyType hotkey_type = HotKeyType::TABLE_HOTKEY_INVALID;
   if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
   } else if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
@@ -217,6 +223,10 @@ int ObTableQueryAndMutateP::try_process()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("should have one partition", K(ret), K(part_ids));
   } else if (FALSE_IT(query_ctx_.param_partition_id() = part_ids.at(0))) {
+  } else if (OB_FAIL(ObTableHotKeyThrottle::get_instance().check_need_reject_query(allocator_, credential_.tenant_id_, table_id, query, arg_.entity_type_))) {
+    if (OB_KILLED_BY_THROTTLING != ret) {
+      LOG_WARN("failed to check throttle in query", K(ret), K(table_id), K(query));
+    }
   } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_UPDATE, table_id, part_ids,
                                  get_timeout_ts()))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
@@ -236,6 +246,7 @@ int ObTableQueryAndMutateP::try_process()
       switch (mutation.type()) {
         case ObTableOperationType::DEL:  // checkAndDelete
           stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_DELETE;
+          hotkey_type = HotKeyType::TABLE_HOTKEY_DELETE;
           if (one_result->get_row_count() > 0) {  // not empty result means check passed
             affected_rows = 1;
             int64_t deleted_cells = 0;
@@ -251,6 +262,7 @@ int ObTableQueryAndMutateP::try_process()
           break;
         case ObTableOperationType::INSERT_OR_UPDATE:  // checkAndPut
           stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_PUT;
+          hotkey_type = HotKeyType::TABLE_HOTKEY_INSERT;
           if (one_result->get_row_count() > 0) { // not empty result means check passed
             affected_rows = 1;
             int64_t put_rows = 0;
@@ -269,6 +281,7 @@ int ObTableQueryAndMutateP::try_process()
           break;
         case ObTableOperationType::INCREMENT:         // Increment
           stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_INCREMENT;
+          hotkey_type = HotKeyType::TABLE_HOTKEY_UPDATE;
           if (one_result->get_row_count() > 0) {  // not empty result means check passed
             affected_rows = 1;
             ObHTableIncrementExecutor inc_executor(ObTableOperationType::INCREMENT,
@@ -292,6 +305,7 @@ int ObTableQueryAndMutateP::try_process()
           break;
         case ObTableOperationType::APPEND:             // Append
           stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_APPEND;
+          hotkey_type = HotKeyType::TABLE_HOTKEY_UPDATE;
           if (one_result->get_row_count() > 0) {  // not empty result means check passed
             affected_rows = 1;
             ObHTableIncrementExecutor apd_executor(ObTableOperationType::APPEND,
@@ -341,6 +355,12 @@ int ObTableQueryAndMutateP::try_process()
 
   // record events
   audit_row_count_ = 1;
+
+  // hotkey stat
+  if (OB_SUCC(ret) && OB_FAIL(ObTableHotKeyMgr::get_instance().set_query_req_stat_common(allocator_, query, arg_.entity_type_, hotkey_type,
+                                                                                         credential_.tenant_id_, table_id, part_ids.at(0), result_.affected_rows_))) {
+    LOG_WARN("fail to do query request stat", K(query), K(ret));
+  }
 
 #ifndef NDEBUG
   // debug mode

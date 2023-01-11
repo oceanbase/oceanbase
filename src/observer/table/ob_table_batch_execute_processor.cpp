@@ -20,6 +20,9 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
 #include "ob_htable_utils.h"
+#include "ob_table_throttle.h"
+#include "ob_table_hotkey_kvcache.h"
+#include "ob_table_throttle_manager.h"
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -163,7 +166,12 @@ int ObTableBatchExecuteP::try_process()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("index type is not supported by table api", K(ret));
   } else {
-    if (batch_operation.is_readonly()) {
+    if (OB_FAIL(ObTableHotKeyThrottle::get_instance().check_need_reject_batch_req(allocator_, batch_operation, credential_.tenant_id_,
+                                                                                  table_id, arg_.entity_type_))) {
+      if (OB_KILLED_BY_THROTTLING != ret) {
+        LOG_WARN("fail to check need reject batch request", K(batch_operation), K(ret));
+      }
+    } else if (batch_operation.is_readonly()) {
       if (batch_operation.is_same_properties_names()) {
         stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_GET;
         ret = multi_get();
@@ -231,6 +239,12 @@ int ObTableBatchExecuteP::try_process()
 
   // record events
   audit_row_count_ = arg_.batch_operation_.count();
+
+  // stat record for hotkey throttle
+  if (OB_SUCC(ret) && OB_FAIL(ObTableHotKeyMgr::get_instance().set_batch_req_stat(allocator_, batch_operation, result_, arg_.entity_type_,
+                                                                                  credential_.tenant_id_, table_id, arg_.partition_id_))) {
+    LOG_WARN("fail to set batch request stat", K(arg_.entity_type_), K(ret));
+  }
 
 #ifndef NDEBUG
   // debug mode

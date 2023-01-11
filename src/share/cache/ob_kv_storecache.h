@@ -58,6 +58,7 @@ public:
   virtual int put_and_fetch(const Key& key, const Value& value, const Value*& pvalue, ObKVCacheHandle& handle,
       bool overwrite = true) override;
   virtual int get(const Key& key, const Value*& pvalue, ObKVCacheHandle& handle) override;
+  virtual int get(const Key &key, const Value *&pvalue, ObKVCacheHandle &handle, int64_t &get_cnt);
   int get_iterator(ObKVCacheIterator& iter);
   virtual int erase(const Key& key) override;
   virtual int alloc(const uint64_t tenant_id, const int64_t key_size, const int64_t value_size, ObKVCachePair*& kvpair,
@@ -172,6 +173,9 @@ private:
       ObKVCacheInstHandle& inst_handle);
   int get(
       const int64_t cache_id, const ObIKVCacheKey& key, const ObIKVCacheValue*& pvalue, ObKVMemBlockHandle*& mb_handle);
+  int get(
+      const int64_t cache_id, const ObIKVCacheKey& key, const ObIKVCacheValue*& pvalue,
+      ObKVMemBlockHandle*& mb_handle, int64_t &get_cnt);
   int erase(const int64_t cache_id, const ObIKVCacheKey& key);
   void revert(ObKVMemBlockHandle* mb_handle);
   void wash();
@@ -504,6 +508,13 @@ int ObKVCache<Key, Value>::put_and_fetch(
 template <class Key, class Value>
 int ObKVCache<Key, Value>::get(const Key& key, const Value*& pvalue, ObKVCacheHandle& handle)
 {
+  int64_t get_cnt;
+  return ObKVCache<Key, Value>::get(key, pvalue, handle, get_cnt);
+}
+
+template <class Key, class Value>
+int ObKVCache<Key, Value>::get(const Key &key, const Value *&pvalue, ObKVCacheHandle &handle, int64_t &get_cnt)
+{
   int ret = OB_SUCCESS;
   const ObIKVCacheValue* value = NULL;
   if (OB_UNLIKELY(!inited_)) {
@@ -511,7 +522,7 @@ int ObKVCache<Key, Value>::get(const Key& key, const Value*& pvalue, ObKVCacheHa
     COMMON_LOG(WARN, "The ObKVCache has not been inited, ", K(ret));
   } else {
     handle.reset();
-    if (OB_FAIL(ObKVGlobalCache::get_instance().get(cache_id_, key, value, handle.mb_handle_))) {
+    if (OB_FAIL(ObKVGlobalCache::get_instance().get(cache_id_, key, value, handle.mb_handle_, get_cnt))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         COMMON_LOG(WARN, "Fail to get value from ObKVGlobalCache, ", K(ret));
       }

@@ -19,6 +19,10 @@
 #include "sql/optimizer/ob_table_location.h"  // ObTableLocation
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
+#include "ob_table_throttle.h"
+#include "ob_table_hotkey_kvcache.h"
+#include "ob_table_throttle_manager.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -147,6 +151,10 @@ int ObTableQueryP::try_process()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("should have one partition", K(ret), K(part_ids));
   } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
+  } else if (OB_FAIL(ObTableHotKeyThrottle::get_instance().check_need_reject_query(allocator_, credential_.tenant_id_, table_id, arg_.query_, arg_.entity_type_))) {
+    if (OB_KILLED_BY_THROTTLING != ret) {
+      LOG_WARN("failed to check throttle in query", K(ret), K(table_id), K(arg_.query_));
+    }
   } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, part_ids, timeout_ts))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(table_service_->execute_query(table_service_ctx_, arg_.query_,
@@ -209,6 +217,12 @@ int ObTableQueryP::try_process()
     stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
   }
   audit_row_count_ = result_row_count_;
+
+  // hotkey stat
+  if (OB_SUCC(ret) && OB_FAIL(ObTableHotKeyMgr::get_instance().set_query_req_stat(allocator_, arg_.query_, arg_.entity_type_,
+                                                                                  credential_.tenant_id_, table_id, part_ids.at(0)))) {
+    LOG_WARN("fail to do query request stat", K(arg_.query_), K(ret));
+  }
 
 #ifndef NDEBUG
   // debug mode

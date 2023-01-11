@@ -428,6 +428,19 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigLogDiskSizeChecker);
 };
 
+class ObConfigKvHotkeyThresholdChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigKvHotkeyThresholdChecker() {}
+  virtual ~ObConfigKvHotkeyThresholdChecker() {};
+  bool check(const ObConfigItem &t) const;
+  static constexpr int64_t MAX_THROTTLE_THRESHOLD = 1000000000000000000L;
+  static constexpr int64_t MIN_THROTTLE_THRESHOLD = 0;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigKvHotkeyThresholdChecker);
+};
+
 // config item container
 class ObConfigStringKey {
 public:

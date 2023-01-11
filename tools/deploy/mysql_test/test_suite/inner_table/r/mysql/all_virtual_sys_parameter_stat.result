@@ -134,6 +134,7 @@ index_cache_priority
 index_clog_cache_priority
 index_info_block_cache_priority
 internal_sql_execute_timeout
+kv_hotkey_throttle_threshold
 kv_ttl_duty_duration
 kv_ttl_history_recycle_interval
 large_query_threshold

@@ -37,6 +37,8 @@ public:
       bool overwrite = true);
   int get(const int64_t cache_id, const ObIKVCacheKey& key, const ObIKVCacheValue*& pvalue,
       ObKVMemBlockHandle*& out_handle);
+  int get(const int64_t cache_id, const ObIKVCacheKey& key, const ObIKVCacheValue*& pvalue,
+    ObKVMemBlockHandle*& out_handle, int64_t &get_cnt);
   int erase(ObKVCacheInst& inst, const ObIKVCacheKey& key);
 
 private:

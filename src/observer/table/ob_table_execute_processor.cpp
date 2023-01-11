@@ -18,6 +18,9 @@
 #include "ob_table_end_trans_cb.h"
 #include "sql/optimizer/ob_table_location.h"  // ObTableLocation
 #include "lib/stat/ob_session_stat.h"
+#include "ob_table_hotkey_kvcache.h"
+#include "ob_table_throttle.h"
+#include "ob_table_throttle_manager.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -115,6 +118,7 @@ int ObTableApiExecuteP::try_process()
   uint64_t table_id = arg_.table_id_;
   bool is_index_supported = true;
   const ObTableOperation &table_operation = arg_.table_operation_;
+
   if (ObTableOperationType::GET != table_operation.type()) {
     if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
       LOG_WARN("failed to get table id", K(ret));
@@ -128,6 +132,11 @@ int ObTableApiExecuteP::try_process()
   } else if (OB_UNLIKELY(!is_index_supported)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("index type is not supported by table api", K(ret));
+  } else if (OB_FAIL(ObTableHotKeyThrottle::get_instance().check_need_reject_req(allocator_, credential_.tenant_id_, table_id,
+                                                                                 const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey(), arg_.entity_type_))) {
+    if (OB_KILLED_BY_THROTTLING != ret) {
+      LOG_WARN("failed to check throttle", K(ret), K(table_id), K(const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey()));
+    }
   } else {
     switch (table_operation.type()) {
       case ObTableOperationType::INSERT:
@@ -169,6 +178,12 @@ int ObTableApiExecuteP::try_process()
         break;
     }
     audit_row_count_ = 1;
+  }
+
+  // hotkey stat
+  if (OB_SUCC(ret) && OB_FAIL(ObTableHotKeyMgr::get_instance().set_req_stat(allocator_, const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey(),
+                                                                            arg_.table_operation_.type(), credential_.tenant_id_, table_id, arg_.partition_id_))) {
+    LOG_WARN("fail to do hotkey request stat", K(const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey()), K(ret));
   }
 
 #ifndef NDEBUG

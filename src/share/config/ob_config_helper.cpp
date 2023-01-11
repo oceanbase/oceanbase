@@ -546,5 +546,16 @@ bool ObConfigBoolParser::get(const char* str, bool& valid)
   return value;
 }
 
+bool ObConfigKvHotkeyThresholdChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.str(), is_valid);
+  if (is_valid) {
+    is_valid = ((value >= MIN_THROTTLE_THRESHOLD &&
+                 value <= MAX_THROTTLE_THRESHOLD));
+  }
+  return is_valid;
+}
+
 }  // namespace common
 }  // end of namespace oceanbase

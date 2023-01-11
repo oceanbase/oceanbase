@@ -23,6 +23,9 @@
 #include "lib/string/ob_strings.h"
 #include "lib/rc/ob_rc.h"
 #include "observer/table/ob_htable_filter_operator.h"
+#include "ob_table_throttle.h"
+#include "ob_table_hotkey_kvcache.h"
+#include "ob_table_throttle_manager.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -516,6 +519,10 @@ int ObTableQuerySyncP::query_scan_with_init()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("should have one partition", K(ret), K(part_ids));
   } else if (FALSE_IT(table_service_ctx_->param_partition_id() = part_ids.at(0))) {
+  } else if (OB_FAIL(ObTableHotKeyThrottle::get_instance().check_need_reject_query(allocator_, credential_.tenant_id_, table_id, arg_.query_, arg_.entity_type_))) {
+    if (OB_KILLED_BY_THROTTLING != ret) {
+      LOG_WARN("failed to check throttle in query", K(ret), K(table_id), K(arg_.query_));
+    }
   } else if (OB_FAIL(
                  start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, part_ids, timeout_ts_))) {
     LOG_WARN("failed to start readonly transaction", K(ret));

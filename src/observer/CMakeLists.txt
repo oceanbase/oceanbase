@@ -249,9 +249,11 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_all_virtual_backupset_history_mgr.cpp
   virtual_table/ob_all_virtual_backup_clean_info.h
   virtual_table/ob_all_virtual_backup_clean_info.cpp
+  virtual_table/ob_all_virtual_kv_hotkey_stat.cpp
 )
 
 ob_set_subtarget(ob_server table
+  table/ob_table_utils.cpp
   table/ob_table_batch_execute_processor.cpp		
   table/ob_table_end_trans_cb.cpp		
   table/ob_table_execute_processor.cpp		
@@ -269,6 +271,11 @@ ob_set_subtarget(ob_server table
   table/ob_table_query_sync_processor.cpp
   table/ob_table_ttl_manager.cpp
   table/ob_table_ttl_task.cpp
+  table/ob_table_hotkey_kvcache.cpp
+  table/ob_table_hotkey.cpp
+  table/ob_table_throttle.cpp
+  table/ob_table_throttle_manager.cpp
+  table/ob_table_virtual_table_mgr.cpp
 )
 
 set_source_files_properties(table/htable_filter_lex.cxx PROPERTIES COMPILE_FLAGS -Wno-null-conversion)
