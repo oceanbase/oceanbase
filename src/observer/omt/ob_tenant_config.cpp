@@ -125,7 +125,7 @@ int ObTenantConfig::read_config()
   ObAddr server;
   char local_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
-  DRWLock::WRLockGuard guard(lock_);
+  DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
   server = GCTX.self_addr();
   if (OB_UNLIKELY(true != server.ip_to_string(local_ip, sizeof(local_ip)))) {
     ret = OB_CONVERT_ERROR;
@@ -380,7 +380,7 @@ int ObTenantConfig::add_extra_config(const char *config_str,
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
     DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
-    DRWLock::WRLockGuard guard(lock_);
+    DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
     token = STRTOK_R(buf, ",\n", &saveptr);
     while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {
       char *saveptr_one = NULL;
@@ -461,7 +461,7 @@ OB_DEF_SERIALIZE(ObTenantConfig)
 OB_DEF_DESERIALIZE(ObTenantConfig)
 {
   int ret = OB_SUCCESS;
-  DRWLock::WRLockGuard guard(lock_);
+  DRWLock::WRLockGuardRetryTimeout guard(lock_, LOCK_TIMEOUT);
   if ('[' != *(buf + pos)) {
     ret = OB_INVALID_DATA;
     LOG_ERROR("invalid tenant config", K(ret));

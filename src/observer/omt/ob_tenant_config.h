@@ -63,7 +63,7 @@ public:
     volatile int64_t running_task_count_;
   };
   friend class TenantConfigUpdateTask;
-
+  static const int64_t LOCK_TIMEOUT = 1 * 1000 * 1000;
 public:
   ObTenantConfig();
   ObTenantConfig(uint64_t tenant_id);
