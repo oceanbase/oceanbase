@@ -903,7 +903,6 @@ const uint64_t OB_MAX_LS_INNER_TABLE_ID       = 49500;
 // (49500, 49999) for cte, cte table opens up a separate id space, which does not conflict with other id
 const uint64_t OB_MIN_CTE_TABLE_ID            = 49500;
 const uint64_t OB_MAX_CTE_TABLE_ID            = 49999;
-const uint64_t OB_MIN_CTE_COLUMN_ID           = 0;
 // (50000, 60000) for inner lob meta table
 // (60000, 70000) for inner lob piece table
 const uint64_t OB_MIN_SYS_LOB_META_TABLE_ID   = 50000;

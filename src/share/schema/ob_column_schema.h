@@ -200,7 +200,7 @@ public:
   inline uint64_t get_sequence_id() const { return sequence_id_; }
   inline int64_t get_encoding_type() const { return encoding_type_; }
 
-  inline int64_t get_cte_generate_column_projector_offset() const { return get_column_id();}
+  inline int64_t get_cte_generate_column_projector_offset() const { return get_column_id() - common::OB_APP_MIN_COLUMN_ID;}
   // true: primary key/hidden primary key(pk_increment/cluster_id/parition_id)/partitioned key of no-pk tables
   inline bool is_rowkey_column() const { return rowkey_position_ > 0; }
   // true: primary key/hidden primary key(pk_increment/cluster_id/parition_id)

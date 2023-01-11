@@ -2380,7 +2380,7 @@ public:
   inline void set_database_name(const common::ObString &db_name) { database_name_ = db_name; }
   inline const common::ObString &get_database_name() const { return database_name_; }
   inline common::ObString &get_database_name() { return database_name_; }
-  inline int64_t get_cte_generate_column_projector_offset() const { return get_column_id(); }
+  inline int64_t get_cte_generate_column_projector_offset() const { return get_column_id() - common::OB_APP_MIN_COLUMN_ID; }
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;

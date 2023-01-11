@@ -1530,7 +1530,7 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
     {
       const ObRawExpr* raw_expr = cycle_items.at(i).expr_;
       if (raw_expr->is_column_ref_expr()) {
-        uint64_t index = cycle_items.at(i).column_id_;
+        uint64_t index = cycle_items.at(i).column_id_ - OB_APP_MIN_COLUMN_ID;
         if (OB_FAIL(spec.cycle_by_col_lists_.push_back(index))) {
           LOG_WARN("Failed to add cycle by order", K(ret));
         }

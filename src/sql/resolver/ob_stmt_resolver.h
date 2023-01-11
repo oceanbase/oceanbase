@@ -103,7 +103,7 @@ public:
     return ret_cid;
   }
   inline uint64_t generate_cte_table_id() { return params_.new_cte_tid_++;}
-  inline uint64_t generate_cte_column_base_id() { return common::OB_MIN_CTE_COLUMN_ID;}
+  inline uint64_t generate_cte_column_base_id() { return common::OB_APP_MIN_COLUMN_ID;}
   template<class T>
   T *create_stmt()
   {
