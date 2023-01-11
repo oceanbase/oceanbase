@@ -1409,8 +1409,8 @@ int ObDDLRedefinitionTask::get_estimated_timeout(const ObTableSchema *dst_table_
     LOG_WARN("get all tablet and object ids failed", K(ret));
   } else {
     estimated_timeout = tablet_ids.count() * dst_table_schema->get_column_count() * 1000L; // 1ms for each column
-    estimated_timeout = max(estimated_timeout, 9 * 1000 * 1000);
-    estimated_timeout = min(estimated_timeout, 3600 * 1000 * 1000);
+    estimated_timeout = max(estimated_timeout, 9 * 1000 * 1000L);
+    estimated_timeout = min(estimated_timeout, 3600 * 1000 * 1000L);
     estimated_timeout = max(estimated_timeout, GCONF.rpc_timeout);
     LOG_INFO("get estimate timeout", K(estimated_timeout));
   }
