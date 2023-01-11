@@ -257,6 +257,17 @@ public:
   }
 
   static int negate_htable_timestamp(table::ObITableEntity &entity);
+  static void replace_ret_code(int &ret)
+  {
+    if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret
+        || OB_BAD_NULL_ERROR == ret
+        || OB_OBJ_TYPE_ERROR == ret
+        || OB_ERR_COLLATION_MISMATCH == ret
+        || OB_ERR_DATA_TOO_LONG == ret
+        || OB_DATA_OUT_OF_RANGE == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableRpcProcessorUtil);

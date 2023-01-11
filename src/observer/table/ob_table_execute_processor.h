@@ -17,6 +17,12 @@
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
 #include "ob_table_service.h"
+#include "ob_table_context.h"
+#include "ob_table_executor.h"
+#include "ob_table_cache.h"
+#include "sql/plan_cache/ob_cache_object_factory.h"
+#include "sql/plan_cache/ob_plan_cache.h"
+#include "ob_table_op_wrapper.h"
 
 namespace oceanbase
 {
@@ -42,23 +48,19 @@ protected:
   virtual uint64_t get_request_checksum() override;
 
 private:
+  int init_tb_ctx();
   int check_arg2() const;
-  int revert_get_ctx();
   int get_tablet_id(uint64_t table_id, const ObRowkey &rowkey, common::ObTabletID &tablet_id);
+  template<int TYPE>
+  int process_dml_op();
   int process_get();
-  int process_insert();
-  int process_del();
-  int process_update();
-  int process_insert_or_update();
-  int process_replace();
-  int process_increment();
 private:
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;
   common::ObArenaAllocator allocator_;
+  table::ObTableCtx tb_ctx_;
+  table::ObTableApiCacheGuard cache_guard_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
-  // the life of scan_ctx_ should be longer than process()
-  ObTableServiceGetCtx get_ctx_;
   bool need_rollback_trans_;
   int64_t query_timeout_ts_;
 };

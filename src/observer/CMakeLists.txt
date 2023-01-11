@@ -125,7 +125,6 @@ ob_set_subtarget(ob_server table
   table/ob_htable_filter_parser.cpp
   table/ob_htable_filters.cpp
   table/ob_htable_utils.cpp
-  table/ob_table_api_row_iterator.cpp
   table/ob_table_batch_execute_processor.cpp
   table/ob_table_end_trans_cb.cpp
   table/ob_table_execute_processor.cpp
@@ -134,6 +133,21 @@ ob_set_subtarget(ob_server table
   table/ob_table_rpc_processor.cpp
   table/ob_table_query_sync_processor.cpp
   table/ob_table_service.cpp
+  table/ob_table_context.cpp
+  table/ob_table_executor.cpp
+  table/ob_table_delete_executor.cpp
+  table/ob_table_insert_executor.cpp
+  table/ob_table_insert_up_executor.cpp
+  table/ob_table_lock_executor.cpp
+  table/ob_table_modify_executor.cpp
+  table/ob_table_replace_executor.cpp
+  table/ob_table_scan_executor.cpp
+  table/ob_table_update_executor.cpp
+  table/ob_table_executor_factory.cpp
+  table/ob_table_cg_service.cpp
+  table/ob_table_cache.cpp
+  table/ob_table_session_pool.cpp
+  table/ob_table_op_wrapper.cpp
 )
 
 ob_set_subtarget(ob_server virtual_table

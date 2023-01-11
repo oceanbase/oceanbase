@@ -101,9 +101,9 @@ void TestHFilterParser::do_parse(const char *filter_cstr, std::ofstream &of_resu
 
 TEST_F(TestHFilterParser, basic_test)
 {
-  const char* test_file = "./hfilter_parser.test";
-  const char* result_file = "./hfilter_parser.result";
-  const char* tmp_file = "./hfilter_parser.tmp";
+  const char* test_file = "./table/hfilter_parser.test";
+  const char* result_file = "./table/hfilter_parser.result";
+  const char* tmp_file = "./table/hfilter_parser.tmp";
   // run tests
   std::ifstream if_tests(test_file);
   ASSERT_TRUE(if_tests.is_open());

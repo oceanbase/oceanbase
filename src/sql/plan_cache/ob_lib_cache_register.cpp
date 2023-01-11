@@ -17,6 +17,7 @@
 #include "sql/plan_cache/ob_pcv_set.h"
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
+#include "observer/table/ob_table_cache.h"
 
 #define USING_LOG_PREFIX SQL_PC
 

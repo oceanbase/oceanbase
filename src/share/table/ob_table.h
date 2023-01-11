@@ -60,7 +60,7 @@ public:
   virtual int add_rowkey_value(const ObObj &value) = 0;
   virtual int64_t get_rowkey_size() const = 0;
   virtual int get_rowkey_value(int64_t idx, ObObj &value) const = 0;
-  virtual ObRowkey get_rowkey() = 0;
+  virtual ObRowkey get_rowkey() const = 0;
   virtual int64_t hash_rowkey() const = 0;
   //@}
   //@{ property is a key-value pair.
@@ -114,18 +114,16 @@ public:
   virtual int get_properties_names(ObIArray<ObString> &properties_names) const override;
   virtual int get_properties_values(ObIArray<ObObj> &properties_values) const override;
   virtual int64_t get_properties_count() const override;
-  virtual void reset() override { rowkey_.reset(); properties_.clear(); }
-  virtual ObRowkey get_rowkey() override;
+  virtual void reset() override;
+  virtual ObRowkey get_rowkey() const override;
+  const ObIArray<ObString> &get_properties_names() const { return properties_names_; }
+  const ObIArray<ObObj> &get_properties_values() const { return properties_values_; }
+  const ObSEArray<ObObj, 8> &get_rowkey_objs() const { return rowkey_; };
   DECLARE_TO_STRING;
 private:
-  int try_init();
-  class GetPropertyFn;
-  class GetPropertyNameFn;
-  class GetPropertyValueFn;
-  typedef common::hash::ObHashMap<ObString, ObObj, common::hash::NoPthreadDefendMode> PropertiesMap;
-private:
   ObSEArray<ObObj, 8> rowkey_;
-  PropertiesMap properties_;
+  ObSEArray<ObString, 8> properties_names_;
+  ObSEArray<ObObj, 8> properties_values_;
 };
 
 enum class ObTableEntityType
@@ -214,8 +212,8 @@ void ObTableEntityFactory<T>::free_all()
   }
 }
 
-enum class ObQueryOperationType : int { 
-  QUERY_START = 0, 
+enum class ObQueryOperationType : int {
+  QUERY_START = 0,
   QUERY_NEXT = 1,
   QUERY_MAX
 };
@@ -232,7 +230,9 @@ struct ObTableOperationType
     INSERT_OR_UPDATE = 4,
     REPLACE = 5,
     INCREMENT = 6,
-    APPEND = 7
+    APPEND = 7,
+    SCAN = 8,
+    INVALID = 15
   };
 };
 
@@ -341,6 +341,12 @@ public:
   void set_errno(int err) { errno_ = err; }
   int get_errno() const { return errno_; }
   int assign(const ObTableResult &other);
+  void reset()
+  {
+    errno_ = common::OB_ERR_UNEXPECTED;
+    sqlstate_[0] = '\0';
+    msg_[0] = '\0';
+  }
   TO_STRING_KV(K_(errno));
 private:
   static const int64_t MAX_MSG_SIZE = common::OB_MAX_ERROR_MSG_LEN;
@@ -357,7 +363,7 @@ class ObTableOperationResult final: public ObTableResult
 public:
   ObTableOperationResult();
   ~ObTableOperationResult() = default;
-
+  void reset();
   ObTableOperationType::Type type() const { return operation_type_; }
   int get_entity(const ObITableEntity *&entity) const;
   int get_entity(ObITableEntity *&entity);
@@ -378,10 +384,10 @@ private:
 class ObIRetryPolicy
 {
 public:
-  virtual bool need_retry(int32_t curr_retry_count, int last_errno, int64_t &retry_interval) 
+  virtual bool need_retry(int32_t curr_retry_count, int last_errno, int64_t &retry_interval)
   {
     UNUSEDx(curr_retry_count, last_errno, retry_interval);
-    return false; 
+    return false;
   }
 };
 
@@ -592,6 +598,7 @@ public:
   const ObString &get_filter() const { return filter_string_; }
   void clear_columns() { select_column_qualifier_.reset(); }
   uint64_t get_checksum() const;
+  int deep_copy(ObIAllocator &allocator, ObHTableFilter &dst) const;
 
   TO_STRING_KV(K_(is_valid),
                "column_qualifier", select_column_qualifier_,
@@ -676,6 +683,7 @@ public:
 
   void clear_scan_range() { key_ranges_.reset(); }
   void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_allocator_ = allocator; }
+  int deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const;
   TO_STRING_KV(K_(key_ranges),
                K_(select_columns),
                K_(filter_string),
@@ -764,6 +772,7 @@ public:
   void rewind();
   virtual int get_next_entity(const ObITableEntity *&entity) override;
   int add_property_name(const ObString &name);
+  void reset_property_names() { properties_names_.reset(); }
   int add_row(const common::ObNewRow &row);
   int add_all_property(const ObTableQueryResult &other);
   int add_all_row(const ObTableQueryResult &other);
@@ -807,7 +816,7 @@ class ObTableQuerySyncResult: public ObTableQueryResult
 public:
   ObTableQuerySyncResult()
     : is_end_(false),
-      query_session_id_(0) 
+      query_session_id_(0)
   {}
   virtual ~ObTableQuerySyncResult() {}
 public:
@@ -815,6 +824,28 @@ public:
   uint64_t  query_session_id_; // from server gen
 };
 
+struct ObTableApiCredential final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableApiCredential();
+  ~ObTableApiCredential();
+public:
+  int64_t cluster_id_;
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  uint64_t database_id_;
+  int64_t expire_ts_;
+  uint64_t hash_val_;
+public:
+  uint64_t hash(uint64_t seed = 0) const;
+  TO_STRING_KV(K_(cluster_id),
+               K_(tenant_id),
+               K_(user_id),
+               K_(database_id),
+               K_(expire_ts),
+               K_(hash_val));
+};
 
 } // end namespace table
 } // end namespace oceanbase

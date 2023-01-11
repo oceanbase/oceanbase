@@ -51,7 +51,7 @@ public:
     virtual int add_rowkey_value(const ObObj &value) override;
     virtual int64_t get_rowkey_size() const override { return 3; }
     virtual int get_rowkey_value(int64_t idx, ObObj &value) const override;
-    virtual ObRowkey get_rowkey() override;
+    virtual ObRowkey get_rowkey() const override;
     virtual int64_t hash_rowkey() const override;
     virtual int get_property(const ObString &prop_name, ObObj &prop_value) const override;
     virtual int set_property(const ObString &prop_name, const ObObj &prop_value) override;

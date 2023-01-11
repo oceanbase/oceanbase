@@ -17,6 +17,8 @@ LIB_CACHE_OBJ_DEF(NS_SFC, "SFC", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLF
 LIB_CACHE_OBJ_DEF(NS_ANON, "ANON", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // anonymous cache
 LIB_CACHE_OBJ_DEF(NS_TRGR, "TRGR", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)   // trigger cache
 LIB_CACHE_OBJ_DEF(NS_PKG, "PKG", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)    // package cache
+LIB_CACHE_OBJ_DEF(NS_TABLEAPI, "TABLEAPI", table::ObTableApiCacheKey, table::ObTableApiCacheNode, table::ObTableApiCacheObj, "OB_TABLEAPI_OBJ")    // tableapi cache
+
 #endif /*LIB_CACHE_OBJ_DEF*/
 
 #ifndef OCEANBASE_SQL_PLAN_CACHE_OB_LIB_CACHE_REGISTER_

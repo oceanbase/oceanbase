@@ -17,6 +17,13 @@
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
 #include "ob_table_service.h"
+#include "ob_table_context.h"
+#include "ob_table_scan_executor.h"
+#include "ob_table_update_executor.h"
+#include "ob_table_insert_executor.h"
+#include "ob_table_cache.h"
+#include "ob_table_op_wrapper.h"
+
 
 namespace oceanbase
 {
@@ -39,18 +46,45 @@ protected:
   virtual uint64_t get_request_checksum() override;
 
 private:
+  typedef std::pair<common::ObString, int32_t> ColumnIdx;
+  class ColumnIdxComparator;
+  int sort_qualifier(common::ObIArray<ColumnIdx> &columns,
+                     const table::ObTableBatchOperation &increment);
+  int init_scan_tb_ctx();
+  int init_tb_ctx(table::ObTableCtx &ctx,
+                  table::ObTableOperationType::Type op_type,
+                  const table::ObITableEntity &entity);
+  int refresh_query_range(const ObObj &new_q_obj);
+  int generate_new_value(const ObNewRow *old_row,
+                         const table::ObITableEntity &src_entity,
+                         bool is_increment,
+                         table::ObTableEntity &new_entity);
+  int add_to_results(const ObObj &rk,
+                     const ObObj &cq,
+                     const ObObj &ts,
+                     const ObObj &value);
+  int get_old_row(ObNewRow *&row);
+  int execute_htable_delete();
+  int execute_htable_put();
+  int execute_htable_increment();
+  int execute_htable_insert(const table::ObITableEntity &new_entity);
+  int execute_htable_put(const table::ObITableEntity &new_entity);
+  int generate_query_result(table::ObTableApiScanRowIterator &row_iter,
+                            table::ObTableQueryResultIterator *&result_iter);
   int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
   int check_rowkey_and_generate_mutations(
       ObTableQueryResult &one_row,
       ObTableBatchOperation *&mutations);
-  // rewrite htable query to avoid lock too much rows for update 
+  // rewrite htable query to avoid lock too much rows for update
   int rewrite_htable_query_if_need(const ObTableOperation &mutaion, ObTableQuery &query);
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAndMutateP);
 private:
   common::ObArenaAllocator allocator_;
+  table::ObTableCtx tb_ctx_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
-  ObTableServiceQueryCtx query_ctx_;
+
   table::ObTableQueryResult one_result_;
+  table::ObTableApiCacheGuard cache_guard_;
 };
 } // end namespace observer
 } // end namespace oceanbase

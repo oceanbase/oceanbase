@@ -943,6 +943,19 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
   return ret;
 }
 
+int ObDMLService::update_row(const ObDASUpdCtDef &ctdef,
+                             ObDASUpdRtDef &rtdef,
+                             const ObDASTabletLoc *tablet_loc,
+                             ObDMLRtCtx &dml_rtctx,
+                             const ExprFixedArray &full_row)
+{
+  return write_row_to_das_op<DAS_OP_TABLE_UPDATE>(ctdef,
+                                                  rtdef,
+                                                  tablet_loc,
+                                                  dml_rtctx,
+                                                  full_row);
+}
+
 int ObDMLService::delete_row(const ObDASDelCtDef &das_del_ctdef,
                              ObDASDelRtDef &das_del_rtdef,
                              const ObDASTabletLoc *tablet_loc,

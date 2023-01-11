@@ -96,6 +96,11 @@ public:
                         ObDelRtDef &del_rtdef,
                         const ObDASTabletLoc *tablet_loc,
                         ObDMLRtCtx &dml_rtctx);
+  static int update_row(const ObDASUpdCtDef &ctdef,
+                        ObDASUpdRtDef &rtdef,
+                        const ObDASTabletLoc *tablet_loc,
+                        ObDMLRtCtx &dml_rtctx,
+                        const ExprFixedArray &full_row);
   static int update_row(const ObUpdCtDef &upd_ctdef,
                         ObUpdRtDef &upd_rtdef,
                         const ObDASTabletLoc *old_tablet_loc,

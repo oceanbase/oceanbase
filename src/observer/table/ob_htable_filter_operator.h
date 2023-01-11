@@ -20,6 +20,7 @@
 #include "ob_htable_utils.h"
 #include "ob_htable_filter_parser.h"
 #include "ob_htable_filters.h"
+#include "ob_table_scan_executor.h"
 #include <utility>
 
 namespace oceanbase
@@ -185,7 +186,7 @@ public:
   virtual int get_next_result(ObTableQueryResult *&one_row) override;
 
   int seek(const ObHTableCell &key);
-  void set_scan_result(common::ObNewRowIterator *scan_result) { child_op_ = scan_result; }
+  void set_scan_result(table::ObTableApiScanRowIterator *scan_result) { child_op_ = scan_result; }
   bool has_more_result() const { return has_more_cells_; }
   void set_hfilter(table::hfilter::Filter *hfilter);
   void set_ttl(int32_t ttl_value);
@@ -199,7 +200,7 @@ private:
   bool reach_batch_limit() const;
   bool reach_size_limit() const;
 private:
-  common::ObNewRowIterator *child_op_;
+  table::ObTableApiScanRowIterator *child_op_;
   const table::ObHTableFilter &htable_filter_;
   table::hfilter::Filter *hfilter_;
   int32_t limit_per_row_per_cf_;
@@ -232,7 +233,7 @@ public:
   /// Fetch next batch result
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
   virtual bool has_more_result() const override { return row_iterator_.has_more_result(); }
-  void set_scan_result(common::ObNewRowIterator *scan_result) { row_iterator_.set_scan_result(scan_result); }
+  void set_scan_result(table::ObTableApiScanRowIterator *scan_result) { row_iterator_.set_scan_result(scan_result); }
   void set_ttl(int32_t ttl_value) { row_iterator_.set_ttl(ttl_value); }
   // parse the filter string
   int parse_filter_string(common::ObArenaAllocator* allocator);
