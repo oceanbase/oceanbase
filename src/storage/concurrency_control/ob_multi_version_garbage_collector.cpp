@@ -560,10 +560,17 @@ void ObMultiVersionGarbageCollector::decide_reserved_snapshot_version_(
   } else if (reserved_snapshot < global_reserved_snapshot_) {
     if ((global_reserved_snapshot_.get_val_for_tx() -
          reserved_snapshot.get_val_for_tx()) / 1000 > 30 * 1_min) {
-      // We ignore the reserved snapshot with too late snapshot and report
-      // error to maintain normal processes
-      MVCC_LOG(ERROR, "update a too smaller reserved snapshot", K(ret), KPC(this),
-               K(global_reserved_snapshot_), K(reserved_snapshot));
+      // We ignore the reserved snapshot with too late snapshot and report WARN
+      // because there may be servers offline and online suddenly and report a
+      // stale txn version. And we report error for a too too old snapshot.
+      if ((global_reserved_snapshot_.get_val_for_tx() -
+           reserved_snapshot.get_val_for_tx()) / 1000 > 100 * 1_min) {
+        MVCC_LOG(ERROR, "update a too too smaller reserved snapshot!!!", K(ret), KPC(this),
+                 K(global_reserved_snapshot_), K(reserved_snapshot));
+      } else {
+        MVCC_LOG(WARN, "update a too too smaller reserved snapshot!", K(ret), KPC(this),
+                 K(global_reserved_snapshot_), K(reserved_snapshot));
+      }
     } else {
       MVCC_LOG(WARN, "update a smaller reserved snapshot", K(ret), KPC(this),
                K(global_reserved_snapshot_), K(reserved_snapshot));
@@ -879,9 +886,10 @@ int ObMultiVersionGarbageCollector::reclaim()
               if (OB_TMP_FAIL(share::ObAllServerTracer::get_instance().check_server_alive(addr, is_alive))) {
                 MVCC_LOG(WARN, "check all server tracer failed", K(tmp_ret));
               } else if (is_alive) {
-                // Case 1.1: server is alive, we report the error for not renewing.
-                //           monitor should asserts the exception
-                MVCC_LOG(ERROR, "server alives while not renew for a long time", K(create_time),
+                // Case 1.1: server is alive, we report the WARN for not
+                //           renewing. because there may be tenant transfer out
+                //           which cause it will not be reclaimed forever
+                MVCC_LOG(WARN, "server alives while not renew for a long time", K(create_time),
                          K(current_timestamp), K(addr), K(snapshot_type), K(snapshot_version));
                 need_reclaim = true;
               } else {
@@ -1160,10 +1168,16 @@ int ObMultiVersionGCSnapshotCalculator::operator()(const share::SCN snapshot_ver
         current_ts - create_time > 2 * ObMultiVersionGarbageCollector::GARBAGE_COLLECT_RECLAIM_DURATION &&
         // for mock or test that change GARBAGE_COLLECT_EXEC_INTERVAL to a small value
         current_ts - create_time > 2 * 3 * 10_min) {
-      // we report error here because we may relay on the reclaim strategy of
-      // garbage collector to reclaim the data of died machine
-      MVCC_LOG(ERROR, "ignore too old version", K(snapshot_version),
-               K(snapshot_type), K(current_ts), K(create_time), K(addr));
+      if (REACH_COUNT_INTERVAL(10L)) {
+        // we report error here for long time warning
+        MVCC_LOG(ERROR, "ignore too old version too long", K(snapshot_version),
+                 K(snapshot_type), K(current_ts), K(create_time), K(addr));
+      } else {
+        // we report WARN here because there may be servers offline and online
+        // suddenly and report a stale txn
+        MVCC_LOG(WARN, "ignore too old version", K(snapshot_version),
+                 K(snapshot_type), K(current_ts), K(create_time), K(addr));
+      }
     } else {
       reserved_snapshot_version_ = snapshot_version;
       reserved_snapshot_type_ = snapshot_type;
