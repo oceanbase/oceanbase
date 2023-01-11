@@ -26,8 +26,8 @@ namespace sql
  *    it is replaced when visit ObQueryRefRawExpr;
  * 3. the replaced expr and its children will be skipped when traverse the expr tree, for example
  *    with replace rule [{c1 -> c1+c2+1}, {c2 -> c1+c2+2}]
- *    select c1, c2 from t1 will be transfromed into select c1+c2+1, c1+c2+2 from t1
- *    In constrast, ObTransformUtils::replace_expr will return OB_SIZE_OVERFLOW unexpectedly;
+ *    select c1, c2 from t1 will be transformed into select c1+c2+1, c1+c2+2 from t1
+ *    In contrast, ObTransformUtils::replace_expr will return OB_SIZE_OVERFLOW unexpectedly;
  */
 class ObRawExprReplacer: public ObRawExprVisitor
 {
@@ -87,7 +87,7 @@ private:
   hash::ObHashMap<uint64_t, uint64_t> expr_replace_map_;
 
   bool replace_happened_;
-   //If true, skip param epxrs which are resolved as flags instead of exprs in mysql.
+   //If true, skip param exprs which are resolved as flags instead of exprs in mysql.
    //(e.g. the second param of IS expr)
   bool skip_bool_param_mysql_;
 };

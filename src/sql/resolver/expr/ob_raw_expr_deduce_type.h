@@ -110,7 +110,7 @@ private:
   int add_implicit_cast_for_op_row(ObRawExpr *&child_ptr,
                                    const common::ObIArray<ObExprResType> &input_types,
                                    const ObCastMode &cast_mode);
-  // try add cast expr on subquery stmt's oubput && update column types.
+  // try add cast expr on subquery stmt's output && update column types.
   int add_implicit_cast_for_subquery(ObQueryRefRawExpr &expr,
                                      const common::ObIArray<ObExprResType> &input_types,
                                      const ObCastMode &cast_mode);
