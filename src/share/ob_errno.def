@@ -2147,7 +2147,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_SEC_COLUMN_TYPE, -9739, -1, "HY000", "Column 
 DEFINE_ORACLE_ERROR(OB_ERR_UNPROTECTED_VIRTUAL_COLUMN, -9740, -1, "HY000", "A protected base column was referenced in an unprotected virtual column expression", 28125, "A protected base column was referenced in an unprotected virtual column expression");
 DEFINE_ORACLE_ERROR(OB_ERR_ATTRIBUTE_ASSOCIATION, -9741, -1, "HY000", "Attribute association failed for policy %.*s", 28126, "Attribute association failed for policy %.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_MERGE_INTO_WITH_POLICY, -9742, -1, "HY000", "The MERGE INTO syntax does not support the security policy", 28132, "The MERGE INTO syntax does not support the security policy");
-
+DEFINE_ERROR_EXT(OB_ERR_SP_NO_DROP_SP, -9743, ER_SP_NO_DROP_SP, "HY000", "Can't drop or alter a procedure/function from within another stored routine.", "Can't drop or alter a '%s' from within another stored routine.");
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

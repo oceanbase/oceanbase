@@ -23361,6 +23361,18 @@ static const _error _error_OB_ERR_MERGE_INTO_WITH_POLICY = {
       .oracle_str_error      = "ORA-28132: The MERGE INTO syntax does not support the security policy",
       .oracle_str_user_error = "ORA-28132: The MERGE INTO syntax does not support the security policy"
 };
+static const _error _error_OB_ERR_SP_NO_DROP_SP = {
+      .error_name            = "OB_ERR_SP_NO_DROP_SP",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_SP_NO_DROP_SP,
+      .sqlstate              = "HY000",
+      .str_error             = "Can't drop or alter a procedure/function from within another stored routine.",
+      .str_user_error        = "Can't drop or alter a '%s' from within another stored routine.",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9743, Can't drop or alter a procedure/function from within another stored routine.",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9743, Can't drop or alter a '%s' from within another stored routine."
+};
 static const _error _error_OB_SP_RAISE_APPLICATION_ERROR = {
       .error_name            = "OB_SP_RAISE_APPLICATION_ERROR",
       .error_cause           = "Internal Error",
@@ -25397,6 +25409,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_UNPROTECTED_VIRTUAL_COLUMN] = &_error_OB_ERR_UNPROTECTED_VIRTUAL_COLUMN;
     _errors[-OB_ERR_ATTRIBUTE_ASSOCIATION] = &_error_OB_ERR_ATTRIBUTE_ASSOCIATION;
     _errors[-OB_ERR_MERGE_INTO_WITH_POLICY] = &_error_OB_ERR_MERGE_INTO_WITH_POLICY;
+    _errors[-OB_ERR_SP_NO_DROP_SP] = &_error_OB_ERR_SP_NO_DROP_SP;
     _errors[-OB_SP_RAISE_APPLICATION_ERROR] = &_error_OB_SP_RAISE_APPLICATION_ERROR;
     _errors[-OB_SP_RAISE_APPLICATION_ERROR_NUM] = &_error_OB_SP_RAISE_APPLICATION_ERROR_NUM;
     _errors[-OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN] = &_error_OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN;
