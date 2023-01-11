@@ -4932,6 +4932,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
   int32_t length = type_node.int32_values_[0];
   int16_t precision = type_node.int16_values_[0];
   int16_t scale = type_node.int16_values_[1];
+  uint64_t tenant_id = MTL_ID();
   const int16_t number_type = type_node.int16_values_[2];
   const bool has_specify_scale = (1 == type_node.int16_values_[2]);
 
@@ -5243,10 +5244,13 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       data_type.set_charset_type(CHARSET_UTF8MB4);
       data_type.set_collation_type(CS_TYPE_UTF8MB4_BIN); // ToDo: oracle, allow utf16
       break;
-    case ObGeometryTC:
-      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
+    case ObGeometryTC: {
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_1_0_0) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create geometry column before cluster min version 4.1");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, geometry type");
       } else {
         data_type.set_length(length);
         data_type.set_scale(default_accuracy.get_scale());
@@ -5254,6 +5258,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         data_type.set_collation_type(CS_TYPE_BINARY);
       }
       break;
+    }
     case ObBitTC:
       if (precision < 0) {
         ret = OB_ERR_UNEXPECTED;
