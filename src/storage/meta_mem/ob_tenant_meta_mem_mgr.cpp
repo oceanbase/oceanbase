@@ -205,11 +205,14 @@ void ObTenantMetaMemMgr::wait()
 
 void ObTenantMetaMemMgr::destroy()
 {
+  int ret = OB_SUCCESS;
+  bool is_all_clean = false;
   tablet_map_.destroy();
-  bucket_lock_.destroy();
-  allocator_.reset();
   last_min_minor_sstable_set_.destroy();
   pinned_tablet_set_.destroy();
+  while (!is_all_clean && OB_SUCC(gc_tables_in_queue(is_all_clean)));
+  bucket_lock_.destroy();
+  allocator_.reset();
   timer_.destroy();
   for (int64_t i = 0; i <= ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE; i++) {
     pool_arr_[i] = nullptr;

@@ -160,6 +160,7 @@ namespace detector
   MTL_LIST(                                          \
       common::ObTenantIOManager*,                    \
       storage::ObStorageLogger*,                     \
+      blocksstable::ObSharedMacroBlockMgr*,          \
       storage::ObTenantMetaMemMgr*,                  \
       transaction::ObTransService*,                  \
       logservice::coordinator::ObLeaderCoordinator*, \
@@ -202,7 +203,6 @@ namespace detector
       sql::ObDataAccessService*,                     \
       sql::ObDASIDService*,                          \
       share::schema::ObTenantSchemaService*,         \
-      blocksstable::ObSharedMacroBlockMgr*,          \
       storage::ObTenantFreezer*,                     \
       storage::checkpoint::ObCheckPointService *,    \
       storage::checkpoint::ObTabletGCService *,      \
