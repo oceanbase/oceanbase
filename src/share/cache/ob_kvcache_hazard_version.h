@@ -37,7 +37,7 @@ private:
 };
 
 
-class KVCacheHazardThreadStore {  
+class KVCacheHazardThreadStore {
 public:
   KVCacheHazardThreadStore();
   ~KVCacheHazardThreadStore();
@@ -55,8 +55,8 @@ public:
   int delete_node(KVCacheHazardNode &node);  // Put node in delete_list and set its version
 
   // Local retire: Retire nodes in delete_list whose version is less than version and send rest nodes to node_receiver
-  void retire(const uint64_t version);  
-  TO_STRING_KV(K(thread_id_), K(inited_), K(last_retire_version_), KP(delete_list_), K(waiting_nodes_count_), K(acquired_version_));
+  void retire(const uint64_t version);
+  TO_STRING_KV(K_(thread_id), K_(inited), K_(last_retire_version), KP_(delete_list), K_(waiting_nodes_count), K_(acquired_version));
 
 private:
   void add_nodes(KVCacheHazardNode &list);
@@ -82,13 +82,15 @@ public:
   void release();  // Thread finish access process, release protected version.
   int retire();  // Global retire, call retire() of every thread store
   int get_thread_store(KVCacheHazardThreadStore *&ts);
-  int print_current_status() const ;
+  int print_current_status() const;
 
 private:
   static void deregister_thread(void *d_ts);
   int get_min_version(uint64_t &min_version) const ;
-  
+
 private:
+  static const int64_t MAX_PRINT_COUNT = 1000;
+
   uint64_t version_;  // current global version
   int64_t thread_waiting_node_threshold_;
   lib::ObMutex thread_store_lock_;
@@ -96,7 +98,6 @@ private:
   ObConcurrentFIFOAllocator thread_store_allocator_;
   pthread_key_t ts_key_;  // pthread_key for getting local KVCacheHazardThreadStore*
   bool inited_;
-
 };
 
 class GlobalHazardVersionGuard final
