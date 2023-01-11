@@ -734,7 +734,7 @@ void ObLogReplayService::process_replay_ret_code_(const int ret_code,
     if (replay_status.is_fatal_error(ret_code)) {
       replay_status.set_err_info(replay_task.lsn_, replay_task.scn_, replay_task.log_type_,
                                  replay_task.replay_hint_, false, cur_ts, ret_code);
-      CLOG_LOG(ERROR, "replay task encount fatal error", K(replay_status), K(replay_task), K(ret_code));
+      CLOG_LOG(ERROR, "replay task encountered fatal error", K(replay_status), K(replay_task), K(ret_code));
     } else {/*do nothing*/}
 
     if (OB_SUCCESS == task_queue.get_err_info_ret_code()) {
@@ -757,7 +757,7 @@ int ObLogReplayService::pre_check_(ObReplayStatus &replay_status,
     if (OB_UNLIKELY(replay_status.has_fatal_error() || task.has_fatal_error())) {
       //encounted fatal error last round,set OB_EAGAIN here
       if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-        CLOG_LOG(ERROR, "replay has encount fatal error", K(replay_status), K(task), K(ret));
+        CLOG_LOG(ERROR, "ReplayService has encountered a fatal error", K(replay_status), K(task), K(ret));
       }
       //set egain just to push back into thread_pool
       ret = OB_EAGAIN;
