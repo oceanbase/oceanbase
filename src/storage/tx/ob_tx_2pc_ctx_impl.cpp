@@ -65,16 +65,6 @@ int ObPartTransCtx::restart_2pc_trans_timer_()
   return ret;
 }
 
-int ObPartTransCtx::do_prepare_redo()
-{
-  int ret = OB_SUCCESS;
-  if (sub_state_.is_force_abort()) {
-    ret = OB_TRANS_NEED_ROLLBACK;
-    TRANS_LOG(WARN, "tx was marked force abort", K(ret));
-  }
-  return ret;
-}
-
 /*
  * If no_need_submit_log is true, it will not submit prepare log after do_prepare.
  * XA and dup_table will submit commit info log in do_prepare and drive to submit prepare log after the conditions are met.
@@ -84,11 +74,8 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
 {
   int ret = OB_SUCCESS;
   no_need_submit_log = false;
-  if (sub_state_.is_force_abort()) {
-    // txn has marked force_abort, prepare should fail
-    ret = OB_TRANS_NEED_ROLLBACK;
-    TRANS_LOG(WARN, "tx was marked force_abort", K(ret));
-  } else if (exec_info_.is_dup_tx_ || OB_SUCC(search_unsubmitted_dup_table_redo_())) {
+
+  if (exec_info_.is_dup_tx_ || OB_SUCC(search_unsubmitted_dup_table_redo_())) {
     no_need_submit_log = true;
     if (OB_FAIL(dup_table_tx_redo_sync_())) {
       TRANS_LOG(WARN, "dup table tx  redo sync failed", K(ret));

@@ -2019,7 +2019,8 @@ int ObPartTransCtx::try_submit_next_log_(const bool for_freeze)
 {
   int ret = OB_SUCCESS;
   ObTxLogType log_type = ObTxLogType::UNKNOWN;
-  if (ObPartTransAction::COMMIT == part_trans_action_ && !is_2pc_logging_() && !is_in_2pc_()) {
+  if (ObPartTransAction::COMMIT == part_trans_action_ && !is_2pc_logging_() && !is_in_2pc_()
+      && !sub_state_.is_force_abort()) {
     if (is_follower_()) {
       ret = OB_NOT_MASTER;
     } else {
@@ -4589,7 +4590,9 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
       } else {
         TRANS_LOG(WARN, "txn data incomplete, will be aborted", K(contain_table_lock), KPC(this));
         if (has_persisted_log_()) {
-          sub_state_.set_force_abort();
+          if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
+            TRANS_LOG(WARN, "abort tx failed", KR(ret), K(*this));
+          }
         } else {
           TRANS_LOG(ERROR, "unexpected trx which has not persisted log", K(*this));
         }
@@ -4762,9 +4765,7 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
   } else if (is_exiting_) {
     // do nothing
   } else if (sub_state_.is_force_abort()) {
-    if (exec_info_.state_ == ObTxState::INIT && OB_FAIL(mt_ctx_.commit_to_replay())) {
-      TRANS_LOG(WARN, "commit to replay error", KR(ret), "context", *this);
-    }
+    // is aborting, skip
   } else if (is_follower_()) {
     TRANS_LOG(INFO, "current tx already follower", K(*this));
   } else if (OB_FAIL(state_helper.switch_state(TxCtxOps::SWITCH_GRACEFUL))) {
@@ -5569,10 +5570,7 @@ int ObPartTransCtx::sub_prepare(const ObLSArray &parts,
     exec_info_.trans_type_ = TransType::DIST_TRANS;
     exec_info_.xid_ = xid;
     // (void)set_sub2pc_coord_state(Ob2PCPrepareState::REDO_PREPARING);
-    if (sub_state_.is_force_abort()) {
-      TRANS_LOG(WARN, "tx was marked force abort");
-      ret = OB_TRANS_KILLED;
-    } else if (OB_FAIL(prepare_redo())) {
+    if (OB_FAIL(prepare_redo())) {
       TRANS_LOG(WARN, "fail to execute sub prepare", K(ret), KPC(this));
     } else {
       part_trans_action_ = ObPartTransAction::COMMIT;
@@ -5804,7 +5802,7 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
     ret = OB_TRANS_SQL_SEQUENCE_ILLEGAL;
   } else if (op_sn > last_op_sn_ && last_scn_ <= to_scn) {
     last_op_sn_ = op_sn;
-    TRANS_LOG(INFO, "rollback succeed trivially", K(op_sn), K(to_scn), K_(last_scn), KP(this), K_(ls_id));
+    TRANS_LOG(INFO, "rollback succeed trivially", K(op_sn), K(to_scn), K_(last_scn));
   } else if (op_sn > last_op_sn_ && pending_write_ > 0) {
     ret = OB_NEED_RETRY;
     TRANS_LOG(WARN, "has pending write, rollback blocked",
@@ -6039,13 +6037,7 @@ int ObPartTransCtx::do_local_tx_end_(TxEndAction tx_end_action)
 
     switch (tx_end_action) {
     case TxEndAction::COMMIT_TX: {
-      if (sub_state_.is_force_abort()) {
-        if (OB_SUCC(do_local_abort_tx_())) {
-          ret = OB_TRANS_KILLED;
-        }
-      } else {
-        ret = do_local_commit_tx_();
-      }
+      ret = do_local_commit_tx_();
       // part_trans_action_ will be set as commit in ObPartTransCtx::commit function
       break;
     }

@@ -107,17 +107,6 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_redo_request_impl_()
     TRANS_LOG(WARN, "unexpected operation", K(ret), K(*this));
   } else if (is_2pc_logging()) {
     TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
-  } else if (OB_FAIL(do_prepare_redo())) {
-    TRANS_LOG(WARN, "do prepare redo fail", K(ret));
-    if (OB_FAIL(drive_self_2pc_phase(ObTxState::ABORT))) {
-      TRANS_LOG(WARN, "drive self abort fail", KR(tmp_ret), KPC(this));
-    }
-    if (is_internal() && OB_TMP_FAIL(post_downstream_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_REQ))) {
-      TRANS_LOG(WARN, "post downstream abort msg failed", KR(tmp_ret), KPC(this));
-    }
-    if (OB_TMP_FAIL(post_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_RESP, OB_C2PC_UPSTREAM_ID))) {
-      TRANS_LOG(WARN, "post upstream abort resp msg failed", KR(tmp_ret), KPC(this));
-    }
   } else if (OB_TMP_FAIL(submit_log(ObTwoPhaseCommitLogType::OB_LOG_TX_COMMIT_INFO))) {
     if (OB_BLOCK_FROZEN == tmp_ret) {
       // memtable is freezing, can not submit log right now.

@@ -40,14 +40,6 @@ int ObTxCycleTwoPhaseCommitter::two_phase_commit()
     TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
   } else if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
     TRANS_LOG(WARN, "enter prepare phase failed", K(ret), K(*this));
-    if (OB_TRANS_NEED_ROLLBACK == ret) {
-      if (OB_FAIL(drive_self_2pc_phase(ObTxState::ABORT))) {
-        TRANS_LOG(WARN, "enter abort phase failed", K(ret), K(*this));
-      } else if (OB_TMP_FAIL(post_downstream_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_REQ))) {
-        TRANS_LOG(WARN, "post prepare requests failed", K(tmp_ret));
-      }
-      ret = OB_TRANS_KILLED;
-    }
   } else {
     if (OB_TMP_FAIL(post_downstream_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ))) {
       TRANS_LOG(WARN, "post prepare requests failed", K(tmp_ret));

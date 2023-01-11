@@ -619,7 +619,6 @@ protected:
 
   // Caller need ensuere the participants array has already been set and the
   // size of the participants array is larger or equal than one.
-  virtual int do_prepare_redo();
   virtual int do_prepare(bool &no_need_submit_log) override;
   virtual int on_prepare() override;
   virtual int do_pre_commit(bool &need_wait) override;
