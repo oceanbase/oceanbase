@@ -300,7 +300,7 @@ void ObBasicSessionInfo::clean_status()
   set_valid(true);
   thread_data_.cur_query_start_time_ = 0;
   thread_data_.cur_query_len_ = 0;
-  thread_data_.last_active_time_ = 0;
+  thread_data_.last_active_time_ = ObTimeUtility::current_time();
   reset_session_changed_info();
 }
 
