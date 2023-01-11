@@ -405,9 +405,20 @@ public:
   static int strcmp(const ObCollationType collation_type,
                     const ObString &l_str,
                     const ObString &r_str);
+  //these interface is not safe:
   //when invoke this, if ObString a = "134";  this func will core; so avoid passing src as a style
+  //if collation type is gb18030, this func will die
+  //**Please** use toupper and tolower instead of casedn and caseup
   static size_t casedn(const ObCollationType collation_type, ObString &src);
   static size_t caseup(const ObCollationType collation_type, ObString &src);
+
+  static int toupper(const ObCollationType collation_type,
+                     const ObString &src, ObString &dst,
+                     ObIAllocator &allocator);
+  static int tolower(const ObCollationType collation_type,
+                     const ObString &src, ObString &dst,
+                     ObIAllocator &allocator);
+
   static bool case_insensitive_equal(const ObString &one,
                                      const ObString &another,
                                      const ObCollationType &collation_type = CS_TYPE_UTF8MB4_GENERAL_CI);

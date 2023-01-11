@@ -2336,6 +2336,74 @@ size_t ObCharset::caseup(const ObCollationType collation_type, ObString &src)
   return size;
 }
 
+int ObCharset::toupper(const ObCollationType collation_type,
+                       const ObString &src, ObString &dst,
+                       ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const ObCharsetInfo *cs_info = NULL;
+  if (OB_ISNULL(cs_info = get_charset(collation_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid collation type", K(ret), K(collation_type));
+  } else {
+    int casemulti = cs_info->caseup_multiply;
+    if (1 == casemulti) {
+      if (OB_FAIL(ob_write_string(allocator, src, dst))) {
+        LOG_WARN("fail to copy string", K(ret), K(src));
+      } else {
+        size_t size = cs_info->cset->caseup(cs_info, dst.ptr(), dst.length(), dst.ptr(), dst.length());
+        dst.assign_ptr(dst.ptr(), static_cast<ObString::obstr_size_t>(size));
+      }
+    } else {
+      char *buf = NULL;
+      int64_t buf_len = src.length() * casemulti;
+      if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", K(ret));
+      } else {
+        size_t size = cs_info->cset->caseup(cs_info, const_cast<char*>(src.ptr()), src.length(), buf, buf_len);
+        dst.assign_ptr(buf, static_cast<ObString::obstr_size_t>(size));
+      }
+    }
+  }
+  return ret;
+}
+
+
+int ObCharset::tolower(const ObCollationType collation_type,
+                       const ObString &src, ObString &dst,
+                       ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const ObCharsetInfo *cs_info = NULL;
+  if (OB_ISNULL(cs_info = get_charset(collation_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid collation type", K(ret), K(collation_type));
+  } else {
+    int casemulti = cs_info->casedn_multiply;
+    if (1 == casemulti) {
+      if (OB_FAIL(ob_write_string(allocator, src, dst))) {
+        LOG_WARN("fail to copy string", K(ret), K(src));
+      } else {
+        size_t size = cs_info->cset->casedn(cs_info, dst.ptr(), dst.length(), dst.ptr(), dst.length());
+        dst.assign_ptr(dst.ptr(), static_cast<ObString::obstr_size_t>(size));
+      }
+    } else {
+      char *buf = NULL;
+      int64_t buf_len = src.length() * casemulti;
+      if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", K(ret));
+      } else {
+        size_t size = cs_info->cset->casedn(cs_info, const_cast<char*>(src.ptr()), src.length(), buf, buf_len);
+        dst.assign_ptr(buf, static_cast<ObString::obstr_size_t>(size));
+      }
+    }
+  }
+  return ret;
+}
+
+
 bool ObCharset::case_insensitive_equal(const ObString &one,
                                        const ObString &another,
                                        const ObCollationType &collation_type) {
