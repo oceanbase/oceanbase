@@ -391,7 +391,7 @@ private:
   void dec_running_task_cnt() { --running_task_cnt_; }
   int inner_add_child_without_inheritance(ObIDag &child);
 private:
-  common::ObConcurrentFIFOAllocator allocator_;
+  common::ObFIFOAllocator allocator_;
   bool is_inited_;
   ObDagType::ObDagTypeEnum type_;
   ObDagPrio::ObDagPrioEnum priority_;
@@ -929,7 +929,7 @@ private:
   int32_t up_limits_[ObDagPrio::DAG_PRIO_MAX]; // wait to delete
   int64_t dag_cnts_[ObDagType::DAG_TYPE_MAX];
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];
-  common::ObConcurrentFIFOAllocator allocator_;
+  common::ObFIFOAllocator allocator_;
   PriorityWorkerList waiting_workers_; // workers waiting for time slice to run
   PriorityWorkerList running_workers_; // running workers
   WorkerList free_workers_; // free workers who have not been assigned to any task
