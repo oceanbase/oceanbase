@@ -863,8 +863,13 @@ int ObNestedLoopJoinOp::process_left_batch()
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
-  batch_info_guard.set_batch_size(left_brs_->size_);
   for (int64_t l_idx = 0; OB_SUCC(ret) && l_idx < left_brs_->size_; l_idx++) {
+    // Note:
+    // Overwrite batch_size in the beginning of the loop as eval_ctx_.batch_size
+    // would be modified when processing right child.
+    // Adding seperated guards for left/right children can also solve the problem,
+    // we don't choose that way due to performance reason.
+    batch_info_guard.set_batch_size(left_brs_->size_);
     if (!MY_SPEC.use_group_ && !MY_SPEC.enable_px_batch_rescan_) {
       batch_info_guard.set_batch_idx(l_idx);
       if (left_brs_->skip_->exist(l_idx)) { continue; }
