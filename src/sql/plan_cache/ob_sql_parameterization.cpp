@@ -479,8 +479,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx& ctx, const ObSQLSess
     bool enable_contain_param = ctx.enable_contain_param_;
     ParseNode* root = ctx.tree_;
     bool not_param = ctx.not_param_;
-    for (int32_t i = 0; OB_SUCC(ret) && i < root->num_child_ && root->type_ != T_QUESTIONMARK &&
-                        root->type_ != T_VARCHAR && root->type_ != T_CHAR;
+    for (int32_t i = 0;
+         OB_SUCC(ret) && i < root->num_child_ && root->type_ != T_QUESTIONMARK
+         && root->type_ != T_VARCHAR && root->type_ != T_CHAR && root->type_ != T_NCHAR;
          ++i) {
       // If not_param is true, there is no need to judge;
       // because a node is judged to be true, the subtree of that node is all true;
