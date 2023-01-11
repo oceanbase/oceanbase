@@ -4316,7 +4316,6 @@ int ObUDFRawExpr::assign(const ObRawExpr &other)
       params_type_ = tmp.params_type_;
       database_name_ = tmp.database_name_;
       package_name_ = tmp.package_name_;
-      is_deterministic_ = tmp.is_deterministic_;
       is_parallel_enable_ = tmp.is_parallel_enable_;
       is_udt_udf_ = tmp.is_udt_udf_;
       is_pkg_body_udf_ = tmp.is_pkg_body_udf_;
@@ -4404,7 +4403,7 @@ bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
   bool bool_ret = true;
   if (this == &expr) {
     // do nothing
-  } else if (NULL != check_context && check_context->need_check_deterministic_ && !is_deterministic_) {
+  } else if (NULL != check_context && check_context->need_check_deterministic_ && !is_deterministic()) {
     bool_ret = false;
   } else if (!ObSysFunRawExpr::inner_same_as(expr, check_context)) {
     bool_ret = false;
@@ -4416,7 +4415,7 @@ bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
                 pls_type_ == other->get_pls_type() &&
                 database_name_.compare(other->get_database_name()) == 0 &&
                 package_name_.compare(other->get_package_name()) == 0 &&
-                is_deterministic_ == other->is_deterministic() &&
+                is_deterministic() == other->is_deterministic() &&
                 is_parallel_enable_ == other->is_parallel_enable() &&
                 is_udt_udf_ == other->get_is_udt_udf() &&
                 is_pkg_body_udf_ == other->is_pkg_body_udf() &&

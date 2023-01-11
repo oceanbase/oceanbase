@@ -3522,7 +3522,6 @@ public:
       params_type_(),
       database_name_(),
       package_name_(),
-      is_deterministic_(false),
       is_parallel_enable_(false),
       is_udt_udf_(false),
       is_pkg_body_udf_(false),
@@ -3549,7 +3548,6 @@ public:
       params_type_(),
       database_name_(),
       package_name_(),
-      is_deterministic_(false),
       is_parallel_enable_(false),
       is_udt_udf_(false),
       is_pkg_body_udf_(false),
@@ -3726,7 +3724,6 @@ private:
   common::ObSEArray<ObExprResType, 5, common::ModulePageAllocator, true> params_type_;
   common::ObString database_name_;
   common::ObString package_name_;
-  bool is_deterministic_;
   bool is_parallel_enable_;
   bool is_udt_udf_;
   bool is_pkg_body_udf_;
