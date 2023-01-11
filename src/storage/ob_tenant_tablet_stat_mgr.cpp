@@ -286,7 +286,13 @@ void ObTabletStreamPool::destroy()
 
   DLIST_REMOVE_ALL_NORET(node, lru_list_) {
     lru_list_.remove(node);
-    node->~ObTabletStreamNode();
+    if (DYNAMIC_ALLOC == node->flag_) {
+      node->~ObTabletStreamNode();
+      // ObFIFOAllocator::reset does not release memory by default.
+      dynamic_allocator_.free(node);
+    } else {
+      node->~ObTabletStreamNode();
+    }
     node = nullptr;
   }
   lru_list_.reset();
@@ -512,7 +518,9 @@ int ObTenantTabletStatMgr::report_stat(const ObTabletStat &stat)
       uint64_t pending_cur = ATOMIC_LOAD(&pending_cursor_);
       uint64_t report_cur = ATOMIC_LOAD(&report_cursor_);
       if (pending_cur - report_cur + 1 == DEFAULT_MAX_PENDING_CNT) { // full queue
-        LOG_INFO("report_queue is full, wait to process", K(report_cur), K(pending_cur), K(stat));
+        if (REACH_TENANT_TIME_INTERVAL(10 * 1000L * 1000L/*10s*/)) {
+          LOG_INFO("report_queue is full, wait to process", K(report_cur), K(pending_cur), K(stat));
+        }
         break;
       } else if (pending_cur != ATOMIC_CAS(&pending_cursor_, pending_cur, pending_cur + 1)) {
         ++retry_cnt;
