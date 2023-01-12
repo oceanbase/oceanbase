@@ -223,7 +223,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     return px_parallel_rule_ == MANUAL_HINT ||
         px_parallel_rule_ == MANUAL_TABLE_HINT ||
         px_parallel_rule_ == SESSION_FORCE_PARALLEL ||
-        px_parallel_rule_ == MANUAL_TABLE_DOP;
+        px_parallel_rule_ == MANUAL_TABLE_DOP ||
+        px_parallel_rule_ == PL_UDF_DAS_FORCE_SERIALIZE;
   }
   inline bool use_intra_parallel() const
   {

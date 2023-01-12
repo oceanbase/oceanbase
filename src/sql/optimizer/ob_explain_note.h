@@ -30,6 +30,7 @@ namespace sql
 #define PARALLEL_ENABLED_BY_TABLE_HINT "Degree of Parallelism is %ld because of hint"
 #define PARALLEL_ENABLED_BY_SESSION "Degree of Parallelism is %ld because of session"
 #define PARALLEL_ENABLED_BY_TABLE_PROPERTY "Degree of Parallelisim is %ld because of table property"
+#define PARALLEL_DISABLED_BY_PL_UDF_DAS  "Degree of Parallelisim is %ld because stmt contain pl_udf which force das scan"
 
 }
 }
