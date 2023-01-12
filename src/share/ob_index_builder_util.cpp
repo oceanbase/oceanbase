@@ -672,14 +672,6 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
                        new_sort_item.column_name_.length(),
                        new_sort_item.column_name_.ptr());
       }
-    } else if (lib::is_mysql_mode()) {
-      const ObColumnSchemaV2 *col_schema = data_schema.get_column_schema(new_sort_item.column_name_);
-      if (OB_ISNULL(col_schema)) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS,
-                       new_sort_item.column_name_.length(),
-                       new_sort_item.column_name_.ptr());
-      }
     } else {
       //parse ordinary index expr as the real expr(maybe column expression)
       const ObString &index_expr_def = new_sort_item.column_name_;
@@ -1123,21 +1115,27 @@ int ObIndexBuilderUtil::adjust_spatial_args(
     ObIArray<ObColumnSchemaV2*> &spatial_cols)
 {
   int ret = OB_SUCCESS;
+  ObIAllocator *allocator = arg.index_schema_.get_allocator();
+  // 如果是spatial index，那么需要在表中创建2个列（uint64_t, varchar），并且在列上创建索引
   ObIArray<ObColumnSortItem> &sort_items = arg.index_columns_;
   ObArray<ObColumnSortItem> new_sort_items;
   ObColumnSortItem cellid_sort_item;
   ObColumnSortItem mbr_sort_item;
-
-  if (sort_items.empty()) {
+  if (OB_UNLIKELY(sort_items.empty()) || OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sort items is empty", K(ret));
+    LOG_WARN("get invalid arguments", K(ret), K(sort_items), K(allocator));
   } else if (OB_FAIL(generate_spatial_columns(sort_items.at(0).column_name_, data_schema, spatial_cols))) {
     LOG_WARN("generate spatial column failed", K(ret));
-  } else if (spatial_cols.count() < 2) {
+  } else if (OB_UNLIKELY(spatial_cols.count() != 2) ||
+             OB_ISNULL(spatial_cols.at(0)) || OB_ISNULL(spatial_cols.at(1))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("spatial_cols is less than 2", K(ret), K(spatial_cols.count()));
-  } else if (FALSE_IT(cellid_sort_item.column_name_ = spatial_cols.at(0)->get_column_name_str())) {
-  } else if (FALSE_IT(mbr_sort_item.column_name_ = spatial_cols.at(1)->get_column_name_str())) {
+    LOG_WARN("get invalid spatial cols", K(ret), K(spatial_cols.count()));
+  } else if (OB_FAIL(ob_write_string(*allocator, spatial_cols.at(0)->get_column_name_str(),
+                                     cellid_sort_item.column_name_))) {
+    LOG_WARN("failed to copy column name", K(ret));
+  } else if (OB_FAIL(ob_write_string(*allocator, spatial_cols.at(1)->get_column_name_str(),
+                                     mbr_sort_item.column_name_))) {
+    LOG_WARN("failed to copy column name", K(ret));
   } else if (OB_FAIL(new_sort_items.push_back(cellid_sort_item))) {
     LOG_WARN("push back cellid sort item to new sort items failed", K(ret));
   } else if (OB_FAIL(new_sort_items.push_back(mbr_sort_item))) {
