@@ -102,7 +102,7 @@ public:
   {}
   ~TestMemtable()
   {
-    ObFreezeCheckpoint::remove_from_data_checkpoint(true);
+    ObFreezeCheckpoint::remove_from_data_checkpoint();
   }
 
   void set_rec_log_ts(int64_t rec_log_ts)

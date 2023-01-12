@@ -22,24 +22,21 @@ namespace storage
 namespace checkpoint
 {
 
-// need_lock_data_checkpoint = false when release head empty memtable
-void ObFreezeCheckpoint::remove_from_data_checkpoint(bool need_lock_data_checkpoint)
+void ObFreezeCheckpoint::remove_from_data_checkpoint()
 {
   if (OUT != location_) {
+    ObSpinLockGuard ls_frozen_list_guard(data_checkpoint_->ls_frozen_list_lock_);
+    ObSpinLockGuard guard(data_checkpoint_->lock_);
     int ret = OB_SUCCESS;
-    if (!need_lock_data_checkpoint) {
-      if(OB_FAIL(unlink_())) {
-        STORAGE_LOG(WARN, "ObFreezeCheckpoint Unlink From DataCheckpoint Failed", K(ret));
-      }
-    } else {
-      ObSpinLockGuard ls_frozen_list_guard(data_checkpoint_->ls_frozen_list_lock_);
-      ObSpinLockGuard guard(data_checkpoint_->lock_);
-      if(OB_FAIL(unlink_())) {
-        STORAGE_LOG(WARN, "ObFreezeCheckpoint Unlink From DataCheckpoint Failed", K(ret));
-      }
+    if(OB_FAIL(unlink_())) {
+      STORAGE_LOG(WARN, "ObFreezeCheckpoint Unlink From DataCheckpoint Failed", K(ret));
     }
-    data_checkpoint_ = nullptr;
   }
+}
+
+void ObFreezeCheckpoint::reset()
+{
+  data_checkpoint_ = nullptr;
 }
 
 int ObFreezeCheckpoint::unlink_()

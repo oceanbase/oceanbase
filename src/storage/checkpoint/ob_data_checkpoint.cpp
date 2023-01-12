@@ -190,7 +190,6 @@ int ObDataCheckpoint::safe_to_destroy(bool &is_safe_destroy)
   ls_frozen_list_.reset();
   active_list_.reset();
   prepare_list_.reset();
-  ls_ = nullptr;
 
   if (OB_FAIL(ret)) {
     is_safe_destroy = false;
@@ -248,7 +247,7 @@ int ObDataCheckpoint::ls_freeze(int64_t rec_log_ts)
   ObCheckPointService *checkpoint_srv = MTL(ObCheckPointService *);
   set_ls_freeze_finished_(false);
   if (OB_FAIL(checkpoint_srv->add_ls_freeze_task(this, rec_log_ts))) {
-    STORAGE_LOG(ERROR, "ls_freeze add task failed", K(ret));
+    STORAGE_LOG(WARN, "ls_freeze add task failed", K(ret));
     set_ls_freeze_finished_(true);
   }
   return ret;

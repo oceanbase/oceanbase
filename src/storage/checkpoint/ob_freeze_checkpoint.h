@@ -85,7 +85,8 @@ class ObFreezeCheckpoint : public common::ObDLinkBase<ObFreezeCheckpoint>
 public:
   ObFreezeCheckpoint() : location_(OUT), data_checkpoint_(nullptr) {}
   virtual ~ObFreezeCheckpoint() {}
-  virtual void remove_from_data_checkpoint(bool need_lock_data_checkpoint = true);
+  void reset();
+  virtual void remove_from_data_checkpoint();
   virtual int64_t get_rec_log_ts() = 0;
   virtual int flush(share::ObLSID ls_id) = 0;
   // judge rec_log_ts of the checkpoint unit won't get smaller

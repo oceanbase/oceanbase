@@ -82,7 +82,7 @@ public:
       ls_frozen_list_lock_(),
       ls_freeze_finished_(true)
   {}
-  ~ObDataCheckpoint() {}
+  ~ObDataCheckpoint() { ls_ = nullptr; }
 
   // used for virtual table
   static const uint64_t LS_DATA_CHECKPOINT_TABLET_ID = 40000;
