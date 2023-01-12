@@ -310,6 +310,7 @@ void ObDDLScheduler::run1()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
+    const int64_t thread_cnt = TG_GET_THREAD_CNT(lib::TGDefIDs::DDLTaskExecutor3);
     int ret = OB_SUCCESS;
     ObDDLTask *task = nullptr;
     ObDDLTask *first_retry_task = nullptr;
@@ -337,7 +338,7 @@ void ObDDLScheduler::run1()
         } else {
           ObCurTraceId::set(task->get_trace_id());
           int task_ret = task->process();
-          task->calc_next_schedule_ts(task_ret, task_queue_.get_task_cnt());
+          task->calc_next_schedule_ts(task_ret, task_queue_.get_task_cnt() + thread_cnt);
           if (task->need_retry() && !has_set_stop()) {
             if (OB_FAIL(task_queue_.add_task_to_last(task))) {
               STORAGE_LOG(ERROR, "fail to add task to last, which should not happen", K(ret), K(*task));
