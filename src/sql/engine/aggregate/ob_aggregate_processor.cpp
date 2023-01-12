@@ -1344,7 +1344,7 @@ int ObAggregateProcessor::collect_for_empty_set()
     if (OB_ISNULL(aggr_info.expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr node is null", K(ret));
-    } else if (aggr_info.is_implicit_first_aggr()) {
+    } else if (aggr_info.is_implicit_first_aggr() && aggr_stage_ != ObThreeStageAggrStage::THIRD_STAGE) {
       set_expr_datum_null(aggr_info.expr_);
     } else {
       switch (aggr_info.get_expr_type()) {
@@ -2297,7 +2297,9 @@ int ObAggregateProcessor::process_aggr_batch_result(
           aggr_cell.set_is_evaluated(true);
         }
       }
-      ret = approx_count_calc_batch(*llc_bitmap, param_exprs, selector);
+      if (OB_SUCC(ret)) {
+        ret = approx_count_calc_batch(*llc_bitmap, param_exprs, selector);
+      }
       break;
     }
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: {
