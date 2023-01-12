@@ -131,7 +131,7 @@ protected:
     mt_mgr_ = NULL;
     ctx_mt_mgr_ = NULL;
 
-    ASSERT_EQ(1, ref_count_);
+    ASSERT_EQ(0, ref_count_);
 
     tenant_base_.destroy();
     ObTenantEnv::set_tenant(nullptr);
