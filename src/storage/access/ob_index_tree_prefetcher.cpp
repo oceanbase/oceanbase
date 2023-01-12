@@ -391,21 +391,21 @@ int ObIndexTreePrefetcher::prefetch_block_data(
 
 void ObIndexTreeMultiPrefetcher::reset()
 {
-  ObIndexTreePrefetcher::reset();
   fetch_rowkey_idx_ = 0;
   prefetch_rowkey_idx_ = 0;
   prefetched_rowkey_cnt_ = 0;
   rowkeys_ = nullptr;
   ext_read_handles_.reset();
+  ObIndexTreePrefetcher::reset();
 }
 
 void ObIndexTreeMultiPrefetcher::reuse()
 {
-  ObIndexTreePrefetcher::reuse();
   fetch_rowkey_idx_ = 0;
   prefetch_rowkey_idx_ = 0;
   prefetched_rowkey_cnt_ = 0;
   rowkeys_ = nullptr;
+  ObIndexTreePrefetcher::reuse();
 }
 
 int ObIndexTreeMultiPrefetcher::init(
@@ -470,6 +470,7 @@ int ObIndexTreeMultiPrefetcher::switch_context(
     data_version_ = sstable_->is_major_sstable() ? sstable_->get_snapshot_version() : sstable_->get_key().get_end_scn().get_val_for_tx();
     rowkeys_ = static_cast<const common::ObIArray<blocksstable::ObDatumRowkey> *> (query_range);
     index_read_info_ = &index_read_info;
+    index_tree_height_ = sstable_->get_meta().get_index_tree_height();
     max_handle_prefetching_cnt_ = min(rowkeys_->count(), MAX_MULTIGET_MICRO_DATA_HANDLE_CNT);
     if (OB_FAIL(ext_read_handles_.prepare_reallocate(max_handle_prefetching_cnt_))) {
       LOG_WARN("Fail to init read_handles", K(ret), K(max_handle_prefetching_cnt_));
@@ -481,6 +482,11 @@ int ObIndexTreeMultiPrefetcher::switch_context(
       micro_block_handle_mgr_.reset();
       if (OB_FAIL(micro_block_handle_mgr_.init(true, false, *access_ctx.stmt_allocator_))) {
         LOG_WARN("failed to init block handle mgr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (index_scanner_.is_valid()) {
+        index_scanner_.switch_context(&index_read_info, sstable.get_macro_offset());
       }
     }
   }
