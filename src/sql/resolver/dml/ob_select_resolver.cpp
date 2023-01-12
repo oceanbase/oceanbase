@@ -750,9 +750,10 @@ int ObSelectResolver::check_group_by()
           LOG_WARN("group by expr is null", K(ret));
         } else if (ObLongTextType == group_by_expr->get_data_type()
                   || ObLobType == group_by_expr->get_data_type()
-                  || ObJsonType == group_by_expr->get_data_type()) {
+                  || ObJsonType == group_by_expr->get_data_type()
+                  || ObExtendType == group_by_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("group by lob expr is not allowed", K(ret));
+          LOG_WARN("group by lob or udt expr is not allowed", K(ret));
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_rollup_expr_size(); i++) {
@@ -761,9 +762,10 @@ int ObSelectResolver::check_group_by()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("rollup expr is null", K(ret));
         } else if (ObLongTextType == rollup_expr->get_data_type()
-                  || ObLobType == rollup_expr->get_data_type()) {
+                  || ObLobType == rollup_expr->get_data_type()
+                  || ObExtendType == rollup_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("group by lob expr is not allowed", K(ret));
+          LOG_WARN("group by lob or udt expr is not allowed", K(ret));
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_grouping_sets_items_size(); i++) {
@@ -782,9 +784,10 @@ int ObSelectResolver::check_group_by()
                 LOG_WARN("rollup expr is null", K(ret));
               } else if (ObLongTextType == groupby_expr->get_data_type()
                         || ObLobType == groupby_expr->get_data_type()
-                        || ObJsonType == groupby_expr->get_data_type()) {
+                        || ObJsonType == groupby_expr->get_data_type()
+                        || ObExtendType == groupby_expr->get_data_type()) {
                 ret = OB_ERR_INVALID_TYPE_FOR_OP;
-                LOG_WARN("group by lob expr is not allowed", K(ret));
+                LOG_WARN("group by lob or udt expr is not allowed", K(ret));
               }
             }
           }
@@ -884,7 +887,7 @@ int ObSelectResolver::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_
   return ret;
 }
 
-// 1. lob type can't be ordered
+// 1. lob or udt type can't be ordered
 // 2. the order item should be exists in select items if has distinct
 int ObSelectResolver::check_order_by()
 {
@@ -899,16 +902,17 @@ int ObSelectResolver::check_order_by()
     // eg: select distinct count(*) from t1 order by c1; -- return single row,then don't check
     bool need_check = !select_stmt->is_single_set_query();
     if (need_check) {
-      // 1. check lob type
+      // 1. check lob type or udt
       common::ObArray<ObRawExpr*> order_item_exprs;
       common::ObIArray<OrderItem> &order_items = select_stmt->get_order_items();
       // special case: select count(*) from t1 order by c1; --c1 is blob, but optimized to be remove
       for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
         if (ob_is_text_tc(order_items.at(i).expr_->get_data_type())
             || ob_is_lob_tc(order_items.at(i).expr_->get_data_type())
-            || ob_is_json_tc(order_items.at(i).expr_->get_data_type())) {
+            || ob_is_json_tc(order_items.at(i).expr_->get_data_type())
+            || ob_is_extend(order_items.at(i).expr_->get_data_type())) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("lob expr can't order", K(ret), K(*order_items.at(i).expr_));
+          LOG_WARN("lob expr or udt can't order", K(ret), K(*order_items.at(i).expr_));
         } else if (has_distinct) {
           if (OB_FAIL(order_item_exprs.push_back(order_items.at(i).expr_))) {
             LOG_WARN("fail to push back expr", K(ret));
@@ -6446,9 +6450,10 @@ int ObSelectResolver::check_window_exprs()
         for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
           if (ob_is_text_tc(order_items.at(i).expr_->get_data_type())
               || ob_is_lob_tc(order_items.at(i).expr_->get_data_type())
-              || ob_is_json_tc(order_items.at(i).expr_->get_data_type())) {
+              || ob_is_json_tc(order_items.at(i).expr_->get_data_type())
+              || ob_is_extend(order_items.at(i).expr_->get_data_type())) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
-            LOG_WARN("lob expr can't order", K(ret), K(*order_items.at(i).expr_));
+            LOG_WARN("lob or udt expr can't order", K(ret), K(*order_items.at(i).expr_));
           }
         }
       }
@@ -6459,7 +6464,8 @@ int ObSelectResolver::check_window_exprs()
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("param is null", K(ret));
           } else if (ob_is_lob_locator(param_expr->get_data_type())
-                    || ob_is_text_tc(param_expr->get_data_type())) {
+                    || ob_is_text_tc(param_expr->get_data_type())
+                    || ob_is_extend(param_expr->get_data_type())) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("invalid partition by expr", K(ret), K(i), KPC(param_expr));
           }
