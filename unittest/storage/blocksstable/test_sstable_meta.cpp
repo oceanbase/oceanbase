@@ -451,7 +451,6 @@ TEST_F(TestSSTableMacroInfo, test_huge_block_ids)
   ObSSTableMacroInfo tmp_info;
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize(&allocator_, des_meta_, buf, buf_len, pos));
-  ASSERT_EQ(OB_SUCCESS, tmp_info.deserialize_post_work());
   for (int i = 0; i < blocksstable::ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD; i++) {
     ASSERT_EQ(sstable_macro_info.data_block_ids_.at(i), tmp_info.data_block_ids_.at(i));
   }

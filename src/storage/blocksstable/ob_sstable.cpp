@@ -886,8 +886,6 @@ int ObSSTable::deserialize_post_work()
   if (OB_UNLIKELY(hold_macro_ref_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("post work may be done", K(ret), KPC(this));
-  } else if (OB_FAIL(meta_.macro_info_.deserialize_post_work())) {
-    LOG_WARN("fail to do post work for sstable meta", K(ret), K(meta_));
   } else if (OB_FAIL(add_macro_ref())) {
     LOG_WARN("fail to add macro ref", K(ret));
   } else if (SSTABLE_WRITE_BUILDING != meta_.get_basic_meta().status_ && OB_FAIL(check_valid_for_reading())) {
@@ -919,6 +917,12 @@ void ObSSTable::dec_macro_ref()
       LOG_ERROR("fail to dec other block ref cnt", K(ret), K(macro_id), K(idx));
     }
   }
+  for (idx = 0; idx < meta_.get_macro_info().get_linked_block_ids().count(); ++idx) {// ignore ret
+    const MacroBlockId &macro_id = meta_.get_macro_info().get_linked_block_ids().at(idx);
+    if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+      LOG_ERROR("fail to dec link block ref cnt", K(ret), K(macro_id), K(idx));
+    }
+  }
   hold_macro_ref_ = false;
 }
 
@@ -927,6 +931,7 @@ int ObSSTable::add_macro_ref()
   int ret = OB_SUCCESS;
   int64_t i = 0;
   int64_t j = 0;
+  int64_t k = 0;
   while (OB_SUCC(ret) && i < meta_.get_macro_info().get_data_block_ids().count()) {
     const MacroBlockId &macro_id = meta_.get_macro_info().get_data_block_ids().at(i);
     if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
@@ -943,6 +948,14 @@ int ObSSTable::add_macro_ref()
       ++j;
     }
   }
+  while (OB_SUCC(ret) && k < meta_.get_macro_info().get_linked_block_ids().count()) {
+    const MacroBlockId &macro_id = meta_.get_macro_info().get_linked_block_ids().at(k);
+    if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
+      LOG_ERROR("fail to inc link block ref cnt", K(ret), K(macro_id), K(k));
+    } else {
+      ++k;
+    }
+  }
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
     int64_t idx = i - 1;
@@ -957,6 +970,13 @@ int ObSSTable::add_macro_ref()
       const MacroBlockId &macro_id = meta_.get_macro_info().get_other_block_ids().at(idx);
       if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = OB_SERVER_BLOCK_MGR.dec_ref(macro_id)))) {
         LOG_ERROR("fail to dec other block ref cnt", K(ret), K(tmp_ret), K(macro_id));
+      }
+    }
+    idx = k - 1;
+    for (; idx >= 0; --idx) {// ignore ret
+      const MacroBlockId &macro_id = meta_.get_macro_info().get_linked_block_ids().at(idx);
+      if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = OB_SERVER_BLOCK_MGR.dec_ref(macro_id)))) {
+        LOG_ERROR("fail to dec link block ref cnt", K(ret), K(tmp_ret), K(macro_id));
       }
     }
   }
