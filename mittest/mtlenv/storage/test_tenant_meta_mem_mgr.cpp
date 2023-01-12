@@ -23,6 +23,7 @@
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
+#include "storage/tablet/ob_tablet_slog_helper.h"
 #include "storage/tablet/ob_tablet_status.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
@@ -920,6 +921,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   MockObLogHandler log_handler;
   ObFreezer freezer;
   ObTableSchema table_schema;
+  ObTabletCreateSSTableParam param;
   prepare_data_schema(table_schema);
 
   ret = freezer.init(&ls);
@@ -927,7 +929,38 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
 
   ret = t3m_.acquire_sstable(table_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
-  table_handle.get_table()->set_table_type(ObITable::TableType::MAJOR_SSTABLE);
+  const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+  param.table_key_.tablet_id_ = tablet_id;
+  param.table_key_.version_range_.base_version_ = ObVersionRange::MIN_VERSION;
+  param.table_key_.version_range_.snapshot_version_ = 1;
+  param.schema_version_ = table_schema.get_schema_version();
+  param.create_snapshot_version_ = 0;
+  param.progressive_merge_round_ = table_schema.get_progressive_merge_round();
+  param.progressive_merge_step_ = 0;
+  param.table_mode_ = table_schema.get_table_mode_struct();
+  param.index_type_ = table_schema.get_index_type();
+  param.rowkey_column_cnt_ = table_schema.get_rowkey_column_num()
+            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  param.root_block_addr_.set_none_addr();
+  param.data_block_macro_meta_addr_.set_none_addr();
+  param.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  param.data_index_tree_height_ = 0;
+  param.index_blocks_cnt_ = 0;
+  param.data_blocks_cnt_ = 0;
+  param.micro_block_cnt_ = 0;
+  param.use_old_macro_block_count_ = 0;
+  param.column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
+  param.data_checksum_ = 0;
+  param.occupy_size_ = 0;
+  param.ddl_log_ts_ = 0;
+  param.filled_tx_log_ts_ = 0;
+  param.original_size_ = 0;
+  param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  param.encrypt_id_ = 0;
+  param.master_key_id_ = 0;
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
+  ASSERT_EQ(OB_SUCCESS, static_cast<ObSSTable *>(table_handle.get_table())->init(param, &t3m_.get_tenant_allocator()));
 
   const int64_t create_scn = ObTimeUtility::fast_current_time();
   const int64_t frozen_timestamp = create_scn;
@@ -942,16 +975,13 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_EQ(1, tablet->get_ref());
 
   ObMetaDiskAddr addr;
-  addr.first_id_ = 1;
-  addr.second_id_ = 2;
-  addr.offset_ = 0;
-  addr.size_ = 4096;
-  addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+  ret = ObTabletSlogHelper::write_create_tablet_slog(handle, addr);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ret = t3m_.compare_and_swap_tablet(key, addr, handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
-  ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
+  ASSERT_EQ(1, t3m_.tablet_pool_.inner_used_num_);
 
   handle.reset();
   ASSERT_EQ(1, tablet->get_ref());
@@ -961,7 +991,8 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_EQ(0, t3m_.tablet_pool_.inner_used_num_);
 
   common::ObArenaAllocator allocator;
-  ASSERT_EQ(common::OB_NOT_SUPPORTED, t3m_.get_tablet_with_allocator(WashTabletPriority::WTP_HIGH, key, allocator, handle));
+  ASSERT_EQ(common::OB_SUCCESS, t3m_.get_tablet_with_allocator(WashTabletPriority::WTP_HIGH, key, allocator, handle));
+  ASSERT_TRUE(handle.is_valid());
 
   ret = t3m_.tablet_map_.erase(key);
   ASSERT_EQ(common::OB_SUCCESS, ret);
