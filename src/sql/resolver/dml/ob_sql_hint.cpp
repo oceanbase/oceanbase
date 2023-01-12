@@ -1171,7 +1171,8 @@ int ObStmtHint::merge_other_opt_hint(const ObIArray<ObHint*> &hints,
         switch (hint->get_hint_type()) {
           case T_INDEX_HINT:
           case T_NO_INDEX_HINT:
-          case T_FULL_HINT: {
+          case T_FULL_HINT:
+          case T_USE_DAS_HINT:{
             hint_type = T_INDEX_HINT;
             break;
           }
