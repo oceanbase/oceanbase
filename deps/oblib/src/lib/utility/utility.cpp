@@ -1187,7 +1187,7 @@ static int read_pid(const char *pidfile, long &pid)
   if (fd < 0) {
     LOG_ERROR("can't open pid file", KCSTRING(pidfile), K(errno));
     ret = OB_FILE_NOT_EXIST;
-  } else if (read(fd, buf, sizeof(buf)) <= 0) {
+  } else if (read(fd, buf, sizeof(buf) - 1) <= 0) {
     LOG_ERROR("fail to read pid from file", KCSTRING(pidfile), K(errno));
     ret = OB_IO_ERROR;
   } else {
