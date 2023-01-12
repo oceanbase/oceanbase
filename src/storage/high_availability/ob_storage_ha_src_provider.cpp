@@ -194,8 +194,8 @@ int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const
     obrpc::ObFetchLSMetaInfoResp ls_info;
     ObMigrationStatus migration_status;
     share::ObLSRestoreStatus restore_status;
-    if (OB_SUCCESS != (tmp_ret = fetch_ls_meta_info_(tenant_id, ls_id, addr, ls_info))) {
-      LOG_WARN("failed to fetch ls meta info", K(ret), K(tenant_id), K(ls_id), K(addr));
+    if (OB_TMP_FAIL(fetch_ls_meta_info_(tenant_id, ls_id, addr, ls_info))) {
+      LOG_WARN("failed to fetch ls meta info", K(tmp_ret), K(tenant_id), K(ls_id), K(addr));
     } else if (!ObReplicaTypeCheck::is_full_replica(ls_info.ls_meta_package_.ls_meta_.replica_type_)) {
       LOG_INFO("do not choose this src", K(tenant_id), K(ls_id), K(addr), K(ls_info));
     } else if (local_clog_checkpoint_scn > ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn()) {

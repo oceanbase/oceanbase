@@ -49,7 +49,7 @@ namespace obrpc
 
 struct ObCopyMacroBlockArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyMacroBlockArg();
   virtual ~ObCopyMacroBlockArg() {}
@@ -61,7 +61,7 @@ public:
 
 struct ObCopyMacroBlockListArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyMacroBlockListArg();
   virtual ~ObCopyMacroBlockListArg() {}
@@ -79,7 +79,7 @@ public:
 
 struct ObCopyMacroBlockRangeArg final
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyMacroBlockRangeArg();
   ~ObCopyMacroBlockRangeArg() {}
@@ -102,7 +102,7 @@ public:
 
 struct ObCopyMacroBlockHeader
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyMacroBlockHeader();
   virtual ~ObCopyMacroBlockHeader() {}
@@ -116,7 +116,7 @@ public:
 
 struct ObCopyTabletInfoArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyTabletInfoArg();
   virtual ~ObCopyTabletInfoArg() {}
@@ -135,7 +135,7 @@ public:
 
 struct ObCopyTabletInfo
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyTabletInfo();
   virtual ~ObCopyTabletInfo() {}
@@ -152,7 +152,7 @@ public:
 
 struct ObCopyTabletSSTableInfoArg final
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyTabletSSTableInfoArg();
   ~ObCopyTabletSSTableInfoArg();
@@ -169,7 +169,7 @@ public:
 
 struct ObCopyTabletsSSTableInfoArg final
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyTabletsSSTableInfoArg();
   ~ObCopyTabletsSSTableInfoArg();
@@ -191,7 +191,7 @@ public:
 
 struct ObCopyTabletSSTableInfo
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyTabletSSTableInfo();
   virtual ~ObCopyTabletSSTableInfo() {}
@@ -207,7 +207,7 @@ public:
 
 struct ObCopyLSInfoArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyLSInfoArg();
   virtual ~ObCopyLSInfoArg() {}
@@ -221,7 +221,7 @@ public:
 
 struct ObCopyLSInfo
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyLSInfo();
   virtual ~ObCopyLSInfo() {}
@@ -236,7 +236,7 @@ public:
 
 struct ObFetchLSMetaInfoArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObFetchLSMetaInfoArg();
   virtual ~ObFetchLSMetaInfoArg() {}
@@ -250,7 +250,7 @@ public:
 
 struct ObFetchLSMetaInfoResp
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObFetchLSMetaInfoResp();
   virtual ~ObFetchLSMetaInfoResp() {}
@@ -263,7 +263,7 @@ public:
 
 struct ObFetchLSMemberListArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObFetchLSMemberListArg();
   virtual ~ObFetchLSMemberListArg() {}
@@ -277,7 +277,7 @@ public:
 
 struct ObFetchLSMemberListInfo
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObFetchLSMemberListInfo();
   virtual ~ObFetchLSMemberListInfo() {}
@@ -290,7 +290,7 @@ public:
 
 struct ObCopySSTableMacroRangeInfoArg final
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopySSTableMacroRangeInfoArg();
   ~ObCopySSTableMacroRangeInfoArg();
@@ -311,7 +311,7 @@ public:
 
 struct ObCopySSTableMacroRangeInfoHeader final
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopySSTableMacroRangeInfoHeader();
   ~ObCopySSTableMacroRangeInfoHeader();
@@ -325,7 +325,7 @@ public:
 
 struct ObCopyTabletSSTableHeader final
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObCopyTabletSSTableHeader();
   ~ObCopyTabletSSTableHeader() {}
@@ -342,7 +342,7 @@ public:
 // Leader notify follower to restore some tablets.
 struct ObNotifyRestoreTabletsArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObNotifyRestoreTabletsArg();
   virtual ~ObNotifyRestoreTabletsArg() {}
@@ -359,7 +359,7 @@ public:
 
 struct ObNotifyRestoreTabletsResp
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObNotifyRestoreTabletsResp();
   virtual ~ObNotifyRestoreTabletsResp() {}
@@ -375,7 +375,7 @@ public:
 
 struct ObInquireRestoreResp
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObInquireRestoreResp();
   virtual ~ObInquireRestoreResp() {}
@@ -391,7 +391,7 @@ public:
 
 struct ObInquireRestoreArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObInquireRestoreArg();
   virtual ~ObInquireRestoreArg() {}
@@ -406,7 +406,7 @@ public:
 
 struct ObRestoreUpdateLSMetaArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObRestoreUpdateLSMetaArg();
   virtual ~ObRestoreUpdateLSMetaArg() {}
