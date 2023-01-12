@@ -186,7 +186,7 @@ struct ObMigrationTabletParam final
 {
 public:
   ObMigrationTabletParam();
-  ~ObMigrationTabletParam() = default;
+  ~ObMigrationTabletParam() { reset(); }
   ObMigrationTabletParam(const ObMigrationTabletParam &) = delete;
   ObMigrationTabletParam &operator=(const ObMigrationTabletParam &) = delete;
 public:
@@ -202,7 +202,9 @@ public:
       ObIAllocator &allocator,
       ObStorageSchema &storage_schema);
 
-  TO_STRING_KV(K_(ls_id),
+  TO_STRING_KV(K_(magic_number),
+               K_(version),
+               K_(ls_id),
                K_(tablet_id),
                K_(data_tablet_id),
                K_(ref_tablet_id),
@@ -222,9 +224,17 @@ public:
                K_(medium_info_list),
                K_(table_store_flag),
                K_(max_sync_storage_schema_version));
-public:
+private:
+  int deserialize_old(const char *buf, const int64_t len, int64_t &pos);
 
-  common::ObArenaAllocator allocator_; // for storage schema
+  // magic_number_ is added to support upgrade from old format(without version and length compatibility)
+  // The old format first member is ls_id_(also 8 bytes long), which is not possible be a negative number.
+  const static int64_t MAGIC_NUM = -20230111;
+  const static int64_t PARAM_VERSION = 1;
+
+public:
+  int64_t magic_number_;
+  int64_t version_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   common::ObTabletID data_tablet_id_;
@@ -250,6 +260,9 @@ public:
   int64_t max_sync_storage_schema_version_;
   int64_t ddl_execution_id_;
   int64_t ddl_cluster_version_;
+
+  // Add new serialization member before this line, below members won't serialize
+  common::ObArenaAllocator allocator_; // for storage schema
 };
 
 } // namespace storage

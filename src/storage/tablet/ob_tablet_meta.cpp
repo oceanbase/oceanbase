@@ -720,7 +720,8 @@ int ObTabletMeta::inner_check_(
 
 
 ObMigrationTabletParam::ObMigrationTabletParam()
-  : allocator_(),
+  : magic_number_(MAGIC_NUM),
+    version_(PARAM_VERSION),
     ls_id_(),
     tablet_id_(),
     data_tablet_id_(),
@@ -744,13 +745,16 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     ddl_snapshot_version_(OB_INVALID_TIMESTAMP),
     max_sync_storage_schema_version_(0),
     ddl_execution_id_(0),
-    ddl_cluster_version_(0)
+    ddl_cluster_version_(0),
+    allocator_()
 {
 }
 
 bool ObMigrationTabletParam::is_valid() const
 {
-  return ls_id_.is_valid()
+  return MAGIC_NUM == magic_number_
+      && PARAM_VERSION == version_
+      && ls_id_.is_valid()
       && tablet_id_.is_valid()
       && data_tablet_id_.is_valid()
       && create_scn_ >= ObTabletMeta::INIT_CREATE_SCN
@@ -771,6 +775,7 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
+  int64_t length = 0;
 
   if (OB_ISNULL(buf)
       || OB_UNLIKELY(len <= 0)
@@ -780,54 +785,67 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration tablet param is invalid", K(ret), K(*this));
-  } else if (OB_FAIL(ls_id_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize ls id", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(tablet_id_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize tablet id", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(data_tablet_id_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize data tablet id", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(ref_tablet_id_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize ref tablet id", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, create_scn_))) {
+  } else if (FALSE_IT(length = get_serialize_size())) {
+  } else if (OB_UNLIKELY(length > len - pos)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("buffer's length is not enough", K(ret), K(length), K(len - new_pos));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, magic_number_))) {
+    LOG_WARN("failed to serialize magic number", K(ret), K(len), K(new_pos), K_(magic_number));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, version_))) {
+    LOG_WARN("failed to serialize version", K(ret), K(len), K(new_pos), K_(version));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, length))) {
+    LOG_WARN("failed to serialize length", K(ret), K(len), K(new_pos), K(length));
+  } else if (new_pos - pos < length && OB_FAIL(ls_id_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize ls id", K(ret), K(len), K(new_pos), K_(ls_id));
+  } else if (new_pos - pos < length && OB_FAIL(tablet_id_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize tablet id", K(ret), K(len), K(new_pos), K_(tablet_id));
+  } else if (new_pos - pos < length && OB_FAIL(data_tablet_id_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize data tablet id", K(ret), K(len), K(new_pos), K_(data_tablet_id));
+  } else if (new_pos - pos < length && OB_FAIL(ref_tablet_id_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize ref tablet id", K(ret), K(len), K(new_pos), K_(ref_tablet_id));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, create_scn_))) {
     LOG_WARN("failed to serialize clog checkpoint ts", K(ret), K(len), K(new_pos), K_(create_scn));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, start_scn_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, start_scn_))) {
     LOG_WARN("failed to serialize start scn", K(ret), K(len), K(new_pos), K_(start_scn));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, clog_checkpoint_ts_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, clog_checkpoint_ts_))) {
     LOG_WARN("failed to serialize clog checkpoint ts", K(ret), K(len), K(new_pos), K_(clog_checkpoint_ts));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_checkpoint_ts_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_checkpoint_ts_))) {
     LOG_WARN("failed to serialize ddl checkpoint ts", K(ret), K(len), K(new_pos), K_(ddl_checkpoint_ts));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, snapshot_version_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, snapshot_version_))) {
     LOG_WARN("failed to serialize clog checkpoint ts", K(ret), K(len), K(new_pos), K_(snapshot_version));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, multi_version_start_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, multi_version_start_))) {
     LOG_WARN("failed to serialize clog checkpoint ts", K(ret), K(len), K(new_pos), K_(multi_version_start));
-  } else if (OB_FAIL(serialization::encode_i8(buf, len, new_pos, static_cast<int8_t>(compat_mode_)))) {
-    LOG_WARN("failed to serialize compat mode", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(autoinc_seq_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize auto inc seq", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(ha_status_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize ha status", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(report_status_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize report status", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(tx_data_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize multi source data", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(ddl_data_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize ddl data", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(storage_schema_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize storage schema", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(medium_info_list_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize medium compaction list", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(table_store_flag_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize table store flag", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_start_log_ts_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i8(buf, len, new_pos, static_cast<int8_t>(compat_mode_)))) {
+    LOG_WARN("failed to serialize compat mode", K(ret), K(len), K(new_pos), K_(compat_mode));
+  } else if (new_pos - pos < length && OB_FAIL(autoinc_seq_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize auto inc seq", K(ret), K(len), K(new_pos), K_(autoinc_seq));
+  } else if (new_pos - pos < length && OB_FAIL(ha_status_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize ha status", K(ret), K(len), K(new_pos), K_(ha_status));
+  } else if (new_pos - pos < length && OB_FAIL(report_status_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize report status", K(ret), K(len), K(new_pos), K_(report_status));
+  } else if (new_pos - pos < length && OB_FAIL(tx_data_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize multi source data", K(ret), K(len), K(new_pos), K_(tx_data));
+  } else if (new_pos - pos < length && OB_FAIL(ddl_data_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize ddl data", K(ret), K(len), K(new_pos), K_(ddl_data));
+  } else if (new_pos - pos < length && OB_FAIL(storage_schema_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize storage schema", K(ret), K(len), K(new_pos), K_(storage_schema));
+  } else if (new_pos - pos < length && OB_FAIL(medium_info_list_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize medium compaction list", K(ret), K(len), K(new_pos), K_(medium_info_list));
+  } else if (new_pos - pos < length && OB_FAIL(table_store_flag_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize table store flag", K(ret), K(len), K(new_pos), K_(table_store_flag));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_start_log_ts_))) {
     LOG_WARN("failed to serialize ddl start log ts", K(ret), K(len), K(new_pos), K_(ddl_start_log_ts));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_snapshot_version_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_snapshot_version_))) {
     LOG_WARN("failed to serialize ddl snapshot version", K(ret), K(len), K(new_pos), K_(ddl_snapshot_version));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, max_sync_storage_schema_version_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, max_sync_storage_schema_version_))) {
     LOG_WARN("failed to serialize max_sync_storage_schema_version", K(ret), K(len), K(new_pos), K_(max_sync_storage_schema_version));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_execution_id_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_execution_id_))) {
     LOG_WARN("failed to serialize ddl execution id", K(ret), K(len), K(new_pos), K_(ddl_execution_id));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_cluster_version_))) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, ddl_cluster_version_))) {
     LOG_WARN("failed to serialize ddl cluster version", K(ret), K(len), K(new_pos), K_(ddl_cluster_version));
+  } else if (OB_UNLIKELY(length != new_pos - pos)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length));
   } else {
     pos = new_pos;
   }
@@ -835,19 +853,14 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
   return ret;
 }
 
-int ObMigrationTabletParam::deserialize(const char *buf, const int64_t len, int64_t &pos)
+// old format compatibility to 4.0, DO NOT add any new member deserialization!!!
+int ObMigrationTabletParam::deserialize_old(const char *buf, const int64_t len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
   int8_t compat_mode = -1;
 
-  if (OB_ISNULL(buf)
-      || OB_UNLIKELY(len <= 0)
-      || OB_UNLIKELY(pos < 0)
-      || OB_UNLIKELY(len <= pos)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(buf), K(len), K(pos));
-  } else if (OB_FAIL(ls_id_.deserialize(buf, len, new_pos))) {
+  if (OB_FAIL(ls_id_.deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize ls id", K(ret), K(len), K(new_pos));
   } else if (OB_FAIL(tablet_id_.deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize tablet id", K(ret), K(len), K(new_pos));
@@ -896,8 +909,101 @@ int ObMigrationTabletParam::deserialize(const char *buf, const int64_t len, int6
   } else if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_cluster_version_))) {
     LOG_WARN("failed to deserialize ddl cluster version", K(ret), K(len), K(new_pos));
   } else {
+    // old format compatibility to 4.0, DO NOT add any new member deserialization!!!
     compat_mode_ = static_cast<lib::Worker::CompatMode>(compat_mode);
     pos = new_pos;
+  }
+
+  return ret;
+}
+
+int ObMigrationTabletParam::deserialize(const char *buf, const int64_t len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  int8_t compat_mode = -1;
+  int64_t length = 0;
+
+  if (OB_ISNULL(buf)
+      || OB_UNLIKELY(len <= 0)
+      || OB_UNLIKELY(pos < 0)
+      || OB_UNLIKELY(len < pos + 24)) { //at least 24 bytes for magic number, version and length
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(buf), K(len), K(pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &magic_number_))) {
+    LOG_WARN("failed to deserialize magic_number", K(ret), K(len), K(new_pos));
+  } else if (MAGIC_NUM == magic_number_) {
+    if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &version_))) {
+      LOG_WARN("failed to deserialize version", K(ret), K(len), K(new_pos));
+    } else if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &length))) {
+      LOG_WARN("failed to deserialize length", K(ret), K(len), K(new_pos));
+    } else if (OB_UNLIKELY(PARAM_VERSION != version_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid version", K(ret), K_(version));
+    } else if (OB_UNLIKELY(length > len - pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("buffer's length is not enough", K(ret), K(length), K(len - new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(ls_id_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize ls id", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(tablet_id_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize tablet id", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(data_tablet_id_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize data tablet id", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(ref_tablet_id_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize ref tablet id", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &create_scn_))) {
+      LOG_WARN("failed to deserialize create scn", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &start_scn_))) {
+      LOG_WARN("failed to deserialize start scn", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &clog_checkpoint_ts_))) {
+      LOG_WARN("failed to deserialize clog checkpoint ts", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_checkpoint_ts_))) {
+      LOG_WARN("failed to deserialize ddl checkpoint ts", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &snapshot_version_))) {
+      LOG_WARN("failed to deserialize clog checkpoint ts", K(ret), K(len));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &multi_version_start_))) {
+      LOG_WARN("failed to deserialize clog checkpoint ts", K(ret), K(len));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i8(buf, len, new_pos, (int8_t*)(&compat_mode)))) {
+      LOG_WARN("failed to deserialize compat mode", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(autoinc_seq_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize auto inc seq", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(ha_status_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize ha status", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(report_status_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize report status", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(tx_data_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize multi source data", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(ddl_data_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize ddl data", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(storage_schema_.deserialize(allocator_, buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize storage schema", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(medium_info_list_.deserialize(allocator_, buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize medium compaction list", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(table_store_flag_.deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize table store flag", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_start_log_ts_))) {
+      LOG_WARN("failed to deserialize ddl start log ts", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_snapshot_version_))) {
+      LOG_WARN("failed to deserialize ddl snapshot version", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &max_sync_storage_schema_version_))) {
+      LOG_WARN("failed to deserialize max sync storage schema version", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_execution_id_))) {
+      LOG_WARN("failed to deserialize ddl execution id", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &ddl_cluster_version_))) {
+      LOG_WARN("failed to deserialize ddl cluster version", K(ret), K(len), K(new_pos));
+    } else if (OB_UNLIKELY(length != new_pos - pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
+    } else {
+      compat_mode_ = static_cast<lib::Worker::CompatMode>(compat_mode);
+      pos = new_pos;
+    }
+  } else { // old format without length and version
+    magic_number_ = MAGIC_NUM;
+    version_ = PARAM_VERSION;
+    if (OB_FAIL(deserialize_old(buf, len, pos))) {
+      LOG_WARN("failed to deserialize old format", K(ret), K(len), K(pos));
+    }
   }
 
   return ret;
@@ -906,6 +1012,10 @@ int ObMigrationTabletParam::deserialize(const char *buf, const int64_t len, int6
 int64_t ObMigrationTabletParam::get_serialize_size() const
 {
   int64_t size = 0;
+  int64_t length = 0;
+  size += serialization::encoded_length_i64(magic_number_);
+  size += serialization::encoded_length_i64(version_);
+  size += serialization::encoded_length_i64(length);
   size += ls_id_.get_serialize_size();
   size += tablet_id_.get_serialize_size();
   size += data_tablet_id_.get_serialize_size();
@@ -935,6 +1045,7 @@ int64_t ObMigrationTabletParam::get_serialize_size() const
 
 void ObMigrationTabletParam::reset()
 {
+  ls_id_.reset();
   tablet_id_.reset();
   data_tablet_id_.reset();
   ref_tablet_id_.reset();
@@ -958,6 +1069,7 @@ void ObMigrationTabletParam::reset()
   max_sync_storage_schema_version_ = 0;
   ddl_execution_id_ = 0;
   ddl_cluster_version_ = 0;
+  allocator_.reset();
 }
 
 int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
