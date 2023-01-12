@@ -1143,6 +1143,7 @@ void ObMigrationTabletParam::reset()
   ddl_execution_id_ = -1;
   ddl_cluster_version_ = 0;
   max_serialized_medium_scn_ = 0;
+  allocator_.reset();
 }
 
 int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)

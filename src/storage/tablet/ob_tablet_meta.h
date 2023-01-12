@@ -197,7 +197,7 @@ struct ObMigrationTabletParam final
 {
 public:
   ObMigrationTabletParam();
-  ~ObMigrationTabletParam() = default;
+  ~ObMigrationTabletParam() { reset(); }
   ObMigrationTabletParam(const ObMigrationTabletParam &) = delete;
   ObMigrationTabletParam &operator=(const ObMigrationTabletParam &) = delete;
 public:
