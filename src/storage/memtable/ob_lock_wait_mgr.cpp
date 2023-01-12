@@ -454,7 +454,7 @@ ObLink* ObLockWaitMgr::check_timeout()
         node2del = iter;
         need_check_session = true;
         iter->on_retry_lock(hash);
-        TRANS_LOG(INFO, "standalone task should be waken up", K(*iter));
+        TRANS_LOG(INFO, "standalone task should be waken up", K(*iter), K(curr_lock_seq));
       } else if (iter->get_run_ts() > 0 && ObTimeUtility::current_time() > iter->get_run_ts()) {
         node2del = iter;
         need_check_session = true;
@@ -563,9 +563,6 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
   if (OB_NOT_NULL(node = get_thread_node())) {
     Key key(&row_key);
     uint64_t &hold_key = get_thread_hold_key();
-    if (hold_key == hash_rowkey(tablet_id, key)) {
-      hold_key = 0;
-    }
     if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
       auto row_hash = hash_rowkey(tablet_id, key);
       auto tx_hash = hash_trans(holder_tx_id);
@@ -576,6 +573,9 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
         TRANS_LOG(WARN, "recheck lock fail", K(key), K(holder_tx_id));
       } else if (locked) {
         auto hash = wait_on_row ? row_hash : tx_hash;
+        if (hold_key == hash) {
+          hold_key = 0;
+        }
         if (is_remote_sql && can_elr) {
           delay_header_node_run_ts(hash);
         }
