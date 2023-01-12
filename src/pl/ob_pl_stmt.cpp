@@ -3076,7 +3076,12 @@ int ObPLBlockNS::get_cursor_by_name(const ObExprResolveContext &ctx,
       }
     }
     if (OB_SUCC(ret) && !found && NULL != pre_ns_) {
-      pre_ns_->get_cursor_by_name(ctx, database_name, package_name, cursor_name, cursor);
+      OZ (pre_ns_->get_cursor_by_name(ctx, database_name, package_name, cursor_name, cursor));
+    }
+    // maybe local package cursor
+    if (OB_SUCC(ret) && !found && NULL != external_ns_ && NULL != external_ns_->get_parent_ns()) {
+      OZ (external_ns_->get_parent_ns()->get_cursor_by_name(
+            ctx, database_name, package_name, cursor_name, cursor));
     }
   } else {
     // package cursor
