@@ -108,7 +108,6 @@ int PalfRoleChangeCbWrapper::on_need_change_leader(const int64_t id, const ObAdd
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(true == list_.is_empty())) {
-    ret = OB_ERR_UNEXPECTED;
     PALF_LOG(INFO, "the role change callback list is empty", K(id), K(dest_addr));
   } else {
     ObSpinLockGuard guard(lock_);
