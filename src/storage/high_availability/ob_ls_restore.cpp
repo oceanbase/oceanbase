@@ -2041,6 +2041,7 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
   const bool is_transfer = false;
   const ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::PENDING;
   const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2048,14 +2049,18 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
   } else if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create or update tablet get invalid argument", K(ret), K(tablet_id));
+  } else if (OB_FAIL(share::ObCompatModeGetter::get_tablet_compat_mode(ctx_->arg_.tenant_id_, tablet_id, compat_mode))) {
+    LOG_WARN("failed to get tenant mode", KR(ret),"tenant_id", ctx_->arg_.tenant_id_, K(tablet_id));
   } else {
+    lib::CompatModeGuard g(compat_mode);
     ObMigrationTabletParam param;
     param.ls_id_ = ctx_->arg_.ls_id_;
     param.tablet_id_ = tablet_id;
     param.data_tablet_id_ = tablet_id;
     param.create_scn_ = ObTabletMeta::INIT_CREATE_SCN;
     param.clog_checkpoint_ts_ = OB_INVALID_TIMESTAMP;
-    param.compat_mode_ = lib::Worker::get_compatibility_mode();
+    // Compat mode of sys tables is MYSQL no matter what if the tenant is ORACLE mode.
+    param.compat_mode_ = compat_mode;
     param.multi_version_start_ = 0;
     param.snapshot_version_ = 0;
     param.tx_data_.tablet_status_ = ObTabletStatus::NORMAL;

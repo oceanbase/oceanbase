@@ -59,11 +59,33 @@ int ObCompatModeGetter::get_table_compat_mode(
       || table_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id or table_id", KR(ret), K(tenant_id), K(table_id));
+  } else if (is_ls_reserved_table(table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table id cannot be ls inner table id", KR(ret), K(tenant_id), K(table_id));
   } else if (is_inner_table(table_id)) {
     mode = (is_ora_virtual_table(table_id)
             || is_ora_sys_view_table(table_id)) ?
             lib::Worker::CompatMode::ORACLE :
             lib::Worker::CompatMode::MYSQL;
+  } else {
+    ret = instance().get_tenant_compat_mode(tenant_id, mode);
+  }
+  return ret;
+}
+
+int ObCompatModeGetter::get_tablet_compat_mode(
+    const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id,
+    lib::Worker::CompatMode& mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(
+      OB_INVALID_TENANT_ID == tenant_id
+      || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id or tablet_id", KR(ret), K(tenant_id), K(tablet_id));
+  } else if (tablet_id.is_sys_tablet()) {
+    mode = lib::Worker::CompatMode::MYSQL;
   } else {
     ret = instance().get_tenant_compat_mode(tenant_id, mode);
   }
