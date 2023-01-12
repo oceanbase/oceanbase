@@ -266,6 +266,65 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   ASSERT_TRUE(src_meta.is_valid());
   ASSERT_TRUE(dst_meta.is_valid());
 }
+
+TEST_F(TestLSMigrationParam, test_migration_param_compat)
+{
+  const int64_t buf_len = 4096;
+  char buf[buf_len] = {};
+
+  int ret = OB_SUCCESS;
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTabletMapKey src_key;
+  src_key.ls_id_ = TEST_LS_ID;
+  src_key.tablet_id_ = 1002;
+
+  ObTabletHandle src_handle;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ret = t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, src_key, ls_handle, src_handle, false);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+
+  share::schema::ObTableSchema table_schema;
+  TestSchemaUtils::prepare_data_schema(table_schema);
+
+  ObTabletID empty_tablet_id;
+  ObTabletTableStoreFlag store_flag;
+  store_flag.set_with_major_sstable();
+  ObTableHandleV2 empty_handle;
+  SCN scn;
+  scn.convert_from_ts(ObTimeUtility::current_time());
+  ret = src_handle.get_obj()->init(src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
+      empty_tablet_id, empty_tablet_id, scn, 2022, table_schema,
+      lib::Worker::CompatMode::MYSQL, store_flag, empty_handle, ls_handle.get_ls()->get_freezer());
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+
+  ObMigrationTabletParam tablet_param;
+  ret = src_handle.get_obj()->build_migration_tablet_param(tablet_param);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(tablet_param.is_valid());
+
+  int64_t pos = 0;
+  ret = tablet_param.serialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // normal deserialize
+  ObMigrationTabletParam des_param;
+  pos = 0;
+  ret = des_param.deserialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(des_param.is_valid());
+
+  // deserialize old format
+  pos = 24; // magic_number_ + version_ + length_
+  des_param.reset();
+  ret = des_param.deserialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(des_param.is_valid());
+}
 } // namespace storage
 } // namespace oceanbase
 

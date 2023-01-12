@@ -590,11 +590,6 @@ int64_t ObSimpleTableSchemaV2::get_convert_size() const
   convert_size += link_database_name_.length() + 1;
   convert_size += transition_point_.get_deep_copy_size();
   convert_size += interval_range_.get_deep_copy_size();
-  if (OB_NOT_NULL(list_idx_hash_array_)) {
-    int64_t cnt = list_idx_hash_array_->item_count();
-    convert_size += get_list_idx_hash_array_mem_size_(cnt);
-    convert_size += cnt * sizeof(ObNewRowValue);
-  }
   return convert_size;
 }
 

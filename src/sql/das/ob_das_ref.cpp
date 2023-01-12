@@ -330,7 +330,7 @@ bool ObDASRef::check_rcode_can_retry(int ret, int64_t ref_table_id)
 int ObDASRef::wait_executing_tasks()
 {
   int ret = OB_SUCCESS;
-  if (get_current_concurrency() < max_das_task_concurrency_) {
+  {
     ObThreadCondGuard guard(cond_);
     while (OB_SUCC(ret) && get_current_concurrency() < max_das_task_concurrency_) {
       // we cannot use ObCond here because it can not explicitly lock mutex, causing concurrency problem.

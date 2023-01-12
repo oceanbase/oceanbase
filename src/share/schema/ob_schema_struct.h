@@ -28,7 +28,6 @@
 #include "share/ob_priv_common.h"
 #include "lib/worker.h"
 #include "objit/common/ob_item_type.h"
-#include "lib/hash/ob_pointer_hashmap.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -2094,54 +2093,6 @@ private:
   int64_t subpart_idx_;
 };
 
-class ObNewRowKey
-{
-public:
-  ObNewRowKey() : row_(NULL), hash_val_(0) {}
-  ObNewRowKey(const common::ObNewRow &row);
-  ~ObNewRowKey() {};
-  uint64_t hash() const;
-  bool operator==(const ObNewRowKey &other) const;
-private:
-  const common::ObNewRow *row_;
-  uint64_t hash_val_;
-};
-
-class ObNewRowValue
-{
-public:
-  ObNewRowValue() : key_(), part_idx_(common::OB_INVALID_INDEX) {}
-  ObNewRowValue(const common::ObNewRow &row, const int64_t part_idx)
-    : key_(row), part_idx_(part_idx) {}
-  ~ObNewRowValue() {};
-  ObNewRowKey get_key() const { return key_; }
-  int64_t get_part_idx() const { return part_idx_; }
-private:
-  ObNewRowKey key_;
-  int64_t part_idx_;
-};
-
-template<class K, class V>
-struct ObGetNewRowKey
-{
-  void operator()(const K &k, const V &v) const
-  {
-    UNUSED(k);
-    UNUSED(v);
-  }
-};
-
-template<>
-struct ObGetNewRowKey<ObNewRowKey, const ObNewRowValue *>
-{
-  ObNewRowKey operator()(const ObNewRowValue *value) const
-  {
-    return value->get_key();
-  }
-};
-
-typedef common::hash::ObPointerHashArray<ObNewRowKey, const ObNewRowValue *, ObGetNewRowKey> ListIdxHashArray;
-
 class ObPartitionSchema : public ObSchema
 {
   OB_UNIS_VERSION(1);
@@ -2353,7 +2304,6 @@ public:
     partition_array_capacity_ = 0;
     partition_num_ = 0;
     partition_array_ = NULL;
-    list_idx_hash_array_ = NULL;
   }
 
   int64_t get_hidden_partition_num() const { return hidden_partition_num_; }
@@ -2406,9 +2356,6 @@ public:
   // only used for generate part_name
   int get_max_part_id(int64_t &part_id) const;
   int get_max_part_idx(int64_t &part_idx) const;
-
-  const ListIdxHashArray *get_list_idx_hash_array() const { return list_idx_hash_array_; }
-  int build_list_idx_hash_array();
 protected:
   int inner_add_partition(const ObPartition &part);
   template<class T>
@@ -2438,8 +2385,6 @@ protected:
   {
     return (sub_part_template_flags_ & flag) > 0;
   }
-  int get_list_idx_hash_array_mem_size_(const int64_t cnt) const;
-  int get_list_part_value_cnt_(int64_t &count);
 protected:
   static const int64_t DEFAULT_ARRAY_CAPACITY = 128;
 protected:
@@ -2479,10 +2424,6 @@ protected:
   int64_t hidden_partition_num_;
   common::ObRowkey transition_point_;
   common::ObRowkey interval_range_;
-
-  // Record ObNewRow -> part_idx when table's firt part is list like
-  // won't serialize/deserialize
-  ListIdxHashArray *list_idx_hash_array_;
 };
 /*TODO: Delete the following interfaces in ObTablegroupSchema and ObDatabaseSchema
 int ObTablegroupSchema::get_first_primary_zone_inherit()
@@ -2853,7 +2794,6 @@ private:
       const common::ObNewRange &range,
       ObPartition * const* partition_array,
       const int64_t partition_num,
-      const ListIdxHashArray *list_idx_hash_array,
       common::ObIArray<PartitionIndex> &indexes);
 
   // param[@in]:
@@ -2887,7 +2827,6 @@ private:
       const common::ObNewRow &row,
       ObPartition * const* partition_array,
       const int64_t partition_num,
-      const ListIdxHashArray *list_idx_hash_array,
       common::ObIArray<PartitionIndex> &indexes);
 
   // param[@in]:
