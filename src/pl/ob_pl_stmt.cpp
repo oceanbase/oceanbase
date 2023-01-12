@@ -2715,6 +2715,13 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
     }
     if (OB_SUCC(ret) && routine_infos.empty()) {
       if (OB_NOT_NULL(external_ns_)) {
+        bool need_clear = false;
+        if (OB_ISNULL(external_ns_->get_resolve_ctx().params_.secondary_namespace_)
+            && OB_NOT_NULL(resolve_ctx.params_.secondary_namespace_)) {
+          need_clear = true;
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_
+          = resolve_ctx.params_.secondary_namespace_;
+        }
         if (OB_FAIL(SMART_CALL(external_ns_->resolve_external_routine(
                                                         db_name,
                                                         package_name,
@@ -2724,6 +2731,9 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
                                                         routine_infos)))) {
           LOG_WARN("resolve routine failed", K(db_name), K(package_name), K(routine_name),
                    K(expr_params), K(ret));
+        }
+        if (need_clear) {
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ = NULL;
         }
       }
     }
