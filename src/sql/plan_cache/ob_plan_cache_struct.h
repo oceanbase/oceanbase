@@ -327,7 +327,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       def_name_ctx_(NULL),
       fixed_param_info_list_(allocator),
       dynamic_param_info_list_(allocator),
-      tpl_sql_const_cons_(allocator)
+      tpl_sql_const_cons_(allocator),
+      need_retry_add_plan_(true)
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -383,6 +384,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   bool is_inner_sql() const { return is_inner_sql_; } 
   void set_is_rewrite_sql(bool v) { is_rewrite_sql_ = v; }
   bool is_rewrite_sql() const { return is_rewrite_sql_; }
+  void set_need_retry_add_plan(bool v) { need_retry_add_plan_ = v; }
+  bool need_retry_add_plan() const { return need_retry_add_plan_; }
   TO_STRING_KV(
     K(mode_),
     K(raw_sql_),
@@ -405,7 +408,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(fixed_param_info_list_),
     K(dynamic_param_info_list_),
     K(tpl_sql_const_cons_),
-    K(is_original_ps_mode_)
+    K(is_original_ps_mode_),
+    K(need_retry_add_plan_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -463,6 +467,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   common::ObFixedArray<DynamicParamInfo, common::ObIAllocator> dynamic_param_info_list_;
   common::ObFixedArray<NotParamInfoList, common::ObIAllocator> tpl_sql_const_cons_;
   // **********  for rewrite end **********
+  // when schema version of cache node is old, whether remove this node and retry add cache obj.
+  bool need_retry_add_plan_;
 };
 
 struct ObPlanCacheStat

@@ -1104,6 +1104,7 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
     int64_t latest_rule_version = G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_version(MTL_ID());
     if (pc_ctx.sql_ctx_.res_map_rule_version_ != latest_rule_version) {
       ret = OB_OLD_SCHEMA_VERSION;
+      pc_ctx.set_need_retry_add_plan(false);
       SQL_PC_LOG(TRACE, "resource map rule version is outdated, not add to plan cache.", K(ret),
                 K(pc_ctx.sql_ctx_.res_map_rule_version_), K(latest_rule_version));
     }

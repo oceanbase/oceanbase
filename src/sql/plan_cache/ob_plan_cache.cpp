@@ -650,7 +650,7 @@ int ObPlanCache::add_plan_cache(ObILibCacheCtx &ctx,
           SQL_PC_LOG(WARN, "fail to remove lib cache node", K(ret));
         }
       }
-    } while (OB_OLD_SCHEMA_VERSION == ret);
+    } while (OB_OLD_SCHEMA_VERSION == ret && pc_ctx.need_retry_add_plan());
   }
   return ret;
 }
