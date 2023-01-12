@@ -7279,20 +7279,20 @@ int ObPLResolver::resolve_condition_compile(
   ObPLDependencyTable *dep_table)
 {
   int ret = OB_SUCCESS;
-  ObPLPackageGuard local_pkg_guard(PACKAGE_RESV_HANDLE);
   ObRawExprFactory expr_factory(allocator);
   CK (OB_NOT_NULL(node));
   CK (T_SP_PRE_STMTS == node->type_);
   CK (OB_NOT_NULL(schema_guard));
-  if (OB_SUCC(ret) && OB_ISNULL(package_guard)) {
-    OZ (local_pkg_guard.init());
-    OX (package_guard = &local_pkg_guard);
-  }
   if (OB_SUCC(ret) && OB_ISNULL(sql_proxy)) {
     CK (OB_NOT_NULL(sql_proxy = GCTX.sql_proxy_));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(session_info)) {
+    ObPLPackageGuard local_pkg_guard(schema_guard->get_tenant_id());
+    if (OB_SUCC(ret) && OB_ISNULL(package_guard)) {
+      OZ (local_pkg_guard.init());
+      OX (package_guard = &local_pkg_guard);
+    }
     SMART_VAR(sql::ObSQLSessionInfo, session) {
       ObExecEnv env;
       CK (OB_NOT_NULL(exec_env));
@@ -7315,6 +7315,11 @@ int ObPLResolver::resolve_condition_compile(
       }
     }
   } else {
+    ObPLPackageGuard local_pkg_guard(session_info->get_effective_tenant_id());
+    if (OB_SUCC(ret) && OB_ISNULL(package_guard)) {
+      OZ (local_pkg_guard.init());
+      OX (package_guard = &local_pkg_guard);
+    }
     ObPLResolver resolver(
       allocator, *session_info,
       *schema_guard, *package_guard, *sql_proxy, expr_factory, NULL, false);
@@ -8579,7 +8584,7 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
   } else if (OB_ISNULL(params.secondary_namespace_)) {
     HEAP_VAR(pl::ObPLFunctionAST, func_ast, *(params.allocator_)) {
       ObPLStmtBlock *null_block = NULL;
-      ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
+      ObPLPackageGuard package_guard(params.session_info_->get_effective_tenant_id());
       ObPLResolver resolver(*(params.allocator_),
                             *(params.session_info_),
                             *(params.schema_checker_->get_schema_guard()),

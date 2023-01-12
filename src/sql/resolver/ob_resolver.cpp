@@ -200,7 +200,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
              K(params_.allocator_), K(params_.schema_checker_),
              K(params_.session_info_), K(params_.query_ctx_), KP(params_.expr_factory_));
   } else if (T_SP_PRE_STMTS == parse_tree.type_) {
-    pl::ObPLPackageGuard package_guard(sql::PACKAGE_RESV_HANDLE);
+    pl::ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
     pl::ObPLResolver resolver(*(params_.allocator_),
                               *(params_.session_info_),
                               *(params_.schema_checker_->get_schema_guard()),

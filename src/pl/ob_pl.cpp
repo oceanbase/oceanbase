@@ -2019,7 +2019,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ParseNode *block_node = NULL;
   ObPLFunction *routine = NULL;
-  ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
+  ObPLPackageGuard package_guard(ctx.get_my_session()->get_effective_tenant_id());
 
   int64_t compile_start = ObTimeUtility::current_time();
 

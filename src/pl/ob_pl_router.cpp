@@ -189,7 +189,7 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
   //Resolver
   if (OB_SUCC(ret)) {
     const bool is_prepare_protocol = false;
-    ObPLPackageGuard package_guard(sql::PACKAGE_RESV_HANDLE);
+    ObPLPackageGuard package_guard(session_info_.get_effective_tenant_id());
     ObPLResolver resolver(inner_allocator_,
                           session_info_,
                           schema_guard_,

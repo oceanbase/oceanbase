@@ -874,7 +874,6 @@ int ObSPIService::spi_calc_package_expr(ObPLExecCtx *ctx,
   ObMySQLProxy *sql_proxy = NULL;
   ObPL *pl_engine = NULL;
   share::schema::ObSchemaGetterGuard schema_guard;
-  ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
   CK (OB_NOT_NULL(ctx), ctx->valid());
   CK (OB_NOT_NULL(GCTX.schema_service_));
   CK (OB_NOT_NULL(exec_ctx = ctx->exec_ctx_));
@@ -884,8 +883,8 @@ int ObSPIService::spi_calc_package_expr(ObPLExecCtx *ctx,
   OZ (GCTX.schema_service_->get_tenant_schema_guard(
                             session_info->get_effective_tenant_id(),
                             schema_guard));
-  OZ (package_guard.init());
   if (OB_SUCC(ret)) {
+    ObPLPackageGuard package_guard(session_info->get_effective_tenant_id());
     ObSqlExpression *sql_expr = NULL;
     ObPLPackageManager &pl_manager = pl_engine->get_package_manager();
     ObPLPackageGuard &guard = ctx->guard_ != NULL ? (*ctx->guard_) : package_guard;
@@ -897,6 +896,7 @@ int ObSPIService::spi_calc_package_expr(ObPLExecCtx *ctx,
                                guard,
                                *sql_proxy,
                                false);
+    OZ (package_guard.init());
     OZ (pl_manager.get_package_expr(resolve_ctx, package_id, expr_idx, sql_expr));
     CK (OB_NOT_NULL(sql_expr));
     OZ (guard.get(package_id, cache_obj_guard));
@@ -939,7 +939,7 @@ int ObSPIService::spi_set_package_variable(
   if (OB_SUCC(ret)) {
     ObPLPackageManager &pl_manager = pl_engine->get_package_manager();
     share::schema::ObSchemaGetterGuard schema_guard;
-    ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
+    ObPLPackageGuard package_guard(session_info->get_effective_tenant_id());
     ObPLResolveCtx resolve_ctx(exec_ctx->get_allocator(),
                                *session_info,
                                schema_guard,
@@ -2788,7 +2788,6 @@ int ObSPIService::spi_get_package_cursor_info(ObPLExecCtx *ctx,
   ObMySQLProxy *sql_proxy = NULL;
   ObPL *pl_engine = NULL;
   share::schema::ObSchemaGetterGuard schema_guard;
-  ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
   UNUSED(routine_id);
   cursor = NULL;
   CK (OB_NOT_NULL(ctx), ctx->valid());
@@ -2800,6 +2799,7 @@ int ObSPIService::spi_get_package_cursor_info(ObPLExecCtx *ctx,
   OZ (GCTX.schema_service_->get_tenant_schema_guard(
                             session_info->get_effective_tenant_id(),
                             schema_guard));
+  ObPLPackageGuard package_guard(session_info->get_effective_tenant_id());
   OZ (package_guard.init());
   if (OB_SUCC(ret)) {
     ObObj value;
@@ -4526,7 +4526,6 @@ int ObSPIService::spi_get_package_allocator(
   ObMySQLProxy *sql_proxy = NULL;
   ObPL *pl_engine = NULL;
   share::schema::ObSchemaGetterGuard schema_guard;
-  ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(GCTX.schema_service_));
   CK (OB_NOT_NULL(exec_ctx = ctx->exec_ctx_));
@@ -4536,6 +4535,7 @@ int ObSPIService::spi_get_package_allocator(
   OZ (GCTX.schema_service_->get_tenant_schema_guard(
                             session_info->get_effective_tenant_id(),
                             schema_guard));
+  ObPLPackageGuard package_guard(session_info->get_effective_tenant_id());
   OZ (package_guard.init());
   OX (allocator = NULL);
   if (OB_SUCC(ret)) {

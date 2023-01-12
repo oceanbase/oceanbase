@@ -111,7 +111,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
     OX (pl_type.set_user_type_id(PL_RECORD_TYPE, table_info->get_table_id()));
     OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
   } else {
-    ObPLPackageGuard dummy_guard(PACKAGE_TYPE_HANDLE);
+    ObPLPackageGuard dummy_guard(session_info.get_effective_tenant_id());
     ObMySQLProxy dummy_proxy;
     ObPLResolveCtx ctx(allocator, session_info, schema_guard, dummy_guard, dummy_proxy, false);
     ObRecordType *record_type = NULL;

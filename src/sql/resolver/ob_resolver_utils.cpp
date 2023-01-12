@@ -544,7 +544,7 @@ int ObResolverUtils::check_type_match(ObResolverParams &params,
                                       ObPLDataType &dst_pl_type)
 {
   int ret = OB_SUCCESS;
-  ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
+  ObPLPackageGuard package_guard(params.session_info_->get_effective_tenant_id());
   ObPLResolveCtx resolve_ctx(*(params.allocator_),
                              *(params.session_info_),
                              *(params.schema_checker_->get_schema_guard()),
@@ -1222,7 +1222,7 @@ int ObResolverUtils::get_routine(ObResolverParams &params,
   CK (OB_NOT_NULL(params.schema_checker_->get_schema_guard()));
   CK (OB_NOT_NULL(GCTX.sql_proxy_));
   if (OB_SUCC(ret)) {
-    ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
+    ObPLPackageGuard package_guard(params.session_info_->get_effective_tenant_id());
     ObPLResolveCtx resolve_ctx(*(params.allocator_),
                                *(params.session_info_),
                                *(params.schema_checker_->get_schema_guard()),
