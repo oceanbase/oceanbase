@@ -1078,6 +1078,7 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
   ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(mt_ctx->get_trans_ctx());
   const SCN scn = mt_ctx->get_redo_scn();
   const int64_t log_id = mt_ctx->get_redo_log_id();
+  common::ObTimeGuard timeguard("ObMemtable::replay_row", 5 * 1000);
 
   if (OB_FAIL(mmi->get_mutator_row().copy(table_id, rowkey, table_version, row,
                                         old_row, dml_flag, modify_count, acc_checksum, version,
@@ -1085,9 +1086,11 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
     if (OB_ITER_END != ret) {
       TRANS_LOG(WARN, "get next row error", K(ret));
     }
+  } else if (FALSE_IT(timeguard.click("mutator_row copy"))) {
   } else if (OB_FAIL(check_standby_cluster_schema_condition_(ctx, table_id, table_version))) {
     TRANS_LOG(WARN, "failed to check standby_cluster_schema_condition", K(ret), K(table_id),
               K(table_version));
+  } else if (FALSE_IT(timeguard.click("check_standby_cluster_schema_condition"))) {
   } else if (OB_UNLIKELY(dml_flag == blocksstable::ObDmlFlag::DF_NOT_EXIST)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "Unexpected not exist trans node", K(ret), K(dml_flag), K(rowkey));
@@ -1107,6 +1110,7 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
       TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
     } else if (OB_FAIL(mvcc_replay_(ctx, &mtk, arg))) {
       TRANS_LOG(WARN, "mvcc replay failed", K(ret), K(ctx), K(arg));
+    } else if (FALSE_IT(timeguard.click("mvcc_replay_"))) {
     }
 
     if (OB_SUCCESS != ret) {
@@ -2495,6 +2499,7 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
   bool is_new_add = false;
   ObIMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
   ObMvccReplayResult res;
+  common::ObTimeGuard timeguard("ObMemtable::mvcc_replay_", 5 * 1000);
 
   if (OB_FAIL(mvcc_engine_.create_kv(key,
                                      &stored_key,
@@ -2502,14 +2507,17 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
                                      getter,
                                      is_new_add))) {
     TRANS_LOG(WARN, "prepare kv before lock fail", K(ret));
+  } else if (FALSE_IT(timeguard.click("mvcc_engine_.create_kv"))) {
   } else if (OB_FAIL(mvcc_engine_.mvcc_replay(*mem_ctx,
                                               &stored_key,
                                               *value,
                                               arg,
                                               res))) {
     TRANS_LOG(WARN, "mvcc replay fail", K(ret));
+  } else if (FALSE_IT(timeguard.click("mvcc_engine_.mvcc_replay"))) {
   } else if (OB_FAIL(mvcc_engine_.ensure_kv(&stored_key, value))) {
     TRANS_LOG(WARN, "prepare kv after lock fail", K(ret));
+  } else if (FALSE_IT(timeguard.click("mvcc_engine_.ensure_kv"))) {
   } else if (OB_FAIL(mem_ctx->register_row_replay_cb(&stored_key,
                                                      value,
                                                      res.tx_node_,
@@ -2518,6 +2526,7 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
                                                      arg.seq_no_,
                                                      arg.scn_))) {
     TRANS_LOG(WARN, "register_row_replay_cb fail", K(ret));
+  } else if (FALSE_IT(timeguard.click("register_row_replay_cb"))) {
   }
 
   return ret;

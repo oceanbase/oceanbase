@@ -107,6 +107,7 @@ int ObIMvccCtx::register_row_replay_cb(
   int ret = OB_SUCCESS;
   const bool is_replay = true;
   ObMvccRowCallback *cb = NULL;
+  common::ObTimeGuard timeguard("ObIMvccCtx::register_row_replay_cb", 5 * 1000);
   if (OB_ISNULL(key) || OB_ISNULL(value) || OB_ISNULL(node)
       || data_size <= 0 || OB_ISNULL(memtable)) {
     ret = OB_INVALID_ARGUMENT;
@@ -114,6 +115,7 @@ int ObIMvccCtx::register_row_replay_cb(
   } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
+  } else if (FALSE_IT(timeguard.click("alloc_row_callback"))) {
   } else {
     cb->set(key,
             node,
@@ -125,6 +127,7 @@ int ObIMvccCtx::register_row_replay_cb(
       ObRowLatchGuard guard(value->latch_);
       cb->link_trans_node();
     }
+    timeguard.click("link_trans_node");
 
     cb->set_scn(scn);
     if (OB_FAIL(append_callback(cb))) {
@@ -134,9 +137,11 @@ int ObIMvccCtx::register_row_replay_cb(
       }
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
+    timeguard.click("append_callback");
 
     if (OB_FAIL(ret)) {
       callback_free(cb);
+      timeguard.click("callback_free");
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
   }
