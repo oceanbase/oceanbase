@@ -164,7 +164,7 @@ int ObOBJLock::recover_(
   return ret;
 }
 
-int ObOBJLock::lock_(
+int ObOBJLock::slow_lock(
     const ObLockParam &param,
     const ObTableLockOp &lock_op,
     const ObTableLockMode &lock_mode_in_same_trans,
@@ -184,6 +184,7 @@ int ObOBJLock::lock_(
   ObMemAttr attr(tenant_id, "ObTableLockOp");
   // 1. check lock conflict.
   // 2. record lock op.
+  WRLockGuard guard(rwlock_);
   if (is_deleted_) {
     ret = OB_EAGAIN;
     need_retry = false;
@@ -194,12 +195,6 @@ int ObOBJLock::lock_(
                                        allocator))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("check allow lock failed", K(ret), K(lock_op));
-    }
-  } else if (OB_LIKELY(!lock_op.need_record_lock_op())) {
-    if (lock_op.lock_mode_ == ROW_EXCLUSIVE) {
-      lock_row_exclusive_();
-    } else if (lock_op.lock_mode_ == ROW_SHARE) {
-      lock_row_share_();
     }
   } else if (OB_FAIL(get_or_create_op_list(lock_op.lock_mode_,
                                            tenant_id,
@@ -410,6 +405,96 @@ int ObOBJLock::update_lock_status(
   return ret;
 }
 
+int ObOBJLock::try_fast_lock_(
+    const ObTableLockOp &lock_op,
+    const ObTableLockMode &lock_mode_in_same_trans,
+    bool &need_retry,
+    ObTxIDSet &conflict_tx_set)
+{
+  int ret = OB_SUCCESS;
+  bool unused_conflict_with_dml_lock = false;
+  if (is_deleted_) {
+    ret = OB_EAGAIN;
+    need_retry = false;
+  } else if (OB_UNLIKELY(lock_op.need_record_lock_op())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("this lock op should not do fast lock", KR(ret), K(lock_op));
+  } else if (OB_FAIL(check_allow_lock_(lock_op,
+                                       lock_mode_in_same_trans,
+                                       conflict_tx_set,
+                                       unused_conflict_with_dml_lock))) {
+    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+      LOG_WARN("check allow lock failed", K(ret), K(lock_op));
+    }
+  } else {
+    if (lock_op.lock_mode_ == ROW_EXCLUSIVE) {
+      lock_row_exclusive_();
+    } else if (lock_op.lock_mode_ == ROW_SHARE) {
+      lock_row_share_();
+    }
+    LOG_DEBUG("succeed create lock ", K(lock_op));
+  }
+  return ret;
+}
+
+int ObOBJLock::fast_lock(
+    const ObLockParam &param,
+    const ObTableLockOp &lock_op,
+    const ObTableLockMode &lock_mode_in_same_trans,
+    bool &need_retry,
+    ObMalloc &allocator,
+    ObTxIDSet &conflict_tx_set)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool is_compacted = false;
+  const bool is_force_compact = true;
+  {
+    // lock first time
+    RDLockGuard guard(rwlock_);
+    if (OB_FAIL(try_fast_lock_(lock_op,
+                               lock_mode_in_same_trans,
+                               need_retry,
+                               conflict_tx_set))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("try fast lock failed", KR(ret), K(lock_op));
+      }
+    } else {
+      LOG_DEBUG("succeed create lock ", K(lock_op));
+    }
+  }
+  // compact if need.
+  if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+    WRLockGuard guard(rwlock_);
+    if (is_deleted_) {
+      ret = OB_EAGAIN;
+      need_retry = false;
+    } else if(OB_TMP_FAIL(compact_tablelock_(allocator, is_compacted, is_force_compact))) {
+      // compact the obj lock to make sure the lock op that need compact will
+      // not block the lock operation next time.
+      LOG_WARN("compact tablelock failed", K(tmp_ret), K(lock_op));
+    }
+  }
+  if (OB_TRY_LOCK_ROW_CONFLICT == ret && is_compacted) {
+    RDLockGuard guard(rwlock_);
+    if (OB_FAIL(try_fast_lock_(lock_op,
+                               lock_mode_in_same_trans,
+                               need_retry,
+                               conflict_tx_set))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("try fast lock failed", KR(ret), K(lock_op));
+      }
+    } else {
+      LOG_DEBUG("succeed create lock ", K(lock_op));
+    }
+  }
+  // 1. need retry basic conditions
+  if (ret == OB_TRY_LOCK_ROW_CONFLICT && !param.is_try_lock_) {
+    need_retry = true;
+  }
+  return ret;
+}
+
 int ObOBJLock::lock(
     const ObLockParam &param,
     ObStoreCtx &ctx,
@@ -432,33 +517,27 @@ int ObOBJLock::lock(
     bool need_retry = false;
     do {
       need_retry = false;
-      {
-        if (OB_LIKELY(!lock_op.need_record_lock_op())) {
-          RDLockGuard guard(rwlock_);
-          if (OB_FAIL(lock_(param,
-                            lock_op,
-                            lock_mode_in_same_trans,
-                            need_retry,
-                            allocator,
-                            conflict_tx_set))) {
-            if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
-                ret != OB_EAGAIN) {
-              LOG_WARN("lock failed.", K(ret), K(lock_op));
-            }
+      if (OB_LIKELY(!lock_op.need_record_lock_op())) {
+        if (OB_FAIL(fast_lock(param,
+                              lock_op,
+                              lock_mode_in_same_trans,
+                              need_retry,
+                              allocator,
+                              conflict_tx_set))) {
+          if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
+              ret != OB_EAGAIN) {
+            LOG_WARN("lock failed.", K(ret), K(lock_op));
           }
-        } else {
-          WRLockGuard guard(rwlock_);
-          if (OB_FAIL(lock_(param,
-                            lock_op,
-                            lock_mode_in_same_trans,
-                            need_retry,
-                            allocator,
-                            conflict_tx_set))) {
-            if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
-                ret != OB_EAGAIN) {
-              LOG_WARN("lock failed.", K(ret), K(lock_op));
-            }
-          }
+        }
+      } else if (OB_FAIL(slow_lock(param,
+                                   lock_op,
+                                   lock_mode_in_same_trans,
+                                   need_retry,
+                                   allocator,
+                                   conflict_tx_set))) {
+        if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
+            ret != OB_EAGAIN) {
+          LOG_WARN("lock failed.", K(ret), K(lock_op));
         }
       }
 
@@ -917,22 +996,48 @@ int ObOBJLock::check_allow_lock(
     const ObTableLockMode &lock_mode_in_same_trans,
     ObTxIDSet &conflict_tx_set,
     bool &conflict_with_dml_lock,
+    ObMalloc &allocator,
     const bool include_finish_tx,
     const bool only_check_dml_lock)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool is_compacted = false;
+  const bool is_force_compact = true;
   if (OB_UNLIKELY(!lock_op.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(lock_op));
   } else {
     // prevent from create new lock op.
-    RDLockGuard guard(rwlock_);
-    ret = check_allow_lock_(lock_op,
-                            lock_mode_in_same_trans,
-                            conflict_tx_set,
-                            conflict_with_dml_lock,
-                            include_finish_tx,
-                            only_check_dml_lock);
+    // may be we need compact the lock.
+    {
+      RDLockGuard guard(rwlock_);
+      ret = check_allow_lock_(lock_op,
+                              lock_mode_in_same_trans,
+                              conflict_tx_set,
+                              conflict_with_dml_lock,
+                              include_finish_tx,
+                              only_check_dml_lock);
+    }
+    // compact if need.
+    if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+      WRLockGuard guard(rwlock_);
+      if(OB_TMP_FAIL(compact_tablelock_(allocator, is_compacted, is_force_compact))) {
+        // compact the obj lock to make sure the lock op that need compact will
+        // not block the lock operation next time.
+        LOG_WARN("compact tablelock failed", K(tmp_ret), K(lock_op));
+      }
+    }
+    // recheck if compacted
+    if (OB_TRY_LOCK_ROW_CONFLICT == ret && is_compacted) {
+      RDLockGuard guard(rwlock_);
+      ret = check_allow_lock_(lock_op,
+                              lock_mode_in_same_trans,
+                              conflict_tx_set,
+                              conflict_with_dml_lock,
+                              include_finish_tx,
+                              only_check_dml_lock);
+    }
   }
   return ret;
 }
@@ -2031,6 +2136,7 @@ int ObOBJLockMap::check_allow_lock(
                                                 lock_mode_in_same_trans,
                                                 conflict_tx_set,
                                                 conflict_with_dml_lock,
+                                                allocator_,
                                                 include_finish_tx,
                                                 only_check_dml_lock))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
