@@ -1248,6 +1248,8 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
   ObSEArray<ObITable *, MAX_SSTABLE_CNT> need_add_minor_tables;
   ObSEArray<ObITable *, MAX_SSTABLE_CNT> old_minor_tables;
   const int64_t inc_pos = 0;
+  ObTablesHandleArray tables_handle;
+  ObArray<ObITable *> minor_tables;
 
   if (OB_FAIL(param.tables_handle_.get_all_minor_sstables(need_add_minor_tables))) {
     LOG_WARN("failed to add need add minor tables", K(ret), K(param));
@@ -1271,18 +1273,20 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
     }
   } else if (OB_FAIL(ObTableStoreUtil::sort_minor_tables(new_minor_tables))) {
     LOG_WARN("failed to sort minor tables", K(ret));
-  } else if (OB_FAIL(cut_ha_sstable_log_ts_range_(new_minor_tables))) {
+  } else if (OB_FAIL(cut_ha_sstable_log_ts_range_(new_minor_tables, tables_handle))) {
     LOG_WARN("failed to cut ha sstable log ts range", K(ret), K(old_store), K(param));
-  } else if (OB_FAIL(check_minor_tables_continue_(new_minor_tables.count(), new_minor_tables.get_data()))) {
+  } else if (OB_FAIL(tables_handle.get_tables(minor_tables))) {
+    LOG_WARN("failed to get minor tables", K(ret), K(tables_handle));
+  } else if (OB_FAIL(check_minor_tables_continue_(minor_tables.count(), minor_tables.get_data()))) {
     LOG_WARN("minor tables is not continue", K(ret), K(param), K(new_minor_tables), K(old_store));
-  } else if (new_minor_tables.at(0)->get_start_log_ts() != tablet_ptr_->get_tablet_meta().start_scn_
-      || new_minor_tables.at(new_minor_tables.count() - 1)->get_end_log_ts() != tablet_ptr_->get_tablet_meta().clog_checkpoint_ts_) {
+  } else if (minor_tables.at(0)->get_start_log_ts() != tablet_ptr_->get_tablet_meta().start_scn_
+      || minor_tables.at(new_minor_tables.count() - 1)->get_end_log_ts() != tablet_ptr_->get_tablet_meta().clog_checkpoint_ts_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(new_minor_tables), K(param), K(old_store));
-  } else if (OB_FAIL(minor_tables_.init_and_copy(allocator, new_minor_tables, inc_pos))) {
+    LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(minor_tables), K(param), K(old_store));
+  } else if (OB_FAIL(minor_tables_.init_and_copy(allocator, minor_tables, inc_pos))) {
     LOG_WARN("failed to init minor_tables", K(ret));
   } else {
-    LOG_INFO("succeed build ha minor sstables", K(old_store), K(new_minor_tables));
+    LOG_INFO("succeed build ha minor sstables", K(old_store), K(minor_tables));
   }
   return ret;
 }
@@ -1350,12 +1354,14 @@ int ObTabletTableStore::build_ha_ddl_tables_(
 }
 
 int ObTabletTableStore::cut_ha_sstable_log_ts_range_(
-    common::ObIArray<ObITable *> &minor_sstables)
+    common::ObIArray<ObITable *> &minor_sstables,
+    ObTablesHandleArray &tables_handle)
 {
   int ret = OB_SUCCESS;
   int64_t last_end_log_ts = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstables.count(); ++i) {
     ObITable *table = minor_sstables.at(i);
+    ObTableHandleV2 new_table_handle;
 
     if (OB_ISNULL(table) || !table->is_multi_version_minor_sstable()) {
       ret = OB_ERR_UNEXPECTED;
@@ -1369,14 +1375,28 @@ int ObTabletTableStore::cut_ha_sstable_log_ts_range_(
       last_end_log_ts = table->get_end_log_ts();
     } else {
       ObSSTable *sstable = static_cast<ObSSTable *>(table);
-      ObLogTsRange new_log_ts_range;
-      ObLogTsRange original_log_ts_range = sstable->get_log_ts_range();
-      new_log_ts_range.start_log_ts_ = last_end_log_ts;
-      new_log_ts_range.end_log_ts_ = table->get_end_log_ts();
+      if (OB_FAIL(deep_copy_sstable_(*sstable, new_table_handle))) {
+        LOG_WARN("failed to deep copy sstable", KPC(sstable), K(new_table_handle));
+      } else {
+        table = new_table_handle.get_table();
+        ObLogTsRange new_log_ts_range;
+        ObLogTsRange original_log_ts_range = table->get_log_ts_range();
+        new_log_ts_range.start_log_ts_ = last_end_log_ts;
+        new_log_ts_range.end_log_ts_ = table->get_end_log_ts();
 
-      sstable->set_log_ts_range(new_log_ts_range);
-      last_end_log_ts = table->get_end_log_ts();
-      LOG_INFO("cut ha sstable log ts range", KPC(sstable), K(new_log_ts_range), K(original_log_ts_range));
+        table->set_log_ts_range(new_log_ts_range);
+        last_end_log_ts = table->get_end_log_ts();
+        LOG_INFO("cut ha sstable log ts range", KPC(sstable), K(new_log_ts_range), K(original_log_ts_range));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table should not be NULL", K(ret), KP(table));
+      } else if (OB_FAIL(tables_handle.add_table(table))) {
+        LOG_WARN("failed to add table into array", K(ret), KPC(table));
+      }
     }
   }
   return ret;
@@ -1653,6 +1673,46 @@ int ObTabletTableStore::build_ha_minor_tables_(
     if (OB_FAIL(replace_ha_minor_sstables_(allocator, param, old_store, inc_base_snapshot_version))) {
       LOG_WARN("failed to replace ha minor tables", K(ret), K(param), K(old_store));
     }
+  }
+  return ret;
+}
+
+
+int ObTabletTableStore::deep_copy_sstable_(
+    const blocksstable::ObSSTable &old_sstable,
+    ObTableHandleV2 &new_table_handle)
+{
+  int ret = OB_SUCCESS;
+  new_table_handle.reset();
+  ObArenaAllocator allocator;
+  int64_t pos = 0;
+  int64_t size = 0;
+  char *buf = nullptr;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
+  ObSSTable *new_sstable = nullptr;
+
+  if (!old_sstable.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("deep copy sstable get invalid argument", K(ret), K(old_sstable));
+  } else if (OB_ISNULL(t3m)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("t3m should not be NULL", K(ret), KP(t3m));
+  } else if (FALSE_IT(size = old_sstable.get_serialize_size())) {
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory", K(ret), K(size));
+  } else if (OB_FAIL(old_sstable.serialize(buf, size, pos))) {
+    LOG_WARN("failed to serialize sstable", K(ret), K(old_sstable), K(size));
+  } else if (OB_FAIL(t3m->acquire_sstable(new_table_handle))) {
+    LOG_WARN("failed to acquire sstable", K(ret));
+  } else if (OB_ISNULL(new_sstable = static_cast<ObSSTable *>(new_table_handle.get_table()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table should not be NULL", K(ret), K(new_table_handle));
+  } else if (FALSE_IT(pos = 0)) {
+  } else if (OB_FAIL(new_sstable->deserialize(t3m->get_tenant_allocator(), buf, size, pos))) {
+    LOG_WARN("failed to deserialize new sstable", K(ret), K(size), K(pos), K(old_sstable));
+  } else if (OB_FAIL(new_sstable->deserialize_post_work())) {
+    LOG_WARN("failed to deserialize post work", K(ret), KPC(new_sstable), K(old_sstable));
   }
   return ret;
 }
