@@ -3736,22 +3736,25 @@ int ObLogicalOperator::adjust_plan_root_output_exprs()
   } else if (output_exprs_.empty()) {
     /*do nothing*/
   } else if (stmt->is_select_stmt() &&
-             FALSE_IT(into_item = static_cast<const ObSelectStmt*>(get_stmt())->get_select_into())) {
+             FALSE_IT(into_item = static_cast<const ObSelectStmt*>(stmt)->get_select_into())) {
     /*do nothing*/
-  } else if (NULL == get_parent() && NULL != into_item && T_INTO_OUTFILE == into_item->into_type_) {
-    if (OB_FAIL(build_and_put_into_outfile_expr(into_item, output_exprs_))) {
-      LOG_WARN("failed to add into outfile expr to ctx", K(ret));
+  } else if (NULL == get_parent()) {
+    if (NULL != into_item && T_INTO_OUTFILE == into_item->into_type_) {
+      if (OB_FAIL(build_and_put_into_outfile_expr(into_item, output_exprs_))) {
+        LOG_WARN("failed to add into outfile expr to ctx", K(ret));
+      } else {
+        LOG_TRACE("succeed to add into outfile expr to ctx", K(ret));
+      }
     } else {
-      LOG_TRACE("succeed to add into outfile expr to ctx", K(ret));
+      bool need_pack = false;
+      if (OB_FAIL(check_stmt_can_be_packed(stmt, need_pack))) {
+        LOG_WARN("failed to check stmt can be pack", K(ret));
+      } else if (need_pack && OB_FAIL(build_and_put_pack_expr(output_exprs_))) {
+        LOG_WARN("failed to add pack expr to context", K(ret));
+      }
     }
-  } else if (NULL == get_parent() && check_stmt_can_be_packed(stmt)) {
-    if (OB_FAIL(build_and_put_pack_expr(output_exprs_))) {
-      LOG_WARN("failed to add pack expr to context", K(ret));
-    } else {
-      LOG_TRACE("succeed to add plan root output exprs", K(output_exprs_));
-    }
-  } else { /*do nothing*/ }
-
+    LOG_TRACE("succeed to adjust plan root output exprs", K(output_exprs_));
+  }
   return ret;
 }
 
@@ -3778,16 +3781,22 @@ int ObLogicalOperator::set_plan_root_output_exprs()
   return ret;
 }
 
-bool ObLogicalOperator::check_stmt_can_be_packed(const ObDMLStmt *stmt)
+int ObLogicalOperator::check_stmt_can_be_packed(const ObDMLStmt *stmt, bool &need_pack)
 {
-  bool need_pack = false;
+  int ret = OB_SUCCESS;
+  need_pack = false;
   ObSQLSessionInfo *session_info = NULL;
-  if (NULL != stmt && NULL != get_plan() &&
-      NULL != (session_info = get_plan()->get_optimizer_context().get_session_info())) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(get_plan()) ||
+      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    bool has_var_assign = get_plan()->get_optimizer_context().has_var_assign();
+    bool is_var_assign_only_in_root = get_plan()->get_optimizer_context().is_var_assign_only_in_root_stmt();
     need_pack = stmt->is_select_stmt() && (!session_info->is_inner()) && LOG_EXCHANGE == type_
-                 && (ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED == get_phy_plan_type());
+                 && (ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED == get_phy_plan_type()) && !has_var_assign;
   }
-  return need_pack;
+  return ret;
 }
 
 int ObLogicalOperator::replace_generated_agg_expr(

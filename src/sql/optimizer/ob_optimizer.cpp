@@ -240,48 +240,56 @@ bool ObOptimizer::exists_temp_table(const ObIArray<ObSqlTempTableInfo*> &temp_ta
   return bret;
 }
 
-// max_table_hint used for parallelism at the statement or object level
-int ObOptimizer::get_stmt_max_table_parallel_hint(ObDMLStmt &stmt,
-                                             int64_t &max_table_hint)
+/**
+* @brief Get the attr from stmt recursively object
+*
+* @param stmt
+* @param max_dop used for table's parallel attribute
+* @param max_table_parallel used for parallelism at the statement or object level
+* @return int
+*/
+int ObOptimizer::get_stmt_parallel_info(ObDMLStmt *stmt,
+                                        int64_t &max_table_dop,
+                                        int64_t &max_table_parallel)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 4> child_stmts;
-  ObQueryCtx *query_ctx = NULL;
   int64_t cur_max_table_hint = ObGlobalHint::UNSET_PARALLEL;
-  if (OB_FAIL(stmt.get_stmt_hint().get_max_table_parallel(stmt, cur_max_table_hint))) {
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmt", K(ret));
+  } else if (OB_FAIL(SMART_CALL(get_stmt_max_table_dop(*stmt, max_table_dop)))) {
+    LOG_WARN("failed to get stmt max table dop", K(ret));
+  } else if (OB_FAIL(stmt->get_stmt_hint().get_max_table_parallel(*stmt, cur_max_table_hint))) {
     LOG_WARN("failed to get max table parallel", K(ret));
-  } else if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
-    LOG_WARN("failed to get child stmts", K(ret));
   } else {
-    max_table_hint = std::max(max_table_hint, cur_max_table_hint);
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
-    if (OB_ISNULL(child_stmts.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(SMART_CALL(get_stmt_max_table_parallel_hint(*child_stmts.at(i),
-                                                               max_table_hint)))) {
-      LOG_WARN("failed to get stmt max table dop", K(ret));
-    } else { /*do nothing*/ }
+    max_table_parallel = std::max(max_table_parallel, cur_max_table_hint);
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
+      if (OB_ISNULL(child_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(get_stmt_parallel_info(child_stmts.at(i),
+                                                           max_table_dop,
+                                                           max_table_parallel)))) {
+        LOG_WARN("failed to get stmt max table dop", K(ret));
+      } else { /*do nothing*/ }
+    }
   }
   return ret;
 }
 
-// max_table_dop used for table's parallel attribute
 int ObOptimizer::get_stmt_max_table_dop(ObDMLStmt &stmt,
                                         int64_t &max_table_dop)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObSelectStmt*, 4> child_stmts;
-  ObQueryCtx *query_ctx = NULL;
   ObSQLSessionInfo *session_info = NULL;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_schema_guard();
-  if (OB_ISNULL(schema_guard) || OB_ISNULL(query_ctx = ctx_.get_query_ctx()) ||
+  if (OB_ISNULL(schema_guard) ||
       OB_ISNULL(session_info = ctx_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(schema_guard), K(query_ctx), K(session_info), K(ret));
-  } else if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
-    LOG_WARN("failed to get child stmts", K(ret));
+    LOG_WARN("get unexpected null", K(schema_guard), K(session_info), K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_items().count(); i++) {
       TableItem *table_item = NULL;
@@ -292,17 +300,12 @@ int ObOptimizer::get_stmt_max_table_dop(ObDMLStmt &stmt,
       } else if (table_item->is_function_table() ||
                  table_item->is_link_table() ||
                  table_item->is_fake_cte_table() ||
-                 table_item->is_joined_table()) {
-        /*do nothing*/
-      } else if (table_item->is_temp_table() ||
+                 table_item->is_joined_table() ||
                  table_item->is_generated_table()) {
-        if (OB_ISNULL(table_item->ref_query_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(SMART_CALL(get_stmt_max_table_dop(*table_item->ref_query_,
-                                                             max_table_dop)))) {
-          LOG_WARN("failed to get stmt max table dop", K(ret));
-        } else { /*do nothing*/ }
+      } else if (table_item->is_temp_table()) {
+        if (OB_FAIL(SMART_CALL(get_stmt_max_table_dop(*table_item->ref_query_, max_table_dop)))) {
+          LOG_WARN("failed to get max table dop from ref query", K(ret));
+        }
       } else {
         uint64_t tids[OB_MAX_INDEX_PER_TABLE + 1];
         int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
@@ -336,15 +339,6 @@ int ObOptimizer::get_stmt_max_table_dop(ObDMLStmt &stmt,
           }
         }
       }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
-      if (OB_ISNULL(child_stmts.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(SMART_CALL(get_stmt_max_table_dop(*child_stmts.at(i),
-                                                           max_table_dop)))) {
-        LOG_WARN("failed to get stmt max table dop", K(ret));
-      } else { /*do nothing*/ }
     }
   }
   return ret;
@@ -575,6 +569,9 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt &stmt,
     LOG_WARN("a online ddl expect PDML enabled. but it does not!", K(is_use_pdml), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "online ddl without pdml");
   }
+  if (OB_SUCC(ret) && ctx_.has_var_assign() && !ctx_.is_var_assign_only_in_root_stmt()) {
+    is_use_pdml = false;
+  }
   LOG_TRACE("check use all pdml feature", K(ret), K(is_use_pdml), K(ctx_.is_online_ddl()));
   return ret;
 }
@@ -616,7 +613,11 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   int64_t parallel = 1;
   bool use_pdml = false;
   bool session_enable_parallel = false;
+  bool has_var_assign = false;
+  bool is_var_assign_only_in_root_stmt = false;
   uint64_t session_force_parallel_dop = 1;
+  int64_t max_table_dop = 1;
+  int64_t max_table_hint = 1;
   ObDMLStmt *target_stmt = &stmt;
   ObSQLSessionInfo *session = ctx_.get_session_info();
   if (OB_ISNULL(target_stmt) || OB_ISNULL(session)) {
@@ -625,6 +626,16 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   } else if (FALSE_IT(ctx_.set_is_online_ddl(session->get_ddl_info().is_ddl()))) {
   } else if (OB_FAIL(check_whether_contain_nested_sql(stmt))) {
     LOG_WARN("check whether contain nested sql failed", K(ret));
+  } else if (OB_FAIL(get_stmt_parallel_info(target_stmt,
+                                            max_table_dop,
+                                            max_table_hint))) {
+    LOG_WARN("failed to get attributes from stmt", K(ret));
+  } else if (OB_FAIL(target_stmt->check_var_assign(has_var_assign,
+                                                   is_var_assign_only_in_root_stmt))) {
+    LOG_WARN("failed to check has ref assign user var", K(ret));
+  } else if (OB_FALSE_IT(ctx_.set_has_var_assign(has_var_assign)) ||
+             OB_FALSE_IT(ctx_.set_is_var_assign_only_in_root_stmt(is_var_assign_only_in_root_stmt))) {
+    // do nothing
   } else if (OB_FAIL(check_pdml_enabled(*target_stmt, *session, use_pdml))) {
     LOG_WARN("fail to check enable pdml", K(ret));
   } else if (OB_FAIL(get_session_parallel_info(*target_stmt,
@@ -639,15 +650,7 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     }
     ctx_.set_parallel(parallel);
     ctx_.set_use_pdml(use_pdml);
-    int64_t max_table_dop = 1;
-    int64_t max_table_hint = 1;
-    if (OB_FAIL(get_stmt_max_table_dop(*target_stmt,
-                                       max_table_dop))) {
-      LOG_WARN("failed to get stmt max table dop", K(ret));
-    } else if (OB_FAIL(get_stmt_max_table_parallel_hint(*target_stmt,
-                                                        max_table_hint))) {
-      LOG_WARN("failed to get stmt max table parallel", K(ret));
-    } else if (ctx_.get_global_hint().get_parallel_hint() != ObGlobalHint::UNSET_PARALLEL) {
+    if (ctx_.get_global_hint().get_parallel_hint() != ObGlobalHint::UNSET_PARALLEL) {
       ctx_.set_parallel_rule(PXParallelRule::MANUAL_HINT);
       ctx_.set_parallel(parallel);
       ctx_.add_plan_note(PARALLEL_ENABLED_BY_GLOBAL_HINT, parallel);

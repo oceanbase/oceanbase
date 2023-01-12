@@ -201,39 +201,6 @@ enum class WinDistAlgo
   LIST = 3 // range + random distribute
 };
 
-#define ADD_DIST_METHOD_WITHOUT_BC2HOST(method) \
-  do {add_join_dist_flag(method, DIST_PULL_TO_LOCAL);         \
-  add_join_dist_flag(method, DIST_HASH_HASH);                 \
-  add_join_dist_flag(method, DIST_BROADCAST_NONE);            \
-  add_join_dist_flag(method, DIST_NONE_BROADCAST);            \
-  add_join_dist_flag(method, DIST_PARTITION_NONE);            \
-  add_join_dist_flag(method, DIST_NONE_PARTITION);            \
-  add_join_dist_flag(method, DIST_PARTITION_WISE);            \
-  } while(0);
-
-#define REMOVE_PX_SPECIFIC_DIST_METHOD(method) \
-  do {remove_join_dist_flag(method, DIST_HASH_HASH);         \
-  remove_join_dist_flag(method, DIST_BROADCAST_NONE);        \
-  remove_join_dist_flag(method, DIST_NONE_BROADCAST);        \
-  remove_join_dist_flag(method, DIST_BC2HOST_NONE);          \
-  remove_join_dist_flag(method, DIST_NONE_RANDOM);           \
-  remove_join_dist_flag(method, DIST_RANDOM_NONE);           \
-  } while(0);
-
-#define UPDATE_CURRENT_JOIN_DIST_METHOD(method, cost, v_method, v_cost) \
-  do { if ((DIST_INVALID_METHOD == method || cost > v_cost) && 0 != v_method) {      \
-    method = v_method;                                             \
-    cost = v_cost;}                                                \
-  } while(0);
-
-#define REMOVE_PX_PARALLEL_DFO_DIST_METHOD(method) \
-  do {remove_join_dist_flag(method, DIST_HASH_HASH);         \
-  remove_join_dist_flag(method, DIST_BROADCAST_NONE);        \
-  remove_join_dist_flag(method, DIST_NONE_BROADCAST);        \
-  remove_join_dist_flag(method, DIST_NONE_RANDOM);           \
-  remove_join_dist_flag(method, DIST_RANDOM_NONE);           \
-  } while(0);
-
 class ObLogPlan;
 class ObLogOperatorFactory
 {

@@ -9074,7 +9074,8 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
     if (OB_FAIL(ret)) {
       /*do nothing*/
     } else {
-      if (get_cnt_rownum()) {
+      if (get_cnt_rownum() ||
+         (!opt_ctx.is_var_assign_only_in_root_stmt() && opt_ctx.has_var_assign())) {
         path_info.distributed_methods_ &= DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
       }
       if (IS_LEFT_STYLE_JOIN(path_info.join_type_)) {
