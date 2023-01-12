@@ -15,6 +15,7 @@
 
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
@@ -56,6 +57,7 @@ class ObDMLStmtPrinter {
 public:
   ObDMLStmtPrinter();
   ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObDMLStmt *stmt,
+                   ObSchemaGetterGuard *schema_guard,
                    common::ObObjPrintParams print_params,
                    const ParamStore *param_store = NULL);
   virtual ~ObDMLStmtPrinter();
@@ -91,6 +93,7 @@ protected:
   int64_t buf_len_;
   int64_t *pos_;
   const ObDMLStmt *stmt_;
+  ObSchemaGetterGuard *schema_guard_;
   ObObjPrintParams print_params_;
   ObRawExprPrinter expr_printer_;
   const ParamStore *param_store_;

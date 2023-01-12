@@ -4604,15 +4604,20 @@ int ObDDLResolver::cast_enum_or_set_default_value(const ObColumnSchemaV2 &column
 }
 
 int ObDDLResolver::print_expr_to_default_value(ObRawExpr &expr,
-    share::schema::ObColumnSchemaV2 &column, const ObTimeZoneInfo *tz_info)
+    share::schema::ObColumnSchemaV2 &column, ObSchemaChecker *schema_checker, const ObTimeZoneInfo *tz_info)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_checker)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  }
   HEAP_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_str_buf) {
     MEMSET(expr_str_buf, 0, sizeof(expr_str_buf));
     int64_t pos = 0;
     ObString expr_def;
     ObObj default_value;
-    ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos, tz_info);
+    ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                  schema_checker->get_schema_guard(), tz_info);
     if (OB_FAIL(expr_printer.do_print(&expr, T_NONE_SCOPE, true))) {
       LOG_WARN("print expr definition failed", K(expr), K(ret));
     } else if (FALSE_IT(expr_def.assign_ptr(expr_str_buf, static_cast<int32_t>(pos)))) {
@@ -4876,7 +4881,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
       if (OB_FAIL(column.set_cur_default_value(tmp_dest_obj_null))) {
         LOG_WARN("set orig default value failed", K(ret));
       }
-    } else if (OB_FAIL(print_expr_to_default_value(*expr, column, tz_info_wrap.get_time_zone_info()))) {
+    } else if (OB_FAIL(print_expr_to_default_value(*expr, column, schema_checker, tz_info_wrap.get_time_zone_info()))) {
       LOG_WARN("fail to print_expr_to_default_value", KPC(expr), K(column), K(ret));
     }
     LOG_DEBUG("finish check default value", K(input_default_value), K(expr_str), K(tmp_default_value), K(tmp_dest_obj), K(tmp_dest_obj_null), KPC(expr), K(ret));

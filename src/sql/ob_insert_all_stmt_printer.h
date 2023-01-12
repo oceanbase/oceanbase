@@ -26,8 +26,9 @@ class ObInsertAllStmtPrinter : public ObDMLStmtPrinter {
 public:
   ObInsertAllStmtPrinter() {}
   ObInsertAllStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObInsertAllStmt *stmt,
-                      common::ObObjPrintParams print_params) :
-    ObDMLStmtPrinter(buf, buf_len, pos, stmt, print_params) {}
+                         ObSchemaGetterGuard *schema_guard,
+                         common::ObObjPrintParams print_params) :
+    ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params) {}
   virtual ~ObInsertAllStmtPrinter() {}
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObInsertAllStmt *stmt);

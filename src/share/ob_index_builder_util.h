@@ -56,6 +56,7 @@ public:
       const ObSQLMode sql_mode,
       share::schema::ObTableSchema &data_schema,
       share::schema::ObColumnSchemaV2 *&gen_col,
+      share::schema::ObSchemaGetterGuard *schema_guard,
       const uint64_t index_id = OB_INVALID_ID);
   static int set_index_table_columns(
       const obrpc::ObCreateIndexArg &arg,

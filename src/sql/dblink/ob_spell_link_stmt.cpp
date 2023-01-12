@@ -191,7 +191,7 @@ int GenLinkStmtPostContext::fill_expr(const ObRawExpr *expr,
       temp_ret = OB_SUCCESS;
       int64_t temp_pos = tmp_buf_pos_;
       ObRawExprPrinter expr_printer; // fill expr to tem_buf_ using expr_printer
-      expr_printer.init(tmp_buf_, tmp_buf_len_, &tmp_buf_pos_, NULL);
+      expr_printer.init(tmp_buf_, tmp_buf_len_, &tmp_buf_pos_, schema_guard_, NULL);
       expr_printer.set_gen_unique_name(&gen_unique_alias_);
       if (OB_SUCCESS != (temp_ret = expr_printer.do_print(const_cast<ObRawExpr *>(expr), 
                                                           T_DBLINK_SCOPE, 

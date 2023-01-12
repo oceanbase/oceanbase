@@ -608,6 +608,7 @@ int ObAllVirtualProxyPartitionInfo::gen_proxy_part_pruning_str_(
                 sql::ObRawExprPrinter expr_printer(expr_str_buf + pos,
                                                    OB_MAX_DEFAULT_VALUE_LENGTH - pos,
                                                    &tmp_pos,
+                                                   &tenant_schema_guard_,
                                                    session_->get_timezone_info());
                 if (OB_FAIL(expr_printer.do_print(part_pruning_expr, sql::T_NONE_SCOPE, true))) {
                   LOG_WARN("print expr definition failed", KR(ret));

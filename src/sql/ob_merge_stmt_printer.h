@@ -27,8 +27,9 @@ class ObMergeStmtPrinter : public ObDMLStmtPrinter
 public:
   ObMergeStmtPrinter() {}
   ObMergeStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObMergeStmt *stmt,
+                     ObSchemaGetterGuard *schema_guard,
                      common::ObObjPrintParams print_params) :
-    ObDMLStmtPrinter(buf, buf_len, pos, stmt, print_params) {}
+    ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params) {}
   virtual ~ObMergeStmtPrinter() {}
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObMergeStmt *stmt);

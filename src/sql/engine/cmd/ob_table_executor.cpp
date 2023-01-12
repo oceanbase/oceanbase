@@ -86,6 +86,7 @@ int ObCreateTableExecutor::prepare_stmt(ObCreateTableStmt &stmt,
 //准备查询插入的脚本
 int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
                                            const ObSQLSessionInfo *my_session,
+                                           ObSchemaGetterGuard *schema_guard,
                                            const ParamStore *param_store,
                                            ObSqlString &ins_sql) //out, 最终的查询插入语句
 {
@@ -101,6 +102,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   const char sep_char = is_oracle_mode? '"': '`';
   ObSelectStmt *select_stmt = stmt.get_sub_select();
   ObSelectStmtPrinter select_stmt_printer(buf, buf_len, &pos1, select_stmt,
+                                          schema_guard,
                                           select_stmt->get_query_ctx()->get_timezone_info(),
                                           param_store,
                                           NULL, // column_list is null here
@@ -286,7 +288,8 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
       OB_NOT_NULL(my_session),
       OB_NOT_NULL(gctx.schema_service_),
       OB_NOT_NULL(plan_ctx),
-      OB_NOT_NULL(common_rpc_proxy));
+      OB_NOT_NULL(common_rpc_proxy),
+      OB_NOT_NULL(ctx.get_sql_ctx()));
     if (OB_SUCC(ret)) {
       ObInnerSQLConnectionPool *pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
       if (OB_ISNULL(pool)) {
@@ -296,7 +299,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         LOG_WARN("init oracle sql proxy failed", K(ret));
       } else if (OB_FAIL(prepare_stmt(stmt, *my_session, create_table_name))) {
         LOG_WARN("failed to prepare stmt", K(ret));
-      } else if (OB_FAIL(prepare_ins_arg(stmt, my_session, &plan_ctx->get_param_store(), ins_sql))) { //1, 参数准备;
+      } else if (OB_FAIL(prepare_ins_arg(stmt, my_session, ctx.get_sql_ctx()->schema_guard_, &plan_ctx->get_param_store(), ins_sql))) { //1, 参数准备;
         LOG_WARN("failed to prepare insert table arg", K(ret));
       } else if (OB_FAIL(prepare_alter_arg(stmt, my_session, create_table_name, alter_table_arg))) {
         LOG_WARN("failed to prepare alter table arg", K(ret));

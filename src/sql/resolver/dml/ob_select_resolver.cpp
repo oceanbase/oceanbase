@@ -6916,9 +6916,10 @@ int ObSelectResolver::check_multi_rollup_items_valid(
         } else if (ObLongTextType == groupby_expr->get_data_type()
                   || ObLobType == groupby_expr->get_data_type()
                   || ObJsonType == groupby_expr->get_data_type()
-                  || ObGeometryType == groupby_expr->get_data_type()) {
+                  || ObGeometryType == groupby_expr->get_data_type()
+                  || ObExtendType == groupby_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("group by lob expr is not allowed", K(ret));
+          LOG_WARN("group by lob or udt expr is not allowed", K(ret));
         }
       }
     }

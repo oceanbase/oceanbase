@@ -9301,7 +9301,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
     ObLocationConstraintContext location_constraints;
     AllocMDContext md_ctx;
     AllocBloomFilterContext bf_ctx;
-    GenLinkStmtPostContext link_ctx(get_allocator());
+    GenLinkStmtPostContext link_ctx(get_allocator(), get_optimizer_context().get_schema_guard());
     CopyPartExprCtx copy_part_expr_ctx;
 
     // set up context
