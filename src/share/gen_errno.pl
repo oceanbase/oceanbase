@@ -736,9 +736,6 @@ namespace common
         }
       }
     } else {
-      ObEditDistance<ObWords> ed;
-      ObWords errmsg_words(error_msg);
-      errmsg_words.divide();
       for (int i = 0; i < OB_MAX_ERROR_CODE; ++i) {
         if (orcl_errno == get_error(i)->oracle_errno) {
           const char *orcl_str_error = get_error(i)->oracle_str_user_error;
@@ -750,9 +747,7 @@ namespace common
           } else {
             // The edit distance between the strings is used to measure their similarity. 
             // The smaller the edit distance, the greater the similarity, so as to find the most similar error message.
-            ObWords orclmsg_words(orcl_str_error);
-            orclmsg_words.divide();
-            ed.cal_edit_distance(errmsg_words, orclmsg_words, edit_dist);
+            ObEditDistance::cal_edit_distance(error_msg, orcl_str_error, STRLEN(error_msg), STRLEN(orcl_str_error), edit_dist);
           }
           if (edit_dist < min_edit_dist) {
             ob_errno = -i;
