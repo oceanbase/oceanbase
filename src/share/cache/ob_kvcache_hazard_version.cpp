@@ -42,11 +42,11 @@ void KVCacheHazardNode::set_next(KVCacheHazardNode * const next)
  */
 KVCacheHazardThreadStore::KVCacheHazardThreadStore()
     : acquired_version_(UINT64_MAX),
-      delete_list_(nullptr), 
-      waiting_nodes_count_(0), 
+      delete_list_(nullptr),
+      waiting_nodes_count_(0),
       last_retire_version_(0),
       next_(nullptr), 
-      thread_id_(INVALID_ITID), 
+      thread_id_(0),
       inited_(false)
 {
 }
@@ -59,7 +59,7 @@ int KVCacheHazardThreadStore::init(const int64_t thread_id)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(thread_id <= INVALID_ITID)) {
+  if (OB_UNLIKELY(thread_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid arguments", K(ret), K(thread_id));
   } else if (OB_UNLIKELY(ATOMIC_LOAD(&inited_))) {
@@ -71,16 +71,15 @@ int KVCacheHazardThreadStore::init(const int64_t thread_id)
   } else {
     thread_id_ = thread_id;
   }
-  
+
   return ret;
 }
 
 void KVCacheHazardThreadStore::set_exit()
 {
-  thread_id_ = INVALID_ITID;
+  thread_id_ = 0;
   acquired_version_ = UINT64_MAX;
-  delete_list_ = nullptr;
-  inited_ = false;
+  ATOMIC_SET(&inited_, false);
 }
 
 int KVCacheHazardThreadStore::delete_node(KVCacheHazardNode &node)
@@ -174,7 +173,7 @@ GlobalHazardVersion::~GlobalHazardVersion()
 int GlobalHazardVersion::init(const int64_t thread_waiting_node_threshold) 
 { 
   int ret = OB_SUCCESS;
-  
+
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     COMMON_LOG(WARN, "This HazardVersion has been inited", K(ret), K(inited_));
@@ -201,7 +200,7 @@ int GlobalHazardVersion::init(const int64_t thread_waiting_node_threshold)
 }
 
 void GlobalHazardVersion::destroy()
-{  
+{
   COMMON_LOG(INFO, "Hazard version begin to destroy");
 
   inited_ = false;
@@ -232,7 +231,7 @@ int GlobalHazardVersion::delete_node(KVCacheHazardNode *node)
   return ret;
 }
 
-int GlobalHazardVersion::acquire() 
+int GlobalHazardVersion::acquire()
 {
   int ret = OB_SUCCESS;
 
@@ -247,7 +246,7 @@ int GlobalHazardVersion::acquire()
     while (ts->get_acquired_version() != ATOMIC_LOAD(&version_)) {
       ts->set_acquired_version(version_);
     }
-  } 
+  }
 
   return ret;
 }
@@ -305,7 +304,7 @@ int GlobalHazardVersion::get_thread_store(KVCacheHazardThreadStore *&ts)
   
   ts = static_cast<KVCacheHazardThreadStore *>(pthread_getspecific(ts_key_));
   if (OB_UNLIKELY(nullptr == ts)) {
-    int64_t thread_id = get_itid();
+    int64_t thread_id = GETTID();
     int syserr = 0;
 
     // find free thread store to reuse
@@ -368,7 +367,7 @@ int GlobalHazardVersion::print_current_status() const
 {
   int ret = OB_SUCCESS;
 
-  static const int64_t BUFLEN = 1 << 17;
+  static const int64_t BUFLEN = 1 << 18;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret), K(inited_));
@@ -380,38 +379,43 @@ int GlobalHazardVersion::print_current_status() const
       KVCacheHazardThreadStore *ts = thread_stores_;
       int64_t total_nodes_num = 0;
       uint64_t min_version = UINT64_MAX;
-      int64_t index = 0;
+      int64_t ts_count = 0;
       char *buf = nullptr;
       if (OB_ISNULL(buf = (char *)lib::ctxalp(BUFLEN))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         COMMON_LOG(ERROR, "[KVCACHE-HAZARD] no memory", K(ret));
-      } else  {
+      } else {
         while (OB_SUCC(ret) && nullptr != ts) {
-          total_nodes_num += ts->get_waiting_count();
-          ret = databuff_printf(buf, BUFLEN, ctxpos,
-              "[KVCACHE-HAZARD] i=%8ld | thread_id=%8ld | inited=%8d | waiting_nodes_count=%8ld | last_retire_version=%8lu | acquire_version=%12lu |\n",
-              index,
+          int64_t waiting_nodes_count = ts->get_waiting_count();
+          uint64_t acquired_version = ts->get_acquired_version();
+          total_nodes_num += waiting_nodes_count;
+          if (waiting_nodes_count == 0 && acquired_version == UINT64_MAX) {
+          } else if (OB_FAIL(databuff_printf(buf, BUFLEN, ctxpos,
+              "[KVCACHE-HAZARD] i=%8ld | thread_id=%8ld | inited=%8d | waiting_nodes_count=%8ld | last_retire_version=%8lu | acquired_version=%12lu |\n",
+              ts_count,
               ts->get_thread_id(),
               ts->is_inited(),
-              ts->get_waiting_count(),
+              waiting_nodes_count,
               ts->get_last_retire_version(),
-              ts->get_acquired_version()
-              );
-          ++index;
+              acquired_version))) {
+            COMMON_LOG(WARN, "Fail to write data buf", K(ret), K(ctxpos), K(BUFLEN));
+          }
+          ++ts_count;
           ts = ts->get_next();
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(get_min_version(min_version))) {
             COMMON_LOG(WARN, "Fail to get min version of hazard version", K(ret));
           }
-          _OB_LOG(INFO, "[KVCACHE-HAZARD] hazard version status info: current version: %8ld | min_version=%8ld | total nodes count: %8ld |\n%s",
+          _OB_LOG(INFO, "[KVCACHE-HAZARD] hazard version status info: current version: %8ld | min_version=%8lu | total thread store count: %8ld | total nodes count: %8ld |\n%s",
               ATOMIC_LOAD(&version_),
               min_version,
+              ts_count,
               total_nodes_num,
               buf);
         }
       }
-    } 
+    }
   }
 
   return ret;
@@ -438,13 +442,13 @@ int GlobalHazardVersion::get_min_version(uint64_t &min_version) const
     }
   }
 
-  return ret; 
+  return ret;
 }
 
 
 void GlobalHazardVersion::deregister_thread(void *d_ts)
 {
-  COMMON_LOG(INFO, "Deregister from hazard_version", KP(d_ts));
+  COMMON_LOG(INFO, "Deregister from hazard_version", KPC(static_cast<KVCacheHazardThreadStore *>(d_ts)));
   static_cast<KVCacheHazardThreadStore *>(d_ts)->set_exit();
 }
 
@@ -453,7 +457,7 @@ void GlobalHazardVersion::deregister_thread(void *d_ts)
  */
 
 GlobalHazardVersionGuard::GlobalHazardVersionGuard(GlobalHazardVersion &g_version)
-    : global_hazard_version_(g_version), 
+    : global_hazard_version_(g_version),
       ret_(OB_SUCCESS)
 {
   if (OB_UNLIKELY( OB_SUCCESS != (ret_ = global_hazard_version_.acquire()) )) {
