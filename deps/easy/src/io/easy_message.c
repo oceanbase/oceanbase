@@ -231,7 +231,7 @@ int easy_session_process_low_level(easy_session_t *s, int stop, int need_copy_re
     easy_buf_t *ebuf = NULL;
     easy_connection_t *conn;
 
-    EASY_STAT_TIME_GUARD((ev_client_cb_count++, ev_client_cb_time += cost), "session_process");
+    EASY_STAT_TIME_GUARD(ev_client_cb_count, ev_client_cb_time);
     if (stop) {
         ev_timer_stop(s->c->loop, &s->timeout_watcher);
         easy_list_del(&s->session_list_node);

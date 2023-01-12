@@ -196,8 +196,7 @@ char* easy_socket_err_reason(int error_no)
 ssize_t easy_socket_read(easy_connection_t *conn, char *buf, size_t size, int *pending)
 {
     ssize_t n;  
-    EASY_SOCKET_IO_TIME_GUARD((ev_read_count++, ev_read_time += cost),
-        ", socket recv, fd(%d), conn(%p).", conn->fd, conn);
+    EASY_SOCKET_IO_TIME_GUARD(ev_read_count, ev_read_time);
 
     do {
         n = recv(conn->fd, buf, size, 0);
@@ -237,8 +236,7 @@ ssize_t easy_socket_tcpwrite(easy_connection_t *conn, easy_list_t *l)
     ssize_t                 sended, size, wbyte, ret;
     int                     cnt, again;
 
-    EASY_SOCKET_IO_TIME_GUARD((ev_write_count++, ev_write_time += cost),
-        ", socket write, fd(%d), iov(%ld/%ld), conn(%p).", conn->fd, wbyte, cnt, conn);
+    EASY_SOCKET_IO_TIME_GUARD(ev_write_count, ev_write_time);
     wbyte = cnt = sended = again = 0;
 
     // foreach
@@ -291,7 +289,7 @@ static ssize_t easy_socket_chain_writev(easy_connection_t *conn, easy_list_t *l,
 
     {
         int retry = 0;
-        EASY_STAT_TIME_GUARD((void)0, "write retry=%d iov=%ld/%d", retry, ret, cnt);
+        EASY_TIME_GUARD();
         do {
             retry++;
             if (cnt == 1) {

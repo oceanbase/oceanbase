@@ -75,6 +75,9 @@ extern void easy_log_print_default(const char *message);
 int64_t get_us();
 
 uint64_t easy_fnv_hash(const char *str);
+void __tg_cleanup(void *s);
+void __tg_stat_cleanup(void *s);
+void __tg_io_cleanup(void *s);
 
 extern int64_t ev_loop_warn_threshold;
 extern __thread int64_t ev_malloc_count;
@@ -90,51 +93,39 @@ extern __thread int64_t ev_server_process_time;
 extern __thread void    *ev_watch_pending_addr;
 extern __thread int     ev_watch_pending;
 
+struct easy_stat_time_guard_t {
+  int64_t start;
+  int64_t *cnt;
+  int64_t *time;
+  const char *procedure;
+};
 
-#ifndef __clang__
+struct easy_time_guard_t {
+  int64_t start;
+  const char *procedure;
+};
 
-#define EASY_STAT_TIME_GUARD(stat, format, ...)                                     \
-  void __tg_cleanup(void* s)                                                        \
-  {                                                                                 \
-    int64_t cost = get_us() - *(int64_t*)s;                                         \
-    stat;                                                                           \
-    if (cost > ev_loop_warn_threshold) {                                            \
-      easy_warn_log("easy cost too much time: %ldus " format, cost, ##__VA_ARGS__); \
-    }                                                                               \
-  }                                                                                 \
-  int64_t _tg_s __attribute__((cleanup(__tg_cleanup))) = get_us();
+#define EASY_STAT_TIME_GUARD(_cnt, _time)                                                             \
+  struct easy_stat_time_guard_t _tg_stat_time_guard __attribute__((cleanup(__tg_stat_cleanup))) = {   \
+      .start = get_us(),                                                                              \
+      .cnt = &(_cnt),                                                                                 \
+      .time = &(_time),                                                                               \
+      .procedure = __FUNCTION__,                                                                      \
+  };
 
-#define EASY_SOCKET_IO_TIME_GUARD(stat, format, ...)                                   \
-  void __tg_cleanup(void* s)                                                           \
-  {                                                                                    \
-    int ret;                                                                           \
-    int64_t cost = get_us() - *(int64_t*)s;                                            \
-    double loadavg[3];                                                                 \
-    stat;                                                                              \
-    if (cost > ev_loop_warn_threshold) {                                               \
-      ret = getloadavg(loadavg, 3);                                                    \
-      if (ret == 3) {                                                                  \
-        easy_warn_log("easy cost too much time(%ldus). loadavg(%lf, %lf, %lf)" format, \
-            cost,                                                                      \
-            loadavg[0],                                                                \
-            loadavg[1],                                                                \
-            loadavg[2],                                                                \
-            ##__VA_ARGS__);                                                            \
-      } else {                                                                         \
-        easy_warn_log("easy cost too much time(%ldus) " format, cost, ##__VA_ARGS__);  \
-      }                                                                                \
-    }                                                                                  \
-  }                                                                                    \
-  int64_t _tg_s __attribute__((cleanup(__tg_cleanup))) = get_us();
+#define EASY_TIME_GUARD()                                                              \
+  struct easy_time_guard_t _tg_time_guard __attribute__((cleanup(__tg_cleanup))) = {   \
+      .start = get_us(),                                                               \
+      .procedure = __FUNCTION__,                                                       \
+  };
 
-#else
-
-#define EASY_STAT_TIME_GUARD(...)
-#define EASY_SOCKET_IO_TIME_GUARD(...)
-
-#endif
-
-#define EASY_TIME_GUARD(format, ...) EASY_STAT_TIME_GUARD((void)0, format, ##__VA_ARGS__)
+#define EASY_SOCKET_IO_TIME_GUARD(_cnt, _time)                                                     \
+  struct easy_stat_time_guard_t _tg__io_time_guard __attribute__((cleanup(__tg_io_cleanup))) = {   \
+      .start = get_us(),                                                                           \
+      .cnt = &(_cnt),                                                                              \
+      .time = &(_time),                                                                            \
+      .procedure = __FUNCTION__,                                                                   \
+  };
 
 EASY_CPP_END
 
