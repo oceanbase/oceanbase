@@ -325,6 +325,8 @@ class ObSqlSchemaGuard
 public:
   ObSqlSchemaGuard()
   { reset(); }
+  ~ObSqlSchemaGuard()
+  { reset(); }
   void set_schema_guard(share::schema::ObSchemaGetterGuard *schema_guard)
   { schema_guard_ = schema_guard; }
   share::schema::ObSchemaGetterGuard *get_schema_guard() const
