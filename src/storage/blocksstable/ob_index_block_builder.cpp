@@ -1897,11 +1897,12 @@ void ObIndexBlockRebuilder::reset()
 int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder)
 {
   int ret = OB_SUCCESS;
-  const int64_t bucket_num = 5011;
+  const int64_t bucket_num = 109;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObIndexBlockRebuilder has been inited", K(ret));
-  } else if (OB_FAIL(macro_id_set_.create(bucket_num))) {
+  } else if (OB_FAIL(macro_id_set_.create(
+      bucket_num, ObModIds::OB_HASH_BUCKET, ObModIds::OB_HASH_BUCKET, MTL_ID()))) {
     STORAGE_LOG(WARN, "fail to create macro id set", K(ret));
   } else if (OB_FAIL(sstable_builder.init_builder_ptrs(sstable_builder_, index_store_desc_,
       sstable_allocator_, root_micro_block_desc_, macro_meta_list_))) {
