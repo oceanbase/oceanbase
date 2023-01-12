@@ -71,8 +71,15 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
     rapidjson::InsituStringStream ss(static_cast<char *>(buf));
     ObRapidJsonReader reader(&parse_allocator);
 
-    rapidjson::ParseResult r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
-    if (!r.IsError()) {
+    rapidjson::ParseResult r;
+    try {
+      r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
+    } catch (const std::bad_alloc &e) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory for json text", K(ret), K(text), K(length));
+    }
+
+    if (OB_SUCC(ret) && !r.IsError()) {
       j_tree = handler.get_built_doc();
       if (OB_ISNULL(j_tree) && OB_NOT_NULL(syntaxerr)) {
         allocator->free(buf);
@@ -80,7 +87,7 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
         LOG_WARN("The parsing failed for some other reason than a syntax error.");
         syntaxerr = NULL;
       }
-    } else { // parse wrong, fill syntaxerr and offset.
+    } else if (OB_SUCC(ret)) { // parse wrong, fill syntaxerr and offset.
       allocator->free(buf);
       ret = OB_ERR_INVALID_JSON_TEXT;
       if (offset != NULL){
@@ -132,8 +139,15 @@ int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocat
     rapidjson::InsituStringStream ss(static_cast<char *>(alloc_buf));
     ObRapidJsonReader reader(&parse_allocator);
 
-    rapidjson::ParseResult r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
-    if (r.IsError()) {
+    rapidjson::ParseResult r;
+    try {
+      r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
+    } catch (const std::bad_alloc &e) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory for json text", K(ret), K(j_doc));
+    }
+
+    if (OB_SUCC(ret) && r.IsError()) {
       allocator->free(alloc_buf);
       if (handler.is_too_deep()) {
         ret = OB_ERR_JSON_OUT_OF_DEPTH;

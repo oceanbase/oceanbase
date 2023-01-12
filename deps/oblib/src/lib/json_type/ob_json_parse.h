@@ -78,7 +78,15 @@ public:
   static const bool kNeedFree = false;
   void *Malloc(size_t size)
   { 
-    return (size != 0) ? allocator_->alloc(size) : NULL;
+    void *ptr = NULL;
+    if (size != 0) {
+      ptr = allocator_->alloc(size);
+      if (OB_ISNULL(ptr)) {
+        LIB_LOG(WARN, "fail to allocate memory", K(size));
+        throw std::bad_alloc();
+      }
+    }
+    return ptr;
   }
   void *Realloc(void *originalPtr, size_t originalSize, size_t newSize)
   {
@@ -89,6 +97,10 @@ public:
       ptr = allocator_->alloc(newSize);
     } else { // original ptr is not null, new size is not zero
       ptr = allocator_->realloc(originalPtr, originalSize, newSize);
+    }
+    if (newSize != 0 && OB_ISNULL(ptr)) {
+      LIB_LOG(WARN, "fail to allocate memory", K(originalSize), K(newSize));
+      throw std::bad_alloc();
     }
     return ptr;
   }
