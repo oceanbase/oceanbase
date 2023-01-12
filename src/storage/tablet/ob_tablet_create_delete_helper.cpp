@@ -562,12 +562,7 @@ int ObTabletCreateDeleteHelper::commit_create_tablets(
   } else {
     bool is_valid = true;
     ObSArray<ObTabletCreateInfo> tablet_create_info_array;
-    if (OB_FAIL(check_tablet_existence(arg, is_valid))) {
-      LOG_WARN("failed to check tablet existence", K(ret), K(PRINT_CREATE_ARG(arg)));
-    } else if (!is_valid) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, tablet does not exist", K(ret));
-    } else if (OB_FAIL(ObTabletBindingHelper::modify_tablet_binding_for_create(arg, ls_, trans_flags))) {
+    if (OB_FAIL(ObTabletBindingHelper::modify_tablet_binding_for_create(arg, ls_, trans_flags))) {
       LOG_ERROR("failed to modify tablet binding", K(ret), K(trans_flags));
     } else if (OB_FAIL(build_tablet_create_info(arg, tablet_create_info_array))) {
       LOG_WARN("failed to build tablet create info", K(ret), K(PRINT_CREATE_ARG(arg)));
@@ -590,12 +585,27 @@ int ObTabletCreateDeleteHelper::do_commit_create_tablets(
     ObIArray<ObTabletID> &tablet_id_array)
 {
   int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTabletMapKey key;
+  key.ls_id_ = arg.id_;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablets_.count(); ++i) {
     const ObCreateTabletInfo &info = arg.tablets_.at(i);
     for (int64_t j = 0; OB_SUCC(ret) && j < info.tablet_ids_.count(); ++j) {
       const ObTabletID &tablet_id = info.tablet_ids_.at(j);
-      if (OB_FAIL(do_commit_create_tablet(tablet_id, trans_flags))) {
+      key.tablet_id_ = tablet_id;
+      if (OB_FAIL(get_tablet(key, tablet_handle))) {
+        if (OB_TABLET_NOT_EXIST == ret) {
+          if (trans_flags.for_replay_) {
+            ret = OB_SUCCESS;
+            LOG_INFO("tablet does not exist, maybe already deleted, skip commit", K(ret), K(key));
+          } else {
+            LOG_WARN("unexepected error, tablet does not exist", K(ret), K(key));
+          }
+        } else {
+          LOG_WARN("failed to get tablet", K(ret), K(key));
+        }
+      } else if (OB_FAIL(do_commit_create_tablet(tablet_id, trans_flags))) {
         LOG_WARN("failed to do commit create tablet", K(ret), K(tablet_id), K(trans_flags));
       } else if (OB_FAIL(tablet_id_array.push_back(tablet_id))) {
         LOG_WARN("failed to push back tablet id", K(ret), K(tablet_id));

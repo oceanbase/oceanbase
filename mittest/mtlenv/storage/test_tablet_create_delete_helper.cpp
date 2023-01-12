@@ -2872,6 +2872,41 @@ TEST_F(TestTabletCreateDeleteHelper, migrate_lob_tablets)
     ASSERT_EQ(102, binding_info.lob_piece_tablet_id_.id());
   }
 }
+
+TEST_F(TestTabletCreateDeleteHelper, tablet_not_exist_commit)
+{
+  int ret = OB_SUCCESS;
+
+  ObMulSourceDataNotifyArg trans_flags;
+  trans_flags.for_replay_ = true;
+  trans_flags.tx_id_ = 1;
+  trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 888);
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObLS *ls = ls_handle.get_ls();
+  ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
+
+  // create data tablet
+  {
+    ObSArray<TabletInfo> array;
+    TabletInfo info;
+    info.data_tablet_id_ = 1;
+    info.index_tablet_id_array_.push_back(ObTabletID(2));
+    array.push_back(info);
+
+    ObBatchCreateTabletArg arg;
+    ret = TestTabletCreateDeleteHelper::build_create_mixed_tablet_arg(
+        ls_id_, array, arg);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // skip prepare and redo procedure
+    ret = ls_tablet_service.on_commit_create_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+}
 } // namespace storage
 } // namespace oceanbase
 
