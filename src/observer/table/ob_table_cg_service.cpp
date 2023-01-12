@@ -1897,21 +1897,6 @@ int ObTableSpecCgService::generate(ObIAllocator &alloc,
   return ret;
 }
 
-// NOTE: explicit instantiate here after adding a new executor, cannot put template define to
-// the header file, it will cause circular dependent with executor factory
-template int ObTableSpecCgService::generate<TABLE_API_EXEC_SCAN>(ObIAllocator &alloc,
-                                                                 ObTableCtx &ctx,
-                                                                 ObTableApiSpec *&root_spec);
-template int ObTableSpecCgService::generate<TABLE_API_EXEC_INSERT>(ObIAllocator &alloc,
-                                                                   ObTableCtx &ctx,
-                                                                   ObTableApiSpec *&root_spec);
-template int ObTableSpecCgService::generate<TABLE_API_EXEC_REPLACE>(ObIAllocator &alloc,
-                                                                    ObTableCtx &ctx,
-                                                                    ObTableApiSpec *&root_spec);
-template int ObTableSpecCgService::generate<TABLE_API_EXEC_INSERT_UP>(ObIAllocator &alloc,
-                                                                      ObTableCtx &ctx,
-                                                                      ObTableApiSpec *&root_spec);
-
 int ObTableTscCgService::generate_rt_exprs(const ObTableCtx &ctx,
                                            ObIAllocator &allocator,
                                            const ObIArray<ObRawExpr *> &src,
