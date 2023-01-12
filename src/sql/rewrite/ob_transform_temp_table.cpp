@@ -34,11 +34,9 @@ namespace sql
 
 ObTransformTempTable::~ObTransformTempTable()
 {
-  for (int64_t i = 0; NULL != trans_param_ && i < trans_param_->materialize_stmts_.count(); ++i) {
-    if (NULL != trans_param_->materialize_stmts_.at(i)) {
-      trans_param_->materialize_stmts_.at(i)->~MaterializeStmts();
-      trans_param_->materialize_stmts_.at(i) = NULL;
-    }
+  if (OB_NOT_NULL(trans_param_)) {
+    trans_param_->~TempTableTransParam();
+    trans_param_ = NULL;
   }
 }
 

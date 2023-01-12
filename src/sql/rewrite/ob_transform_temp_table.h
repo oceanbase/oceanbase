@@ -101,6 +101,15 @@ public:
       :trans_stmt_(NULL),
       trans_type_(T_MATERIALIZE)
     {}
+    virtual ~TempTableTransParam()
+    {
+      for (int64_t i = 0; i < materialize_stmts_.count(); ++i) {
+        if (OB_NOT_NULL(materialize_stmts_.at(i))) {
+          materialize_stmts_.at(i)->~MaterializeStmts();
+          materialize_stmts_.at(i) = NULL;
+        }
+      }
+    }
     Ob2DArray<MaterializeStmts *> materialize_stmts_;
     ObSelectStmt *trans_stmt_;
     ObItemType trans_type_;
