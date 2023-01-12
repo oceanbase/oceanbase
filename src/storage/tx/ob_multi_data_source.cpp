@@ -224,16 +224,19 @@ int ObMulSourceTxDataNotifier::notify_table_lock(
   const bool is_replay_multi_source = true;
   const bool is_committed = true;
   int64_t pos = 0;
+  const int64_t curr_timestamp = ObTimeUtility::current_time();
   if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0) || OB_ISNULL(mt_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(buf), K(len), K(mt_ctx));
-  } else if (OB_FAIL(lock_op.deserialize(buf, len, pos))) {
-    TRANS_LOG(WARN, "deserialize lock op failed", K(ret), K(len), KP(buf));
   } else if (NotifyType::TX_END != type) {
     // TABLELOCK only deal with tx_end type, but not redo/prepare/commit/abort.
   } else if (!arg.for_replay_) {
     // TABLELOCK only need deal with replay process, but not apply.
     // the replay process will produce a lock op and will be dealt at trans end.
+  } else if (OB_FAIL(lock_op.deserialize(buf, len, pos))) {
+    TRANS_LOG(WARN, "deserialize lock op failed", K(ret), K(len), KP(buf));
+  } else if (FALSE_IT(lock_op.create_timestamp_ = OB_MIN(curr_timestamp,
+                                                         lock_op.create_timestamp_))) {
   } else if (OB_FAIL(mt_ctx->replay_lock(lock_op,
                                          arg.log_ts_))) {
     TRANS_LOG(WARN, "replay lock failed", K(ret));

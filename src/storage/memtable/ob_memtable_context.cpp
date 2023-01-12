@@ -1050,19 +1050,23 @@ int ObMemtableCtx::recover_from_table_lock_durable_info(const ObTableLockInfo &t
   const int64_t op_cnt = table_lock_info.table_lock_ops_.count();
   ObLockMemtable* lock_memtable = nullptr;
   ObMemCtxLockOpLinkNode *lock_op_node = nullptr;
+  const int64_t curr_timestamp = ObTimeUtility::current_time();
   for (int64_t i = 0; i < op_cnt && OB_SUCC(ret); ++i) {
-    tablelock::ObTableLockOp table_lock_op = table_lock_info.table_lock_ops_.at(i);
-    if (!table_lock_op.is_valid()) {
+    tablelock::ObTableLockOp lock_op = table_lock_info.table_lock_ops_.at(i);
+    if (!lock_op.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "the table_lock_op is not valid", K(table_lock_op));
+      TRANS_LOG(ERROR, "the lock_op is not valid", K(lock_op));
       // NOTE: we only need recover the lock op at lock list and lock map.
       // the buffer at multi source data is recovered by multi source data.
-    } else if (OB_FAIL(lock_mem_ctx_.add_lock_record(table_lock_op, lock_op_node, true))) {
-      TRANS_LOG(ERROR, "add_lock_record failed", K(ret), K(table_lock_op));
+      // the tx ctx table may be copied from other ls replica we need fix the lockop's create timestamp.
+    } else if (FALSE_IT(lock_op.create_timestamp_ = OB_MIN(curr_timestamp,
+                                                           lock_op.create_timestamp_))) {
+    } else if (OB_FAIL(lock_mem_ctx_.add_lock_record(lock_op, lock_op_node, true))) {
+      TRANS_LOG(ERROR, "add_lock_record failed", K(ret), K(lock_op));
     } else if (OB_FAIL(lock_mem_ctx_.get_lock_memtable(lock_memtable))) {
       TRANS_LOG(ERROR, "get_lock_memtable failed", K(ret));
     } else if (OB_NOT_NULL(lock_memtable)
-              && OB_FAIL(lock_memtable->recover_obj_lock(table_lock_op))) {
+              && OB_FAIL(lock_memtable->recover_obj_lock(lock_op))) {
       TRANS_LOG(ERROR, "recover_obj_lock failed", K(ret), K(*lock_memtable));
     } else {
       lock_mem_ctx_.set_log_synced(lock_op_node, table_lock_info.max_durable_log_ts_);

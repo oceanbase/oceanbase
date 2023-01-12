@@ -851,6 +851,7 @@ int ObLockMemtable::replay_row(
   int64_t create_timestamp = 0;
   int64_t create_schema_vesion = -1;
   ObMemtableCtx *mem_ctx = nullptr;
+  const int64_t curr_timestamp = ObTimeUtility::current_time();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -877,7 +878,7 @@ int ObLockMemtable::replay_row(
                           lock_op_type,
                           LOCK_OP_DOING,
                           seq_no,
-                          create_timestamp,
+                          OB_MIN(create_timestamp, curr_timestamp),
                           create_schema_vesion);
     if (OB_UNLIKELY(!lock_op.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
