@@ -153,6 +153,7 @@ public:
     inline void set_warning(int64_t level) { top_warning_level_ = level; }
     inline int64_t get_continue() { return top_continue_; }
     inline void set_continue() { top_continue_ = handler_stack_.count() - 1; }
+    inline void set_continue(int64_t top_continue) { top_continue_ = top_continue; }
     inline int64_t get_stack_depth() { return handler_stack_.count(); }
     inline bool in_continue() { return OB_INVALID_INDEX != top_continue_; }
     inline bool in_notfound() { return OB_INVALID_INDEX != top_notfound_level_; }

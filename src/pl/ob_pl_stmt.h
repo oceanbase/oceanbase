@@ -1281,7 +1281,7 @@ public:
   inline const ObPLExternalNS *get_external_ns() const { return external_ns_; }
   inline void set_external_ns(ObPLExternalNS *external_ns) { external_ns_ = external_ns; }
   int check_dup_symbol(const ObString &name, const ObPLDataType &type, bool &is_dup) const;
-  int check_dup_label(const ObString &name, bool &is_dup, bool check_parent) const;
+  int check_dup_label(const ObString &name, bool &is_dup) const;
   int check_dup_goto_label(const ObString &name, bool &is_dup) const;
   int check_dup_condition(const ObString &name, bool &is_dup, const void *&dup_item) const;
   int check_dup_cursor(const ObString &name, bool &is_dup) const;

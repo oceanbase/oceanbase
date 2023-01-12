@@ -4173,10 +4173,12 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
 }
 
 int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
-                                        const ObSqlExpression *errcode_expr,
-                                        const ObSqlExpression *errmsg_expr,
-                                        const char *sql_state,
-                                        bool is_signal)
+                                       const ObSqlExpression *errcode_expr,
+                                       const ObSqlExpression *errmsg_expr,
+                                       const char *sql_state,
+                                       int *error_code,
+                                       const char *resignal_sql_state,
+                                       bool is_signal)
 {
   int ret = OB_SUCCESS;
   ObObjParam result;
@@ -4192,6 +4194,7 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(session_info = ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(sqlcode_info = ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
   CK (OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer()));
+  CK (OB_NOT_NULL(error_code));
 
 #define CALC(expr, type, result) \
   do { \
@@ -4202,17 +4205,22 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
     OX (expected_type.set_collation_type(tmp.get_collation_type())); \
     OZ (spi_convert(ctx->exec_ctx_->get_my_session(), ctx->allocator_, tmp, expected_type, result)); \
   } while(0)
+
   if (OB_SUCC(ret)) {
     type = ObPLEH::eh_classify_exception(sql_state);
     cur_err_code = wb->get_err_code();
   }
-  if (OB_ISNULL(errcode_expr)) {
-    if (type == ObPLConditionType::NOT_FOUND) {
-      sqlcode_info->set_sqlcode(ER_SIGNAL_NOT_FOUND);
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(errcode_expr)) {
+    if (!is_signal && *error_code != -1 && NULL == sql_state) {
+      sqlcode_info->set_sqlcode(*error_code);
     } else {
-      sqlcode_info->set_sqlcode(ER_SIGNAL_EXCEPTION);
+      if (type == ObPLConditionType::NOT_FOUND) {
+        sqlcode_info->set_sqlcode(ER_SIGNAL_NOT_FOUND);
+      } else {
+        sqlcode_info->set_sqlcode(ER_SIGNAL_EXCEPTION);
+      }
     }
-    LOG_INFO("error code is not set", K(ret));
   } else {
     CALC(errcode_expr, int32, result);
     if (OB_SUCC(ret)) {
@@ -4274,7 +4282,6 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
         sqlcode_info->set_sqlcode(OB_SUCCESS);
         wb->reset_err();
       }
-      ret = OB_SUCCESS;
     } else {
       if (is_signal) {
         LOG_MYSQL_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR,
@@ -4284,9 +4291,11 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
         wb->set_sql_state(sql_state);
       } else {
         wb->set_error(err_msg, sqlcode_info->get_sqlcode());
-        wb->set_sql_state(sql_state != NULL ? sql_state : ob_sqlstate(cur_err_code));
+        wb->set_sql_state(sql_state != NULL
+                           ? sql_state
+                           : (resignal_sql_state != NULL) ? resignal_sql_state : ob_sqlstate(cur_err_code));
       }
-      ret = sqlcode_info->get_sqlcode();
+      *error_code = sqlcode_info->get_sqlcode();
     }
   }
   return ret;

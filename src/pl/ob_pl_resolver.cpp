@@ -5187,13 +5187,29 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
           LOG_WARN("Invalid else node", K(parse_tree->children_[1]->type_), K(ret));
         } else {
           ObPLStmtBlock *body_block = NULL;
-          if (OB_FAIL(resolve_stmt_list(parse_tree->children_[1],
+          int64_t top_continue = handler_analyzer_.get_continue();
+          ++current_level_;
+          if (handler_analyzer_.in_continue()) {
+            ObPLDeclareHandlerStmt::DeclareHandler info;
+            if (OB_FAIL(handler_analyzer_.get_handler(top_continue, info))) {
+              LOG_WARN("failed to get top continue handler", K(ret), K(top_continue));
+            } else if (info.get_level() == (current_level_ - 1)) {
+              handler_analyzer_.set_continue(OB_INVALID_INDEX);
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(resolve_stmt_list(parse_tree->children_[1],
                                         body_block,
                                         func,
                                         true,/*stop scarch label*/
                                         true /*in exception handler scope*/))) {
             LOG_WARN("failed to resolve stmt list", K(parse_tree->children_[1]->type_), K(ret));
+          } else if (OB_FAIL(handler_analyzer_.reset_handlers(current_level_))) {
+            LOG_WARN("failed to reset handlers", K(ret), K(current_level_));
           } else {
+            --current_level_;
+            handler_analyzer_.reset_notfound_and_warning(current_level_);
+            handler_analyzer_.set_continue(top_continue);
             desc->set_body(body_block);
           }
         }
