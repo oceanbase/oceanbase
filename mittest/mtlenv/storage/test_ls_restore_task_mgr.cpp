@@ -433,7 +433,7 @@ int ObILSRestoreState::request_leader_status_(ObLSRestoreStatus &leader_restore_
   return OB_SUCCESS;
 }
 
-int ObILSRestoreState::request_follower_restore_status_(bool &finish)
+int ObILSRestoreState::check_all_follower_restore_finish_(bool &finish)
 {
   finish = true;
   return OB_SUCCESS;
