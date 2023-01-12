@@ -294,7 +294,7 @@ int ObMvccValueIterator::get_next_node(const void *&tnode)
       if (NULL == version_iter_) {
         ret = OB_ITER_END;
       } else if (OB_FAIL(try_cleanout_tx_node_(version_iter_))) {
-        TRANS_LOG(ERROR, "fail to cleanout tnode", K(ret), K(*version_iter_));
+        TRANS_LOG(WARN, "fail to cleanout tnode", K(ret), K(*version_iter_));
       } else if (OB_FAIL(version_iter_->is_lock_node(is_lock_node))) {
         TRANS_LOG(WARN, "fail to check is lock node", K(ret), K(*version_iter_));
       } else if (!(version_iter_->is_aborted()              // skip abort version

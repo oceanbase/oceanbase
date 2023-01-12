@@ -1174,7 +1174,7 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
 
       stores = &iter_tables;
       // ignore active memtable
-      for (int64_t i = stores->count() - 2; OB_SUCC(ret) && !lock_is_decided && i >= 0; i--) {
+      for (int64_t i = stores->count() - 2; OB_SUCC(ret) && !row_locked && i >= 0; i--) {
         lock_state.reset();
         if (NULL == stores->at(i)) {
           ret = OB_ERR_UNEXPECTED;
