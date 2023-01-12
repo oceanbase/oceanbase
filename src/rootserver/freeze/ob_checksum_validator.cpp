@@ -15,6 +15,7 @@
 #include "rootserver/freeze/ob_checksum_validator.h"
 #include "rootserver/freeze/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 #include "rootserver/ob_root_utils.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_isql_client.h"
@@ -301,6 +302,7 @@ bool ObIndexChecksumValidator::need_validate() const
 }
 
 int ObIndexChecksumValidator::validate_checksum(
+    const volatile bool &stop,
     const SCN &frozen_scn,
     const hash::ObHashMap<ObTabletLSPair, ObTabletCompactionStatus> &tablet_compaction_map,
     int64_t &table_count,
@@ -308,7 +310,10 @@ int ObIndexChecksumValidator::validate_checksum(
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
-  if ((!frozen_scn.is_valid()) || (tablet_compaction_map.empty())) {
+  if (stop) {
+    ret = OB_CANCELED;
+    LOG_WARN("already stop", KR(ret), K_(tenant_id));
+  } else if ((!frozen_scn.is_valid()) || (tablet_compaction_map.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn));
   } else if (IS_NOT_INIT) {
@@ -317,14 +322,15 @@ int ObIndexChecksumValidator::validate_checksum(
   } else if (!is_primary_cluster()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("can only check index column checksum in primary cluster", KR(ret));
-  } else if (OB_FAIL(check_all_table_verification_finished(frozen_scn, tablet_compaction_map, table_count,
-      table_compaction_map, expected_epoch))) {
+  } else if (OB_FAIL(check_all_table_verification_finished(stop, frozen_scn, tablet_compaction_map,
+               table_count, table_compaction_map, expected_epoch))) {
     LOG_WARN("fail to check all table verification finished", KR(ret), K_(tenant_id), K(frozen_scn));
   }
   return ret;
 }
 
 int ObIndexChecksumValidator::check_all_table_verification_finished(
+    const volatile bool &stop,
     const SCN &frozen_scn,
     const hash::ObHashMap<ObTabletLSPair, ObTabletCompactionStatus> &tablet_compaction_map,
     int64_t &table_count,
@@ -338,13 +344,16 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
   ObSchemaGetterGuard schema_guard;
   SMART_VARS_2((ObArray<const ObSimpleTableSchemaV2 *>, table_schemas),
                (ObArray<uint64_t>, table_ids)) {
-    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(tenant_id_, schema_guard))) {
+    if (stop) {
+      ret = OB_CANCELED;
+      LOG_WARN("already stop", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get tenant schema guard", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id_, table_schemas))) {
       LOG_WARN("fail to get tenant table schemas", KR(ret), K_(tenant_id));
     } else {
       table_count = table_schemas.count();
-      for (int64_t i = 0; (i < table_schemas.count()) && OB_SUCC(ret); ++i) {
+      for (int64_t i = 0; (i < table_schemas.count()) && OB_SUCC(ret) && !stop; ++i) {
         const ObSimpleTableSchemaV2 *simple_schema = table_schemas.at(i);
         if (OB_ISNULL(simple_schema)) {
           ret = OB_ERR_UNEXPECTED;
@@ -423,6 +432,7 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
                       }
                   #endif
                   // both tables' all tablets finished compaction, we should validate column checksum.
+                  FREEZE_TIME_GUARD;
                   if (OB_FAIL(ObTabletReplicaChecksumOperator::check_column_checksum(tenant_id_,
                       *data_table_schema, *table_schema, frozen_scn, *sql_proxy_, expected_epoch))) {
                     if (OB_CHECKSUM_ERROR == ret) {
@@ -488,7 +498,7 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
       if (OB_SUCC(ret) && (OB_SUCCESS == check_ret)) {
         ObArray<uint64_t> removed_table_ids; // record the table_id which will be removed
         hash::ObHashMap<uint64_t, ObTableCompactionInfo>::iterator iter = table_compaction_map.begin();
-        for (;OB_SUCC(ret) && (iter != table_compaction_map.end()); ++iter) {
+        for (;!stop && OB_SUCC(ret) && (iter != table_compaction_map.end()); ++iter) {
           const uint64_t cur_table_id = iter->first;
           if (exist_in_table_array(cur_table_id, table_ids)) {
             const ObTableCompactionInfo &compaction_info = iter->second;
@@ -518,7 +528,6 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
   if (check_ret == OB_CHECKSUM_ERROR) {
     ret = check_ret;
   }
-
   return ret;
 }
 
@@ -591,6 +600,7 @@ int ObIndexChecksumValidator::handle_table_compaction_finished(
     } else {
       if (table_schema->has_tablet()) {
         SMART_VAR(ObArray<ObTabletLSPair>, pairs) {
+          FREEZE_TIME_GUARD;
           if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(tenant_id_, *table_schema, *sql_proxy_, pairs))) {
             LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(table_id));
           } else if (pairs.count() < 1) {
@@ -649,6 +659,7 @@ int ObIndexChecksumValidator::check_table_compaction_finished(
     SMART_VAR(ObArray<ObTabletID>, tablet_ids) {
       SMART_VAR(ObArray<ObTabletLSPair>, pairs) {
         if (table_schema.has_tablet()) {
+          FREEZE_TIME_GUARD;
           if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
             LOG_WARN("fail to get tablet_ids from table schema", KR(ret), K(table_schema));
           } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(tenant_id_, table_id,
@@ -689,6 +700,7 @@ int ObIndexChecksumValidator::check_table_compaction_finished(
             }
             // if current table 'has tablet' & 'finished compaction' & 'not skip verifying', verify tablet replica checksum
             if (OB_SUCC(ret) && latest_compaction_info.is_compacted()) {
+              FREEZE_TIME_GUARD;
               if (OB_FAIL(ObTabletReplicaChecksumOperator::check_tablet_replica_checksum(tenant_id_, pairs, frozen_scn,
                   *sql_proxy_))) {
                 if (OB_CHECKSUM_ERROR == ret) {

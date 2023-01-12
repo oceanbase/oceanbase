@@ -226,6 +226,12 @@ public:
   }
 };
 
+class ObPxWorker : public lib::Worker
+{
+public:
+  virtual int check_status() override;
+};
+
 }
 }
 #endif /* __OB_SQL_ENGINE_PX_WORKER_RUNNABLE_H__ */

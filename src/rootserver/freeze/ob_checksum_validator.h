@@ -104,7 +104,8 @@ public:
   virtual ~ObIndexChecksumValidator() {}
 
 public:
-  int validate_checksum(const share::SCN &frozen_scn,
+  int validate_checksum(const volatile bool &stop,
+                        const share::SCN &frozen_scn,
                         const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                         int64_t &table_count,
                         hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
@@ -113,7 +114,8 @@ public:
 
 private:
   // valid '<data table, index table>' pair should finish index column checksum verification, other tables just skip verification.
-  int check_all_table_verification_finished(const share::SCN &frozen_scn,
+  int check_all_table_verification_finished(const volatile bool &stop,
+                                            const share::SCN &frozen_scn,
                                             const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
                                             int64_t &table_count,
                                             hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,

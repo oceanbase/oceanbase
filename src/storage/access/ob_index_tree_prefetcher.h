@@ -221,13 +221,13 @@ public:
       cur_prefetch_end_ = false;
       index_block_info_.reset();
       micro_handle_idx_ = 0;
-      for (int64_t i = 0; i < DEFAULT_GET_MICRO_DATA_HANDLE_CNT; ++i) {
+      for (int64_t i = 0; i < DEFAULT_MULTIGET_MICRO_DATA_HANDLE_CNT; ++i) {
         micro_handles_[i].reset();
       }
     }
     OB_INLINE ObMicroBlockDataHandle& get_read_handle()
     {
-      return micro_handles_[micro_handle_idx_ % DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
+      return micro_handles_[micro_handle_idx_ % DEFAULT_MULTIGET_MICRO_DATA_HANDLE_CNT];
     }
     OB_INLINE void set_cur_micro_handle(ObMicroBlockDataHandle &handle)
     {
@@ -236,11 +236,13 @@ public:
     }
     INHERIT_TO_STRING_KV("ObSSTableReadHandle", ObSSTableReadHandle, KPC_(rowkey),
         K_(cur_level), K_(cur_prefetch_end), K_(index_block_info), K_(micro_handle_idx), K_(micro_handles));
+    // TODO(yht146439) change to 2
+    static const int64_t DEFAULT_MULTIGET_MICRO_DATA_HANDLE_CNT = 3;
     int16_t cur_level_;
     bool cur_prefetch_end_;
     ObMicroIndexInfo index_block_info_;
     int64_t micro_handle_idx_;
-    ObMicroBlockDataHandle micro_handles_[DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
+    ObMicroBlockDataHandle micro_handles_[DEFAULT_MULTIGET_MICRO_DATA_HANDLE_CNT];
   };
   typedef ObReallocatedFixedArray<ObSSTableReadHandleExt> ReadHandleExtArray;
   ObIndexTreeMultiPrefetcher() :

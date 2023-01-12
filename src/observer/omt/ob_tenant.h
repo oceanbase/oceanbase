@@ -55,6 +55,7 @@ class ObPxPool
     : public share::ObThreadPool
 {
   using RunFuncT = std::function<void ()>;
+  void run(int64_t idx) final;
   void run1() final;
   static const int64_t QUEUE_WAIT_TIME = 100 * 1000;
 

@@ -62,7 +62,8 @@ public:
                            const share::SCN &global_broadcast_scn,
                            share::ObAllZoneMergeProgress &all_progress);
 
-  int check_verification(const share::SCN &global_broadcast_scn,
+  int check_verification(const volatile bool &stop,
+                         const share::SCN &global_broadcast_scn,
                          const int64_t expected_epoch);
 
   // @exist_uncompacted means not all table finished compaction

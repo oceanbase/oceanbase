@@ -14,6 +14,7 @@
 
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/tablet/ob_tablet_table_operator.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
@@ -181,8 +182,17 @@ int ObMajorMergeProgressChecker::check_merge_progress(
           LOG_WARN("fail to generate tablet table map", K_(tenant_id), KR(ret));
         } else {
           ObTabletInfo tablet_info;
-          while (!stop && OB_SUCC(ret) && OB_SUCC(iter.next(tablet_info))) {
-            if (!tablet_info.is_valid()) {
+          while (!stop && OB_SUCC(ret)) {
+            {
+              FREEZE_TIME_GUARD;
+              if (OB_FAIL(iter.next(tablet_info))) {
+                if (OB_ITER_END != ret) {
+                  LOG_WARN("fail to get next tablet_info", KR(ret), K_(tenant_id), K(stop));
+                }
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (!tablet_info.is_valid()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("iterate invalid tablet info", KR(ret), K(tablet_info));
             } else if (OB_FAIL(check_tablet(tablet_info, tablet_map, all_progress, global_broadcast_scn,
@@ -258,10 +268,14 @@ int ObMajorMergeProgressChecker::check_tablet(
     ObLSInfo ls_info;
     int64_t cluster_id = GCONF.cluster_id;
     const ObLSID &ls_id = tablet_info.get_ls_id();
-    if (OB_FAIL(lst_operator_->get(cluster_id, tenant_id_,
-        ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
-      LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K(ls_id));
-    } else if (OB_FAIL(check_majority_integrated(schema_guard, tablet_info, ls_info))) {
+    {
+      FREEZE_TIME_GUARD;
+      if (OB_FAIL(lst_operator_->get(cluster_id, tenant_id_,
+          ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
+        LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K(ls_id));
+      }
+    }
+    if (FAILEDx(check_majority_integrated(schema_guard, tablet_info, ls_info))) {
       LOG_WARN("fail to check majority integrated", KR(ret), K(tablet_info), K(ls_info));
     } else if (OB_FAIL(check_tablet_compaction_scn(all_progress, global_broadcast_scn, tablet_info, ls_info))) {
       LOG_WARN("fail to check data version", KR(ret), K(tablet_info), K(ls_info));
@@ -458,13 +472,18 @@ int ObMajorMergeProgressChecker::get_associated_replica_num(
 }
 
 int ObMajorMergeProgressChecker::check_verification(
+    const volatile bool &stop,
     const share::SCN &global_broadcast_scn,
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
-  if (!tablet_compaction_map_.empty()) {
-    if (index_validator_.need_validate() && OB_FAIL(index_validator_.validate_checksum(global_broadcast_scn,
-        tablet_compaction_map_, table_count_, table_compaction_map_, expected_epoch))) {
+  if (stop) {
+    ret = OB_CANCELED;
+    LOG_WARN("already stop", KR(ret), K_(tenant_id));
+  } else if (!tablet_compaction_map_.empty()) {
+    if (index_validator_.need_validate() && OB_FAIL(index_validator_.validate_checksum(stop,
+        global_broadcast_scn, tablet_compaction_map_, table_count_, table_compaction_map_,
+        expected_epoch))) {
       LOG_WARN("fail to validate checksum of index validator", KR(ret), K(global_broadcast_scn),
                K(expected_epoch));
     }

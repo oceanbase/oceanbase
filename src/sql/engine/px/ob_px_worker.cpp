@@ -471,3 +471,27 @@ ObPxLocalWorkerFactory::~ObPxLocalWorkerFactory()
 {
   destroy();
 }
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+int ObPxWorker::check_status()
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != session_) {
+    session_->is_terminate(ret);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (is_timeout()) {
+      ret = OB_TIMEOUT;
+    } else if (IS_INTERRUPTED()) {
+      ObInterruptCode &ic = GET_INTERRUPT_CODE();
+      ret = ic.code_;
+      LOG_WARN("px execution was interrupted", K(ic), K(ret));
+    }
+  }
+  return ret;
+}

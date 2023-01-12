@@ -20,11 +20,13 @@
 #include "rootserver/freeze/ob_freeze_info_manager.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/freeze/ob_tenant_all_zone_merge_strategy.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_se_array_iterator.h"
 #include "lib/allocator/page_arena.h"
+#include "lib/profile/ob_trace_id.h"
 #include "share/ob_errno.h"
 #include "share/config/ob_server_config.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
@@ -257,6 +259,7 @@ int ObMajorMergeScheduler::do_before_major_merge(const int64_t expected_epoch)
   int ret = OB_SUCCESS;
   share::SCN global_broadcast_scn;
   global_broadcast_scn.set_min();
+  FREEZE_TIME_GUARD;
 
   if (OB_FAIL(progress_checker_.prepare_handle())) {
     LOG_WARN("fail to do prepare handle of progress checker", KR(ret));
@@ -279,6 +282,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
     // loop until 'this round major merge finished' or 'epoch changed'
     while (!stop_ && !is_paused()) {
       update_last_run_timestamp();
+      ObCurTraceId::init(GCONF.self_addr_);
       ObZoneArray to_merge_zone;
       // Place is_last_merge_complete() to the head of this while loop.
       // So as to break this loop at once, when the last merge is complete.
@@ -372,7 +376,7 @@ int ObMajorMergeScheduler::schedule_zones_to_merge(
     // set zone merging flag
     if (OB_SUCC(ret)) {
       HEAP_VAR(ObZoneMergeInfo, tmp_info) {
-        FOREACH_CNT_X(zone, to_merge, OB_SUCCESS == ret) {
+        FOREACH_CNT_X(zone, to_merge, (OB_SUCCESS == ret) && !stop_) {
           tmp_info.reset();
           tmp_info.tenant_id_ = tenant_id_;
           tmp_info.zone_ = *zone;
@@ -411,7 +415,7 @@ int ObMajorMergeScheduler::start_zones_merge(const ObZoneArray &to_merge, const 
   } else if (OB_FAIL(zone_merge_mgr_->get_global_broadcast_scn(global_broadcast_scn))) {
     LOG_WARN("fail to get_global_broadcast_scn", KR(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && (i < to_merge.count()); ++i) {
+    for (int64_t i = 0; !stop_ && OB_SUCC(ret) && (i < to_merge.count()); ++i) {
       HEAP_VAR(ObZoneMergeInfo, tmp_info) {
         tmp_info.tenant_id_ = tenant_id_;
         tmp_info.zone_ = to_merge.at(i);
@@ -458,7 +462,7 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
                             "global_broadcast_scn", global_broadcast_scn.get_val_for_inner_table_field(),
                             "service_addr", GCONF.self_addr_);
     }
-  } else if (OB_FAIL(progress_checker_.check_verification(global_broadcast_scn, expected_epoch))) {
+  } else if (OB_FAIL(progress_checker_.check_verification(stop_, global_broadcast_scn, expected_epoch))) {
     LOG_WARN("fail to check verification", KR(ret), K_(tenant_id), K(global_broadcast_scn));
     int64_t time_interval = 10L * 60 * 1000 * 1000;  // record every 10 minutes
     if (TC_REACH_TIME_INTERVAL(time_interval)) {
@@ -496,7 +500,7 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
   } else {
     // 1. check all zone finished compaction
     HEAP_VAR(ObZoneMergeInfo, info) {
-      FOREACH_X(progress, all_progress, OB_SUCC(ret)) {
+      FOREACH_X(progress, all_progress, OB_SUCC(ret) && !stop_) {
         const ObZone &zone = progress->zone_;
         bool merged = false;
         info.reset();
@@ -703,6 +707,7 @@ int ObMajorMergeScheduler::try_update_epoch_and_reload()
         }
         LOG_WARN("fail to update freeze_service_epoch", KR(ret), K(ori_epoch), K(latest_epoch));
       } else {
+        FREEZE_TIME_GUARD;
         if (OB_FAIL(set_epoch(latest_epoch))) {
           LOG_WARN("fail to set epoch", KR(ret), K(latest_epoch));
         } else if (OB_FAIL(zone_merge_mgr_->reload())) {
@@ -735,6 +740,7 @@ int ObMajorMergeScheduler::do_update_freeze_service_epoch(
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
+  FREEZE_TIME_GUARD;
   if (OB_FAIL(ObServiceEpochProxy::update_service_epoch(*sql_proxy_, tenant_id_,
       ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, latest_epoch, affected_rows))) {
     LOG_WARN("fail to update freeze_service_epoch", KR(ret), K(latest_epoch), K_(tenant_id));
@@ -750,6 +756,7 @@ int ObMajorMergeScheduler::update_all_tablets_report_scn(
     const uint64_t global_braodcast_scn_val)
 {
   int ret = OB_SUCCESS;
+  FREEZE_TIME_GUARD;
   if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
           tenant_id_,
           global_braodcast_scn_val,
@@ -793,10 +800,13 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
       ObServerTableOperator st_operator;
       if (OB_FAIL(st_operator.init(sql_proxy_))) {
         LOG_WARN("fail to init server table operator", K(ret), K_(tenant_id));
-      } else if (OB_FAIL(st_operator.get_start_service_time(GCONF.self_addr_, start_service_time))) {
-        LOG_WARN("fail to get start service time", KR(ret), K_(tenant_id));
       } else {
-        total_service_time = now - start_service_time;
+        FREEZE_TIME_GUARD;
+        if (OB_FAIL(st_operator.get_start_service_time(GCONF.self_addr_, start_service_time))) {
+          LOG_WARN("fail to get start service time", KR(ret), K_(tenant_id));
+        } else {
+          total_service_time = now - start_service_time;
+        }
       }
     }
     // In order to avoid LOG_ERROR when the tenant miss daily merge due to the cluster restarted.

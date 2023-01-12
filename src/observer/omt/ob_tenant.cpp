@@ -47,6 +47,7 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "lib/container/ob_array.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
+#include "sql/engine/px/ob_px_worker.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -220,6 +221,14 @@ void ObPxPool::set_px_thread_name()
   char buf[32];
   snprintf(buf, 32, "PX_G%ld_%ld", group_id_, tenant_id_);
   lib::set_thread_name_inner(buf);
+}
+
+void ObPxPool::run(int64_t idx)
+{
+  set_thread_idx(idx);
+  // Create worker for current thread.
+  ObPxWorker worker;
+  run1();
 }
 
 void ObPxPool::run1()

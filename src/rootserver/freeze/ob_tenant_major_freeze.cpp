@@ -85,16 +85,22 @@ int ObTenantMajorFreeze::start()
 
 void ObTenantMajorFreeze::stop()
 {
+  LOG_INFO("daily_launcher start to stop", K_(tenant_id));
   daily_launcher_.stop();
+  LOG_INFO("freeze_info_detector start to stop", K_(tenant_id));
   freeze_info_detector_.stop();
+  LOG_INFO("merge_scheduler start to stop", K_(tenant_id));
   merge_scheduler_.stop();
 }
 
 int ObTenantMajorFreeze::wait()
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("daily_launcher start to wait", K_(tenant_id));
   daily_launcher_.wait();
+  LOG_INFO("freeze_info_detector start to wait", K_(tenant_id));
   freeze_info_detector_.wait();
+  LOG_INFO("merge_scheduler start to wait", K_(tenant_id));
   merge_scheduler_.wait();
   return ret;
 }
@@ -102,13 +108,22 @@ int ObTenantMajorFreeze::wait()
 int ObTenantMajorFreeze::destroy()
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("daily_launcher start to destroy", K_(tenant_id));
   if (OB_FAIL(daily_launcher_.destroy())) {
     LOG_WARN("fail to destroy daily_launcher", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(freeze_info_detector_.destroy())) {
-    LOG_WARN("fail to destroy freeze_info_detector", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(merge_scheduler_.destroy())) {
-    LOG_WARN("fail to destroy merge_scheduler", KR(ret), K_(tenant_id));
-  } 
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("freeze_info_detector start to destroy", K_(tenant_id));
+    if (OB_FAIL(freeze_info_detector_.destroy())) {
+      LOG_WARN("fail to destroy freeze_info_detector", KR(ret), K_(tenant_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("merge_scheduler start to destroy", K_(tenant_id));
+    if (OB_FAIL(merge_scheduler_.destroy())) {
+      LOG_WARN("fail to destroy merge_scheduler", KR(ret), K_(tenant_id));
+    }
+  }
   return ret;
 }
 
