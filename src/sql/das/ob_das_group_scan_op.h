@@ -36,12 +36,17 @@ public:
     lookup_group_cnt_ = 1;
   }
   virtual int64_t get_index_group_cnt() override  { return index_group_cnt_; }
+  virtual void set_index_group_cnt(int64_t group_cnt_) override {index_group_cnt_ = group_cnt_;}
   virtual void inc_index_group_cnt() override { ++index_group_cnt_; }
   virtual int64_t get_lookup_group_cnt() override  { return lookup_group_cnt_; }
   virtual void inc_lookup_group_cnt() override { ++lookup_group_cnt_; }
   virtual int switch_rowkey_scan_group() override
   {
     return static_cast<ObGroupScanIter *>(rowkey_iter_)->switch_scan_group();
+  }
+  virtual int set_rowkey_scan_group(int64_t group_id) override
+  {
+    return static_cast<ObGroupScanIter *>(rowkey_iter_)->set_scan_group(group_id);
   }
   virtual ObNewRowIterator *&get_lookup_storage_iter() override;
   int init_group_range(int64_t cur_group_idx, int64_t group_size) override;
@@ -50,6 +55,7 @@ public:
                                    int64_t group_size,
                                    ObExpr *group_id_expr);
   virtual int switch_lookup_scan_group() override;
+  virtual int set_lookup_scan_group(int64_t group_id) override;
 public:
   ObGroupScanIter group_iter_;
   int64_t index_group_cnt_;  // number of groups fetched from index table
@@ -65,7 +71,8 @@ public:
   int open_op() override;
   int release_op() override;
   virtual int rescan() override;
-  virtual int switch_scan_group();
+  virtual int switch_scan_group() override;
+  virtual int set_scan_group(int64_t group_id) override;
   int64_t get_cur_group_idx() const { return iter_.get_cur_group_idx(); }
   void init_group_range(int64_t cur_group_idx, int64_t group_size);
   virtual ObLocalIndexLookupOp *get_lookup_op() override

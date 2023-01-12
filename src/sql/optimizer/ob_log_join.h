@@ -150,11 +150,15 @@ namespace sql
 
     inline bool can_use_batch_nlj() const { return can_use_batch_nlj_; }
     void set_can_use_batch_nlj(bool can_use) { can_use_batch_nlj_ = can_use; }
-    int set_use_batch(ObLogicalOperator* root);
+    int check_and_set_use_batch();
     void set_join_path(JoinPath *path) { join_path_ = path; }
     JoinPath *get_join_path() { return join_path_; }
     bool is_my_exec_expr(const ObRawExpr *expr);
+    common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
+    common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
+
   private:
+    int set_use_batch(ObLogicalOperator* root);
     inline bool can_enable_gi_partition_pruning()
     {
       return (NESTED_LOOP_JOIN == join_algo_)
@@ -210,6 +214,7 @@ namespace sql
     int print_join_tables_in_hint(const ObDMLStmt &stmt,
                                   planText &plan_text,
                                   const ObRelIds &table_set);
+
   private:
     // all join predicates
     common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_conditions_; //equal join condition, for merge-join
@@ -233,6 +238,8 @@ namespace sql
     common::ObSEArray<JoinFilterInfo, 4, common::ModulePageAllocator, true> join_filter_infos_;
     bool can_use_batch_nlj_;
     JoinPath *join_path_;
+    common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
+    common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
 
     DISALLOW_COPY_AND_ASSIGN(ObLogJoin);
   };

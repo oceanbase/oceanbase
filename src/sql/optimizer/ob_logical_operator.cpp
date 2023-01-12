@@ -1703,6 +1703,12 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
       }
       break;
     }
+    case COLLECT_BATCH_EXEC_PARAM: {
+      if (OB_FAIL(collect_batch_exec_param_pre(ctx))) {
+        LOG_WARN("failed to gen batch exec param pre", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected access of default branch", K(op), K(ret));
@@ -1870,6 +1876,12 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
       case ALLOC_STARTUP_EXPR: {
         if (OB_FAIL(allocate_startup_expr_post())) {
           LOG_WARN("failed to alloc startup expr post", K(ret));
+        }
+        break;
+      }
+      case COLLECT_BATCH_EXEC_PARAM: {
+        if (OB_FAIL(collect_batch_exec_param_post(ctx))) {
+          LOG_WARN("failed to gen batch exec param post",  K(ret));
         }
         break;
       }
@@ -5487,6 +5499,121 @@ int ObLogicalOperator::need_alloc_material_for_shared_hj(ObLogicalOperator &curr
     }
     if (OB_SUCC(ret) && !end_traverse) {
       OZ (need_alloc_material_for_shared_hj(*parent, need_alloc));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::collect_batch_exec_param_pre(void* ctx)
+{
+  int ret = OB_SUCCESS;
+  ObBatchExecParamCtx* param_ctx = static_cast<ObBatchExecParamCtx*>(ctx);
+  if (OB_ISNULL(param_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (ObLogOpType::LOG_JOIN == get_type() &&
+             NESTED_LOOP_JOIN == static_cast<ObLogJoin*>(this)->get_join_algo()) {
+    if (OB_FAIL(param_ctx->params_idx_.push_back(param_ctx->exec_params_.count()))) {
+      LOG_WARN("failed to push back params idx", K(ret));
+    }
+  } else if (ObLogOpType::LOG_SUBPLAN_FILTER == get_type()) {
+    if (OB_FAIL(param_ctx->params_idx_.push_back(param_ctx->exec_params_.count()))) {
+      LOG_WARN("failed to push back params idx", K(ret));
+    }
+  } else if (param_ctx->params_idx_.empty()) {
+    /* do nothing */
+  } else {
+    ObSEArray<ObRawExpr*, 4> param_exprs;
+    if (OB_FAIL(ObRawExprUtils::extract_params(get_filter_exprs(), param_exprs))) {
+      LOG_WARN("extract params failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_params(get_startup_exprs(), param_exprs))) {
+      LOG_WARN("extract params failed", K(ret));
+    } else if (ObLogOpType::LOG_TABLE_SCAN == get_type() &&
+               OB_FAIL(ObRawExprUtils::extract_params(static_cast<ObLogTableScan*>(this)->get_range_conditions(),
+                                                      param_exprs))) {
+      LOG_WARN("extract params failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_exprs.count(); ++i) {
+      ObRawExpr *expr = param_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (expr->has_flag(IS_DYNAMIC_PARAM)) {
+        ObBatchExecParamCtx::ExecParam param(expr, branch_id_);
+        if (OB_FAIL(param_ctx->exec_params_.push_back(param))) {
+          LOG_WARN("failed to push back exec params", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::collect_batch_exec_param_post(void* ctx)
+{
+  int ret = OB_SUCCESS;
+  ObBatchExecParamCtx* param_ctx = static_cast<ObBatchExecParamCtx*>(ctx);
+  if (OB_ISNULL(param_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (ObLogOpType::LOG_SUBPLAN_FILTER == get_type()) {
+    ObLogSubPlanFilter* filter_op = static_cast<ObLogSubPlanFilter*>(this);
+    if (OB_FAIL(collect_batch_exec_param(ctx,
+                                          filter_op->get_exec_params(),
+                                          filter_op->get_above_pushdown_left_params(),
+                                          filter_op->get_above_pushdown_right_params()))) {
+      LOG_WARN("failed to collect batch exec param", K(ret));
+    }
+  } else if (ObLogOpType::LOG_JOIN == get_type() &&
+             NESTED_LOOP_JOIN == static_cast<ObLogJoin*>(this)->get_join_algo()) {
+    ObLogJoin* join_op = static_cast<ObLogJoin*>(this);
+    if (OB_FAIL(collect_batch_exec_param(ctx,
+                                         join_op->get_nl_params(),
+                                         join_op->get_above_pushdown_left_params(),
+                                         join_op->get_above_pushdown_right_params()))) {
+      LOG_WARN("failed to collect batch exec param", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::collect_batch_exec_param(void* ctx,
+                                                const ObIArray<ObExecParamRawExpr*> &exec_params,
+                                                ObIArray<ObExecParamRawExpr *> &left_above_params,
+                                                ObIArray<ObExecParamRawExpr *> &right_above_params)
+{
+  int ret = OB_SUCCESS;
+  int64_t start = -1;
+  ObBatchExecParamCtx* param_ctx = static_cast<ObBatchExecParamCtx*>(ctx);
+  if (OB_ISNULL(param_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_UNLIKELY(param_ctx->params_idx_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params idx is null", K(ret));
+  } else if (OB_FAIL(param_ctx->params_idx_.pop_back(start))) {
+    LOG_WARN("failed to pop back idx", K(ret));
+  } else if (OB_UNLIKELY(start > param_ctx->exec_params_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params idx is large than count", K(ret));
+  } else {
+    for (int64_t i = param_ctx->exec_params_.count() - 1; OB_SUCC(ret) && i >= start; --i) {
+      const ObBatchExecParamCtx::ExecParam& param = param_ctx->exec_params_.at(i);
+      if (!ObOptimizerUtil::find_item(exec_params, param.expr_)) {
+        /* do nothing */
+      } else if (OB_FAIL(param_ctx->exec_params_.remove(i))) {
+        LOG_WARN("failed to remove params", K(ret));
+      }
+    }
+    for (int64_t i = start; OB_SUCC(ret) && i < param_ctx->exec_params_.count(); ++i) {
+      const ObBatchExecParamCtx::ExecParam& param = param_ctx->exec_params_.at(i);
+      if (param.branch_id_ > branch_id_ &&
+          OB_FAIL(right_above_params.push_back(static_cast<ObExecParamRawExpr*>(param.expr_)))) {
+        LOG_WARN("failed to push back right params", K(ret));
+      } else if (param.branch_id_ <= branch_id_ &&
+                 OB_FAIL(left_above_params.push_back(static_cast<ObExecParamRawExpr*>(param.expr_)))) {
+        LOG_WARN("failed to push back left params", K(ret));
+      }
     }
   }
   return ret;

@@ -678,8 +678,8 @@ int ObTableScanOp::prepare_pushdown_limit_param()
   } else if (MY_SPEC.batch_scan_flag_) {
     //batch scan can not pushdown limit param to storage
     need_final_limit_ = true;
-    limit_param_.offset_ = 0;
-    limit_param_.limit_ = -1;
+    tsc_rtdef_.scan_rtdef_.limit_param_.offset_ = 0;
+    tsc_rtdef_.scan_rtdef_.limit_param_.limit_ = -1;
   } else if (tsc_rtdef_.has_lookup_limit() || das_ref_.get_das_task_cnt() > 1) {
     //for index back, need to final limit output rows in TableScan operator,
     //please see me for the reason: https://work.aone.alibaba-inc.com/issue/43232745
@@ -1226,8 +1226,8 @@ int ObTableScanOp::inner_open()
   }
   if (OB_SUCC(ret)) {
     // here need add plan batch_size, because in vectorized execution,
-    // left batch may greater than BNLJ_DEFAULT_GROUP_SIZE
-    max_group_size_ = BNLJ_DEFAULT_GROUP_SIZE + MY_SPEC.plan_->get_batch_size();
+    // left batch may greater than OB_MAX_BULK_JOIN_ROWS
+    max_group_size_ = OB_MAX_BULK_JOIN_ROWS + MY_SPEC.plan_->get_batch_size();
     if (MY_CTDEF.pre_query_range_.get_is_equal_and()) {
       int64_t column_count = MY_CTDEF.pre_query_range_.get_column_count();
       size_t range_size = sizeof(ObNewRange) + sizeof(ObObj) * column_count * 2;
@@ -1398,7 +1398,7 @@ int ObTableScanOp::inner_rescan()
     // replaced by NLJ.
     LOG_WARN("build batch nlj params failed", KR(ret));
   } else if (!need_fetch_batch_result()) {
-    ret = switch_batch_iter();
+    ret = set_batch_iter(ctx_.get_das_ctx().jump_read_group_id_);
   } else {
     if (is_virtual_table(MY_SPEC.ref_table_id_)
         || !das_ref_.is_all_local_task()
@@ -1563,6 +1563,37 @@ int ObTableScanOp::switch_batch_iter()
   return ret;
 }
 
+int ObTableScanOp::set_batch_iter(int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  for (DASTaskIter task_iter = das_ref_.begin_task_iter();
+       OB_SUCC(ret) && !task_iter.is_end(); ++task_iter) {
+    ObDASGroupScanOp *group_scan_op = DAS_GROUP_SCAN_OP(*task_iter);
+    if (OB_FAIL(group_scan_op->set_scan_group(group_id))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("switch batch iter failed", K(ret));
+      } else {
+        iter_end_ = true;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !iter_end_) {
+    if (!das_ref_.has_task()) {
+      iter_end_ = true;
+    } else {
+      //prepare to output row
+      scan_result_ = das_ref_.begin_result_iter();
+      if (OB_FAIL(update_output_tablet_id())) {
+        LOG_WARN("update output row pkey failed", K(ret), KPC(scan_result_.get_tablet_loc()));
+      }
+    }
+  }
+  return ret;
+}
+
+
+
+
 int ObTableScanOp::get_next_row_with_das()
 {
   int ret = OB_SUCCESS;
@@ -1589,12 +1620,31 @@ int ObTableScanOp::get_next_row_with_das()
         LOG_WARN("get next row from das result failed", K(ret));
       }
     } else {
-      ++input_row_cnt_;
+      // We need do filter first before do the limit.
+      // See the issue 47201028.
+      bool filtered = false;
+      if (need_final_limit_ && !MY_SPEC.filters_.empty()) {
+        if (OB_FAIL(filter_row(filtered))) {
+          LOG_WARN("das get_next_row filter row failed", K(ret));
+        } else {
+          if(filtered) {
+            //Do nothing
+          } else {
+            ++input_row_cnt_;
+          }
+        }
+      } else {
+        ++input_row_cnt_;
+      }
       if (need_final_limit_ && input_row_cnt_ <= limit_param_.offset_) {
         continue;
       } else {
-        ++output_row_cnt_;
-        got_row = true;
+        if (need_final_limit_ && !MY_SPEC.filters_.empty() && filtered) {
+          //Do nothing
+        } else {
+          ++output_row_cnt_;
+          got_row = true;
+        }
       }
     }
   }
@@ -1635,7 +1685,26 @@ int ObTableScanOp::get_next_batch_with_das(int64_t &count, int64_t capacity)
         LOG_WARN("get next batch from das result failed", K(ret));
       }
     } else {
-      input_row_cnt_ += count;
+      // We need do filter first before do the limit.
+      // See the issue 47201028.
+      if(need_final_limit_ && !MY_SPEC.filters_.empty() && count > 0) {
+        bool all_filtered = false;
+        if (OB_FAIL(filter_batch_rows(MY_SPEC.filters_,
+                                      *brs_.skip_,
+                                      count,
+                                      all_filtered))) {
+          LOG_WARN("filter batch failed in das get_next_batch", K(ret));
+        } else if (all_filtered) {
+          //Do nothing.
+          brs_.skip_->reset(count);
+        } else {
+          int64_t skipped_rows_count = brs_.skip_->accumulate_bit_cnt(count);
+          input_row_cnt_ += count - skipped_rows_count;
+          brs_.skip_->reset(count);
+        }
+      } else {
+        input_row_cnt_ += count;
+      }
     }
   }
   if (OB_SUCC(ret) && need_final_limit_) {
@@ -1671,9 +1740,29 @@ int ObTableScanOp::get_next_batch_with_das(int64_t &count, int64_t capacity)
         LOG_WARN("get next batch from das result failed", K(ret));
       }
     } else {
-      got_batch = true;
-      output_row_cnt_ += count;
-      input_row_cnt_ += count;
+      // We need do filter first before do the limit.
+      // See the issue 47201028.
+      if (need_final_limit_ && !MY_SPEC.filters_.empty() && count > 0) {
+        bool all_filtered = false;
+        if (OB_FAIL(filter_batch_rows(MY_SPEC.filters_,
+                                      *brs_.skip_,
+                                      count,
+                                      all_filtered))) {
+          LOG_WARN("filter batch failed in das get_next_batch", K(ret));
+        } else if (all_filtered) {
+          //Do nothing.
+          brs_.skip_->reset(count);
+        } else {
+          int64_t skipped_rows_count = brs_.skip_->accumulate_bit_cnt(count);
+          got_batch = true;
+          output_row_cnt_ += (count - skipped_rows_count);
+          input_row_cnt_ += (count - skipped_rows_count);
+        }
+      } else {
+        got_batch = true;
+        output_row_cnt_ += count;
+        input_row_cnt_ += count;
+      }
     }
   }
   return ret;

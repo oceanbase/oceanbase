@@ -856,7 +856,7 @@ int ObStaticEngineCG::generate_calc_exprs(
     bool contain_batch_stmt_parameter = false;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObOptimizerUtil::check_contain_batch_stmt_parameter(
-                                          raw_expr, 
+                                          raw_expr,
                                           contain_batch_stmt_parameter))) {
       LOG_WARN("failed to check contain batch stmt parameter", K(ret));
     } else {
@@ -868,6 +868,7 @@ int ObStaticEngineCG::generate_calc_exprs(
           && !raw_expr->is_op_pseudo_column_expr()
           && !has_exist_in_array(dep_exprs, flattened_cur_exprs_arr.at(i))
           && (raw_expr->has_flag(CNT_VOLATILE_CONST)
+              || raw_expr->has_flag(CNT_DYNAMIC_PARAM)
               || contain_batch_stmt_parameter // 计算包含batch优化的折叠参数
               || !raw_expr->is_const_expr())) {
         if (check_eval_once
@@ -4069,7 +4070,7 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
           ObNestedLoopJoinSpec &nlj = static_cast<ObNestedLoopJoinSpec &>(spec);
           if (op.enable_px_batch_rescan()) {
             nlj.enable_px_batch_rescan_ = true;
-            nlj.left_group_size_ = ObNestedLoopJoinOp::PX_RESCAN_BATCH_ROW_COUNT;
+            nlj.group_size_ = ObNestedLoopJoinOp::PX_RESCAN_BATCH_ROW_COUNT;
           } else {
             nlj.enable_px_batch_rescan_ = false;
           }
@@ -4078,7 +4079,7 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
           ObNestedLoopJoinSpec &nlj = static_cast<ObNestedLoopJoinSpec &>(spec);
           bool use_batch_nlj = op.can_use_batch_nlj();
           if (use_batch_nlj) {
-            nlj.use_group_ = use_batch_nlj;
+            nlj.group_rescan_ = use_batch_nlj;
           }
 
           if (nlj.is_vectorized()) {
@@ -4110,6 +4111,32 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
                 }
                 // Note: no need to call init explicitly as init() is invoked inside assign()
                 OZ(nlj.left_expr_ids_in_other_cond_.at(i).assign(left_expr_ids));
+              }
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(nlj.left_rescan_params_.init(op.get_above_pushdown_left_params().count()))) {
+              LOG_WARN("fail to init fixed array", K(ret));
+            } else if (OB_FAIL(nlj.right_rescan_params_.init(op.get_above_pushdown_right_params().count()))) {
+              LOG_WARN("fail to init fixed array", K(ret));
+            } else if (OB_FAIL(set_batch_exec_param(op.get_nl_params(), nlj_spec.rescan_params_))) {
+              LOG_WARN("fail to set batch exec param", K(ret));
+            }
+            ARRAY_FOREACH(op.get_above_pushdown_left_params(), i) {
+              ObExecParamRawExpr* param_expr = op.get_above_pushdown_left_params().at(i);
+              if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+                                                                                 &nlj,
+                                                                                 true)))) {
+                LOG_WARN("fail to push back param expr", K(ret));
+              }
+            }
+            ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
+              ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
+              if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+                                                                                 &nlj,
+                                                                                 false)))) {
+                LOG_WARN("fail to push back param expr", K(ret));
               }
             }
           }
@@ -4513,6 +4540,30 @@ int ObStaticEngineCG::generate_spec(
     for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(exec_params); i++) {
       OZ(generate_param_spec(*exec_params[i], *setters[i]));
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(spec.left_rescan_params_.init(op.get_above_pushdown_left_params().count()))) {
+      LOG_WARN("fail to init fixed array", K(ret));
+    } else if (OB_FAIL(spec.right_rescan_params_.init(op.get_above_pushdown_right_params().count()))) {
+      LOG_WARN("fail to init fixed array", K(ret));
+    } else if (OB_FAIL(set_batch_exec_param(*exec_params[0], *setters[0]))) {
+      LOG_WARN("fail to set batch exec param", K(ret));
+    }
+    ARRAY_FOREACH(op.get_above_pushdown_left_params(), i) {
+      ObExecParamRawExpr* param_expr = op.get_above_pushdown_left_params().at(i);
+      if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+                                                                      &spec,
+                                                                      true)))) {
+        LOG_WARN("fail to push back param expr", K(ret));
+      }
+    }
+    ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
+      ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
+      if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+                                                                      &spec,
+                                                                      false)))) {
+        LOG_WARN("fail to push back param expr", K(ret));
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -4586,7 +4637,7 @@ int ObStaticEngineCG::generate_spec(
     }
   }
   if (OB_SUCC(ret)) {
-    spec.enable_das_batch_rescans_ = op.get_enable_das_batch_rescans();
+    spec.enable_das_batch_rescans_ = op.enable_das_batch_rescans();
   }
   return ret;
 }
@@ -6793,6 +6844,51 @@ int ObStaticEngineCG::check_fk_nested_dup_del(const uint64_t table_id,
   }
   if (OB_SUCC(ret) && OB_FAIL(parent_tables.pop_back())) {
     LOG_WARN("failed to pop latest table id", K(ret));
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                           const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(exec_params.count() != setters.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("nl params should have the same length with rescan params", K(ret));
+  }
+  ARRAY_FOREACH(exec_params, i) {
+    const ObExecParamRawExpr* param_expr = exec_params.at(i);
+    const ObDynamicParamSetter& setter = setters.at(i);
+    for (int64_t j = batch_exec_param_caches_.count() - 1; OB_SUCC(ret) && j >= 0; --j) {
+      const BatchExecParamCache &cache = batch_exec_param_caches_.at(j);
+      if (param_expr != cache.expr_) {
+      } else if (OB_ISNULL(cache.spec_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (cache.spec_->get_type() == PHY_SUBPLAN_FILTER) {
+        ObSubPlanFilterSpec *spf = static_cast<ObSubPlanFilterSpec*>(cache.spec_);
+        if (cache.is_left_param_ &&
+                    OB_FAIL(spf->left_rescan_params_.push_back(setter))) {
+          LOG_WARN("fail to push back left rescan params", K(ret));
+        } else if (!cache.is_left_param_ &&
+                    OB_FAIL(spf->right_rescan_params_.push_back(setter))) {
+          LOG_WARN("fail to push back right rescan params", K(ret));
+        } else if (OB_FAIL(batch_exec_param_caches_.remove(j))) {
+          LOG_WARN("fail to remove batch nl param caches", K(ret));
+        }
+      } else if (cache.spec_->get_type() == PHY_NESTED_LOOP_JOIN) {
+        ObNestedLoopJoinSpec *nlj = static_cast<ObNestedLoopJoinSpec*>(cache.spec_);
+        if (cache.is_left_param_ &&
+                    OB_FAIL(nlj->left_rescan_params_.push_back(setter))) {
+          LOG_WARN("fail to push back left rescan params", K(ret));
+        } else if (!cache.is_left_param_ &&
+                    OB_FAIL(nlj->right_rescan_params_.push_back(setter))) {
+          LOG_WARN("fail to push back right rescan params", K(ret));
+        } else if (OB_FAIL(batch_exec_param_caches_.remove(j))) {
+          LOG_WARN("fail to remove batch nl param caches", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }

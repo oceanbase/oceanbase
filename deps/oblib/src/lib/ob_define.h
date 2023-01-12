@@ -1665,7 +1665,7 @@ const int64_t OB_MAX_STATICS_PER_TABLE = 128;
 const uint64_t OB_DEFAULT_INDEX_ATTRIBUTES_SET = 0;
 const uint64_t OB_DEFAULT_INDEX_VISIBILITY = 0;//0 menas visible;1 means invisible
 
-const uint64_t BNLJ_DEFAULT_GROUP_SIZE = 1000;
+const uint64_t OB_MAX_BULK_JOIN_ROWS = 1000;
 
 const int64_t OB_INDEX_WRITE_START_DELAY = 20 * 1000 * 1000; //20s
 

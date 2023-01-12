@@ -383,6 +383,7 @@ protected:
 
   int local_iter_reuse();
   int switch_batch_iter();
+  int set_batch_iter(int64_t group_id);
   int calc_expr_int_value(const ObExpr &expr, int64_t &retval, bool &is_null_value);
   int init_table_scan_rtdef();
   int init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef,

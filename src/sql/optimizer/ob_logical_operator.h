@@ -726,6 +726,35 @@ private:
   common::ObArray<OpCtx *> op_ctxs_;
 };
 
+struct ObBatchExecParamCtx
+{
+  struct ExecParam
+  {
+    ExecParam() : expr_(NULL), branch_id_(0) {}
+
+    ExecParam(ObRawExpr *expr, uint64_t branch_id)
+      : expr_(expr), branch_id_(branch_id) {}
+
+    ExecParam(const ExecParam &other)
+      : expr_(other.expr_),
+      branch_id_(other.branch_id_) {}
+
+    ExecParam &operator=(const ExecParam &other)
+    {
+      expr_ = other.expr_;
+      branch_id_ = other.branch_id_;
+      return *this;
+    }
+
+    ObRawExpr *expr_;
+    uint64_t branch_id_;
+
+    TO_STRING_KV(K_(expr), K_(branch_id));
+  };
+  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> params_idx_;
+  common::ObSEArray<ExecParam, 8, common::ModulePageAllocator, true> exec_params_;
+};
+
 struct ObErrLogDefine
 {
   ObErrLogDefine() :
@@ -1612,6 +1641,12 @@ public:
   int has_window_function_below(bool &has_win_func) const;
   int get_pushdown_op(log_op_def::ObLogOpType op_type, const ObLogicalOperator *&op) const;
 
+  int collect_batch_exec_param_pre(void* ctx);
+  int collect_batch_exec_param_post(void* ctx);
+  int collect_batch_exec_param(void* ctx,
+                               const ObIArray<ObExecParamRawExpr*> &exec_params,
+                               ObIArray<ObExecParamRawExpr *> &left_above_params,
+                               ObIArray<ObExecParamRawExpr *> &right_above_params);
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;

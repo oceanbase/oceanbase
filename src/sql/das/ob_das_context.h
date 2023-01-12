@@ -51,6 +51,7 @@ public:
       snapshot_(),
       savepoint_(0),
       del_ctx_list_(allocator),
+      jump_read_group_id_(-1),
       flags_(0)
   {
     need_check_server_ = 1;
@@ -120,6 +121,7 @@ private:
   //@todo: save snapshot version
   DASDelCtxList del_ctx_list_;
 public:
+  int64_t jump_read_group_id_;
   union {
     uint64_t flags_;
     struct {
@@ -129,6 +131,7 @@ public:
       uint64_t reserved_                        : 62;
     };
   };
+
 };
 }  // namespace sql
 }  // namespace oceanbase

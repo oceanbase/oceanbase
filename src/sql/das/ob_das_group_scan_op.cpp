@@ -152,6 +152,23 @@ int ObDASGroupScanOp::switch_scan_group()
   return ret;
 }
 
+int ObDASGroupScanOp::set_scan_group(int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  ObLocalIndexLookupOp *lookup_op = get_lookup_op();
+  // for lookup group scan, switch lookup group scan iter
+  if (NULL != lookup_op) {
+    ret = lookup_op->set_lookup_scan_group(group_id);
+  } else {
+    ret = iter_.set_scan_group(group_id);
+  }
+
+  if (OB_FAIL(ret) && OB_ITER_END != ret) {
+    LOG_WARN("set scan group failed", K(ret), KP(lookup_op), K(iter_));
+  }
+  return ret;
+}
+
 ObNewRowIterator *ObDASGroupScanOp::get_storage_scan_iter()
 {
   ObNewRowIterator *iter = NULL;
@@ -312,6 +329,33 @@ int ObGroupLookupOp::switch_lookup_scan_group()
 
   return ret;
 }
+
+int ObGroupLookupOp::set_lookup_scan_group(int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  state_ = OUTPUT_ROWS;
+  ObGroupScanIter *group_iter = NULL;
+  group_iter = static_cast<ObGroupScanIter *>(get_lookup_iter());
+  if (NULL == group_iter) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguement", K(group_iter), K(ret));
+  } else {
+    ret = group_iter->set_scan_group(group_id);
+    if(-1 == group_id) {
+      ++lookup_group_cnt_;
+    } else {
+      lookup_group_cnt_ = group_id + 1;
+    }
+
+    if(lookup_group_cnt_ >= index_group_cnt_ && OB_ITER_END == ret && !index_end_) {
+      ret = OB_SUCCESS;
+      state_ = INDEX_SCAN;
+    }
+  }
+
+  return ret;
+}
+
 
 
 OB_SERIALIZE_MEMBER((ObDASGroupScanOp, ObDASScanOp), iter_, cur_group_idx_, group_size_);

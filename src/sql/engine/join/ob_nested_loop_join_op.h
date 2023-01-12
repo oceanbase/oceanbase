@@ -15,6 +15,7 @@
 
 #include "sql/engine/join/ob_basic_nested_loop_join_op.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/basic/ob_group_join_buffer.h"
 #include "sql/engine/basic/ob_material_op.h"
 
 namespace oceanbase
@@ -27,46 +28,33 @@ class ObNestedLoopJoinSpec : public ObBasicNestedLoopJoinSpec
 public:
   ObNestedLoopJoinSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
     : ObBasicNestedLoopJoinSpec(alloc, type),
-      use_group_(false),
-      left_group_size_(BNLJ_DEFAULT_GROUP_SIZE),
-      left_expr_ids_in_other_cond_(alloc)
+      group_rescan_(false),
+      group_size_(OB_MAX_BULK_JOIN_ROWS),
+      left_expr_ids_in_other_cond_(alloc),
+      left_rescan_params_(alloc),
+      right_rescan_params_(alloc)
   {}
 
 public:
-  // for group nested loop join.
-  bool use_group_;
-  int64_t left_group_size_;
+  // for group join buffer
+  bool group_rescan_;
+  int64_t group_size_;
   ObFixedArray<ObFixedArray<int, common::ObIAllocator>, common::ObIAllocator>
       left_expr_ids_in_other_cond_;
+  // for multi level batch rescan
+  //           NLJ 1
+  //           / \
+  //      TSC 1   NLJ 2
+  //              / \
+  //         TSC 2   TSC 3
+  // As shown above, for NLJ 2, its left_rescan_params_ stores params used by TSC 2 and
+  // set by NLJ 1.
+  // Similarly, for NLJ 2, its right_rescan_params_ stores params used by TSC 3 and set
+  // by NLJ 1.
+  common::ObFixedArray<ObDynamicParamSetter, common::ObIAllocator> left_rescan_params_;
+  common::ObFixedArray<ObDynamicParamSetter, common::ObIAllocator> right_rescan_params_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNestedLoopJoinSpec);
-};
-
-
-struct ObBatchRowDatums
-{
-  ObBatchRowDatums()
-    : alloc_(NULL), exprs_(NULL), batch_size_(0), datums_(NULL),
-      skip_(NULL), size_(0), saved_size_(0)
-  {}
-  int init(const ObExprPtrIArray *exprs, common::ObIAllocator *alloc, int32_t batch_size);
-  void from_exprs(ObEvalCtx &ctx, ObBitVector *skip, int64_t size);
-  void extend_save(ObEvalCtx &ctx, int64_t size);
-  void to_exprs(ObEvalCtx &ctx);
-  void to_exprs(ObEvalCtx &ctx, int64_t from_idx, int64_t to_idx);
-  ObDatum &get_datum(int64_t row_id, int64_t col_id)
-  {
-    return datums_[col_id * batch_size_ + row_id];
-  }
-
-public:
-  common::ObIAllocator *alloc_;
-  const ObExprPtrIArray *exprs_;
-  int32_t batch_size_;
-  ObDatum *datums_;
-  ObBitVector *skip_;
-  int32_t size_;
-  int32_t saved_size_; // record  the saved size, include extend saved size
 };
 
 // Nest loop join has no expression result overwrite problem:
@@ -124,11 +112,13 @@ public:
         batch_mem_ctx_ = nullptr;
       }
     }
+    if (MY_SPEC.group_rescan_) {
+      group_join_buffer_.destroy();
+    }
     ObBasicNestedLoopJoinOp::destroy();
   }
   ObBatchRescanCtl &get_batch_rescan_ctl() { return batch_rescan_ctl_; }
   int fill_cur_row_rescan_param();
-  int fill_cur_row_bnlj_param();
   // Skip restore if child is material operator to save duplicate work
   // Note:
   //   this is a sister function of backup_right_child_exprs(), call it after
@@ -174,7 +164,6 @@ private:
   int read_left_operate_batch();
   int read_left_operate_group_batch();
   int group_read_left_operate();
-  int deep_copy_dynamic_obj();
   int read_left_func_going();
   int read_left_func_end();
   // JS_READ_RIGHT state operation and transfer functions.
@@ -199,8 +188,6 @@ private:
       ObEvalCtx::BatchInfoScopeGuard &batch_info_guard);
   int output();
   int inner_get_next_batch(const int64_t max_row_cnt);
-  int init_bnlj_params();
-  int bind_bnlj_param_to_store();
   // for vectorized end
 
   bool continue_fetching() { return !(left_brs_->end_ || is_full());}
@@ -228,13 +215,12 @@ public:
   ObChunkDatumStore::Iterator right_store_iter_;
   const ObBatchRows *left_brs_;
   ObBitVector *left_matched_;
-  common::ObArrayWrap<ObSqlArrayObj> bnlj_params_;
   bool need_switch_iter_;
   bool iter_end_;
   ObBatchResultHolder brs_holder_;
   int64_t op_max_batch_size_;
   int64_t max_group_size_;
-  int64_t bnlj_cur_idx_;
+  ObGroupJoinBufffer group_join_buffer_;
   // for vectorized end
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNestedLoopJoinOp);

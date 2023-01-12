@@ -4906,18 +4906,26 @@ int JoinPath::can_use_batch_nlj(ObLogPlan *plan,
                       || table_item->for_update_
                       || !access_path->subquery_exprs_.empty()
                       );
-    for (int64_t i = 0; OB_SUCC(ret) && use_batch_nlj && i < access_path->filter_.count(); ++i) {
-      const ObRawExpr *expr = access_path->filter_.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table filter is null", K(ret));
-      } else if (OB_NOT_NULL(access_path->pre_query_range_) &&
-                ObOptimizerUtil::find_item(access_path->pre_query_range_->get_range_exprs(), expr)) {
-        //range expr, do nothing
-      } else {
-        use_batch_nlj = !expr->has_flag(CNT_DYNAMIC_PARAM);
+
+    if (use_batch_nlj) {
+      bool found_query_range = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < access_path->filter_.count() && !found_query_range; ++i) {
+        const ObRawExpr *expr = access_path->filter_.at(i);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table filter is null", K(ret));
+        } else if (OB_NOT_NULL(access_path->pre_query_range_) &&
+                  ObOptimizerUtil::find_item(access_path->pre_query_range_->get_range_exprs(), expr)) {
+          found_query_range = true;
+        } else {
+          //do nothing
+          //dynamic filter will keep in tsc operator
+          //static filter will pushdown to storage
+        }
       }
+      use_batch_nlj = use_batch_nlj && found_query_range;
     }
+
   }
   return ret;
 }
@@ -5006,7 +5014,8 @@ int JoinPath::can_use_das_batch_nlj(ObLogicalOperator* root, bool &use_batch_nlj
     if (OB_FAIL(SMART_CALL(can_use_das_batch_nlj(root->get_child(0), use_batch_nlj)))) {
       LOG_WARN("failed to check das batch nlj", K(ret));
     }
-  } else if (log_op_def::LOG_SET == root->get_type()) {
+  } else if (log_op_def::LOG_SET == root->get_type()
+             || log_op_def::LOG_JOIN == root->get_type()) {
     use_batch_nlj = true;
     for (int64_t i = 0; OB_SUCC(ret) && use_batch_nlj && i < root->get_num_of_child(); ++i) {
       ObLogicalOperator *child = root->get_child(i);

@@ -7603,7 +7603,7 @@ int ObRawExprUtils::extract_params(common::ObIArray<ObRawExpr*> &exprs,
   return ret;
 }
 
-int ObRawExprUtils::is_contain_params(common::ObIArray<ObRawExpr*> &exprs,
+int ObRawExprUtils::is_contain_params(const common::ObIArray<ObRawExpr*> &exprs,
                                       bool &is_contain)
 {
   int ret = OB_SUCCESS;
@@ -7786,7 +7786,7 @@ int ObRawExprUtils::get_col_ref_expr_recursively(ObRawExpr *expr,
   return ret;
 }
 
-int ObRawExprUtils::is_contain_params(ObRawExpr *expr, bool &is_contain)
+int ObRawExprUtils::is_contain_params(const ObRawExpr *expr, bool &is_contain)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
@@ -7794,7 +7794,6 @@ int ObRawExprUtils::is_contain_params(ObRawExpr *expr, bool &is_contain)
     LOG_WARN("expr passed in is NULL", K(ret));
   } else if (expr->is_param_expr()) {
     is_contain = true;
-    LOG_WARN("expr is param expr", KPC(expr));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(is_contain_params(expr->get_param_expr(i), is_contain)))) {

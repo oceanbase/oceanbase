@@ -1221,8 +1221,6 @@ public:
   int contains_limit_or_pushdown_limit(ObLogicalOperator *op,
                                        bool &contains);
 
-  int check_and_reset_batch_nlj(ObLogicalOperator *root);
-
   /**
    * 递归处理expr里的SubQuery，遇到SubLink就生成一个SubPlan
    * @param expr

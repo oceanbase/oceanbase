@@ -1158,15 +1158,43 @@ int ObLogJoin::set_use_batch(ObLogicalOperator* root)
   } else if (root->is_table_scan()) {
     ObLogTableScan *ts = static_cast<ObLogTableScan*>(root);
     // dblink can not support batch nlj
-    if (!ts->get_range_conditions().empty()) {
-      ts->set_use_batch(can_use_batch_nlj_);
+    bool has_param = false;
+    ObSEArray<int64_t, 1> idx_array;
+    if (OB_FAIL(ts->extract_bnlj_param_idxs(idx_array))) {
+      LOG_WARN("extract param indexes failed", KR(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !has_param && i < nl_params_.count(); i++) {
+      int64_t param_idx = nl_params_.at(i)->get_param_index();
+      for (int64_t j = 0; OB_SUCC(ret) && j < idx_array.count(); j++) {
+        if (param_idx == idx_array.at(j)) {
+          has_param = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ts->set_use_batch(ts->use_batch() || (can_use_batch_nlj_ && has_param));
     }
   } else if (root->get_num_of_child() == 1) {
     if (log_op_def::LOG_TABLE_LOOKUP == root->get_type()) {
-      ObLogTableLookup *tlu = static_cast<ObLogTableLookup*>(root);
-      tlu->set_use_batch(can_use_batch_nlj_);
-    }
-    if(OB_FAIL(SMART_CALL(set_use_batch(root->get_child(first_child))))) {
+      ObLogTableLookup *tlu = NULL;
+      ObLogTableScan *ts = NULL;
+      if (OB_ISNULL(tlu = static_cast<ObLogTableLookup *>(root))
+          || OB_ISNULL(root->get_child(first_child))
+          || !root->get_child(first_child)->is_table_scan()
+          || OB_ISNULL(ts = static_cast<ObLogTableScan *>(root->get_child(first_child)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid input", K(ret));
+      } else {
+        if (!ts->get_filter_exprs().empty()) {
+          tlu->set_use_batch(false);
+          ts->set_use_batch(false);
+        } else if (OB_FAIL(SMART_CALL(set_use_batch(root->get_child(first_child))))) {
+          LOG_WARN("failed to check use batch nlj", K(ret));
+        } else {
+          tlu->set_use_batch(tlu->use_batch() || (can_use_batch_nlj_ && ts->use_batch()));
+        }
+      }
+    } else if (OB_FAIL(SMART_CALL(set_use_batch(root->get_child(first_child))))) {
       LOG_WARN("failed to check use batch nlj", K(ret));
     }
   } else if (log_op_def::LOG_SET == root->get_type()) {
@@ -1175,11 +1203,82 @@ int ObLogJoin::set_use_batch(ObLogicalOperator* root)
       if (OB_ISNULL(child)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid child", K(ret));
-      } else if(OB_FAIL(SMART_CALL(set_use_batch(child)))) {
+      } else if (OB_FAIL(SMART_CALL(set_use_batch(child)))) {
         LOG_WARN("failed to check use batch nlj", K(ret));
       }
     }
+  } else if (log_op_def::LOG_JOIN == root->get_type()) {
+    ObLogJoin *nlj = NULL;
+    ObLogicalOperator *child = NULL;
+    if (OB_ISNULL(nlj = static_cast<ObLogJoin *>(root))
+        || OB_ISNULL(child = nlj->get_child(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input", K(ret));
+    } else if (OB_FAIL(SMART_CALL(set_use_batch(child)))) {
+      LOG_WARN("failed to check use batch nlj", K(ret));
+    } else if (!nlj->can_use_batch_nlj()) {
+      // do nothing
+    } else if (OB_ISNULL(child = nlj->get_child(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid child", K(ret));
+    } else if (OB_FAIL(SMART_CALL(set_use_batch(child)))) {
+      LOG_WARN("failed to check use batch nlj", K(ret));
+    }
   } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObLogJoin::check_and_set_use_batch()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  ObLogPlan *plan = NULL;
+  if (OB_ISNULL(plan = get_plan())
+      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!can_use_batch_nlj_) {
+    // do nothing
+  } else if (OB_FAIL(session_info->get_nlj_batching_enabled(can_use_batch_nlj_))) {
+    LOG_WARN("failed to get enable batch variable", K(ret));
+  } else if (NESTED_LOOP_JOIN != get_join_algo()) {
+    can_use_batch_nlj_ = false;
+  }
+  // check use batch
+  if (OB_SUCC(ret) && can_use_batch_nlj_) {
+    bool contains_invalid_startup = false;
+    bool contains_limit = false;
+    if (get_child(1)->get_type() == log_op_def::LOG_GRANULE_ITERATOR) {
+      can_use_batch_nlj_ = false;
+    } else if (OB_FAIL(plan->contains_startup_with_exec_param(get_child(1),
+                                                              contains_invalid_startup))) {
+      LOG_WARN("failed to check contains invalid startup", K(ret));
+    } else if (contains_invalid_startup) {
+      can_use_batch_nlj_ = false;
+    } else if (OB_FAIL(plan->contains_limit_or_pushdown_limit(get_child(1), contains_limit))) {
+      LOG_WARN("failed to check contains limit", K(ret));
+    } else if (contains_limit) {
+      can_use_batch_nlj_ = false;
+    } else if (log_op_def::LOG_TABLE_LOOKUP == get_child(1)->get_type()) {
+      ObLogTableScan *ts = NULL;
+      if (OB_ISNULL(get_child(1)->get_child(0))
+          || !get_child(1)->get_child(0)->is_table_scan()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid input", K(ret));
+      } else if (OB_ISNULL(ts = static_cast<ObLogTableScan *>(get_child(1)->get_child(0)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid input", K(ret));
+      } else if (!ts->get_filter_exprs().empty()) {
+        can_use_batch_nlj_ = false;
+      }
+    }
+  }
+  // set use batch
+  if (OB_SUCC(ret) && can_use_batch_nlj_) {
+    if (OB_FAIL(set_use_batch(get_child(1)))) {
+      LOG_WARN("failed to set use batch nlj", K(ret));
+    }
+  }
   return ret;
 }
 

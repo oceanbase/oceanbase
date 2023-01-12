@@ -2662,9 +2662,9 @@ Outputs & filters:
   2 - output([xy_t1.c2], [xy_t1.c1]), filter(nil), rowset=256, 
       access([xy_t1.c2], [xy_t1.c1]), partitions(p0)
   3 - output([1]), filter(nil), rowset=256, 
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
   4 - output([1]), filter(nil), rowset=256, 
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
 
 select /*+ no_rewrite*/ sum(c1), sum(c2) from xy_t1 where not exists (select 1 from xy_t3 where c2 = xy_t1.c2) and  exists (select 1 from xy_t2 where c2 = xy_t1.c2);
 +---------+---------+
@@ -4054,7 +4054,7 @@ Outputs & filters:
   1 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=256, 
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
   2 - output([1]), filter([xy_t1.c3 < ?]), rowset=256, 
-      access([xy_t1.c3]), partitions(p0)
+      access([GROUP_ID], [xy_t1.c3]), partitions(p0)
 
 select /*+ no_rewrite*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c1 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 +----+------+
@@ -4188,7 +4188,7 @@ Outputs & filters:
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256, 
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
   2 - output([1]), filter([xy_t1.c1 > xy_t1.c2]), rowset=256, 
-      access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
+      access([GROUP_ID], [xy_t1.c1], [xy_t1.c2]), partitions(p0)
 
 select /*+ no_rewrite*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c2 and xy_t1.c2 < xy_t2.c2) order by 1,2;
 +----+------+

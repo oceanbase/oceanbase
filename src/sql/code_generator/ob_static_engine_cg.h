@@ -458,6 +458,7 @@ private:
   int add_output_datum_check_flag(ObOpSpec &spec);
   int generate_calc_part_id_expr(const ObRawExpr &src, const ObDASTableLocMeta *loc_meta, ObExpr *&dst);
   int check_only_one_unique_key(const ObLogPlan &log_plan, const ObTableSchema* table_schema, bool& only_one_unique_key);
+
   bool is_simple_aggr_expr(const ObItemType &expr_type) { return T_FUN_COUNT == expr_type
                                                                  || T_FUN_SUM == expr_type
                                                                  || T_FUN_MAX == expr_type
@@ -467,6 +468,31 @@ private:
                               DASTableIdList &parent_tables,
                               bool &is_dup);
   bool has_cycle_reference(DASTableIdList &parent_tables, const uint64_t table_id);
+
+  int set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                           const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters);
+private:
+  struct BatchExecParamCache {
+    BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)
+      : expr_(expr), spec_(spec), is_left_param_(is_left) {}
+
+    BatchExecParamCache()
+      : expr_(NULL), spec_(NULL), is_left_param_(true) {}
+
+    BatchExecParamCache(const BatchExecParamCache& other)
+    {
+      expr_ = other.expr_;
+      spec_ = other.spec_;
+      is_left_param_ = other.is_left_param_;
+    }
+
+    TO_STRING_KV(K_(expr),
+                 K_(is_left_param));
+
+    ObExecParamRawExpr* expr_;
+    ObOpSpec* spec_;
+    bool is_left_param_;
+  };
 private:
   ObPhysicalPlan *phy_plan_;
   ObOptimizerContext *opt_ctx_;
@@ -478,6 +504,7 @@ private:
   common::ObSEArray<uint64_t, 10> fake_cte_tables_;
   ObDmlCgService dml_cg_service_;
   ObTscCgService tsc_cg_service_;
+  common::ObSEArray<BatchExecParamCache, 8> batch_exec_param_caches_;
 };
 
 } // end namespace sql

@@ -144,7 +144,7 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
       }
     }
   }
-  if (OB_SUCC(ret) && op.use_batch()) {
+  if (OB_SUCC(ret)) {
     ObArray<int64_t> bnlj_params;
     OZ(op.extract_bnlj_param_idxs(bnlj_params));
     OZ(tsc_ctdef.bnlj_param_idxs_.assign(bnlj_params));
@@ -362,9 +362,15 @@ int ObTscCgService::extract_pushdown_filters(const ObLogTableScan &op,
     //2. data table scan filter when TSC use the data table scan directly
     //lookup_pushdown_filters means that the data table filter when TSC use index scan and lookup the data table
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
-      if (filters.at(i)->has_flag(CNT_PL_UDF)) {
+      if (op.use_batch() && filters.at(i)->has_flag(CNT_DYNAMIC_PARAM)) {
+        //In Batch table scan the dynamic param filter do not push down to storage
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
-          LOG_WARN("store non-pushdown filter failed", K(ret), K(i));
+          LOG_WARN("push dynamic filter to store non-pushdown filter failed", K(ret), K(i));
+        }
+      } else if (filters.at(i)->has_flag(CNT_PL_UDF)) {
+        //User Define Function filter do not push down to storage
+        if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
+          LOG_WARN("push UDF filter store non-pushdown filter failed", K(ret), K(i));
         }
       } else if (!op.get_index_back()) {
         if (OB_FAIL(scan_pushdown_filters.push_back(filters.at(i)))) {

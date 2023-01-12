@@ -185,6 +185,7 @@ public:
   bool is_group_scan() { return NULL != scan_ctdef_->group_id_expr_; }
   virtual bool need_all_output() { return false; }
   virtual int switch_scan_group() { return common::OB_SUCCESS; };
+  virtual int set_scan_group(int64_t group_id) { UNUSED(group_id); return common::OB_NOT_IMPLEMENT; };
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
                        KPC_(scan_ctdef),
                        KPC_(scan_rtdef),
@@ -296,13 +297,16 @@ public:
   // for lookup group scan
   virtual int64_t get_index_group_cnt() { return 0; }
   virtual int64_t get_lookup_group_cnt() { return 0; }
+  virtual void set_index_group_cnt(int64_t group_cnt_) { UNUSED(group_cnt_); /*do nothing*/ }
   virtual void inc_index_group_cnt() { /*do nothing*/ }
   virtual void inc_lookup_group_cnt() { /*do nothing*/ }
   virtual int init_group_range(int64_t cur_group_idx, int64_t group_size)
   { return common::OB_NOT_IMPLEMENT; }
   virtual bool need_next_index_batch() const;
   virtual int switch_rowkey_scan_group() { return common::OB_NOT_IMPLEMENT; }
+  virtual int set_rowkey_scan_group(int64_t group_id) { UNUSED(group_id); return common::OB_NOT_IMPLEMENT; }
   virtual int switch_lookup_scan_group() { return common::OB_NOT_IMPLEMENT; }
+  virtual int set_lookup_scan_group(int64_t group_id) { UNUSED(group_id); return common::OB_NOT_IMPLEMENT; }
   virtual ObNewRowIterator *&get_lookup_storage_iter() { return lookup_iter_; }
   virtual ObNewRowIterator *get_lookup_iter() { return lookup_iter_; }
   int check_lookup_row_cnt();

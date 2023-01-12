@@ -796,6 +796,17 @@ int ObLocalIndexLookupOp::get_next_row()
     switch (state_) {
     case INDEX_SCAN: {
       lookup_rowkey_cnt_ = 0;
+      if (is_group_scan_) {
+        //See the comment in the ObLocalIndexLookupOp::get_next_rows
+        set_index_group_cnt(get_lookup_group_cnt());
+        ret = set_rowkey_scan_group(get_lookup_group_cnt() - 1);
+        if (OB_SUCCESS != ret) {
+          LOG_WARN("set_rowkey_scan_group fail",K(get_lookup_group_cnt() - 1),K(ret));
+          if (OB_ITER_END == ret) {
+            ret = OB_ERR_UNEXPECTED;
+          }
+        }
+      }
       int64_t start_group_idx = get_index_group_cnt() - 1;
       while (OB_SUCC(ret) && lookup_rowkey_cnt_ < default_row_batch_cnt) {
         index_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
@@ -894,6 +905,22 @@ int ObLocalIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
     case INDEX_SCAN: {
       int64_t rowkey_count = 0;
       lookup_rowkey_cnt_ = 0;
+      if (is_group_scan_) {
+        //Do the group scan jump read.
+        //Now we support jump read in GroupScan iter.
+        //Some of row read from index maybe jump.
+        //We need to sync index_group_cnt with lookup_group_cnt.
+        //Because in the rescan we manipulate the lookup_group_cnt.
+        set_index_group_cnt(get_lookup_group_cnt());
+        ret = set_rowkey_scan_group(get_lookup_group_cnt() - 1);
+        if (OB_SUCCESS != ret) {
+          LOG_WARN("set_rowkey_scan_group fail",K(get_lookup_group_cnt() - 1),K(ret));
+          if (OB_ITER_END == ret) {
+            ret = OB_ERR_UNEXPECTED;
+          }
+        }
+      }
+
       int64_t start_group_idx = get_index_group_cnt() - 1;
       while (OB_SUCC(ret) && lookup_rowkey_cnt_ < default_row_batch_cnt) {
         int64_t batch_size = min(capacity, default_row_batch_cnt - lookup_rowkey_cnt_);
@@ -997,7 +1024,9 @@ int ObLocalIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
 int ObLocalIndexLookupOp::check_lookup_row_cnt()
 {
   int ret = OB_SUCCESS;
+  //In group scan the jump read may happend, so the lookup_group_cnt and lookup_rowkey_cnt_ mismatch.
   if (GCONF.enable_defensive_check()
+      && !is_group_scan_
       && lookup_ctdef_->pd_expr_spec_.pushdown_filters_.empty()) {
     if (OB_UNLIKELY(lookup_rowkey_cnt_ != lookup_row_cnt_)
         && get_index_group_cnt() == get_lookup_group_cnt()) {

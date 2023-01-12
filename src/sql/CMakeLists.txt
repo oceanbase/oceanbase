@@ -145,6 +145,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_count_op.cpp
   engine/basic/ob_expr_values_op.cpp
   engine/basic/ob_function_table_op.cpp
+  engine/basic/ob_group_join_buffer.cpp
   engine/basic/ob_hash_partitioning_infrastructure_op.cpp
   engine/basic/ob_limit_op.cpp
   engine/basic/ob_material_op.cpp

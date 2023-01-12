@@ -9303,178 +9303,138 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
     AllocBloomFilterContext bf_ctx;
     GenLinkStmtPostContext link_ctx(get_allocator(), get_optimizer_context().get_schema_guard());
     CopyPartExprCtx copy_part_expr_ctx;
-
-    // set up context
-    switch (operation) {
-    case PX_PIPE_BLOCKING: {
-      ctx = &pipe_block_ctx;
-      if (OB_FAIL(get_plan_root()->init_all_traverse_ctx(pipe_block_ctx))) {
-        LOG_WARN("init traverse ctx failed", K(ret));
-      }
-      break;
-    }
-    case ALLOC_GI: {
-      ctx = &gi_ctx;
-      bool is_valid = true;
-      if (get_stmt()->is_insert_stmt() &&
-          !static_cast<const ObInsertStmt*>(get_stmt())->value_from_select()) {
-        gi_ctx.is_valid_for_gi_ = false;
-      } else if (OB_FAIL(get_plan_root()->should_allocate_gi_for_dml(is_valid))) {
-        LOG_WARN("failed to check should allocate gi for dml", K(ret));
-      } else {
-        gi_ctx.is_valid_for_gi_ = get_stmt()->is_dml_write_stmt() && is_valid;
-      }
-    	break;
-    }
-    case ALLOC_MONITORING_DUMP: {
-      ctx = &md_ctx;
-      break;
-    }
-    case BLOOM_FILTER: {
-      ctx = &bf_ctx;
-      break;
-    }
-    case PROJECT_PRUNING: {
-      ctx = &output_deps;
-      break;
-    }
-    case COPY_PART_EXPR: {
-      ctx = &copy_part_expr_ctx;
-      break;
-    }
-    case ALLOC_EXPR: {
-      if (OB_FAIL(alloc_expr_ctx.flattern_expr_map_.create(128, "ExprAlloc"))) {
-        LOG_WARN("failed to init hash map", K(ret));
-      } else {
-        ctx = &alloc_expr_ctx;
-      }
-      break;
-    }
-    case OPERATOR_NUMBERING: {
-      ctx = &numbering_ctx;
-      break;
-    }
-    case EXCHANGE_NUMBERING: {
-      ctx = &numbering_exchange_ctx;
-      break;
-    }
-    case GEN_SIGNATURE: {
-      ctx = &hash_seed;
-      break;
-    }
-    case GEN_LOCATION_CONSTRAINT: {
-      ctx = &location_constraints;
-      break;
-    }
-    case PX_ESTIMATE_SIZE:
-      break;
-    case GEN_LINK_STMT: {
-      if (OB_FAIL(link_ctx.init())) {
-        LOG_WARN("failed to init link_ctx", K(operation), K(ret));
-      } else {
-        ctx = &link_ctx;
-      }
-      break;
-    }
-    case EXPLAIN_COLLECT_WIDTH:
-    case EXPLAIN_WRITE_BUFFER:
-    case EXPLAIN_WRITE_BUFFER_OUTPUT:
-    case EXPLAIN_WRITE_BUFFER_OUTLINE:
-    case EXPLAIN_INDEX_SELECTION_INFO:
-    case ALLOC_STARTUP_EXPR:
-    default:
-      break;
-    }
-    if (OB_SUCC(ret)) {
-      if (((PX_ESTIMATE_SIZE == operation) ||
-           (PX_PIPE_BLOCKING == operation) ||
-           (PX_RESCAN == operation)) &&
-           (get_optimizer_context().is_local_or_remote_plan())) {
-        /*do nothing*/
-      } else if (ALLOC_GI == operation &&
-                 get_optimizer_context().is_local_or_remote_plan() &&
-                 !(gi_ctx.is_valid_for_gi_ &&
-                   get_optimizer_context().enable_batch_rpc())) {
-        /*do nothing*/
-      } else if (OB_FAIL(get_plan_root()->do_plan_tree_traverse(operation, ctx))) {
-        LOG_WARN("failed to apply operation to operator", K(operation), K(ret));
-      } else {
-        // remember signature in plan
-        if (GEN_SIGNATURE == operation) {
-          if (OB_ISNULL(ctx)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("ctx is null", K(ret), K(ctx));
+    SMART_VAR(ObBatchExecParamCtx, batch_exec_param_ctx) {
+      // set up context
+      switch (operation) {
+        case PX_PIPE_BLOCKING: {
+          ctx = &pipe_block_ctx;
+          if (OB_FAIL(get_plan_root()->init_all_traverse_ctx(pipe_block_ctx))) {
+            LOG_WARN("init traverse ctx failed", K(ret));
+          }
+          break;
+        }
+        case ALLOC_GI: {
+          ctx = &gi_ctx;
+          bool is_valid = true;
+          if (get_stmt()->is_insert_stmt() &&
+              !static_cast<const ObInsertStmt*>(get_stmt())->value_from_select()) {
+            gi_ctx.is_valid_for_gi_ = false;
+          } else if (OB_FAIL(get_plan_root()->should_allocate_gi_for_dml(is_valid))) {
+            LOG_WARN("failed to check should allocate gi for dml", K(ret));
           } else {
-            hash_value_ = *static_cast<uint64_t *>(ctx);
-            LOG_TRACE("succ to generate plan hash value", "hash_value", hash_value_);
+            gi_ctx.is_valid_for_gi_ = get_stmt()->is_dml_write_stmt() && is_valid;
           }
-        } else if (GEN_LOCATION_CONSTRAINT == operation) {
-          ObSqlCtx *sql_ctx = NULL;
-          if (OB_ISNULL(optimizer_context_.get_exec_ctx())
-              || OB_ISNULL(sql_ctx = optimizer_context_.get_exec_ctx()->get_sql_ctx())) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid argument", K(ret), K(optimizer_context_.get_exec_ctx()), K(sql_ctx));
-          } else if (OB_FAIL(remove_duplicate_constraint(location_constraints,
-                                                         *sql_ctx))) {
-            LOG_WARN("fail to remove duplicate constraint", K(ret));
-          } else if (OB_FAIL(calc_and_set_exec_pwj_map(location_constraints))) {
-            LOG_WARN("failed to calc and set exec pwj map", K(ret));
+          break;
+        }
+        case ALLOC_MONITORING_DUMP: {
+          ctx = &md_ctx;
+          break;
+        }
+        case BLOOM_FILTER: {
+          ctx = &bf_ctx;
+          break;
+        }
+        case PROJECT_PRUNING: {
+          ctx = &output_deps;
+          break;
+        }
+        case COPY_PART_EXPR: {
+          ctx = &copy_part_expr_ctx;
+          break;
+        }
+        case ALLOC_EXPR: {
+          if (OB_FAIL(alloc_expr_ctx.flattern_expr_map_.create(128, "ExprAlloc"))) {
+            LOG_WARN("failed to init hash map", K(ret));
+          } else {
+            ctx = &alloc_expr_ctx;
           }
-        } else if (OPERATOR_NUMBERING == operation) {
-          NumberingCtx *num_ctx = static_cast<NumberingCtx *>(ctx);
-          max_op_id_ = num_ctx->op_id_;
-          LOG_TRACE("trace max operator id", K(max_op_id_), K(this));
-        } else { /* Do nothing */ }
-        LOG_TRACE("succ to apply operaion to operator", K(operation), K(ret));
+          break;
+        }
+        case OPERATOR_NUMBERING: {
+          ctx = &numbering_ctx;
+          break;
+        }
+        case EXCHANGE_NUMBERING: {
+          ctx = &numbering_exchange_ctx;
+          break;
+        }
+        case GEN_SIGNATURE: {
+          ctx = &hash_seed;
+          break;
+        }
+        case GEN_LOCATION_CONSTRAINT: {
+          ctx = &location_constraints;
+          break;
+        }
+        case PX_ESTIMATE_SIZE:
+          break;
+        case GEN_LINK_STMT: {
+          if (OB_FAIL(link_ctx.init())) {
+            LOG_WARN("failed to init link_ctx", K(operation), K(ret));
+          } else {
+            ctx = &link_ctx;
+          }
+          break;
+        }
+        case COLLECT_BATCH_EXEC_PARAM: {
+          ctx = &batch_exec_param_ctx;
+          break;
+        }
+        case EXPLAIN_COLLECT_WIDTH:
+        case EXPLAIN_WRITE_BUFFER:
+        case EXPLAIN_WRITE_BUFFER_OUTPUT:
+        case EXPLAIN_WRITE_BUFFER_OUTLINE:
+        case EXPLAIN_INDEX_SELECTION_INFO:
+        case ALLOC_STARTUP_EXPR:
+        default:
+          break;
+      }
+      if (OB_SUCC(ret)) {
+        if (((PX_ESTIMATE_SIZE == operation) ||
+            (PX_PIPE_BLOCKING == operation) ||
+            (PX_RESCAN == operation)) &&
+            (get_optimizer_context().is_local_or_remote_plan())) {
+          /*do nothing*/
+        } else if (ALLOC_GI == operation &&
+                  get_optimizer_context().is_local_or_remote_plan() &&
+                  !(gi_ctx.is_valid_for_gi_ &&
+                    get_optimizer_context().enable_batch_rpc())) {
+          /*do nothing*/
+        } else if (OB_FAIL(get_plan_root()->do_plan_tree_traverse(operation, ctx))) {
+          LOG_WARN("failed to apply operation to operator", K(operation), K(ret));
+        } else {
+          // remember signature in plan
+          if (GEN_SIGNATURE == operation) {
+            if (OB_ISNULL(ctx)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("ctx is null", K(ret), K(ctx));
+            } else {
+              hash_value_ = *static_cast<uint64_t *>(ctx);
+              LOG_TRACE("succ to generate plan hash value", "hash_value", hash_value_);
+            }
+          } else if (GEN_LOCATION_CONSTRAINT == operation) {
+            ObSqlCtx *sql_ctx = NULL;
+            if (OB_ISNULL(optimizer_context_.get_exec_ctx())
+                || OB_ISNULL(sql_ctx = optimizer_context_.get_exec_ctx()->get_sql_ctx())) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid argument", K(ret), K(optimizer_context_.get_exec_ctx()), K(sql_ctx));
+            } else if (OB_FAIL(remove_duplicate_constraint(location_constraints,
+                                                          *sql_ctx))) {
+              LOG_WARN("fail to remove duplicate constraint", K(ret));
+            } else if (OB_FAIL(calc_and_set_exec_pwj_map(location_constraints))) {
+              LOG_WARN("failed to calc and set exec pwj map", K(ret));
+            }
+          } else if (OPERATOR_NUMBERING == operation) {
+            NumberingCtx *num_ctx = static_cast<NumberingCtx *>(ctx);
+            max_op_id_ = num_ctx->op_id_;
+            LOG_TRACE("trace max operator id", K(max_op_id_), K(this));
+          } else { /* Do nothing */ }
+          LOG_TRACE("succ to apply operaion to operator", K(operation), K(ret));
+        }
       }
     }
   }
-  return ret;
-}
 
-int ObLogPlan::check_and_reset_batch_nlj(ObLogicalOperator *root)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(root)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid root", K(ret));
-  } else if (root->get_type() == log_op_def::LOG_JOIN &&
-             static_cast<ObLogJoin*>(root)->get_join_algo() == NESTED_LOOP_JOIN &&
-             static_cast<ObLogJoin*>(root)->can_use_batch_nlj() &&
-             OB_NOT_NULL(root->get_child(1))) {
-    bool need_reset = false;
-    bool contains_invalid_startup = false;
-    bool contains_limit = false;
-    if (root->get_child(1)->get_type() == log_op_def::LOG_GRANULE_ITERATOR) {
-      need_reset = true;
-    } else if (OB_FAIL(contains_startup_with_exec_param(root->get_child(1),
-                                                        contains_invalid_startup))) {
-      LOG_WARN("failed to check contains invalid startup", K(ret));
-    } else if (contains_invalid_startup) {
-      need_reset = true;
-    } else if (OB_FAIL(contains_limit_or_pushdown_limit(root->get_child(1), contains_limit))) {
-      LOG_WARN("failed to check contains limit", K(ret));
-    } else if (contains_limit) {
-      need_reset = true;
-    }
-    if (OB_SUCC(ret) && need_reset) {
-      ObLogJoin *nl_join_op = static_cast<ObLogJoin*>(root);
-      nl_join_op->set_can_use_batch_nlj(false);
-      if (OB_FAIL(nl_join_op->set_use_batch(nl_join_op->get_child(1)))) {
-        LOG_WARN("failed to reset batch join flag", K(ret));
-      } else {/*do nothing*/}
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < root->get_num_of_child(); ++i) {
-      ObLogicalOperator *child = root->get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid child", K(ret));
-      } else if (OB_FAIL(SMART_CALL(check_and_reset_batch_nlj(child)))) {
-        LOG_WARN("failed to refresh batch nlj", K(ret));
-      } else {/*do nothing*/}
-    }
-  }
   return ret;
 }
 
@@ -10741,7 +10701,8 @@ int ObLogPlan::generate_plan()
                                         GEN_LOCATION_CONSTRAINT,
                                         PX_ESTIMATE_SIZE,
                                         GEN_LINK_STMT,
-                                        ALLOC_STARTUP_EXPR))) {
+                                        ALLOC_STARTUP_EXPR,
+                                        COLLECT_BATCH_EXEC_PARAM))) {
     LOG_WARN("failed to do plan traverse", K(ret));
   } else if (OB_FAIL(do_post_traverse_processing())) {
     LOG_WARN("failed to post traverse processing", K(ret));
@@ -10756,9 +10717,6 @@ int ObLogPlan::do_post_traverse_processing()
   if (OB_ISNULL(root = get_plan_root())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(check_and_reset_batch_nlj(root))) {
-    // refresh nlj batch flag for right side gi or startup with exec param
-    LOG_WARN("failed to refresh batch nlj", K(ret));
   } else if (OB_FAIL(calc_plan_resource())) {
     LOG_WARN("fail calc plan resource", K(ret));
   } else { /*do nothing*/ }
@@ -10929,9 +10887,9 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
       } else if (OB_FAIL(op->reorder_filter_exprs())) {
         LOG_WARN("failed to reorder filter exprs", K(ret));
       } else if (log_op_def::LOG_JOIN == op->get_type() &&
-                 OB_FAIL(static_cast<ObLogJoin*>(op)->set_use_batch(op->get_child(1)))) {
+                 OB_FAIL(static_cast<ObLogJoin*>(op)->check_and_set_use_batch())) {
         LOG_WARN("failed to set use batch nlj", K(ret));
-      } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type() && false && // TODO: chenxuan open it
+      } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type() &&
                  OB_FAIL(static_cast<ObLogSubPlanFilter*>(op)->check_and_set_use_batch())) {
         LOG_WARN("failed to set use batch spf", K(ret));
       } else { /*do nothing*/ }

@@ -75,6 +75,7 @@ public:
   ObGroupScanIter();
   //virtual int rescan() override;
   int switch_scan_group();
+  int set_scan_group(int64_t group_id);
   virtual int get_next_row(ObNewRow *&row) { return common::OB_NOT_IMPLEMENT; } ;
   virtual int get_next_row() override;
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;

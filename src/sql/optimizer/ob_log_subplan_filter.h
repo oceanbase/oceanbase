@@ -97,13 +97,13 @@ public:
   virtual int compute_sharding_info() override;
   inline DistAlgo get_distributed_algo() { return dist_algo_; }
   inline void set_distributed_algo(const DistAlgo set_dist_algo) { dist_algo_ = set_dist_algo; }
-  
+
   int add_px_batch_rescan_flag(bool flag) { return enable_px_batch_rescans_.push_back(flag); }
   common::ObIArray<bool> &get_px_batch_rescans() {  return enable_px_batch_rescans_; }
-  
-  inline bool &get_enable_das_batch_rescans() { return enable_das_batch_rescans_; }
+
+  inline bool enable_das_batch_rescans() { return enable_das_batch_rescans_; }
+  inline void set_enable_das_batch_rescans(bool flag) { enable_das_batch_rescans_ = flag; }
   int check_and_set_use_batch();
-  int check_if_match_das_batch_rescan(bool &enable_das_batch_rescans);
   int check_if_match_das_batch_rescan(ObLogicalOperator *root,
                                       bool &enable_das_batch_rescans);
   int set_use_das_batch(ObLogicalOperator* root);
@@ -111,6 +111,11 @@ public:
   int allocate_startup_expr_post() override;
 
   int allocate_subquery_id();
+
+  common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
+
+  common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
+
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);
@@ -128,6 +133,9 @@ protected:
   common::ObBitSet<> one_time_idxs_;
   bool update_set_;
   common::ObSEArray<bool , 8, common::ModulePageAllocator, true> enable_px_batch_rescans_;
+
+  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
+  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
   bool enable_das_batch_rescans_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanFilter);

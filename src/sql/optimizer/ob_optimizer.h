@@ -94,6 +94,8 @@ namespace sql
     GEN_LINK_STMT,
     ALLOC_STARTUP_EXPR,
     COPY_PART_EXPR,
+
+    COLLECT_BATCH_EXEC_PARAM,
     TRAVERSE_OP_END
   };
 

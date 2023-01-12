@@ -1001,8 +1001,8 @@ public:
 
   static int extract_params(common::ObIArray<ObRawExpr*> &exprs,
                             common::ObIArray<ObRawExpr*> &params);
-  static int is_contain_params(common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
-  static int is_contain_params(ObRawExpr *expr, bool &is_contain);
+  static int is_contain_params(const common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
+  static int is_contain_params(const ObRawExpr *expr, bool &is_contain);
 
   static int add_calc_tablet_id_on_calc_rowid_expr(const ObDMLStmt *dml_stmt,
                                                    ObRawExprFactory &expr_factory,

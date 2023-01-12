@@ -210,7 +210,7 @@ int ObLogSubPlanFilter::est_cost()
     LOG_WARN("failed to get child", K(ret), K(first_child));
   } else if (OB_FALSE_IT(first_child_card = first_child->get_card())) {
   } else if (OB_FAIL(inner_est_cost(first_child_card, op_cost_))) {
-    LOG_WARN("failed to est cost", K(ret));   
+    LOG_WARN("failed to est cost", K(ret));
   } else {
     set_cost(op_cost_ + first_child->get_cost());
     set_card(first_child_card);
@@ -238,8 +238,8 @@ int ObLogSubPlanFilter::re_est_cost(EstimateCostInfo &param, double &card, doubl
   } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (param.need_row_count_ >= 0 && 
-             param.need_row_count_ < get_card() && 
+  } else if (param.need_row_count_ >= 0 &&
+             param.need_row_count_ < get_card() &&
              sel > OB_DOUBLE_EPSINON &&
              OB_FALSE_IT(param.need_row_count_ /= sel)) {
   } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param,
@@ -449,7 +449,6 @@ int ObLogSubPlanFilter::check_if_match_das_batch_rescan(ObLogicalOperator *root,
                                                         bool &enable_das_batch_rescans)
 {
   int ret = OB_SUCCESS;
-  enable_das_batch_rescans = false;
   if (OB_ISNULL(root)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -457,39 +456,34 @@ int ObLogSubPlanFilter::check_if_match_das_batch_rescan(ObLogicalOperator *root,
     bool is_valid = false;
     ObLogTableScan *tsc = static_cast<ObLogTableScan*>(root);
     if (!tsc->use_das()) {
-      // do nothing
+      enable_das_batch_rescans = false;
     } else if (OB_FAIL(ObOptimizerUtil::check_contribute_query_range(root,
                                                                      get_exec_params(),
                                                                      is_valid))) {
       LOG_WARN("failed to check query range contribution", K(ret));
-    } else if (is_valid) {
-      enable_das_batch_rescans = true;
-    }
-  } else if (root->get_num_of_child() == 1 &&
-             OB_FAIL(SMART_CALL(check_if_match_das_batch_rescan(root->get_child(0),
-                                                                enable_das_batch_rescans)))) {
-    LOG_WARN("failed to check match das batch rescan", K(ret));
-  } else {/*do nothing*/}
-  return ret;
-}
-
-int ObLogSubPlanFilter::check_if_match_das_batch_rescan(bool &enable_das_batch_rescans)
-{
-  int ret = OB_SUCCESS;
-  enable_das_batch_rescans = true;
-  for (int64_t i = 1; OB_SUCC(ret) && enable_das_batch_rescans && i < get_num_of_child(); ++i) {
-    ObLogicalOperator *child = get_child(i);
-    if (OB_ISNULL(child)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (get_initplan_idxs().has_member(i) || get_onetime_idxs().has_member(i)) {
+    } else if (!is_valid) {
       enable_das_batch_rescans = false;
-    } else if (OB_FAIL(check_if_match_das_batch_rescan(child, enable_das_batch_rescans))) {
-      LOG_WARN("failed to check match das batch rescan", K(ret));
-    } else {
-      // do nothing
+    } else if (tsc->get_scan_direction() != default_asc_direction()) {
+      enable_das_batch_rescans = false;
+    } else {/*do nothing*/}
+  } else if (root->get_num_of_child() == 1) {
+    if (log_op_def::LOG_TABLE_LOOKUP == root->get_type()) {
+      ObLogTableLookup *tlu = static_cast<ObLogTableLookup*>(root);
+      ObLogTableScan *ts = static_cast<ObLogTableScan *>(root->get_child(0));
+      if (OB_ISNULL(tlu) || OB_ISNULL(ts)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (!ts->get_filter_exprs().empty()) {
+        enable_das_batch_rescans = false;
+      }
     }
-  }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(SMART_CALL(check_if_match_das_batch_rescan(root->get_child(0),
+                                                             enable_das_batch_rescans)))) {
+        LOG_WARN("failed to check match das batch rescan", K(ret));
+      }
+    }
+  } else {/*do nothing*/}
   return ret;
 }
 
@@ -502,12 +496,12 @@ int ObLogSubPlanFilter::set_use_das_batch(ObLogicalOperator* root)
   } else if (root->is_table_scan()) {
     ObLogTableScan *ts = static_cast<ObLogTableScan*>(root);
     if (!ts->get_range_conditions().empty()) {
-      ts->set_use_batch(true);
+      ts->set_use_batch(enable_das_batch_rescans_);
     }
   } else if (root->get_num_of_child() == 1) {
     if (log_op_def::LOG_TABLE_LOOKUP == root->get_type()) {
       ObLogTableLookup *tlu = static_cast<ObLogTableLookup*>(root);
-      tlu->set_use_batch(true);
+      tlu->set_use_batch(enable_das_batch_rescans_);
     }
     if(OB_FAIL(SMART_CALL(set_use_das_batch(root->get_child(first_child))))) {
       LOG_WARN("failed to check use das batch", K(ret));
@@ -519,25 +513,42 @@ int ObLogSubPlanFilter::set_use_das_batch(ObLogicalOperator* root)
 int ObLogSubPlanFilter::check_and_set_use_batch()
 {
   int ret = OB_SUCCESS;
-  bool &enable_das_batch_rescans = get_enable_das_batch_rescans();
-  if (DistAlgo::DIST_NONE_ALL != get_distributed_algo()) {
-    // do nothing
-  } else if (OB_FAIL(check_if_match_das_batch_rescan(enable_das_batch_rescans))) {
-    LOG_WARN("failed to check match das batch rescan", K(ret));
-  } else if (!enable_das_batch_rescans) {
-    // do nothing
-  } else {
-    for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); i ++) {
-      ObLogicalOperator *child = get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (OB_FAIL(set_use_das_batch(child))) {
-        LOG_WARN("failed to set use das batch rescan", K(ret));
-      }
-    }
-    LOG_TRACE("spf das batch rescan", K(enable_das_batch_rescans));
+  ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(session_info->get_nlj_batching_enabled(enable_das_batch_rescans_))) {
+    LOG_WARN("failed to get enable batch variable", K(ret));
   }
+  // check use batch
+  for (int64_t i = 1; OB_SUCC(ret) && enable_das_batch_rescans_ && i < get_num_of_child(); i++) {
+    ObLogicalOperator *child = get_child(i);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (get_initplan_idxs().has_member(i) || get_onetime_idxs().has_member(i)) {
+      enable_das_batch_rescans_ = false;
+    } else if (!(child->get_type() == log_op_def::LOG_TABLE_SCAN
+                 || child->get_type() == log_op_def::LOG_TABLE_LOOKUP
+                 || child->get_type() == log_op_def::LOG_SUBPLAN_SCAN)) {
+      enable_das_batch_rescans_ = false;
+    } else if (OB_FAIL(check_if_match_das_batch_rescan(child, enable_das_batch_rescans_))) {
+      LOG_WARN("failed to check match das batch rescan", K(ret));
+    } else {
+      // do nothing
+    }
+  }
+  // set use batch
+  for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); i++) {
+    ObLogicalOperator *child = get_child(i);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(set_use_das_batch(child))) {
+      LOG_WARN("failed to set use das batch rescan", K(ret));
+    }
+  }
+  LOG_TRACE("spf das batch rescan", K(ret), K(enable_das_batch_rescans_));
   return ret;
 }
 
