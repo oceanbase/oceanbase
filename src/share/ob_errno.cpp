@@ -17745,6 +17745,18 @@ static const _error _error_OB_CLOG_SLIDE_TIMEOUT = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -6322, ob clog slide timeout",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -6322, ob clog slide timeout"
 };
+static const _error _error_OB_TABLET_FREEZE_TIMEOUT = {
+      .error_name            = "OB_TABLET_FREEZE_TIMEOUT",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "tablet_freeze timeout",
+      .str_user_error        = "tablet_freeze timeout",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -6400, tablet_freeze timeout",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -6400, tablet_freeze timeout"
+};
 static const _error _error_OB_ELECTION_WARN_LOGBUF_FULL = {
       .error_name            = "OB_ELECTION_WARN_LOGBUF_FULL",
       .error_cause           = "Internal Error",
@@ -23453,6 +23465,7 @@ struct ObStrErrorInit
     _errors[-OB_TOO_MANY_LOG_TASK] = &_error_OB_TOO_MANY_LOG_TASK;
     _errors[-OB_INVALID_BATCH_SIZE] = &_error_OB_INVALID_BATCH_SIZE;
     _errors[-OB_CLOG_SLIDE_TIMEOUT] = &_error_OB_CLOG_SLIDE_TIMEOUT;
+    _errors[-OB_TABLET_FREEZE_TIMEOUT] = &_error_OB_TABLET_FREEZE_TIMEOUT;
     _errors[-OB_ELECTION_WARN_LOGBUF_FULL] = &_error_OB_ELECTION_WARN_LOGBUF_FULL;
     _errors[-OB_ELECTION_WARN_LOGBUF_EMPTY] = &_error_OB_ELECTION_WARN_LOGBUF_EMPTY;
     _errors[-OB_ELECTION_WARN_NOT_RUNNING] = &_error_OB_ELECTION_WARN_NOT_RUNNING;

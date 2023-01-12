@@ -276,7 +276,7 @@ private:
   int ls_freeze_task();
   int tablet_freeze_task(memtable::ObIMemtable *imemtable);
   int submit_freeze_task(bool is_ls_freeze, ObFuture<int> *result, memtable::ObIMemtable *imemtable = nullptr);
-  void wait_memtable_ready_for_flush(memtable::ObMemtable *memtable);
+  int wait_memtable_ready_for_flush(memtable::ObMemtable *memtable);
   int wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable);
   int handle_memtable_for_tablet_freeze(memtable::ObIMemtable *imemtable);
   int create_memtable_if_no_active_memtable(ObTablet *tablet);

@@ -1266,6 +1266,7 @@ constexpr int OB_LOG_NEED_REBUILD = -6319;
 constexpr int OB_TOO_MANY_LOG_TASK = -6320;
 constexpr int OB_INVALID_BATCH_SIZE = -6321;
 constexpr int OB_CLOG_SLIDE_TIMEOUT = -6322;
+constexpr int OB_TABLET_FREEZE_TIMEOUT = -6400;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -3077,6 +3078,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TOO_MANY_LOG_TASK__USER_ERROR_MSG "too many log tasks"
 #define OB_INVALID_BATCH_SIZE__USER_ERROR_MSG "ob invalid batch size"
 #define OB_CLOG_SLIDE_TIMEOUT__USER_ERROR_MSG "ob clog slide timeout"
+#define OB_TABLET_FREEZE_TIMEOUT__USER_ERROR_MSG "tablet_freeze timeout"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -4909,6 +4911,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TOO_MANY_LOG_TASK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6320, too many log tasks"
 #define OB_INVALID_BATCH_SIZE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6321, ob invalid batch size"
 #define OB_CLOG_SLIDE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6322, ob clog slide timeout"
+#define OB_TABLET_FREEZE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6400, tablet_freeze timeout"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"

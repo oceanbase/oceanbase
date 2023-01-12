@@ -748,8 +748,9 @@ int ObFreezer::handle_memtable_for_tablet_freeze(memtable::ObIMemtable *imemtabl
   } else {
     memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable*>(imemtable);
     submit_log_for_freeze();
-    wait_memtable_ready_for_flush(memtable);
-    if (OB_FAIL(memtable->finish_freeze())) {
+    if (OB_FAIL(wait_memtable_ready_for_flush(memtable))) {
+      TRANS_LOG(WARN, "fail to wait memtable ready_for_flush", K(ret), K(ls_id), KPC(imemtable));
+    } else if (OB_FAIL(memtable->finish_freeze())) {
       TRANS_LOG(ERROR, "[Freezer] memtable cannot be flushed",
                 K(ret), K(ls_id), K(*memtable));
       stat_.add_diagnose_info("memtable cannot be flushed");
@@ -872,15 +873,17 @@ int ObFreezer::wait_freeze_finished(ObFuture<int> &result)
   return ret;
 }
 
-void ObFreezer::wait_memtable_ready_for_flush(memtable::ObMemtable *memtable)
+int ObFreezer::wait_memtable_ready_for_flush(memtable::ObMemtable *memtable)
 {
   share::ObLSID ls_id = get_ls_id();
   const int64_t start = ObTimeUtility::current_time();
   int ret = OB_SUCCESS;
 
-  while (!memtable->ready_for_flush()) {
+  while (!memtable->ready_for_flush() && OB_TABLET_FREEZE_TIMEOUT != ret) {
     const int64_t cost_time = ObTimeUtility::current_time() - start;
-    if (cost_time > 5 * 1000 * 1000) {
+    if (cost_time > 1 * 60 * 1000 * 1000) {
+      ret = OB_TABLET_FREEZE_TIMEOUT;
+    } else if (cost_time > 5 * 1000 * 1000) {
       if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
         if (need_resubmit_log()) {
           submit_log_for_freeze();
@@ -894,6 +897,8 @@ void ObFreezer::wait_memtable_ready_for_flush(memtable::ObMemtable *memtable)
     }
     ob_usleep(100);
   }
+
+  return ret;
 }
 
 int ObFreezer::create_memtable_if_no_active_memtable(ObTablet *tablet)

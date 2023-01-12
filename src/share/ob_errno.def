@@ -1624,7 +1624,8 @@ DEFINE_ERROR(OB_TOO_MANY_LOG_TASK, -6320, -1, "HY000", "too many log tasks");
 DEFINE_ERROR(OB_INVALID_BATCH_SIZE, -6321, -1, "HY000", "ob invalid batch size");
 DEFINE_ERROR(OB_CLOG_SLIDE_TIMEOUT, -6322, -1, "HY000", "ob clog slide timeout");
 
-// for table lock
+// for freeze
+DEFINE_ERROR(OB_TABLET_FREEZE_TIMEOUT, -6400, -1, "HY000", "tablet_freeze timeout");
 
 ////////////////////////////////////////////////////////////////
 //error code for election -7000 ---- -7100
