@@ -307,12 +307,23 @@ int ObDataAccessService::do_remote_das_task(ObDASRef &das_ref, ObDASTaskArg &tas
 
   LOG_DEBUG("begin to do remote das task", K(task_arg));
   SMART_VAR(ObDASTaskResp, task_resp) {
-    if (OB_FAIL(collect_das_task_info(task_arg, remote_info))) {
+    if (NULL != (op_result = task_op->get_op_result())) {
+      if (OB_FAIL(op_result->reuse())) {
+        LOG_WARN("reuse task result failed", K(ret));
+      }
+    } else {
+      if (OB_FAIL(das_ref.get_das_factory().create_das_task_result(task_op->get_type(), op_result))) {
+        LOG_WARN("create das task result failed", K(ret));
+      } else if (OB_FAIL(op_result->init(*task_op))) {
+        LOG_WARN("init task result failed", K(ret));
+      } else {
+        task_op->set_op_result(op_result);
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(collect_das_task_info(task_arg, remote_info))) {
       LOG_WARN("collect das task info failed", K(ret));
-    } else if (OB_FAIL(das_ref.get_das_factory().create_das_task_result(task_op->get_type(), op_result))) {
-      LOG_WARN("create das task result failed", K(ret));
-    } else if (OB_FAIL(op_result->init(*task_op))) {
-      LOG_WARN("init task result failed", K(ret));
     } else if (OB_UNLIKELY(timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("das is timeout", K(ret), K(plan_ctx->get_timeout_timestamp()), K(timeout));

@@ -94,7 +94,8 @@ public:
       op_alloc_(op_alloc),
       related_ctdefs_(op_alloc),
       related_rtdefs_(op_alloc),
-      related_tablet_ids_(op_alloc)
+      related_tablet_ids_(op_alloc),
+      op_result_(nullptr)
   {
   }
   virtual ~ObIDASTaskOp() { }
@@ -164,6 +165,8 @@ public:
   bool is_in_retry() const { return in_part_retry_ || in_stmt_retry_; }
   void set_need_switch_param(bool v) { need_switch_param_ = v; }
   bool need_switch_param() const { return need_switch_param_; }
+  ObIDASTaskResult *get_op_result() const { return op_result_; }
+  void set_op_result(ObIDASTaskResult *op_result) { op_result_ = op_result; }
 protected:
   int start_das_task();
   int end_das_task();
@@ -200,6 +203,7 @@ protected:
   DASCtDefFixedArray related_ctdefs_;
   DASRtDefFixedArray related_rtdefs_;
   ObTabletIDFixedArray related_tablet_ids_;
+  ObIDASTaskResult *op_result_;
 
 public:
   const static uint32_t DAS_ROW_EXTEND_SIZE = 16;
@@ -214,6 +218,7 @@ public:
   ObIDASTaskResult() : task_id_(0) { }
   virtual ~ObIDASTaskResult() { }
   virtual int init(const ObIDASTaskOp &task_op) = 0;
+  virtual int reuse() { return OB_NOT_IMPLEMENT; };
   virtual int link_extra_result(ObDASExtraData &extra_result)
   {
     UNUSED(extra_result);
