@@ -19,6 +19,7 @@
 #include "storage/blocksstable/ob_index_block_builder.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
+#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/ob_store_row_comparer.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
 
