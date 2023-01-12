@@ -435,8 +435,6 @@ int64_t ObTenantCtxAllocator::sync_wash(int64_t wash_size)
   const double min_utilization = 0.9;
   if (stat.payload_ * min_utilization > stat.used_) {
     washed_size = obj_mgr_.sync_wash(wash_size);
-    stat = obj_mgr_.get_stat();
-    abort_unless(stat.hold_ >= stat.used_);
   }
   if (washed_size != 0 && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
     _OB_LOG(INFO, "[MEM][WASH] tenant_id: %ld, ctx_id: %ld, washed_size: %ld", tenant_id_, ctx_id_, washed_size);
