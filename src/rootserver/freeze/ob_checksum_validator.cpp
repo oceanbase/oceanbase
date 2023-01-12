@@ -15,6 +15,7 @@
 #include "rootserver/freeze/ob_checksum_validator.h"
 #include "rootserver/freeze/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 #include "rootserver/ob_root_utils.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_isql_client.h"
@@ -48,7 +49,9 @@ int ObChecksumValidatorBase::init(
   return ret;
 }
 
-int ObChecksumValidatorBase::check(const ObSimpleFrozenStatus &frozen_status)
+int ObChecksumValidatorBase::check(
+    const volatile bool &stop,
+    const ObSimpleFrozenStatus &frozen_status)
 {
   int ret = OB_SUCCESS;
   if (!frozen_status.is_valid()) {
@@ -57,8 +60,11 @@ int ObChecksumValidatorBase::check(const ObSimpleFrozenStatus &frozen_status)
   } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if (stop) {
+    ret = OB_CANCELED;
+    LOG_WARN("already stop", KR(ret), K_(tenant_id));
   } else if (need_check_) {
-    if (OB_FAIL(do_check(frozen_status))) {
+    if (OB_FAIL(do_check(stop, frozen_status))) {
       LOG_WARN("fail to do check", KR(ret), K_(tenant_id), K(frozen_status));
     }
   }
@@ -67,7 +73,9 @@ int ObChecksumValidatorBase::check(const ObSimpleFrozenStatus &frozen_status)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-int ObTabletChecksumValidator::do_check(const ObSimpleFrozenStatus &frozen_status)
+int ObTabletChecksumValidator::do_check(
+    const volatile bool &stop,
+    const ObSimpleFrozenStatus &frozen_status)
 {
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
@@ -81,7 +89,8 @@ int ObTabletChecksumValidator::do_check(const ObSimpleFrozenStatus &frozen_statu
 
       ObTabletReplicaChecksumItem prev_item;
       ObTabletReplicaChecksumItem curr_item;
-      while (OB_SUCC(ret)) {
+      while (OB_SUCC(ret) && !stop) {
+        FREEZE_TIME_GUARD;
         curr_item.reset();
         if (OB_FAIL(tablet_replica_checksum_iter.next(curr_item))) {
           if (OB_ITER_END != ret) {
@@ -125,7 +134,9 @@ int ObTabletChecksumValidator::do_check(const ObSimpleFrozenStatus &frozen_statu
 
 ///////////////////////////////////////////////////////////////////////////////
 
-int ObCrossClusterTableteChecksumValidator::do_check(const ObSimpleFrozenStatus &frozen_status)
+int ObCrossClusterTableteChecksumValidator::do_check(
+    const volatile bool &stop,
+    const ObSimpleFrozenStatus &frozen_status)
 {
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
@@ -144,7 +155,7 @@ int ObCrossClusterTableteChecksumValidator::do_check(const ObSimpleFrozenStatus 
         int cmp_ret = 0;
         ObTabletChecksumItem tablet_checksum_item;
         ObTabletReplicaChecksumItem tablet_replica_checksum_item;
-        while (OB_SUCC(ret)) {
+        while (OB_SUCC(ret) && !stop) {
           tablet_checksum_item.reset();
           if (OB_FAIL(tablet_checksum_iter.next(tablet_checksum_item))) {
             if (OB_ITER_END != ret) {
@@ -176,7 +187,7 @@ int ObCrossClusterTableteChecksumValidator::do_check(const ObSimpleFrozenStatus 
                   }
                 }
               }
-            } while ((cmp_ret >= 0) && OB_SUCC(ret));
+            } while ((cmp_ret >= 0) && OB_SUCC(ret) && !stop);
           }
         }
       }
@@ -278,7 +289,9 @@ bool ObCrossClusterTableteChecksumValidator::is_first_tablet_in_sys_ls(const ObT
 
 ///////////////////////////////////////////////////////////////////////////////
 
-int ObIndexChecksumValidator::do_check(const ObSimpleFrozenStatus &frozen_status)
+int ObIndexChecksumValidator::do_check(
+    const volatile bool &stop,
+    const ObSimpleFrozenStatus &frozen_status)
 {
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
@@ -292,7 +305,7 @@ int ObIndexChecksumValidator::do_check(const ObSimpleFrozenStatus &frozen_status
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id_, table_schemas))) {
     LOG_WARN("fail to get tenant table schemas", KR(ret), K_(tenant_id));
   } else {
-    for (int64_t i = 0; (i < table_schemas.count()) && OB_SUCC(ret); ++i) {
+    for (int64_t i = 0; (i < table_schemas.count()) && OB_SUCC(ret) && !stop; ++i) {
       const ObSimpleTableSchemaV2 *simple_schema = table_schemas.at(i);
 
       if (OB_ISNULL(simple_schema)) {
@@ -319,6 +332,7 @@ int ObIndexChecksumValidator::do_check(const ObSimpleFrozenStatus &frozen_status
           ++check_cnt;
         }
         
+        FREEZE_TIME_GUARD;
         if (FAILEDx(ObTabletReplicaChecksumOperator::check_column_checksum(tenant_id_, *data_table_schema,
             *index_table_schema, frozen_status.frozen_scn_, *sql_proxy_))) {
           if (OB_CHECKSUM_ERROR == ret) {

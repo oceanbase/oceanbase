@@ -23,6 +23,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 
 namespace oceanbase
 {
@@ -310,6 +311,7 @@ int ObZoneMergeManagerBase::start_zone_merge(
   const int64_t global_broadcast_scn = global_merge_info_.global_broadcast_scn_;
   const int64_t global_frozen_scn = global_merge_info_.frozen_scn_;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+  FREEZE_TIME_GUARD;
 
   if (OB_FAIL(check_valid(zone, idx))) {
     LOG_WARN("fail to check valid", KR(ret), K(zone), K_(tenant_id));
@@ -341,6 +343,7 @@ int ObZoneMergeManagerBase::start_zone_merge(
       tmp_info.merge_start_time_.set_val(cur_time, true);
       tmp_info.merge_status_.set_val(ObZoneMergeInfo::MERGE_STATUS_MERGING, true);
 
+      FREEZE_TIME_GUARD;
       if (OB_FAIL(ObZoneMergeTableOperator::update_partial_zone_merge_info(trans, tenant_id_, tmp_info))) {
         LOG_WARN("fail to update partial zone merge info", KR(ret), K_(tenant_id), K(tmp_info));
       }
@@ -369,6 +372,7 @@ int ObZoneMergeManagerBase::finish_zone_merge(
   ObMySQLTransaction trans;
   const int64_t cur_time = ObTimeUtility::current_time();
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+  FREEZE_TIME_GUARD;
 
   if (OB_FAIL(check_valid(zone, idx))) {
     LOG_WARN("fail to check valid", KR(ret), K(zone), K_(tenant_id));
@@ -404,6 +408,7 @@ int ObZoneMergeManagerBase::finish_zone_merge(
         tmp_info.all_merged_scn_.set_val(new_all_merged_scn, true);
       }
 
+      FREEZE_TIME_GUARD;
       if (OB_FAIL(ObZoneMergeTableOperator::update_partial_zone_merge_info(trans, tenant_id_, tmp_info))) {
         LOG_WARN("fail to update partial zone merge info", KR(ret), K_(tenant_id), K(tmp_info));
       }
@@ -462,6 +467,7 @@ int ObZoneMergeManagerBase::set_merge_error(const int64_t error_type, const int6
       is_merge_error = 0;
     }
 
+    FREEZE_TIME_GUARD;
     if (OB_FAIL(check_inner_stat())) {
       LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
@@ -476,6 +482,7 @@ int ObZoneMergeManagerBase::set_merge_error(const int64_t error_type, const int6
         tmp_global_info.is_merge_error_.set_val(is_merge_error, true);
         tmp_global_info.error_type_.set_val(error_type, true);
 
+        FREEZE_TIME_GUARD;
         if (OB_FAIL(ObGlobalMergeTableOperator::update_partial_global_merge_info(trans, tenant_id_, 
             tmp_global_info))) {
           LOG_WARN("fail to update partial global merge info", KR(ret), K(tmp_global_info));
@@ -508,6 +515,7 @@ int ObZoneMergeManagerBase::set_zone_merging(
   int64_t idx = OB_INVALID_INDEX;
   ObMySQLTransaction trans;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+  FREEZE_TIME_GUARD;
   if (OB_FAIL(check_valid(zone, idx))) {
     LOG_WARN("fail to check valid", KR(ret), K(zone), K_(tenant_id));
   } else if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
@@ -522,6 +530,7 @@ int ObZoneMergeManagerBase::set_zone_merging(
     } else if (is_merging != zone_merge_infos_[idx].is_merging_) {
       tmp_info.is_merging_.set_val(is_merging, true);
 
+      FREEZE_TIME_GUARD;
       if (OB_FAIL(ObZoneMergeTableOperator::update_partial_zone_merge_info(trans, tenant_id_, tmp_info))) {
         LOG_WARN("fail to update partial zone merge info", KR(ret), K_(tenant_id), K(tmp_info));
       }
@@ -664,6 +673,7 @@ int ObZoneMergeManagerBase::generate_next_global_broadcast_scn(
     int64_t &next_scn)
 {
   int ret = OB_SUCCESS;
+  FREEZE_TIME_GUARD;
   ObMySQLTransaction trans;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
   if (OB_FAIL(check_inner_stat())) {
@@ -709,6 +719,7 @@ int ObZoneMergeManagerBase::generate_next_global_broadcast_scn(
         LOG_INFO("next global_broadcast_scn", K_(tenant_id), K(next_scn), K(tmp_global_info));
         
         tmp_global_info.merge_status_.set_val(ObZoneMergeInfo::MERGE_STATUS_MERGING, true);
+        FREEZE_TIME_GUARD;
         if (OB_FAIL(ObGlobalMergeTableOperator::update_partial_global_merge_info(trans, tenant_id_, 
             tmp_global_info))) {
           LOG_WARN("fail to update partial global merge info", KR(ret), K(tmp_global_info));
@@ -757,6 +768,7 @@ int ObZoneMergeManagerBase::try_update_global_last_merged_scn(const int64_t expe
     }
 
     if (OB_SUCC(ret) && need_update) {
+      FREEZE_TIME_GUARD;
       if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
         LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(meta_tenant_id));
       } else if (OB_FAIL(check_freeze_service_epoch(trans, expected_epoch))) {
@@ -772,6 +784,7 @@ int ObZoneMergeManagerBase::try_update_global_last_merged_scn(const int64_t expe
           tmp_global_info.last_merged_scn_.set_val(global_merge_info_.global_broadcast_scn_.value_, true);
           tmp_global_info.merge_status_.set_val(ObZoneMergeInfo::MERGE_STATUS_IDLE, true);
 
+          FREEZE_TIME_GUARD;
           if (OB_FAIL(ObGlobalMergeTableOperator::update_partial_global_merge_info(trans, tenant_id_, 
               tmp_global_info))) {
             LOG_WARN("fail to update partial global merge info", KR(ret), K(tmp_global_info));
@@ -797,6 +810,7 @@ int ObZoneMergeManagerBase::update_global_merge_info_after_merge(const int64_t e
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+  FREEZE_TIME_GUARD;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
   } else if (global_merge_info_.is_in_verifying_status()) {
@@ -815,6 +829,7 @@ int ObZoneMergeManagerBase::update_global_merge_info_after_merge(const int64_t e
       if (OB_FAIL(tmp_global_info.assign_value(global_merge_info_))) {
         LOG_WARN("fail to assign global merge info", KR(ret), K_(global_merge_info));
       } else {
+        FREEZE_TIME_GUARD;
         tmp_global_info.merge_status_.set_val(ObZoneMergeInfo::MERGE_STATUS_VERIFYING, true);
         if (OB_FAIL(ObGlobalMergeTableOperator::update_partial_global_merge_info(trans, tenant_id_, 
             tmp_global_info))) {

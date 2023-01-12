@@ -25,6 +25,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_se_array_iterator.h"
 #include "lib/allocator/page_arena.h"
+#include "lib/profile/ob_trace_id.h"
 #include "share/ob_errno.h"
 #include "share/config/ob_server_config.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
@@ -32,6 +33,7 @@
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_column_checksum_error_operator.h"
 #include "share/ob_server_table_operator.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 
 namespace oceanbase
 {
@@ -102,6 +104,7 @@ int ObFullChecksumValidator::init(
 }
 
 int ObFullChecksumValidator::execute_check(
+    const volatile bool &stop,
     const ObSimpleFrozenStatus &frozen_status,
     const int64_t expected_epoch)
 {
@@ -110,6 +113,9 @@ int ObFullChecksumValidator::execute_check(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if (stop) {
+    ret = OB_CANCELED;
+    LOG_WARN("already stop", KR(ret), K_(tenant_id));
   } else {
     // Set check condition for each validator here.
     if (PRIMARY_CLUSTER == ObClusterInfoGetter::get_cluster_role_v2()) {
@@ -117,11 +123,11 @@ int ObFullChecksumValidator::execute_check(
       cross_cluster_validator_.set_need_check(false);
     }
 
-    if (OB_FAIL(tablet_validator_.check(frozen_status))) {
+    if (OB_FAIL(tablet_validator_.check(stop, frozen_status))) {
       LOG_WARN("fail to do check of tablet validator", KR(ret));
     } else if (/*OB_FAIL(cross_cluster_validator_.check(frozen_status))*/ false) {
       LOG_WARN("fail to do check of cross_cluster validator", KR(ret));
-    } else if (OB_FAIL(index_validator_.check(frozen_status))) {
+    } else if (OB_FAIL(index_validator_.check(stop, frozen_status))) {
       LOG_WARN("fail to do check of index validator", KR(ret));
     }
     last_check_time_ = ObTimeUtility::current_time();
@@ -372,6 +378,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
     // loop until 'this round major merge finished' or 'epoch changed'
     while (!stop_ && !is_paused()) {
       update_last_run_timestamp();
+      ObCurTraceId::init(GCONF.self_addr_);
       ObZoneArray to_merge_zone;
       // Place is_last_merge_complete() to the head of this while loop.
       // So as to break this loop at once, when the last merge is complete.
@@ -465,7 +472,7 @@ int ObMajorMergeScheduler::schedule_zones_to_merge(
     // set zone merging flag
     if (OB_SUCC(ret)) {
       HEAP_VAR(ObZoneMergeInfo, tmp_info) {
-        FOREACH_CNT_X(zone, to_merge, OB_SUCCESS == ret) {
+        FOREACH_CNT_X(zone, to_merge, (OB_SUCCESS == ret) && !stop_) {
           tmp_info.reset();
           tmp_info.tenant_id_ = tenant_id_;
           tmp_info.zone_ = *zone;
@@ -504,7 +511,7 @@ int ObMajorMergeScheduler::start_zones_merge(const ObZoneArray &to_merge, const 
   } else if (OB_FAIL(zone_merge_mgr_->get_global_broadcast_scn(global_broadcast_scn))) {
     LOG_WARN("fail to get_global_broadcast_scn", KR(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && (i < to_merge.count()); ++i) {
+    for (int64_t i = 0; !stop_ && OB_SUCC(ret) && (i < to_merge.count()); ++i) {
       HEAP_VAR(ObZoneMergeInfo, tmp_info) {
         tmp_info.tenant_id_ = tenant_id_;
         tmp_info.zone_ = to_merge.at(i);
@@ -552,7 +559,7 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
     }
   } else {
     HEAP_VAR(ObZoneMergeInfo, info) {
-      FOREACH_X(progress, all_progress, OB_SUCC(ret)) {
+      FOREACH_X(progress, all_progress, OB_SUCC(ret) && !stop_) {
         const ObZone &zone = progress->zone_;
         bool merged = false;
         info.reset();
@@ -640,10 +647,15 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
       // MERGE_STATUS: MERGING -> VERIFYING CHECKSUM
       if (OB_FAIL(update_global_merge_info_after_merge(expected_epoch))) {
         LOG_WARN("fail to update global merge info after merge", KR(ret), K_(tenant_id), K(expected_epoch));
-      } else if (OB_FAIL(ObColumnChecksumErrorOperator::delete_column_checksum_err_info(*sql_proxy_,  
-          tenant_id_, global_broadcast_scn))) {
-        LOG_WARN("fail to delete column checksum error info", KR(ret), K_(tenant_id), K(global_broadcast_scn));
-      } else if (OB_FAIL(checksum_validator_.execute_check(frozen_status, expected_epoch))) { 
+      }
+      if (OB_SUCC(ret)) {
+        FREEZE_TIME_GUARD;
+        if (OB_FAIL(ObColumnChecksumErrorOperator::delete_column_checksum_err_info(*sql_proxy_,
+            tenant_id_, global_broadcast_scn))) {
+          LOG_WARN("fail to delete column checksum error info", KR(ret), K_(tenant_id), K(global_broadcast_scn));
+        }
+      }
+      if (FAILEDx(checksum_validator_.execute_check(stop_, frozen_status, expected_epoch))) {
         LOG_WARN("fail to execute checking checksum", KR(ret), K_(tenant_id), K(expected_epoch));
       // TODO NOT support cross-cluster checksum verify
       } else if (/*OB_FAIL(checksum_validator_.sync_tablet_checksum())*/ false) {
@@ -735,6 +747,7 @@ int ObMajorMergeScheduler::try_update_epoch_and_reload()
         }
         LOG_WARN("fail to update freeze_service_epoch", KR(ret), K(ori_epoch), K(latest_epoch));
       } else {
+        FREEZE_TIME_GUARD;
         if (OB_FAIL(set_epoch(latest_epoch))) {
           LOG_WARN("fail to set epoch", KR(ret), K(latest_epoch));
         } else if (OB_FAIL(zone_merge_mgr_->reload())) {
@@ -767,6 +780,7 @@ int ObMajorMergeScheduler::do_update_freeze_service_epoch(
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
+  FREEZE_TIME_GUARD;
   if (OB_FAIL(ObServiceEpochProxy::update_service_epoch(*sql_proxy_, tenant_id_,
       ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, latest_epoch, affected_rows))) {
     LOG_WARN("fail to update freeze_service_epoch", KR(ret), K(latest_epoch), K_(tenant_id));
@@ -809,6 +823,7 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
       max_merge_time = MAX(global_last_merged_time, global_merge_start_time);
     }
     if (OB_SUCC(ret)) {
+      FREEZE_TIME_GUARD;
       ObServerTableOperator st_operator;
       if (OB_FAIL(st_operator.init(sql_proxy_))) {
         LOG_WARN("fail to init server table operator", K(ret), K_(tenant_id));

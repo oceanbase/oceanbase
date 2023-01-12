@@ -14,6 +14,7 @@
 
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/tablet/ob_tablet_table_operator.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
@@ -119,8 +120,20 @@ int ObMajorMergeProgressChecker::check_merge_progress(
           LOG_WARN("fail to generate tablet table map", K_(tenant_id), KR(ret));
         } else {
           ObTabletInfo tablet;
-          while (!stop && OB_SUCC(ret) && OB_SUCC(iter.next(tablet))) {
-            if (OB_FAIL(check_tablet(tablet, tablet_map, all_progress,
+          while (!stop && OB_SUCC(ret)) {
+            {
+              FREEZE_TIME_GUARD;
+              if (OB_FAIL(iter.next(tablet))) {
+                if (OB_ITER_END != ret) {
+                  LOG_WARN("fail to get next tablet", KR(ret), K_(tenant_id), K(stop));
+                }
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (!tablet.is_valid()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("iterate invalid tablet", KR(ret), K(tablet));
+            } else if (OB_FAIL(check_tablet(tablet, tablet_map, all_progress,
                                      global_broadcast_scn, schema_guard))) {
               LOG_WARN("fail to check tablet merge progress", KR(ret), K_(tenant_id),
                        K(stop), K(tablet));
@@ -193,10 +206,14 @@ int ObMajorMergeProgressChecker::check_tablet(
     ObLSInfo ls_info;
     int64_t cluster_id = GCONF.cluster_id;
     const ObLSID &ls_id = tablet.get_ls_id();
-    if (OB_FAIL(lst_operator_->get(cluster_id, tenant_id_,
-        ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
-      LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K(ls_id));
-    } else if (OB_FAIL(check_majority_integrated(schema_guard, tablet, ls_info))) {
+    {
+      FREEZE_TIME_GUARD;
+      if (OB_FAIL(lst_operator_->get(cluster_id, tenant_id_,
+          ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
+        LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K(ls_id));
+      }
+    }
+    if (FAILEDx(check_majority_integrated(schema_guard, tablet, ls_info))) {
       LOG_WARN("fail to check majority integrated", KR(ret));
     } else if (OB_FAIL(check_tablet_data_version(all_progress, global_broadcast_scn, tablet, ls_info))) {
       LOG_WARN("fail to check data version", KR(ret));

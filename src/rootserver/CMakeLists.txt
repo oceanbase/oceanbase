@@ -110,6 +110,7 @@ ob_set_subtarget(ob_rootserver freeze
   freeze/ob_major_freeze_service.cpp
   freeze/ob_major_freeze_rpc_define.cpp
   freeze/ob_major_freeze_helper.cpp
+  freeze/ob_major_freeze_util.cpp
 )
 
 ob_set_subtarget(ob_rootserver restore

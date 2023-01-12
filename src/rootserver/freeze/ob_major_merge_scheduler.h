@@ -78,7 +78,8 @@ public:
            common::ObMySQLProxy &sql_proxy,
            ObZoneMergeManager &zone_merge_mgr);
 
-  int execute_check(const share::ObSimpleFrozenStatus &frozen_status,
+  int execute_check(const volatile bool &stop,
+                    const share::ObSimpleFrozenStatus &frozen_status,
                     const int64_t expected_epoch);
 
   // sync tablet checksum data from __all_tablet_replica_checksum to __all_tablet_checksum

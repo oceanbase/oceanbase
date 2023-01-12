@@ -243,35 +243,44 @@ int ObMajorFreezeService::check_inner_stat()
 
 void ObMajorFreezeService::stop()
 {
+  LOG_INFO("major_freeze_service start to stop", K_(tenant_id));
   ObRecursiveMutexGuard guard(lock_);
   SpinRLockGuard r_guard(rw_lock_);
   if (OB_NOT_NULL(tenant_major_freeze_)) {
+    LOG_INFO("tenant_major_freeze_ start to stop", K_(tenant_id));
     tenant_major_freeze_->stop();
   }
+  LOG_INFO("major_freeze_service finish to stop", K_(tenant_id));
 }
 
 void ObMajorFreezeService::wait()
 {
+  LOG_INFO("major_freeze_service start to wait", K_(tenant_id));
   ObRecursiveMutexGuard guard(lock_);
   SpinRLockGuard r_guard(rw_lock_);
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(tenant_major_freeze_)) {
+    LOG_INFO("tenant_major_freeze_ start to wait", K_(tenant_id));
     if (OB_FAIL(tenant_major_freeze_->wait())) {
       LOG_WARN("fail to wait", KR(ret), K_(tenant_id));
     }
   }
+  LOG_INFO("major_freeze_service finish to wait", K_(tenant_id));
 }
 
 void ObMajorFreezeService::destroy()
 {
+  LOG_INFO("major_freeze_service start to destroy", K_(tenant_id));
   ObRecursiveMutexGuard guard(lock_);
   SpinRLockGuard r_guard(rw_lock_);
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(tenant_major_freeze_)) {
+    LOG_INFO("tenant_major_freeze_ start to destroy", K_(tenant_id));
     if (OB_FAIL(tenant_major_freeze_->destroy())) {
       LOG_WARN("fail to destroy", KR(ret), K_(tenant_id));
     }
   }
+  LOG_INFO("major_freeze_service finish to destroy", K_(tenant_id));
 }
 
 int ObMajorFreezeService::mtl_init(ObMajorFreezeService *&service)

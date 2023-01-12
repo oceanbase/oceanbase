@@ -36,14 +36,15 @@ public:
   virtual int init(const uint64_t tenant_id,
                    common::ObMySQLProxy *sql_proxy);
 
-  int check(const share::ObSimpleFrozenStatus &frozen_status);
+  int check(const volatile bool &stop, const share::ObSimpleFrozenStatus &frozen_status);
 
   void set_need_check(bool need_check) { need_check_ = need_check; }
 
   static const int64_t MIN_CHECK_INTERVAL = 10 * 1000 * 1000LL;
 
 protected:
-  virtual int do_check(const share::ObSimpleFrozenStatus &frozen_status) = 0;
+  virtual int do_check(const volatile bool &stop,
+                       const share::ObSimpleFrozenStatus &frozen_status) = 0;
 
 protected:
   bool is_inited_;
@@ -60,7 +61,8 @@ public:
   virtual ~ObTabletChecksumValidator() {}
 
 protected:
-  virtual int do_check(const share::ObSimpleFrozenStatus &frozen_status) override;
+  virtual int do_check(const volatile bool &stop,
+                       const share::ObSimpleFrozenStatus &frozen_status) override;
 };
 
 // Mainly to verify checksum of cross-cluster's tablet which sync from primary cluster
@@ -74,7 +76,8 @@ public:
   int write_tablet_checksum_item();
 
 protected:
-  virtual int do_check(const share::ObSimpleFrozenStatus &frozen_status) override;
+  virtual int do_check(const volatile bool &stop,
+                       const share::ObSimpleFrozenStatus &frozen_status) override;
 
 private:
   bool is_first_tablet_in_sys_ls(const share::ObTabletReplicaChecksumItem &item) const;
@@ -91,7 +94,8 @@ public:
   virtual ~ObIndexChecksumValidator() {}
 
 protected:
-  virtual int do_check(const share::ObSimpleFrozenStatus &frozen_status) override;
+  virtual int do_check(const volatile bool &stop,
+                       const share::ObSimpleFrozenStatus &frozen_status) override;
 };
 
 } // end namespace rootserver
