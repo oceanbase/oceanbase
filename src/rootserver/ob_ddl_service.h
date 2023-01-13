@@ -742,6 +742,7 @@ public:
   //----Functions for managing synonym----
   virtual int check_synonym_exist(share::schema::ObSynonymInfo &Synonym_info, const bool create_or_replace, bool &is_update);
   virtual int create_synonym(share::schema::ObSynonymInfo &synonym_info,
+                             const ObDependencyInfo &dep_info,
                              const common::ObString *ddl_stmt_str,
                              bool is_replace,
                              share::schema::ObSchemaGetterGuard &schema_guard);
@@ -752,7 +753,7 @@ public:
   virtual int create_user_defined_function(share::schema::ObUDF &udf_info,
                                            const common::ObString &ddl_stmt_str);
   virtual int drop_user_defined_function(const obrpc::ObDropUserDefinedFunctionArg &drop_func_arg);
-  virtual int check_udf_exist(uint64 tenant_id, const common::ObString &name, bool &is_exsit);
+  virtual int check_udf_exist(uint64 tenant_id, const common::ObString &name, bool &is_exsit, uint64_t &udf_id);
   //----End of functions for managing udf----
 
   //----Functions for managing routine----
@@ -951,6 +952,9 @@ public:
   // lock table, unlock when ddl trans end
   int lock_table(ObMySQLTransaction &trans,
                  const share::schema::ObTableSchema &table_schema);
+  int recompile_view(const ObTableSchema &view_schema, const bool reset_view_column_infos, ObDDLSQLTransaction &trans);
+  int recompile_all_views_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t > &view_ids);
+  int try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t> &synonym_ids);
 private:
   enum PartitionBornMethod : int64_t
   {

@@ -951,6 +951,19 @@ int ObTableColumns::resolve_view_definition(
               } else { /*do-nothing*/ }
             }
           }
+          int tmp_ret = OB_SUCCESS;
+          bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
+          if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
+            LOG_WARN("failed to resolve view", K(ret));
+          } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(table_schema, select_stmt, reset_column_infos))) {
+            LOG_WARN("failed to add recompile view task", K(tmp_ret));
+            if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
+              tmp_ret = OB_SUCCESS; //ignore
+            }
+          }
+          if (OB_SUCCESS == ret) {
+            ret = tmp_ret;
+          }
         }
       }
     }

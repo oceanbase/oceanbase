@@ -446,7 +446,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
         bool processed = false;
 
         BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
-          case OB_SCHEMA_PRIVILEGES_TID: {
+          case OB_SCHEMA_PRIVILEGES_OLD_TID: {
             ObInfoSchemaSchemaPrivilegesTable *schema_privileges = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObInfoSchemaSchemaPrivilegesTable, schema_privileges))) {
               SERVER_LOG(ERROR, "fail to new", K(ret), K(pure_tid));
@@ -458,7 +458,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_USER_PRIVILEGES_TID: {
+          case OB_USER_PRIVILEGES_OLD_TID: {
             ObInfoSchemaUserPrivilegesTable *user_privileges = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObInfoSchemaUserPrivilegesTable, user_privileges))) {
               SERVER_LOG(ERROR, "fail to new", K(ret), K(pure_tid));
@@ -479,7 +479,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_TABLE_PRIVILEGES_TID: {
+          case OB_TABLE_PRIVILEGES_OLD_TID: {
             ObInfoSchemaTablePrivilegesTable *table_privileges = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObInfoSchemaTablePrivilegesTable, table_privileges))) {
               SERVER_LOG(ERROR, "fail to new", K(ret), K(pure_tid));
@@ -1132,7 +1132,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_REFERENTIAL_CONSTRAINTS_TID: {
+          case OB_ALL_VIRTUAL_REFERENTIAL_CONSTRAINTS_OLD_TID: {
             ObInfoSchemaReferentialConstraintsTable *referential_constraint = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaReferentialConstraintsTable,
                                           referential_constraint))) {
@@ -1141,7 +1141,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_TABLE_CONSTRAINTS_TID: {
+          case OB_ALL_VIRTUAL_TABLE_CONSTRAINTS_OLD_TID: {
             ObInfoSchemaTableConstraintsTable *table_constraint = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaTableConstraintsTable,
                                           table_constraint))) {
@@ -1150,7 +1150,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_CHECK_CONSTRAINTS_TID: {
+          case OB_ALL_VIRTUAL_CHECK_CONSTRAINTS_OLD_TID: {
             ObInfoSchemaCheckConstraintsTable* check_constraint = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaCheckConstraintsTable, check_constraint))) {
               check_constraint->set_tenant_id(real_tenant_id);
@@ -1227,7 +1227,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_TRIGGERS_TID: {
+          case OB_ALL_VIRTUAL_TRIGGERS_OLD_TID: {
             ObInfoSchemaTriggersTable *tg_table = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaTriggersTable, tg_table))) {
               tg_table->set_tenant_id(real_tenant_id);
@@ -1235,7 +1235,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_PARAMETERS_TID: {
+          case OB_ALL_VIRTUAL_PARAMETERS_OLD_TID: {
             ObInformationParametersTable *information_parameters_table = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInformationParametersTable, information_parameters_table))) {
               information_parameters_table->set_tenant_id(real_tenant_id);
@@ -1243,7 +1243,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_PARTITIONS_TID: {
+          case OB_PARTITIONS_OLD_TID: {
             ObInfoSchemaPartitionsTable *partitions_table = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaPartitionsTable, partitions_table))) {
               partitions_table->set_tenant_id(real_tenant_id);

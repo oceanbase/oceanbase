@@ -1387,7 +1387,7 @@ int ObRootInspection::check_table_schema(const ObTableSchema &hard_code_table,
     LOG_WARN("invalid table_schema", K(hard_code_table), K(inner_table), K(ret));
   } else if (OB_FAIL(check_table_options_(inner_table, hard_code_table))) {
     LOG_WARN("check_table_options failed", "table_id", hard_code_table.get_table_id(), K(ret));
-  } else {
+  } else if (!inner_table.is_view_table()) { //view table do not check column info
     if (hard_code_table.get_column_count() != inner_table.get_column_count()) {
       ret = OB_SCHEMA_ERROR;
       LOG_WARN("column count mismatch", "table_id", inner_table.get_table_id(),
@@ -1645,43 +1645,6 @@ int ObRootInspection::check_table_options_(const ObTableSchema &table,
       ret = OB_SCHEMA_ERROR;
       LOG_WARN("tablegroup_id mismatch", K(table_name), "in_memory", table.get_tablegroup_id(),
           "hard_code", hard_code_table.get_tablegroup_id(), K(ret));
-    } else if (table.get_max_used_column_id() < hard_code_table.get_max_used_column_id()) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("max_used_column_id mismatch", K(table_name), "in_memory",
-          table.get_max_used_column_id(), "hard_code",
-          hard_code_table.get_max_used_column_id(), K(ret));
-    } else if (table.get_rowkey_column_num() != hard_code_table.get_rowkey_column_num()) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("rowkey_column_num mismatch", K(table_name), "in_memory",
-          table.get_rowkey_column_num(), "hard_code",
-          hard_code_table.get_rowkey_column_num(), K(ret));
-    } else if (table.get_index_column_num() != hard_code_table.get_index_column_num()) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("index_column_num mismatch", K(table_name), "in_memory",
-          table.get_index_column_num(), "hard_code",
-          hard_code_table.get_index_column_num(), K(ret));
-    } else if (table.get_rowkey_split_pos() != hard_code_table.get_rowkey_split_pos()) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("rowkey_split_pos mismatch", K(table_name), "in_memory",
-          table.get_rowkey_split_pos(), "hard_code",
-          hard_code_table.get_rowkey_split_pos(), K(ret));
-    } else if (table.get_partition_key_column_num()
-        != hard_code_table.get_partition_key_column_num()) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("partition_key_column_num mismatch", K(table_name), "in_memory",
-          table.get_partition_key_column_num(), "hard_code",
-          hard_code_table.get_partition_key_column_num(), K(ret));
-    } else if (table.get_subpartition_key_column_num()
-        != hard_code_table.get_subpartition_key_column_num()) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("partition_key_column_num mismatch", K(table_name), "in_memory",
-          table.get_subpartition_key_column_num(), "hard_code",
-          hard_code_table.get_subpartition_key_column_num(), K(ret));
-    } else if (table.get_autoinc_column_id() != hard_code_table.get_autoinc_column_id()) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("autoinc_column_id mismatch", K(table_name), "in_memory",
-          table.get_autoinc_column_id(), "hard_code",
-          hard_code_table.get_autoinc_column_id(), K(ret));
     } else if (table.get_auto_increment() != hard_code_table.get_auto_increment()) {
       ret = OB_SCHEMA_ERROR;
       LOG_WARN("auto_increment mismatch", K(table_name), "in_memory", table.get_auto_increment(),
@@ -1740,6 +1703,45 @@ int ObRootInspection::check_table_options_(const ObTableSchema &table,
       ret = OB_SCHEMA_ERROR;
       LOG_WARN("sub_part_expr mismatch", K(table_name), "in_memory",
           table.get_sub_part_option(), "hard_code", hard_code_table.get_sub_part_option(), K(ret));
+    } else if (table.is_view_table()) {
+      // view table do not check column info
+    } else if (table.get_max_used_column_id() < hard_code_table.get_max_used_column_id()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("max_used_column_id mismatch", K(table_name), "in_memory",
+          table.get_max_used_column_id(), "hard_code",
+          hard_code_table.get_max_used_column_id(), K(ret));
+    } else if (table.get_rowkey_column_num() != hard_code_table.get_rowkey_column_num()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("rowkey_column_num mismatch", K(table_name), "in_memory",
+          table.get_rowkey_column_num(), "hard_code",
+          hard_code_table.get_rowkey_column_num(), K(ret));
+    } else if (table.get_index_column_num() != hard_code_table.get_index_column_num()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("index_column_num mismatch", K(table_name), "in_memory",
+          table.get_index_column_num(), "hard_code",
+          hard_code_table.get_index_column_num(), K(ret));
+    } else if (table.get_rowkey_split_pos() != hard_code_table.get_rowkey_split_pos()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("rowkey_split_pos mismatch", K(table_name), "in_memory",
+          table.get_rowkey_split_pos(), "hard_code",
+          hard_code_table.get_rowkey_split_pos(), K(ret));
+    } else if (table.get_partition_key_column_num()
+        != hard_code_table.get_partition_key_column_num()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partition_key_column_num mismatch", K(table_name), "in_memory",
+          table.get_partition_key_column_num(), "hard_code",
+          hard_code_table.get_partition_key_column_num(), K(ret));
+    } else if (table.get_subpartition_key_column_num()
+        != hard_code_table.get_subpartition_key_column_num()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partition_key_column_num mismatch", K(table_name), "in_memory",
+          table.get_subpartition_key_column_num(), "hard_code",
+          hard_code_table.get_subpartition_key_column_num(), K(ret));
+    } else if (table.get_autoinc_column_id() != hard_code_table.get_autoinc_column_id()) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("autoinc_column_id mismatch", K(table_name), "in_memory",
+          table.get_autoinc_column_id(), "hard_code",
+          hard_code_table.get_autoinc_column_id(), K(ret));
     }
 
     // options may be different between different ob instance, don't check

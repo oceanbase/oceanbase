@@ -306,12 +306,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 11115	__all_virtual_io_quota	2	201001	1
 11116	__all_virtual_server_compaction_event_history	2	201001	1
 12001	SESSION_VARIABLES	2	201002	1
-12002	TABLE_PRIVILEGES	2	201002	1
-12003	USER_PRIVILEGES	2	201002	1
-12004	SCHEMA_PRIVILEGES	2	201002	1
-12005	TABLE_CONSTRAINTS	2	201002	1
 12006	GLOBAL_STATUS	2	201002	1
-12007	PARTITIONS	2	201002	1
 12008	SESSION_STATUS	2	201002	1
 12009	user	2	201003	1
 12010	db	2	201003	1
@@ -322,7 +317,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12033	__all_virtual_tenant_memstore_allocator_info	2	201001	1
 12034	__all_virtual_table_mgr	2	201001	1
 12036	__all_virtual_freeze_info	2	201001	1
-12037	PARAMETERS	2	201002	1
 12038	__all_virtual_bad_block_table	2	201001	1
 12039	__all_virtual_px_worker_stat	2	201001	1
 12055	__all_virtual_auto_increment	2	201001	1
@@ -425,7 +419,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12167	__all_virtual_backup_info	2	201001	1
 12175	__all_virtual_error	2	201001	1
 12176	__all_virtual_id_service	2	201001	1
-12177	REFERENTIAL_CONSTRAINTS	2	201002	1
 12182	__all_virtual_object_type	2	201001	1
 12185	__all_virtual_sql_plan_monitor	2	201001	1
 12186	__all_virtual_sql_monitor_statname	2	201001	1
@@ -452,7 +445,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12218	__all_virtual_column_stat	2	201001	1
 12219	__all_virtual_histogram_stat	2	201001	1
 12220	__all_virtual_tenant_memory_info	2	201001	1
-12221	TRIGGERS	2	201002	1
 12222	__tenant_virtual_show_create_trigger	2	201001	1
 12223	__all_virtual_px_target_monitor	2	201001	1
 12224	__all_virtual_monitor_modified	2	201001	1
@@ -466,7 +458,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12232	__all_virtual_log_archive_history	2	201001	1
 12233	__all_virtual_log_archive_piece_files	2	201001	1
 12234	__all_virtual_ls_log_archive_progress	2	201001	1
-12235	CHECK_CONSTRAINTS	2	201002	1
 12236	__all_virtual_backup_storage_info	2	201001	1
 12237	__all_virtual_ls_status	2	201001	1
 12238	__all_virtual_ls	2	201001	1
@@ -828,6 +819,15 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21339	CDB_OB_DATABASE_PRIVILEGE	1	201001	1
 21340	DBA_OB_USER_DEFINED_RULES	1	201001	1
 21345	DBA_OB_CLUSTER_EVENT_HISTORY	1	201001	1
+21346	PARAMETERS	1	201002	1
+21347	TABLE_PRIVILEGES	1	201002	1
+21348	USER_PRIVILEGES	1	201002	1
+21349	SCHEMA_PRIVILEGES	1	201002	1
+21350	CHECK_CONSTRAINTS	1	201002	1
+21351	REFERENTIAL_CONSTRAINTS	1	201002	1
+21352	TABLE_CONSTRAINTS	1	201002	1
+21355	TRIGGERS	1	201002	1
+21356	PARTITIONS	1	201002	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

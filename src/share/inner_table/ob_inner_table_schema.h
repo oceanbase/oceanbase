@@ -588,12 +588,7 @@ public:
   static int all_virtual_io_quota_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_server_compaction_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int session_variables_schema(share::schema::ObTableSchema &table_schema);
-  static int table_privileges_schema(share::schema::ObTableSchema &table_schema);
-  static int user_privileges_schema(share::schema::ObTableSchema &table_schema);
-  static int schema_privileges_schema(share::schema::ObTableSchema &table_schema);
-  static int table_constraints_schema(share::schema::ObTableSchema &table_schema);
   static int global_status_schema(share::schema::ObTableSchema &table_schema);
-  static int partitions_schema(share::schema::ObTableSchema &table_schema);
   static int session_status_schema(share::schema::ObTableSchema &table_schema);
   static int user_schema(share::schema::ObTableSchema &table_schema);
   static int db_schema(share::schema::ObTableSchema &table_schema);
@@ -604,7 +599,6 @@ public:
   static int all_virtual_tenant_memstore_allocator_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_mgr_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_freeze_info_schema(share::schema::ObTableSchema &table_schema);
-  static int parameters_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_bad_block_table_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_px_worker_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_auto_increment_schema(share::schema::ObTableSchema &table_schema);
@@ -707,7 +701,6 @@ public:
   static int all_virtual_backup_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_error_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_id_service_schema(share::schema::ObTableSchema &table_schema);
-  static int referential_constraints_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_object_type_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_monitor_statname_schema(share::schema::ObTableSchema &table_schema);
@@ -734,7 +727,6 @@ public:
   static int all_virtual_column_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_histogram_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_memory_info_schema(share::schema::ObTableSchema &table_schema);
-  static int triggers_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_show_create_trigger_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_px_target_monitor_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_monitor_modified_schema(share::schema::ObTableSchema &table_schema);
@@ -748,7 +740,6 @@ public:
   static int all_virtual_log_archive_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_log_archive_piece_files_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_log_archive_progress_schema(share::schema::ObTableSchema &table_schema);
-  static int check_constraints_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_backup_storage_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_schema(share::schema::ObTableSchema &table_schema);
@@ -1306,6 +1297,15 @@ public:
   static int cdb_ob_database_privilege_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_user_defined_rules_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_cluster_event_history_schema(share::schema::ObTableSchema &table_schema);
+  static int parameters_schema(share::schema::ObTableSchema &table_schema);
+  static int table_privileges_schema(share::schema::ObTableSchema &table_schema);
+  static int user_privileges_schema(share::schema::ObTableSchema &table_schema);
+  static int schema_privileges_schema(share::schema::ObTableSchema &table_schema);
+  static int check_constraints_schema(share::schema::ObTableSchema &table_schema);
+  static int referential_constraints_schema(share::schema::ObTableSchema &table_schema);
+  static int table_constraints_schema(share::schema::ObTableSchema &table_schema);
+  static int triggers_schema(share::schema::ObTableSchema &table_schema);
+  static int partitions_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -2516,12 +2516,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_io_quota_schema,
   ObInnerTableSchema::all_virtual_server_compaction_event_history_schema,
   ObInnerTableSchema::session_variables_schema,
-  ObInnerTableSchema::table_privileges_schema,
-  ObInnerTableSchema::user_privileges_schema,
-  ObInnerTableSchema::schema_privileges_schema,
-  ObInnerTableSchema::table_constraints_schema,
   ObInnerTableSchema::global_status_schema,
-  ObInnerTableSchema::partitions_schema,
   ObInnerTableSchema::session_status_schema,
   ObInnerTableSchema::user_schema,
   ObInnerTableSchema::db_schema,
@@ -2532,7 +2527,6 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tenant_memstore_allocator_info_schema,
   ObInnerTableSchema::all_virtual_table_mgr_schema,
   ObInnerTableSchema::all_virtual_freeze_info_schema,
-  ObInnerTableSchema::parameters_schema,
   ObInnerTableSchema::all_virtual_bad_block_table_schema,
   ObInnerTableSchema::all_virtual_px_worker_stat_schema,
   ObInnerTableSchema::all_virtual_auto_increment_schema,
@@ -2635,7 +2629,6 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_backup_info_schema,
   ObInnerTableSchema::all_virtual_error_schema,
   ObInnerTableSchema::all_virtual_id_service_schema,
-  ObInnerTableSchema::referential_constraints_schema,
   ObInnerTableSchema::all_virtual_object_type_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_schema,
   ObInnerTableSchema::all_virtual_sql_monitor_statname_schema,
@@ -2662,7 +2655,6 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_column_stat_schema,
   ObInnerTableSchema::all_virtual_histogram_stat_schema,
   ObInnerTableSchema::all_virtual_tenant_memory_info_schema,
-  ObInnerTableSchema::triggers_schema,
   ObInnerTableSchema::tenant_virtual_show_create_trigger_schema,
   ObInnerTableSchema::all_virtual_px_target_monitor_schema,
   ObInnerTableSchema::all_virtual_monitor_modified_schema,
@@ -2676,7 +2668,6 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_log_archive_history_schema,
   ObInnerTableSchema::all_virtual_log_archive_piece_files_schema,
   ObInnerTableSchema::all_virtual_ls_log_archive_progress_schema,
-  ObInnerTableSchema::check_constraints_schema,
   ObInnerTableSchema::all_virtual_backup_storage_info_schema,
   ObInnerTableSchema::all_virtual_ls_status_schema,
   ObInnerTableSchema::all_virtual_ls_schema,
@@ -3254,6 +3245,15 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_database_privilege_schema,
   ObInnerTableSchema::dba_ob_user_defined_rules_schema,
   ObInnerTableSchema::dba_ob_cluster_event_history_schema,
+  ObInnerTableSchema::parameters_schema,
+  ObInnerTableSchema::table_privileges_schema,
+  ObInnerTableSchema::user_privileges_schema,
+  ObInnerTableSchema::schema_privileges_schema,
+  ObInnerTableSchema::check_constraints_schema,
+  ObInnerTableSchema::referential_constraints_schema,
+  ObInnerTableSchema::table_constraints_schema,
+  ObInnerTableSchema::triggers_schema,
+  ObInnerTableSchema::partitions_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -3969,12 +3969,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TABLET_COMPACTION_HISTORY_TID,
   OB_ALL_VIRTUAL_SERVER_COMPACTION_EVENT_HISTORY_TID,
   OB_SESSION_VARIABLES_TID,
-  OB_TABLE_PRIVILEGES_TID,
-  OB_USER_PRIVILEGES_TID,
-  OB_SCHEMA_PRIVILEGES_TID,
-  OB_TABLE_CONSTRAINTS_TID,
   OB_GLOBAL_STATUS_TID,
-  OB_PARTITIONS_TID,
   OB_SESSION_STATUS_TID,
   OB_USER_TID,
   OB_DB_TID,
@@ -3983,7 +3978,6 @@ const uint64_t tenant_space_tables [] = {
   OB_TENANT_VIRTUAL_CHARSET_TID,
   OB_ALL_VIRTUAL_TABLE_MGR_TID,
   OB_ALL_VIRTUAL_FREEZE_INFO_TID,
-  OB_PARAMETERS_TID,
   OB_ALL_VIRTUAL_PX_WORKER_STAT_TID,
   OB_ALL_VIRTUAL_TABLE_TID,
   OB_ALL_VIRTUAL_USER_TID,
@@ -3997,7 +3991,6 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_SQL_WORKAREA_HISTOGRAM_TID,
   OB_ALL_VIRTUAL_SQL_WORKAREA_MEMORY_INFO_TID,
   OB_ALL_VIRTUAL_BACKUP_INFO_TID,
-  OB_REFERENTIAL_CONSTRAINTS_TID,
   OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TID,
   OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_ALL_VIRTUAL_SQL_PLAN_MONITOR_I1_TID,
   OB_ALL_VIRTUAL_SQL_MONITOR_STATNAME_TID,
@@ -4006,14 +3999,12 @@ const uint64_t tenant_space_tables [] = {
   OB_TENANT_VIRTUAL_OBJECT_DEFINITION_TID,
   OB_ALL_VIRTUAL_DEADLOCK_EVENT_HISTORY_TID,
   OB_ALL_VIRTUAL_TENANT_MEMORY_INFO_TID,
-  OB_TRIGGERS_TID,
   OB_TENANT_VIRTUAL_SHOW_CREATE_TRIGGER_TID,
   OB_ALL_VIRTUAL_PX_TARGET_MONITOR_TID,
   OB_ALL_VIRTUAL_LOG_ARCHIVE_PROGRESS_TID,
   OB_ALL_VIRTUAL_LOG_ARCHIVE_HISTORY_TID,
   OB_ALL_VIRTUAL_LOG_ARCHIVE_PIECE_FILES_TID,
   OB_ALL_VIRTUAL_LS_LOG_ARCHIVE_PROGRESS_TID,
-  OB_CHECK_CONSTRAINTS_TID,
   OB_ALL_VIRTUAL_BACKUP_STORAGE_INFO_TID,
   OB_ALL_VIRTUAL_LS_STATUS_TID,
   OB_ALL_VIRTUAL_LS_META_TABLE_TID,
@@ -4456,6 +4447,15 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_USERS_TID,
   OB_DBA_OB_DATABASE_PRIVILEGE_TID,
   OB_DBA_OB_USER_DEFINED_RULES_TID,
+  OB_PARAMETERS_TID,
+  OB_TABLE_PRIVILEGES_TID,
+  OB_USER_PRIVILEGES_TID,
+  OB_SCHEMA_PRIVILEGES_TID,
+  OB_CHECK_CONSTRAINTS_TID,
+  OB_REFERENTIAL_CONSTRAINTS_TID,
+  OB_TABLE_CONSTRAINTS_TID,
+  OB_TRIGGERS_TID,
+  OB_PARTITIONS_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -5775,12 +5775,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TABLET_COMPACTION_HISTORY_TNAME,
   OB_ALL_VIRTUAL_SERVER_COMPACTION_EVENT_HISTORY_TNAME,
   OB_SESSION_VARIABLES_TNAME,
-  OB_TABLE_PRIVILEGES_TNAME,
-  OB_USER_PRIVILEGES_TNAME,
-  OB_SCHEMA_PRIVILEGES_TNAME,
-  OB_TABLE_CONSTRAINTS_TNAME,
   OB_GLOBAL_STATUS_TNAME,
-  OB_PARTITIONS_TNAME,
   OB_SESSION_STATUS_TNAME,
   OB_USER_TNAME,
   OB_DB_TNAME,
@@ -5789,7 +5784,6 @@ const char* const tenant_space_table_names [] = {
   OB_TENANT_VIRTUAL_CHARSET_TNAME,
   OB_ALL_VIRTUAL_TABLE_MGR_TNAME,
   OB_ALL_VIRTUAL_FREEZE_INFO_TNAME,
-  OB_PARAMETERS_TNAME,
   OB_ALL_VIRTUAL_PX_WORKER_STAT_TNAME,
   OB_ALL_VIRTUAL_TABLE_TNAME,
   OB_ALL_VIRTUAL_USER_TNAME,
@@ -5803,7 +5797,6 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_SQL_WORKAREA_HISTOGRAM_TNAME,
   OB_ALL_VIRTUAL_SQL_WORKAREA_MEMORY_INFO_TNAME,
   OB_ALL_VIRTUAL_BACKUP_INFO_TNAME,
-  OB_REFERENTIAL_CONSTRAINTS_TNAME,
   OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME,
   OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_ALL_VIRTUAL_SQL_PLAN_MONITOR_I1_TNAME,
   OB_ALL_VIRTUAL_SQL_MONITOR_STATNAME_TNAME,
@@ -5812,14 +5805,12 @@ const char* const tenant_space_table_names [] = {
   OB_TENANT_VIRTUAL_OBJECT_DEFINITION_TNAME,
   OB_ALL_VIRTUAL_DEADLOCK_EVENT_HISTORY_TNAME,
   OB_ALL_VIRTUAL_TENANT_MEMORY_INFO_TNAME,
-  OB_TRIGGERS_TNAME,
   OB_TENANT_VIRTUAL_SHOW_CREATE_TRIGGER_TNAME,
   OB_ALL_VIRTUAL_PX_TARGET_MONITOR_TNAME,
   OB_ALL_VIRTUAL_LOG_ARCHIVE_PROGRESS_TNAME,
   OB_ALL_VIRTUAL_LOG_ARCHIVE_HISTORY_TNAME,
   OB_ALL_VIRTUAL_LOG_ARCHIVE_PIECE_FILES_TNAME,
   OB_ALL_VIRTUAL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
-  OB_CHECK_CONSTRAINTS_TNAME,
   OB_ALL_VIRTUAL_BACKUP_STORAGE_INFO_TNAME,
   OB_ALL_VIRTUAL_LS_STATUS_TNAME,
   OB_ALL_VIRTUAL_LS_META_TABLE_TNAME,
@@ -6262,6 +6253,15 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_USERS_TNAME,
   OB_DBA_OB_DATABASE_PRIVILEGE_TNAME,
   OB_DBA_OB_USER_DEFINED_RULES_TNAME,
+  OB_PARAMETERS_TNAME,
+  OB_TABLE_PRIVILEGES_TNAME,
+  OB_USER_PRIVILEGES_TNAME,
+  OB_SCHEMA_PRIVILEGES_TNAME,
+  OB_CHECK_CONSTRAINTS_TNAME,
+  OB_REFERENTIAL_CONSTRAINTS_TNAME,
+  OB_TABLE_CONSTRAINTS_TNAME,
+  OB_TRIGGERS_TNAME,
+  OB_PARTITIONS_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -9275,8 +9275,8 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 216;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 555;
-const int64_t OB_SYS_VIEW_COUNT = 611;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 546;
+const int64_t OB_SYS_VIEW_COUNT = 620;
 const int64_t OB_SYS_TENANT_TABLE_COUNT = 1387;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
 const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1390;

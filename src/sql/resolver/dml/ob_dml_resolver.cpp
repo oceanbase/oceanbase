@@ -310,13 +310,23 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
         } else {
           ObDMLStmt *stmt = get_stmt();
           ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(udf_info.at(i).ref_expr_);
+          share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+          uint64_t database_id = OB_INVALID_ID;
           if (OB_ISNULL(stmt) || OB_ISNULL(udf_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("stmt or expr is null", K(stmt), K(udf_expr), K(ret));
+          } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table schema is null", K(ret), K(schema_guard));
+          } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(), udf_expr->get_database_name(), database_id))) {
+            LOG_WARN("failed to get database id", K(ret));
           } else if (udf_expr->need_add_dependency()) {
             ObSchemaObjVersion udf_version;
+            uint64_t dep_obj_id = view_ref_id_;
+            uint64_t dep_db_id = database_id;
             OZ (udf_expr->get_schema_object_version(udf_version));
             OZ (stmt->add_global_dependency_table(udf_version));
+            OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, udf_version, *allocator_));
           }
         }
       }
@@ -1409,7 +1419,8 @@ int ObDMLResolver::resolve_table_relation_factor_wrapper(const ParseNode *table_
                                                          ObString &db_name,
                                                          ObString &dblink_name,
                                                          bool &is_db_explicit,
-                                                         bool &use_sys_tenant)
+                                                         bool &use_sys_tenant,
+                                                         ObIArray<uint64_t> &ref_obj_ids)
 {
   int ret = OB_SUCCESS;
 
@@ -1427,7 +1438,8 @@ int ObDMLResolver::resolve_table_relation_factor_wrapper(const ParseNode *table_
                                               synonym_db_name,
                                               db_name,
                                               dblink_name,
-                                              is_db_explicit))) {
+                                              is_db_explicit,
+                                              ref_obj_ids))) {
       if (ret != OB_TABLE_NOT_EXIST) {
         // 只关心找不到表的情况，因此这里直接跳过
       } else {
@@ -1485,6 +1497,7 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
   bool use_sys_tenant = false;
   uint64_t database_id = OB_INVALID_ID;
   const ObTableSchema *table_schema = NULL;
+  ObArray<uint64_t> ref_obj_ids;
 
   if (T_ORG == parse_tree.type_) {
     table_node = parse_tree.children_[0];
@@ -1523,7 +1536,8 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
                                                     database_name,
                                                     dblink_name,
                                                     is_db_explicit,
-                                                    use_sys_tenant))) {
+                                                    use_sys_tenant,
+                                                    ref_obj_ids))) {
     if (OB_TABLE_NOT_EXIST == ret || OB_ERR_BAD_DATABASE == ret) {
       if (is_information_schema_database_id(database_id)) {
         ret = OB_ERR_UNKNOWN_TABLE;
@@ -1548,6 +1562,7 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
     }
     tenant_id = use_sys_tenant ? OB_SYS_TENANT_ID : session_info_->get_effective_tenant_id();
     bool cte_table_fisrt = (table_node->children_[0] == NULL);
+    uint64_t real_dep_obj_id = (ref_obj_ids.empty() ? view_ref_id_ : ref_obj_ids.at(ref_obj_ids.count() - 1));
     if (OB_FAIL(resolve_base_or_alias_table_item_normal(tenant_id,
                                                         database_name,
                                                         is_db_explicit,
@@ -1556,7 +1571,8 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
                                                         synonym_name,
                                                         synonym_db_name,
                                                         table_item,
-                                                        cte_table_fisrt))) {
+                                                        cte_table_fisrt,
+                                                        real_dep_obj_id))) {
       LOG_WARN("resolve base or alias table item failed", K(ret));
     } else {
       //如果当前解析的表属于oracle租户,在线程局部设置上mode.
@@ -2725,10 +2741,21 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
     if (OB_SUCC(ret) && function_table_expr->is_udf_expr()) {
       ObUDFRawExpr *udf = static_cast<ObUDFRawExpr*>(function_table_expr);
       ObSchemaObjVersion table_version;
+      share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+      uint64_t database_id = OB_INVALID_ID;
       CK (OB_NOT_NULL(udf));
-      if (OB_SUCC(ret) && udf->need_add_dependency()) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", K(ret), K(schema_guard));
+      } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(), udf->get_database_name(), database_id))) {
+        LOG_WARN("failed to get database id", K(ret));
+      } else if (udf->need_add_dependency()) {
+        uint64_t dep_obj_id = view_ref_id_;
+        uint64_t dep_db_id = database_id;
         OZ (udf->get_schema_object_version(table_version));
         OZ (stmt->add_global_dependency_table(table_version));
+        OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, table_version, *allocator_));
       }
     }
   }
@@ -2752,7 +2779,8 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
                                                            const ObString &synonym_name,
                                                            const ObString &synonym_db_name,
                                                            TableItem *&tbl_item,
-                                                           bool cte_table_fisrt)
+                                                           bool cte_table_fisrt,
+                                                           uint64_t dep_obj_id)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
@@ -2900,10 +2928,13 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
           table_version.object_type_ = DEPENDENCY_TABLE;
           table_version.version_ = tab_schema->get_schema_version();
           table_version.is_db_explicit_ = is_db_explicit;
+          uint64_t dep_db_id = tab_schema->get_database_id();
           if (common::is_cte_table(table_version.object_id_)) {
             // do nothing
           } else if (OB_FAIL(stmt->add_global_dependency_table(table_version))) {
             LOG_WARN("add global dependency table failed", K(ret));
+          } else if (OB_FAIL(stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, table_version, *allocator_))) {
+            LOG_WARN("failed to add ref obj version", K(ret));
           }
         }
       } else {
@@ -2947,11 +2978,14 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
       table_version.object_type_ = tschema->is_view_table() ? DEPENDENCY_VIEW : DEPENDENCY_TABLE;
       table_version.version_ = tschema->get_schema_version();
       table_version.is_db_explicit_ = is_db_explicit;
+      uint64_t dep_db_id = tschema->get_database_id();
       if (common::is_cte_table(table_version.object_id_)) {
          // do nothing
       } else if (OB_FAIL(stmt->add_global_dependency_table(table_version))) {
         LOG_WARN("add global dependency table failed", K(ret));
-      } else { /*do nothing*/ }
+      } else if (OB_FAIL(stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, table_version, *allocator_))) {
+        LOG_WARN("failed to add ref obj version", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(stmt->add_table_item(session_info_, item, params_.have_same_table_name_))) {
@@ -3094,11 +3128,10 @@ int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &vie
       } else if (OB_ISNULL(ref_obj_tbl = stmt->get_ref_obj_table())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("reference obj table is null", K(ret));
-      } else if (0 == current_view_level_
-                && OB_FAIL(ref_obj_tbl->set_obj_schema_version(view_item.ref_id_,
-                view_schema->get_database_id(), ObObjectType::VIEW,
-                view_schema->get_max_dependency_version(),
-                view_schema->get_schema_version(), *allocator_))) {
+      } else if (OB_FAIL(ref_obj_tbl->set_obj_schema_version(view_item.ref_id_,
+                         view_schema->get_database_id(), ObObjectType::VIEW,
+                         view_schema->get_max_dependency_version(),
+                         view_schema->get_schema_version(), *allocator_))) {
         LOG_WARN("failed to set max dependency version", K(ret));
       } else {
         // use alias to make all columns number continued
@@ -3131,6 +3164,20 @@ int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &vie
         view_item.type_ = TableItem::GENERATED_TABLE;
         view_item.ref_query_ = view_stmt;
         view_item.is_view_table_ = true;
+      }
+
+      int tmp_ret = OB_SUCCESS;
+      bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
+      if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
+        LOG_WARN("failed to resolve view", K(ret));
+      } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(*view_schema, view_stmt,reset_column_infos))) {
+        LOG_WARN("failed to add recompile view task", K(tmp_ret));
+        if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
+          tmp_ret = OB_SUCCESS; //ignore
+        }
+      }
+      if (OB_SUCCESS == ret) {
+        ret = tmp_ret;
       }
     }
   }
@@ -5483,7 +5530,8 @@ int ObDMLResolver::add_synonym_obj_id(const ObSynonymChecker &synonym_checker, b
   if (synonym_checker.has_synonym()) {
     if (OB_FAIL(add_object_versions_to_dependency(DEPENDENCY_SYNONYM,
                                                  SYNONYM_SCHEMA,
-                                                 synonym_checker.get_synonym_ids()))) {
+                                                 synonym_checker.get_synonym_ids(),
+                                                 synonym_checker.get_database_ids()))) {
       LOG_WARN("add synonym version failed", K(ret));
     }
   }
@@ -5497,7 +5545,8 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObString &synonym_name,
                                                  ObString &synonym_db_name,
                                                  ObString &db_name,
-                                                 ObString &dblink_name)
+                                                 ObString &dblink_name,
+                                                 ObIArray<uint64_t> &ref_obj_ids)
 {
   bool is_db_explicit = false;
   UNUSED(is_db_explicit);
@@ -5509,7 +5558,8 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                        synonym_db_name,
                                        db_name,
                                        dblink_name,
-                                       is_db_explicit);
+                                       is_db_explicit,
+                                       ref_obj_ids);
 }
 
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
@@ -5521,7 +5571,8 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  common::ObString &synonym_db_name,
                                                  common::ObString &db_name,
                                                  common::ObString &dblink_name,
-                                                 ObSynonymChecker &synonym_checker)
+                                                 ObSynonymChecker &synonym_checker,
+                                                 ObIArray<uint64_t> &ref_obj_ids)
 {
   bool is_db_explicit = false;
   return resolve_table_relation_factor(node,
@@ -5534,7 +5585,8 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                        db_name,
                                        dblink_name,
                                        is_db_explicit,
-                                       synonym_checker);
+                                       synonym_checker,
+                                       ref_obj_ids);
 }
 
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
@@ -5545,7 +5597,8 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  common::ObString &synonym_name,
                                                  common::ObString &synonym_db_name,
                                                  common::ObString &dblink_name,
-                                                 common::ObString &db_name)
+                                                 common::ObString &db_name,
+                                                 ObIArray<uint64_t> &ref_obj_ids)
 {
   bool is_db_explicit = false;
   UNUSED(is_db_explicit);
@@ -5558,7 +5611,8 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                        synonym_db_name,
                                        db_name,
                                        dblink_name,
-                                       is_db_explicit);
+                                       is_db_explicit,
+                                       ref_obj_ids);
 }
 
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
@@ -5569,17 +5623,20 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObString &synonym_db_name,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
-                                                 bool &is_db_explicit)
+                                                 bool &is_db_explicit,
+                                                 ObIArray<uint64_t> &ref_obj_ids)
 {
   return resolve_table_relation_factor(node, session_info_->get_effective_tenant_id(), dblink_id,
                                        database_id, table_name, synonym_name, synonym_db_name,
-                                       db_name, dblink_name, is_db_explicit);
+                                       db_name, dblink_name, is_db_explicit, ref_obj_ids);
 }
 
 
 int ObDMLResolver::add_object_version_to_dependency(share::schema::ObDependencyTableType table_type,
                                                     share::schema::ObSchemaType schema_type,
-                                                    uint64_t object_id)
+                                                    uint64_t object_id,
+                                                    uint64_t database_id,
+                                                    uint64_t dep_obj_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(schema_checker_)) {
@@ -5611,9 +5668,12 @@ int ObDMLResolver::add_object_version_to_dependency(share::schema::ObDependencyT
       obj_version.object_id_ = object_id;
       obj_version.object_type_ = table_type,
       obj_version.version_ = schema_version;
+      uint64_t dep_db_id = database_id;
       if (OB_FAIL(get_stmt()->add_global_dependency_table(obj_version))) {
         LOG_WARN("add global dependency table failed",
                  K(ret), K(table_type), K(schema_type));
+      } else if (OB_FAIL(get_stmt()->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, obj_version, *allocator_))) {
+        LOG_WARN("failed to add ref obj version", K(ret));
       }
     }
   }
@@ -5624,11 +5684,13 @@ int ObDMLResolver::add_object_version_to_dependency(share::schema::ObDependencyT
 // 当对象 schema 版本变更时，通过依赖检查对象是否需要重新生成
 int ObDMLResolver::add_object_versions_to_dependency(ObDependencyTableType table_type,
                                                     ObSchemaType schema_type,
-                                                    const ObIArray<uint64_t> &object_ids)
+                                                    const ObIArray<uint64_t> &object_ids,
+                                                    const ObIArray<uint64_t> &db_ids)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < object_ids.count(); ++i) {
-    if (OB_FAIL(add_object_version_to_dependency(table_type, schema_type, object_ids.at(i)))) {
+    uint64_t real_dep_obj_id = (0 == i) ? view_ref_id_ : object_ids.at(i - 1);
+    if (OB_FAIL(add_object_version_to_dependency(table_type, schema_type, object_ids.at(i), db_ids.at(i), real_dep_obj_id))) {
       LOG_WARN("add object versions to dependency failed");
     }
   }
@@ -5644,12 +5706,13 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObString &synonym_db_name,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
-                                                 bool &is_db_explicit)
+                                                 bool &is_db_explicit,
+                                                 ObIArray<uint64_t> &ref_obj_ids)
 {
   ObSynonymChecker synonym_checker;
   return resolve_table_relation_factor(node, tenant_id, dblink_id,
                                        database_id, table_name, synonym_name, synonym_db_name,
-                                       db_name, dblink_name, is_db_explicit, synonym_checker);
+                                       db_name, dblink_name, is_db_explicit, synonym_checker, ref_obj_ids);
 }
 
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
@@ -5662,7 +5725,8 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
                                                  bool &is_db_explicit,
-                                                 ObSynonymChecker &synonym_checker)
+                                                 ObSynonymChecker &synonym_checker,
+                                                 ObIArray<uint64_t> &ref_obj_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session_info_)) {
@@ -5704,6 +5768,9 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                        table_name, db_name))) {
         LOG_WARN("resolve table relation factor from dblink failed", K(ret));
       }
+    }
+    if (OB_SUCC(ret)) {
+      OZ (ref_obj_ids.assign(synonym_checker.get_synonym_ids()));
     }
   }
   return ret;
@@ -5944,53 +6011,6 @@ int ObDMLResolver::resolve_table_relation_factor_dblink(const ParseNode *table_n
   return ret;
 }
 
-int ObDMLResolver::add_reference_obj_table(const uint64_t dep_obj_id,
-                                           const uint64_t dep_db_id,
-                                           const ObObjectType dep_obj_type,
-                                           const ObDependencyTableType ref_table_type,
-                                           const ObSchemaType ref_schema_type,
-                                           const uint64_t ref_obj_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_stmt()) || OB_ISNULL(schema_checker_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("stmt or schema_checker is null", K(get_stmt()), K_(schema_checker));
-  } else if (OB_ISNULL(params_.session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params_.session_info_ is null", K(ret));
-  } else {
-    int64_t schema_version = OB_INVALID_VERSION;
-    ObSchemaObjVersion obj_version;
-    bool is_pl_schema_type =
-         PACKAGE_SCHEMA == ref_schema_type
-         || ROUTINE_SCHEMA == ref_schema_type
-         || UDT_SCHEMA == ref_schema_type
-         || TRIGGER_SCHEMA == ref_schema_type;
-    if (OB_FAIL(schema_checker_->get_schema_version(
-        is_pl_schema_type && (OB_SYS_TENANT_ID == pl::get_tenant_id_by_object_id(ref_obj_id)) ? OB_SYS_TENANT_ID : params_.session_info_->get_effective_tenant_id(),
-        ref_obj_id,
-        ref_schema_type,
-        schema_version))) {
-      LOG_WARN("get schema version failed", K(params_.session_info_->get_effective_tenant_id()),
-                K(ref_obj_id), K(ref_table_type), K(ref_schema_type), K(ret));
-    } else if (OB_UNLIKELY(OB_INVALID_VERSION == schema_version)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("object schema is unknown",
-                K(ref_obj_id), K(ref_table_type), K(ref_schema_type), K(ret));
-    } else {
-      obj_version.object_id_ = ref_obj_id;
-      obj_version.object_type_ = ref_table_type,
-      obj_version.version_ = schema_version;
-      if (OB_FAIL(get_stmt()->add_ref_obj_version(
-          dep_obj_id, dep_db_id, dep_obj_type, obj_version, *allocator_))) {
-        LOG_WARN("add reference obj table failed", K(ret), K(dep_obj_id), K(dep_obj_type),
-          K(ref_table_type), K(ref_schema_type));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
                                                       uint64_t &database_id,
                                                       ObString &table_name,
@@ -6023,7 +6043,7 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
         LOG_WARN("get synonym schema failed", K(tenant_id), K(database_id), K(table_name), K(ret));
       } else if (exist_with_synonym) {
         synonym_checker.set_synonym(true);
-        if (OB_FAIL(synonym_checker.add_synonym_id(synonym_id))) {
+        if (OB_FAIL(synonym_checker.add_synonym_id(synonym_id, database_id))) {
           LOG_WARN("fail to add synonym id", K(synonym_id), K(database_id), K(table_name), K(object_table_name), K(ret));
         } else if (OB_FAIL(schema_checker_->get_database_schema(tenant_id, object_db_id, database_schema))) {
           LOG_WARN("get db schema failed", K(tenant_id), K(object_db_id), K(ret));
@@ -6041,14 +6061,6 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
                                                                     synonym_checker,
                                                                     is_db_explicit)))) {
             LOG_WARN("fail to resolve table relation", K(tenant_id), K(database_id), K(table_name), K(ret));
-          } else if (is_resolving_view_ && 1 == current_view_level_
-            && !params_.is_from_show_resolver_) {
-            uint64_t dep_obj_id = params_.is_from_create_view_ ? OB_INVALID_ID : view_ref_id_;
-            uint64_t dep_db_id = params_.is_from_create_view_ ? OB_INVALID_ID : database_id;
-            if (OB_FAIL(add_reference_obj_table(dep_obj_id, dep_db_id, ObObjectType::VIEW,
-                DEPENDENCY_SYNONYM, SYNONYM_SCHEMA, synonym_id))) {
-              LOG_WARN("failed to add reference obj table", K(ret), K(dep_obj_id), K(dep_db_id));
-            }
           }
         }
       } else {
@@ -6062,19 +6074,6 @@ int ObDMLResolver::resolve_table_relation_recursively(uint64_t tenant_id,
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("synonym not exist", K(tenant_id), K(database_id), K(table_name), K(ret));
       }
-    }
-  } else if (is_resolving_view_ && !params_.is_from_show_resolver_
-            && !synonym_checker.has_synonym()) {
-    uint64_t dep_obj_id = params_.is_from_create_view_ ? OB_INVALID_ID : view_ref_id_;
-    uint64_t dep_db_id = params_.is_from_create_view_ ? OB_INVALID_ID : database_id;
-    OZ (schema_guard->get_simple_table_schema(tenant_id, database_id, table_name,
-       false/*is_index*/, table_schema));
-    CK (OB_NOT_NULL(table_schema));
-    if (OB_SUCC(ret) && 1 == current_view_level_
-      && OB_FAIL(add_reference_obj_table(dep_obj_id, dep_db_id, ObObjectType::VIEW,
-      table_schema->is_view_table() ? DEPENDENCY_VIEW : DEPENDENCY_TABLE,
-      TABLE_SCHEMA, table_schema->get_table_id()))) {
-      LOG_WARN("failed to add reference obj table", K(ret), K(dep_obj_id), K(dep_db_id));
     }
   }
   return ret;
@@ -7658,7 +7657,16 @@ int ObDMLResolver::add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval
       // 如果是 NEXTVAL 表达式，则添加到 STMT 中，提示 SEQUENCE 算子为它计算 NEXTVALUE
       //  note: 按照 Oracle 语义，一个语句中即使出现多次相同对象的 nextval
       //        也只计算一次。所以这里只需要保存唯一的 sequence_id 即可
-      if (is_currval) {
+      const ObSequenceSchema *seq_schema = nullptr;
+      if (OB_ISNULL(params_.schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard ptr is null ptr", K(ret), KP(params_.schema_checker_));
+      } else if (OB_FAIL(params_.schema_checker_->get_schema_guard()->get_sequence_schema(session_info_->get_effective_tenant_id(), sequence_id, seq_schema))) {
+        LOG_WARN("get seq schema failed", K(ret));
+      } else if (OB_ISNULL(seq_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("database_schema is null", K(ret));
+      } else if (is_currval) {
         if (OB_FAIL(stmt->add_currval_sequence_id(sequence_id))) {
           LOG_WARN("failed to push back sequence id",K(ret));
         } else {
@@ -7667,12 +7675,12 @@ int ObDMLResolver::add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval
       } else if (OB_FAIL(stmt->add_nextval_sequence_id(sequence_id))) {
         LOG_WARN("fail push back sequence id",
                  K(sequence_id), K(ids), K(ret));
-      } else {
-        // do nothing
       }
       if (OB_SUCC(ret) && OB_FAIL(add_object_version_to_dependency(DEPENDENCY_SEQUENCE,
-                                                                    SEQUENCE_SCHEMA,
-                                                                    sequence_id))) {
+                                                                   SEQUENCE_SCHEMA,
+                                                                   sequence_id,
+                                                                   seq_schema->get_database_id(),
+                                                                   OB_INVALID_ID))) {
         LOG_WARN("add object version to dependency failed", K(ret));
       }
     }
@@ -7819,16 +7827,27 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
       ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
       ObDMLStmt *stmt = get_stmt();
       ObSchemaObjVersion udf_version;
+      share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+      uint64_t database_id = OB_INVALID_ID;
       CK (OB_NOT_NULL(udf_expr));
-      if (OB_SUCC(ret) && udf_expr->need_add_dependency()) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", K(ret), K(schema_guard));
+      } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(), udf_expr->get_database_name(), database_id))) {
+        LOG_WARN("failed to get database id", K(ret));
+      } else if (udf_expr->need_add_dependency()) {
+        uint64_t dep_obj_id = view_ref_id_;
+        uint64_t dep_db_id = database_id;
         OZ (udf_expr->get_schema_object_version(udf_version));
         CK (OB_NOT_NULL(stmt));
         OZ (stmt->add_global_dependency_table(udf_version));
+        OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, udf_version, *allocator_));
+        //for udf without params, we just set called_in_sql = true,
+        //if this expr go through pl :: build_raw_expr later,
+        //the flag will change to false;
+        OX (expr->set_is_called_in_sql(true));
       }
-      //for udf without params, we just set called_in_sql = true,
-      //if this expr go through pl :: build_raw_expr later,
-      //the flag will change to false;
-      OX (expr->set_is_called_in_sql(true));
     }
   }
   if (OB_ERR_SP_UNDECLARED_VAR == ret) {

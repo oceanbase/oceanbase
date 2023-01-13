@@ -51,6 +51,8 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "pl/ob_pl_user_type.h"
 #include "observer/omt/ob_tenant_srs_mgr.h"
+#include "sql/executor/ob_maintain_dependency_info_task.h"
+#include "sql/resolver/ddl/ob_create_view_resolver.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -4650,4 +4652,212 @@ int ObSQLUtils::transform_pl_ext_type(
 void ObSQLUtils::adjust_time_by_ntp_offset(int64_t &dst_timeout_ts)
 {
   dst_timeout_ts += THIS_WORKER.get_ntp_offset();
+}
+
+
+int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
+                                     ObSelectStmt *select_stmt,
+                                     bool reset_column_infos)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema new_view_schema;
+  uint64_t data_version = 0;
+  if (OB_FAIL(new_view_schema.assign(old_view_schema))) {
+    LOG_WARN("failed to assign table schema", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(old_view_schema.get_tenant_id(), data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_1_0_0) {
+    // do nothing
+  } else if (OB_ISNULL(GCTX.sql_engine_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get sql engine", K(ret));
+  } else if ((0 == old_view_schema.get_object_status() || 0 == old_view_schema.get_column_count())) {
+    if (!reset_column_infos) {
+      if (OB_ISNULL(select_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get select stmt", K(ret));
+      } else if (OB_FAIL(new_view_schema.delete_all_view_columns())) {
+        LOG_WARN("failed to delete all columns", K(ret));
+      } else if (OB_ISNULL(select_stmt->get_ref_obj_table())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref obj is null", K(ret));
+      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(), *select_stmt, new_view_schema))) {
+        LOG_WARN("failed to update view column info", K(ret));
+      } else if (!new_view_schema.is_view_table() || new_view_schema.get_column_count() <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get wrong schema", K(ret), K(new_view_schema));
+      } else if (!select_stmt->get_ref_obj_table()->is_inited()) {
+        // do nothing
+      } else if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().add_view_id_to_set(new_view_schema.get_table_id()))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+          LOG_WARN("table id exists", K(new_view_schema.get_table_id()));
+        } else {
+          LOG_WARN("failed to set table id", K(ret));
+        }
+      } else if (OB_FAIL(select_stmt->get_ref_obj_table()->process_reference_obj_table(
+        new_view_schema.get_tenant_id(), new_view_schema.get_table_id(), &new_view_schema, GCTX.sql_engine_->get_dep_info_queue()))) {
+        LOG_WARN("failed to process reference obj table", K(ret), K(new_view_schema), K(old_view_schema));
+      }
+    } else if (lib::is_oracle_mode()) {
+      bool already_invalid = false;
+      if (OB_FAIL(new_view_schema.alter_all_view_columns_type_undefined(already_invalid))) {
+        LOG_WARN("failed to reset all columns", K(ret));
+      } else if (already_invalid) {
+        // have reset all column to be undefined before, do nothing
+      } else if (!new_view_schema.is_view_table() || new_view_schema.get_column_count() <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get wrong schema", K(ret), K(new_view_schema));
+      } else if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().add_view_id_to_set(new_view_schema.get_table_id()))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+          LOG_WARN("table id exists", K(new_view_schema.get_table_id()));
+        } else {
+          LOG_WARN("failed to set table id", K(ret));
+        }
+      } else {
+        SMART_VAR(sql::ObMaintainObjDepInfoTask, task, new_view_schema.get_tenant_id()) {
+          if (OB_FAIL(task.assign_view_schema(new_view_schema))) {
+            LOG_WARN("failed to assign view schema", K(ret));
+          } else if (FALSE_IT(task.set_reset_view_column_infos(true))) {
+          } else if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().push(task))) {
+            LOG_WARN("push task failed", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = GCTX.sql_engine_->get_dep_info_queue().erase_view_id_from_set(new_view_schema.get_table_id()))) {
+            LOG_WARN("failed to erase obj id", K(tmp_ret), K(ret));
+          }
+           if (OB_SIZE_OVERFLOW == ret) {
+            ret = OB_SUCCESS;
+            LOG_TRACE("async queue is full");
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::find_synonym_ref_obj(const ObString &database_name,
+                                     const ObString &object_name,
+                                     const uint64_t tenant_id,
+                                     bool &exist,
+                                     uint64_t &object_id,
+                                     ObObjectType &obj_type,
+                                     uint64_t &schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard guard;
+  exist = false;
+  uint64_t database_id = OB_INVALID_ID;
+  const ObTableSchema *table_schema = nullptr;
+  const ObSimpleSynonymSchema *synonym_schema = nullptr;
+  const share::schema::ObPackageInfo *package_info = nullptr;
+  const ObUDTTypeInfo *udt_info = nullptr;
+  const ObRoutineInfo *routine_info = nullptr;
+  const ObSequenceSchema *seq_schema = nullptr;
+  // table/view/synomyon/package/function/udt/sequence/procedure
+  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(guard.get_database_id(tenant_id, database_name, database_id))) {
+    LOG_WARN("failed to get database id", K(ret), K(tenant_id), K(database_name));
+  } else if (OB_FAIL(find_synonym_ref_obj(database_id, object_name, tenant_id, exist, object_id, obj_type, schema_version))) {
+    LOG_WARN("failed to find synonym ref obj", K(ret));
+  }
+  return ret;
+}
+
+
+int ObSQLUtils::find_synonym_ref_obj(const uint64_t database_id,
+                                     const ObString &object_name,
+                                     const uint64_t tenant_id,
+                                     bool &exist,
+                                     uint64_t &object_id,
+                                     ObObjectType &obj_type,
+                                     uint64_t &schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard guard;
+  exist = false;
+  const ObTableSchema *table_schema = nullptr;
+  const ObSimpleSynonymSchema *synonym_schema = nullptr;
+  const share::schema::ObPackageInfo *package_info = nullptr;
+  const ObUDTTypeInfo *udt_info = nullptr;
+  const ObRoutineInfo *routine_info = nullptr;
+  const ObSequenceSchema *seq_schema = nullptr;
+  // table/view/synomyon/package/function/udt/sequence/procedure
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema service", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_INVALID_ID == database_id) {
+    // do nothing
+  } else if (OB_FAIL(guard.get_table_schema(tenant_id, database_id, object_name, false, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (nullptr != table_schema) {
+    exist = true;
+    object_id = table_schema->get_table_id();
+    obj_type = table_schema->is_view_table() ? ObObjectType::VIEW : ObObjectType::TABLE;
+    schema_version = table_schema->get_schema_version();
+  } else if (OB_FAIL(guard.get_synonym_info(tenant_id, database_id, object_name, synonym_schema))) {
+    LOG_WARN("failed to get synonym schema", K(ret));
+  } else if (nullptr != synonym_schema) {
+    exist = true;
+    object_id = synonym_schema->get_synonym_id();
+    obj_type = ObObjectType::SYNONYM;
+    schema_version = synonym_schema->get_schema_version();
+  } else if (OB_FAIL(guard.get_standalone_function_info(tenant_id, database_id, object_name, routine_info))) {
+    LOG_WARN("failed to get udf info", K(ret));
+  } else if (nullptr != routine_info) {
+    exist = true;
+    object_id = routine_info->get_object_id();
+    obj_type = ObObjectType::FUNCTION;
+    schema_version = routine_info->get_schema_version();
+  } else if (OB_FAIL(guard.get_standalone_procedure_info(tenant_id, database_id, object_name, routine_info))) {
+    LOG_WARN("failed to get procedore info", K(ret));
+  } else if (nullptr != routine_info) {
+    exist = true;
+    object_id = routine_info->get_object_id();
+    obj_type = ObObjectType::PROCEDURE;
+    schema_version = routine_info->get_schema_version();
+  } else if (OB_FAIL(guard.get_udt_info(tenant_id, database_id, OB_INVALID_ID,
+                                        object_name, udt_info))) {
+    LOG_WARN("failed to get udt info", K(ret));
+  } else if (nullptr != udt_info) {
+    exist = true;
+    object_id = udt_info->get_type_id();
+    obj_type = ObObjectType::TYPE;
+    schema_version = udt_info->get_schema_version();
+  } else if (OB_FAIL(guard.get_sequence_schema_with_name(tenant_id, database_id, object_name, seq_schema))) {
+    LOG_WARN("failed to get sequence schema", K(ret));
+  } else if (nullptr != seq_schema) {
+    exist = true;
+    object_id = seq_schema->get_sequence_id();
+    obj_type = ObObjectType::SEQUENCE;
+    schema_version = seq_schema->get_schema_version();
+  } else if (OB_FAIL(guard.get_package_info(tenant_id, database_id, object_name,
+                                            share::schema::ObPackageType::PACKAGE_TYPE,
+                                            COMPATIBLE_ORACLE_MODE,
+                                            package_info))) {
+    LOG_WARN("failed to get package info", K(ret));
+  } else if (nullptr != package_info) {
+    exist = true;
+    object_id = package_info->get_package_id();
+    obj_type = ObObjectType::PACKAGE;
+    schema_version = package_info->get_schema_version();
+  } else if (OB_FAIL(guard.get_package_info(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, object_name,
+                                            share::schema::ObPackageType::PACKAGE_TYPE,
+                                            COMPATIBLE_ORACLE_MODE,
+                                            package_info))) {
+    LOG_WARN("failed to get package info", K(ret));
+  } else if (nullptr != package_info) {
+    exist = true;
+    object_id = package_info->get_package_id();
+    obj_type = ObObjectType::PACKAGE;
+    schema_version = package_info->get_schema_version();
+  }
+  return ret;
 }

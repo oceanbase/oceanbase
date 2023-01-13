@@ -174,6 +174,13 @@ enum ObPartitionFuncType
   PARTITION_FUNC_TYPE_MAX,
 };
 
+enum ObObjectStatus : int64_t
+{
+  INVALID = 0,
+  VALID = 1,
+  NA = 2, /*The use case is unknown*/
+};
+
 int get_part_type_str(const bool is_oracle_mode, ObPartitionFuncType type, common::ObString &str);
 
 inline bool is_hash_part(const ObPartitionFuncType part_type)
@@ -916,10 +923,10 @@ struct ObSchemaObjVersion
     }
     return ret_type;
   }
-  ObObjectType get_schema_object_type() const
+  static ObObjectType get_schema_object_type(ObDependencyTableType object_type)
   {
     ObObjectType ret_type = ObObjectType::MAX_TYPE;
-    switch (object_type_) {
+    switch (object_type) {
       case DEPENDENCY_TABLE:
         ret_type = ObObjectType::TABLE;
         break;
@@ -5104,10 +5111,11 @@ class ObSynonymInfo: public ObSchema
 public:
   ObSynonymInfo();
   explicit ObSynonymInfo(common::ObIAllocator *allocator);
-  VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(database_id), K_(synonym_id), K_(schema_version));
+  VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(database_id), K_(synonym_id), K_(schema_version), K_(status));
   virtual ~ObSynonymInfo();
   ObSynonymInfo &operator=(const ObSynonymInfo &src_schema);
   ObSynonymInfo(const ObSynonymInfo &src_schema);
+  int assign(const ObSynonymInfo &src_schema);
   inline void set_tenant_id(const uint64_t id) { tenant_id_ = id; }
   inline void set_database_id(const uint64_t id) { database_id_ = id; }
   inline void set_object_database_id(const uint64_t id) { object_db_id_ = id; }
@@ -5131,6 +5139,9 @@ public:
   inline const char *get_version() const { return extract_str(version_); }
   inline const common::ObString &get_version_str() const { return version_; }
   inline uint64_t get_object_database_id() const { return object_db_id_; }
+  inline ObObjectStatus get_status() const { return status_; }
+  inline void set_status(const ObObjectStatus status) { status_ = status; }
+  inline void set_status(const int64_t status) { status_ = static_cast<ObObjectStatus> (status); }
   void reset();
 private:
   //void *alloc(int64_t size);
@@ -5143,6 +5154,7 @@ private:
   common::ObString version_;
   common::ObString object_name_;
   uint64_t object_db_id_;
+  ObObjectStatus status_;
   //common::ObArenaAllocator allocator_;
 };
 

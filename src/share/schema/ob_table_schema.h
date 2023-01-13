@@ -178,6 +178,12 @@ enum ObTableRowidMode
   ROWID_EXTENDED = 1,
 };
 
+enum ObViewColumnFilledFlag
+{
+  NOT_FILLED = 0,
+  FILLED = 1,
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -195,7 +201,9 @@ private:
   static const int32_t TM_TABLE_AUTO_INCREMENT_MODE_BITS = 1;
   static const int32_t TM_TABLE_ROWID_MODE_OFFSET = 22;
   static const int32_t TM_TABLE_ROWID_MODE_BITS = 1;
-  static const int32_t TM_RESERVED = 9;
+  static const int32_t TM_VIEW_COLUMN_FILLED_OFFSET = 23;
+  static const int32_t TM_VIEW_COLUMN_FILLED_BITS = 1;
+  static const int32_t TM_RESERVED = 8;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -204,6 +212,7 @@ private:
   static const uint32_t VIEW_CREATED_METHOD_FLAG_MASK = (1U << TM_TABLE_STATE_FLAG_BITS) - 1;
   static const uint32_t AUTO_INCREMENT_MODE_MASK = (1U << TM_TABLE_AUTO_INCREMENT_MODE_BITS) - 1;
   static const uint32_t ROWID_MODE_MASK = (1U << TM_TABLE_ROWID_MODE_BITS) - 1;
+  static const uint32_t VIEW_COLUMN_FILLED_MASK = (1U << TM_VIEW_COLUMN_FILLED_BITS) - 1;
 public:
   ObTableMode() { reset(); }
   virtual ~ObTableMode() { reset(); }
@@ -244,13 +253,18 @@ public:
   {
     return (ObTableRowidMode)((table_mode >> TM_TABLE_ROWID_MODE_OFFSET) & ROWID_MODE_MASK);
   }
+  static ObViewColumnFilledFlag get_view_column_filled_flag(int32_t table_mode)
+  {
+    return (ObViewColumnFilledFlag)((table_mode >> TM_VIEW_COLUMN_FILLED_OFFSET) & VIEW_COLUMN_FILLED_MASK);
+  }
   TO_STRING_KV("table_mode_flag", mode_flag_,
                "pk_mode", pk_mode_,
                "table_state_flag", state_flag_,
                "view_created_method_flag", view_created_method_flag_,
                "table_organization_mode", organization_mode_,
                "auto_increment_mode", auto_increment_mode_,
-               "rowid_mode", rowid_mode_);
+               "rowid_mode", rowid_mode_,
+               "view_column_filled_flag", view_column_filled_flag_);
   union {
     int32_t mode_;
     struct {
@@ -261,6 +275,7 @@ public:
       uint32_t view_created_method_flag_ :TM_VIEW_CREATED_METHOD_FLAG_BITS;
       uint32_t auto_increment_mode_: TM_TABLE_AUTO_INCREMENT_MODE_BITS;
       uint32_t rowid_mode_: TM_TABLE_ROWID_MODE_BITS;
+      uint32_t view_column_filled_flag_ : TM_VIEW_COLUMN_FILLED_BITS;
       uint32_t reserved_ :TM_RESERVED;
     };
   };
@@ -467,6 +482,11 @@ public:
   inline virtual uint64_t get_table_id() const { return table_id_; }
   inline void set_tablet_id(const ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
   inline void set_tablet_id(const uint64_t tablet_id) { tablet_id_ = tablet_id; }
+  inline void set_object_status(const ObObjectStatus status) { object_status_ = status; }
+  inline void set_object_status(const int64_t status) { object_status_ = static_cast<ObObjectStatus> (status); }
+  inline ObObjectStatus get_object_status() const { return object_status_; }
+  inline void set_force_view(const bool flag) { is_force_view_ = flag; }
+  inline bool is_force_view() const { return is_force_view_; }
   virtual ObObjectID get_object_id() const override;
   inline ObTabletID get_tablet_id() const { return tablet_id_; }
   inline void set_association_table_id(const uint64_t table_id) { association_table_id_ = table_id; }
@@ -545,6 +565,11 @@ public:
   { return TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.organization_mode_; }
   inline bool is_heap_table() const
   { return TOM_HEAP_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.organization_mode_; }
+  inline bool view_column_filled() const
+  { return FILLED == (enum ObViewColumnFilledFlag)table_mode_.view_column_filled_flag_; }
+  inline void set_view_column_filled_flag(const ObViewColumnFilledFlag flag)
+  { table_mode_.view_column_filled_flag_ = flag; }
+
   inline void set_session_id(const uint64_t id)  { session_id_ = id; }
   inline uint64_t get_session_id() const { return session_id_; }
   virtual int get_zone_list(
@@ -793,6 +818,8 @@ protected:
   uint64_t association_table_id_;
   bool in_offline_ddl_white_list_;
   ObTabletID tablet_id_;
+  ObObjectStatus object_status_;
+  bool is_force_view_; // only record in create view path, do not persist to disk
 };
 class ObTableSchema : public ObSimpleTableSchemaV2
 {
@@ -930,7 +957,9 @@ public:
   template<typename ColumnType>
   int add_column(const ColumnType &column);
   int delete_column(const common::ObString &column_name);
-  int alter_column(ObColumnSchemaV2 &column, ObColumnCheckMode check_mode);
+  int delete_all_view_columns();
+  int alter_all_view_columns_type_undefined(bool &already_invalid);
+  int alter_column(ObColumnSchemaV2 &column, ObColumnCheckMode check_mode, const bool for_view);
   int reorder_column(const ObString &column_name, const bool is_first, const ObString &prev_column_name, const ObString &next_column_name);
   int add_aux_vp_tid(const uint64_t aux_vp_tid);
   int add_partition_key(const common::ObString &column_name);
@@ -1354,7 +1383,7 @@ private:
       common::ObNewRow &default_row) const;
   inline int64_t get_id_hash_array_mem_size(const int64_t column_cnt) const;
   inline int64_t get_name_hash_array_mem_size(const int64_t column_cnt) const;
-  int delete_column_internal(ObColumnSchemaV2 *column_schema);
+  int delete_column_internal(ObColumnSchemaV2 *column_schema, const bool for_view);
   ObColumnSchemaV2 *get_column_schema_by_id_internal(const uint64_t column_id) const;
   ObColumnSchemaV2 *get_column_schema_by_name_internal(const common::ObString &column_name) const;
   int check_rowkey_column_can_be_altered(const ObColumnSchemaV2 *src_schema,
@@ -1384,6 +1413,7 @@ private:
   static int convert_column_ids_in_info(
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map,
       ObRowkeyInfo &rowkey_info);
+  int alter_view_column_internal(ObColumnSchemaV2 &column_schema);
 
 protected:
   int add_mv_tid(const uint64_t mv_tid);
@@ -1714,7 +1744,7 @@ int ObTableSchema::add_column(const ColumnType &column)
     SHARE_SCHEMA_LOG(WARN, "check if_oracle_compat_mode failed", K(ret), K(tenant_id_), K(table_id_));
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_row_length(is_oracle_mode, NULL, &column))) {
+  } else if (!is_view_table() && OB_FAIL(check_row_length(is_oracle_mode, NULL, &column))) {
     SHARE_SCHEMA_LOG(WARN, "check row length failed", K(ret));
   } else {
     if (NULL == (local_column = new (buf) ColumnType(allocator_))) {

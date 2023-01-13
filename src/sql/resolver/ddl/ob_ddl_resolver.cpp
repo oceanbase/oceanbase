@@ -2363,7 +2363,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
     // identity column默认为not null，不可更改
     if (OB_SUCC(ret) && column.is_identity_column()) {
       if (!column.has_not_null_constraint()) {
-        if (OB_FAIL(add_default_not_null_constraint(column))) {
+        if (OB_FAIL(add_default_not_null_constraint(column, table_name_, *allocator_, stmt_))) {
           LOG_WARN("add default not null constraint for identity column failed", K(ret));
         }
       }
@@ -7932,7 +7932,7 @@ int ObDDLResolver::resolve_not_null_constraint_node(
         } else {
           // do nothing if alter table modify identity_column not null
         }
-      } else if (OB_FAIL(add_not_null_constraint(column, cst_name, cst))) {
+      } else if (OB_FAIL(add_not_null_constraint(column, cst_name, cst, *allocator_, stmt_))) {
         LOG_WARN("add not null constraint", K(ret));
       } else {
         LOG_DEBUG("before column set not null", K(column), K(cst));
@@ -7947,16 +7947,19 @@ int ObDDLResolver::resolve_not_null_constraint_node(
 }
 
 // identity column is default not null, also for ctas not null column
-int ObDDLResolver::add_default_not_null_constraint(ObColumnSchemaV2 &column)
+int ObDDLResolver::add_default_not_null_constraint(ObColumnSchemaV2 &column,
+                                                   const ObString &table_name,
+                                                   ObIAllocator &allocator,
+                                                   ObStmt *stmt)
 {
   int ret = OB_SUCCESS;
   ObString cst_name;
   ObConstraint cst;
-  if (OB_FAIL(ObTableSchema::create_cons_name_automatically(cst_name, table_name_, *allocator_,
+  if (OB_FAIL(ObTableSchema::create_cons_name_automatically(cst_name, table_name, allocator,
                                                                 CONSTRAINT_TYPE_NOT_NULL,
                                                                 lib::is_oracle_mode()))) {
     LOG_WARN("create cons name automatically failed", K(ret));
-  } else if (OB_FAIL(add_not_null_constraint(column, cst_name, cst))) {
+  } else if (OB_FAIL(add_not_null_constraint(column, cst_name, cst, allocator, stmt))) {
     LOG_WARN("add not null constraint", K(ret));
   } else {
     column.add_not_null_cst();
@@ -7967,12 +7970,16 @@ int ObDDLResolver::add_default_not_null_constraint(ObColumnSchemaV2 &column)
 
 int ObDDLResolver::add_not_null_constraint(ObColumnSchemaV2 &column,
                                            const ObString &cst_name,
-                                           ObConstraint &cst)
+                                           ObConstraint &cst,
+                                           ObIAllocator &allocator,
+                                           ObStmt *stmt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_ID == column.get_column_id())) {
+  CK (OB_NOT_NULL(stmt));
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == column.get_column_id())) {
     bool is_alter_add_column = false;
-    if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+    if (stmt::T_ALTER_TABLE == stmt->get_stmt_type()) {
       AlterColumnSchema &alter_col_schema = static_cast<AlterColumnSchema &>(column);
       if (OB_DDL_ADD_COLUMN == alter_col_schema.alter_type_) {
         is_alter_add_column = true;
@@ -7998,7 +8005,7 @@ int ObDDLResolver::add_not_null_constraint(ObColumnSchemaV2 &column,
     cst.set_check_expr(column.get_column_name_str());
     const ObString &column_name = column.get_column_name_str();
     ObString expr_str;
-    if (OB_FAIL(ObResolverUtils::create_not_null_expr_str(column_name, *allocator_, expr_str, is_oracle_mode()))) {
+    if (OB_FAIL(ObResolverUtils::create_not_null_expr_str(column_name, allocator, expr_str, is_oracle_mode()))) {
       LOG_WARN("create not null expr string failed", K(ret));
     } else {
       cst.set_check_expr(expr_str);
@@ -8007,8 +8014,8 @@ int ObDDLResolver::add_not_null_constraint(ObColumnSchemaV2 &column,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
-    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+  } else if (stmt::T_CREATE_TABLE == stmt->get_stmt_type()) {
+    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt);
     ObSEArray<ObConstraint, 4> &csts = create_table_stmt->get_create_table_arg().constraint_list_;
     for (uint64_t i = 0; OB_SUCC(ret) && i < csts.count(); ++i) {
       if (csts.at(i).get_constraint_name_str() == cst_name) {
@@ -8019,8 +8026,8 @@ int ObDDLResolver::add_not_null_constraint(ObColumnSchemaV2 &column,
     if (OB_SUCC(ret) && OB_FAIL(csts.push_back(cst))) {
       LOG_WARN("push back cst failed", K(ret));
     }
-  } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-    ObAlterTableStmt *alter_table_stmt = static_cast<ObAlterTableStmt*>(stmt_);
+  } else if (stmt::T_ALTER_TABLE == stmt->get_stmt_type()) {
+    ObAlterTableStmt *alter_table_stmt = static_cast<ObAlterTableStmt*>(stmt);
     AlterTableSchema &alter_table_schema = alter_table_stmt->
                                           get_alter_table_arg().alter_table_schema_;
     for (ObTableSchema::const_constraint_iterator iter = alter_table_schema.constraint_begin();
@@ -8040,7 +8047,7 @@ int ObDDLResolver::add_not_null_constraint(ObColumnSchemaV2 &column,
     LOG_DEBUG("alter, add not null constraint", K(cst), K(alter_table_schema));
   } else {
     ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "unexpected stmt type", K(ret), K(stmt_->get_stmt_type()));
+    SQL_RESV_LOG(WARN, "unexpected stmt type", K(ret), K(stmt->get_stmt_type()));
   }
   return ret;
 }

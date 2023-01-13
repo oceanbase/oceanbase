@@ -565,6 +565,18 @@ const char *const DISABLED_WITH_READONLY_CLUSTER_MODE_STR = "disabled_with_reado
 
 static const int64_t MODIFY_GC_SNAPSHOT_INTERVAL = 2 * 1000 * 1000; //2s
 
+//reserved table id for information schema
+const uint64_t OB_ALL_VIRTUAL_PARAMETERS_OLD_TID = 12037; // "PARAMETERS_OLD"
+const uint64_t OB_ALL_VIRTUAL_TABLE_CONSTRAINTS_OLD_TID = 12005; // "TABLE_CONSTRAINTS_OLD"
+const uint64_t OB_ALL_VIRTUAL_REFERENTIAL_CONSTRAINTS_OLD_TID = 12177; // "REFERENTIAL_CONSTRAINTS_OLD"
+const uint64_t OB_ALL_VIRTUAL_CHECK_CONSTRAINTS_OLD_TID = 12235; // "CHECK_CONSTRAINTS_OLD"
+const uint64_t OB_ALL_VIRTUAL_TRIGGERS_OLD_TID = 12221; // "TRIGGERS_OLD"
+const uint64_t OB_TABLE_PRIVILEGES_OLD_TID = 12002;  // not used anymore for "TABLE_PRIVILEGES" has a new table id
+const uint64_t OB_USER_PRIVILEGES_OLD_TID = 12003;   // not used anymore for "USER_PRIVILEGES" has a new table id
+const uint64_t OB_SCHEMA_PRIVILEGES_OLD_TID = 12004; // not used anymore for "SCHEMA_PRIVILEGES" has a new table id
+const uint64_t OB_PARTITIONS_OLD_TID = 12007;        // not used anymore for "PARTITIONS" has a new table id
+//end of reserved table id for information schema
+
 ////////////////typedef
 typedef common::ObSEArray<int64_t, 8> PartitionIdArray;
 ///////////////

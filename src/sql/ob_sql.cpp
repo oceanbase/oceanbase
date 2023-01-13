@@ -113,7 +113,7 @@ int ObSql::init(common::ObOptStatManager *opt_stat_mgr,
   } else {
     if (OB_FAIL(plan_cache_manager_.init(addr))) {
       LOG_WARN("Failed to init plan cache manager", K(ret));
-    } else if (OB_FAIL(queue_.init(1, 1024))) {
+    } else if (OB_FAIL(queue_.init(1, 8192))) {
       LOG_WARN("queue init failed", K(ret));
     } else {
       opt_stat_mgr_ = opt_stat_mgr;
@@ -2927,15 +2927,17 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   if (OB_NOT_NULL(basic_stmt) && basic_stmt->is_dml_stmt()) {
     int tmp_ret = ret;
     ObDMLStmt *stmt = static_cast<ObDMLStmt*>(basic_stmt);
-    if (stmt->get_ref_obj_table()->is_inited()) {
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+    } else if (data_version < DATA_VERSION_4_1_0_0 && stmt->get_ref_obj_table()->is_inited()) {
       if (OB_FAIL(stmt->get_ref_obj_table()->process_reference_obj_table(
-          tenant_id, sql_ctx, queue_))) {
+          tenant_id, OB_INVALID_ID, nullptr, queue_))) {
         LOG_WARN("failed to process reference obj table", K(ret));
-      } else {
-      // update the object's dependencies is successful, but may have failed when the plan
-      // was previously generated. need to return the previous error code
-        ret = tmp_ret;
       }
+    }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
     }
   }
   return ret;

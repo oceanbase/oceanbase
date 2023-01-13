@@ -251,6 +251,7 @@ public:
   }
 
   virtual ~ObSql() { destroy(); }
+  ObMaintainDepInfoTaskQueue &get_dep_info_queue() { return queue_; }
 
 private:
   // disallow copy

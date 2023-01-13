@@ -10222,6 +10222,7 @@ ObSynonymInfo &ObSynonymInfo::operator=(const ObSynonymInfo &src_info)
     synonym_id_ = src_info.synonym_id_;
     schema_version_ = src_info.schema_version_;
     object_db_id_ = src_info.object_db_id_;
+    status_ = src_info.status_;
     if (OB_FAIL(deep_copy_str(src_info.name_, name_))) {
       LOG_WARN("Fail to deep copy name", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.object_name_, object_name_))) {
@@ -10234,6 +10235,17 @@ ObSynonymInfo &ObSynonymInfo::operator=(const ObSynonymInfo &src_info)
     }
   }
   return *this;
+}
+
+int ObSynonymInfo::assign(const ObSynonymInfo &src_info)
+{
+  int ret = OB_SUCCESS;
+  *this = src_info;
+  if (OB_UNLIKELY(OB_SUCCESS != error_ret_)) {
+    ret = error_ret_;
+    LOG_WARN("failed to assign synonym info", K(ret));
+  }
+  return ret;
 }
 
 /*
@@ -10263,6 +10275,7 @@ void ObSynonymInfo::reset()
   reset_string(version_);
   reset_string(object_name_);
   object_db_id_ = 0;
+  status_ = ObObjectStatus::VALID;
   ObSchema::reset();
   //allocator_.reset();
 }
@@ -10271,7 +10284,7 @@ OB_DEF_SERIALIZE(ObSynonymInfo)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, database_id_, synonym_id_, schema_version_,
-              name_, version_, object_name_, object_db_id_);
+              name_, version_, object_name_, object_db_id_, status_);
   return ret;
 }
 
@@ -10283,7 +10296,7 @@ OB_DEF_DESERIALIZE(ObSynonymInfo)
   ObString object_name;
   ObString version;
   LST_DO_CODE(OB_UNIS_DECODE, tenant_id_, database_id_, synonym_id_, schema_version_,
-              name, version, object_name, object_db_id_);
+              name, version, object_name, object_db_id_, status_);
   if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
   } else if (OB_FAIL(deep_copy_str(name, name_))) {
@@ -10301,7 +10314,7 @@ OB_DEF_SERIALIZE_SIZE(ObSynonymInfo)
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, database_id_, synonym_id_, schema_version_,
-      name_, version_, object_name_, object_db_id_);
+      name_, version_, object_name_, object_db_id_, status_);
   return len;
 }
 

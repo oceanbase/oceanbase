@@ -47,6 +47,7 @@ public:
   virtual ~ObCreateViewResolver();
 
   virtual int resolve(const ParseNode &parse_tree);
+  static int add_column_infos(const uint64_t tenant_id, ObSelectStmt &select_stmt, ObTableSchema &table_schema);
 private:
   int check_privilege(ObCreateTableStmt *stmt,
                       ObSelectStmt *select_stmt);

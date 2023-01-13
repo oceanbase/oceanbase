@@ -165,10 +165,13 @@ public:
   int add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval = false);
   int add_object_version_to_dependency(share::schema::ObDependencyTableType table_type,
                                        share::schema::ObSchemaType schema_type,
-                                       uint64_t object_id);
+                                       uint64_t object_id,
+                                       uint64_t database_id,
+                                       uint64_t dep_obj_id);
   int add_object_versions_to_dependency(share::schema::ObDependencyTableType table_type,
                                        share::schema::ObSchemaType schema_type,
-                                       const ObIArray<uint64_t> &object_ids);
+                                       const ObIArray<uint64_t> &object_ids,
+                                       const ObIArray<uint64_t> &db_ids);
   ObDMLStmt *get_stmt();
 protected:
   int resolve_into_variables(const ParseNode *node,
@@ -189,7 +192,9 @@ protected:
                                 bool include_hidden,
                                 ColumnItem *&col_item,
                                 ObDMLStmt *stmt = NULL);
+public:
   virtual int resolve_table(const ParseNode &parse_tree, TableItem *&table_item);
+protected:
   virtual int resolve_generate_table(const ParseNode &table_node,
                                      const ObString &alias_name,
                                      TableItem *&tbl_item);
@@ -207,7 +212,8 @@ protected:
                                               const common::ObString &synonym_name,
                                               const common::ObString &synonym_db_name,
                                               TableItem *&tbl_item,
-                                              bool cte_table_fisrt);
+                                              bool cte_table_fisrt,
+                                              uint64_t real_dep_obj_id);
   int resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
                                               const common::ObString &dblink_name,
                                               const common::ObString &database_name,
@@ -317,6 +323,7 @@ protected:
   virtual int check_need_use_sys_tenant(bool &use_sys_tenant) const;
   // check in sys view or show statement
   virtual int check_in_sysview(bool &in_sysview) const;
+public:
   int resolve_table_relation_factor_wrapper(const ParseNode *table_node,
                                             uint64_t &dblink_id,
                                             uint64_t &database_id,
@@ -326,7 +333,9 @@ protected:
                                             common::ObString &synonym_db_name,
                                             common::ObString &dblink_name,
                                             bool &is_db_explicit,
-                                            bool &use_sys_tenant);
+                                            bool &use_sys_tenant,
+                                            common::ObIArray<uint64_t> &ref_obj_ids);
+protected:
   int check_resolve_oracle_sys_view(const ParseNode *node, bool &is_oracle_sys_view);
   bool is_oracle_sys_view(const ObString &table_name);
   int inner_resolve_sys_view(const ParseNode *table_node,
@@ -349,7 +358,8 @@ protected:
                                     common::ObString &synonym_db_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
-                                    bool &is_db_explicit);
+                                    bool &is_db_explicit,
+                                    common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t &dblink_id,
                                     uint64_t &database_id,
@@ -358,24 +368,8 @@ protected:
                                     common::ObString &synonym_db_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
-                                    bool &is_db_explicit);
-  int resolve_table_relation_factor(const ParseNode *node,
-                                    uint64_t tenant_id,
-                                    uint64_t &dblink_id,
-                                    uint64_t &database_id,
-                                    common::ObString &table_name,
-                                    common::ObString &synonym_name,
-                                    common::ObString &synonym_db_name,
-                                    common::ObString &db_name,
-                                    common::ObString &dblink_name);
-  int resolve_table_relation_factor(const ParseNode *node,
-                                    uint64_t &dblink_id,
-                                    uint64_t &database_id,
-                                    common::ObString &table_name,
-                                    common::ObString &synonym_name,
-                                    common::ObString &synonym_db_name,
-                                    common::ObString &db_name,
-                                    common::ObString &dblink_name);
+                                    bool &is_db_explicit,
+                                    common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t tenant_id,
                                     uint64_t &dblink_id,
@@ -385,7 +379,27 @@ protected:
                                     common::ObString &synonym_db_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
-                                    ObSynonymChecker &synonym_checker);
+                                    common::ObIArray<uint64_t> &ref_obj_ids);
+  int resolve_table_relation_factor(const ParseNode *node,
+                                    uint64_t &dblink_id,
+                                    uint64_t &database_id,
+                                    common::ObString &table_name,
+                                    common::ObString &synonym_name,
+                                    common::ObString &synonym_db_name,
+                                    common::ObString &db_name,
+                                    common::ObString &dblink_name,
+                                    common::ObIArray<uint64_t> &ref_obj_ids);
+  int resolve_table_relation_factor(const ParseNode *node,
+                                    uint64_t tenant_id,
+                                    uint64_t &dblink_id,
+                                    uint64_t &database_id,
+                                    common::ObString &table_name,
+                                    common::ObString &synonym_name,
+                                    common::ObString &synonym_db_name,
+                                    common::ObString &db_name,
+                                    common::ObString &dblink_name,
+                                    ObSynonymChecker &synonym_checker,
+                                    common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t tenant_id,
                                     uint64_t &dblink_id,
@@ -396,7 +410,8 @@ protected:
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     bool &is_db_expilicit,
-                                    ObSynonymChecker &synonym_checker);
+                                    ObSynonymChecker &synonym_checker,
+                                    common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor_normal(const ParseNode *node,
                                            uint64_t tenant_id,
                                            uint64_t &database_id,
@@ -604,13 +619,6 @@ private:
   int check_index_table_has_partition_keys(const ObTableSchema *index_schema,
                                            const ObPartitionKeyInfo &partition_keys,
                                            bool &has_part_key);
-
-  int add_reference_obj_table(const uint64_t dep_obj_id,
-                              const uint64_t dep_db_id,
-                              const share::schema::ObObjectType dep_obj_type,
-                              const share::schema::ObDependencyTableType ref_table_type,
-                              const share::schema::ObSchemaType ref_schema_type,
-                              const uint64_t ref_obj_id);
 
   ///////////functions for sql hint/////////////
   int resolve_global_hint(const ParseNode &hint_node,

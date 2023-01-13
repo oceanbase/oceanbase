@@ -525,11 +525,27 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
     ParseNode parse_node;
     parse_node.value_ = param.get_int();
     ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+    bool is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_mode);
     dst_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
     dst_type.set_type(obj_type);
-    if (ob_is_string_type(obj_type) || ob_is_lob_locator(obj_type)) {
+    int64_t maxblen = 4;
+    if (ob_is_lob_locator(obj_type)) {
       // cast(x as char(10)) or cast(x as binary(10))
       dst_type.set_full_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX], param_type2.get_accuracy().get_length_semantics());
+    } else if (ob_is_string_type(obj_type)) {
+      dst_type.set_full_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX], param_type2.get_accuracy().get_length_semantics());
+      if (lib::is_mysql_mode() && is_explicit_cast && !dst_type.is_binary() && !dst_type.is_varbinary()) {
+        if (dst_type.get_length() > OB_MAX_CAST_CHAR_VARCHAR_LENGTH && dst_type.get_length() <= OB_MAX_CAST_CHAR_TEXT_LENGTH) {
+          dst_type.set_type(ObTextType);
+          dst_type.set_length(OB_MAX_CAST_CHAR_TEXT_LENGTH);
+        } else if (dst_type.get_length() > OB_MAX_CAST_CHAR_TEXT_LENGTH && dst_type.get_length() <= OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH) {
+          dst_type.set_type(ObMediumTextType);
+          dst_type.set_length(OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH);
+        } else if (dst_type.get_length() > OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH) {
+          dst_type.set_type(ObLongTextType);
+          dst_type.set_length(OB_MAX_LONGTEXT_LENGTH / maxblen);
+        }
+      }
     } else if (ob_is_raw(obj_type)) {
       dst_type.set_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
     } else if (ob_is_extend(obj_type)) {

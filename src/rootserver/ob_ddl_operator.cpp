@@ -3813,6 +3813,7 @@ int ObDDLOperator::update_table_attribute(ObTableSchema &new_table_schema,
   const uint64_t tenant_id = new_table_schema.get_tenant_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
+  const bool update_object_status_ignore_version = false;
   if (OB_ISNULL(schema_service_impl)) {
     ret = OB_ERR_SYS;
     RS_LOG(WARN, "schema_service_impl must not null", K(ret));
@@ -3824,6 +3825,7 @@ int ObDDLOperator::update_table_attribute(ObTableSchema &new_table_schema,
         trans,
         new_table_schema,
         operation_type,
+        update_object_status_ignore_version,
         ddl_stmt_str))) {
       RS_LOG(WARN, "failed to update table attribute!" ,K(ret));
     }
@@ -3869,6 +3871,7 @@ int ObDDLOperator::batch_update_system_table_columns(
   const uint64_t table_id = new_table_schema.get_table_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
+  const bool update_object_status_ignore_version = false;
   if (OB_ISNULL(schema_service_impl)) {
     ret = OB_ERR_SYS;
     LOG_WARN("schema_service_impl must not null", KR(ret));
@@ -3902,7 +3905,7 @@ int ObDDLOperator::batch_update_system_table_columns(
     } // end for
 
     if (FAILEDx(schema_service_impl->get_table_sql_service().update_table_attribute(
-        trans, new_table_schema, OB_DDL_ALTER_TABLE, ddl_stmt_str))) {
+        trans, new_table_schema, OB_DDL_ALTER_TABLE, update_object_status_ignore_version, ddl_stmt_str))) {
       LOG_WARN("failed to update table attribute", KR(ret), K(tenant_id), K(table_id));
     }
   }
@@ -4069,7 +4072,10 @@ int ObDDLOperator::drop_table(
   int ret = OB_SUCCESS;
   bool tmp = false;
   const uint64_t tenant_id = table_schema.get_tenant_id();
-  if (OB_FAIL(drop_table_for_not_dropped_schema(
+  if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, table_schema.get_table_id(),
+                                                      *this, schema_service_))) {
+    LOG_WARN("failed to modify obj status", K(ret));
+  } else if (OB_FAIL(drop_table_for_not_dropped_schema(
               table_schema, trans, ddl_stmt_str, is_truncate_table,
               drop_table_set, is_drop_db))) {
     LOG_WARN("drop table for not dropped shema failed", K(ret));
@@ -4300,6 +4306,9 @@ int ObDDLOperator::drop_table_to_recyclebin(const ObTableSchema &table_schema,
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (OB_FAIL(cleanup_autoinc_cache(table_schema))) {
     LOG_WARN("fail cleanup auto inc global cache", K(ret));
+  } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, table_schema.get_table_id(),
+                                                             *this, schema_service_))) {
+    LOG_WARN("failed to modify dep obj status", K(ret));
   } else if (table_schema.is_view_table()
             && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
                       trans,
@@ -9506,6 +9515,7 @@ int ObDDLOperator::revise_not_null_constraint_info(
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   const ObTableSchema *ori_table_schema = NULL;
   ObSEArray<const ObColumnSchemaV2 *, 16> not_null_cols;
+  const bool update_object_status_ignore_version = false;
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
@@ -9613,7 +9623,7 @@ int ObDDLOperator::revise_not_null_constraint_info(
       } else {
         new_table_schema.set_schema_version(new_schema_version);
         if (OB_FAIL(schema_service->get_table_sql_service().update_table_attribute(
-            trans, new_table_schema, OB_DDL_ADD_CONSTRAINT))) {
+            trans, new_table_schema, OB_DDL_ADD_CONSTRAINT, update_object_status_ignore_version))) {
           LOG_WARN("update table attribute faield", K(ret));
         }
       }
@@ -10749,6 +10759,138 @@ int ObDDLOperator::insert_dependency_infos(common::ObMySQLTransaction &trans,
 
   return ret;
 }
+
+int ObDDLOperator::update_table_status(const ObTableSchema &orig_table_schema,
+                                       const int64_t schema_version,
+                                       const ObObjectStatus new_status,
+                                       const bool update_object_status_ignore_version,
+                                       ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  uint64_t data_version = 0;
+  ObTableSchema new_schema;
+  const ObSchemaOperationType op = OB_DDL_ALTER_TABLE;
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (schema_version <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema_version is invalid", K(ret), K(schema_version));
+  } else if (!update_object_status_ignore_version && OB_FAIL(GET_MIN_DATA_VERSION(orig_table_schema.get_tenant_id(), data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (!update_object_status_ignore_version && data_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version and feature mismatch", K(ret));
+  } else if (OB_FAIL(new_schema.assign(orig_table_schema))) {
+    LOG_WARN("failed to assign table schema", K(ret));
+  } else if (FALSE_IT(new_schema.set_object_status(new_status))) {
+  } else if (FALSE_IT(new_schema.set_schema_version(schema_version))) {
+  } else if (new_schema.get_column_count() > 0
+             && FALSE_IT(new_schema.set_view_column_filled_flag(ObViewColumnFilledFlag::FILLED))) {
+    /*
+    *Except for drop view, there is no way to reduce the column count,
+    *and there is no need to consider the table mode of this view before
+    */
+  } else if (OB_FAIL(schema_service->get_table_sql_service().update_table_attribute(trans, new_schema, op, update_object_status_ignore_version) )) {
+    LOG_WARN("update table status failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLOperator::update_view_columns(const ObTableSchema &view_schema,
+                                        common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  uint64_t data_version = 0;
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(view_schema.get_tenant_id(), data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version and feature mismatch", K(ret));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().update_view_columns(trans, view_schema))) {
+    LOG_WARN("failed to add columns", K(ret));
+  }
+  return ret;
+}
+
+// only used in upgrading
+int ObDDLOperator::reset_view_status(common::ObMySQLTransaction &trans,
+                                     const uint64_t tenant_id,
+                                     const ObTableSchema *table)
+{
+  int ret = OB_SUCCESS;
+  ObObjectStatus new_status = ObObjectStatus::INVALID;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  int64_t schema_version = OB_INVALID_VERSION;
+  const bool update_object_status_ignore_version = true;
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else {
+    if (OB_ISNULL(table) || !table->is_view_table()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get wrong schema", K(ret), KP(table));
+    } else if (OB_FAIL(schema_service->gen_new_schema_version(tenant_id, schema_version, schema_version))) {
+      LOG_WARN("failed to gen new schema version", K(ret));
+    } else if (OB_FAIL(update_table_status(*table,
+                                            schema_version,
+                                            new_status,
+                                            update_object_status_ignore_version,
+                                            trans))) {
+      LOG_WARN("failed to update table status", K(ret));
+    }
+  }
+  return ret;
+}
+
+
+// only used in upgrading
+int ObDDLOperator::try_add_dep_info_for_synonym(const ObSimpleSynonymSchema *synonym_info,
+                                                common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  //add def obj info if exists
+  bool ref_exists = false;
+  ObObjectType ref_type = ObObjectType::INVALID;
+  uint64_t ref_obj_id = OB_INVALID_ID;
+  uint64_t ref_schema_version = share::OB_INVALID_SCHEMA_VERSION;
+  if (OB_ISNULL(synonym_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unecpected synonym info", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::find_synonym_ref_obj(synonym_info->get_object_database_id(),
+                                                      synonym_info->get_object_name_str(),
+                                                      synonym_info->get_tenant_id(),
+                                                      ref_exists,
+                                                      ref_obj_id,
+                                                      ref_type,
+                                                      ref_schema_version))) {
+    LOG_WARN("failed to find synonym ref obj", K(ret));
+  } else {
+    if (ref_exists) {
+      ObDependencyInfo dep;
+      dep.set_dep_obj_id(synonym_info->get_synonym_id());
+      dep.set_dep_obj_type(ObObjectType::SYNONYM);
+      dep.set_ref_obj_id(ref_obj_id);
+      dep.set_ref_obj_type(ref_type);
+      dep.set_dep_timestamp(-1);
+      dep.set_ref_timestamp(ref_schema_version);
+      dep.set_tenant_id(synonym_info->get_tenant_id());
+      if (OB_FAIL(dep.insert_schema_object_dependency(trans))) {
+        if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+          ret = OB_SUCCESS;
+          LOG_TRACE("synonym have dep info before", K(*synonym_info));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 }//end namespace rootserver
 }//end namespace oceanbase

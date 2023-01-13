@@ -61,6 +61,7 @@ ObSimpleSynonymSchema &ObSimpleSynonymSchema::operator =(const ObSimpleSynonymSc
     schema_version_ = other.schema_version_;
     database_id_ = other.database_id_;
     object_database_id_ = other.object_database_id_;
+    status_ = other.status_;
     if (OB_FAIL(deep_copy_str(other.synonym_name_, synonym_name_))) {
       LOG_WARN("Fail to deep copy synonym name", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.object_name_, object_name_))) {
@@ -85,6 +86,7 @@ void ObSimpleSynonymSchema::reset()
   object_database_id_ = OB_INVALID_ID;
   synonym_name_.reset();
   object_name_.reset();
+  status_ = ObObjectStatus::VALID;
 }
 
 bool ObSimpleSynonymSchema::is_valid() const
@@ -96,7 +98,8 @@ bool ObSimpleSynonymSchema::is_valid() const
       OB_INVALID_ID == database_id_ ||
       OB_INVALID_ID == object_database_id_||
       synonym_name_.empty() ||
-      object_name_.empty()) {
+      object_name_.empty() ||
+      ObObjectStatus::INVALID == status_) {
     ret = false;
   }
   return ret;

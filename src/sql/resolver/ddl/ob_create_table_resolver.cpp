@@ -1428,7 +1428,10 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
 
 int ObCreateTableResolver::set_nullable_for_cta_column(ObSelectStmt *select_stmt,
                                                        ObColumnSchemaV2& column,
-                                                       const ObRawExpr *expr)
+                                                       const ObRawExpr *expr,
+                                                       const ObString &table_name,
+                                                       ObIAllocator &allocator,
+                                                       ObStmt *stmt)
 {
   int ret = OB_SUCCESS;
   bool is_not_null = false;
@@ -1473,7 +1476,7 @@ int ObCreateTableResolver::set_nullable_for_cta_column(ObSelectStmt *select_stmt
   if (OB_SUCC(ret)) {
     if (is_oracle_mode()) {
       if (is_not_null) {
-        if (OB_FAIL(add_default_not_null_constraint(column))) {
+        if (OB_FAIL(add_default_not_null_constraint(column, table_name, allocator, stmt))) {
           LOG_WARN("add default not null constraint failed", K(ret));
         }
       } else {
@@ -1681,7 +1684,10 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               // nullable property of org_column instead of column should be set.
               if (OB_FAIL(set_nullable_for_cta_column(select_stmt,
                                                       *org_column,
-                                                      expr))) {
+                                                      expr,
+                                                      table_name_,
+                                                      *allocator_,
+                                                      stmt_))) {
                 LOG_WARN("failed to check and set nullable for cta.", K(ret));
               } else if (column.is_enum_or_set()) {
                 if (OB_FAIL(org_column->set_extended_type_info(column.get_extended_type_info()))) {
@@ -1702,10 +1708,15 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               new_column.set_next_column_id(UINT64_MAX);
               if (1 == table_schema.get_column_count()) {
                 //do nothing, 只有一列就不用调整了
-                if (OB_FAIL(set_nullable_for_cta_column(select_stmt, *org_column, expr))) {
+                if (OB_FAIL(set_nullable_for_cta_column(select_stmt, *org_column, expr, table_name_, *allocator_, stmt_))) {
                   LOG_WARN("failed to check and set nullable for cta.", K(ret));
                 }
-              } else if (OB_FAIL(set_nullable_for_cta_column(select_stmt, new_column, expr))) {
+              } else if (OB_FAIL(set_nullable_for_cta_column(select_stmt,
+                                                            new_column,
+                                                            expr,
+                                                            table_name_,
+                                                            *allocator_,
+                                                            stmt_))) {
                 LOG_WARN("failed to check and set nullable for cta.", K(ret));
               } else if (OB_FAIL(table_schema.delete_column(org_column->get_column_name_str()))) {
                 LOG_WARN("delete column failed", K(ret), K(new_column.get_column_name_str()));
@@ -1715,7 +1726,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 LOG_DEBUG("reorder column successfully", K(new_column));
               }
             } else {
-              if (OB_FAIL(set_nullable_for_cta_column(select_stmt, column, expr))) {
+              if (OB_FAIL(set_nullable_for_cta_column(select_stmt, column, expr, table_name_, *allocator_, stmt_))) {
                 LOG_WARN("failed to check and set nullable for cta.", K(ret));
               } else if (column.is_string_type() || column.is_json() || column.is_geometry()) {
                 if (column.is_geometry() && T_REF_COLUMN == select_item.expr_->get_expr_type()) {

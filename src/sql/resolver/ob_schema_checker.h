@@ -330,6 +330,7 @@ public:
                    ObString &obj_dbname,
                    ObString &obj_name,
                    uint64_t &synonym_id,
+                   uint64_t &database_id,
                    bool &exists);
   int get_package_id(const uint64_t tenant_id,
                      const uint64_t database_id,

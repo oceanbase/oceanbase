@@ -247,7 +247,7 @@ int ObStmtResolver::normalize_table_or_database_names(ObString &name)
   return ret;
 }
 
-int ObSynonymChecker::add_synonym_id(uint64_t synonym_id)
+int ObSynonymChecker::add_synonym_id(uint64_t synonym_id, uint64_t database_id)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < synonym_ids_.count(); ++i) {
@@ -260,6 +260,8 @@ int ObSynonymChecker::add_synonym_id(uint64_t synonym_id)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(synonym_ids_.push_back(synonym_id))) {
     LOG_WARN("fail to add synonym_id", K(synonym_id), K(ret));
+  } else if (OB_FAIL(database_ids_.push_back(database_id))) {
+    LOG_WARN("fail to add database id", K(database_id), K(ret));
   }
   return ret;
 }

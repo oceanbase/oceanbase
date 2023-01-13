@@ -48,6 +48,12 @@ public:
   virtual ~ObCreateTableResolver();
 
   virtual int resolve(const ParseNode &parse_tree);
+  static int set_nullable_for_cta_column(ObSelectStmt *select_stmt,
+                                  share::schema::ObColumnSchemaV2& column,
+                                  const ObRawExpr *expr,
+                                  const ObString &table_name,
+                                  common::ObIAllocator &allocator,
+                                  ObStmt *stmt);
 private:
   enum ResolveRule
     {
@@ -73,9 +79,6 @@ private:
                              common::ObArray<int> &table_level_constraint_list,
                              const int resolve_rule);
   int resolve_table_elements_from_select(const ParseNode &parse_tree);
-  int set_nullable_for_cta_column(ObSelectStmt *select_stmt,
-                                  share::schema::ObColumnSchemaV2& column,
-                                  const ObRawExpr *expr);
   int set_temp_table_info(share::schema::ObTableSchema &table_schema, ParseNode *commit_option_node);
 
   int set_table_option_to_schema(share::schema::ObTableSchema &table_schema);

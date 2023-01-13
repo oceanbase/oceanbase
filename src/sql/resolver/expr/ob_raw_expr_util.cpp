@@ -1857,7 +1857,8 @@ int ObRawExprUtils::resolve_sequence_object(const ObQualifiedName &q_name,
             // add synonym depedency schemas
             if (OB_FAIL(dml_resolver->add_object_versions_to_dependency(DEPENDENCY_SYNONYM,
                                                                 SYNONYM_SCHEMA,
-                                                                syn_checker.get_synonym_ids()))) {
+                                                                syn_checker.get_synonym_ids(),
+                                                                syn_checker.get_database_ids()))) {
               LOG_WARN("add synonym version failed", K(ret));
             } else {
               // do nothing

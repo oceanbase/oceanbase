@@ -778,6 +778,7 @@ int ObBaseUpgradeProcessor::init(
 #undef FORMAT_STR
 
 /* =========== special upgrade processor start ============= */
+
 int ObUpgradeFor4100Processor::post_upgrade()
 {
   int ret = OB_SUCCESS;
@@ -787,6 +788,8 @@ int ObUpgradeFor4100Processor::post_upgrade()
   } else if (OB_FAIL(post_upgrade_for_srs())) {
     LOG_WARN("post upgrade for srs failed", K(ret));
   } else if (OB_FAIL(init_rewrite_rule_version(tenant_id))) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(recompile_all_views_and_synonyms(tenant_id))) {
     LOG_WARN("fail to init rewrite rule version", K(ret), K(tenant_id));
   }
   return ret;
@@ -835,6 +838,89 @@ int ObUpgradeFor4100Processor::post_upgrade_for_srs()
   }
 
   LOG_INFO("add tenant srs finish", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
+    return ret;
+}
+
+int ObUpgradeFor4100Processor::recompile_all_views_and_synonyms(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(GCTX.rs_rpc_proxy_) && OB_NOT_NULL(GCTX.schema_service_));
+  ObSchemaGetterGuard schema_guard;
+  ObArray<const ObTableSchema *> all_views;
+  ObArray<const ObSynonymInfo *> all_synonyms;
+  const int64_t batch_size = 128;
+  const int64_t timeout = GCONF.internal_sql_execute_timeout;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("failed to get tenant schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_view_schemas_in_tenant(tenant_id, all_views))) {
+      LOG_WARN("failed to get view schemas", K(ret));
+    } else if (OB_FAIL(schema_guard.get_synonym_infos_in_tenant(tenant_id, all_synonyms))) {
+      LOG_WARN("failed to get synonym infos", K(ret));
+    } else {
+      int64_t idx = 0;
+      while (OB_SUCC(ret) && idx < all_views.count()) {
+        ObArray<uint64_t> batch_ids;
+        for (int64_t i = 0; OB_SUCC(ret) && i < batch_size && idx < all_views.count(); ++idx) {
+          if (OB_ISNULL(all_views.at(idx))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get view schema", K(ret), K(idx));
+          } else if (!all_views.at(idx)->is_view_table()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get wrong schema", K(ret), K(*all_views.at(idx)));
+          } else if (ObObjectStatus::VALID == all_views.at(idx)->get_object_status()) {
+            OZ (batch_ids.push_back(all_views.at(idx)->get_table_id()));
+            ++i;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          int64_t start_time = ObTimeUtility::current_time();
+          SMART_VAR(obrpc::ObRecompileAllViewsBatchArg, recompile_arg) {
+            recompile_arg.tenant_id_ = tenant_id;
+            recompile_arg.exec_tenant_id_ = tenant_id;
+            if (batch_ids.empty()) {
+            } else if (OB_FAIL(recompile_arg.view_ids_.assign(batch_ids))) {
+              LOG_WARN("failed to assign ids", K(ret));
+            } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(timeout).recompile_all_views_batch(recompile_arg))) {
+              LOG_WARN("failed to recompile batch views", K(ret), K(recompile_arg));
+            } else {
+              LOG_INFO("succ reset batch view", KR(ret), K(start_time),
+                      "cost_time", ObTimeUtility::current_time() - start_time);
+            }
+          }
+        }
+      }
+      idx = 0;
+      while (OB_SUCC(ret) && idx < all_synonyms.count()) {
+        ObArray<uint64_t> batch_ids;
+        for (int64_t i = 0; OB_SUCC(ret) && i < batch_size && idx < all_synonyms.count(); ++i, ++idx) {
+          if (OB_ISNULL(all_synonyms.at(idx))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get view schema", K(ret), K(idx));
+          } else {
+            OZ (batch_ids.push_back(all_synonyms.at(idx)->get_synonym_id()));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          int64_t start_time = ObTimeUtility::current_time();
+          SMART_VAR(obrpc::ObTryAddDepInofsForSynonymBatchArg, dep_info_arg) {
+            dep_info_arg.tenant_id_ = tenant_id;
+            dep_info_arg.exec_tenant_id_ = tenant_id;
+            if (batch_ids.empty()) {
+            } else if (OB_FAIL(dep_info_arg.synonym_ids_.assign(batch_ids))) {
+              LOG_WARN("failed to assign ids", K(ret));
+            } else if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(timeout).try_add_dep_infos_for_synonym_batch(dep_info_arg))) {
+              LOG_WARN("failed to add dep infos", K(ret), K(dep_info_arg));
+            } else {
+              LOG_INFO("succ add dep info batch", KR(ret), K(start_time),
+                      "cost_time", ObTimeUtility::current_time() - start_time);
+            }
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 

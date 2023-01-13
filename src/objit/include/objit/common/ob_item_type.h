@@ -417,6 +417,7 @@ typedef enum ObItemType
   T_FUN_SYS_PART_KEY_V3 = 696,
   //following T_FUN_SYS_PART_HASH_V2 has been removed, it's useless now.
   T_FUN_SYS_PART_HASH_V2 = 697,
+  T_FUN_SYS_SQL_MODE_CONVERT = 698,
 
   ///< @note add new mysql/oracle function type before this line
   T_COMMON_FUN_SYS_END = 700,
@@ -490,6 +491,7 @@ typedef enum ObItemType
   T_FUN_SYS_ENCRYPT = 764,
   T_FUN_SYS_ICU_VERSION = 765,
 
+  T_FUN_SYS_CURRENT_USER_PRIV = 766,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 

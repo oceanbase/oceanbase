@@ -4794,6 +4794,25 @@ int ObSchemaGetterGuard::get_table_schemas_in_tenant(
     common::ObIArray<const ObTableSchema *> &table_schemas)
 {
   int ret = OB_SUCCESS;
+  bool only_view_schema = false;
+  ret = get_table_schemas_in_tenant_(tenant_id, only_view_schema, table_schemas);
+  return ret;
+}
+
+int ObSchemaGetterGuard::get_view_schemas_in_tenant(const uint64_t tenant_id,
+                                                    ObIArray<const ObTableSchema *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  bool only_view_schema = true;
+  ret = get_table_schemas_in_tenant_(tenant_id, only_view_schema, table_schemas);
+  return ret;
+}
+
+int ObSchemaGetterGuard::get_table_schemas_in_tenant_(const uint64_t tenant_id,
+                                                      const bool only_view_schema,
+                                                      ObIArray<const ObTableSchema *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
   const ObSchemaMgr *mgr = NULL;
   ObArray<const ObSimpleTableSchemaV2 *> schemas;
 
@@ -4824,6 +4843,8 @@ int ObSchemaGetterGuard::get_table_schemas_in_tenant(
       if (OB_ISNULL(tmp_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL ptr", KR(ret), KP(tmp_schema));
+      } else if (only_view_schema && !tmp_schema->is_view_table()) {
+        // do nothing
       } else if (OB_FAIL(get_schema(TABLE_SCHEMA,
           tmp_schema->get_tenant_id(), tmp_schema->get_table_id(),
           table_schema, tmp_schema->get_schema_version()))) {
@@ -7298,12 +7319,13 @@ int ObSchemaGetterGuard::get_tenant_mv_ids(const uint64_t tenant_id, ObArray<uin
 
 int ObSchemaGetterGuard::check_udf_exist_with_name(const uint64_t tenant_id,
                                                    const common::ObString &name,
-                                                   bool &exist)
+                                                   bool &exist,
+                                                   uint64_t &udf_id)
 {
   int ret = OB_SUCCESS;
   const ObSchemaMgr *mgr = NULL;
   exist = false;
-
+  udf_id = OB_INVALID_ID;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", KR(ret));
@@ -7324,6 +7346,7 @@ int ObSchemaGetterGuard::check_udf_exist_with_name(const uint64_t tenant_id,
                K(tenant_id), K(name));
     } else if (OB_NOT_NULL(schema)) {
       exist = true;
+      udf_id = schema->get_udf_id();
     }
   }
   return ret;

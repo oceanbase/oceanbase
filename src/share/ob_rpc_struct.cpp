@@ -2584,6 +2584,7 @@ int ObDependencyObjDDLArg::assign(const ObDependencyObjDDLArg &other)
   int ret = OB_SUCCESS;
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
+    reset_view_column_infos_ = other.reset_view_column_infos_;
     if (OB_FAIL(ObDDLArg::assign(other))) {
       LOG_WARN("fail to assign ddl arg", KR(ret));
     } else if (OB_FAIL(insert_dep_objs_.assign(other.insert_dep_objs_))) {
@@ -2592,6 +2593,8 @@ int ObDependencyObjDDLArg::assign(const ObDependencyObjDDLArg &other)
       LOG_WARN("fail to assign keys", KR(ret), K(other));
     } else if (OB_FAIL(delete_dep_objs_.assign(other.delete_dep_objs_))) {
       LOG_WARN("fail to assign keys", KR(ret), K(other));
+    } else if (OB_FAIL(schema_.assign(other.schema_))) {
+      LOG_WARN("fail to assign schema", K(ret));
     }
   }
   return ret;
@@ -2601,7 +2604,9 @@ OB_SERIALIZE_MEMBER((ObDependencyObjDDLArg, ObDDLArg),
                     tenant_id_,
                     insert_dep_objs_,
                     update_dep_objs_,
-                    delete_dep_objs_);
+                    delete_dep_objs_,
+                    schema_,
+                    reset_view_column_infos_);
 
 
 OB_SERIALIZE_MEMBER(ObCheckFrozenScnArg, frozen_scn_);
@@ -4629,11 +4634,28 @@ int ObReportSingleReplicaArg::assign(const ObReportSingleReplicaArg &other)
 
 OB_SERIALIZE_MEMBER(ObReportSingleReplicaArg, tenant_id_, ls_id_);
 OB_SERIALIZE_MEMBER(ObSetDiskValidArg);
+
+int ObCreateSynonymArg::assign(const ObCreateSynonymArg &other)
+{
+  int ret = OB_SUCCESS;
+  db_name_ = other.db_name_;
+  obj_db_name_ = other.obj_db_name_;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("failed to assign ddl arg", K(ret));
+  } else if (OB_FAIL(synonym_info_.assign(other.synonym_info_))) {
+    LOG_WARN("failed to assign synonym info", K(ret));
+  } else if (OB_FAIL(dependency_info_.assign(other.dependency_info_))) {
+    LOG_WARN("failed to assign dependency info", K(ret));
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObCreateSynonymArg, ObDDLArg),
                     or_replace_,
                     synonym_info_,
                     db_name_,
-                    obj_db_name_);
+                    obj_db_name_,
+                    dependency_info_);
 
 OB_SERIALIZE_MEMBER((ObDropSynonymArg, ObDDLArg),
                     tenant_id_,
@@ -7236,6 +7258,7 @@ int ObFetchLocationResult::set_servers(
   return servers_.assign(servers);
 }
 
+
 OB_SERIALIZE_MEMBER(ObSyncRewriteRuleArg, tenant_id_);
 
 OB_SERIALIZE_MEMBER(ObInitTenantConfigArg, tenant_configs_);
@@ -7246,6 +7269,18 @@ int ObInitTenantConfigArg::assign(const ObInitTenantConfigArg &other)
   if (this == &other) {
   } else if (OB_FAIL(tenant_configs_.assign(other.tenant_configs_))) {
     LOG_WARN("fail to assign tenant configs", KR(ret), K(other));
+      }
+  return ret;
+}
+
+int ObRecompileAllViewsBatchArg::assign(const ObRecompileAllViewsBatchArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("failed to assign ddl arg", K(ret));
+  } else if (OB_FAIL(view_ids_.assign(other.view_ids_))) {
+    LOG_WARN("failed to assign view ids", K(ret));
   }
   return ret;
 }
@@ -7265,10 +7300,27 @@ int ObInitTenantConfigRes::assign(const ObInitTenantConfigRes &other)
   int ret = OB_SUCCESS;
   if (this != &other) {
     ret_ = other.ret_;
+      }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObRecompileAllViewsBatchArg, ObDDLArg),
+                    tenant_id_, view_ids_);
+
+int ObTryAddDepInofsForSynonymBatchArg::assign(const ObTryAddDepInofsForSynonymBatchArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("failed to assign ddl arg", K(ret));
+  } else if (OB_FAIL(synonym_ids_.assign(other.synonym_ids_))) {
+    LOG_WARN("failed to assign view ids", K(ret));
   }
   return ret;
 }
 
+OB_SERIALIZE_MEMBER((ObTryAddDepInofsForSynonymBatchArg, ObDDLArg),
+                    tenant_id_, synonym_ids_);
 
 }//end namespace obrpc
 }//end namepsace oceanbase

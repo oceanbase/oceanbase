@@ -672,10 +672,15 @@ protected:
   int resolve_not_null_constraint_node(share::schema::ObColumnSchemaV2 &column,
                                         const ParseNode *cst_node,
                                         const bool is_identity_column);
-  int add_default_not_null_constraint(share::schema::ObColumnSchemaV2 &column);
-  int add_not_null_constraint(share::schema::ObColumnSchemaV2 &column,
+  static int add_default_not_null_constraint(share::schema::ObColumnSchemaV2 &column,
+                                             const common::ObString &table_name,
+                                             common::ObIAllocator &allocator,
+                                             ObStmt *stmt);
+  static int add_not_null_constraint(share::schema::ObColumnSchemaV2 &column,
                               const common::ObString &cst_name,
-                              share::schema::ObConstraint &cst);
+                              share::schema::ObConstraint &cst,
+                              common::ObIAllocator &allocator,
+                              ObStmt *stmt);
   int create_name_for_empty_partition(const bool is_subpartition,
                                       ObIArray<share::schema::ObPartition> &partitions,
                                       ObIArray<share::schema::ObSubPartition> &subpartitions);

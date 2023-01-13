@@ -1452,21 +1452,21 @@ int ObSchemaChecker::get_syn_info(const uint64_t tenant_id,
                                   ObString &obj_dbname,
                                   ObString &obj_name,
                                   uint64_t &synonym_id,
+                                  uint64_t &database_id,
                                   bool &exists)
 {
   int ret = OB_SUCCESS;
-  uint64_t db_id = OB_INVALID_ID;
+  database_id = OB_INVALID_ID;
   const ObSimpleSynonymSchema *synonym_schema = NULL;
 
   exists = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K_(is_inited));
-  } else if (OB_FAIL(get_database_id(tenant_id, database_name, db_id))) {
+  } else if (OB_FAIL(get_database_id(tenant_id, database_name, database_id))) {
     LOG_WARN("get database id failed", K(ret));
   } else if (OB_FAIL(schema_mgr_->get_synonym_info(
-                      tenant_id, db_id, sym_name, synonym_schema))) {
-
+                      tenant_id, database_id, sym_name, synonym_schema))) {
     LOG_WARN("get_synonym_schema_with_name failed", K(ret));
   } else if (synonym_schema == NULL) {
     ret = OB_TABLE_NOT_EXIST;
@@ -2249,13 +2249,14 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
       ObString obj_db_name;
       ObString obj_name;
       uint64_t synonym_id = OB_INVALID_ID;
+      uint64_t database_id = OB_INVALID_ID;
       bool exists = false;
       ret = OB_SUCCESS;
-      OZ (get_syn_info(tenant_id, database_name, table_name, obj_db_name, obj_name, synonym_id, exists));
+      OZ (get_syn_info(tenant_id, database_name, table_name, obj_db_name, obj_name, synonym_id, database_id, exists));
       if (OB_SUCC(ret) && exists) {
         object_db_name = obj_db_name;
         synonym_checker.set_synonym(true);
-        OZ (synonym_checker.add_synonym_id(synonym_id));
+        OZ (synonym_checker.add_synonym_id(synonym_id, database_id));
         OZ (SMART_CALL(get_object_type_with_view_info(allocator,
                                                       param_org,
                                                       tenant_id,
@@ -2282,7 +2283,8 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
         ret = OB_TABLE_NOT_EXIST;
       } else {
         uint64_t synonym_id = OB_INVALID_ID;
-        OZ (get_syn_info(tenant_id, OB_PUBLIC_SCHEMA_NAME, table_name, obj_db_name, obj_name, synonym_id, exists));
+        uint64_t database_id = OB_INVALID_ID;
+        OZ (get_syn_info(tenant_id, OB_PUBLIC_SCHEMA_NAME, table_name, obj_db_name, obj_name, synonym_id, database_id, exists));
         if (OB_SUCC(ret) && exists) {
           /* 如果上次同义词和这次的一样，说明一直没找到对应的数据库对象 */
           if (prev_table_name == obj_name) {
@@ -2290,7 +2292,7 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
           } else {
             object_db_name = obj_db_name;
             synonym_checker.set_synonym(true);
-            OZ (synonym_checker.add_synonym_id(synonym_id));
+            OZ (synonym_checker.add_synonym_id(synonym_id, database_id));
             OZ (SMART_CALL(get_object_type_with_view_info(allocator,
                                                           param_org,
                                                           tenant_id,
@@ -2439,13 +2441,14 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
       ObString obj_db_name;
       ObString obj_name;
       uint64_t synonym_id = OB_INVALID_ID;
+      uint64_t database_id = OB_INVALID_ID;
       bool exists = false;
       ret = OB_SUCCESS;
-      OZ (get_syn_info(tenant_id, database_name, table_name, obj_db_name, obj_name, synonym_id, exists));
+      OZ (get_syn_info(tenant_id, database_name, table_name, obj_db_name, obj_name, synonym_id, database_id, exists));
       if (OB_SUCC(ret) && exists) {
         object_db_name = obj_db_name;
         synonym_checker.set_synonym(true);
-        OZ (synonym_checker.add_synonym_id(synonym_id));
+        OZ (synonym_checker.add_synonym_id(synonym_id, database_id));
         OZ (SMART_CALL(get_object_type(tenant_id,
                                        obj_db_name,
                                        obj_name,
@@ -2463,18 +2466,19 @@ int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
       ObString obj_db_name;
       ObString obj_name;
       uint64_t synonym_id = OB_INVALID_ID;
+      uint64_t database_id = OB_INVALID_ID;
       bool exists = false;
       ret = OB_SUCCESS;
       if (explicit_db) {
         ret = OB_TABLE_NOT_EXIST;
       } else {
-        OZ (get_syn_info(tenant_id, OB_PUBLIC_SCHEMA_NAME, table_name, obj_db_name, obj_name, synonym_id, exists));
+        OZ (get_syn_info(tenant_id, OB_PUBLIC_SCHEMA_NAME, table_name, obj_db_name, obj_name, synonym_id, database_id, exists));
         if (OB_SUCC(ret) && exists) {
           if (prev_table_name == obj_name) {
             ret = OB_TABLE_NOT_EXIST;
           } else {
             synonym_checker.set_synonym(true);
-            OZ (synonym_checker.add_synonym_id(synonym_id));
+            OZ (synonym_checker.add_synonym_id(synonym_id, database_id));
             object_db_name = obj_db_name;
             OZ (SMART_CALL(get_object_type(tenant_id,
                                           obj_db_name,

@@ -1387,7 +1387,7 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
   } else if (exist_with_synonym) {
     exist = true;
     synonym_checker.set_synonym(true);
-    if (OB_FAIL(synonym_checker.add_synonym_id(synonym_id))) {
+    if (OB_FAIL(synonym_checker.add_synonym_id(synonym_id, database_id))) {
       if (OB_ERR_LOOP_OF_SYNONYM == ret) {
         ret = OB_SUCCESS;
       } else {

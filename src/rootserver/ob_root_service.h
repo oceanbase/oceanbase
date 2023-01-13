@@ -766,6 +766,8 @@ public:
   int purge_recyclebin_objects(int64_t purge_each_time);
   int flush_opt_stat_monitoring_info(const obrpc::ObFlushOptStatArg &arg);
   int update_rslist();
+  int recompile_all_views_batch(const obrpc::ObRecompileAllViewsBatchArg &arg);
+  int try_add_dep_infos_for_synonym_batch(const obrpc::ObTryAddDepInofsForSynonymBatchArg &arg);
 private:
   int check_parallel_ddl_conflict(
       share::schema::ObSchemaGetterGuard &schema_guard,

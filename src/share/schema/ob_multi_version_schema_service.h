@@ -269,7 +269,8 @@ public:
       uint64_t &synonym_id) ;
   int check_udf_exist(const uint64_t tenant_id,
       const common::ObString &name,
-      bool &exist);
+      bool &exist,
+      uint64_t &udf_id);
   int check_sequence_exist(const uint64_t tenant_id,
       const uint64_t database_id,
       const common::ObString &name,

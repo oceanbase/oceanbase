@@ -21,6 +21,7 @@
 #include "ob_expr_regexp_count.h"
 #include "ob_expr_conv.h"
 #include "ob_expr_current_user.h"
+#include "ob_expr_current_user_priv.h"
 #include "ob_expr_cur_time.h"
 #include "ob_expr_database.h"
 #include "ob_expr_date.h"
@@ -296,6 +297,7 @@
 #include "ob_expr_st_contains.h"
 #include "ob_expr_st_within.h"
 #include "ob_expr_priv_st_asewkb.h"
+#include "ob_expr_sql_mode_convert.h"
 
 namespace oceanbase
 {
@@ -895,7 +897,6 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
 #endif
   ObExprDayName::calc_dayname,                                        /* 510 */
   ObExprNullif::eval_nullif_enumset,                                  /* 511 */
-
   ObExprSTIntersects::eval_st_intersects,                             /* 512 */
   ObExprSTX::eval_st_x,                                               /* 513 */
   ObExprSTY::eval_st_y,                                               /* 514 */
@@ -941,7 +942,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprSTWithin::eval_st_within,                                     /* 554 */
   ObExprPrivSTTransform::eval_priv_st_transform,                      /* 555 */
   ObExprSTGeomFromText::eval_st_geomfromtext,                         /* 556 */
-  ObExprSTArea::eval_st_area                                          /* 557 */
+  ObExprSTArea::eval_st_area,                                         /* 557 */
+  ObExprCurrentUserPriv::eval_current_user_priv,                      /* 558 */
+  ObExprSqlModeConvert::sql_mode_convert,                             /* 559 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

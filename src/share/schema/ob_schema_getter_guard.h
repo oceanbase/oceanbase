@@ -214,6 +214,8 @@ public:
 			common::ObIArray<const ObSimpleTablegroupSchema*> &tablegroup_schemas);
 	int get_table_schemas_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObTableSchema *> &table_schemas);
+  int get_view_schemas_in_tenant(const uint64_t tenant_id,
+      common::ObIArray<const ObTableSchema *> &table_schemas);
 	int get_outline_infos_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObOutlineInfo *> &outline_infos);
 	int get_package_infos_in_tenant(const uint64_t tenant_id,
@@ -736,7 +738,8 @@ public:
   //about user define function
   int check_udf_exist_with_name(const uint64_t tenant_id,
                                 const common::ObString &name,
-                                bool &exist);
+                                bool &exist,
+                                uint64_t &udf_id);
   int get_udf_info(const uint64_t tenant_id,
                    const common::ObString &name,
                    const ObUDF *&udf_info,
@@ -1101,6 +1104,9 @@ private:
                            const uint64_t tenant_id,
                            const uint64_t user_id,
                            bool& pass);
+  int get_table_schemas_in_tenant_(const uint64_t tenant_id,
+                                   const bool only_view_schema,
+                                   common::ObIArray<const ObTableSchema *> &table_schemas);
 private:
   common::ObArenaAllocator local_allocator_;
   ObMultiVersionSchemaService *schema_service_;

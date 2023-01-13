@@ -6186,6 +6186,7 @@ int ObDDLService::update_generated_column_schema(
   ObTableSchema::const_column_iterator col_iter = new_table_schema.column_begin();
   ObTableSchema::const_column_iterator col_end = new_table_schema.column_end();
   ObColumnSchemaV2 *column = nullptr;
+  bool for_view = false;
   if (OB_ISNULL(tz_info_wrap.get_time_zone_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tz info", K(ret));
@@ -6205,7 +6206,8 @@ int ObDDLService::update_generated_column_schema(
                                                                *tz_info_wrap.get_time_zone_info()))) {
         LOG_WARN("modify generated column value failed", K(ret));
       } else if (OB_FAIL(new_table_schema.alter_column(new_generated_column_schema,
-                        ObTableSchema::CHECK_MODE_ONLINE))) {
+                        ObTableSchema::CHECK_MODE_ONLINE,
+                        for_view))) {
         // alter_column must not change column_array_ because we are still looping the column_array_
         LOG_WARN("failed to change column", K(ret));
       } else if (OB_NOT_NULL(ddl_operator) && OB_NOT_NULL(trans)) {
@@ -7013,7 +7015,7 @@ int ObDDLService::check_new_column_for_index(
   int idx_cnt = idx_schemas.count();
   ObTableSchema *index_table_schema = NULL;
   ObColumnSchemaV2 copy_index_column_schema;
-
+  bool for_view = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < idx_cnt; ++i) {
     index_table_schema = &idx_schemas.at(i);
     if (OB_ISNULL(index_table_schema)) {
@@ -7038,7 +7040,8 @@ int ObDDLService::check_new_column_for_index(
         copy_index_column_schema.set_index_position(origin_idx_column_schema->get_index_position());
         copy_index_column_schema.set_tbl_part_key_pos(origin_idx_column_schema->get_tbl_part_key_pos());
         if (OB_FAIL(index_table_schema->alter_column(copy_index_column_schema,
-                    ObTableSchema::CHECK_MODE_ONLINE))) {
+                    ObTableSchema::CHECK_MODE_ONLINE,
+                    for_view))) {
           RS_LOG(WARN, "failed to alter index column schema", K(copy_index_column_schema), K(ret));
         } else if (!index_table_schema->is_valid()) {
           ret = OB_SCHEMA_ERROR;
@@ -7655,6 +7658,7 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
               ObColumnSchemaV2 new_column_schema;
               bool is_change_column_order = false;
               ObSEArray<ObString, 1> new_pk_column;
+              bool for_view = false;
               if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
                 LOG_WARN("fail to assign column schema", KR(ret));
               } else if (alter_column_schema->is_primary_key_) {
@@ -7679,7 +7683,8 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                                                           allocator))) {
                 RS_LOG(WARN, "fail to resolve timestamp column", K(ret));
               } else if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
-                         ObTableSchema::CHECK_MODE_OFFLINE))) {
+                         ObTableSchema::CHECK_MODE_OFFLINE,
+                         for_view))) {
                 RS_LOG(WARN, "failed to change column", K(ret));
               } else if (!new_pk_column.empty() && OB_FAIL(add_primary_key(new_pk_column, new_table_schema))) {
                 LOG_WARN("failed to add pk to table", K(ret), K(new_pk_column), K(new_table_schema));
@@ -7844,6 +7849,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
   const common::ObString *nls_formats = alter_table_arg.nls_formats_;
   common::ObIAllocator &allocator = alter_table_arg.allocator_;
   bool is_oracle_mode = false;
+  bool for_view = false;
   LOG_INFO("check before alter table column", K(origin_table_schema),
   K(alter_table_schema), K(new_table_schema));
   ObSchemaChecker schema_checker;
@@ -8036,7 +8042,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                                           allocator))) {
                 RS_LOG(WARN, "fail to resolve timestamp column", K(ret));
               } else if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
-                                 ObTableSchema::CHECK_MODE_ONLINE))) {
+                                 ObTableSchema::CHECK_MODE_ONLINE,
+                                 for_view))) {
                 RS_LOG(WARN, "failed to change column", K(ret));
               } else if (OB_FAIL(check_new_column_for_index(
                                  idx_schema_array,
@@ -8155,7 +8162,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                                           allocator))) {
                 RS_LOG(WARN, "fail to resolve timestamp column", K(ret));
               } else if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
-                                 ObTableSchema::CHECK_MODE_ONLINE))) {
+                                 ObTableSchema::CHECK_MODE_ONLINE,
+                                 for_view))) {
                 RS_LOG(WARN, "failed to change column", K(ret));
               } else if (OB_FAIL(check_new_column_for_index(
                                  idx_schema_array,
@@ -8256,7 +8264,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
               }
               if (OB_SUCC(ret)) {
                 if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
-                            ObTableSchema::CHECK_MODE_ONLINE))) {
+                            ObTableSchema::CHECK_MODE_ONLINE,
+                            for_view))) {
                   RS_LOG(WARN, "failed to change column", K(ret));
                 } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
                   RS_LOG(WARN, "failed to check primary key cover partition column", K(ret));
@@ -9852,6 +9861,10 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
       } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
         LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+      // All alter table behaviors will cause the status to change, which is not as fine as oracle
+      } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, orig_table_schema->get_table_id(),
+                                                                 ddl_operator, *schema_service_))) {
+        LOG_WARN("failed to modify obj status", K(ret));
       } else {
         ObArray<ObTableSchema> global_idx_schema_array;
         //table columns
@@ -10660,6 +10673,9 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       }
       // TODO yiren, refactor it, create user hidden table after alter index/column/part/cst...
       if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, orig_table_schema->get_table_id(),
+                                                      ddl_operator, *schema_service_))) {
+        LOG_WARN("failed to modify obj status", K(ret));
       } else if (OB_FAIL(check_ddl_with_primary_key_operation(alter_table_arg, 
                                                               with_primary_key_operation))) {
         LOG_WARN("check ddl with primary key operation failed", K(ret));
@@ -12233,6 +12249,12 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                   LOG_WARN("failed to append sql", K(ret));
                 }
               }
+              if (OB_SUCC(ret) && OB_NOT_NULL(from_table_schema)) {
+                if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, from_table_schema->get_table_id(),
+                                                                 ddl_operator, *schema_service_))) {
+                  LOG_WARN("failed to modify obj status", K(ret));
+                }
+              }
               if (OB_SUCC(ret) && !is_oracle_mode) {
                 ObString rename_sql = sql.string();
                 if (database_schema->is_in_recyclebin()) {
@@ -12991,6 +13013,8 @@ int ObDDLService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLAr
       && OB_FAIL(process_schema_object_dependency(tenant_id, is_standby, arg.delete_dep_objs_,
       schema_guard, trans, ddl_operator, ObReferenceObjTable::DELETE_OP))) {
       LOG_WARN("failed to process delete object dependency", K(ret));
+    } else if (arg.schema_.is_valid() && OB_FAIL(recompile_view(arg.schema_, arg.reset_view_column_infos_, trans))) {
+      LOG_WARN("failed to recompile view", K(ret));
     }
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
@@ -15394,7 +15418,8 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
           new_col_schema.drop_not_null_cst();
           new_hidden_table_schema.set_in_offline_ddl_white_list(true);
           ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
-          if (OB_FAIL(new_hidden_table_schema.alter_column(new_col_schema, ObTableSchema::CHECK_MODE_ONLINE))) {
+          bool for_view = false;
+          if (OB_FAIL(new_hidden_table_schema.alter_column(new_col_schema, ObTableSchema::CHECK_MODE_ONLINE, for_view))) {
             LOG_WARN("failed to alter column", K(ret));
           } else if (OB_FAIL(ddl_operator.update_single_column(trans,
                                                               *hidden_table_schema,
@@ -18741,6 +18766,7 @@ int ObDDLService::alter_system_table_column_(
       } // end for
 
       ObColumnSchemaV2 new_column;
+      bool for_view = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < alter_column_ids.count(); i++) {
         const uint64_t column_id = alter_column_ids.at(i);
         if (OB_ISNULL(hard_code_column = hard_code_schema.get_column_schema(column_id))) {
@@ -18748,7 +18774,7 @@ int ObDDLService::alter_system_table_column_(
           LOG_WARN("fail to get column schema", KR(ret), K(tenant_id), K(table_id), K(column_id));
         } else if (OB_FAIL(new_column.assign(*hard_code_column))) {
           LOG_WARN("fail to assign column", KR(ret), KPC(hard_code_column));
-        } else if (OB_FAIL(new_table_schema.alter_column(new_column, share::schema::ObTableSchema::CHECK_MODE_ONLINE))) {
+        } else if (OB_FAIL(new_table_schema.alter_column(new_column, share::schema::ObTableSchema::CHECK_MODE_ONLINE, for_view))) {
           LOG_WARN("fail to alter column", KR(ret), K(new_column));
         }
       } // end for
@@ -26322,6 +26348,9 @@ int ObDDLService::alter_routine(const ObRoutineInfo &routine_info,
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed!", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, routine_info.get_routine_id(),
+                                                    ddl_operator, *schema_service_))) {
+      LOG_WARN("failed to modify obj status", K(ret));
     } else if (OB_FAIL(ddl_operator.alter_routine(
                        routine_info, trans, error_info, ddl_stmt_str))) {
       LOG_WARN("alter routine failed!", K(ret));
@@ -26358,6 +26387,9 @@ int ObDDLService::drop_routine(const ObRoutineInfo &routine_info,
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, routine_info.get_routine_id(),
+                                                    ddl_operator, *schema_service_))) {
+      LOG_WARN("failed to modify obj status", K(ret));
     } else if (OB_FAIL(ddl_operator.drop_routine(routine_info, trans, error_info, ddl_stmt_str))) {
       LOG_WARN("drop procedure failed", K(ret), K(routine_info));
     }
@@ -26456,6 +26488,9 @@ int ObDDLService::drop_udt(const ObUDTTypeInfo &udt_info,
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, udt_info.get_type_id(),
+                                                    ddl_operator, *schema_service_))) {
+      LOG_WARN("failed to modify obj status", K(ret));
     } else if (OB_FAIL(ddl_operator.drop_udt(udt_info, trans, schema_guard, ddl_stmt_str))) {
       LOG_WARN("drop procedure failed", K(ret), K(udt_info));
     }
@@ -26614,6 +26649,7 @@ int ObDDLService::check_synonym_exist(share::schema::ObSynonymInfo &synonym_info
 }
 
 int ObDDLService::create_synonym(share::schema::ObSynonymInfo &synonym_info,
+                                 const ObDependencyInfo &dep_info,
                                  const common::ObString *ddl_stmt_str,
                                  bool is_update,
                                  share::schema::ObSchemaGetterGuard &schema_guard)
@@ -26638,6 +26674,17 @@ int ObDDLService::create_synonym(share::schema::ObSynonymInfo &synonym_info,
       }
       if (OB_FAIL(ret)) {
         LOG_WARN("failed to create synonym", K(synonym_info), K(is_update), K(ret));
+      } else if (OB_INVALID_ID != dep_info.get_ref_obj_id()) {
+        ObDependencyInfo dep;
+        if (OB_FAIL(dep.assign(dep_info))) {
+          LOG_WARN("failed to assign dependency info", K(ret));
+        } else {
+          dep.set_tenant_id(tenant_id);
+          dep.set_dep_obj_id(synonym_info.get_synonym_id());
+          dep.set_dep_obj_owner_id(synonym_info.get_synonym_id());
+          dep.set_schema_version(synonym_info.get_schema_version());
+          OZ (dep.insert_schema_object_dependency(trans, is_update));
+        }
       }
     }
     if (trans.is_started()) {
@@ -26708,9 +26755,18 @@ int ObDDLService::drop_synonym(const obrpc::ObDropSynonymArg &arg)
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      if (OB_FAIL(ddl_operator.drop_synonym(tenant_id, database_id, synonym_id, trans, &arg.ddl_stmt_str_))) {
+      if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, synonym_id,
+                                                      ddl_operator, *schema_service_))) {
+        LOG_WARN("failed to modify obj status", K(ret));
+      } else if (OB_FAIL(ddl_operator.drop_synonym(tenant_id, database_id, synonym_id, trans, &arg.ddl_stmt_str_))) {
         LOG_WARN("ddl_operator drop_synonym failed", K(tenant_id), KT(synonym_id), K(ret));
-      } else {/*do nothing*/}
+      } else if (OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(trans,
+                                                                           tenant_id,
+                                                                           synonym_id,
+                                                                           OB_INVALID_SCHEMA_VERSION,
+                                                                           ObObjectType::SYNONYM))) {
+        LOG_WARN("failed to delete_schema_object_dependency", K(ret), K(tenant_id), K(synonym_id));
+      }
     }
   }
 
@@ -27417,6 +27473,55 @@ int ObDDLService::clean_global_context(const ObContextSchema &context_schema)
             K(context_schema.get_tenant_id()),
             K(context_schema.get_context_id()),
             K(context_schema.get_namespace()));
+  }
+  return ret;
+}
+
+int ObDDLService::recompile_view(const ObTableSchema &view_schema, const bool reset_view_column_infos, ObDDLSQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = view_schema.get_tenant_id();
+  int64_t refreshed_schema_version = 0;
+  ObSchemaService *schema_service = nullptr;
+  uint64_t data_version = 0;
+  CK (OB_NOT_NULL(schema_service_) && OB_NOT_NULL(schema_service = schema_service_->get_schema_service()));
+  LOG_WARN("recompile view", K(view_schema.get_table_id()), K(view_schema.get_table_name()), K(ret), K(reset_view_column_infos));
+  ObSchemaGetterGuard schema_guard;
+  const ObSimpleTableSchemaV2 *view_schema_in_guard = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_1_0_0) {
+    // do nothing
+  } else if (!view_schema.is_view_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("wrong schema get", K(ret), K(view_schema));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, view_schema.get_table_id(), view_schema_in_guard))) {
+    LOG_WARN("failed to get simpile table schema", K(ret));
+  } else if (nullptr == view_schema_in_guard
+            || view_schema_in_guard->get_schema_version() > view_schema.get_schema_version()) {
+    // view is deleted or modified before, ignore this recompile task
+    LOG_TRACE("task is ignore", K(view_schema_in_guard->get_schema_version()), K(view_schema.get_schema_version()));
+  } else {
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    ObTableSchema new_view_schema;
+    ObObjectStatus new_status = reset_view_column_infos ? ObObjectStatus::INVALID : ObObjectStatus::VALID;
+    const bool update_object_status_ignore_version = false;
+    if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, refreshed_schema_version))) {
+      LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+    } else if (OB_FAIL(new_view_schema.assign(view_schema))) {
+        LOG_WARN("failed to copy schema", K(ret));
+    } else if (FALSE_IT(new_view_schema.set_schema_version(refreshed_schema_version))) {
+    } else if (view_schema.get_column_count() > 0
+               && OB_FAIL(ddl_operator.update_view_columns(new_view_schema, trans))) {
+      LOG_WARN("failed to add view column info", K(ret));
+    } else if (OB_FAIL(ddl_operator.update_table_status(new_view_schema, refreshed_schema_version,
+                                                        new_status, update_object_status_ignore_version,
+                                                        trans))) {
+      LOG_WARN("failed to update table status", K(ret));
+    }
   }
   return ret;
 }
@@ -28907,9 +29012,10 @@ int ObDDLService::drop_user_defined_function(const obrpc::ObDropUserDefinedFunct
   //check udf exist & drop udf
   if (OB_SUCC(ret)) {
     bool is_exist = false;
+    uint64_t udf_id = OB_INVALID_ID;
     int64_t refreshed_schema_version = 0;
     if (OB_FAIL(schema_service_->check_udf_exist(tenant_id, name,
-                                                 is_exist))) {
+                                                 is_exist, udf_id))) {
       LOG_WARN("check_udf_exist failed", K(tenant_id), K(name), K(ret));
     } else if (!is_exist) {
       if (if_exist) {
@@ -28925,7 +29031,10 @@ int ObDDLService::drop_user_defined_function(const obrpc::ObDropUserDefinedFunct
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id));
     } else {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      if (OB_FAIL(ddl_operator.drop_user_defined_function(tenant_id, name, trans, &drop_func_arg.ddl_stmt_str_))) {
+      if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, udf_id,
+                                                      ddl_operator, *schema_service_))) {
+        LOG_WARN("failed to modify obj status", K(ret));
+      } else if (OB_FAIL(ddl_operator.drop_user_defined_function(tenant_id, name, trans, &drop_func_arg.ddl_stmt_str_))) {
         LOG_WARN("ddl_operator drop_user_defined_function failed", K(tenant_id), K(ret));
       } else {/*do nothing*/}
     }
@@ -28950,10 +29059,10 @@ int ObDDLService::drop_user_defined_function(const obrpc::ObDropUserDefinedFunct
   return ret;
 }
 
-int ObDDLService::check_udf_exist(uint64 tenant_id, const common::ObString &name, bool &is_exist)
+int ObDDLService::check_udf_exist(uint64 tenant_id, const common::ObString &name, bool &is_exist, uint64_t &udf_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(schema_service_->check_udf_exist(tenant_id, name, is_exist))) {
+  if (OB_FAIL(schema_service_->check_udf_exist(tenant_id, name, is_exist, udf_id))) {
     LOG_WARN("failed to check if udf_name exists", K(name), K(ret));
   }
   return ret;
@@ -30250,6 +30359,116 @@ bool ObDDLService::need_check_constraint_validity(const obrpc::ObAlterTableArg &
   }
   return need_check_validity;
 }
+
+int ObDDLService::recompile_all_views_batch(const uint64_t tenant_id, const ObIArray<uint64_t > &view_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = schema_service_->get_schema_service();
+  ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init");
+  } else if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service must not null", K(ret));
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    int64_t refreshed_schema_version = 0;
+    if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+      LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
+    } else {
+      ObDDLSQLTransaction trans(schema_service_);
+      if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+        LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+        LOG_WARN("failed to start trans, ", KR(ret), K(tenant_id), K(refreshed_schema_version));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < view_ids.count(); ++i) {
+          const ObTableSchema *table = nullptr;
+          if (OB_FAIL(schema_guard.get_table_schema(tenant_id, view_ids.at(i), table))) {
+            LOG_WARN("failed to get table schema", K(ret));
+          } else if (OB_ISNULL(table)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get table schema", K(ret));
+          } else if (OB_FAIL(ddl_operator.reset_view_status(trans, tenant_id, table))) {
+            LOG_WARN("failed to reset view status", K(ret));
+          }
+        }
+      }
+      if (trans.is_started()) {
+        int temp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish_schema failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t> &synonym_ids)
+{
+  // 2.sync add dependency infos for synonym in this tenant
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = schema_service_->get_schema_service();
+  ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init");
+  } else if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service must not null", K(ret));
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    int64_t refreshed_schema_version = 0;
+    if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+      LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
+    } else {
+      ObDDLSQLTransaction trans(schema_service_);
+      if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+        LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+        LOG_WARN("failed to start trans, ", KR(ret), K(tenant_id), K(refreshed_schema_version));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < synonym_ids.count(); ++i) {
+          const ObSimpleSynonymSchema *synonym_info = nullptr;
+          if (OB_FAIL(schema_guard.get_simple_synonym_info(tenant_id, synonym_ids.at(i), synonym_info))) {
+            LOG_WARN("failed to get synonym schema", K(ret));
+          } else if (OB_ISNULL(synonym_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get synonym schema", K(ret));
+          } else if (OB_FAIL(ddl_operator.try_add_dep_info_for_synonym(synonym_info, trans))) {
+            LOG_WARN("failed to add dep for synonym", K(ret));
+          }
+        }
+      }
+
+      if (trans.is_started()) {
+        int temp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish_schema failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+
 
 } // end namespace rootserver
 } // end namespace oceanbase

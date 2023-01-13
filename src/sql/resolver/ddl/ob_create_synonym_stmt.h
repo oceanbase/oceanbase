@@ -48,6 +48,8 @@ public:
 
   void set_object_database_name(const common::ObString &db_name) { create_synonym_arg_.obj_db_name_ = db_name;  }
   const common::ObString &get_object_database_name() const { return create_synonym_arg_.obj_db_name_; }
+  void set_dependency_info(const ObDependencyInfo &dep) { create_synonym_arg_.dependency_info_ = dep; }
+  const ObDependencyInfo &get_dependency_info() const { return create_synonym_arg_.dependency_info_; }
 
   virtual obrpc::ObDDLArg &get_ddl_arg() { return create_synonym_arg_; }
   TO_STRING_KV(K_(create_synonym_arg));

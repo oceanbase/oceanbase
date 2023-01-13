@@ -740,6 +740,7 @@
 #define N_EFFECTIVE_TENANT "effective_tenant"
 #define N_EFFECTIVE_TENANT_ID "effective_tenant_id"
 #define N_CURRENT_USER "current_user"
+#define N_CURRENT_USER_PRIV "current_user_priv"
 #define N_USER "user"
 #define N_HOST_IP "host_ip"
 #define N_RPC_PORT "rpc_port"
@@ -1020,4 +1021,6 @@
 #define N_ST_DISTANCE_SPHERE                "st_distance_sphere"
 #define N_ST_CONTAINS                       "st_contains"
 #define N_ST_WITHIN                         "st_within"
+#define N_SQL_MODE_CONVERT                  "sql_mode_convert"
+
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

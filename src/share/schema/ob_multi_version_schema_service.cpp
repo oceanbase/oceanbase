@@ -2801,10 +2801,12 @@ int ObMultiVersionSchemaService::check_synonym_exist(const uint64_t tenant_id,
 
 int ObMultiVersionSchemaService::check_udf_exist(const uint64_t tenant_id,
                                                  const common::ObString &name,
-                                                 bool &exist)
+                                                 bool &exist,
+                                                 uint64_t &udf_id)
 {
   int ret = OB_SUCCESS;
   exist = false;
+  udf_id = OB_INVALID_ID;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -2819,7 +2821,8 @@ int ObMultiVersionSchemaService::check_udf_exist(const uint64_t tenant_id,
     } else if (OB_FAIL(schema_guard.check_udf_exist_with_name(
                 tenant_id,
                 name,
-                exist))) {
+                exist,
+                udf_id))) {
       LOG_WARN("failed to check udf sql exist",
           K(tenant_id), K(name), K(ret));
     } else {/*do nothing*/}

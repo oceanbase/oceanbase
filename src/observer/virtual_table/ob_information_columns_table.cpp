@@ -212,7 +212,7 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       //  不显示索引表
       if (table_schema->is_aux_table()
          || table_schema->is_in_recyclebin()
-         || is_ora_sys_view_table(table_schema->get_table_id())) { // Oracle system view
+         || is_ora_sys_view_table(table_schema->get_table_id())) {
         continue;
       } else if (is_filter_table_schema && OB_FAIL(schema_guard_->get_database_schema(tenant_id_,
           table_schema->get_database_id(), database_schema))) {
@@ -221,8 +221,11 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "database schema is null", K(ret));
       }
+      // for system view, its column info depend on hard code, so its valid by default, but do not have column meta
+      // status default value is valid, old version also work whether what status it read because its column count = 0
+      bool view_is_invalid = (0 == table_schema->get_object_status() || 0 == table_schema->get_column_count());
       if (OB_FAIL(ret)) {
-      } else if (is_normal_view) {
+      } else if (is_normal_view && view_is_invalid) {
         view_resolve_alloc_.reset_remain_one_page();
         ObString view_definition;
         sql::ObSelectStmt *select_stmt = NULL;

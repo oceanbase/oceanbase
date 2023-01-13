@@ -1033,11 +1033,13 @@ ObCreateSynonymArg():
       synonym_info_(),
       db_name_()
       {}
-  TO_STRING_KV(K_(synonym_info), K_(db_name), K_(obj_db_name));
+  int assign(const ObCreateSynonymArg &other);
+  TO_STRING_KV(K_(synonym_info), K_(db_name), K_(obj_db_name), K_(dependency_info));
   bool or_replace_;
   share::schema::ObSynonymInfo synonym_info_;
   common::ObString db_name_;
   common::ObString obj_db_name_;
+  share::schema::ObDependencyInfo dependency_info_;
 };
 
 struct ObDropSynonymArg : ObDDLArg
@@ -6748,7 +6750,8 @@ struct ObDependencyObjDDLArg: public ObDDLArg
   OB_UNIS_VERSION(1);
 public:
   ObDependencyObjDDLArg()
-    : tenant_id_(OB_INVALID_ID)
+    : tenant_id_(OB_INVALID_ID),
+      reset_view_column_infos_(false)
   {
   }
   bool is_valid() const { return tenant_id_ != OB_INVALID_ID; }
@@ -6757,12 +6760,15 @@ public:
   TO_STRING_KV(K_(tenant_id),
                K_(insert_dep_objs),
                K_(update_dep_objs),
-               K_(delete_dep_objs));
+               K_(delete_dep_objs),
+               K_(reset_view_column_infos));
 
   uint64_t tenant_id_;
   share::schema::ObReferenceObjTable::DependencyObjKeyItemPairs insert_dep_objs_;
   share::schema::ObReferenceObjTable::DependencyObjKeyItemPairs update_dep_objs_;
   share::schema::ObReferenceObjTable::DependencyObjKeyItemPairs delete_dep_objs_;
+  share::schema::ObTableSchema schema_;
+  bool reset_view_column_infos_; // for oracle mode, recompile invalid view will reset its data type to undefined
 };
 
 struct ObCheckServerEmptyArg
@@ -8156,6 +8162,42 @@ public:
   TO_STRING_KV(K_(ret));
 private:
   int ret_;
+};
+
+struct ObRecompileAllViewsBatchArg: public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRecompileAllViewsBatchArg()
+    : tenant_id_(OB_INVALID_ID),
+      view_ids_()
+  {
+  }
+  bool is_valid() const { return tenant_id_ != OB_INVALID_ID && !view_ids_.empty(); }
+  int assign(const ObRecompileAllViewsBatchArg &other);
+  virtual bool is_allow_when_upgrade() const { return true; }
+  TO_STRING_KV(K_(tenant_id), K_(view_ids));
+
+  uint64_t tenant_id_;
+  ObSArray<uint64_t> view_ids_;
+};
+
+struct ObTryAddDepInofsForSynonymBatchArg: public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTryAddDepInofsForSynonymBatchArg()
+    : tenant_id_(OB_INVALID_ID),
+      synonym_ids_()
+  {
+  }
+  bool is_valid() const { return tenant_id_ != OB_INVALID_ID && !synonym_ids_.empty(); }
+  int assign(const ObTryAddDepInofsForSynonymBatchArg &other);
+  virtual bool is_allow_when_upgrade() const { return true; }
+  TO_STRING_KV(K_(tenant_id), K_(synonym_ids));
+
+  uint64_t tenant_id_;
+  ObSArray<uint64_t> synonym_ids_;
 };
 
 }//end namespace obrpc

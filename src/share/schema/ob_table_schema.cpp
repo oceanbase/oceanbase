@@ -143,6 +143,8 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       link_table_id_ = other.link_table_id_;
       link_schema_version_ = other.link_schema_version_;
       in_offline_ddl_white_list_ = other.in_offline_ddl_white_list_;
+      object_status_ = other.object_status_;
+      is_force_view_ = other.is_force_view_;
       if (OB_FAIL(table_mode_.assign(other.table_mode_))) {
         LOG_WARN("Fail to assign table mode", K(ret), K(other.table_mode_));
       } else if (OB_FAIL(deep_copy_str(other.table_name_, table_name_))) {
@@ -202,7 +204,8 @@ bool ObSimpleTableSchemaV2::operator ==(const ObSimpleTableSchemaV2 &other) cons
      dblink_id_ == other.dblink_id_ &&
      link_table_id_ == other.link_table_id_ &&
      link_schema_version_ == other.link_schema_version_ &&
-     link_database_name_ == other.link_database_name_) {
+     link_database_name_ == other.link_database_name_ &&
+     object_status_ == other.object_status_) {
      ret = true;
      if (true == ret) {
        if (simple_foreign_key_info_array_.count() == other.simple_foreign_key_info_array_.count()) {
@@ -257,6 +260,8 @@ void ObSimpleTableSchemaV2::reset()
   index_type_ =  INDEX_TYPE_IS_NOT;
   session_id_ = 0;
   in_offline_ddl_white_list_ = false;
+  object_status_ = ObObjectStatus::VALID;
+  is_force_view_ = false;
   for (int64_t i = 0; i < simple_foreign_key_info_array_.count(); ++i) {
     free(simple_foreign_key_info_array_.at(i).foreign_key_name_.ptr());
   }
@@ -779,7 +784,9 @@ int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(master_key_id),
     K_(sub_part_template_flags),
     K(get_tablet_id()),
-    K_(max_dependency_version)
+    K_(max_dependency_version),
+    K_(object_status),
+    K_(is_force_view)
 );
   J_OBJ_END();
 
@@ -1788,6 +1795,7 @@ int ObTableSchema::delete_column(const common::ObString &column_name)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 *column_schema = NULL;
+  bool for_view = false;
   if (OB_ISNULL(column_name) || column_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column name is NULL", K(ret));
@@ -1796,14 +1804,15 @@ int ObTableSchema::delete_column(const common::ObString &column_name)
     if (NULL == column_schema) {
       ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
       LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, column_name.length(), column_name.ptr());
-    } else if (OB_FAIL(delete_column_internal(column_schema))) {
+    } else if (OB_FAIL(delete_column_internal(column_schema, for_view))) {
       LOG_WARN("Failed to delete column, ", K(column_name), K(ret));
     }
   }
   return ret;
 }
 
-int ObTableSchema::alter_column(ObColumnSchemaV2 &column_schema, ObColumnCheckMode check_mode)
+// for view = true, no constraint checking
+int ObTableSchema::alter_column(ObColumnSchemaV2 &column_schema, ObColumnCheckMode check_mode, const bool for_view)
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
@@ -1819,10 +1828,10 @@ int ObTableSchema::alter_column(ObColumnSchemaV2 &column_schema, ObColumnCheckMo
   //if the src_schema is a rowkey column
   //check_column_can_be_altered will modify dst_schema's is_nullable attribute to not nullable
   //TODO @hualong should move it to other place
-  } else if (ObColumnCheckMode::CHECK_MODE_ONLINE == check_mode &&
+  } else if (!for_view && ObColumnCheckMode::CHECK_MODE_ONLINE == check_mode &&
     OB_FAIL(check_column_can_be_altered_online(src_schema, &column_schema))) {
     LOG_WARN("Failed to alter column schema", K(ret));
-  } else if (ObColumnCheckMode::CHECK_MODE_OFFLINE == check_mode &&
+  } else if (!for_view && ObColumnCheckMode::CHECK_MODE_OFFLINE == check_mode &&
     OB_FAIL(check_column_can_be_altered_offline(src_schema, &column_schema))) {
     LOG_WARN("Failed to alter column schema", K(ret));
   } else {
@@ -3477,7 +3486,7 @@ int ObTableSchema::remove_col_from_column_array(const ObColumnSchemaV2 *column)
   return ret;
 }
 
-int ObTableSchema::delete_column_internal(ObColumnSchemaV2 *column_schema)
+int ObTableSchema::delete_column_internal(ObColumnSchemaV2 *column_schema, const bool for_view)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(column_schema)) {
@@ -3489,13 +3498,13 @@ int ObTableSchema::delete_column_internal(ObColumnSchemaV2 *column_schema)
   } else if (table_id_ != column_schema->get_table_id()) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("The column schema does not belong to this table", K(ret));
-  } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table() && !is_aux_vp_table()) {
+  } else if (!is_view_table() && !is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table() && !is_aux_vp_table()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Only NORMAL table and index table and SYSTEM table are allowed", K(ret));
-  } else if ((!is_heap_table() && column_cnt_ <= MIN_COLUMN_COUNT_WITH_PK_TABLE)
-      || (is_heap_table() && column_cnt_ <=
-         ((column_schema->is_rowkey_column() && column_schema->is_hidden()) ? MIN_COLUMN_COUNT_WITH_HEAP_TABLE - 1 :
-         MIN_COLUMN_COUNT_WITH_HEAP_TABLE))) {
+    LOG_WARN("Only NORMAL table and index table and SYSTEM table and view table are allowed", K(ret));
+  } else if (!for_view && ((!is_heap_table() && column_cnt_ <= MIN_COLUMN_COUNT_WITH_PK_TABLE)
+            || (is_heap_table() && column_cnt_ <=
+              ((column_schema->is_rowkey_column() && column_schema->is_hidden()) ? MIN_COLUMN_COUNT_WITH_HEAP_TABLE - 1 :
+              MIN_COLUMN_COUNT_WITH_HEAP_TABLE)))) {
     ret = OB_CANT_REMOVE_ALL_FIELDS;
     LOG_USER_ERROR(OB_CANT_REMOVE_ALL_FIELDS);
     LOG_WARN("Can not delete all columns in table", K(ret));
@@ -3504,7 +3513,7 @@ int ObTableSchema::delete_column_internal(ObColumnSchemaV2 *column_schema)
     if (static_cast<int64_t>(table_id_) > 0 // may be used in resolver
         && OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("fail to check oracle mode", KR(ret));
-    } else if (OB_FAIL(delete_column_update_prev_id(column_schema))) {
+    } else if (!for_view && OB_FAIL(delete_column_update_prev_id(column_schema))) {
       LOG_WARN("Failed to update column previous id", K(ret));
     } else if (OB_FAIL(remove_col_from_column_array(column_schema))) {
       LOG_WARN("Failed to remove col from column array", K(ret));
@@ -5545,6 +5554,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 aux_lob_piece_tid_,
                 depend_mock_fk_parent_table_ids_);
   }
+  LST_DO_CODE(OB_UNIS_ENCODE, object_status_, is_force_view_);
   }();
   return ret;
 }
@@ -5877,6 +5887,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
                 aux_lob_meta_tid_,
                 aux_lob_piece_tid_,
                 depend_mock_fk_parent_table_ids_);
+    LST_DO_CODE(OB_UNIS_DECODE, object_status_, is_force_view_);
   }
   }();
   return ret;
@@ -6003,6 +6014,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(tablet_id_);
   OB_UNIS_ADD_LEN(aux_lob_meta_tid_);
   OB_UNIS_ADD_LEN(aux_lob_piece_tid_);
+  OB_UNIS_ADD_LEN(object_status_);
+  OB_UNIS_ADD_LEN(is_force_view_);
   return len;
 }
 
@@ -6718,10 +6731,7 @@ int ObColumnIterByPrevNextID::next(const ObColumnSchemaV2 *&column_schema)
 {
   int ret = OB_SUCCESS;
   column_schema = NULL;
-  if (table_schema_.is_view_table() && !table_schema_.is_materialized_view()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("This iterator cannot support view", K(ret));
-  } else if (is_end_) {
+  if (is_end_) {
     ret = OB_ITER_END;
   } else if (table_schema_.is_index_table()) {
     if (OB_ISNULL(last_iter_)) {
@@ -6973,6 +6983,51 @@ int ObTableSchema::get_spatial_index_column_ids(common::ObIArray<uint64_t> &colu
     LOG_WARN("fail to push back geo column id", K(ret), K(geo_column_id));
   } else {
     // do nothing
+      }
+  return ret;
+}
+
+int ObTableSchema::delete_all_view_columns()
+{
+  int ret = OB_SUCCESS;
+  bool for_view = true;
+  for (int64_t i = column_cnt_ - 1; OB_SUCC(ret) && i >= 0; --i) {
+    ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    if (nullptr != column_schema) {
+      OZ (delete_column_internal(column_schema, for_view));
+    }
+  }
+  CK (0 == column_cnt_);
+  return ret;
+}
+
+int ObTableSchema::alter_all_view_columns_type_undefined(bool &already_invalid)
+{
+  int ret = OB_SUCCESS;
+  // for force create view, it is invalid when created
+  already_invalid = (0 == column_cnt_);
+  bool for_view = true;
+  //useless param
+  ObColumnCheckMode dummy_mode = ObColumnCheckMode::CHECK_MODE_ONLINE;
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
+    ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    ObColumnSchemaV2 new_column_schema;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get column schema", K(ret));
+    } else if (ObObjType::ObExtendType == column_schema->get_data_type()) {
+      already_invalid = true;
+      break;
+    } else if (OB_FAIL(new_column_schema.assign(*column_schema))) {
+      LOG_WARN("failed to copy column schema", K(ret));
+    } else {
+      //ObExtendType only used internal, we user it to describe UNDEFINED type
+      new_column_schema.set_data_type(ObObjType::ObExtendType);
+      new_column_schema.set_data_length(0);
+      new_column_schema.set_data_precision(-1);
+      new_column_schema.set_data_scale(OB_MIN_NUMBER_SCALE - 1);
+      OZ (alter_column(new_column_schema, dummy_mode, for_view));
+    }
   }
   return ret;
 }

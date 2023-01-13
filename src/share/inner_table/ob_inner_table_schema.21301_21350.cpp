@@ -1631,6 +1631,206 @@ int ObInnerTableSchema::dba_ob_cluster_event_history_schema(ObTableSchema &table
   return ret;
 }
 
+int ObInnerTableSchema::parameters_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_PARAMETERS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_PARAMETERS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(select CAST('def' AS CHAR(512)) AS SPECIFIC_CATALOG,                         CAST(d.database_name AS CHAR(128)) AS SPECIFIC_SCHEMA,                         CAST(r.routine_name AS CHAR(64)) AS SPECIFIC_NAME,                         CAST(rp.param_position AS signed) AS ORDINAL_POSITION,                         CAST(CASE rp.param_position WHEN 0 THEN NULL                           ELSE CASE rp.flag & 0x03                           WHEN 1 THEN "IN"                           WHEN 2 THEN "OUT"                           WHEN 3 THEN "INOUT"                           ELSE NULL                           END                         END AS CHAR(5)) AS PARAMETER_MODE,                         CAST(rp.param_name AS CHAR(64)) AS PARAMETER_NAME,                         CAST(lower(v.data_type_str) AS CHAR(64)) AS DATA_TYPE,                         CASE WHEN rp.param_type IN (22, 23, 27, 28, 29, 30) THEN CAST(rp.param_length AS SIGNED)                           ELSE CAST(NULL AS SIGNED)                         END AS CHARACTER_MAXIMUM_LENGTH,                         CASE WHEN rp.param_type IN (22, 23, 27, 28, 29, 30, 43, 44, 46)                            THEN CAST(                             rp.param_length * CASE rp.param_coll_type                             WHEN 63 THEN 1                             WHEN 249 THEN 4                             WHEN 248 THEN 4                             WHEN 87 THEN 2                             WHEN 28 THEN 2                             WHEN 55 THEN 4                             WHEN 54 THEN 4                             WHEN 101 THEN 2                             WHEN 46 THEN 4                             WHEN 45 THEN 4                             WHEN 224 THEN 4                             ELSE 1                             END                               AS SIGNED                           )                           ELSE CAST(NULL AS SIGNED)                         END AS CHARACTER_OCTET_LENGTH,                         CASE WHEN rp.param_type IN (1, 2, 3, 4, 5, 15, 16)                           THEN CAST(rp.param_precision AS UNSIGNED)                           ELSE CAST(NULL AS UNSIGNED)                         END AS NUMERIC_PRECISION,                         CASE WHEN rp.param_type IN (15, 16) THEN CAST(rp.param_scale AS SIGNED)                           WHEN rp.param_type IN (1, 2, 3, 4, 5, 11, 12, 13, 14) THEN CAST(0 AS SIGNED)                           ELSE CAST(NULL AS SIGNED)                         END AS NUMERIC_SCALE,                         CASE WHEN rp.param_type IN (17, 18, 20) THEN CAST(rp.param_scale AS UNSIGNED)                           ELSE CAST(NULL AS UNSIGNED)                         END AS DATETIME_PRECISION,                         CAST(CASE rp.param_charset                           WHEN 1 THEN "binary"                           WHEN 2 THEN "utf8mb4"                           WHEN 3 THEN "gbk"                           WHEN 4 THEN "utf16"                           WHEN 5 THEN "gb18030"                           ELSE NULL                         END AS CHAR(64)) AS CHARACTER_SET_NAME,                         CAST(CASE rp.param_coll_type                           WHEN 45 THEN 'utf8mb4_general_ci'                           WHEN 46 THEN 'utf8mb4_bin'                           WHEN 63 THEN 'binary'                           ELSE NULL                         END AS CHAR(64)) AS COLLATION_NAME,                         CAST(CASE WHEN rp.param_type IN (1, 2, 3, 4, 5)                           THEN CONCAT(lower(v.data_type_str),'(',rp.param_precision,')')                           WHEN rp.param_type IN (15,16)                           THEN CONCAT(lower(v.data_type_str),'(',rp.param_precision, ',', rp.param_scale,')')                           WHEN rp.param_type IN (18, 20)                            THEN CONCAT(lower(v.data_type_str),'(', rp.param_scale, ')')                            ELSE lower(v.data_type_str) END AS char(4194304)) AS DTD_IDENTIFIER,                         CAST(CASE WHEN r.routine_type = 1 THEN 'PROCEDURE'                           WHEN ROUTINE_TYPE = 2 THEN 'FUNCTION'                           ELSE NULL                         END AS CHAR(9)) AS ROUTINE_TYPE                       from                         oceanbase.__all_routine_param as rp                         join oceanbase.__all_routine as r on rp.subprogram_id = r.subprogram_id                         and rp.tenant_id = r.tenant_id                         and rp.routine_id = r.routine_id                         join oceanbase.__all_database as d on r.database_id = d.database_id                         left join oceanbase.__all_virtual_data_type v on rp.param_type = v.data_type                       WHERE                         rp.tenant_id = 0                         and in_recyclebin = 0                         and database_name != '__recyclebin'                       order by SPECIFIC_SCHEMA,                         SPECIFIC_NAME,                         ORDINAL_POSITION                       )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::table_privileges_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_TABLE_PRIVILEGES_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_TABLE_PRIVILEGES_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT           CAST(CONCAT('''', V.USER_NAME, '''', '@', '''', V.HOST, '''') AS CHAR(81)) AS GRANTEE ,          CAST('def' AS CHAR(512)) AS TABLE_CATALOG ,          CAST(V.DATABASE_NAME AS CHAR(128)) AS TABLE_SCHEMA ,          CAST(V.TABLE_NAME AS CHAR(64)) AS TABLE_NAME,          CAST(V.PRIVILEGE_TYPE AS CHAR(64)) AS PRIVILEGE_TYPE ,          CAST(V.IS_GRANTABLE AS CHAR(3)) AS IS_GRANTABLE   FROM     (SELECT TP.DATABASE_NAME AS DATABASE_NAME,             TP.TABLE_NAME AS TABLE_NAME,             U.USER_NAME AS USER_NAME,             U.HOST AS HOST,             CASE                 WHEN V1.C1 = 1                      AND TP.PRIV_ALTER = 1 THEN 'ALTER'                 WHEN V1.C1 = 2                      AND TP.PRIV_CREATE = 1 THEN 'CREATE'                 WHEN V1.C1 = 4                      AND TP.PRIV_DELETE = 1 THEN 'DELETE'                 WHEN V1.C1 = 5                      AND TP.PRIV_DROP = 1 THEN 'DROP'                 WHEN V1.C1 = 7                      AND TP.PRIV_INSERT = 1 THEN 'INSERT'                 WHEN V1.C1 = 8                      AND TP.PRIV_UPDATE = 1 THEN 'UPDATE'                 WHEN V1.C1 = 9                      AND TP.PRIV_SELECT = 1 THEN 'SELECT'                 WHEN V1.C1 = 10                      AND TP.PRIV_INDEX = 1 THEN 'INDEX'                 WHEN V1.C1 = 11                      AND TP.PRIV_CREATE_VIEW = 1 THEN 'CREATE VIEW'                 WHEN V1.C1 = 12                      AND TP.PRIV_SHOW_VIEW = 1 THEN 'SHOW VIEW'                 ELSE NULL             END PRIVILEGE_TYPE ,             CASE                 WHEN TP.PRIV_GRANT_OPTION = 1 THEN 'YES'                 WHEN TP.PRIV_GRANT_OPTION = 0 THEN 'NO'             END IS_GRANTABLE      FROM oceanbase.__all_table_privilege TP,                       oceanbase.__all_user U,        (SELECT 1 AS C1         UNION ALL SELECT 2 AS C1         UNION ALL SELECT 4 AS C1         UNION ALL SELECT 5 AS C1         UNION ALL SELECT 7 AS C1         UNION ALL SELECT 8 AS C1         UNION ALL SELECT 9 AS C1         UNION ALL SELECT 10 AS C1         UNION ALL SELECT 11 AS C1         UNION ALL SELECT 12 AS C1) V1,        (SELECT USER_ID         FROM oceanbase.__all_user         WHERE TENANT_ID = 0           AND CONCAT(USER_NAME, '@', HOST) = CURRENT_USER()) CURR      LEFT JOIN        (SELECT USER_ID         FROM oceanbase.__all_database_privilege         WHERE TENANT_ID = 0           AND DATABASE_NAME = 'mysql'           AND PRIV_SELECT = 1) DB ON CURR.USER_ID = DB.USER_ID      WHERE TP.TENANT_ID = 0        AND TP.TENANT_ID = U.TENANT_ID        AND TP.USER_ID = U.USER_ID        AND (DB.USER_ID IS NOT NULL             OR 512 & CURRENT_USER_PRIV() = 512             OR TP.USER_ID = CURR.USER_ID)) V   WHERE V.PRIVILEGE_TYPE IS NOT NULL   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_privileges_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_USER_PRIVILEGES_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_PRIVILEGES_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST(CONCAT('''', V.USER_NAME, '''', '@', '''', V.HOST, '''') AS CHAR(81)) AS GRANTEE ,          CAST('def' AS CHAR(512)) AS TABLE_CATALOG ,          CAST(V.PRIVILEGE_TYPE AS CHAR(64)) AS PRIVILEGE_TYPE ,          CAST(V.IS_GRANTABLE AS CHAR(3)) AS IS_GRANTABLE   FROM     (SELECT U.USER_NAME AS USER_NAME,             U.HOST AS HOST,             CASE                 WHEN V1.C1 = 1                      AND U.PRIV_ALTER = 1 THEN 'ALTER'                 WHEN V1.C1 = 2                      AND U.PRIV_CREATE = 1 THEN 'CREATE'                 WHEN V1.C1 = 3                      AND U.PRIV_CREATE_USER = 1 THEN 'CREATE USER'                 WHEN V1.C1 = 4                      AND U.PRIV_DELETE = 1 THEN 'DELETE'                 WHEN V1.C1 = 5                      AND U.PRIV_DROP = 1 THEN 'DROP'                 WHEN V1.C1 = 7                      AND U.PRIV_INSERT = 1 THEN 'INSERT'                 WHEN V1.C1 = 8                      AND U.PRIV_UPDATE = 1 THEN 'UPDATE'                 WHEN V1.C1 = 9                      AND U.PRIV_SELECT = 1 THEN 'SELECT'                 WHEN V1.C1 = 10                      AND U.PRIV_INDEX = 1 THEN 'INDEX'                 WHEN V1.C1 = 11                      AND U.PRIV_CREATE_VIEW = 1 THEN 'CREATE VIEW'                 WHEN V1.C1 = 12                      AND U.PRIV_SHOW_VIEW = 1 THEN 'SHOW VIEW'                 WHEN V1.C1 = 13                      AND U.PRIV_SHOW_DB = 1 THEN 'SHOW DB'                 WHEN V1.C1 = 14                      AND U.PRIV_SUPER = 1 THEN 'SUPER'                 WHEN V1.C1 = 15                      AND U.PRIV_PROCESS = 1 THEN 'PROCESS'                 WHEN V1.C1 = 17                      AND U.PRIV_CREATE_SYNONYM = 1 THEN 'CREATE SYNONYM'                 WHEN V1.C1 = 27                      AND U.PRIV_FILE = 1 THEN 'FILE'                 WHEN V1.C1 = 28                      AND U.PRIV_ALTER_TENANT = 1 THEN 'ALTER TENANT'                 WHEN V1.C1 = 29                      AND U.PRIV_ALTER_SYSTEM = 1 THEN 'ALTER SYSTEM'                 WHEN V1.C1 = 30                      AND U.PRIV_CREATE_RESOURCE_POOL = 1 THEN 'CREATE RESOURCE POOL'                 WHEN V1.C1 = 31                      AND U.PRIV_CREATE_RESOURCE_UNIT = 1 THEN 'CREATE RESOURCE UNIT'                 WHEN V1.C1 = 33                      AND U.PRIV_REPL_SLAVE = 1 THEN 'REPLICATION SLAVE'                 WHEN V1.C1 = 34                      AND U.PRIV_REPL_CLIENT = 1 THEN 'REPLICATION CLIENT'                 WHEN V1.C1 = 0                      AND U.PRIV_ALTER = 0                      AND U.PRIV_CREATE = 0                      AND U.PRIV_CREATE_USER = 0                      AND U.PRIV_DELETE = 0                      AND U.PRIV_DROP = 0                      AND U.PRIV_INSERT = 0                      AND U.PRIV_UPDATE = 0                      AND U.PRIV_SELECT = 0                      AND U.PRIV_INDEX = 0                      AND U.PRIV_CREATE_VIEW = 0                      AND U.PRIV_SHOW_VIEW = 0                      AND U.PRIV_SHOW_DB = 0                      AND U.PRIV_SUPER = 0                      AND U.PRIV_PROCESS = 0                      AND U.PRIV_CREATE_SYNONYM = 0                      AND U.PRIV_FILE = 0                      AND U.PRIV_ALTER_TENANT = 0                      AND U.PRIV_ALTER_SYSTEM = 0                      AND U.PRIV_CREATE_RESOURCE_POOL = 0                      AND U.PRIV_CREATE_RESOURCE_UNIT = 0                      AND U.PRIV_REPL_SLAVE = 0                      AND U.PRIV_REPL_CLIENT = 0 THEN 'USAGE'             END PRIVILEGE_TYPE ,             CASE                 WHEN U.PRIV_GRANT_OPTION = 0 THEN 'NO'                 WHEN U.PRIV_ALTER = 0                      AND U.PRIV_CREATE = 0                      AND U.PRIV_CREATE_USER = 0                      AND U.PRIV_DELETE = 0                      AND U.PRIV_DROP = 0                      AND U.PRIV_INSERT = 0                      AND U.PRIV_UPDATE = 0                      AND U.PRIV_SELECT = 0                      AND U.PRIV_INDEX = 0                      AND U.PRIV_CREATE_VIEW = 0                      AND U.PRIV_SHOW_VIEW = 0                      AND U.PRIV_SHOW_DB = 0                      AND U.PRIV_SUPER = 0                      AND U.PRIV_PROCESS = 0                      AND U.PRIV_CREATE_SYNONYM = 0                      AND U.PRIV_FILE = 0                      AND U.PRIV_ALTER_TENANT = 0                      AND U.PRIV_ALTER_SYSTEM = 0                      AND U.PRIV_CREATE_RESOURCE_POOL = 0                      AND U.PRIV_CREATE_RESOURCE_UNIT = 0                      AND U.PRIV_REPL_SLAVE = 0                      AND U.PRIV_REPL_CLIENT = 0 THEN 'NO'                 WHEN U.PRIV_GRANT_OPTION = 1 THEN 'YES'             END IS_GRANTABLE      FROM oceanbase.__all_user U,        (SELECT 0 AS C1         UNION ALL SELECT 1 AS C1         UNION ALL SELECT 2 AS C1         UNION ALL SELECT 3 AS C1         UNION ALL SELECT 4 AS C1         UNION ALL SELECT 5 AS C1         UNION ALL SELECT 7 AS C1         UNION ALL SELECT 8 AS C1         UNION ALL SELECT 9 AS C1         UNION ALL SELECT 10 AS C1         UNION ALL SELECT 11 AS C1         UNION ALL SELECT 12 AS C1         UNION ALL SELECT 13 AS C1         UNION ALL SELECT 14 AS C1         UNION ALL SELECT 15 AS C1         UNION ALL SELECT 17 AS C1         UNION ALL SELECT 27 AS C1         UNION ALL SELECT 28 AS C1         UNION ALL SELECT 29 AS C1         UNION ALL SELECT 30 AS C1         UNION ALL SELECT 31 AS C1         UNION ALL SELECT 33 AS C1         UNION ALL SELECT 34 AS C1) V1,        (SELECT USER_ID         FROM oceanbase.__all_user         WHERE TENANT_ID = 0           AND CONCAT(USER_NAME, '@', HOST) = CURRENT_USER()) CURR      LEFT JOIN        (SELECT USER_ID         FROM oceanbase.__all_database_privilege         WHERE TENANT_ID = 0           AND DATABASE_NAME = 'mysql'           AND PRIV_SELECT = 1) DB ON CURR.USER_ID = DB.USER_ID      WHERE U.TENANT_ID = 0        AND (DB.USER_ID IS NOT NULL             OR 512 & CURRENT_USER_PRIV() = 512             OR U.USER_ID = CURR.USER_ID)) V   WHERE V.PRIVILEGE_TYPE IS NOT NULL   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::schema_privileges_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_SCHEMA_PRIVILEGES_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_SCHEMA_PRIVILEGES_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST(CONCAT('''', V.USER_NAME, '''', '@', '''', V.HOST, '''') AS CHAR(81)) AS GRANTEE ,          CAST('def' AS CHAR(512)) AS TABLE_CATALOG ,          CAST(V.DATABASE_NAME AS CHAR(128)) AS TABLE_SCHEMA ,          CAST(V.PRIVILEGE_TYPE AS CHAR(64)) AS PRIVILEGE_TYPE ,          CAST(V.IS_GRANTABLE AS CHAR(3)) AS IS_GRANTABLE   FROM     (SELECT DP.DATABASE_NAME DATABASE_NAME,             U.USER_NAME AS USER_NAME,             U.HOST AS HOST,             CASE                 WHEN V1.C1 = 1                      AND DP.PRIV_ALTER = 1 THEN 'ALTER'                 WHEN V1.C1 = 2                      AND DP.PRIV_CREATE = 1 THEN 'CREATE'                 WHEN V1.C1 = 4                      AND DP.PRIV_DELETE = 1 THEN 'DELETE'                 WHEN V1.C1 = 5                      AND DP.PRIV_DROP = 1 THEN 'DROP'                 WHEN V1.C1 = 7                      AND DP.PRIV_INSERT = 1 THEN 'INSERT'                 WHEN V1.C1 = 8                      AND DP.PRIV_UPDATE = 1 THEN 'UPDATE'                 WHEN V1.C1 = 9                      AND DP.PRIV_SELECT = 1 THEN 'SELECT'                 WHEN V1.C1 = 10                      AND DP.PRIV_INDEX = 1 THEN 'INDEX'                 WHEN V1.C1 = 11                      AND DP.PRIV_CREATE_VIEW = 1 THEN 'CREATE VIEW'                 WHEN V1.C1 = 12                      AND DP.PRIV_SHOW_VIEW = 1 THEN 'SHOW VIEW'                 ELSE NULL             END PRIVILEGE_TYPE ,             CASE                 WHEN DP.PRIV_GRANT_OPTION = 1 THEN 'YES'                 WHEN DP.PRIV_GRANT_OPTION = 0 THEN 'NO'             END IS_GRANTABLE      FROM oceanbase.__all_database_privilege DP,                       oceanbase.__all_user U,        (SELECT 1 AS C1         UNION ALL SELECT 2 AS C1         UNION ALL SELECT 4 AS C1         UNION ALL SELECT 5 AS C1         UNION ALL SELECT 7 AS C1         UNION ALL SELECT 8 AS C1         UNION ALL SELECT 9 AS C1         UNION ALL SELECT 10 AS C1         UNION ALL SELECT 11 AS C1         UNION ALL SELECT 12 AS C1) V1,        (SELECT USER_ID         FROM oceanbase.__all_user         WHERE TENANT_ID= 0           AND CONCAT(USER_NAME, '@', HOST) = CURRENT_USER()) CURR      LEFT JOIN        (SELECT USER_ID         FROM oceanbase.__all_database_privilege         WHERE TENANT_ID = 0           AND DATABASE_NAME = 'mysql'           AND PRIV_SELECT = 1) DB ON CURR.USER_ID = DB.USER_ID      WHERE DP.TENANT_ID = 0        AND DP.TENANT_ID = U.TENANT_ID        AND DP.USER_ID = U.USER_ID        AND DP.DATABASE_NAME != '__recyclebin'        AND DP.DATABASE_NAME != '__public'        AND DP.DATABASE_NAME != 'SYS'        AND DP.DATABASE_NAME != 'LBACSYS'        AND DP.DATABASE_NAME != 'ORAAUDITOR'        AND (DB.USER_ID IS NOT NULL             OR 512 & CURRENT_USER_PRIV() = 512             OR DP.USER_ID = CURR.USER_ID)) V   WHERE V.PRIVILEGE_TYPE IS NOT NULL   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

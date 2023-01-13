@@ -183,8 +183,9 @@ public:
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
   virtual int post_upgrade() override;
 private:
-   int post_upgrade_for_srs();
-   int init_rewrite_rule_version(const uint64_t tenant_id);
+  int post_upgrade_for_srs();
+  int init_rewrite_rule_version(const uint64_t tenant_id);
+  static int recompile_all_views_and_synonyms(const uint64_t tenant_id);
 };
 /* =========== special upgrade processor end   ============= */
 

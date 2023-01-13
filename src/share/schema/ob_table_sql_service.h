@@ -58,6 +58,7 @@ public:
   int update_table_attribute(common::ObISQLClient &sql_client,
                              ObTableSchema &new_table_schema,
                              const ObSchemaOperationType operation_type,
+                             const bool update_object_status_ignore_version,
                              const common::ObString *ddl_stmt_str = NULL);
   int update_partition_option(common::ObISQLClient &sql_client,
                               ObTableSchema &table,
@@ -235,6 +236,7 @@ public:
 private:
 
   int add_table(common::ObISQLClient &sql_client, const ObTableSchema &table,
+                const bool update_object_status_ignore_version,
                 const bool only_history = false);
   int delete_from_all_table(common::ObISQLClient &sql_client,
                             const uint64_t tenant_id,
@@ -254,7 +256,8 @@ private:
   int delete_from_all_column(common::ObISQLClient &sql_client,
                              const uint64_t tenant_id,
                              const uint64_t table_id,
-      const int64_t column_count, bool check_affect_rows = true);
+                             const int64_t column_count,
+                             bool check_affect_rows = true);
   int delete_from_all_table_history(common::ObISQLClient &sql_client,
                                     const ObTableSchema &table_schema,
                                     const int64_t new_schema_version);
@@ -284,7 +287,8 @@ private:
                                const ObTableSchema &table);
   int add_interval_range_val(share::ObDMLSqlSplicer &dml, 
                                const ObTableSchema &table);
-  int gen_table_dml(const uint64_t exec_tenant_id, const ObTableSchema &table, share::ObDMLSqlSplicer &dml);
+  int gen_table_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
+                    const bool update_object_status_ignore_version, share::ObDMLSqlSplicer &dml);
   int gen_table_options_dml(const uint64_t exec_tenant_id, const ObTableSchema &table, share::ObDMLSqlSplicer &dml);
   int gen_column_dml(const uint64_t exec_tenant_id, const ObColumnSchemaV2 &column, share::ObDMLSqlSplicer &dml);
   int gen_constraint_dml(const uint64_t exec_tenant_id, const ObConstraint &constraint, share::ObDMLSqlSplicer &dml);
@@ -411,6 +415,9 @@ public:
   int update_mock_fk_parent_table_schema_version(
       common::ObISQLClient *sql_client,
       ObMockFKParentTableSchema &mock_fk_parent_table_schema);
+  int update_view_columns(ObISQLClient &sql_client,
+                          const ObTableSchema &table);
+
 private:
   int update_foreign_key_in_mock_fk_parent_table(
       common::ObISQLClient *sql_client,

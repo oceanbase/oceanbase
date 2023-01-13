@@ -46,6 +46,7 @@
 #include "sql/engine/expr/ob_expr_convert.h"
 #include "sql/engine/expr/ob_expr_coalesce.h"
 #include "sql/engine/expr/ob_expr_current_user.h"
+#include "sql/engine/expr/ob_expr_current_user_priv.h"
 #include "sql/engine/expr/ob_expr_nvl.h"
 #include "sql/engine/expr/ob_expr_concat.h"
 #include "sql/engine/expr/ob_expr_concat_ws.h"
@@ -370,6 +371,7 @@
 #include "sql/engine/expr/ob_expr_st_contains.h"
 #include "sql/engine/expr/ob_expr_st_within.h"
 #include "sql/engine/expr/ob_expr_priv_st_asewkb.h"
+#include "sql/engine/expr/ob_expr_sql_mode_convert.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -580,6 +582,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprNvl);
     REG_OP(ObExprConcat);
     REG_OP(ObExprCurrentUser);
+    REG_OP(ObExprCurrentUserPriv);
     REG_OP(ObExprYear);
     REG_OP(ObExprOracleDecode);
     REG_OP(ObExprOracleTrunc);
@@ -882,6 +885,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprStatementDigestText);
     REG_OP(ObExprTimestampToScn);
     REG_OP(ObExprScnToTimestamp);
+    REG_OP(ObExprSqlModeConvert);
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
     // convert input value into an OceanBase error number and throw out as exception
     REG_OP(ObExprErrno);

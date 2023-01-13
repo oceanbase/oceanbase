@@ -678,7 +678,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_GUID == type_
           || T_FUN_SYS_CUR_DATE == type_
           || T_FUN_SYS_USERENV == type_
-          || T_FUN_SYS_REGEXP_REPLACE == type_) {
+          || T_FUN_SYS_REGEXP_REPLACE == type_
+          || T_FUN_SYS_USER_CAN_ACCESS_OBJ == type_) {
       is_non_pure = true;
     } else if (T_FUN_SYS_TO_DATE == type_ || T_FUN_SYS_TO_TIMESTAMP == type_ ||
                T_FUN_SYS_TO_TIMESTAMP_TZ == type_) {
@@ -731,7 +732,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           // TODO:@sean.yyj#273971, will sort out exprs not deterministic in mysql mode later, https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/4961352
           // || T_FUN_SYS_REGEXP_LIKE == type_ // create table t1(c1 int, c2 int generated always as(regexp_like(1, 2))); success in mysql
           || T_FUN_SYS_REGEXP_REPLACE == type_
-          || T_FUN_SYS_REGEXP_SUBSTR == type_) {
+          || T_FUN_SYS_REGEXP_SUBSTR == type_
+          || T_FUN_SYS_CURRENT_USER_PRIV == type_) {
       is_non_pure = true;
     }
   }

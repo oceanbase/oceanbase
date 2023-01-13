@@ -1325,6 +1325,7 @@ int ObDelUpdResolver::resolve_err_log_table(const ParseNode *node)
   bool use_sys_tenant = false;
   uint64_t table_id = OB_INVALID_ID;
   ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
+  ObArray<uint64_t> ref_obj_ids;
   CK (OB_NOT_NULL(del_upd_stmt));
   if (OB_ISNULL(relation_factor_node = node->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
@@ -1341,7 +1342,8 @@ int ObDelUpdResolver::resolve_err_log_table(const ParseNode *node)
                                                            database_name,
                                                            dblink_name,
                                                            is_db_explicit,
-                                                           use_sys_tenant))) {
+                                                           use_sys_tenant,
+                                                           ref_obj_ids))) {
     if (OB_TABLE_NOT_EXIST == ret || OB_ERR_BAD_DATABASE == ret) {
       if (is_information_schema_database_id(database_id)) {
         ret = OB_ERR_UNKNOWN_TABLE;

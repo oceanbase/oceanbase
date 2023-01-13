@@ -2009,7 +2009,7 @@ int ObSchemaServiceSQLImpl::sort_tables_partition_info(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", K(ret));
     } else if (OB_FAIL(sort_table_partition_info(*table))) {
-      LOG_WARN("fail to sort table partition info", K(ret), KPC(table));
+      LOG_WARN("fail to sort table partition info", K(ret), KPC(table), K(i));
     }
   }
   return ret;
@@ -2310,7 +2310,8 @@ int ObSchemaServiceSQLImpl::fetch_all_table_info(const ObRefreshSchemaStatus &sc
                                                   table_name,
                                                   schema_service_))) {
       LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
-    } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_SQL, table_name,
+    } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_SQL,
+                                      table_name,
                                       fill_extract_tenant_id(schema_status, tenant_id)))) {
       LOG_WARN("append sql failed", K(ret));
     }
@@ -2334,8 +2335,9 @@ int ObSchemaServiceSQLImpl::fetch_all_table_info(const ObRefreshSchemaStatus &sc
                                                           table_name,
                                                           schema_service_))) {
       LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
-    } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL, table_name,
-                       fill_extract_tenant_id(schema_status, tenant_id)))) {
+    } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL,
+                                      table_name,
+                                      fill_extract_tenant_id(schema_status, tenant_id)))) {
       LOG_WARN("append sql failed", K(ret));
     }
     if (OB_SUCC(ret)) {
@@ -3759,7 +3761,8 @@ int ObSchemaServiceSQLImpl::fetch_all_synonym_info(
     const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
     DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
     const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
-    if (OB_FAIL(sql.append_fmt(FETCH_ALL_SYNONYM_HISTORY_SQL, OB_ALL_SYNONYM_HISTORY_TNAME,
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_SYNONYM_HISTORY_SQL,
+                               OB_ALL_SYNONYM_HISTORY_TNAME,
                                fill_extract_tenant_id(schema_status, tenant_id)))) {
       LOG_WARN("append sql failed", K(ret));
     } else if (NULL != synonym_keys && synonyms_size > 0) {
@@ -4227,14 +4230,15 @@ int ObSchemaServiceSQLImpl::fetch_tables(
     LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
   } else if (!is_increase_schema) {
     if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_FULL_SCHEMA,
-                table_name, table_name,
-                fill_extract_tenant_id(schema_status, tenant_id),
-                schema_version,
-                fill_extract_schema_id(schema_status, OB_ALL_CORE_TABLE_TID)))) {
+                               table_name, table_name,
+                               fill_extract_tenant_id(schema_status, tenant_id),
+                               schema_version,
+                               fill_extract_schema_id(schema_status, OB_ALL_CORE_TABLE_TID)))) {
       LOG_WARN("append sql failed", K(ret));
     }
   } else {
-    if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL3, table_name,
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL3,
+                               table_name,
                                fill_extract_tenant_id(schema_status, tenant_id)))) {
       LOG_WARN("append sql failed", K(ret));
     } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
@@ -4844,10 +4848,8 @@ int ObSchemaServiceSQLImpl::get_not_core_table_schema(
                                       sql_client, allocator, table_schema))) {
     LOG_WARN("fetch all table info failed", K(tenant_id), K(table_id),
              K(schema_version), K(ret));
-  } else if (table_schema->is_view_table()) {
-    // do-nothing
-  } else if (OB_FAIL(fetch_column_info(schema_status, tenant_id, table_id, schema_version,
-                                       sql_client, table_schema))) {
+  } else if ((OB_FAIL(fetch_column_info(schema_status, tenant_id, table_id, schema_version,
+                                          sql_client, table_schema)))) {
     LOG_WARN("Failed to fetch column info", K(ret));
   } else if (OB_FAIL(fetch_partition_info(schema_status, tenant_id, table_id, schema_version,
                                          sql_client, table_schema))) {
@@ -4925,8 +4927,9 @@ int ObSchemaServiceSQLImpl::fetch_table_info(
                                                                table_name,
                                                                schema_service_))) {
     LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
-  } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL, table_name,
-                     fill_extract_tenant_id(schema_status, tenant_id)))) {
+  } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL,
+                                    table_name,
+                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
     LOG_WARN("append sql failed", K(ret));
   } else if (OB_FAIL(sql.append_fmt(" AND table_id = %lu and schema_version <= %ld order by schema_version desc limit 1",
                                     fill_extract_schema_id(schema_status, table_id),

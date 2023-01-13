@@ -1611,6 +1611,10 @@ const int64_t OB_MAX_LONGTEXT_LENGTH = 512 * 1024 * 1024L - 1; // 2^29-1,for dat
 const int64_t OB_MAX_MEDIUMTEXT_LENGTH_OLD = 256 * 1024L;  // for compatibility
 const int64_t OB_MAX_LONGTEXT_LENGTH_OLD = 512 * 1024L;  // for compatibility
 
+const int64_t OB_MAX_CAST_CHAR_VARCHAR_LENGTH = 512;
+const int64_t OB_MAX_CAST_CHAR_TEXT_LENGTH = 16383;
+const int64_t OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH = 4194303;
+
 const char *const SYS_DATE = "$SYS_DATE";
 const char *const OB_DEFAULT_COMPRESS_FUNC_NAME = "none";
 const char *const OB_DEFAULT_FULLTEXT_PARSER_NAME = "TAOBAO_CHN";

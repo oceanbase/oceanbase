@@ -57,6 +57,7 @@ typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
 typedef common::ObSEArray<bool, 2, common::ModulePageAllocator, true> ObGetMethodArray;
 struct ObExprConstraint;
 typedef common::ObSEArray<common::ObSpatialMBR, 1> ObMbrFilterArray;
+class ObSelectStmt;
 
 struct EstimatedPartition {
   common::ObAddr addr_;
@@ -566,6 +567,23 @@ public:
   *  That is the time correctly set by the processor of the RPC
   ------------------------*/
   static void adjust_time_by_ntp_offset(int64_t &dst_timeout_ts);
+  static int async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
+                                  ObSelectStmt *select_stmt,
+                                  bool reset_column_infos);
+  static int find_synonym_ref_obj(const ObString &database_name,
+                                  const ObString &object_name,
+                                  const uint64_t tenant_id,
+                                  bool &exist,
+                                  uint64_t &object_id,
+                                  share::schema::ObObjectType &obj_type,
+                                  uint64_t &schema_version);
+  static int find_synonym_ref_obj(const uint64_t database_id,
+                                  const ObString &object_name,
+                                  const uint64_t tenant_id,
+                                  bool &exist,
+                                  uint64_t &object_id,
+                                  share::schema::ObObjectType &obj_type,
+                                  uint64_t &schema_version);
 private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);

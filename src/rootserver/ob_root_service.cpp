@@ -3154,7 +3154,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
         }
       }
       RS_TRACE(generate_schema_lob);
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(ret) || table_schema.is_view_table()) {
         // do nothing
       } else if (OB_FAIL(ddl_service_.build_aux_lob_table_schema_if_need(table_schema, table_schemas))) {
         LOG_WARN("fail to build_aux_lob_table_schema_if_need", K(ret), K(table_schema));
@@ -5554,6 +5554,7 @@ int ObRootService::create_user_defined_function(const obrpc::ObCreateUserDefined
 {
   int ret = OB_SUCCESS;
   bool exist = false;
+  uint64_t udf_id = OB_INVALID_ID;
   ObUDF udf_info_ = arg.udf_;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -5561,7 +5562,7 @@ int ObRootService::create_user_defined_function(const obrpc::ObCreateUserDefined
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(ddl_service_.check_udf_exist(arg.udf_.get_tenant_id(), arg.udf_.get_name_str(), exist))) {
+  } else if (OB_FAIL(ddl_service_.check_udf_exist(arg.udf_.get_tenant_id(), arg.udf_.get_name_str(), exist, udf_id))) {
     LOG_WARN("failed to check_udf_exist", K(arg.udf_.get_tenant_id()), K(arg.udf_.get_name_str()), K(exist), K(ret));
   } else if (exist) {
     ret = OB_UDF_EXISTS;
@@ -6209,7 +6210,7 @@ int ObRootService::create_synonym(const ObCreateSynonymArg &arg)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ddl_service_.create_synonym(synonym_info, &arg.ddl_stmt_str_, is_update, schema_guard))) {
+      if (OB_FAIL(ddl_service_.create_synonym(synonym_info, arg.dependency_info_, &arg.ddl_stmt_str_, is_update, schema_guard))) {
         LOG_WARN("create_synonym failed", K(synonym_info), K(ret));
       }
     }
@@ -9833,6 +9834,42 @@ int ObRootService::set_cpu_quota_concurrency_config_()
   } else if (OB_FAIL(check_config_result("cpu_quota_concurrency", "10"))) {
     LOG_WARN("failed to check config same", K(ret));
   }
+  return ret;
+}
+
+int ObRootService::recompile_all_views_batch(const obrpc::ObRecompileAllViewsBatchArg &arg)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ddl_service_.recompile_all_views_batch(arg.tenant_id_, arg.view_ids_))) {
+    LOG_WARN("failed to recompile all views", K(ret), K(arg.tenant_id_));
+  }
+  LOG_INFO("recompile all views batch finish", KR(ret), K(start_time),
+      "cost_time", ObTimeUtility::current_time() - start_time);
+  return ret;
+}
+
+int ObRootService::try_add_dep_infos_for_synonym_batch(const obrpc::ObTryAddDepInofsForSynonymBatchArg &arg)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ddl_service_.try_add_dep_info_for_all_synonyms_batch(arg.tenant_id_, arg.synonym_ids_))) {
+    LOG_WARN("failed to add synonym dep info", K(ret), K(arg.tenant_id_));
+  }
+  LOG_INFO("add dep infos for synonym batch finish", KR(ret), K(start_time),
+      "cost_time", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 

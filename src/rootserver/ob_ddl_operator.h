@@ -931,6 +931,18 @@ public:
   int insert_tenant_merge_info(const share::schema::ObSchemaOperationType op,
                                const share::schema::ObTenantSchema &tenant_schema,
                                common::ObMySQLTransaction &trans);
+  int update_table_status(const share::schema::ObTableSchema &orig_table_schema,
+                          const int64_t schema_version,
+                          const ObObjectStatus new_status,
+                          const bool update_object_status_ignore_version,
+                          common::ObMySQLTransaction &trans);
+  int update_view_columns(const ObTableSchema &view_schema,
+                          common::ObMySQLTransaction &trans);
+  int reset_view_status(common::ObMySQLTransaction &trans,
+                        const uint64_t tenant_id,
+                        const share::schema::ObTableSchema *table);
+  int try_add_dep_info_for_synonym(const ObSimpleSynonymSchema *synonym_info,
+                                   common::ObMySQLTransaction &trans);
 private:
   virtual int set_need_flush_ora(
       share::schema::ObSchemaGetterGuard &schema_guard,
