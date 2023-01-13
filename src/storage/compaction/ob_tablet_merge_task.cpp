@@ -642,6 +642,8 @@ int ObTabletMergeExecutePrepareTask::process()
   } else if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is unexpected null", K(ret), K(ctx_));
+  } else if (OB_FAIL(ctx_->try_swap_tablet_handle(result_.handle_))) { // swap tablet before get schema ptr from tablet
+    LOG_WARN("failed to try swap tablet handle", K(ret));
   } else if (OB_FAIL(ctx_->get_schema_and_gene_from_result(result_))) {
     LOG_WARN("failed to get schema and generage from result", K(ret), K_(result));
   } else if (OB_FAIL(ctx_->init_merge_info())) {
@@ -817,6 +819,9 @@ int ObTabletMergePrepareTask::process()
   }
 
   if (OB_FAIL(ret) || skip_rest_operation) {
+  } else if (!is_mini_merge(ctx->param_.merge_type_)
+    && OB_FAIL(ctx->try_swap_tablet_handle(ctx->tables_handle_))) {
+    LOG_WARN("failed to try swap tablet handle", K(ret));
   } else if (OB_FAIL(ObBasicTabletMergeDag::generate_merge_task(
       *merge_dag_, *ctx, this))) {
     LOG_WARN("Failed to generate_merge_sstable_task", K(ret));
@@ -933,7 +938,7 @@ int ObTabletMiniPrepareTask::inner_init_ctx(ObTabletMergeCtx &ctx, bool &skip_me
 {
   int ret = OB_SUCCESS;
   skip_merge_task_flag = false;
-  if (OB_FAIL(ctx.inner_init_for_minor(skip_merge_task_flag))) {
+  if (OB_FAIL(ctx.inner_init_for_mini(skip_merge_task_flag))) {
     LOG_WARN("failed to inner init for mini", K(ret));
   }
   return ret;

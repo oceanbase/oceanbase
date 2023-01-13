@@ -3262,7 +3262,7 @@ int ObTablet::check_max_sync_schema_version() const
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("schema recorder is invalid", K(ret), K_(tablet_meta), KPC(data_memtable_mgr));
     } else if (OB_FAIL(data_memtable_mgr->get_multi_source_data_unit(&storage_schema, &tmp_allocator))) {
-      LOG_ERROR("failed to storage schema from memtable, max_sync_schema_version is invalid", K(ret),
+      LOG_ERROR("failed to get storage schema from memtable, max_sync_schema_version is invalid", K(ret),
           K(max_sync_schema_version), KPC(data_memtable_mgr));
     } else if (OB_UNLIKELY(storage_schema.schema_version_ < max_sync_schema_version)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3313,5 +3313,18 @@ int ObTablet::set_memtable_clog_checkpoint_scn(
 
   return ret;
 }
+
+int ObTablet::clear_memtables_on_table_store() // be careful to call this func
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    table_store_.clear_memtables();
+  }
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

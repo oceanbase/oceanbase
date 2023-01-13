@@ -431,6 +431,19 @@ int ObTabletTableStore::update_memtables()
   return ret;
 }
 
+int ObTabletTableStore::clear_memtables()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table store is unexpected invalid", K(ret), KPC(this));
+  } else {
+    memtables_.destroy();
+    read_cache_.reset();
+  }
+  return ret;
+}
+
 int ObTabletTableStore::init_read_cache()
 {
   int ret = OB_SUCCESS;
@@ -1200,7 +1213,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
     J_OBJ_START();
     J_NAME("ObTabletTableStore");
     J_COLON();
-    J_KV(KP(this), KP_(tablet_ptr), K_(major_tables), K_(minor_tables), K_(is_ready_for_read));
+    J_KV(KP(this), KP_(tablet_ptr), K_(major_tables), K_(minor_tables), K_(memtables), K_(is_ready_for_read));
     J_COMMA();
     J_ARRAY_START();
     for (int64_t i = 0; i < major_tables_.count_; ++i) {

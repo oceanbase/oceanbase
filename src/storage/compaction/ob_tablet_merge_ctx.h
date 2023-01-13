@@ -165,12 +165,14 @@ struct ObTabletMergeCtx
   int init_merge_progress(bool is_major);
   int get_merge_range(int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
 
-  int inner_init_for_minor(bool &skip_rest_operation);
+  int inner_init_for_mini(bool &skip_rest_operation);
   int inner_init_for_medium();
   int init_get_medium_compaction_info(const int64_t medium_snapshot, const ObMediumCompactionInfo *&medium_info);
   int get_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle, const bool get_schema_on_memtable = true);
+
+  int try_swap_tablet_handle(const ObTablesHandleArray &tables_handle);
 public:
   int get_medium_compaction_info_to_store();
 
@@ -197,7 +199,8 @@ public:
   }
 
   typedef common::ObSEArray<ObGetMergeTablesResult, ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
-
+  static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
+  static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
   // 1. init in dag
   ObTabletMergeDagParam &param_;
   common::ObIAllocator &allocator_;

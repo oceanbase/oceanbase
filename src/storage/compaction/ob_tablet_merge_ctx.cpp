@@ -24,6 +24,7 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+#include "src/storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 namespace oceanbase
 {
@@ -723,7 +724,7 @@ int ObTabletMergeCtx::init_get_medium_compaction_info(
   return ret;
 }
 
-int ObTabletMergeCtx::inner_init_for_minor(bool &skip_rest_operation)
+int ObTabletMergeCtx::inner_init_for_mini(bool &skip_rest_operation)
 {
   int ret = OB_SUCCESS;
   skip_rest_operation = false;
@@ -735,7 +736,10 @@ int ObTabletMergeCtx::inner_init_for_minor(bool &skip_rest_operation)
   get_merge_table_param.merge_version_ = param_.merge_version_;
   ObTablet *tablet = tablet_handle_.get_obj();
 
-  if (OB_FAIL(ObPartitionMergePolicy::get_merge_tables[param_.merge_type_](
+  if (OB_UNLIKELY(!is_mini_merge(param_.merge_type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid merge type", K(ret), K_(param));
+  } else if (OB_FAIL(ObPartitionMergePolicy::get_merge_tables[param_.merge_type_](
           get_merge_table_param,
           *ls_handle_.get_ls(),
           *tablet,
@@ -743,7 +747,7 @@ int ObTabletMergeCtx::inner_init_for_minor(bool &skip_rest_operation)
     // TODO(@DanLin) optimize this interface
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to get merge tables", K(ret), KPC(this), K(get_merge_table_result));
-    } else if (is_mini_merge(param_.merge_type_)) { // OB_NO_NEED_MERGE && mini merge
+    } else { // OB_NO_NEED_MERGE
       int tmp_ret = OB_SUCCESS;
       // then release memtable
       if (OB_TMP_FAIL(tablet->release_memtables(tablet->get_tablet_meta().clog_checkpoint_scn_))) {
@@ -1054,6 +1058,8 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(
   bool get_storage_schema_flag = true;
   if (is_mini_merge(merge_type) && get_schema_on_memtable) {
     void *buf = nullptr;
+    ObSEArray<ObITable*, MAX_MEMSTORE_CNT> memtables;
+
     if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObStorageSchema)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc storage schema", K(ret));
@@ -1061,26 +1067,18 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(
       storage_schema = new(buf) ObStorageSchema();
     }
 
-    ObITable *table = nullptr;
-    memtable::ObMemtable * memtable = nullptr;
-    for (int i = merge_tables_handle.get_count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-      if (OB_UNLIKELY(nullptr == (table = merge_tables_handle.get_table(i)) || !table->is_frozen_memtable())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table in tables_handle is invalid", K(ret), KPC(table));
-      } else if (OB_ISNULL(memtable = dynamic_cast<memtable::ObMemtable *>(table))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table pointer does not point to a ObMemtable object", KPC(table));
-      } else if (OB_FAIL(memtable->get_multi_source_data_unit(storage_schema, &allocator_))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("failed to get storage schema from memtable", K(ret), KPC(table));
-        } else {
-          ret = OB_SUCCESS; // clear OB_ENTRY_NOT_EXIST
-        }
+    if (FAILEDx(merge_tables_handle.get_tables(memtables))) {
+      LOG_WARN("failed to get tables", K(ret), K(memtables));
+    } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_latest_storage_schema_from_memtable(
+        allocator_, memtables, *storage_schema))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
       } else {
-        get_storage_schema_flag = false;
-        break;
+        LOG_WARN("failed to get storage schema on memtable", K(ret), K_(param));
       }
-    } // end for
+    } else {
+      get_storage_schema_flag = false;
+    }
 
     // free alloced storage schema
     if ((OB_FAIL(ret) || get_storage_schema_flag) && nullptr != storage_schema) {
@@ -1166,6 +1164,43 @@ int ObTabletMergeCtx::prepare_merge_progress()
       LOG_WARN("failed to init merge progress", K(ret));
     } else {
       LOG_INFO("succeed to init merge progress", K(ret), KPC(merge_progress_));
+    }
+  }
+  return ret;
+}
+
+int ObTabletMergeCtx::try_swap_tablet_handle(const ObTablesHandleArray &tables_handle)
+{
+  int ret = OB_SUCCESS;
+  // check need swap tablet when compaction
+  if (OB_UNLIKELY(is_mini_merge(param_.merge_type_))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("mini merge not support swap tablet", K(ret), K_(param));
+  } else {
+    int64_t row_count = 0;
+    int64_t macro_count = 0;
+    const ObSSTable *table = nullptr;
+    for (int64_t i = 0; i < tables_handle_.get_count(); ++i) {
+      table = static_cast<const ObSSTable*>(tables_handle_.get_table(i));
+      row_count += table->get_meta().get_row_count();
+      macro_count += table->get_meta().get_basic_meta().get_data_macro_block_count();
+    }
+    if (tablet_handle_.get_obj()->get_table_store().get_memtables_count() > 0
+      && (row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD
+      || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD)) {
+      ObTabletHandle alloc_handle;
+      const ObTabletMapKey key(param_.ls_id_, param_.tablet_id_);
+      if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_with_allocator(
+        WashTabletPriority::WTP_HIGH, key, allocator_, alloc_handle, true/*force_alloc_new*/))) {
+        LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
+      } else {
+        tablet_handle_ = alloc_handle;
+        if (OB_FAIL(alloc_handle.get_obj()->clear_memtables_on_table_store())) {
+          LOG_WARN("failed to clear memtables on table_store", K(ret), K(param_));
+        } else {
+          LOG_INFO("success to swap tablet handle", K(ret), K(macro_count), K(row_count), K(tablet_handle_.get_obj()->get_table_store()));
+        }
+      }
     }
   }
   return ret;

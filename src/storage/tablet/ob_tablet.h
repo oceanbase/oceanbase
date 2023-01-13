@@ -388,6 +388,7 @@ public:
   int set_redefined_schema_version_in_tablet_pointer(const int64_t schema_version);
   int set_memtable_clog_checkpoint_scn(
       const ObMigrationTabletParam *tablet_meta);
+  int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
   TO_STRING_KV(KP(this), K_(wash_score), K_(ref_cnt), K_(tablet_meta), K_(table_store), K_(storage_schema),
       K_(medium_info_list));
 private:

@@ -96,8 +96,13 @@ public:
                              ObTableStoreIterator &iterator);
 
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
+  int64_t get_memtables_count() const
+  {
+    return memtables_.count();
+  }
   int prepare_memtables();
   int update_memtables();
+  int clear_memtables();
   int get_first_frozen_memtable(ObITable *&table);
 
   int get_ddl_sstable_handles(ObTablesHandleArray &ddl_sstable_handles) const;

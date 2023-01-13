@@ -164,22 +164,22 @@ private:
 };
 
 template<class T>
-int ObMultiSourceData::deep_copy_data_unit(const T *const src, T *&dst, ObIAllocator &allocator)
+int ObMultiSourceData::deep_copy_data_unit(const T *const src, T *&dst, ObIAllocator &input_allocator)
 {
   int ret = OB_SUCCESS;
   dst = nullptr;
   void *buf = nullptr;
-  if (OB_ISNULL(buf = allocator.alloc(src->get_data_size()))) {
+  if (OB_ISNULL(buf = input_allocator.alloc(src->get_data_size()))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "fail to alloc memory", K(ret));
   } else if (FALSE_IT(dst = new (buf) T())) {
-  } else if (OB_FAIL(dst->deep_copy_unit(src, &allocator_))) {
+  } else if (OB_FAIL(dst->deep_copy_unit(src, &input_allocator))) {
     TRANS_LOG(WARN, "fail to deep copy", K(ret), KP(dst), KP(src));
   }
   if (OB_FAIL(ret)) {
     if (nullptr != buf) {
       dst->~ObIMultiSourceDataUnit();
-      allocator.free(buf);
+      input_allocator.free(buf);
       dst = nullptr;
     }
   }
@@ -268,7 +268,7 @@ template<class T>
 int ObMultiSourceData::get_multi_source_data_unit_list(
     const T * const useless_unit,
     ObIMultiSourceDataUnitList &dst_list,
-    ObIAllocator *allocator)
+    ObIAllocator *input_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t type = 0;
@@ -277,9 +277,9 @@ int ObMultiSourceData::get_multi_source_data_unit_list(
   if (OB_UNLIKELY(nullptr == useless_unit
       || FALSE_IT(type = (int64_t)useless_unit->type())
       || type < 0 || type >= type_count
-      || nullptr == allocator)) {
+      || nullptr == input_allocator)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KPC(useless_unit), KP(allocator));
+    TRANS_LOG(WARN, "invalid argument", K(ret), KPC(useless_unit), KP(input_allocator));
   } else if (!ObIMultiSourceDataUnit::is_unit_list(static_cast<MultiSourceDataUnitType>(type))) {
     ret = OB_NOT_SUPPORTED;
     TRANS_LOG(WARN, "not supported for cur data unit", K(ret), K(type));
@@ -294,7 +294,7 @@ int ObMultiSourceData::get_multi_source_data_unit_list(
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "data unit is invalid", K(ret), KPC(item));
       } else if (item->is_sync_finish()) {
-        if (OB_FAIL(deep_copy_data_unit(static_cast<const T *>(item), dst, *allocator))) {
+        if (OB_FAIL(deep_copy_data_unit(static_cast<const T *>(item), dst, *input_allocator))) {
           TRANS_LOG(WARN, "failed to deep copy unit", K(ret), KPC(item));
         } else if (!dst_list.add_last(dst)) {
           ret = OB_ERR_UNEXPECTED;
@@ -302,7 +302,7 @@ int ObMultiSourceData::get_multi_source_data_unit_list(
         }
         if (OB_FAIL(ret) && nullptr != dst) {
           dst->~ObIMultiSourceDataUnit();
-          allocator->free(dst);
+          input_allocator->free(dst);
         }
       }
     }

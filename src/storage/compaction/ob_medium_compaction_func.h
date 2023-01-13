@@ -36,6 +36,10 @@ public:
       ObLS &ls,
       ObTablet &tablet,
       const int64_t major_frozen_scn = 0);
+  static int get_latest_storage_schema_from_memtable(
+    ObIAllocator &allocator,
+    const ObIArray<ObITable *> &memtables,
+    ObStorageSchema &storage_schema);
   static int get_palf_role(const share::ObLSID &ls_id, ObRole &role);
 
   int schedule_next_medium_for_leader(const int64_t major_snapshot);
