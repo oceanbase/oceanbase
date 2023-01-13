@@ -137,6 +137,9 @@ private:
                                        hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
   bool is_index_table(const share::schema::ObSimpleTableSchemaV2 &simple_schema);
   bool exist_in_table_array(const uint64_t table_id, const common::ObIArray<uint64_t> &table_ids);
+  // check 'is_valid_data_table_' and 'all_index_verified_' for all data tables
+  int check_valid_and_verified_for_data_table(const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
+                                              hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
 };
 
 } // end namespace rootserver

@@ -490,6 +490,10 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
         }
       } // end for loop
 
+      if (FAILEDx(check_valid_and_verified_for_data_table(table_schemas, table_compaction_map))) {
+        LOG_WARN("fail to check valid and verified for data table", KR(ret), K_(tenant_id), K(frozen_scn));
+      }
+
       // for valid data table, if its all index table finished verification, we can handle it here
       // and make it as verified
       //
@@ -655,7 +659,7 @@ int ObIndexChecksumValidator::check_table_compaction_finished(
     }
   }
   
-  if (OB_SUCC(ret) && !latest_compaction_info.is_compacted()) {
+  if (OB_SUCC(ret) && latest_compaction_info.is_uncompacted()) {
     SMART_VAR(ObArray<ObTabletID>, tablet_ids) {
       SMART_VAR(ObArray<ObTabletLSPair>, pairs) {
         if (table_schema.has_tablet()) {
@@ -747,6 +751,69 @@ bool ObIndexChecksumValidator::exist_in_table_array(
     }
   }
   return exist;
+}
+
+int ObIndexChecksumValidator::check_valid_and_verified_for_data_table(
+    const ObIArray<const ObSimpleTableSchemaV2 *> &table_schemas,
+    hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map)
+{
+  int ret = OB_SUCCESS;
+  int64_t table_count = table_schemas.count();
+  // initialize 'is_valid_data_table_' and 'all_index_verifed_'
+  for (int64_t i = 0; (i < table_count) && OB_SUCC(ret); ++i) {
+    const ObSimpleTableSchemaV2 *simple_schema = table_schemas.at(i);
+    uint64_t table_id = 0;
+    ObTableCompactionInfo table_compaction_info;
+    if (OB_ISNULL(simple_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, simple schema is null", KR(ret), K_(tenant_id));
+    } else if (FALSE_IT(table_id = simple_schema->get_table_id())) {
+    } else if (OB_FAIL(table_compaction_map.get_refactored(table_id, table_compaction_info))) {
+      LOG_WARN("fail to get refactored", KR(ret), K(table_id));
+    } else {
+      table_compaction_info.is_valid_data_table_ = false;
+      table_compaction_info.all_index_verified_ = true;
+      if (OB_FAIL(table_compaction_map.set_refactored(table_id, table_compaction_info, true/*overwrite*/))) {
+        LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(table_compaction_info));
+      }
+    }
+  }
+  // check 'is_valid_data_table_' and 'all_index_verifed_' for data tables according to index tables
+  for (int64_t i = 0; (i < table_count) && OB_SUCC(ret); ++i) {
+    const ObSimpleTableSchemaV2 *simple_schema = table_schemas.at(i);
+    if (OB_ISNULL(simple_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, simple schema is null", KR(ret), K_(tenant_id));
+    } else if (is_index_table(*simple_schema)) {
+      const uint64_t index_table_id = simple_schema->get_table_id();
+      const uint64_t data_table_id = simple_schema->get_data_table_id();
+      ObTableCompactionInfo index_table_compaction_info;
+      ObTableCompactionInfo data_table_compaction_info;
+      if (OB_FAIL(table_compaction_map.get_refactored(index_table_id, index_table_compaction_info))) {
+        LOG_WARN("fail to get refactored", KR(ret), K(index_table_id));
+      } else if (OB_FAIL(table_compaction_map.get_refactored(data_table_id, data_table_compaction_info))) {
+        LOG_WARN("fail to get refactored", KR(ret), K(data_table_id));
+      } else {
+        bool need_update = false;
+        if (!data_table_compaction_info.is_valid_data_table_) {
+          need_update = true;
+          data_table_compaction_info.is_valid_data_table_ = true;
+        }
+        if (!index_table_compaction_info.is_verified()
+            && data_table_compaction_info.all_index_verified_) {
+          need_update = true;
+          data_table_compaction_info.all_index_verified_ = false;
+        }
+        if (need_update) {
+          if (OB_FAIL(table_compaction_map.set_refactored(data_table_id, data_table_compaction_info,
+                                                          true/*overwrite*/))) {
+            LOG_WARN("fail to set refactored", KR(ret), K(data_table_id), K(data_table_compaction_info));
+          }
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 } // end namespace rootserver

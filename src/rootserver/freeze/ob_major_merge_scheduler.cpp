@@ -465,7 +465,8 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
   } else if (OB_FAIL(progress_checker_.check_verification(stop_, global_broadcast_scn, expected_epoch))) {
     LOG_WARN("fail to check verification", KR(ret), K_(tenant_id), K(global_broadcast_scn));
     int64_t time_interval = 10L * 60 * 1000 * 1000;  // record every 10 minutes
-    if (TC_REACH_TIME_INTERVAL(time_interval)) {
+    // only record OB_CHECKSUM_ERROR, and thus avoid confusing DBA
+    if (TC_REACH_TIME_INTERVAL(time_interval) && (OB_CHECKSUM_ERROR == ret)) {
       ROOTSERVICE_EVENT_ADD("daily_merge", "verification", K_(tenant_id),
                             "check verification fail", ret,
                             "global_broadcast_scn", global_broadcast_scn.get_val_for_inner_table_field(),
