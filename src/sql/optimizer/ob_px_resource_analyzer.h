@@ -20,6 +20,13 @@ namespace sql {
 
 enum DfoStatus { INIT, SCHED, FINISH };
 
+template <class T>
+class DfoTreeNormalizer
+{
+public:
+  static int normalize(T &root);
+};
+
 struct DfoInfo {
   DfoInfo() : parent_(nullptr), depend_sibling_(nullptr), child_dfos_(), status_(DfoStatus::INIT), dop_(0)
   {}
@@ -68,31 +75,33 @@ struct DfoInfo {
     return dop_;
   }
 
-  int64_t set_sched()
-  {
-    int64_t set = 0;
+  void set_sched(int64_t &thread)
+	{
     if (DfoStatus::INIT == status_) {
-      set = dop_;
+      thread += dop_;
       status_ = DfoStatus::SCHED;
     }
-    return set;
   }
-  int64_t set_parent_sched()
+  void set_parent_sched(int64_t &thread)
   {
-    int64_t set = 0;
     if (has_parent()) {
-      set = parent_->set_sched();
+      parent_->set_sched(thread);
     }
-    return set;
   }
-  int64_t set_finish()
+  void set_finish(int64_t &thread)
   {
-    int64_t set = 0;
     if (DfoStatus::SCHED == status_) {
-      set = dop_;
+      thread -= dop_;
       status_ = DfoStatus::FINISH;
     }
-    return set;
+  }
+  void set_has_depend_sibling(bool has_depend_sibling)
+  {
+    UNUSED(has_depend_sibling);
+  }
+  bool is_init() const
+  {
+    return DfoStatus::INIT == status_;
   }
   bool is_finish() const
   {
@@ -147,6 +156,75 @@ private:
   common::ObArray<DfoInfo*> dfos_;
   DISALLOW_COPY_AND_ASSIGN(ObPxResourceAnalyzer);
 };
+
+template <class T>
+int DfoTreeNormalizer<T>::normalize(T &root)
+{
+  int ret = OB_SUCCESS;
+  int64_t non_leaf_cnt = 0;
+  int64_t non_leaf_pos = -1;
+  ARRAY_FOREACH_X(root.child_dfos_, idx, cnt, OB_SUCC(ret)) {
+    T *dfo = root.child_dfos_.at(idx);
+    if (0 < dfo->get_child_count()) {
+      non_leaf_cnt++;
+      if (-1 == non_leaf_pos) {
+        non_leaf_pos = idx;
+      }
+    }
+  }
+  if (non_leaf_cnt > 1) {
+    // sched as the tree shape in bushy tree scenario
+  } else if (0 < non_leaf_pos) {
+    /*
+     * swap dfos to reorder schedule seq
+     *
+     * simple mode:
+     *
+     *      inode                 inode
+     *      /   \       ===>      /   \
+     *    leaf  inode           inode  leaf
+     *
+     * [*] inode is not leaf
+     *
+     * complicate mode:
+     *
+     *
+     *      root  --------+-----+
+     *      |      |      |     |
+     *      leaf0  leaf1  inode leaf2
+     *
+     *
+     *  after transformation:
+     *
+     *     root  --------+-----+
+     *      |     |      |     |
+     *      inode leaf0  leaf1 leaf2
+     */
+    // (1) build dependence
+    T *inode = root.child_dfos_.at(non_leaf_pos);
+    for (int64_t i = 1; i < non_leaf_pos; ++i) {
+      root.child_dfos_.at(i - 1)->set_depend_sibling(root.child_dfos_.at(i));
+    }
+    inode->set_depend_sibling(root.child_dfos_.at(0));
+    inode->set_has_depend_sibling(true);
+    // (2) transform
+    for (int64_t i = non_leaf_pos; i > 0; --i) {
+      root.child_dfos_.at(i) = root.child_dfos_.at(i-1);
+    }
+    root.child_dfos_.at(0) = inode;
+  }
+  if (OB_SUCC(ret)) {
+    ARRAY_FOREACH_X(root.child_dfos_, idx, cnt, OB_SUCC(ret)) {
+      if (OB_ISNULL(root.child_dfos_.at(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "NULL ptr", K(idx), K(cnt), K(ret));
+      } else if (OB_FAIL(normalize(*root.child_dfos_.at(idx)))) {
+        SQL_LOG(WARN, "fail normalize dfo", K(idx), K(cnt), K(ret));
+      }
+    }
+  }
+  return ret;
+}
 
 }  // namespace sql
 }  // namespace oceanbase

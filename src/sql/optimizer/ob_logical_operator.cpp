@@ -8253,6 +8253,11 @@ int ObLogicalOperator::calc_current_dfo_table_dop(ObLogicalOperator* root, int64
       }
     }
   }
+  // if there is no base table in a leaf dfo, such as
+  // EXCHANGE
+  //   EXPRESSION
+  // set dop = 1.
+  table_dop = max(1, table_dop);
   return ret;
 }
 

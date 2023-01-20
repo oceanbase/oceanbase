@@ -33,8 +33,23 @@ ObJoin::ObJoinCtx::ObJoinCtx(ObExecContext& ctx)
       right_row_(NULL),
       last_left_row_(NULL),
       last_right_row_(NULL),
-      left_row_joined_(false)
+      left_row_joined_(false),
+      check_times_(0)
 {}
+
+int ObJoin::ObJoinCtx::check_calc_buf(const int64_t n)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((check_times_++ & n) == n)) {
+    if (OB_ISNULL(calc_buf_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("calc buf is null", K(ret));
+    } else {
+      static_cast<ObArenaAllocator *>(calc_buf_)->reset_remain_one_page();
+    }
+  }
+  return ret;
+}
 
 ObJoin::ObJoin(ObIAllocator& alloc)
     : ObDoubleChildrenPhyOperator(alloc),
@@ -423,7 +438,9 @@ int ObJoin::calc_other_conds(ObJoinCtx& join_ctx, bool& is_match) const
   if (other_join_conds_.get_size() > 0) {
     ObExprCtx expr_ctx;
     ObSQLSessionInfo* my_session = join_ctx.exec_ctx_.get_my_session();
-    if (OB_ISNULL(my_session) || OB_ISNULL(my_phy_plan_) || OB_ISNULL(join_ctx.left_row_) ||
+    if (OB_FAIL(join_ctx.check_calc_buf())) {
+      LOG_WARN("check calc buf failed", K(ret));
+    } else if (OB_ISNULL(my_session) || OB_ISNULL(my_phy_plan_) || OB_ISNULL(join_ctx.left_row_) ||
         OB_ISNULL(join_ctx.right_row_)) {
       ret = OB_BAD_NULL_ERROR;
       LOG_WARN("session or phy plan or left / right row is null", K(ret));

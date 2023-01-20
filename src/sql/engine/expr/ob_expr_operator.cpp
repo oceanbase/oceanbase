@@ -1186,7 +1186,9 @@ int ObExprOperator::aggregate_numeric_accuracy_for_merge(
           precision = MAX(ObAccuracy::DDL_DEFAULT_ACCURACY2[is_oracle_mode][types[i].get_type()].precision_,
               types[i].get_precision());
           scale = 0;
-        } else if (ob_is_number_tc(types[i].get_type()) || ob_is_temporal_type(types[i].get_type())) {
+        } else if (ob_is_number_tc(types[i].get_type())
+                || ob_is_temporal_type(types[i].get_type())
+                || ob_is_bit_tc(types[i].get_type())) {
           precision = types[i].get_precision();
           scale = types[i].get_scale();
         } else {

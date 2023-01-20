@@ -175,6 +175,7 @@ class ObPostExprItem {
 public:
   ObPostExprItem() : v2_(), accuracy_(), item_type_(::T_INVALID)
   {}
+  virtual ~ObPostExprItem() {}
   // setters
   OB_INLINE void set_item_type(ObItemType item_type)
   {

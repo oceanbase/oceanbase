@@ -477,7 +477,8 @@ private:
 };
 
 class ObDfo {
-  friend class ObDfoTreeNormalizer;
+  template <class T>
+  friend class DfoTreeNormalizer;
   friend class ObDfoMgr;
   using TaskFilterFunc = std::function<bool(const ObPxTaskChSet&)>;
 
@@ -511,6 +512,7 @@ public:
         thread_inited_(false),
         thread_finish_(false),
         depend_sibling_(NULL),
+        has_depend_sibling_(false),
         parent_(NULL),
         receive_ch_sets_map_(),
         dfo_ch_infos_(),
@@ -750,9 +752,13 @@ public:
   {
     depend_sibling_ = sibling;
   }
+	void set_has_depend_sibling(bool has_depend_sibling)
+  {
+    has_depend_sibling_ = has_depend_sibling;
+  }
   bool has_depend_sibling() const
   {
-    return NULL != depend_sibling_;
+    return has_depend_sibling_;
   }
   ObDfo* depend_sibling() const
   {
@@ -932,6 +938,7 @@ private:
   bool thread_inited_;
   bool thread_finish_;
   ObDfo* depend_sibling_;
+  bool has_depend_sibling_;
   ObDfo* parent_;
   ObPxTaskChSets transmit_ch_sets_;
   common::ObArray<ObPxTaskChSets*> receive_ch_sets_map_;

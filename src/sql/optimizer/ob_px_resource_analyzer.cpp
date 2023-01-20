@@ -23,80 +23,6 @@ using namespace oceanbase::sql::log_op_def;
 namespace oceanbase {
 namespace sql {
 
-template <class T>
-class DfoTreeNormalizer {
-public:
-  static int normalize(T& root);
-};
-
-template <class T>
-int DfoTreeNormalizer<T>::normalize(T& root)
-{
-  int ret = OB_SUCCESS;
-  int64_t non_leaf_cnt = 0;
-  int64_t non_leaf_pos = -1;
-  ARRAY_FOREACH_X(root.child_dfos_, idx, cnt, OB_SUCC(ret))
-  {
-    DfoInfo* dfo = root.child_dfos_.at(idx);
-    if (0 < dfo->get_child_count()) {
-      non_leaf_cnt++;
-      if (-1 == non_leaf_pos) {
-        non_leaf_pos = idx;
-      }
-    }
-  }
-  if (non_leaf_cnt > 1) {
-    // sched as the tree shape in bushy tree scenario
-  } else if (1 == non_leaf_pos) {
-    /*
-     * swap dfos to reorder schedule seq
-     *
-     * simple mode:
-     *
-     *      inode                 inode
-     *      /   \       ===>      /   \
-     *    leaf  inode           inode  leaf
-     *
-     * [*] inode is not leaf
-     *
-     * complicate mode:
-     *
-     *      root  --------+-----+
-     *      |      |      |     |
-     *      leaf0  leaf1  inode leaf2
-     *
-     *
-     *  after transformation:
-     *
-     *     root  --------+-----+
-     *      |     |      |     |
-     *      inode leaf0  leaf1 leaf2
-     */
-
-    // (1) build dependence
-    T* inode = root.child_dfos_.at(non_leaf_pos);
-    inode->set_depend_sibling(root.child_dfos_.at(0));
-
-    // (2) transform
-    for (int64_t i = non_leaf_pos; i > 0; --i) {
-      root.child_dfos_.at(i) = root.child_dfos_.at(i - 1);
-    }
-    root.child_dfos_.at(0) = inode;
-  }
-  if (OB_SUCC(ret)) {
-    ARRAY_FOREACH_X(root.child_dfos_, idx, cnt, OB_SUCC(ret))
-    {
-      if (OB_ISNULL(root.child_dfos_.at(idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL ptr", K(idx), K(cnt), K(ret));
-      } else if (OB_FAIL(normalize(*root.child_dfos_.at(idx)))) {
-        LOG_WARN("fail normalize dfo", K(idx), K(cnt), K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 class SchedOrderGenerator {
 public:
   SchedOrderGenerator() = default;
@@ -363,26 +289,33 @@ int ObPxResourceAnalyzer::walk_through_dfo_tree(PxInfo& px_root, int64_t& max_pa
   int64_t max_threads = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < edges.count(); ++i) {
     DfoInfo& child = *edges.at(i);
-    threads += child.set_sched();
-    threads += child.set_parent_sched();
-    if (child.has_sibling() && child.depend_sibling_->is_leaf_node()) {
-      threads += child.depend_sibling_->set_sched();
+    child.set_sched(threads);
+    child.set_parent_sched(threads);
+    DfoInfo *pre_depend_sibling = NULL;
+
+    DfoInfo *depend_sibling = child.depend_sibling_;
+    while (NULL != depend_sibling && depend_sibling->is_init()) {
+      if (NULL != pre_depend_sibling) {
+        pre_depend_sibling->set_finish(threads);
+      }
+      depend_sibling->set_sched(threads);
+      pre_depend_sibling = depend_sibling;
+      depend_sibling = depend_sibling->depend_sibling_;
+      max_threads = max(max_threads, threads);
     }
-    if (threads > max_threads) {
-      max_threads = threads;
-    }
+    max_threads = max(max_threads, threads);
 #ifndef NDEBUG
     for (int x = 0; x < edges.count(); ++x) {
       LOG_DEBUG("dump dfo step.sched", K(i), K(x), K(*edges.at(x)), K(threads), K(max_threads));
     }
 #endif
     if (child.is_leaf_node()) {
-      threads -= child.set_finish();
+      child.set_finish(threads);
     } else if (child.is_all_child_finish()) {
-      threads -= child.set_finish();
+      child.set_finish(threads);
     }
-    if (child.has_sibling() && child.depend_sibling_->is_leaf_node()) {
-      threads -= child.depend_sibling_->set_finish();
+    if (NULL != pre_depend_sibling) {
+      pre_depend_sibling->set_finish(threads);
     }
 #ifndef NDEBUG
     for (int x = 0; x < edges.count(); ++x) {

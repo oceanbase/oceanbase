@@ -106,12 +106,11 @@ int ObSqlExpression::add_expr_item(const ObPostExprItem &item, const ObRawExpr *
       LOG_WARN("add infix expr item failed", K(ret));
     } else if (IS_EXPR_OP(item.get_item_type())) {
       int64_t last_expr_idx = infix_expr_.get_exprs().count() - 1;
-      infix_expr_.get_exprs()
-          .at(last_expr_idx)
-          .set_param_idx(static_cast<const ObInfixExprItem*>(&item)->get_param_idx());
-      infix_expr_.get_exprs()
-          .at(last_expr_idx)
-          .set_param_num(static_cast<const ObInfixExprItem*>(&item)->get_param_num());
+      const ObInfixExprItem *infix_expr_item = dynamic_cast<const ObInfixExprItem *>(&item);
+      if (NULL != infix_expr_item) {
+        infix_expr_.get_exprs().at(last_expr_idx).set_param_idx(infix_expr_item->get_param_idx());
+        infix_expr_.get_exprs().at(last_expr_idx).set_param_num(infix_expr_item->get_param_num());
+      }
     }
   }
   return ret;

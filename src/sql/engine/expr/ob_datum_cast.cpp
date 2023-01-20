@@ -1087,6 +1087,9 @@ static int common_string_string(const ObExpr& expr, const ObObjType in_type, con
         int64_t buf_offset = 0;
         while (str_offset < in_str.length() && buf_offset < buf_len) {
           int64_t offset = ObCharset::charpos(in_cs_type, in_str.ptr() + str_offset, in_str.length() - str_offset, 1);
+          if (OB_UNLIKELY(0 == offset)) {
+            break;
+          }
           ret = ObCharset::charset_convert(in_cs_type,
               in_str.ptr() + str_offset,
               offset,

@@ -72,13 +72,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDfoMgr);
 };
 
-class ObDfoTreeNormalizer {
-public:
-  // Rotate the leaf node to the right, making sure that the middle node is on the left.
-  // at the same time check the bushy tree situation, report an error and exit
-  static int normalize(ObDfo& root);
-};
-
 class ObDfoSchedOrderGenerator {
 public:
   static int generate_sched_order(ObDfoMgr& dfo_mgr);

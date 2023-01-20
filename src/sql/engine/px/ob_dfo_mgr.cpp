@@ -22,79 +22,11 @@
 #include "sql/engine/basic/ob_temp_table_insert_op.h"
 #include "sql/engine/px/exchange/ob_transmit_op.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "sql/optimizer/ob_px_resource_analyzer.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-int ObDfoTreeNormalizer::normalize(ObDfo& root)
-{
-  int ret = OB_SUCCESS;
-  int64_t non_leaf_cnt = 0;
-  int64_t non_leaf_pos = -1;
-  ARRAY_FOREACH_X(root.child_dfos_, idx, cnt, OB_SUCC(ret))
-  {
-    ObDfo* dfo = root.child_dfos_.at(idx);
-    if (0 < dfo->get_child_count()) {
-      non_leaf_cnt++;
-      if (-1 == non_leaf_pos) {
-        non_leaf_pos = idx;
-      }
-    }
-  }
-  if (non_leaf_cnt > 1) {
-  } else if (0 < non_leaf_pos) {
-    /*
-     * swap dfos to reorder schedule seq
-     *
-     * simplest case:
-     *
-     *      inode                 inode
-     *      /   \       ===>      /   \
-     *    leaf  inode           inode  leaf
-     *
-     * [*] inode means non-leaf node.
-     *
-     * complicated case:
-     *
-     * root node has 4 children, third child is middle and others are leaf nodes.
-     *
-     *      root  --------+-----+
-     *      |      |      |     |
-     *      leaf0  leaf1  inode leaf2
-     *
-     * dependence relationship: inode rely on leaf0 and leaf1,
-     *  so expect to schedule leaf0 first,then schedule leaf1.
-     *
-     *  After convert:
-     *
-     *     root  --------+-----+
-     *      |     |      |     |
-     *      inode leaf0  leaf1 leaf2
-     */
-    ObDfo* inode = root.child_dfos_.at(non_leaf_pos);
-    for (int64_t i = 1; i < non_leaf_pos; ++i) {
-      root.child_dfos_.at(i - 1)->set_depend_sibling(root.child_dfos_.at(i));
-    }
-    inode->set_depend_sibling(root.child_dfos_.at(0));
-
-    for (int64_t i = non_leaf_pos; i > 0; --i) {
-      root.child_dfos_.at(i) = root.child_dfos_.at(i - 1);
-    }
-    root.child_dfos_.at(0) = inode;
-  }
-  if (OB_SUCC(ret)) {
-    ARRAY_FOREACH_X(root.child_dfos_, idx, cnt, OB_SUCC(ret))
-    {
-      if (OB_ISNULL(root.child_dfos_.at(idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL ptr", K(idx), K(cnt), K(ret));
-      } else if (OB_FAIL(normalize(*root.child_dfos_.at(idx)))) {
-        LOG_WARN("fail normalize dfo", K(idx), K(cnt), K(ret));
-      }
-    }
-  }
-  return ret;
-}
 
 int ObDfoSchedOrderGenerator::generate_sched_order(ObDfoMgr& dfo_mgr)
 {
@@ -103,7 +35,7 @@ int ObDfoSchedOrderGenerator::generate_sched_order(ObDfoMgr& dfo_mgr)
   if (OB_ISNULL(dfo_tree)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL unexpected", K(ret));
-  } else if (OB_FAIL(ObDfoTreeNormalizer::normalize(*dfo_tree))) {
+  } else if (OB_FAIL(DfoTreeNormalizer<ObDfo>::normalize(*dfo_tree))) {
     LOG_WARN("fail normalize dfo tree", K(ret));
   } else if (OB_FAIL(do_generate_sched_order(dfo_mgr, *dfo_tree))) {
     LOG_WARN("fail generate dfo edges", K(ret));
@@ -180,17 +112,35 @@ int ObDfoWorkerAssignment::assign_worker(
       LOG_WARN("dfo edges expect to have parent", K(*child), K(ret));
     } else {
       int64_t assigned = parent->get_assigned_worker_count() + child->get_assigned_worker_count();
+	    /* Why need extra flag has_depend_sibling_? Why not use NULL != depend_sibling_?
+       *               dfo5 (dop=2)
+       *         /      |      \
+       *      dfo1(2) dfo2 (4) dfo4 (1)
+       *                        |
+       *                      dfo3 (2)
+       * Schedule order: (4,3) => (4,5) => (4,5,1) => (4,5,2) => (4,5) => (5). max_dop = (4,5,2) = 1 + 2 + 4 = 7.
+       * Depend sibling: dfo4 -> dfo1 -> dfo2.
+       * Depend sibling is stored as a list.
+       * We thought dfo2 is depend sibling of dfo1, and calculated incorrect max_dop = (1,2,5) = 2 + 4 + 2 = 8.
+       * Actually, dfo1 and dfo2 are depend sibling of dfo4, but dfo2 is not depend sibling of dfo1.
+       * So we use has_depend_sibling_ record whether the dfo is the header of list.
+      */
       int64_t max_depend_sibling_assigned_worker = 0;
-      while (child->has_depend_sibling()) {
-        child = child->depend_sibling();
-        if (max_depend_sibling_assigned_worker < child->get_assigned_worker_count()) {
-          max_depend_sibling_assigned_worker = child->get_assigned_worker_count();
+      if (child->has_depend_sibling()) {
+        while (NULL != child->depend_sibling()) {
+          child = child->depend_sibling();
+          if (max_depend_sibling_assigned_worker < child->get_assigned_worker_count()) {
+            max_depend_sibling_assigned_worker = child->get_assigned_worker_count();
+          }
         }
       }
       assigned += max_depend_sibling_assigned_worker;
       if (assigned > total_assigned) {
         total_assigned = assigned;
       }
+      LOG_TRACE("update total assigned", K(idx), K(parent->get_assigned_worker_count()),
+                K(child->get_assigned_worker_count()), K(max_depend_sibling_assigned_worker),
+                K(total_assigned));
     }
   }
   if (OB_SUCC(ret) && total_assigned > allocated_worker_count && allocated_worker_count != 0) {

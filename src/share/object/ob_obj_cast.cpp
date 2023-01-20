@@ -1113,6 +1113,7 @@ static int int_string(
     } else if (OB_FAIL(copy_string(params, expect_type, tmp_out.get_string(), out))) {
     } else {
       res_length = static_cast<ObLength>(out.get_string_len());
+      out.set_collation_type(params.dest_collation_);
     }
   }
   SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
@@ -1417,6 +1418,7 @@ static int uint_string(
     } else if (OB_FAIL(copy_string(params, expect_type, tmp_out.get_string(), out))) {
     } else {
       res_length = static_cast<ObLength>(out.get_string_len());
+      out.set_collation_type(params.dest_collation_);
     }
   }
 
@@ -1803,6 +1805,7 @@ static int float_string(
     } else if (OB_FAIL(copy_string(params, expect_type, tmp_out.get_string(), out))) {
     } else {
       res_length = static_cast<ObLength>(out.get_string_len());
+      out.set_collation_type(params.dest_collation_);
     }
   }
   UNUSED(cast_mode);
@@ -2182,6 +2185,7 @@ static int double_string(
     } else if (OB_FAIL(copy_string(params, expect_type, tmp_out.get_string(), out))) {
     } else {
       res_length = static_cast<ObLength>(out.get_string_len());
+      out.set_collation_type(params.dest_collation_);
     }
   }
   SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
@@ -2603,6 +2607,7 @@ static int number_string(
       } else if (OB_FAIL(copy_string(params, expect_type, tmp_out.get_string(), out))) {
       } else {
         res_length = static_cast<ObLength>(out.get_string_len());
+        out.set_collation_type(params.dest_collation_);
       }
     }
   }
@@ -2930,6 +2935,7 @@ static int datetime_string(
       } else if (OB_FAIL(copy_string(params, expect_type, tmp_out.get_string(), out))) {
       } else {
         res_length = static_cast<ObLength>(out.get_string_len());
+        out.set_collation_type(params.dest_collation_);
       }
     }
   }
@@ -3229,6 +3235,7 @@ static int date_string(
     ret = copy_string(params, expect_type, buf, len, out);
     if (OB_SUCC(ret)) {
       res_length = static_cast<ObLength>(out.get_string_len());
+      out.set_collation_type(params.dest_collation_);
     }
   }
   SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
@@ -3487,6 +3494,7 @@ static int time_string(
     ret = copy_string(params, expect_type, buf, len, out);
     if (OB_SUCC(ret)) {
       res_length = static_cast<ObLength>(out.get_string_len());
+      out.set_collation_type(params.dest_collation_);
     }
   }
   SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
@@ -3730,6 +3738,7 @@ static int year_string(
     ret = copy_string(params, expect_type, buf, len, out);
     if (OB_SUCC(ret)) {
       res_length = static_cast<ObLength>(out.get_string_len());
+      out.set_collation_type(params.dest_collation_);
     }
   }
   SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
@@ -4269,6 +4278,9 @@ static int string_string(
           while (str_offset < str.length() && buf_offset + question_mark.length() <= buf_len) {
             int64_t offset =
                 ObCharset::charpos(in.get_collation_type(), str.ptr() + str_offset, str.length() - str_offset, 1);
+            if (OB_UNLIKELY(0 == offset)) {
+              break;
+            }
             ret = ObCharset::charset_convert(in.get_collation_type(),
                 str.ptr() + str_offset,
                 offset,
@@ -5097,6 +5109,7 @@ static int bit_string(
   }
   if (OB_SUCC(ret)) {
     res_length = static_cast<ObLength>(out.get_string_len());
+    out.set_collation_type(params.dest_collation_);
     SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_STRING, res_length);
   }
   return ret;
@@ -5779,6 +5792,7 @@ static int otimestamp_string(
       } else {
         out.set_type(expect_type);
         res_length = static_cast<ObLength>(out.get_string_len());
+        out.set_collation_type(params.dest_collation_);
       }
     }
   }
@@ -5858,6 +5872,7 @@ static int interval_string(
         LOG_WARN("failed to copy_string", K(ret), K(expect_type), K(len));
       } else {
         out.set_type(expect_type);
+        out.set_collation_type(params.dest_collation_);
         res_length = static_cast<ObLength>(out.get_string_len());
       }
     }
@@ -6054,6 +6069,7 @@ static int rowid_string(
         LOG_WARN("failed to copy_string", K(ret), K(expect_type));
       } else {
         out.set_type(expect_type);
+        out.set_collation_type(params.dest_collation_);
         res_length = static_cast<ObLength>(out.get_string_len());
       }
     }
@@ -6537,6 +6553,7 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
           temp_str_val.assign_ptr(j_buf.ptr(), accuracy_max_len);
         }
         ret = copy_string(params, expect_type, temp_str_val, out);
+        out.set_collation_type(params.dest_collation_);
       } else {
         ObObj tmp_obj;
         tmp_obj.set_collation_type(in.get_collation_type());

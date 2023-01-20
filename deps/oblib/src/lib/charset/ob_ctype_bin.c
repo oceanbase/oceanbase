@@ -710,7 +710,7 @@ static int ob_wildcmp_bin_impl(const ObCharsetInfo* cs, const char* str_ptr, con
 
       INC_PTR(cs, wild_str, wild_end);
       cmp = likeconv(cs, cmp);
-      do {
+      while (1) {
         while (str_ptr != str_end_ptr && (unsigned char)likeconv(cs, *str_ptr) != cmp) {
           str_ptr++;
         }
@@ -723,8 +723,14 @@ static int ob_wildcmp_bin_impl(const ObCharsetInfo* cs, const char* str_ptr, con
           if (tmp <= 0) {
             return tmp;
           }
+          if (str_ptr == str_end_ptr) {
+            return -1;
+          }
+          if (wild_str != wild_end && wild_str[0] == w_many_char) {
+            return -1;
+          }
         } while (0);
-      } while (str_ptr != str_end_ptr && wild_str[0] != w_many_char);
+      }
       return -1;
     }
   }

@@ -43,6 +43,7 @@ public:
     {
       ObPhyOperatorCtx::destroy_base();
     }
+    int check_calc_buf(const int64_t n = 0xFF);
 
   protected:
     const common::ObNewRow* left_row_;
@@ -52,6 +53,8 @@ public:
     bool left_row_joined_;
 
   private:
+    // for release memory of calc_buf_.
+    int64_t check_times_;
     DISALLOW_COPY_AND_ASSIGN(ObJoinCtx);
   };
 
