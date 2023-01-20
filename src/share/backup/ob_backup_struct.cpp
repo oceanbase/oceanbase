@@ -15,6 +15,7 @@
 #include "common/ob_record_header.h"
 #include "share/config/ob_server_config.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/schema/ob_schema_mgr.h"
 #include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_lease_info_mgr.h"
 #include "storage/transaction/ob_i_ts_source.h"
@@ -1003,13 +1004,13 @@ bool ObTenantLogArchiveStatus::is_compatible_valid(COMPATIBLE compatible)
   return compatible >= COMPATIBLE::NONE && compatible < COMPATIBLE::MAX;
 }
 
-// 备份状态机
+// archive log state machine
 // STOP->STOP
 // BEGINNING -> BEGINNING\DOING\STOPPING\INERRUPTED
 // DOING -> DOING\STOPPING\INERRUPTED
 // STOPPING -> STOPPIONG\STOP
 // INTERRUPTED -> INERRUPTED\STOPPING
-// 备份备份状态机
+// backup archive log state machine
 // DOING->PAUSED\STOP
 // PAUSED->DOING
 int ObTenantLogArchiveStatus::update(const ObTenantLogArchiveStatus& new_status)
@@ -3338,7 +3339,9 @@ int ObBackupUtils::check_gts(
     schema::ObMultiVersionSchemaService& schema_service, const uint64_t tenant_id, bool& is_gts)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t gts_type = oceanbase::transaction::TS_SOURCE_LTS;
+  bool is_dropped = false;
   schema::ObSchemaGetterGuard schema_guard;
 
   if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -3348,6 +3351,22 @@ int ObBackupUtils::check_gts(
   } else if (!oceanbase::transaction::is_ts_type_external_consistent(gts_type)) {
     is_gts = false;
     LOG_INFO("tenant is not gts", K(tenant_id));
+  }
+  DEBUG_SYNC(BEFORE_BACKUP_DROP_TENANT);
+  if (OB_FAIL(ret)) {
+    // ignore restoring and dropped tenant.
+    const schema::ObSimpleTenantSchema *tenant_schema = NULL;
+    if (OB_SUCCESS != (tmp_ret = schema_service.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+      LOG_WARN("fail to check if tenant has been dropped", K(tmp_ret), K(tenant_id));
+    } else if (is_dropped) {
+      ret = OB_SUCCESS;
+      LOG_INFO("tenant has been dropped, no need to check gts", K(tenant_id));
+    } else if (OB_SUCCESS != (tmp_ret = (schema_guard.get_tenant_info(tenant_id, tenant_schema)))) {
+      LOG_WARN("failed to get tenant info", K(tmp_ret), K(tenant_id));
+    } else if (tenant_schema->is_restore()) {
+      ret = OB_SUCCESS;
+      LOG_INFO("tenant is restoring, no need to check gts", K(tenant_id));
+    }
   }
   return ret;
 }
