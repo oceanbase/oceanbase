@@ -711,7 +711,7 @@ int ObPhyOperator::calculate_row_inner(
       } else {
       }
     }
-    LOG_DEBUG("calculate row", K(ret), "op_type", ob_phy_operator_type_str(get_type()), K(calc_row));
+    LOG_DEBUG("calculate row", K(ret), "op_type", ob_phy_operator_type_str(get_type()));
   }
   return ret;
 }
