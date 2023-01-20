@@ -507,7 +507,7 @@ int ObSynonymMgr::get_object(const uint64_t tenant_id, const uint64_t database_i
     if (OB_FAIL(get_synonym_schema_with_name(tenant_id, cur_database_id, name, synonym_schema))) {
       LOG_WARN("fail to get synonym schema with name", K(tenant_id), K(cur_database_id), K(name), K(ret));
     } else if (OB_ISNULL(synonym_schema)) {
-      LOG_INFO("synonym is not exist", K(tenant_id), K(cur_database_id), K(name), K(ret));
+      LOG_DEBUG("synonym is not exist", K(tenant_id), K(cur_database_id), K(name), K(ret));
     } else {
       do_exist = true;
     }
