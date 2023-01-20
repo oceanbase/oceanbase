@@ -95,9 +95,7 @@ int ObScalarAggregateOp::inner_get_next_row()
         LOG_WARN("fail to prepare the aggr func", K(ret));
       }
     } else {
-      clear_evaluated_flag();
-
-      ObAggregateProcessor::GroupRow* group_row = NULL;
+      ObAggregateProcessor::GroupRow *group_row = NULL;
       if (OB_FAIL(aggr_processor_.get_group_row(0, group_row))) {
         LOG_WARN("failed to get_group_row", K(ret));
       } else if (OB_ISNULL(group_row)) {
@@ -106,9 +104,13 @@ int ObScalarAggregateOp::inner_get_next_row()
       } else if (OB_FAIL(aggr_processor_.prepare(*group_row))) {
         LOG_WARN("fail to prepare the aggr func", K(ret));
       } else {
-        while (OB_SUCC(ret) && OB_SUCC(child_->get_next_row())) {
+        while (OB_SUCC(ret)) {
           clear_evaluated_flag();
-          if (OB_FAIL(try_check_status())) {
+          if (OB_FAIL((child_->get_next_row()))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get row from child", K(ret));
+            }
+          } else if (OB_FAIL(try_check_status())) {
             LOG_WARN("check status failed", K(ret));
           } else if (OB_FAIL(aggr_processor_.process(*group_row))) {
             LOG_WARN("fail to process the aggr func", K(ret));
