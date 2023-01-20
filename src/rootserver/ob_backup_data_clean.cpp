@@ -1240,7 +1240,6 @@ int ObBackupDataClean::add_obsolete_backup_sets_in_doing(const share::ObBackupCl
 {
   int ret = OB_SUCCESS;
   bool is_continue = false;
-  bool need_add_backup_set = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data clean do not init", K(ret));
@@ -1256,14 +1255,11 @@ int ObBackupDataClean::add_obsolete_backup_sets_in_doing(const share::ObBackupCl
       backup_set_id.clean_mode_ = ObBackupDataCleanMode::CLEAN;
       ObBackupDestOpt backup_dest_option;
       bool can_delete = false;
-      need_add_backup_set = true;
 
       if (OB_FAIL(check_backup_set_id_can_be_deleted(clean_info.tenant_id_, backup_set_id, can_delete))) {
         LOG_WARN("failed to check backup set id can be deleted", K(ret), K(clean_info), K(backup_set_id));
       } else if (can_delete) {
         backup_set_id.clean_mode_ = ObBackupDataCleanMode::CLEAN;
-      } else if (ObTenantBackupTaskInfo::FINISH == task_info.status_ && !task_info.is_result_succeed()) {
-        need_add_backup_set = false;
       } else {
         backup_set_id.clean_mode_ = ObBackupDataCleanMode::TOUCH;
         if (!task_info.is_result_succeed() || !task_info.backup_type_.is_full_backup()) {
@@ -1276,7 +1272,7 @@ int ObBackupDataClean::add_obsolete_backup_sets_in_doing(const share::ObBackupCl
         }
       }
 
-      if (OB_SUCC(ret) && need_add_backup_set) {
+      if (OB_SUCC(ret)) {
         if (OB_FAIL(get_backup_dest_option(task_info.backup_dest_, backup_dest_option))) {
           LOG_WARN("failed to get backup dest option", K(ret), K(task_info));
         } else if (OB_FAIL(clean_tenant.set_backup_clean_backup_set_id(task_info.cluster_id_,
@@ -1321,7 +1317,6 @@ int ObBackupDataClean::add_obsolete_backup_sets_in_prepare(const share::ObBackup
     for (int64_t i = task_infos.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
       is_continue = false;
       const ObTenantBackupTaskInfo &task_info = task_infos.at(i);
-      bool need_add_backup_set = true;
       if (task_info.snapshot_version_ <= clean_info.expired_time_) {
         if (OB_FAIL(deal_with_obsolete_backup_set(clean_info,
                 task_info,
@@ -1335,7 +1330,9 @@ int ObBackupDataClean::add_obsolete_backup_sets_in_prepare(const share::ObBackup
       } else {
         // backup set is not obsolete
         if (ObTenantBackupTaskInfo::FINISH == task_info.status_ && !task_info.is_result_succeed()) {
-          need_add_backup_set = false;
+          backup_set_id.backup_set_id_ = task_info.backup_set_id_;
+          backup_set_id.copy_id_ = task_info.copy_id_;
+          backup_set_id.clean_mode_ = ObBackupDataCleanMode::CLEAN;
         } else if (OB_FAIL(deal_with_effective_backup_set(clean_info,
                        task_info,
                        log_archive_infos,
@@ -1347,13 +1344,10 @@ int ObBackupDataClean::add_obsolete_backup_sets_in_prepare(const share::ObBackup
       }
 
       if (OB_FAIL(ret)) {
-      } else if (need_add_backup_set) {
-        // successful and not obsolete backup sets need to added, because of the touch feature
-        if (OB_FAIL(reverse_task_infos.push_back(task_info))) {
-          LOG_WARN("failed to push task info into array", K(ret), K(task_info));
-        } else if (OB_FAIL(reverse_backup_set_ids.push_back(backup_set_id))) {
-          LOG_WARN("failed to push backup set id into array", K(ret), K(backup_set_id));
-        }
+      } else if (OB_FAIL(reverse_task_infos.push_back(task_info))) {
+        LOG_WARN("failed to push task info into array", K(ret), K(task_info));
+      } else if (OB_FAIL(reverse_backup_set_ids.push_back(backup_set_id))) {
+        LOG_WARN("failed to push backup set id into array", K(ret), K(backup_set_id));
       }
     }
 
@@ -1391,7 +1385,6 @@ int ObBackupDataClean::deal_with_obsolete_backup_set(const share::ObBackupCleanI
     backup_set_id.backup_set_id_ = task_info.backup_set_id_;
     backup_set_id.copy_id_ = task_info.copy_id_;
     backup_set_id.clean_mode_ = ObBackupDataCleanMode::CLEAN;
-    bool need_add_backup_set = true;
     ObBackupDestOpt backup_dest_option;
     int64_t copies_num = 0;
     bool can_delete = false;
