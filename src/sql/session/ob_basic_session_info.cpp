@@ -876,6 +876,7 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       }
     }
   }  // end for
+  release_to_pool_ = OB_SUCC(ret);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(gen_sys_var_in_pc_str())) {
@@ -3395,6 +3396,7 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema& sys_var_sch
     }
     OX(sys_var_base_version_ = sys_var_schema.get_schema_version());
   }
+  release_to_pool_ = OB_SUCC(ret);
   if (!is_deserialized_) {
     OZ(gen_sys_var_in_pc_str());
   }
