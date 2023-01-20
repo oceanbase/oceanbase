@@ -5735,15 +5735,15 @@ int ObTransService::handle_trans_response(const ObTransMsg& msg)
             TRANS_LOG(INFO, "refresh location cache success", "partition", sender, K(lbt()));
           }
         }
-
-        if (OB_TRANS_START_STMT_REQUEST == err_msg_type || OB_TRANS_STMT_ROLLBACK_REQUEST == err_msg_type ||
-            OB_TRANS_COMMIT_REQUEST == err_msg_type || OB_TRANS_ABORT_REQUEST == err_msg_type ||
-            OB_TRANS_CLEAR_REQUEST == err_msg_type || OB_TRANS_SAVEPOINT_ROLLBACK_REQUEST == err_msg_type) {
-          if (OB_SUCCESS != (tmp_ret = handle_trans_err_response_(
-                                 err_msg_type, trans_id, sender, sender_addr, status, sql_no, request_id))) {
-            TRANS_LOG(WARN, "handle error reseponse msg error", K(msg));
-            ret = tmp_ret;
-          }
+      }
+      if (OB_TRANS_START_STMT_REQUEST == err_msg_type || OB_TRANS_STMT_ROLLBACK_REQUEST == err_msg_type ||
+          OB_TRANS_COMMIT_REQUEST == err_msg_type || OB_TRANS_ABORT_REQUEST == err_msg_type ||
+          OB_TRANS_CLEAR_REQUEST == err_msg_type || OB_TRANS_SAVEPOINT_ROLLBACK_REQUEST == err_msg_type ||
+          OB_TRANS_TIMEOUT == status) {
+        if (OB_SUCCESS != (tmp_ret = handle_trans_err_response_(
+                               err_msg_type, trans_id, sender, sender_addr, status, sql_no, request_id))) {
+          TRANS_LOG(WARN, "handle error reseponse msg error", K(msg));
+          ret = tmp_ret;
         }
       }
     }

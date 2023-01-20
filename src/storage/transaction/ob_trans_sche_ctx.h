@@ -138,7 +138,7 @@ public:
     return OB_NOT_SUPPORTED;
   }
   int wait_start_stmt(ObTransDesc& trans_desc, const int64_t expired_time);
-  int wait_end_stmt(const int64_t expired_time);
+  int wait_end_stmt(const int64_t stmt_expired_time);
   int handle_err_response(const int64_t msg_type, const ObPartitionKey& partition, const ObAddr& sender_addr,
       const int status, const int64_t sql_no, const int64_t request_id);
   int kill_query_session(const int status);

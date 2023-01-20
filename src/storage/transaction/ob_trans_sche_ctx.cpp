@@ -1213,7 +1213,7 @@ int ObScheTransCtx::end_stmt(const bool is_rollback, ObTransDesc& trans_desc)
   return ret;
 }
 
-int ObScheTransCtx::wait_end_stmt(const int64_t expired_time)
+int ObScheTransCtx::wait_end_stmt(const int64_t stmt_expired_time)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1222,10 +1222,11 @@ int ObScheTransCtx::wait_end_stmt(const int64_t expired_time)
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObScheTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(expired_time <= 0)) {
-    TRANS_LOG(WARN, "invalid argument", K(expired_time));
+  } else if (OB_UNLIKELY(stmt_expired_time <= 0)) {
+    TRANS_LOG(WARN, "invalid argument", K(stmt_expired_time));
     ret = OB_INVALID_ARGUMENT;
   } else {
+    int64_t expired_time = std::min(stmt_expired_time, trans_expired_time_);
     stmt_rollback_req_timeout_ = GCONF._ob_trans_rpc_timeout / 3;
     bool need_retry_rpc = true;
     int64_t retry_count = 0;
@@ -1245,7 +1246,11 @@ int ObScheTransCtx::wait_end_stmt(const int64_t expired_time)
         // generate request id, so rolback stmt will not retry
         CtxLockGuard guard(lock_);
         generate_request_id_();
-        ret = OB_TRANS_STMT_TIMEOUT;
+        if (ObTimeUtility::current_time() > trans_expired_time_) {
+          ret = OB_TRANS_TIMEOUT;
+        } else {
+          ret = OB_TRANS_STMT_TIMEOUT;
+        }
         need_retry_rpc = false;
       } else if (OB_FAIL(end_stmt_cond_.wait(waittime, result)) || OB_FAIL(result)) {
         if (ObTimeUtility::current_time() < expired_time && OB_TIMEOUT == ret) {
@@ -2412,7 +2417,8 @@ int ObScheTransCtx::handle_err_response(const int64_t msg_type, const ObPartitio
             "context",
             *this);
       } else if (OB_PARTITION_NOT_EXIST == status || OB_NOT_MASTER == status || OB_PARTITION_IS_STOPPED == status ||
-                 OB_PARTITION_IS_BLOCKED == status || OB_TRANS_STMT_NEED_RETRY == status) {
+                 OB_PARTITION_IS_BLOCKED == status || OB_TRANS_STMT_NEED_RETRY == status ||
+                 OB_TRANS_TIMEOUT == status) {
         if (trans_param_.is_bounded_staleness_read()) {
           if (OB_FAIL(cur_stmt_unreachable_partitions_.push_back(partition))) {
             TRANS_LOG(WARN,
@@ -2434,8 +2440,13 @@ int ObScheTransCtx::handle_err_response(const int64_t msg_type, const ObPartitio
             }
           }
         } else {
-          if (OB_NOT_MASTER != status && OB_TRANS_STMT_NEED_RETRY != status) {
-            end_stmt_cond_.notify(OB_TRANS_CTX_NOT_EXIST);
+          if (OB_NOT_MASTER != status && OB_PARTITION_NOT_EXIST != status && OB_TRANS_STMT_NEED_RETRY != status &&
+              OB_PARTITION_IS_STOPPED != status && OB_PARTITION_IS_BLOCKED != status) {
+            if (OB_TRANS_TIMEOUT == status) {
+              end_stmt_cond_.notify(OB_TRANS_TIMEOUT);
+            } else {
+              end_stmt_cond_.notify(OB_TRANS_CTX_NOT_EXIST);
+            }
             // NOT_MASTER error-code retryable, add async task
           } else if (OB_TRANS_STMT_ROLLBACK_REQUEST == msg_type) {
             if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
@@ -2453,6 +2464,8 @@ int ObScheTransCtx::handle_err_response(const int64_t msg_type, const ObPartitio
           }
         }
       } else {
+        end_stmt_cond_.notify(OB_TRANS_NEED_ROLLBACK);
+        TRANS_LOG(WARN, "transaction need rollback when stmt rollback", K(msg_type), K(partition), K(sender_addr), K(status), K(*this));
         // do nothing
       }
     } else if (OB_TRANS_COMMIT_REQUEST == msg_type || OB_TRANS_ABORT_REQUEST == msg_type) {
