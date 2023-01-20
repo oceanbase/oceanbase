@@ -86,14 +86,17 @@ public:
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(init_block_allocator())) {
+      desc_.init_errcode_ = ret;
       SQL_RESV_LOG(WARN, "failed to init block allocator", K(ret));
     } else if (OB_ISNULL(block_allocator_)) {
       ret = OB_INVALID_ARGUMENT;
+      desc_.init_errcode_ = ret;
       SQL_RESV_LOG(WARN, "invalid argument", K(ret));
     } else {
       int64_t words_size = sizeof(BitSetWord) * MAX_BITSETWORD;
       if (OB_ISNULL(bit_set_word_array_ = (BitSetWord *)block_allocator_->alloc(words_size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
+        desc_.init_errcode_ = ret;
         SQL_RESV_LOG(WARN, "failed to alloc memory", K(ret));
       } else {
         MEMSET(bit_set_word_array_, 0, words_size);
@@ -108,13 +111,15 @@ public:
       : block_allocator_(NULL), bit_set_word_array_(NULL), desc_()
   {
     int ret = OB_SUCCESS;
-    desc_.inited_ = false;
     if (!other.is_valid()) {
-      ret = OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "not intied", K(ret));
+      desc_.init_errcode_ = other.desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "other not intied", K(other.desc_.init_errcode_));
     } else if (OB_FAIL(init_block_allocator())) {
+      desc_.init_errcode_ = ret;
       SQL_RESV_LOG(WARN, "failed to init block allocator", K(ret));
     } else if (OB_ISNULL(block_allocator_)) {
+      ret = OB_INVALID_ARGUMENT;
+      desc_.init_errcode_ = ret;
       SQL_RESV_LOG(WARN, "block_allocator_ is null", K(ret));
     } else {
       int64_t cap = other.bitset_word_count() * 2;
@@ -124,6 +129,7 @@ public:
       int64_t words_size = sizeof(BitSetWord) * cap;
       if (OB_ISNULL(bit_set_word_array_ = (BitSetWord *)block_allocator_->alloc(words_size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
+        desc_.init_errcode_ = ret;
         SQL_RESV_LOG(WARN, "failed to alloc memory", K(ret));
       } else {
         MEMSET(bit_set_word_array_, 0, words_size);
@@ -141,14 +147,17 @@ public:
     int ret = OB_SUCCESS;
     if (bit_size < 0) {
       ret = OB_INVALID_ARGUMENT;
+      desc_.init_errcode_ = ret;
       SQL_RESV_LOG(WARN, "invalid argument", K(ret));
     } else if (OB_FAIL(init_block_allocator())) {
+      desc_.init_errcode_ = ret;
       SQL_RESV_LOG(WARN, "failed to init block allocator", K(ret));
     } else {
       int64_t bitset_word_cnt = (bit_size <= N ? MAX_BITSETWORD : ((bit_size - 1) / PER_BITSETWORD_BITS + 1));
       int64_t words_size = sizeof(BitSetWord) * bitset_word_cnt;
       if (OB_ISNULL(bit_set_word_array_ = (BitSetWord *)block_allocator_->alloc(words_size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
+        desc_.init_errcode_ = ret;
         SQL_RESV_LOG(WARN, "failed to alloc memory", K(ret));
       } else {
         MEMSET(bit_set_word_array_, 0, words_size);
@@ -232,9 +241,9 @@ public:
   {
     BitSetWord word = 0;
     if (!is_valid()) {
-      SQL_RESV_LOG(INFO, "not inited");
+      SQL_RESV_LOG(WARN, "not inited", K(desc_.init_errcode_));
     } else if (index < 0 || index >= desc_.len_) {
-      SQL_RESV_LOG(INFO, "bitmap word index exceeds scope", K(index), K(desc_.len_));
+      SQL_RESV_LOG(WARN, "bitmap word index exceeds scope", K(index), K(desc_.len_));
     } else {
       word = bit_set_word_array_[index];
     }
@@ -270,7 +279,7 @@ public:
     if (!is_valid()) {
       // do nothing
     } else if (OB_UNLIKELY(index < 0)) {
-      SQL_RESV_LOG(INFO, "negative bitmap member not allowed");
+      SQL_RESV_LOG(WARN, "negative bitmap member not allowed");
     } else {
       int64_t pos = index >> PER_BITSETWORD_MOD_BITS;
       if (pos >= desc_.len_) {
@@ -285,8 +294,8 @@ public:
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid()) {
-      ret = OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "not inited", K(ret));
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "got init error", K(desc_.init_errcode_));
     } else if (OB_UNLIKELY(index < 0)) {
       ret = OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "negative bitmap member not allowed", K(ret), K(index));
@@ -311,8 +320,8 @@ public:
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid()) {
-      ret = common::OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "not inited", K(ret));
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "got init error", K(desc_.init_errcode_));
     } else if (OB_UNLIKELY(index < 0)) {
       ret = common::OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "negative bitmap member not allowed", K(ret), K(index));
@@ -332,8 +341,8 @@ public:
     int ret = OB_SUCCESS;
     int64_t max_bit_count = static_cast<int64_t>(desc_.len_) * PER_BITSETWORD_BITS;
     if (!is_valid()) {
-      ret = OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "not inited", K(ret));
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "got init error", K(desc_.init_errcode_));
     } else if (begin_index < 0 || begin_index >= max_bit_count || end_index < 0 || end_index >= max_bit_count) {
       ret = OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(begin_index), K(end_index), K(max_bit_count));
@@ -364,8 +373,8 @@ public:
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid()) {
-      ret = common::OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "not inited", K(ret));
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "got init error", K(desc_.init_errcode_));
     } else if (OB_ISNULL(bit_set_word_array_)) {
       ret = common::OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(bit_set_word_array_));
@@ -410,8 +419,8 @@ public:
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid()) {
-      ret = common::OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "not inited", K(ret));
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "got init error", K(desc_.init_errcode_));
     } else {
       for (int64_t i = 0; i < desc_.len_; i++) {
         bit_set_word_array_[i] &= ~(other.get_bitset_word(i));
@@ -510,8 +519,8 @@ public:
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid()) {
-      ret = OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "not inited", K(ret));
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "got init error", K(desc_.init_errcode_));
     } else {
       arr.reuse();
       int64_t num = num_members();
@@ -562,9 +571,15 @@ public:
   int intersect(const ObSqlBitSet<M, FlagType2, auto_free2> &left, const ObSqlBitSet<L, FlagType3, auto_free3> &right)
   {
     int ret = common::OB_SUCCESS;
-    if (!is_valid() || !left.is_valid() || !right.is_valid()) {
-      ret = common::OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "not inited", K(ret));
+    if (!is_valid()) {
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "init error", K(desc_.init_errcode_));
+    } else if (!left.is_valid()) {
+      ret = left.desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "left init error", K(left.desc_.init_errcode_));
+    } else if (!right.is_valid()) {
+      ret = right.desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "right init error", K(right.desc_.init_errcode_));
     } else if (OB_ISNULL(bit_set_word_array_)) {
       ret = common::OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(bit_set_word_array_));
@@ -594,9 +609,15 @@ public:
   int except(const ObSqlBitSet<M, FlagType2, auto_free2> &left, const ObSqlBitSet<L, FlagType3, auto_free3> &right)
   {
     int ret = common::OB_SUCCESS;
-    if (!is_valid() || !left.is_valid() || !right.is_valid()) {
-      ret = common::OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "not inited", K(ret));
+    if (!is_valid()) {
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "init error", K(desc_.init_errcode_));
+    } else if (!left.is_valid()) {
+      ret = left.desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "left init error", K(left.desc_.init_errcode_));
+    } else if (!right.is_valid()) {
+      ret = right.desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "right init error", K(right.desc_.init_errcode_));
     } else if (OB_ISNULL(bit_set_word_array_)) {
       ret = common::OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(bit_set_word_array_));
@@ -661,9 +682,12 @@ public:
   ObSqlBitSet<N, FlagType, auto_free> &operator=(const ObSqlBitSet<N, FlagType, auto_free> &other)
   {
     int ret = OB_SUCCESS;
-    if (!other.is_valid() || !is_valid()) {
-      ret = OB_NOT_INIT;
-      SQL_RESV_LOG(WARN, "invalid bitset", K(is_valid()), K(other.is_valid()));
+    if (!is_valid()) {
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "init error", K(desc_.init_errcode_));
+    } else if (!other.is_valid()) {
+      ret = other.desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "init error", K(other.desc_.init_errcode_));
     } else if (&other == this) {
       // do nothing
     } else {
@@ -681,6 +705,7 @@ public:
     }
     if (OB_FAIL(ret)) {
       // error happened, set inited flag to be false
+      desc_.init_errcode_ = ret;
       desc_.inited_ = false;
     }
     return *this;
@@ -694,9 +719,10 @@ private:
     BitSetWord *new_buf = NULL;
     ObIAllocator *allocator = get_block_allocator();
     if (!is_valid()) {
-      ret = OB_NOT_INIT;
+      ret = desc_.init_errcode_;
       SQL_RESV_LOG(WARN, "not inited", K(ret));
     } else if (OB_ISNULL(allocator)) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid allocator", K(ret));
     } else if (OB_ISNULL(new_buf = (BitSetWord *)allocator->alloc(words_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -744,14 +770,21 @@ private:
   }
 
 private:
+  template <int64_t N2, typename FlagType2, bool auto_free2>
+  friend struct ObSqlBitSet;
   static const int64_t PER_BITSETWORD_BITS = 32;
   static const int64_t PER_BITSETWORD_MOD_BITS = 5;
   static const int64_t PER_BITSETWORD_MASK = PER_BITSETWORD_BITS - 1;
   static const int64_t MAX_BITSETWORD = ((N <= 0 ? DEFAULT_SQL_BITSET_SIZE : N) - 1) / PER_BITSETWORD_BITS + 1;
 
   struct SqlBitSetDesc {
-    int16_t len_;
-    int16_t cap_;
+    union {
+      int32_t init_errcode_;
+      struct {
+        int16_t len_;
+        int16_t cap_;
+      };
+    };
     bool inited_;
 
     SqlBitSetDesc() : len_(0), cap_(0), inited_(false)
