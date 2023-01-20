@@ -1029,6 +1029,45 @@ uint64_t ObTableQuery::get_checksum() const
   return checksum;
 }
 
+int ObTableQuery::deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges_.count(); i++) {
+    const ObNewRange &src_range = key_ranges_.at(i);
+    ObNewRange dst_range;
+    if (OB_FAIL(deep_copy_range(allocator, src_range, dst_range))) {
+      LOG_WARN("fail tp deep copy range", K(ret));
+    } else if (OB_FAIL(dst.key_ranges_.push_back(dst_range))) {
+      LOG_WARN("fail to push back new range", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_columns_.count(); i++) {
+    ObString select_column;
+    if (OB_FAIL(ob_write_string(allocator, select_columns_.at(i), select_column))) {
+      LOG_WARN("Fail to deep copy select column", K(ret), K(select_columns_.at(i)));
+    } else if (OB_FAIL(dst.select_columns_.push_back(select_column))) {
+      LOG_WARN("fail to push back select column", K(ret), K(select_column));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(ob_write_string(allocator, filter_string_, dst.filter_string_))) {
+    LOG_WARN("fail to deep copy filter string", K(ret), K_(filter_string));
+  } else if (OB_FAIL(ob_write_string(allocator, index_name_, dst.index_name_))) {
+    LOG_WARN("fail to deep copy index name", K(ret), K_(index_name));
+  } else if (OB_FAIL(htable_filter_.deep_copy(allocator, dst.htable_filter_))) {
+    LOG_WARN("fail to deep copy htable filter", K(ret), K_(htable_filter));
+  } else {
+    dst.deserialize_allocator_ = deserialize_allocator_;
+    dst.limit_ = limit_;
+    dst.offset_ = offset_;
+    dst.scan_order_ = scan_order_;
+    dst.batch_size_ = batch_size_;
+    dst.max_result_size_ = max_result_size_;
+  }
+  return ret;
+}
+
 OB_UNIS_DEF_SERIALIZE(ObTableQuery,
                       key_ranges_,
                       select_columns_,
@@ -1227,6 +1266,32 @@ uint64_t ObHTableFilter::get_checksum() const
   checksum = ob_crc64(checksum, &offset_per_row_per_cf_, sizeof(offset_per_row_per_cf_));
   checksum = ob_crc64(checksum, filter_string_.ptr(), filter_string_.length());
   return checksum;
+}
+
+int ObHTableFilter::deep_copy(ObIAllocator &allocator, ObHTableFilter &dst) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_column_qualifier_.count(); i++) {
+    ObString select_column;
+    if (OB_FAIL(ob_write_string(allocator, select_column_qualifier_.at(i), select_column))) {
+      LOG_WARN("Fail to deep copy select column qualifier", K(ret), K(select_column_qualifier_.at(i)));
+    } else if (OB_FAIL(dst.select_column_qualifier_.push_back(select_column))) {
+      LOG_WARN("fail to push back select column qualifier", K(ret), K(select_column));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(ob_write_string(allocator, filter_string_, dst.filter_string_))) {
+    LOG_WARN("fail to write filter string", K(ret), K_(filter_string));
+  } else {
+    dst.is_valid_ = is_valid_;
+    dst.min_stamp_ = min_stamp_;
+    dst.max_stamp_ = max_stamp_;
+    dst.max_versions_ = max_versions_;
+    dst.limit_per_row_per_cf_ = limit_per_row_per_cf_;
+    dst.offset_per_row_per_cf_ = offset_per_row_per_cf_;
+  }
+  return ret;
 }
 
 // If valid_ is true, serialize the members. Otherwise, nothing/dummy is serialized.

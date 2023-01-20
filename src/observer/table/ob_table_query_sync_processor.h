@@ -44,7 +44,6 @@ public:
   void set_timestamp(int64_t timestamp) { timestamp_ = timestamp; }
   void set_result_iterator(ObNormalTableQueryResultIterator* iter);
   void set_htable_result_iterator(table::ObHTableFilterOperator *iter);
-  int deep_copy_select_columns(const ObTableQuery &query);
   void set_in_use(bool in_use) {in_use_ = in_use;}
   bool is_in_use() {return in_use_;}
   int init();
@@ -60,11 +59,12 @@ public:
   sql::TransState* get_trans_state() {return &trans_state_;}
   transaction::ObTransDesc* get_trans_desc() {return &trans_desc_;}
   transaction::ObPartitionEpochArray* get_part_epoch_list() {return &part_epoch_list_;}
+  ObTableQuery &get_query() { return query_; }
 
 private:
   bool in_use_;
   uint64_t timestamp_;
-  ObTableQuery query_; // only select_columns is correct
+  ObTableQuery query_; // deep copy from arg_.query_ in query_start
   ObNormalTableQueryResultIterator *result_iterator_;
   table::ObHTableFilterOperator *htable_result_iterator_;
   ObArenaAllocator allocator_;
