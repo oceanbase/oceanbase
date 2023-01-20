@@ -424,9 +424,8 @@ int ObAllVirtualProxyPartitionInfo::gen_proxy_part_pruning_str(const share::sche
   } else if (OB_FAIL(full_schema_guard_.get_tenant_compat_mode(table_schema.get_tenant_id(), tenant_mode))) {
     SERVER_LOG(WARN, "fail to get tenant compat mode", K(table_schema.get_tenant_id()), K(ret));
   } else {
-    SMART_VAR(char[OB_MAX_SQL_LENGTH], expr_str_buf)
-    {
-      MEMSET(expr_str_buf, 0, OB_MAX_SQL_LENGTH);
+    SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_str_buf) {
+      MEMSET(expr_str_buf, 0, OB_MAX_DEFAULT_VALUE_LENGTH);
       int64_t pos = 0;
       {
         // need to switch to the mode of the tenant where the table is located
