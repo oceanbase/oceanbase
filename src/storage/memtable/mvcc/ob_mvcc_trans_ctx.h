@@ -274,7 +274,8 @@ public:
   int data_relocate_fifo_callback(ObITransCallback* start, const ObITransCallback* end, const int type,
       const bool for_replay, const bool need_lock_for_write, ObMemtable* memtable, ObITransCallback*& sub_trans_begin);
   int remove_callback_fifo_callback(const ObITransCallback* start, const ObITransCallback* end,
-      ObMemtable* release_memtable, const ObITransCallback* sub_trans_begin, bool& move_forward, int64_t& cnt);
+      ObMemtable* release_memtable, const ObITransCallback* sub_trans_begin, const ObITransCallback* sub_stmt_begin,
+      bool& move_forward_for_sub_trans, bool& move_forward_for_sub_stmt, int64_t& cnt);
   int fifo_callback(ObITransCallback* start, const ObITransCallback* end, const int type, const bool for_replay);
   int lifo_callback(ObITransCallback* start, ObITransCallback* end, const int type, const bool for_replay);
   ObITransCallback* search_callback(
@@ -417,6 +418,7 @@ public:
   int trans_end(const bool commit)
   {
     int ret = common::OB_SUCCESS;
+    ATOMIC_STORE(&sub_stmt_begin_, nullptr);
     sub_trans_end(commit);
     if (commit) {
       ret = fifo_callback(guard(), TCB_TRANS_COMMIT);
