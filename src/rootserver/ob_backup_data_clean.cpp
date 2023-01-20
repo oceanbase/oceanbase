@@ -49,7 +49,7 @@ ObBackupDataClean::ObBackupDataClean()
       is_prepare_flag_(false),
       inner_error_(OB_SUCCESS),
       is_working_(false),
-      reverse_min_backup_set_id_(0),
+      reserve_min_backup_set_id_(0),
       backup_lease_service_(nullptr),
       backup_dest_(),
       backup_dest_option_(),
@@ -634,16 +634,17 @@ int ObBackupDataClean::mark_sys_tenant_backup_meta_data_deleting()
       LOG_WARN("failed to get backup clean info", K(ret), K(sys_clean_info));
     } else if (ObBackupCleanInfoStatus::STOP == sys_clean_info.status_) {
       // do nothing
-    } else if (ObBackupCleanInfoStatus::DOING == sys_clean_info.status_) {
+    } else if (0 != reserve_min_backup_set_id_ && ObBackupCleanInfoStatus::DOING == sys_clean_info.status_) {
       if (OB_FAIL(prepare_delete_backup_set(sys_clean_info))) {
         LOG_WARN("failed to prepare delete backup set", K(ret), K(sys_clean_info));
       } else if (OB_FAIL(prepare_delete_backup_piece_and_round(sys_clean_info))) {
         LOG_WARN("failed to prepare delete backup piece and round", K(ret), K(sys_clean_info));
       }
     } else {
+      // In the prepare phase, mark deleting is be needed
+      // remark deleting is required when switch RS occurs in the doing phase, reserve_min_backup_set_id_ = 0
       sys_clean_tenant.simple_clean_tenant_.tenant_id_ = OB_SYS_TENANT_ID;
       sys_clean_tenant.simple_clean_tenant_.is_deleted_ = false;
-
       if (OB_FAIL(get_all_tenant_backup_infos(
               sys_clean_info, sys_clean_tenant.simple_clean_tenant_, *sql_proxy_, task_infos, log_archive_infos))) {
         LOG_WARN("failed to get all tenant backup infos", K(ret), K(sys_clean_info));
@@ -664,9 +665,9 @@ int ObBackupDataClean::mark_sys_tenant_backup_meta_data_deleting()
         } else if (OB_FAIL(
                        update_clog_gc_snaphost(sys_clean_info.clog_gc_snapshot_, sys_clean_info, sys_clean_tenant))) {
           LOG_WARN("failed to update clog gc snapshot", K(ret), K(sys_clean_info));
-        } else if (FALSE_IT(reverse_min_backup_set_id_ =
+        } else if (FALSE_IT(reserve_min_backup_set_id_ =
                                 sys_clean_tenant.clog_data_clean_point_
-                                    .backup_set_id_)) {  // Set reverse_min_backup_set_id_ only in the prepare stage
+                                    .backup_set_id_)) {  // Set reserve_min_backup_set_id_ only in the prepare stage
         } else if (OB_FAIL(mark_backup_meta_data_deleting(sys_clean_info, sys_clean_tenant))) {
           LOG_WARN("failed to mark backup meta data deleted", K(ret), K(sys_clean_info));
         } else if (OB_FAIL(check_backup_dest_lifecycle(sys_clean_tenant))) {
@@ -823,13 +824,13 @@ int ObBackupDataClean::check_clog_data_point(
   if (!sys_clean_info.is_delete_obsolete() || !normal_clean_tenant.clog_data_clean_point_.is_valid() ||
       0 == sys_clean_info.clog_gc_snapshot_) {
     // do nothing
-  } else if (0 == reverse_min_backup_set_id_ ||
-             normal_clean_tenant.clog_data_clean_point_.backup_set_id_ < reverse_min_backup_set_id_) {
+  } else if (0 == reserve_min_backup_set_id_ ||
+             normal_clean_tenant.clog_data_clean_point_.backup_set_id_ < reserve_min_backup_set_id_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get clog data clean point error",
         K(ret),
         K_(normal_clean_tenant.clog_data_clean_point),
-        K_(reverse_min_backup_set_id));
+        K_(reserve_min_backup_set_id));
   }
   return ret;
 }

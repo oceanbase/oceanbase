@@ -427,7 +427,7 @@ private:
   bool is_prepare_flag_;
   int32_t inner_error_;
   bool is_working_;
-  int64_t reverse_min_backup_set_id_;
+  int64_t reserve_min_backup_set_id_;
   share::ObIBackupLeaseService *backup_lease_service_;
   ObBackupDest backup_dest_;
   ObBackupDestOpt backup_dest_option_;
