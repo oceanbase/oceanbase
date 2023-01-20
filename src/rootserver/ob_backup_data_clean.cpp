@@ -49,6 +49,7 @@ ObBackupDataClean::ObBackupDataClean()
       is_prepare_flag_(false),
       inner_error_(OB_SUCCESS),
       is_working_(false),
+      reverse_min_backup_set_id_(0),
       backup_lease_service_(nullptr),
       backup_dest_(),
       backup_dest_option_(),
@@ -496,7 +497,7 @@ int ObBackupDataClean::do_schedule_clean_tenants(ObIArray<ObBackupDataCleanTenan
         ret = OB_RS_SHUTDOWN;
         LOG_WARN("rootservice shutdown", K(ret));
       } else if (OB_SUCCESS != (tmp_ret = do_tenant_clean_scheduler(clean_info, clean_tenant))) {
-        LOG_WARN("failed to do tenant clean scheduler", K(tmp_ret), K(clean_tenant));
+        LOG_WARN("failed to do tenant clean scheduler", K(tmp_ret), K(clean_tenant), K(clean_info));
       } else if (OB_SUCCESS != (tmp_ret = do_with_status(clean_info, clean_tenant))) {
         LOG_WARN("failed to do tenant backup clean status", K(tmp_ret), K(clean_info), K(clean_tenant));
       }
@@ -649,7 +650,7 @@ int ObBackupDataClean::mark_sys_tenant_backup_meta_data_deleting()
       } else if (FALSE_IT(std::sort(task_infos.begin(), task_infos.end(), backup_task_cmp))) {
       } else if (FALSE_IT(std::sort(log_archive_infos.begin(), log_archive_infos.end(), log_archive_info_cmp))) {
       } else if (OB_FAIL(get_backup_clean_elements(
-                     sys_clean_info, task_infos, log_archive_infos, true /*need_add_event*/, sys_clean_tenant))) {
+                     sys_clean_info, task_infos, log_archive_infos, true /*is_prepare_stage*/, sys_clean_tenant))) {
         LOG_WARN("failed to get backup clean elements", K(ret), K(sys_clean_info), K(task_infos));
       } else if (sys_clean_info.is_backup_set_clean() &&
                  !sys_clean_tenant.has_clean_backup_set(sys_clean_info.backup_set_id_, sys_clean_info.copy_id_)) {
@@ -663,6 +664,9 @@ int ObBackupDataClean::mark_sys_tenant_backup_meta_data_deleting()
         } else if (OB_FAIL(
                        update_clog_gc_snaphost(sys_clean_info.clog_gc_snapshot_, sys_clean_info, sys_clean_tenant))) {
           LOG_WARN("failed to update clog gc snapshot", K(ret), K(sys_clean_info));
+        } else if (FALSE_IT(reverse_min_backup_set_id_ =
+                                sys_clean_tenant.clog_data_clean_point_
+                                    .backup_set_id_)) {  // Set reverse_min_backup_set_id_ only in the prepare stage
         } else if (OB_FAIL(mark_backup_meta_data_deleting(sys_clean_info, sys_clean_tenant))) {
           LOG_WARN("failed to mark backup meta data deleted", K(ret), K(sys_clean_info));
         } else if (OB_FAIL(check_backup_dest_lifecycle(sys_clean_tenant))) {
@@ -812,6 +816,24 @@ int ObBackupDataClean::schedule_tenant_backup_data_clean(
   return ret;
 }
 
+int ObBackupDataClean::check_clog_data_point(
+    const ObBackupCleanInfo &sys_clean_info, const ObBackupDataCleanTenant &normal_clean_tenant)
+{
+  int ret = OB_SUCCESS;
+  if (!sys_clean_info.is_delete_obsolete() || !normal_clean_tenant.clog_data_clean_point_.is_valid() ||
+      0 == sys_clean_info.clog_gc_snapshot_) {
+    // do nothing
+  } else if (0 == reverse_min_backup_set_id_ ||
+             normal_clean_tenant.clog_data_clean_point_.backup_set_id_ < reverse_min_backup_set_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get clog data clean point error",
+        K(ret),
+        K_(normal_clean_tenant.clog_data_clean_point),
+        K_(reverse_min_backup_set_id));
+  }
+  return ret;
+}
+
 int ObBackupDataClean::do_tenant_clean_scheduler(ObBackupCleanInfo &clean_info, ObBackupDataCleanTenant &clean_tenant)
 {
   int ret = OB_SUCCESS;
@@ -839,18 +861,21 @@ int ObBackupDataClean::do_tenant_clean_scheduler(ObBackupCleanInfo &clean_info, 
   } else if (FALSE_IT(std::sort(log_archive_infos.begin(), log_archive_infos.end(), log_archive_info_cmp))) {
   } else if (FALSE_IT(std::sort(task_infos.begin(), task_infos.end(), backup_task_info_cmp))) {
   } else if (OB_FAIL(get_backup_clean_elements(
-                 clean_info, task_infos, log_archive_infos, false /*need_add_event*/, clean_tenant))) {
+                 clean_info, task_infos, log_archive_infos, false /*is_prepare_stage*/, clean_tenant))) {
     LOG_WARN("failed to get backup clean elements", K(ret), K(clean_tenant), K(task_infos));
   } else if (OB_FAIL(get_backup_clean_info(OB_SYS_TENANT_ID, sys_clean_info))) {
     LOG_WARN("failed to get backup clean info", K(ret), K(clean_tenant));
+  } else if (OB_FAIL(check_clog_data_point(sys_clean_info, clean_tenant))) {
+    LOG_WARN("failed to check clog data point", K(ret), K(sys_clean_info), K(clean_tenant));
   } else if (OB_FAIL(update_clog_gc_snaphost(sys_clean_info.clog_gc_snapshot_, clean_info, clean_tenant))) {
     LOG_WARN("failed to update clog gc snapshot", K(ret), K(sys_clean_info), K(clean_tenant));
+  } else {
+    FLOG_INFO("[BACKUP_CLEAN]finish prepare tenant clean info",
+        "cost",
+        ObTimeUtil::current_time() - start_ts,
+        K(clean_tenant),
+        K(clean_info));
   }
-  FLOG_INFO("[BACKUP_CLEAN]finish prepare tenant clean info",
-      "cost",
-      ObTimeUtil::current_time() - start_ts,
-      K(clean_tenant),
-      K(clean_info));
   return ret;
 }
 
@@ -861,7 +886,7 @@ int ObBackupDataClean::do_tenant_clean_scheduler(ObBackupCleanInfo &clean_info, 
 //   -- backup_set_id_array(descending order)
 int ObBackupDataClean::get_backup_clean_elements(const share::ObBackupCleanInfo &clean_info,
     const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-    const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
+    const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const bool is_prepare_stage,
     ObBackupDataCleanTenant &clean_tenant)
 {
   int ret = OB_SUCCESS;
@@ -875,12 +900,12 @@ int ObBackupDataClean::get_backup_clean_elements(const share::ObBackupCleanInfo 
     LOG_WARN("get backup clean elements get invalid argument", K(ret), K(clean_tenant), K(clean_info));
   } else if (clean_info.is_backup_set_clean()) {
     if (OB_FAIL(add_delete_backup_set(
-            clean_info, task_infos, log_archive_infos, need_add_event, clean_tenant, min_include_task_info))) {
+            clean_info, task_infos, log_archive_infos, is_prepare_stage, clean_tenant, min_include_task_info))) {
       LOG_WARN("failed to add delete backup set", K(ret), K(clean_info), K(clean_tenant));
     }
   } else if (clean_info.is_delete_obsolete()) {
     if (OB_FAIL(add_obsolete_backup_sets(
-            clean_info, task_infos, log_archive_infos, need_add_event, clean_tenant, min_include_task_info))) {
+            clean_info, task_infos, log_archive_infos, is_prepare_stage, clean_tenant, min_include_task_info))) {
       LOG_WARN("failed to add expired backup set", K(ret), K(clean_info), K(clean_tenant));
     }
   } else if (clean_info.is_delete_backup_piece()) {
@@ -1016,7 +1041,7 @@ int ObBackupDataClean::add_log_archive_info(
 
 int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &clean_info,
     const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-    const common::ObArray<ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
+    const common::ObArray<ObLogArchiveBackupInfo> &log_archive_infos, const bool is_prepare_stage,
     ObBackupDataCleanTenant &clean_tenant, ObTenantBackupTaskInfo &clog_data_clean_point)
 {
   int ret = OB_SUCCESS;
@@ -1152,7 +1177,7 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
           }
         }
 
-        if (OB_SUCC(ret) && need_add_event) {
+        if (OB_SUCC(ret) && is_prepare_stage) {
           char trace_id[common::OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
           int trace_length = 0;
           if (FALSE_IT(trace_length =
@@ -1182,7 +1207,7 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
 
 int ObBackupDataClean::add_obsolete_backup_sets(const share::ObBackupCleanInfo &clean_info,
     const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-    const common::ObArray<ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
+    const common::ObArray<ObLogArchiveBackupInfo> &log_archive_infos, const bool is_prepare_stage,
     ObBackupDataCleanTenant &clean_tenant, ObTenantBackupTaskInfo &clog_data_clean_point)
 {
   int ret = OB_SUCCESS;
@@ -1193,24 +1218,24 @@ int ObBackupDataClean::add_obsolete_backup_sets(const share::ObBackupCleanInfo &
   } else if (!clean_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("add delete backup set get invalid argument", K(ret), K(clean_info));
-  } else if (OB_SYS_TENANT_ID == clean_info.tenant_id_) {
-    if (OB_FAIL(add_sys_tenant_obsolete_backup_sets(
-            clean_info, task_infos, log_archive_infos, need_add_event, clean_tenant, clog_data_clean_point))) {
+  } else if (OB_SYS_TENANT_ID == clean_info.tenant_id_ && is_prepare_stage) {
+    if (OB_FAIL(add_obsolete_backup_sets_in_prepare(
+            clean_info, task_infos, log_archive_infos, clean_tenant, clog_data_clean_point))) {
       LOG_WARN("failed to add sys tenant obsolete backup sets", K(ret), K(clean_info));
     }
   } else {
-    if (OB_FAIL(add_normal_tenant_obsolete_backup_sets(
-            clean_info, task_infos, log_archive_infos, need_add_event, clean_tenant, clog_data_clean_point))) {
+    if (OB_FAIL(add_obsolete_backup_sets_in_doing(
+            clean_info, task_infos, log_archive_infos, clean_tenant, clog_data_clean_point))) {
       LOG_WARN("failed to add normal tenant obsolete backup sets", K(ret), K(clean_info));
     }
   }
   return ret;
 }
 
-int ObBackupDataClean::add_normal_tenant_obsolete_backup_sets(const share::ObBackupCleanInfo &clean_info,
+int ObBackupDataClean::add_obsolete_backup_sets_in_doing(const share::ObBackupCleanInfo &clean_info,
     const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-    const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
-    ObBackupDataCleanTenant &clean_tenant, share::ObTenantBackupTaskInfo &clog_data_clean_point)
+    const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, ObBackupDataCleanTenant &clean_tenant,
+    share::ObTenantBackupTaskInfo &clog_data_clean_point)
 {
   int ret = OB_SUCCESS;
   bool is_continue = false;
@@ -1218,9 +1243,6 @@ int ObBackupDataClean::add_normal_tenant_obsolete_backup_sets(const share::ObBac
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data clean do not init", K(ret));
-  } else if (OB_SYS_TENANT_ID == clean_info.tenant_id_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("add normal tenant obsolete backup set get invalid argument", K(ret), K(clean_info));
   } else if (OB_FAIL(add_log_archive_infos(log_archive_infos, clean_tenant))) {
     LOG_WARN("failed to add log archive infos", K(ret), K(clean_info), K(clean_tenant));
   } else {
@@ -1262,8 +1284,6 @@ int ObBackupDataClean::add_normal_tenant_obsolete_backup_sets(const share::ObBac
                        backup_set_id,
                        backup_dest_option))) {
           LOG_WARN("failed to set backup clean element", K(ret), K(task_info), K(clean_tenant));
-        } else if (OB_FAIL(add_deleting_backup_set_id_into_set(clean_info.tenant_id_, backup_set_id, need_add_event))) {
-          LOG_WARN("failed to add deleting backup set id into set", K(ret), K(backup_set_id), K(clean_info));
         }
       }
     }
@@ -1271,10 +1291,10 @@ int ObBackupDataClean::add_normal_tenant_obsolete_backup_sets(const share::ObBac
   return ret;
 }
 
-int ObBackupDataClean::add_sys_tenant_obsolete_backup_sets(const share::ObBackupCleanInfo &clean_info,
+int ObBackupDataClean::add_obsolete_backup_sets_in_prepare(const share::ObBackupCleanInfo &clean_info,
     const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-    const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
-    ObBackupDataCleanTenant &clean_tenant, share::ObTenantBackupTaskInfo &clog_data_clean_point)
+    const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, ObBackupDataCleanTenant &clean_tenant,
+    share::ObTenantBackupTaskInfo &clog_data_clean_point)
 {
   int ret = OB_SUCCESS;
   bool has_kept_last_succeed_data = false;
@@ -1337,12 +1357,8 @@ int ObBackupDataClean::add_sys_tenant_obsolete_backup_sets(const share::ObBackup
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(add_obsolete_backup_set_with_order(clean_info,
-                   reverse_task_infos,
-                   reverse_backup_set_ids,
-                   need_add_event,
-                   clean_tenant,
-                   clog_data_clean_point))) {
+    } else if (OB_FAIL(add_obsolete_backup_set_with_order(
+                   clean_info, reverse_task_infos, reverse_backup_set_ids, clean_tenant, clog_data_clean_point))) {
       LOG_WARN("failed to add obsolete backup set with order", K(ret), K(clean_info));
     }
   }
@@ -1484,8 +1500,8 @@ int ObBackupDataClean::deal_with_effective_backup_set(const share::ObBackupClean
 
 int ObBackupDataClean::add_obsolete_backup_set_with_order(const share::ObBackupCleanInfo &clean_info,
     const common::ObIArray<share::ObTenantBackupTaskInfo> &reverse_task_infos,
-    const common::ObIArray<ObBackupSetId> &reverse_backup_set_ids, const bool need_add_event,
-    ObBackupDataCleanTenant &clean_tenant, share::ObTenantBackupTaskInfo &clog_data_clean_point)
+    const common::ObIArray<ObBackupSetId> &reverse_backup_set_ids, ObBackupDataCleanTenant &clean_tenant,
+    share::ObTenantBackupTaskInfo &clog_data_clean_point)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -1526,8 +1542,7 @@ int ObBackupDataClean::add_obsolete_backup_set_with_order(const share::ObBackupC
                      new_backup_set_id,
                      backup_dest_option))) {
         LOG_WARN("failed to set backup clean element", K(ret), K(task_info), K(clean_tenant));
-      } else if (OB_FAIL(
-                     add_deleting_backup_set_id_into_set(clean_info.tenant_id_, new_backup_set_id, need_add_event))) {
+      } else if (OB_FAIL(add_deleting_backup_set_id_into_set(clean_info.tenant_id_, new_backup_set_id))) {
         LOG_WARN("failed to add deleting backup set id into set", K(ret), K(backup_set_id), K(clean_info));
       }
     }
@@ -6009,8 +6024,6 @@ int ObBackupDataClean::check_backup_set_id_can_be_deleted(
   } else if (!backup_set_id.is_valid() || ObBackupDataCleanMode::CLEAN != backup_set_id.clean_mode_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check backup set id can be deleted get invalid argument", K(ret), K(tenant_id), K(backup_set_id));
-  } else if (OB_SYS_TENANT_ID == tenant_id) {
-    can_deleted = true;
   } else {
     int hash_ret = sys_tenant_deleted_backup_set_.exist_refactored(backup_set_id.backup_set_id_);
     if (OB_HASH_EXIST == hash_ret) {
@@ -6025,8 +6038,7 @@ int ObBackupDataClean::check_backup_set_id_can_be_deleted(
   return ret;
 }
 
-int ObBackupDataClean::add_deleting_backup_set_id_into_set(
-    const uint64_t tenant_id, const ObBackupSetId &backup_set_id, const bool need_add_event)
+int ObBackupDataClean::add_deleting_backup_set_id_into_set(const uint64_t tenant_id, const ObBackupSetId &backup_set_id)
 {
   int ret = OB_SUCCESS;
   char trace_id[common::OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
@@ -6042,25 +6054,23 @@ int ObBackupDataClean::add_deleting_backup_set_id_into_set(
     // do nothing
   } else if (OB_FAIL(sys_tenant_deleted_backup_set_.set_refactored_1(backup_set_id.backup_set_id_, overwirte_key))) {
     LOG_WARN("failed to set backup set id into set", K(ret), K(backup_set_id), K(tenant_id));
-  } else if (need_add_event) {
-    if (FALSE_IT(
-            trace_length = ObCurTraceId::get_trace_id()->to_string(trace_id, common::OB_MAX_TRACE_ID_BUFFER_SIZE))) {
-    } else if (trace_length > OB_MAX_TRACE_ID_BUFFER_SIZE) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get trace id", K(ret), K(*ObCurTraceId::get_trace_id()));
-    } else {
-      FLOG_INFO("[BACKUP_CLEAN]succ add backup clean set when obsolete clean", K(tenant_id), K(backup_set_id));
-      ROOTSERVICE_EVENT_ADD("backup_clean",
-          "backup_set",
-          "tenant_id",
-          tenant_id,
-          "backup_set_id",
-          backup_set_id.backup_set_id_,
-          "copy_id",
-          backup_set_id.copy_id_,
-          "trace_id",
-          trace_id);
-    }
+  } else if (FALSE_IT(trace_length =
+                          ObCurTraceId::get_trace_id()->to_string(trace_id, common::OB_MAX_TRACE_ID_BUFFER_SIZE))) {
+  } else if (trace_length > OB_MAX_TRACE_ID_BUFFER_SIZE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get trace id", K(ret), K(*ObCurTraceId::get_trace_id()));
+  } else {
+    FLOG_INFO("[BACKUP_CLEAN]succ add backup clean set when obsolete clean", K(tenant_id), K(backup_set_id));
+    ROOTSERVICE_EVENT_ADD("backup_clean",
+        "backup_set",
+        "tenant_id",
+        tenant_id,
+        "backup_set_id",
+        backup_set_id.backup_set_id_,
+        "copy_id",
+        backup_set_id.copy_id_,
+        "trace_id",
+        trace_id);
   }
   return ret;
 }
