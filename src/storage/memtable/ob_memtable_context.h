@@ -413,6 +413,7 @@ public:
   }
   virtual void add_trans_mem_total_size(const int64_t size) override;
   virtual void set_contain_hotspot_row() override;
+
   MemtableIDMap* get_ctx_map()
   {
     return ctx_map_;

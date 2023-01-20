@@ -338,6 +338,10 @@ public:
   {
     return 0 != abs_lock_wait_timeout_;
   }
+  ObTransCallbackMgr *get_callback_mgr()
+  {
+    return &trans_mgr_;
+  }
 
 public:
   virtual void reset()

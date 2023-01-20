@@ -42,6 +42,7 @@ namespace memtable {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class ObIMemtable;
+class ObTransCallbackMgr;
 class ObIMemtableCtx : public ObIMvccCtx {
 public:
   ObIMemtableCtx() : ObIMvccCtx(), is_standalone_(false)

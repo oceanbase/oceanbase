@@ -1278,6 +1278,8 @@ int ObPartitionStorage::insert_rows_(ObDMLRunningCtx& run_ctx, const ObNewRow* c
     ctx.mem_ctx_->sub_stmt_end(false);  // abort row
     ++dup_num;
     ret = OB_SUCCESS;
+  } else if (is_ignore) {
+    ctx.mem_ctx_->sub_stmt_end(true);
   }
 
   return ret;
@@ -2665,6 +2667,8 @@ int ObPartitionStorage::update_row(ObDMLRunningCtx& run_ctx, const ObIArray<Chan
     run_ctx.store_ctx_.mem_ctx_->sub_stmt_end(false);  // abort row
     duplicate = true;
     ret = OB_SUCCESS;
+  } else if (is_ignore) {
+    run_ctx.store_ctx_.mem_ctx_->sub_stmt_end(true);
   }
 
   return ret;
