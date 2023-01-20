@@ -450,6 +450,11 @@ public:
     }
   }
 
+  ObITransCallback *get_sub_stmt_begin()
+  {
+    return sub_stmt_begin_;
+  }
+
   void sub_stmt_begin()
   {
     sub_stmt_begin_ = guard()->get_prev();

@@ -276,72 +276,80 @@ int ObRedoLogGenerator::fill_redo_log(char* buf, const int64_t buf_len, int64_t&
     // record the number of serialized trans node in the filling process
     int64_t data_node_count = 0;
     bool need_serialize = true;
-    for (ObMvccRowCallback* iter = (ObMvccRowCallback*)generate_cursor_->get_next();
-         OB_SUCCESS == ret && NULL != iter && end_guard_ != iter;
-         iter = (ObMvccRowCallback*)iter->get_next()) {
-      if (!iter->need_fill_redo()) {
-        continue;
-      } else if (OB_FAIL(iter->get_redo(redo)) && OB_ENTRY_NOT_EXIST != ret) {
-        TRANS_LOG(ERROR, "get_redo", K(ret));
-      } else if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else if (OB_FAIL(fill_row_redo(mmw, redo)) && OB_BUF_NOT_ENOUGH != ret) {
-        TRANS_LOG(ERROR, "fill_row_redo", K(ret));
-      } else if (OB_BUF_NOT_ENOUGH == ret) {
-        // buf is not enough: if some rows have been serialized before, that means
-        // more redo data is demanding more buf, returns OB_EAGAIN;
-        // if the buf is not enough for the first trans node, that means a big row
-        // is comming, handle it according to the big row logic
-        if (0 != data_node_count) {
-          ret = OB_EAGAIN;
-        } else {
-          // deal with big row logic
-          if (OB_FAIL(generate_and_fill_big_row_redo(mmw.get_serialize_size(), redo, iter, buf, buf_len, buf_pos)) &&
-              OB_EAGAIN != ret) {
-            TRANS_LOG(WARN,
-                "fill big row redo error",
-                K(ret),
-                "iter",
-                *iter,
-                K_(generate_cursor),
-                "mem_ctx",
-                *(static_cast<ObMemtableCtx*>(mem_ctx_)));
+    ObITransCallback *sub_stmt_begin = mem_ctx_->get_callback_mgr()->get_sub_stmt_begin();
+    if (sub_stmt_begin != NULL) {
+      // it means we are immediate logging and encounters sub_stmt_begin
+      ret = OB_ENTRY_NOT_EXIST;
+      TRANS_LOG(INFO, "encounter sub_stmt_begin, retry next time", K(ret),
+                K(data_node_count));
+    } else {
+      for (ObMvccRowCallback* iter = (ObMvccRowCallback*)generate_cursor_->get_next();
+           OB_SUCCESS == ret && NULL != iter && end_guard_ != iter;
+           iter = (ObMvccRowCallback*)iter->get_next()) {
+        if (!iter->need_fill_redo()) {
+          continue;
+        } else if (OB_FAIL(iter->get_redo(redo)) && OB_ENTRY_NOT_EXIST != ret) {
+          TRANS_LOG(ERROR, "get_redo", K(ret));
+        } else if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else if (OB_FAIL(fill_row_redo(mmw, redo)) && OB_BUF_NOT_ENOUGH != ret) {
+          TRANS_LOG(ERROR, "fill_row_redo", K(ret));
+        } else if (OB_BUF_NOT_ENOUGH == ret) {
+          // buf is not enough: if some rows have been serialized before, that means
+          // more redo data is demanding more buf, returns OB_EAGAIN;
+          // if the buf is not enough for the first trans node, that means a big row
+          // is comming, handle it according to the big row logic
+          if (0 != data_node_count) {
+            ret = OB_EAGAIN;
           } else {
-            TRANS_LOG(DEBUG,
-                "generate big row redo data success",
-                "iter",
-                *iter,
-                K_(generate_cursor),
-                K_(consume_cursor),
-                "mem_ctx",
-                *(static_cast<ObMemtableCtx*>(mem_ctx_)));
+            // deal with big row logic
+            if (OB_FAIL(generate_and_fill_big_row_redo(mmw.get_serialize_size(), redo, iter, buf, buf_len, buf_pos)) &&
+                OB_EAGAIN != ret) {
+              TRANS_LOG(WARN,
+                        "fill big row redo error",
+                        K(ret),
+                        "iter",
+                        *iter,
+                        K_(generate_cursor),
+                        "mem_ctx",
+                        *(static_cast<ObMemtableCtx*>(mem_ctx_)));
+            } else {
+              TRANS_LOG(DEBUG,
+                        "generate big row redo data success",
+                        "iter",
+                        *iter,
+                        K_(generate_cursor),
+                        K_(consume_cursor),
+                        "mem_ctx",
+                        *(static_cast<ObMemtableCtx*>(mem_ctx_)));
+            }
+            need_serialize = false;
+            // it is unnecessary to traverse the next trans node before big row data has been written
+            break;
           }
-          need_serialize = false;
-          // it is unnecessary to traverse the next trans node before big row data has been written
-          break;
+        } else if (OB_SUCCESS == ret) {
+          data_node_count++;
+          if (!iter->is_savepoint()) {
+            generate_data_size_ += iter->get_data_size();
+          }
+        } else {
+          // do nothing
         }
-      } else if (OB_SUCCESS == ret) {
-        data_node_count++;
-        if (!iter->is_savepoint()) {
-          generate_data_size_ += iter->get_data_size();
+        if (OB_SUCC(ret)) {
+          generate_cursor_ = iter;
         }
-      } else {
-        // do nothing
       }
-      if (OB_SUCC(ret)) {
-        generate_cursor_ = iter;
-      }
-    }
-    if (need_serialize && (OB_EAGAIN == ret || OB_SUCCESS == ret)) {
-      int tmp_ret = OB_SUCCESS;
-      int64_t res_len = 0;
-      if (OB_SUCCESS != (tmp_ret = mmw.serialize(ObTransRowFlag::NORMAL_ROW, res_len))) {
-        ret = tmp_ret;
-        if (OB_ENTRY_NOT_EXIST != tmp_ret) {
-          TRANS_LOG(ERROR, "mmw.serialize fail", K(ret));
+      if (need_serialize && (OB_EAGAIN == ret || OB_SUCCESS == ret)) {
+        int tmp_ret = OB_SUCCESS;
+        int64_t res_len = 0;
+        if (OB_SUCCESS != (tmp_ret = mmw.serialize(ObTransRowFlag::NORMAL_ROW, res_len))) {
+          ret = tmp_ret;
+          if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+            TRANS_LOG(ERROR, "mmw.serialize fail", K(ret));
+          }
+        } else {
+          buf_pos += res_len;
         }
-      } else {
-        buf_pos += res_len;
       }
     }
   }
