@@ -128,11 +128,11 @@ int ObExprGetUserVar::eval_get_user_var(const ObExpr& expr, ObEvalCtx& ctx, ObDa
           OZ(ObDatumCast::cast_obj(
               ctx, calc_alloc, expr.datum_meta_.type_, expr.datum_meta_.cs_type_, sess_obj, res_obj));
           OZ(res.from_obj(res_obj));
-          // res.ptr_ may allocated by temporary allocator, need deep copy.
-          OZ(expr.deep_copy_datum(ctx, res));
         } else {
           OZ(res.from_obj(sess_obj));
         }
+        // res.ptr_ may allocated by temporary allocator, need deep copy.
+        OZ(expr.deep_copy_datum(ctx, res));
       } else if (OB_ERR_USER_VARIABLE_UNKNOWN == ret) {
         res.set_null();
         ret = OB_SUCCESS;  // always return success no matter found or not
