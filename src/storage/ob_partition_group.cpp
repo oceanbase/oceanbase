@@ -4082,6 +4082,11 @@ int ObPartitionGroup::get_curr_clog_info_(
   bool is_sys_tenant = OB_SYS_TENANT_ID == pkey_.get_tenant_id();
   const int64_t self_cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;
   const bool is_restore = pg_storage_.is_restore();
+  bool archive_progress_invalid = false;
+  int64_t create_ts = OB_INVALID_TIMESTAMP;
+  bool clog_exist = false;
+  bool skip_archive = false;
+  const bool is_mandatory = ObServerConfig::get_instance().backup_log_archive_option.is_mandatory();
 
   if (OB_FAIL(get_base_storage_info_(clog_info))) {
     STORAGE_LOG(WARN, "fail to get base storage info", K(ret), K(pkey_));
@@ -4093,63 +4098,79 @@ int ObPartitionGroup::get_curr_clog_info_(
     // To solve the circular dependency that the leader of primary database can not take over due to the restore
     // failure of the backup database replica here in the maximum protection mode (bug#30365449).
     ObLogArchiveBackupInfo info;
+    ObPGLogArchiveStatus log_archive_status;
     if (OB_FAIL(ObBackupInfoMgr::get_instance().get_log_archive_backup_info(info))) {
       CLOG_LOG(WARN, "failed to get_log_archive_backup_info", K(pkey_), KR(ret));
-    } else if (ObLogArchiveStatus::STATUS::BEGINNING == info.status_.status_ ||
-               ObLogArchiveStatus::STATUS::DOING == info.status_.status_) {
-      ObPGLogArchiveStatus log_archive_status;
-      if (OB_FAIL(pls_->get_log_archive_status(log_archive_status))) {
-        STORAGE_LOG(WARN, "failed to get_last_archived_log_info", KR(ret), K(pkey_), K(info));
-      } else if (info.status_.incarnation_ != log_archive_status.archive_incarnation_ ||
-                 info.status_.round_ != log_archive_status.log_archive_round_) {
-        ret = OB_EAGAIN;
-        STORAGE_LOG(
-            WARN, "not the same round, try later", KR(ret), K(pkey_), K(info), K(clog_info), K(log_archive_status));
-      } else if (ObLogArchiveStatus::INTERRUPTED == log_archive_status.status_ ||
-                 ObLogArchiveStatus::STOP == log_archive_status.status_) {
-        // just skip
-        STORAGE_LOG(INFO, "log archive is not doing, just skip", K(pkey_), K(info), K(log_archive_status));
-      } else if (!log_archive_status.is_valid_for_clog_info()) {
-        ret = OB_EAGAIN;
-        // attention: can not merge with the forword OB_EAGAIN branch
+    } else if (ObLogArchiveStatus::STATUS::DOING != info.status_.status_) {
+      // not in doing status, skip archive progress
+      skip_archive = true;
+    } else if (OB_FAIL(pls_->get_log_archive_status(log_archive_status))) {
+      STORAGE_LOG(WARN, "failed to get_last_archived_log_info", KR(ret), K(pkey_), K(info));
+    } else if (info.status_.incarnation_ != log_archive_status.archive_incarnation_ ||
+               info.status_.round_ != log_archive_status.log_archive_round_) {
+      archive_progress_invalid = true;
+      STORAGE_LOG(WARN, "not the same round", KR(ret), K(pkey_), K(info), K(clog_info), K(log_archive_status));
+    } else if (ObLogArchiveStatus::INTERRUPTED == log_archive_status.status_ ||
+               ObLogArchiveStatus::STOP == log_archive_status.status_) {
+      // archive is stop or interrupt, skip archive prohress
+      skip_archive = true;
+    } else if (!log_archive_status.is_valid_for_clog_info()) {
+      archive_progress_invalid = true;
+      STORAGE_LOG(
+          WARN, "log_archive_status is not valid", KR(ret), K(pkey_), K(info), K(clog_info), K(log_archive_status));
+    } else if (OB_FAIL(pls_->check_log_exist(log_archive_status.last_archived_log_id_ + 1, clog_exist))) {
+      STORAGE_LOG(WARN, "failed to check log exist", KR(ret), K(pkey_), K(log_archive_status));
+    }
+
+    if (OB_FAIL(ret) || skip_archive) {
+    }
+    // archive progress is invalid
+    else if (archive_progress_invalid) {
+      if (OB_FAIL(pg_storage_.get_pg_create_ts(create_ts))) {
+        STORAGE_LOG(WARN, "get pg create ts failed", K(ret), K(pkey_));
+      } else if (create_ts > info.status_.start_ts_) {
         STORAGE_LOG(WARN,
-            "log_archive_status is not valid, try later",
-            KR(ret),
+            "archive progress is invalid and pg create ts bigger than archive start ts, set clog info with 0",
             K(pkey_),
+            K(create_ts),
             K(info),
-            K(clog_info),
+            K(clog_info));
+        clog_info.set_last_replay_log_id(0);
+        clog_info.set_accumulate_checksum(0);
+        clog_info.set_submit_timestamp(0);
+      } else if (is_mandatory) {
+        ret = OB_EAGAIN;
+        STORAGE_LOG(WARN,
+            "archive progress is invalid and archive mode is madatory, retry later",
+            K(ret),
+            K(pkey_),
+            K(is_mandatory),
             K(log_archive_status));
       } else {
-        bool clog_exist = true;
-        const uint64_t last_archived_log_id = log_archive_status.last_archived_log_id_;
-        const bool is_mandatory = ObServerConfig::get_instance().backup_log_archive_option.is_mandatory();
-        if (! is_mandatory && last_archived_log_id < clog_info.get_last_replay_log_id()) {
-          // check next archive log exist, return clog_exist = true only on situation of log exist
-          if (OB_FAIL(pls_->check_log_exist(last_archived_log_id + 1, clog_exist))) {
-            STORAGE_LOG(WARN, "failed to check log exist", KR(ret), K(pkey_), K(log_archive_status));
-          }
+        // archive mode is optional and archive progress is invalid
+        STORAGE_LOG(INFO, "archive mode is optional and archive progress is invalid, skip it", K(pkey_), K(clog_info));
+      }
+    }
+    // archive progress is valid
+    else {
+      if (!clog_exist) {
+        if (is_mandatory) {
+          STORAGE_LOG(WARN,
+              "attent!! archive had been omitted due to log based on archive not exist, maybe some error occur",
+              KR(ret),
+              K(pkey_),
+              K(log_archive_status));
         }
-
-        if (OB_FAIL(ret)) {
-        }
-        // if archive not in madatory mode and next archive log not exist, omit archive
-        else if (! is_mandatory && ! clog_exist) {
-          STORAGE_LOG(WARN, "attent!! archive had been omitted due to log based on archive not exist, maybe some error occur",
-              KR(ret), K(pkey_), K(log_archive_status));
-        } else {
-          STORAGE_LOG(INFO, "update with archived clog info", K(pkey_), K(clog_info), K(log_archive_status));
-          if (last_archived_log_id < clog_info.get_last_replay_log_id()) {
-            log_info_usable = true;
-            clog_info.set_last_replay_log_id(last_archived_log_id);
-            clog_info.set_submit_timestamp(log_archive_status.last_archived_log_submit_ts_);
-            clog_info.set_epoch_id(log_archive_status.clog_epoch_id_);
-            clog_info.set_accumulate_checksum(log_archive_status.accum_checksum_);
-          }
+      } else {
+        STORAGE_LOG(INFO, "update with archived clog info", K(pkey_), K(clog_info), K(log_archive_status));
+        if (log_archive_status.last_archived_log_id_ < clog_info.get_last_replay_log_id()) {
+          log_info_usable = true;
+          clog_info.set_last_replay_log_id(log_archive_status.last_archived_log_id_);
+          clog_info.set_accumulate_checksum(log_archive_status.accum_checksum_);
+          clog_info.set_submit_timestamp(log_archive_status.last_archived_log_submit_ts_);
         }
       }
-    } else { /*do nothing*/
     }
-  } else { /*do nothing*/
   }
   return ret;
 }
