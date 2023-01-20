@@ -147,6 +147,7 @@ public:
   virtual int get_next_result(table::ObTableQueryResult *&one_result) override;
   virtual bool has_more_result() const override;
   void set_scan_result(common::ObNewRowIterator *scan_result) { scan_result_ = scan_result; }
+  table::ObTableQueryResult *get_one_result() { return one_result_; }
   virtual void set_one_result(ObTableQueryResult *result) {one_result_ = result;}
   void set_query(const ObTableQuery *query) {query_ = query;}
   void set_query_sync() { is_query_sync_ = true ; }

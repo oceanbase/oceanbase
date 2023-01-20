@@ -190,6 +190,7 @@ private:
 private:
   void set_trans_from_session(ObTableQuerySyncSession *query_session);
   int check_query_type();
+  int deep_copy_result_property_names();
 
 private:
   ObTableServiceQueryCtx *table_service_ctx_;
