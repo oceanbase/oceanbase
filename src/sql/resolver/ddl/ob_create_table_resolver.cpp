@@ -1445,6 +1445,21 @@ int ObCreateTableResolver::set_nullable_for_cta_column(
   } else {
     column.set_nullable(true);
   }
+  if (OB_SUCC(ret) && share::is_mysql_mode() && expr->is_win_func_expr()) {  // compatiable with mysql
+    const ObWinFunRawExpr *win_expr = reinterpret_cast<const ObWinFunRawExpr *>(expr);
+    if (T_WIN_FUN_RANK == win_expr->get_func_type() || T_WIN_FUN_DENSE_RANK == win_expr->get_func_type() ||
+        T_WIN_FUN_ROW_NUMBER == win_expr->get_func_type()) {
+      ObObj temp_default;
+      temp_default.set_uint64(0);
+      column.set_cur_default_value(temp_default);
+    } else if (T_WIN_FUN_CUME_DIST == win_expr->get_func_type() ||
+                T_WIN_FUN_PERCENT_RANK == win_expr->get_func_type()) {
+      ObObj temp_default;
+      temp_default.set_double(0);
+      column.set_cur_default_value(temp_default);
+    } else {
+    }
+  }
   return ret;
 }
 

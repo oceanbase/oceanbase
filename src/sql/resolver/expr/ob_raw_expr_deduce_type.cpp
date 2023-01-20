@@ -1907,9 +1907,27 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr& expr)
     if (NULL == expr.get_agg_expr()) {
       ObExprResType result_type(alloc_);
       if (T_WIN_FUN_CUME_DIST == expr.get_func_type() || T_WIN_FUN_PERCENT_RANK == expr.get_func_type()) {
-        result_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[is_oracle_mode()][ObNumberType]);
-        result_type.set_calc_accuracy(ObAccuracy::MAX_ACCURACY2[is_oracle_mode()][ObNumberType]);
-        result_type.set_number();
+        if (is_oracle_mode()) {
+          result_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObNumberType]);
+          result_type.set_calc_accuracy(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObNumberType]);
+          result_type.set_number();
+        } else {
+          result_type.set_accuracy(ObAccuracy::DML_DEFAULT_ACCURACY[ObDoubleType]);
+          result_type.set_calc_accuracy(ObAccuracy::MAX_ACCURACY2[MYSQL_MODE][ObDoubleType]);
+          result_type.set_double();
+          result_type.set_result_flag(NOT_NULL_FLAG);
+        }
+      } else if (T_WIN_FUN_DENSE_RANK == expr.get_func_type() || T_WIN_FUN_RANK == expr.get_func_type() ||
+                 T_WIN_FUN_ROW_NUMBER == expr.get_func_type()) {
+        if (is_oracle_mode()) {
+          result_type.set_number();
+          result_type.set_scale(0);
+          result_type.set_precision(OB_MAX_NUMBER_PRECISION);
+        } else {
+          result_type.set_uint64();
+          result_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObUInt64Type]);
+          result_type.set_result_flag(NOT_NULL_FLAG);
+        }
       } else if (is_oracle_mode()) {
         result_type.set_number();
         result_type.set_scale(0);
@@ -1960,9 +1978,59 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr& expr)
       }
     }
   } else if (T_WIN_FUN_LEAD == expr.get_func_type() || T_WIN_FUN_LAG == expr.get_func_type()) {
-    expr.set_result_type(func_params.at(0)->get_result_type());
-    expr.unset_result_flag(OB_MYSQL_NOT_NULL_FLAG);
-    if (func_params.count() == 3) {
+    if (func_params.count() == 3) {  // compatiable with mysql
+      const ObLengthSemantics default_ls = my_session_->get_actual_nls_length_semantics();
+      ObExprResType res_type;
+      ObSEArray<ObExprResType, 2> types;
+      ObCollationType coll_type = CS_TYPE_INVALID;
+      if (OB_FAIL(types.push_back(func_params.at(0)->get_result_type()))) {
+        LOG_WARN("fail to push back type of the first param.", K(ret));
+      } else if (OB_FAIL(types.push_back(func_params.at(2)->get_result_type()))) {
+        LOG_WARN("fail to push back type of the third param.", K(ret));
+      } else if (OB_FAIL(my_session_->get_collation_connection(coll_type))) {
+        LOG_WARN("fail to get_collation_connection", K(ret));
+      } else if (OB_FAIL(ObExprOperator::aggregate_result_type_for_merge(
+                     res_type, &types.at(0), types.count(), coll_type, false, default_ls, my_session_))) {
+        LOG_WARN("fail to aggregate_result_type_for_merge", K(ret), K(types));
+      } else {
+        if (res_type.is_json()) {
+          ObExprResType merged_type = func_params.at(0)->get_result_type();
+          if (merged_type.is_json()) {
+            merged_type = func_params.at(2)->get_result_type();
+          } else {
+          }
+          if (merged_type.get_type() >= ObTinyIntType && merged_type.get_type() <= ObHexStringType) {
+            res_type.set_varchar();
+          } else if (merged_type.is_blob()) {
+            res_type.set_blob();
+          } else {
+            // json or max, do nothing
+          }
+        } else {
+        }
+        if (!func_params.at(0)->get_result_type().has_result_flag(OB_MYSQL_NOT_NULL_FLAG) ||
+            !func_params.at(2)->get_result_type().has_result_flag(OB_MYSQL_NOT_NULL_FLAG)) {
+          res_type.unset_result_flag(OB_MYSQL_NOT_NULL_FLAG);
+        }
+        ObCastMode def_cast_mode = CM_NONE;
+        ObRawExpr *cast_expr = NULL;
+        res_type.set_calc_meta(res_type.get_obj_meta());
+        res_type.set_calc_accuracy(res_type.get_accuracy());
+        if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, my_session_, def_cast_mode))) {
+          LOG_WARN("get_default_cast_mode failed", K(ret));
+        } else if (OB_FAIL(try_add_cast_expr_above_for_deduce_type(
+                *func_params.at(0), cast_expr, res_type, def_cast_mode))) {
+          LOG_WARN("failed to create raw expr.", K(ret));
+        } else {
+          func_params.at(0) = cast_expr;
+          expr.set_result_type(func_params.at(0)->get_result_type());
+        }
+      }
+    } else {
+      expr.set_result_type(func_params.at(0)->get_result_type());
+      expr.unset_result_flag(OB_MYSQL_NOT_NULL_FLAG);
+    }
+    if (OB_SUCC(ret) && func_params.count() == 3) {
       ObSysFunRawExpr* cast_expr = NULL;
       if (OB_ISNULL(expr_factory_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1977,7 +2045,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr& expr)
         func_params.at(2) = cast_expr;
       }
     }
-    if (func_params.count() >= 2 && my_session_->use_static_typing_engine() &&
+    if (OB_SUCC(ret) && func_params.count() >= 2 && my_session_->use_static_typing_engine() &&
         !func_params.at(1)->get_result_type().is_numeric_type()) {
       ObSysFunRawExpr* cast_expr = NULL;
       if (OB_ISNULL(expr_factory_)) {

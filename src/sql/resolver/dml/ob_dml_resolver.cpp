@@ -6814,7 +6814,24 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem& table_it
               LOG_WARN("failed to set_enum_set_values", K(ret));
             }
           }
-          column_item.set_default_value(ref_select_item.default_value_);
+          if (is_mysql_mode() && select_expr->is_win_func_expr()) {
+            const ObWinFunRawExpr *win_expr = reinterpret_cast<const ObWinFunRawExpr *>(select_expr);
+            if (T_WIN_FUN_RANK == win_expr->get_func_type() || T_WIN_FUN_DENSE_RANK == win_expr->get_func_type() ||
+                T_WIN_FUN_ROW_NUMBER == win_expr->get_func_type()) {
+              ObObj temp_default;
+              temp_default.set_uint64(0);
+              column_item.set_default_value(temp_default);
+            } else if (T_WIN_FUN_CUME_DIST == win_expr->get_func_type() ||
+                       T_WIN_FUN_PERCENT_RANK == win_expr->get_func_type()) {
+              ObObj temp_default;
+              temp_default.set_double(0);
+              column_item.set_default_value(temp_default);
+            } else {
+              // do nothing
+            }
+          } else {
+            column_item.set_default_value(ref_select_item.default_value_);
+          }
           column_item.set_default_value_expr(ref_select_item.default_value_expr_);
           is_break = true;
 

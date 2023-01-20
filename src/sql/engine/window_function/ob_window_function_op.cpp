@@ -489,7 +489,20 @@ int ObWindowFunctionOp::NonAggrCellRankLike::eval(RowsReader& row_reader, const 
     wf_info_.expr_->get_eval_info(op_.eval_ctx_).evaluated_ = true;
     if (T_WIN_FUN_PERCENT_RANK == wf_info_.func_type_) {
       // result will be zero when only one row within frame
-      if (0 == frame.tail_ - frame.head_) {
+      if (is_mysql_mode()) {
+        if (0 == frame.tail_ - frame.head_) {
+          expr_datum.set_double(0);
+        } else {
+          double numerator = static_cast<double>(rank - 1);
+          double denominator = static_cast<double>(frame.tail_ - frame.head_);
+          if (OB_UNLIKELY(0 == denominator)) {
+            ret = OB_DIVISION_BY_ZERO;
+            LOG_WARN("div zero", K(ret), K(denominator), K(frame.tail_), K(frame.head_));
+          } else {
+            expr_datum.set_double(numerator / denominator);
+          }
+        }
+      } else if (0 == frame.tail_ - frame.head_) {
         number::ObNumber res_nmb;
         res_nmb.set_zero();
         expr_datum.set_number(res_nmb);
@@ -578,7 +591,8 @@ int ObWindowFunctionOp::NonAggrCellCumeDist::eval(RowsReader& row_reader, const 
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (is_oracle_mode()) {
     // number of row[cur] >= row[:] (whether `>=` or other is depend on ORDER BY)
     number::ObNumber numerator;
     // total tuple of current window
@@ -593,11 +607,22 @@ int ObWindowFunctionOp::NonAggrCellCumeDist::eval(RowsReader& row_reader, const 
     } else if (OB_FAIL(numerator.div(denominator, res_nmb, tmp_alloc))) {
       LOG_WARN("failed to div number", K(ret));
     } else {
-      ObDatum& expr_datum = wf_info_.expr_->locate_datum_for_write(op_.eval_ctx_);
+      ObDatum &expr_datum = wf_info_.expr_->locate_datum_for_write(op_.eval_ctx_);
       wf_info_.expr_->get_eval_info(op_.eval_ctx_).evaluated_ = true;
       expr_datum.set_number(res_nmb);
-      val = static_cast<ObDatum&>(expr_datum);
+      val = static_cast<ObDatum &>(expr_datum);
     }
+  } else {
+    // number of row[cur] >= row[:] (whether `>=` or other is depend on ORDER BY)
+    double numerator;
+    // total tuple of current window
+    double denominator;
+    numerator = static_cast<double>(same_idx - frame.head_ + 1);
+    denominator = static_cast<double>(frame.tail_ - frame.head_ + 1);
+    ObDatum &expr_datum = wf_info_.expr_->locate_datum_for_write(op_.eval_ctx_);
+    wf_info_.expr_->get_eval_info(op_.eval_ctx_).evaluated_ = true;
+    expr_datum.set_double(numerator / denominator);
+    val = static_cast<ObDatum&>(expr_datum);
   }
 
   return ret;
