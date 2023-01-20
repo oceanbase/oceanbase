@@ -82,6 +82,12 @@ int ObAllVirtualKvHotKeyStat::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
+int ObAllVirtualKvHotKeyStat::inner_close()
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
 int ObAllVirtualKvHotKeyStat::fill_cells()
 {
   int ret = OB_SUCCESS;
@@ -119,7 +125,7 @@ int ObAllVirtualKvHotKeyStat::fill_cells()
           break;
         }
         case HOTKEY: {
-          cells[i].set_varchar(to_cstring(info.hotkey_));
+          cells[i].set_varchar(to_hotkey_string(info.hotkey_));
           cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
@@ -171,11 +177,56 @@ int ObAllVirtualKvHotKeyStat::fill_cells()
   return ret;
 }
 
-int ObAllVirtualKvHotKeyStat::inner_close()
+void ObAllVirtualKvHotKeyStat::print_rowkey_range_value(ObObj rowkey, char* buf, int64_t buf_len, int64_t& pos)
+{
+  if (rowkey.is_string_type()) {
+    // for Unicode character set
+    rowkey.print_str_with_repeat(buf, buf_len, pos);
+  } else {
+    rowkey.print_format(buf, buf_len, pos);
+  }
+}
+
+char* ObAllVirtualKvHotKeyStat::to_hotkey_string(ObRowkey rowkey)
 {
   int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (!rowkey.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid rowkey set into hotkey stat virtual table", K(rowkey), K(ret));
+  } else {
+    int64_t obj_cnt = rowkey.get_obj_cnt();
+    common::ObObj* obj_ptr = rowkey.get_obj_ptr();
 
-  return ret;
+    memset(hotkey_buffer_, 0, STAT_HOTKEY_BUFFER_LEN);
+
+    for (int i = 0; OB_SUCC(ret) && i < obj_cnt; ++i) {
+      if (pos < STAT_HOTKEY_BUFFER_LEN) {
+        if (!obj_ptr[i].is_max_value() && !obj_ptr[i].is_min_value()) {
+          print_rowkey_range_value(obj_ptr[i], hotkey_buffer_, STAT_HOTKEY_BUFFER_LEN, pos);
+        } else if (obj_ptr[i].is_min_value()) {
+          if (OB_FAIL(databuff_printf(hotkey_buffer_, STAT_HOTKEY_BUFFER_LEN, pos, "MIN"))) {
+            // do nothing
+          }
+        } else {
+          if (OB_FAIL(databuff_printf(hotkey_buffer_, STAT_HOTKEY_BUFFER_LEN, pos, "MAX"))) {
+            // do nothing
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (i < obj_cnt - 1) {
+            if (OB_FAIL(databuff_printf(hotkey_buffer_, STAT_HOTKEY_BUFFER_LEN, pos, ","))) {
+              // do nothing
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret) && ret != OB_SIZE_OVERFLOW) {
+    LOG_WARN("unpected error when transforming rowkey", K(rowkey), K(ret));
+  }
+  return hotkey_buffer_;
 }
 
 } /* namespace observer */

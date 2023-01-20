@@ -13,6 +13,7 @@
 #ifndef OB_ALL_VIRTUAL_KV_HOTKEY_STAT_H_
 #define OB_ALL_VIRTUAL_KV_HOTKEY_STAT_H_
 #include "lib/list/ob_dlist.h"
+#include "common/rowkey/ob_rowkey.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "observer/table/ob_table_virtual_table_mgr.h"
 
@@ -34,6 +35,7 @@ class ObAllVirtualKvHotKeyStat : public ObVirtualTableScannerIterator
     THROTTLE_PERCENT
   };
 public:
+  static const int64_t STAT_HOTKEY_BUFFER_LEN = 2048;
   ObAllVirtualKvHotKeyStat();
   virtual ~ObAllVirtualKvHotKeyStat();
 
@@ -44,11 +46,14 @@ public:
 private:
   int init();
   int fill_cells();
+  void print_rowkey_range_value(ObObj rowkey, char* buf, int64_t buf_len, int64_t& pos);
+  char* to_hotkey_string(ObRowkey rowkey);
 private:
   bool inited_;
   int64_t idx;
   int32_t svr_port_;
   char svr_ip_[common::OB_IP_STR_BUFF];
+  char hotkey_buffer_[STAT_HOTKEY_BUFFER_LEN];
   ObArenaAllocator arena_allocator_;
   ObTableVirtualTableMgr virtual_tbl_mgr_;
 };
