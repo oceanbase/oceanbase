@@ -99,6 +99,7 @@ int StartArchiveHelper::handle()
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
+  DEBUG_SYNC(BLOCK_PG_START_ARCHIVE);
 
   if (OB_UNLIKELY(!pg_key_.is_valid())) {
     ARCHIVE_LOG(WARN, "invalid pg_key", K(pg_key_));
@@ -507,7 +508,7 @@ int StartArchiveHelper::get_piece_archive_meta_(
           K(piece_id),
           K(piece_create_date));
     } else {
-      // 1: in case of no switch piece scene，should generate here
+      // 1: in case of no switch piece scene, should generate here
       // 2: in case of switch piece scene, come here means index file has effective data or archive pg
       // key has effective data, should generate here
       (void)generate_max_data_file_id_();
@@ -539,8 +540,7 @@ int StartArchiveHelper::get_piece_archive_meta_(
       if (OB_BACKUP_NO_SWITCH_PIECE_ID == piece_id) {
         if (OB_INVALID_ARCHIVE_FILE_ID != max_index_file_id_ && !max_archived_log_info_.is_valid() &&
             round_start_info_.is_valid()) {
-          // https://work.aone.alibaba-inc.com/issue/34123450: if index file and data file exist, but
-          // archive log not exist, just fake max_archive_log_info_
+          // if index file and data file exist, but archive log not exist, just fake max_archive_log_info_
           max_archived_log_info_.max_log_id_archived_ = round_start_info_.start_log_id_ - 1;
           max_archived_log_info_.max_checkpoint_ts_archived_ = 0;
           max_archived_log_info_.max_log_submit_ts_archived_ = round_start_info_.log_submit_ts_;
