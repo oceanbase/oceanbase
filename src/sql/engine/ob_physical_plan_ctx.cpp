@@ -737,5 +737,32 @@ void ObPhysicalPlanCtx::add_px_dml_row_info(const ObPxDmlRowInfo& dml_row_info)
   add_row_deleted_count(dml_row_info.row_deleted_count_);
 }
 
+void ParamInfoRecovery::save(const ObPhysicalPlanCtx &phy_ctx)
+{
+  org_param_count_ = phy_ctx.get_param_store().count();
+  org_param_frame_cnt_ = phy_ctx.get_param_frame_ptrs().count();
+  org_param_frame_capacity_ = phy_ctx.get_param_frame_capacity();
+}
+
+void ParamInfoRecovery::recover(bool use_static_engine, ObPhysicalPlanCtx &phy_ctx) const
+{
+  ParamStore &param_store = phy_ctx.get_param_store_for_update();
+  if (param_store.count() > org_param_count_) {
+    if (use_static_engine) {
+      phy_ctx.set_param_frame_capacity(org_param_frame_capacity_);
+      ObIArray<char *> &param_frame_ptrs = phy_ctx.get_param_frame_ptrs();
+      for (int64_t i = param_frame_ptrs.count(); i > org_param_frame_cnt_; --i) {
+        param_frame_ptrs.pop_back();
+      }
+    }
+    for (int64_t i = param_store.count(); i > org_param_count_; --i) {
+      param_store.pop_back();
+      if (use_static_engine) {
+        phy_ctx.get_datum_param_store().pop_back();
+      }
+    }
+  }
+}
+
 }  // namespace sql
 }  // namespace oceanbase

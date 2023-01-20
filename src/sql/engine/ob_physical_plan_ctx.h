@@ -30,6 +30,7 @@ class ObSQLSessionInfo;
 class ObPhysicalPlan;
 class ObExecContext;
 class ObUdfCtxMgr;
+class ObPhysicalPlanCtx;
 struct ObPxDmlRowInfo;
 
 struct PartParamIdxArray {
@@ -53,6 +54,19 @@ struct ObRemoteSqlInfo {
   int32_t ps_param_cnt_;
   common::ObString remote_sql_;
   ParamStore* ps_params_;
+};
+
+struct ParamInfoRecovery {
+  ParamInfoRecovery() : org_param_count_(0), org_param_frame_cnt_(0), org_param_frame_capacity_(0)
+  {}
+
+  void save(const ObPhysicalPlanCtx &phy_ctx);
+  void recover(bool use_static_engine, ObPhysicalPlanCtx &phy_ctx) const;
+
+public:
+  int64_t org_param_count_;
+  int64_t org_param_frame_cnt_;
+  int64_t org_param_frame_capacity_;
 };
 
 class ObPhysicalPlanCtx {
@@ -167,6 +181,10 @@ public:
   {
     return param_frame_ptrs_;
   }
+  ObIArray<char *> &get_param_frame_ptrs()
+  {
+    return param_frame_ptrs_;
+  }
   int init_datum_param_store();
   void reset_datum_param_store()
   {
@@ -175,8 +193,16 @@ public:
     param_frame_ptrs_.reuse();
     param_frame_capacity_ = 0;
   }
-  int extend_datum_param_store(DatumParamStore& ext_datum_store);
-  ObRemoteSqlInfo& get_remote_sql_info()
+  void set_param_frame_capacity(int64_t v)
+  {
+    param_frame_capacity_ = v;
+  }
+  int64_t get_param_frame_capacity() const
+  {
+    return param_frame_capacity_;
+  }
+  int extend_datum_param_store(DatumParamStore &ext_datum_store);
+  ObRemoteSqlInfo &get_remote_sql_info()
   {
     return remote_sql_info_;
   }

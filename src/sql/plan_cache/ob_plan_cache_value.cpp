@@ -344,9 +344,10 @@ int ObPlanCacheValue::choose_plan(
                    outline_param_idx))) {  // need use param store
       LOG_WARN("fail to judge concurrent limit sql", K(ret));
     } else {
-      int64_t org_param_count = 0;
-      if (OB_NOT_NULL(params)) {
-        org_param_count = params->count();
+      ParamInfoRecovery param_info_recovery;
+      ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
+      if (OB_NOT_NULL(phy_ctx)) {
+        param_info_recovery.save(*phy_ctx);
       }
       DLIST_FOREACH(plan_set, plan_sets_)
       {
@@ -370,21 +371,8 @@ int ObPlanCacheValue::choose_plan(
             break;
           }
         }
-        if (NULL == plan && OB_NOT_NULL(params) && (params->count() > org_param_count)) {
-          ObPhysicalPlanCtx* phy_ctx = NULL;
-          if (session->use_static_typing_engine()) {
-            phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
-            if (NULL == phy_ctx) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("physical ctx is null", K(ret));
-            }
-          }
-          for (int64_t i = params->count(); OB_SUCC(ret) && i > org_param_count; --i) {
-            params->pop_back();
-            if (session->use_static_typing_engine()) {
-              phy_ctx->get_datum_param_store().pop_back();
-            }
-          }
+        if (NULL == plan && OB_NOT_NULL(phy_ctx)) {
+          param_info_recovery.recover(session->use_static_typing_engine(), *phy_ctx);
         }
       }  // end for
     }
