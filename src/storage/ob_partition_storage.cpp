@@ -1274,6 +1274,10 @@ int ObPartitionStorage::insert_rows_(ObDMLRunningCtx& run_ctx, const ObNewRow* c
     afct_num = afct_num + row_count;
   }
 
+  if (is_ignore) {
+    DEBUG_SYNC(AFTER_INSERT_FOR_INSERT_IGNORE);
+  }
+
   if (is_ignore && OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
     ctx.mem_ctx_->sub_stmt_end(false);  // abort row
     ++dup_num;

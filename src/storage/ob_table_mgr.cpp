@@ -303,6 +303,8 @@ int ObTableMgr::clear_unneed_tables()
 {
   int ret = OB_SUCCESS;
 
+  DEBUG_SYNC(STOP_CLEAR_UNEED_TABLES);
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));

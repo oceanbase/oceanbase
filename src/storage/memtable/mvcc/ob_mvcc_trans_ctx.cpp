@@ -39,6 +39,9 @@ int ObTransCallbackMgr::rollback_to(const ObPartitionKey& pkey, const int32_t sq
   if (!pkey.is_valid() || 0 > sql_no) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(pkey), K(sql_no));
+  } else if (nullptr != sub_stmt_begin_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(pkey), K(sql_no));
   } else {
     bool hit = false;
     ObITransCallback* end = callback_list_.search_callback(sql_no, need_write_log, sub_trans_begin_, hit);
@@ -114,6 +117,9 @@ int ObTransCallbackMgr::truncate_to(const int32_t sql_no)
 
   if (0 > sql_no) {
     ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(sql_no));
+  } else if (nullptr != sub_stmt_begin_) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(sql_no));
   } else {
     bool hit = false;
@@ -238,20 +244,25 @@ int ObTransCallbackMgr::data_relocate(ObMemtable* dst_memtable, const int data_r
 
 int ObTransCallbackMgr::remove_callback_for_uncommited_txn(ObMemtable* memtable, int64_t& cnt)
 {
-  int ret = common::OB_SUCCESS;
-  bool move_forward = false;
+  int ret = OB_SUCCESS;
+  bool move_forward_for_sub_trans = false;
+  bool move_forward_for_sub_stmt = false;
   cnt = 0;
 
   if (OB_ISNULL(memtable)) {
     ret = common::OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "memtable is null", K(ret));
   } else if (OB_FAIL(callback_list_.remove_callback_fifo_callback(
-                 guard(), guard(), memtable, sub_trans_begin_, move_forward, cnt))) {
+                       guard(), guard(), memtable, sub_trans_begin_, sub_stmt_begin_,
+                       move_forward_for_sub_trans, move_forward_for_sub_stmt, cnt))) {
     TRANS_LOG(WARN, "fifo remove callback fail", K(ret), K(*memtable));
   }
 
-  if (move_forward) {
+  if (move_forward_for_sub_trans) {
     sub_trans_begin_ = guard()->get_next();
+  }
+  if (move_forward_for_sub_stmt) {
+    sub_stmt_begin_ = guard()->get_next();
   }
 
   return ret;
@@ -512,13 +523,15 @@ int ObTransCallbackList::data_relocate_fifo_callback(ObITransCallback* start, co
 }
 
 int ObTransCallbackList::remove_callback_fifo_callback(const ObITransCallback* start, const ObITransCallback* end,
-    ObMemtable* release_memtable, const ObITransCallback* sub_trans_begin, bool& move_forward, int64_t& cnt)
+    ObMemtable* release_memtable, const ObITransCallback* sub_trans_begin, const ObITransCallback* sub_stmt_begin,
+    bool& move_forward_for_sub_trans, bool& move_forward_for_sub_stmt, int64_t& cnt)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t visted_cb_cnt = 0;
   int64_t same_mem_cb_cnt = 0;
-  move_forward = false;
+  move_forward_for_sub_trans = false;
+  move_forward_for_sub_stmt = false;
   cnt = 0;
 
   if (NULL != start) {
@@ -529,7 +542,10 @@ int ObTransCallbackList::remove_callback_fifo_callback(const ObITransCallback* s
       visted_cb_cnt++;
       if (OB_ITEM_NOT_MATCH != tmp_ret) {
         if (iter == sub_trans_begin) {
-          move_forward = true;
+          move_forward_for_sub_trans = true;
+        }
+        if (iter == sub_stmt_begin) {
+          move_forward_for_sub_stmt = true;
         }
         length_--;
         cnt++;
