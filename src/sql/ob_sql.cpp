@@ -3122,7 +3122,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session, ObP
       pctx->set_last_insert_id_session(session.get_local_last_insert_id());
     }
 
-    if (NULL != phy_plan) {
+    if (OB_SUCC(ret) && NULL != phy_plan) {
       if (from_plan_cache) {
         ObQueryHint &query_hint = phy_plan->get_query_hint();
         pc_ctx.sql_ctx_.force_print_trace_ = query_hint.force_trace_log_;
@@ -3134,7 +3134,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session, ObP
         }
       }
     }
-    if (NULL != phy_plan && !session.get_is_deserialized()) {
+    if (OB_SUCC(ret) && NULL != phy_plan && !session.get_is_deserialized()) {
       if (phy_plan->is_contain_oracle_session_level_temporary_table()) {
         bool is_already_set = false;
         if (OB_FAIL(session.get_session_temp_table_used(is_already_set))) {
