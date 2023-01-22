@@ -140,7 +140,7 @@ namespace sql
     ObRelIds R_TES_;
     //left degenerate set，用于检查join condition为退化谓词的合法性，存放的是左子树的所有表集
     ObRelIds L_DS_;
-    //right degnerate set，存放的是右子树的所有表集
+    //right degenerate set，存放的是右子树的所有表集
     ObRelIds R_DS_;
     bool is_degenerate_pred_;
     //当前join是否可交换左右表
@@ -1674,7 +1674,7 @@ struct NullAwareAntiJoinInfo {
                       bool &sort_match);
 
     /**
-     * 检查是否是intersting order
+     * 检查是否是interesting order
      * @keys 索引列
      * @stmt
      * @interest_column_ids 匹配的索引列的id

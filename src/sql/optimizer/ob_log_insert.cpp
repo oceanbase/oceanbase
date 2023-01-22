@@ -455,7 +455,7 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
         ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
         if (OB_ISNULL(index_info)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("replae dml info is null", K(ret));
+          LOG_WARN("replace dml info is null", K(ret));
         } else if (OB_FAIL(generate_old_calc_partid_expr(*index_info))) {
           LOG_WARN("failed to generate calc partid expr", K(ret));
         } else if (!is_heap_table && OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
@@ -478,7 +478,7 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
       }
     }
   } else if (get_insert_up()) {
-    // generate the calc_part_id_expr_ of update caluse
+    // generate the calc_part_id_expr_ of update clause
     for (int64_t i = 0; OB_SUCC(ret) && i < get_insert_up_index_dml_infos().count(); ++i) {
       IndexDMLInfo *dml_info = get_insert_up_index_dml_infos().at(i);
       ObSqlSchemaGuard *schema_guard = NULL;

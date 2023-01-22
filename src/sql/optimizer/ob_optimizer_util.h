@@ -208,7 +208,7 @@ public:
   static bool same_exprs(const common::ObIArray<ObRawExpr*> &src_exprs,
                          const common::ObIArray<ObRawExpr*> &target_exprs);
 
-  //for topk, non terminal expr with agg params need to be deep copyed to prevent sum being replaced
+  //for topk, non terminal expr with agg params need to be deep copied to prevent sum being replaced
   //with sum(sum)
   static int clone_expr_for_topk(ObRawExprFactory &expr_factory, ObRawExpr* src, ObRawExpr* &dst);
 
@@ -1592,7 +1592,7 @@ int ObOptimizerUtil::intersect(const ObIArray<T> &first,
  /**
    * @brief intersect, to reduce the assign cost when computing many sets' overlap.
    * @param sets the element sets to calculate the overlap.
-   * @param result the reuslt of the overlap
+   * @param result the result of the overlap
    * @return
    */
 template <class T>
