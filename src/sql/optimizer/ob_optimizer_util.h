@@ -208,7 +208,7 @@ public:
   static bool same_exprs(const common::ObIArray<ObRawExpr*> &src_exprs,
                          const common::ObIArray<ObRawExpr*> &target_exprs);
 
-  //for topk, non terminal expr with agg params need to be deep copyed to prevent sum being replaced
+  //for topk, non terminal expr with agg params need to be deep copied to prevent sum being replaced
   //with sum(sum)
   static int clone_expr_for_topk(ObRawExprFactory &expr_factory, ObRawExpr* src, ObRawExpr* &dst);
 
@@ -949,7 +949,7 @@ public:
                                             const bool in_subplan_scan,
                                             EqualSets &equal_sets,
                                             const ObIArray<ObRawExpr *> &const_exprs,
-                                            const bool is_parent_set_disinct,
+                                            const bool is_parent_set_distinct,
                                             const int64_t check_scope,
                                             int64_t &match_info,
                                             int64_t &max_prefix_count);
@@ -1098,7 +1098,7 @@ public:
 
   static int get_set_res_types(ObIAllocator *allocator,
                                ObSQLSessionInfo *session_info,
-                               ObIArray<ObSelectStmt*> &child_querys,
+                               ObIArray<ObSelectStmt*> &child_queries,
                                ObIArray<ObExprResType> &res_types);
 
   static int try_add_cast_to_set_child_list(ObIAllocator *allocator,
@@ -1592,7 +1592,7 @@ int ObOptimizerUtil::intersect(const ObIArray<T> &first,
  /**
    * @brief intersect, to reduce the assign cost when computing many sets' overlap.
    * @param sets the element sets to calculate the overlap.
-   * @param result the reuslt of the overlap
+   * @param result the result of the overlap
    * @return
    */
 template <class T>
