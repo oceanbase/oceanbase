@@ -4245,6 +4245,18 @@ static const _error _error_OB_DDL_SSTABLE_RANGE_CROSS = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4391, ddl sstable version range cross",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4391, ddl sstable version range cross"
 };
+static const _error _error_OB_DISK_CORRUPTED = {
+      .error_name            = "OB_DISK_CORRUPTED",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "disk is corrupted",
+      .str_user_error        = "disk is corrupted",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4392, disk is corrupted",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4392, disk is corrupted"
+};
 static const _error _error_OB_IMPORT_NOT_IN_SERVER = {
       .error_name            = "OB_IMPORT_NOT_IN_SERVER",
       .error_cause           = "Internal Error",
@@ -23816,6 +23828,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_TOO_MUCH_TIME] = &_error_OB_ERR_TOO_MUCH_TIME;
     _errors[-OB_ERR_REMOTE_SCHEMA_NOT_FULL] = &_error_OB_ERR_REMOTE_SCHEMA_NOT_FULL;
     _errors[-OB_DDL_SSTABLE_RANGE_CROSS] = &_error_OB_DDL_SSTABLE_RANGE_CROSS;
+    _errors[-OB_DISK_CORRUPTED] = &_error_OB_DISK_CORRUPTED;
     _errors[-OB_IMPORT_NOT_IN_SERVER] = &_error_OB_IMPORT_NOT_IN_SERVER;
     _errors[-OB_CONVERT_ERROR] = &_error_OB_CONVERT_ERROR;
     _errors[-OB_BYPASS_TIMEOUT] = &_error_OB_BYPASS_TIMEOUT;

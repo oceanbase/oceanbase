@@ -260,6 +260,7 @@ constexpr int OB_UNEXPECT_INTERNAL_ERROR = -4388;
 constexpr int OB_ERR_TOO_MUCH_TIME = -4389;
 constexpr int OB_ERR_REMOTE_SCHEMA_NOT_FULL = -4390;
 constexpr int OB_DDL_SSTABLE_RANGE_CROSS = -4391;
+constexpr int OB_DISK_CORRUPTED = -4392;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -1989,6 +1990,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TOO_MUCH_TIME__USER_ERROR_MSG "Porcessing time is too long"
 #define OB_ERR_REMOTE_SCHEMA_NOT_FULL__USER_ERROR_MSG "Schema of remote server is not refreshed yet"
 #define OB_DDL_SSTABLE_RANGE_CROSS__USER_ERROR_MSG "ddl sstable version range cross"
+#define OB_DISK_CORRUPTED__USER_ERROR_MSG "disk is corrupted"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -3945,6 +3947,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4389, Porcessing time is too long"
 #define OB_ERR_REMOTE_SCHEMA_NOT_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4390, Schema of remote server is not refreshed yet"
 #define OB_DDL_SSTABLE_RANGE_CROSS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4391, ddl sstable version range cross"
+#define OB_DISK_CORRUPTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4392, disk is corrupted"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"

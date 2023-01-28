@@ -439,6 +439,7 @@ DEFINE_ERROR(OB_UNEXPECT_INTERNAL_ERROR, -4388, -1, "HY000", "Unexpected interna
 DEFINE_ERROR(OB_ERR_TOO_MUCH_TIME, -4389, -1, "HY000", "Porcessing time is too long");
 DEFINE_ERROR(OB_ERR_REMOTE_SCHEMA_NOT_FULL, -4390, -1, "HY000", "Schema of remote server is not refreshed yet");
 DEFINE_ERROR(OB_DDL_SSTABLE_RANGE_CROSS, -4391, -1, "HY000", "ddl sstable version range cross");
+DEFINE_ERROR(OB_DISK_CORRUPTED, -4392, -1, "HY000", "disk is corrupted");
 
 ////////////////////////////////////////////////////////////////
 //error code for root server & server management -4500 ---- -5000
@@ -1007,7 +1008,7 @@ DEFINE_ERROR_EXT(OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT, -5407, ER_WRONG_PARAMETE
 DEFINE_ERROR_EXT(OB_ERR_CTE_MAX_RECURSION_DEPTH, -5408, ER_CTE_MAX_RECURSION_DEPTH, "HY000", "Recursive query aborted after multiple iterations. Try increasing @@cte_max_recursion_depth to a larger value.", "Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value.");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//error code for json  -5410 ---- -5433, as for json only support mysql mode, error code for oracle use special values 
+//error code for json  -5410 ---- -5433, as for json only support mysql mode, error code for oracle use special values
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_TEXT, -5411, ER_INVALID_JSON_TEXT, "22032", "Invalid JSON text.", "Invalid JSON text.", 600, "Invalid JSON text.", "Invalid JSON text.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_TEXT_IN_PARAM, -5412, ER_INVALID_JSON_TEXT_IN_PARAM, "22032", "Invalid JSON text in argument.", "Invalid JSON text in argument.", 600, "Invalid JSON text in argument.", "Invalid JSON text in argument.");
