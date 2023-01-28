@@ -351,7 +351,7 @@ int ObDDLChecksumOperator::get_tablet_checksum_record(
         if ((i != 0 && i % batch_size == 0) /* reach batch size */ || i == tablet_ids.count() - 1 /* reach end */) {
           if (OB_FAIL(sql.assign_fmt(
               "SELECT task_id, column_id FROM %s "
-              "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld AND task_id >= %ld and task_id <= %ld"
+              "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld AND task_id >= %ld and task_id <= %ld "
               "ORDER BY task_id",
               OB_ALL_DDL_CHECKSUM_TNAME,
               execution_id,
