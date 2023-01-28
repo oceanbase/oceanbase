@@ -174,7 +174,9 @@ public:
               blk2destroy = blk;
             }
           }
+          arena.ref(-1);
         } else {
+          arena.ref(-1);
           Block* nb = prepare_block();
           if (NULL == nb) {
             // alloc block fail, end
@@ -186,7 +188,6 @@ public:
             }
           }
         }
-        arena.ref(-1);
         if (blk2destroy) {
           arena.sync();
           if (blk2destroy->retire(leak_pos)) {
