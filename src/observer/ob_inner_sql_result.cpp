@@ -153,8 +153,6 @@ int ObInnerSQLResult::open()
         LOG_WARN("open result set failed", K(ret));
         // move after precess_retry().
 //        result_set_->close();
-      } else if (has_tenant_resource() && OB_FAIL(result_set_->get_exec_context().check_status())) {
-        LOG_WARN("failed check status", K(ret));
       } else if (is_read_&& is_select) {
         //prefetch 1 row for throwing error code and retry
         opened_ = true;

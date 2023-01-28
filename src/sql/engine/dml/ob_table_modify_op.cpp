@@ -303,7 +303,9 @@ int ForeignKeyHandle::cascade(ObTableModifyOp &op,
   int64_t where_pos = 0;
   const ObString &database_name = fk_arg.database_name_;
   const ObString &table_name = fk_arg.table_name_;
-  if (old_row.empty()) {
+  if (OB_FAIL(op.get_exec_ctx().check_status())) {
+    LOG_WARN("failed check status", K(ret));
+  } else if (old_row.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("old row is invalid", K(ret));
   } else if (OB_FAIL(gen_where(op.get_eval_ctx(), where_buf, where_len, where_pos,
