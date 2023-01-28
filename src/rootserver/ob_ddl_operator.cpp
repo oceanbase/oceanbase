@@ -1802,7 +1802,8 @@ int ObDDLOperator::drop_sequence_in_drop_column(const ObColumnSchemaV2 &column_s
 }
 
 int ObDDLOperator::reinit_autoinc_row(const ObTableSchema &table_schema,
-                                      common::ObMySQLTransaction &trans)
+                                      common::ObMySQLTransaction &trans,
+                                      const ObArray<ObAddr>* alive_server_list)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
@@ -1831,7 +1832,7 @@ int ObDDLOperator::reinit_autoinc_row(const ObTableSchema &table_schema,
                 KR(ret), K(tenant_id), K(table_id), K(table_name), K(schema_version), K(column_id));
         // to do
         // Cache can't be cleaned totally when RS change leader in autoinc_in_order mode
-      } else if (OB_FAIL(cleanup_autoinc_cache(table_schema))) {
+      } else if (OB_FAIL(cleanup_autoinc_cache(table_schema, alive_server_list))) {
         LOG_WARN("failed to cleanup_autoinc_caceh",
                 KR(ret), K(tenant_id), K(table_id), K(table_name), K(schema_version), K(column_id));
       }
@@ -4300,7 +4301,8 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
 // ref https://aone.alibaba-inc.com/issue/21209472
 // When tables with auto-increment columns are frequently created or deleted, if the auto-increment column cache is not cleared, the memory will grow slowly.
 // so every time when you drop table, if you bring auto-increment columns, clean up the corresponding cache.
-int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema &table_schema)
+int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema &table_schema,
+                                         const common::ObArray<ObAddr>* alive_server_list/*nullptr*/)
 {
   int ret = OB_SUCCESS;
   ObAutoincrementService &autoinc_service = share::ObAutoincrementService::get_instance();
@@ -4319,7 +4321,8 @@ int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema &table_schema)
     if (OB_FAIL(autoinc_service.clear_autoinc_cache_all(tenant_id,
                                                         table_id,
                                                         autoinc_column_id,
-                                                        table_schema.is_order_auto_increment_mode()))) {
+                                                        table_schema.is_order_auto_increment_mode(),
+                                                        alive_server_list))) {
       LOG_WARN("failed to clear auto-increment cache",
                K(tenant_id), K(table_id));
     }

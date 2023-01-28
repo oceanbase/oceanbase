@@ -506,7 +506,7 @@ int ObGlobalStatProxy::inner_get_snapshot_gc_scn_(
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "column_value", snapshot_gc_scn_str);
 
       char *endptr = NULL;
-      char buf[common::MAX_ZONE_INFO_LENGTH];
+      char buf[common::MAX_ZONE_INFO_LENGTH] = {0};
       if (OB_SUCC(ret)) {
         const int64_t str_len = snapshot_gc_scn_str.length();
         const int64_t buf_len = sizeof(buf);
@@ -595,7 +595,7 @@ int ObGlobalStatProxy::select_ddl_epoch_for_update(
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "column_value", ddl_epoch_str);
 
       char *endptr = NULL;
-      char buf[common::MAX_ZONE_INFO_LENGTH];
+      char buf[common::MAX_ZONE_INFO_LENGTH] = {0};
       if (OB_SUCC(ret)) {
         const int64_t str_len = ddl_epoch_str.length();
         const int64_t buf_len = sizeof(buf);

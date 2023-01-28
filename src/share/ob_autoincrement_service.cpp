@@ -335,7 +335,7 @@ int ObAutoincrementService::get_handle(AutoincParam &param,
   if (OB_SUCC(ret)) {
     int ignore_ret = try_periodic_refresh_global_sync_value(tenant_id,
                                                             table_id,
-                                                            column_id, 
+                                                            column_id,
                                                             param.autoinc_mode_is_order_,
                                                             *table_node);
     if (OB_SUCCESS != ignore_ret) {
@@ -584,7 +584,8 @@ int ObAutoincrementService::reinit_autoinc_row(const uint64_t &tenant_id,
 int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
                                                     const uint64_t table_id,
                                                     const uint64_t column_id,
-                                                    const bool autoinc_is_order)
+                                                    const bool autoinc_is_order,
+                                                    const common::ObArray<ObAddr>* alive_server_list/*nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret)) {
@@ -598,9 +599,24 @@ int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
     ObHashSet<ObAddr> server_set;
     if (OB_FAIL(server_set.create(PARTITION_LOCATION_SET_BUCKET_NUM))) {
       LOG_WARN("failed to create hash set", K(ret));
-    } else if (OB_FAIL(get_server_set(tenant_id, table_id, server_set, true))) {
-      SHARE_LOG(WARN, "failed to get table partitions server set", K(ret));
+    //to do
+    //fix can not get all server bug
+    // https://work.aone.alibaba-inc.com/issue/47360408
+    } else if (OB_ISNULL(alive_server_list)) {
+      if (OB_FAIL(get_server_set(tenant_id, table_id, server_set, true))) {
+        SHARE_LOG(WARN, "failed to get table partitions server set", K(ret));
+      }
     } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < alive_server_list->count(); i++) {
+        int err = OB_SUCCESS;
+        err = server_set.set_refactored(alive_server_list->at(i));
+        if (OB_SUCCESS != err && OB_HASH_EXIST != err) {
+          ret = err;
+          LOG_WARN("failed to add element to set", "server", alive_server_list->at(i), K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       const int64_t sync_timeout = SYNC_OP_TIMEOUT + TIME_SKEW;
       ObHashSet<ObAddr>::iterator iter;
       for(iter = server_set.begin(); OB_SUCC(ret) && iter != server_set.end(); ++iter) {
@@ -820,7 +836,7 @@ int ObAutoincrementService::fetch_table_node(const AutoincParam &param,
       LOG_ERROR("unexpected auto_increment_cache_size", K(auto_increment_cache_size));
       auto_increment_cache_size = DEFAULT_INCREMENT_CACHE_SIZE;
     }
-    // For ORDER mode, the local cache_size is always 1, and the central(remote) cache_size 
+    // For ORDER mode, the local cache_size is always 1, and the central(remote) cache_size
     // is the configuration value.
     const uint64_t local_cache_size = is_order ? 1 : auto_increment_cache_size;
     uint64_t prefetch_count = std::min(max_value / 100 / part_num, local_cache_size);

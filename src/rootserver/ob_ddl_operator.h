@@ -310,7 +310,8 @@ public:
       const common::ObIArray<uint64_t> &alter_column_ids,
       const common::ObString *ddl_stmt_str = NULL);
   int reinit_autoinc_row(const ObTableSchema &table_schema,
-                         common::ObMySQLTransaction &trans);
+                         common::ObMySQLTransaction &trans,
+                         const common::ObArray<ObAddr>* alive_server_list);
   int create_sequence_in_create_table(share::schema::ObTableSchema &table_schema,
                                       common::ObMySQLTransaction &trans,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1047,7 +1048,8 @@ private:
       const common::ObIArray<uint64_t> &table_ids,
       common::ObMySQLTransaction &trans);
 
-  int cleanup_autoinc_cache(const share::schema::ObTableSchema &table_schema);
+  int cleanup_autoinc_cache(const share::schema::ObTableSchema &table_schema,
+                            const common::ObArray<ObAddr>* alive_server_list = nullptr);
 
   int fill_trigger_id(share::schema::ObSchemaService &schema_service,
                       share::schema::ObTriggerInfo &new_trigger_info);

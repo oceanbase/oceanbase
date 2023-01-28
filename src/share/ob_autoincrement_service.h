@@ -210,9 +210,9 @@ public:
                          uint64_t &start_inclusive,
                          uint64_t &end_inclusive,
                          uint64_t &sync_value);
-  
+
   int get_autoinc_value(const AutoincKey &key, uint64_t &seq_value, uint64_t &sync_value);
-  
+
   int get_autoinc_value_in_batch(const uint64_t tenant_id,
                                  const common::ObIArray<AutoincKey> &keys,
                                  common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values);
@@ -292,7 +292,7 @@ public:
       uint64_t &sync_value,
       uint64_t &start_inclusive,
       uint64_t &end_inclusive) override;
-  
+
   virtual int get_sequence_value(const AutoincKey &key, uint64_t &sequence_value) override;
 
   virtual int get_auto_increment_values(
@@ -360,7 +360,8 @@ public:
   int clear_autoinc_cache_all(const uint64_t tenant_id,
                               const uint64_t table_id,
                               const uint64_t column_id,
-                              const bool autoinc_mode_is_order);
+                              const bool autoinc_mode_is_order,
+                              const common::ObArray<ObAddr>* alive_server_list = nullptr);
   int clear_autoinc_cache(const obrpc::ObAutoincSyncArg &arg);
 
   static int calc_next_value(const uint64_t last_next_value,

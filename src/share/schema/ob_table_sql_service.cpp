@@ -293,8 +293,8 @@ int ObTableSqlService::drop_inc_partition(common::ObISQLClient &sql_client,
       } else if (OB_FAIL(delete_from_all_histogram_stat_history(sql_client, tenant_id, table_id, extra_str))) {
         LOG_WARN("failed to delete all histogram_stat history", K(ret));
       }
-    } 
-    
+    }
+
     if (OB_SUCC(ret)) {
       int64_t affected_rows = 0;
       if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
@@ -388,7 +388,7 @@ int ObTableSqlService::drop_inc_sub_partition(common::ObISQLClient &sql_client,
       } else if (OB_FAIL(delete_from_all_histogram_stat_history(sql_client, tenant_id, table_id, &condition_str))) {
         LOG_WARN("failed to delete all histogram_stat history", K(ret));
       }
-    } 
+    }
 
     if (OB_SUCC(ret)) {
       int64_t affected_rows = 0;
@@ -3135,7 +3135,7 @@ int ObTableSqlService::delete_from_all_table_stat(ObISQLClient &sql_client,
     LOG_WARN("add column failed", K(ret));
   } else {
     int64_t affected_rows = 0;
-    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) { 
+    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) {
       LOG_WARN("fail to assign extra condition", K(ret));
     } else if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id,
                             OB_ALL_TABLE_STAT_TNAME,
@@ -3162,7 +3162,7 @@ int ObTableSqlService::delete_from_all_histogram_stat(ObISQLClient &sql_client,
     LOG_WARN("add column failed", K(ret));
   } else {
     int64_t affected_rows = 0;
-    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) { 
+    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) {
       LOG_WARN("fail to assign extra condition", K(ret));
     } else if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id,
                             OB_ALL_HISTOGRAM_STAT_TNAME,
@@ -3219,7 +3219,7 @@ int ObTableSqlService::delete_from_all_column_stat(ObISQLClient &sql_client,
     LOG_WARN("add column failed", K(ret));
   } else {
     int64_t affected_rows = 0;
-    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) { 
+    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) {
       LOG_WARN("fail to assign extra condition", K(ret));
     } else if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id,
                             OB_ALL_COLUMN_STAT_TNAME,
@@ -3322,7 +3322,7 @@ int ObTableSqlService::delete_from_all_table_stat_history(ObISQLClient &sql_clie
     LOG_WARN("add column failed", K(ret));
   } else {
     int64_t affected_rows = 0;
-    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) { 
+    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) {
       LOG_WARN("fail to assign extra condition", K(ret));
     } else if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id, OB_ALL_TABLE_STAT_HISTORY_TNAME,
                             dml, affected_rows))) {
@@ -3347,7 +3347,7 @@ int ObTableSqlService::delete_from_all_column_stat_history(ObISQLClient &sql_cli
     LOG_WARN("add column failed", K(ret));
   } else {
     int64_t affected_rows = 0;
-    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) { 
+    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) {
       LOG_WARN("fail to assign extra condition", K(ret));
     } else if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id, OB_ALL_COLUMN_STAT_HISTORY_TNAME,
                             dml, affected_rows))) {
@@ -3372,7 +3372,7 @@ int ObTableSqlService::delete_from_all_histogram_stat_history(ObISQLClient &sql_
     LOG_WARN("add column failed", K(ret));
   } else {
     int64_t affected_rows = 0;
-    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) { 
+    if (OB_NOT_NULL(extra_condition) && OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) {
       LOG_WARN("fail to assign extra condition", K(ret));
     } else if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id,
                             OB_ALL_HISTOGRAM_STAT_HISTORY_TNAME,

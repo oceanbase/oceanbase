@@ -515,7 +515,10 @@ inline bool index_has_tablet(const ObIndexType &index_type)
         || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type
         || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
         || INDEX_TYPE_NORMAL_GLOBAL == index_type
-        || INDEX_TYPE_UNIQUE_GLOBAL == index_type;
+        || INDEX_TYPE_UNIQUE_GLOBAL == index_type
+        || INDEX_TYPE_SPATIAL_LOCAL == index_type
+        || INDEX_TYPE_SPATIAL_GLOBAL == index_type
+        || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
 }
 
 struct ObTenantTableId

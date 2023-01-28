@@ -16204,7 +16204,12 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     // in mysql mode
     // 1.reinit auto_increment table value
     // 2.clear auto_increment cache
-    if (FAILEDx(ddl_operator.reinit_autoinc_row(*orig_table_schemas.at(0), trans))) {
+    ObZone nullzone;
+    ObArray<ObAddr> alive_server_list;
+
+    if (FAILEDx(get_server_manager().get_alive_servers(nullzone, alive_server_list))) {
+      LOG_WARN("fail to get alive server list", KR(ret));
+    } else if (OB_FAIL(ddl_operator.reinit_autoinc_row(*orig_table_schemas.at(0), trans, &alive_server_list))) {
       LOG_WARN("fail to reinit autoinc row", KR(ret), K(table_name));
     } else if (OB_FAIL(drop_and_create_tablet(first_schema_version, orig_table_schemas, new_table_schemas, trans))) {
       LOG_WARN("fail to drop or create tablet", KR(ret), K(table_name), K(first_schema_version));
