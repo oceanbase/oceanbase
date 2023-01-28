@@ -779,7 +779,7 @@ int ObLS::online_tx_()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ls_tx_svr_.online())) {
     LOG_WARN("ls tx service online failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(tx_table_.prepare_online())) {
+  } else if (OB_FAIL(tx_table_.online())) {
     LOG_WARN("tx table online failed", K(ret), K(ls_meta_));
   }
   return ret;

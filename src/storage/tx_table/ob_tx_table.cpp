@@ -52,7 +52,6 @@ int ObTxTable::init(ObLS *ls)
   } else {
     ls_ = ls;
     epoch_ = 0;
-    max_tablet_clog_checkpoint_ = SCN::min_scn();
     state_ = TxTableState::ONLINE;
     LOG_INFO("init tx table successfully", K(ret), K(ls->get_ls_id()));
     is_inited_ = true;
@@ -152,61 +151,27 @@ int ObTxTable::offline()
   return ret;
 }
 
-int ObTxTable::prepare_online()
+int ObTxTable::online()
 {
   int ret = OB_SUCCESS;
   SCN tmp_max_tablet_clog_checkpiont = SCN::min_scn();
-  max_tablet_clog_checkpoint_ = SCN::invalid_scn();
 
   ATOMIC_INC(&epoch_);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret));
-  } else if (OB_FAIL(get_max_tablet_clog_checkpoint_(tmp_max_tablet_clog_checkpiont))) {
-    LOG_WARN("get max tablet clog checkpint failed", KR(ret));
   } else if (OB_FAIL(load_tx_data_table_())) {
     LOG_WARN("failed to load tx data table", K(ret));
   } else if (OB_FAIL(load_tx_ctx_table_())) {
     LOG_WARN("failed to load tx ctx table", K(ret));
   } else {
-    max_tablet_clog_checkpoint_ = tmp_max_tablet_clog_checkpiont;
-    prepare_online_ts_ = ObTimeUtil::current_time();
-    ATOMIC_STORE(&state_, ObTxTable::PREPARE_ONLINE);
-    LOG_INFO("tx table prepare online succeed", "ls_id", ls_->get_ls_id(), KPC(this));
+    ATOMIC_STORE(&state_, ObTxTable::ONLINE);
+    LOG_INFO("tx table online succeed", "ls_id", ls_->get_ls_id(), KPC(this));
   }
 
   return ret;
 }
-
-int ObTxTable::check_and_online()
-{
-  int ret = OB_SUCCESS;
-  SCN max_consequent_callbacked_scn = SCN::min_scn();
-
-  if (OB_FAIL(ls_->get_max_decided_scn(max_consequent_callbacked_scn))) {
-    LOG_WARN("get max decided scn from ls failed", KR(ret), "ls_id", ls_->get_ls_id());
-  } else if (max_consequent_callbacked_scn >= max_tablet_clog_checkpoint_) {
-    ATOMIC_STORE(&state_, TxTableState::ONLINE);
-    LOG_INFO("tx table online finish",
-             "ls_id",
-             ls_->get_ls_id(),
-             K(max_consequent_callbacked_scn),
-             K(max_tablet_clog_checkpoint_));
-  } else {
-    int64_t current_ts = ObTimeUtil::current_time();
-    int64_t time_after_prepare_online_ms = (current_ts - prepare_online_ts_) / 1000LL;
-    LOG_INFO("tx table is PREPARE_ONLINE but not ONLINE yet",
-             "ls_id", ls_->get_ls_id(),
-             K(max_consequent_callbacked_scn),
-             K(max_tablet_clog_checkpoint_),
-             K(time_after_prepare_online_ms),
-             KTIME(current_ts),
-             KTIME(prepare_online_ts_));
-  }
-  return ret;
-}
-
 
 int ObTxTable::prepare_for_safe_destroy()
 {
@@ -630,49 +595,6 @@ int ObTxTable::load_tx_data_table_()
   return ret;
 }
 
-int ObTxTable::get_max_tablet_clog_checkpoint_(SCN &max_tablet_clog_checkpoint)
-{
-  int ret = OB_SUCCESS;
-  ObLSTabletIterator tablet_iter(ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US);
-  if (OB_FAIL(ls_->build_tablet_iter(tablet_iter))) {
-    STORAGE_LOG(WARN, "get ls tablet iterator failed", KR(ret), KPC(this));
-  } else {
-    while (OB_SUCC(ret)) {
-      ObTabletHandle tablet_handle;
-      if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
-        if (OB_ITER_END == ret) {
-          // iterate tablet done.
-        } else {
-          STORAGE_LOG(WARN, "get next table from tablet iter failed", KR(ret), KPC(this));
-        }
-      } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle), KPC(this));
-      } else if (tablet_handle.get_obj()->get_tablet_meta().tablet_id_.is_inner_tablet()) {
-        // skip inner tablet
-      } else {
-        SCN tmp_clog_checkpoint = tablet_handle.get_obj()->get_clog_checkpoint_scn();
-        if (tmp_clog_checkpoint > max_tablet_clog_checkpoint) {
-          max_tablet_clog_checkpoint = tmp_clog_checkpoint;
-        }
-      }
-    }
-
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-
-    STORAGE_LOG(INFO,
-                "get max tablet clog checkpiont finish",
-                KR(ret),
-                "ls_id", ls_->get_ls_id(),
-                K(max_tablet_clog_checkpoint));
-  }
-
-
-  return ret;
-}
-
 int ObTxTable::load_tx_table()
 {
   int ret = OB_SUCCESS;
@@ -842,11 +764,18 @@ int ObTxTable::check_with_tx_data(const transaction::ObTransID tx_id,
   } else if (OB_TRANS_CTX_NOT_EXIST == ret && OB_FAIL(tx_data_table_.check_with_tx_data(tx_id, fn))) {
     if (OB_ITER_END == ret) {
       ret = OB_TRANS_CTX_NOT_EXIST;
+    } else {
+      LOG_WARN("read tx data in tx data table failed",
+               KR(ret),
+               "ls_id", ls_->get_ls_id(),
+               "state", get_state_string(state),
+               K(read_epoch));
     }
-    LOG_WARN("check_with_tx_data in tx data table fail.", KR(ret), "ls_id", ls_->get_ls_id(), K(tx_id));
   }
 
-  check_state_and_epoch_(tx_id, read_epoch, true/*need_log_error*/, ret);
+  if (OB_SUCC(ret) || OB_TRANS_CTX_NOT_EXIST == ret) {
+    check_state_and_epoch_(tx_id, read_epoch, true/*need_log_error*/, ret);
+  }
   return ret;
 }
 
@@ -862,37 +791,33 @@ void ObTxTable::check_state_and_epoch_(const transaction::ObTransID tx_id,
   if (OB_UNLIKELY(read_epoch != epoch)) {
     // offline or online has been executed on this tx table, return a specific error code to retry
     ret = OB_REPLICA_NOT_READABLE;
-    LOG_WARN("tx table may offline or changed",
+    LOG_WARN("tx table epoch changed",
              KR(ret),
              "ls_id", ls_->get_ls_id(),
              "state", get_state_string(state),
              K(read_epoch),
              K(epoch));
   } else if (OB_UNLIKELY(TxTableState::ONLINE != state)) {
-    // try switch state first
-    bool try_switch_state_succ = false;
-    if (TxTableState::PREPARE_ONLINE == state) {
-      int tmp_ret = check_and_online();
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("check and online failed", KR(tmp_ret));
-      } else {
-        try_switch_state_succ = true;
-        state = ATOMIC_LOAD(&state_);
-      }
-    }
-
-    // check again
-    if (!try_switch_state_succ || TxTableState::ONLINE != state) {
-      ret = OB_REPLICA_NOT_READABLE;
-      LOG_WARN("tx table may offline or changed",
-               KR(ret),
-               "ls_id", ls_->get_ls_id(),
-               "state", get_state_string(state),
-               K(read_epoch),
-               K(epoch));
-    }
+    ret = OB_REPLICA_NOT_READABLE;
+    LOG_WARN("tx table is not online",
+             KR(ret),
+             "ls_id", ls_->get_ls_id(),
+             "state", get_state_string(state),
+             K(read_epoch),
+             K(epoch));
   } else if (OB_FAIL(ret)) {
-    LOG_WARN("check with tx data failed.", KR(ret), K(tx_id), K(read_epoch), "ls_id", ls_->get_ls_id(), KPC(this));
+    SCN max_decided_scn = SCN::invalid_scn();
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ls_->get_max_decided_scn(max_decided_scn))){
+      LOG_WARN("get max decided scn failed", KR(tmp_ret));
+    }
+    LOG_WARN("check with tx data failed.",
+             KR(ret),
+             K(tx_id),
+             K(read_epoch),
+             K(max_decided_scn),
+             "ls_id", ls_->get_ls_id(),
+             KPC(this));
   }
 }
 
@@ -1092,10 +1017,9 @@ const char *ObTxTable::get_state_string(const int64_t state) const
   STATIC_ASSERT(TxTableState::OFFLINE == 0, "Invalid State Enum");
   STATIC_ASSERT(TxTableState::ONLINE == 1, "Invalid State Enum");
   STATIC_ASSERT(TxTableState::PREPARE_OFFLINE == 2, "Invalid State Enum");
-  STATIC_ASSERT(TxTableState::PREPARE_ONLINE == 3, "Invalid State Enum");
-  STATIC_ASSERT(TxTableState::STATE_CNT == 4, "Invalid State Enum");
+  STATIC_ASSERT(TxTableState::STATE_CNT == 3, "Invalid State Enum");
   const static int64_t cnt = TxTableState::STATE_CNT;
-  const static char STATE_TO_CHAR[cnt][32] = {"OFFLINE", "ONLINE", "PREPARE_OFFLINE", "PREPARE_ONLINE"};
+  const static char STATE_TO_CHAR[cnt][32] = {"OFFLINE", "ONLINE", "PREPARE_OFFLINE"};
   return STATE_TO_CHAR[int(state)];
 }
 

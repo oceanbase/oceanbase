@@ -49,7 +49,6 @@ public:
     OFFLINE = 0,
     ONLINE,
     PREPARE_OFFLINE,
-    PREPARE_ONLINE,
     STATE_CNT
   };
 
@@ -57,8 +56,6 @@ public:
   ObTxTable()
       : is_inited_(false),
         epoch_(INVALID_READ_EPOCH),
-        max_tablet_clog_checkpoint_(),
-        prepare_online_ts_(0),
         state_(OFFLINE),
         ls_(nullptr),
         tx_data_table_(default_tx_data_table_) {}
@@ -66,8 +63,6 @@ public:
   ObTxTable(ObTxDataTable &tx_data_table)
       : is_inited_(false),
         epoch_(INVALID_READ_EPOCH),
-        max_tablet_clog_checkpoint_(),
-        prepare_online_ts_(0),
         state_(OFFLINE),
         ls_(nullptr),
     tx_data_table_(tx_data_table) {}
@@ -82,8 +77,7 @@ public:
   int load_tx_table();
   int prepare_offline();
   int offline();
-  int prepare_online();
-  int check_and_online();
+  int online();
 
   // In OB4 .0, transaction contexts are divided into exec_data and tx_data. Where exec_data
   // indicates the data required when the transaction is running,and tx_data indicates the data that
@@ -295,7 +289,6 @@ private:
   int load_tx_data_table_();
   int offline_tx_ctx_table_();
   int offline_tx_data_table_();
-  int get_max_tablet_clog_checkpoint_(share::SCN &max_tablet_clog_checkpoint);
 
   void check_state_and_epoch_(const transaction::ObTransID tx_id,
                               const int64_t read_epoch,
@@ -307,8 +300,6 @@ private:
   static const int64_t LS_TX_CTX_SCHEMA_COLUMN_CNT = 3;
   bool is_inited_;
   int64_t epoch_ CACHE_ALIGNED;
-  share::SCN max_tablet_clog_checkpoint_;
-  int64_t prepare_online_ts_;
   TxTableState state_ CACHE_ALIGNED;
   ObLS *ls_;
   ObTxCtxTable tx_ctx_table_;

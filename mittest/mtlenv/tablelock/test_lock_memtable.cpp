@@ -33,7 +33,7 @@ using namespace transaction;
 using namespace blocksstable;
 
 namespace storage {
-int ObTxTable::prepare_online()
+int ObTxTable::online()
 {
   ATOMIC_INC(&epoch_);
   ATOMIC_STORE(&state_, TxTableState::ONLINE);
@@ -70,7 +70,7 @@ public:
     // mock sequence no
     ObClockGenerator::init();
     create_memtable();
-    tx_table_.prepare_online();
+    tx_table_.online();
     LOG_INFO("set up success");
   }
   virtual void TearDown() override
