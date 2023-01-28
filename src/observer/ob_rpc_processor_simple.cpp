@@ -1208,7 +1208,7 @@ int ObRpcCreateLSP::process()
       COMMON_LOG(WARN, "failed create log stream", KR(ret), K(arg_));
     }
   }
-  result_.set_result(ret);
+  (void)result_.init(ret, GCTX.self_addr());
   return ret;
 }
 

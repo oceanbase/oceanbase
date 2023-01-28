@@ -2503,23 +2503,29 @@ struct ObCreateLSResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCreateLSResult(): ret_(common::OB_SUCCESS) {}
+  ObCreateLSResult(): ret_(common::OB_SUCCESS), addr_() {}
   ~ObCreateLSResult() {}
   bool is_valid() const;
   int assign(const ObCreateLSResult &other);
-  TO_STRING_KV(K_(ret));
-  void set_result(const int ret)
+  void init(const int ret, const ObAddr &addr)
   {
     ret_ = ret;
+    addr_ = addr;
   }
+  TO_STRING_KV(K_(ret), K_(addr));
   int get_result() const
   {
     return ret_;
+  }
+  const ObAddr &get_addr() const
+  {
+    return addr_;
   }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateLSResult);
 private:
   int ret_;
+  ObAddr addr_;//for async rpc, dests and results not one-by-one mapping
 };
 
 struct ObSetMemberListArgV2

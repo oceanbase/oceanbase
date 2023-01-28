@@ -429,12 +429,23 @@ int ObLSCreator::check_create_ls_result_(const int64_t rpc_count,
         } else if (OB_SUCCESS != result->get_result()) {
           LOG_WARN("rpc is failed", KR(ret), K(*result), K(i));
         } else {
-          const ObAddr &addr = create_ls_proxy_.get_dests().at(i);
+          ObAddr addr;
+          if (result->get_addr().is_valid()) {
+            addr = result->get_addr();
+          } else if (create_ls_proxy_.get_dests().count() == create_ls_proxy_.get_results().count()) {
+            //one by one match
+            addr = create_ls_proxy_.get_dests().at(i);
+          }
           //TODO other replica type
           //can not get replica type from arg, arg and result is not match
-          if (OB_FAIL(member_list.add_member(ObMember(addr, timestamp)))) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_UNLIKELY(!addr.is_valid())) {
+            ret = OB_NEED_RETRY;
+            LOG_WARN("addr is invalid, ls create failed", KR(ret), K(addr));
+          } else if (OB_FAIL(member_list.add_member(ObMember(addr, timestamp)))) {
             LOG_WARN("failed to add member", KR(ret), K(addr));
           }
+          LOG_TRACE("create ls result", KR(ret), K(i), K(addr), KPC(result), K(rpc_count));
         }
       }
     }

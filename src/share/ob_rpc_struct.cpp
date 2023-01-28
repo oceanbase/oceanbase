@@ -6350,7 +6350,7 @@ DEF_TO_STRING(ObBatchCreateTabletArg)
 OB_SERIALIZE_MEMBER(ObBatchCreateTabletArg, id_, major_frozen_scn_,
     tablets_, table_schemas_);
 
-OB_SERIALIZE_MEMBER(ObCreateLSResult, ret_);
+OB_SERIALIZE_MEMBER(ObCreateLSResult, ret_, addr_);
 bool ObCreateLSResult::is_valid() const
 {
   return true;
@@ -6361,6 +6361,7 @@ int ObCreateLSResult::assign(const ObCreateLSResult &other)
   if (this == &other) {
   } else {
     ret_ = other.ret_;
+    addr_ = other.addr_;
   }
   return ret;
 }
