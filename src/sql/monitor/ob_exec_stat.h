@@ -314,6 +314,7 @@ struct ObAuditRecordData {
     plan_hash_ = 0;
     trx_lock_for_read_elapse_ = 0;
     params_value_len_ = 0;
+    partition_hit_ = true;
   }
 
   int64_t get_elapsed_time() const
@@ -432,6 +433,7 @@ struct ObAuditRecordData {
     char const* source_;   // snapshot's acquire source
   } snapshot_; // stmt's tx snapshot
   uint64_t txn_free_route_flag_; // flag contains txn free route meta
+  bool partition_hit_;// flag for need das partition route or not
 };
 
 } //namespace sql

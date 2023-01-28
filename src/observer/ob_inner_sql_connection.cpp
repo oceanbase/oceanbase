@@ -542,6 +542,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
       audit_record.table_scan_ = result_set.get_physical_plan()->contain_table_scan();
       audit_record.plan_id_ = result_set.get_physical_plan()->get_plan_id();
       audit_record.plan_hash_ = result_set.get_physical_plan()->get_plan_hash_value();
+      audit_record.partition_hit_ = session.partition_hit().get_bool();
     }
 
     audit_record.is_executor_rpc_ = false;
