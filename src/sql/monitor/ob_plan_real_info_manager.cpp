@@ -156,9 +156,11 @@ int ObPlanRealInfoMgr::handle_plan_info(int64_t id,
         SERVER_LOG(WARN, "alloc mem failed", K(total_size), K(ret));
       }
     } else {
+      uint64_t cpu_khz = get_cpufreq_khz();
+      cpu_khz = cpu_khz < 1 ? 1 : cpu_khz;
       int64_t row_count = plan_info.output_row_count_;
-      int64_t cpu_time = plan_info.db_time_*1000/get_cpufreq_khz();
-      int64_t io_time = plan_info.block_time_*1000/get_cpufreq_khz();
+      int64_t cpu_time = plan_info.db_time_*1000 / cpu_khz;
+      int64_t io_time = plan_info.block_time_*1000 / cpu_khz;
       int64_t open_time = plan_info.open_time_;
       int64_t last_row_time = plan_info.last_row_time_;
       int64_t real_time = 0;
