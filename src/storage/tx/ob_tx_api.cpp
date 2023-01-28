@@ -757,6 +757,8 @@ int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
       sp.init(&snapshot);
       ObSpinLockGuard guard(tx->lock_);
       if (OB_FAIL(tx_sanity_check_(*tx))) {
+      } else if (!tx->is_in_tx()) {
+        // skip register if txn not active
       } else if (OB_FAIL(tx->savepoints_.push_back(sp))) {
         TRANS_LOG(WARN, "push back snapshot fail", K(ret),
                   K(snapshot), KPC(tx));

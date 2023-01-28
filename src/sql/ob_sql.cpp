@@ -1472,6 +1472,12 @@ int ObSql::handle_pl_execute(const ObString &sql,
     }
   }
 
+  if (OB_SUCC(ret) && session.get_in_transaction()) {
+    if (ObStmt::is_dml_write_stmt(result.get_stmt_type()) ||
+        ObStmt::is_savepoint_stmt(result.get_stmt_type())) {
+      session.set_has_exec_inner_dml(true);
+    }
+  }
   FLT_SET_TAG(sql_id, context.sql_id_);
   return ret;
 }

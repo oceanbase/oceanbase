@@ -1728,7 +1728,7 @@ int ObSPIService::spi_check_autonomous_trans(pl::ObPLExecCtx *ctx)
   CK (OB_NOT_NULL(pl_context = ctx->exec_ctx_->get_pl_stack_ctx()));
 
   if (OB_SUCC(ret) && pl_context->is_autonomous()) {
-    if (session_info->is_in_transaction()) {
+    if (session_info->is_in_transaction() && session_info->has_exec_inner_dml()) {
       ret = OB_ERR_AUTONOMOUS_TRANSACTION_ROLLBACK;
       LOG_WARN("active autonomous transaction detected", K(ret));
     }

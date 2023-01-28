@@ -569,6 +569,9 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
   }
   if (is_autonomous_) {
+    has_inner_dml_write_ = session_info.has_exec_inner_dml();
+    session_info.set_has_exec_inner_dml(false);
+
     ObTransID last_trans_id;
     (void) record_tx_id_before_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
     OZ (session_info.begin_autonomous_session(saved_session_));
@@ -611,13 +614,12 @@ void ObPLContext::destory(
   ObSQLSessionInfo &session_info, ObExecContext &ctx, int &ret)
 {
   int trans_state_ret = OB_SUCCESS;
-  if (is_autonomous_) {
-    trans_state_ret = session_info.is_in_transaction() ? OB_ERR_AUTONOMOUS_TRANSACTION_ROLLBACK : OB_SUCCESS;
-    if (OB_SUCCESS != trans_state_ret) {
-      LOG_WARN("active autonomous transaction detected", K(trans_state_ret));
-      ret = OB_SUCCESS == ret ? trans_state_ret : ret;
-    }
+  if (is_autonomous_ && session_info.is_in_transaction() && session_info.has_exec_inner_dml()) {
+    trans_state_ret =  OB_ERR_AUTONOMOUS_TRANSACTION_ROLLBACK;
+    LOG_WARN("active autonomous transaction detected", K(trans_state_ret));
+    ret = COVER_SUCC(trans_state_ret);
   }
+
   if (old_worker_timeout_ts_ != 0) {
     THIS_WORKER.set_timeout_ts(old_worker_timeout_ts_);
     if (OB_NOT_NULL(ctx.get_physical_plan_ctx())) {
@@ -798,6 +800,7 @@ int ObPLContext::end_autonomous(ObExecContext &ctx, sql::ObSQLSessionInfo &sessi
     ret = switch_trans_ret;
   }
   session_info.set_has_pl_implicit_savepoint(saved_has_implicit_savepoint_);
+  session_info.set_has_exec_inner_dml(has_inner_dml_write_);
   return ret;
 }
 

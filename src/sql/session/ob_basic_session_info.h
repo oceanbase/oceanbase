@@ -237,23 +237,22 @@ public:
     virtual ~TransFlags() {}
     inline void reset() { flags_ = 0; }
     inline uint64_t get_flags() const { return flags_; }
-  private:
-    inline void set_flag(bool value, uint64_t flag)
-    {
-      if (value) {
-        flags_ |= flag;
-      } else {
-        flags_ &= ~flag;
-      }
-      changed_ = true;
-      return;
-    }
+    void set_has_exec_inner_dml(bool v) { has_exec_inner_dml_ = v; }
+    bool has_exec_inner_dml() const { return has_exec_inner_dml_; }
   private:
     // NOTICE:
     // after 4.1, txn support executed on multiple node
     // if use TransFlags, please add it into session_sync
     // in order to sync it to txn execution node
-    uint64_t flags_;
+    union {
+      uint64_t flags_;
+      struct {
+        // has executed dml stmt via inner connection
+        // used by PL detect autonomous trasnaction missing commit or rollback
+        // will not cross server, do not required to be synced
+        bool has_exec_inner_dml_ : 1;
+      };
+    };
     bool changed_;
   };
   class SqlScopeFlags
@@ -1203,7 +1202,8 @@ public:
   virtual bool is_txn_free_route_temp() const { return false; }
   bool get_in_transaction() const { return is_in_transaction(); }
   uint64_t get_trans_flags() const { return trans_flags_.get_flags(); }
-
+  void set_has_exec_inner_dml(bool value) { trans_flags_.set_has_exec_inner_dml(value); }
+  bool has_exec_inner_dml() const { return trans_flags_.has_exec_inner_dml(); }
   void set_is_in_user_scope(bool value) { sql_scope_flags_.set_is_in_user_scope(value); }
   bool is_in_user_scope() const { return sql_scope_flags_.is_in_user_scope(); }
   SqlScopeFlags &get_sql_scope_flags() { return sql_scope_flags_; }
