@@ -174,11 +174,12 @@ int ObLSCreator::create_user_ls(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
   } else if (OB_UNLIKELY(!status_info.is_valid()
+                         || !id_.is_user_ls()
                          || 0 >= zone_locality.count()
                          || 0 >= paxos_replica_num
                          || !create_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(status_info), K(zone_locality),
+    LOG_WARN("invalid argument", KR(ret), K(status_info), K_(id), K(zone_locality),
              K(paxos_replica_num), K(create_scn), K(palf_base_info));
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;

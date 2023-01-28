@@ -54,13 +54,14 @@ public:
 
   // LS attribute interface
   bool is_sys_ls() const { return SYS_LS_ID == id_; }
+  bool is_user_ls() const { return id_ > MIN_USER_LS_ID && SCHEDULER_LS_ID != id_; }
   bool is_scheduler_ls() const { return SCHEDULER_LS_ID == id_; }
   bool is_valid() const { return INVALID_LS_ID != id_; }
   bool is_valid_with_tenant(const uint64_t tenant_id) const
   {
-    // 1. User tenant support all valid LS
+    // 1. User tenant have SYS LS and User LS
     // 2. SYS tenant and Meta tenant only have SYS LS
-    return (is_user_tenant(tenant_id) && is_valid())
+    return (is_user_tenant(tenant_id) && (is_sys_ls() || is_user_ls()))
         || ((is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) && is_sys_ls());
   }
 

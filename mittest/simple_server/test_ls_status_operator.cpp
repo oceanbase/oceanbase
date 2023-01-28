@@ -254,6 +254,60 @@ TEST_F(TestLSStatusOperator, add_tenant)
   }
   ASSERT_EQ(OB_ITER_END, ret);
 }*/
+
+TEST_F(TestLSStatusOperator, test_check_ls_exist)
+{
+  uint64_t user_tenant_id = OB_INVALID_TENANT_ID;
+  ASSERT_EQ(OB_SUCCESS, create_tenant());
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(user_tenant_id));
+  uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
+
+  ObLSID user_ls_id(1001);
+  ObLSID uncreated_ls_id(6666);
+  ObLSID invalid_ls_id(123);
+  const uint64_t not_exist_tenant_id = 1234;
+  ObLSStatusOperator::ObLSExistState state;
+
+  // user tenant
+  ASSERT_EQ(OB_SUCCESS, ObLSStatusOperator::check_ls_exist(user_tenant_id, SYS_LS, state));
+  ASSERT_TRUE(state.is_existing());
+  state.reset();
+  ASSERT_EQ(OB_SUCCESS, ObLSStatusOperator::check_ls_exist(user_tenant_id, user_ls_id, state));
+  ASSERT_TRUE(state.is_existing());
+  state.reset();
+  ASSERT_EQ(OB_SUCCESS, ObLSStatusOperator::check_ls_exist(user_tenant_id, uncreated_ls_id, state));
+  ASSERT_TRUE(state.is_uncreated());
+
+  common::ObMySQLProxy &inner_proxy = get_curr_simple_server().get_observer().get_mysql_proxy();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("delete from oceanbase.__all_ls_status where tenant_id = %lu and ls_id = %ld", user_tenant_id, ObLSID::SYS_LS_ID));
+  ASSERT_EQ(OB_SUCCESS, inner_proxy.write(ObLSLifeIAgent::get_exec_tenant_id(user_tenant_id), sql.ptr(), affected_rows));
+  state.reset();
+  ASSERT_EQ(OB_SUCCESS, ObLSStatusOperator::check_ls_exist(user_tenant_id, SYS_LS, state));
+  ASSERT_TRUE(state.is_deleted());
+
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ObLSStatusOperator::check_ls_exist(user_tenant_id, invalid_ls_id, state));
+
+  // meta tenant
+  state.reset();
+  ASSERT_EQ(OB_SUCCESS, ObLSStatusOperator::check_ls_exist(meta_tenant_id, SYS_LS, state));
+  ASSERT_TRUE(state.is_existing());
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ObLSStatusOperator::check_ls_exist(meta_tenant_id, user_ls_id, state));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ObLSStatusOperator::check_ls_exist(meta_tenant_id, invalid_ls_id, state));
+
+  // sys tenant
+  state.reset();
+  ASSERT_EQ(OB_SUCCESS, ObLSStatusOperator::check_ls_exist(OB_SYS_TENANT_ID, SYS_LS, state));
+  ASSERT_TRUE(state.is_existing());
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ObLSStatusOperator::check_ls_exist(OB_SYS_TENANT_ID, user_ls_id, state));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ObLSStatusOperator::check_ls_exist(OB_SYS_TENANT_ID, invalid_ls_id, state));
+
+  // not exist tenant
+  ASSERT_EQ(OB_TENANT_NOT_EXIST, ObLSStatusOperator::check_ls_exist(not_exist_tenant_id, SYS_LS, state));
+
+}
+
 } // namespace share
 } // namespace oceanbase
 

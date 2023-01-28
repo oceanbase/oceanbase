@@ -93,17 +93,7 @@ public:
    * */
   static uint64_t get_exec_tenant_id(const uint64_t tenant_id)
   {
-    uint64_t ret_tenant_id = OB_INVALID_TENANT_ID;
-    if (is_sys_tenant(tenant_id)) {
-      ret_tenant_id = tenant_id;
-    } else if (is_meta_tenant(tenant_id)) {
-      // ls of meta tenant in sys tenant
-      ret_tenant_id = OB_SYS_TENANT_ID;
-    } else {
-      // all ls of user tenant in meta tenant
-      ret_tenant_id = gen_meta_tenant_id(tenant_id);
-    }
-    return ret_tenant_id;
+    return get_private_table_exec_tenant_id(tenant_id);
   }
 
 private:

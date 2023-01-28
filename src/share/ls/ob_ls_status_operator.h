@@ -334,6 +334,47 @@ public:
       const char *print_str,
       bool &has_ls_without_leader,
       common::ObSqlString &error_msg);
+
+  struct ObLSExistState final
+  {
+  public:
+    enum State
+    {
+      INVALID_STATE = -1,
+      EXISTING,
+      DELETED,
+      UNCREATED,
+      MAX_STATE
+    };
+    ObLSExistState() : state_(INVALID_STATE) {}
+    ~ObLSExistState() {}
+    void reset() { state_ = INVALID_STATE; }
+    void set_existing() { state_ = EXISTING; }
+    void set_deleted() { state_ = DELETED; }
+    void set_uncreated() { state_ = UNCREATED; }
+    bool is_valid() const { return state_ > INVALID_STATE && state_ < MAX_STATE; }
+    bool is_existing() const { return EXISTING == state_; }
+    bool is_deleted() const { return DELETED == state_; }
+    bool is_uncreated() const { return UNCREATED == state_; }
+
+    TO_STRING_KV(K_(state));
+  private:
+    State state_;
+  };
+
+  /* check if the ls exists by __all_virtual_ls_status
+   *
+   * @param[in] tenant_id:   target tenant_id
+   * @param[in] ls_id:       target ls_id
+   * @param[out] state:      EXISTING/DELETED/UNCREATED
+   * @return
+   *  - OB_SUCCESS:          check successfully
+   *  - OB_TENANT_NOT_EXIST: tenant not exist
+   *  - OB_INVALID_ARGUMENT: invalid ls_id or tenant_id
+   *  - other:               other failures
+   */
+  static int check_ls_exist(const uint64_t tenant_id, const ObLSID &ls_id, ObLSExistState &state);
+
 private:
   int get_visible_member_list_str_(const ObMemberList &member_list,
                                   common::ObIAllocator &allocator,

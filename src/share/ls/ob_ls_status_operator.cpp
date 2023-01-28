@@ -1228,5 +1228,71 @@ int ObLSStatusOperator::check_all_ls_has_leader(
   return ret;
 }
 
+int ObLSStatusOperator::check_ls_exist(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    ObLSExistState &state)
+{
+  int ret = OB_SUCCESS;
+  state.reset();
+  schema::ObSchemaGetterGuard schema_guard;
+  bool tenant_exist = false;
+  ObSqlString sql;
+  if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX has null ptr", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret));
+  } else if (OB_FAIL(schema_guard.check_tenant_exist(tenant_id, tenant_exist))) {
+    LOG_WARN("fail to check tenant exist", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!tenant_exist)) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT (SELECT COUNT(*) > 0 FROM %s WHERE tenant_id = %lu AND ls_id = %ld) AS ls_is_existing, "
+      "MAX(ls_id) < %ld AS ls_is_uncreated FROM %s WHERE tenant_id = %lu",
+      OB_ALL_LS_STATUS_TNAME,
+      tenant_id,
+      ls_id.id(),
+      ls_id.id(),
+      OB_ALL_LS_STATUS_TNAME,
+      tenant_id))) {
+    LOG_WARN("assign sql failed", KR(ret), K(tenant_id), K(ls_id), K(sql));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      bool ls_is_existing = false;
+      bool ls_is_uncreated = false;
+      common::sqlclient::ObMySQLResult *res = NULL;
+      uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
+      if (OB_FAIL(GCTX.sql_proxy_->read(result, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret),
+            K(tenant_id), K(ls_id), K(exec_tenant_id), K(sql));
+      } else if (OB_ISNULL(res = result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret),
+            K(tenant_id), K(ls_id), K(exec_tenant_id), K(sql));
+      } else if (OB_FAIL(res->next())) {
+        LOG_WARN("next failed", KR(ret), K(tenant_id), K(ls_id), K(sql));
+      } else if (OB_FAIL(res->get_bool("ls_is_existing", ls_is_existing))) {
+        LOG_WARN("fail to get ls_is_existing", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_FAIL(res->get_bool("ls_is_uncreated", ls_is_uncreated))) {
+        LOG_WARN("fail to get ls_is_uncreated", KR(ret), K(tenant_id), K(ls_id));
+      } else if (ls_is_existing) {
+        state.set_existing();
+      } else if (ls_is_uncreated) {
+        state.set_uncreated();
+      } else {
+        state.set_deleted();
+      }
+      LOG_INFO("check ls exist finished", KR(ret),
+          K(tenant_id), K(ls_id), K(state), K(ls_is_existing), K(ls_is_uncreated));
+    }
+  }
+  return ret;
+}
+
 }//end of share
 }//end of ob
