@@ -2626,12 +2626,15 @@ inline bool ObCharset::is_argument_valid(const ObCollationType collation_type, c
         (OB_ISNULL(str1) && OB_UNLIKELY(0 != str_len1)) ||
         (OB_ISNULL(str2) && OB_UNLIKELY(0 != str_len2))) {
       is_arg_valid = false;
+      const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
       BACKTRACE(ERROR, true, "invalid argument."
           "collation_type = %d,"
           "str1 = %p,"
           "str1_len = %ld,"
           "str2 = %p,"
-          "str2_len = %ld", collation_type, str1, str_len1, str2, str_len2);
+          "str2_len = %ld,"
+          "extra_info=(%s)", collation_type, str1, str_len1, str2, str_len2,
+          (NULL == extra_info) ? NULL : to_cstring(*extra_info));
     } else {
       ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
       if (OB_ISNULL(cs->cset) || OB_ISNULL(cs->coll)) {
