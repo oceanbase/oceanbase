@@ -929,9 +929,6 @@ int ObIMicroBlockCache::prefetch(
     // fill read info
     ObMacroBlockReadInfo read_info;
     read_info.macro_block_id_ = macro_id;
-    read_info.io_desc_.set_category(flag.is_prewarm() ? ObIOCategory::PREWARM_IO
-        : flag.is_large_query() && GCONF._large_query_io_percentage.get_value() > 0
-        ? ObIOCategory::LARGE_QUERY_IO : ObIOCategory::USER_IO);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     read_info.io_callback_ = &callback;
     common::align_offset_size(
@@ -980,9 +977,6 @@ int ObIMicroBlockCache::prefetch(
     // fill read info
     ObMacroBlockReadInfo read_info;
     read_info.macro_block_id_ = macro_id;
-    read_info.io_desc_.set_category(flag.is_prewarm() ? ObIOCategory::PREWARM_IO
-        : flag.is_large_query() && GCONF._large_query_io_percentage.get_value() > 0
-        ? ObIOCategory::LARGE_QUERY_IO : ObIOCategory::USER_IO);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     read_info.io_callback_ = &callback;
     common::align_offset_size(offset, size, read_info.offset_, read_info.size_);
@@ -1096,7 +1090,6 @@ int ObDataMicroBlockCache::load_block(
     LOG_WARN("Invalid argument", K(ret), K(micro_block_id), KP(macro_reader));
   } else {
     macro_read_info.macro_block_id_ = micro_block_id.macro_id_;
-    macro_read_info.io_desc_.set_category(ObIOCategory::USER_IO);
     macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     macro_read_info.offset_ = micro_block_id.offset_;
     macro_read_info.size_ = micro_block_id.size_;
@@ -1214,7 +1207,6 @@ int ObIndexMicroBlockCache::load_block(
     LOG_WARN("Invalid argument", K(ret), K(micro_block_id), KP(read_info), KP(allocator));
   } else {
     macro_read_info.macro_block_id_ = micro_block_id.macro_id_;
-    macro_read_info.io_desc_.set_category(ObIOCategory::USER_IO);
     macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     macro_read_info.offset_ = micro_block_id.offset_;
     macro_read_info.size_ = micro_block_id.size_;

@@ -705,9 +705,12 @@ public:
   void run1() override;
   void yield();
   void set_task(ObITask *task) { task_ = task; }
+  void set_function_type(const int64_t function_type) { function_type_ = function_type; }
+  int set_dag_resource();
   bool need_wake_up() const;
   ObITask *get_task() const { return task_; }
   static ObTenantDagWorker *self() { return self_; }
+  uint64_t get_group_id() { return group_id_; }
 private:
   void notify(DagWorkerStatus status);
 private:
@@ -719,6 +722,8 @@ private:
   DagWorkerStatus status_;
   int64_t check_period_;
   int64_t last_check_time_;
+  int64_t function_type_;
+  uint64_t group_id_;
   int tg_id_;
   bool is_inited_;
 };
@@ -874,7 +879,7 @@ private:
   int create_worker();
   int try_reclaim_threads();
   int schedule_one(const int64_t priority);
-  int dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker);
+  int dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority);
   void destroy_all_workers();
   int set_thread_score(const int64_t priority, const int32_t concurrency);
   bool try_switch(ObTenantDagWorker &worker);

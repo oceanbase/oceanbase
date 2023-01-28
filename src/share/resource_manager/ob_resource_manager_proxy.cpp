@@ -21,6 +21,8 @@
 #include "share/ob_errno.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/resource_manager/ob_resource_plan_manager.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "share/resource_manager/ob_resource_manager.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/resource_manager/ob_resource_mapping_rule_manager.h"
 #include "common/ob_timeout_ctx.h"
@@ -168,6 +170,26 @@ int ObResourceManagerProxy::delete_plan(
       LOG_WARN("fail to execute sql", K(sql), K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    ObResMgrVarcharValue cur_plan;
+    ObResourcePlanManager &plan_mgr = G_RES_MGR.get_plan_mgr();
+    if (OB_FAIL(plan_mgr.get_cur_plan(tenant_id, cur_plan))) {
+      LOG_WARN("get cur plan failed", K(ret), K(tenant_id), K(cur_plan));
+    } else if (cur_plan.get_value() != plan) {
+      //删除非当前使用plan，do nothing
+    } else {
+      //删除当前使用的plan，把当前所有IO资源置空
+      if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(
+                        tenant_id,
+                        1))) {
+        LOG_WARN("reset cur plan group directive failed",K(plan), K(ret));
+      } else if (OB_FAIL(reset_all_mapping_rules())) {
+        LOG_WARN("reset hashmap failed when delete using plan");
+      } else {
+        LOG_INFO("reset cur plan group directive success",K(plan), K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -185,7 +207,7 @@ int ObResourceManagerProxy::allocate_consumer_group_id(
     ObSqlString sql;
     const char *tname = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
     if (OB_FAIL(sql.assign_fmt(
-                "SELECT /* ALLOC_MAX_GROUP_ID */ COALESCE(MAX(CONSUMER_GROUP_ID) + 1, 1) AS NEXT_GROUP_ID FROM %s "
+                "SELECT /* ALLOC_MAX_GROUP_ID */ COALESCE(MAX(CONSUMER_GROUP_ID) + 1, 10000) AS NEXT_GROUP_ID FROM %s "
                 "WHERE TENANT_ID = %ld",
                 tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
       LOG_WARN("fail format sql", K(ret));
@@ -289,7 +311,9 @@ int ObResourceManagerProxy::delete_consumer_group(
   if (trans_guard.ready()) {
     int64_t affected_rows = 0;
     ObSqlString sql;
+    // 删除 group 时要级联删除 directive
     const char *tname_consumer_group = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
+    const char *tname_directive = OB_ALL_RES_MGR_DIRECTIVE_TNAME;
     if (OB_FAIL(sql.assign_fmt(
                 "DELETE /* REMOVE_RES_CONSUMER_GROUP */ FROM %s "
                 "WHERE TENANT_ID = %ld AND CONSUMER_GROUP = '%.*s'",
@@ -305,24 +329,45 @@ int ObResourceManagerProxy::delete_consumer_group(
     } else if (1 != affected_rows) {
       ret = OB_ERR_CONSUMER_GROUP_NOT_EXIST;
       LOG_USER_ERROR(OB_ERR_CONSUMER_GROUP_NOT_EXIST, consumer_group.length(), consumer_group.ptr());
+    } else if (OB_FAIL(sql.assign_fmt(
+                "DELETE /* REMOVE_RES_CONSUMER_GROUP */ FROM %s "
+                "WHERE TENANT_ID = %ld AND GROUP_OR_SUBPLAN = '%.*s'",
+                tname_directive, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                consumer_group.length(), consumer_group.ptr()))) {
+      LOG_WARN("fail append value", K(ret));
+    } else if (OB_FAIL(trans.write(
+                tenant_id,
+                sql.ptr(),
+                affected_rows))) {
+      trans.reset_last_error();
+      LOG_WARN("fail to execute sql", K(sql), K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // 在这里inner sql之后就stop io_control的原因是，无法从内部表读到被删除group的信息
+    if (OB_FAIL(GCTX.cgroup_ctrl_->delete_group_iops(tenant_id, 1, consumer_group))) {
+      LOG_WARN("fail to stop cur iops isolation", K(ret), K(tenant_id), K(consumer_group));
     }
   }
   return ret;
 }
 
 int ObResourceManagerProxy::create_plan_directive(
-      uint64_t tenant_id,
-      const common::ObString &plan,
-      const common::ObString &group,
-      const common::ObObj &comment,
-      const common::ObObj &mgmt_p1,
-      const common::ObObj &utilization_limit)
+    uint64_t tenant_id,
+    const common::ObString &plan,
+    const common::ObString &group,
+    const common::ObObj &comment,
+    const common::ObObj &mgmt_p1,
+    const common::ObObj &utilization_limit,
+    const common::ObObj &min_iops,
+    const common::ObObj &max_iops,
+    const common::ObObj &weight_iops)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   TransGuard trans_guard(trans, tenant_id, ret);
   if (trans_guard.ready()) {
-    ret = create_plan_directive(trans, tenant_id, plan, group, comment, mgmt_p1, utilization_limit);
+    ret = create_plan_directive(trans, tenant_id, plan, group, comment, mgmt_p1, utilization_limit, min_iops, max_iops, weight_iops);
   }
   return ret;
 }
@@ -330,11 +375,14 @@ int ObResourceManagerProxy::create_plan_directive(
 int ObResourceManagerProxy::create_plan_directive(
     common::ObMySQLTransaction &trans,
     uint64_t tenant_id,
-    const ObString &plan,
-    const ObString &group,
-    const ObObj &comments,
-    const ObObj &mgmt_p1,
-    const ObObj &utilization_limit)
+    const common::ObString &plan,
+    const common::ObString &group,
+    const common::ObObj &comments,
+    const common::ObObj &mgmt_p1,
+    const common::ObObj &utilization_limit,
+    const common::ObObj &min_iops,
+    const common::ObObj &max_iops,
+    const common::ObObj &weight_iops)
 {
   int ret = OB_SUCCESS;
   bool consumer_group_exist = true;
@@ -369,6 +417,40 @@ int ObResourceManagerProxy::create_plan_directive(
       }
       if (OB_SUCC(ret) && OB_SUCC(get_percentage("UTILIZATION_LIMIT", utilization_limit, v))) {
         SQL_COL_APPEND_VALUE(sql, values, v, "UTILIZATION_LIMIT", "%ld");
+      }
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_1_0_0 && (
+                 (OB_SUCC(get_percentage("MIN_IOPS", min_iops, v) && v != 0)) ||
+                 (OB_SUCC(get_percentage("MAX_IOPS", max_iops, v) && v != 100)) ||
+                 (OB_SUCC(get_percentage("WEIGHT_IOPS", weight_iops, v) && v != 0)))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("iops setting is not suppported when tenant's data version is below 4.1.0.0", K(ret));
+      } else if (tenant_data_version >= DATA_VERSION_4_1_0_0) {
+        int64_t iops_minimum = 0;
+        int64_t iops_maximum = 100;
+        if (OB_SUCC(ret) && OB_SUCC(get_percentage("MIN_IOPS", min_iops, v))) {
+          iops_minimum = v;
+          SQL_COL_APPEND_VALUE(sql, values, v, "MIN_IOPS", "%ld");
+        }
+        if (OB_SUCC(ret) && OB_SUCC(get_percentage("MAX_IOPS", max_iops, v))) {
+          iops_maximum = v;
+          bool is_valid = false;
+          if (OB_FAIL(check_iops_validity(tenant_id, plan, group, iops_minimum, iops_maximum, is_valid))) {
+            LOG_WARN("check iops setting failed", K(tenant_id), K(plan), K(iops_minimum), K(iops_maximum));
+          } else if (OB_UNLIKELY(!is_valid)) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("invalid iops config", K(ret), K(tenant_id), K(iops_minimum), K(iops_maximum));
+          } else {
+            SQL_COL_APPEND_VALUE(sql, values, v, "MAX_IOPS", "%ld");
+          }
+        }
+        if (OB_SUCC(ret) && OB_SUCC(get_percentage("WEIGHT_IOPS", weight_iops, v))) {
+          SQL_COL_APPEND_VALUE(sql, values, v, "WEIGHT_IOPS", "%ld");
+        }
       }
       if (OB_SUCC(ret)) {
         int64_t affected_rows = 0;
@@ -556,6 +638,25 @@ int ObResourceManagerProxy::check_if_user_exist(
   return ret;
 }
 
+int ObResourceManagerProxy::check_if_function_exist(const ObString &function_name, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  if (0 == function_name.compare("COMPACTION_HIGH") ||
+      0 == function_name.compare("HA_HIGH") ||
+      0 == function_name.compare("COMPACTION_MID") ||
+      0 == function_name.compare("HA_MID") ||
+      0 == function_name.compare("COMPACTION_LOW") ||
+      0 == function_name.compare("HA_LOW") ||
+      0 == function_name.compare("DDL_HIGH") ||
+      0 == function_name.compare("DDL")) {
+    exist = true;
+  } else {
+    exist = false;
+    LOG_WARN("invalid function name", K(function_name));
+  }
+  return ret;
+}
+
 int ObResourceManagerProxy::check_if_column_exist(
     uint64_t tenant_id,
     const ObString &db_name,
@@ -696,13 +797,123 @@ int ObResourceManagerProxy::get_percentage(const char *name, const ObObj &obj, i
   return ret;
 }
 
+int ObResourceManagerProxy::check_iops_validity(
+    const uint64_t tenant_id,
+    const common::ObString &plan_name,
+    const common::ObString &group,
+    const int64_t iops_minimum,
+    const int64_t iops_maximum,
+    bool &valid)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_TENANT_ID;
+    LOG_WARN("invalid config", K(ret), K(tenant_id));
+  } else if (iops_maximum < iops_minimum) {
+    // precheck
+    valid = false;
+  } else {
+    ObSEArray<ObPlanDirective, 8> directives;
+    if (OB_FAIL(get_all_plan_directives(tenant_id, plan_name, directives))) {
+      LOG_WARN("fail get plan directive", K(tenant_id), K(plan_name), K(ret));
+    } else {
+      uint64_t total_min = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
+        ObPlanDirective &cur_directive = directives.at(i);
+        if (cur_directive.group_id_ < GROUP_START_ID) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected group id", K(cur_directive));
+        } else if (OB_UNLIKELY(!cur_directive.is_valid())) {
+          ret = OB_INVALID_CONFIG;
+          LOG_WARN("invalid group io config", K(cur_directive));
+        } else if ((0 == group.compare(cur_directive.group_name_.get_value()))) {
+          //skip cur group
+        } else {
+          total_min += cur_directive.min_iops_;
+        }
+      }
+      if(OB_SUCC(ret)) {
+        total_min += iops_minimum;
+        if (total_min > 100) {
+          valid = false;
+          LOG_WARN("invalid group io config", K(total_min), K(iops_minimum), K(iops_maximum), K(plan_name));
+        } else {
+          valid = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResourceManagerProxy::get_user_mapping_info(
+    const uint64_t tenant_id,
+    const common::ObString &user,
+    ObResourceUserMappingRule &rule)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_TENANT_ID;
+    LOG_WARN("invalid config", K(ret), K(tenant_id));
+  } else {
+    ObMySQLTransaction trans;
+    TransGuard trans_guard(trans, tenant_id, ret);
+    if (trans_guard.ready()) {
+      ObSQLClientRetryWeak sql_client_retry_weak(
+          &trans, tenant_id, OB_ALL_RES_MGR_MAPPING_RULE_TID);
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = NULL;
+        ObSqlString sql;
+        const char *t_a_res_name = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
+        const char *t_b_user_name = OB_ALL_USER_TNAME;
+        uint64_t sql_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+        if (OB_FAIL(sql.assign_fmt(
+                    "SELECT /* GET_USER_ID_FROM_MAPPING_RULE */ "
+                    "user_id FROM %s a, %s b "
+                    "WHERE a.`value` = b.user_name "
+                    "AND a.TENANT_ID = %ld AND b.tenant_id = %ld "
+                    "AND a.attribute = 'USER' AND a.`value` = '%.*s'",
+                    t_a_res_name, t_b_user_name,
+                    sql_tenant_id, sql_tenant_id, user.length(), user.ptr()))) {
+          LOG_WARN("fail format sql", K(ret));
+        } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
+          LOG_WARN("fail to execute sql", K(sql), K(ret));
+        } else if (NULL == (result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail query sql", K(t_a_res_name), K(tenant_id), K(ret));
+        } else {
+          int64_t affected_rows = 0;
+          while (OB_SUCC(result->next())) {
+            EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, user_id, rule, uint64_t);
+            ++affected_rows;
+          }
+          if (OB_ITER_END == ret) {
+            if (OB_UNLIKELY(!is_single_row(affected_rows))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected value. expect only 1 row affected", K(ret), K(affected_rows), K(user));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          } else {
+            LOG_WARN("fail get next row", K(ret), K(user), K(tenant_id));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObResourceManagerProxy::update_plan_directive(
     uint64_t tenant_id,
     const ObString &plan,
     const ObString &group,
     const ObObj &comments,
     const ObObj &mgmt_p1,
-    const ObObj &utilization_limit)
+    const ObObj &utilization_limit,
+    const ObObj &min_iops,
+    const ObObj &max_iops,
+    const ObObj &weight_iops)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
@@ -719,7 +930,8 @@ int ObResourceManagerProxy::update_plan_directive(
       ret = OB_ERR_PLAN_DIRECTIVE_NOT_EXIST;
       LOG_USER_ERROR(OB_ERR_PLAN_DIRECTIVE_NOT_EXIST,
                      plan.length(), plan.ptr(), group.length(), group.ptr());
-    } else if (comments.is_null() && mgmt_p1.is_null() && utilization_limit.is_null()) {
+    } else if (comments.is_null() && mgmt_p1.is_null() && utilization_limit.is_null() &&
+               min_iops.is_null() && max_iops.is_null() && weight_iops.is_null()) {
       // 没有指定任何有效参数，什么都不做，也不报错。兼容 Oracle 行为。
       ret = OB_SUCCESS;
     } else if (OB_FAIL(sql.assign_fmt("UPDATE /* UPDATE_PLAN_DIRECTIVE */ %s SET ", tname))) {
@@ -742,6 +954,65 @@ int ObResourceManagerProxy::update_plan_directive(
           OB_SUCC(get_percentage("NEW_UTILIZATION_LIMIT", utilization_limit, v))) {
         ret = sql.append_fmt("%s UTILIZATION_LIMIT=%ld", comma, v);
         comma = ",";
+      }
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_1_0_0 && (
+                 (OB_SUCC(get_percentage("NEW_MIN_IOPS", min_iops, v) && v != 0)) ||
+                 (OB_SUCC(get_percentage("NEW_MAX_IOPS", max_iops, v) && v != 100)) ||
+                 (OB_SUCC(get_percentage("NEW_WEIGHT_IOPS", weight_iops, v) && v != 0)))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("iops setting is not suppported when tenant's data version is below 4.1.0.0", K(ret));
+      } else if (tenant_data_version >= DATA_VERSION_4_1_0_0) {
+        if (min_iops.is_null() && max_iops.is_null()) {
+          // no need to check
+        } else {
+          // check if iops_config is valid
+          int64_t new_iops_minimum = 0;
+          int64_t new_iops_maximum = 100;
+          if (OB_SUCC(ret)) {
+            ObPlanDirective directive;
+            if (OB_FAIL(get_iops_config(tenant_id, plan, group, directive))) {
+              LOG_WARN("get iops config from table failed", K(ret), K(plan), K(group), K(directive));
+            } else {
+              new_iops_minimum = directive.min_iops_;
+              new_iops_maximum = directive.max_iops_;
+            }
+          }
+          if (OB_SUCC(ret) &&
+              !min_iops.is_null() &&
+              OB_SUCC(get_percentage("NEW_MIN_IOPS", min_iops, v))) {
+            new_iops_minimum = v;
+            ret = sql.append_fmt("%s MIN_IOPS=%ld", comma, v);
+            comma = ",";
+          }
+          if (OB_SUCC(ret) &&
+              !max_iops.is_null() &&
+              OB_SUCC(get_percentage("NEW_MAX_IOPS", max_iops, v))) {
+            new_iops_maximum = v;
+          }
+          if (OB_SUCC(ret)) {
+            bool is_valid = false;
+            if (OB_FAIL(check_iops_validity(tenant_id, plan, group, new_iops_minimum, new_iops_maximum, is_valid))) {
+              LOG_WARN("check iops setting failed", K(tenant_id), K(plan), K(new_iops_minimum), K(new_iops_maximum));
+            } else if (OB_UNLIKELY(!is_valid)) {
+              ret = OB_INVALID_CONFIG;
+              LOG_WARN("invalid iops config", K(ret), K(tenant_id), K(new_iops_minimum), K(new_iops_maximum));
+            } else {
+              ret = sql.append_fmt("%s MAX_IOPS=%ld", comma, v);
+              comma = ",";
+            }
+          }
+        }
+        if (OB_SUCC(ret) &&
+            !weight_iops.is_null() &&
+            OB_SUCC(get_percentage("NEW_WEIGHT_IOPS", weight_iops, v))) {
+          ret = sql.append_fmt("%s WEIGHT_IOPS=%ld", comma, v);
+          comma = ",";
+        }
       }
       if (OB_FAIL(ret)) {
         LOG_WARN("fail append value", K(ret));
@@ -801,6 +1072,15 @@ int ObResourceManagerProxy::delete_plan_directive(
       LOG_WARN("affected row value not expected", K(affected_rows), K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    // 在这里inner sql之后就stop的原因是， 无法从内部表读到被删除group的信息
+    if (OB_FAIL(GCTX.cgroup_ctrl_->reset_group_iops(
+                     tenant_id,
+                     1,
+                     group))) {
+      LOG_WARN("reset deleted group directive failed", K(ret), K(group));
+    }
+  }
   return ret;
 }
 
@@ -827,7 +1107,7 @@ int ObResourceManagerProxy::get_all_plan_directives(
         const char *tname = OB_ALL_RES_MGR_DIRECTIVE_TNAME;
         if (OB_FAIL(sql.assign_fmt(
                     "SELECT /* GET_ALL_PLAN_DIRECTIVE_SQL */ "
-                    "group_or_subplan group_name, mgmt_p1, utilization_limit FROM %s "
+                    "* FROM %s "
                     "WHERE TENANT_ID = %ld AND PLAN = '%.*s'",
                     tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
                     plan.length(), plan.ptr()))) {
@@ -841,11 +1121,22 @@ int ObResourceManagerProxy::get_all_plan_directives(
           while (OB_SUCC(result->next())) {
             ObPlanDirective directive;
             directive.set_tenant_id(tenant_id);
-            EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, group_name, directive);
+            EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, group_or_subplan, directive);
             EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, mgmt_p1, directive, int64_t);
             EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, utilization_limit, directive, int64_t);
-            if (OB_SUCC(ret) && OB_FAIL(directives.push_back(directive))) {
-              LOG_WARN("fail push back directives", K(directive), K(ret));
+            bool skip_null_error = false;
+            bool skip_column_error = true;
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "min_iops", directive.min_iops_, int64_t, skip_null_error, skip_column_error, 0);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "max_iops", directive.max_iops_, int64_t, skip_null_error, skip_column_error, 100);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "weight_iops", directive.weight_iops_, int64_t, skip_null_error, skip_column_error, 0);
+            if (OB_SUCC(ret)) {
+              ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+              //如果读失败了，可能是group info还没有放到map里，因此不执行该directive直到下一次刷新
+              if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, directive.group_name_, directive.group_id_))) {
+                LOG_WARN("fail get group id",K(ret), K(directive.group_id_), K(directive.group_name_));
+              } else if (OB_FAIL(directives.push_back(directive))) {
+                LOG_WARN("fail push back directives", K(directive), K(ret));
+              }
             }
           }
           if (OB_ITER_END == ret) {
@@ -893,6 +1184,10 @@ int ObResourceManagerProxy::replace_mapping_rule(
         if (OB_FAIL(replace_user_mapping_rule(trans, tenant_id, attribute, value, consumer_group))) {
           LOG_WARN("replace user mapping rule failed", K(ret));
         }
+      } else if (0 == attribute.case_compare("function")) {
+        if (OB_FAIL(replace_function_mapping_rule(trans, tenant_id, attribute, value, consumer_group))) {
+          LOG_WARN("replace user mapping rule failed", K(ret));
+        }
       } else if (0 == attribute.case_compare("column")) {
         if (OB_FAIL(replace_column_mapping_rule(trans, tenant_id, attribute, value, consumer_group, session))) {
           LOG_WARN("replace column mapping rule failed", K(ret));
@@ -913,6 +1208,7 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
 {
   int ret = OB_SUCCESS;
   bool user_exist = true;
+  uint64_t user_id = 0;
   if (OB_SUCC(ret)) {
     // if user not exists, do nothing, do not throw error
     // https://work.aone.alibaba-inc.com/issue/34248669
@@ -920,6 +1216,15 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
                                     value,
                                     user_exist))) {
       LOG_WARN("fail check if user exist", K(tenant_id), K(value), K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && user_exist && consumer_group.empty()) {
+    // get user_id for reset map
+    ObResourceUserMappingRule rule;
+    if (OB_FAIL(get_user_mapping_info(tenant_id, value, rule))) {
+      LOG_WARN("get user info failed", K(ret), K(tenant_id), K(value));
+    } else {
+      user_id = rule.user_id_;
     }
   }
   if (OB_SUCC(ret) && user_exist) {
@@ -953,15 +1258,85 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
           }
         }
       }
+      if (OB_SUCC(ret) && user_exist && consumer_group.empty()) {
+        // reset map
+        if (consumer_group.empty()) {
+          ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+          if (OB_FAIL(rule_mgr.reset_group_id_by_user(tenant_id, user_id))) {
+            LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(user_id), K(value));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResourceManagerProxy::replace_function_mapping_rule(ObMySQLTransaction &trans, uint64_t tenant_id,
+                                                          const ObString &attribute, const ObString &value,
+                                                          const ObString &consumer_group)
+{
+  int ret = OB_SUCCESS;
+  bool function_exist = false;
+  if (OB_SUCC(ret)) {
+    // Same as user rule, the mapping is unsuccessful but no error is thrown
+    if (OB_FAIL(check_if_function_exist(value, function_exist))) {
+      LOG_WARN("fail check if function exist", K(tenant_id), K(value), K(ret));
+    } else if (OB_UNLIKELY(!function_exist)) {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid function name, please check");
+    }
+  }
+  if (OB_SUCC(ret) && function_exist) {
+    ObSqlString sql;
+    const char *tname = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
+    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
+      STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+    } else {
+      ObSqlString values;
+      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
+      SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
+      SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
+      SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+      if (OB_SUCC(ret)) {
+        int64_t affected_rows = 0;
+        if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
+                                  static_cast<int32_t>(values.length()),
+                                  values.ptr()))) {
+          LOG_WARN("append sql failed, ", K(ret));
+        } else if (OB_FAIL(trans.write(tenant_id,
+                                      sql.ptr(),
+                                      affected_rows))) {
+          trans.reset_last_error();
+          LOG_WARN("fail to execute sql", K(sql), K(ret));
+        } else {
+          if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
+            // insert or replace
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && function_exist && consumer_group.empty()) {
+        // reset map
+        if (consumer_group.empty()) {
+          ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+          ObResMgrVarcharValue func;
+          func.set_value(value);
+          if (OB_FAIL(rule_mgr.reset_group_id_by_function(tenant_id, func))) {
+            LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(func), K(value));
+          }
+        }
+      }
     }
   }
   return ret;
 }
 
 int ObResourceManagerProxy::replace_column_mapping_rule(ObMySQLTransaction &trans, uint64_t tenant_id,
-                                                      const ObString &attribute, const ObString &value,
-                                                      const ObString &consumer_group,
-                                                      const sql::ObSQLSessionInfo &session)
+                                                        const ObString &attribute, const ObString &value,
+                                                        const ObString &consumer_group,
+                                                        const sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   bool both_exist = true;
@@ -1107,6 +1482,54 @@ int ObResourceManagerProxy::get_all_resource_mapping_rules(
   return ret;
 }
 
+int ObResourceManagerProxy::get_all_group_info(
+    uint64_t tenant_id,
+    const common::ObString &plan,
+    common::ObIArray<ObResourceUserMappingRule> &rules)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  TransGuard trans_guard(trans, tenant_id, ret);
+  if (trans_guard.ready()) {
+    ObSQLClientRetryWeak sql_client_retry_weak(
+        &trans, tenant_id, OB_ALL_RES_MGR_CONSUMER_GROUP_TID);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      const char *tname = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
+      if (OB_FAIL(sql.assign_fmt(
+                  "SELECT /* GET_ALL_GROUP_INFOS */ "
+                  "consumer_group as group_name,"
+                  "consumer_group_id as group_id "
+                  "FROM %s WHERE TENANT_ID = %ld",
+                  tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
+        LOG_WARN("fail format sql", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail query sql", K(tname), K(tenant_id), K(ret));
+      } else {
+        while (OB_SUCC(result->next())) {
+          ObResourceUserMappingRule rule;
+          rule.set_tenant_id(tenant_id);
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, group_id, rule, uint64_t);
+          EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, group_name, rule);
+          if (OB_SUCC(ret) && OB_FAIL(rules.push_back(rule))) {
+            LOG_WARN("fail push back rules", K(rule), K(ret));
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail get next row", K(ret), K(tname), K(tenant_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // 构建当前租户下全部 group_id -> group_name 的映射表
 int ObResourceManagerProxy::get_all_resource_mapping_rules_for_plan(
     uint64_t tenant_id,
@@ -1150,6 +1573,68 @@ int ObResourceManagerProxy::get_all_resource_mapping_rules_for_plan(
           rule.set_tenant_id(tenant_id);
           EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, group_id, rule, uint64_t);
           EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, group_name, rule);
+          if (OB_SUCC(ret) && OB_FAIL(rules.push_back(rule))) {
+            LOG_WARN("fail push back rules", K(rule), K(ret));
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail get next row", K(ret), K(t_a_res_name), K(tenant_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// 构建当前租户下全部后台 Function 到 group_id 的映射表
+int ObResourceManagerProxy::get_all_resource_mapping_rules_by_function(
+    uint64_t tenant_id,
+    const common::ObString &plan,
+    common::ObIArray<ObResourceMappingRule> &rules)
+// 构建当前租户下全部 group_id -> group_name 的映射表
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  TransGuard trans_guard(trans, tenant_id, ret);
+  if (trans_guard.ready()) {
+    ObSQLClientRetryWeak sql_client_retry_weak(
+        &trans, tenant_id, OB_ALL_RES_MGR_MAPPING_RULE_TID);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      const char *t_a_res_name = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
+      const char *t_c_consumer_group_name = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
+      const char *t_d_directive = OB_ALL_RES_MGR_DIRECTIVE_TNAME;
+      uint64_t sql_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+      // 当 resource plan 为空时，或者对应的 directive 不存在时，使用默认组 OTHER_GROUPS
+      if (OB_FAIL(sql.assign_fmt(
+                  "SELECT /* GET_ALL_RES_MAPPING_RULE_BY_FUNCTION */ "
+                  "a.`value` as `value`,"
+                  "(case when d.group_or_subplan is NULL then 'OTHER_GROUPS' else c.consumer_group end) as `group`, "
+                  "(case when d.group_or_subplan is NULL then 0 else c.consumer_group_id end) as group_id  "
+                  "FROM %s a left join %s d ON a.consumer_group = d.group_or_subplan AND d.plan = '%.*s' AND d.tenant_id = %ld,"
+                  "%s c "
+                  "WHERE a.TENANT_ID = %ld AND c.tenant_id = %ld AND a.tenant_id = c.tenant_id "
+                  "AND a.attribute = 'FUNCTION' AND c.consumer_group = a.consumer_group",
+                  t_a_res_name, t_d_directive, plan.length(), plan.ptr(), sql_tenant_id,
+                  t_c_consumer_group_name,
+                  sql_tenant_id, sql_tenant_id))) {
+        LOG_WARN("fail format sql", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail query sql", K(t_a_res_name), K(tenant_id), K(ret));
+      } else {
+        while (OB_SUCC(result->next())) {
+          ObResourceMappingRule rule;
+          rule.set_tenant_id(tenant_id);
+          rule.set_attr(ObString::make_string(""));
+          EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, value, rule);
+          EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(*result, group, rule);
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, group_id, rule, uint64_t);
           if (OB_SUCC(ret) && OB_FAIL(rules.push_back(rule))) {
             LOG_WARN("fail push back rules", K(rule), K(ret));
           }
@@ -1540,5 +2025,64 @@ int ObResourceManagerProxy::get_all_resource_mapping_rules_by_column(
       }
     }
   }
+  return ret;
+}
+
+int ObResourceManagerProxy::get_iops_config(
+                            const uint64_t tenant_id,
+                            const common::ObString &plan,
+                            const common::ObString &group,
+                            ObPlanDirective &directive)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  TransGuard trans_guard(trans, tenant_id, ret);
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_TENANT_ID;
+    LOG_WARN("invalid config", K(ret), K(tenant_id));
+  } else if (trans_guard.ready()) {
+    ObSQLClientRetryWeak sql_client_retry_weak(
+        &trans, tenant_id, OB_ALL_RES_MGR_DIRECTIVE_TID);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      const char *tname = OB_ALL_RES_MGR_DIRECTIVE_TNAME;
+      if (OB_FAIL(sql.assign_fmt(
+                  "SELECT /* GET IOPS CONFIG */ min_iops, max_iops FROM %s "
+                  "WHERE TENANT_ID = %ld AND PLAN = '%.*s' AND GROUP_OR_SUBPLAN = '%.*s'",
+                  tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                  plan.length(), plan.ptr(), group.length(), group.ptr()))) {
+        LOG_WARN("fail format sql", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail query sql", K(tname), K(tenant_id), K(ret));
+      } else {
+        int64_t affected_rows = 0;
+        while (OB_SUCC(result->next())) {
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, min_iops, directive, int64_t);
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(*result, max_iops, directive, int64_t);
+          ++affected_rows;
+        }
+        if (OB_ITER_END == ret) {
+          if (OB_UNLIKELY(!is_single_row(affected_rows))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected value. expect only 1 row affected", K(ret), K(affected_rows), K(group), K(plan));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        } else {
+          LOG_WARN("fail get next row", K(ret), K(tname), K(tenant_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResourceManagerProxy::reset_all_mapping_rules()
+{
+  int ret = G_RES_MGR.get_mapping_rule_mgr().reset_mapping_rules();
   return ret;
 }

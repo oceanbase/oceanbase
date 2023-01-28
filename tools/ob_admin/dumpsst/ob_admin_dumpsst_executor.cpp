@@ -290,7 +290,6 @@ int ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &macr
 
   ObMacroBlockReadInfo read_info;
   read_info.macro_block_id_.set_block_index(macro_block_context.second_id_);
-  read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.offset_ = 0;
   read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;

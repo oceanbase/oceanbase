@@ -15,7 +15,6 @@
 
 #include <stdint.h>
 #include <sys/types.h>
-
 namespace oceanbase
 {
 namespace common
@@ -65,6 +64,23 @@ private:
   const char *names_[OBCG_MAXNUM];
 };
 
+struct OBGroupIOInfo final
+{
+public:
+  OBGroupIOInfo()
+  : min_percent_(0),
+    max_percent_(100),
+    weight_percent_(0)
+  {}
+  int init(const int64_t min_percent, const int64_t max_percent, const int64_t weight_percent);
+  void reset();
+  bool is_valid() const;
+public:
+  uint64_t min_percent_;
+  uint64_t max_percent_;
+  uint64_t weight_percent_;
+};
+
 class ObCgroupCtrl
 {
 public:
@@ -86,6 +102,10 @@ public:
   // 从指定租户cgroup组移除指定tid
   int remove_thread_from_cgroup(const pid_t tid, const uint64_t tenant_id);
 
+  // 后台线程绑定接口
+  int add_thread_to_group(const pid_t tid,
+                          const uint64_t tenant_id,
+                          const uint64_t group_id);
   // 设定指定租户cgroup组的cpu.shares
   int set_cpu_shares(const int32_t cpu_shares, const uint64_t tenant_id, int64_t group_id = INT64_MAX);
   int get_cpu_shares(int32_t &cpu_shares, const uint64_t tenant_id, int64_t group_id = INT64_MAX);
@@ -110,6 +130,25 @@ public:
   int get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time);
   // 获取某段时间内cpu占用率
   int get_cpu_usage(const uint64_t tenant_id, int32_t &cpu_usage);
+
+
+  // 设定指定租户cgroup组的iops，直接更新到租户io_config
+  int set_group_iops(const uint64_t tenant_id,
+                     const int level, // UNUSED
+                     const int64_t group_id,
+                     const OBGroupIOInfo &group_io);
+  // 删除正在使用的plan反应到IO层：重置所有IOPS
+  int reset_all_group_iops(const uint64_t tenant_id,
+                           const int level);// UNUSED
+  // 删除directive反应到IO层：重置IOPS
+  int reset_group_iops(const uint64_t tenant_id,
+                       const int level, // UNUSED
+                       const common::ObString &consumer_group);
+  // 删除group反应到IO层：停用对应的group结构
+  int delete_group_iops(const uint64_t tenant_id,
+                        const int level, // UNUSED
+                        const common::ObString &consumer_group);
+
   // 根据 consumer group 动态创建 cgroup
   int create_user_tenant_group_dir(
       const uint64_t tenant_id,

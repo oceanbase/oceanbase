@@ -1335,7 +1335,6 @@ int ObBlockManager::InspectBadBlockTask::check_block(const MacroBlockId &macro_i
     read_info.macro_block_id_ = macro_id;
     read_info.offset_ = 0;
     read_info.size_ = blk_mgr_.get_macro_block_size();
-    read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
 
     if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle))) {

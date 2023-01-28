@@ -182,7 +182,6 @@ int ObSharedMacroBlockMgr::write_block(
   } else {
     ObMacroBlockWriteInfo write_info;
     write_info.buffer_ = buf;
-    write_info.io_desc_.set_category(ObIOCategory::SYS_IO);
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     write_info.size_ = size;
     lib::ObMutexGuard guard(mutex_);
@@ -252,7 +251,6 @@ int ObSharedMacroBlockMgr::check_write_complete(const MacroBlockId &macro_id, co
   read_info.macro_block_id_ = macro_id;
   read_info.size_ = macro_size;
   read_info.offset_ = offset_;
-  read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   ObMacroBlockHandle read_handle;
@@ -289,7 +287,6 @@ int ObSharedMacroBlockMgr::try_switch_macro_block()
     write_info.buffer_ = common_header_buf_;
     write_info.size_ = header_size_;
     write_info.offset_ = 0;
-    write_info.io_desc_.set_category(ObIOCategory::SYS_IO);
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     if (OB_FAIL(do_write_block(write_info, block_info))) {
       LOG_WARN("fail to write common header to the shared macro block", K(ret), K(block_info));
@@ -745,7 +742,6 @@ int ObSharedMacroBlockMgr::read_sstable_block(
   read_info.macro_block_id_ = macro_info.get_data_block_ids().at(0);
   read_info.offset_ = macro_info.get_nested_offset();
   read_info.size_ = upper_align(macro_info.get_nested_size(), DIO_READ_ALIGN_SIZE);
-  read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
 
   if (OB_FAIL(ObBlockManager::read_block(read_info, block_handle))) {

@@ -186,7 +186,6 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
   ObMacroBlockHandle macro_handle;
   ObMacroBlockReadInfo macro_read_info;
   macro_read_info.macro_block_id_ = macro_id;
-  macro_read_info.io_desc_.set_category(ObIOCategory::USER_IO);
   macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   macro_read_info.offset_ = 0;
   macro_read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();

@@ -30,7 +30,10 @@ PROCEDURE create_plan_directive (
   group_or_subplan  VARCHAR(65535),
   comment           VARCHAR(65535) DEFAULT '',
   mgmt_p1           INT DEFAULT 100,
-  utilization_limit INT DEFAULT 100
+  utilization_limit INT DEFAULT 100,
+  min_iops          INT DEFAULT 0,
+  max_iops          INT DEFAULT 100,
+  weight_iops       INT DEFAULT 0
 );
 pragma interface (C, CREATE_PLAN_DIRECTIVE_INNER);
 
@@ -39,7 +42,10 @@ PROCEDURE update_plan_directive (
   group_or_subplan      VARCHAR(65535),
   new_comment           VARCHAR(65535) DEFAULT NULL,
   new_mgmt_p1           INT DEFAULT NULL,
-  new_utilization_limit INT DEFAULT NULL
+  new_utilization_limit INT DEFAULT NULL,
+  new_min_iops          INT DEFAULT NULL,
+  new_max_iops          INT DEFAULT NULL,
+  new_weight_iops       INT DEFAULT NULL
 );
 pragma interface (C, UPDATE_PLAN_DIRECTIVE_INNER);
 

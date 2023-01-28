@@ -112,7 +112,6 @@ TEST_F(TestSharedMacroBlk, test_rebuild_sstable)
   read_info.offset_ = sstable_.meta_.macro_info_.nested_offset_;
   read_info.size_ = sstable_.meta_.macro_info_.nested_size_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::read_block(read_info, old_handle));
 
   ObMacroBlockHandle new_handle;
@@ -157,7 +156,6 @@ TEST_F(TestSharedMacroBlk, test_invalid_write)
   read_info.macro_block_id_ = block_info.macro_id_;
   read_info.size_ = block_info.nested_size_;
   read_info.offset_ = block_info.nested_offset_;
-  read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   ObMacroBlockHandle read_handle;
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::read_block(read_info, read_handle));

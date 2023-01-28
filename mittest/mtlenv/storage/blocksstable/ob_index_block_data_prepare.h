@@ -444,7 +444,6 @@ void TestIndexBlockDataPrepare::prepare_data()
     ObMacroBlockHandle macro_handle;
     const int64_t macro_block_size = 2 * 1024 * 1024;
     ASSERT_EQ(OB_SUCCESS, root_desc.addr_.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_));
-    read_info.io_desc_.set_category(ObIOCategory::USER_IO);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     read_info.offset_ = 0;
     read_info.size_ = macro_block_size;

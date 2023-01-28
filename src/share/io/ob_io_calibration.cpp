@@ -388,7 +388,7 @@ void ObIOBenchRunner::run1()
     io_info.size_ = load_.size_;
     io_info.buf_ = ObIOMode::READ == load_.mode_ ? nullptr : write_buf_;
     io_info.flag_.set_mode(load_.mode_);
-    io_info.flag_.set_category(ObIOCategory::SYS_IO);
+    io_info.flag_.set_group_id(0);
     io_info.flag_.set_wait_event(ObIOMode::READ == load_.mode_ ?
         ObWaitEventIds::DB_FILE_DATA_READ : ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     io_info.flag_.set_unlimited(true);

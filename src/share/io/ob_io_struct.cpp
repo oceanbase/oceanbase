@@ -424,8 +424,15 @@ void ObIOStatDiff::reset()
 
 /******************             IOUsage              **********************/
 ObIOUsage::ObIOUsage()
+  : io_stats_(),
+    io_estimators_(),
+    group_avg_iops_(),
+    group_avg_byte_(),
+    group_avg_rt_us_(),
+    group_num_(0),
+    doing_request_count_()
 {
-  MEMSET(doing_request_count_, 0, sizeof(doing_request_count_));
+
 }
 
 ObIOUsage::~ObIOUsage()
@@ -433,46 +440,137 @@ ObIOUsage::~ObIOUsage()
 
 }
 
-void ObIOUsage::accumulate(const ObIORequest &req)
+int ObIOUsage::init(const int64_t group_num)
+{
+  int ret =OB_SUCCESS;
+  //push other group into array
+  if (OB_FAIL(refresh_group_num(group_num))) {
+    LOG_WARN("refresh io usage array failed", K(ret), K(group_num));
+  } else if (io_stats_.count() != group_num_ ||
+             io_estimators_.count() != group_num_ ||
+             group_avg_iops_.count() != group_num_ ||
+             group_avg_byte_.count() != group_num_ ||
+             group_avg_rt_us_.count() != group_num_ ||
+             doing_request_count_.count() != group_num_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init io usage failed", K(group_num_));
+  }
+  return ret;
+}
+
+int ObIOUsage::refresh_group_num(const int64_t group_num)
+{
+  int ret = OB_SUCCESS;
+  if (group_num < 0) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid group num", K(ret), K(group_num));
+  } else if (OB_FAIL(io_stats_.reserve(group_num + 1)) ||
+             OB_FAIL(io_estimators_.reserve(group_num + 1)) ||
+             OB_FAIL(group_avg_iops_.reserve(group_num + 1)) ||
+             OB_FAIL(group_avg_byte_.reserve(group_num + 1)) ||
+             OB_FAIL(group_avg_rt_us_.reserve(group_num + 1)) ||
+             OB_FAIL(doing_request_count_.reserve(group_num + 1))) {
+    LOG_WARN("reserver group failed", K(ret), K(group_num));
+  } else {
+    for (int64_t i = group_num_; OB_SUCC(ret) && i < group_num + 1; ++i) {
+      ObSEArray<ObIOStat, GROUP_START_NUM> cur_stat_array;
+      ObSEArray<ObIOStatDiff, GROUP_START_NUM> cur_estimators_array;
+      ObSEArray<double, GROUP_START_NUM> cur_avg_iops;
+      ObSEArray<double, GROUP_START_NUM> cur_avg_byte;
+      ObSEArray<double, GROUP_START_NUM> cur_avg_rt_us;
+
+      if (OB_FAIL(cur_stat_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
+          OB_FAIL(cur_estimators_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
+          OB_FAIL(cur_avg_iops.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
+          OB_FAIL(cur_avg_byte.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
+          OB_FAIL(cur_avg_rt_us.reserve(static_cast<int>(ObIOMode::MAX_MODE)))) {
+        LOG_WARN("reserver group failed", K(ret), K(group_num));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
+          ObIOStat cur_stat;
+          ObIOStatDiff cur_diff;
+          if (OB_FAIL(cur_stat_array.push_back(cur_stat))) {
+            LOG_WARN("push stat failed", K(ret), K(i), K(j));
+          } else if (OB_FAIL(cur_estimators_array.push_back(cur_diff))) {
+            LOG_WARN("push estimator failed", K(ret), K(i), K(j));
+          } else if (OB_FAIL(cur_avg_iops.push_back(0))) {
+            LOG_WARN("push avg_iops failed", K(ret), K(i), K(j));
+          } else if (OB_FAIL(cur_avg_byte.push_back(0))) {
+            LOG_WARN("push avg_byte failed", K(ret), K(i), K(j));
+          } else if (OB_FAIL(cur_avg_rt_us.push_back(0))) {
+            LOG_WARN("push avg_rt failed", K(ret), K(i), K(j));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(io_stats_.push_back(cur_stat_array))) {
+          LOG_WARN("push stat array failed", K(ret), K(i));
+        } else if (OB_FAIL(io_estimators_.push_back(cur_estimators_array))) {
+          LOG_WARN("push estimator array failed", K(ret), K(i));
+        } else if (OB_FAIL(group_avg_iops_.push_back(cur_avg_iops))) {
+          LOG_WARN("push avg_iops array failed", K(ret), K(i));
+        } else if (OB_FAIL(group_avg_byte_.push_back(cur_avg_byte))) {
+          LOG_WARN("push avg_byte array failed", K(ret), K(i));
+        } else if (OB_FAIL(group_avg_rt_us_.push_back(cur_avg_rt_us))) {
+          LOG_WARN("push avg_rt array failed", K(ret), K(i));
+        } else if (OB_FAIL(doing_request_count_.push_back(0))) {
+          LOG_WARN("push group_doing_req failed", K(ret), K(i));
+        } else {
+          ATOMIC_INC(&group_num_);
+        }
+      }
+    }
+  }
+  return ret;
+}
+void ObIOUsage::accumulate(ObIORequest &req)
 {
   if (req.time_log_.return_ts_ > 0) {
     const int64_t device_delay = get_io_interval(req.time_log_.return_ts_, req.time_log_.submit_ts_);
-    io_stats_[static_cast<int>(req.get_category())][static_cast<int>(req.get_mode())]
+    io_stats_.at(req.get_io_usage_index()).at(static_cast<int>(req.get_mode()))
       .accumulate(1, req.io_size_, device_delay);
   }
 }
 
 void ObIOUsage::calculate_io_usage()
 {
-  for (int64_t i = 0; i < static_cast<int>(ObIOCategory::MAX_CATEGORY); ++i) {
+  for (int64_t i = 0; i < group_num_; ++i) {
     for (int64_t j = 0; j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
-      ObIOStatDiff &cur_io_estimator = io_estimators_[i][j];
-      ObIOStat &cur_io_stat = io_stats_[i][j];
-      cur_io_estimator.diff(cur_io_stat, avg_iops_[i][j], avg_byte_[i][j], avg_rt_us_[i][j]);
+      ObIOStatDiff &cur_io_estimator = io_estimators_.at(i).at(j);
+      ObIOStat &cur_io_stat = io_stats_.at(i).at(j);
+      cur_io_estimator.diff(cur_io_stat,
+                            group_avg_iops_.at(i).at(j),
+                            group_avg_byte_.at(i).at(j),
+                            group_avg_rt_us_.at(i).at(j));
     }
   }
 }
 
-void ObIOUsage::get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us) const
+void ObIOUsage::get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us)
 {
-  memcpy(&avg_iops, &avg_iops_, sizeof(AvgItems));
-  memcpy(&avg_bytes, &avg_byte_, sizeof(AvgItems));
-  memcpy(&avg_rt_us, &avg_rt_us_, sizeof(AvgItems));
+  avg_iops.assign(group_avg_iops_);
+  avg_bytes.assign(group_avg_byte_);
+  avg_rt_us.assign(group_avg_rt_us_);
 }
 
-void ObIOUsage::record_request_start(const ObIORequest &req)
+void ObIOUsage::record_request_start(ObIORequest &req)
 {
-  ATOMIC_INC(&doing_request_count_[static_cast<int>(req.get_category())]);
+  ATOMIC_INC(&doing_request_count_.at(req.get_io_usage_index()));
 }
 
-void ObIOUsage::record_request_finish(const ObIORequest &req)
+void ObIOUsage::record_request_finish(ObIORequest &req)
 {
-  ATOMIC_DEC(&doing_request_count_[static_cast<int>(req.get_category())]);
+  ATOMIC_DEC(&doing_request_count_.at(req.get_io_usage_index()));
 }
 
-bool ObIOUsage::is_request_doing(const ObIOCategory category) const
+bool ObIOUsage::is_request_doing(const int64_t index) const
 {
-  return ATOMIC_LOAD(&doing_request_count_[static_cast<int>(category)]) > 0;
+  return ATOMIC_LOAD(&doing_request_count_.at(index)) > 0;
+}
+
+int64_t ObIOUsage::get_io_usage_num() const
+{
+  return group_num_;
 }
 
 int64_t ObIOUsage::to_string(char* buf, const int64_t buf_len) const
@@ -481,11 +579,13 @@ int64_t ObIOUsage::to_string(char* buf, const int64_t buf_len) const
   J_OBJ_START();
   BUF_PRINTF("doing_request_count:[");
   bool need_comma = false;
-  for (int64_t i = 0; i < static_cast<int>(ObIOCategory::MAX_CATEGORY); ++i) {
+  for (int64_t i = 0; i < group_num_; ++i) {
     if (need_comma) {
       J_COMMA();
     }
-    J_KV(get_io_category_name(static_cast<ObIOCategory>(i)), doing_request_count_[i]);
+    char ret[8];
+    snprintf(ret, sizeof(ret), "%ld", i);
+    J_KV(ret, doing_request_count_.at(i));
     need_comma = true;
   }
   BUF_PRINTF("]");
@@ -634,49 +734,93 @@ void ObIOTuner::print_io_status()
   }
 }
 
-/******************             ObIOCategoryQueues              **********************/
-ObIOCategoryQueues::ObIOCategoryQueues()
-  : is_inited_(false)
+/******************             ObIOGroupQueues              **********************/
+ObIOGroupQueues::ObIOGroupQueues(ObIAllocator &allocator)
+  : is_inited_(false),
+    allocator_(allocator),
+    group_phy_queues_(),
+    other_phy_queue_()
 {
 
 }
 
-ObIOCategoryQueues::~ObIOCategoryQueues()
+ObIOGroupQueues::~ObIOGroupQueues()
 {
   destroy();
 }
 
-int ObIOCategoryQueues::init()
+int ObIOGroupQueues::init(const int64_t group_num)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("phy queue init twice", K(ret), K(is_inited_));
+  } else if (group_num < 0) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid group num", K(ret), K(group_num));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1; ++i) {
-      if (OB_FAIL(phy_queues_[i].init(i))){
-        LOG_WARN("phy queue init failed", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_num; ++i) {
+      void *buf = nullptr;
+      ObPhyQueue *tmp_phyqueue = nullptr;
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObPhyQueue)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else if (FALSE_IT(tmp_phyqueue = new (buf) ObPhyQueue())) {
+      } else if (OB_FAIL(tmp_phyqueue->init(i))) {
+        LOG_WARN("init io phy_queue failed", K(ret), K(i), K(*tmp_phyqueue));
+      } else if (OB_FAIL(group_phy_queues_.push_back(tmp_phyqueue))) {
+        LOG_WARN("push back io sender failed", K(ret), K(i), K(*tmp_phyqueue));
+      }
+      if (OB_FAIL(ret) && nullptr != tmp_phyqueue) {
+        tmp_phyqueue->~ObPhyQueue();
+        allocator_.free(tmp_phyqueue);
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    is_inited_ = true;
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
-void ObIOCategoryQueues::destroy()
+
+void ObIOGroupQueues::destroy()
 {
+  for (int64_t i = 0; i < group_phy_queues_.count(); ++i) {
+    ObPhyQueue *tmp_phyqueue = group_phy_queues_.at(i);
+    if (nullptr != tmp_phyqueue) {
+      tmp_phyqueue->destroy();
+      allocator_.free(tmp_phyqueue);
+    }
+  }
+  other_phy_queue_.destroy();
+  group_phy_queues_.destroy();
   is_inited_ = false;
 }
+
+/******************             IOSenderInfo              **********************/
+ObSenderInfo::ObSenderInfo()
+  : queuing_count_(0),
+    reservation_ts_(INT_MAX64),
+    group_limitation_ts_(INT_MAX64),
+    tenant_limitation_ts_(INT_MAX64),
+    proportion_ts_(INT_MAX64)
+{
+
+}
+ObSenderInfo::~ObSenderInfo()
+{
+
+}
+
 /******************             IOScheduleQueue              **********************/
 ObIOSender::ObIOSender(ObIAllocator &allocator)
-  : is_inited_(false),
-    allocator_(allocator),
-    stop_submit_(false),
+  : sender_req_count_(0),
     tg_id_(-1),
+    is_inited_(false),
+    stop_submit_(false),
+    allocator_(allocator),
     io_queue_(nullptr),
-    queue_cond_(),
-    sender_req_count_(0)
+    queue_cond_()
 {
 
 }
@@ -686,23 +830,20 @@ ObIOSender::~ObIOSender()
   destroy();
 }
 
-int ObIOSender::init(const int32_t queue_depth)
+int ObIOSender::init()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(queue_depth <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(queue_depth));
   } else if (OB_FAIL(queue_cond_.init(ObWaitEventIds::IO_QUEUE_LOCK_WAIT))) {
     LOG_WARN("init queue condition failed", K(ret));
   } else if (OB_FAIL(alloc_mclock_queue(allocator_, io_queue_))) {
     LOG_WARN("alloc io queue failed", K(ret));
   } else if (OB_FAIL(io_queue_->init())) {
     LOG_WARN("init io queue failed", K(ret));
-  } else if (OB_FAIL(tenant_map_.create(7, "IO_TENANT_MAP"))) {
-    LOG_WARN("create channel map failed", K(ret));
+  } else if (OB_FAIL(tenant_groups_map_.create(7, "IO_GROUP_MAP"))) {
+    LOG_WARN("create tenant group map failed", K(ret));
   } else if (OB_FAIL(TG_CREATE(lib::TGDefIDs::IO_SCHEDULE, tg_id_))) {
     LOG_WARN("create thread group id failed", K(ret));
   } else {
@@ -717,13 +858,13 @@ int ObIOSender::init(const int32_t queue_depth)
   return ret;
 }
 
-struct DestroyPhyqueueMapFn
+struct DestroyGroupqueueMapFn
 {
 public:
-  DestroyPhyqueueMapFn(ObIAllocator &allocator) : allocator_(allocator) {}
-  int operator () (oceanbase::common::hash::HashMapPair<uint64_t, ObIOCategoryQueues *> &entry) {
+  DestroyGroupqueueMapFn(ObIAllocator &allocator) : allocator_(allocator) {}
+  int operator () (hash::HashMapPair<uint64_t, ObIOGroupQueues *> &entry) {
     if (nullptr != entry.second) {
-      entry.second->~ObIOCategoryQueues();
+      entry.second->~ObIOGroupQueues();
       allocator_.free(entry.second);
     }
     return OB_SUCCESS;
@@ -757,9 +898,9 @@ void ObIOSender::destroy()
     TG_DESTROY(tg_id_);
     tg_id_ = -1;
   }
-  DestroyPhyqueueMapFn destry_phyqueue_map_fn(allocator_);
-  tenant_map_.foreach_refactored(destry_phyqueue_map_fn);
-  tenant_map_.destroy();
+  DestroyGroupqueueMapFn destry_groupqueue_map_fn(allocator_);
+  tenant_groups_map_.foreach_refactored(destry_groupqueue_map_fn);
+  tenant_groups_map_.destroy();
   queue_cond_.destroy();
   if (nullptr != io_queue_) {
     io_queue_->destroy();
@@ -823,21 +964,43 @@ int ObIOSender::alloc_mclock_queue(ObIAllocator &allocator, ObMClockQueue *&io_q
 int ObIOSender::enqueue_request(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
-  ObIOCategoryQueues *io_category_queues = nullptr;
   ObIORequest *tmp_req = &req;
+  ObPhyQueue *tmp_phy_queue = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret), K(is_inited_));
-  } else {
+  } else if (OB_NOT_NULL(req.tenant_io_mgr_.get_ptr())) {
     ObThreadCondGuard cond_guard(queue_cond_);
     if (OB_FAIL(cond_guard.get_ret())) {
       LOG_ERROR("guard queue condition failed", K(ret));
     } else {
-      if (OB_FAIL(tenant_map_.get_refactored(tmp_req->io_info_.tenant_id_, io_category_queues))) {
+      ObIOGroupQueues *io_group_queues = nullptr;
+      if (OB_FAIL(tenant_groups_map_.get_refactored(tmp_req->io_info_.tenant_id_, io_group_queues))) {
         LOG_WARN("get_refactored tenant_map failed", K(ret), K(req));
       } else {
-        const int index = static_cast<int>(tmp_req->get_category());
-        ObPhyQueue *tmp_phy_queue = &(io_category_queues->phy_queues_[index]);
+        uint64_t index = INT_MAX64;
+        const int64_t group_id = tmp_req->get_group_id();
+        if (group_id < GROUP_START_ID) { //other
+          tmp_phy_queue = &(io_group_queues->other_phy_queue_);
+        } else if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(group_id, index))) {
+          // 防止删除group、新建group等情况发生时在途req无法找到对应的group
+          if (ret == OB_HASH_NOT_EXIST || ret == OB_STATE_NOT_MATCH) {
+            ret = OB_SUCCESS;
+            tmp_phy_queue = &(io_group_queues->other_phy_queue_);
+          } else {
+            LOG_WARN("get group index failed", K(ret), K(group_id), K(index));
+          }
+        } else if (index < 0 || index >= io_group_queues->group_phy_queues_.count()) {
+          tmp_phy_queue = &(io_group_queues->other_phy_queue_);
+        } else {
+          tmp_phy_queue = io_group_queues->group_phy_queues_.at(index);
+          if (OB_UNLIKELY(tmp_phy_queue->is_stop_accept())) {
+            ret = OB_STATE_NOT_MATCH;
+            LOG_WARN("runner is quit, stop accept new req", K(ret), K(req));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
         if (tmp_phy_queue->req_list_.is_empty()) {
           //new request        
           if (OB_FAIL(io_queue_->remove_from_heap(tmp_phy_queue))) {
@@ -856,9 +1019,10 @@ int ObIOSender::enqueue_request(ObIORequest &req)
               if (OB_NOT_NULL(req.tenant_io_mgr_.get_ptr())) {
                 ObTenantIOClock *io_clock = static_cast<ObTenantIOClock *>(req.tenant_io_mgr_.get_ptr()->get_io_clock());
                 //phy_queue from idle to active
+                // TODO（QILU):不要每次是新请求就调一次，因为可能就是发的很快，需要增加一个判断机制空闲了一段时间才触发
                 int tmp_ret = io_clock->sync_tenant_clock(io_clock);
                 if (OB_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, req))) {
-                  LOG_WARN("calc phyqueue clock failed", K(ret));
+                  LOG_WARN("calc phyqueue clock failed", K(ret), K(tmp_phy_queue->queue_index_));
                 } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
                   LOG_WARN("sync tenant clock failed", K(tmp_ret));
                 }
@@ -947,30 +1111,48 @@ int ObIOSender::dequeue_request(ObIORequest *&req)
   return ret;
 }
 
-int ObIOSender::remove_phy_queue(const uint64_t tenant_id)
+int ObIOSender::update_group_queue(const uint64_t tenant_id, const int64_t group_num)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || group_num < 0)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid config", K(ret), K(tenant_id), K(group_num));
   } else {
-    ObThreadCondGuard cond_guard(queue_cond_);
-    if (OB_FAIL(cond_guard.get_ret())) {
-      LOG_ERROR("guard queue condition failed", K(ret));
-    } else {
-      ObIOCategoryQueues *io_category_queues = nullptr;
-      if (OB_FAIL(tenant_map_.erase_refactored(tenant_id, &io_category_queues))) {
-        LOG_WARN("erase phy_queues failed", K(ret), K(tenant_id));
-      } else if (nullptr != io_category_queues) {
-        for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1; ++j) {
-          ObPhyQueue *tmp_phy_queue = &(io_category_queues->phy_queues_[j]);
-          if (OB_FAIL(io_queue_->remove_from_heap(tmp_phy_queue))) {
-            LOG_WARN("remove phy queue from heap failed", K(ret));
-          }
+    ObIOGroupQueues *io_group_queues = nullptr;
+    if (OB_FAIL(tenant_groups_map_.get_refactored(tenant_id, io_group_queues))) {
+      LOG_WARN("get_refactored form tenant_group_map failed", K(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(!io_group_queues->is_inited_)) {
+      LOG_WARN("io_group_queues not init", K(ret), K(*io_group_queues));
+    } else if (io_group_queues->group_phy_queues_.count() > group_num || group_num < 0) {
+      ret = OB_INVALID_CONFIG;
+      LOG_WARN("invalid group num", K(ret), K(group_num));
+    } else if (io_group_queues->group_phy_queues_.count() == group_num) {
+      // do nothing
+    } else if (io_group_queues->group_phy_queues_.count() < group_num) {
+      // add phyqueue
+      int64_t cur_num = io_group_queues->group_phy_queues_.count();
+      for (int64_t i = cur_num; OB_SUCC(ret) && i < group_num; ++i) {
+        void *buf = nullptr;
+        ObPhyQueue *tmp_phyqueue = nullptr;
+        if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObPhyQueue)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else if (FALSE_IT(tmp_phyqueue = new (buf) ObPhyQueue())) {
+        } else if (OB_FAIL(tmp_phyqueue->init(i))) {
+          LOG_WARN("init io phy_queue failed", K(ret), K(i), K(*tmp_phyqueue));
+        } else if (OB_FAIL(io_group_queues->group_phy_queues_.push_back(tmp_phyqueue))) {
+          LOG_WARN("push back io sender failed", K(ret), K(i), K(*tmp_phyqueue));
+        } else if (OB_FAIL(enqueue_phy_queue(*tmp_phyqueue))) {
+          LOG_WARN("new queue into heap failed", K(ret));
+        } else {
+          LOG_INFO("add phy queue success", K(tenant_id), K(cur_num), K(group_num));
         }
-        if (OB_SUCC(ret)) {
-          io_category_queues->~ObIOCategoryQueues();
-          allocator_.free(io_category_queues);
+        if (OB_FAIL(ret) && nullptr != tmp_phyqueue) {
+          tmp_phyqueue->~ObPhyQueue();
+          allocator_.free(tmp_phyqueue);
         }
       }
     }
@@ -978,6 +1160,69 @@ int ObIOSender::remove_phy_queue(const uint64_t tenant_id)
   return ret;
 }
 
+int ObIOSender::remove_group_queues(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid config", K(ret), K(tenant_id));
+  } else {
+    ObThreadCondGuard cond_guard(queue_cond_);
+    if (OB_FAIL(cond_guard.get_ret())) {
+      LOG_ERROR("guard queue condition failed", K(ret));
+    } else {
+      ObIOGroupQueues *io_group_queues = nullptr;
+      if (OB_FAIL(tenant_groups_map_.erase_refactored(tenant_id, &io_group_queues))) {
+        LOG_WARN("erase phy_queues failed", K(ret), K(tenant_id));
+      } else if (nullptr != io_group_queues) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < io_group_queues->group_phy_queues_.count(); ++j) {
+          ObPhyQueue *tmp_phy_queue = io_group_queues->group_phy_queues_.at(j);
+          if (OB_FAIL(io_queue_->remove_from_heap(tmp_phy_queue))) {
+            LOG_WARN("remove phy queue from heap failed", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if(OB_FAIL(io_queue_->remove_from_heap(&(io_group_queues->other_phy_queue_)))) {
+            LOG_WARN("remove other phy queue from heap failed", K(ret));
+          } else {
+            io_group_queues->~ObIOGroupQueues();
+            allocator_.free(io_group_queues);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIOSender::stop_phy_queue(const uint64_t tenant_id, const uint64_t index)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || index < 0 || INT64_MAX == index)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid config", K(ret), K(tenant_id), K(index));
+  } else {
+    ObThreadCondGuard cond_guard(queue_cond_);
+    if (OB_FAIL(cond_guard.get_ret())) {
+      LOG_ERROR("guard queue condition failed", K(ret));
+    } else {
+      ObIOGroupQueues *io_group_queues = nullptr;
+      if (OB_FAIL(tenant_groups_map_.get_refactored(tenant_id, io_group_queues))) {
+        LOG_WARN("get_refactored tenant_map failed", K(ret), K(tenant_id));
+      } else if (nullptr != io_group_queues && index < io_group_queues->group_phy_queues_.count()) {
+        io_group_queues->group_phy_queues_.at(index)->set_stop_accept();
+        //TODO (QILU) tuner regularly checks whether the memory can be released
+      }
+    }
+  }
+  return ret;
+}
 int ObIOSender::notify()
 {
   int ret = OB_SUCCESS;
@@ -998,6 +1243,38 @@ int ObIOSender::notify()
 int32_t ObIOSender::get_queue_count() const
 {
   return OB_ISNULL(io_queue_) ?  0 : sender_req_count_;
+}
+
+int ObIOSender::get_sender_status(const uint64_t tenant_id, const uint64_t index, ObSenderInfo &sender_info)
+{
+  int ret = OB_SUCCESS;
+  ObIOGroupQueues *io_group_queues = nullptr;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || index < 0 ||
+             (index >= io_group_queues->group_phy_queues_.count() && INT64_MAX != index))) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid index", K(ret), K(index));
+  } else {
+    ObThreadCondGuard cond_guard(queue_cond_);
+    if (OB_FAIL(cond_guard.get_ret())) {
+      LOG_ERROR("guard queue condition failed", K(ret));
+    } else {
+      if (OB_FAIL(tenant_groups_map_.get_refactored(tenant_id, io_group_queues))) {
+        LOG_WARN("get io_group_queues from map failed", K(ret), K(tenant_id));
+      } else {
+        ObPhyQueue *tmp_phy_queue = index == INT64_MAX ?
+                   &(io_group_queues->other_phy_queue_) : io_group_queues->group_phy_queues_.at(index);
+        sender_info.queuing_count_ = tmp_phy_queue->req_list_.get_size();
+        sender_info.reservation_ts_ = tmp_phy_queue->reservation_ts_;
+        sender_info.group_limitation_ts_ = tmp_phy_queue->group_limitation_ts_;
+        sender_info.tenant_limitation_ts_ = tmp_phy_queue->tenant_limitation_ts_;
+        sender_info.proportion_ts_ = tmp_phy_queue->proportion_ts_;
+      }
+    }
+  }
+  return ret;
 }
 
 void ObIOSender::pop_and_submit()
@@ -1111,7 +1388,7 @@ ObIOScheduler::~ObIOScheduler()
   destroy();
 }
 
-int ObIOScheduler::init(const int64_t queue_count, const int64_t queue_depth, const int64_t schedule_media_id)
+int ObIOScheduler::init(const int64_t queue_count, const int64_t schedule_media_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -1119,7 +1396,7 @@ int ObIOScheduler::init(const int64_t queue_count, const int64_t queue_depth, co
     LOG_WARN("io scheduler init twice", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(queue_count <= 0 || queue_count <= 0 || schedule_media_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(queue_count), K(queue_depth), K(schedule_media_id));
+    LOG_WARN("invalid argument", K(queue_count), K(schedule_media_id));
   } else if (OB_FAIL(io_tuner_.init())) {
     LOG_WARN("init io tuner failed", K(ret));
   } else {
@@ -1130,8 +1407,8 @@ int ObIOScheduler::init(const int64_t queue_count, const int64_t queue_depth, co
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
       } else if (FALSE_IT(tmp_sender = new (buf) ObIOSender(allocator_))) {
-      } else if (OB_FAIL(tmp_sender->init(queue_depth))) {
-        LOG_WARN("init io sender failed", K(ret), K(i), K(*tmp_sender), K(queue_depth));
+      } else if (OB_FAIL(tmp_sender->init())) {
+        LOG_WARN("init io sender failed", K(ret), K(i), K(*tmp_sender));
       } else if (OB_FAIL(senders_.push_back(tmp_sender))) {
         LOG_WARN("push back io sender failed", K(ret), K(i), K(*tmp_sender));
       }
@@ -1196,7 +1473,7 @@ void ObIOScheduler::stop()
   }
 }
 
-int ObIOScheduler::schedule_request(ObIOClock &io_clock, ObIORequest &req)
+int ObIOScheduler::schedule_request(ObTenantIOClock &io_clock, ObIORequest &req)
 {
   int ret = OB_SUCCESS;
   RequestHolder holder(&req);
@@ -1224,47 +1501,105 @@ int ObIOScheduler::schedule_request(ObIOClock &io_clock, ObIORequest &req)
   return ret;
 }
 
-int ObIOScheduler::add_tenant_map(uint64_t tenant_id)
+int ObIOScheduler::init_group_queues(const uint64_t tenant_id, const int64_t group_num)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < senders_.count(); ++i) {
-    ObIOSender *cur_sender = senders_.at(i);
-    ObIOCategoryQueues *io_category_queues = nullptr;
-    void *buf_queues = nullptr;
-    if (OB_ISNULL(buf_queues = cur_sender->allocator_.alloc(sizeof(ObIOCategoryQueues)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate phyqueues memory failed", K(ret));
-    } else {
-      io_category_queues = new (buf_queues) ObIOCategoryQueues();
-      if (OB_FAIL(io_category_queues->init())) {
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || group_num < 0)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid config", K(ret), K(tenant_id), K(group_num));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < senders_.count(); ++i) {
+      ObIOSender *cur_sender = senders_.at(i);
+      ObIOGroupQueues *io_group_queues = nullptr;
+      void *buf_queues = nullptr;
+      if (OB_ISNULL(buf_queues = cur_sender->allocator_.alloc(sizeof(ObIOGroupQueues)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate phyqueues memory failed", K(ret));
+      } else if (FALSE_IT(io_group_queues = new (buf_queues) ObIOGroupQueues(cur_sender->allocator_))) {
+      } else if (OB_FAIL(io_group_queues->other_phy_queue_.init(INT64_MAX))) { //other group index
+        LOG_WARN("init other group queue failes", K(ret));
+      } else if (OB_FAIL(io_group_queues->init(group_num))) {
         LOG_WARN("init phyqueues failed", K(ret));
+      } else if (OB_FAIL(cur_sender->enqueue_phy_queue(io_group_queues->other_phy_queue_))){ //other groups queue
+        LOG_WARN("other phy queue into send_queue failed", K(ret));
       } else {
-        for(int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1; j++) {
-          if (OB_FAIL(cur_sender->enqueue_phy_queue(io_category_queues->phy_queues_[j]))) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < group_num; ++j) {
+          if (OB_FAIL(cur_sender->enqueue_phy_queue(*(io_group_queues->group_phy_queues_.at(j))))) {
             LOG_WARN("new phy_queue into send_queue failed", K(ret));
           }
         }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(cur_sender->tenant_map_.set_refactored(tenant_id, io_category_queues))) {
-          LOG_WARN("init tenant map failed", K(ret), K(i));
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(cur_sender->tenant_groups_map_.set_refactored(tenant_id, io_group_queues))) {
+            LOG_WARN("init tenant group map failed", K(tenant_id), K(ret), K(i));
+          }
+        } else {
+          io_group_queues->~ObIOGroupQueues();
+          cur_sender->allocator_.free(io_group_queues);
         }
-      } else {
-        io_category_queues->~ObIOCategoryQueues();
-        cur_sender->allocator_.free(io_category_queues);
       }
     }
   }
   return ret;
 }
 
-int ObIOScheduler::remove_tenant_map(uint64_t tenant_id)
+int ObIOScheduler::update_group_queues(const uint64_t tenant_id, const int64_t group_num)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < senders_.count(); ++i) {
-    ObIOSender *cur_sender = senders_.at(i);
-    if (OB_FAIL(cur_sender->remove_phy_queue(tenant_id))) {
-      LOG_WARN("remove phy queue failed", K(ret), K(i), K(tenant_id));
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || group_num < 0)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid config", K(ret), K(tenant_id), K(group_num));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < senders_.count(); ++i) {
+      ObIOSender *cur_sender = senders_.at(i);
+      if (OB_FAIL(cur_sender->update_group_queue(tenant_id, group_num))) {
+        LOG_WARN("serder update group queue num failed", K(ret), K(tenant_id), K(group_num));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIOScheduler::remove_phyqueues(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid config", K(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < senders_.count(); ++i) {
+      ObIOSender *cur_sender = senders_.at(i);
+      if (OB_FAIL(cur_sender->remove_group_queues(tenant_id))) {
+        LOG_WARN("remove phy queue failed", K(ret), K(i), K(tenant_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIOScheduler::stop_phy_queues(const uint64_t tenant_id, const int64_t index)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || index < 0 || INT64_MAX == index)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid config", K(ret), K(tenant_id), K(index));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < senders_.count(); ++i) {
+      ObIOSender *cur_sender = senders_.at(i);
+      if (OB_FAIL(cur_sender->stop_phy_queue(tenant_id, index))) {
+        LOG_WARN("stop phy queue failed", K(ret), K(index));
+      }
     }
   }
   return ret;
@@ -2215,7 +2550,7 @@ void ObIOCallbackManager::destroy()
     }
     for (int64_t i = 0; i < runners_.count(); ++i) {
       runners_.at(i)->wait();
-    }    
+    }
     for (int64_t i = 0; i < runners_.count(); ++i) {
       io_allocator_->free(runners_.at(i));
     }
@@ -2529,7 +2864,7 @@ int ObIOFaultDetector::record_read_failure(const ObIORequest &req)
     LOG_WARN("alloc RetryTask failed", K(ret));
   } else {
     retry_task->io_info_ = req.io_info_;
-    retry_task->io_info_.flag_.set_category(ObIOCategory::PREWARM_IO);
+    retry_task->io_info_.flag_.set_group_id(0);
     retry_task->io_info_.callback_ = nullptr;
     retry_task->timeout_ms_ = 5000L; // 5s
     if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {

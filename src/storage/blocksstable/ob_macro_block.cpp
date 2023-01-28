@@ -687,7 +687,6 @@ int ObMacroBlock::flush(ObMacroBlockHandle &macro_handle,
     ObMacroBlockWriteInfo write_info;
     write_info.buffer_ = data_.data();
     write_info.size_ = data_.capacity();
-    write_info.io_desc_.set_category(ObIOCategory::SYS_IO);
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     if (OB_FAIL(macro_handle.async_write(write_info))) {
       STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(macro_handle));

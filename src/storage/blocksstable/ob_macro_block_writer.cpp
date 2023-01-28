@@ -1282,7 +1282,6 @@ int ObMacroBlockWriter::check_write_complete(const MacroBlockId &macro_block_id)
   ObMacroBlockReadInfo read_info;
   read_info.macro_block_id_ = macro_block_id;
   read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-  read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   ObMacroBlockHandle read_handle;

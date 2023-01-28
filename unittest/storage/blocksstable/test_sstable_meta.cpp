@@ -149,7 +149,6 @@ void TestRootBlockInfo::prepare_block_root()
   char *io_buf = static_cast<char *>(allocator_.alloc(buf_size));
   ASSERT_TRUE(nullptr != io_buf);
   MEMCPY(io_buf + block_addr_.offset_, buf, block_addr_.size_);
-  write_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
   write_info.buffer_ = io_buf;
   write_info.size_ = buf_size;

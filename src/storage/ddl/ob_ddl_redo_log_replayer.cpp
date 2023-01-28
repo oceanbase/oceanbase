@@ -126,7 +126,6 @@ int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const SCN &scn)
     ObMacroBlockHandle macro_handle;
     write_info.buffer_ = redo_info.data_buffer_.ptr();
     write_info.size_= redo_info.data_buffer_.length();
-    write_info.io_desc_.set_category(ObIOCategory::SYS_IO);
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     const int64_t io_timeout_ms = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
     ObDDLMacroBlock macro_block;

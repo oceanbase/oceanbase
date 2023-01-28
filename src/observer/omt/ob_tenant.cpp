@@ -1876,6 +1876,10 @@ void ObTenant::check_resource_manager_plan()
               plan_name))) {
     LOG_WARN("fail get tenant variable", K(id_), K(plan_name), K(ret));
     // skip
+  } else if (OB_FAIL(rule_mgr.refresh_group_mapping_rule(id_, plan_name))) {
+    LOG_WARN("refresh group id name mapping rule fail."
+             "Tenant resource isolation may not work",
+             K(id_), K(plan_name), K(ret));
   } else if (OB_FAIL(plan_mgr.refresh_resource_plan(id_, plan_name))) {
     LOG_WARN("refresh resource plan fail."
              "Tenant resource isolation may not work",

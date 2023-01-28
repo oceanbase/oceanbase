@@ -17,12 +17,51 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
+ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
+{
+  ObString ret_name;
+  switch (function_type) {
+    case ObFunctionType::PRIO_COMPACTION_HIGH:
+      ret_name = ObString("COMPACTION_HIGH");
+      break;
+    case ObFunctionType::PRIO_HA_HIGH:
+      ret_name = ObString("HA_HIGH");
+      break;
+    case ObFunctionType::PRIO_COMPACTION_MID:
+      ret_name = ObString("COMPACTION_MID");
+      break;
+    case ObFunctionType::PRIO_HA_MID:
+      ret_name = ObString("HA_MID");
+      break;
+    case ObFunctionType::PRIO_COMPACTION_LOW:
+      ret_name = ObString("COMPACTION_LOW");
+      break;
+    case ObFunctionType::PRIO_HA_LOW:
+      ret_name = ObString("HA_LOW");
+      break;
+    case ObFunctionType::PRIO_DDL:
+      ret_name = ObString("DDL");
+      break;
+    case ObFunctionType::PRIO_DDL_HIGH:
+      ret_name = ObString("DDL_HIGH");
+      break;
+    default:
+      ret_name = ObString("OTHER_GROUPS");
+      break;
+  }
+  return ret_name;
+}
+
 int ObPlanDirective::assign(const ObPlanDirective &other)
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
   mgmt_p1_ = other.mgmt_p1_;
   utilization_limit_ = other.utilization_limit_;
+  min_iops_ = other.min_iops_;
+  max_iops_ = other.max_iops_;
+  weight_iops_ = other.weight_iops_;
+  group_id_ = other.group_id_;
   level_ = other.level_;
   ret = group_name_.assign(other.group_name_);
   return ret;
@@ -32,6 +71,7 @@ int ObResourceMappingRule::assign(const ObResourceMappingRule &other)
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
+  group_id_ = other.group_id_;
   OZ(set_attr(other.attr_), other);
   OZ(set_value(other.value_), other);
   OZ(set_group(other.group_), other);

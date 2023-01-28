@@ -143,7 +143,6 @@ int ObBackupIndexBufferNode::get_backup_index(T &backup_index)
   blocksstable::ObTmpFileIOHandle handle;
   io_info.fd_ = tmp_file_.get_fd();
   io_info.tenant_id_ = tmp_file_.get_tenant_id();
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.size_ = std::min(need_read_size, estimate_size_ - read_offset_);
   common::ObArenaAllocator allocator;

@@ -307,7 +307,6 @@ TEST_F(TestIndexBlockTreeCursor, test_bare_micro_block_iterator)
   read_info.macro_block_id_ = macro_block_id;
   read_info.offset_ = 0;
   read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-  read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::async_read_block(read_info, macro_handle));
   ASSERT_EQ(OB_SUCCESS, macro_handle.wait(DEFAULT_IO_WAIT_TIME_MS));

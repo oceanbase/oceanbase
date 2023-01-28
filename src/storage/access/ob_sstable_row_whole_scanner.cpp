@@ -255,7 +255,6 @@ int ObSSTableRowWholeScanner::open(
       read_info.macro_block_id_ = macro_desc.macro_block_id_;
       read_info.offset_ = sstable_->get_macro_offset();
       read_info.size_ = sstable_->get_macro_read_size();
-      read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
       if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
         LOG_WARN("Fail to read macro block", K(ret), K(read_info));
@@ -365,7 +364,6 @@ int ObSSTableRowWholeScanner::prefetch()
       read_info.macro_block_id_ = scan_handle.macro_block_desc_.macro_block_id_;
       read_info.offset_ = sstable_->get_macro_offset();
       read_info.size_ = sstable_->get_macro_read_size();
-      read_info.io_desc_.set_category(common::ObIOCategory::SYS_IO);
       read_info.io_desc_.set_wait_event(common::ObWaitEventIds::DB_FILE_COMPACT_READ);
       if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
         LOG_WARN("Fail to read macro block, ", K(ret), K(read_info));

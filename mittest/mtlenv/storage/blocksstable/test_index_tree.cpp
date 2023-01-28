@@ -614,7 +614,6 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   ObMacroBlockHandle macro_handle;
   const int64_t macro_block_size = 2 * 1024 * 1024;
   read_info.macro_block_id_ = first_macro_id;
-  read_info.io_desc_.set_category(ObIOCategory::USER_IO);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   read_info.offset_ = 0;
   read_info.size_ = macro_block_size;
@@ -1326,7 +1325,6 @@ TEST_F(TestIndexTree, test_rebuilder)
   ObMacroBlockReadInfo info;
   ObMacroBlockHandle macro_handle;
   const int64_t macro_block_size = 2 * 1024 * 1024;
-  info.io_desc_.set_category(ObIOCategory::USER_IO);
   info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   info.offset_ = 0;
   info.size_ = macro_block_size;

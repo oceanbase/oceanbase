@@ -2709,7 +2709,10 @@ def_table_schema(
   normal_columns = [
     ('comments', 'varchar:2000', 'true'),
     ('mgmt_p1', 'int', 'false', 100),
-    ('utilization_limit', 'int', 'false', 100)
+    ('utilization_limit', 'int', 'false', 100),
+    ('min_iops', 'int', 'false', 0),
+    ('max_iops', 'int', 'false', 100),
+    ('weight_iops', 'int', 'false', 0)
   ],
 )
 
@@ -7744,7 +7747,7 @@ def_table_schema(
       ('svr_ip',        'varchar:MAX_IP_ADDR_LENGTH'),
       ('svr_port',      'int'),
       ('tenant_id',     'int'),
-      ('category',      'varchar:256'),
+      ('group_id',      'int'),
       ('mode',          'varchar:256'),
       ('size',          'int'),
       ('min_iops',      'int'),

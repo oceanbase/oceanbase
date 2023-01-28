@@ -1192,9 +1192,7 @@ int ObMultiTenant::modify_tenant_io(const uint64_t tenant_id, const ObUnitConfig
       io_config.callback_thread_count_ = tenant_config->_io_callback_thread_count;
       static const char *trace_mod_name = "io_tracer";
       io_config.enable_io_tracer_ = 0 == strncasecmp(trace_mod_name, GCONF.leak_mod_to_check.get_value(), strlen(trace_mod_name));
-      if (OB_FAIL(io_config.parse_category_config(tenant_config->io_category_config))) {
-        LOG_WARN("parse io category config failed", K(ret));
-      } else if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_config(tenant_id, io_config))) {
+      if (OB_FAIL(OB_IO_MANAGER.refresh_tenant_io_config(tenant_id, io_config))) {
         LOG_WARN("refresh tenant io config failed", K(ret), K(tenant_id), K(io_config));
       }
     }

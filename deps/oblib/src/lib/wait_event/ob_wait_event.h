@@ -294,6 +294,8 @@ WAIT_EVENT_DEF(DEADLOCK_DETECT_LOCK_WAIT, 15247, "spinlock: deadlock detect lock
 //WAIT_EVENT_DEF(BACKUP_ARCHIVE_SERVICE_COND_WAIT, 15250, "backup archive service condition wait", "address", "", "", CONCURRENCY, "backup archive service condition wait", true)
 WAIT_EVENT_DEF(SRS_LOCK_WAIT, 15251, "latch: srs lock wait", "address", "number", "tries", CONCURRENCY, "latch: srs lock wait", true)
 WAIT_EVENT_DEF(CLOG_CKPT_RWLOCK_WAIT, 15252, "rwlock: clog checkpoint rwlock wait", "address", "number", "tries", CONCURRENCY, "rwlock: clog checkpoint rwlock wait", true)
+WAIT_EVENT_DEF(TENANT_IO_CONFIG_WAIT, 15253, "rwlock: tenant io config wait", "address", "number", "tries", CONCURRENCY, "rwlock: tenant io config wait", true)
+
 
 //transaction
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,"wait end trans", false)

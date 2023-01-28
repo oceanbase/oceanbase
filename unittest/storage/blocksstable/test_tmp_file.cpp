@@ -255,7 +255,6 @@ void TestTmpFileStress::write_data(const int64_t macro_block_size)
   io_info.fd_ = fd_;
   io_info.size_ = macro_block_size;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   char *buf = new char[BUF_COUNT * macro_block_size];
   const int64_t timeout_ms = 5000;
@@ -276,7 +275,6 @@ void TestTmpFileStress::write_plain_data(char *&buf, const int64_t macro_block_s
   ASSERT_EQ(OB_SUCCESS, ret);
   io_info.fd_ = fd_;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   buf = new char[BUF_COUNT * macro_block_size];
   const int64_t timeout_ms = 5000;
@@ -302,7 +300,6 @@ void TestTmpFileStress::read_data(const int64_t macro_block_size)
   io_info.fd_ = fd_;
   io_info.size_ = macro_block_size;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   char *buf = new char[macro_block_size];
   for (int64_t i = 0; i < BUF_COUNT; ++i) {
@@ -325,7 +322,6 @@ void TestTmpFileStress::read_plain_data(const char *read_buf, const int64_t macr
   io_info.fd_ = fd_;
   io_info.size_ = macro_block_size;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   char *buf = new char[BUF_COUNT * macro_block_size];
   int64_t offset = 0;
@@ -584,7 +580,6 @@ TEST_F(TestTmpFile, test_big_file)
   char *read_buf = (char *)malloc(write_size);
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = write_size;
@@ -720,7 +715,6 @@ TEST_F(TestTmpFile, test_inner_read_offset_and_seek)
   char *read_buf = new char [macro_block_size + 256];
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = macro_block_size + 256;
@@ -832,7 +826,6 @@ TEST_F(TestTmpFile, test_aio_read_and_write)
 
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = macro_block_size + 256;
@@ -1075,7 +1068,6 @@ TEST_F(TestTmpFile, test_write_less_than_macro_block_size)
   char *read_buf = new char [256];
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = 256;
@@ -1163,7 +1155,6 @@ TEST_F(TestTmpFile, test_write_more_than_one_macro_block)
   char *read_buf = new char [macro_block_size + 256];
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = macro_block_size + 256;
@@ -1266,7 +1257,6 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
   ASSERT_EQ(OB_SUCCESS, ret);
   io_info1.fd_ = fd_1;
   io_info1.tenant_id_ = 1;
-  io_info1.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info1.io_desc_.set_wait_event(2);
   io_info1.buf_ = write_buf;
   io_info1.size_ = macro_block_size + 256;
@@ -1275,7 +1265,6 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
   ASSERT_EQ(OB_SUCCESS, ret);
   io_info2.fd_ = fd_2;
   io_info2.tenant_id_ = 1;
-  io_info2.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info2.io_desc_.set_wait_event(2);
   io_info2.buf_ = write_buf;
   io_info2.size_ = macro_block_size + 256;
@@ -1346,14 +1335,12 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
 
   new_io_info.fd_ = new_fd;
   new_io_info.tenant_id_ = 1;
-  new_io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   new_io_info.io_desc_.set_wait_event(2);
   new_io_info.buf_ = write_buf;
   new_io_info.size_ = macro_block_size + 256;
 
   old_io_info.fd_ = old_fd;
   old_io_info.tenant_id_ = 1;
-  old_io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   old_io_info.io_desc_.set_wait_event(2);
   old_io_info.buf_ = write_buf;
   old_io_info.size_ = macro_block_size + 256;
@@ -1496,7 +1483,6 @@ TEST_F(TestTmpFile, test_handle_double_wait)
   char *read_buf = new char [256];
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = 256;
@@ -1554,7 +1540,6 @@ TEST_F(TestTmpFile, test_sql_workload)
 
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = write_size;

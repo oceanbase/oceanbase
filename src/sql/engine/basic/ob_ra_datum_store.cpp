@@ -1133,7 +1133,6 @@ int ObRADatumStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     io.buf_ = static_cast<char *>(buf);
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
-    io.io_desc_.set_category(ObIOCategory::USER_IO);
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
     const uint64_t start = rdtsc();
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io, timeout_ms))) {
@@ -1174,7 +1173,6 @@ int ObRADatumStore::read_file(void *buf, const int64_t size, const int64_t offse
     io.buf_ = static_cast<char *>(buf);
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
-    io.io_desc_.set_category(ObIOCategory::USER_IO);
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     const uint64_t start = rdtsc();
     blocksstable::ObTmpFileIOHandle handle;

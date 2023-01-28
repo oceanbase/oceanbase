@@ -308,7 +308,6 @@ int ObFragmentWriterV2<T>::flush_buffer()
     io_info.size_ = buf_size_;
     io_info.tenant_id_ = tenant_id_;
     io_info.buf_ = buf_;
-    io_info.io_desc_.set_category(common::ObIOCategory::SYS_IO);
     io_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_info, file_io_handle_))) {
       STORAGE_LOG(WARN, "fail to do aio write macro file", K(ret), K(io_info));
@@ -561,7 +560,6 @@ int ObFragmentReaderV2<T>::prefetch()
       io_info.size_ = buf_size_;
       io_info.tenant_id_ = tenant_id_;
       io_info.buf_ = buf_;
-      io_info.io_desc_.set_category(common::ObIOCategory::SYS_IO);
       io_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_READ);
       if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_read(io_info, file_io_handles_[handle_cursor_ % MAX_HANDLE_COUNT]))) {
         if (common::OB_ITER_END != ret) {

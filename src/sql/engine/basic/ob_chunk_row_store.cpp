@@ -1615,9 +1615,6 @@ int ObChunkRowStore::write_file(void *buf, int64_t size)
       } else {
         file_size_ = 0;
         io_.tenant_id_ = tenant_id_;
-        common::ObIOCategory io_category = GCONF._large_query_io_percentage.get_value() > 0 ?
-          common::ObIOCategory::LARGE_QUERY_IO : common::ObIOCategory::USER_IO;
-        io_.io_desc_.set_category(io_category);
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
         LOG_TRACE("open file success", K_(io_.fd), K_(io_.dir_id));
       }
@@ -1661,9 +1658,6 @@ int ObChunkRowStore::read_file(void *buf, const int64_t size, const int64_t offs
     OX (ret = OB_ITER_END);
   } else {
     this->set_io(size, static_cast<char *>(buf));
-    common::ObIOCategory io_category = GCONF._large_query_io_percentage.get_value() > 0 ?
-      common::ObIOCategory::LARGE_QUERY_IO : common::ObIOCategory::USER_IO;
-    io_.io_desc_.set_category(io_category);
     io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     blocksstable::ObTmpFileIOHandle handle;
     if (0 == read_size

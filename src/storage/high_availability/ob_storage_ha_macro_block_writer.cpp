@@ -114,7 +114,6 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
   int64_t log_seq_num = 0;
   int64_t data_size = 0;
   obrpc::ObCopyMacroBlockHeader header;
-  write_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_WRITE);
 
   if (OB_UNLIKELY(!is_inited_)) {

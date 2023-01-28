@@ -271,7 +271,6 @@ int ObMacroBlockBackupReader::get_macro_read_info_(
     read_info.macro_block_id_ = block_info_.macro_id_;
     read_info.offset_ = block_info_.nested_offset_;
     read_info.size_ = block_info_.nested_size_;
-    read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_READ);
   }
   return ret;

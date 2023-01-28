@@ -2538,7 +2538,6 @@ int ObChunkDatumStore::write_file(void *buf, int64_t size)
       } else {
         file_size_ = 0;
         io_.tenant_id_ = tenant_id_;
-        io_.io_desc_.set_category(common::ObIOCategory::USER_IO);
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
         LOG_INFO("open file success", K_(io_.fd), K_(io_.dir_id));
       }
@@ -2593,7 +2592,6 @@ int ObChunkDatumStore::read_file(
     OX (ret = OB_ITER_END);
   } else {
     this->set_io(size, static_cast<char *>(buf));
-    io_.io_desc_.set_category(common::ObIOCategory::USER_IO);
     io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     if (0 == read_size
         && OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(io_.fd_, tmp_file_size))) {
@@ -2626,7 +2624,6 @@ int ObChunkDatumStore::aio_read_file(
     LOG_WARN("invalid argument", K(size), K(offset), KP(buf));
   } else if (size > 0) {
     this->set_io(size, static_cast<char *>(buf));
-    io_.io_desc_.set_category(common::ObIOCategory::USER_IO);
     io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(io_, offset, handle))) {
       if (OB_ITER_END != ret) {

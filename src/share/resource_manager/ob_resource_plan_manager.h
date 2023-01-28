@@ -27,21 +27,32 @@ class ObString;
 }
 namespace share
 {
+static constexpr int64_t OTHER_GROUPS_IOPS_WEIGHT = 100L;
 
 class ObResourcePlanManager
 {
 public:
-  typedef common::ObSEArray<ObPlanDirective, 2> ObPlanDirectiveSet;
+  typedef common::ObSEArray<ObPlanDirective, 8> ObPlanDirectiveSet;
 public:
   ObResourcePlanManager() = default;
   virtual ~ObResourcePlanManager() = default;
   int init();
-  int refresh_resource_plan(uint64_t tenant_id, common::ObString &plan_name);
+  int refresh_resource_plan(const uint64_t tenant_id, common::ObString &plan_name);
+  int get_cur_plan(const uint64_t tenant_id, ObResMgrVarcharValue &plan_name);
 private:
   /* functions */
+  int switch_resource_plan(const uint64_t tenant_id, common::ObString &plan_name);
   int flush_directive_to_cgroup_fs(ObPlanDirectiveSet &directives);
+  int flush_directive_to_iops_control(const uint64_t tenant_id,
+                                      ObPlanDirectiveSet &directives,
+                                      ObPlanDirective &other_group_directive);
   int create_cgroup_dir_if_not_exist(const ObPlanDirectiveSet &directives);
-  int normalize_directives(ObPlanDirectiveSet &directives);
+  int normalize_cpu_directives(ObPlanDirectiveSet &directives);
+  int normalize_iops_directives(const uint64_t tenant_id,
+                                ObPlanDirectiveSet &directives,
+                                ObPlanDirective &other_group_directive);
+  int refresh_tenant_group_io_config(const uint64_t tenant_id);
+  common::hash::ObHashMap<uint64_t, ObResMgrVarcharValue> tenant_plan_map_;
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObResourcePlanManager);
 };

@@ -173,7 +173,6 @@ int ObIndexBlockMicroIterator::init(
     read_info.macro_block_id_ = macro_id;
     read_info.offset_ = sstable->get_macro_offset();
     read_info.size_ = sstable->get_macro_read_size();
-    read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle_))) {
       LOG_WARN("async read block failed, ", K(ret), K(read_info), K(macro_id));
