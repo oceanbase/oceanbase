@@ -56,6 +56,22 @@ int ObTxReplayExecutor::execute(storage::ObLS *ls,
                                                 tenant_id))) {
     TRANS_LOG(WARN, "replay_executor.do_replay failed",
         K(replay_executor), K(buf), K(size), K(skip_pos), K(replay_hint), K(ls_id), K(tenant_id));
+  } else {
+    if (log_timestamp <= ls->get_ls_wrs_handler()->get_ls_weak_read_ts()) {
+      SCN min_log_service_scn;
+      // check max decided scn
+      ls->get_max_decided_scn(min_log_service_scn);
+      int tmp_ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected log timestamp and weak read ts", "ret", tmp_ret,
+                                                                    K(replay_executor),
+                                                                    K(buf),
+                                                                    K(size),
+                                                                    K(skip_pos),
+                                                                    K(replay_hint),
+                                                                    K(min_log_service_scn),
+                                                                    K(ls_id),
+                                                                    K(tenant_id));
+    }
   }
   return ret;
 }
