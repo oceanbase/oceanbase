@@ -368,6 +368,9 @@ int ObInsertLogPlan::allocate_insert_as_top(ObLogicalOperator *&top,
     insert_op->set_table_partition_info(table_partition_info);
     insert_op->set_lock_row_flag_expr(lock_row_flag_expr);
     insert_op->set_has_instead_of_trigger(insert_stmt->has_instead_of_trigger());
+    if (OB_NOT_NULL(insert_stmt->get_table_item(0))) {
+      insert_op->set_append_table_id(insert_stmt->get_table_item(0)->ref_id_);
+    }
     if (top->is_match_all() && !is_multi_part_dml && !insert_stmt->has_instead_of_trigger()) {
       insert_op->set_strong_sharding(insert_sharding);
     }

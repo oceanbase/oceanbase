@@ -33,6 +33,9 @@ public:
   int init(const int64_t max_num,
            ObIAllocator *allocator = global_default_allocator,
            const lib::ObLabel &label = ObModIds::OB_FIXED_QUEUE);
+  int init(const int64_t max_num,
+           ObIAllocator *allocator,
+           const lib::ObMemAttr &attr);
   void destroy();
 public:
   int push(T *ptr);
@@ -81,9 +84,15 @@ ObFixedQueue<T>::~ObFixedQueue()
 template <typename T>
 int ObFixedQueue<T>::init(const int64_t max_num, ObIAllocator *allocator, const lib::ObLabel &label)
 {
-  int ret = common::OB_SUCCESS;
   lib::ObMemAttr attr;
   attr.label_ = label;
+  return init(max_num, allocator, attr);
+}
+
+template <typename T>
+int ObFixedQueue<T>::init(const int64_t max_num, ObIAllocator *allocator, const lib::ObMemAttr &attr)
+{
+  int ret = common::OB_SUCCESS;
   if (NULL == allocator || 0 >= max_num) {
     ret = common::OB_INVALID_ARGUMENT;
   } else if (is_inited_) {

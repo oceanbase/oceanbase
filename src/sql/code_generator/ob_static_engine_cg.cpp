@@ -135,6 +135,9 @@
 #include "sql/engine/basic/ob_stat_collector_op.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "sql/engine/cmd/ob_load_data_direct_impl.h"
+#include "observer/table_load/ob_table_load_struct.h"
+#include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "share/stat/ob_stat_define.h"
 
 namespace oceanbase
@@ -1977,6 +1980,11 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
       spec.use_dist_das_ = op.is_multi_part_dml();
       spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
       spec.is_returning_ = op.is_returning();
+      // currently direct-insert does not support non-pdml situation
+      // if (GCONF._ob_enable_direct_load) {
+      //   spec.plan_->set_append_table_id(op.get_append_table_id());
+      //   spec.plan_->set_enable_append(op.get_plan()->get_optimizer_context().get_global_hint().has_append());
+      // }
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {
@@ -4966,6 +4974,10 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
     spec.is_pdml_index_maintain_ = op.is_index_maintenance();
     spec.table_location_uncertain_ = op.is_table_location_uncertain(); // row-movement target table
     spec.is_pdml_update_split_ = op.is_pdml_update_split();
+    if (GCONF._ob_enable_direct_load) {
+      spec.plan_->set_append_table_id(op.get_append_table_id());
+      spec.plan_->set_enable_append(op.get_plan()->get_optimizer_context().get_global_hint().has_append());
+    }
     int64_t partition_expr_idx = OB_INVALID_INDEX;
     if (OB_FAIL(get_pdml_partition_id_column_idx(spec.get_child(0)->output_, partition_expr_idx))) {
       LOG_WARN("failed to get partition id column idx", K(ret));

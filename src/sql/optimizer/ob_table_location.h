@@ -636,6 +636,18 @@ public:
                            ObIArray<ObObjectID> &partition_ids,
                            const ObDataTypeCastParams &dtc_params) const;
 
+  int init_partition_ids_by_rowkey2(ObExecContext &exec_ctx,
+                                    ObSQLSessionInfo &session_info,
+                                    ObSchemaGetterGuard &schema_guard,
+                                    uint64_t table_id);
+
+  int calculate_partition_ids_by_rows2(ObSQLSessionInfo &session_info,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        uint64_t table_id,
+                                        ObIArray<ObNewRow> &part_rows,
+                                        ObIArray<ObTabletID> &tablet_ids,
+                                        ObIArray<ObObjectID> &part_ids) const;//FIXME
+
    int calculate_partition_ids_by_rowkey(ObSQLSessionInfo &session_info,
                                          share::schema::ObSchemaGetterGuard &schema_guard,
                                          uint64_t table_id,

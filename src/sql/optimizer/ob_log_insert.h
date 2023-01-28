@@ -30,6 +30,7 @@ public:
         is_replace_(false),
         insert_up_(false),
         is_insert_select_(false),
+        append_table_id_(0),
         constraint_infos_(NULL)
   {
   }
@@ -81,6 +82,11 @@ public:
   virtual int est_cost() override;
   virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
   int inner_est_cost(double child_card, double &op_cost);
+  inline void set_append_table_id(const uint64_t append_table_id)
+  {
+    append_table_id_ = append_table_id;
+  }
+  inline uint64_t get_append_table_id() const { return append_table_id_; }
   void set_constraint_infos(const common::ObIArray<ObUniqueConstraintInfo> *constraint_infos)
   {
     constraint_infos_ = constraint_infos;
@@ -105,6 +111,7 @@ protected:
   bool insert_up_; // insert on duplicate update statement
   //for SPM Pruning
   bool is_insert_select_;
+  uint64_t append_table_id_;
   const common::ObIArray<ObUniqueConstraintInfo> *constraint_infos_;
 };
 

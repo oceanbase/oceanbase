@@ -109,7 +109,6 @@ enum ObDefaultRoleFlag
   OB_DEFAULT_ROLE_NONE = 4,
   OB_DEFAULT_ROLE_MAX,
 };
-
 struct Bool
 {
   OB_UNIS_VERSION(1);
@@ -1534,6 +1533,299 @@ public:
   common::ObSArray<ObRenameTableItem> rename_table_items_;
 };
 
+struct ObStartRedefTableArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(orig_tenant_id),
+               K_(orig_table_id),
+               K_(target_tenant_id),
+               K_(target_table_id),
+               K_(session_id),
+               K_(parallelism),
+               K_(ddl_type),
+               K_(ddl_stmt_str),
+               K_(trace_id),
+               K_(sql_mode),
+               K_(tz_info_wrap),
+               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+  ObStartRedefTableArg():
+    orig_tenant_id_(common::OB_INVALID_ID),
+    orig_table_id_(common::OB_INVALID_ID),
+    target_tenant_id_(common::OB_INVALID_ID),
+    target_table_id_(common::OB_INVALID_ID),
+    session_id_(common::OB_INVALID_ID),
+    ddl_type_(share::DDL_INVALID),
+    ddl_stmt_str_(),
+    trace_id_(),
+    sql_mode_(0),
+    tz_info_wrap_(),
+    nls_formats_{}
+  {}
+
+  ~ObStartRedefTableArg()
+  {
+    allocator_.clear();
+  }
+
+  void reset()
+  {
+    orig_tenant_id_ = common::OB_INVALID_ID;
+    orig_table_id_ = common::OB_INVALID_ID;
+    target_tenant_id_ = common::OB_INVALID_ID;
+    target_table_id_ = common::OB_INVALID_ID;
+    session_id_ = common::OB_INVALID_ID;
+    ddl_type_ = share::DDL_INVALID;
+    ddl_stmt_str_.reset();
+    sql_mode_ = 0;
+  }
+
+  inline void set_tz_info_map(const common::ObTZInfoMap *tz_info_map)
+  {
+    tz_info_wrap_.set_tz_info_map(tz_info_map);
+    tz_info_.set_tz_info_map(tz_info_map);
+  }
+  int set_nls_formats(const common::ObString *nls_formats);
+  int set_nls_formats(const common::ObString &nls_date_format,
+                      const common::ObString &nls_timestamp_format,
+                      const common::ObString &nls_timestamp_tz_format)
+  {
+    ObString tmp_str[ObNLSFormatEnum::NLS_MAX] = {nls_date_format, nls_timestamp_format,
+                                                  nls_timestamp_tz_format};
+    return set_nls_formats(tmp_str);
+  }
+  bool is_valid() const;
+  int assign(const ObStartRedefTableArg &arg);
+public:
+  uint64_t orig_tenant_id_;
+  uint64_t orig_table_id_;
+  uint64_t target_tenant_id_;
+  uint64_t target_table_id_;
+  uint64_t session_id_;
+  uint64_t parallelism_;
+  share::ObDDLType ddl_type_;
+  common::ObString ddl_stmt_str_;
+  share::ObTaskId trace_id_;
+  ObSQLMode sql_mode_;
+  common::ObArenaAllocator allocator_;
+  common::ObTimeZoneInfo tz_info_;
+  common::ObTimeZoneInfoWrap tz_info_wrap_;
+  common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+};
+
+struct ObStartRedefTableRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(task_id),
+               K_(tenant_id),
+               K_(schema_version));
+  ObStartRedefTableRes() : task_id_(0), tenant_id_(common::OB_INVALID_ID), schema_version_(0){}
+  ~ObStartRedefTableRes() = default;
+  void reset()
+  {
+    task_id_ = 0;
+    tenant_id_ = common::OB_INVALID_ID;
+    schema_version_ = 0;
+  }
+  int assign(const ObStartRedefTableRes &res);
+public:
+  int64_t task_id_;
+  uint64_t tenant_id_;
+  int64_t schema_version_;
+};
+
+struct ObCopyTableDependentsArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(task_id),
+               K_(tenant_id),
+               K_(copy_indexes),
+               K_(copy_triggers),
+               K_(copy_constraints),
+               K_(copy_foreign_keys),
+               K_(ignore_errors));
+  ObCopyTableDependentsArg() : task_id_(0), tenant_id_(common::OB_INVALID_ID), copy_indexes_(true), copy_triggers_(true),
+                               copy_constraints_(true), copy_foreign_keys_(true), ignore_errors_(false) {}
+
+  ~ObCopyTableDependentsArg() = default;
+  bool is_valid() const;
+  void reset()
+  {
+    task_id_ = 0;
+    tenant_id_ = 0;
+    copy_indexes_ = false;
+    copy_triggers_ = false;
+    copy_constraints_ = false;
+    copy_foreign_keys_ = false;
+    ignore_errors_ = false;
+  }
+  int assign(const ObCopyTableDependentsArg &arg);
+public:
+  int64_t task_id_;
+  uint64_t tenant_id_;
+  bool copy_indexes_;
+  bool copy_triggers_;
+  bool copy_constraints_;
+  bool copy_foreign_keys_;
+  bool ignore_errors_;
+};
+
+struct ObFinishRedefTableArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(task_id), K_(tenant_id));
+  ObFinishRedefTableArg() :
+    task_id_(0), tenant_id_(common::OB_INVALID_ID) {}
+  ~ObFinishRedefTableArg() = default;
+  bool is_valid() const;
+  void reset()
+  {
+    task_id_ = 0;
+    tenant_id_ = common::OB_INVALID_ID;
+  }
+  int assign(const ObFinishRedefTableArg &arg);
+public:
+  int64_t task_id_;
+  uint64_t tenant_id_;
+};
+
+
+struct ObAbortRedefTableArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(task_id), K_(tenant_id));
+  ObAbortRedefTableArg() : task_id_(0), tenant_id_(common::OB_INVALID_ID) {}
+  ~ObAbortRedefTableArg() = default;
+  bool is_valid() const;
+  void reset()
+  {
+    task_id_ = 0;
+    tenant_id_ = common::OB_INVALID_ID;
+  }
+  int assign(const ObAbortRedefTableArg &arg);
+public:
+  int64_t task_id_;
+  uint64_t tenant_id_;
+};
+struct ObUpdateDDLTaskActiveTimeArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(task_id), K_(tenant_id));
+  ObUpdateDDLTaskActiveTimeArg() : task_id_(0), tenant_id_(common::OB_INVALID_ID) {}
+  ~ObUpdateDDLTaskActiveTimeArg() = default;
+  bool is_valid() const;
+  void reset()
+  {
+    task_id_ = 0;
+    tenant_id_ = common::OB_INVALID_ID;
+  }
+  int assign(const ObUpdateDDLTaskActiveTimeArg &arg);
+public:
+  int64_t task_id_;
+  uint64_t tenant_id_;
+};
+
+struct ObCreateHiddenTableArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(tenant_id),
+               K_(table_id),
+               K_(dest_tenant_id),
+               K_(session_id),
+               K_(parallelism),
+               K_(ddl_type),
+               K_(ddl_stmt_str),
+               K_(sql_mode),
+               K_(tz_info_wrap),
+               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+  ObCreateHiddenTableArg() :
+    tenant_id_(common::OB_INVALID_ID),
+    table_id_(common::OB_INVALID_ID),
+    dest_tenant_id_(common::OB_INVALID_ID),
+    session_id_(common::OB_INVALID_ID),
+    ddl_type_(share::DDL_INVALID),
+    ddl_stmt_str_(),
+    sql_mode_(0),
+    tz_info_wrap_(),
+    nls_formats_{}
+    {}
+  ~ObCreateHiddenTableArg()
+  {
+    allocator_.clear();
+  }
+  bool is_valid() const;
+  void reset()
+  {
+    tenant_id_ = common::OB_INVALID_ID;
+    table_id_ = common::OB_INVALID_ID;
+    dest_tenant_id_ = common::OB_INVALID_ID;
+    session_id_ = common::OB_INVALID_ID;
+    ddl_type_ = share::DDL_INVALID;
+    ddl_stmt_str_.reset();
+    sql_mode_ = 0;
+  }
+  int assign(const ObCreateHiddenTableArg &arg);
+public:
+  uint64_t tenant_id_;
+  int64_t table_id_;
+  uint64_t dest_tenant_id_;
+  uint64_t session_id_;
+  uint64_t parallelism_;
+  share::ObDDLType ddl_type_;
+  common::ObString ddl_stmt_str_;
+  ObSQLMode sql_mode_;
+  common::ObArenaAllocator allocator_;
+  common::ObTimeZoneInfo tz_info_;
+  common::ObTimeZoneInfoWrap tz_info_wrap_;
+  common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+};
+
+struct ObCreateHiddenTableRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(tenant_id),
+               K_(table_id),
+               K_(dest_tenant_id),
+               K_(dest_table_id),
+               K_(trace_id),
+               K_(task_id),
+               K_(schema_version));
+  ObCreateHiddenTableRes() :
+    tenant_id_(common::OB_INVALID_ID),
+    table_id_(common::OB_INVALID_ID),
+    dest_tenant_id_(common::OB_INVALID_ID),
+    dest_table_id_(common::OB_INVALID_ID),
+    task_id_(0),
+    schema_version_(0) {}
+  ~ObCreateHiddenTableRes() = default;
+  void reset()
+  {
+    tenant_id_ = common::OB_INVALID_ID;
+    table_id_ = common::OB_INVALID_ID;
+    dest_tenant_id_ = common::OB_INVALID_ID;
+    dest_table_id_ = common::OB_INVALID_ID;
+    task_id_ = 0;
+    schema_version_ = 0;
+  }
+  int assign(const ObCreateHiddenTableRes &res);
+public:
+  uint64_t tenant_id_;
+  int64_t table_id_;
+  uint64_t dest_tenant_id_;
+  int64_t dest_table_id_;
+  int64_t task_id_;
+  int64_t schema_version_;
+  share::ObTaskId trace_id_;
+};
+
+
 struct ObAlterTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -1607,7 +1899,8 @@ public:
       alter_constraint_type_(CONSTRAINT_NO_OPERATION),
       index_arg_list_(),
       foreign_key_arg_list_(),
-      alter_table_schema_(),
+      allocator_(),
+      alter_table_schema_(&allocator_),
       tz_info_wrap_(),
       nls_formats_{},
       sequence_ddl_arg_(),
@@ -1638,7 +1931,6 @@ public:
         index_arg->~ObIndexArg();
       }
     }
-    allocator_.clear();
   }
   bool is_valid() const;
   bool has_rename_action() const
@@ -1701,8 +1993,8 @@ public:
   AlterConstraintType alter_constraint_type_;
   common::ObSArray<ObIndexArg *> index_arg_list_;
   common::ObSArray<ObCreateForeignKeyArg> foreign_key_arg_list_;
-  share::schema::AlterTableSchema alter_table_schema_;
   common::ObArenaAllocator allocator_;
+  share::schema::AlterTableSchema alter_table_schema_;
   common::ObTimeZoneInfo tz_info_;//unused now
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];

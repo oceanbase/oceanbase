@@ -1990,6 +1990,7 @@ typedef enum ObItemType
   T_RESTORE_TENANT_2,
   T_GEN_ROWS,
   T_LOAD_BATCH_SIZE,
+  T_DIRECT, // direct load data
   T_REMOTE_OSS,
   T_PHYSICAL_RESTORE_TENANT,
   T_REVOKE_SYSAUTH,

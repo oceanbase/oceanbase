@@ -64,8 +64,8 @@ public:
       obrpc::ObCommonRpcProxy *common_rpc_proxy,
       int64_t &affected_rows);
   static int wait_build_index_finish(const uint64_t tenant_id, const int64_t task_id, bool &is_finish);
-private:
   static int handle_session_exception(ObSQLSessionInfo &session);
+private:
   static int cancel_ddl_task(const int64_t tenant_id, obrpc::ObCommonRpcProxy *common_rpc_proxy);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLExecutorUtil);

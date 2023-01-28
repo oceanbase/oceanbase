@@ -15,11 +15,13 @@
 #include "storage/access/ob_dml_param.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/dml/ob_dml_service.h"
+#include "sql/engine/cmd/ob_table_direct_insert_trans.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::storage;
 using namespace oceanbase::common::serialization;
+using namespace oceanbase::observer;
 
 OB_SERIALIZE_MEMBER((ObPxMultiPartInsertOpInput, ObPxMultiPartModifyOpInput));
 
@@ -45,6 +47,18 @@ int ObPxMultiPartInsertOp::inner_open()
   } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), ins_rtdef_, this, this,
                                        nullptr, MY_SPEC.ins_ctdef_.is_heap_table_))) {
     LOG_WARN("failed to init data driver", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
+    if (plan->get_enable_append() && (0 != plan->get_append_table_id())) {
+      int64_t task_id = ctx_.get_px_task_id() + 1;
+      if (OB_FAIL(ObTableDirectInsertTrans::start_trans(plan->get_append_table_id(), task_id))) {
+        LOG_WARN("failed to start table direct insert trans", KR(ret),
+            K(plan->get_append_table_id()), K(task_id));
+      } else {
+        ins_rtdef_.das_rtdef_.direct_insert_task_id_ = task_id;
+      }
+    }
   }
   LOG_TRACE("pdml static insert op", K(ret), K_(MY_SPEC.row_desc), K_(MY_SPEC.ins_ctdef));
   return ret;
@@ -89,6 +103,14 @@ int ObPxMultiPartInsertOp::inner_get_next_row()
 int ObPxMultiPartInsertOp::inner_close()
 {
   int ret = OB_SUCCESS;
+  const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
+  if (plan->get_enable_append() && (0 != plan->get_append_table_id())) {
+    int64_t task_id = ctx_.get_px_task_id() + 1;
+    if (OB_FAIL(ObTableDirectInsertTrans::finish_trans(plan->get_append_table_id(), task_id))) {
+      LOG_WARN("failed to finish table direct insert trans", KR(ret),
+          K(plan->get_append_table_id()), K(task_id));
+    }
+  }
   if (OB_FAIL(ObTableModifyOp::inner_close())) {
     LOG_WARN("failed to inner close table modify", K(ret));
   } else {

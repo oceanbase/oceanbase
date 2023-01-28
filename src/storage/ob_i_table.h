@@ -232,6 +232,7 @@ public:
   virtual OB_INLINE int64_t get_timestamp() const { return 0; }
   virtual bool is_ddl_sstable() const { return is_ddl_sstable(key_.table_type_); }
   virtual bool is_remote_logical_minor_sstable() const { return is_remote_logical_minor_sstable(key_.table_type_); }
+  virtual bool is_empty() const = 0;
   DECLARE_VIRTUAL_TO_STRING;
 
   static bool is_sstable(const TableType table_type)

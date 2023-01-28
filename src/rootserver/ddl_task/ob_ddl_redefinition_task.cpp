@@ -1308,58 +1308,6 @@ int ObDDLRedefinitionTask::notify_update_autoinc_finish(const uint64_t autoinc_v
   return ret;
 }
 
-int ObDDLRedefinitionTask::serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
-  } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("serialize table arg failed", K(ret));
-  } else {
-    LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, cluster_version_);
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ddl_tracing_.serialize(buf, buf_len, pos))) {
-        LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLRedefinitionTask::deserlize_params_from_message(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  obrpc::ObAlterTableArg tmp_arg;
-  if (OB_UNLIKELY(nullptr == buf || data_len <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
-  } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
-    LOG_WARN("serialize table failed", K(ret));
-  } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
-    LOG_WARN("deep copy table arg failed", K(ret));
-  } else {
-    LST_DO_CODE(OB_UNIS_DECODE, parallelism_, cluster_version_);
-    if (OB_SUCC(ret) && pos < data_len) {
-      if (OB_FAIL(ddl_tracing_.deserialize(buf, data_len, pos))) {
-        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int64_t ObDDLRedefinitionTask::get_serialize_param_size() const
-{
-  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_)
-         + serialization::encoded_length_i64(parallelism_) + serialization::encoded_length_i64(cluster_version_)
-         + ddl_tracing_.get_serialize_size();
-}
-
 int ObDDLRedefinitionTask::check_health()
 {
   int ret = OB_SUCCESS;

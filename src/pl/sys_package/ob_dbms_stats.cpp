@@ -5864,7 +5864,7 @@ int ObDbmsStats::set_param_global_part_id(ObExecContext &ctx,
     int64_t target_table_id = is_data_table ? data_table_id : param.table_id_;
     if (OB_FAIL(ctx.get_das_ctx().get_das_tablet_mapper(target_table_id, tablet_mapper))) {
       LOG_WARN("fail to get das tablet mapper", K(ret));
-    } else if (tablet_mapper.get_non_partition_tablet_id(tmp_tablet_ids, tmp_part_ids)) {
+    } else if (OB_FAIL(tablet_mapper.get_non_partition_tablet_id(tmp_tablet_ids, tmp_part_ids))) {
       LOG_WARN("failed to get non partition tablet id", K(ret));
     } else if (tmp_part_ids.count() == 1 && tmp_tablet_ids.count() == 1) {
       if (is_data_table) {

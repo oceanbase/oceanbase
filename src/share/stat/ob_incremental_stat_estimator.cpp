@@ -19,6 +19,9 @@
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_stat_item.h"
 #include "share/stat/ob_topk_hist_estimator.h"
+#include "pl/sys_package/ob_dbms_stats.h"
+#include "share/stat/ob_dbms_stats_history_manager.h"
+
 namespace oceanbase {
 using namespace pl;
 namespace common {
@@ -49,6 +52,111 @@ int ObIncrementalStatEstimator::try_drive_global_stat(ObExecContext &ctx,
   } else if (OB_FAIL(drive_global_stat_from_part_stats(ctx, param,
                                                        approx_part_opt_stats, opt_stats))) {
     LOG_WARN("failed to drive global stat from part stats", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
+int ObIncrementalStatEstimator::drive_global_stat_by_direct_load(ObExecContext &ctx,
+                                                                 ObIArray<ObOptTableStat*> &part_tab_stats,
+                                                                 ObIArray<ObOptColumnStat*> &part_column_stats)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
+  ObSEArray<ObOptStat, 4> part_opt_stats;
+  ObSEArray<ObOptStat, 4> all_derive_opt_stats;
+  ObArenaAllocator alloc("ObIncrStats");
+  ObTableStatParam param;
+  if (part_tab_stats.empty()) {
+    //do nothing
+  } else if (OB_ISNULL(part_tab_stats.at(0)) || OB_UNLIKELY(!part_tab_stats.at(0)->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), KPC(part_tab_stats.at(0)));
+  } else if (OB_FAIL(gen_opt_stat_param_by_direct_load(ctx, alloc,
+                                                       part_tab_stats.at(0)->get_table_id(),
+                                                       param))) {
+    LOG_WARN("failed to gen opt stat param by direct load", K(ret));
+  } else if (param.part_level_ != share::schema::PARTITION_LEVEL_ONE &&
+             param.part_level_ != share::schema::PARTITION_LEVEL_TWO) {
+    /*do nothing*/
+  } else if (OB_FAIL(generate_all_opt_stat(part_tab_stats, part_column_stats,
+                                           param.column_params_.count(),
+                                           part_opt_stats))) {
+    LOG_WARN("failed to generate all opt stat", K(ret));
+  } else if (OB_FAIL(param.all_part_infos_.assign(param.part_infos_))||
+             OB_FAIL(param.all_subpart_infos_.assign(param.subpart_infos_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    bool nee_derive_part = param.part_level_ == share::schema::PARTITION_LEVEL_TWO;
+    //derive part stat first
+    if (nee_derive_part) {
+      ObSEArray<ObOptStat, 1> empty_opt_stats;
+      if (OB_FAIL(do_derive_part_stats_from_subpart_stats(ctx, alloc, param, empty_opt_stats,
+                                                          part_opt_stats, all_derive_opt_stats))) {
+        LOG_WARN("failed to derive part stat by direct load", K(ret));
+      }
+    }
+    //derive global stat
+    if (OB_SUCC(ret)) {
+      ObOptStat global_opt_stat;
+      bool need_drive_hist = false;
+      bool need_gather_hybrid_hist = false;
+      if (OB_FAIL(do_derive_global_stat(ctx, alloc, param,
+                                        nee_derive_part ? all_derive_opt_stats : part_opt_stats,
+                                        need_drive_hist,
+                                        TABLE_LEVEL, param.global_part_id_, need_gather_hybrid_hist,
+                                        global_opt_stat))) {
+        LOG_WARN("Failed to derive global stat from part stat", K(ret));
+      } else if (OB_FAIL(all_derive_opt_stats.push_back(global_opt_stat))) {
+        LOG_WARN("faield to push back", K(ret));
+      }
+    }
+  }
+  //write all stat
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObOptTableStat *, 4> all_tstats;
+    ObSEArray<ObOptColumnStat *, 4> all_cstats;
+    ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
+    ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
+    if (OB_FAIL(append(all_tstats, part_tab_stats))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(append(all_cstats, part_column_stats))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::calssify_opt_stat(all_derive_opt_stats,
+                                                           all_tstats,
+                                                           all_cstats))) {
+      LOG_WARN("failed to calssify opt stat", K(ret));
+    } else if (OB_FAIL(write_all_opt_stats_by_dircet_load(ctx, param, all_tstats, all_cstats))) {
+      LOG_WARN("failed to write all opt stats by dircet load", K(ret));
+    } else {/*do nothing*/}
+  }
+  LOG_TRACE("succeed to drive global stat by direct load", K(param), K(part_tab_stats),
+                                                           K(part_column_stats));
+  return ret;
+}
+
+int ObIncrementalStatEstimator::write_all_opt_stats_by_dircet_load(
+    ObExecContext &ctx,
+    const ObTableStatParam &param,
+    ObIArray<ObOptTableStat *> &all_tstats,
+    ObIArray<ObOptColumnStat *> &all_cstats)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
+  ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
+  //before write, we need record history stats.
+  if (OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param,
+                                                                  history_tab_handles,
+                                                                  history_col_handles))) {
+    LOG_WARN("failed to get history stat handles", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, all_tstats, all_cstats))) {
+    LOG_WARN("failed to split batch write", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::batch_write_history_stats(ctx,
+                                                                  history_tab_handles,
+                                                                  history_col_handles))) {
+    LOG_WARN("failed to batch write history stats", K(ret));
+  } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
+    LOG_WARN("failed to update last modified count", K(ret));
   } else {/*do nothing*/}
   return ret;
 }
@@ -107,15 +215,20 @@ int ObIncrementalStatEstimator::drive_global_stat_from_part_stats(
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(get_no_regather_partition_stats(param, no_regather_part_ids,
-                                                    table_stats, col_handles, tmp_opt_stats))) {
+        ObSEArray<uint64_t, 4> column_ids;
+        if (OB_FAIL(get_column_ids(param.column_params_, column_ids))) {
+          LOG_WARN("failed to get column ids", K(ret));
+        } else if (OB_FAIL(get_no_regather_partition_stats(param.tenant_id_, param.table_id_, column_ids,
+                                                           no_regather_part_ids, table_stats,
+                                                           col_handles, tmp_opt_stats))) {
           LOG_WARN("failed to get locked partition stats", K(ret));
         } else {/*do nothing*/}
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(do_derive_global_stat(ctx, param, tmp_opt_stats, need_drive_hist, TABLE_LEVEL, -1,
-                                        need_gather_hybrid_hist, global_opt_stat))) {
+      if (OB_FAIL(do_derive_global_stat(ctx, ctx.get_allocator(), param, tmp_opt_stats, need_drive_hist,
+                                        TABLE_LEVEL,param.global_part_id_, need_gather_hybrid_hist,
+                                        global_opt_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
       } else if (OB_FAIL(opt_stats.push_back(global_opt_stat))) {
         LOG_WARN("failed to push back global stat", K(ret));
@@ -145,7 +258,7 @@ int ObIncrementalStatEstimator::drive_part_stats_from_subpart_stats(
                                                    no_regather_col_handles,
                                                    no_regather_subpart_opt_stats))) {
     LOG_WARN("failed to get locked partition stats", K(ret));
-  } else if (OB_FAIL(do_derive_part_stats_from_subpart_stats(ctx, param,
+  } else if (OB_FAIL(do_derive_part_stats_from_subpart_stats(ctx, ctx.get_allocator(), param,
                                                              no_regather_subpart_opt_stats,
                                                              gather_opt_stats,
                                                              approx_part_opt_stats))) {
@@ -160,6 +273,7 @@ int ObIncrementalStatEstimator::drive_part_stats_from_subpart_stats(
 
 int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
     ObExecContext &ctx,
+    ObIAllocator &alloc,
     const ObTableStatParam &param,
     const ObIArray<ObOptStat> &no_regather_subpart_opt_stats,
     const ObIArray<ObOptStat> &gather_opt_stats,
@@ -208,8 +322,8 @@ int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(subpart_opt_stats.count()),
                                          K(param.approx_part_infos_.at(i)));
-      } else if (OB_FAIL(do_derive_global_stat(ctx, param, subpart_opt_stats, true, PARTITION_LEVEL,
-                                               param.approx_part_infos_.at(i).part_id_,
+      } else if (OB_FAIL(do_derive_global_stat(ctx, alloc, param, subpart_opt_stats, true,
+                                               PARTITION_LEVEL, param.approx_part_infos_.at(i).part_id_,
                                                need_gather_hybrid_hist, opt_part_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
       } else if (OB_FAIL(approx_part_opt_stats.push_back(opt_part_stat))) {
@@ -256,6 +370,38 @@ int ObIncrementalStatEstimator::generate_all_opt_stat(ObIArray<ObOptTableStat> &
       } else if (opt_stat.table_stat_->get_partition_id() == col_handles.at(j).stat_->get_partition_id()) {
         if (OB_FAIL(opt_stat.column_stats_.push_back(
                                     const_cast<ObOptColumnStat*>(col_handles.at(j).stat_)))) {
+          LOG_WARN("failed to push back col stat", K(ret));
+        } else {/*do nothing*/}
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(opt_stat.column_stats_.count() != col_cnt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(opt_stat.column_stats_), K(col_cnt));
+      } else if (OB_FAIL(all_opt_stats.push_back(opt_stat))) {
+        LOG_WARN("failed to push back opt stat", K(ret));
+      } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObIncrementalStatEstimator::generate_all_opt_stat(ObIArray<ObOptTableStat*> &table_stats,
+                                                      ObIArray<ObOptColumnStat*> &column_stats,
+                                                      int64_t col_cnt,
+                                                      ObIArray<ObOptStat> &all_opt_stats)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_stats.count(); ++i) {
+    ObOptStat opt_stat;
+    opt_stat.table_stat_ = table_stats.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && opt_stat.column_stats_.count() < col_cnt && j < column_stats.count(); ++j) {
+      if (OB_ISNULL(column_stats.at(j)) || OB_ISNULL(opt_stat.table_stat_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(column_stats.at(j)));
+      } else if (opt_stat.table_stat_->get_partition_id() == column_stats.at(j)->get_partition_id()) {
+        if (OB_FAIL(opt_stat.column_stats_.push_back(
+                                    const_cast<ObOptColumnStat*>(column_stats.at(j))))) {
           LOG_WARN("failed to push back col stat", K(ret));
         } else {/*do nothing*/}
       }
@@ -346,6 +492,7 @@ int ObIncrementalStatEstimator::get_part_ids_and_column_ids_info(ObOptStat &src_
 }
 
 int ObIncrementalStatEstimator::do_derive_global_stat(ObExecContext &ctx,
+                                                      ObIAllocator &alloc,
                                                       const ObTableStatParam &param,
                                                       ObIArray<ObOptStat> &part_opt_stats,
                                                       bool need_drive_hist,
@@ -355,10 +502,10 @@ int ObIncrementalStatEstimator::do_derive_global_stat(ObExecContext &ctx,
                                                       ObOptStat &global_opt_stat)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(derive_global_tbl_stat(ctx, param,  approx_level, partition_id,
+  if (OB_FAIL(derive_global_tbl_stat(ctx, alloc, param,  approx_level, partition_id,
                                      part_opt_stats, global_opt_stat))) {
     LOG_WARN("failed to derive global tbl stat from part tbl stat", K(ret));
-  } else if (OB_FAIL(derive_global_col_stat(ctx, param, part_opt_stats, need_drive_hist,
+  } else if (OB_FAIL(derive_global_col_stat(ctx, alloc, param, part_opt_stats, need_drive_hist,
                                             approx_level, partition_id, need_gather_hybrid_hist,
                                             global_opt_stat))) {
     LOG_WARN("failed to derive global col stat from part col stat", K(ret));
@@ -369,6 +516,7 @@ int ObIncrementalStatEstimator::do_derive_global_stat(ObExecContext &ctx,
 }
 
 int ObIncrementalStatEstimator::derive_global_tbl_stat(ObExecContext &ctx,
+                                                       ObIAllocator &alloc,
                                                        const ObTableStatParam &param,
                                                        const StatLevel &approx_level,
                                                        const int64_t partition_id,
@@ -386,7 +534,7 @@ int ObIncrementalStatEstimator::derive_global_tbl_stat(ObExecContext &ctx,
   } else {
     ObOptTableStat *&table_stat = global_opt_stat.table_stat_;
     void *ptr = NULL;
-    if (OB_ISNULL(ptr = ctx.get_allocator().alloc(sizeof(ObOptTableStat)))) {
+    if (OB_ISNULL(ptr = alloc.alloc(sizeof(ObOptTableStat)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("memory is not enough", K(ret), K(ptr));
     } else {
@@ -424,6 +572,7 @@ int ObIncrementalStatEstimator::derive_global_tbl_stat(ObExecContext &ctx,
 }
 
 int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
+                                                       ObIAllocator &alloc,
                                                        const ObTableStatParam &param,
                                                        ObIArray<ObOptStat> &part_opt_stats,
                                                        bool need_drive_hist,
@@ -447,11 +596,11 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
       ObOptColumnStat *col_stat = NULL;
       void *ptr = NULL;
-      if (OB_ISNULL(ptr = ctx.get_allocator().alloc(sizeof(ObOptColumnStat)))) {
+      if (OB_ISNULL(ptr = alloc.alloc(sizeof(ObOptColumnStat)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("memory is not enough", K(ret), K(ptr));
       } else {
-        col_stat = new (ptr) ObOptColumnStat(ctx.get_allocator());
+        col_stat = new (ptr) ObOptColumnStat(alloc);
         ObGlobalMinEval min_eval;
         ObGlobalMaxEval max_eval;
         ObGlobalNullEval null_eval;
@@ -512,15 +661,15 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           col_stat->set_collation_type(param.column_params_.at(i).cs_type_);
           ObObj new_min_obj, new_max_obj;
           //maybe the stat is from KVCACHE, need deep copy min/max obj.
-          if (OB_FAIL(ob_write_obj(ctx.get_allocator(), min_eval.get(), new_min_obj)) ||
+          if (OB_FAIL(ob_write_obj(alloc, min_eval.get(), new_min_obj)) ||
               FALSE_IT(col_stat->set_min_value(new_min_obj))) {
             LOG_WARN("failed to set min value", K(ret), K(min_eval.get()), K(new_min_obj));
-          } else if (OB_FAIL(ob_write_obj(ctx.get_allocator(), max_eval.get(), new_max_obj)) ||
+          } else if (OB_FAIL(ob_write_obj(alloc, max_eval.get(), new_max_obj)) ||
                      FALSE_IT(col_stat->set_max_value(new_max_obj))) {
             LOG_WARN("failed to set max value", K(ret), K(max_eval.get()), K(new_max_obj));
           } else if (need_drive_hist && !all_part_histograms.empty() &&
                      OB_FAIL(derive_global_histogram(all_part_histograms,
-                                                     ctx.get_allocator(),
+                                                     alloc,
                                                      max_bucket_num,
                                                      global_opt_stat.table_stat_->get_row_count(),
                                                      col_stat->get_num_not_null(),
@@ -622,25 +771,24 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
 }
 
 int ObIncrementalStatEstimator::get_no_regather_partition_stats(
-    const ObTableStatParam &param,
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const ObIArray<uint64_t> &column_ids,
     const ObIArray<int64_t> &no_regather_partition_ids,
     ObIArray<ObOptTableStat> &no_regather_table_stats,
     ObIArray<ObOptColumnStatHandle> &no_regather_col_handles,
     ObIArray<ObOptStat> &part_opt_stats)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<uint64_t, 4> column_ids;
   if (no_regather_partition_ids.empty()) {
     /*do nothing*/
-  } else if (OB_FAIL(get_column_ids(param, column_ids))) {
-    LOG_WARN("failed to get column ids", K(ret));
-  } else if (OB_FAIL(ObOptStatManager::get_instance().get_table_stat(param.tenant_id_,
-                                                                     param.table_id_,
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_table_stat(tenant_id,
+                                                                     table_id,
                                                                      no_regather_partition_ids,
                                                                      no_regather_table_stats))) {
     LOG_WARN("failed to get table stat", K(ret));
-  } else if (OB_FAIL(ObOptStatManager::get_instance().get_column_stat(param.tenant_id_,
-                                                                      param.table_id_,
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_column_stat(tenant_id,
+                                                                      table_id,
                                                                       no_regather_partition_ids,
                                                                       column_ids,
                                                                       no_regather_col_handles))) {
@@ -656,12 +804,12 @@ int ObIncrementalStatEstimator::get_no_regather_partition_stats(
   return ret;
 }
 
-int ObIncrementalStatEstimator::get_column_ids(const ObTableStatParam &param,
+int ObIncrementalStatEstimator::get_column_ids(const ObIArray<ObColumnStatParam> &column_params,
                                                ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
-    if (OB_FAIL(column_ids.push_back(param.column_params_.at(i).column_id_))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
+    if (OB_FAIL(column_ids.push_back(column_params.at(i).column_id_))) {
       LOG_WARN("failed to push back", K(ret));
     } else {/*do nothing*/}
   }
@@ -765,13 +913,67 @@ int ObIncrementalStatEstimator::get_no_regather_subpart_stats(
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(get_no_regather_partition_stats(param,
-                                                derive_need_no_regather_subpart_ids,
-                                                no_regather_table_stats,
-                                                no_regather_col_handles,
-                                                subpart_opt_stats))) {
+    ObSEArray<uint64_t, 4> column_ids;
+    if (OB_FAIL(get_column_ids(param.column_params_, column_ids))) {
+      LOG_WARN("failed to get column ids", K(ret));
+    } else if (OB_FAIL(get_no_regather_partition_stats(param.tenant_id_,
+                                                       param.table_id_,
+                                                       column_ids,
+                                                       derive_need_no_regather_subpart_ids,
+                                                       no_regather_table_stats,
+                                                       no_regather_col_handles,
+                                                       subpart_opt_stats))) {
       LOG_WARN("failed to get no regather partition stats", K(ret));
     } else {/*do nothing*/}
+  }
+  return ret;
+}
+
+int ObIncrementalStatEstimator::gen_opt_stat_param_by_direct_load(ObExecContext &ctx,
+                                                                  ObIAllocator &alloc,
+                                                                  const uint64_t table_id,
+                                                                  ObTableStatParam &param)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
+  param.table_id_ = table_id;
+  if (OB_ISNULL(schema_guard = ctx.get_virtual_table_ctx().schema_guard_) ||
+       OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(schema_guard), K(ctx.get_my_session()));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ctx.get_my_session()->get_effective_tenant_id(),
+                                                    table_id,
+                                                    table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::get_part_infos(*table_schema,
+                                                     param.part_infos_,
+                                                     param.subpart_infos_,
+                                                     param.part_ids_,
+                                                     param.subpart_ids_))) {
+    LOG_WARN("failed to get partition infos", K(ret));
+  } else if (table_schema->get_part_level() == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO
+            && OB_FAIL(param.approx_part_infos_.assign(param.part_infos_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::init_column_stat_params(alloc,
+                                                              *schema_guard,
+                                                              *table_schema,
+                                                              param.column_params_))) {
+    LOG_WARN("failed to init column stat params", K(ret));
+  } else {
+    param.tenant_id_ = ctx.get_my_session()->get_effective_tenant_id();
+    param.part_level_ = table_schema->get_part_level();
+    param.total_part_cnt_ = table_schema->get_all_part_num();
+    param.need_global_ = true;
+    param.need_part_ = true;
+    param.need_subpart_ = true;
+    if (OB_FAIL(pl::ObDbmsStats::set_param_global_part_id(ctx, param))) {
+      LOG_WARN("failed to set param globa part id", K(ret));
+    }
+    LOG_TRACE("succeed to gen opt stat param by direct load", K(ret));
   }
   return ret;
 }

@@ -180,6 +180,8 @@ USE_HASH_DISTINCT NO_USE_HASH_DISTINCT
 DISTINCT_PUSHDOWN NO_DISTINCT_PUSHDOWN
 USE_HASH_SET NO_USE_HASH_SET
 USE_DISTRIBUTED_DML NO_USE_DISTRIBUTED_DML
+// direct load data hint
+DIRECT
 // hint related to optimizer statistics
 APPEND NO_GATHER_OPTIMIZER_STATISTICS GATHER_OPTIMIZER_STATISTICS
 // other
@@ -8411,6 +8413,14 @@ READ_CONSISTENCY '(' consistency_level ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_BATCH_SIZE, 1, $3);
 }
+| DIRECT '(' BOOL_VALUE ',' INTNUM ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DIRECT, 2, $3, $5);
+}
+| APPEND
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_APPEND);
+}
 | ENABLE_PARALLEL_DML
 {
   malloc_terminal_node($$, result->malloc_pool_, T_ENABLE_PARALLEL_DML);
@@ -8426,10 +8436,6 @@ READ_CONSISTENCY '(' consistency_level ')'
 | NO_COST_BASED_QUERY_TRANSFORMATION
 {
   malloc_terminal_node($$, result->malloc_pool_, T_NO_COST_BASED_QUERY_TRANSFORMATION);
-}
-| APPEND
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_APPEND);
 }
 | NO_GATHER_OPTIMIZER_STATISTICS
 {

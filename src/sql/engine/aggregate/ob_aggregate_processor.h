@@ -672,6 +672,8 @@ public:
   {
     io_event_observer_ = observer;
   }
+  // used in optimizer statistic gathering.
+  static int llc_add_value(const uint64_t value, const common::ObString &llc_bitmap_buf);
   inline void set_op_eval_infos(ObIArray<ObEvalInfo *> *eval_infos)
   {
     op_eval_infos_ = eval_infos;
@@ -896,7 +898,6 @@ private:
   static uint64_t llc_calc_hash_value(const ObChunkDatumStore::StoredRow &stored_row,
                                       const ObIArray<ObExpr *> &param_exprs,
                                       bool &has_null_cell);
-  static int llc_add_value(const uint64_t value, const common::ObString &llc_bitmap_buf);
   static int llc_add(ObDatum &result, const ObDatum &new_value);
   void set_expr_datum_null(ObExpr *expr);
 

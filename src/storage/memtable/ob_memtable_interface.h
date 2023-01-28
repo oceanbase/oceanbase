@@ -261,7 +261,7 @@ public:
     int ret = OB_NOT_SUPPORTED;
     return ret;
   }
-  virtual bool is_empty()
+  virtual bool is_empty() const override
   {
     return false;
   }

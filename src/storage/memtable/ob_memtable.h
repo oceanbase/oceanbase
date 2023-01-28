@@ -389,7 +389,7 @@ public:
   {
     return key_.scn_range_.start_scn_;
   }
-  bool is_empty()
+  bool is_empty() const override
   {
     return get_end_scn() == get_start_scn() &&
       share::ObScnRange::MIN_SCN == get_max_end_scn();

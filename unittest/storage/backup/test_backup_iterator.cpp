@@ -73,7 +73,7 @@ protected:
 
 
 TestBackupIndexIterator::TestBackupIndexIterator()
-    : TestDataFilePrepare(&getter, "TestBackupIndexIterator"),
+    : TestDataFilePrepare(&getter, "TestBackupIndexIterator", OB_DEFAULT_MACRO_BLOCK_SIZE, 500),
       tenant_base_(500),
       job_desc_(),
       backup_dest_(),

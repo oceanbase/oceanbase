@@ -20,6 +20,7 @@
 #include "share/schema/ob_table_dml_param.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "sql/engine/ob_operator.h"
+#include "sql/resolver/dml/ob_hint.h"
 namespace oceanbase
 {
 namespace sql
@@ -153,18 +154,22 @@ public:
   ObDASInsRtDef()
     : ObDASDMLBaseRtDef(DAS_OP_TABLE_INSERT),
       need_fetch_conflict_(false),
-      is_duplicated_(false)
+      is_duplicated_(false),
+      direct_insert_task_id_(0)
   { }
 
   INHERIT_TO_STRING_KV("ObDASBaseRtDef", ObDASDMLBaseRtDef,
                        K_(need_fetch_conflict),
-                       K_(is_duplicated));
+                       K_(is_duplicated),
+                       K_(direct_insert_task_id));
 
   // used to check whether need to fetch_duplicate_key, will set in table_replace_op
   bool need_fetch_conflict_;
   // used to check whether duplicate_key error occurred, will be set in das_insert_op
   // not need to serialize
   bool is_duplicated_;
+  // used in direct-insert mode
+  int64_t direct_insert_task_id_;
 };
 typedef DASDMLRtDefArray DASInsRtDefArray;
 

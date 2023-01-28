@@ -269,6 +269,7 @@ _minor_compaction_interval
 _mvcc_gc_using_min_txn_snapshot
 _ob_ddl_timeout
 _ob_elr_fast_freeze_threshold
+_ob_enable_direct_load
 _ob_enable_fast_freeze
 _ob_enable_fast_parser
 _ob_enable_prepared_statement

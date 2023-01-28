@@ -1151,6 +1151,9 @@ int ObDelUpdLogPlan::allocate_pdml_insert_as_top(ObLogicalOperator *&top,
       insert_op->set_replace(insert_stmt->is_replace());
       insert_op->set_ignore(insert_stmt->is_ignore());
       insert_op->set_is_insert_select(insert_stmt->value_from_select());
+      if (OB_NOT_NULL(insert_stmt->get_table_item(0))) {
+        insert_op->set_append_table_id(insert_stmt->get_table_item(0)->ref_id_);
+      }
       if (OB_FAIL(insert_stmt->get_view_check_exprs(insert_op->get_view_check_exprs()))) {
         LOG_WARN("failed to get view check exprs", K(ret));
       }
@@ -1493,9 +1496,15 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
   uint64_t index_tid_array[OB_MAX_INDEX_PER_TABLE];
   ObArray<uint64_t> base_column_ids;
   const uint64_t tenant_id = optimizer_context_.get_session_info()->get_effective_tenant_id();
+  bool is_direct_insert = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_guard = optimizer_context_.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard is nullptr", K(ret), K(stmt), K(schema_guard));
+  } else if (OB_FAIL(is_direct_insert_into_select(is_direct_insert))) {
+    LOG_WARN("failed to check is direct insert into select", KR(ret));
+  } else if (is_direct_insert) {
+    // no need building index
+    index_tid_array_size = 0;
   } else if (OB_FAIL(schema_guard->get_can_write_index_array(tenant_id,
                                                              primary_dml_info.ref_table_id_,
                                                              index_tid_array,
@@ -1611,7 +1620,13 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
   if (OB_SUCC(ret) && !has_tg) {
     uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
     int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
-    if (OB_FAIL(schema_guard->get_can_write_index_array(session_info->get_effective_tenant_id(),
+    bool is_direct_insert = false;
+    if (OB_FAIL(is_direct_insert_into_select(is_direct_insert))) {
+      LOG_WARN("failed to check is direct insert into select", KR(ret));
+    } else if (is_direct_insert) {
+      // no need building index
+      index_cnt = 0;
+    } else if (OB_FAIL(schema_guard->get_can_write_index_array(session_info->get_effective_tenant_id(),
                                                         table_info.ref_table_id_, index_tid, index_cnt, true))) {
       LOG_WARN("failed to get can read index array", K(ret));
     }
@@ -1997,6 +2012,30 @@ int ObDelUpdLogPlan::check_update_part_key(const ObTableSchema* index_schema,
         index_dml_info->is_update_part_key_ = true;
         break;
       }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdLogPlan::is_direct_insert_into_select(bool &result)
+{
+  int ret = OB_SUCCESS;
+  const ObDelUpdStmt *stmt = get_stmt();
+  ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
+  if (OB_ISNULL(stmt) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KR(ret), KP(stmt), KP(session_info));
+  } else if (stmt::T_INSERT == stmt->stmt_type_
+      && static_cast<const ObInsertStmt*>(stmt)->value_from_select()
+      && GCONF._ob_enable_direct_load
+      && get_optimizer_context().get_global_hint().has_append()) {
+    // In direct-insert mode, index will be built by direct loader
+    bool auto_commit = false;
+    if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
+      LOG_WARN("failed to get auto commit", KR(ret));
+    } else if (auto_commit && !session_info->is_in_transaction()) {
+      LOG_TRACE("insert into select clause in direct-insert mode, no need building index");
+      result = true;
     }
   }
   return ret;

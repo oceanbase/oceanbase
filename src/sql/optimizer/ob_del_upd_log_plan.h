@@ -224,6 +224,8 @@ public:
   int check_update_part_key(const ObTableSchema* index_schema,
                             IndexDMLInfo*& index_dml_info) const;
 private:
+  int is_direct_insert_into_select(bool &result);
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
 protected:

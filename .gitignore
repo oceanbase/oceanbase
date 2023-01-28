@@ -190,6 +190,7 @@ tools/deploy/lib
 tools/deploy/lib/
 tools/deploy/list
 tools/deploy/log/
+tools/deploy/usr/
 tools/deploy/mysql_test/java/mytest.jar
 tools/deploy/mysql_test/r/*.reject
 tools/deploy/mysql_test/r/*.reject

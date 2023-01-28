@@ -96,6 +96,12 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcDropTablegroupP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterTablegroupP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcStartRedefTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCopyTableDependentsP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcFinishRedefTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAbortRedefTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcUpdateDDLTaskActiveTimeP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateHiddenTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRenameTableP, *gctx_.root_service_);

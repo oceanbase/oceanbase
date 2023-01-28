@@ -158,6 +158,12 @@ struct ObGlobalHint {
   { return MIN_OUTLINE_ENABLE_VERSION <= version && CLUSTER_CURRENT_VERSION >= version; }
   bool disable_query_transform() const { return disable_transform_; }
   bool disable_cost_based_transform() const { return disable_cost_based_transform_; }
+  bool has_append() const { return enable_append_; }
+  void set_append(const bool enable_append)
+  {
+    enable_append_ = enable_append;
+  }
+
 
   // wether should generate optimizer_statistics_operator.
   bool should_generate_osg_operator () const {
@@ -197,6 +203,7 @@ struct ObGlobalHint {
                K_(opt_features_version),
                K_(disable_transform),
                K_(disable_cost_based_transform),
+               K_(enable_append),
                K_(opt_params),
                K_(ob_ddl_schema_versions),
                K_(osg_hint));
@@ -220,6 +227,7 @@ struct ObGlobalHint {
   uint64_t opt_features_version_;
   bool disable_transform_;
   bool disable_cost_based_transform_;
+  bool enable_append_;
   ObOptParamHint opt_params_;
   common::ObSArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
   ObOptimizerStatisticsGatheringHint osg_hint_;

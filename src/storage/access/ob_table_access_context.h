@@ -20,6 +20,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObIOCallback;
+} // namespace common
 namespace storage
 {
 class ObStoreRowIterPool;
@@ -117,7 +121,8 @@ struct ObTableAccessContext
     K_(merge_scn),
     K_(lob_locator_helper),
     KP_(iter_pool),
-    KP_(block_row_store));
+    KP_(block_row_store),
+    KP_(io_callback))
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
   int build_lob_locator_helper(ObTableScanParam &scan_param, const common::ObVersionRange &trans_version_range);
@@ -151,6 +156,7 @@ public:
   ObLobLocatorHelper *lob_locator_helper_;
   ObStoreRowIterPool *iter_pool_;
   ObBlockRowStore *block_row_store_;
+  common::ObIOCallback *io_callback_;
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckRecordExtend defensive_check_record_;
 #endif

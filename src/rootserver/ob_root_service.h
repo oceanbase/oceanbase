@@ -201,7 +201,7 @@ public:
     DISALLOW_COPY_AND_ASSIGN(ObStatusChangeCallback);
   };
 
-class ObServerChangeCallback : public ObIServerChangeCallback
+  class ObServerChangeCallback : public ObIServerChangeCallback
   {
   public:
     explicit ObServerChangeCallback(ObRootService &root_service) : root_service_(root_service) {}
@@ -287,7 +287,7 @@ class ObServerChangeCallback : public ObIServerChangeCallback
     ObRootService &root_service_;
   };
 
-class ObUpdateAllServerConfigTask : public common::ObAsyncTimerTask
+  class ObUpdateAllServerConfigTask : public common::ObAsyncTimerTask
   {
   public:
     explicit ObUpdateAllServerConfigTask(ObRootService &root_service);
@@ -498,6 +498,12 @@ public:
   int create_table(const obrpc::ObCreateTableArg &arg, obrpc::ObCreateTableRes &res);
   int alter_database(const obrpc::ObAlterDatabaseArg &arg);
   int alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlterTableRes &res);
+  int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res);
+  int copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg);
+  int finish_redef_table(const obrpc::ObFinishRedefTableArg &arg);
+  int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg);
+  int update_ddl_task_active_time(const obrpc::ObUpdateDDLTaskActiveTimeArg &arg);
+  int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res);
   int execute_ddl_task(const obrpc::ObAlterTableArg &arg, common::ObSArray<uint64_t> &obj_ids);
   int cancel_ddl_task(const obrpc::ObCancelDDLTaskArg &arg);
   int alter_tablegroup(const obrpc::ObAlterTablegroupArg &arg);

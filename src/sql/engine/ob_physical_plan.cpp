@@ -120,7 +120,9 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     is_packed_(false),
     has_instead_of_trigger_(false),
     min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
-    need_record_plan_info_(false)
+    need_record_plan_info_(false),
+    enable_append_(false),
+    append_table_id_(0)
 {
 }
 
@@ -202,6 +204,8 @@ void ObPhysicalPlan::reset()
   contain_pl_udf_or_trigger_ = false;
   is_packed_ = false;
   has_instead_of_trigger_ = false;
+  enable_append_ = false;
+  append_table_id_ = 0;
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
   need_record_plan_info_ = false;
@@ -749,7 +753,9 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     ddl_task_id_,
                     stat_.plan_id_,
                     min_cluster_version_,
-                    need_record_plan_info_);
+                    need_record_plan_info_,
+                    enable_append_,
+                    append_table_id_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

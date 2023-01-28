@@ -26,6 +26,7 @@
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/optimizer/ob_pwj_comparer.h"
 #include "sql/das/ob_das_context.h"
+#include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
 #include "pl/ob_pl_package_guard.h"
 
 #define GET_PHY_PLAN_CTX(ctx) ((ctx).get_physical_plan_ctx())
@@ -459,6 +460,7 @@ public:
     eval_res_allocator_.set_attr(attr);
     eval_tmp_allocator_.set_attr(attr);
   }
+  ObTableDirectInsertCtx &get_table_direct_insert_ctx() { return table_direct_insert_ctx_; }
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -629,6 +631,8 @@ protected:
   // indicate if eval_tmp_allocator_ is used
   bool tmp_alloc_used_;
   // -------------------
+  // for direct insert
+  ObTableDirectInsertCtx table_direct_insert_ctx_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

@@ -233,6 +233,10 @@ ob_set_subtarget(ob_share common_mixed
   system_variable/ob_system_variable_init.cpp
   table/ob_table.cpp
   table/ob_table_rpc_struct.cpp
+  table/ob_table_load_define.cpp
+  table/ob_table_load_rpc_struct.cpp
+  table/ob_table_load_shared_allocator.cpp
+  table/ob_table_load_row.cpp
 )
 
 ob_set_subtarget(ob_share tablet

@@ -244,6 +244,16 @@ TRUE {
   }
 }
 
+<hint>TRUE {
+  check_value(yylval);
+  ParseResult *p = (ParseResult *)yyextra;
+  malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  yylval->node->value_ = 1;
+  COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
+  yylval->node->text_len_ = yyleng;
+  return BOOL_VALUE;
+}
+
 FALSE {
   check_value(yylval);
   ParseResult *p = (ParseResult *)yyextra;
@@ -256,6 +266,16 @@ FALSE {
   } else {
     return BOOL_VALUE;
   }
+}
+
+<hint>FALSE {
+  check_value(yylval);
+  ParseResult *p = (ParseResult *)yyextra;
+  malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  yylval->node->value_ = 0;
+  COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
+  yylval->node->text_len_ = yyleng;
+  return BOOL_VALUE;
 }
 
 {sqbegin} {
@@ -935,6 +955,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_USE_LATE_MATERIALIZATION  { return NO_USE_LATE_MATERIALIZATION; }
 <hint>TRACE_LOG { return TRACE_LOG; }
 <hint>LOAD_BATCH_SIZE { return LOAD_BATCH_SIZE; }
+<hint>DIRECT { return DIRECT; }
+<hint>APPEND { return APPEND; }
 <hint>TRACING { return TRACING; }
 <hint>DOP { return DOP; }
 <hint>FORCE_REFRESH_LOCATION_CACHE { return FORCE_REFRESH_LOCATION_CACHE; }

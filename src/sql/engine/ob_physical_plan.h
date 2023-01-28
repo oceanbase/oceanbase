@@ -336,6 +336,10 @@ public:
   inline int64_t get_ddl_execution_id() const { return ddl_execution_id_; }
   inline void set_ddl_task_id(const int64_t ddl_task_id) { ddl_task_id_ = ddl_task_id; }
   inline int64_t get_ddl_task_id() const { return ddl_task_id_; }
+  inline void set_enable_append(const bool enable_append) { enable_append_ = enable_append; }
+  inline bool get_enable_append() const { return enable_append_; }
+  inline void set_append_table_id(const uint64_t append_table_id) { append_table_id_ = append_table_id; }
+  inline uint64_t get_append_table_id() const { return append_table_id_; }
   void set_record_plan_info(bool v) { need_record_plan_info_ = v; }
   bool need_record_plan_info() const { return need_record_plan_info_; }
   const common::ObString &get_rule_name() const { return stat_.rule_name_; }
@@ -612,6 +616,8 @@ public:
   bool has_instead_of_trigger_; // mask if has instead of trigger on view
   uint64_t min_cluster_version_; // record min cluster version in code gen
   bool need_record_plan_info_;
+  bool enable_append_; // for APPEND hint
+  uint64_t append_table_id_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

@@ -11615,6 +11615,7 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     case T_APPEND: {
       CHECK_HINT_PARAM(hint_node, 0) {
         global_hint.merge_osg_hint(ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT);
+        global_hint.set_append(true);
       }
       break;
     }

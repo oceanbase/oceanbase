@@ -794,6 +794,14 @@ private:
   int set_allow_to_read_(ObLS *ls);
 
 private:
+  int direct_insert_rows(const uint64_t table_id,
+                         const int64_t task_id,
+                         const common::ObTabletID &tablet_id,
+                         const bool is_heap_table,
+                         common::ObNewRowIterator *row_iter,
+                         int64_t &affected_rows);
+
+private:
   friend class ObLSTabletIterator;
 
   ObLS *ls_;

@@ -337,7 +337,6 @@ public:
     }
   }
 
-
   int deep_copy_max_min_obj();
 
   common::ObCollationType get_collation_type() const { return cs_type_; }

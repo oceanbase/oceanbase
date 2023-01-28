@@ -284,7 +284,7 @@ protected:
 };
 
 TestBackupIndexMerger::TestBackupIndexMerger()
-    : TestDataFilePrepare(&getter, "TestBackupIndexMerger"),
+    : TestDataFilePrepare(&getter, "TestBackupIndexMerger", OB_DEFAULT_MACRO_BLOCK_SIZE, 800),
       tenant_base_(500),
       job_desc_(),
       backup_dest_(),

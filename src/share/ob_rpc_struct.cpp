@@ -284,6 +284,407 @@ int ObMergeResourcePoolArg::assign(const ObMergeResourcePoolArg &other)
   return ret;
 }
 
+bool ObStartRedefTableArg::is_valid() const
+{
+  return (OB_INVALID_ID != orig_tenant_id_ && OB_INVALID_ID != orig_table_id_
+          && OB_INVALID_ID != target_tenant_id_ && OB_INVALID_ID != target_table_id_
+          && share::DDL_INVALID != ddl_type_);
+}
+int ObStartRedefTableArg::set_nls_formats(const common::ObString *nls_formats)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(nls_formats)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("nls_formats is nullptr", K(ret));
+  } else {
+    char *tmp_ptr[ObNLSFormatEnum::NLS_MAX] = {};
+    for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; ++i) {
+      if (OB_ISNULL(tmp_ptr[i] = (char *)allocator_.alloc(nls_formats[i].length()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory!", K(ret), "size: ", nls_formats[i].length());
+      } else {
+        MEMCPY(tmp_ptr[i], nls_formats[i].ptr(), nls_formats[i].length());
+        nls_formats_[i].assign_ptr(tmp_ptr[i], nls_formats[i].length());
+      }
+    }
+    if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
+        allocator_.free(tmp_ptr[i]);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStartRedefTableArg::assign(const ObStartRedefTableArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tz_info_.assign(arg.tz_info_))) {
+    LOG_WARN("tz_info assign failed", K(ret));
+  } else if (OB_FAIL(tz_info_wrap_.deep_copy(arg.tz_info_wrap_))) {
+    LOG_WARN("failed to deep_copy tz info wrap", K(ret), "tz_info_wrap", arg.tz_info_wrap_);
+  } else if (FALSE_IT(ddl_stmt_str_.assign_ptr(arg.ddl_stmt_str_.ptr(), static_cast<int32_t>(arg.ddl_stmt_str_.length())))) {
+    // do nothing
+  } else {
+    orig_tenant_id_ = arg.orig_tenant_id_;
+    orig_table_id_ = arg.orig_table_id_;
+    target_tenant_id_ = arg.target_tenant_id_;
+    target_table_id_ = arg.target_table_id_;
+    session_id_ = arg.session_id_;
+    parallelism_ = arg.parallelism_;
+    ddl_type_ = arg.ddl_type_;
+    trace_id_ = arg.trace_id_;
+    sql_mode_ = arg.sql_mode_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < common::ObNLSFormatEnum::NLS_MAX; i++) {
+      nls_formats_[i].assign_ptr(arg.nls_formats_[i].ptr(), static_cast<int32_t>(arg.nls_formats_[i].length()));
+    }
+  }
+  return ret;
+}
+
+int ObStartRedefTableRes::assign(const ObStartRedefTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  task_id_ = res.task_id_;
+  tenant_id_ = res.tenant_id_;
+  schema_version_ = res.schema_version_;
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObStartRedefTableArg)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+          orig_tenant_id_,
+          orig_table_id_,
+          target_tenant_id_,
+          target_table_id_,
+          session_id_,
+          parallelism_,
+          ddl_type_,
+          ddl_stmt_str_,
+          trace_id_,
+          sql_mode_,
+          tz_info_,
+          tz_info_wrap_);
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
+        if (OB_FAIL(nls_formats_[i].serialize(buf, buf_len, pos))) {
+          LOG_WARN("fail to serialize nls_formats_[i]", K(ret), K(nls_formats_[i]));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObStartRedefTableArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE,
+          orig_tenant_id_,
+          orig_table_id_,
+          target_tenant_id_,
+          target_table_id_,
+          session_id_,
+          parallelism_,
+          ddl_type_,
+          ddl_stmt_str_,
+          trace_id_,
+          sql_mode_,
+          tz_info_,
+          tz_info_wrap_);
+  if (OB_SUCC(ret)) {
+    ObString tmp_string;
+    char *tmp_ptr[ObNLSFormatEnum::NLS_MAX] = {};
+    for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
+      if (OB_FAIL(tmp_string.deserialize(buf, data_len, pos))) {
+        LOG_WARN("fail to deserialize nls_formats_", K(ret), K(i));
+      } else if (OB_ISNULL(tmp_ptr[i] = (char *)allocator_.alloc(tmp_string.length()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory!", K(ret));
+      } else {
+        MEMCPY(tmp_ptr[i], tmp_string.ptr(), tmp_string.length());
+        nls_formats_[i].assign_ptr(tmp_ptr[i], tmp_string.length());
+        tmp_string.reset();
+      }
+    }
+    if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; i++) {
+        allocator_.free(tmp_ptr[i]);
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObStartRedefTableArg)
+{
+  int64_t len = 0;
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+          orig_tenant_id_,
+          orig_table_id_,
+          target_tenant_id_,
+          target_table_id_,
+          session_id_,
+          parallelism_,
+          ddl_type_,
+          ddl_stmt_str_,
+          trace_id_,
+          sql_mode_,
+          tz_info_,
+          tz_info_wrap_);
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; i++) {
+        len += nls_formats_[i].get_serialize_size();
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    len = -1;
+  }
+  return len;
+}
+
+bool ObCopyTableDependentsArg::is_valid() const
+{
+  return 0 != task_id_ && OB_INVALID_ID != tenant_id_;
+}
+
+int ObCopyTableDependentsArg::assign(const ObCopyTableDependentsArg &arg)
+{
+  int ret = OB_SUCCESS;
+  task_id_ = arg.task_id_;
+  tenant_id_ = arg.tenant_id_;
+  copy_indexes_ = arg.copy_indexes_;
+  copy_triggers_ = arg.copy_triggers_;
+  copy_constraints_ = arg.copy_constraints_;
+  copy_foreign_keys_ = arg.copy_foreign_keys_;
+  ignore_errors_ = arg.ignore_errors_;
+  return ret;
+}
+
+bool ObFinishRedefTableArg::is_valid() const
+{
+  return (0 != task_id_ && OB_INVALID_ID != tenant_id_);
+}
+
+int ObFinishRedefTableArg::assign(const ObFinishRedefTableArg &arg)
+{
+  int ret = OB_SUCCESS;
+  task_id_ = arg.task_id_;
+  tenant_id_ = arg.tenant_id_;
+  return ret;
+}
+
+bool ObAbortRedefTableArg::is_valid() const
+{
+  return 0 != task_id_ && OB_INVALID_ID != tenant_id_;
+}
+
+int ObAbortRedefTableArg::assign(const ObAbortRedefTableArg &arg)
+{
+  int ret = OB_SUCCESS;
+  task_id_ = arg.task_id_;
+  tenant_id_ = arg.tenant_id_;
+  return ret;
+}
+
+bool ObUpdateDDLTaskActiveTimeArg::is_valid() const
+{
+  return 0 != task_id_ && OB_INVALID_ID != tenant_id_;
+}
+
+int ObUpdateDDLTaskActiveTimeArg::assign(const ObUpdateDDLTaskActiveTimeArg &arg)
+{
+  int ret = OB_SUCCESS;
+  task_id_ = arg.task_id_;
+  tenant_id_ = arg.tenant_id_;
+  return ret;
+}
+
+bool ObCreateHiddenTableArg::is_valid() const
+{
+  return (OB_INVALID_ID != tenant_id_
+          && OB_INVALID_ID != table_id_
+          && OB_INVALID_ID != dest_tenant_id_
+          && share::DDL_INVALID != ddl_type_);
+}
+
+int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tz_info_.assign(arg.tz_info_))) {
+    LOG_WARN("tz_info assign failed", K(ret));
+  } else if (OB_FAIL(tz_info_wrap_.deep_copy(arg.tz_info_wrap_))) {
+    LOG_WARN("failed to deep_copy tz info wrap", K(ret), "tz_info_wrap", arg.tz_info_wrap_);
+  } else if (FALSE_IT(ddl_stmt_str_.assign_ptr(arg.ddl_stmt_str_.ptr(), static_cast<int32_t>(arg.ddl_stmt_str_.length())))) {
+    // do nothing
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    table_id_ = arg.table_id_;
+    dest_tenant_id_ = arg.dest_tenant_id_;
+    session_id_ = arg.session_id_;
+    parallelism_ = arg.parallelism_;
+    ddl_type_ = arg.ddl_type_;
+    sql_mode_ = arg.sql_mode_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < common::ObNLSFormatEnum::NLS_MAX; i++) {
+      nls_formats_[i].assign_ptr(arg.nls_formats_[i].ptr(), static_cast<int32_t>(arg.nls_formats_[i].length()));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                tenant_id_,
+                table_id_,
+                dest_tenant_id_,
+                session_id_,
+                parallelism_,
+                ddl_type_,
+                sql_mode_,
+                tz_info_,
+                tz_info_wrap_);
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
+        if (OB_FAIL(nls_formats_[i].serialize(buf, buf_len, pos))) {
+          LOG_WARN("fail to serialize nls_formats_[i]", K(ret), K(nls_formats_[i]));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              tenant_id_,
+              table_id_,
+              dest_tenant_id_,
+              session_id_,
+              parallelism_,
+              ddl_type_,
+              sql_mode_,
+              tz_info_,
+              tz_info_wrap_);
+  if (OB_SUCC(ret)) {
+    ObString tmp_string;
+    char *tmp_ptr[ObNLSFormatEnum::NLS_MAX] = {};
+    for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
+      if (OB_FAIL(tmp_string.deserialize(buf, data_len, pos))) {
+        LOG_WARN("fail to deserialize nls_formats_", K(ret), K(i));
+      } else if (OB_ISNULL(tmp_ptr[i] = (char *)allocator_.alloc(tmp_string.length()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory!", K(ret));
+      } else {
+        MEMCPY(tmp_ptr[i], tmp_string.ptr(), tmp_string.length());
+        nls_formats_[i].assign_ptr(tmp_ptr[i], tmp_string.length());
+        tmp_string.reset();
+      }
+    }
+    if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; i++) {
+        allocator_.free(tmp_ptr[i]);
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObCreateHiddenTableArg)
+{
+  int64_t len = 0;
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                tenant_id_,
+                table_id_,
+                dest_tenant_id_,
+                session_id_,
+                parallelism_,
+                ddl_type_,
+                sql_mode_,
+                tz_info_,
+                tz_info_wrap_);
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; i++) {
+        len += nls_formats_[i].get_serialize_size();
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    len = -1;
+  }
+  return len;
+}
+
+int ObCreateHiddenTableRes::assign(const ObCreateHiddenTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = res.tenant_id_;
+  table_id_ = res.table_id_;
+  dest_tenant_id_ = res.dest_tenant_id_;
+  dest_table_id_ = res.dest_table_id_;
+  trace_id_ = res.trace_id_;
+  task_id_ = res.task_id_;
+  schema_version_ = res.schema_version_;
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObCreateHiddenTableRes,
+                    tenant_id_,
+                    table_id_,
+                    dest_tenant_id_,
+                    dest_table_id_,
+                    trace_id_,
+                    task_id_,
+                    schema_version_);
+OB_SERIALIZE_MEMBER(ObStartRedefTableRes,
+                    task_id_,
+                    tenant_id_,
+                    schema_version_);
+
+OB_SERIALIZE_MEMBER(ObCopyTableDependentsArg,
+                    task_id_,
+                    tenant_id_,
+                    copy_indexes_,
+                    copy_triggers_,
+                    copy_constraints_,
+                    copy_foreign_keys_,
+                    ignore_errors_);
+
+OB_SERIALIZE_MEMBER(ObFinishRedefTableArg,
+                    task_id_,
+                    tenant_id_);
+
+OB_SERIALIZE_MEMBER(ObAbortRedefTableArg,
+                    task_id_,
+                    tenant_id_);
+
+OB_SERIALIZE_MEMBER(ObUpdateDDLTaskActiveTimeArg,
+                    task_id_,
+                    tenant_id_);
+
 int ObAlterResourceUnitArg::assign(const ObAlterResourceUnitArg &other)
 {
   int ret = OB_SUCCESS;

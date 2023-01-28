@@ -4940,7 +4940,6 @@ int ObAggregateProcessor::llc_add_value(const uint64_t value, char *llc_bitmap_b
     // 理论上pmax不会超过65.
     llc_bitmap_buf[bucket_index] = static_cast<uint8_t>(pmax);
   }
-  LOG_DEBUG("llc add value", K(pmax), K(bucket_index));
   return ret;
 }
 

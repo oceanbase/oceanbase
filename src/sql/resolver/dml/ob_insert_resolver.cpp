@@ -113,6 +113,16 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
       LOG_WARN("failed to resolve hints", K(ret));
+    } else if ((stmt::T_INSERT == insert_stmt->stmt_type_)
+        && insert_stmt->value_from_select()
+        && GCONF._ob_enable_direct_load) {
+      ObQueryCtx *query_ctx = insert_stmt->get_query_ctx();
+      if (OB_ISNULL(query_ctx)) {
+        LOG_WARN("query ctx should not be NULL", KR(ret), KP(query_ctx));
+      } else if (query_ctx->get_query_hint().get_global_hint().has_append()) {
+        // For insert into select clause with direct-insert mode, plan cache is disabled
+        query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
+      }
     }
   }
 

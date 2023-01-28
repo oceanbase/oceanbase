@@ -365,6 +365,52 @@ int ObLoadDataUtils::check_session_status(ObSQLSessionInfo &session, int64_t res
   return ret;
 }
 
+/////////////////
+
+ObGetAllJobStatusOp::ObGetAllJobStatusOp()
+    : job_status_array_(),
+      current_job_index_(0)
+{
+}
+
+ObGetAllJobStatusOp::~ObGetAllJobStatusOp()
+{
+  reset();
+}
+
+void ObGetAllJobStatusOp::reset()
+{
+  ObLoadDataStat *job_status;
+  for (int64_t i = 0; i < job_status_array_.count(); ++i) {
+    job_status = job_status_array_.at(i);
+    job_status->release();
+  }
+  job_status_array_.reset();
+  current_job_index_ = 0;
+}
+
+int ObGetAllJobStatusOp::operator()(common::hash::HashMapPair<ObLoadDataGID, ObLoadDataStat *> &entry)
+{
+  int ret = OB_SUCCESS;
+  entry.second->aquire();
+  if (OB_FAIL(job_status_array_.push_back(entry.second))) {
+    entry.second->release();
+    LOG_WARN("push_back ObLoadDataStat failed", K(ret));
+  }
+  return ret;
+}
+
+int ObGetAllJobStatusOp::get_next_job_status(ObLoadDataStat *&job_status)
+{
+  int ret = OB_SUCCESS;
+  if (current_job_index_ >= job_status_array_.count()) {
+    ret = OB_ITER_END;
+  } else {
+    job_status = job_status_array_.at(current_job_index_++);
+  }
+  return ret;
+}
+
 int ObGlobalLoadDataStatMap::init()
 {
   int ret = OB_SUCCESS;
@@ -416,61 +462,19 @@ int ObGlobalLoadDataStatMap::get_job_status(const ObLoadDataGID &id, ObLoadDataS
 int ObGlobalLoadDataStatMap::get_all_job_status(ObGetAllJobStatusOp &job_status_op)
 {
   int ret = OB_SUCCESS;
-
   OZ (map_.foreach_refactored(job_status_op));
-
   return ret;
 }
 
-ObGetAllJobStatusOp::ObGetAllJobStatusOp()
-    : job_status_array_(),
-      current_job_index_(0)
-{
-
-}
-
-ObGetAllJobStatusOp::~ObGetAllJobStatusOp()
-{
-  reset();
-}
-
-void ObGetAllJobStatusOp::reset()
-{
-  ObLoadDataStat *job_status;
-  for (int i = 0; i < job_status_array_.count(); i++) {
-    job_status = job_status_array_.at(i);
-    job_status->release();
-  }
-  job_status_array_.reset();
-  current_job_index_ = 0;
-}
-
-int ObGetAllJobStatusOp::operator()(common::hash::HashMapPair<ObLoadDataGID, ObLoadDataStat *> &entry)
+int ObGlobalLoadDataStatMap::get_job_stat_guard(const ObLoadDataGID &id, ObLoadDataStatGuard &guard)
 {
   int ret = OB_SUCCESS;
-
-  entry.second->aquire();
-  if (OB_FAIL(job_status_array_.push_back(entry.second))) {
-    entry.second->release();
-    LOG_WARN("push_back ObLoadDataStat failed", K(ret));
-  }
-
+  auto get_and_add_ref = [&](hash::HashMapPair<ObLoadDataGID, ObLoadDataStat*> &entry) -> void
+  {
+    guard.aquire(entry.second);
+  };
+  OZ (map_.read_atomic(id, get_and_add_ref));
   return ret;
-}
-
-ObLoadDataStat* ObGetAllJobStatusOp::next_job_status()
-{
-  ObLoadDataStat *job_status = nullptr;
-  if (current_job_index_ < job_status_array_.count()) {
-    job_status = job_status_array_.at(current_job_index_++);
-  }
-
-  return job_status;
-}
-
-bool ObGetAllJobStatusOp::end()
-{
-  return (current_job_index_ >= job_status_array_.count());
 }
 
 ObGlobalLoadDataStatMap *ObGlobalLoadDataStatMap::getInstance()

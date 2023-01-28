@@ -454,7 +454,7 @@ int ObLoadDataBase::pre_parse_lines(ObLoadFileBuffer &buffer,
         }
       }
     }
-    if (is_last_buf && buffer.current_ptr() > cur_pos) {
+    if (is_last_buf && cur_lines < line_count && buffer.current_ptr() > cur_pos) {
       cur_lines++;
       cur_pos = buffer.current_ptr();
     }
@@ -901,7 +901,7 @@ void ObCSVFormats::init(const ObDataInFileStruct &file_formats)
   if (!file_formats.field_term_str_.empty()
       && file_formats.line_term_str_.empty()) {
     is_line_term_by_counting_field_ = true;
-    field_term_char_ = line_term_char_;
+    line_term_char_ = field_term_char_;
   }
   is_simple_format_ =
       !is_line_term_by_counting_field_
@@ -1670,8 +1670,8 @@ int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
       }
       */
      
-      box.job_status->processed_rows_ = box.affected_rows;
-      box.job_status->processed_bytes_ += insert_task.data_size_;
+      box.job_status->parsed_rows_ = box.affected_rows;
+      box.job_status->parsed_bytes_ += insert_task.data_size_;
       box.job_status->total_insert_task_ = box.insert_task_controller.get_total_task_cnt();
       box.job_status->insert_rt_sum_ = box.insert_rt_sum;
       box.job_status->total_wait_secs_ = box.wait_secs_for_mem_release;
@@ -2991,8 +2991,10 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       ObLoadDataGID::generate_new_id(temp_gid);
       job_status->tenant_id_ = tenant_id;
       job_status->job_id_ = temp_gid.id;
-      job_status->table_name_ = load_args.combined_name_;
-      job_status->file_path_ = load_args.file_name_;
+      OZ(ob_write_string(job_status->allocator_,
+                         load_args.combined_name_, job_status->table_name_));
+      OZ(ob_write_string(job_status->allocator_,
+                         load_args.file_name_, job_status->file_path_));
       job_status->file_column_ = num_of_file_column;
       job_status->table_column_ = num_of_table_column;
       job_status->batch_size_ = batch_row_count;

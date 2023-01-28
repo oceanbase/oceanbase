@@ -357,15 +357,17 @@ int ObDDLTableMergeTask::process()
     ObTabletDDLParam ddl_param;
     ObTableHandleV2 table_handle;
     bool is_data_complete = false;
-    const ObSSTable *latest_major_sstable = nullptr;
-    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(merge_param_.ls_id_, merge_param_.tablet_id_, latest_major_sstable))) {
-      LOG_WARN("check if major sstable exist failed", K(ret));
-    } else if (nullptr != latest_major_sstable) {
-      LOG_INFO("major sstable has been created before", K(merge_param_), K(ddl_param.table_key_));
-      sstable = static_cast<ObSSTable *>(tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
-    } else if (tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-      skip_major_process = true;
-      LOG_INFO("tablet me says with major but no major, meaning its a migrated deleted tablet, skip");
+    if (ddl_sstable_handles.empty()) {
+      const ObSSTable *latest_major_sstable = nullptr;
+      if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(merge_param_.ls_id_, merge_param_.tablet_id_, latest_major_sstable))) {
+        LOG_WARN("check if major sstable exist failed", K(ret));
+      } else if (nullptr != latest_major_sstable) {
+        LOG_INFO("major sstable has been created before", K(merge_param_), K(ddl_param.table_key_));
+        sstable = static_cast<ObSSTable *>(tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
+      } else if (tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
+        skip_major_process = true;
+        LOG_INFO("tablet me says with major but no major, meaning its a migrated deleted tablet, skip");
+      }
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_param(ddl_param))) {
       LOG_WARN("get tablet ddl param failed", K(ret));
     } else if (merge_param_.start_scn_ > SCN::min_scn() && merge_param_.start_scn_ < ddl_param.start_scn_) {

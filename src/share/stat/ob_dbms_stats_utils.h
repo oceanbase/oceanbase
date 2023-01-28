@@ -45,6 +45,14 @@ public:
                                const bool is_history_stat = false,
                                const bool is_online_stat = false);
 
+  static int split_batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
+                               const uint64_t tenant_id,
+                               ObIArray<ObOptTableStat*> &table_stats,
+                               ObIArray<ObOptColumnStat*> &column_stats,
+                               const bool is_index_stat = false,
+                               const bool is_history_stat = false,
+                               const bool is_online_stat = false);
+
   static int batch_write_history_stats(sql::ObExecContext &ctx,
                                        ObIArray<ObOptTableStatHandle> &history_tab_handles,
                                        ObIArray<ObOptColumnStatHandle> &history_col_handles);
@@ -74,6 +82,9 @@ public:
                                             const ObIArray<PartInfo> &partition_infos,
                                             int64_t &partition_id);
 
+  static int calssify_opt_stat(const ObIArray<ObOptStat> &opt_stats,
+                               ObIArray<ObOptTableStat *> &table_stats,
+                               ObIArray<ObOptColumnStat*> &column_stats);
   static int merge_tab_stats(
     const ObTableStatParam &param,
     const TabStatIndMap &table_stats,

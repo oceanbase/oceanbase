@@ -31,7 +31,8 @@ using namespace oceanbase::rootserver;
 using namespace oceanbase::obrpc;
 
 ObTableRedefinitionTask::ObTableRedefinitionTask()
-  : ObDDLRedefinitionTask(ObDDLType::DDL_TABLE_REDEFINITION), has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false), allocator_(lib::ObLabel("RedefTask"))
+  : ObDDLRedefinitionTask(ObDDLType::DDL_TABLE_REDEFINITION), has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false), allocator_(lib::ObLabel("RedefTask")),
+    is_copy_indexes_(true), is_copy_triggers_(true), is_copy_constraints_(true), is_copy_foreign_keys_(true), is_ignore_errors_(false), is_do_finish_(false)
 {
 }
 
@@ -92,7 +93,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_record));
   } else if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
-    LOG_WARN("deserialize params from message failed", K(ret));
+    LOG_WARN("deserialize params from message failed", K(ret), K(task_record.message_), K(common::lbt()));
   } else if (OB_FAIL(set_ddl_stmt_str(task_record.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
   } else {
@@ -135,20 +136,50 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
   } else if (ObDDLTaskStatus::CHECK_TABLE_EMPTY == task_status_) {
     check_table_empty_job_ret_code_ = ret_code;
-  } else if (OB_UNLIKELY(snapshot_version_ != snapshot_version)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, snapshot version is not equal", K(ret), K(snapshot_version_), K(snapshot_version));
-  } else if (execution_id < execution_id_) {
-    LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
   } else {
-    complete_sstable_job_ret_code_ = ret_code;
-    execution_id_ = execution_id; // update ObTableRedefinitionTask::execution_id_ from ObDDLRedefinitionSSTableBuildTask::execution_id_
-    LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_), K(execution_id_));
+    switch(task_type_) {
+      case ObDDLType::DDL_DIRECT_LOAD: {
+        complete_sstable_job_ret_code_ = ret_code;
+        LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_));
+        break;
+      }
+      default : {
+        if (OB_UNLIKELY(snapshot_version_ != snapshot_version)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, snapshot version is not equal", K(ret), K(snapshot_version_), K(snapshot_version));
+        } else if (execution_id < execution_id_) {
+          LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
+        } else {
+          complete_sstable_job_ret_code_ = ret_code;
+          execution_id_ = execution_id; // update ObTableRedefinitionTask::execution_id_ from ObDDLRedefinitionSSTableBuildTask::execution_id_
+          LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_), K(execution_id_));
+        }
+        break;
+      }
+    }
   }
   return ret;
 }
 
 int ObTableRedefinitionTask::send_build_replica_request()
+{
+  int ret = OB_SUCCESS;
+  switch (task_type_) {
+    case DDL_DIRECT_LOAD: {
+      // do nothing
+      break;
+    }
+    default: {
+      if (send_build_replica_request_by_sql()) {
+        LOG_WARN("failed to send build replica request", K(ret));
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTableRedefinitionTask::send_build_replica_request_by_sql()
 {
   int ret = OB_SUCCESS;
   bool modify_autoinc = false;
@@ -298,12 +329,29 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   if (is_build_replica_end) {
     ret = complete_sstable_job_ret_code_;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_data_dest_tables_columns_checksum(execution_id_))) {
-        LOG_WARN("fail to check the columns checksum of data table and destination table", K(ret));
+      if (OB_FAIL(replica_end_check(ret))) {
+        LOG_WARN("fail to check", K(ret));
       }
     }
     if (OB_FAIL(switch_status(next_task_status, true, ret))) {
       LOG_WARN("fail to switch task status", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableRedefinitionTask::replica_end_check(const int ret_code)
+{
+  int ret = OB_SUCCESS;
+  switch(task_type_) {
+    case DDL_DIRECT_LOAD : {
+      break;
+    }
+    default : {
+      if (OB_FAIL(check_data_dest_tables_columns_checksum(execution_id_))) {
+        LOG_WARN("fail to check the columns checksum of data table and destination table", K(ret));
+      }
+      break;
     }
   }
   return ret;
@@ -466,7 +514,6 @@ int ObTableRedefinitionTask::copy_table_constraints()
       } else {
         LOG_INFO("constraint has already been built");
       }
-        
       DEBUG_SYNC(TABLE_REDEFINITION_COPY_TABLE_CONSTRAINTS);
       if (OB_SUCC(ret) && constraint_ids.count() > 0) {
         for (int64_t i = 0; OB_SUCC(ret) && i < constraint_ids.count(); ++i) {
@@ -565,11 +612,11 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
   } else if (!dependent_task_result_map_.created() && OB_FAIL(dependent_task_result_map_.create(MAX_DEPEND_OBJECT_COUNT, lib::ObLabel("DepTasMap")))) {
     LOG_WARN("create dependent task map failed", K(ret));
   } else {
-    if (OB_FAIL(copy_table_indexes())) {
+    if (get_is_copy_indexes() && OB_FAIL(copy_table_indexes())) {
       LOG_WARN("copy table indexes failed", K(ret));
-    } else if (OB_FAIL(copy_table_constraints())) {
+    } else if (get_is_copy_constraints() && OB_FAIL(copy_table_constraints())) {
       LOG_WARN("copy table constraints failed", K(ret));
-    } else if (OB_FAIL(copy_table_foreign_keys())) {
+    } else if (get_is_copy_foreign_keys() && OB_FAIL(copy_table_foreign_keys())) {
       LOG_WARN("copy table foreign keys failed", K(ret));
     } else {
       // copy triggers(at current, not supported, skip it)
@@ -603,6 +650,9 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
             finished_task_cnt++;
             if (error_message.ret_code_ != OB_SUCCESS) {
               ret = error_message.ret_code_;
+              if (get_is_ignore_errors()) {
+                ret = OB_SUCCESS;
+              }
             }
           }
         }
@@ -696,6 +746,31 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
   return ret;
 }
 
+int ObTableRedefinitionTask::repending(const share::ObDDLTaskStatus next_task_status)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
+  } else {
+    switch (task_type_) {
+      case DDL_DIRECT_LOAD:
+        if (get_is_do_finish()) {
+          if (OB_FAIL(switch_status(next_task_status, true, ret))) {
+            LOG_WARN("fail to switch status", K(ret));
+          }
+        }
+        break;
+      default:
+        if (OB_FAIL(switch_status(next_task_status, true, ret))) {
+          LOG_WARN("fail to switch status", K(ret));
+        }
+        break;
+    }
+  }
+  return ret;
+}
+
 int ObTableRedefinitionTask::process()
 {
   int ret = OB_SUCCESS;
@@ -718,8 +793,13 @@ int ObTableRedefinitionTask::process()
         }
         break;
       case ObDDLTaskStatus::LOCK_TABLE:
-        if (OB_FAIL(lock_table(ObDDLTaskStatus::CHECK_TABLE_EMPTY))) {
+        if (OB_FAIL(lock_table(ObDDLTaskStatus::REPENDING))) {
           LOG_WARN("fail to lock table", K(ret));
+        }
+        break;
+      case ObDDLTaskStatus::REPENDING:
+        if (OB_FAIL(repending(ObDDLTaskStatus::CHECK_TABLE_EMPTY))) {
+          LOG_WARN("fail to repending", K(ret));
         }
         break;
       case ObDDLTaskStatus::CHECK_TABLE_EMPTY:
@@ -782,6 +862,123 @@ int ObTableRedefinitionTask::check_modify_autoinc(bool &modify_autoinc)
     } else if (alter_column_schema->is_autoincrement()) {
       modify_autoinc = true;
     }
+  }
+  return ret;
+}
+
+int64_t ObTableRedefinitionTask::get_serialize_param_size() const
+{
+  int8_t copy_indexes = static_cast<int8_t>(is_copy_indexes_);
+  int8_t copy_triggers = static_cast<int8_t>(is_copy_triggers_);
+  int8_t copy_constraints = static_cast<int8_t>(is_copy_constraints_);
+  int8_t copy_foreign_keys = static_cast<int8_t>(is_copy_foreign_keys_);
+  int8_t ignore_errors = static_cast<int8_t>(is_ignore_errors_);
+  int8_t do_finish = static_cast<int8_t>(is_do_finish_);
+  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_)
+         + serialization::encoded_length_i64(parallelism_) + serialization::encoded_length_i64(cluster_version_)
+         + serialization::encoded_length_i8(copy_indexes) + serialization::encoded_length_i8(copy_triggers)
+         + serialization::encoded_length_i8(copy_constraints) + serialization::encoded_length_i8(copy_foreign_keys)
+         + serialization::encoded_length_i8(ignore_errors) + serialization::encoded_length_i8(do_finish);
+}
+
+int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  int8_t copy_indexes = static_cast<int8_t>(is_copy_indexes_);
+  int8_t copy_triggers = static_cast<int8_t>(is_copy_triggers_);
+  int8_t copy_constraints = static_cast<int8_t>(is_copy_constraints_);
+  int8_t copy_foreign_keys = static_cast<int8_t>(is_copy_foreign_keys_);
+  int8_t ignore_errors = static_cast<int8_t>(is_ignore_errors_);
+  int8_t do_finish = static_cast<int8_t>(is_do_finish_);
+  if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
+    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("serialize table arg failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, parallelism_))) {
+    LOG_WARN("fail to serialize parallelism_", K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, cluster_version_))) {
+    LOG_WARN("fail to serialize parallelism_", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, copy_indexes))) {
+    LOG_WARN("fail to serialize is_copy_indexes", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, copy_triggers))) {
+    LOG_WARN("fail to serialize is_copy_triggers", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, copy_constraints))) {
+    LOG_WARN("fail to serialize is_copy_constraints", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, copy_foreign_keys))) {
+    LOG_WARN("fail to serialize is_copy_foreign_keys", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, ignore_errors))) {
+    LOG_WARN("fail to serialize is_ignore_errors", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, do_finish))) {
+    LOG_WARN("fail to serialize is_do_finish");
+  }
+  return ret;
+}
+
+int ObTableRedefinitionTask::deserlize_params_from_message(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int8_t copy_indexes = 0;
+  int8_t copy_triggers = 0;
+  int8_t copy_constraints = 0;
+  int8_t copy_foreign_keys = 0;
+  int8_t ignore_errors = 0;
+  int8_t do_finish = 0;
+  obrpc::ObAlterTableArg tmp_arg;
+  if (OB_UNLIKELY(nullptr == buf || data_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
+    LOG_WARN("fail to deserialize task version", K(ret));
+  } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
+    LOG_WARN("serialize table failed", K(ret));
+  } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
+    LOG_WARN("deep copy table arg failed", K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &parallelism_))) {
+    LOG_WARN("fail to deserialize parallelism", K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &cluster_version_))) {
+    LOG_WARN("fail to deserialize cluster_version", K(ret));
+  } else if (pos < data_len) {
+    if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &copy_indexes))) {
+      LOG_WARN("fail to deserialize is_copy_indexes_", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &copy_triggers))) {
+      LOG_WARN("fail to deserialize is_copy_triggers_", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &copy_constraints))) {
+      LOG_WARN("fail to deserialize is_copy_constraints_", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &copy_foreign_keys))) {
+      LOG_WARN("fail to deserialize is_copy_foreign_keys_", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &ignore_errors))) {
+      LOG_WARN("fail to deserialize is_ignore_errors_", K(ret));
+    } else if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &do_finish))) {
+      LOG_WARN("fail to deserialize is_do_finish_", K(ret));
+    } else {
+      is_copy_indexes_ = static_cast<bool>(copy_indexes);
+      is_copy_triggers_ = static_cast<bool>(copy_triggers);
+      is_copy_constraints_ = static_cast<bool>(copy_constraints);
+      is_copy_foreign_keys_ = static_cast<bool>(copy_foreign_keys);
+      is_ignore_errors_ = static_cast<bool>(ignore_errors);
+      is_do_finish_ = static_cast<bool>(do_finish);
+    }
+  }
+  return ret;
+}
+
+int ObTableRedefinitionTask::assign(const ObTableRedefinitionTask *table_redef_task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(deep_copy_table_arg(allocator_, table_redef_task->alter_table_arg_, alter_table_arg_))) {
+    LOG_WARN("assign alter_table_arg failed", K(ret));
+  } else {
+    task_version_ = table_redef_task->task_version_;
+    parallelism_ = table_redef_task->parallelism_;
+    set_is_copy_indexes(table_redef_task->get_is_copy_indexes());
+    set_is_copy_triggers(table_redef_task->get_is_copy_triggers());
+    set_is_copy_constraints(table_redef_task->get_is_copy_constraints());
+    set_is_copy_foreign_keys(table_redef_task->get_is_copy_foreign_keys());
+    set_is_ignore_errors(table_redef_task->get_is_ignore_errors());
+    set_is_do_finish(table_redef_task->get_is_do_finish());
   }
   return ret;
 }

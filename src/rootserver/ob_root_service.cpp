@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 
+#include "observer/ob_server.h"
 #include "rootserver/ob_root_service.h"
 
 #include "share/ob_define.h"
@@ -91,6 +92,7 @@
 #include "share/ob_max_id_fetcher.h" //ObMaxIdFetcher
 #include "observer/ob_service.h"
 #include "storage/ob_file_system_router.h"
+#include "storage/ddl/ob_ddl_heart_beat_task.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
@@ -954,7 +956,6 @@ int ObRootService::init(ObServerConfig &config,
                                                       schema_service_))) {
     FLOG_WARN("init disaster recovery task mgr failed", KR(ret));
   }
-
   if (OB_SUCC(ret)) {
     inited_ = true;
     FLOG_INFO("[ROOTSERVICE_NOTICE] init rootservice success", KR(ret), K_(inited));
@@ -3838,6 +3839,159 @@ int ObRootService::precheck_interval_part(const obrpc::ObAlterTableArg &arg)
       LOG_INFO("all interval part for add is exist", K(alter_table_schema), KPC(simple_table_schema));
       ret = OB_ERR_INTERVAL_PARTITION_EXIST;
     }
+  }
+  return ret;
+}
+
+int ObRootService::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res)
+{
+  LOG_DEBUG("receive create hidden table arg", K(arg));
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version 4.0 does not support this operation", K(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_service_.create_hidden_table(arg, res))) {
+    LOG_WARN("do create hidden table in trans failed", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::update_ddl_task_active_time(const obrpc::ObUpdateDDLTaskActiveTimeArg &arg)
+{
+  LOG_DEBUG("receive recv ddl task status arg", K(arg));
+  int ret = OB_SUCCESS;
+  const int64_t task_id = arg.task_id_;
+  const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version 4.0 does not support this operation", K(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_scheduler_.update_ddl_task_active_time(task_id))) {
+    LOG_WARN("fail to set RegTaskTime map", K(ret), K(task_id));
+  }
+  return ret;
+}
+
+int ObRootService::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg)
+{
+  LOG_DEBUG("receive abort redef table arg", K(arg));
+  int ret = OB_SUCCESS;
+  const int64_t task_id = arg.task_id_;
+  const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version 4.0 does not support this operation", K(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_scheduler_.abort_redef_table(task_id))) {
+    LOG_WARN("cancel task failed", K(ret), K(task_id));
+  }
+  return ret;
+}
+
+int ObRootService::finish_redef_table(const obrpc::ObFinishRedefTableArg &arg)
+{
+  LOG_DEBUG("receive finish redef table arg", K(arg));
+  int ret = OB_SUCCESS;
+  const int64_t task_id = arg.task_id_;
+  const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version 4.0 does not support this operation", K(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_scheduler_.finish_redef_table(task_id, tenant_id))) {
+    LOG_WARN("failed to finish redef table", K(ret), K(task_id), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObRootService::copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg)
+{
+  LOG_DEBUG("receive copy table dependents arg", K(arg));
+  int ret = OB_SUCCESS;
+  const int64_t task_id = arg.task_id_;
+  const uint64_t tenant_id = arg.tenant_id_;
+  const bool is_copy_indexes = arg.copy_indexes_;
+  const bool is_copy_triggers = arg.copy_triggers_;
+  const bool is_copy_constraints = arg.copy_constraints_;
+  const bool is_copy_foreign_keys = arg.copy_foreign_keys_;
+  const bool is_ignore_errors = arg.ignore_errors_;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version 4.0 does not support this operation", K(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_scheduler_.copy_table_dependents(task_id,
+                                                          tenant_id,
+                                                          is_copy_constraints,
+                                                          is_copy_indexes,
+                                                          is_copy_triggers,
+                                                          is_copy_foreign_keys,
+                                                          is_ignore_errors))) {
+    LOG_WARN("failed to copy table dependents", K(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObRootService::start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res)
+{
+  LOG_DEBUG("receive start redef table arg", K(arg));
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.orig_tenant_id_;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version 4.0 does not support this operation", K(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_scheduler_.start_redef_table(arg, res))) {
+    LOG_WARN("start redef table failed", K(ret));
   }
   return ret;
 }

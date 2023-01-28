@@ -1002,12 +1002,14 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret)) {
     bool is_weak_read = false;
-    if (OB_FAIL(get_is_weak_read(stmt,
-                                 exec_ctx.get_my_session(),
-                                 exec_ctx.get_sql_ctx(),
-                                 is_weak_read))) {
-      LOG_WARN("get is weak read failed", K(ret));
-    } else if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
+    //if (OB_FAIL(get_is_weak_read(stmt,
+    //                             exec_ctx.get_my_session(),
+    //                             exec_ctx.get_sql_ctx(),
+    //                             is_weak_read))) {
+    //  LOG_WARN("get is weak read failed", K(ret));
+    //} else
+
+    if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
       loc_meta_.is_dup_table_ = 1;
     }
     if (is_dml_table) {
@@ -1070,6 +1072,7 @@ int ObTableLocation::init_table_location_with_rowkey(ObSqlSchemaGuard &schema_gu
   const ObTableSchema *table_schema = NULL;
   ObSQLSessionInfo *session_info = NULL;
   ObArray<uint64_t> column_ids;
+  ObSEArray<ObColDesc, 64> column_descs;
   if (OB_FAIL(schema_checker.init(schema_guard))) {
     LOG_WARN("fail to init schema_checker", K(ret));
   } else if (OB_ISNULL(session_info = exec_ctx.get_my_session())) {
@@ -1081,18 +1084,34 @@ int ObTableLocation::init_table_location_with_rowkey(ObSqlSchemaGuard &schema_gu
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(table_id));
-  } else if (table_schema->is_heap_table()) {
+  } else if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+    LOG_WARN("fail to get column ids", KR(ret));
+  } else if (OB_UNLIKELY(column_descs.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("init heap table location with by auto increment not supported", K(ret));
-  } else if (OB_FAIL(table_schema->get_rowkey_info().get_column_ids(column_ids))) {
-    LOG_WARN("get column ids of rowkey info failed", K(ret), K(table_schema->get_rowkey_info()));
-  } else if (OB_FAIL(init_table_location_with_column_ids(schema_guard,
-                                                         table_id,
-                                                         column_ids,
-                                                         exec_ctx,
-                                                         is_dml_table,
-                                                         is_link))) {
-    LOG_WARN("init table location with column ids failed", K(ret), K(table_id), K(column_ids));
+    LOG_WARN("unexpected empty column desc", KR(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
+    const ObColumnSchemaV2 *column_schema =
+      table_schema->get_column_schema(column_descs.at(i).col_id_);
+    int64_t part_key_pos = column_schema->get_part_key_pos();
+    int64_t sub_part_key_pos = column_schema->get_subpart_key_pos();
+    if (part_key_pos > 0 || sub_part_key_pos > 0) {
+      if(OB_FAIL(column_ids.push_back(column_descs.at(i).col_id_))) {
+        LOG_WARN("fail to push back column id", KR(ret), K(column_descs.at(i).col_id_), K(column_ids));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(init_table_location_with_column_ids(schema_guard,
+                                                           table_id,
+                                                           column_ids,
+                                                           exec_ctx,
+                                                           is_dml_table,
+                                                           is_link))) {
+      LOG_WARN("init table location with column ids failed", K(ret), K(table_id), K(column_ids));
+    }
   }
   return ret;
 }
@@ -1372,6 +1391,105 @@ int ObTableLocation::calculate_candi_tablet_locations(
                                           is_link_))) {
     LOG_WARN("Failed to set partition locations", K(ret), K(partition_ids));
   } else {}//do nothing
+
+  return ret;
+}
+
+int ObTableLocation::init_partition_ids_by_rowkey2(ObExecContext &exec_ctx,
+                                                   ObSQLSessionInfo &session_info,
+                                                   ObSchemaGetterGuard &schema_guard,
+                                                   uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlSchemaGuard sql_schema_guard;
+  sql_schema_guard.set_schema_guard(&schema_guard);
+  exec_ctx.set_my_session(&session_info);
+  if (OB_UNLIKELY(is_virtual_table(table_id))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Calculate virtual table partition id with rowkey");
+  } else if (OB_FAIL(init_table_location_with_rowkey(sql_schema_guard, table_id, exec_ctx))) {
+    LOG_WARN("implicit init location failed", K(table_id), K(ret));
+  }
+  return ret;
+}
+
+//FIXME
+int ObTableLocation::calculate_partition_ids_by_rows2(ObSQLSessionInfo &session_info,
+                                                       ObSchemaGetterGuard &schema_guard,
+                                                       uint64_t table_id,
+                                                       ObIArray<ObNewRow> &part_rows,
+                                                       ObIArray<ObTabletID> &tablet_ids,
+                                                       ObIArray<ObObjectID> &part_ids) const
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_TABLE_LOCATION);
+  SMART_VAR(ObExecContext, exec_ctx, allocator) {
+    ObSqlSchemaGuard sql_schema_guard;
+    sql_schema_guard.set_schema_guard(&schema_guard);
+    exec_ctx.set_my_session(&session_info);
+    ObDASTabletMapper tablet_mapper;
+    OZ(OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(table_id, tablet_mapper,
+                                                            &loc_meta_.related_table_ids_)));
+    if (OB_UNLIKELY(is_virtual_table(table_id))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Calculate virtual table partition id with rowkey");
+    } else if (!is_partitioned_) {
+      ObObjectID object_id = 0;
+      ObTabletID tablet_id;
+      const ObTableSchema *table_schema = nullptr;
+      if (OB_FAIL(sql_schema_guard.get_table_schema(table_id, table_schema))) {
+        LOG_WARN("fail to get table schema", K(table_id), KR(ret));
+      } else if (OB_FAIL(table_schema->get_tablet_and_object_id(tablet_id, object_id))) {
+        LOG_WARN("fail to get tablet and object", KR(ret));
+      }
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_rows.count(); i ++) {
+          if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+            LOG_WARN("fail to push tablet id", KR(ret));
+          } else if (OB_FAIL(part_ids.push_back(object_id))) {
+            LOG_WARN("fail to push object id", KR(ret));
+          }
+        }
+      }
+    } else {//TODO: copied from calc_partition_ids_by_rowkey()
+      ObSEArray<ObObjectID, 1> tmp_part_ids;
+      ObSEArray<ObTabletID, 1> tmp_tablet_ids;
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_rows.count(); ++i) {
+        tmp_part_ids.reset();
+        tmp_tablet_ids.reset(); //must reset
+        ObNewRow &part_row = part_rows.at(i);
+        if (PARTITION_LEVEL_ONE == part_level_) {
+          if (OB_FAIL(calc_partition_id_by_row(exec_ctx, tablet_mapper, part_row, tmp_tablet_ids, tmp_part_ids))) {
+            LOG_WARN("calc partition id by row failed", K(ret));
+          }
+        } else {
+          ObSEArray<ObObjectID, 1> tmp_part_ids2;
+          ObSEArray<ObTabletID, 1> tmp_tablet_ids2;
+          if (OB_FAIL(calc_partition_id_by_row(exec_ctx,
+                                              tablet_mapper,
+                                              part_row,
+                                              tmp_tablet_ids2,
+                                              tmp_part_ids2))) {
+            LOG_WARN("calc partition id by row failed", K(ret));
+          } else if (OB_FAIL(calc_partition_id_by_row(exec_ctx,
+                                                      tablet_mapper,
+                                                      part_row,
+                                                      tmp_tablet_ids,
+                                                      tmp_part_ids,
+                                                      &tmp_part_ids2))) {
+            LOG_WARN("calc sub partition id by row failed", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(tablet_ids.push_back(tmp_tablet_ids.at(0)))) {
+            LOG_WARN("fail to push tablet id", KR(ret));
+          } else if (OB_FAIL(part_ids.push_back(tmp_part_ids.at(0)))) {
+            LOG_WARN("fail to push object id", KR(ret));
+          }
+        }
+      }
+    }
+  }
 
   return ret;
 }

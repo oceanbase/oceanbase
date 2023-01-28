@@ -116,26 +116,50 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     } else {
       ObString file_name(file_name_node->str_len_, file_name_node->str_value_);
       if (ObLoadFileLocation::OSS != load_args.load_file_storage_) {
+        load_args.file_name_ = file_name;
+        const char *p = nullptr;
+        ObString sub_file_name;
+        ObString cstyle_file_name; // ends with '\0'
         char *full_path_buf = nullptr;
         char *actual_path = nullptr;
-        if (OB_FAIL(ob_write_string(*allocator_, file_name, load_args.file_name_, true))) {
-          LOG_WARN("fail to write string", K(ret));
-        } else if (OB_ISNULL(full_path_buf = static_cast<char*>(allocator_->alloc(DEFAULT_BUF_LENGTH)))) {
+        if (OB_ISNULL(full_path_buf = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate memory", K(ret));
-        } else if (OB_ISNULL(actual_path = realpath(file_name_node->str_value_, full_path_buf))) {
-          ret = OB_FILE_NOT_EXIST;
-          LOG_WARN("file not exist", K(ret), K(file_name));
-        } else {
-          load_args.full_file_path_ = actual_path;
         }
-        //security check for mysql mode
-        if (OB_SUCC(ret) && lib::is_mysql_mode()) {
-          ObString secure_file_priv;
-          if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
-            LOG_WARN("failed to get secure file priv", K(ret));
-          } else if (OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, load_args.full_file_path_))) {
-            LOG_WARN("failed to check secure path", K(ret), K(secure_file_priv), K(load_args));
+        while (OB_SUCC(ret) && !file_name.empty()) {
+          p = file_name.find(',');
+          if (nullptr == p) {
+            sub_file_name = file_name;
+            cstyle_file_name = sub_file_name;
+            file_name.reset();
+          } else {
+            sub_file_name = file_name.split_on(p);
+            cstyle_file_name.reset();
+          }
+          if (!sub_file_name.empty()) {
+            if (cstyle_file_name.empty() &&
+                OB_FAIL(ob_write_string(*allocator_, sub_file_name, cstyle_file_name, true))) {
+              LOG_WARN("fail to write string", KR(ret));
+            } else if (OB_ISNULL(actual_path = realpath(cstyle_file_name.ptr(), full_path_buf))) {
+              ret = OB_FILE_NOT_EXIST;
+              LOG_WARN("file not exist", K(ret), K(cstyle_file_name));
+            }
+            //security check for mysql mode
+            if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+              ObString secure_file_priv;
+              if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
+                LOG_WARN("failed to get secure file priv", K(ret));
+              } else if (OB_FAIL(
+                           ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
+                LOG_WARN("failed to check secure path", K(ret), K(secure_file_priv),
+                         K(actual_path));
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(load_args.file_iter_.add_files(&cstyle_file_name))) {
+                LOG_WARN("fail to add files", KR(ret));
+              }
+            }
           }
         }
       } else {
@@ -150,6 +174,8 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name or access key");
         } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), storage_info.ptr()))) {
           LOG_WARN("failed to set access info", K(ret));
+        } else if (OB_FAIL(load_args.file_iter_.add_files(&load_args.file_name_))) {
+          LOG_WARN("fail to add files", KR(ret));
         }
       }
     }
@@ -419,7 +445,28 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
       LOG_DEBUG("LOAD DATA resolve hint node", "type", hint_node->type_);
 
       switch (hint_node->type_) {
-
+      case T_DIRECT: {
+        if (hint_node->num_child_ != 2) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected hint node", K(ret), K(hint_node->num_child_));
+        } else {
+          int64_t need_sort = hint_node->children_[0]->value_;
+          int64_t error_rows_value = hint_node->children_[1]->value_;
+          if (error_rows_value < 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid error rows value", K(ret), K(error_rows_value));
+          } else if (OB_FAIL(stmt_hints.set_value(
+                          ObLoadDataHint::ENABLE_DIRECT, 1))) {
+            LOG_WARN("fail to enable direct", K(ret));
+          } else if (OB_FAIL(stmt_hints.set_value(
+                          ObLoadDataHint::NEED_SORT, need_sort))) {
+            LOG_WARN("fail to enable sort", K(ret));
+          } else if (OB_FAIL(stmt_hints.set_value(ObLoadDataHint::ERROR_ROWS, error_rows_value))) {
+            LOG_WARN("fail to set error rows", K(ret), K(error_rows_value));
+          }
+        }
+        break;
+      }
       case T_QUERY_TIMEOUT: {
         int64_t timeout_value = hint_node->children_[0]->value_;
         if (timeout_value > OB_MAX_USER_SPECIFIED_TIMEOUT) {

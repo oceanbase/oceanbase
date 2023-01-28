@@ -27,6 +27,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/schema/ob_table_param.h"
+#include "share/schema/ob_table_dml_param.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "share/ob_ddl_common.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
@@ -64,10 +65,15 @@
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/slog/ob_storage_log_struct.h"
 #include "storage/slog/ob_storage_logger.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
+#include "observer/table_load/ob_table_load_coordinator.h"
+#include "observer/table_load/ob_table_load_service.h"
+#include "observer/table_load/ob_table_load_store.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::observer;
 
 namespace oceanbase
 {
@@ -2339,6 +2345,21 @@ int ObLSTabletService::insert_rows(
   } else if (OB_FAIL(get_tablet_with_timeout(
       ctx.tablet_id_, tablet_handle, dml_param.timeout_))) {
     LOG_WARN("failed to check and get tablet", K(ret), K(ctx.tablet_id_));
+  } else if (dml_param.is_direct_insert()) { // direct-insert mode
+    const ObTableSchemaParam::Columns &columns = dml_param.table_param_->get_data_table().get_columns();
+    bool is_heap_table = columns.at(0)->is_hidden();
+    if (OB_FAIL(direct_insert_rows(dml_param.table_param_->get_data_table().get_table_id(),
+                                   dml_param.direct_insert_task_id_,
+                                   ctx.tablet_id_,
+                                   is_heap_table,
+                                   row_iter,
+                                   afct_num))) {
+      LOG_WARN("failed to insert rows direct", KR(ret),
+          K(dml_param.table_param_->get_data_table().get_table_id()),
+          K(dml_param.direct_insert_task_id_),
+          K(ctx.tablet_id_),
+          K(is_heap_table));
+    }
   } else {
     ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObDMLRunningCtx run_ctx(ctx,
@@ -2399,15 +2420,78 @@ int ObLSTabletService::insert_rows(
       work_allocator.free(ptr);
     }
     lob_allocator.reset();
-    if (OB_SUCC(ret)) {
-      LOG_DEBUG("succeeded to insert rows", K(ret));
-      affected_rows = afct_num;
-      EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
-    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_DEBUG("succeeded to insert rows", K(ret));
+    affected_rows = afct_num;
+    EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
   }
   NG_TRACE(S_insert_rows_end);
 
    return ret;
+}
+
+int ObLSTabletService::direct_insert_rows(
+    const uint64_t table_id,
+    const int64_t task_id,
+    const ObTabletID &tablet_id,
+    const bool is_heap_table,
+    ObNewRowIterator *row_iter,
+    int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadTableCtx *table_ctx = nullptr;
+  ObTableLoadKey key(MTL_ID(), table_id);
+  if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
+    LOG_WARN("fail to get table ctx", KR(ret), K(key));
+  } else {
+    int64_t row_count = 0;
+    ObNewRow *rows = nullptr;
+    table::ObTableLoadTransId trans_id;
+    trans_id.segment_id_ = task_id;
+    trans_id.trans_gid_ = 1;
+    ObTableLoadStore store(table_ctx);
+    if (OB_FAIL(store.init())) {
+      LOG_WARN("fail to init store", KR(ret));
+    }
+
+    while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
+      if (row_count <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("row_count should be greater than 0", K(ret));
+      } else {
+        common::ObArray<ObNewRow> row_array;
+        for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
+          ObNewRow new_row;
+          if (is_heap_table) {
+            new_row.assign(rows[i].cells_ + 1, rows[i].count_ - 1);
+          } else {
+            new_row.assign(rows[i].cells_, rows[i].count_);
+          }
+          if (OB_FAIL(row_array.push_back(new_row))) {
+            LOG_WARN("failed to push back row to row_array", KR(ret), K(i), K(new_row));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(store.px_write(trans_id, tablet_id, row_array))) {
+            LOG_WARN("failed to write to store", KR(ret), K(trans_id),
+                K(table_id), K(tablet_id), K(row_array));
+          } else {
+            affected_rows += row_count;
+          }
+        }
+      }
+    }
+
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  if (OB_NOT_NULL(table_ctx)) {
+    ObTableLoadService::put_ctx(table_ctx);
+    table_ctx = nullptr;
+  }
+  return ret;
 }
 
 int ObLSTabletService::insert_row(

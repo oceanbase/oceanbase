@@ -158,6 +158,10 @@ public:
       const ObTableReadInfo &index_read_info,
       common::ObIAllocator &allocator,
       common::ObStoreRowkey &endkey);
+  bool is_empty() const override
+  {
+    return meta_.is_empty();
+  }
 
 public:
   int dump2text(

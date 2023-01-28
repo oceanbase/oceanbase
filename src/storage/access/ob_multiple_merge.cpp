@@ -1145,15 +1145,10 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
       }
     }
     if (OB_SUCC(ret) && need_table) {
-      if (table_ptr->is_sstable()) {
-        if (static_cast<ObSSTable*>(table_ptr)->get_meta().is_empty()) {
-          LOG_DEBUG("cur sstable is empty", K(ret), K(*table_ptr));
-          continue;
-        }
-      } else if (static_cast<memtable::ObMemtable *>(table_ptr)->is_empty()) {
-        LOG_DEBUG("cur memtable is empty", K(ret), K(*table_ptr));
+      if (table_ptr->is_empty()) {
+        LOG_DEBUG("cur table is empty", K(ret), KPC(table_ptr));
         continue;
-      } else {
+      } else if (table_ptr->is_memtable()) {
         ++memtable_cnt;
       }
       if (OB_FAIL(tables_.push_back(table_ptr))) {

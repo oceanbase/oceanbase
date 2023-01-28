@@ -50,7 +50,6 @@ enum ObDDLType
   DDL_MODIFY_AUTO_INCREMENT = 4,
   DDL_CREATE_INDEX = 5,
   DDL_DROP_INDEX = 6,
-  
   ///< @note Drop schema, and refuse concurrent trans.  
   DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS = 500,
   DDL_DROP_DATABASE = 501,
@@ -73,6 +72,8 @@ enum ObDDLType
   DDL_ADD_COLUMN_OFFLINE = 1008, // only add columns
   DDL_COLUMN_REDEFINITION = 1009, // only add/drop columns
   DDL_TABLE_REDEFINITION = 1010,
+  DDL_DIRECT_LOAD = 1011,
+
 
   // @note new normal ddl type to be defined here !!!
   DDL_NORMAL_TYPE = 10001,
@@ -118,6 +119,7 @@ enum ObDDLTaskStatus {
   DROP_SCHEMA = 14,
   CHECK_TABLE_EMPTY = 15,
   WAIT_CHILD_TASK_FINISH = 16,
+  REPENDING = 17,
   FAIL = 99,
   SUCCESS = 100
 };

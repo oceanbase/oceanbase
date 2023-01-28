@@ -91,6 +91,7 @@
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/tx_storage/ob_tablet_gc_service.h"
 #include "share/ob_occam_time_guard.h"
+#include "observer/table_load/ob_table_load_service.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -324,6 +325,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     //MTL_BIND(ObTransAuditRecordMgr::mtl_init, ObTransAuditRecordMgr::mtl_destroy);
     MTL_BIND(ObTenantSqlMemoryManager::mtl_init, ObTenantSqlMemoryManager::mtl_destroy);
     MTL_BIND(ObPlanMonitorNodeList::mtl_init, ObPlanMonitorNodeList::mtl_destroy);
+    MTL_BIND2(mtl_new_default, ObTableLoadService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObSharedMacroBlockMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND(ObFLTSpanMgr::mtl_init, ObFLTSpanMgr::mtl_destroy);
     MTL_BIND(ObSqlPlanMgr::mtl_init, ObSqlPlanMgr::mtl_destroy);

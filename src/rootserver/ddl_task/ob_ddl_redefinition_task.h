@@ -111,7 +111,7 @@ public:
     dependent_task_result_map_(), snapshot_held_(false), has_synced_autoincrement_(false),
     has_synced_stats_info_(false), update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0),
     check_table_empty_job_ret_code_(INT64_MAX), check_table_empty_job_time_(0) {}
-  virtual ~ObDDLRedefinitionTask(){};
+  virtual ~ObDDLRedefinitionTask() {}
   virtual int process() = 0;
   virtual int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
@@ -122,9 +122,6 @@ public:
   int on_child_task_finish(
       const uint64_t child_task_key,
       const int ret_code);
-  virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
-  virtual int64_t get_serialize_param_size() const override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
   virtual void flt_set_task_span_tag() const = 0;
   virtual void flt_set_status_span_tag() const = 0;

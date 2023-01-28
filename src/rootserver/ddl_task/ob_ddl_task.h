@@ -175,6 +175,10 @@ public:
       common::ObMySQLProxy &proxy,
       common::ObIAllocator &allocator,
       common::ObIArray<ObDDLTaskRecord> &records);
+  static int check_task_id_exist(
+      common::ObMySQLProxy &proxy,
+      const int64_t task_id,
+      bool &exist);
 
   static int check_is_adding_constraint(
      common::ObMySQLProxy *proxy,
@@ -385,6 +389,7 @@ public:
   virtual bool need_retry() const { return need_retry_; };
   share::ObDDLType get_task_type() const { return task_type_; }
   void set_not_running() { ATOMIC_SET(&is_running_, false); }
+  void set_task_status(const share::ObDDLTaskStatus new_status) {task_status_ = new_status; }
   bool try_set_running() { return !ATOMIC_CAS(&is_running_, false, true); }
   uint64_t get_tenant_id() const { return tenant_id_; }
   uint64_t get_object_id() const { return object_id_; }
@@ -400,10 +405,12 @@ public:
   int64_t get_task_version() const { return task_version_; }
   int64_t get_execution_id() const { return execution_id_; }
   int64_t get_parallelism() const { return parallelism_; }
+  static int deep_copy_table_arg(common::ObIAllocator &allocator,
+                                 const obrpc::ObDDLArg &source_arg,
+                                 obrpc::ObDDLArg &dest_arg);
   void set_longops_stat(share::ObDDLLongopsStat *longops_stat) { longops_stat_ = longops_stat; }
   share::ObDDLLongopsStat *get_longops_stat() const { return longops_stat_; }
   int64_t get_cluster_version() const { return cluster_version_; }
-  static int deep_copy_table_arg(common::ObIAllocator &allocator, const obrpc::ObDDLArg &source_arg, obrpc::ObDDLArg &dest_arg);
   static int fetch_new_task_id(ObMySQLProxy &sql_proxy, int64_t &new_task_id);
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const = 0;
   virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) = 0;

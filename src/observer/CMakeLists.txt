@@ -150,6 +150,49 @@ ob_set_subtarget(ob_server table
   table/ob_table_op_wrapper.cpp
 )
 
+ob_set_subtarget(ob_server table_load
+  table_load/ob_table_load_abort_processor.cpp
+  table_load/ob_table_load_autoinc_nextval.cpp
+  table_load/ob_table_load_begin_processor.cpp
+  table_load/ob_table_load_bucket.cpp
+  table_load/ob_table_load_commit_processor.cpp
+  table_load/ob_table_load_coordinator_ctx.cpp
+  table_load/ob_table_load_coordinator_trans.cpp
+  table_load/ob_table_load_coordinator.cpp
+  table_load/ob_table_load_csv_parser.cpp
+  table_load/ob_table_load_error_row_handler.cpp
+  table_load/ob_table_load_finish_processor.cpp
+  table_load/ob_table_load_general_table_compactor.cpp
+  table_load/ob_table_load_get_status_processor.cpp
+  table_load/ob_table_load_merger.cpp
+  table_load/ob_table_load_obj_cast.cpp
+  table_load/ob_table_load_parallel_merge_ctx.cpp
+  table_load/ob_table_load_parallel_merge_table_compactor.cpp
+  table_load/ob_table_load_partition_calc.cpp
+  table_load/ob_table_load_partition_location.cpp
+  table_load/ob_table_load_processor.cpp
+  table_load/ob_table_load_schema.cpp
+  table_load/ob_table_load_service.cpp
+  table_load/ob_table_load_store_ctx.cpp
+  table_load/ob_table_load_store_trans.cpp
+  table_load/ob_table_load_store.cpp
+  table_load/ob_table_load_table_compactor.cpp
+  table_load/ob_table_load_table_ctx.cpp
+  table_load/ob_table_load_task_scheduler.cpp
+  table_load/ob_table_load_task.cpp
+  table_load/ob_table_load_time_convert.cpp
+  table_load/ob_table_load_trans_bucket_writer.cpp
+  table_load/ob_table_load_trans_ctx.cpp
+  table_load/ob_table_load_trans_processor.cpp
+  table_load/ob_table_load_trans_store.cpp
+  table_load/ob_table_load_utils.cpp
+  table_load/ob_table_load_mem_compactor.cpp
+  table_load/ob_table_load_exec_ctx.cpp
+  table_load/ob_table_load_instance.cpp
+  table_load/ob_table_load_multiple_heap_table_compactor.cpp
+  table_load/ob_table_load_redef_table.cpp
+)
+
 ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_agent_table_base.cpp
   virtual_table/ob_agent_virtual_table.cpp

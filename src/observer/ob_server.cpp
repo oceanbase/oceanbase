@@ -99,6 +99,7 @@
 #include "share/longops_mgr/ob_longops_mgr.h"
 #include "logservice/palf/election/interface/election.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
+#include "observer/table_load/ob_table_load_partition_calc.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -210,6 +211,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_ERROR("init retry ctrl failed", KR(ret));
   } else if (OB_FAIL(ObTableApiProcessorBase::init_session())) {
     LOG_ERROR("init static session failed", KR(ret));
+  } else if (OB_FAIL(ObTableLoadPartitionCalc::init_session())) {
+    LOG_ERROR("failed to init static session", KR(ret));
   } else if (OB_FAIL(init_loaddata_global_stat())) {
     LOG_ERROR("init global load data stat map failed", KR(ret));
   } else if (OB_FAIL(init_pre_setting())) {
@@ -311,6 +314,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_ERROR("init multi tenant failed", KR(ret));
   } else if (OB_FAIL(init_ctas_clean_up_task())) {
     LOG_ERROR("init ctas clean up task failed", KR(ret));
+  } else if (OB_FAIL(init_ddl_heart_beat_task_container())) {
+    LOG_ERROR("init ddl heart beat task container failed", KR(ret));
+  } else if (OB_FAIL(init_redef_heart_beat_task())) {
+    LOG_ERROR("init redef heart beat task failed", KR(ret));
   } else if (OB_FAIL(init_refresh_active_time_task())) {
     LOG_ERROR("init refresh active time task failed", KR(ret));
   } else if (OB_FAIL(init_refresh_network_speed_task())) {
@@ -439,6 +446,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy ctas clean up timer");
     TG_DESTROY(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer destroyed");
+
+    FLOG_INFO("begin to destroy redef heart beat task");
+    TG_DESTROY(lib::TGDefIDs::RedefHeartBeatTask);
+    FLOG_INFO("redef heart beat task destroyed");
 
     FLOG_INFO("begin to destroy root service");
     root_service_.destroy();
@@ -956,6 +967,10 @@ int ObServer::stop()
 
   FLOG_INFO("begin to stop ctas clean up timer");
   TG_STOP(lib::TGDefIDs::CTASCleanUpTimer);
+  FLOG_INFO("ctas clean up timer stopped");
+
+  FLOG_INFO("begin to stop ctas clean up timer");
+  TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
   FLOG_INFO("ctas clean up timer stopped");
 
   FLOG_INFO("begin to stop sql conn pool");
@@ -1709,6 +1724,8 @@ int ObServer::init_network()
   } else if (OB_FAIL(net_frame_.get_proxy(inner_sql_rpc_proxy_))) {
     LOG_ERROR("get rpc proxy fail", KR(ret));
   } else if (OB_FAIL(net_frame_.get_proxy(dbms_sched_job_rpc_proxy_))) {
+    LOG_ERROR("get rpc proxy fail", KR(ret));
+  } else if (OB_FAIL(net_frame_.get_proxy(table_rpc_proxy_))) {
     LOG_ERROR("get rpc proxy fail", KR(ret));
   } else if (OB_FAIL(batch_rpc_.init(net_frame_.get_batch_rpc_req_transport(),
                                      net_frame_.get_high_prio_req_transport(),
@@ -2707,6 +2724,24 @@ int ObServer::init_ctas_clean_up_task()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ctas_clean_up_task_.init(this, lib::TGDefIDs::CTASCleanUpTimer))) {
     LOG_ERROR("fail to init ctas clean up task", KR(ret));
+  }
+  return ret;
+}
+
+int ObServer::init_redef_heart_beat_task()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(redef_table_heart_beat_task_.init(lib::TGDefIDs::ServerGTimer))) {
+    LOG_ERROR("fail to init redef heart beat task", KR(ret));
+  }
+  return ret;
+}
+
+int ObServer::init_ddl_heart_beat_task_container()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.init())) {
+    LOG_ERROR("fail to init ddl heart beat task container", K(ret));
   }
   return ret;
 }

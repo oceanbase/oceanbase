@@ -260,7 +260,7 @@ extern "C" void ob_zfree(void *ptr);
   ({                                            \
     T* ret = NULL;                              \
     if (OB_NOT_NULL(pool)) {                    \
-      void *buf = pool->alloc(sizeof(T));       \
+      void *buf = (pool)->alloc(sizeof(T));       \
       if (OB_NOT_NULL(buf))                     \
       {                                         \
         ret = new(buf) T(__VA_ARGS__);          \

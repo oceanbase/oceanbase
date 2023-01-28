@@ -20,6 +20,7 @@ add_subdirectory(mockcontainer)
 add_subdirectory(transaction)
 add_subdirectory(tx)
 add_subdirectory(blocksstable)
+add_subdirectory(direct_load)
 add_subdirectory(utl_file)
 add_subdirectory(tx_table)
 

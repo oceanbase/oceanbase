@@ -552,7 +552,8 @@ int ObAccessService::check_write_allowed_(
                                       is_try_lock,
                                       lock_expired_ts))) {
       LOG_WARN("get lock param failed", K(ret), K(lock_id));
-    } else if (OB_FAIL(ls->lock(ctx_guard.get_store_ctx(), lock_param))) {
+    } else if (!dml_param.is_direct_insert()
+        && OB_FAIL(ls->lock(ctx_guard.get_store_ctx(), lock_param))) {
       LOG_WARN("lock tablet failed", K(ret), K(lock_param));
     } else if (dml_param.spec_seq_no_ != -1) {
       ctx_guard.get_store_ctx().mvcc_acc_ctx_.tx_scn_ = dml_param.spec_seq_no_;

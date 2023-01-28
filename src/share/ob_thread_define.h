@@ -120,4 +120,6 @@ TG_DEF(DDLScanTask, DDLScanTask, "", TG_STATIC, TIMER)
 TG_DEF(TenantLSMetaChecker, LSMetaCh, "", TG_STATIC, TIMER)
 TG_DEF(TenantTabletMetaChecker, TbMetaCh, "", TG_STATIC, TIMER)
 TG_DEF(ServerMetaChecker, SvrMetaCh, "", TG_STATIC, TIMER)
+TG_DEF(HeartBeatCheckTask, HeartBeatCheckTask, "", TG_STATIC, TIMER)
+TG_DEF(RedefHeartBeatTask, RedefHeartBeatTask, "", TG_STATIC, TIMER)
 #endif

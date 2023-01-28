@@ -60,6 +60,9 @@ private:
   int copy_table_indexes();
   int copy_table_constraints();
   int copy_table_foreign_keys();
+  virtual int serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int deserlize_params_from_message(const char *buf, const int64_t data_len, int64_t &pos) override;
+  virtual int64_t get_serialize_param_size() const override;
 private:
   static const int64_t OB_COLUMN_REDEFINITION_TASK_VERSION = 1L; 
   int64_t sstable_complete_request_time_;

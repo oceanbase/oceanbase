@@ -25,6 +25,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ob_cmd.h"
 #include "sql/engine/px/ob_px_admission.h"
+#include "sql/engine/cmd/ob_table_direct_insert_trans.h"
 #include "sql/executor/ob_executor.h"
 #include "sql/executor/ob_cmd_executor.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
@@ -455,6 +456,13 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
     }
   }
 
+  // for insert /*+ append */ into select clause
+  if (OB_SUCC(ret) && (stmt::T_INSERT == get_stmt_type())) {
+    if (OB_FAIL(ObTableDirectInsertTrans::try_start_direct_insert(ctx, *physical_plan_))) {
+      LOG_WARN("fail to start direct insert", KR(ret));
+    }
+  }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(start_stmt())) {
     LOG_WARN("fail start stmt", K(ret));
@@ -682,6 +690,20 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
     } else if (OB_SUCCESS != (close_ret = executor_.close(ctx))) { // executor_.close里面会等到调度线程结束才返回。
       SQL_LOG(WARN, "fail to close executor", K(ret), K(close_ret));
     }
+
+    ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), *get_physical_plan());
+    // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
+    if ((OB_SUCCESS == close_ret)
+        && (OB_SUCCESS == errcode || OB_ITER_END == errcode)
+        && (stmt::T_INSERT == get_stmt_type())) {
+      // for insert /*+ append */ into select clause
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ObTableDirectInsertTrans::try_finish_direct_insert(ctx, *physical_plan_))) {
+        errcode_ = tmp_ret; // record error code
+        errcode = tmp_ret;
+        LOG_WARN("fail to finish direct insert", KR(tmp_ret));
+      }
+    }
 //    // 必须要在executor_.execute_plan运行之后再调用exec_result_的一系列函数。
 //    if (OB_FAIL(exec_result_.close(ctx))) {
 //      SQL_LOG(WARN, "fail close main query", K(ret));
@@ -715,8 +737,6 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 
   // 无论如何都reset掉executor_，否则前面调executor_.init的时候可能会报init twice
   executor_.reset();
-
-  ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), *get_physical_plan());
 
   NG_TRACE(close_plan_end);
   return ret;

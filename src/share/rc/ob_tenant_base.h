@@ -121,6 +121,7 @@ namespace rootserver
 namespace observer
 {
   class ObTenantMetaChecker;
+  class ObTableLoadService;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -216,6 +217,7 @@ namespace detector
       storage::ObTenantFreezeInfoMgr*,               \
       transaction::ObTxLoopWorker *,                 \
       storage::ObAccessService*,                     \
+      observer::ObTableLoadService*,                 \
       concurrency_control::ObMultiVersionGarbageCollector*, \
       sql::ObUDRMgr*,                        \
       sql::ObFLTSpanMgr*,                            \

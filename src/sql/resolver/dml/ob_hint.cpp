@@ -284,6 +284,7 @@ void ObGlobalHint::reset()
   disable_cost_based_transform_ = false;
   opt_params_.reset();
   ob_ddl_schema_versions_.reuse();
+  enable_append_ = false;
   osg_hint_.flags_ = 0;
 }
 
@@ -307,6 +308,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_opt_features_version_hint(other.opt_features_version_);
   disable_transform_ |= other.disable_transform_;
   disable_cost_based_transform_ |= other.disable_cost_based_transform_;
+  enable_append_ |= other.enable_append_;
   osg_hint_.flags_ |= other.osg_hint_.flags_;
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
@@ -457,6 +459,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && disable_cost_based_transform()) {
     PRINT_GLOBAL_HINT_STR("NO_COST_BASED_QUERY_TRANSFORMATION");
+  }
+  if (OB_SUCC(ret) && has_append()) { // APPEND
+    PRINT_GLOBAL_HINT_STR("APPEND");
   }
   if (OB_SUCC(ret) && OB_FAIL(opt_params_.print_opt_param_hint(plan_text))) {
     LOG_WARN("failed to print opt param hint", K(ret));

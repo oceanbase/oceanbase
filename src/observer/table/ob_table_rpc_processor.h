@@ -79,6 +79,12 @@ public:
   int64_t max_local_retry_count_;
 };
 
+class ObTableApiUtils
+{
+public:
+  static int check_user_access(const common::ObString &credential_str, const ObGlobalContext &gctx, table::ObTableApiCredential &credential);
+};
+
 /*
  * Normally, the rpc process flow is:
  * 1. deserialize

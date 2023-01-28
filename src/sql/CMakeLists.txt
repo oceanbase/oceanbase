@@ -177,6 +177,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_index_executor.cpp
   engine/cmd/ob_kill_executor.cpp
   engine/cmd/ob_kill_session_arg.cpp
+  engine/cmd/ob_load_data_direct_impl.cpp
   engine/cmd/ob_load_data_executor.cpp
   engine/cmd/ob_load_data_impl.cpp
   engine/cmd/ob_load_data_parser.cpp
@@ -206,6 +207,8 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_variable_set_executor.cpp
   engine/cmd/ob_xa_executor.cpp
   engine/cmd/ob_context_executor.cpp
+  engine/cmd/ob_table_direct_insert_ctx.cpp
+  engine/cmd/ob_table_direct_insert_trans.cpp
 )
 
 ob_set_subtarget(ob_sql engine_dml

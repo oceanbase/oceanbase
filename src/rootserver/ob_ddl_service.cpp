@@ -9120,6 +9120,8 @@ const char* ObDDLService::ddl_type_str(const ObDDLType ddl_type)
     str = "column redefinition";
   } else if (DDL_TABLE_REDEFINITION == ddl_type) {
     str = "table redefinition";
+  } else if (DDL_DIRECT_LOAD == ddl_type) {
+    str = "direct load";
   } else if (DDL_MODIFY_AUTO_INCREMENT == ddl_type) {
     str = "modify auto_increment";
   } else if (DDL_CONVERT_TO_CHARACTER == ddl_type) {
@@ -10916,6 +10918,135 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           LOG_WARN("publish_schema failed", K(ret));
         } else if (OB_TMP_FAIL(root_service->get_ddl_scheduler().schedule_ddl_task(task_record))) {
           LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::create_hidden_table(
+    const obrpc::ObCreateHiddenTableArg &create_hidden_table_arg,
+    obrpc::ObCreateHiddenTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = create_hidden_table_arg.tenant_id_;
+  const int64_t table_id = create_hidden_table_arg.table_id_;
+  const uint64_t dest_tenant_id = create_hidden_table_arg.dest_tenant_id_;
+  ObRootService *root_service = GCTX.root_service_;
+  bool bind_tablets = true;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *orig_table_schema = NULL;
+  const ObDatabaseSchema *orig_database_schema = nullptr;
+  common::ObArenaAllocator allocator_for_redef(lib::ObLabel("StartRedefTable"));
+  if (OB_UNLIKELY(!create_hidden_table_arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("create_hidden_table_arg is invalid", K(ret), K(create_hidden_table_arg));
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", K(ret));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, orig_table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret));
+  } else if (OB_ISNULL(orig_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("orig table schema is nullptr", K(ret));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, orig_table_schema->get_database_id(), orig_database_schema))) {
+    LOG_WARN("fail to get orig database schema", K(ret));
+  } else if (OB_ISNULL(orig_database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("orig_database_schema is nullptr", K(ret));
+  } else {
+    HEAP_VAR(ObTableSchema, new_table_schema) {
+      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+      if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
+        LOG_WARN("fail to assign schema", K(ret));
+      } else {
+        ObDDLSQLTransaction trans(schema_service_);
+        common::ObArenaAllocator allocator;
+        ObDDLTaskRecord task_record;
+        int64_t refreshed_schema_version = 0;
+        new_table_schema.set_tenant_id(dest_tenant_id);
+        new_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
+        if (orig_table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_OFFLINE_DDL) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("not in offline ddl, create hidden table fail", K(ret));
+        } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+          LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+          LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+        } else if (OB_FAIL(create_user_hidden_table(
+                  *orig_table_schema,
+                  new_table_schema,
+                  nullptr,
+                  bind_tablets,
+                  schema_guard,
+                  ddl_operator,
+                  trans,
+                  allocator))) {
+          LOG_WARN("fail to create hidden table", K(ret));
+        } else {
+          LOG_INFO("create hidden table success!");
+        }
+        if (OB_SUCC(ret)) {
+          HEAP_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
+            ObPrepareAlterTableArgParam param;
+            if (OB_FAIL(param.init(create_hidden_table_arg.session_id_,
+                                  create_hidden_table_arg.sql_mode_,
+                                  create_hidden_table_arg.ddl_stmt_str_,
+                                  orig_table_schema->get_table_name_str(),
+                                  orig_database_schema->get_database_name_str(),
+                                  orig_database_schema->get_database_name_str(),
+                                  create_hidden_table_arg.tz_info_,
+                                  create_hidden_table_arg.tz_info_wrap_,
+                                  create_hidden_table_arg.nls_formats_))) {
+              LOG_WARN("param init failed", K(ret));
+            } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
+              LOG_WARN("prepare alter table arg fail", K(ret));
+            } else {
+              LOG_DEBUG("alter table arg preparation complete!", K(ret), K(alter_table_arg));
+              ObCreateDDLTaskParam param(tenant_id,
+                                        create_hidden_table_arg.ddl_type_,
+                                        orig_table_schema,
+                                        &new_table_schema,
+                                        table_id,
+                                        orig_table_schema->get_schema_version(),
+                                        create_hidden_table_arg.parallelism_,
+                                        &allocator_for_redef,
+                                        &alter_table_arg);
+              if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
+                LOG_WARN("submit ddl task failed", K(ret));
+              } else {
+                res.tenant_id_ = tenant_id;
+                res.table_id_ = table_id;
+                res.dest_tenant_id_ = dest_tenant_id;
+                res.dest_table_id_ = task_record.target_object_id_;
+                res.schema_version_ = task_record.schema_version_;
+                res.trace_id_ = task_record.trace_id_;
+                res.task_id_ = task_record.task_id_;
+              }
+            }
+          }
+          if (trans.is_started()) {
+            int temp_ret = OB_SUCCESS;
+            if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+              LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+              ret = (OB_SUCC(ret)) ? temp_ret : ret;
+            }
+          }
+          if (OB_SUCC(ret)) {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_FAIL(publish_schema(tenant_id))) {
+              LOG_WARN("publish_schema failed", K(ret));
+            } else if (OB_TMP_FAIL(root_service->get_ddl_scheduler().schedule_ddl_task(task_record))) {
+              LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
+            } else {
+              LOG_INFO("schedule ddl task success");
+            }
+          }
         }
       }
     }
@@ -13364,6 +13495,10 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                                                   trans,
                                                                   schema_guard,
                                                                   is_add_identity_column ? sequence_ddl_arg : nullptr))) {
+    // alter table t1 modify c2 int generated always as identity;
+    // alter table t1 add c2 int generated by default on null as identity;
+    // alter table t1 add column c6 datetime(6) default '20180224' after c2;
+    // alter table t1 add column c1_5 int generated always as identity after c1;
     LOG_WARN("failed to create sequence in create table", K(ret));
   } else if (OB_FAIL(build_aux_lob_table_schema_if_need(hidden_table_schema, aux_table_schemas))) {
     LOG_WARN("failed to build_aux_lob_table_schema_if_need", K(ret), K(hidden_table_schema));

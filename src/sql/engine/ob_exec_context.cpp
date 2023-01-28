@@ -122,7 +122,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     nested_level_(0),
     is_ps_prepare_stage_(false),
     register_op_id_(OB_INVALID_ID),
-    tmp_alloc_used_(false)
+    tmp_alloc_used_(false),
+    table_direct_insert_ctx_()
 {
 }
 

@@ -58,12 +58,10 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
       /*do nothing*/
     } else if (OB_FAIL(do_gather_stats(ctx, param, extra, approx_opt_part_stats, opt_stats))) {
       LOG_WARN("failed to gather subpartition stats", K(ret));
-    } else if (OB_FAIL(buffer_opt_stat(ctx,
-                                       param.column_params_,
-                                       all_tstats,
-                                       all_cstats,
-                                       opt_stats))) {
-      LOG_WARN("failed to buffer opt stat", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::calssify_opt_stat(opt_stats,
+                                                           all_tstats,
+                                                           all_cstats))) {
+      LOG_WARN("failed to calssify opt stat", K(ret));
     }
   }
   if (OB_SUCC(ret) && param.need_part_) {
@@ -74,12 +72,10 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
       /*do nothing*/
     } else if (OB_FAIL(do_gather_stats(ctx, param, extra, approx_opt_part_stats, opt_stats))) {
       LOG_WARN("failed to gather partition stats", K(ret));
-    } else if (OB_FAIL(buffer_opt_stat(ctx,
-                                       param.column_params_,
-                                       all_tstats,
-                                       all_cstats,
-                                       opt_stats))) {
-      LOG_WARN("failed to buffer opt stat", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::calssify_opt_stat(opt_stats,
+                                                           all_tstats,
+                                                           all_cstats))) {
+      LOG_WARN("failed to calssify opt stat", K(ret));
     }
   }
   if (OB_SUCC(ret) && (param.need_global_ ||
@@ -89,12 +85,10 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
     ObSEArray<ObOptStat, 4> opt_stats;
     if (OB_FAIL(do_gather_stats(ctx, param, extra, approx_opt_part_stats, opt_stats))) {
       LOG_WARN("failed to gather table stats", K(ret));
-    } else if (OB_FAIL(buffer_opt_stat(ctx,
-                                       param.column_params_,
-                                       all_tstats,
-                                       all_cstats,
-                                       opt_stats))) {
-      LOG_WARN("failed to buffer opt stat", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::calssify_opt_stat(opt_stats,
+                                                           all_tstats,
+                                                           all_cstats))) {
+      LOG_WARN("failed to calssify opt stat", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -647,31 +641,6 @@ int ObDbmsStatsExecutor::init_opt_stat(ObIAllocator &allocator,
       col_stat->set_stat_level(extra.type_);
       col_stat->set_column_id(param.column_params_.at(i).column_id_);
       col_stat->set_collation_type(param.column_params_.at(i).cs_type_);
-    }
-  }
-  return ret;
-}
-
-
-int ObDbmsStatsExecutor::buffer_opt_stat(ObExecContext &ctx,
-                                         const ObIArray<ObColumnStatParam> &column_params,
-                                         ObIArray<ObOptTableStat*> &table_stats,
-                                         ObIArray<ObOptColumnStat*> &column_stats,
-                                         ObIArray<ObOptStat> &opt_stats)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < opt_stats.count(); ++i) {
-    if (OB_FAIL(table_stats.push_back(opt_stats.at(i).table_stat_))) {
-      LOG_WARN("failed to push back table stat", K(ret));
-    } else {
-      for (int64_t j = 0; OB_SUCC(ret) && j < opt_stats.at(i).column_stats_.count(); ++j) {
-        if (OB_ISNULL(opt_stats.at(i).column_stats_.at(j))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(opt_stats.at(i).column_stats_.at(j)));
-        } else if (opt_stats.at(i).column_stats_.at(j)->is_valid()) {
-          ret = column_stats.push_back(opt_stats.at(i).column_stats_.at(j));
-        }
-      }
     }
   }
   return ret;

@@ -42,18 +42,16 @@ int ObAllVirtualLoadDataStat::inner_open()
 {
   int ret = OB_SUCCESS;
   sql::ObGlobalLoadDataStatMap *job_status_map = sql::ObGlobalLoadDataStatMap::getInstance();
-
-  job_status_map->get_all_job_status(all_job_status_op_);
-
+  if (OB_FAIL(job_status_map->get_all_job_status(all_job_status_op_))) {
+    SERVER_LOG(WARN, "fail to get all job status", K(ret));
+  }
   return ret;
 }
 
 int ObAllVirtualLoadDataStat::inner_close()
 {
   int ret = OB_SUCCESS;
-
   all_job_status_op_.reset();
-
   return ret;
 }
 
@@ -61,14 +59,10 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   sql::ObLoadDataStat *job_status = nullptr;
-
-  if (all_job_status_op_.end()) {
-    all_job_status_op_.reset();
-    ret = OB_ITER_END;
-  } else if ((job_status = all_job_status_op_.next_job_status()) == nullptr) {
-    all_job_status_op_.reset();
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "job_status = null", K(ret));
+  if (OB_FAIL(all_job_status_op_.get_next_job_status(job_status))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      SERVER_LOG(WARN, "fail to get next job status", KR(ret));
+    }
   } else {
     ObObj *cells = cur_row_.cells_;
     const int64_t col_count = output_column_ids_.count();
@@ -98,6 +92,11 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
         }
         case JOB_ID: {
           cells[i].set_int(job_status->job_id_);
+          break;
+        }
+        case JOB_TYPE: {
+          cells[i].set_varchar(job_status->job_type_);
+          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case TABLE_NAME: {
@@ -131,16 +130,19 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
           break;
         }
         case LOAD_TIME: {//当前导入数据已经花费的秒数
+          int64_t current_time = common::ObTimeUtility::current_time();
           cells[i].set_int((current_time - job_status->start_time_) / 1000000);
           break;
         }
         case ESTIMATED_REMAINING_TIME: {
           int64_t load_time = current_time - job_status->start_time_;
           int64_t estimated_remaining_time = 0;
-          if (job_status->processed_bytes_ != 0) {
-            int64_t remain_bytes = job_status->total_bytes_ - job_status->processed_bytes_;
-            double speed = (double)job_status->processed_bytes_ / load_time;
-            estimated_remaining_time = (int64_t)(remain_bytes / speed / 1000000);
+          if ((job_status->parsed_bytes_ != 0) && OB_LIKELY(load_time != 0)) {
+            double speed = (double)job_status->parsed_bytes_ / load_time;
+            if (OB_LIKELY(speed != 0)) {
+              int64_t remain_bytes = job_status->total_bytes_ - job_status->parsed_bytes_;
+              estimated_remaining_time = (int64_t)(remain_bytes / speed / 1000000);
+            }
           }
           if (estimated_remaining_time < 0) {
             cells[i].set_int(INT64_MAX);
@@ -157,12 +159,12 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
           cells[i].set_int(job_status->read_bytes_);
           break;
         }
-        case PROCESSED_BYTES: {
-          cells[i].set_int(job_status->processed_bytes_);
+        case PARSED_BYTES: {
+          cells[i].set_int(job_status->parsed_bytes_);
           break;
         }
-        case PROCESSED_ROWS: {
-          cells[i].set_int(job_status->processed_rows_);
+        case PARSED_ROWS: {
+          cells[i].set_int(job_status->parsed_rows_);
           break;
         }
         case TOTAL_SHUFFLE_TASK: {
@@ -185,6 +187,50 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
           cells[i].set_int(job_status->total_wait_secs_);
           break;
         }
+        case MAX_ALLOWED_ERROR_ROWS: {
+          cells[i].set_int(job_status->max_allowed_error_rows_);
+          break;
+        }
+        case DETECTED_ERROR_ROWS: {
+          cells[i].set_int(job_status->detected_error_rows_);
+          break;
+        }
+        case COORDINATOR_RECEIVED_ROWS: {
+          cells[i].set_int(job_status->coordinator.received_rows_);
+          break;
+        }
+        case COORDINATOR_LAST_COMMIT_SEGMENT_ID: {
+          cells[i].set_int(job_status->coordinator.last_commit_segment_id_);
+          break;
+        }
+        case COORDINATOR_STATUS: {
+          cells[i].set_varchar(job_status->coordinator.status_);
+          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+        case COORDINATOR_TRANS_STATUS: {
+          cells[i].set_varchar(job_status->coordinator.trans_status_);
+          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+        case STORE_PROCESSED_ROWS: {
+          cells[i].set_int(job_status->store.processed_rows_);
+          break;
+        }
+        case STORE_LAST_COMMIT_SEGMENT_ID: {
+          cells[i].set_int(job_status->store.last_commit_segment_id_);
+          break;
+        }
+        case STORE_STATUS: {
+          cells[i].set_varchar(job_status->store.status_);
+          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+        case STORE_TRANS_STATUS: {
+          cells[i].set_varchar(job_status->store.trans_status_);
+          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));
@@ -202,4 +248,4 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
 }
 
 } // namespace observer
-} // namespace oceanbasenamespace observer
+} // namespace oceanbase

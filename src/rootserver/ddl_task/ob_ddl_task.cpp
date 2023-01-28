@@ -660,6 +660,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_TABLE_REDEFINITION:
       ddl_type_str = "table redefinition";
       break;
+    case DDL_DIRECT_LOAD:
+      ddl_type_str = "direct load";
+      break;
     case DDL_MODIFY_AUTO_INCREMENT:
       ddl_type_str = "modify auto increment";
       break;
@@ -889,8 +892,9 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const bool enable_flt, 
     }
 
     if (OB_CANCELED == real_ret_code) {
-      (void)ObDDLTaskRecordOperator::kill_task_inner_sql(root_service->get_sql_proxy(),
-          trace_id_, tenant_id_, sql_exec_addr_); // ignore return code
+      // (void)ObDDLTaskRecordOperator::kill_task_inner_sql(root_service->get_sql_proxy(),
+      //     trace_id_, tenant_id_, sql_exec_addr_); // ignore return code
+      LOG_WARN("ddl_task switch_status kill_task_inner_sql");
     }
   }
   return ret;
@@ -2633,6 +2637,42 @@ int ObDDLTaskRecordOperator::get_all_record(
   return ret;
 }
 
+int ObDDLTaskRecordOperator::check_task_id_exist(common::ObMySQLProxy &proxy, const int64_t task_id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!proxy.is_inited())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()));
+  } else {
+    ObSqlString sql_string;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_string.assign_fmt("SELECT count(*) as have FROM %s WHERE task_id=%lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME, task_id))) {
+        LOG_WARN("assign sql string failed", K(ret));
+      } else if (OB_FAIL(proxy.read(res, sql_string.ptr()))) {
+        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_ISNULL((result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else {
+        int64_t have = 0;
+        int64_t cnt = 0;
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          EXTRACT_INT_FIELD_MYSQL(*result, "have", have, uint64_t);
+          cnt++;
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+        if (OB_SUCC(ret)) {
+          exist = (1 == cnt && have >= 1);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLTaskRecordOperator::to_hex_str(const ObString &src, ObSqlString &dst)
 {
   int ret = OB_SUCCESS;
@@ -2821,7 +2861,11 @@ int ObDDLTaskRecordOperator::select_for_update(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get sql result", K(ret), KP(result));
       } else if (OB_FAIL(result->next())) {
-        LOG_WARN("fail to get next row", K(ret));
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get next row", K(ret));
+        }
       } else {
         EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "execution_id", execution_id, int64_t);

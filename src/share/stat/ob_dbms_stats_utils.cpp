@@ -284,6 +284,30 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                         const bool is_online_stat /*default false*/)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx.get_my_session()));
+  } else if (OB_FAIL(split_batch_write(ctx.get_virtual_table_ctx().schema_guard_,
+                                       ctx.get_my_session()->get_effective_tenant_id(),
+                                       table_stats,
+                                       column_stats,
+                                       is_index_stat,
+                                       is_history_stat,
+                                       is_online_stat))) {
+    LOG_WARN("failed to split batch write", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
+int ObDbmsStatsUtils::split_batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
+                                        const uint64_t tenant_id,
+                                        ObIArray<ObOptTableStat*> &table_stats,
+                                        ObIArray<ObOptColumnStat*> &column_stats,
+                                        const bool is_index_stat/*default false*/,
+                                        const bool is_history_stat/*default false*/,
+                                        const bool is_online_stat /*default false*/)
+{
+  int ret = OB_SUCCESS;
   int64_t idx_tab_stat = 0;
   int64_t idx_col_stat = 0;
   //avoid the write stat sql is too long, we split write table stats and column stats:
@@ -291,10 +315,6 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
   LOG_DEBUG("dbms stats write stats", K(table_stats), K(column_stats));
   const int64_t MAX_NUM_OF_WRITE_STATS = 2000;
   int64_t current_time = ObTimeUtility::current_time();
-  if (OB_ISNULL(ctx.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(ctx.get_my_session()));
-  }
   while (OB_SUCC(ret) &&
         (idx_tab_stat < table_stats.count() || idx_col_stat < column_stats.count())) {
     ObSEArray<ObOptTableStat*, 4> write_table_stats;
@@ -331,8 +351,8 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDbmsStatsUtils::batch_write(ctx.get_virtual_table_ctx().schema_guard_,
-                                                ctx.get_my_session()->get_effective_tenant_id(),
+      if (OB_FAIL(ObDbmsStatsUtils::batch_write(schema_guard,
+                                                tenant_id,
                                                 write_table_stats,
                                                 write_column_stats,
                                                 current_time,
@@ -425,6 +445,28 @@ int ObDbmsStatsUtils::get_dst_partition_by_tablet_id(sql::ObExecContext &ctx,
     LOG_WARN("get unexpected null", K(ret), K(tablet_id), K(partition_infos));
   } else {
     LOG_TRACE("succeed to get dst partition by tablet id", K(tablet_id), K(partition_infos), K(partition_id));
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::calssify_opt_stat(const ObIArray<ObOptStat> &opt_stats,
+                                        ObIArray<ObOptTableStat*> &table_stats,
+                                        ObIArray<ObOptColumnStat*> &column_stats)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < opt_stats.count(); ++i) {
+    if (OB_FAIL(table_stats.push_back(opt_stats.at(i).table_stat_))) {
+      LOG_WARN("failed to push back table stat", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < opt_stats.at(i).column_stats_.count(); ++j) {
+        if (OB_ISNULL(opt_stats.at(i).column_stats_.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(opt_stats.at(i).column_stats_.at(j)));
+        } else if (opt_stats.at(i).column_stats_.at(j)->is_valid()) {
+          ret = column_stats.push_back(opt_stats.at(i).column_stats_.at(j));
+        }
+      }
+    }
   }
   return ret;
 }
