@@ -171,7 +171,7 @@ int ObRemoteFetchWorker::submit_fetch_log_task(ObFetchLogTask *task)
   } else if (OB_FAIL(task_queue_.push(task))) {
     LOG_WARN("push task failed", K(ret), KPC(task));
   } else {
-    LOG_TRACE("submit_fetch_log_task succ", KPC(task));
+    LOG_TRACE("submit_fetch_log_task succ", KP(task));
   }
   return ret;
 }
@@ -256,9 +256,9 @@ int ObRemoteFetchWorker::handle_single_task_()
   } else {
     ObFetchLogTask *task = static_cast<ObFetchLogTask *>(data);
     ObLSID id = task->id_;
-    // after
+    // after task handle, DON'T print it any more
     if (OB_FAIL(handle_fetch_log_task_(task))) {
-      LOG_WARN("handle fetch log task failed", K(ret), KPC(task));
+      LOG_WARN("handle fetch log task failed", K(ret), KP(task), K(id));
     }
 
     // only fatal error report fail, retry with others
@@ -306,7 +306,7 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
     int tmp_ret = OB_SUCCESS;
     task->iter_.update_source_cb();
     if (OB_SUCCESS != (tmp_ret = try_retire_(task))) {
-      LOG_WARN("retire task failed", K(tmp_ret), KPC(task));
+      LOG_WARN("retire task failed", K(tmp_ret), KP(task));
     }
   }
 
@@ -409,6 +409,7 @@ int ObRemoteFetchWorker::push_submit_array_(ObFetchLogTask &task)
 {
   int ret = OB_SUCCESS;
   const ObLSID &id = task.id_;
+  DEBUG_SYNC(BEFORE_RESTORE_SERVICE_PUSH_FETCH_DATA);
   GET_RESTORE_HANDLER_CTX(id) {
     if (OB_FAIL(restore_handler->submit_sorted_task(task))) {
       LOG_WARN("submit sort task failed", K(ret), K(task));
@@ -496,7 +497,7 @@ int ObRemoteFetchWorker::foreach_ls_(const ObLSID &id)
         int tmp_ret = OB_SUCCESS;
         task->iter_.update_source_cb();
         if (OB_SUCCESS != (tmp_ret = try_retire_(task))) {
-          LOG_WARN("retire task failed", K(tmp_ret), KPC(task));
+          LOG_WARN("retire task failed", K(tmp_ret), KP(task));
         }
       }
     }
