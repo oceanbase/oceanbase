@@ -377,7 +377,7 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
   ObTxDataMemtable *tx_data_memtable = nullptr;
   ObTableHandleV2 (&memtable_handles)[MAX_TX_DATA_MEMTABLE_CNT] = write_guard.handles_;
 
-  for (int i = write_guard.size_ - 1; OB_SUCC(ret) && OB_NOT_NULL(tx_data) && i >= 0; i--) {
+  for (int i = write_guard.size_ - 1; OB_SUCC(ret) && OB_NOT_NULL(tx_data) && !inserted && i >= 0; i--) {
     tx_data_memtable = nullptr;
     if (OB_FAIL(memtable_handles[i].get_tx_data_memtable(tx_data_memtable))) {
       ret = OB_ERR_UNEXPECTED;
@@ -404,7 +404,7 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
       }
     } else {
       // should not insert into this memtable
-      STORAGE_LOG(INFO, "skip this tx data memtable", KPC(tx_data), KPC(tx_data_memtable));
+      STORAGE_LOG(DEBUG, "skip this tx data memtable", KPC(tx_data), KPC(tx_data_memtable));
     }
   }
   tg.click();
@@ -416,7 +416,7 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
     if (tx_data->end_scn_ <= clog_checkpoint_scn) {
       // Filter this tx data. The part trans ctx need to handle this error code because the memory
       // of tx data need to be freed.
-      STORAGE_LOG(INFO, "This tx data is filtered.", K(clog_checkpoint_scn), KPC(tx_data));
+      STORAGE_LOG(DEBUG, "This tx data is filtered.", K(clog_checkpoint_scn), KPC(tx_data));
       tg.click();
 
     } else {
