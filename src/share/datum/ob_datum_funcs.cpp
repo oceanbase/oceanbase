@@ -295,6 +295,7 @@ DEF_DATUM_SPECIAL_HASH_FUNCS(ObUFloatType);
 DEF_DATUM_SPECIAL_HASH_FUNCS(ObDoubleType);
 DEF_DATUM_SPECIAL_HASH_FUNCS(ObUDoubleType);
 DEF_DATUM_SPECIAL_HASH_FUNCS(ObJsonType);
+DEF_DATUM_SPECIAL_HASH_FUNCS(ObGeometryType);
 
 OB_INLINE static uint64_t datum_varchar_hash(const ObDatum &datum,
                                              const ObCollationType cs_type,

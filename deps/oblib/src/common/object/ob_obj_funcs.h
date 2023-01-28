@@ -1489,7 +1489,67 @@ DEF_TEXT_FUNCS(ObTinyTextType, string, ObString);
 DEF_TEXT_FUNCS(ObTextType, string, ObString);
 DEF_TEXT_FUNCS(ObMediumTextType, string, ObString);
 DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
-DEF_TEXT_FUNCS(ObGeometryType, string, ObString);  //todo: not implement
+
+
+#define DEF_GEO_CS_FUNCS(OBJTYPE)                                    \
+  template <>                                                           \
+  inline int64_t obj_crc64<OBJTYPE>(const ObObj &obj, const int64_t current)   \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    int cs = obj.get_collation_type();                                  \
+    int64_t ret =  ob_crc64_sse42(current, &type, sizeof(type));        \
+    ret = ob_crc64_sse42(ret, &cs, sizeof(cs));                         \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                     \
+  template <>                                                           \
+  inline int64_t obj_crc64_v2<OBJTYPE>(const ObObj &obj, const int64_t current)   \
+  {                                                                     \
+    int cs = obj.get_collation_type();                                  \
+    int64_t ret =  ob_crc64_sse42(current, &cs, sizeof(cs));        \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                     \
+  template <>                                                           \
+  inline void obj_batch_checksum<OBJTYPE>(const ObObj &obj, ObBatchChecksum &bc) \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    int cs = obj.get_collation_type();                                  \
+    bc.fill(&type, sizeof(type));                                       \
+    bc.fill(&cs, sizeof(cs));                                           \
+    bc.fill(obj.get_string_ptr(), obj.get_string_len());                \
+  }                                                                     \
+  template <>                                                           \
+  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  {                                                                     \
+    return varchar_murmurhash(obj, obj.get_collation_type(), hash);     \
+  }                                                                     \
+  template <typename T>                                                 \
+  struct ObjHashCalculator<OBJTYPE, T, ObObj>                           \
+  {                                                                             \
+    static uint64_t calc_hash_value(const ObObj &param, const uint64_t hash) {     \
+      common::ObString wkb = param.get_string();                                   \
+      uint64_t hash_res = hash;                                                       \
+      if (wkb.length() > 0 && !param.is_null()) {                                     \
+        hash_res = ObCharset::hash(param.get_collation_type(), param.get_string_ptr(), \
+                                   param.get_string_len(), hash,                     \
+                                   false,  T::is_varchar_hash ? T::hash : NULL);   \
+      }                                                                            \
+      return hash_res;                                                             \
+    }                                                                              \
+  };                                                                               \
+  template <>                                                               \
+  inline uint64_t obj_crc64_v3<OBJTYPE>(const ObObj &obj, const uint64_t current)  \
+  {                                                                         \
+    int cs = obj.get_collation_type();                                      \
+    uint64_t ret = ob_crc64_sse42(current, &cs, sizeof(cs));               \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                         \
+
+#define DEF_GEO_FUNCS(OBJTYPE, TYPE, VTYPE)        \
+  DEF_TEXT_PRINT_FUNCS(OBJTYPE);                   \
+  DEF_GEO_CS_FUNCS(OBJTYPE);                       \
+  DEF_TEXT_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)
+
+DEF_GEO_FUNCS(ObGeometryType, string, ObString);
 
 #define DEF_JSON_CS_FUNCS(OBJTYPE)                                    \
   template <>                                                           \
