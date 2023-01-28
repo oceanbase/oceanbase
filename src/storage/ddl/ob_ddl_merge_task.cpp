@@ -798,9 +798,9 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
     ObArray<ObDDLChecksumItem> ddl_checksum_items;
     if (OB_FAIL(table_schema->get_multi_version_column_descs(column_ids))) {
       LOG_WARN("fail to get column ids", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_UNLIKELY(column_checksums.count() != column_ids.count())) {
+    } else if (OB_UNLIKELY(column_checksums.count() > column_ids.count())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect error, column checksums count didn't equal to column ids count", K(ret),
+      LOG_WARN("unexpect error, column checksums count larger than column ids count", K(ret),
           K(ls_id), K(tablet_id), K(column_checksums.count()), K(column_ids.count()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_checksums.count(); ++i) {

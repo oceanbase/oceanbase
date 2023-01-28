@@ -1460,6 +1460,8 @@ int ObTabletTableStore::build_ha_ddl_tables_(
       break;
     } else if (!new_table->is_ddl_sstable()) {
       //do nothing
+    } else if (static_cast<ObSSTable *>(new_table)->get_meta().get_basic_meta().ddl_scn_ < tablet_ptr_->get_tablet_meta().ddl_start_scn_) {
+      // the ddl start scn is old, drop it
     } else if (OB_NOT_NULL(last_ddl_table) && new_table->get_start_scn() != last_ddl_table->get_end_scn()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ddl table is not continue", K(ret), K(param), K(old_store));
