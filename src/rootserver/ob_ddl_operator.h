@@ -967,7 +967,7 @@ private:
                                     common::ObMySQLTransaction &trans);
   virtual int init_tenant_user(const uint64_t tenant_id,
                                const common::ObString &user_name,
-                               const char* password,
+                               const common::ObString &pwd_raw,
                                const uint64_t pure_user_id,
                                const common::ObString &user_comment,
                                common::ObMySQLTransaction &trans,
@@ -1134,6 +1134,7 @@ private:
       const uint64_t tenant_id,
       common::ObMySQLTransaction &trans);
 private:
+  static const int64_t ENCRYPT_KEY_LENGTH = 15;
   share::schema::ObMultiVersionSchemaService &schema_service_;
   common::ObMySQLProxy &sql_proxy_;
 };

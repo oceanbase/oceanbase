@@ -5537,7 +5537,7 @@ int ObDDLOperator::init_inner_user_privs(
 
 int ObDDLOperator::init_tenant_user(const uint64_t tenant_id,
                                     const ObString &user_name,
-                                    const char *password,
+                                    const ObString &pwd_raw,
                                     const uint64_t pure_user_id,
                                     const ObString &user_comment,
                                     ObMySQLTransaction &trans,
@@ -5551,7 +5551,6 @@ int ObDDLOperator::init_tenant_user(const uint64_t tenant_id,
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   ObUserInfo user;
-  ObString pwd_raw(password);
   user.set_tenant_id(tenant_id);
   pwd_enc.assign_ptr(enc_buf, ENC_BUF_LEN);
   if (OB_ISNULL(schema_service)) {
@@ -5571,7 +5570,9 @@ int ObDDLOperator::init_tenant_user(const uint64_t tenant_id,
   } else {
     user.set_is_locked(set_locked);
     user.set_user_id(pure_user_id);
-    if (!is_oracle_mode || is_user) {
+    if ((!is_oracle_mode || is_user) &&
+        pure_user_id != OB_ORA_LBACSYS_USER_ID &&
+        pure_user_id != OB_ORA_AUDITOR_USER_ID) {
       user.set_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT);
     }
     user.set_schema_version(OB_CORE_SCHEMA_VERSION);
@@ -5616,39 +5617,49 @@ int ObDDLOperator::init_tenant_users(const ObTenantSchema &tenant_schema,
   ObString ora_dba_role_name(OB_ORA_DBA_ROLE_NAME);
   ObString ora_public_role_name(OB_ORA_PUBLIC_ROLE_NAME);
   ObString sys_standby_name(OB_STANDBY_USER_NAME);
+  char ora_lbacsys_password[ENCRYPT_KEY_LENGTH];
+  char ora_auditor_password[ENCRYPT_KEY_LENGTH];
   bool is_oracle_mode = false;
   if (OB_FAIL(sys_variable.get_oracle_mode(is_oracle_mode))) {
     RS_LOG(WARN, "failed to get oracle mode", K(ret), K(tenant_id));
   } else if (is_oracle_mode) {
     // Only retain the three users that is SYS/LBACSYS/ORAAUDITOR in Oracle mode.
-    if (OB_FAIL(init_tenant_user(tenant_id, ora_sys_user_name, "",
+    if (OB_FAIL(share::ObKeyGenerator::generate_encrypt_key(ora_lbacsys_password, ENCRYPT_KEY_LENGTH))) {
+      RS_LOG(WARN, "failed to generate lbacsys's password", K(ret), K(tenant_id));
+    } else if (OB_FAIL(share::ObKeyGenerator::generate_encrypt_key(ora_auditor_password, ENCRYPT_KEY_LENGTH))) {
+      RS_LOG(WARN, "failed to generate auditor's password", K(ret), K(tenant_id));
+    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_sys_user_name, ObString(""),
         OB_ORA_SYS_USER_ID, "oracle system administrator", trans, false, true, true))) {
       RS_LOG(WARN, "failed to init oracle sys user", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_lbacsys_user_name, OB_ORA_LBACSYS_NAME,
+    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_lbacsys_user_name,
+        ObString(ENCRYPT_KEY_LENGTH, ora_lbacsys_password),
         OB_ORA_LBACSYS_USER_ID, "oracle system administrator", trans, true, true, true))) {
       RS_LOG(WARN, "failed to init oracle sys user", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_auditor_user_name, OB_ORA_AUDITOR_NAME,
+    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_auditor_user_name,
+        ObString(ENCRYPT_KEY_LENGTH, ora_auditor_password),
         OB_ORA_AUDITOR_USER_ID, "oracle system administrator", trans, true, true, true))) {
       RS_LOG(WARN, "failed to init oracle sys user", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_connect_role_name, "",
+    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_connect_role_name, ObString(""),
          OB_ORA_CONNECT_ROLE_ID, "oracle connect role", trans, false, false, true))) {
       RS_LOG(WARN, "fail to init oracle connect role", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_resource_role_name, "",
+    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_resource_role_name, ObString(""),
          OB_ORA_RESOURCE_ROLE_ID, "oracle resource role", trans, false, false, true))) {
       RS_LOG(WARN, "fail to init oracle resource role", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_dba_role_name, "",
+    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_dba_role_name, ObString(""),
          OB_ORA_DBA_ROLE_ID, "oracle dba role", trans, false, false, true))) {
       RS_LOG(WARN, "fail to init oracle dba role", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_public_role_name, "",
+    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_public_role_name, ObString(""),
          OB_ORA_PUBLIC_ROLE_ID, "oracle public role", trans, false, false, true))) {
       RS_LOG(WARN, "fail to init oracle public role", K(ret), K(tenant_id));
     }
   } else {
-    if (OB_FAIL(init_tenant_user(tenant_id, sys_user_name, "", OB_SYS_USER_ID,
+    if (OB_FAIL(share::ObKeyGenerator::generate_encrypt_key(ora_auditor_password, ENCRYPT_KEY_LENGTH))) {
+      RS_LOG(WARN, "failed to generate auditor's password", K(ret), K(tenant_id));
+    } else if (OB_FAIL(init_tenant_user(tenant_id, sys_user_name, ObString(""), OB_SYS_USER_ID,
         "system administrator", trans))) {
       RS_LOG(WARN, "failed to init sys user", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id,
-        ora_auditor_user_name, OB_ORA_AUDITOR_NAME,
+    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_auditor_user_name,
+        ObString(ENCRYPT_KEY_LENGTH, ora_auditor_password),
         OB_ORA_AUDITOR_USER_ID, "system administrator", trans, true))) {
       RS_LOG(WARN, "failed to init mysql audit user", K(ret), K(tenant_id));
     }
