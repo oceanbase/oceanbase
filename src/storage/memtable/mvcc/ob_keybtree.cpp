@@ -690,8 +690,10 @@ int WriteHandle::insert_and_split_upward(BtreeKey key, BtreeVal &val, BtreeNode 
     }
   } else if (this->path_.get_is_found()) {
     ret = OB_ENTRY_EXIST;
+    BtreeVal old_val = val;
     val = old_node->get_val(pos, index);
-    OB_LOG(ERROR, "duplicate key", K(old_node->get_key(pos, index)), K(key), K(old_node->get_val(pos, index)), K(val));
+    OB_LOG(ERROR, "duplicate key", K(old_node->get_key(pos, index)), K(key), K(old_node->get_val(pos, index)), K(val), K(old_val));
+    ob_abort();
   } else {
     ret = insert_into_node(old_node, pos, key, val, new_node_1, new_node_2);
   }
