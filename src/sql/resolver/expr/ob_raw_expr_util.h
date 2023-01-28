@@ -1053,6 +1053,7 @@ public:
                                   const ObSQLSessionInfo &session_info,
                                   const share::schema::ObTableSchema &index_schema,
                                   ObColumnRefRawExpr *&spk_expr);
+  static int check_contain_case_when_exprs(const ObRawExpr *raw_expr, bool &contain);
 
 private :
 
