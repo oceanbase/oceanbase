@@ -187,11 +187,13 @@ int ObTimestampService::switch_to_leader()
       const int64_t standby_last_id = MTL(ObStandbyTimestampService *)->get_last_id();
       const int64_t tmp_last_id = ATOMIC_LOAD(&tmp_last_id_);
       if ((tmp_last_id != 0 && standby_last_id > tmp_last_id)
-           || (tmp_last_id == 0 && standby_last_id > ATOMIC_LOAD(&limited_id_))) {
-        TRANS_LOG(ERROR, "snapshot rolls back", K(standby_last_id), K(tmp_last_id), "limit_id", ATOMIC_LOAD(&limited_id_));
+           || (tmp_last_id == 0 && standby_last_id > ATOMIC_LOAD(&last_id_))) {
+        TRANS_LOG(ERROR, "snapshot rolls back", K(standby_last_id), K(tmp_last_id), "limit_id", ATOMIC_LOAD(&limited_id_),
+                         "last_id", ATOMIC_LOAD(&last_id_), K(version));
       }
       MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::GTS_LEADER);
-      TRANS_LOG(INFO, "ObTimestampService switch to leader success", K(ret), K(version), K(last_id_), "service_type", MTL(ObTimestampAccess *)->get_service_type());
+      TRANS_LOG(INFO, "ObTimestampService switch to leader success", K(ret), K(version), K(last_id_), K(limited_id_),
+                      "service_type", MTL(ObTimestampAccess *)->get_service_type());
     }
   }
 
