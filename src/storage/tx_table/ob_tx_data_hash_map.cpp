@@ -19,19 +19,21 @@ namespace storage {
 
 void ObTxDataHashMap::destroy()
 {
-  ObTxData *curr = nullptr;
-  ObTxData *next = nullptr;
-  for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
-    curr = buckets_[i].next_;
-    buckets_[i].next_ = nullptr;
-
-    while (OB_NOT_NULL(curr)) {
-      next = curr->hash_node_.next_;
-      curr->dec_ref();
-      curr = next;
+  if (OB_NOT_NULL(buckets_)) {
+    ObTxData *curr = nullptr;
+    ObTxData *next = nullptr;
+    for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
+      curr = buckets_[i].next_;
+      buckets_[i].next_ = nullptr;
+      while (OB_NOT_NULL(curr)) {
+        next = curr->hash_node_.next_;
+        curr->dec_ref();
+        curr = next;
+      }
     }
+    ob_free(buckets_);
+    total_cnt_ = 0;
   }
-  ob_free(buckets_);
 }
 
 int ObTxDataHashMap::init()
@@ -45,6 +47,7 @@ int ObTxDataHashMap::init()
     for (int i = 0; i < BUCKETS_CNT; i++) {
       buckets_[i].reset();
     }
+    total_cnt_ = 0;
   }
   return ret;
 }
