@@ -19,6 +19,7 @@
 #include "ob_ls_restore.h"
 #include "share/backup/ob_backup_data_store.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -2234,7 +2235,7 @@ int ObTabletRestoreTask::generate_ddl_restore_tasks_(
   } else if (!ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)) {
     LOG_INFO("tablet not restore minor, skip ddl restore tasks",
         K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(generate_restore_task_(ObITable::is_ddl_sstable, tablet_copy_finish_task, parent_task))) {
+  } else if (OB_FAIL(generate_restore_task_(ObITable::is_ddl_dump_sstable, tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate ddl restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   }
   return ret;

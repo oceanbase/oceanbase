@@ -23,6 +23,7 @@
 #include "storage/tx/ob_timestamp_service.h"
 #include "storage/tx/ob_trans_id_service.h"
 #include "storage/tablelock/ob_lock_memtable.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

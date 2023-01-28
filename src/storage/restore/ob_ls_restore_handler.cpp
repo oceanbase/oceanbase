@@ -31,6 +31,7 @@
 #include "share/backup/ob_backup_data_store.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/restore/ob_restore_persist_helper.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase;
 using namespace share;

@@ -35,7 +35,7 @@ public:
 
   virtual void SetUp();
   virtual void TearDown();
-  void test_one_rowkey(ObSSTableRowGetter &getter, const int64_t seed);
+  void test_one_rowkey(const int64_t seed);
 };
 
 TestSSTableRowGetter::TestSSTableRowGetter()
@@ -77,8 +77,10 @@ void TestSSTableRowGetter::TearDown()
   TestIndexBlockDataPrepare::TearDown();
 }
 
-void TestSSTableRowGetter::test_one_rowkey(ObSSTableRowGetter &getter, const int64_t seed)
+void TestSSTableRowGetter::test_one_rowkey(const int64_t seed)
 {
+  ObSSTableRowGetter getter;
+  ObSSTableRowGetter kv_getter;
   ObDatumRow query_row;
   ASSERT_EQ(OB_SUCCESS, query_row.init(allocator_, TEST_COLUMN_CNT));
   row_generate_.get_next_row(seed, query_row);
@@ -86,54 +88,39 @@ void TestSSTableRowGetter::test_one_rowkey(ObSSTableRowGetter &getter, const int
   query_rowkey.assign(query_row.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
   STORAGE_LOG(INFO, "Query rowkey", K(query_row));
   ASSERT_EQ(OB_SUCCESS, getter.inner_open(iter_param_, context_, &sstable_, &query_rowkey));
+  ASSERT_EQ(OB_SUCCESS, kv_getter.inner_open(iter_param_, context_, &ddl_kv_, &query_rowkey));
 
   const ObDatumRow *prow = nullptr;
+  const ObDatumRow *kv_prow = nullptr;
   ASSERT_EQ(OB_SUCCESS, getter.inner_get_next_row(prow));
-  STORAGE_LOG(INFO, "debug datum row1", KPC(prow));
-  ASSERT_TRUE(*prow == query_row);
+  ASSERT_EQ(OB_SUCCESS, kv_getter.inner_get_next_row(kv_prow));
+  STORAGE_LOG(INFO, "debug datum row1", KPC(prow), KPC(kv_prow));
+  if (seed >= row_cnt_) {
+    ASSERT_TRUE(prow->row_flag_.is_not_exist());
+    ASSERT_TRUE(kv_prow->row_flag_.is_not_exist());
+  } else {
+    ASSERT_TRUE(*prow == query_row);
+    ASSERT_TRUE(*kv_prow == query_row);
+  }
   ASSERT_EQ(OB_ITER_END, getter.inner_get_next_row(prow));
-
+  ASSERT_EQ(OB_ITER_END, kv_getter.inner_get_next_row(kv_prow));
   getter.reuse();
-  ASSERT_EQ(OB_SUCCESS, getter.inner_open(iter_param_, context_, &sstable_, &query_rowkey));
-  ASSERT_EQ(OB_SUCCESS, getter.inner_get_next_row(prow));
-  STORAGE_LOG(INFO, "debug datum row2", KPC(prow));
-  ASSERT_TRUE(*prow == query_row);
-  ASSERT_EQ(OB_ITER_END, getter.inner_get_next_row(prow));
+  kv_getter.reuse();
 }
 
 TEST_F(TestSSTableRowGetter, get)
 {
-  const ObDatumRow *prow = nullptr;
-  ObSSTableRowGetter getter;
-
   //left border rowkey
-  test_one_rowkey(getter, 0);
-
-  ASSERT_EQ(OB_ITER_END, getter.inner_get_next_row(prow));
-  getter.reuse();
+  test_one_rowkey(0);
 
   // right border rowkey
-  test_one_rowkey(getter, row_cnt_ - 1);
-
-  ASSERT_EQ(OB_ITER_END, getter.inner_get_next_row(prow));
-  getter.reuse();
+  test_one_rowkey(row_cnt_ - 1);
 
   // mid border rowkey
-  test_one_rowkey(getter, row_cnt_ / 2);
-
-  ASSERT_EQ(OB_ITER_END, getter.inner_get_next_row(prow));
-  getter.reuse();
+  test_one_rowkey(row_cnt_ / 2);
 
   // non-exist rowkey
-  ObDatumRow row;
-  ObDatumRowkey rowkey;
-  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT + 1));
-  row_generate_.get_next_row(row_cnt_, row);
-  rowkey.assign(row.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
-  ASSERT_EQ(OB_SUCCESS, getter.inner_open(iter_param_, context_, &sstable_, &rowkey));
-
-  ASSERT_EQ(OB_SUCCESS, getter.inner_get_next_row(prow));
-  ASSERT_TRUE(prow->row_flag_.is_not_exist());
+  test_one_rowkey(row_cnt_);
 }
 
 }

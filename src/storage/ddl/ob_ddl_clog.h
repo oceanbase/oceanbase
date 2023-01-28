@@ -27,10 +27,10 @@ enum class ObDDLClogType : int64_t
 {
   UNKNOWN = -1,
   DDL_REDO_LOG = 0x1,
-  DDL_COMMIT_LOG = 0x2,
+//  DDL_COMMIT_LOG = 0x2, // deprecated
   DDL_TABLET_SCHEMA_VERSION_CHANGE_LOG = 0x10,
   DDL_START_LOG = 0x20,
-  DDL_PREPARE_LOG = 0x40
+  DDL_COMMIT_LOG = 0x40,// rename from DDL_PREPARE_LOG
 };
 
 enum ObDDLClogState : uint8_t
@@ -171,12 +171,12 @@ private:
   blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
 };
 
-class ObDDLPrepareLog final
+class ObDDLCommitLog final
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObDDLPrepareLog();
-  ~ObDDLPrepareLog() = default;
+  ObDDLCommitLog();
+  ~ObDDLCommitLog() = default;
   int init(const ObITable::TableKey &table_key,
            const share::SCN &start_scn);
   bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid(); }
@@ -186,29 +186,6 @@ public:
 private:
   ObITable::TableKey table_key_;
   share::SCN start_scn_;
-};
-
-class ObDDLCommitLog final
-{
-  OB_UNIS_VERSION_V(1);
-public:
-  ObDDLCommitLog();
-  ~ObDDLCommitLog() = default;
-  int init(const ObITable::TableKey &table_key,
-           const share::SCN &start_scn,
-           const share::SCN &prepare_scn);
-  bool is_valid() const {
-    return table_key_.is_valid() &&
-           start_scn_.is_valid() &&
-           prepare_scn_.is_valid(); }
-  ObITable::TableKey get_table_key() const { return table_key_; }
-  share::SCN get_start_scn() const { return start_scn_; }
-  share::SCN get_prepare_scn() const { return prepare_scn_; }
-  TO_STRING_KV(K_(table_key), K_(start_scn), K_(prepare_scn));
-private:
-  ObITable::TableKey table_key_;
-  share::SCN start_scn_;
-  share::SCN prepare_scn_;
 };
 
 class ObTabletSchemaVersionChangeLog final

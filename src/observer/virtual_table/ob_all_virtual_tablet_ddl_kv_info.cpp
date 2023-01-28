@@ -12,6 +12,7 @@
 
 #include "observer/virtual_table/ob_all_virtual_tablet_ddl_kv_info.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 using namespace oceanbase::common;
@@ -135,7 +136,9 @@ int ObAllVirtualTabletDDLKVInfo::get_next_ddl_kv(ObDDLKV *&ddl_kv)
     }
 
     if (OB_SUCC(ret) && ddl_kv_idx_ >= 0 && ddl_kv_idx_ < ddl_kvs_handle_.get_count()) {
-      if (OB_FAIL(ddl_kvs_handle_.get_ddl_kv(ddl_kv_idx_, ddl_kv))) {
+      ddl_kv = static_cast<ObDDLKV *>(ddl_kvs_handle_.get_table(ddl_kv_idx_));
+      if (OB_ISNULL(ddl_kv)) {
+        ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "fail to get ddl kv", K(ret), K(ddl_kv_idx_));
       } else {
         ddl_kv_idx_++;

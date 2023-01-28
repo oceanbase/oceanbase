@@ -378,7 +378,7 @@ int ObMicroBlockRowGetter::inner_get_row(
           param_->tablet_id_,
           rowkey,
           read_info_->get_datum_utils(),
-          sstable_->is_major_sstable() ? sstable_->get_snapshot_version() : sstable_->get_key().get_end_scn().get_val_for_tx(),
+          sstable_->get_data_version(),
           sstable_->get_key().table_type_);
       if (OB_SUCCESS == OB_STORE_CACHE.get_row_cache().put_row(row_cache_key, row_cache_value)) {
         context_->table_store_stat_.row_cache_put_cnt_++;

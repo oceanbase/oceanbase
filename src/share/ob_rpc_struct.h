@@ -7961,34 +7961,6 @@ public:
   int progress_;
 };
 
-struct ObDDLWriteSSTableCommitLogArg final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObDDLWriteSSTableCommitLogArg()
-    : table_key_()
-  {}
-  ~ObDDLWriteSSTableCommitLogArg() = default;
-  bool is_valid() const { return table_key_.is_valid(); };
-  int assign(const ObDDLWriteSSTableCommitLogArg &other);
-  TO_STRING_KV(K_(table_key));
-public:
-  storage::ObITable::TableKey table_key_;
-};
-
-struct ObDDLWriteCommitLogResult final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObDDLWriteCommitLogResult(): ret_code_(OB_SUCCESS)
-  {}
-  ~ObDDLWriteCommitLogResult() = default;
-  int assign(const ObDDLWriteCommitLogResult &other);
-  TO_STRING_KV(K_(ret_code));
-public:
-  int64_t ret_code_;
-};
-
 
 struct ObDetectMasterRsArg
 {
@@ -8108,12 +8080,12 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLRedoLogArg);
 };
 
-struct ObRpcRemoteWriteDDLPrepareLogArg final
+struct ObRpcRemoteWriteDDLCommitLogArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObRpcRemoteWriteDDLPrepareLogArg();
-  ~ObRpcRemoteWriteDDLPrepareLogArg() = default;
+  ObRpcRemoteWriteDDLCommitLogArg();
+  ~ObRpcRemoteWriteDDLCommitLogArg() = default;
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
            const storage::ObITable::TableKey &table_key,
@@ -8137,35 +8109,9 @@ public:
   int64_t execution_id_;
   int64_t ddl_task_id_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLPrepareLogArg);
-};
-
-struct ObRpcRemoteWriteDDLCommitLogArg final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObRpcRemoteWriteDDLCommitLogArg();
-  ~ObRpcRemoteWriteDDLCommitLogArg() = default;
-  int init(const uint64_t tenant_id,
-           const share::ObLSID &ls_id,
-           const storage::ObITable::TableKey &table_key,
-           const share::SCN &start_scn,
-           const share::SCN &prepare_scn);
-  bool is_valid() const
-  {
-    return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_scn_.is_valid_and_not_min()
-           && prepare_scn_.is_valid_and_not_min();
-  }
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(prepare_scn));
-public:
-  uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-  storage::ObITable::TableKey table_key_;
-  share::SCN start_scn_;
-  share::SCN prepare_scn_;
-private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLCommitLogArg);
 };
+
 
 struct ObCheckLSCanOfflineArg
 {

@@ -149,7 +149,7 @@ int ObColumnRedefinitionTask::wait_data_complement(const ObDDLTaskStatus next_ta
   DEBUG_SYNC(COLUMN_REDEFINITION_REPLICA_BUILD);
   if (is_build_replica_end) {
     ret = complete_sstable_job_ret_code_;
-    if (OB_SUCC(ret) && OB_FAIL(check_data_dest_tables_columns_checksum(1/*execution_id*/))) {
+    if (OB_SUCC(ret) && OB_FAIL(check_data_dest_tables_columns_checksum(1))) {
       LOG_WARN("fail to check the columns checkum between data table and hidden one", K(ret));
     }
     if (OB_FAIL(switch_status(next_task_status, true, ret))) {

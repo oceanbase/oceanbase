@@ -14,6 +14,7 @@
 #include "ob_ls_restore_task_mgr.h"
 #include "storage/ls/ob_ls.h"
 #include "lib/lock/ob_mutex.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase;
 using namespace share;

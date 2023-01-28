@@ -83,6 +83,7 @@ TEST_F(TestSSTableRowExister, single_exist)
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
   ObStoreCtx ctx;
   ObSSTableRowExister row_exister;
+  ObSSTableRowExister kv_row_exister;
 
   //exist check
   bool is_exist = false;
@@ -90,15 +91,23 @@ TEST_F(TestSSTableRowExister, single_exist)
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row_cnt_ - 1, row));
   ASSERT_EQ(OB_SUCCESS, rowkey.assign(row.storage_datums_, TEST_ROWKEY_COLUMN_CNT));
   ASSERT_EQ(OB_SUCCESS, row_exister.inner_open(iter_param_, context_, &sstable_, &rowkey));
+  ASSERT_EQ(OB_SUCCESS, kv_row_exister.inner_open(iter_param_, context_, &ddl_kv_, &rowkey));
   const ObDatumRow *prow = nullptr;
+  const ObDatumRow *kv_prow = nullptr;
   ASSERT_EQ(OB_SUCCESS, row_exister.inner_get_next_row(prow));
   ASSERT_TRUE(prow->row_flag_.is_exist());
+  ASSERT_EQ(OB_SUCCESS, kv_row_exister.inner_get_next_row(kv_prow));
+  ASSERT_TRUE(kv_prow->row_flag_.is_exist());
 
   row_exister.reuse();
+  kv_row_exister.reuse();
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row_cnt_, row));
   ASSERT_EQ(OB_SUCCESS, row_exister.inner_open(iter_param_, context_, &sstable_, &rowkey));
   ASSERT_EQ(OB_SUCCESS, row_exister.inner_get_next_row(prow));
   ASSERT_TRUE(prow->row_flag_.is_not_exist());
+  ASSERT_EQ(OB_SUCCESS, kv_row_exister.inner_open(iter_param_, context_, &ddl_kv_, &rowkey));
+  ASSERT_EQ(OB_SUCCESS, kv_row_exister.inner_get_next_row(kv_prow));
+  ASSERT_TRUE(kv_prow->row_flag_.is_not_exist());
 }
 
 }

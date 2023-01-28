@@ -76,8 +76,6 @@ class ObTableHandleV2;
 class ObFreezer;
 class ObTabletDDLInfo;
 class ObTabletDDLKvMgr;
-class ObDDLKVHandle;
-class ObDDLKVsHandle;
 class ObStorageSchema;
 class ObTabletTableIterator;
 class ObMetaDiskAddr;
@@ -225,6 +223,7 @@ public:
   int get_all_sstables(common::ObIArray<ObITable *> &sstables) const;
   int get_sstables_size(int64_t &used_size) const;
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
+  int get_ddl_memtables(common::ObIArray<ObITable *> &ddl_memtables) const;
   int check_need_remove_old_table(const int64_t multi_version_start, bool &need_remove) const;
   int update_upper_trans_version(ObLS &ls, bool &is_updated);
 

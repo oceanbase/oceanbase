@@ -23,6 +23,7 @@
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService, ObLSIterator
 #include "storage/tx_storage/ob_ls_handle.h" // ObLSHandle
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
+#include "storage/tablet/ob_tablet.h" // ObTablet
 
 namespace oceanbase
 {

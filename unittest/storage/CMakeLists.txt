@@ -23,6 +23,7 @@ add_subdirectory(blocksstable)
 add_subdirectory(direct_load)
 add_subdirectory(utl_file)
 add_subdirectory(tx_table)
+add_subdirectory(ddl)
 
 storage_unittest(test_io_manager)
 storage_unittest(test_iocb_pool)

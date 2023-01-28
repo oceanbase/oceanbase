@@ -33,7 +33,6 @@ public:
   void reset() { destroy(); }
   int replay_start(const ObDDLStartLog &log, const share::SCN &scn);
   int replay_redo(const ObDDLRedoLog &log, const share::SCN &scn);
-  int replay_prepare(const ObDDLPrepareLog &log, const share::SCN &scn);
   int replay_commit(const ObDDLCommitLog &log, const share::SCN &scn);
 private:
   void destroy();

@@ -93,12 +93,10 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcBroadcastRsListP, gctx_);
     RPC_PROCESSOR(ObPreBootstrapCreateServerWorkingDirP, gctx_);
     RPC_PROCESSOR(ObRpcBuildDDLSingleReplicaRequestP, gctx_);
-    RPC_PROCESSOR(ObWriteDDLSSTableCommitLogP, gctx_);
     RPC_PROCESSOR(ObRpcFetchTabletAutoincSeqCacheP, gctx_);
     RPC_PROCESSOR(ObRpcBatchGetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcBatchSetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLRedoLogP, gctx_);
-    RPC_PROCESSOR(ObRpcRemoteWriteDDLPrepareLogP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLCommitLogP, gctx_);
     RPC_PROCESSOR(ObRpcLSMigrateReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSAddReplicaP, gctx_);

@@ -21,6 +21,7 @@
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/blocksstable/ob_row_generate.h"
 #include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_tenant_node_balancer.h"
@@ -70,6 +71,7 @@ public:
   virtual ObITable::TableType get_merged_table_type() const;
   void prepare_query_param(const bool is_reverse_scan, const ObTableReadInfo &full_read_info);
   void destroy_query_param();
+  void prepare_ddl_kv();
 protected:
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
   static const int64_t MAX_TEST_COLUMN_CNT = TEST_COLUMN_CNT + 3;
@@ -88,6 +90,7 @@ protected:
   ObRowGenerate row_generate_;
   int64_t row_cnt_;
   ObSSTable sstable_;
+  storage::ObDDLKV ddl_kv_;
   ObSSTableIndexBuilder *root_index_builder_;
   ObMicroBlockData root_block_data_buf_;
   ObRowStoreType row_store_type_;
@@ -220,6 +223,7 @@ void TestIndexBlockDataPrepare::SetUp()
 void TestIndexBlockDataPrepare::TearDown()
 {
   sstable_.reset();
+  ddl_kv_.reset();
   if (nullptr != root_block_data_buf_.buf_) {
     allocator_.free((void *)root_block_data_buf_.buf_);
   }
@@ -263,7 +267,7 @@ ObITable::TableType TestIndexBlockDataPrepare::get_merged_table_type() const
   } else if (META_MAJOR_MERGE == merge_type_) {
     table_type = ObITable::TableType::META_MAJOR_SSTABLE;
   } else if (DDL_KV_MERGE == merge_type_) {
-    table_type = ObITable::TableType::KV_DUMP_SSTABLE;
+    table_type = ObITable::TableType::DDL_DUMP_SSTABLE;
   } else { // MINOR_MERGE || HISTORY_MINOR_MERGE
     table_type = ObITable::TableType::MINOR_SSTABLE;
   }
@@ -510,10 +514,55 @@ void TestIndexBlockDataPrepare::prepare_data()
   }
   ASSERT_EQ(OB_SUCCESS, sstable_.init(param, &allocator_));
   STORAGE_LOG(INFO, "create sstable param", K(param));
+  prepare_ddl_kv();
 
   root_block_data_buf_.buf_ = root_buf;
   root_block_data_buf_.size_ = root_size;
   row_store_type_ = root_row_store_type;
+}
+
+void TestIndexBlockDataPrepare::prepare_ddl_kv()
+{
+  ddl_kv_.reset();
+  ObTabletHandle tablet_handle;
+  int ret = OB_SUCCESS;
+  ObLSID ls_id(ls_id_);
+  ObTabletID tablet_id(tablet_id_);
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
+
+  share::SCN ddl_start_scn;
+  ddl_start_scn.convert_from_ts(ObTimeUtility::current_time());
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_.init(ls_id, tablet_id, ddl_start_scn, sstable_.get_data_version(), ddl_start_scn, 4000));
+
+  SMART_VAR(ObSSTableSecMetaIterator, meta_iter) {
+    ObDatumRange query_range;
+    query_range.set_whole_range();
+    ObDataMacroBlockMeta data_macro_meta;
+    ASSERT_EQ(OB_SUCCESS, meta_iter.open(query_range,
+                                         ObMacroBlockMetaType::DATA_BLOCK_META,
+                                         sstable_,
+                                         tablet_handle.get_obj()->get_index_read_info(),
+                                         allocator_));
+
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(meta_iter.get_next(data_macro_meta))) {
+        if (OB_ITER_END != ret) {
+          STORAGE_LOG(WARN, "get data macro meta failed", K(ret));
+        }
+      } else {
+        ObDDLMacroHandle macro_handle;
+        macro_handle.set_block_id(data_macro_meta.get_macro_id());
+        ObDataMacroBlockMeta *copied_meta = nullptr;
+        ASSERT_EQ(OB_SUCCESS, data_macro_meta.deep_copy(copied_meta, allocator_));
+        ASSERT_EQ(OB_SUCCESS, ddl_kv_.insert_block_meta_tree(macro_handle, copied_meta));
+      }
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(OB_SUCCESS, ddl_kv_.block_meta_tree_.build_sorted_rowkeys());
+  }
 }
 
 void TestIndexBlockDataPrepare::insert_data(ObMacroBlockWriter &data_writer)

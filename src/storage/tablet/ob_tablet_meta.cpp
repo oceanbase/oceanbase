@@ -153,11 +153,7 @@ int ObTabletMeta::init(
     const int64_t max_sync_storage_schema_version,
     const int64_t max_serialized_medium_scn,
     const SCN clog_checkpoint_scn,
-    const SCN ddl_checkpoint_scn,
-    const SCN ddl_start_scn,
-    const int64_t ddl_snapshot_version,
-    const int64_t ddl_execution_id,
-    const int64_t ddl_cluster_version)
+    const ObDDLTableStoreParam &ddl_info)
 {
   int ret = OB_SUCCESS;
 
@@ -180,7 +176,7 @@ int ObTabletMeta::init(
     ref_tablet_id_ = old_tablet_meta.ref_tablet_id_;
     create_scn_ = old_tablet_meta.create_scn_;
     start_scn_ = old_tablet_meta.start_scn_;
-    ddl_start_scn_ = SCN::max(ddl_start_scn, old_tablet_meta.ddl_start_scn_);
+    ddl_start_scn_ = SCN::max(ddl_info.ddl_start_scn_, old_tablet_meta.ddl_start_scn_);
     clog_checkpoint_scn_ = SCN::max(clog_checkpoint_scn, old_tablet_meta.clog_checkpoint_scn_);
     compat_mode_ = old_tablet_meta.compat_mode_;
     ha_status_ = old_tablet_meta.ha_status_;
@@ -192,10 +188,10 @@ int ObTabletMeta::init(
     table_store_flag_ = old_tablet_meta.table_store_flag_;
     max_sync_storage_schema_version_ = max_sync_storage_schema_version;
     max_serialized_medium_scn_ = max_serialized_medium_scn;
-    ddl_checkpoint_scn_ = SCN::max(old_tablet_meta.ddl_checkpoint_scn_, ddl_checkpoint_scn);
-    ddl_snapshot_version_ = MAX(old_tablet_meta.ddl_snapshot_version_, ddl_snapshot_version);
-    ddl_execution_id_ = MAX(old_tablet_meta.ddl_execution_id_, ddl_execution_id);
-    ddl_cluster_version_ = MAX(old_tablet_meta.ddl_cluster_version_, ddl_cluster_version);
+    ddl_checkpoint_scn_ = SCN::max(old_tablet_meta.ddl_checkpoint_scn_, ddl_info.ddl_checkpoint_scn_);
+    ddl_snapshot_version_ = MAX(old_tablet_meta.ddl_snapshot_version_, ddl_info.ddl_snapshot_version_);
+    ddl_execution_id_ = MAX(old_tablet_meta.ddl_execution_id_, ddl_info.ddl_execution_id_);
+    ddl_cluster_version_ = MAX(old_tablet_meta.ddl_cluster_version_, ddl_info.ddl_cluster_version_);
     is_inited_ = true;
   }
 
@@ -744,6 +740,11 @@ int ObTabletMeta::update(const ObMigrationTabletParam &param)
   }
 
   return ret;
+}
+
+SCN ObTabletMeta::get_ddl_sstable_start_scn() const
+{
+  return ddl_start_scn_.is_valid_and_not_min () ? share::SCN::scn_dec(ddl_start_scn_) : ddl_start_scn_;
 }
 
 int ObTabletMeta::update_create_scn(const SCN create_scn)

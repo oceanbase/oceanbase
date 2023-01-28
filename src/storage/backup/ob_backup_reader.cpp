@@ -590,7 +590,7 @@ int ObSSTableMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffe
         ObBackupSSTableMeta backup_sstable_meta;
         backup_sstable_meta.tablet_id_ = tablet_id_;
         if ((backup_data_type_.is_major_backup() && !table_ptr->is_major_sstable())
-            || (backup_data_type_.is_minor_backup() && !table_ptr->is_minor_sstable() && !table_ptr->is_ddl_sstable())) {
+            || (backup_data_type_.is_minor_backup() && !table_ptr->is_minor_sstable() && !table_ptr->is_ddl_dump_sstable())) {
           ret = OB_ERR_SYS;
           LOG_WARN("get incorrect table type", K(ret), K(i), K_(backup_data_type), KP(table_ptr));
         } else if (FALSE_IT(sstable_ptr = static_cast<ObSSTable *>(table_ptr))) {

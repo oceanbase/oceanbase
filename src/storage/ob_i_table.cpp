@@ -64,6 +64,7 @@ const char* ObITable::table_type_name_[] =
   "META_MAJOR",
   "DDL_DUMP",
   "REMOTE_LOGICAL_MINOR",
+  "DDL_MEM",
 };
 
 uint64_t ObITable::TableKey::hash() const

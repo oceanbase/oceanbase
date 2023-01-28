@@ -28,6 +28,7 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {
@@ -96,6 +97,7 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     pinned_tablet_set_(),
     memtable_pool_(tenant_id, get_default_memtable_pool_count(), "MemTblObj", ObCtxIds::DEFAULT_CTX_ID, wash_func_),
     sstable_pool_(tenant_id, get_default_sstable_pool_count(), "SSTblObj", ObCtxIds::META_OBJ_CTX_ID, wash_func_),
+    ddl_kv_pool_(tenant_id, MAX_DDL_KV_IN_OBJ_POOL, "DDLKVObj", ObCtxIds::DEFAULT_CTX_ID, wash_func_),
     tablet_pool_(tenant_id, get_default_tablet_pool_count(), "TabletObj", ObCtxIds::META_OBJ_CTX_ID, wash_func_),
     tablet_ddl_kv_mgr_pool_(tenant_id, get_default_tablet_pool_count(), "DDLKvMgrObj", ObCtxIds::DEFAULT_CTX_ID, wash_func_),
     tablet_memtable_mgr_pool_(tenant_id, get_default_tablet_pool_count(), "MemTblMgrObj", ObCtxIds::DEFAULT_CTX_ID,wash_func_),
@@ -170,9 +172,10 @@ void ObTenantMetaMemMgr::init_pool_arr()
   pool_arr_[static_cast<int>(ObITable::TableType::TX_DATA_MEMTABLE)] = &tx_data_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::TX_CTX_MEMTABLE)] = &tx_ctx_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::LOCK_MEMTABLE)] = &lock_memtable_pool_;
+  pool_arr_[static_cast<int>(ObITable::TableType::DDL_MEM_SSTABLE)] = &ddl_kv_pool_;
 
   for (int64_t i = ObITable::TableType::MAJOR_SSTABLE; i < ObITable::TableType::MAX_TABLE_TYPE; i++) {
-    if (ObITable::is_sstable((ObITable::TableType)i)) {
+    if (ObITable::is_sstable((ObITable::TableType)i) && !ObITable::is_ddl_mem_sstable((ObITable::TableType)i)) {
       pool_arr_[i] = &sstable_pool_;
     }
   }
@@ -340,13 +343,13 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
       FLOG_INFO("Successfully finish table gc", K(sstable_cnt), K(data_memtable_cnt),
         K(tx_data_memtable_cnt), K(tx_ctx_memtable_cnt), K(lock_memtable_cnt),
         K(pending_cnt), K(recycled_cnt), K(allocator_),
-        K(tablet_pool_), K(sstable_pool_), K(memtable_pool_),
+        K(tablet_pool_), K(sstable_pool_), K(ddl_kv_pool_), K(memtable_pool_),
         "tablet count", tablet_map_.count(),
         "min_minor_cnt", last_min_minor_sstable_set_.size(),
         "pinned_tablet_cnt", pinned_tablet_set_.size());
     } else if (REACH_COUNT_INTERVAL(100)) {
       FLOG_INFO("Recycle 0 table", K(ret), K(allocator_),
-          K(tablet_pool_), K(sstable_pool_), K(memtable_pool_),
+          K(tablet_pool_), K(sstable_pool_), K(ddl_kv_pool_), K(memtable_pool_),
           "tablet count", tablet_map_.count(),
           "min_minor_cnt", last_min_minor_sstable_set_.size(),
           "pinned_tablet_cnt", pinned_tablet_set_.size());
@@ -363,7 +366,11 @@ void ObTenantMetaMemMgr::gc_sstable(ObSSTable *sstable)
   } else {
     const int64_t block_cnt = sstable->get_meta().get_macro_info().get_total_block_cnt();
     const int64_t start_time = ObTimeUtility::current_time();
-    sstable_pool_.free_obj(sstable);
+    if (sstable->is_ddl_mem_sstable()) {
+      ddl_kv_pool_.free_obj(sstable);
+    } else {
+      sstable_pool_.free_obj(sstable);
+    }
     const int64_t end_time = ObTimeUtility::current_time();
     if (end_time - start_time > SSTABLE_GC_MAX_TIME) {
       LOG_WARN("sstable gc costs too much time", K(start_time), K(end_time), K(block_cnt));
@@ -526,6 +533,42 @@ void ObTenantMetaMemMgr::release_sstable(ObSSTable *sstable)
       LOG_ERROR("ObSSTable reference count may be leak", KPC(sstable));
     } else {
       sstable_pool_.release(sstable);
+    }
+  }
+}
+
+int ObTenantMetaMemMgr::acquire_ddl_kv(ObTableHandleV2 &handle)
+{
+  int ret = OB_SUCCESS;
+  ObDDLKV *ddl_kv = nullptr;
+  handle.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_FAIL(ddl_kv_pool_.acquire(ddl_kv))) {
+    LOG_WARN("fail to acquire ddl kv object", K(ret));
+  } else if (OB_FAIL(handle.set_table(ddl_kv, this, ObITable::TableType::DDL_MEM_SSTABLE))) {
+    LOG_WARN("fail to set table", K(ret), KP(ddl_kv));
+  } else {
+    ddl_kv = nullptr;
+  }
+
+  if (OB_FAIL(ret)) {
+    handle.reset();
+    if (OB_NOT_NULL(ddl_kv)) {
+      release_ddl_kv(ddl_kv);
+    }
+  }
+  return ret;
+}
+
+void ObTenantMetaMemMgr::release_ddl_kv(ObDDLKV *ddl_kv)
+{
+  if (OB_NOT_NULL(ddl_kv)) {
+    if (0 != ddl_kv->get_ref()) {
+      LOG_ERROR("ddl kv reference count may be leak", KPC(ddl_kv));
+    } else {
+      ddl_kv_pool_.release(ddl_kv);
     }
   }
 }
@@ -1061,6 +1104,8 @@ int ObTenantMetaMemMgr::get_meta_mem_status(common::ObIArray<ObTenantMetaMemStat
     LOG_WARN("fail to get memtable pool's info", K(ret), K(info));
   } else if (OB_FAIL(get_obj_pool_info(sstable_pool_, "SSTABLE POOL", info))) {
     LOG_WARN("fail to get sstable pool's info", K(ret), K(info));
+  } else if (OB_FAIL(get_obj_pool_info(ddl_kv_pool_, "DDL KV POOL", info))) {
+    LOG_WARN("fail to get ddl kv pool's info", K(ret), K(info));
   } else if (OB_FAIL(get_obj_pool_info(tablet_pool_, "TABLET POOL", info))) {
     LOG_WARN("fail to get tablet pool's info", K(ret), K(info));
   } else if (OB_FAIL(get_obj_pool_info(tablet_ddl_kv_mgr_pool_, "KV MGR POOL", info))) {
@@ -1214,20 +1259,21 @@ int ObTenantMetaMemMgr::check_all_meta_mem_released(ObLSService &ls_service, boo
   } else {
     int64_t memtable_cnt = memtable_pool_.get_used_obj_cnt();
     int64_t sstable_cnt = sstable_pool_.get_used_obj_cnt();
+    int64_t ddl_kv_cnt = ddl_kv_pool_.get_used_obj_cnt();
     int64_t tablet_cnt = tablet_pool_.get_used_obj_cnt();
     int64_t ddl_kv_mgr_cnt = tablet_ddl_kv_mgr_pool_.get_used_obj_cnt();
     int64_t tablet_memtable_mgr_cnt = tablet_memtable_mgr_pool_.get_used_obj_cnt();
     int64_t tx_data_memtable_cnt_ = tx_data_memtable_pool_.get_used_obj_cnt();
     int64_t tx_ctx_memtable_cnt_ = tx_ctx_memtable_pool_.get_used_obj_cnt();
     int64_t lock_memtable_cnt_ = lock_memtable_pool_.get_used_obj_cnt();
-    if (memtable_cnt != 0 || sstable_cnt != 0 || tablet_cnt != 0 || ddl_kv_mgr_cnt != 0
+    if (memtable_cnt != 0 || sstable_cnt != 0 || ddl_kv_cnt != 0 || tablet_cnt != 0 || ddl_kv_mgr_cnt != 0
         || tablet_memtable_mgr_cnt != 0 || tx_data_memtable_cnt_ != 0 || tx_ctx_memtable_cnt_ != 0
         || lock_memtable_cnt_ != 0) {
       is_released = false;
     } else {
       is_released = true;
     }
-    LOG_INFO("check all meta mem in t3m", K(module), K(is_released), K(memtable_cnt), K(sstable_cnt),
+    LOG_INFO("check all meta mem in t3m", K(module), K(is_released), K(memtable_cnt), K(sstable_cnt), K(ddl_kv_cnt),
         K(tablet_cnt), K(ddl_kv_mgr_cnt), K(tablet_memtable_mgr_cnt), K(tx_data_memtable_cnt_),
         K(tx_ctx_memtable_cnt_), K(lock_memtable_cnt_),
         "min_minor_cnt", last_min_minor_sstable_set_.size(),
@@ -1585,7 +1631,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const int64_t expect_wash_cnt)
           LOG_WARN("no object can be washed", K(ret), K(wash_inner_cnt), K(wash_user_cnt),
               K(wash_mem_addr_cnt), K(expect_wash_cnt),
               "tablet count", tablet_map_.count(), K(allocator_), K(tablet_pool_),
-              K(sstable_pool_), K(memtable_pool_), K(tablet_ddl_kv_mgr_pool_),
+              K(sstable_pool_), K(ddl_kv_pool_), K(memtable_pool_), K(tablet_ddl_kv_mgr_pool_),
               K(tablet_memtable_mgr_pool_), K(tx_data_memtable_pool_), K(tx_ctx_memtable_pool_),
               K(lock_memtable_pool_), K(op),
               "min_minor_cnt", last_min_minor_sstable_set_.size(),
@@ -1594,7 +1640,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const int64_t expect_wash_cnt)
         } else {
           FLOG_INFO("succeed to wash tablet", K(wash_inner_cnt), K(wash_user_cnt),
               K(wash_mem_addr_cnt), K(expect_wash_cnt), "tablet count", tablet_map_.count(),
-              K(allocator_), K(tablet_pool_), K(sstable_pool_), K(memtable_pool_), K(op),
+              K(allocator_), K(tablet_pool_), K(sstable_pool_), K(ddl_kv_pool_), K(memtable_pool_), K(op),
               "min_minor_cnt", last_min_minor_sstable_set_.size(),
               "pinned_tablet_cnt", pinned_tablet_set_.size(),
               K(time_guard));

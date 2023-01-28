@@ -104,7 +104,7 @@ private:
       const ObTablet *tablet,
       const ObSSTableArray &ddl_sstable_array,
       share::ObScnRange &scn_range);
-  int get_ddl_sstable_max_start_scn_(
+  int get_ddl_sstable_min_start_scn_(
       const ObSSTableArray &ddl_sstable_array,
       share::SCN &max_start_scn);
   int hold_local_reuse_sstable_(

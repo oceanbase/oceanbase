@@ -36,6 +36,7 @@
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
 #include "share/scn.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
 
 namespace oceanbase
 {
@@ -749,6 +750,32 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
   return ret;
 }
 
+int ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  ObDDLKvMgrHandle kv_mgr_handle;
+  if (!tablet_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(kv_mgr_handle))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("get ddl kv mgr failed", K(ret), K(tablet_handle));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else if (kv_mgr_handle.is_valid() && kv_mgr_handle.get_obj()->can_schedule_major_compaction()) {
+    ObDDLTableMergeDagParam param;
+    if (OB_FAIL(kv_mgr_handle.get_obj()->get_ddl_major_merge_param(param))) {
+      LOG_WARN("get ddl major merge param failed", K(ret));
+    } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
+      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+        LOG_WARN("schedule ddl merge dag failed", K(ret), K(param));
+      }
+    }
+  }
+  return ret;
+}
+
 template <class T>
 int ObTenantTabletScheduler::schedule_merge_execute_dag(
     const ObTabletMergeDagParam &param,
@@ -844,6 +871,13 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
             LOG_WARN("failed to schedule tablet merge", K(tmp_ret), K(ls_id), K(tablet_id));
           }
         }
+
+        if (OB_TMP_FAIL(schedule_tablet_ddl_major_merge(tablet_handle))) {
+          if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
+            LOG_WARN("failed to schedule tablet ddl merge", K(tmp_ret), K(ls_id), K(tablet_handle));
+          }
+        }
+
         if (OB_SUCC(ret)) {
           need_fast_freeze = false;
           if (!fast_freeze_checker_.need_check()) {

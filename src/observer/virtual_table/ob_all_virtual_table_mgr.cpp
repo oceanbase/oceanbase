@@ -152,20 +152,34 @@ int ObAllVirtualTableMgr::get_next_table(ObITable *&table)
         SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K_(tablet_handle));
       } else if (OB_FAIL(tablet_handle_.get_obj()->get_memtables(all_tables_, true/*need_active*/))) {
         SERVER_LOG(WARN, "fail to get mem tables", K(ret), K(tablet_handle_));
-      } else if (OB_FAIL(tablet_handle_.get_obj()->get_all_sstables(sst_tables))) {
-        SERVER_LOG(WARN, "fail to get sstables", K(ret), K(tablet_handle_));
-      } else {
-        for (int i = 0; OB_SUCC(ret) && i < sst_tables.count(); ++i) {
-          if (OB_FAIL(all_tables_.push_back(sst_tables.at(i)))) {
-            SERVER_LOG(WARN, "fail to push back sstables", K(ret), K(tablet_handle_));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(tablet_handle_.get_obj()->get_all_sstables(sst_tables))) {
+          SERVER_LOG(WARN, "fail to get sstables", K(ret), K(tablet_handle_));
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < sst_tables.count(); ++i) {
+            if (OB_FAIL(all_tables_.push_back(sst_tables.at(i)))) {
+              SERVER_LOG(WARN, "fail to push back sstables", K(ret), K(tablet_handle_));
+            }
           }
         }
-        if (OB_SUCC(ret) && all_tables_.count() > 0) {
-          table_idx_ = 0;
-          table = all_tables_.at(table_idx_);
-          ++table_idx_;
-          break;
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(tablet_handle_.get_obj()->get_ddl_memtables(sst_tables))) {
+          SERVER_LOG(WARN, "fail to get ddl memtables", K(ret), K(tablet_handle_));
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < sst_tables.count(); ++i) {
+            if (OB_FAIL(all_tables_.push_back(sst_tables.at(i)))) {
+              SERVER_LOG(WARN, "fail to push back sstables", K(ret), K(tablet_handle_));
+            }
+          }
         }
+      }
+      if (OB_SUCC(ret) && all_tables_.count() > 0) {
+        table_idx_ = 0;
+        table = all_tables_.at(table_idx_);
+        ++table_idx_;
+        break;
       }
     }
   }

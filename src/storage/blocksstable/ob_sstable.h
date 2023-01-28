@@ -17,6 +17,7 @@
 #include "storage/blocksstable/ob_macro_block_meta.h"
 #include "share/scn.h"
 #include "ob_datum_range.h"
+#include "storage/ddl/ob_ddl_struct.h"
 
 namespace oceanbase
 {
@@ -129,7 +130,12 @@ public:
   {
     return meta_.basic_meta_.filled_tx_scn_;
   }
-
+  int64_t get_data_version() const
+  {
+    return is_major_sstable() ? get_snapshot_version() :
+      is_ddl_sstable() ? get_upper_trans_version() :
+      get_key().get_end_scn().get_val_for_tx();
+  }
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;
   int add_disk_ref();
   int dec_disk_ref();
@@ -198,7 +204,7 @@ private:
   void dec_macro_ref();
   int get_last_rowkey(const ObTableReadInfo &index_read_info, const ObDatumRowkey *&sstable_endkey);
 
-private:
+protected:
   blocksstable::ObSSTableMeta meta_;
   bool valid_for_reading_;
   bool hold_macro_ref_;

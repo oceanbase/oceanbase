@@ -354,15 +354,6 @@ int ObAdminParserLogEntry::parse_ddl_log_()
         }
         break;
       }
-      case ObDDLClogType::DDL_PREPARE_LOG: {
-        ObDDLPrepareLog log;
-        if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
-          LOG_WARN("deserialize ddl commit log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
-        } else {
-          fprintf(stdout, " ###<ObDDLPrepareLog>: %s\n", to_cstring(log));
-        }
-        break;
-      }
       case ObDDLClogType::DDL_COMMIT_LOG: {
         ObDDLCommitLog log;
         if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {

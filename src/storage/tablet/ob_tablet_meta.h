@@ -77,11 +77,7 @@ public:
       const int64_t max_sync_storage_schema_version,
       const int64_t max_serialized_medium_scn,
       const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
-      const share::SCN ddl_checkpoint_scn = share::SCN::min_scn(),
-      const share::SCN ddl_start_scn = share::SCN::min_scn(),
-      const int64_t ddl_snapshot_version = 0,
-      const int64_t ddl_execution_id = -1,
-      const int64_t ddl_cluster_version = 0);
+      const ObDDLTableStoreParam &ddl_info = ObDDLTableStoreParam());
   int init(
       common::ObIAllocator &allocator,
       const ObMigrationTabletParam &param);
@@ -110,6 +106,7 @@ public:
 
   int update(const ObMigrationTabletParam &param);
   int update_create_scn(const share::SCN create_scn);
+  share::SCN get_ddl_sstable_start_scn() const;
 public:
   static int deserialize_id(
       const char *buf,

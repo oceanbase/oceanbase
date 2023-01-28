@@ -20,6 +20,7 @@
 #include "ob_i_compaction_filter.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/blocksstable/ob_data_macro_block_merge_writer.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

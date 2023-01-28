@@ -18,6 +18,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObBlockMetaTree;
+}
 namespace blocksstable
 {
 
@@ -86,6 +90,7 @@ private:
   ObDataMicroBlockCache *block_cache_;
   ObIMicroBlockReader *micro_reader_;
   ObMicroBlockReaderHelper micro_reader_helper_;
+  storage::ObBlockMetaTree *block_meta_tree_;
   const ObDatumRange *query_range_;
   ObMicroBlockId start_bound_micro_block_;
   ObMicroBlockId end_bound_micro_block_;

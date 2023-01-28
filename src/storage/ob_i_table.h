@@ -88,8 +88,9 @@ public:
     MINOR_SSTABLE = 11,
     MINI_SSTABLE = 12,
     META_MAJOR_SSTABLE = 13,
-    KV_DUMP_SSTABLE = 14,
+    DDL_DUMP_SSTABLE = 14,
     REMOTE_LOGICAL_MINOR_SSTABLE = 15,
+    DDL_MEM_SSTABLE = 16,
     // < add new sstable before here, See is_sstable()
     MAX_TABLE_TYPE
   };
@@ -121,6 +122,8 @@ public:
     OB_INLINE bool is_meta_major_sstable() const { return ObITable::is_meta_major_sstable(table_type_); }
     OB_INLINE bool is_multi_version_table() const { return ObITable::is_multi_version_table(table_type_); }
     OB_INLINE bool is_ddl_sstable() const { return ObITable::is_ddl_sstable(table_type_); }
+    OB_INLINE bool is_ddl_dump_sstable() const { return ObITable::is_ddl_dump_sstable(table_type_); }
+    OB_INLINE bool is_ddl_mem_sstable() const { return ObITable::is_ddl_mem_sstable(table_type_); }
     OB_INLINE bool is_table_with_scn_range() const { return ObITable::is_table_with_scn_range(table_type_); }
     OB_INLINE bool is_remote_logical_minor_sstable() const { return ObITable::is_remote_logical_minor_sstable(table_type_); }
 
@@ -231,6 +234,8 @@ public:
   OB_INLINE bool is_table_with_scn_range() const { return is_table_with_scn_range(key_.table_type_); }
   virtual OB_INLINE int64_t get_timestamp() const { return 0; }
   virtual bool is_ddl_sstable() const { return is_ddl_sstable(key_.table_type_); }
+  virtual bool is_ddl_dump_sstable() const { return is_ddl_dump_sstable(key_.table_type_); }
+  virtual bool is_ddl_mem_sstable() const { return is_ddl_mem_sstable(key_.table_type_); }
   virtual bool is_remote_logical_minor_sstable() const { return is_remote_logical_minor_sstable(key_.table_type_); }
   virtual bool is_empty() const = 0;
   DECLARE_VIRTUAL_TO_STRING;
@@ -315,7 +320,16 @@ public:
   }
   static bool is_ddl_sstable(const TableType table_type)
   {
-    return ObITable::TableType::KV_DUMP_SSTABLE == table_type;
+    return ObITable::TableType::DDL_DUMP_SSTABLE == table_type
+      || ObITable::TableType::DDL_MEM_SSTABLE == table_type;
+  }
+  static bool is_ddl_dump_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::DDL_DUMP_SSTABLE == table_type;
+  }
+  static bool is_ddl_mem_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::DDL_MEM_SSTABLE == table_type;
   }
   static bool is_table_with_scn_range(const TableType table_type)
   {

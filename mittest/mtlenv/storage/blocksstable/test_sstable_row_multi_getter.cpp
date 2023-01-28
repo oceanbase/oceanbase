@@ -107,7 +107,9 @@ void TestSSTableRowMultiGetter::test_one_case(
   ObDatumRowkey rowkey;
   ObDatumRow row;
   const ObDatumRow *prow = NULL;
+  const ObDatumRow *kv_prow = NULL;
   ObSSTableRowMultiGetter getter;
+  ObSSTableRowMultiGetter kv_getter;
 
   // prepare rowkeys
   ObDatumRowkey mget_rowkeys[TEST_MULTI_GET_CNT];
@@ -134,51 +136,74 @@ void TestSSTableRowMultiGetter::test_one_case(
     }
     if (part_rowkeys.count() > 0) {
       ASSERT_EQ(OB_SUCCESS, getter.inner_open(iter_param_, context_, &sstable_, &part_rowkeys));
+      ASSERT_EQ(OB_SUCCESS, kv_getter.inner_open(iter_param_, context_, &ddl_kv_, &part_rowkeys));
       for (int64_t i = 0; i < part_rowkeys.count(); ++i) {
         ret = getter.inner_get_next_row(prow);
+        ASSERT_EQ(OB_SUCCESS, ret);
+        ret = kv_getter.inner_get_next_row(kv_prow);
         ASSERT_EQ(OB_SUCCESS, ret);
       }
       ret = getter.inner_get_next_row(prow);
       ASSERT_EQ(OB_ITER_END, ret);
+      ret = kv_getter.inner_get_next_row(kv_prow);
+      ASSERT_EQ(OB_ITER_END, ret);
     }
     getter.reuse();
+    kv_getter.reuse();
   }
 
   // in io
   ASSERT_EQ(OB_SUCCESS, getter.inner_open(iter_param_, context_, &sstable_, &rowkeys));
+  ASSERT_EQ(OB_SUCCESS, kv_getter.inner_open(iter_param_, context_, &ddl_kv_, &rowkeys));
   for (int64_t i = 0; i < seeds.count(); ++i) {
     ret = getter.inner_get_next_row(prow);
     ASSERT_EQ(OB_SUCCESS, ret);
+    ret = kv_getter.inner_get_next_row(kv_prow);
+    ASSERT_EQ(OB_SUCCESS, ret);
     if (seeds.at(i) >= row_cnt_) {
       ASSERT_TRUE(prow->row_flag_.is_not_exist());
+      ASSERT_TRUE(kv_prow->row_flag_.is_not_exist());
     } else {
       ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seeds.at(i), check_row_));
       ASSERT_EQ(OB_SUCCESS, (const_cast<ObDatumRow *>(prow))->prepare_new_row(schema_cols_));
+      ASSERT_EQ(OB_SUCCESS, (const_cast<ObDatumRow *>(kv_prow))->prepare_new_row(schema_cols_));
       ASSERT_TRUE(check_row_ == *prow);
+      ASSERT_TRUE(check_row_ == *kv_prow);
     }
   }
   ret = getter.inner_get_next_row(prow);
   ASSERT_EQ(OB_ITER_END, ret);
+  ret = kv_getter.inner_get_next_row(kv_prow);
+  ASSERT_EQ(OB_ITER_END, ret);
   getter.reuse();
+  kv_getter.reuse();
 
   // in cache
   if (hit_mode == HIT_ALL) {
     ASSERT_EQ(OB_SUCCESS, getter.inner_open(iter_param_, context_, &sstable_, &rowkeys));
+    ASSERT_EQ(OB_SUCCESS, kv_getter.inner_open(iter_param_, context_, &ddl_kv_, &rowkeys));
     for (int64_t i = 0; i < seeds.count(); ++i) {
       ret = getter.inner_get_next_row(prow);
+      ret = kv_getter.inner_get_next_row(kv_prow);
       ASSERT_EQ(OB_SUCCESS, ret);
       if (seeds.at(i) >= row_cnt_) {
         ASSERT_TRUE(prow->row_flag_.is_not_exist());
+        ASSERT_TRUE(kv_prow->row_flag_.is_not_exist());
       } else {
         ASSERT_EQ(OB_SUCCESS, (const_cast<ObDatumRow *>(prow))->prepare_new_row(schema_cols_));
+        ASSERT_EQ(OB_SUCCESS, (const_cast<ObDatumRow *>(kv_prow))->prepare_new_row(schema_cols_));
         ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seeds.at(i), check_row_));
         ASSERT_TRUE(check_row_ == *prow);
+        ASSERT_TRUE(check_row_ == *kv_prow);
       }
     }
     ret = getter.inner_get_next_row(prow);
     ASSERT_EQ(OB_ITER_END, ret);
+    ret = kv_getter.inner_get_next_row(kv_prow);
+    ASSERT_EQ(OB_ITER_END, ret);
   }
   getter.reuse();
+  kv_getter.reuse();
 }
 
 void TestSSTableRowMultiGetter::test_border(const bool is_reverse_scan)

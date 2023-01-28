@@ -378,13 +378,13 @@ public:
   int append_macro_row(const ObDataMacroBlockMeta &macro_meta);
   int close();
   void reset();
-private:
   static int get_macro_meta(
       const char *buf,
       const int64_t size,
       const MacroBlockId &macro_id,
       common::ObIAllocator &allocator,
       ObDataMacroBlockMeta *&macro_meta);
+private:
   static int get_meta_block_and_read_info(
       const char *buf,
       const int64_t buf_size,
@@ -438,6 +438,7 @@ public:
       ObMacroMetasArray *&macro_meta_list);
   int append_root(ObIndexMicroBlockDesc &root_micro_block_desc);
   int close(const int64_t column_cnt, ObSSTableMergeRes &res);
+  const ObDataStoreDesc &get_index_store_desc() const { return index_store_desc_; }
   TO_STRING_KV(K(roots_.count()));
 private:
   int check_and_rewrite_sstable(ObSSTableMergeRes &res);

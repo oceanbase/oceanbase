@@ -118,6 +118,7 @@ struct ObMicroBlockData
   {
     DATA_BLOCK,
     INDEX_BLOCK,
+    DDL_BLOCK_TREE,
     MAX_TYPE
   };
 public:
@@ -140,6 +141,7 @@ public:
   int64_t &get_extra_size() { return extra_size_; }
 
   int64_t total_size() const { return size_ + extra_size_; }
+  bool is_index_block() const { return INDEX_BLOCK == type_ || DDL_BLOCK_TREE == type_;}
 
   void reset() { *this = ObMicroBlockData(); }
   OB_INLINE const ObMicroBlockHeader *get_micro_header() const

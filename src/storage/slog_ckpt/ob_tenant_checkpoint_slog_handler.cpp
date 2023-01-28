@@ -30,6 +30,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "sql/das/ob_das_id_service.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

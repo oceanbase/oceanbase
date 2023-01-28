@@ -179,8 +179,6 @@ public:
   int get_key_val(const ObMemtableKey*& key, ObMvccRow*& row);
   int try_purge(const transaction::ObTxSnapshot &snapshot_info,
                 const ObMemtableKey* key, ObMvccRow* row);
-  int get_end_gap_key(const transaction::ObTxSnapshot &snapshot_info,
-                      const ObStoreRowkey *&key, int64_t& size);
   uint8_t get_iter_flag()
   {
     return query_engine_iter_? query_engine_iter_->get_iter_flag(): 0;

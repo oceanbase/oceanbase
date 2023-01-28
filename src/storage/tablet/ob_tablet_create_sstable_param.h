@@ -19,6 +19,7 @@
 #include "storage/blocksstable/ob_imicro_block_reader.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "share/scn.h"
+#include "storage/ddl/ob_ddl_struct.h"
 
 namespace oceanbase
 {
@@ -103,7 +104,7 @@ public:
   int64_t occupy_size_;
   int64_t original_size_;
   int64_t max_merged_trans_version_;
-  share::SCN ddl_scn_;
+  share::SCN ddl_scn_; // saved into sstable meta
   share::SCN filled_tx_scn_;
   bool contain_uncommitted_row_;
   bool is_meta_root_;

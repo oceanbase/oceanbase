@@ -71,7 +71,7 @@ int ObIndexTreePrefetcher::init(
     access_ctx_ = &access_ctx;
     iter_param_ = &iter_param;
     index_read_info_ = iter_param.get_full_read_info()->get_index_read_info();
-    data_version_ = sstable_->is_major_sstable() ? sstable_->get_snapshot_version() : sstable_->get_key().get_end_scn().get_val_for_tx();
+    data_version_ = sstable_->get_data_version();
     data_block_cache_ = &(OB_STORE_CACHE.get_block_cache());
     index_block_cache_ = &(OB_STORE_CACHE.get_index_block_cache());
     is_inited_ = true;
@@ -98,7 +98,7 @@ int ObIndexTreePrefetcher::switch_context(
     sstable_ = &sstable;
     access_ctx_ = &access_ctx;
     index_read_info_ = &index_read_info;
-    data_version_ = sstable_->is_major_sstable() ? sstable_->get_snapshot_version() : sstable_->get_key().get_end_scn().get_val_for_tx();
+    data_version_ = sstable_->get_data_version();
     if (!is_rescan_) {
       is_rescan_ = true;
       for (int64_t i = 0; i < DEFAULT_GET_MICRO_DATA_HANDLE_CNT; ++i) {
@@ -795,7 +795,7 @@ int ObIndexTreeMultiPassPrefetcher::init_basic_info(
   int32_t range_count = 0;
   sstable_ = &sstable;
   access_ctx_ = &access_ctx;
-  data_version_ = sstable_->is_major_sstable() ? sstable_->get_snapshot_version() : sstable_->get_key().get_end_scn().get_val_for_tx();
+  data_version_ = sstable_->get_data_version();
   cur_level_ = 0;
   iter_type_ = iter_type;
   index_tree_height_ = sstable_->get_meta().get_index_tree_height();

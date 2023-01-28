@@ -31,6 +31,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {
@@ -1229,15 +1230,27 @@ int ObSSTable::get_last_rowkey(
     sstable_endkey = &ObDatumRowkey::MAX_ROWKEY;
   } else if (OB_FAIL(get_index_tree_root(index_read_info, root_block))) {
     LOG_WARN("Fail to get index tree root", K(ret), K(root_block));
-  } else if (OB_ISNULL(idx_data_header = reinterpret_cast<const ObIndexBlockDataHeader *>(
-      root_block.get_extra_buf()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null extra buf after transform", K(ret), K(root_block));
-  } else if (OB_UNLIKELY(!idx_data_header->is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Invalid index data header", KP(idx_data_header));
   } else {
-    sstable_endkey = &(idx_data_header->rowkey_array_[idx_data_header->row_cnt_ - 1]);
+    if (ObMicroBlockData::DDL_BLOCK_TREE == root_block.type_) {
+      ObBlockMetaTree *block_meta_tree = reinterpret_cast<ObBlockMetaTree *>(const_cast<char *>(root_block.buf_));
+      if (OB_ISNULL(block_meta_tree)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, block meta tree can not be null", K(ret), K(root_block));
+      } else if (OB_FAIL(block_meta_tree->get_last_rowkey(sstable_endkey))) {
+        LOG_WARN("get last rowkey failed", K(ret));
+      }
+    } else {
+      if (OB_ISNULL(idx_data_header = reinterpret_cast<const ObIndexBlockDataHeader *>(
+          root_block.get_extra_buf()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null extra buf after transform", K(ret), K(root_block));
+      } else if (OB_UNLIKELY(!idx_data_header->is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Invalid index data header", KP(idx_data_header));
+      } else {
+        sstable_endkey = &(idx_data_header->rowkey_array_[idx_data_header->row_cnt_ - 1]);
+      }
+    }
   }
   return ret;
 }

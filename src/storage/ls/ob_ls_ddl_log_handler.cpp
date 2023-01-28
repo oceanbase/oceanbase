@@ -159,10 +159,6 @@ int ObLSDDLLogHandler::replay(const void *buffer,
         ret = replay_ddl_redo_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
       }
-      case ObDDLClogType::DDL_PREPARE_LOG: {
-        ret = replay_ddl_prepare_log_(log_buf, buf_size, tmp_pos, log_scn);
-        break;
-      }
       case ObDDLClogType::DDL_COMMIT_LOG: {
         ret = replay_ddl_commit_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
@@ -261,6 +257,7 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
           param.tablet_id_ = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
           param.start_scn_ = ddl_kv_mgr_handle.get_obj()->get_start_scn();
           param.rec_scn_ = rec_scn;
+          LOG_INFO("schedule ddl merge dag", K(param));
           if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
             if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
               LOG_WARN("failed to schedule ddl kv merge dag", K(ret));
@@ -329,28 +326,10 @@ int ObLSDDLLogHandler::replay_ddl_redo_log_(const char *log_buf,
   return ret;
 }
 
-int ObLSDDLLogHandler::replay_ddl_prepare_log_(const char *log_buf,
+int ObLSDDLLogHandler::replay_ddl_commit_log_(const char *log_buf,
                                                const int64_t buf_size,
                                                int64_t pos,
                                                const SCN &log_scn)
-{
-  int ret = OB_SUCCESS;
-  ObDDLPrepareLog log;
-  if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
-    LOG_WARN("fail to deserialize ddl commit log", K(ret));
-  } else if (OB_FAIL(ddl_log_replayer_.replay_prepare(log, log_scn))) {
-    if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
-      LOG_WARN("fail to replay ddl prepare log", K(ret), K(log));
-      ret = OB_EAGAIN;
-    }
-  }
-  return ret;
-}
-
-int ObLSDDLLogHandler::replay_ddl_commit_log_(const char *log_buf,
-                                              const int64_t buf_size,
-                                              int64_t pos,
-                                              const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObDDLCommitLog log;

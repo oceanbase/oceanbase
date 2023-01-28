@@ -134,8 +134,10 @@ void TestSSTableRowMultiScanner::test_one_case(
   int ret = OB_SUCCESS;
   ObDatumRange mscan_ranges[TEST_MULTI_GET_CNT];
   ObSSTableRowMultiScanner scanner;
+  ObSSTableRowMultiScanner kv_scanner;
   ObSEArray<ObDatumRange, TEST_MULTI_GET_CNT> ranges;
   const ObDatumRow *prow = NULL;
+  const ObDatumRow *kv_prow = NULL;
   //if (HIT_PART == hit_mode) {
     //ObArray<ObDatumRange> part_ranges;
     //ObArray<ObDatumRange> tmp_ranges;
@@ -182,6 +184,7 @@ void TestSSTableRowMultiScanner::test_one_case(
     ASSERT_EQ(OB_SUCCESS, ranges.push_back(mscan_ranges[i]));
   }
   ASSERT_EQ(OB_SUCCESS, scanner.inner_open(iter_param_, context_, &sstable_, &ranges));
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(iter_param_, context_, &ddl_kv_, &ranges));
   for (int64_t i = 0; i < start_seeds.count(); ++i) {
     for (int64_t j = 0; j < count_per_range; ++j) {
       const int64_t k = is_reverse_scan ? start_seeds.at(i) + count_per_range - j - 1 : start_seeds.at(i) + j;
@@ -190,18 +193,27 @@ void TestSSTableRowMultiScanner::test_one_case(
         if (k < row_cnt_) {
           ASSERT_EQ(OB_SUCCESS, scanner.inner_get_next_row(prow));
           ASSERT_TRUE(*prow == check_row);
+          ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_get_next_row(kv_prow));
+          ASSERT_TRUE(*kv_prow == check_row);
         }
       }
     }
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
   scanner.reuse();
+  ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
+  kv_scanner.reuse();
 
   if (HIT_ALL == hit_mode) {
     ASSERT_EQ(OB_SUCCESS, scanner.inner_open(
             iter_param_,
             context_,
             &sstable_,
+            &ranges));
+    ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+            iter_param_,
+            context_,
+            &ddl_kv_,
             &ranges));
     for (int64_t i = 0; i < start_seeds.count(); ++i) {
       for (int64_t j = 0; j < count_per_range; ++j) {
@@ -211,13 +223,18 @@ void TestSSTableRowMultiScanner::test_one_case(
           if (k < row_cnt_) {
             ASSERT_EQ(OB_SUCCESS, scanner.inner_get_next_row(prow));
             ASSERT_TRUE(*prow == check_row);
+            ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_get_next_row(kv_prow));
+            ASSERT_TRUE(*kv_prow == check_row);
           }
         }
       }
     }
     ret = scanner.inner_get_next_row(prow);
     ASSERT_EQ(OB_ITER_END, ret);
+    ret = kv_scanner.inner_get_next_row(kv_prow);
+    ASSERT_EQ(OB_ITER_END, ret);
     scanner.reuse();
+    kv_scanner.reuse();
   }
 }
 
@@ -670,8 +687,10 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   ObDatumRow row;
   ObDatumRowkey rowkey;
   const ObDatumRow *prow = NULL;
+  const ObDatumRow *kv_prow = NULL;
   int64_t row_cnt = 0;
   ObSSTableRowMultiScanner scanner;
+  ObSSTableRowMultiScanner kv_scanner;
 
   // prepare query param
   prepare_query_param(is_reverse_scan, tablet_handle_.get_obj()->get_full_read_info());
@@ -706,6 +725,11 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
           context_,
           &sstable_,
           &ranges));
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+          iter_param_,
+          context_,
+          &ddl_kv_,
+          &ranges));
   row_cnt = 0;
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;
@@ -713,19 +737,25 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
       for (int64_t j = 0; j < count_per_range; ++j) {
         const int64_t k = is_reverse_scan ? i + count_per_range - j - 1 : i + j;
         ASSERT_EQ(OB_SUCCESS, scanner.inner_get_next_row(prow));
+        ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_get_next_row(kv_prow));
         ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(k, check_row));
         ++row_cnt;
         ASSERT_TRUE(*prow == check_row);
+        ASSERT_TRUE(*kv_prow == check_row);
       }
     } else {
       ASSERT_EQ(OB_SUCCESS, scanner.inner_get_next_row(prow));
+      ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_get_next_row(kv_prow));
       ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(p, check_row));
       ++row_cnt;
       ASSERT_TRUE(*prow == check_row);
+      ASSERT_TRUE(*kv_prow == check_row);
     }
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
+  ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
   scanner.reuse();
+  kv_scanner.reuse();
 
   // first half multi scan, second half multi get
   ranges.reuse();
@@ -746,6 +776,11 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
           context_,
           &sstable_,
           &ranges));
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+          iter_param_,
+          context_,
+          &ddl_kv_,
+          &ranges));
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;
     if (p < TEST_MULTI_GET_CNT / 2) {
@@ -753,20 +788,28 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
         const int64_t k = is_reverse_scan ? i + count_per_range - j - 1 : i + j;
         ret = scanner.inner_get_next_row(prow);
         ASSERT_EQ(OB_SUCCESS, ret);
+        ret = kv_scanner.inner_get_next_row(kv_prow);
+        ASSERT_EQ(OB_SUCCESS, ret);
         ret = row_generate_.get_next_row(k, check_row);
         ASSERT_EQ(OB_SUCCESS, ret);
         ASSERT_TRUE(*prow == check_row);
+        ASSERT_TRUE(*kv_prow == check_row);
       }
     } else {
       ret = scanner.inner_get_next_row(prow);
       ASSERT_EQ(OB_SUCCESS, ret);
+      ret = kv_scanner.inner_get_next_row(kv_prow);
+      ASSERT_EQ(OB_SUCCESS, ret);
       ret = row_generate_.get_next_row(p, check_row);
       ASSERT_EQ(OB_SUCCESS, ret);
       ASSERT_TRUE(*prow == check_row);
+      ASSERT_TRUE(*kv_prow == check_row);
     }
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
+  ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
   scanner.reuse();
+  kv_scanner.reuse();
 
   // first half multi get, second half multi scan
   ranges.reuse();
@@ -788,6 +831,11 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
           context_,
           &sstable_,
           &ranges));
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+          iter_param_,
+          context_,
+          &ddl_kv_,
+          &ranges));
 
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;
@@ -796,21 +844,30 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
         const int64_t k = is_reverse_scan ? i + count_per_range - j - 1 : i + j;
         ret = scanner.inner_get_next_row(prow);
         ASSERT_EQ(OB_SUCCESS, ret);
+        ret = kv_scanner.inner_get_next_row(kv_prow);
+        ASSERT_EQ(OB_SUCCESS, ret);
         ret = row_generate_.get_next_row(k, check_row);
         ASSERT_EQ(OB_SUCCESS, ret);
         ASSERT_TRUE(*prow == check_row);
+        ASSERT_TRUE(*kv_prow == check_row);
       }
     } else {
       ret = scanner.inner_get_next_row(prow);
       ASSERT_EQ(OB_SUCCESS, ret);
+      ret = kv_scanner.inner_get_next_row(kv_prow);
+      ASSERT_EQ(OB_SUCCESS, ret);
       ret = row_generate_.get_next_row(p, check_row);
       ASSERT_EQ(OB_SUCCESS, ret);
       ASSERT_TRUE(*prow == check_row);
+      ASSERT_TRUE(*kv_prow == check_row);
     }
   }
   ret = scanner.inner_get_next_row(prow);
   ASSERT_EQ(OB_ITER_END, ret);
+  ret = kv_scanner.inner_get_next_row(kv_prow);
+  ASSERT_EQ(OB_ITER_END, ret);
   scanner.reuse();
+  kv_scanner.reuse();
 
   // first one multi get, others multi scan
   ranges.reuse();
@@ -831,6 +888,11 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
           context_,
           &sstable_,
           &ranges));
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+          iter_param_,
+          context_,
+          &ddl_kv_,
+          &ranges));
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;
     if (p != 0) {
@@ -838,20 +900,28 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
         const int64_t k = is_reverse_scan ? i + count_per_range - j - 1 : i + j;
         ret = scanner.inner_get_next_row(prow);
         ASSERT_EQ(OB_SUCCESS, ret);
+        ret = kv_scanner.inner_get_next_row(kv_prow);
+        ASSERT_EQ(OB_SUCCESS, ret);
         ret = row_generate_.get_next_row(k, check_row);
         ASSERT_EQ(OB_SUCCESS, ret);
         ASSERT_TRUE(*prow == check_row);
+        ASSERT_TRUE(*kv_prow == check_row);
       }
     } else {
       ret = scanner.inner_get_next_row(prow);
       ASSERT_EQ(OB_SUCCESS, ret);
+      ret = kv_scanner.inner_get_next_row(kv_prow);
+      ASSERT_EQ(OB_SUCCESS, ret);
       ret = row_generate_.get_next_row(p, check_row);
       ASSERT_EQ(OB_SUCCESS, ret);
       ASSERT_TRUE(*prow == check_row);
+      ASSERT_TRUE(*kv_prow == check_row);
     }
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
+  ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
   scanner.reuse();
+  kv_scanner.reuse();
 
   // first one multi scan, others multi get
   ranges.reuse();
@@ -872,6 +942,11 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
           context_,
           &sstable_,
           &ranges));
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+          iter_param_,
+          context_,
+          &ddl_kv_,
+          &ranges));
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;
     if (p == 0) {
@@ -879,20 +954,28 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
         const int64_t k = is_reverse_scan ? i + count_per_range - j - 1 : i + j;
         ret = scanner.inner_get_next_row(prow);
         ASSERT_EQ(OB_SUCCESS, ret);
+        ret = kv_scanner.inner_get_next_row(kv_prow);
+        ASSERT_EQ(OB_SUCCESS, ret);
         ret = row_generate_.get_next_row(k, check_row);
         ASSERT_EQ(OB_SUCCESS, ret);
         ASSERT_TRUE(*prow == check_row);
+        ASSERT_TRUE(*kv_prow == check_row);
       }
     } else {
       ret = scanner.inner_get_next_row(prow);
       ASSERT_EQ(OB_SUCCESS, ret);
+      ret = kv_scanner.inner_get_next_row(kv_prow);
+      ASSERT_EQ(OB_SUCCESS, ret);
       ret = row_generate_.get_next_row(p, check_row);
       ASSERT_EQ(OB_SUCCESS, ret);
       ASSERT_TRUE(*prow == check_row);
+      ASSERT_TRUE(*kv_prow == check_row);
     }
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
+  ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
   scanner.reuse();
+  kv_scanner.reuse();
 
   // multi scan not exist row
   STORAGE_LOG(DEBUG, "multi_scan_not_exist_row");
@@ -914,6 +997,11 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
           context_,
           &sstable_,
           &ranges));
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+          iter_param_,
+          context_,
+          &ddl_kv_,
+          &ranges));
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;
     if (p % 2) {
@@ -921,12 +1009,16 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
     } else {
       ret = scanner.inner_get_next_row(prow);
       ASSERT_EQ(OB_SUCCESS, ret);
+      ret = kv_scanner.inner_get_next_row(kv_prow);
+      ASSERT_EQ(OB_SUCCESS, ret);
       ret = row_generate_.get_next_row(p, check_row);
       ASSERT_EQ(OB_SUCCESS, ret);
       ASSERT_TRUE(*prow == check_row);
+      ASSERT_TRUE(*kv_prow == check_row);
     }
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
+  ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
   destroy_query_param();
 }
 

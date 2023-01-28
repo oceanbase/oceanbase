@@ -49,7 +49,6 @@ RPC_F(obrpc::OB_DETECT_MASTER_RS_LS, obrpc::ObDetectMasterRsArg,
       obrpc::ObDetectMasterRsLSResult, ObDetectMasterRsLSProxy);
 RPC_F(obrpc::OB_GET_ROOT_SERVER_ROLE, obrpc::ObDetectMasterRsArg,
       obrpc::ObGetRootserverRoleResult, ObGetRootserverRoleProxy);
-RPC_F(obrpc::OB_WRITE_DDL_SSTABLE_COMMIT_LOG, obrpc::ObDDLWriteSSTableCommitLogArg, obrpc::ObDDLWriteCommitLogResult, ObWriteDDLSSTableCommitLogProxy);
 RPC_F(obrpc::OB_CREATE_LS, obrpc::ObCreateLSArg, obrpc::ObCreateLSResult, ObLSCreatorProxy);
 RPC_F(obrpc::OB_CREATE_TABLET, obrpc::ObBatchCreateTabletArg, obrpc::ObCreateTabletBatchRes, ObTabletCreatorProxy);
 RPC_F(obrpc::OB_SET_MEMBER_LIST, obrpc::ObSetMemberListArgV2, obrpc::ObSetMemberListResult, ObSetMemberListProxy);

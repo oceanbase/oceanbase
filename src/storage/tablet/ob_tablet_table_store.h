@@ -77,10 +77,12 @@ public:
   OB_INLINE ObSSTableArray &get_major_sstables() { return major_tables_; }
   OB_INLINE ObSSTableArray &get_minor_sstables() { return minor_tables_; }
   OB_INLINE ObSSTableArray &get_ddl_sstables() { return ddl_sstables_; }
+  OB_INLINE ObSSTableArray &get_ddl_memtables() { return ddl_mem_sstables_; }
   OB_INLINE storage::ObITable *get_extend_sstable(const int64_t type) { return extend_tables_[type]; }
   OB_INLINE const storage::ObSSTableArray &get_major_sstables() const { return major_tables_; }
   OB_INLINE const storage::ObSSTableArray &get_minor_sstables() const { return minor_tables_; }
   OB_INLINE const storage::ObSSTableArray &get_ddl_sstables() const { return ddl_sstables_; }
+  OB_INLINE const storage::ObSSTableArray &get_ddl_memtables() const { return ddl_mem_sstables_; }
   OB_INLINE storage::ObITable *get_extend_sstable(const int64_t type) const { return extend_tables_[type]; }
 
   // called by SSTable Garbage Collector Thread
@@ -159,10 +161,6 @@ private:
   int build_meta_major_table(
       const ObTableHandleV2 &new_handle,
       const ObTabletTableStore &old_store);
-  int build_ddl_sstables(
-      common::ObIAllocator &allocator,
-      const ObUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store);
 
   int inner_build_major_tables_(
       common::ObIAllocator &allocator,
@@ -215,6 +213,15 @@ private:
       common::ObIAllocator &allocator,
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
+  // ddl
+  int pull_ddl_memtables(common::ObIAllocator &allocator);
+  int build_ddl_sstables(
+      common::ObIAllocator &allocator,
+      const ObUpdateTableStoreParam &param,
+      const ObTabletTableStore &old_store);
+  bool is_major_sstable_empty() const { return major_tables_.empty() && ddl_mem_sstables_.empty() && ddl_sstables_.empty(); }
+  int get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_sstables);
+
   int inner_replace_sstables(
       common::ObIAllocator &allocator,
       const ObIArray<ObTableHandleV2> &table_handles,
@@ -236,6 +243,7 @@ private:
   ObSSTableArray ddl_sstables_;
   storage::ObExtendTableArray extend_tables_;
   storage::ObMemtableArray memtables_;
+  ObSSTableArray ddl_mem_sstables_;
   storage::ObTableStoreIterator read_cache_;
   int64_t version_;
   bool is_ready_for_read_;
@@ -278,6 +286,7 @@ private:
   const ObSSTableArray &major_tables_;
   const ObSSTableArray &minor_tables_;
   const ObMemtableArray &memtables_;
+  const ObSSTableArray &ddl_mem_sstables_;
   const ObSSTableArray &ddl_sstables_;
   const ObExtendTableArray &extend_tables_;
   const bool is_ready_for_read_;

@@ -868,7 +868,7 @@ int ObComplementWriteTask::do_local_scan()
     ObQueryFlag query_flag(ObQueryFlag::Forward,
         true, /*is daily merge scan*/
         true, /*is read multiple macro block*/
-        true, /*sys task scan, read one macro block in single io*/
+        false, /*sys task scan, read one macro block in single io*/
         false /*is full row scan?*/,
         false,
         false);
@@ -1200,7 +1200,7 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   ObTablet *tablet = nullptr;
   ObTabletHandle tablet_handle;
   ObITable::TableKey hidden_table_key;
-  SCN prepare_scn;
+  SCN commit_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementMergetask has not been inited", K(ret));
@@ -1224,15 +1224,15 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_prepare_log(hidden_table_key,
-                                                                           param_->hidden_table_schema_->get_table_id(),
-                                                                           param_->execution_id_,
-                                                                           param_->task_id_,
-                                                                           prepare_scn))) {
+  } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_commit_log(hidden_table_key,
+                                                                          param_->hidden_table_schema_->get_table_id(),
+                                                                          param_->execution_id_,
+                                                                          param_->task_id_,
+                                                                          commit_scn))) {
     if (OB_TASK_EXPIRED == ret) {
       LOG_INFO("ddl task expired", K(ret), K(hidden_table_key), KPC(param_));
     } else {
-      LOG_WARN("fail write ddl prepare log", K(ret), K(hidden_table_key));
+      LOG_WARN("fail write ddl commit log", K(ret), K(hidden_table_key));
     }
   } else {
     ObTabletHandle new_tablet_handle; // no use here
@@ -1244,18 +1244,15 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
     const int64_t ddl_task_id = param_->task_id_;
     if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       LOG_WARN("get ddl kv manager failed", K(ret));
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_scn,
-                                                                prepare_scn,
-                                                                table_id,
-                                                                ddl_task_id))) {
-      LOG_WARN("commit ddl log failed", K(ret), K(ls_id), K(tablet_id), K(prepare_scn), K(hidden_table_key),
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(ddl_start_scn,
+                                                               commit_scn,
+                                                               table_id,
+                                                               ddl_task_id))) {
+      LOG_WARN("commit ddl log failed", K(ret), K(ls_id), K(tablet_id), K(commit_scn), K(hidden_table_key),
           K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_scn, prepare_scn))) {
-      LOG_WARN("wait ddl commit failed", K(ret), K(ls_id), K(tablet_id), K(hidden_table_key),
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_merge_success(ddl_start_scn, commit_scn))) {
+      LOG_WARN("wait ddl merge failed", K(ret), K(ls_id), K(tablet_id), K(hidden_table_key),
           K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
-    } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_commit_log(hidden_table_key,
-                                                                            prepare_scn))) {
-      LOG_WARN("fail write ddl commit log", K(ret), K(hidden_table_key));
     }
   }
   return ret;

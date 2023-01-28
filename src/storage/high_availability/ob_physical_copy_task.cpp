@@ -18,6 +18,7 @@
 #include "share/ob_cluster_version.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -834,7 +835,7 @@ int ObPhysicalCopyFinishTask::get_merge_type_(
     merge_type = ObMergeType::MAJOR_MERGE;
   } else if (sstable_param->table_key_.is_minor_sstable()) {
     merge_type = ObMergeType::MINOR_MERGE;
-  } else if (sstable_param->table_key_.is_ddl_sstable()) {
+  } else if (sstable_param->table_key_.is_ddl_dump_sstable()) {
     merge_type = ObMergeType::DDL_KV_MERGE;
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -971,7 +972,7 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
     param.rowkey_column_cnt_ = sstable_param_->basic_meta_.rowkey_column_count_;
     param.ddl_scn_ = sstable_param_->basic_meta_.ddl_scn_;
     MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-    if (param.table_key_.is_major_sstable() || param.table_key_.is_ddl_sstable()) {
+    if (param.table_key_.is_major_sstable() || param.table_key_.is_ddl_dump_sstable()) {
       if (OB_FAIL(res.fill_column_checksum(sstable_param_->column_default_checksums_,
           param.column_checksums_))) {
         LOG_WARN("fail to fill column checksum", K(ret), K(res));

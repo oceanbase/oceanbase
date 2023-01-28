@@ -222,8 +222,7 @@ int ObTablet::init(
       param.snapshot_version_, param.multi_version_start_,
       tx_data, ddl_data, autoinc_seq, input_max_sync_schema_version,
       MAX(max_serialized_medium_scn, old_tablet.tablet_meta_.max_serialized_medium_scn_),
-      param.clog_checkpoint_scn_, param.ddl_checkpoint_scn_, param.ddl_start_scn_, param.ddl_snapshot_version_,
-      param.ddl_execution_id_, param.ddl_cluster_version_))) {
+      param.clog_checkpoint_scn_, param.ddl_info_))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param),
         K(tx_data), K(ddl_data), K(autoinc_seq), K(input_max_sync_schema_version));
   } else if (OB_FAIL(table_store_.init(*allocator_, this, param, old_tablet.table_store_))) {
@@ -1153,6 +1152,22 @@ int ObTablet::get_read_major_sstable(
   return table_store_.get_read_major_sstable(major_snapshot_version, iter);
 }
 
+int ObTablet::get_ddl_memtables(common::ObIArray<ObITable *> &ddl_memtables) const
+{
+  int ret = OB_SUCCESS;
+  ddl_memtables.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    const ObSSTableArray &tmp_tables = table_store_.get_ddl_memtables();
+    if (!tmp_tables.empty() && OB_FAIL(tmp_tables.get_all_tables(ddl_memtables))) {
+      LOG_WARN("fail to get ddl memtables", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTablet::get_all_sstables(common::ObIArray<ObITable *> &sstables) const
 {
   int ret = OB_SUCCESS;
@@ -1974,16 +1989,26 @@ int ObTablet::get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_creat
 {
   int ret = OB_SUCCESS;
   ddl_kv_mgr_handle.reset();
-  ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
-  if (try_create) {
-    if (OB_FAIL(tablet_ptr->create_ddl_kv_mgr(tablet_meta_.ls_id_, tablet_meta_.tablet_id_, ddl_kv_mgr_handle))) {
-      LOG_WARN("create ddl kv mgr failed", K(ret), K(tablet_meta_));
+  if (!pointer_hdl_.is_valid()) {
+    if (try_create) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet pointer not valid", K(ret));
+    } else {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_DEBUG("tablet pointer not valid", K(ret));
     }
   } else {
-    tablet_ptr->get_ddl_kv_mgr(ddl_kv_mgr_handle);
-    if (!ddl_kv_mgr_handle.is_valid()) {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_DEBUG("ddl kv mgr not exist", K(ret), K(ddl_kv_mgr_handle));
+    ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
+    if (try_create) {
+      if (OB_FAIL(tablet_ptr->create_ddl_kv_mgr(tablet_meta_.ls_id_, tablet_meta_.tablet_id_, ddl_kv_mgr_handle))) {
+        LOG_WARN("create ddl kv mgr failed", K(ret), K(tablet_meta_));
+      }
+    } else {
+      tablet_ptr->get_ddl_kv_mgr(ddl_kv_mgr_handle);
+      if (!ddl_kv_mgr_handle.is_valid()) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_DEBUG("ddl kv mgr not exist", K(ret), K(ddl_kv_mgr_handle));
+      }
     }
   }
   return ret;

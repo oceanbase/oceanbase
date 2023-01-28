@@ -6441,21 +6441,6 @@ int ObDropDirectoryArg::assign(const ObDropDirectoryArg &other)
 
 OB_SERIALIZE_MEMBER((ObDropDirectoryArg, ObDDLArg), tenant_id_, directory_name_);
 
-OB_SERIALIZE_MEMBER(ObDDLWriteSSTableCommitLogArg, table_key_);
-int ObDDLWriteSSTableCommitLogArg::assign(const ObDDLWriteSSTableCommitLogArg &other)
-{
-  int ret = OB_SUCCESS;
-  table_key_ = other.table_key_;
-  return ret;
-}
-
-OB_SERIALIZE_MEMBER(ObDDLWriteCommitLogResult, ret_code_);
-int ObDDLWriteCommitLogResult::assign(const ObDDLWriteCommitLogResult &other)
-{
-  int ret = OB_SUCCESS;
-  ret_code_ = other.ret_code_;
-  return ret;
-}
 
 
 bool ObCreateLSArg::is_valid() const
@@ -7380,12 +7365,12 @@ int ObRpcRemoteWriteDDLRedoLogArg::init(const uint64_t tenant_id,
 
 OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLRedoLogArg, tenant_id_, ls_id_, redo_info_);
 
-ObRpcRemoteWriteDDLPrepareLogArg::ObRpcRemoteWriteDDLPrepareLogArg()
+ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(SCN::min_scn()),
     table_id_(0), execution_id_(-1), ddl_task_id_(0)
 {}
 
-int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
+int ObRpcRemoteWriteDDLCommitLogArg::init(const uint64_t tenant_id,
                                           const share::ObLSID &ls_id,
                                           const storage::ObITable::TableKey &table_key,
                                           const SCN &start_scn,
@@ -7411,35 +7396,9 @@ int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLPrepareLogArg, tenant_id_, ls_id_, table_key_, start_scn_,
+OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLCommitLogArg, tenant_id_, ls_id_, table_key_, start_scn_,
                     table_id_, execution_id_, ddl_task_id_);
 
-ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
-  : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), prepare_scn_(SCN::min_scn())
-{}
-
-int ObRpcRemoteWriteDDLCommitLogArg::init(const uint64_t tenant_id,
-                                          const share::ObLSID &ls_id,
-                                          const storage::ObITable::TableKey &table_key,
-                                          const SCN &start_scn,
-                                          const SCN &prepare_scn)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid_and_not_min()
-                  || !prepare_scn.is_valid_and_not_min())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_scn), K(prepare_scn));
-  } else {
-    tenant_id_ = tenant_id;
-    ls_id_ = ls_id;
-    table_key_ = table_key;
-    start_scn_ = start_scn;
-    prepare_scn_ = prepare_scn;
-  }
-  return ret;
-}
-
-OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLCommitLogArg, tenant_id_, ls_id_, table_key_, start_scn_, prepare_scn_);
 
 bool ObCheckLSCanOfflineArg::is_valid() const
 {

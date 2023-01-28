@@ -18,6 +18,7 @@
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -707,14 +708,10 @@ int ObStorageHATabletsBuilder::get_remote_logical_minor_scn_range_(
   return ret;
 }
 
-// 1. ddl_start_scn == ddl_checkpoint_scn
-//   1.1 no need copy sstable
-// 2. ddl_start_scn < ddl_checkpoint_scn
-//   2.1 ddl_checkpoint_scn has pushed on dest ls tablet
-//       2.1.1 we need to copy sstable in [ddl_start_scn, ddl_checkpoint_scn]
-//   2.2 ddl_checkpoint_scn has not pushed on dest ls tablet
-//       2.2.1 we need find the orignal checkpoint ts of tablet meta, mark as ddl_checkpoint_scn_1
-//       2.2.2 and the need copy sstable is in [ddl_start_scn, ddl_checkpoint_scn_1]
+// the tablet meta if the one copied from the source server
+// ddl_sstable_array is the sstable of the destination server
+// the first ddl sstable is an empty one with scn range: (ddl_start_scn - 1, ddl_start_scn]
+// the scn range of ddl_sstable_array is continuous, so get the min ddl start scn as the end scn of need_copy_scn_range
 int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
     const ObTablet *tablet,
     const ObSSTableArray &ddl_sstable_array,
@@ -730,41 +727,33 @@ int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
   } else {
     const SCN ddl_start_scn = tablet->get_tablet_meta().ddl_start_scn_;
     const SCN ddl_checkpoint_scn = tablet->get_tablet_meta().ddl_checkpoint_scn_;
-    if (ddl_start_scn == ddl_checkpoint_scn) {
-      need_copy_scn_range.start_scn_ = ddl_start_scn;
-      need_copy_scn_range.end_scn_ = ddl_checkpoint_scn;
-    } else if (ddl_start_scn < ddl_checkpoint_scn) {
-      bool ddl_checkpoint_pushed = !ddl_sstable_array.empty();
-      if (ddl_checkpoint_pushed) {
-        need_copy_scn_range.start_scn_ = ddl_start_scn;
-        SCN max_start_scn = SCN::max_scn();
-        if (OB_FAIL(get_ddl_sstable_max_start_scn_(ddl_sstable_array, max_start_scn))) {
-          LOG_WARN("failed to get ddl sstable min start log ts", K(ret));
-        } else {
-          need_copy_scn_range.end_scn_ = max_start_scn;
-        }
-      } else {
-        need_copy_scn_range.start_scn_ = ddl_start_scn;
-        need_copy_scn_range.end_scn_ = ddl_checkpoint_scn;
-      }
-#ifdef ERRSIM
-      LOG_INFO("ddl checkpoint pushed", K(ddl_checkpoint_pushed), K(ddl_sstable_array), K(ddl_start_scn), K(ddl_checkpoint_scn));
-      SERVER_EVENT_SYNC_ADD("storage_ha", "get_need_copy_ddl_sstable_range",
-                            "tablet_id", tablet->get_tablet_meta().tablet_id_,
-                            "dest_ddl_checkpoint_pushed", ddl_checkpoint_pushed,
-                            "start_scn", need_copy_scn_range.start_scn_,
-                            "end_scn", need_copy_scn_range.end_scn_);
-#endif
-    } else {
+    need_copy_scn_range.start_scn_ = tablet->get_tablet_meta().get_ddl_sstable_start_scn();
+    if (ddl_start_scn > ddl_checkpoint_scn) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("checkpoint ts should be greater than start ts",
         K(ret), "tablet_meta", tablet->get_tablet_meta());
+    } else {
+      if (!ddl_sstable_array.empty()) {
+        if (OB_FAIL(get_ddl_sstable_min_start_scn_(ddl_sstable_array, need_copy_scn_range.end_scn_))) {
+          LOG_WARN("failed to get ddl sstable min start scn", K(ret));
+        }
+      } else {
+        need_copy_scn_range.end_scn_ = ddl_checkpoint_scn;
+      }
+#ifdef ERRSIM
+      LOG_INFO("get_need_copy_ddl_sstable_range", K(ddl_sstable_array), K(ddl_start_scn), K(ddl_checkpoint_scn));
+      SERVER_EVENT_SYNC_ADD("storage_ha", "get_need_copy_ddl_sstable_range",
+                            "tablet_id", tablet->get_tablet_meta().tablet_id_,
+                            "dest_ddl_sstable_count", ddl_sstable_array.count(),
+                            "start_scn", need_copy_scn_range.start_scn_,
+                            "end_scn", need_copy_scn_range.end_scn_);
+#endif
     }
   }
   return ret;
 }
 
-int ObStorageHATabletsBuilder::get_ddl_sstable_max_start_scn_(
+int ObStorageHATabletsBuilder::get_ddl_sstable_min_start_scn_(
     const ObSSTableArray &ddl_sstable_array,
     SCN &max_start_scn)
 {
@@ -787,7 +776,7 @@ int ObStorageHATabletsBuilder::get_ddl_sstable_max_start_scn_(
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable should not be NULL", K(ret), KP(table), K(param_));
-      } else if (!table->is_ddl_sstable()) {
+      } else if (!table->is_ddl_dump_sstable()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable type is unexpected", K(ret), KP(table), K(param_));
       } else {

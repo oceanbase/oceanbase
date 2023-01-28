@@ -20,6 +20,7 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tablet/ob_tablet.h"
 
 static const char *TEST_FILE_NAME = "fast_commit_report";
 const int64_t TOTAL_FC_ROW_COUNT = 1000000;
@@ -565,7 +566,6 @@ TEST_F(ObFastCommitReport, fast_commit_report)
     }
 
     std::cout << "Data reading has been finished, you can generate it with command: sudo perf script -i perf.data -F ip,sym -f > data.viz\n";
-    std::cout << "And finally you can graph it using url: http://tools.obdev.alibaba-inc.com:8888/perf/ \n";
   }
 }
 

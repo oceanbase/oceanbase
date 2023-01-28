@@ -25,6 +25,7 @@
 #include "storage/ob_relative_table.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
+#include "storage/tablet/ob_tablet.h"
 
 static const char *TEST_FILE_NAME = "test_mvcc_gc";
 

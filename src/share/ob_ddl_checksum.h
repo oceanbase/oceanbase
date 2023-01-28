@@ -70,6 +70,7 @@ public:
       const int64_t execution_id,
       const uint64_t table_id,
       const int64_t ddl_task_id,
+      const bool is_unique_index_checking,
       common::hash::ObHashMap<int64_t, int64_t> &column_checksums, common::ObMySQLProxy &sql_proxy);
   static int get_tablet_checksum_record(
       const uint64_t tenant_id,
@@ -85,6 +86,7 @@ public:
       const uint64_t data_table_id,
       const uint64_t index_table_id,
       const int64_t ddl_task_id,
+      const bool is_unique_index_checking,
       bool &is_equal,
       common::ObMySQLProxy &sql_proxy);
   static int delete_checksum(

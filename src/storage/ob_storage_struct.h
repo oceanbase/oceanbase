@@ -27,6 +27,7 @@
 #include "share/scn.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
+#include "storage/ddl/ob_ddl_struct.h"
 
 namespace oceanbase
 {
@@ -293,6 +294,23 @@ OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
   return status >= OB_MIGRATE_STATUS_NONE && status < OB_MIGRATE_STATUS_MAX;
 }
 
+struct ObDDLTableStoreParam final
+{
+public:
+  ObDDLTableStoreParam();
+  ~ObDDLTableStoreParam() = default;
+  bool is_valid() const;
+  TO_STRING_KV(K_(keep_old_ddl_sstable), K_(ddl_start_scn), K_(ddl_checkpoint_scn),
+      K_(ddl_snapshot_version), K_(ddl_execution_id), K_(ddl_cluster_version));
+public:
+  bool keep_old_ddl_sstable_;
+  share::SCN ddl_start_scn_;
+  share::SCN ddl_checkpoint_scn_;
+  int64_t ddl_snapshot_version_;
+  int64_t ddl_execution_id_;
+  int64_t ddl_cluster_version_;
+};
+
 struct ObUpdateTableStoreParam
 {
   ObUpdateTableStoreParam(
@@ -316,35 +334,27 @@ struct ObUpdateTableStoreParam
   ObUpdateTableStoreParam( // for ddl merge task only
     const ObTableHandleV2 &table_handle,
     const int64_t snapshot_version,
-    const bool keep_old_ddl_sstable,
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
-    const int64_t ddl_cluster_version,
     const bool update_with_major_flag,
     const bool need_report = false);
 
   bool is_valid() const;
   TO_STRING_KV(K_(table_handle), K_(snapshot_version), K_(clog_checkpoint_scn), K_(multi_version_start),
-               K_(keep_old_ddl_sstable), K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
-               K_(need_check_sstable), K_(ddl_checkpoint_scn), K_(ddl_start_scn), K_(ddl_snapshot_version),
-               K_(ddl_execution_id), K_(ddl_cluster_version), K_(allow_duplicate_sstable), K_(tx_data), K_(binding_info), K_(auto_inc_seq),
+               K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
+               K_(need_check_sstable), K_(ddl_info), K_(allow_duplicate_sstable), K_(tx_data), K_(binding_info), K_(auto_inc_seq),
                KPC_(medium_info_list), "merge_type", merge_type_to_str(merge_type_));
 
   ObTableHandleV2 table_handle_;
   int64_t snapshot_version_;
   share::SCN clog_checkpoint_scn_;
   int64_t multi_version_start_;
-  bool keep_old_ddl_sstable_;
   bool need_report_;
   const ObStorageSchema *storage_schema_;
   int64_t rebuild_seq_;
   bool update_with_major_flag_;
   bool need_check_sstable_;
-  share::SCN ddl_checkpoint_scn_;
-  share::SCN ddl_start_scn_;
-  int64_t ddl_snapshot_version_;
-  int64_t ddl_execution_id_;
-  int64_t ddl_cluster_version_;
+  ObDDLTableStoreParam ddl_info_;
   bool allow_duplicate_sstable_;
 
   // msd

@@ -208,6 +208,25 @@ int ObGetMergeTablesResult::assign(const ObGetMergeTablesResult &src)
   }
   return ret;
 }
+ObDDLTableStoreParam::ObDDLTableStoreParam()
+  : keep_old_ddl_sstable_(true),
+    ddl_start_scn_(SCN::min_scn()),
+    ddl_checkpoint_scn_(SCN::min_scn()),
+    ddl_snapshot_version_(0),
+    ddl_execution_id_(-1),
+    ddl_cluster_version_(0)
+{
+
+}
+
+bool ObDDLTableStoreParam::is_valid() const
+{
+  return ddl_start_scn_.is_valid()
+    && ddl_checkpoint_scn_.is_valid()
+    && ddl_snapshot_version_ >= 0
+    && ddl_execution_id_ >= 0
+    && ddl_cluster_version_ >= 0;
+}
 
 ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const int64_t snapshot_version,
@@ -218,17 +237,12 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     snapshot_version_(snapshot_version),
     clog_checkpoint_scn_(),
     multi_version_start_(multi_version_start),
-    keep_old_ddl_sstable_(true),
     need_report_(false),
     storage_schema_(storage_schema),
     rebuild_seq_(rebuild_seq),
     update_with_major_flag_(false),
     need_check_sstable_(false),
-    ddl_checkpoint_scn_(SCN::min_scn()),
-    ddl_start_scn_(SCN::min_scn()),
-    ddl_snapshot_version_(0),
-    ddl_execution_id_(-1),
-    ddl_cluster_version_(0),
+    ddl_info_(),
     allow_duplicate_sstable_(false),
     tx_data_(),
     binding_info_(),
@@ -255,17 +269,12 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     snapshot_version_(snapshot_version),
     clog_checkpoint_scn_(),
     multi_version_start_(multi_version_start),
-    keep_old_ddl_sstable_(true),
     need_report_(need_report),
     storage_schema_(storage_schema),
     rebuild_seq_(rebuild_seq),
     update_with_major_flag_(false),
     need_check_sstable_(need_check_sstable),
-    ddl_checkpoint_scn_(SCN::min_scn()),
-    ddl_start_scn_(SCN::min_scn()),
-    ddl_snapshot_version_(0),
-    ddl_execution_id_(-1),
-    ddl_cluster_version_(0),
+    ddl_info_(),
     allow_duplicate_sstable_(allow_duplicate_sstable),
     tx_data_(),
     binding_info_(),
@@ -279,27 +288,20 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
 ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const ObTableHandleV2 &table_handle,
     const int64_t snapshot_version,
-    const bool keep_old_ddl_sstable,
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
-    const int64_t ddl_cluster_version,
     const bool update_with_major_flag,
     const bool need_report)
   : table_handle_(table_handle),
     snapshot_version_(snapshot_version),
     clog_checkpoint_scn_(),
     multi_version_start_(0),
-    keep_old_ddl_sstable_(keep_old_ddl_sstable),
     need_report_(need_report),
     storage_schema_(storage_schema),
     rebuild_seq_(rebuild_seq),
     update_with_major_flag_(update_with_major_flag),
     need_check_sstable_(false),
-    ddl_checkpoint_scn_(SCN::min_scn()),
-    ddl_start_scn_(SCN::min_scn()),
-    ddl_snapshot_version_(0),
-    ddl_execution_id_(-1),
-    ddl_cluster_version_(ddl_cluster_version),
+    ddl_info_(),
     allow_duplicate_sstable_(false),
     tx_data_(),
     binding_info_(),

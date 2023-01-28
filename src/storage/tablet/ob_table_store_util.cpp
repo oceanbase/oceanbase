@@ -79,7 +79,7 @@ void ObITableArray::reset_table(const int64_t pos)
           && reinterpret_cast<ObSSTable*>(array_[pos])->is_small_sstable())) {
         FLOG_INFO("this thread doesn't have MTL ctx, push sstable into gc queue", KP(array_[pos]), K(array_[pos]->get_key()));
         meta_mem_mgr_->push_table_into_gc_queue(array_[pos], array_[pos]->get_key().table_type_);
-      } else if (array_[pos]->is_sstable()) {
+      } else if (array_[pos]->is_sstable() && !array_[pos]->is_ddl_mem_sstable()) {
         meta_mem_mgr_->gc_sstable(reinterpret_cast<ObSSTable*>(array_[pos]));
       } else {
         meta_mem_mgr_->push_table_into_gc_queue(array_[pos], array_[pos]->get_key().table_type_);

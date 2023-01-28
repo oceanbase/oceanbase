@@ -93,6 +93,7 @@ private:
   static const int64_t MAX_TX_DATA_MEMTABLE_CNT_IN_OBJ_POOL = MAX_MEMSTORE_CNT * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER;
   static const int64_t MAX_TX_CTX_MEMTABLE_CNT_IN_OBJ_POOL = OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER;
   static const int64_t MAX_LOCK_MEMTABLE_CNT_IN_OBJ_POOL = OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER;
+  static const int64_t MAX_DDL_KV_IN_OBJ_POOL = 5000;
 
   static int64_t get_default_tablet_pool_count()
   {
@@ -132,6 +133,9 @@ public:
   // sstable interface
   int acquire_sstable(ObTableHandleV2 &handle);
   int acquire_sstable(ObTableHandleV2 &handle, common::ObIAllocator &allocator);
+
+  // ddl kv interface
+  int acquire_ddl_kv(ObTableHandleV2 &handle);
 
   // memtable interfaces
   int acquire_memtable(ObTableHandleV2 &handle);
@@ -408,6 +412,7 @@ private:
   void init_pool_arr();
   void release_memtable(memtable::ObMemtable *memtable);
   void release_sstable(blocksstable::ObSSTable *sstable);
+  void release_ddl_kv(ObDDLKV *ddl_kv);
   void release_tablet(ObTablet *tablet);
   void release_tablet_ddl_kv_mgr(ObTabletDDLKvMgr *ddl_kv_mgr);
   void release_tablet_memtable_mgr(ObTabletMemtableMgr *memtable_mgr);
@@ -443,6 +448,7 @@ private:
 
   ObTenantMetaObjPool<memtable::ObMemtable> memtable_pool_;
   ObTenantMetaObjPool<blocksstable::ObSSTable> sstable_pool_;
+  ObTenantMetaObjPool<ObDDLKV> ddl_kv_pool_;
   ObTenantMetaObjPool<ObTablet> tablet_pool_;
   ObTenantMetaObjPool<ObTabletDDLKvMgr> tablet_ddl_kv_mgr_pool_;
   ObTenantMetaObjPool<ObTabletMemtableMgr> tablet_memtable_mgr_pool_;

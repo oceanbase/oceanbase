@@ -19,6 +19,7 @@
 #include "share/ob_rpc_struct.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "share/scn.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

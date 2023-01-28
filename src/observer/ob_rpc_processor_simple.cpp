@@ -42,6 +42,7 @@
 #include "share/ob_ls_id.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/ls/ob_ls.h"
+#include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_trans_service.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/sequence/ob_sequence_cache.h"
@@ -1912,18 +1913,6 @@ int ObHandlePartTransCtxP::process()
   return ret;
 }
 
-int ObWriteDDLSSTableCommitLogP::process()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(gctx_.ob_service_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
-  } else {
-    ret = gctx_.ob_service_->write_ddl_sstable_commit_log(arg_);
-  }
-  return ret;
-}
-
 int ObFlushLocalOptStatMonitoringInfoP::process()
 {
   int ret = OB_SUCCESS;
@@ -2013,51 +2002,6 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
   return ret;
 }
 
-int ObRpcRemoteWriteDDLPrepareLogP::process()
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = arg_.tenant_id_;
-
-  MTL_SWITCH(tenant_id) {
-    const ObITable::TableKey &table_key = arg_.table_key_;
-    ObDDLSSTableRedoWriter sstable_redo_writer;
-    ObLSService *ls_service = MTL(ObLSService*);
-    ObLSHandle ls_handle;
-    ObTabletHandle tablet_handle;
-    ObDDLKvMgrHandle ddl_kv_mgr_handle;
-    if (OB_UNLIKELY(!arg_.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arguments", K(ret), K_(arg));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-      LOG_WARN("get ls failed", K(ret), K(arg_));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(table_key.tablet_id_, tablet_handle))) {
-      LOG_WARN("get tablet failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      LOG_WARN("get ddl kv manager failed", K(ret));
-    } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
-      LOG_WARN("init sstable redo writer", K(ret), K(table_key));
-    } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
-    } else {
-      SCN prepare_scn;
-      if (OB_FAIL(sstable_redo_writer.write_prepare_log(table_key,
-                                                        arg_.table_id_,
-                                                        arg_.execution_id_,
-                                                        arg_.ddl_task_id_,
-                                                        prepare_scn))) {
-        LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(arg_.start_scn_,
-                                                                  prepare_scn,
-                                                                  arg_.table_id_,
-                                                                  arg_.ddl_task_id_))) {
-        LOG_WARN("failed to do ddl kv prepare", K(ret), K(arg_));
-      } else {
-        result_ = prepare_scn.get_val_for_tx();
-      }
-    }
-  }
-  return ret;
-}
-
 int ObRpcRemoteWriteDDLCommitLogP::process()
 {
   int ret = OB_SUCCESS;
@@ -2083,11 +2027,20 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
     } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
     } else {
-      // wait in rpc framework may cause rpc timeout, need sync commit via rs @xiajin
-      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(arg_.start_scn_, arg_.prepare_scn_))) {
-        LOG_WARN("failed to wait ddl kv commit", K(ret), K(arg_));
-      } else if (OB_FAIL(sstable_redo_writer.write_commit_log(table_key, arg_.prepare_scn_))) {
+      SCN commit_scn;
+      if (OB_FAIL(sstable_redo_writer.write_commit_log(table_key,
+                                                       arg_.table_id_,
+                                                       arg_.execution_id_,
+                                                       arg_.ddl_task_id_,
+                                                       commit_scn))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(arg_.start_scn_,
+                                                                 commit_scn,
+                                                                 arg_.table_id_,
+                                                                 arg_.ddl_task_id_))) {
+        LOG_WARN("failed to do ddl kv commit", K(ret), K(arg_));
+      } else {
+        result_ = commit_scn.get_val_for_tx();
       }
     }
   }

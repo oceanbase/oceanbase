@@ -37,7 +37,7 @@ public:
   OB_INLINE bool is_valid() const { return nullptr != datums_ && datum_cnt_ > 0; }
   OB_INLINE bool is_memtable_valid() const { return store_rowkey_.is_valid() && is_valid(); }
   OB_INLINE int32_t get_datum_cnt() const { return datum_cnt_; }
-  OB_INLINE const ObStorageDatum *get_datum_ptr() { return datums_; }
+  OB_INLINE const ObStorageDatum *get_datum_ptr() const { return datums_; }
   OB_INLINE const ObStorageDatum& get_datum(const int64_t idx) const { OB_ASSERT(idx < datum_cnt_); return datums_[idx]; }
   OB_INLINE int64_t get_deep_copy_size() const;
   OB_INLINE int deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const;
@@ -127,13 +127,19 @@ private:
 struct ObDatumRowkeyWrapper
 {
 public:
-  ObDatumRowkeyWrapper() = delete;
-  ObDatumRowkeyWrapper(const ObDatumRowkey &rowkey, const ObStorageDatumUtils &datum_utils)
+  ObDatumRowkeyWrapper() : rowkey_(nullptr), datum_utils_(nullptr)
+  {}
+  ObDatumRowkeyWrapper(const ObDatumRowkey *rowkey, const ObStorageDatumUtils *datum_utils)
     : rowkey_(rowkey), datum_utils_(datum_utils)
   {}
-  TO_STRING_KV(K_(rowkey), K_(datum_utils));
-  const ObDatumRowkey &rowkey_;
-  const ObStorageDatumUtils &datum_utils_;
+  bool is_valid() const { return nullptr != rowkey_ && nullptr != datum_utils_; }
+  const ObDatumRowkey *get_rowkey() const { return rowkey_; }
+  int compare(const ObDatumRowkeyWrapper &other, int &cmp) const { return rowkey_->compare(*(other.get_rowkey()), *datum_utils_, cmp); }
+  const ObStorageDatum *get_ptr() const { return rowkey_->get_datum_ptr(); }
+  const char *repr() const { return to_cstring(rowkey_); }
+  TO_STRING_KV(KPC_(rowkey), KPC_(datum_utils));
+  const ObDatumRowkey *rowkey_;
+  const ObStorageDatumUtils *datum_utils_;
 };
 
 

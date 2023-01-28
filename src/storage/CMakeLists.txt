@@ -379,6 +379,7 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_struct.cpp
   ddl/ob_direct_insert_sstable_ctx.cpp
   ddl/ob_tablet_barrier_log.cpp
+  ddl/ob_tablet_ddl_kv.cpp
   ddl/ob_tablet_ddl_kv_mgr.cpp
   ddl/ob_ddl_heart_beat_task.cpp
   ddl/ob_ddl_server_client.cpp
@@ -480,7 +481,6 @@ ob_set_subtarget(ob_storage memtable
 )
 
 ob_set_subtarget(ob_storage memtable_mvcc
-  memtable/mvcc/ob_keybtree.cpp
   memtable/mvcc/ob_multi_version_iterator.cpp
   memtable/mvcc/ob_mvcc_ctx.cpp
   memtable/mvcc/ob_mvcc_engine.cpp

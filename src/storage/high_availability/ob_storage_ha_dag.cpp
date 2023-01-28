@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -569,7 +570,7 @@ int ObStorageHATaskUtils::check_need_copy_sstable(
     if (OB_FAIL(check_minor_sstable_need_copy_(param, tablet_handle, need_copy))) {
       LOG_WARN("failed to check minor sstable need copy", K(ret), K(param), K(tablet_handle));
     }
-  } else if (param.table_key_.is_ddl_sstable()) {
+  } else if (param.table_key_.is_ddl_dump_sstable()) {
     if (OB_FAIL(check_ddl_sstable_need_copy_(param, tablet_handle, need_copy))) {
       LOG_WARN("failed to check ddl sstable need copy", K(ret), K(param), K(tablet_handle));
     }
@@ -674,7 +675,7 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
   const ObSSTable *sstable = nullptr;
   ObTablesHandleArray tables_handle_array;
 
-  if (!param.table_key_.is_ddl_sstable()) {
+  if (!param.table_key_.is_ddl_dump_sstable()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check ddl sstable need copy get invalid argument", K(ret), K(param));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {

@@ -23,6 +23,7 @@
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/log_define.h"
+#include "storage/tablet/ob_tablet.h" // ObTablet
 
 namespace oceanbase
 {

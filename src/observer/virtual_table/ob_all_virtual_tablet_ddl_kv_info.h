@@ -48,7 +48,7 @@ private:
   int64_t ls_id_;
   ObSharedGuard<storage::ObLSIterator> ls_iter_guard_;
   storage::ObLSTabletIterator ls_tablet_iter_;
-  storage::ObDDLKVsHandle ddl_kvs_handle_;
+  ObTablesHandleArray ddl_kvs_handle_;
   common::ObTabletID curr_tablet_id_;
   int64_t ddl_kv_idx_;
   char ip_buf_[common::OB_IP_STR_BUFF];

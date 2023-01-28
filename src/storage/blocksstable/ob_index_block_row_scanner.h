@@ -25,6 +25,7 @@ namespace storage
 {
 struct ObTableIterParam;
 struct ObTableAccessContext;
+class ObBlockMetaTree;
 }
 namespace blocksstable
 {
@@ -119,18 +120,24 @@ public:
   TO_STRING_KV(K_(current), K_(start), K_(end), K_(step),
                K_(range_idx), K_(is_get), K_(is_reverse_scan),
                K_(is_left_border), K_(is_right_border),
-               K_(is_inited), K_(macro_id), KPC_(idx_data_header), KPC_(index_read_info));
+               K_(is_inited), K_(index_format), K_(macro_id), KPC_(idx_data_header), KPC_(index_read_info));
 private:
   int init_by_micro_data(const ObMicroBlockData &idx_block_data);
   int locate_key(const ObDatumRowkey &rowkey);
   int locate_range(const ObDatumRange &range, const bool is_left_border, const bool is_right_border);
   int init_datum_row();
-  int read_curr_idx_row();
+  int read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header);
 private:
   union {
     const ObDatumRowkey *rowkey_;
     const ObDatumRange *range_;
     const void *query_range_;
+  };
+  enum IndexFormat {
+    INVALID = 0,
+    RAW_DATA,
+    TRANSFORMED,
+    BLOCK_TREE
   };
   const ObIArray<int32_t> *agg_projector_;
   const ObIArray<share::schema::ObColumnSchemaV2> *agg_column_schema_;
@@ -139,6 +146,7 @@ private:
   ObIAllocator *allocator_;
   ObMicroBlockReaderHelper micro_reader_helper_;
   ObIMicroBlockReader *micro_reader_;
+  storage::ObBlockMetaTree *block_meta_tree_;
   ObDatumRow *datum_row_;
   ObDatumRowkey endkey_;
   ObIndexBlockRowParser idx_row_parser_;
@@ -149,7 +157,7 @@ private:
   int64_t step_;
   int16_t range_idx_;
   int64_t nested_offset_;
-  bool is_transformed_;
+  IndexFormat index_format_;
   bool is_get_;
   bool is_reverse_scan_;
   bool is_left_border_;

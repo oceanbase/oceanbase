@@ -26,6 +26,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -930,7 +931,7 @@ int ObDDLMacroBlockRedoWriter::remote_write_macro_redo(const ObAddr &leader_addr
     if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id, redo_info))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLRedoLogArg", K(ret));
     } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).remote_write_ddl_redo_log(arg))) {
-      LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
+      LOG_WARN("fail to remote write ddl redo log", K(ret), K(leader_addr), K(arg));
     }
   }
   return ret;
@@ -1059,11 +1060,11 @@ int ObDDLSSTableRedoWriter::wait_redo_log_finish(const ObDDLMacroBlockRedoInfo &
   return ret;
 }
 
-int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_key,
-                                              const int64_t table_id,
-                                              const int64_t execution_id,
-                                              const int64_t ddl_task_id,
-                                              SCN &prepare_scn)
+int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key,
+                                             const int64_t table_id,
+                                             const int64_t execution_id,
+                                             const int64_t ddl_task_id,
+                                             SCN &commit_scn)
 
 {
   int ret = OB_SUCCESS;
@@ -1075,10 +1076,10 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
                         "ddl_task_id", ddl_task_id);
   DEBUG_SYNC(BEFORE_DDL_WRITE_PREPARE_LOG);
 #endif
-  prepare_scn.set_min();
+  commit_scn.set_min();
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ObDDLPrepareLog log;
+  ObDDLCommitLog log;
   ObDDLCommitLogHandle handle;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1088,60 +1089,6 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_));
   } else if (OB_FAIL(log.init(table_key, get_start_scn()))) {
     LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn_));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("get ls failed", K(ret), K(ls_id_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls should not be null", K(ret), K(table_key));
-  } else if (!remote_write_) {
-    if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_finish_log(log, ObDDLClogType::DDL_PREPARE_LOG, ls_id_, ls->get_log_handler(), handle))) {
-      if (ObDDLUtil::need_remote_write(ret)) {
-        if (OB_FAIL(switch_to_remote_write())) {
-          LOG_WARN("fail to switch to remote write", K(ret), K(table_key));
-        }
-      } else {
-        LOG_WARN("fail to write ddl commit log", K(ret), K(table_key));
-      }
-    } else if (OB_FAIL(handle.wait())) {
-      LOG_WARN("wait ddl commit log finish failed", K(ret), K(table_key));
-    } else {
-      prepare_scn = handle.get_commit_scn();
-    }
-  }
-  if (OB_SUCC(ret) && remote_write_) {
-    ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
-    obrpc::ObRpcRemoteWriteDDLPrepareLogArg arg;
-    obrpc::Int64 log_ns;
-    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn(), table_id, execution_id, ddl_task_id))) {
-      LOG_WARN("fail to init ObRpcRemoteWriteDDLPrepareLogArg", K(ret));
-    } else if (OB_ISNULL(srv_rpc_proxy)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
-    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_prepare_log(arg, log_ns))) {
-      LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
-    } else if (OB_FAIL(prepare_scn.convert_for_tx(log_ns))) {
-      LOG_WARN("convert for tx failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key,
-                                             const SCN &prepare_scn)
-{
-  int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-  ObDDLCommitLog log;
-  ObDDLCommitLogHandle handle;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn_.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
-  } else if (OB_FAIL(log.init(table_key, get_start_scn(), prepare_scn))) {
-    LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -1158,19 +1105,23 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
       }
     } else if (OB_FAIL(handle.wait())) {
       LOG_WARN("wait ddl commit log finish failed", K(ret), K(table_key));
+    } else {
+      commit_scn = handle.get_commit_scn();
     }
   }
   if (OB_SUCC(ret) && remote_write_) {
     ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
     obrpc::ObRpcRemoteWriteDDLCommitLogArg arg;
     obrpc::Int64 log_ns;
-    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn(), prepare_scn))) {
+    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn(), table_id, execution_id, ddl_task_id))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLCommitLogArg", K(ret));
     } else if (OB_ISNULL(srv_rpc_proxy)) {
       ret = OB_ERR_SYS;
       LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
     } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_commit_log(arg, log_ns))) {
       LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
+    } else if (OB_FAIL(commit_scn.convert_for_tx(log_ns))) {
+      LOG_WARN("convert for tx failed", K(ret));
     }
   }
   return ret;

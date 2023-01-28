@@ -22,6 +22,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
+#include "storage/tablet/ob_tablet.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "src/storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -615,7 +616,7 @@ ObITable::TableType ObTabletMergeCtx::get_merged_table_type() const
   } else if (META_MAJOR_MERGE == param_.merge_type_) {
     table_type = ObITable::TableType::META_MAJOR_SSTABLE;
   } else if (DDL_KV_MERGE == param_.merge_type_) {
-    table_type = ObITable::TableType::KV_DUMP_SSTABLE;
+    table_type = ObITable::TableType::DDL_DUMP_SSTABLE;
   } else { // MINOR_MERGE || HISTORY_MINOR_MERGE
     table_type = ObITable::TableType::MINOR_SSTABLE;
   }

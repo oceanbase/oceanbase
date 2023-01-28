@@ -244,7 +244,7 @@ int ObRestoreUtils::get_backup_data_type(
     data_type.set_minor_data_backup();
   } else if (table_key.is_major_sstable()) {
     data_type.set_major_data_backup();
-  } else if (table_key.is_ddl_sstable()) {
+  } else if (table_key.is_ddl_dump_sstable()) {
     data_type.set_minor_data_backup();
   } else {
     ret = OB_ERR_UNEXPECTED;

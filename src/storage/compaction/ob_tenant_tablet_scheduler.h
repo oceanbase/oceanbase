@@ -35,6 +35,7 @@ namespace storage
 class ObLS;
 class ObTablet;
 class ObITable;
+class ObTabletDDLKvMgr;
 
 class ObFastFreezeChecker
 {
@@ -153,6 +154,8 @@ public:
       const ObMergeType merge_type,
       const int64_t &merge_snapshot_version,
       const bool is_tenant_major_merge = false);
+  static int schedule_tablet_ddl_major_merge(
+      ObTabletHandle &tablet_handle);
 
   int get_min_dependent_schema_version(int64_t &min_schema_version);
 

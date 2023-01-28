@@ -43,11 +43,13 @@ bool ObRootBlockInfo::is_valid() const
 
 void ObRootBlockInfo::reset()
 {
-  if (OB_NOT_NULL(block_data_.buf_) && OB_NOT_NULL(block_data_allocator_)) {
-    block_data_allocator_->free(static_cast<void *>(const_cast<char *>(block_data_.buf_)));
-  }
-  if (OB_NOT_NULL(block_data_.extra_buf_) && OB_NOT_NULL(block_data_allocator_)) {
-    block_data_allocator_->free(static_cast<void *>(const_cast<char *>(block_data_.extra_buf_)));
+  if (ObMicroBlockData::INDEX_BLOCK == block_data_.type_) {
+    if (OB_NOT_NULL(block_data_.buf_) && OB_NOT_NULL(block_data_allocator_)) {
+      block_data_allocator_->free(static_cast<void *>(const_cast<char *>(block_data_.buf_)));
+    }
+    if (OB_NOT_NULL(block_data_.extra_buf_) && OB_NOT_NULL(block_data_allocator_)) {
+      block_data_allocator_->free(static_cast<void *>(const_cast<char *>(block_data_.extra_buf_)));
+    }
   }
   block_data_.reset();
   block_data_allocator_ = nullptr;
@@ -154,23 +156,29 @@ int ObRootBlockInfo::init_root_block_info(
   } else if (FALSE_IT(addr_ = addr)) {
   } else if (FALSE_IT(block_data_allocator_ = allocator)) {
   } else if (!addr.is_memory()) {
-    // nothing to do.
+    block_data_.type_ = ObMicroBlockData::INDEX_BLOCK;
   } else if (OB_FAIL(addr.get_mem_addr(offset, size))) {
     LOG_WARN("fail to get memory address", K(ret), K(addr));
-  } else if (OB_ISNULL(dst_buf = static_cast<char *>(allocator->alloc(size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc buf", K(ret), K(size));
   } else {
-    MEMCPY(dst_buf, block_data.buf_, size);
-    block_data_.buf_ = dst_buf;
-    block_data_.size_ = size;
+    LOG_DEBUG("block data type", K(block_data.type_));
+    if (ObMicroBlockData::DDL_BLOCK_TREE == block_data.type_) {
+      block_data_ = block_data;
+    } else {
+      if (OB_ISNULL(dst_buf = static_cast<char *>(allocator->alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc buf", K(ret), K(size));
+      } else {
+        MEMCPY(dst_buf, block_data.buf_, size);
+        block_data_.buf_ = dst_buf;
+        block_data_.size_ = size;
+        block_data_.type_ = ObMicroBlockData::INDEX_BLOCK;
+      }
+    }
   }
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(dst_buf)) {
       allocator->free(dst_buf);
     }
-  } else {
-    block_data_.type_ = ObMicroBlockData::INDEX_BLOCK;
   }
   return ret;
 }
@@ -210,7 +218,9 @@ int ObRootBlockInfo::load_root_block_data(const ObMicroBlockDesMeta &des_meta)
 int ObRootBlockInfo::transform_root_block_data(const ObTableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(block_data_.get_extra_buf()) && OB_NOT_NULL(block_data_.get_buf())) {
+  if (ObMicroBlockData::INDEX_BLOCK == block_data_.type_
+      && OB_ISNULL(block_data_.get_extra_buf())
+      && OB_NOT_NULL(block_data_.get_buf())) {
     ObIndexBlockDataTransformer *transformer = nullptr;
     ObDecoderAllocator *allocator = nullptr;
     if (OB_UNLIKELY(!read_info.is_valid())) {

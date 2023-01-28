@@ -124,7 +124,9 @@ void TestSSTableRowScanner::test_one_case(
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
   const ObDatumRow *prow = nullptr;
+  const ObDatumRow *kv_prow = nullptr;
   ObSSTableRowScanner scanner;
+  ObSSTableRowScanner kv_scanner;
 
   if (HIT_PART == hit_mode) {
     const int64_t part_start = start + (end - start) / 3;
@@ -148,21 +150,36 @@ void TestSSTableRowScanner::test_one_case(
             context_,
             &sstable_,
             &part_range));
+    ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+            iter_param_,
+            context_,
+            &ddl_kv_,
+            &part_range));
     for (int64_t i = part_start; i <= part_end; ++i) {
       if (i < row_cnt_) {
         ret = scanner.inner_get_next_row(prow);
         ASSERT_EQ(OB_SUCCESS, ret) << "i: " << i << " part_start: " << part_start
             << " part_end: " << part_end << " prow: " << prow;
+        ret = kv_scanner.inner_get_next_row(kv_prow);
+        ASSERT_EQ(OB_SUCCESS, ret) << "i: " << i << " part_start: " << part_start
+            << " part_end: " << part_end << " kv_prow: " << kv_prow;
       }
     }
     ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
+    ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
     scanner.reuse();
+    kv_scanner.reuse();
   }
 
   ASSERT_EQ(OB_SUCCESS, scanner.inner_open(
           iter_param_,
           context_,
           &sstable_,
+          &range));
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+          iter_param_,
+          context_,
+          &ddl_kv_,
           &range));
   for (int64_t i = start; i <= end; ++i) {
     int64_t index = 0;
@@ -180,11 +197,19 @@ void TestSSTableRowScanner::test_one_case(
           << " end: " << end << " prow: " << prow;
       ASSERT_TRUE(row == *prow) << i << "index: " << index << " start: " << start
           << " end: " << end << " prow: " << prow;
+      ret = kv_scanner.inner_get_next_row(kv_prow);
+      ASSERT_EQ(OB_SUCCESS, ret) << i << "index: " << index << " start: " << start
+          << " end: " << end << " kv_prow: " << kv_prow;
+      ASSERT_TRUE(row == *kv_prow) << i << "index: " << index << " start: " << start
+          << " end: " << end << " kv_prow: " << kv_prow;
     }
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
+  ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
+  ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
   scanner.reuse();
+  kv_scanner.reuse();
 
   if (HIT_ALL == hit_mode) {
     int64_t index = 0;
@@ -192,6 +217,11 @@ void TestSSTableRowScanner::test_one_case(
             iter_param_,
             context_,
             &sstable_,
+            &range));
+    ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+            iter_param_,
+            context_,
+            &ddl_kv_,
             &range));
     for (int64_t i = start; i <= end; ++i) {
       if (is_reverse_scan) {
@@ -208,11 +238,19 @@ void TestSSTableRowScanner::test_one_case(
             << " end: " << end << " prow: " << prow;
         ASSERT_TRUE(row == *prow) << i << "index: " << index << " start: " << start
             << " end: " << end << " prow: " << prow;
+        ret = kv_scanner.inner_get_next_row(kv_prow);
+        ASSERT_EQ(OB_SUCCESS, ret) << i << "index: " << index << " start: " << start
+            << " end: " << end << " kv_prow: " << kv_prow;
+        ASSERT_TRUE(row == *kv_prow) << i << "index: " << index << " start: " << start
+            << " end: " << end << " kv_prow: " << kv_prow;
       }
     }
     ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
     ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
+    ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
+    ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
     scanner.reuse();
+    kv_scanner.reuse();
   }
 }
 

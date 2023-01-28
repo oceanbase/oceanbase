@@ -18,6 +18,7 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -183,23 +184,6 @@ int ObDDLCommitClogCb::init(const share::ObLSID &ls_id,
 int ObDDLCommitClogCb::on_success()
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObTabletHandle tablet_handle;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-  if (!is_inited_) {
-    // ddl prepare will not init this cb, so do nothing
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
-  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
-                                               tablet_id_,
-                                               tablet_handle,
-                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
-    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(start_scn_, ddl_kv_mgr_handle))) {
-    LOG_WARN("unregister ddl kv manager from tablet failed", K(ret), K(ls_id_), K(tablet_id_));
-  }
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);
   try_release();
@@ -304,13 +288,13 @@ int ObDDLRedoLog::init(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info)
 
 OB_SERIALIZE_MEMBER(ObDDLRedoLog, redo_info_);
 
-ObDDLPrepareLog::ObDDLPrepareLog()
+ObDDLCommitLog::ObDDLCommitLog()
   : table_key_(), start_scn_(SCN::min_scn())
 {
 }
 
-int ObDDLPrepareLog::init(const ObITable::TableKey &table_key,
-                          const SCN &start_scn)
+int ObDDLCommitLog::init(const ObITable::TableKey &table_key,
+                         const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   if (!table_key.is_valid() || !start_scn.is_valid_and_not_min()) {
@@ -323,32 +307,8 @@ int ObDDLPrepareLog::init(const ObITable::TableKey &table_key,
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLPrepareLog, table_key_, start_scn_);
+OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_scn_);
 
-ObDDLCommitLog::ObDDLCommitLog()
-  : table_key_(), start_scn_(SCN::min_scn()), prepare_scn_(SCN::min_scn())
-{
-}
-
-int ObDDLCommitLog::init(const ObITable::TableKey &table_key,
-                         const SCN &start_scn,
-                         const SCN &prepare_scn)
-{
-  int ret = OB_SUCCESS;
-  if (!table_key.is_valid() ||
-      !start_scn.is_valid_and_not_min() ||
-      !prepare_scn.is_valid_and_not_min()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(prepare_scn));
-  } else {
-    table_key_ = table_key;
-    start_scn_ = start_scn;
-    prepare_scn_ = prepare_scn;
-  }
-  return ret;
-}
-
-OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_scn_, prepare_scn_);
 
 ObTabletSchemaVersionChangeLog::ObTabletSchemaVersionChangeLog()
   : tablet_id_(), schema_version_(-1)

@@ -149,7 +149,7 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
       ObQueryFlag query_flag(ObQueryFlag::Forward,
           true, /*is daily merge scan*/
           true, /*is read multiple macro block*/
-          true, /*sys task scan, read one macro block in single io*/
+          false, /*sys task scan, read one macro block in single io*/
           false, /*is full row scan?*/
           false,
           false);

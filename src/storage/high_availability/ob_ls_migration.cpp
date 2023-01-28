@@ -24,6 +24,7 @@
 #include "ob_storage_ha_src_provider.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "ob_storage_ha_utils.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -2318,7 +2319,7 @@ int ObTabletMigrationTask::generate_ddl_copy_tasks_(
   } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
-  } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_ddl_sstable, tablet_copy_finish_task, parent_task))) {
+  } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_ddl_dump_sstable, tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate copy ddl tasks", K(ret), KPC(copy_tablet_ctx_));
   }
   return ret;

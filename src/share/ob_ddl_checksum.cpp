@@ -382,6 +382,7 @@ int ObDDLChecksumOperator::get_table_column_checksum(
     const int64_t execution_id,
     const uint64_t table_id,
     const int64_t ddl_task_id,
+    const bool is_unique_index_checking,
     common::hash::ObHashMap<int64_t, int64_t> &column_checksum_map,
     ObMySQLProxy &sql_proxy)
 {
@@ -395,10 +396,10 @@ int ObDDLChecksumOperator::get_table_column_checksum(
         K(column_checksum_map.created()));
   } else if (OB_FAIL(sql.assign_fmt(
       "SELECT column_id, checksum FROM %s "
-      "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld "
+      "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld AND task_id %s "
       "ORDER BY column_id", OB_ALL_DDL_CHECKSUM_TNAME,
       execution_id, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-      ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id), ddl_task_id))) {
+      ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id), ddl_task_id, is_unique_index_checking ? "< 0" : ">= 0"))) {
     LOG_WARN("fail to assign fmt", K(ret));
   } else if (OB_FAIL(get_column_checksum(sql, tenant_id, column_checksum_map, sql_proxy))) {
     LOG_WARN("fail to get column checksum", K(ret), K(sql));
@@ -412,6 +413,7 @@ int ObDDLChecksumOperator::check_column_checksum(
     const uint64_t data_table_id,
     const uint64_t index_table_id,
     const int64_t ddl_task_id,
+    const bool is_unique_index_checking,
     bool &is_equal,
     common::ObMySQLProxy &sql_proxy)
 {
@@ -427,10 +429,11 @@ int ObDDLChecksumOperator::check_column_checksum(
     LOG_WARN("fail to create column checksum map", K(ret));
   } else if (OB_FAIL(index_table_column_checksums.create(OB_MAX_COLUMN_NUMBER / 2, ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create column checksum map", K(ret));
-  } else if (OB_FAIL(get_table_column_checksum(tenant_id, execution_id, data_table_id, ddl_task_id, data_table_column_checksums, sql_proxy))) {
+  } else if (OB_FAIL(get_table_column_checksum(tenant_id, execution_id, data_table_id,
+      ddl_task_id, is_unique_index_checking, data_table_column_checksums, sql_proxy))) {
     LOG_WARN("fail to get table column checksum", K(ret), K(execution_id), K(data_table_id), K(ddl_task_id));
-  } else if (OB_FAIL(get_table_column_checksum(tenant_id, execution_id, index_table_id, ddl_task_id, index_table_column_checksums,
-      sql_proxy))) {
+  } else if (OB_FAIL(get_table_column_checksum(tenant_id, execution_id, index_table_id,
+      ddl_task_id, is_unique_index_checking, index_table_column_checksums, sql_proxy))) {
     LOG_WARN("fail to get table column checksum", K(ret), K(execution_id), K(index_table_id), K(ddl_task_id));
   } else {
     for (hash::ObHashMap<int64_t, int64_t>::const_iterator iter = index_table_column_checksums.begin();

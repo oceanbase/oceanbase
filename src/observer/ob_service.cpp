@@ -2090,27 +2090,6 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
   return ret;
 }
 
-int ObService::write_ddl_sstable_commit_log(const ObDDLWriteSSTableCommitLogArg &arg)
-{
-  int ret = OB_SUCCESS;
-  LOG_INFO("receive write ddl sstable commit log", K(arg));
-  if (OB_UNLIKELY(!arg.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(arg));
-  } else {
-    // ObDDLSSTableRedoWriter redo_writer;
-    // const ObITable::TableKey &table_key = arg.table_key_;
-    // if (OB_FAIL(ObDDLTableMergeTask::commit_ddl_sstable(table_key))) {
-    //   LOG_WARN("fail to commit ddl sstable", K(ret), K(table_key));
-    // } else if (OB_FAIL(redo_writer.init(table_key.get_partition_key().get_tenant_id(), table_key.tablet_id_))) {
-    //   LOG_WARN("fail to init ObDDLSSTableRedoWriter", K(ret), K(table_key));
-    // } else if (OB_FAIL(redo_writer.write_commit_log(table_key))) {
-    //   LOG_WARN("fail to write commit log", K(ret), K(table_key));
-    // }
-  }
-  return ret;
-}
-
 int ObService::inner_fill_tablet_info_(
     const int64_t tenant_id,
     const ObTabletID &tablet_id,

@@ -482,16 +482,6 @@ int ObMvccRowIterator::try_purge(const ObTxSnapshot &snapshot_info,
   return ret;
 }
 
-int ObMvccRowIterator::get_end_gap_key(const ObTxSnapshot &snapshot_info, const ObStoreRowkey *&key, int64_t& size)
-{
-  ObIQueryEngineIterator *iter = query_engine_iter_;
-  bool is_reverse = iter->is_reverse_scan();
-  return query_engine_->skip_gap(iter->get_key(),
-                                 key,
-                                 snapshot_info.version_.get_val_for_tx(),
-                                 is_reverse,
-                                 size);
-}
 } // namespace memtable
 } // namespace oceanbase
 
