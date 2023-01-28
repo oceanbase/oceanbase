@@ -1070,7 +1070,7 @@ int ObXACtx::xa_start_second(const ObXATransID &xid,
     }
   }
 
-  TRANS_LOG(INFO, "first xa start", K(ret), K(xid), K(flags), K(*this));
+  TRANS_LOG(INFO, "second xa start", K(ret), K(xid), K(flags), K(is_join), K(is_original), K(*this));
   return ret;
 }
 
@@ -1191,7 +1191,6 @@ int ObXACtx::xa_start_local_(const ObXATransID &xid,
     }
     tx_desc = tx_desc_;
     // tx_desc.set_xid(xid);
-    // tx_desc.set_xa_ctx(this);
     // tx_desc.set_trans_type(TransType::DIST_TRANS);
   }
 

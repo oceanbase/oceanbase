@@ -84,9 +84,6 @@ int ObExecutor::execute_plan(ObExecContext &ctx)
   } else {
     ObPhyPlanType execute_type = phy_plan_->get_plan_type();
 
-    if (phy_plan_->get_need_serial_exec()) {
-      session_info->set_need_serial_exec(phy_plan_->get_need_serial_exec());
-    }
     // 特殊处理如下case：
     // MULTI PART INSERT (remote)
     //   SELECT (local)

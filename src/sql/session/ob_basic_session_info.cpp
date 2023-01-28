@@ -160,25 +160,9 @@ ObBasicSessionInfo::~ObBasicSessionInfo()
 
 bool ObBasicSessionInfo::is_server_status_in_transaction() const
 {
-  bool can_free_route = tx_desc_ == NULL || tx_desc_->can_free_route();
-  bool result = !can_free_route;
-  /*
-   * if autocommit is OFF and user has issued query which need transaction protection
-   * the switch 'ob_proxy_readonly_transaction_routing_policy' control whether
-   * client should assume current session is inner transaction:
-   * - in transaction if switch ON
-   * - out of transaction if switch is OFF
-   */
-  bool auto_commit = get_local_autocommit();
-  if (can_free_route
-      && !auto_commit /*  autocommit = OFF */
-      && get_first_need_txn_stmt_type() != stmt::StmtType::T_NONE /* has issued transactional query */) {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(get_effective_tenant_id()));
-    result = tenant_config->ob_proxy_readonly_transaction_routing_policy; /* switch is ON */
-  }
-  LOG_TRACE("decide flag: server in transaction", K(can_free_route),
-            K(result), KPC(tx_desc_), K(auto_commit), K(get_first_need_txn_stmt_type()));
-  return result;
+  bool in_txn = OB_NOT_NULL(tx_desc_) && tx_desc_->in_tx_for_free_route();
+  LOG_TRACE("decide flag: server in transaction", K(in_txn));
+  return in_txn;
 }
 
 //for test
@@ -548,7 +532,7 @@ int ObBasicSessionInfo::switch_tenant(uint64_t effective_tenant_id)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(ret), K(effective_tenant_id));
   } else if (OB_NOT_NULL(tx_desc_) && effective_tenant_id != effective_tenant_id_) {
-    if (!tx_desc_->can_free_route()) {
+    if (tx_desc_->in_tx_or_has_state()) {
       ret = OB_NOT_SUPPORTED;
       // only inner-SQL goes switch_tenant and may fall into such state
       // print out error to easy trouble-shot
@@ -4006,7 +3990,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
   int64_t unused_weak_read_snapshot_source = 0;
   int64_t unused_safe_weak_read_snapshot = 0;
 
-  bool need_serial_exec = trans_flags_.need_serial_exec();
+  bool need_serial_exec = false;
   uint64_t sql_scope_flags = sql_scope_flags_.get_flags();
   LST_DO_CODE(OB_UNIS_ENCODE,
               sys_vars_cache_.inc_data_,
@@ -4256,7 +4240,6 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
       LOG_WARN("fail to write config_in_pc_str_ to string_buf_", K(config_in_pc_str_), K(ret));
     }
   }
-  trans_flags_.set_need_serial_exec(need_serial_exec);
   sql_scope_flags_.set_flags(sql_scope_flags);
   is_deserialized_ = true;
   tz_info_wrap_.set_tz_info_map(tz_info_map);
@@ -4507,7 +4490,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   int64_t unused_inner_safe_weak_read_snapshot = 0;
   int64_t unused_weak_read_snapshot_source = 0;
   int64_t unused_safe_weak_read_snapshot = 0;
-  bool need_serial_exec = trans_flags_.need_serial_exec();
+  bool need_serial_exec = false;
   uint64_t sql_scope_flags = sql_scope_flags_.get_flags();
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
@@ -4967,16 +4950,10 @@ int ObBasicSessionInfo::get_regexp_time_limit(int64_t &v) const
   return get_sys_variable(SYS_VAR_REGEXP_TIME_LIMIT, v);
 }
 
-// 重置事务相关变量
-// 调用时机：end_trans阶段
-//
-// 注意：
-// 1. 该函数需要保证幂等，可能在多处调用
-// 2. trans_desc不能够在这里重置，end_trans过程中可能还会用到相关变量，
-//    它由事务层在ObTransService::start_trans()中reset()
 void ObBasicSessionInfo::reset_tx_variable()
 {
   LOG_DEBUG("reset tx variable", K(lbt()));
+  reset_first_need_txn_stmt_type();
   reset_tx_isolation();
   reset_tx_read_only();
   reset_trans_flags();
@@ -5062,7 +5039,8 @@ int ObBasicSessionInfo::check_tx_read_only_privilege(const ObSqlTraits &sql_trai
   // will be check in ObTransService::start_stmt_sanity_check_
   if (get_tx_read_only() && !sql_traits.is_readonly_stmt_
       && sql_traits.stmt_type_ != ObItemType::T_SP_CALL_STMT
-      && sql_traits.stmt_type_ != ObItemType::T_SP_ANONYMOUS_BLOCK) {
+      && sql_traits.stmt_type_ != ObItemType::T_SP_ANONYMOUS_BLOCK
+      && sql_traits.stmt_type_ != ObItemType::T_EXPLAIN) {
     ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
 
   } else {}
@@ -5417,11 +5395,6 @@ int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip
   OX (is_foreign_key_cascade_ = false);
   OX (saved_value.is_foreign_key_check_exist_ = is_foreign_key_check_exist_);
   OX (is_foreign_key_check_exist_ = false);
-  OX (saved_value.need_serial_exec_ = trans_flags_.need_serial_exec());
-  if (OB_NOT_NULL(saved_value.cur_phy_plan_) &&
-      saved_value.cur_phy_plan_->get_need_serial_exec()) {
-    OX (trans_flags_.set_need_serial_exec(true));
-  }
   return ret;
 }
 
@@ -5452,7 +5425,6 @@ int ObBasicSessionInfo::begin_nested_session(StmtSavedValue &saved_value, bool s
 int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
-  OX (trans_flags_.set_need_serial_exec(saved_value.need_serial_exec_));
   OX (is_foreign_key_check_exist_ = saved_value.is_foreign_key_check_exist_);
   OX (is_foreign_key_cascade_ = saved_value.is_foreign_key_cascade_);
   OX (sys_vars_cache_.set_autocommit_info(saved_value.inc_autocommit_));
@@ -5557,48 +5529,6 @@ int ObBasicSessionInfo::init_stmt_tables()
     // cur stmt is top stmt.
     total_stmt_tables_.reset();
     cur_stmt_tables_.reset();
-  }
-  return ret;
-}
-
-int ObBasicSessionInfo::check_stmt_table(uint64_t table_id, stmt::StmtType stmt_type)
-{
-  int ret = OB_SUCCESS;
-  TableStmtType table_stmt_type(table_id, stmt_type);
-  int64_t idx = -1;
-  if (!is_nested_session() && !is_fast_select()) {
-    // check nested stmt and fast select only, skip for top stmt.
-    // fast select is used by cursor only NOW
-  } else if (!is_foreign_key_cascade() && !is_foreign_key_check_exist()) {
-    if (has_exist_in_array(total_stmt_tables_, table_stmt_type, &idx) &&
-        0 <= idx && idx < total_stmt_tables_.count()) {
-      if (total_stmt_tables_.at(idx).is_mutating()) {
-        ObSchemaGetterGuard schema_guard;
-        const ObTableSchema *table_schema = NULL;
-        OZ (GCTX.schema_service_->get_tenant_schema_guard(
-            effective_tenant_id_, schema_guard));
-        OZ (schema_guard.get_table_schema(effective_tenant_id_, table_id, table_schema));
-        CK (OB_NOT_NULL(table_schema));
-        if (OB_SUCC(ret) && lib::is_mysql_mode()) {
-          LOG_MYSQL_USER_ERROR(OB_ERR_MUTATING_TABLE_OPERATION, table_schema->get_table_name());
-        }
-        ret = OB_ERR_MUTATING_TABLE_OPERATION;
-        LOG_WARN("table is mutating", K(table_stmt_type), K(ret));
-      }
-    }
-  }
-  if (!need_serial_exec()) {
-    // skip those stmts which will NOT execute nested stmt.
-    // ps: need_serial_exec flag is introduced for nested stmt rollback.
-  } else if (has_exist_in_array(cur_stmt_tables_, table_stmt_type, &idx) &&
-             0 <= idx && idx < cur_stmt_tables_.count()) {
-    // in dml plan, dml op and table scan op have same table_id, and they will both
-    // call check_stmt_table(), so we need rewrite stmt_type if current is SELECT.
-    if (cur_stmt_tables_.at(idx).get_stmt_type() == stmt::T_SELECT) {
-      OX (cur_stmt_tables_.at(idx).set_stmt_type(stmt_type));
-    }
-  } else {
-    OZ (cur_stmt_tables_.push_back(table_stmt_type), table_id, stmt_type);
   }
   return ret;
 }

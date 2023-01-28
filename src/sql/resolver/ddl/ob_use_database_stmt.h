@@ -55,6 +55,7 @@ public:
   const ObPrivSet& get_db_priv_set() const { return db_priv_set_; }
   void set_db_priv_set(const ObPrivSet &db_priv_set) { db_priv_set_ = db_priv_set; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return use_database_arg_; }
+  virtual bool cause_implicit_commit() const { return false; }
 private:
   int64_t db_id_;
   common::ObString db_name_;

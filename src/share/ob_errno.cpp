@@ -18117,6 +18117,18 @@ static const _error _error_OB_TRANS_IDLE_TIMEOUT = {
       .oracle_str_error      = "ORA-24761: transaction rolled back: transaction idle timeout",
       .oracle_str_user_error = "ORA-24761: transaction rolled back: transaction idle timeout"
 };
+static const _error _error_OB_TRANS_FREE_ROUTE_NOT_SUPPORTED = {
+      .error_name            = "OB_TRANS_FREE_ROUTE_NOT_SUPPORTED",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "Query is not supported to be executed on txn temporary node",
+      .str_user_error        = "Query is not supported to be executed on txn temporary node",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -6279, Query is not supported to be executed on txn temporary node",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -6279, Query is not supported to be executed on txn temporary node"
+};
 static const _error _error_OB_LOG_ID_NOT_FOUND = {
       .error_name            = "OB_LOG_ID_NOT_FOUND",
       .error_cause           = "Internal Error",
@@ -25572,6 +25584,7 @@ struct ObStrErrorInit
     _errors[-OB_OBJ_UNLOCK_CONFLICT] = &_error_OB_OBJ_UNLOCK_CONFLICT;
     _errors[-OB_SCN_OUT_OF_BOUND] = &_error_OB_SCN_OUT_OF_BOUND;
     _errors[-OB_TRANS_IDLE_TIMEOUT] = &_error_OB_TRANS_IDLE_TIMEOUT;
+    _errors[-OB_TRANS_FREE_ROUTE_NOT_SUPPORTED] = &_error_OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
     _errors[-OB_LOG_ID_NOT_FOUND] = &_error_OB_LOG_ID_NOT_FOUND;
     _errors[-OB_LSR_THREAD_STOPPED] = &_error_OB_LSR_THREAD_STOPPED;
     _errors[-OB_NO_LOG] = &_error_OB_NO_LOG;

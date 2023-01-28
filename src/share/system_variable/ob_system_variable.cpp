@@ -2029,8 +2029,7 @@ bool ObSysVarOnCheckFuncs::can_set_trans_var(ObSetVar::SetScopeType scope,
      * https://yuque.antfin-inc.com/ob/sql2/zo3rzg
      * https://yuque.antfin-inc.com/ob/transaction/qtdtfz
      */
-    ret = !session.is_in_transaction();
-    //|| (!session.has_set_trans_var() && !session.has_hold_row_lock());
+    ret = !session.is_in_transaction() || session.is_txn_free_route_temp();
   } else if (lib::is_mysql_mode()) {
     /*
      * mysql mode is much simpler than oracle mode, only 'SET TRANSACTION xxx' is forbidden
@@ -2381,7 +2380,6 @@ int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
         LOG_WARN("auto start trans fail when set txn charactor", K(ret),
                  KPC(session->get_tx_desc()), KPC(session));
       }
-      session->set_has_set_trans_var(true);
     } else {
       /*
        * 'ALTER SESSION SET isolation_level' just release snapshot since 4.0
@@ -2390,7 +2388,8 @@ int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
       if (ObTxIsolationLevel::SERIAL == isolation ||
           ObTxIsolationLevel::RR == isolation) {
         // release snapshot, following stmt will acquire snapshot again
-        if (OB_NOT_NULL(session->get_tx_desc()) &&
+        if (!session->is_txn_free_route_temp() &&
+            OB_NOT_NULL(session->get_tx_desc()) &&
             OB_FAIL(MTL(transaction::ObTransService*)
                     ->release_snapshot(*session->get_tx_desc()))) {
           TRANS_LOG(WARN, "try to release snapshot for current session fail",
@@ -2433,7 +2432,6 @@ int ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope(ObExecContext &ctx,
                  KPC(session->get_tx_desc()), KPC(session));
       }
     }
-    session->set_has_set_trans_var(true);
     LOG_DEBUG("update tx_read only, while scope=none", K(ret), K(val.get_bool()));
   }
   return ret;

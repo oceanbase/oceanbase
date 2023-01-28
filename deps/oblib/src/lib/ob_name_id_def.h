@@ -468,6 +468,16 @@ DEF_NAME(id, "id")
     DEF_NAME(replay_rollback_to, "replay rollback to")
     DEF_NAME(replay_active_info, "replay active info")
     DEF_NAME(scn_val, "value of scn")
+
+    // txn_free_route
+    DEF_NAME(logic_clock, "the logical clock")
+    DEF_NAME(tx_free_route_update_static, "txn free route update static state")
+    DEF_NAME(tx_free_route_update_dynamic, "txn free route update dynamic state")
+    DEF_NAME(tx_free_route_update_participants, "txn free route update participants state")
+    DEF_NAME(tx_free_route_update_extra, "txn free route update extra state")
+    DEF_NAME(tx_free_route_send_state, "txn free route send state")
+    DEF_NAME(tx_free_route_recv_state, "txn free route receive state")
+
     // perf event
     DEF_NAME(S_scan_iter, "storage: scan iterator")
     DEF_NAME(pc_fast_gen_stmt_key_end, "plan cache: fast genarate stmt_key")

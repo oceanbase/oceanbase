@@ -913,7 +913,8 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
     LOG_WARN("session is NULL", K(ret));
   } else {
     int64_t autocommit = 0;
-    bool in_trans = my_session->get_in_transaction();
+    auto tx_desc = my_session->get_tx_desc();
+    bool in_trans = OB_NOT_NULL(tx_desc) && tx_desc->in_tx_or_has_state();
     bool ac = true;
 
     if (OB_FAIL(my_session->get_autocommit(ac))) {
@@ -926,7 +927,8 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
       LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, (int)strlen(OB_SV_AUTOCOMMIT), OB_SV_AUTOCOMMIT,
                      (int)strlen(autocommit_str), autocommit_str);
     } else {
-      if (false == ac &&  true == in_trans && 1 == autocommit) {
+      // skip commit txn if this is txn free route temporary node
+      if (false == ac &&  true == in_trans && 1 == autocommit && !my_session->is_txn_free_route_temp()) {
         if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false))) {
           LOG_WARN("fail implicit commit trans", K(ret));
         }

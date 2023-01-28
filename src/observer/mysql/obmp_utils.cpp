@@ -119,32 +119,35 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
   const char *end = buf + len;
   int64_t pos = 0;
 
-  LOG_TRACE("sync sess_inf", K(sess.get_sessid()), KP(data), K(len), KPHEX(data, len));
+  LOG_TRACE("sync sess_inf", K(sess.get_is_in_retry()), K(sess.get_sessid()), KP(data), K(len), KPHEX(data, len));
 
   // decode sess_info
-  if (NULL != sess_infos.ptr()) {
+  if (NULL != sess_infos.ptr() && !sess.get_is_in_retry()) {
     while (OB_SUCC(ret) && pos < len) {
       int16_t info_type = 0;
       int32_t info_len = 0;
+      int64_t pos0 = 0;
       char *sess_buf = NULL;
       LOG_TRACE("sync field sess_inf", K(sess.get_sessid()), KP(data), K(pos), K(len), KPHEX(data+pos, len-pos));
       if (OB_FAIL(ObProtoTransUtil::resolve_type_and_len(buf, len, pos, info_type, info_len))) {
         LOG_WARN("failed to resolve type and len", K(ret), K(len), K(pos));
-      } else if (info_type < 0) {
+      } else if (info_type < 0 || info_len <= 0) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid session sync info encoder", K(ret), K(info_type));
       // for old version compatible
       // if new version has a val that old version doesn't has, just ignore.
       } else if (info_type >= SESSION_SYNC_MAX_TYPE) {
         pos += info_len;
+      } else if (FALSE_IT(pos0 = pos)) {
       } else if (OB_FAIL(sess.update_sess_sync_info(
                                   (oceanbase::sql::SessionSyncInfoType)(info_type),
-                                  buf, (int64_t)info_len + pos, pos))) {
+                                  buf, (int64_t)info_len + pos0, pos0))) {
         LOG_WARN("failed to update session sync info",
                                 K(ret), K(pos), K(info_len), K(info_len+pos));
       } else {
-        //buf += info_len;
+        pos += info_len;
       }
+      LOG_DEBUG("sync-session-info", K(info_type), K(info_len));
     }
   }
 
@@ -205,6 +208,7 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
         } else if (encoder->is_changed_) {
           int16_t info_type = (int16_t)i;
           int32_t info_len = sess_size[i];
+          LOG_INFO("session-info-encode", K(info_type), K(info_len));
           if (info_len < 0) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid session info length", K(info_len), K(info_type), K(ret));
@@ -241,7 +245,7 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
           if (OB_FAIL(extra_info_ecds->push_back(sess_inf_ecd))) {
             LOG_WARN("failed to add extra info kv", K(sess_inf_ecd), K(ret));
           } else {
-            LOG_TRACE("add extra_info", KPHEX(buf, size), KP(buf));
+            LOG_DEBUG("add extra_info", KP(sess_inf_ecd), K(size), KPHEX(buf, size), KP(buf));
           }
         }
       } else {

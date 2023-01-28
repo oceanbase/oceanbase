@@ -282,11 +282,6 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
     session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
   }
 
-  //set read_only
-  if (OB_SUCC(ret)) {
-    session.set_has_exec_write_stmt(false);
-  }
-
   if (enable_sql_audit) {
     audit_record.status_ = ret;
     audit_record.client_addr_ = session.get_peer_addr();

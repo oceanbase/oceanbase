@@ -1004,7 +1004,7 @@ int ObXAService::xa_start(const ObXATransID &xid,
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start failed", K(ret), K(xid), K(flags), K(timeout_seconds));
   } else {
-    TRANS_LOG(INFO, "xa start", K(ret), K(xid), K(flags), K(timeout_seconds));
+    TRANS_LOG(INFO, "xa start", K(ret), K(xid), K(flags), K(timeout_seconds), "tx_id", tx_desc->get_tx_id());
   }
 
   return ret;
@@ -1359,7 +1359,7 @@ int ObXAService::start_stmt(const ObXATransID &xid, ObTxDesc &tx_desc)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa service not inited", K(ret));
-  } else {
+  } else if (tx_desc.is_xa_tightly_couple()) {
     ObXACtx *xa_ctx = tx_desc.get_xa_ctx();
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;
@@ -1382,7 +1382,7 @@ int ObXAService::end_stmt(const ObXATransID &xid, ObTxDesc &tx_desc)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa service not inited", K(ret));
-  } else {
+  } else if (tx_desc.is_xa_tightly_couple()) {
     ObXACtx *xa_ctx = tx_desc.get_xa_ctx();
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;

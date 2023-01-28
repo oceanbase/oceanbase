@@ -2155,6 +2155,9 @@ int ObSetTPResolver::resolve(const ParseNode &parse_tree)
                 stmt->get_rpc_arg().error_code_ = value->value_;
               }
             } break;
+            case T_TP_COND: {        // condition
+              stmt->get_rpc_arg().cond_ = value->value_;
+            } break;
             default:
               break;
             }

@@ -5292,7 +5292,8 @@ public:
   ObAdminSetTPArg() : event_no_(0),
                       occur_(0),
                       trigger_freq_(1),
-                      error_code_(0)
+                      error_code_(0),
+                      cond_(0)
       {}
 
    inline bool is_valid() const {
@@ -5304,6 +5305,7 @@ public:
                 K_(occur),
                 K_(trigger_freq),
                 K_(error_code),
+                K_(cond),
                 K_(server),
                 K_(zone));
 
@@ -5312,6 +5314,7 @@ public:
    int64_t occur_;            // number of occurrences
    int64_t trigger_freq_;         // trigger frequency
    int64_t error_code_;        // error code to return
+   int64_t cond_;              // condition to match
 };
 
 struct ObCreateRoutineArg : public ObDDLArg

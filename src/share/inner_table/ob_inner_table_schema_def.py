@@ -6553,7 +6553,9 @@ def_table_schema(
     ('user_group', 'int', 'true'),
     ('lock_for_read_time', 'bigint'),
     ('params_value', 'longtext'),
-    ('rule_name', 'varchar:256')
+    ('rule_name', 'varchar:256'),
+    ('proxy_session_id', 'uint'),
+    ('tx_free_route_flag', 'uint')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

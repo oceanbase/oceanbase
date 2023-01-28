@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/mysql/obmp_statistic.h"
+#include "observer/mysql/obmp_utils.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/packet/ompk_string.h"
 #include "rpc/obmysql/obsm_struct.h"
@@ -27,12 +28,15 @@ namespace observer
 int ObMPStatistic::process()
 {
   int ret = common::OB_SUCCESS;
+  bool need_disconnect = true;
+  bool need_response_error = true;
   //Attention::it is BUG when using like followers (build with release):
   //  obmysql::OMPKString pkt(ObString("Active threads not support"));
   //
   const common::ObString tmp_string("Active threads not support");
   obmysql::OMPKString pkt(tmp_string);
   ObSMConnection *conn = NULL;
+  const ObMySQLRawPacket &mysql_pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
 
   if (OB_FAIL(packet_sender_.alloc_ezbuf())) {
     LOG_WARN("failed to alloc easy buf", K(ret));
@@ -50,6 +54,13 @@ int ObMPStatistic::process()
     } else if (OB_ISNULL(session)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql session info is null", K(ret));
+    } else if (FALSE_IT(session->set_txn_free_route(mysql_pkt.txn_free_route()))) {
+    } else if (mysql_pkt.get_extra_info().exist_sync_sess_info()
+                 && OB_FAIL(ObMPUtils::sync_session_info(*session,
+                              mysql_pkt.get_extra_info().get_sync_sess_info()))) {
+      need_response_error = false;
+      LOG_WARN("fail to update sess info", K(ret));
+    } else if (FALSE_IT(session->post_sync_session_info())) {
     } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
       LOG_WARN("update transmisson checksum flag failed", K(ret));
     } else {
@@ -61,9 +72,13 @@ int ObMPStatistic::process()
     if (OB_LIKELY(NULL != session)) {
       revert_session(session);
     }
-    if (OB_FAIL(ret)) {
-      force_disconnect();
-    }
+  }
+  if (OB_FAIL(ret) && need_response_error) {
+    send_error_packet(ret, NULL);
+  }
+  if (OB_FAIL(ret) && need_disconnect) {
+    force_disconnect();
+    LOG_WARN("disconnect connection", KR(ret));
   }
   return ret;
 }

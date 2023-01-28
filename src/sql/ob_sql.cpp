@@ -146,6 +146,25 @@ void ObSql::stat()
   sql::print_sql_stat();
 }
 
+#define CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, allow_ps)        \
+ if (OB_SUCC(ret)) {                                                    \
+   auto stmt_type = result.get_stmt_type();                             \
+   auto &session = result.get_session();                                \
+   if (!session.is_inner() && session.is_txn_free_route_temp()) {       \
+     if (ObStmt::is_dml_stmt(stmt_type)                                 \
+         || (stmt_type == stmt::StmtType::T_VARIABLE_SET)               \
+         || stmt_type == stmt::StmtType::T_USE_DATABASE                 \
+         || (allow_ps && stmt_type == stmt::StmtType::T_PREPARE)        \
+         || (allow_ps && stmt_type == stmt::StmtType::T_EXECUTE)        \
+         || (allow_ps && stmt_type == stmt::StmtType::T_DEALLOCATE)) {  \
+     } else {                                                           \
+       ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;                         \
+       LOG_WARN("only DML stmt or SET command is supported to be executed on txn temporary node", KR(ret), K(stmt_type)); \
+     }                                                                  \
+   }                                                                    \
+ }
+
+
 int ObSql::stmt_prepare(const common::ObString &stmt,
                         ObSqlCtx &context,
                         ObResultSet &result,
@@ -158,6 +177,7 @@ int ObSql::stmt_prepare(const common::ObString &stmt,
   } else if (OB_FAIL(handle_ps_prepare(stmt, context, result, is_inner_sql))) {
     LOG_WARN("failed to handle ps query", K(stmt), K(ret));
   }
+  CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, false);
   if (OB_FAIL(ret) && OB_SUCCESS == result.get_errcode()) {
     result.set_errcode(ret);
   }
@@ -170,9 +190,10 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
   FLTSpanGuard(sql_compile);
   ObTruncatedString trunc_stmt(stmt);
-#if !defined(NDEBUG)
+#ifndef NDEBUG
   LOG_INFO("Begin to handle text statement", K(trunc_stmt),
            "sess_id", result.get_session().get_sessid(),
+           "proxy_sess_id", result.get_session().get_proxy_sessid(),
            "tenant_id", result.get_session().get_effective_tenant_id(),
            "execution_id", result.get_session().get_current_execution_id());
 #endif
@@ -184,7 +205,9 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
     if (OB_EAGAIN != ret && OB_ERR_PROXY_REROUTE != ret) {
       LOG_WARN("fail to handle text query", K(stmt), K(ret));
     }
-  } else {
+  }
+  CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, true);
+  if (OB_SUCC(ret)) {
     result.get_session().set_exec_min_cluster_version();
   }
   //LOG_DEBUG("result errno", N_ERR_CODE, result.get_errcode(), K(ret));
@@ -220,7 +243,9 @@ int ObSql::stmt_execute(const ObPsStmtId stmt_id,
     if (OB_ERR_PROXY_REROUTE != ret) {
       LOG_WARN("failed to handle ps execute", K(stmt_id), K(ret));
     }
-  } else {
+  }
+  CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, false);
+  if (OB_SUCC(ret)) {
     result.get_session().set_exec_min_cluster_version();
   }
   if (OB_FAIL(ret) && OB_SUCCESS == result.get_errcode()) {
@@ -1447,13 +1472,6 @@ int ObSql::handle_pl_execute(const ObString &sql,
     }
   }
 
-
-  if (OB_SUCC(ret) && session.get_in_transaction()) {
-    if (ObStmt::is_dml_write_stmt(result.get_stmt_type()) ||
-        ObStmt::is_savepoint_stmt(result.get_stmt_type())) {
-      session.set_has_inner_dml_write(true);
-    }
-  }
   FLT_SET_TAG(sql_id, context.sql_id_);
   return ret;
 }
@@ -1486,7 +1504,8 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
     ectx.set_is_ps_prepare_stage(true);
 
 #ifndef NDEBUG
-    LOG_INFO("Begin to handle prepare stmtement", K(session.get_sessid()), K(stmt));
+    LOG_INFO("Begin to handle prepare stmtement", "sess_id", session.get_sessid(),
+             "proxy_sess_id", session.get_proxy_sessid(), K(stmt));
 #endif
 
     if (OB_ISNULL(ps_cache) || OB_ISNULL(pctx) || OB_ISNULL(schema_guard)) {
@@ -1958,7 +1977,8 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
       const ObString &sql = !ps_info->get_no_param_sql().empty() ? ps_info->get_no_param_sql() : ps_info->get_ps_sql();
       context.cur_sql_ = sql;
 #ifndef NDEBUG
-      LOG_INFO("Begin to handle execute stmtement", K(session.get_sessid()), K(sql));
+      LOG_INFO("Begin to handle execute stmtement", "sess_id", session.get_sessid(),
+               "proxy_sess_id", session.get_proxy_sessid(), K(sql));
 #endif
 
       if (!ps_info->get_fixed_raw_params().empty()) {
@@ -2085,9 +2105,10 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObPlanCacheCtx)));
   } else {
-#if !defined(NDEBUG)
+#ifndef NDEBUG
   LOG_INFO("Begin to handle remote statement",
            K(remote_sql_info), "sess_id", session->get_sessid(),
+           "proxy_sess_id", session->get_proxy_sessid(),
            "execution_id", session->get_current_execution_id());
 #endif
     const uint64_t tenant_id = session->get_effective_tenant_id();
@@ -4241,24 +4262,24 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       }
     }
     if (OB_SUCC(ret) && NULL != phy_plan && !session.get_is_deserialized()) {
-      if (phy_plan->is_contain_oracle_session_level_temporary_table()
-          || phy_plan->contains_temp_table()) {
-        bool is_already_set = false;
-        if (OB_FAIL(session.get_session_temp_table_used(is_already_set))) {
-          LOG_WARN("fail to get session temp table used", K(ret));
-        } else if (is_already_set) {
-          //do nothing
-        } else if (OB_FAIL(session.set_session_temp_table_used(true))) {
-          LOG_WARN("fail to set session temp table used", K(ret));
+      bool has_session_tmp_table = phy_plan->is_contain_oracle_session_level_temporary_table()
+        || phy_plan->contains_temp_table();
+      bool has_txn_tmp_table = phy_plan->is_contain_oracle_trx_level_temporary_table();
+      if (has_session_tmp_table || has_txn_tmp_table) {
+        if (!session.is_inner() && session.is_txn_free_route_temp()) {
+          ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+          LOG_WARN("access temp table is supported to be executed on txn temporary node", KR(ret));
+        } else if (has_session_tmp_table) {
+          bool is_already_set = false;
+          if (OB_FAIL(session.get_session_temp_table_used(is_already_set))) {
+            LOG_WARN("fail to get session temp table used", K(ret));
+          } else if (is_already_set) {
+            //do nothing
+          } else if (OB_FAIL(session.set_session_temp_table_used(true))) {
+            LOG_WARN("fail to set session temp table used", K(ret));
+          }
+          LOG_DEBUG("plan contain oracle session level temporary table detected", K(is_already_set));
         }
-        LOG_DEBUG("plan contain oracle session level temporary table detected", K(is_already_set));
-      }
-      if (phy_plan->is_contain_oracle_trx_level_temporary_table()) {
-        bool is_already_set = session.has_tx_level_temp_table();
-        if (!is_already_set) {
-          session.set_tx_level_temp_table();
-        }
-        LOG_DEBUG("plan contain oracle trx level temporary table detected", K(is_already_set));
       }
     }
   } else {

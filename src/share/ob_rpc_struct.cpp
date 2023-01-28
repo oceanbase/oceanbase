@@ -4391,7 +4391,8 @@ OB_SERIALIZE_MEMBER(ObAdminSetTPArg,
                     trigger_freq_,
                     error_code_,
                     server_,
-                    zone_);
+                    zone_,
+                    cond_);
 
 bool ObCreateRoutineArg::is_valid() const
 {

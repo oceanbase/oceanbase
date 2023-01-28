@@ -203,11 +203,7 @@ public:
   static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback);
   static int kill_query_session(ObSQLSessionInfo &session, const ObSQLSessionState &status);
   static int kill_tx(ObSQLSessionInfo *session, int cause);
-  static int kill_idle_timeout_tx(ObSQLSessionInfo *session)
-  {
-    using namespace oceanbase::transaction;
-    return kill_tx(session, OB_TRANS_IDLE_TIMEOUT);
-  }
+  static int kill_idle_timeout_tx(ObSQLSessionInfo *session);
   static int kill_deadlock_tx(ObSQLSessionInfo *session)
   {
     using namespace oceanbase::transaction;
@@ -275,6 +271,27 @@ public:
    *   in this case, the trans_result was incomplete, the flag must been set.
    */
   static int rollback_savepoint(ObExecContext &exec_ctx, const int64_t savepoint);
+
+  //
+  // Transaction free route relative
+  //
+  // called when receive request to update txn state
+  static int update_txn_static_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos);
+  static int update_txn_dynamic_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos);
+  static int update_txn_parts_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos);
+  static int update_txn_extra_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos);
+  // called when response client to decide whether need allow free route and whether state need to be returned
+  static int calc_txn_free_route(ObSQLSessionInfo &session, transaction::ObTxnFreeRouteCtx &txn_free_route_ctx);
+  // called when response client to serialize txn state which has changed
+  static int serialize_txn_static_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos);
+  static int serialize_txn_dynamic_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos);
+  static int serialize_txn_parts_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos);
+  static int serialize_txn_extra_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos);
+  static int64_t get_txn_static_state_serialize_size(ObSQLSessionInfo &session);
+  static int64_t get_txn_dynamic_state_serialize_size(ObSQLSessionInfo &session);
+  static int64_t get_txn_parts_state_serialize_size(ObSQLSessionInfo &session);
+  static int64_t get_txn_extra_state_serialize_size(ObSQLSessionInfo &session);
+  static int check_free_route_tx_alive(ObSQLSessionInfo &session, transaction::ObTxnFreeRouteCtx &txn_free_rotue_ctx);
 };
 
 inline int ObSqlTransControl::get_trans_expire_ts(const ObSQLSessionInfo &my_session,

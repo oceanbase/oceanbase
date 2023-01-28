@@ -24,6 +24,7 @@
 #include "common/storage/ob_sequence.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/stat/ob_latch_define.h"
+#include "ob_xa_ctx.h"
 
 #define USING_LOG_PREFIX TRANS
 namespace oceanbase
@@ -129,7 +130,6 @@ DEF_TO_STRING(ObTxSavePoint)
   J_OBJ_END();
   return pos;
 }
-
 OB_SERIALIZE_MEMBER(ObTxExecResult, incomplete_, parts_, cflict_txs_);
 OB_SERIALIZE_MEMBER(ObTxSnapshot, tx_id_, version_, scn_, elr_);
 OB_SERIALIZE_MEMBER(ObTxReadSnapshot, valid_, core_, source_, uncertain_bound_, snapshot_lsid_, parts_);
@@ -175,7 +175,8 @@ OB_SERIALIZE_MEMBER(ObTxInfo,
                     timeout_us_,
                     expire_ts_,
                     active_scn_,
-                    parts_);
+                    parts_,
+                    session_id_);
 OB_SERIALIZE_MEMBER(ObTxStmtInfo,
                     tx_id_,
                     op_sn_,
@@ -196,6 +197,8 @@ ObTxDesc::ObTxDesc()
     addr_(),
     tx_id_(),
     xid_(),
+    xa_tightly_couple_(true),
+    xa_start_addr_(),
     isolation_(ObTxIsolationLevel::RC), // default is RC
     access_mode_(ObTxAccessMode::RW),   // default is RW
     snapshot_version_(),
@@ -205,6 +208,7 @@ ObTxDesc::ObTxDesc()
     op_sn_(0),                          // default is from 0
     state_(State::INVL),
     flags_({ 0 }),
+    state_change_flags_({ 0 }),
     alloc_ts_(-1),
     active_ts_(-1),
     timeout_us_(-1),
@@ -232,6 +236,9 @@ ObTxDesc::ObTxDesc()
     rpc_cond_(),
     commit_task_(),
     xa_ctx_(NULL)
+#ifndef NDEBUG
+  , alloc_link_()
+#endif
 {}
 
 /**
@@ -250,6 +257,7 @@ int ObTxDesc::switch_to_idle()
   tx_id_.reset();
   trace_info_.reset();
   flags_.switch_to_idle_();
+  state_change_flags_.reset();
   active_ts_ = 0;
   timeout_us_ = 0;
   lock_timeout_us_ = -1;
@@ -277,6 +285,15 @@ inline void ObTxDesc::FLAG::switch_to_idle_()
   const FLAG sv = *this;
   v_ = 0;
   REPLICA_ = sv.REPLICA_;
+}
+
+ObTxDesc::FLAG ObTxDesc::FLAG::update_with(const ObTxDesc::FLAG &flag)
+{
+  auto n = flag;
+#define KEEP_(x) n.x = x
+LST_DO(KEEP_, (;), SHADOW_, REPLICA_, TRACING_, INTERRUPTED_, RELEASED_, BLOCK_);
+#undef KEEP_
+  return n;
 }
 
 ObTxDesc::~ObTxDesc()
@@ -309,6 +326,8 @@ void ObTxDesc::reset()
   addr_.reset();
   tx_id_.reset();
   xid_.reset();
+  xa_tightly_couple_ = true;
+  xa_start_addr_.reset();
   isolation_ = ObTxIsolationLevel::INVALID;
   access_mode_ = ObTxAccessMode::INVL;
   snapshot_version_.reset();
@@ -320,6 +339,7 @@ void ObTxDesc::reset()
   state_ = State::INVL;
 
   flags_.v_ = 0;
+  state_change_flags_.reset();
 
   alloc_ts_ = -1;
   active_ts_ = -1;
@@ -350,6 +370,9 @@ void ObTxDesc::reset()
   commit_task_.reset();
   xa_ctx_ = NULL;
   tlog_.reset();
+#ifndef NDEBUG
+  alloc_link_.reset();
+#endif
 }
 
 const ObString &ObTxDesc::get_tx_state_str() const {
@@ -396,15 +419,39 @@ void ObTxDesc::print_trace()
   }
 }
 
-bool ObTxDesc::can_free_route() const
+bool ObTxDesc::in_tx_or_has_state()
 {
-  bool can_not = is_in_tx()
-    || savepoints_.count() > 0  // FIXME: acc valid snapshot only
-    || ((isolation_ == ObTxIsolationLevel::RR
-         || isolation_ == ObTxIsolationLevel::SERIAL)
-        && snapshot_version_.is_valid()
-        );
-  return !can_not;
+  ObSpinLockGuard guard(lock_);
+  return in_tx_or_has_state_();
+}
+
+bool ObTxDesc::in_tx_or_has_state_()
+{
+  if (is_in_tx()) {
+    return true;
+  }
+  if (snapshot_version_.is_valid()) {
+    return true;
+  }
+  // TODO(yunxing.cyx): refine this iter for performance
+  ARRAY_FOREACH_NORET(savepoints_, i) {
+    if (savepoints_[i].is_savepoint()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ObTxDesc::in_tx_for_free_route()
+{
+  ObSpinLockGuard guard(lock_);
+  return in_tx_for_free_route_();
+}
+
+bool ObTxDesc::in_tx_for_free_route_()
+{
+  return (addr_.is_valid() && (addr_ != GCONF.self_addr_)) // txn free route temporary node
+    || in_tx_or_has_state_();
 }
 
 bool ObTxDesc::contain_savepoint(const ObString &sp)
@@ -457,6 +504,7 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
       ret = OB_ENTRY_NOT_EXIST;
     }
   }
+  state_change_flags_.PARTS_CHANGED_ = true;
   return ret;
 }
 
@@ -512,6 +560,7 @@ void ObTxDesc::implicit_start_tx_()
     active_ts_ = ObClockGenerator::getClock();
     expire_ts_ = active_ts_ + timeout_us_;
     active_scn_ = ObSequence::get_max_seq_no();
+    state_change_flags_.STATIC_CHANGED_ = true;
   }
 }
 
@@ -751,6 +800,15 @@ int ObTxDesc::merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_txs
     }
   }
   return ret;
+}
+
+void ObTxDesc::set_xa_ctx(ObXACtx *xa_ctx)
+{
+  xa_ctx_ = xa_ctx;
+  if (OB_NOT_NULL(xa_ctx)) {
+    xa_tightly_couple_ = xa_ctx->is_tightly_coupled();
+    xa_start_addr_ = GCONF.self_addr_;
+  }
 }
 
 ObTxParam::ObTxParam()
@@ -1103,7 +1161,11 @@ int ObTxDescMgr::wait()
       ret = OB_TIMEOUT;
       TRANS_LOG(WARN, "txDescMgr.wait timeout", K(ret));
       PrintTxDescFunctor fn(128);
+#ifndef NDEBUG
+      (void)map_.alloc_handle_.for_each(fn);
+#else
       (void)map_.for_each(fn);
+#endif
     }
   }
   TRANS_LOG(INFO, "txDescMgr.wait", K(ret), K(inited_), K(stoped_), K(active_cnt));
@@ -1148,25 +1210,28 @@ int ObTxDescMgr::add(ObTxDesc &tx_desc)
 int ObTxDescMgr::add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc)
 {
   int ret = OB_SUCCESS;
+  auto desc_tx_id = tx_desc.get_tx_id();
   if (!inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "ObTxDescMgr not inited", K(ret));
   } else if (stoped_) {
     ret = OB_IN_STOP_STATE;
     TRANS_LOG(WARN, "ObTxDescMgr has been stopped", K(ret));
-  } else if (tx_desc.get_tx_id().is_valid() || !tx_id.is_valid()) {
+  } else if (!tx_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id), K(tx_desc));
-  } else {
-    // set_tx_id should before insert_and_get
-    tx_desc.set_tx_id(tx_id);
-    if (OB_FAIL(map_.insert_and_get(tx_id, &tx_desc, NULL))) {
+  } else if (desc_tx_id.is_valid() && desc_tx_id != tx_id) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "tx desc with different tx id", K(ret), K(tx_id), K(tx_desc));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!desc_tx_id.is_valid()) { tx_desc.set_tx_id(tx_id); }
+    if (OB_FAIL(map_.insert(tx_id, &tx_desc))) {
       TRANS_LOG(WARN, "fail to register trans", K(ret), K(tx_desc));
     }
     // if fail revert tx_desc.tx_id_ member
-    if (OB_FAIL(ret)) {
-      tx_desc.reset_tx_id();
-    }
+    if (OB_FAIL(ret) && !desc_tx_id.is_valid()) { tx_desc.reset_tx_id(); }
   }
   TRANS_LOG(INFO, "txDescMgr.register trans with txid", K(ret), K(tx_id), K(tx_desc));
   return ret;
@@ -1176,7 +1241,9 @@ int ObTxDescMgr::get(const ObTransID &tx_id, ObTxDesc *&tx_desc)
 {
   int ret = OB_SUCCESS;
   OV(inited_, OB_NOT_INIT);
-  OZ(map_.get(tx_id, tx_desc));
+  if (OB_SUCC(ret)) {
+    ret = map_.get(tx_id, tx_desc);
+  }
   TRANS_LOG(TRACE, "txDescMgr.get trans", K(tx_id), KPC(tx_desc));
   return ret;
 }

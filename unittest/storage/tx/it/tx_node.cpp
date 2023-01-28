@@ -22,6 +22,25 @@
 } while(0);
 
 namespace oceanbase {
+namespace common
+{
+void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
+{
+  int ret = OB_SUCCESS;
+  int64_t align_size = upper_align(size, sizeof(int64_t));
+  uint64_t tenant_id = arena_.get_tenant_id();
+  bool is_out_of_mem = false;
+  if (!handle.is_id_valid()) {
+    COMMON_LOG(TRACE, "MTALLOC.first_alloc", KP(&handle.mt_));
+    LockGuard guard(lock_);
+    if (!handle.is_id_valid()) {
+      handle.set_clock(arena_.retired());
+      hlist_.set_active(handle);
+    }
+  }
+  return arena_.alloc(handle.id_, handle.arena_handle_, align_size);
+}
+}
 
 namespace storage {
 
@@ -58,13 +77,14 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   name_(name_buf_),
   addr_(addr),
   ls_id_(ls_id),
-  tenant_(1001),
+  tenant_id_(1001),
+  tenant_(tenant_id_),
   memtable_(NULL),
   msg_consumer_(ObString("TxNode"),
                 &msg_queue_,
                 std::bind(&ObTxNode::handle_msg_,
                           this, std::placeholders::_1)),
-  t3m_(1001),
+  t3m_(tenant_id_),
   fake_rpc_(&msg_bus, addr, &get_location_adapter_()),
   lock_memtable_(),
   fake_tx_log_adapter_(nullptr)
@@ -98,7 +118,8 @@ ObTxNode::ObTxNode(const int64_t ls_id,
                &rpc_proxy_,
                &schema_service_,
                &server_tracer_));
-  memtable_ = create_memtable_(1001);
+  tenant_.set(&txs_);
+  OZ (create_memtable_(100000, memtable_));
   {
     ObColDesc col_desc;
     col_desc.col_id_ = 1;
@@ -157,6 +178,7 @@ struct MsgInfo {
   int64_t recv_time_ = 0;
   ObAddr sender_;
   bool is_callback_msg_ = false;
+  bool is_sync_msg_ = false;
   TxMsgCallbackMsg callback_msg_;
   int16_t msg_type_;
   int64_t size_;
@@ -165,6 +187,7 @@ struct MsgInfo {
                K_(recv_time),
                K_(sender),
                K_(is_callback_msg),
+               K_(is_sync_msg),
                K_(msg_type),
                K_(callback_msg),
                K_(size));
@@ -188,6 +211,7 @@ int get_msg_info(ObTxNode::MsgPack *pkt, MsgInfo& msg_info)
     msg_info.buf_ = buf + pos;
     msg_info.size_ = size - pos;
   }
+  msg_info.is_sync_msg_ = pkt->is_sync_msg_;
   msg_info.msg_ptr_ = (void*)pkt->body_.ptr();
   msg_info.recv_time_ = pkt->recv_time_;
   msg_info.sender_ = pkt->sender_;
@@ -234,7 +258,8 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
   FAST_FAIL();
 }
 
-memtable::ObMemtable *ObTxNode::create_memtable_(const int64_t tablet_id) {
+int ObTxNode::create_memtable_(const int64_t tablet_id, memtable::ObMemtable *&mt) {
+  int ret = OB_SUCCESS;
   memtable::ObMemtable *t = new memtable::ObMemtable();
   ObITable::TableKey table_key;
   table_key.table_type_ = ObITable::DATA_MEMTABLE;
@@ -243,13 +268,16 @@ memtable::ObMemtable *ObTxNode::create_memtable_(const int64_t tablet_id) {
   table_key.scn_range_.end_scn_.set_max();
   ObLSHandle ls_handle;
   ls_handle.set_ls(fake_ls_map_, fake_ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
-  t->init(table_key, ls_handle, &fake_freezer_, &fake_memtable_mgr_, 0, 0);
-  return t;
+  OZ (t->init(table_key, ls_handle, &fake_freezer_, &fake_memtable_mgr_, 0, 0));
+  if (OB_SUCC(ret)) {
+    mt = t;
+  } else { delete t; }
+  return ret;
 }
 
 int ObTxNode::create_ls_(const ObLSID ls_id) {
   int ret = OB_SUCCESS;
-  OZ(txs_.tx_ctx_mgr_.create_ls(txs_.tenant_id_,
+  OZ(txs_.tx_ctx_mgr_.create_ls(tenant_id_,
                                 ls_id,
                                 &fake_tx_table_,
                                 &fake_lock_table_,
@@ -311,6 +339,25 @@ int ObTxNode::recv_msg(const ObAddr &sender, ObString &m)
   return ret;
 }
 
+int ObTxNode::sync_recv_msg(const ObAddr &sender, ObString &m, ObString &resp)
+{
+  TRANS_LOG(INFO, "sync_recv_msg", K(sender), "msg_ptr", OB_P(m.ptr()), KPC(this));
+  int ret = OB_SUCCESS;
+  auto pkt = new MsgPack(sender, m, true);
+  msg_queue_.push(pkt);
+  msg_consumer_.wakeup();
+  pkt->cond_.wait(pkt->cond_.get_key(), 500000);
+  if (pkt->resp_ready_) {
+    OX(resp = pkt->resp_);
+  } else {
+    ret = OB_TIMEOUT;
+    TRANS_LOG(ERROR, "wait resp timeout",K(ret));
+  }
+  ob_free((void*)const_cast<char*>(pkt->body_.ptr()));
+  delete pkt;
+  return ret;
+}
+
 int ObTxNode::handle_msg_(MsgPack *pkt)
 {
   ObTenantEnv::set_tenant(&tenant_);
@@ -328,7 +375,7 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
   int16_t msg_type = msg_info.msg_type_;
   if (OB_HASH_EXIST == drop_msg_type_set_.exist_refactored(msg_type)) {
     TRANS_LOG(WARN, "drop msg", K(msg_type), KPC(this));
-    return 0;
+    return OB_SUCCESS;
   }
   switch (msg_type) {
 #define TX_MSG_HANDLER__(t, clz, func)                  \
@@ -337,7 +384,7 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
     clz msg;                                            \
     ObTransRpcResult rslt;                              \
     OZ(msg.deserialize(buf, size, pos));                \
-    TRANS_LOG(TRACE, "handle_msg::", K(msg), KPC(this)); \
+    TRANS_LOG(TRACE, "handle_msg::", K(msg), KPC(this));        \
     auto status = txs_.func(msg, rslt);                 \
     rslt.status_ = status;                              \
     OZ(fake_rpc_.send_msg_callback(sender, msg, rslt)); \
@@ -349,6 +396,40 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
   TX_MSG_HANDLER__(KEEPALIVE, ObTxKeepaliveMsg, handle_trans_keepalive);
   TX_MSG_HANDLER__(KEEPALIVE_RESP, ObTxKeepaliveRespMsg, handle_trans_keepalive_response);
 #undef TX_MSG_HANDLER__
+  case TX_FREE_ROUTE_CHECK_ALIVE:
+    {
+      ObTxFreeRouteCheckAliveMsg msg;
+      OZ(msg.deserialize(buf, size, pos));
+      TRANS_LOG(TRACE, "handle_msg", K(msg), KPC(this));
+      OZ(txs_.tx_free_route_handle_check_alive(msg));
+      break;
+    }
+  case TX_FREE_ROUTE_CHECK_ALIVE_RESP:
+    {
+      ObTxFreeRouteCheckAliveRespMsg msg;
+      OZ(msg.deserialize(buf, size, pos));
+      TRANS_LOG(TRACE, "handle_msg", K(msg), KPC(this));
+      // can not handle by tx node, call extra handler
+      if (extra_msg_handler_) {
+        OZ(extra_msg_handler_(msg_type, &msg));
+      }
+      break;
+    }
+  case TX_FREE_ROUTE_PUSH_STATE:
+    {
+      ObTxFreeRoutePushState msg;
+      OZ(msg.deserialize(buf, size, pos));
+      TRANS_LOG(TRACE, "handle_msg", K(msg), KPC(this));
+      OZ(txs_.tx_free_route_handle_push_state(msg));
+      ObTxFreeRoutePushStateResp resp;
+      resp.ret_ = ret;
+      int64_t buf_len = resp.get_serialize_size();
+      char *buf = (char*)ob_malloc(buf_len);
+      int64_t pos = 0;
+      OZ(resp.serialize(buf, buf_len, pos));
+      pkt->resp_ = ObString(buf_len, buf);
+      break;
+    }
   case ROLLBACK_SAVEPOINT:
     {
       ObTxRollbackSPMsg msg;
@@ -374,18 +455,23 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
   default:
     ret = OB_NOT_SUPPORTED;
   }
-
-  delete pkt;
-  ob_free((void*)const_cast<char*>(pkt->body_.ptr()));
+  if (msg_info.is_sync_msg_) {
+    pkt->resp_ready_ = true;
+    pkt->cond_.signal();
+  } else {
+    ob_free((void*)const_cast<char*>(pkt->body_.ptr()));
+    delete pkt;
+  }
   TRANS_LOG(INFO, "handle_msg done", K(ret), KPC(this));
   return ret;
 }
-int ObTxNode::read(ObTxDesc &tx, const int64_t key, int64_t &value)
+
+int ObTxNode::read(ObTxDesc &tx, const int64_t key, int64_t &value, const ObTxIsolationLevel iso)
 {
   int ret = OB_SUCCESS;
   ObTxReadSnapshot snapshot;
   OZ(get_read_snapshot(tx,
-                       tx.isolation_,
+                       iso,
                        ts_after_ms(5),
                        snapshot));
   return read(snapshot, key, value);
@@ -454,6 +540,19 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected row result", K(ret), K(row.row_flag_), K(row), KPC(this));
     }
+  }
+  return ret;
+}
+
+int ObTxNode::atomic_write(ObTxDesc &tx, const int64_t key, const int64_t value,
+                           const int64_t expire_ts, const ObTxParam &tx_param)
+{
+  int ret = OB_SUCCESS;
+  int64_t sp = -1;
+  OZ(create_implicit_savepoint(tx, tx_param, sp, true));
+  OZ(write(tx, key, value));
+  if (sp != -1 && OB_FAIL(ret)) {
+    OZ(rollback_to_implicit_savepoint(tx, sp, expire_ts, nullptr));
   }
   return ret;
 }
@@ -574,13 +673,12 @@ int ObTxNode::replay(const void *buffer,
     LOG_WARN("log base header deserialize error", K(ret));
   } else if (OB_FAIL(ObFakeTxReplayExecutor::execute(&mock_ls_, mock_ls_.get_tx_svr(), log_buf, nbytes,
                                                      tmp_pos, lsn, ts_ns, base_header.get_replay_hint(),
-                                                     ls_id_, 1001, memtable_))) {
+                                                     ls_id_, tenant_id_, memtable_))) {
     LOG_WARN("replay tx log error", K(ret), K(lsn), K(ts_ns));
   } else {
     LOG_INFO("replay tx log succ", K(ret), K(lsn), K(ts_ns));
   }
   return ret;
 }
-
 } // transaction
 } // oceanbase

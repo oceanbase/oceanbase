@@ -1602,15 +1602,6 @@ int ObSqlPlanSet::get_plan_normal(ObPlanCacheCtx &pc_ctx,
         SQL_PC_LOG(DEBUG, "failed to get plan type", K(ret));
       }
 
-      if (OB_SUCC(ret)
-          && OB_PHY_PLAN_LOCAL != plan_type
-          && session->get_in_transaction()
-          && session->get_is_in_retry()) {
-        // 如果同一个事务中因为有远程计划导致session重试
-        // 记录对应的trans_flag_，该事务后的所有sql都不会走直接获取local计划的优化
-        session->set_has_remote_plan_in_tx(true);
-        LOG_DEBUG("do not get local direct plan from now on", K(session->has_remote_plan_in_tx()));
-      }
       if (OB_SUCC(ret) && !enable_inner_part_parallel_exec_) {
         NG_TRACE(get_plan_type_end);
         SQL_PC_LOG(DEBUG, "get plan type before select plan", K(ret), K(plan_type));

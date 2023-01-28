@@ -701,6 +701,8 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
         } else if (true == is_timeout) {
           LOG_INFO("session is timeout, kill this session", K(key.sessid_));
           ret = sess_mgr_->kill_session(*sess_info);
+        } else if (sess_info->is_txn_free_route_temp()) {
+          sess_info->check_txn_free_route_alive();
         } else {
           //借助于session遍历的功能，尝试revert session上缓存的schema guard，
           //避免长时间持有guard，导致schema mgr的槽位无法释放

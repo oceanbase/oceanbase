@@ -146,9 +146,7 @@ int ObTransDeadlockDetectorAdapter::kill_tx(const uint32_t sess_id)
   } else if (OB_FAIL(GCTX.session_mgr_->set_query_deadlocked(*session_info))) {
     DETECT_LOG(WARN, "set query dealocked failed", K(ret), K(sess_id), K(*session_info));
   } else {
-    session_info->reset_first_need_txn_stmt_type();
     session_info->reset_tx_variable();
-    session_info->set_early_lock_release(false);
     mgr->notify_deadlocked_session(sess_id);
     DETECT_LOG(INFO, "set query dealocked success in mysql mode", K(ret), K(sess_id), K(*session_info));
   }
@@ -631,7 +629,7 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
     } else if (conflict_txs.empty()) {
       // no row conflicted, no need register to deadlock
     } else if (OB_FAIL(register_remote_execution_or_replace_conflict_trans_ids(desc->tid(),
-                                                                               desc->get_session_id(),
+                                                                               session->get_sessid(),
                                                                                conflict_txs))) {
       DETECT_LOG(WARN, "register or replace list failed", KR(ret), K(desc->tid()));
     } else {

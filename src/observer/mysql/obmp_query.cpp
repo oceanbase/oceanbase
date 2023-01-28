@@ -201,10 +201,14 @@ int ObMPQuery::process()
                  && OB_FAIL(session.update_sys_variable(SYS_VAR_OB_TRACE_INFO,
                                                         pkt.get_trace_info()))) {
         LOG_WARN("fail to update trace info", K(ret));
+      } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
       } else if (pkt.get_extra_info().exist_sync_sess_info()
                  && OB_FAIL(ObMPUtils::sync_session_info(session,
                               pkt.get_extra_info().get_sync_sess_info()))) {
+        // won't response error, disconnect will let proxy sens failure
+        need_response_error = false;
         LOG_WARN("fail to update sess info", K(ret));
+      } else if (FALSE_IT(session.post_sync_session_info())) {
       } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                               conn->proxy_cap_flags_.is_full_link_trace_support()))) {
         LOG_WARN("failed to update flt extra info", K(ret));
@@ -316,6 +320,11 @@ int ObMPQuery::process()
             need_disconnect = false;
             need_response_error = true;
             LOG_WARN("explain batch statement failed", K(ret));
+          } else if (!optimization_done && queries.count() > 1 && session.is_txn_free_route_temp()) {
+            need_disconnect = false;
+            need_response_error = true;
+            ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+            LOG_WARN("multi stmt is not supported to be executed on txn temporary node", KR(ret), K(session));
           } else if (!optimization_done) {
             ARRAY_FOREACH(queries, i) {
               // in multistmt sql, audit_record will record multistmt_start_ts_ when count over 1
@@ -402,11 +411,6 @@ int ObMPQuery::process()
 
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
     send_error_packet(ret, NULL);
-    if (need_disconnect) {
-      force_disconnect();
-    }
-    need_disconnect = false;
-    LOG_WARN("disconnect connection when process query", KR(ret));
   }
   if (OB_FAIL(ret) && OB_UNLIKELY(need_disconnect) && is_conn_valid()) {
     force_disconnect();
@@ -787,6 +791,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
             need_response_error = false;
           }
         } else {
+          session.set_session_in_retry(ObSessionRetryStatus::SESS_IN_RETRY);
           session.get_retry_info_for_update().set_last_query_retry_err(ret);
           session.get_retry_info_for_update().inc_retry_cnt();
         }
@@ -905,16 +910,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         }
       }
     }
-    //set read_only
-    if (OB_SUCC(ret)) {
-      if (session.get_in_transaction()) {
-        if (ObStmt::is_write_stmt(result.get_stmt_type(), result.has_global_variable())) {
-          session.set_has_exec_write_stmt(true);
-        }
-      } else {
-        session.set_has_exec_write_stmt(false);
-      }
-    }
 
     audit_record.status_ = (0 == ret || OB_ITER_END == ret)
         ? REQUEST_SUCC : (ret);
@@ -932,6 +927,11 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         audit_record.plan_hash_ = plan->get_plan_hash_value();
         audit_record.rule_name_ = const_cast<char *>(plan->get_rule_name().ptr());
         audit_record.rule_name_len_ = plan->get_rule_name().length();
+      }
+      if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
+        // normally trans_id is set in the `start-stmt` phase,
+        // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
+        audit_record.trans_id_ = session.get_tx_id();
       }
       audit_record.affected_rows_ = result.get_affected_rows();
       audit_record.return_rows_ = result.get_return_rows();

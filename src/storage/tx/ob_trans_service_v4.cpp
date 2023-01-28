@@ -1920,6 +1920,7 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                                               const int64_t request_id,
                                               const SCN &private_data)
 {
+  auto start_ts = ObClockGenerator::getClock();
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_running_)) {
     ret = OB_NOT_RUNNING;
@@ -1971,13 +1972,14 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
       }
     }
   }
+  auto elapsed_ts = ObClockGenerator::getClock() - start_ts;
 #ifndef NDEBUG
-  TRANS_LOG(INFO, "handle trans msg callback", K(ret),
+  TRANS_LOG(INFO, "handle trans msg callback", K(ret), K(elapsed_ts),
             K(tx_id), K(sender_ls_id), K(receiver_ls_id),
             K(msg_type), K(status), K(receiver_addr), K(request_id));
 #else
   if (OB_FAIL(ret) || OB_SUCCESS != status) {
-    TRANS_LOG(WARN, "handle trans msg callback", K(ret),
+    TRANS_LOG(WARN, "handle trans msg callback", K(ret), K(elapsed_ts),
               K(tx_id), K(sender_ls_id), K(receiver_ls_id),
               K(msg_type), K(status), K(receiver_addr), K(request_id));
   }
@@ -2244,6 +2246,7 @@ int ObTransService::recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx)
     TRANS_LOG(WARN, "add tx to txMgr fail", K(ret), K(tx));
   } else {
     tx->flags_.REPLICA_ = true;
+    tx->flags_.EXPLICIT_ = true;
     tx->tenant_id_ = tx_info.tenant_id_;
     tx->cluster_id_ = tx_info.cluster_id_;
     tx->cluster_version_ = tx_info.cluster_version_;
@@ -2261,6 +2264,7 @@ int ObTransService::recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx)
     tx->finish_ts_ = tx_info.finish_ts_;
     tx->active_scn_ = tx_info.active_scn_;
     tx->state_ = ObTxDesc::State::ACTIVE;
+    tx->sess_id_ = tx_info.session_id_;
   }
   return ret;
 }
@@ -2288,6 +2292,7 @@ int ObTransService::get_tx_info(ObTxDesc &tx, ObTxInfo &tx_info)
     tx_info.expire_ts_ = tx.expire_ts_;
     tx_info.finish_ts_ = tx.finish_ts_;
     tx_info.active_scn_ = tx.active_scn_;
+    tx_info.session_id_ = tx.sess_id_;
   }
   tx.lock_.unlock();
   return ret;

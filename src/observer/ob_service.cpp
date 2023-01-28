@@ -1758,10 +1758,10 @@ int ObService::set_tracepoint(const obrpc::ObAdminSetTPArg &arg)
       if (OB_FAIL(str.assign(arg.event_name_))) {
         LOG_WARN("string assign failed", K(ret));
       } else {
-        TP_SET_EVENT(str.ptr(), arg.error_code_, arg.occur_, arg.trigger_freq_);
+        TP_SET_EVENT(str.ptr(), arg.error_code_, arg.occur_, arg.trigger_freq_, arg.cond_);
       }
     } else {
-      TP_SET_EVENT(arg.event_no_, arg.error_code_, arg.occur_, arg.trigger_freq_);
+      TP_SET_EVENT(arg.event_no_, arg.error_code_, arg.occur_, arg.trigger_freq_, arg.cond_);
     }
     LOG_INFO("set event", K(arg));
   }

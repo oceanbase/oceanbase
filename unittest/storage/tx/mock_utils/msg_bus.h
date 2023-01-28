@@ -20,6 +20,7 @@ namespace common {
 class MsgEndPoint {
 public:
   virtual int recv_msg(const ObAddr &sender, ObString &msg) = 0;
+  virtual int sync_recv_msg(const ObAddr &sender, ObString &msg, ObString &resp) = 0;
 };
 class MsgBus {
 struct ObAddrPair {
@@ -61,9 +62,24 @@ public:
     if (OB_SUCC(ret)) {
       ObAddrPair pair(sender, recv);
       if (OB_HASH_EXIST == fail_links_.exist_refactored(pair)) {
-        TRANS_LOG(WARN, "link failure, msg lost", K(sender), K(recv));
+        TRANS_LOG(WARN, "[msg bus] link failure, msg lost", K(sender), K(recv));
       } else {
         OZ(e->recv_msg(sender, msg));
+      }
+    }
+    return ret;
+  }
+  int sync_send_msg(ObString &msg, const ObAddr &sender, const ObAddr &recv, ObString &resp)
+  {
+    int ret = OB_SUCCESS;
+    MsgEndPoint *e = NULL;
+    OZ(route_table_.get_refactored(recv, e));
+    if (OB_SUCC(ret)) {
+      ObAddrPair pair(sender, recv);
+      if (OB_HASH_EXIST == fail_links_.exist_refactored(pair)) {
+        TRANS_LOG(WARN, "[msg bus] link failure, msg lost", K(sender), K(recv));
+      } else {
+        OZ(e->sync_recv_msg(sender, msg, resp));
       }
     }
     return ret;

@@ -525,6 +525,9 @@ private:
   bool is_inited_;
   ObTransHashHeader buckets_[BUCKETS_CNT];
   int64_t total_cnt_;
+#ifndef NDEBUG
+public:
+#endif
   AllocHandle alloc_handle_;
 };
 

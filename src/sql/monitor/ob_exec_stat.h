@@ -373,6 +373,7 @@ struct ObAuditRecordData {
   int64_t request_id_; //set by request_manager automatic when add record
   int64_t execution_id_;  //used to jion v$sql_plan_monitor
   uint64_t session_id_;
+  uint64_t proxy_session_id_;
   uint64_t qc_id_;  //px框架下id
   int64_t dfo_id_;
   int64_t sqc_id_;
@@ -430,6 +431,7 @@ struct ObAuditRecordData {
     int64_t scn_;          // snapshot's position in the txn
     char const* source_;   // snapshot's acquire source
   } snapshot_; // stmt's tx snapshot
+  uint64_t txn_free_route_flag_; // flag contains txn free route meta
 };
 
 } //namespace sql

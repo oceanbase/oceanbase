@@ -233,27 +233,9 @@ public:
   class TransFlags
   {
   public:
-    TransFlags() : flags_(0) {}
+    TransFlags() : flags_(0), changed_(false) {}
     virtual ~TransFlags() {}
     inline void reset() { flags_ = 0; }
-    inline void set_has_exec_write_stmt(bool value) { set_flag(value, HAS_EXEC_WRITE_STMT); }
-    inline void set_has_set_trans_var(bool value) { set_flag(value, HAS_SET_TRANS_VAR); }
-    inline void set_has_hold_row_lock(bool value) { set_flag(value, HAS_HOLD_ROW_LOCK); }
-    inline void set_has_any_dml_succ(bool value) { set_flag(value, HAS_ANY_DML_SUCC); }
-    inline void set_has_any_pl_succ(bool value) { set_flag(value, HAS_ANY_PL_SUCC); }
-    inline void set_has_remote_plan(bool value) { set_flag(value, HAS_REMOTE_PLAN); }
-    inline void set_has_inner_dml_write(bool value) { set_flag(value, HAS_INNER_DML_WRITE); }
-    inline void set_need_serial_exec(bool value) { set_flag(value, NEED_SERIAL_EXEC); }
-    inline void set_explicit_start_trans(bool value) { return set_flag(value, EXPLICIT_START_TRANS); }
-    inline bool has_exec_write_stmt() const { return flags_ & HAS_EXEC_WRITE_STMT; }
-    inline bool has_set_trans_var() const  { return flags_ & HAS_SET_TRANS_VAR; }
-    inline bool has_hold_row_lock() const { return flags_ & HAS_HOLD_ROW_LOCK; }
-    inline bool has_any_dml_succ() const { return flags_ & HAS_ANY_DML_SUCC; }
-    inline bool has_any_pl_succ() const { return flags_ & HAS_ANY_PL_SUCC; }
-    inline bool has_remote_plan() const { return flags_ & HAS_REMOTE_PLAN; }
-    inline bool has_inner_dml_write() const { return flags_ & HAS_INNER_DML_WRITE; }
-    inline bool need_serial_exec() const { return flags_ & NEED_SERIAL_EXEC; }
-    inline bool has_explicit_start_trans() const { return flags_ & EXPLICIT_START_TRANS; }
     inline uint64_t get_flags() const { return flags_; }
   private:
     inline void set_flag(bool value, uint64_t flag)
@@ -263,19 +245,16 @@ public:
       } else {
         flags_ &= ~flag;
       }
+      changed_ = true;
       return;
     }
   private:
-    static const uint64_t HAS_EXEC_WRITE_STMT = 1ULL << 1;
-    static const uint64_t HAS_SET_TRANS_VAR   = 1ULL << 2;    // has executed set transaction stmt.
-    static const uint64_t HAS_HOLD_ROW_LOCK   = 1ULL << 3;
-    static const uint64_t HAS_ANY_DML_SUCC    = 1ULL << 4;
-    static const uint64_t HAS_ANY_PL_SUCC     = 1ULL << 5;
-    static const uint64_t HAS_REMOTE_PLAN     = 1ULL << 6;
-    static const uint64_t HAS_INNER_DML_WRITE = 1ULL << 7;
-    static const uint64_t NEED_SERIAL_EXEC    = 1ULL << 8;
-    static const uint64_t EXPLICIT_START_TRANS  = 1ULL << 9;
+    // NOTICE:
+    // after 4.1, txn support executed on multiple node
+    // if use TransFlags, please add it into session_sync
+    // in order to sync it to txn execution node
     uint64_t flags_;
+    bool changed_;
   };
   class SqlScopeFlags
   {
@@ -1209,7 +1188,6 @@ public:
   int begin_autonomous_session(TransSavedValue &saved_value);
   int end_autonomous_session(TransSavedValue &saved_value);
   int init_stmt_tables();
-  int check_stmt_table(uint64_t table_id, stmt::StmtType stmt_type);
   int merge_stmt_tables();
   int skip_mutating(uint64_t table_id, stmt::StmtType &saved_stmt_type);
   int restore_mutating(uint64_t table_id, stmt::StmtType saved_stmt_type);
@@ -1220,25 +1198,10 @@ public:
 
   bool is_server_status_in_transaction() const;
 
-  void set_has_exec_write_stmt(bool value) { trans_flags_.set_has_exec_write_stmt(value); }
-  void set_has_set_trans_var(bool value) { trans_flags_.set_has_set_trans_var(value); }
-  void set_has_any_dml_succ(bool value) { trans_flags_.set_has_any_dml_succ(value); }
-  void set_has_any_pl_succ(bool value) { trans_flags_.set_has_any_pl_succ(value); }
-  void set_has_remote_plan_in_tx(bool value) { trans_flags_.set_has_remote_plan(value); }
-  void set_has_inner_dml_write(bool value) { trans_flags_.set_has_inner_dml_write(value); }
-  void set_need_serial_exec(bool value) { trans_flags_.set_need_serial_exec(value); }
-  void set_explicit_start_trans(bool value) { trans_flags_.set_explicit_start_trans(value); }
-  bool has_explicit_start_trans() const { return trans_flags_.has_explicit_start_trans(); }
+  bool has_explicit_start_trans() const { return tx_desc_ != NULL && tx_desc_->is_explicit(); }
   bool is_in_transaction() const { return tx_desc_ != NULL && tx_desc_->is_in_tx(); }
+  virtual bool is_txn_free_route_temp() const { return false; }
   bool get_in_transaction() const { return is_in_transaction(); }
-  bool has_exec_write_stmt() const { return trans_flags_.has_exec_write_stmt(); }
-  bool has_set_trans_var() const {return trans_flags_.has_set_trans_var(); }
-  bool has_hold_row_lock() const   { return trans_flags_.has_hold_row_lock(); }
-  bool has_any_dml_succ() const { return trans_flags_.has_any_dml_succ(); }
-  bool has_any_pl_succ() const { return trans_flags_.has_any_pl_succ(); }
-  bool has_remote_plan_in_tx() const { return trans_flags_.has_remote_plan(); }
-  bool has_inner_dml_write() const { return trans_flags_.has_inner_dml_write(); }
-  bool need_serial_exec() const { return trans_flags_.need_serial_exec(); }
   uint64_t get_trans_flags() const { return trans_flags_.get_flags(); }
 
   void set_is_in_user_scope(bool value) { sql_scope_flags_.set_is_in_user_scope(value); }
@@ -1984,7 +1947,7 @@ private:
   common::ObSEArray<ChangedVar, 8> changed_sys_vars_;
   common::ObSEArray<common::ObString, 16> changed_user_vars_;
   common::ObArenaAllocator changed_var_pool_;  // reuse for each statement
-  common::ObArenaAllocator extra_info_allocator_; // use for extra_info in 20 protocol
+  common::ObReserveArenaAllocator<256> extra_info_allocator_; // use for extra_info in 20 protocol
   bool is_database_changed_;  // is schema changed
   share::ObFeedbackManager feedback_manager_; // feedback T-L-V
   // add by gujian, cached the flag whether transaction is sepcified

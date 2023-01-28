@@ -241,6 +241,7 @@ int ObMPPacketSender::response_compose_packet(obmysql::ObMySQLPacket &pkt,
 
 int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo* session)
 {
+  LOG_DEBUG("response-packet", K(proto20_context_.is_proto20_used_), K(lbt()));
   int ret = OB_SUCCESS;
   extra_info_kvs_.reset();
   extra_info_ecds_.reset();
@@ -255,18 +256,19 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
                                       &extra_info_kvs_, &extra_info_ecds_, *session,
                                       conn_->proxy_cap_flags_.is_new_extra_info_support()))) {
       LOG_WARN("failed to add flt extra info", K(ret));
-  } else if (conn_->is_support_sessinfo_sync() &&
-              proto20_context_.is_proto20_used_ &&
-              OB_FAIL(ObMPUtils::append_modfied_sess_info(session->get_extra_info_alloc(),
-                                        *session, &extra_info_kvs_, &extra_info_ecds_,
-                                        conn_->proxy_cap_flags_.is_new_extra_info_support()))) {
-    SERVER_LOG(WARN, "fail to add modified session info", K(ret));
-  } else {
-    // do nothing
+  } else if (conn_->is_support_sessinfo_sync() && proto20_context_.is_proto20_used_) {
+    proto20_context_.txn_free_route_ = session->can_txn_free_route();
+    if (OB_FAIL(ObMPUtils::append_modfied_sess_info(session->get_extra_info_alloc(),
+                                                    *session, &extra_info_kvs_, &extra_info_ecds_,
+                                                    conn_->proxy_cap_flags_.is_new_extra_info_support()))) {
+      SERVER_LOG(WARN, "fail to add modified session info", K(ret));
+    } else {
+      // do nothing
+    }
   }
 
-
-  if (OB_FAIL(alloc_ezbuf())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(alloc_ezbuf())) {
     LOG_ERROR("easy buffer alloc failed", K(ret));
   } else {
     int64_t seri_size = 0;
@@ -515,6 +517,7 @@ int ObMPPacketSender::get_session(ObSQLSessionInfo *&sess_info)
 int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt)
 {
   int ret = OB_SUCCESS;
+  LOG_DEBUG("send-ok-packet", K(lbt()));
   ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
   OMPKOK okp;
   if (!conn_valid_ || OB_ISNULL(conn_)) {
@@ -654,6 +657,11 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
 
   if (OB_SUCC(ret) && OB_FAIL(alloc_ezbuf())) {
     LOG_WARN("ez_buf_ alloc failed", K(ret));
+  }
+  if (OB_SUCC(ret) && conn_->is_support_sessinfo_sync() && proto20_context_.is_proto20_used_) {
+    if (OB_FAIL(session.calc_txn_free_route())) {
+      SERVER_LOG(WARN, "fail calculate txn free route info", K(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     // for ok packet which has no status packet

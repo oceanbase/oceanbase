@@ -1413,6 +1413,7 @@ typedef enum ObItemType
   T_GATHER_PLAN_STATISTICS,
   T_TP_NAME,
   T_TP_NO,
+  T_TP_COND,
   T_ACTION,
   T_ERROR,
   T_ERROR_CODE,

@@ -1335,3 +1335,6 @@ DEF_INT(_px_join_skew_minfreq, OB_TENANT_PARAMETER, "30", "[1,100]",
 DEF_BOOL(_enable_protocol_diagnose, OB_CLUSTER_PARAMETER, "True",
         "enables protocol layer diagnosis. The default value is False.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_transaction_internal_routing, OB_TENANT_PARAMETER, "True",
+         "enable SQLs of transaction routed to any servers in the cluster on demand",
+         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

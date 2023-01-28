@@ -238,15 +238,6 @@ int ObMPStmtPrexecute::before_process()
                       LOG_WARN("run stmt_query failed, check if need retry",
                                K(ret), K(cli_ret), K(get_retry_ctrl().need_retry()), K(sql_));
                       ret = cli_ret;
-                    } else {
-                      if (session->get_in_transaction()) {
-                        if (ObStmt::is_write_stmt(result.get_stmt_type(),
-                                                  result.has_global_variable())) {
-                          session->set_has_exec_write_stmt(true);
-                        }
-                      } else {
-                        session->set_has_exec_write_stmt(false);
-                      }
                     }
                     session->set_session_in_retry(retry_ctrl_.need_retry());
                   }

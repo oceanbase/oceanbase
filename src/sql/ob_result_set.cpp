@@ -790,9 +790,7 @@ int ObResultSet::close()
       //兼容oracle，这里需要重置session状态
       LOG_WARN("branch fail in global transaction", KPC(my_session_.get_tx_desc()));
       ObSqlTransControl::clear_xa_branch(my_session_.get_xid(), my_session_.get_tx_desc());
-      my_session_.reset_first_need_txn_stmt_type();
       my_session_.reset_tx_variable();
-      my_session_.set_early_lock_release(false);
       my_session_.disassociate_xa();
     }
   } else if (OB_NOT_NULL(physical_plan_)) {

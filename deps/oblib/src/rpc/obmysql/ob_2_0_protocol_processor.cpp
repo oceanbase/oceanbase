@@ -416,6 +416,7 @@ inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& conte
         input_packet->set_can_reroute_pkt(pkt20->get_flags().is_proxy_reroute());
         input_packet->set_is_weak_read(pkt20->get_flags().is_weak_read());
         input_packet->set_extra_info(pkt20->get_extra_info());
+        input_packet->set_txn_free_route(pkt20->get_flags().txn_free_route());
         context.reset();
         // set again for sending response
         context.proto20_last_pkt_seq_ = pkt20->get_seq();

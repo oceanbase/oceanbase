@@ -479,6 +479,7 @@ public:
   ObMySQLRawPacket() : ObMySQLPacket(), cmd_(COM_MAX_NUM),
                        can_reroute_pkt_(false),
                        is_weak_read_(false),
+                       txn_free_route_(false),
                        extra_info_()
   {}
 
@@ -486,6 +487,7 @@ public:
     : ObMySQLPacket(), cmd_(cmd),
       can_reroute_pkt_(false),
       is_weak_read_(false),
+      txn_free_route_(false),
       extra_info_()
   {}
 
@@ -503,6 +505,9 @@ public:
   inline void set_is_weak_read(const bool v) { is_weak_read_ = v; }
   inline bool is_weak_read() const { return is_weak_read_; }
 
+  inline void set_txn_free_route(const bool txn_free_route);
+  inline bool txn_free_route() const;
+
   inline void set_extra_info(const Ob20ExtraInfo &extra_info) { extra_info_ = extra_info; }
   inline const Ob20ExtraInfo &get_extra_info() const { return extra_info_; }
   bool exist_trace_info() const { return extra_info_.exist_trace_info_; }
@@ -514,6 +519,7 @@ public:
     cmd_ = COM_MAX_NUM;
     can_reroute_pkt_ = false;
     is_weak_read_ = false;
+    txn_free_route_ = false;
     extra_info_.reset();
   }
 
@@ -523,6 +529,7 @@ public:
     cmd_ = other.cmd_;
     can_reroute_pkt_ = other.can_reroute_pkt_;
     is_weak_read_ = other.is_weak_read_;
+    txn_free_route_ = other.txn_free_route_;
     extra_info_ = other.extra_info_;
   }
 
@@ -536,6 +543,7 @@ private:
   ObMySQLCmd cmd_;
   bool can_reroute_pkt_;
   bool is_weak_read_;
+  bool txn_free_route_;
   Ob20ExtraInfo extra_info_;
 };
 
@@ -620,6 +628,16 @@ inline void ObMySQLRawPacket::set_can_reroute_pkt(const bool can_reroute)
 inline bool ObMySQLRawPacket::can_reroute_pkt() const
 {
   return can_reroute_pkt_;
+}
+
+inline void ObMySQLRawPacket::set_txn_free_route(const bool txn_free_route)
+{
+  txn_free_route_ = txn_free_route;
+}
+
+inline bool ObMySQLRawPacket::txn_free_route() const
+{
+  return txn_free_route_;
 }
 
 } // end of namespace obmysql

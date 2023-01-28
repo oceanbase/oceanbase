@@ -812,12 +812,6 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
         }
 
         if (res.is_inited()) {
-          if (OB_SUCC(ret) && get_session().get_in_transaction()) {
-            if (ObStmt::is_dml_write_stmt(res.result_set().get_stmt_type()) ||
-                ObStmt::is_savepoint_stmt(res.result_set().get_stmt_type())) {
-              get_session().set_has_inner_dml_write(true);
-            }
-          }
         }
       }
     }
@@ -1891,10 +1885,6 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
           LOG_WARN("failed to execute inner sql", K(ret));
         } else if (FALSE_IT(affected_rows = handler->get_result()->get_affected_rows())) {
         } else if (FALSE_IT(get_session().set_trans_type(transaction::ObTxClass::SYS))) {
-        } else if (get_session().get_in_transaction()) {
-          get_session().set_has_inner_dml_write(
-              ObStmt::is_dml_write_stmt(handler->get_result()->get_stmt_type()) ||
-              ObStmt::is_savepoint_stmt(handler->get_result()->get_stmt_type()));
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(res.close())) {

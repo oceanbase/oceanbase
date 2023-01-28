@@ -22,6 +22,7 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "rpc/obmysql/obsm_struct.h"
+#include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/ob_query_retry_ctrl.h"
 
 using namespace oceanbase::rpc;
@@ -51,9 +52,11 @@ int ObMPInitDB::process()
 {
   LOG_INFO("init db", K_(db_name));
   int ret = OB_SUCCESS;
+  bool need_disconnect = true;
   ObSQLSessionInfo *session = NULL;
   ObString tmp_db_name;
   ObDataBuffer allocator(db_name_conv_buf, sizeof(db_name_conv_buf));
+  const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   int64_t query_timeout = 0;
   bool is_packet_retry = false;
   if (OB_FAIL(get_session(session))) {
@@ -92,7 +95,14 @@ int ObMPInitDB::process()
       LOG_WARN("fail to get name case mode", K(mode), K(ret));
     } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
       LOG_WARN("update transmisson checksum flag failed", K(ret));
+    } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
+    } else if (pkt.get_extra_info().exist_sync_sess_info()
+                 && OB_FAIL(ObMPUtils::sync_session_info(*session,
+                              pkt.get_extra_info().get_sync_sess_info()))) {
+      LOG_WARN("fail to update sess info", K(ret));
+    } else if (FALSE_IT(session->post_sync_session_info())) {
     } else {
+      need_disconnect = false;
       bool perserve_lettercase = lib::is_oracle_mode() ?
           true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
       if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator,
@@ -166,7 +176,10 @@ int ObMPInitDB::process()
   }  // end session guard
 
   if (OB_FAIL(ret)) {
-    if (false == is_packet_retry && OB_FAIL(send_error_packet(ret, NULL))) { // 覆盖ret, 无需继续抛出
+    if (false == is_packet_retry && need_disconnect && is_conn_valid()) {
+      force_disconnect();
+      LOG_WARN("disconnect connection when process query", K(ret));
+    } else  if (false == is_packet_retry && OB_FAIL(send_error_packet(ret, NULL))) { // 覆盖ret, 无需继续抛出
       LOG_WARN("failed to send error packet", K(ret));
     }
   } else if (OB_LIKELY(NULL != session)) {

@@ -312,6 +312,7 @@ class ObTxDesc final : public ObTransHashLink<ObTxDesc>
   friend class ObPartTransCtx;
   friend class StopTxDescFunctor;
   friend class ObTxStmtInfo;
+  friend class ObTxnFreeRouteCtx;
   typedef common::ObMaskSet2<ObTxLSEpochPair> MaskSet;
   OB_UNIS_VERSION(1);
 protected:
@@ -327,6 +328,8 @@ protected:
   common::ObAddr addr_;                // where we site
   ObTransID tx_id_;                    // identifier
   ObXATransID xid_;                    // xa info if participant in XA
+  bool xa_tightly_couple_;              // xa mode is tightly couple or loosely couple TODO: setup in xa_service
+  common::ObAddr xa_start_addr_;       // the xa start's address
   ObTxIsolationLevel isolation_;       // isolation level
   ObTxAccessMode access_mode_;         // READ_ONLY | READ_WRITE
   share::SCN snapshot_version_;           // snapshot for RR | SERIAL Isolation
@@ -362,6 +365,7 @@ protected:
     uint64_t v_;
     struct
     {
+      bool EXPLICIT_:1;               // txn is explicted start
       bool SHADOW_:1;                // this tx desc is a shadow copy
       bool REPLICA_:1;               // a replica of primary/original, its state is transient, without whole lifecyle
       bool TRACING_:1;               // tracing the Tx
@@ -370,9 +374,23 @@ protected:
       bool BLOCK_: 1;                // tx is blocking within some loop
       bool PARTS_INCOMPLETE_: 1;     // participants set incomplete (must abort)
       bool PART_EPOCH_MISMATCH_: 1;  // participant's born epoch mismatched
+      bool WITH_TEMP_TABLE_: 1;      // with txn level temporary table
     };
     void switch_to_idle_();
+    FLAG update_with(const FLAG &flag);
   } flags_;
+  union STATE_CHANGE_FLAG
+  {
+    uint8_t v_;
+    struct {
+      bool STATIC_CHANGED_:1;
+      bool DYNAMIC_CHANGED_:1;
+      bool PARTS_CHANGED_:1;
+      bool EXTRA_CHANGED_:1;
+    };
+    void reset() { v_ = 0;}
+    void mark_all() { v_ = 0xFF; }
+  } state_change_flags_;
 
   int64_t alloc_ts_;                 // time of allocated
   int64_t active_ts_;                // time of ACTIVE | IMPLICIT_ACTIVE
@@ -415,6 +433,24 @@ private:
   ObTxTimeoutTask commit_task_;     // commit retry task
   ObXACtx *xa_ctx_;                 // xa context
   ObTransTraceLog tlog_;
+#ifndef NDEBUG
+  struct DLink {
+    DLink(): next_(this), prev_(this) {}
+    void reset() { next_ = this; prev_ = this; }
+    void insert(DLink &n) {
+      next_->prev_ = &n;
+      n.next_ = next_;
+      n.prev_ = this;
+      next_ = &n;
+    }
+    void remove() {
+      next_->prev_ = prev_;
+      prev_->next_ = next_;
+    }
+    DLink *next_;
+    DLink *prev_;
+  } alloc_link_;
+#endif
 private:
   /* these routine should be called by txn-service only to avoid corrupted state */
   void reset();
@@ -435,6 +471,8 @@ private:
   int update_parts_(const ObTxPartList &list);
   void implicit_start_tx_();
   bool acq_commit_cb_lock_if_need_();
+  bool in_tx_or_has_state_();
+  bool in_tx_for_free_route_();
   void print_trace_() const;
 public:
   ObTxDesc();
@@ -446,6 +484,8 @@ public:
                K_(tenant_id),
                "session_id", sess_id_,
                "xid", PC((!xid_.empty() ? &xid_ : (ObXATransID*)nullptr)),
+               "xa_mode", xid_.empty() ? "" : (xa_tightly_couple_ ? "tightly" : "loosely"),
+               K_(xa_start_addr),
                K_(access_mode),
                K_(tx_consistency_type),
                K_(isolation),
@@ -496,8 +536,12 @@ public:
   bool is_valid() const { return !is_in_tx() || tx_id_.is_valid(); }
   ObTxAccessMode get_access_mode() const { return access_mode_; }
   bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY; }
+  bool is_clean() const { return parts_.empty(); }
+  bool is_explicit() const { return flags_.EXPLICIT_; }
+  void set_with_temporary_table() { flags_.WITH_TEMP_TABLE_ = true; }
+  bool with_temporary_table() const { return flags_.WITH_TEMP_TABLE_; }
   int64_t get_op_sn() const { return op_sn_; }
-  int inc_op_sn() { return ++op_sn_; }
+  int inc_op_sn() { state_change_flags_.DYNAMIC_CHANGED_ = true; return ++op_sn_; }
   share::SCN get_commit_version() const { return commit_version_; }
   bool contain_savepoint(const ObString &sp);
   bool is_tx_end() {
@@ -529,12 +573,14 @@ public:
   }
   bool is_tx_timeout() { return ObClockGenerator::getClock() > expire_ts_; }
   bool is_tx_commit_timeout() { return ObClockGenerator::getClock() > commit_expire_ts_;}
-  void set_xa_ctx(ObXACtx *xa_ctx) { xa_ctx_ = xa_ctx; }
+  void set_xa_ctx(ObXACtx *xa_ctx);
   ObXACtx *get_xa_ctx() { return xa_ctx_; }
   void set_xid(const ObXATransID &xid) { xid_ = xid; }
   void set_sessid(const uint32_t session_id) { sess_id_ = session_id; }
   const ObXATransID &get_xid() const { return xid_; }
   bool is_xa_trans() const { return !xid_.empty(); }
+  bool is_xa_tightly_couple() const { return xa_tightly_couple_; }
+  common::ObAddr xa_start_addr() const { return xa_start_addr_; }
   void reset_for_xa() { xid_.reset(); xa_ctx_ = NULL; }
   int trans_deep_copy(const ObTxDesc &x);
   int64_t get_active_ts() const { return active_ts_; }
@@ -543,7 +589,8 @@ public:
   bool is_in_tx() const { return state_ > State::IDLE; }
   bool is_tx_active() const { return state_ >= State::ACTIVE && state_ < State::IN_TERMINATE; }
   void print_trace();
-  bool can_free_route() const;
+  bool in_tx_or_has_state();
+  bool in_tx_for_free_route();
   const ObTransID &get_tx_id() const { return tx_id_; }
   ObITxCallback *get_end_tx_cb() { return commit_cb_; }
   void reset_end_tx_cb() { commit_cb_ = NULL; }
@@ -562,6 +609,21 @@ public:
   bool need_rollback() { return state_ == State::ABORTED; }
   share::SCN get_snapshot_version() { return snapshot_version_; }
   ObITxCallback *cancel_commit_cb();
+  // free route
+#define DEF_FREE_ROUTE_DECODE_(name)                                    \
+  int encode_##name##_state(char *buf, const int64_t len, int64_t &pos); \
+  int decode_##name##_state(const char *buf, const int64_t len, int64_t &pos); \
+  int64_t name##_state_encoded_length();                                \
+  int64_t est_##name##_size__()
+#define DEF_FREE_ROUTE_DECODE(name) DEF_FREE_ROUTE_DECODE_(name)
+LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
+#undef DEF_FREE_ROUTE_DECODE
+#undef DEF_FREE_ROUTE_DECODE_
+  int64_t estimate_state_size();
+  bool is_static_changed() { return state_change_flags_.STATIC_CHANGED_; }
+  bool is_dynamic_changed() { return state_ > State::IDLE && state_change_flags_.DYNAMIC_CHANGED_; }
+  bool is_parts_changed() { return state_change_flags_.PARTS_CHANGED_; };
+  bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
 };
 
 class ObTxDescMgr final
@@ -593,22 +655,54 @@ private:
   class ObTxDescAlloc
   {
   public:
-    ObTxDescAlloc(): alloc_cnt_(0) {}
+    ObTxDescAlloc(): alloc_cnt_(0)
+#ifndef NDEBUG
+                   , lk_()
+                   , list_()
+#endif
+    {}
     ObTxDesc* alloc_value()
     {
       ATOMIC_INC(&alloc_cnt_);
-      return op_alloc(ObTxDesc);
+      ObTxDesc *it = op_alloc(ObTxDesc);
+#ifndef NDEBUG
+      ObSpinLockGuard guard(lk_);
+      list_.insert(it->alloc_link_);
+#endif
+      return it;
     }
     void free_value(ObTxDesc *v)
     {
       if (NULL != v) {
         ATOMIC_DEC(&alloc_cnt_);
+#ifndef NDEBUG
+        ObSpinLockGuard guard(lk_);
+        v->alloc_link_.remove();
+#endif
         op_free(v);
       }
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
+#ifndef NDEBUG
+    template<typename Function>
+    int for_each(Function &fn)
+    {
+      int ret = OB_SUCCESS;
+      auto n = list_.next_;
+      while(n != &list_) {
+        auto tx = CONTAINER_OF(n, ObTxDesc, alloc_link_);
+        ret = fn(tx);
+        n = n->next_;
+      }
+      return ret;
+    }
+#endif
   private:
     int64_t alloc_cnt_;
+#ifndef NDEBUG
+    ObSpinLock lk_;
+    ObTxDesc::DLink list_;
+#endif
   };
   ObTransHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
@@ -637,8 +731,10 @@ protected:
   int64_t finish_ts_;
   int64_t active_scn_;
   ObTxPartList parts_;
+  uint32_t session_id_ = 0;
 public:
   TO_STRING_KV(K_(tenant_id),
+               K_(session_id),
                K_(tx_id),
                K_(access_mode),
                K_(isolation),

@@ -137,6 +137,10 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxSubCommitRespP);
   RPC_PROCESSOR(ObTxSubRollbackP);
   RPC_PROCESSOR(ObTxSubRollbackRespP);
+  // for tx free route
+  RPC_PROCESSOR(ObTxFreeRouteCheckAliveP);
+  RPC_PROCESSOR(ObTxFreeRouteCheckAliveRespP);
+  RPC_PROCESSOR(ObTxFreeRoutePushStateP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_clog(ObSrvRpcXlator *xlator) {

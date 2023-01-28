@@ -15536,6 +15536,11 @@ TP_NO opt_equal_mark INTNUM
   (void)($2) ; /* make bison mute */
   malloc_non_terminal_node($$, result->malloc_pool_, T_ERROR_CODE, 1, $3);
 }
+| MATCH opt_equal_mark INTNUM
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TP_COND, 1, $3);
+}
 ;
 
 opt_full:

@@ -428,22 +428,13 @@ int ObPLContext::notify(ObSQLSessionInfo *sql_session)
 void ObPLContext::record_tx_id_before_begin_autonomous_session_for_deadlock_(ObSQLSessionInfo &session_info,
                                                                              ObTransID &last_trans_id)
 {
-  if (OB_ISNULL(session_info.get_tx_desc())) {
-    DETECT_LOG(ERROR, "tx desc on session is NULL");
-  } else {
-    last_trans_id = session_info.get_tx_id();
-  }
+  last_trans_id = session_info.get_tx_id();
 }
 
 void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSessionInfo &session_info,
                                                                         const ObTransID last_trans_id)
 {
-  ObTransID now_trans_id;
-  if (OB_ISNULL(session_info.get_tx_desc())) {
-    DETECT_LOG(ERROR, "tx desc on session is NULL");
-  } else {
-    now_trans_id = session_info.get_tx_id();
-  }
+  ObTransID now_trans_id = session_info.get_tx_id();
   // 上一个事务等自治事务结束，若自治事务要加上一个事务已经持有的锁，则会死锁
   // 为检测死锁，需要注册上一个事务到自治事务的等待关系
   if (last_trans_id != now_trans_id &&
@@ -578,9 +569,6 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
   }
   if (is_autonomous_) {
-    has_inner_dml_write_ = session_info.has_inner_dml_write();
-    session_info.set_has_inner_dml_write(false);
-
     ObTransID last_trans_id;
     (void) record_tx_id_before_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
     OZ (session_info.begin_autonomous_session(saved_session_));
@@ -624,9 +612,7 @@ void ObPLContext::destory(
 {
   int trans_state_ret = OB_SUCCESS;
   if (is_autonomous_) {
-    trans_state_ret =
-      (session_info.is_in_transaction() && session_info.has_inner_dml_write())
-        ? OB_ERR_AUTONOMOUS_TRANSACTION_ROLLBACK : OB_SUCCESS;
+    trans_state_ret = session_info.is_in_transaction() ? OB_ERR_AUTONOMOUS_TRANSACTION_ROLLBACK : OB_SUCCESS;
     if (OB_SUCCESS != trans_state_ret) {
       LOG_WARN("active autonomous transaction detected", K(trans_state_ret));
       ret = OB_SUCCESS == ret ? trans_state_ret : ret;
@@ -812,8 +798,6 @@ int ObPLContext::end_autonomous(ObExecContext &ctx, sql::ObSQLSessionInfo &sessi
     ret = switch_trans_ret;
   }
   session_info.set_has_pl_implicit_savepoint(saved_has_implicit_savepoint_);
-  session_info.set_has_inner_dml_write(has_inner_dml_write_);
-
   return ret;
 }
 

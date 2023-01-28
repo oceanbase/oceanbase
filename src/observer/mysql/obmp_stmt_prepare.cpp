@@ -209,10 +209,14 @@ int ObMPStmtPrepare::process()
                && OB_FAIL(session.update_sys_variable(SYS_VAR_OB_TRACE_INFO,
                                                       pkt.get_trace_info()))) {
       LOG_WARN("fail to update trace info", K(ret));
+    } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
     } else if (pkt.get_extra_info().exist_sync_sess_info()
                && OB_FAIL(ObMPUtils::sync_session_info(session,
                                 pkt.get_extra_info().get_sync_sess_info()))) {
+      // won't response error, disconnect will let proxy sens failure
+      need_response_error = false;
       LOG_WARN("fail to update sess info", K(ret));
+    } else if (FALSE_IT(session.post_sync_session_info())) {
     } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                             conn->proxy_cap_flags_.is_full_link_trace_support()))) {
       LOG_WARN("failed to init flt extra info", K(ret));
@@ -232,6 +236,7 @@ int ObMPStmtPrepare::process()
 
       bool has_more = false;
       bool force_sync_resp = false;
+      need_disconnect = false;
       need_response_error = false;
       if (OB_FAIL(multiple_query_check(session, sql_, force_sync_resp, need_response_error))) {
         need_disconnect = OB_NOT_SUPPORTED == ret ? false : true; 
@@ -257,12 +262,14 @@ int ObMPStmtPrepare::process()
         FLT_END_TRACE();
     }
 
-    if (!OB_SUCC(ret) && need_response_error && is_conn_valid()) {
-      send_error_packet(ret, NULL);
+    if (OB_FAIL(ret) && is_conn_valid()) {
+      if (need_response_error) {
+        send_error_packet(ret, NULL);
+      }
       if (need_disconnect) {
         force_disconnect();
+        LOG_WARN("disconnect connection when process query", K(ret));
       }
-      LOG_WARN("disconnect connection when process query", K(ret));
     }
 
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
@@ -522,16 +529,6 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
         if (OB_SUCCESS != err) {  // 发送error包
           LOG_WARN("send error packet failed", K(ret), K(err));
         }
-      }
-    }
-    //set read_only
-    if (OB_SUCC(ret)) {
-      if (session.get_in_transaction()) {
-        if (ObStmt::is_write_stmt(result.get_stmt_type(), result.has_global_variable())) {
-          session.set_has_exec_write_stmt(true);
-        }
-      } else {
-        session.set_has_exec_write_stmt(false);
       }
     }
     if (enable_sql_audit) {

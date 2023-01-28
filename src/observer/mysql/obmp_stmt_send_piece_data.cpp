@@ -265,9 +265,7 @@ int ObMPStmtSendPieceData::do_process(ObSQLSessionInfo &session)
   }
 
   //set read_only
-  if (OB_SUCC(ret)) {
-    session.set_has_exec_write_stmt(false);
-  } else {
+  if (OB_FAIL(ret)) {
     bool is_partition_hit = session.partition_hit().get_bool();
     int err = send_error_packet(ret, NULL, is_partition_hit);
     if (OB_SUCCESS != err) {  // 发送error包

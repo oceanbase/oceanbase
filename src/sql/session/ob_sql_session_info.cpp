@@ -174,7 +174,6 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       pl_exact_err_msg_(),
       is_ps_prepare_stage_(false),
       got_conn_res_(false),
-      tx_level_temp_table_(false),
       mem_context_(nullptr),
       cur_exec_ctx_(nullptr),
       expect_group_id_(OB_INVALID_ID),
@@ -331,7 +330,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     proxy_version_ = 0;
     min_proxy_version_ps_ = 0;
     set_registered_to_deadlock(false);
-    tx_level_temp_table_ = false;
     if (OB_NOT_NULL(mem_context_)) {
       destroy_contexts_map(contexts_map_, mem_context_->get_malloc_allocator());
       DESTROY_CONTEXT(mem_context_);
@@ -352,6 +350,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     optimizer_tracer_.reset();
     sql_plan_manager_ = NULL;
     destroy_session_plan_mgr();
+    txn_free_route_ctx_.reset();
   }
   expect_group_id_ = OB_INVALID_ID;
   group_id_not_expected_ = false;
@@ -389,7 +388,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
         // 这里调用end_trans无需上锁，因为调用reclaim_value时意味着已经没有query并发使用session
         // 调用这个函数之前会调session.set_session_state(SESSION_KILLED)，
         bool need_disconnect = false;
-        if (is_in_transaction()) {
+        if (is_in_transaction() && !is_txn_free_route_temp()) {
           transaction::ObTransID tx_id = get_tx_id();
           MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
           // inner session skip check switch tenant, because the inner connection was shared between tenant
@@ -1060,9 +1059,8 @@ int ObSQLSessionInfo::check_global_read_only_privilege(const bool read_only,
        *                      set @@global.read_only = 1;
        *  commit; (should fail)                           commit; (should success)
        */
-      if (sql_traits.is_commit_stmt_ && trans_flags_.has_exec_write_stmt()) {
+      if (sql_traits.is_commit_stmt_ && is_in_transaction() && !tx_desc_->is_clean()) {
         ret = OB_ERR_OPTION_PREVENTS_STATEMENT;
-
         LOG_WARN("the server is running with read_only, cannot execute stmt");
       }
     }
@@ -1698,6 +1696,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
   audit_record_.trace_id_ = *ObCurTraceId::get_trace_id();
   audit_record_.request_type_ = mode;
   audit_record_.session_id_ = get_sessid();
+  audit_record_.proxy_session_id_ = get_proxy_sessid();
   audit_record_.tenant_id_ = get_priv_tenant_id();
   audit_record_.user_id_ = get_user_id();
   audit_record_.effective_tenant_id_ = get_effective_tenant_id();
@@ -1757,7 +1756,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
       ret = OB_SUCCESS;
     }
   }
-
+  audit_record_.txn_free_route_flag_ = txn_free_route_ctx_.get_audit_record();
   return audit_record_;
 }
 
@@ -2536,10 +2535,52 @@ int ObSQLSessionInfo::on_user_disconnect()
   return ret;
 }
 
+void ObSQLSessionInfo::post_sync_session_info()
+{
+  if (!get_is_in_retry()) {
+#define RESET_TXN_STATE_ENCODER_CHANGED_(x) txn_##x##_info_encoder_.is_changed_ = false
+#define RESET_TXN_STATE_ENCODER_CHANGED(x) RESET_TXN_STATE_ENCODER_CHANGED_(x)
+    LST_DO(RESET_TXN_STATE_ENCODER_CHANGED, (;), static, dynamic, participants, extra);
+#undef RESET_TXN_STATE_ENCODER_CHANGED
+#undef RESET_TXN_STATE_ENCODER_CHANGED_
+    txn_free_route_ctx_.init_before_handle_request(tx_desc_);
+  }
+}
+
+void ObSQLSessionInfo::set_txn_free_route(bool txn_free_route)
+{
+  txn_free_route_ctx_.reset_audit_record();
+  txn_free_route_ctx_.set_proxy_support(txn_free_route);
+}
+
+bool ObSQLSessionInfo::can_txn_free_route() const
+{
+  return txn_free_route_ctx_.can_free_route();
+}
+
+int ObSQLSessionInfo::calc_txn_free_route()
+{
+  int ret = OB_SUCCESS;
+  if (!txn_free_route_ctx_.has_calculated()) {
+    OZ (ObSqlTransControl::calc_txn_free_route(*this, txn_free_route_ctx_));
+    if (OB_SUCC(ret)) {
+      txn_static_info_encoder_.is_changed_ = txn_free_route_ctx_.is_static_changed();
+      txn_dynamic_info_encoder_.is_changed_ = txn_free_route_ctx_.is_dynamic_changed();
+      txn_participants_info_encoder_.is_changed_ = txn_free_route_ctx_.is_parts_changed();
+      txn_extra_info_encoder_.is_changed_ = txn_free_route_ctx_.is_extra_changed();
+    }
+  }
+  return ret;
+}
+
+void ObSQLSessionInfo::check_txn_free_route_alive()
+{
+  ObSqlTransControl::check_free_route_tx_alive(*this, txn_free_route_ctx_);
+}
+
 void ObSQLSessionInfo::reset_tx_variable()
 {
   ObBasicSessionInfo::reset_tx_variable();
-  tx_level_temp_table_ = false;
   set_early_lock_release(false);
 }
 void ObSQLSessionInfo::destroy_contexts_map(ObContextsMap &map, common::ObIAllocator &alloc)
@@ -2956,6 +2997,26 @@ int64_t ObControlInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
   return sess.get_control_info().get_serialize_size() + 6 + sizeof(bool);
 }
 
+#define SESS_ENCODER_DELEGATE_TO_TXN(CLS, func)                         \
+int CLS::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)\
+{                                                                     \
+  return ObSqlTransControl::serialize_txn_##func##_state(sess, buf, length, pos); \
+}                                                                     \
+int CLS::deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) \
+{                                                                       \
+  return ObSqlTransControl::update_txn_##func##_state(sess, buf, length, pos); \
+}                                                                       \
+int64_t CLS::get_serialize_size(ObSQLSessionInfo &sess) const          \
+{                                                                       \
+  return ObSqlTransControl::get_txn_##func##_state_serialize_size(sess); \
+}
+
+SESS_ENCODER_DELEGATE_TO_TXN(ObTxnStaticInfoEncoder, static)
+SESS_ENCODER_DELEGATE_TO_TXN(ObTxnDynamicInfoEncoder, dynamic)
+SESS_ENCODER_DELEGATE_TO_TXN(ObTxnParticipantsInfoEncoder, parts)
+SESS_ENCODER_DELEGATE_TO_TXN(ObTxnExtraInfoEncoder, extra)
+
+#undef SESS_ENCODER_DELEGATE_TO_TXN
 // in oracle mode, if the user variable is valid, we use it first
 int64_t ObSQLSessionInfo::get_xa_end_timeout_seconds() const
 {

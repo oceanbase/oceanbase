@@ -53,7 +53,11 @@ namespace transaction
       /* for others */
       ROLLBACK_SAVEPOINT       = 60,
       KEEPALIVE                = 61,
-      KEEPALIVE_RESP           = 62
+      KEEPALIVE_RESP           = 62,
+      /* for txn free route  */
+      TX_FREE_ROUTE_PUSH_STATE       = 80,
+      TX_FREE_ROUTE_CHECK_ALIVE      = 81,
+      TX_FREE_ROUTE_CHECK_ALIVE_RESP = 82,
     };
 
     struct ObTxMsg : public obrpc::ObIFill

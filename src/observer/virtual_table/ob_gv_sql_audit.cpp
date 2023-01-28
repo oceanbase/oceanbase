@@ -544,6 +544,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
       case SESSION_ID: {
         cells[cell_idx].set_uint64(record.data_.session_id_);
       } break;
+      case PROXY_SESSION_ID: {
+        cells[cell_idx].set_uint64(record.data_.proxy_session_id_);
+      } break;
       case TRACE_ID: {
         int len = record.data_.trace_id_.to_string(trace_id_, sizeof(trace_id_));
         cells[cell_idx].set_varchar(trace_id_, len);
@@ -967,6 +970,10 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                              ObCharset::get_default_charset()));
       } break;
+      case TX_FREE_ROUTE_FLAG: {
+        cells[cell_idx].set_uint64(record.data_.txn_free_route_flag_);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

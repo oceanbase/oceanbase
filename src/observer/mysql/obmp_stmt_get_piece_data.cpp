@@ -24,6 +24,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
 #include "observer/ob_req_time_service.h"
+#include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "rpc/obmysql/packet/ompk_piece.h"
 #include "observer/omt/ob_tenant.h"
@@ -87,6 +88,7 @@ int ObMPStmtGetPieceData::process()
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *sess = NULL;
   bool need_response_error = true;
+  bool need_disconnect = true;
   bool async_resp_used = false; // 由事务提交线程异步回复客户端
   int64_t query_timeout = 0;
   ObSMConnection *conn = get_conn();
@@ -142,7 +144,15 @@ int ObMPStmtGetPieceData::process()
                && OB_FAIL(session.update_sys_variable(SYS_VAR_OB_TRACE_INFO,
                                                       pkt.get_trace_info()))) {
       LOG_WARN("fail to update trace info", K(ret));
+    } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
+    } else if (pkt.get_extra_info().exist_sync_sess_info()
+                 && OB_FAIL(ObMPUtils::sync_session_info(session,
+                              pkt.get_extra_info().get_sync_sess_info()))) {
+      need_response_error = false;
+      LOG_WARN("fail to update sess info", K(ret));
+    } else if (FALSE_IT(session.post_sync_session_info())) {
     } else {
+      need_disconnect = false;
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       session.partition_hit().reset();
       if (OB_FAIL(process_get_piece_data_stmt(session))) {
@@ -153,6 +163,15 @@ int ObMPStmtGetPieceData::process()
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
     THIS_WORKER.set_session(NULL);
     revert_session(sess); //current ignore revert session ret
+  }
+
+  if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
+    send_error_packet(ret, NULL);
+  }
+
+  if (OB_FAIL(ret) && need_disconnect && is_conn_valid()) {
+    force_disconnect();
+    LOG_WARN("disconnect connection when process query", K(ret));
   }
   return ret;
 }
@@ -248,9 +267,7 @@ int ObMPStmtGetPieceData::do_process(ObSQLSessionInfo &session)
   }
 
   //set read_only
-  if (OB_SUCC(ret)) {
-    session.set_has_exec_write_stmt(false);
-  } else {
+  if (OB_FAIL(ret)) {
     bool is_partition_hit = session.partition_hit().get_bool();
     int err = send_error_packet(ret, NULL, is_partition_hit);
     if (OB_SUCCESS != err) {  // 发送error包

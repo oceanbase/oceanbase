@@ -17,6 +17,7 @@
 #include "storage/tx/ob_trans_rpc.h"
 #include "storage/tx/ob_location_adapter.h"
 #include "storage/tx/ob_tx_log_adapter.h"
+#include "storage/tx/ob_tx_free_route.h"
 namespace oceanbase {
 using namespace share;
 namespace transaction {
@@ -92,6 +93,7 @@ public:
   obrpc::ObTxRpcRollbackSPResult sp_rollback_result_;
   ObTransRpcResult tx_rpc_result_;
 };
+
 class ObFakeTransRpc : public ObITransRpc {
 public:
   ObFakeTransRpc(MsgBus *msg_bus,
@@ -107,7 +109,7 @@ public:
     int ret = OB_SUCCESS;
     int64_t size = msg.get_serialize_size() + 1 /*for msg category*/ + sizeof(int16_t) /* for tx_msg.type_ */;
     char *buf = (char*)ob_malloc(size);
-    buf[0] = 0; // 1 : ObTxMsg
+    buf[0] = 0; // 0 not callback msg
     int64_t pos = 1;
     int16_t msg_type = msg.type_;
     OZ(serialization::encode(buf, size, pos, msg_type));
@@ -123,6 +125,41 @@ public:
     common::ObAddr leader;
     OZ(location_adapter_->nonblock_get_leader(0, 0, p, leader));
     OZ(post_msg(leader, msg));
+    return ret;
+  }
+  int post_msg(const ObAddr &server, const ObTxFreeRouteMsg &msg) override
+  {
+    int ret = OB_SUCCESS;
+    int64_t size = msg.get_serialize_size() + 1 /*for msg category*/ + sizeof(int16_t) /* for tx_msg.type_ */;
+    char *buf = (char*)ob_malloc(size);
+    buf[0] = 0; // not callback msg
+    int64_t pos = 1;
+    int16_t msg_type = msg.type_;
+    OZ(serialization::encode(buf, size, pos, msg_type));
+    OZ(msg.serialize(buf, size, pos));
+    ObString msg_str(size, buf);
+    TRANS_LOG(INFO, "post_tx_free_route_msg", "msg_ptr", OB_P(buf), K(msg), "receiver", server);
+    OZ(msg_bus_->send_msg(msg_str, addr_, server));
+    return ret;
+  }
+  int sync_access(const ObAddr &server,
+                          const ObTxFreeRoutePushState &msg,
+                          ObTxFreeRoutePushStateResp &result) override
+  {
+    int ret = OB_SUCCESS;
+    int64_t size = msg.get_serialize_size() + 1 + sizeof(int16_t);
+    char *buf = (char*)ob_malloc(size);
+    buf[0] = 0; // not callback msg
+    int64_t pos = 1;
+    int16_t msg_type = TX_MSG_TYPE::TX_FREE_ROUTE_PUSH_STATE;
+    OZ(serialization::encode(buf, size, pos, msg_type));
+    OZ(msg.serialize(buf, size, pos));
+    ObString msg_str(size, buf);
+    TRANS_LOG(INFO, "sync send tx push_state", "msg_ptr", OB_P(buf), K(msg), "receiver", server);
+    ObString resp;
+    OZ(msg_bus_->sync_send_msg(msg_str, addr_, server, resp));
+    pos = 0;
+    OZ(result.deserialize(resp.ptr(), resp.length(), pos));
     return ret;
   }
   template<class MSG_RESULT_T>

@@ -1213,17 +1213,6 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       }
     }
 
-    if (OB_SUCC(ret) && !is_ps_cursor()) {
-      // cursor 协议在inner open中已经处理过
-      if (session.get_in_transaction()) {
-        if (ObStmt::is_write_stmt(result.get_stmt_type(), result.has_global_variable())) {
-          session.set_has_exec_write_stmt(true);
-        }
-      } else {
-        session.set_has_exec_write_stmt(false);
-      }
-    }
-
     audit_record.status_ =
       (0 == ret || OB_ITER_END == ret) ? REQUEST_SUCC : (ret);
     if (enable_sql_audit && !is_ps_cursor()) {
@@ -1678,6 +1667,7 @@ int ObMPStmtExecute::process()
   trace::UUID ps_execute_span_id;
   ObSQLSessionInfo *sess = NULL;
   bool need_response_error = true;
+  bool need_disconnect = true;
   bool async_resp_used = false; // 由事务提交线程异步回复客户端
   int64_t query_timeout = 0;
 
@@ -1739,10 +1729,14 @@ int ObMPStmtExecute::process()
                && OB_FAIL(session.update_sys_variable(SYS_VAR_OB_TRACE_INFO,
                                                       pkt.get_trace_info()))) {
       LOG_WARN("fail to update trace info", K(ret));
+    } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
     } else if (pkt.get_extra_info().exist_sync_sess_info()
                 && OB_FAIL(ObMPUtils::sync_session_info(session,
                               pkt.get_extra_info().get_sync_sess_info()))) {
+      // won't response error, disconnect will let proxy sens failure
+      need_response_error = false;
       LOG_WARN("fail to update sess info", K(ret));
+    } else if (FALSE_IT(session.post_sync_session_info())) {
     } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                             conn->proxy_cap_flags_.is_full_link_trace_support()))) {
       LOG_WARN("failed to init flt extra info", K(ret));
@@ -1765,7 +1759,7 @@ int ObMPStmtExecute::process()
       lock_wait_node.set_session_info(session.get_sessid());
 
       need_response_error = false;
-
+      need_disconnect = false;
       ret = process_execute_stmt(ObMultiStmtItem(false, 0, ObString()),
                                  session,
                                  false, // has_mode
@@ -1814,10 +1808,14 @@ int ObMPStmtExecute::process()
     FLT_END_TRACE();
   }
 
-  if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
-    send_error_packet(ret, NULL);
-    force_disconnect();
-    LOG_WARN("disconnect connection when process query", K(ret));
+  if (OB_FAIL(ret) && is_conn_valid()) {
+    if (need_response_error) {
+      send_error_packet(ret, NULL);
+    }
+    if (need_disconnect) {
+      force_disconnect();
+      LOG_WARN("disconnect connection when process query", K(ret));
+    }
   }
 
   // 如果已经异步回包，则这部分逻辑在cb中执行，这里跳过flush_buffer()

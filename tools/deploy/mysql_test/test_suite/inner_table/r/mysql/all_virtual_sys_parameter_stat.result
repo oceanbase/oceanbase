@@ -250,6 +250,7 @@ _enable_px_bloom_filter_sync
 _enable_px_ordered_coord
 _enable_resource_limit_spec
 _enable_trace_session_leak
+_enable_transaction_internal_routing
 _fast_commit_callback_count
 _follower_snapshot_read_retry_duration
 _force_hash_groupby_dump

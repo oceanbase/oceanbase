@@ -42,45 +42,6 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
 }
 }
 
-namespace common
-{
-void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
-{
-  int ret = OB_SUCCESS;
-  int64_t align_size = upper_align(size, sizeof(int64_t));
-  uint64_t tenant_id = arena_.get_tenant_id();
-  bool is_out_of_mem = false;
-  if (!handle.is_id_valid()) {
-    COMMON_LOG(TRACE, "MTALLOC.first_alloc", KP(&handle.mt_));
-    LockGuard guard(lock_);
-    if (!handle.is_id_valid()) {
-      handle.set_clock(arena_.retired());
-      hlist_.set_active(handle);
-    }
-  }
-  MTL_SWITCH(tenant_id) {
-    storage::ObTenantFreezer *freezer = nullptr;
-    if (handle.mt_.is_inner_tablet()) {
-      // inner table memory not limited by memstore
-    } else if (is_virtual_tenant_id(tenant_id)) {
-      // virtual tenant should not have memstore.
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "virtual tenant should not have memstore", K(ret), K(tenant_id));
-    } else if (FALSE_IT(freezer = MTL(storage::ObTenantFreezer*))) {
-    } else if (OB_FAIL(freezer->check_tenant_out_of_memstore_limit(is_out_of_mem))) {
-      COMMON_LOG(ERROR, "fail to check tenant out of mem limit", K(ret), K(tenant_id));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    is_out_of_mem = true;
-  }
-  if (is_out_of_mem && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    STORAGE_LOG(WARN, "this tenant is already out of memstore limit or some thing wrong.", K(tenant_id));
-  }
-  return is_out_of_mem ? nullptr : arena_.alloc(handle.id_, handle.arena_handle_, align_size);
-}
-}
-
 class ObTestTx : public ::testing::Test
 {
 public:

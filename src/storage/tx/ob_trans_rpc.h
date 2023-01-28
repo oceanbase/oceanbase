@@ -28,6 +28,7 @@
 #include "ob_tx_msg.h"
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
+#include "ob_tx_free_route_msg.h"
 
 namespace oceanbase
 {
@@ -96,9 +97,13 @@ public:
   RPC_AP(PR3 post_sub_commit_resp_msg, OB_TX_SUB_COMMIT_RESP, (transaction::ObTxSubCommitRespMsg), ObTransRpcResult);
   RPC_AP(PR3 post_sub_rollback_msg, OB_TX_SUB_ROLLBACK, (transaction::ObTxSubRollbackMsg), ObTransRpcResult);
   RPC_AP(PR3 post_sub_rollback_resp_msg, OB_TX_SUB_ROLLBACK_RESP, (transaction::ObTxSubRollbackRespMsg), ObTransRpcResult);
+  // txn free route
+  RPC_AP(PR3 post_msg, OB_TX_FREE_ROUTE_CHECK_ALIVE, (transaction::ObTxFreeRouteCheckAliveMsg), ObTransRpcResult);
+  RPC_AP(PR3 post_msg, OB_TX_FREE_ROUTE_CHECK_ALIVE_RESP, (transaction::ObTxFreeRouteCheckAliveRespMsg), ObTransRpcResult);
+  RPC_S(@PR3 sync_access, OB_TX_FREE_ROUTE_PUSH_STATE, (transaction::ObTxFreeRoutePushState), transaction::ObTxFreeRoutePushStateResp);
 };
 
-#define TX_P_(name, pcode) \
+#define TX_P_(name, pcode)                                              \
 class ObTx##name##P : public ObRpcProcessor< ObTransRpcProxy::ObRpc<pcode> > \
 { \
 public: \
@@ -342,6 +347,8 @@ void ObTxRPCCB<PC>::on_timeout()
 }
 } // obrpc
 
+#include "ob_tx_free_route_rpc.h"
+
 namespace transaction
 {
 
@@ -357,6 +364,8 @@ public:
 public:
   virtual int post_msg(const ObAddr &server, ObTxMsg &msg) = 0;
   virtual int post_msg(const share::ObLSID &p, ObTxMsg &msg) = 0;
+  virtual int post_msg(const ObAddr &server, const ObTxFreeRouteMsg &m) = 0;
+  virtual int sync_access(const ObAddr &server, const ObTxFreeRoutePushState &m, ObTxFreeRoutePushStateResp &result) = 0;
 };
 
 /*
@@ -391,6 +400,8 @@ public:
 public:
   int post_msg(const ObAddr &server, ObTxMsg &msg);
   int post_msg(const share::ObLSID &p, ObTxMsg &msg);
+  int post_msg(const ObAddr &server, const ObTxFreeRouteMsg &m);
+  int sync_access(const ObAddr &server, const ObTxFreeRoutePushState &m, ObTxFreeRoutePushStateResp &result);
 private:
   int post_(const ObAddr &server, ObTxMsg &msg);
   int post_commit_msg_(const ObAddr &server, ObTxMsg &msg);
@@ -402,6 +413,7 @@ private:
   bool is_inited_;
   bool is_running_;
   // common info
+  int64_t tenant_id_;
   ObTransService *trans_service_;
   obrpc::ObTransRpcProxy rpc_proxy_;
   obrpc::ObBatchRpc* batch_rpc_; // used to send msg by batch
@@ -418,11 +430,15 @@ private:
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_COMMIT_RESP> tx_sub_commit_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_ROLLBACK> tx_sub_rollback_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_ROLLBACK_RESP> tx_sub_rollback_resp_cb_;
+  obrpc::ObTxFreeRouteRPCCB<obrpc::OB_TX_FREE_ROUTE_CHECK_ALIVE> tx_free_route_ck_alive_cb_;
+  obrpc::ObTxFreeRouteRPCCB<obrpc::OB_TX_FREE_ROUTE_CHECK_ALIVE_RESP> tx_free_route_ck_alive_resp_cb_;
   // statistic info
   int64_t total_trans_msg_count_;
   int64_t total_trans_resp_msg_count_;
   int64_t last_stat_ts_;
 };
+
+
 
 } // transaction
 

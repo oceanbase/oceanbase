@@ -26,6 +26,7 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/coro/co_var.h"
 #include "lib/time/ob_tsc_timestamp.h"
+#include "lib/utility/ob_macro_utils.h"
 
 #define TP_COMMA(x) ,
 #define TP_EMPTY(x)
@@ -102,23 +103,35 @@ private:
 #define EVENT_CALL(event_no, ...) ({ \
       EventItem item; \
       item = ::oceanbase::common::EventTable::instance().get_event(event_no); \
-      item.call(); })
+      item.call(SELECT(1, ##__VA_ARGS__)); })
 
 #define ERRSIM_POINT_DEF(name) void name##name(){}; static oceanbase::common::NamedEventItem name( \
     #name, oceanbase::common::EventTable::global_item_list());
 #define ERRSIM_POINT_CALL(name) name?:
 
+// doc: https://yuque.antfin-inc.com/ob/sql/ssc2x0
+
 // to check if a certain tracepoint is set
+// example: if (E(50) OB_SUCCESS) {...}
+// you can also specify condition:
+// if (E(50, session_id) OB_SUCCESS) { ... }
+// which means:
+//   check whether event 50 of session_id was raised
 #define OB_E(event_no, ...)  \
   EVENT_CALL(event_no, ##__VA_ARGS__)?:
 
 // to set a particular tracepoint
-#define TP_SET_EVENT(id, error_in, occur, trigger_freq)                 \
+// example: TP_SET_EVENT(50, 4016, 1, 1)
+// specify condition: TP_SET_EVENT(50, 4016, 1, 1, 3302201)
+// which means:
+//   when session id is 3302201, trigger event 50 with error -4016
+#define TP_SET_EVENT(id, error_in, occur, trigger_freq, ...)            \
   {                                                                     \
     EventItem item;                                                     \
     item.error_code_ = error_in;                                        \
     item.occur_ = occur;                                                \
     item.trigger_freq_ = trigger_freq;                                  \
+    item.cond_ = SELECT(1, ##__VA_ARGS__, 0);                           \
     ::oceanbase::common::EventTable::instance().set_event(id, item);    \
   }
 
@@ -205,12 +218,16 @@ struct EventItem
   int64_t occur_;            // number of occurrences
   int64_t trigger_freq_;         // trigger frequency
   int64_t error_code_;        // error code to return
+  int64_t cond_;
 
   EventItem()
     : occur_(0),
       trigger_freq_(0),
-      error_code_(0) {}
-  int call(void) const
+      error_code_(0),
+      cond_(0) {}
+
+  int call(const int64_t v) const { return cond_ == v ? call() : 0; }
+  int call() const
   {
     int ret = 0;
     if (OB_LIKELY(trigger_freq_ == 0)) {
@@ -219,7 +236,10 @@ struct EventItem
       ret = 0;
     } else if (trigger_freq_ == 1) {
       ret = static_cast<int>(error_code_);
-      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+#ifdef NDEBUG
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000))
+#endif
+      {
         COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret));
       }
     } else {
@@ -310,8 +330,6 @@ class EventTable
       EN_GET_GTS_LEADER = 47,
       ALLOC_LOG_ID_AND_TIMESTAMP_ERROR = 48,
       AFTER_MIGRATE_FINISH_TASK = 49,
-      EN_TRANS_START_TASK_ERROR = 50,
-      EN_TRANS_END_TASK_ERROR = 51,
       EN_VALID_MIGRATE_SRC = 52,
       EN_BALANCE_TASK_EXE_ERR = 53,
       EN_ADD_REBUILD_PARENT_SRC = 54,
@@ -648,6 +666,11 @@ class EventTable
       EN_BACKUP_READ_MACRO_BLOCK_FAILED = 1111,
       EN_FETCH_TABLE_INFO_RPC = 1112,
       // END OF STORAGE HA - 1101 - 2000
+
+      // Transaction free route
+      EN_TX_FREE_ROUTE_UPDATE_STATE_ERROR = 1150,
+      EN_TX_FREE_ROUTE_ENCODE_STATE_ERROR = 1151,
+      EN_TX_FREE_ROUTE_STATE_SIZE = 1152,
 
       EVENT_TABLE_MAX = SIZE_OF_EVENT_TABLE
     };

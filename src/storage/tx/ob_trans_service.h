@@ -40,6 +40,8 @@
 #include "observer/ob_server_struct.h"
 #include "common/storage/ob_sequence.h"
 #include "ob_tx_elr_util.h"
+#include "ob_tx_free_route.h"
+#include "ob_tx_free_route_msg.h"
 
 namespace oceanbase
 {
@@ -223,6 +225,7 @@ public:
                     const int64_t expire_ts);
   int get_max_commit_version(share::SCN &commit_version) const;
   #include "ob_trans_service_v4.h"
+  #include "ob_tx_free_route_api.h"
 private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;
   // max task count in message process queue

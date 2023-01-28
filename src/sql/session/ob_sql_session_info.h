@@ -44,6 +44,7 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "sql/monitor/ob_sql_plan_manager.h"
+#include "storage/tx/ob_tx_free_route.h"
 
 namespace oceanbase
 {
@@ -197,11 +198,15 @@ private:
 
 enum SessionSyncInfoType {
   //SESSION_SYNC_USER_VAR,  // for user variables
-  SESSION_SYNC_APPLICATION_INFO, // for application info
-  SESSION_SYNC_APPLICATION_CONTEXT, // for app ctx
-  SESSION_SYNC_CLIENT_ID, // for client identifier
-  SESSION_SYNC_CONTROL_INFO, // for full trace link control info
-  SESSION_SYNC_SYS_VAR,   // for system variables
+  SESSION_SYNC_APPLICATION_INFO = 0, // for application info
+  SESSION_SYNC_APPLICATION_CONTEXT = 1, // for app ctx
+  SESSION_SYNC_CLIENT_ID = 2, // for client identifier
+  SESSION_SYNC_CONTROL_INFO = 3, // for full trace link control info
+  SESSION_SYNC_SYS_VAR = 4,   // for system variables
+  SESSION_SYNC_TXN_STATIC_INFO = 5,       // 5: basic txn info
+  SESSION_SYNC_TXN_DYNAMIC_INFO = 6,      // 6: txn dynamic info
+  SESSION_SYNC_TXN_PARTICIPANTS_INFO = 7, // 7: txn dynamic info
+  SESSION_SYNC_TXN_EXTRA_INFO = 8,        // 8: txn dynamic info
   SESSION_SYNC_MAX_TYPE,
 };
 
@@ -272,6 +277,20 @@ public:
   virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
   static const int16_t CONINFO_BY_SESS = 0xC078;
 };
+
+#define DEF_SESSION_TXN_ENCODER(CLS)                                    \
+class CLS final : public ObSessInfoEncoder {                            \
+public:                                                                 \
+  int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override; \
+  int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override; \
+  int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;    \
+};
+DEF_SESSION_TXN_ENCODER(ObTxnStaticInfoEncoder);
+DEF_SESSION_TXN_ENCODER(ObTxnDynamicInfoEncoder);
+DEF_SESSION_TXN_ENCODER(ObTxnParticipantsInfoEncoder);
+DEF_SESSION_TXN_ENCODER(ObTxnExtraInfoEncoder);
+
+#undef DEF_SESSION_TXN_ENCODER
 
 typedef common::hash::ObHashMap<uint64_t, pl::ObPLPackageState *,
                                 common::hash::NoPthreadDefendMode> ObPackageStateMap;
@@ -618,13 +637,7 @@ public:
   void get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const;
   void set_found_rows(const int64_t count) { found_rows_ = count; }
   int64_t get_found_rows() const { return found_rows_; }
-  void set_affected_rows(const int64_t count)
-  {
-    affected_rows_ = count;
-    if (affected_rows_ > 0) {
-      trans_flags_.set_has_hold_row_lock(true);
-    }
-  }
+  void set_affected_rows(const int64_t count) { affected_rows_ = count; }
   int64_t get_affected_rows() const { return affected_rows_; }
   bool has_user_super_privilege() const;
   bool has_user_process_privilege() const;
@@ -977,12 +990,7 @@ public:
   virtual void reset_tx_variable();
   ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
 public:
-  bool has_tx_level_temp_table() const {
-    return tx_level_temp_table_;
-  }
-  void set_tx_level_temp_table() {
-    tx_level_temp_table_ = true;
-  }
+  bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
   //for dblink
   int register_dblink_conn_pool(common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool);
   int free_dblink_conn_pool();
@@ -1129,7 +1137,6 @@ private:
   // No matter whether apply for resource successfully, a session will call on_user_disconnect when disconnect.
   // While only session got connection resource can release connection resource and decrease connections count.
   bool got_conn_res_;
-  bool tx_level_temp_table_;
   ObArray<common::sqlclient::ObCommonServerConnectionPool *> dblink_conn_pool_array_;  //for dblink to free connection when session drop.
   // get_session_allocator can only apply for fixed-length memory.
   // To customize the memory length, you need to use malloc_alloctor of mem_context
@@ -1150,7 +1157,11 @@ private:
                             &app_ctx_info_encoder_,
                             &client_id_info_encoder_,
                             &control_info_encoder_,
-                            &sys_var_encoder_
+                            &sys_var_encoder_,
+                            &txn_static_info_encoder_,
+                            &txn_dynamic_info_encoder_,
+                            &txn_participants_info_encoder_,
+                            &txn_extra_info_encoder_
                             };
   ObSysVarEncoder sys_var_encoder_;
   //ObUserVarEncoder usr_var_encoder_;
@@ -1158,6 +1169,20 @@ private:
   ObAppCtxInfoEncoder app_ctx_info_encoder_;
   ObClientIdInfoEncoder client_id_info_encoder_;
   ObControlInfoEncoder control_info_encoder_;
+  ObTxnStaticInfoEncoder txn_static_info_encoder_;
+  ObTxnDynamicInfoEncoder txn_dynamic_info_encoder_;
+  ObTxnParticipantsInfoEncoder txn_participants_info_encoder_;
+  ObTxnExtraInfoEncoder txn_extra_info_encoder_;
+public:
+  void post_sync_session_info();
+  void set_txn_free_route(bool txn_free_route);
+  int calc_txn_free_route();
+  bool can_txn_free_route() const;
+  virtual bool is_txn_free_route_temp() const { return tx_desc_ != NULL && txn_free_route_ctx_.is_temp(*tx_desc_); }
+  transaction::ObTxnFreeRouteCtx &get_txn_free_route_ctx() { return txn_free_route_ctx_; }
+  void check_txn_free_route_alive();
+private:
+  transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
   //and remove the record when the SQL execution ends
   //in order to access exec ctx through session during SQL execution

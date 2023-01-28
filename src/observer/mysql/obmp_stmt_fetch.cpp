@@ -17,6 +17,7 @@
 #include "lib/profile/ob_perf_event.h"
 #include "lib/timezone/ob_time_convert.h"
 #include "observer/mysql/obsm_utils.h"
+#include "observer/mysql/obmp_utils.h"
 #include "rpc/ob_request.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/ob_mysql_util.h"
@@ -246,14 +247,6 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session)
     session.partition_hit().freeze();
     session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
 
-    //set read_only
-    if (OB_SUCC(ret)) {
-      if (session.get_in_transaction()) {
-        //do nothing
-      } else {
-        session.set_has_exec_write_stmt(false);
-      }
-    }
     clear_wb_content(session);
     // 流式审计信息交给dbms_cursor来做
     ObSQLUtils::handle_audit_record(false/*no need retry*/, EXECUTE_PS_FETCH, session);
@@ -690,10 +683,13 @@ int ObMPStmtFetch::process()
 {
   int ret = OB_SUCCESS;
   int flush_ret = OB_SUCCESS;
+  bool need_disconnect = true;
+  bool need_response_error = true;
   ObSQLSessionInfo *sess = NULL;
   int64_t query_timeout = 0;
   ObCurTraceId::TraceId *cur_trace_id = ObCurTraceId::get_trace_id();
   ObSMConnection *conn = get_conn();
+  const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   bool cursor_fetched = false;
   reset_close_cursor();
   if (OB_ISNULL(req_) || OB_ISNULL(conn) || OB_ISNULL(cur_trace_id)) {
@@ -744,7 +740,15 @@ int ObMPStmtFetch::process()
     } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
                 OB_SYS_TENANT_ID, sys_version))) {
       LOG_WARN("fail get tenant broadcast version", K(ret));
+    } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
+    } else if (pkt.get_extra_info().exist_sync_sess_info()
+                 && OB_FAIL(ObMPUtils::sync_session_info(session,
+                              pkt.get_extra_info().get_sync_sess_info()))) {
+      need_response_error = false;
+      LOG_WARN("fail to update sess info", K(ret));
+    } else if (FALSE_IT(session.post_sync_session_info())) {
     } else {
+      need_disconnect = false;
       ObPLCursorInfo *cursor = NULL;
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       session.partition_hit().reset();
@@ -767,9 +771,11 @@ int ObMPStmtFetch::process()
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
   }
 
-  if (!OB_SUCC(ret) && is_conn_valid()) {
-    send_error_packet(ret, NULL);
-    if (cursor_fetched) {
+  if (OB_FAIL(ret) && is_conn_valid()) {
+    if (need_response_error) {
+      send_error_packet(ret, NULL);
+    }
+    if (cursor_fetched || need_disconnect) {
       force_disconnect();
       LOG_WARN("disconnect connection when process query", K(ret));
     }

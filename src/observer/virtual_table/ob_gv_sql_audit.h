@@ -159,7 +159,9 @@ private:
     USER_GROUP,
     LOCK_FOR_READ_TIME,
     PARAMS_VALUE,
-    RULE_NAME
+    RULE_NAME,
+    PROXY_SESSION_ID,
+    TX_FREE_ROUTE_FLAG,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

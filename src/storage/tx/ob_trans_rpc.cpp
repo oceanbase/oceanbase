@@ -184,6 +184,7 @@ int ObTransRpc::init(ObTransService *trans_service,
   } else if (OB_FAIL(rpc_proxy_.init(req_transport, self))) {
     TRANS_LOG(WARN, "init rpc_proxy fail", KR(ret));
   } else {
+    tenant_id_ = MTL_ID();
     trans_service_ = trans_service;
     last_stat_ts_ = ObTimeUtility::current_time();
     batch_rpc_ = batch_rpc;
@@ -432,6 +433,49 @@ int ObTransRpc::post_msg(const ObLSID &p, ObTxMsg &msg)
   }
 
   return ret;
+}
+
+int ObTransRpc::post_msg(const ObAddr &server, const ObTxFreeRouteMsg &msg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    TRANS_LOG(WARN, "ObTransRpc not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransRpc is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_UNLIKELY(!server.is_valid()) || OB_UNLIKELY(!msg.is_valid())) {
+    TRANS_LOG(WARN, "invalid argument", K(server), K(msg));
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    switch(msg.type_) {
+    case TX_FREE_ROUTE_CHECK_ALIVE: {
+      ret = rpc_proxy_.to(server).by(tenant_id_)
+        .timeout(GCONF._ob_trans_rpc_timeout)
+        .post_msg(static_cast<const ObTxFreeRouteCheckAliveMsg&>(msg),
+                  &tx_free_route_ck_alive_cb_);
+      break;
+    }
+    case TX_FREE_ROUTE_CHECK_ALIVE_RESP: {
+      ret = rpc_proxy_.to(server).by(tenant_id_)
+        .timeout(GCONF._ob_trans_rpc_timeout)
+        .post_msg(static_cast<const ObTxFreeRouteCheckAliveRespMsg&>(msg),
+                  &tx_free_route_ck_alive_resp_cb_);
+      break;
+    }
+    default:
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(ERROR, "invalid msg type", KR(ret), K(msg));
+    }
+  }
+  TRANS_LOG(INFO, "post txn free route msg", K(ret), K(msg));
+  return ret;
+}
+
+int ObTransRpc::sync_access(const ObAddr &server, const ObTxFreeRoutePushState &m, ObTxFreeRoutePushStateResp &result)
+{
+  return rpc_proxy_.to(server).by(tenant_id_).timeout(GCONF._ob_trans_rpc_timeout)
+    .sync_access(m, result);
 }
 
 int ObTransRpc::post_sub_request_msg_(const ObAddr &server, ObTxMsg &msg)
