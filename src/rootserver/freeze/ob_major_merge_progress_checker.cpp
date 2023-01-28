@@ -36,12 +36,13 @@ using namespace oceanbase::share::schema;
 ObMajorMergeProgressChecker::ObMajorMergeProgressChecker()
   : is_inited_(false), tenant_id_(OB_INVALID_ID), sql_proxy_(nullptr),
     schema_service_(nullptr), zone_merge_mgr_(nullptr), lst_operator_(nullptr),
-    server_trace_(nullptr), tablet_compaction_map_(), table_count_(0), table_compaction_map_(),
-    tablet_validator_(), index_validator_(), cross_cluster_validator_()
+    server_trace_(nullptr), tablet_compaction_map_(), table_count_(0), table_ids_(),
+    table_compaction_map_(), tablet_validator_(), index_validator_(), cross_cluster_validator_()
 {}
 
 int ObMajorMergeProgressChecker::init(
     const uint64_t tenant_id,
+    const bool is_primary_service,
     common::ObMySQLProxy &sql_proxy,
     share::schema::ObMultiVersionSchemaService &schema_service,
     ObZoneMergeManager &zone_merge_mgr,
@@ -59,11 +60,11 @@ int ObMajorMergeProgressChecker::init(
     LOG_WARN("fail to create tablet compaction status map", KR(ret), K(tenant_id), K(DEFAULT_TABLET_CNT));
   } else if (OB_FAIL(table_compaction_map_.create(DEFAULT_TABLE_CNT, "MFTbCompMap", "MFTbCompMap", tenant_id))) {
     LOG_WARN("fail to create table compaction status map", KR(ret), K(tenant_id), K(DEFAULT_TABLE_CNT));
-  } else if (OB_FAIL(tablet_validator_.init(tenant_id, sql_proxy, zone_merge_mgr))) {
+  } else if (OB_FAIL(tablet_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
     LOG_WARN("fail to init tablet validator", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(index_validator_.init(tenant_id, sql_proxy, zone_merge_mgr))) {
+  } else if (OB_FAIL(index_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
     LOG_WARN("fail to init index validator", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(cross_cluster_validator_.init(tenant_id, sql_proxy, zone_merge_mgr))) {
+  } else if (OB_FAIL(cross_cluster_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
     LOG_WARN("fail to init cross cluster validator", KR(ret), K(tenant_id));
   } else {
     tenant_id_ = tenant_id;
@@ -100,11 +101,14 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_uncompacted, boo
     for (;OB_SUCC(ret) && (iter != table_compaction_map_.end()); ++iter) {
       const ObTableCompactionInfo &compaction_info = iter->second;
       if (!compaction_info.is_verified()) {
-        if (compaction_info.finish_compaction()) {
-          if (OB_FAIL(unverified_tables.push_back(compaction_info))) {
+        if (!has_exist_in_array(table_ids_, compaction_info.table_id_)) {
+          // treat tables whose table_id not exist in 'table_ids_' as verified.
+          ++ele_count;
+        } else if (compaction_info.is_uncompacted()) {
+          if (OB_FAIL(uncompacted_tables.push_back(compaction_info))) {
             LOG_WARN("fail to push back", KR(ret), K(compaction_info));
           }
-        } else if (OB_FAIL(uncompacted_tables.push_back(compaction_info))) {
+        } else if (OB_FAIL(unverified_tables.push_back(compaction_info))) {
           LOG_WARN("fail to push back", KR(ret), K(compaction_info));
         }
       } else if (compaction_info.is_verified()) {
@@ -116,7 +120,7 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_uncompacted, boo
       exist_uncompacted = uncompacted_tables.count() > 0;
       exist_unverified = unverified_tables.count() > 0;
       if (exist_uncompacted || exist_unverified) {
-        FLOG_INFO("exists compaction/varification unfinished table", "uncompacted cnt", uncompacted_tables.count(),
+        FLOG_INFO("exists compaction/verification unfinished table", "uncompacted cnt", uncompacted_tables.count(),
           "unverified cnt", unverified_tables.count(), K(uncompacted_tables), K(unverified_tables));
       } else if (ele_count != table_count_) {
         ret = OB_INNER_STAT_ERROR;
@@ -130,6 +134,7 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_uncompacted, boo
 
 int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
     const volatile bool &stop,
+    const bool is_primary_service,
     const share::SCN &global_broadcast_scn,
     const int64_t expected_epoch)
 {
@@ -138,7 +143,9 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
   const ObTableSchema *table_schema = nullptr;
   ObTableCompactionInfo cur_compaction_info;
   const uint64_t special_table_id = cross_cluster_validator_.get_special_table_id();
-  if (OB_UNLIKELY(OB_INVALID_ID == special_table_id)) {
+  // only primary major_freeze_service need to handle table with frist tablet in sys ls here
+  if (!is_primary_service) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == special_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid special table id", KR(ret), K_(tenant_id), K(special_table_id));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(tenant_id_, schema_guard))) {
@@ -230,6 +237,8 @@ int ObMajorMergeProgressChecker::check_merge_progress(
           LOG_WARN("fail to get schema guard", KR(ret), K_(tenant_id));
         } else if (OB_FAIL(schema_guard.generate_tablet_table_map(tenant_id_, tablet_map))) {
           LOG_WARN("fail to generate tablet table map", K_(tenant_id), KR(ret));
+        } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id_, table_ids_))) {
+          LOG_WARN("fail to get table ids in tenant", KR(ret), K_(tenant_id));
         } else {
           ObTabletInfo tablet_info;
           while (!stop && OB_SUCC(ret)) {

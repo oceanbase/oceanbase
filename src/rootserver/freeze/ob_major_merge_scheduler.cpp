@@ -95,8 +95,8 @@ int ObMajorMergeScheduler::init(
     LOG_WARN("invalid argument", K(tenant_id));
   } else if (OB_FAIL(merge_strategy_.init(tenant_id, &zone_merge_mgr))) {
     LOG_WARN("fail to init tenant zone merge strategy", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(progress_checker_.init(tenant_id, sql_proxy, schema_service,
-          zone_merge_mgr, *GCTX.lst_operator_, server_trace))) {
+  } else if (OB_FAIL(progress_checker_.init(tenant_id, is_primary_service, sql_proxy,
+                schema_service, zone_merge_mgr, *GCTX.lst_operator_, server_trace))) {
     LOG_WARN("fail to init progress_checker", KR(ret));
   } else if (OB_FAIL(idling_.init(tenant_id))) {
     LOG_WARN("fail to init idling", KR(ret), K(tenant_id));
@@ -605,14 +605,13 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
       bool exist_unverified = false;
       if (OB_FAIL(progress_checker_.check_table_status(exist_uncompacted, exist_unverified))) {
         LOG_WARN("fail to check table status", KR(ret), K_(tenant_id));
-      } else if (exist_uncompacted) {
+      } else if (exist_uncompacted || exist_unverified) {
+        // 1. uncompacted tables: may be caused by fail to get ls of truncated table's tablet.
+        // 2. unverified tables: may be caused by has not performed cross-cluster checksum
+        // verification due to waiting tablet checksum items.
         all_merged = false;
         FLOG_INFO("although all zone merged in check_merge_progress, there still exists uncompacted"
-                 " tables. this may be caused by new tables created in check_verification",
-                 K(all_merged), K(exist_unverified));
-      } else if (exist_unverified) {
-        all_merged = false;
-        LOG_INFO("although finished compaction, but not finish verification", K(all_merged), K(exist_uncompacted));
+                  "/unverified tables", K(all_merged), K(exist_uncompacted), K(exist_unverified));
       }
     }
 
@@ -657,7 +656,7 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
         }
         if (merged) {
           if (OB_FAIL(progress_checker_.handle_table_with_first_tablet_in_sys_ls(stop_,
-                        global_info.global_broadcast_scn(), expected_epoch))) {
+                      is_primary_service_, global_info.global_broadcast_scn(), expected_epoch))) {
             LOG_WARN("fail to handle table with first tablet in sys ls", KR(ret), K_(tenant_id),
                      "global_broadcast_scn", global_info.global_broadcast_scn(), K(expected_epoch));
           } else if (FALSE_IT(global_broadcast_scn_val = global_info.global_broadcast_scn_.get_scn_val())) {

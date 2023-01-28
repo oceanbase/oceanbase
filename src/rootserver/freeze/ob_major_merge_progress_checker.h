@@ -50,7 +50,8 @@ public:
   virtual ~ObMajorMergeProgressChecker() {}
 
   int init(const uint64_t tenant_id,
-           common::ObMySQLProxy &sql_proxy, 
+           const bool is_primary_service,
+           common::ObMySQLProxy &sql_proxy,
            share::schema::ObMultiVersionSchemaService &schema_service,
            ObZoneMergeManager &zone_merge_mgr,
            share::ObLSTableOperator &lst_operator,
@@ -73,6 +74,7 @@ public:
 
   // write tablet checksum and update report_scn of the table which contains first tablet of sys ls
   int handle_table_with_first_tablet_in_sys_ls(const volatile bool &stop,
+                                               const bool is_primary_service,
                                                const share::SCN &global_broadcast_scn,
                                                const int64_t expected_epoch);
 
@@ -115,11 +117,13 @@ private:
   // record each tablet compaction status: INITIAL/COMPACTED/FINISHED
   common::hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> tablet_compaction_map_;
   int64_t table_count_;
+  // record the table_ids in the schema_guard obtained in check_merge_progress
+  common::ObArray<uint64_t> table_ids_;
   // record each table compaction/verify status
   common::hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> table_compaction_map_; // <table_id, conpaction_info>
   ObTabletChecksumValidator tablet_validator_;
   ObIndexChecksumValidator index_validator_;
-  ObCrossClusterTableteChecksumValidator cross_cluster_validator_;
+  ObCrossClusterTabletChecksumValidator cross_cluster_validator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeProgressChecker);
 };

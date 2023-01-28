@@ -366,8 +366,6 @@ ObTableCompactionInfo &ObTableCompactionInfo::operator=(const ObTableCompactionI
   table_id_ = other.table_id_;
   tablet_cnt_ = other.tablet_cnt_;
   status_ = other.status_;
-  is_valid_data_table_ = other.is_valid_data_table_;
-  all_index_verified_ = other.all_index_verified_;
   return *this;
 }
 

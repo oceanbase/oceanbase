@@ -54,11 +54,12 @@ class ObChecksumValidatorBase
 {
 public:
   ObChecksumValidatorBase()
-    : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), need_validate_(false),
-      sql_proxy_(NULL), zone_merge_mgr_(NULL), merge_err_cb_()
+    : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), is_primary_service_(true),
+      need_validate_(false), sql_proxy_(NULL), zone_merge_mgr_(NULL), merge_err_cb_()
   {}
   virtual ~ObChecksumValidatorBase() {}
   virtual int init(const uint64_t tenant_id,
+                   const bool is_primary_service,
                    common::ObMySQLProxy &sql_proxy,
                    ObZoneMergeManager &zone_merge_mgr);
   void set_need_validate(const bool need_validate) { need_validate_ = need_validate; }
@@ -95,6 +96,7 @@ private:
 protected:
   bool is_inited_;
   uint64_t tenant_id_;
+  bool is_primary_service_;  // identify ObMajorFreezeServiceType::SERVICE_TYPE_PRIMARY
   bool need_validate_;
   common::ObMySQLProxy *sql_proxy_;
   ObZoneMergeManager *zone_merge_mgr_;
@@ -126,11 +128,11 @@ private:
 };
 
 // Mainly to verify checksum of cross-cluster's tablet which sync from primary cluster
-class ObCrossClusterTableteChecksumValidator : public ObChecksumValidatorBase
+class ObCrossClusterTabletChecksumValidator : public ObChecksumValidatorBase
 {
 public:
-  ObCrossClusterTableteChecksumValidator();
-  virtual ~ObCrossClusterTableteChecksumValidator() {}
+  ObCrossClusterTabletChecksumValidator();
+  virtual ~ObCrossClusterTabletChecksumValidator() {}
   int check_and_set_validate(const bool is_primary_service,
                              const share::SCN &frozen_scn);
   void set_major_merge_start_time(const int64_t major_merge_start_us)
@@ -202,23 +204,25 @@ private:
   void check_need_validate(const bool is_primary_service, bool &need_validate) const;
   // handle data table which has tablet and index table(s). its all index tables may finish virification or not
   // If all finished, update table status.
-  int update_data_table_verified(const int64_t table_id,
+  int update_data_table_verified(const uint64_t table_id,
                                  const share::ObTableCompactionInfo &data_table_compaction,
                                  const share::SCN &frozen_scn,
                                  hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
   // handle the table, update its all tablets' status if needed. And update its compaction_info in @table_compaction_map
-  int handle_table_verification_finished(const share::schema::ObTableSchema *table_schema,
+  int handle_table_verification_finished(const uint64_t table_id,
                                          const share::SCN &frozen_scn,
                                          hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
   bool is_index_table(const share::schema::ObSimpleTableSchemaV2 &simple_schema);
-  // handle valid data table, mark it as INDEX_CKM_VERIFIED if its all index table finished verification
-  int handle_valid_data_table(const volatile bool &stop,
-                              const share::SCN &frozen_scn,
-                              const ObArray<uint64_t> &table_ids,
-                              hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
-  // check 'is_valid_data_table_' and 'all_index_verified_' for all data tables
-  int check_valid_and_verified_for_data_table(const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
-                                              hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+  // handle data tables with index, mark data tables whose all index tables finished verification as INDEX_CKM_VERIFIED
+  int handle_data_table_with_index(const volatile bool &stop,
+                                   const share::SCN &frozen_scn,
+                                   const common::ObIArray<uint64_t> &table_ids,
+                                   const ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
+                                   hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+  // check data tables with index, return those need to be marked as INDEX_CKM_VERIFIED
+  int check_data_table_with_index(const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
+                                  hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                  common::ObIArray<uint64_t> &data_tables_to_update);
 };
 
 } // end namespace rootserver

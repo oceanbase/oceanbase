@@ -160,12 +160,9 @@ void ObTenantMajorFreeze::resume()
 
 bool ObTenantMajorFreeze::is_paused() const
 {
-  bool is_paused = true;
+  bool is_paused = (freeze_info_detector_.is_paused() || merge_scheduler_.is_paused());
   if (is_primary_service()) {
-    is_paused = (freeze_info_detector_.is_paused() || merge_scheduler_.is_paused()
-                 || daily_launcher_.is_paused());
-  } else {
-    is_paused = (freeze_info_detector_.is_paused() || merge_scheduler_.is_paused());
+    is_paused = (is_paused || daily_launcher_.is_paused());
   }
   return is_paused;
 }

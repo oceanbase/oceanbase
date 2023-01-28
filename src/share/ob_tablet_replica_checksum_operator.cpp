@@ -1031,7 +1031,6 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
   int tmp_ret = OB_SUCCESS;
   const int64_t default_column_cnt = ObTabletReplicaReportColumnMeta::DEFAULT_COLUMN_CNT;
   int64_t check_cnt = 0;
-  bool need_verify = false;
   bool is_match = true;
   uint64_t index_table_id = UINT64_MAX;
   uint64_t data_table_id = UINT64_MAX;

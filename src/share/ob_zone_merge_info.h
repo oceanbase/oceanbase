@@ -200,17 +200,23 @@ public:
   enum Status
   {
     INITIAL = 0,
+    // already finished compaction and verified tablet checksum
     COMPACTED,
-    CAN_SKIP_VERIFYING, // already compacted and can skip verification
-    INDEX_CKM_VERIFIED, // already verified index checksum
-    VERIFIED, // already verified all kinds of checksum
+    // already finished compaction and can skip verification due to the following two reasons:
+    // 1. this table has no tablet.
+    // 2. this table has tablets, but compaction_scn of tablets > frozen_scn of this round major compaction.
+    // i.e., already launched another medium compaction for this table.
+    CAN_SKIP_VERIFYING,
+    // already verified index checksum
+    INDEX_CKM_VERIFIED,
+    // already verified all kinds of checksum (i.e., tablet checksum, index checksum, cross-cluster checksum)
+    VERIFIED,
     TB_STATUS_MAX
   };
 
   ObTableCompactionInfo()
     : table_id_(OB_INVALID_ID), tablet_cnt_(0),
-      status_(Status::INITIAL),
-      is_valid_data_table_(false), all_index_verified_(true) {}
+      status_(Status::INITIAL) {}
   ~ObTableCompactionInfo() { reset(); }
 
   void reset()
@@ -218,8 +224,6 @@ public:
     table_id_ = OB_INVALID_ID;
     tablet_cnt_ = 0;
     status_ = Status::INITIAL;
-    is_valid_data_table_ = false;
-    all_index_verified_ = true;
   }
 
   ObTableCompactionInfo &operator=(const ObTableCompactionInfo &other);
@@ -235,15 +239,11 @@ public:
   bool is_verified() const { return Status::VERIFIED == status_; }
   bool finish_compaction() const { return (is_compacted() ||  can_skip_verifying()); }
 
-  TO_STRING_KV(K_(table_id), K_(tablet_cnt), K_(status), K_(is_valid_data_table), K_(all_index_verified));
+  TO_STRING_KV(K_(table_id), K_(tablet_cnt), K_(status));
 
   uint64_t table_id_;
   int64_t tablet_cnt_;
   Status status_;
-  // only for data table which has index table, these two members are meaningful.
-  // PS: above data table and index table must have tablet.
-  bool is_valid_data_table_;
-  bool all_index_verified_; // the data table's all index tables finished verification
 };
 
 typedef common::ObArray<ObMergeProgress> ObAllZoneMergeProgress;
