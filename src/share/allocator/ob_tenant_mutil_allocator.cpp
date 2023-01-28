@@ -85,6 +85,7 @@ void ObTenantMutilAllocator::try_purge()
   log_io_truncate_log_task_alloc_.purge_extra_cached_block(0);
   log_io_flush_meta_task_alloc_.purge_extra_cached_block(0);
   log_io_truncate_prefix_blocks_task_alloc_.purge_extra_cached_block(0);
+  log_io_flashback_task_alloc_.purge_extra_cached_block(0);
   palf_fetch_log_task_alloc_.purge_extra_cached_block(0);
   replay_log_task_alloc_.purge_extra_cached_block(0);
 }

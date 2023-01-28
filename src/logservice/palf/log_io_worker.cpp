@@ -255,7 +255,6 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::init(int64_t batch_width,
     PALF_LOG(ERROR, "batch_io_task_array_ init failed", K(ret));
   } else {
     for (int i = 0; i < batch_width  && OB_SUCC(ret); i++) {
-      //char *ptr = reinterpret_cast<char*>(allocator->alloc(sizeof(BatchLogIOFlushLogTask)));
       char *ptr = reinterpret_cast<char*>(mtl_malloc(sizeof(BatchLogIOFlushLogTask)));
       BatchLogIOFlushLogTask *io_task = NULL;
       if (NULL == ptr) {
