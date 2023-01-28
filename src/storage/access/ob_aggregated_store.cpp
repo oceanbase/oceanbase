@@ -324,6 +324,7 @@ ObMinMaxAggCell::ObMinMaxAggCell(
     common::ObIAllocator &allocator)
     : ObAggCell(col_idx, col_param, expr, allocator),
       is_min_(is_min),
+      cmp_fun_(nullptr),
       agg_datum_buf_(allocator),
       cell_data_ptrs_(nullptr),
       datum_allocator_(ObModIds::OB_TABLE_SCAN_ITER)
@@ -338,6 +339,7 @@ void ObMinMaxAggCell::reset()
     allocator_.free(cell_data_ptrs_);
     cell_data_ptrs_ = nullptr;
   }
+  cmp_fun_ = nullptr;
   ObAggCell::reset();
   datum_allocator_.reset();
 }
