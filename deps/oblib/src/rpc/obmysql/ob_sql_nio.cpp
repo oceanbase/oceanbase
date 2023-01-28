@@ -654,6 +654,20 @@ public:
     tcp_keepintvl_ = tcp_keepintvl;
     tcp_keepcnt_ = tcp_keepcnt;
   }
+  void close_all_fd() {
+    if (lfd_ > 0) {
+      IGNORE_RETURN epoll_ctl(epfd_, EPOLL_CTL_DEL, lfd_, NULL);
+      close(lfd_);
+      lfd_ = -1;
+    }
+    ObDLink* head = all_list_.head();
+    ObLink* cur = head->next_;
+    while (cur != head) {
+      ObSqlSock* s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
+      cur = cur->next_;
+      s->do_close();
+    }
+  }
 private:
   void handle_epoll_event() {
     const int maxevents = 512;
@@ -936,6 +950,9 @@ void ObSqlNio::run(int64_t idx)
     lib::set_thread_name("sql_nio", idx);
     while(!has_set_stop()) {
       impl_[idx].do_work();
+    }
+    if (has_set_stop()) {
+      impl_[idx].close_all_fd();
     }
   }
 }

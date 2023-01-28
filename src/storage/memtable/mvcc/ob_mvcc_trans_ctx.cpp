@@ -1204,6 +1204,8 @@ int ObMvccRowCallback::log_sync_fail()
 {
   int ret = OB_SUCCESS;
 
+  ObRowLatchGuard guard(value_.latch_);
+
   if (OB_FAIL(dec_unsynced_cnt_())) {
     TRANS_LOG(ERROR, "memtable dec unsynced cnt error", K(ret),
               K(memtable_->get_unsynced_cnt()));

@@ -453,9 +453,6 @@ int ObSrvNetworkFrame::stop()
   if (OB_FAIL(net_.stop())) {
     LOG_WARN("stop easy net fail", K(ret));
   } 
-  if (NULL != obmysql::global_sql_nio_server) {
-    obmysql::global_sql_nio_server->stop();
-  }
   return ret;
 }
 
@@ -488,4 +485,11 @@ void ObSrvNetworkFrame::set_ratelimit_enable(int ratelimit_enabled)
 {
   rpc_transport_->set_ratelimit_enable(ratelimit_enabled);
   batch_rpc_transport_->set_ratelimit_enable(ratelimit_enabled);
+}
+
+void ObSrvNetworkFrame::sql_nio_stop()
+{
+  if (NULL != obmysql::global_sql_nio_server) {
+    obmysql::global_sql_nio_server->stop();
+  }
 }

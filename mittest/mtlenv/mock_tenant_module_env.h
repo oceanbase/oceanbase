@@ -737,6 +737,7 @@ void MockTenantModuleEnv::destroy()
   ObTsMgr::get_instance().wait();
   ObTsMgr::get_instance().destroy();
 
+  net_frame_.sql_nio_stop();
   net_frame_.stop();
   net_frame_.wait();
   net_frame_.destroy();

@@ -334,6 +334,7 @@ int MockObServer::stop()
   if (!is_inited_) {
     STORAGE_LOG(WARN, "ob server not inited");
     ret = OB_NOT_INIT;
+  } else if (FALSE_IT(net_frame_.sql_nio_stop())) {
   } else if (OB_SUCCESS != (ret = net_frame_.stop())) {
     STORAGE_LOG(WARN, "net frame stop error", K(ret));
   } else {

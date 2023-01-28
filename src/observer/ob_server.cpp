@@ -898,6 +898,10 @@ int ObServer::stop()
     FLOG_INFO("mysql shutdown network stopped");
   }
 
+  FLOG_INFO("begin to sql nio stop");
+  net_frame_.sql_nio_stop();
+  FLOG_INFO("sql nio stopped");
+
   FLOG_INFO("begin to stop active session history task");
   ObActiveSessHistTask::get_instance().stop();
   FLOG_INFO("active session history task stopped");
