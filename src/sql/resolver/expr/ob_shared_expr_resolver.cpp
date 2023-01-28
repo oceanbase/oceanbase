@@ -61,8 +61,10 @@ uint64_t ObSharedExprResolver::hash_expr_tree(ObRawExpr *expr, uint64_t hash_cod
     if (expr->get_expr_type() == T_QUESTIONMARK) {
       // do nothing
     } else if (expr->is_const_raw_expr()) {
-      hash_code = common::do_hash(static_cast<ObConstRawExpr *>(expr)->get_value(),
-                                  hash_code);
+      if (expr->get_expr_type() != T_GEOMETRY) { // GIS does not support hash func
+        hash_code = common::do_hash(static_cast<ObConstRawExpr *>(expr)->get_value(),
+                                    hash_code);
+      }
     } else if (expr->get_expr_type() == T_FUN_SYS_CAST) {
       hash_code = hash_expr_tree(expr->get_param_expr(0), hash_code, false);
     } else if (!is_root) {
