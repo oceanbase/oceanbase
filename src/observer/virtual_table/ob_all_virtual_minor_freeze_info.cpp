@@ -108,6 +108,7 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObFreezer *freezer = nullptr;
+  ObFreezerStat freeze_stat;
   if (NULL == allocator_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
@@ -122,8 +123,10 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret));
   } else if (FALSE_IT(freezer = ls->get_freezer())) {
-  } else if (freezer->get_stat().is_valid()) {
-    ObFreezerStat& freeze_stat = freezer->get_stat();
+  } else if (!(freezer->get_stat().is_valid())) {
+  } else if (OB_FAIL(freezer->get_stat().deep_copy_to(freeze_stat))) {
+    SERVER_LOG(WARN, "fail to deep copy", K(ret));
+  } else {
     int64_t freeze_clock = 0;
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -153,37 +156,37 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 4:
           // tablet_id
-          cur_row_.cells_[i].set_int(freeze_stat.tablet_id_.id());
+          cur_row_.cells_[i].set_int(freeze_stat.get_tablet_id().id());
           break;
         case OB_APP_MIN_COLUMN_ID + 5:
           // is_force
-          cur_row_.cells_[i].set_varchar(freeze_stat.is_force_ ? "YES" : "NO");
+          cur_row_.cells_[i].set_varchar(freeze_stat.get_is_force() ? "YES" : "NO");
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case OB_APP_MIN_COLUMN_ID + 6:
           // freeze_clock
-          freeze_clock = freezer->get_freeze_clock();
+          freeze_clock = freeze_stat.get_freeze_clock();
           cur_row_.cells_[i].set_int(freeze_clock);
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
           // freeze_snapshot_version
-          cur_row_.cells_[i].set_int(freezer->get_freeze_snapshot_version().get_val_for_inner_table_field());
+          cur_row_.cells_[i].set_int(freeze_stat.get_freeze_snapshot_version().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // start_time
-          cur_row_.cells_[i].set_timestamp(freeze_stat.start_time_);
+          cur_row_.cells_[i].set_timestamp(freeze_stat.get_start_time());
           break;
         case OB_APP_MIN_COLUMN_ID + 9:
           // end_time
-          cur_row_.cells_[i].set_timestamp(freeze_stat.end_time_);
+          cur_row_.cells_[i].set_timestamp(freeze_stat.get_end_time());
           break;
         case OB_APP_MIN_COLUMN_ID + 10:
           // ret_code
-          cur_row_.cells_[i].set_int(freeze_stat.ret_code_);
+          cur_row_.cells_[i].set_int(freeze_stat.get_ret_code());
           break;
         case OB_APP_MIN_COLUMN_ID + 11:
           // state
-          switch (freeze_stat.state_) {
+          switch (freeze_stat.get_state()) {
             case ObFreezeState::INVALID:
               cur_row_.cells_[i].set_varchar("INVALID");
               break;

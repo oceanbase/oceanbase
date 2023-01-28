@@ -70,6 +70,7 @@ public:
   void tablet_freeze_for_replace_tablet_meta();
   void insert_and_freeze();
   void empty_memtable_flush();
+  void all_virtual_minor_freeze_info();
 private:
   int insert_thread_num_ = 3;
   int insert_num_ = 200000;
@@ -139,6 +140,26 @@ void ObMinorFreezeTest::get_tablet_id_and_ls_id()
   OB_LOG(INFO, "ls_id", K(ls_id_));
   ASSERT_EQ(true, tablet_id_.is_valid());
   ASSERT_EQ(true, ls_id_.is_valid());
+}
+
+void ObMinorFreezeTest::all_virtual_minor_freeze_info()
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
+  const int64_t start_time = ObTimeUtility::current_time();
+
+  OB_LOG(INFO, "test __all_virtual_minor_freeze_info");
+  while (ObTimeUtility::current_time() - start_time <= freeze_duration_) {
+    ObSqlString sql;
+    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select * from oceanbase.__all_virtual_minor_freeze_info where ls_id = %ld", ls_id_.id()));
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
+      sqlclient::ObMySQLResult *result = res.get_result();
+      ASSERT_NE(nullptr, result);
+      ASSERT_EQ(OB_SUCCESS, result->next());
+    }
+  }
+
 }
 
 void ObMinorFreezeTest::get_ls()

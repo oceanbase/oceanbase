@@ -161,22 +161,39 @@ public:
                         const int64_t current_right_boundary);
   int remove_memtable_info(const ObTabletID &tablet_id);
   int get_memtables_info(common::ObSArray<ObFrozenMemtableInfo> &memtables_info);
-  void add_diagnose_info(const ObString &str);
+  int set_memtables_info(const common::ObSArray<ObFrozenMemtableInfo> &memtables_info);
+  int add_diagnose_info(const ObString &str);
   int get_diagnose_info(ObStringHolder &diagnose_info);
+  void set_tablet_id(const ObTabletID &tablet_id);
+  ObTabletID get_tablet_id();
+  void set_is_force(bool is_force);
+  bool get_is_force();
+  void set_state(int state);
+  int get_state();
+  void set_freeze_clock(const int64_t freeze_clock);
+  int64_t get_freeze_clock();
+  void set_start_time(int64_t start_time);
+  int64_t get_start_time();
+  void set_end_time(int64_t end_time);
+  int64_t get_end_time();
+  void set_ret_code(int ret_code);
+  int get_ret_code();
+  void set_freeze_snapshot_version(const share::SCN &freeze_snapshot_version);
+  share::SCN get_freeze_snapshot_version();
+  int deep_copy_to(ObFreezerStat &other);
 
-public:
+private:
   ObTabletID tablet_id_;
   bool is_force_;
   int state_;
+  int64_t freeze_clock_;
   int64_t start_time_;
   int64_t end_time_;
   int ret_code_;
+  share::SCN freeze_snapshot_version_;
   ObStringHolder diagnose_info_;
-
-private:
   common::ObSArray<ObFrozenMemtableInfo> memtables_info_;
-  ObSpinLock memtables_info_lock_;
-  ObSpinLock diagnose_info_lock_;
+  ObSpinLock lock_;
 };
 
 class ObFreezer
