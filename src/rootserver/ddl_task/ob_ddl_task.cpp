@@ -918,9 +918,7 @@ int ObDDLTask::refresh_schema_version()
   } else if (schema_version_ > 0 && schema_version_ != UINT64_MAX) {
     ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
     int64_t refreshed_schema_version = 0;
-    if (OB_FAIL(schema_service.async_refresh_schema(tenant_id_, schema_version_))) {
-      LOG_WARN("async refresh schema version failed", K(ret), K(tenant_id_), K(schema_version_));
-    } else if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(tenant_id_, refreshed_schema_version))) {
+    if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(tenant_id_, refreshed_schema_version))) {
       LOG_WARN("get refreshed schema version failed", K(ret), K(tenant_id_));
     } else if (refreshed_schema_version < schema_version_) {
       ret = OB_SCHEMA_EAGAIN;
