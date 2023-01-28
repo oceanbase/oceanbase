@@ -194,33 +194,20 @@ const ObBackupStorageInfo *ObBackupStore::get_storage_info() const
   return backup_dest_.get_storage_info();
 }
 
-int ObBackupStore::get_root_path(ObBackupPathString &root_path) const
-{
-  int ret = OB_SUCCESS;
-  const ObString bak_root_path = backup_dest_.get_root_path();
-  if (OB_FAIL(root_path.assign(bak_root_path.ptr()))) {
-    LOG_WARN("failed to assign root path", K(ret));
-  }
-  return ret;
-}
-
 // oss://archive/format
 int ObBackupStore::get_format_file_path(ObBackupPathString &path) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  ObBackupPathString root;
+  ObBackupPath format_path;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupStore not init", K(ret));
-  } else if (OB_FAIL(get_root_path(root))) {
-    LOG_WARN("failed to get root path", K(ret));
-  } else if (OB_FAIL(databuff_printf(path.ptr(), path.capacity(), "%s", root.ptr()))) {
-    LOG_WARN("failed to assign root path", K(ret), K(root));
-  } else if (OB_FAIL(trim_right_backslash(path))) {
-    LOG_WARN("failed to trim right backslash", K(ret), K(path));
-  } else if (OB_FALSE_IT(pos = path.size())) {
-  } else if (OB_FAIL(databuff_printf(path.ptr(), path.capacity(), pos, "/%s", OB_STR_FORMAT_FILE_NAME))) {
+  } else if (OB_FAIL(format_path.init(backup_dest_.get_root_path()))) {
+    LOG_WARN("failed to get format path", K(ret));
+  } else if (OB_FAIL(format_path.join(OB_STR_FORMAT_FILE_NAME, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to assign format path", K(ret), K(format_path));
+  } else if (OB_FAIL(databuff_printf(path.ptr(), path.capacity(), pos, "%s", format_path.get_ptr()))) {
     LOG_WARN("failed to assign format file name", K(ret), K(path));
   }
   return ret;

@@ -600,7 +600,7 @@ int ObLSBackupCleanTask::delete_complement_log_(const ObBackupPath &path)
   ObBackupPath complement_path;
   if (OB_FAIL(complement_path.init(path.get_ptr()))) {
     LOG_WARN("failed to init complement log path", K(ret), K(path));
-  } else if (OB_FAIL(complement_path.join("complement_log"))) {
+  } else if (OB_FAIL(complement_path.join("complement_log", ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join complement log", K(ret), K(path));
   } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
@@ -632,7 +632,7 @@ int ObLSBackupCleanTask::delete_sys_data_(const ObBackupPath &path)
         LOG_WARN("file name is null", K(ret));
       } else if (OB_FAIL(sys_path.init(path.get_ptr()))) {
         LOG_WARN("failed to init major path", K(ret), K(path));
-      } else if (OB_FAIL(sys_path.join(tmp_entry.name_))) {
+      } else if (OB_FAIL(sys_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
         LOG_WARN("failed to join major path", K(ret));
       } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(sys_path, backup_dest_.get_storage_info()))) {
         LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
@@ -666,7 +666,7 @@ int ObLSBackupCleanTask::delete_major_data_(const ObBackupPath &path)
         LOG_WARN("file name is null", K(ret));
       } else if (OB_FAIL(major_path.init(path.get_ptr()))) {
         LOG_WARN("failed to init major path", K(ret), K(path));
-      } else if (OB_FAIL(major_path.join(tmp_entry.name_))) {
+      } else if (OB_FAIL(major_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
         LOG_WARN("failed to join major path", K(ret));
       } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(major_path, backup_dest_.get_storage_info()))) {
         LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
@@ -700,7 +700,7 @@ int ObLSBackupCleanTask::delete_minor_data_(const ObBackupPath &path)
         LOG_WARN("file name is null", K(ret));
       } else if (OB_FAIL(minor_path.init(path.get_ptr()))) {
         LOG_WARN("failed to init minor path", K(ret), K(path));
-      } else if (OB_FAIL(minor_path.join(tmp_entry.name_))) {
+      } else if (OB_FAIL(minor_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
         LOG_WARN("failed to join minor path", K(ret));
       } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(minor_path, backup_dest_.get_storage_info()))) {
         LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
@@ -734,7 +734,7 @@ int ObLSBackupCleanTask::delete_meta_info_(const ObBackupPath &path)
         LOG_WARN("file name is null", K(ret));
       } else if (OB_FAIL(meta_path.init(path.get_ptr()))) {
         LOG_WARN("failed to init meta path", K(ret), K(path));
-      } else if (OB_FAIL(meta_path.join(tmp_entry.name_))) {
+      } else if (OB_FAIL(meta_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
         LOG_WARN("failed to join meta path", K(ret));
       } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(meta_path, backup_dest_.get_storage_info()))) {
         LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
@@ -806,7 +806,7 @@ int ObLSBackupCleanTask::get_set_ls_path_(ObBackupPath &path)
     LOG_WARN("failed to get tenant data backup set dir path", K(ret));
   } else if (OB_FAIL(databuff_printf(log_sream_str, sizeof(log_sream_str), "logstream_%ld", ls_id_.id()))) {
     LOG_WARN("failed to get logsream_str", K(ret));
-  } else if (OB_FAIL(path.join(log_sream_str))) {
+  } else if (OB_FAIL(path.join(log_sream_str, ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join log stream dir", K(ret));
   } 
 
@@ -825,7 +825,7 @@ int ObLSBackupCleanTask::get_piece_ls_path(ObBackupPath &path)
     LOG_WARN("failed to get tenant clog piece dir path", K(ret));
   } else if (OB_FAIL(databuff_printf(log_sream_str, sizeof(log_sream_str), "logstream_%ld", ls_id_.id()))) {
     LOG_WARN("failed to get log_sream_str", K(ret));
-  } else if (OB_FAIL(path.join(log_sream_str))) {
+  } else if (OB_FAIL(path.join(log_sream_str, ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join log stream dir", K(ret));
   }
   return ret;

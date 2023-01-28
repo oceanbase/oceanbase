@@ -739,7 +739,7 @@ int ObBackupCleanTaskMgr::delete_data_info_turn_files_(const ObBackupPath &infos
         LOG_WARN("file name is null", K(ret));
       } else if (OB_FAIL(info_path.init(infos_path.get_ptr()))) {
         LOG_WARN("failed to init major path", K(ret), K(info_path));
-      } else if (OB_FAIL(info_path.join(tmp_entry.name_))) {
+      } else if (OB_FAIL(info_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
         LOG_WARN("failed to join major path", K(ret));
       } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(info_path, backup_dest_.get_storage_info()))) {
         LOG_WARN("failed to delete backup log stream dir files", K(ret), K(info_path));

@@ -356,7 +356,7 @@ public:
   int read_single_piece(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, ObSinglePieceDesc &desc) const;
   int write_single_piece(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObSinglePieceDesc &desc) const;
 
-  // oss://archive/d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info_[file_id]
+  // oss://archive/d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info.[file_id]
   int is_piece_checkpoint_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t file_id, bool &is_exist) const;
   int read_piece_checkpoint(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t file_id, ObPieceCheckpointDesc &desc) const;
   int write_piece_checkpoint(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t file_id, const ObPieceCheckpointDesc &desc) const;

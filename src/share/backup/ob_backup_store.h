@@ -110,7 +110,6 @@ public:
   bool is_init() const;
   const ObBackupDest &get_backup_dest() const;
   const ObBackupStorageInfo *get_storage_info() const;
-  int get_root_path(ObBackupPathString &root_path) const;
 
   // oss://backup_dest/format
   int get_format_file_path(ObBackupPathString &path) const;

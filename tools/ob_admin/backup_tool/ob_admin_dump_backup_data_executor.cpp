@@ -2487,7 +2487,7 @@ int ObAdminDumpBackupDataExecutor::get_tenant_backup_set_infos_path_(
     STORAGE_LOG(WARN, "fail to init tmp_path", K(ret));
   } else if (OB_FAIL(target_path.join_backup_set(backup_set_dir_name))) {
     STORAGE_LOG(WARN, "fail to join backup set dir name", K(ret), K(backup_set_dir_name));
-  } else if (OB_FAIL(target_path.join(OB_STR_TENANT_BACKUP_SET_INFOS))) {
+  } else if (OB_FAIL(target_path.join(OB_STR_TENANT_BACKUP_SET_INFOS, ObBackupFileSuffix::BACKUP))) {
     STORAGE_LOG(WARN, "fail to join tenant backup set infos", K(ret), K(backup_set_dir_name));
   }
   return ret;

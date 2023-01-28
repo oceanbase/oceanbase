@@ -4083,15 +4083,14 @@ int share::trim_right_backslash(ObBackupPathString &path)
   return ret;
 }
 
-// Convert a scn to time string.
-int share::backup_scn_to_strftime(const SCN &scn, char *buf,
+// Convert time string.
+int share::backup_time_to_strftime(const int64_t &ts_s, char *buf,
     const int64_t buf_len, int64_t &pos, const char concat)
 {
   int ret = OB_SUCCESS;
   ObSqlString format;
   struct tm lt;
   int strftime_len = 0;
-  const int64_t ts_s = trans_scn_to_second(scn);
   time_t t = static_cast<time_t>(ts_s);
 
   (void) localtime_r(&t, &lt);
@@ -4114,7 +4113,8 @@ int share::backup_scn_to_strftime(const SCN &scn, char *buf,
 int share::backup_scn_to_time_tag(const SCN &scn, char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(share::backup_scn_to_strftime(scn, buf, buf_len, pos, 'T'/* concat */))) {
+  const int64_t ts_s = trans_scn_to_second(scn);
+  if (OB_FAIL(share::backup_time_to_strftime(ts_s, buf, buf_len, pos, 'T'/* concat */))) {
     LOG_WARN("failed to format time tag", K(ret), K(scn));
   }
   return ret;

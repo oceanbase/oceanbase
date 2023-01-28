@@ -461,7 +461,7 @@ int ObArchiveStore::write_round_start(const int64_t dest_id, const int64_t round
   return ret;
 }
 
-// oss://archive/rounds/round_d[dest_id]r[round_id]_end
+// oss://archive/rounds/round_d[dest_id]r[round_id]_end.obarc
 int ObArchiveStore::is_round_end_file_exist(const int64_t dest_id, const int64_t round_id, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
@@ -620,7 +620,7 @@ int ObArchiveStore::get_all_rounds(const int64_t dest_id, ObIArray<ObRoundEndDes
   return ret;
 }
 
-// oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000
+// oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000.obarc
 int ObArchiveStore::is_piece_start_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
     const SCN &create_scn, bool &is_exist) const
 {
@@ -676,7 +676,7 @@ int ObArchiveStore::write_piece_start(const int64_t dest_id, const int64_t round
   return ret;
 }
 
-// oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000
+// oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000.obarc
 int ObArchiveStore::is_piece_end_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
     const SCN &create_scn, bool &is_exist) const
 {
@@ -763,7 +763,7 @@ int ObArchiveStore::get_piece_range(const int64_t dest_id, const int64_t round_i
   return ret;
 }
 
-// oss://archive/d[dest_id]r[round_id]p[piece_id]/single_piece_info
+// oss://archive/d[dest_id]r[round_id]p[piece_id]/single_piece_info.obarc
 int ObArchiveStore::is_single_piece_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
@@ -815,7 +815,7 @@ int ObArchiveStore::write_single_piece(const int64_t dest_id, const int64_t roun
   return ret;
 }
 
-// oss://archive/d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info_[file_id]
+// oss://archive/d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info.[file_id].obarc
 int ObArchiveStore::is_piece_checkpoint_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t file_id, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
@@ -867,7 +867,7 @@ int ObArchiveStore::write_piece_checkpoint(const int64_t dest_id, const int64_t 
   return ret;
 }
 
-// oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000
+// oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000.obarc
 int ObArchiveStore::is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
     const SCN &end_scn, bool &is_exist) const
 {
@@ -920,7 +920,7 @@ int ObArchiveStore::write_piece_inner_placeholder(const int64_t dest_id, const i
   return ret;
 }
 
-// oss://archive/d[dest_id]r[round_id]p[piece_id]/[ls_id]/ls_file_info
+// oss://archive/d[dest_id]r[round_id]p[piece_id]/[ls_id]/ls_file_info.obarc
 int ObArchiveStore::is_single_ls_info_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
     const ObLSID &ls_id, bool &is_exist) const
 {
@@ -973,7 +973,7 @@ int ObArchiveStore::write_single_ls_info(const int64_t dest_id, const int64_t ro
   return ret;
 }
 
-// oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_file_info
+// oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_file_info.obarc
 int ObArchiveStore::is_piece_info_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
@@ -1456,14 +1456,18 @@ static int parse_piece_file_(ObString &dir_name, int64_t &dest_id, int64_t &roun
 
 static int is_piece_start_file_name_(ObString &file_name, bool &is_piece_start)
 {
-  // parse file name like 'piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000'
+  // parse file name like 'piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000.obarc'
   int ret = OB_SUCCESS;
   char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   is_piece_start = false;
+  int32_t len = file_name.length() - strlen(OB_ARCHIVE_SUFFIX);
   if (file_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("empty file name", K(ret), K(file_name));
-  } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(file_name.length()), file_name.ptr()))) {
+  } else if (len <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("file name without a unified suffix", K(ret), K(file_name.length()), K(len));
+  } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", len, file_name.ptr()))) {
     LOG_WARN("fail to save tmp file name", K(ret), K(file_name));
   } else {
     const char *PREFIX = "piece";
@@ -1562,11 +1566,15 @@ static int is_round_start_file_name_(ObString &file_name, bool &is_round_start)
   int ret = OB_SUCCESS;
   const char *PREFIX = "round_";
   const char *SUFFIX = "_start";
-  int64_t p = file_name.length() - strlen(SUFFIX);
+  int64_t suffix_len = strlen(SUFFIX) + strlen(OB_ARCHIVE_SUFFIX);
+  int64_t p = file_name.length() - suffix_len;
   ObString tmp;
-  if (!file_name.prefix_match(PREFIX)) {
+  if (p <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("file name without a unified suffix", K(ret), K(p));
+  } else if (!file_name.prefix_match(PREFIX)) {
     is_round_start = false;
-  } else if (file_name.length() < strlen(SUFFIX)) {
+  } else if (file_name.length() < suffix_len) {
     is_round_start = false;
   } else if (OB_FALSE_IT(tmp.assign(file_name.ptr() + p, strlen(SUFFIX)))) {
   } else if (!tmp.prefix_match(SUFFIX)) {
@@ -1830,12 +1838,22 @@ int ObArchiveStore::ObPieceFileListFilter::init(ObArchiveStore *store)
 int ObArchiveStore::ObPieceFileListFilter::func(const dirent *entry)
 {
   int ret = OB_SUCCESS;
-  ObString file_name(entry->d_name);
+  char file_name[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   int64_t file_id = -1;
+  int32_t len = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPieceFileListFilter not init", K(ret));
-  } else if (1 != sscanf(file_name.ptr(), "%ld", &file_id)) {
+  } else if (OB_ISNULL(entry)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid entry", K(ret));
+  } else if (FALSE_IT(len = strlen(entry->d_name) - strlen(OB_ARCHIVE_SUFFIX))) {
+  } else if (len <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("file name without a unified suffix", K(ret), K(entry->d_name), K(OB_ARCHIVE_SUFFIX));
+  } else if (OB_FAIL(databuff_printf(file_name, sizeof(file_name), "%.*s", len, entry->d_name))) {
+    LOG_WARN("fail to save tmp file name", K(ret), K(file_name));
+  } else if (OB_FAIL(ob_atoll(file_name, file_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid archive file name", K(file_name));
   } else if (OB_FAIL(files_.push_back(file_id))) {
@@ -1875,13 +1893,18 @@ int ObArchiveStore::ObLSFileListOp::func(const dirent *entry)
   ObString file_name;
   ObSingleLSInfoDesc::OneFile one_file;
   char *endptr = NULL;
+  int64 len = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLSFileListOp not init", K(ret));
   } else if (OB_ISNULL(entry)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid entry", K(ret));
-  } else if (OB_FALSE_IT(file_name.assign_ptr(entry->d_name, strlen(entry->d_name)))) {
+  } else if (FALSE_IT(len = strlen(entry->d_name) - strlen(OB_ARCHIVE_SUFFIX))) {
+  } else if (len <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("file name without a unified suffix", K(ret), K(entry->d_name), K(OB_ARCHIVE_SUFFIX));
+  } else if (OB_FALSE_IT(file_name.assign_ptr(entry->d_name, len))) {
   } else if (OB_FAIL(ob_atoll(file_name.ptr(), one_file.file_id_))) {
     OB_LOG(WARN, "ignore invalid file name", K(ret), K(file_name));
     ret = OB_SUCCESS;

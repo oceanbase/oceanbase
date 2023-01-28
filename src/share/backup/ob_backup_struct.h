@@ -289,7 +289,7 @@ const char *const OB_STR_TENANT_MAJOR_MACRO_INDEX = "tenant_major_data_macro_ran
 const char *const OB_STR_TENANT_MAJOR_META_INDEX = "tenant_major_data_meta_index";
 const char *const OB_STR_TENANT_MAJOR_SEC_META_INDEX = "tenant_major_data_sec_meta_index";
 const char *const OB_STR_TABLET_INFO = "tablet_info";
-const char *const OB_STR_LS_ATTR_INFO = "ls_attr_info_turn";
+const char *const OB_STR_LS_ATTR_INFO = "ls_attr_info";
 const char *const OB_STR_META_INFO = "meta_info";
 const char *const OB_STR_SINGLE_BACKUP_SET_INFO = "single_backup_set_info";
 const char *const OB_STR_PIECE_INFO = "piece_info";
@@ -383,6 +383,8 @@ const char *const OB_STR_BACKUP_SET_LIST = "backup_set_list";
 const char *const OB_STR_BACKUP_PIECE_LIST = "backup_piece_list";
 const char *const OB_STR_LOG_PATH_LIST = "log_path_list";
 const char *const OB_STR_LS_META_INFOS = "ls_meta_infos";
+const char *const OB_BACKUP_SUFFIX=".obbak";
+const char *const OB_ARCHIVE_SUFFIX=".obarc";
 
 enum ObBackupFileType
 {
@@ -1621,8 +1623,8 @@ struct ObLogArchiveDestAtrr final
 // trim '/' from right until encouter a non backslash charactor.
 int trim_right_backslash(ObBackupPathString &path);
 
-// Convert a scn to time string, return like '2022-05-31 12:00:00' if concat is ' '.
-int backup_scn_to_strftime(const SCN &scn, char *buf, const int64_t buf_len, int64_t &pos, const char concat);
+// Convert  time string, return like '2022-05-31 12:00:00' if concat is ' '.
+int backup_time_to_strftime(const int64_t &ts_s, char *buf, const int64_t buf_len, int64_t &pos, const char concat);
 
 // Convert a scn to time tag, return like '20220531T120000'
 int backup_scn_to_time_tag(const SCN &scn, char *buf, const int64_t buf_len, int64_t &pos);

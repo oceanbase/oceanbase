@@ -179,7 +179,7 @@ int ObBackupConnectivityCheckManager::set_connectivity_check_path_(
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_check_file_name(
       *sql_proxy_, tenant_id_, backup_dest, check_file_name))) {
     LOG_WARN("failed to get check file name", K(ret), K_(tenant_id));
-  } else if (OB_FAIL(path.join(check_file_name))) {
+  } else if (OB_FAIL(path.join(check_file_name, ObBackupFileSuffix::BACKUP))) {
     LOG_WARN("failed to join check file name", K(ret), K_(tenant_id));
   }
   return ret;
@@ -257,7 +257,7 @@ int ObBackupCheckFile::get_check_file_path(
     LOG_WARN("backup dest is valid", K(ret), K_(tenant_id)); 
   } else if (OB_FAIL(path.init(backup_dest.get_root_path()))) {
     LOG_WARN("failed to init path", K(ret));
-  } else if (OB_FAIL(path.join(OB_STR_BACKUP_CHECK_FILE))) {
+  } else if (OB_FAIL(path.join(OB_STR_BACKUP_CHECK_FILE, ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join check_file", K(ret));
   }
   return ret;
@@ -266,11 +266,16 @@ int ObBackupCheckFile::get_check_file_path(
 int ObBackupCheckFile::set_connectivity_check_name_()
 {
   int ret = OB_SUCCESS;
+  int64_t check_time_s = ObTimeUtility::current_time() / 1000 / 1000;
+  char buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  int64_t pos = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup check file not init", K(ret));
+  } else if (OB_FAIL(backup_time_to_strftime(check_time_s, buff, sizeof(buff), pos, 'T'/* concat */))) {
+    LOG_WARN("failed to convert time", K(ret));
   } else if (OB_FAIL(databuff_printf(connectivity_file_name_, sizeof(connectivity_file_name_),
-      "%lu_%s_%s_%ld", tenant_id_, "connect", "file", ObTimeUtility::current_time()))) {
+      "%lu_%s_%s_%s", tenant_id_, "connect", "file", buff))) {
     LOG_WARN("failed to set connectivity file name", K(ret));
   }
   return ret;
@@ -406,7 +411,7 @@ int ObBackupCheckFile::create_connectivity_check_file(
   } else if (false == is_match) {
     if (OB_FAIL(set_connectivity_check_name_())) {
       LOG_WARN("failed to set check file name", K(ret), K_(tenant_id));
-    } else if (OB_FAIL(path.join(connectivity_file_name_))) {
+    } else if (OB_FAIL(path.join(connectivity_file_name_, ObBackupFileSuffix::BACKUP))) {
       LOG_WARN("failed to join connectivity file name", K(ret), K_(tenant_id));
     } else if (OB_FAIL(generate_format_desc_(backup_dest, check_desc))) {
       LOG_WARN("failed to set buffer", K(ret), K_(tenant_id));
@@ -477,15 +482,20 @@ int ObBackupCheckFile::get_permission_check_file_path_(
     share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
+  int64_t check_time_s = ObTimeUtility::current_time() / 1000/ 1000;
+  char buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  int64_t pos = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup check file not init", K(ret));
   } else if (OB_FAIL(get_check_file_path(backup_dest, path))) {
-    LOG_WARN("failed to get check file path", K(ret), K(backup_dest)); 
+    LOG_WARN("failed to get check file path", K(ret), K(backup_dest));
+  } else if (OB_FAIL(backup_time_to_strftime(check_time_s, buff, sizeof(buff), pos, 'T'/* concat */))) {
+    LOG_WARN("failed to convert time", K(ret), K(backup_dest));
   } else if (OB_FAIL(databuff_printf(permission_file_name_, sizeof(permission_file_name_),
-      "%lu_%s_%s_%ld", tenant_id_, "permission", "file", ObTimeUtility::current_time()))) {
+      "%lu_%s_%s_%s", tenant_id_, "permission", "file", buff))) {
     LOG_WARN("failed to set permission file name", K(ret));
-  }  else if (OB_FAIL(path.join(permission_file_name_))) {
+  }  else if (OB_FAIL(path.join(permission_file_name_, ObBackupFileSuffix::BACKUP))) {
     LOG_WARN("failed to join permission file name", K(ret), K_(permission_file_name)); 
   }
   return ret;

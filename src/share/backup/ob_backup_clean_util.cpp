@@ -32,7 +32,7 @@ int ObBackupCleanFileOp::func(const dirent *entry)
     LOG_WARN("invalid list entry, d_name is null");
   } else if (OB_FAIL(tmp_path.init(path_.get_ptr()))) {
     LOG_WARN("failed to init tmp_path", K(ret), K(path_)); 
-  } else if (OB_FAIL(tmp_path.join(entry->d_name))) {
+  } else if (OB_FAIL(tmp_path.join(entry->d_name, ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join file name", K(ret), K(entry->d_name));
   } else if (OB_FAIL(util.del_file(tmp_path.get_ptr(), storage_info_))) {
     // File does not exist should be considered successful
@@ -99,7 +99,7 @@ int ObBackupPrefixDeleteFileOp::func(const dirent *entry)
     // do nothing
   } else if (OB_FAIL(tmp_path.init(path_.get_ptr()))) {
     LOG_WARN("failed to init tmp_path", K(ret), K(path_));
-  } else if (OB_FAIL(tmp_path.join(entry->d_name))) {
+  } else if (OB_FAIL(tmp_path.join(entry->d_name, ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join file name", K(ret));
   } else if (OB_FAIL(util.del_file(tmp_path.get_ptr(), storage_info_))) {
     // File does not exist should be considered successful
