@@ -523,8 +523,7 @@ public:
                K(commit_task_.is_registered()),
                K_(ref));
 
-  int get_conflict_txs(ObIArray<ObTransIDAndAddr> &array)
-  { ObSpinLockGuard guard(lock_); return array.assign(cflict_txs_); }
+  int fetch_conflict_txs(ObIArray<ObTransIDAndAddr> &array);
   void reset_conflict_txs()
   { ObSpinLockGuard guard(lock_); cflict_txs_.reset(); }
   int add_conflict_tx(const ObTransIDAndAddr conflict_tx);

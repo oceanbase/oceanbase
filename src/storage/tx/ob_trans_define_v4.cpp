@@ -623,6 +623,7 @@ int ObTxDesc::get_inc_exec_info(ObTxExecResult &exec_info)
     exec_info_reap_ts_ += 1;
   }
   (void) exec_info.merge_cflict_txs(cflict_txs_);
+  cflict_txs_.reset();
   DETECT_LOG(TRACE, "merge conflict txs to exec result", K(cflict_txs_), K(exec_info));
   return ret;
 }
@@ -781,6 +782,17 @@ void ObTxDesc::release_implicit_savepoint(const int64_t savepoint)
               K(savepoint), K_(snapshot_scn), K_(tx_id));
     snapshot_version_.reset();
   }
+}
+
+int ObTxDesc::fetch_conflict_txs(ObIArray<ObTransIDAndAddr> &array)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  if (OB_FAIL(array.assign(cflict_txs_))) {
+    DETECT_LOG(WARN, "fail to fetch conflict txs", K(ret), K(cflict_txs_));
+  }
+  cflict_txs_.reset();
+  return ret;
 }
 
 int ObTxDesc::add_conflict_tx(const ObTransIDAndAddr conflict_tx) {
