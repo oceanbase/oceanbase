@@ -39,9 +39,11 @@ void ObTxDataHashMap::destroy()
 int ObTxDataHashMap::init()
 {
   int ret = OB_SUCCESS;
-  void *ptr = ob_malloc(BUCKETS_CNT * sizeof(ObTxDataHashHeader));
+  const int64_t alloc_size = BUCKETS_CNT * sizeof(ObTxDataHashHeader);
+  void *ptr = ob_malloc(alloc_size);
   if (OB_ISNULL(ptr)) {
-    STORAGE_LOG(WARN, "allocate memory failed when init tx data hash map", K(ret));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "allocate memory failed when init tx data hash map", KR(ret), K(alloc_size), K(BUCKETS_CNT));
   } else {
     buckets_ = new (ptr) ObTxDataHashHeader[BUCKETS_CNT];
     for (int i = 0; i < BUCKETS_CNT; i++) {

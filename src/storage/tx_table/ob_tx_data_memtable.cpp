@@ -93,8 +93,6 @@ int ObTxDataMemtable::init_tx_data_map_()
     tx_data_map_ = new (data_map_ptr) TxDataMap(1 << 20/*2097152*/);
     if (OB_FAIL(tx_data_map_->init())) {
       STORAGE_LOG(WARN, "tx_data_map_ init failed", KR(ret));
-    } else {
-      is_inited_ = true;
     }
   }
   return ret;

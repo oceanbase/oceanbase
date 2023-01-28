@@ -40,8 +40,7 @@ public:
       : BUCKETS_CNT(buckets_cnt),
         BUCKETS_MOD_MASK(buckets_cnt - 1),
         buckets_(nullptr),
-        total_cnt_(0)
-  {}
+        total_cnt_(0) {}
   ~ObTxDataHashMap()
   {
     destroy();
