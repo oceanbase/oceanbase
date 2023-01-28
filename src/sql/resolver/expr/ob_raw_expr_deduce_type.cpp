@@ -2422,7 +2422,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
           LOG_WARN("failed to create raw expr.", K(ret));
         } else {
           func_params.at(0) = cast_expr;
-          expr.set_result_type(func_params.at(0)->get_result_type());
+          expr.set_result_type(res_type);
           expr.set_enum_set_values(func_params.at(0)->get_enum_set_values());
         }
       }
@@ -2434,15 +2434,14 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
     // lead和lag函数的第三个参数，应当转换为第一个参数的类型，加cast，这里不能在执行层转。
     // bug: https://work.aone.alibaba-inc.com/issue/24115140
     if (OB_SUCC(ret) && func_params.count() == 3) {
-      ObSysFunRawExpr *cast_expr = NULL;
+      ObRawExpr *cast_expr = NULL;
+      ObCastMode def_cast_mode = CM_NONE;
       if (OB_ISNULL(expr_factory_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null pointer", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::create_cast_expr(*expr_factory_,
-                                                          func_params.at(2),
-                                                          func_params.at(0)->get_result_type(),
-                                                          cast_expr,
-                                                          my_session_))) {
+      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, my_session_, def_cast_mode))) {
+          LOG_WARN("get_default_cast_mode failed", K(ret));
+      } else if (OB_FAIL(try_add_cast_expr_above_for_deduce_type(*func_params.at(2), cast_expr, expr.get_result_type(), def_cast_mode))) {
         LOG_WARN("failed to create raw expr.", K(ret));
       } else {
         func_params.at(2) = cast_expr;
