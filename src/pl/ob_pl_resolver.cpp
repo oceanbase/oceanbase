@@ -6926,6 +6926,27 @@ int ObPLResolver::resolve_fetch(
             ret = OB_ERR_WRONG_FETCH_INTO_NUM;
             LOG_WARN("wrong number of values in the INTO list of a FETCH statement", K(ret));
           } else {
+            // cursor nested complex type, report not support
+            for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_into().count(); ++i) {
+              const ObRawExpr *raw_expr = NULL;
+              CK (OB_NOT_NULL(raw_expr = func.get_expr(stmt->get_into(i))));
+              if (OB_FAIL(ret)) {
+              } else if (raw_expr->get_result_type().is_ext()) {
+                int64_t udt_id = raw_expr->get_result_type().get_accuracy().accuracy_;
+                const ObUserDefinedType *into_var_type = NULL;
+                OZ (current_block_->get_namespace().get_user_type(udt_id, into_var_type));
+                CK (OB_NOT_NULL(into_var_type));
+                if (OB_SUCC(ret) && into_var_type->is_record_type()) {
+                  for (int64_t j = 0; OB_SUCC(ret) && j < into_var_type->get_member_count(); ++j) {
+                    if (!into_var_type->get_member(j)->is_obj_type()) {
+                      ret = OB_NOT_SUPPORTED;
+                      LOG_WARN("cursor nested complex type", K(ret));
+                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor nested complex type");
+                    }
+                  }
+                }
+              }
+            }
             bool has_record_type = false;
             for (int64_t i = 0;
                  OB_SUCC(ret) && is_compatible && i < return_type->get_record_member_count();
