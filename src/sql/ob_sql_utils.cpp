@@ -51,6 +51,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/charset/ob_charset.h"
 #include "pl/ob_pl_user_type.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs_mgr.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
@@ -546,7 +547,7 @@ int ObSQLUtils::calc_sql_expression_without_row(
       ObDatum *datum = NULL;
       ObEvalCtx eval_ctx(exec_ctx);
       clear_expr_eval_flags(*new_expr, eval_ctx);
-      OZ(new_expr->eval(eval_ctx, datum));
+      OZ(new_expr->eval(eval_ctx, datum)); // sql exprs called here
       OZ(datum->to_obj(result, new_expr->obj_meta_, new_expr->obj_datum_map_));
     }
   }
@@ -709,7 +710,8 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                    (ObStaticEngineExprCG, expr_cg, tmp_allocator,
                     session, schema_guard,
                     phy_plan_ctx.get_original_param_cnt(),
-                    phy_plan_ctx.get_datum_param_store().count())) {
+                    phy_plan_ctx.get_datum_param_store().count(),
+                    (NULL != out_ctx ? out_ctx->get_min_cluster_version() : GET_MIN_CLUSTER_VERSION()))) {
         LinkExecCtxGuard link_guard(*session, exec_ctx);
         exec_ctx.set_my_session(session);
         exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
@@ -3582,6 +3584,13 @@ int ObVirtualTableResultConverter::convert_output_row(
       } else if (convert_row_.cells_[i].is_null() ||
           (convert_row_.cells_[i].is_string_type() && 0 == convert_row_.cells_[i].get_data_length())) {
         convert_row_.cells_[i].set_null();
+      } else if (convert_row_.cells_[i].is_lob_storage()) {
+        ObLobLocatorV2 lob;
+        if (OB_FAIL(convert_row_.cells_[i].get_lob_locatorv2(lob))) {
+          LOG_WARN("failed to get lob locator", K(ret));
+        } else if (lob.is_empty_lob()) {
+          convert_row_.cells_[i].set_null();
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObObjCaster::to_type(obj_meta.get_type(),
@@ -3590,8 +3599,12 @@ int ObVirtualTableResultConverter::convert_output_row(
                                               convert_row_.cells_[i],
                                               dst_obj))) {
         LOG_WARN("failed to cast obj in oracle mode", K(ret), K(column_id));
-     } else if (OB_FAIL(dst_datum.from_obj(dst_obj))) {
+      } else if (OB_FAIL(dst_datum.from_obj(dst_obj))) {
         LOG_WARN("failed to cast obj", K(ret));
+      } else if (is_lob_storage(dst_obj.get_type()) &&
+                 OB_FAIL(ob_adjust_lob_datum(dst_obj, dst_expr->obj_meta_,
+                                             dst_expr->obj_datum_map_, *output_row_cast_ctx_.allocator_v2_, dst_datum))) {
+        LOG_WARN("adjust lob datum failed", K(ret), K(i), K(dst_obj.get_meta()), K(dst_expr->obj_meta_));
       } else {
         dst_expr->set_evaluated_projected(eval_ctx);
       }

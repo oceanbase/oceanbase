@@ -15,6 +15,7 @@
 #define OCEANBASE_SQL_OB_EXPR_IS_JSON_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -32,7 +33,7 @@ public:
   static int get_is_json_option(const ObExpr &expr, ObEvalCtx &ctx, int64_t idx, uint8_t& is_json_mode);
   static int check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
                            const ObDatum &data, ObObjType type,
-                           ObCollationType cs_type, ObArenaAllocator *allocator,
+                           ObCollationType cs_type, ObArenaAllocator &allocator,
                            uint8_t strict_opt, uint8_t scalar_opt, uint8_t unique_opt,
                            bool check_for_is_json, ObDatum &res);
   static int eval_is_json(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);

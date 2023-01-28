@@ -437,7 +437,7 @@ public:
   void set_is_deserialized() { is_deserialized_ = true; }
   bool get_is_deserialized() { return is_deserialized_; }
   void set_exec_min_cluster_version() { exec_min_cluster_version_ = GET_MIN_CLUSTER_VERSION(); }
-  uint64_t get_exec_min_cluster_version() { return exec_min_cluster_version_; }
+  uint64_t get_exec_min_cluster_version() const { return exec_min_cluster_version_; }
   // local sys var getters
   inline ObCollationType get_local_collation_connection() const;
   inline ObCollationType get_nls_collation() const;
@@ -445,6 +445,7 @@ public:
   inline const ObString &get_ob_trace_info() const;
   inline const ObString &get_plsql_ccflags() const;
   inline const ObString &get_iso_nls_currency() const;
+  inline const ObString &get_log_row_value_option() const;
   bool get_local_autocommit() const;
   uint64_t get_local_auto_increment_increment() const;
   uint64_t get_local_auto_increment_offset() const;
@@ -1042,6 +1043,7 @@ public:
   const inline common::ObIArray<common::ObString> &get_changed_user_var() const { return changed_user_vars_; }
 
   inline void set_capability(const obmysql::ObMySQLCapabilityFlags cap) { capability_ = cap; }
+  inline void set_client_attrbuite_capability(const uint64_t cap) { client_attribute_capability_.capability_ = cap; }
   inline obmysql::ObMySQLCapabilityFlags get_capability() const { return capability_; }
   inline bool is_track_session_info() const { return capability_.cap_flags_.OB_CLIENT_SESSION_TRACK; }
 
@@ -1053,6 +1055,11 @@ public:
   inline bool is_client_use_lob_locator() const
   {
     return capability_.cap_flags_.OB_CLIENT_USE_LOB_LOCATOR;
+  }
+
+  inline bool is_client_support_lob_locatorv2() const
+  {
+    return client_attribute_capability_.cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2;
   }
 
   void set_proxy_cap_flags(const obmysql::ObProxyCapabilityFlags &proxy_capability)
@@ -1458,6 +1465,7 @@ private:
         tx_isolation_(transaction::ObTxIsolationLevel::INVALID),
         iso_nls_currency_(),
         ob_pl_block_timeout_(0),
+        log_row_value_option_(),
         autocommit_(false),
         ob_enable_trace_log_(false),
         ob_enable_sql_audit_(false),
@@ -1527,6 +1535,7 @@ private:
       ob_trace_info_.reset();
       iso_nls_currency_.reset();
       ob_plsql_ccflags_.reset();
+      log_row_value_option_.reset();
       ob_max_read_stale_time_ = 0;
     }
     void set_nls_date_format(const common::ObString &format)
@@ -1607,6 +1616,19 @@ private:
     {
       return ob_plsql_ccflags_;
     }
+    void set_log_row_value_option(const common::ObString &option)
+    {
+      if (option.empty()) {
+        log_row_value_option_.reset();
+      } else {
+        MEMCPY(log_row_value_option_buf_, option.ptr(), option.length());
+        log_row_value_option_.assign_ptr(log_row_value_option_buf_, option.length());
+      }
+    }
+    const common::ObString &get_log_row_value_option() const
+    {
+      return log_row_value_option_;
+    }
 
     TO_STRING_KV(K(autocommit_), K(ob_enable_trace_log_), K(ob_enable_sql_audit_), K(nls_length_semantics_),
                  K(ob_org_cluster_id_), K(ob_query_timeout_), K(ob_trx_timeout_), K(collation_connection_),
@@ -1616,7 +1638,7 @@ private:
                  K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
                  K_(is_result_accurate), K_(character_set_results),
                  K_(character_set_connection), K_(ob_pl_block_timeout), K_(ob_plsql_ccflags),
-                 K_(iso_nls_currency), K_(ob_max_read_stale_time));
+                 K_(iso_nls_currency), K_(log_row_value_option), K_(ob_max_read_stale_time));
   public:
     static const int64_t MAX_NLS_FORMAT_STR_LEN = 256;
 
@@ -1647,6 +1669,9 @@ private:
     common::ObString iso_nls_currency_;
     char iso_nls_currency_buf_[MAX_NLS_FORMAT_STR_LEN];
     int64_t ob_pl_block_timeout_;
+
+    common::ObString log_row_value_option_;
+    char log_row_value_option_buf_[OB_TMP_BUF_SIZE_256];
 
     //==========  需要序列化  ============
     bool autocommit_;
@@ -1773,6 +1798,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_pl_block_timeout);
     DEF_SYS_VAR_CACHE_FUNCS_STR(plsql_ccflags);
     DEF_SYS_VAR_CACHE_FUNCS_STR(iso_nls_currency);
+    DEF_SYS_VAR_CACHE_FUNCS_STR(log_row_value_option);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_max_read_stale_time);
     void set_autocommit_info(bool inc_value)
     {
@@ -1835,6 +1861,7 @@ private:
         bool inc_ob_pl_block_timeout_:1;
         bool inc_plsql_ccflags_:1;
         bool inc_iso_nls_currency_:1;
+        bool inc_log_row_value_option_:1;
         bool inc_ob_max_read_stale_time_:1;
       };
     };
@@ -1944,6 +1971,7 @@ private:
   //=======================ObProxy && OCJ related============================
   obmysql::ObMySQLCapabilityFlags capability_;
   obmysql::ObProxyCapabilityFlags proxy_capability_;
+  obmysql::ObClientAttributeCapabilityFlags client_attribute_capability_;
   common::ObClientMode client_mode_; // client mode, java client , obproxy or etc.
   // add by oushen, track changed session info
   common::ObSEArray<ChangedVar, 8> changed_sys_vars_;
@@ -2086,6 +2114,11 @@ inline const ObString &ObBasicSessionInfo::get_plsql_ccflags() const
 inline const ObString &ObBasicSessionInfo::get_iso_nls_currency() const
 {
   return sys_vars_cache_.get_iso_nls_currency();
+}
+
+inline const ObString &ObBasicSessionInfo::get_log_row_value_option() const
+{
+  return sys_vars_cache_.get_log_row_value_option();
 }
 
 inline bool ObBasicSessionInfo::get_local_autocommit() const

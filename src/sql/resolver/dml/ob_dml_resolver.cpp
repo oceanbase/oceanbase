@@ -57,6 +57,7 @@
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_expr_version.h"
 #include "common/ob_smart_call.h"
+#include "share/ob_lob_access_utils.h"
 #include "share/resource_manager/ob_resource_manager.h"
 
 namespace oceanbase
@@ -2059,9 +2060,12 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       LOG_WARN("fail to check is multiple key column",
       K(ret), KPC(table_schema), K(col_schema->get_column_id()));
     } else {
-      if (is_oracle_mode() && ObLongTextType == col_expr->get_data_type()
-          && ! is_virtual_table(col_schema->get_table_id())) {
-        col_expr->set_data_type(ObLobType);
+      if (!ob_enable_lob_locator_v2()) {
+        // Notice: clob will not convert to ObLobType if locator v2 enabled
+        if (is_oracle_mode() && ObLongTextType == col_expr->get_data_type()
+            && ! is_virtual_table(col_schema->get_table_id())) {
+          col_expr->set_data_type(ObLobType);
+        }
       }
       col_expr->set_synonym_db_name(table_item.synonym_db_name_);
       col_expr->set_synonym_name(table_item.synonym_name_);
@@ -2078,9 +2082,7 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       if (!table_item.alias_name_.empty()) {
         col_expr->set_table_alias_name();
       }
-      bool is_lob_column = (ob_is_text_tc(col_schema->get_data_type())
-                            || ob_is_json_tc(col_schema->get_data_type())
-                            || ob_is_geometry_tc(col_schema->get_data_type()));
+      bool is_lob_column = is_lob_storage(col_schema->get_data_type());
       col_expr->set_lob_column(is_lob_column);
       if (session_info_->get_ddl_info().is_ddl()) {
         column_item.set_default_value(col_schema->get_orig_default_value());
@@ -7632,7 +7634,7 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
   return ret;
 }
 
-int ObDMLResolver::json_table_resolve_col_name_and_path(const ParseNode *name_node,
+int ObDMLResolver::resolve_json_table_column_name_and_path(const ParseNode *name_node,
                                                         const ParseNode *path_node,
                                                         ObIAllocator* allocator,
                                                         ObDmlJtColDef *col_def)
@@ -7700,8 +7702,8 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
     data_type.set_int();
     data_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObInt32Type]);
   } else if (col_type == COL_TYPE_EXISTS
-            || col_type == COL_TYPE_VALUE
-            || col_type == COL_TYPE_QUERY) {
+             || col_type == COL_TYPE_VALUE
+             || col_type == COL_TYPE_QUERY) {
     if (ObNumberType == obj_type
         && parse_tree.int16_values_[2] == -1 && parse_tree.int16_values_[3] == 0) {
       obj_type = ObIntType;
@@ -7807,6 +7809,7 @@ int ObDMLResolver::generate_json_table_output_column_item(TableItem *table_item,
   } else {
     OX (col_expr->set_column_attr(table_item->get_object_name(), column_name));
   }
+
   OX (col_expr->set_database_name(table_item->database_name_));
   if (OB_SUCC(ret) && ob_is_enumset_tc(col_expr->get_data_type())) {
     ret = OB_NOT_SUPPORTED;
@@ -7888,7 +7891,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
         const ParseNode* path_node = parse_tree.children_[2];
         const ParseNode* on_err_node = parse_tree.children_[3];
 
-        if (OB_FAIL(json_table_resolve_col_name_and_path(name_node, path_node, allocator_, col_def))) {
+        if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def))) {
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
         } else if (on_err_node->num_child_ != 2) {
           ret = OB_ERR_UNEXPECTED;
@@ -7924,7 +7927,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
             || OB_ISNULL(on_err_node->children_[2])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("json table error empty mismatch is null", K(ret));
-        } else if (OB_FAIL(json_table_resolve_col_name_and_path(name_node, path_node, allocator_, col_def))) {
+        } else if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def))) {
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
         } else {
           col_def->col_base_info_.col_type_ = COL_TYPE_QUERY;
@@ -7958,7 +7961,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
         col_def->col_base_info_.col_type_ = COL_TYPE_VALUE;
         col_def->col_base_info_.truncate_ = trunc_node->value_;
 
-        if (OB_FAIL(json_table_resolve_col_name_and_path(name_node, path_node, allocator_, col_def))) {
+        if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def))) {
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
         }
       }

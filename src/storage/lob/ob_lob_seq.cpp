@@ -13,18 +13,20 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_seq.h"
+#include <netinet/in.h>
+
 namespace oceanbase
 {
 namespace storage
 {
 
-inline char *store32be(char *ptr, uint32_t val) {
+char* ObLobSeqId::store32be(char *ptr, uint32_t val) {
   val = htonl(val);
   memcpy(ptr, &val, sizeof(val));
   return ptr + sizeof(val);
 }
 
-inline uint32_t load32be(const char *ptr) {
+uint32_t ObLobSeqId::load32be(const char *ptr) {
   uint32_t val;
   memcpy(&val, ptr, sizeof(val));
   return ntohl(val);
@@ -117,6 +119,69 @@ ObLobSeqId::~ObLobSeqId()
   }
 }
 
+// this > other => return 1
+// this == other => return 0
+// this < other => return -1
+int ObLobSeqId::compare(ObLobSeqId &other)
+{
+  int cmp_ret = 0;
+  uint32_t common_len = (dig_len_ > other.dig_len_) ? other.dig_len_ : dig_len_;
+  for (uint32_t i = 0; i < common_len && cmp_ret == 0; ++i) {
+    if (digits_[i] > other.digits_[i]) {
+      cmp_ret = 1;
+    } else if (digits_[i] < other.digits_[i]) {
+      cmp_ret = -1;
+    }
+  }
+  if (cmp_ret == 0) {
+    if (dig_len_ > other.dig_len_) {
+      cmp_ret = 1;
+    } else if (dig_len_ < other.dig_len_) {
+      cmp_ret = -1;
+    }
+  }
+  return cmp_ret;
+}
+
+int ObLobSeqId::get_next_seq_id(ObString& seq_id, ObLobSeqId &end)
+{
+  int ret = OB_SUCCESS;
+  if (!parsed_ && OB_FAIL(parse())) {
+    LOG_WARN("failed get next seq id, parse failed.", K(ret), K(seq_id_));
+  } else if (!end.parsed_ && OB_FAIL(end.parse())) {
+     LOG_WARN("failed get next seq id, parse end seq id failed.", K(ret), K(end.seq_id_));
+  } else if (end.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("end should not be empty", K(ret));
+  } else if (compare(end) != -1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("end is not bigger than this.", K(ret));
+  } else if (empty()) {
+    uint32_t val = (LOB_SEQ_ID_MIN > end.digits_[0] / 2) ? (end.digits_[0] / 2) : LOB_SEQ_ID_MIN;
+    if (OB_FAIL(add_digits(LOB_SEQ_ID_MIN)) || OB_FAIL(append_seq_buf(LOB_SEQ_ID_MIN))) {
+      LOG_WARN("failed add seq node.", K(ret));
+    } else {
+      seq_id.assign_ptr(buf_, len_);
+    }
+  } else {
+    uint64_t cur = digits_[dig_len_ - 1];
+    // TODO @luohongdi.lhd. try smaller step rather than add digits
+    cur += LOB_SEQ_STEP_LEN;
+    if (cur > LOB_SEQ_STEP_MAX || compare(end) != -1) {
+      if (OB_FAIL(add_digits(LOB_SEQ_ID_MIN)) || OB_FAIL(append_seq_buf(LOB_SEQ_ID_MIN))) {
+        LOG_WARN("failed add seq node.", K(ret), K(len_), K(cap_), K(dig_len_), K(dig_cap_));
+      } else {
+        seq_id.assign_ptr(buf_, len_);
+      }
+    } else if (OB_FAIL(replace_seq_buf_last_node(static_cast<uint32_t>(cur)))) {
+      LOG_WARN("failed replace seq node.", K(ret), K(len_), K(cap_), K(dig_len_), K(dig_cap_));
+    } else {
+      seq_id.assign_ptr(buf_, len_);
+    }
+  }
+  return ret;
+}
+
 int ObLobSeqId::get_next_seq_id(ObString& seq_id)
 {
   int ret = OB_SUCCESS;
@@ -132,7 +197,7 @@ int ObLobSeqId::get_next_seq_id(ObString& seq_id)
   } else {
     uint64_t cur = digits_[dig_len_ - 1];
     cur += LOB_SEQ_STEP_LEN;
-    if (cur > UINT_MAX32) {
+    if (cur > LOB_SEQ_STEP_MAX) {
       if (OB_FAIL(add_digits(LOB_SEQ_ID_MIN)) || OB_FAIL(append_seq_buf(LOB_SEQ_ID_MIN))) {
         LOG_WARN("failed add seq node.", K(ret), K(len_), K(cap_), K(dig_len_), K(dig_cap_));
       } else {

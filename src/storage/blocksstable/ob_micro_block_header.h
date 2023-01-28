@@ -30,9 +30,11 @@ public:
   uint16_t rowkey_column_count_;
   struct {
     uint16_t has_column_checksum_ : 1;
-    uint8_t contains_hash_index_   : 1;
+    uint16_t has_string_out_row_ : 1; // flag for furture, varchar and char can be overflowed as lob handle
+    uint16_t all_lob_in_row_ : 1; // compatible with 4.0, we assume that all lob is out row in old data
+    uint16_t contains_hash_index_   : 1;
     uint16_t hash_index_offset_from_end_ : 10;
-    uint16_t reserved16_          : 4;
+    uint16_t reserved16_          : 2;
   };
   uint32_t row_count_;
   uint8_t row_store_type_;
@@ -40,15 +42,13 @@ public:
     struct {
       uint8_t row_index_byte_    :3;
       uint8_t extend_value_bit_  :3;
-      uint8_t encoding_has_out_row_column_ : 1;
-      uint8_t reserved_          :1;
+      uint8_t reserved_          :2;
     }; // For encoding format
     struct {
       uint8_t single_version_rows_: 1;
       uint8_t contain_uncommitted_rows_: 1;
-      uint8_t flat_has_out_row_column_ : 1;
       uint8_t is_last_row_last_flag_ : 1;
-      uint8_t not_used_ : 4;
+      uint8_t not_used_ : 5;
     }; // For flat format
     uint8_t opt_;
   };
@@ -96,7 +96,8 @@ public:
 public:
   bool is_compressed_data() const { return data_length_ != data_zlength_; }
   bool contain_uncommitted_rows() const { return contain_uncommitted_rows_; }
-  bool has_out_row_column() const;
+  OB_INLINE bool has_string_out_row() const { return has_string_out_row_; }
+  OB_INLINE bool has_lob_out_row() const { return !all_lob_in_row_; }
   bool is_last_row_last_flag() const { return is_last_row_last_flag_; }
   bool is_contain_hash_index() const;
 }__attribute__((packed));

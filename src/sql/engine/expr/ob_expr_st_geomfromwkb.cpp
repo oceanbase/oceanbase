@@ -93,7 +93,8 @@ int ObIExprSTGeomFromWKB::calc_result_typeN(ObExprResType& type,
 int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObDatum *datum = NULL;
   int num_args = expr.arg_cnt_;
   bool is_null_result = false;
@@ -137,10 +138,15 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
 
   // get axis_order
   if (!is_null_result && OB_SUCC(ret) && num_args > 2) {
+    ObString axis_str;
     expr.args_[2]->eval(ctx, datum);
     if (datum->is_null()){
       is_null_result = true;
-    } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(datum->get_string(), get_func_name(), axis_order))) {
+    } else if (FALSE_IT(axis_str = datum->get_string())) {
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+              expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), axis_str))) {
+      LOG_WARN("fail to get real string data", K(ret), K(axis_str));
+    } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(axis_str, get_func_name(), axis_order))) {
       LOG_WARN("failed to parse axis order option string", K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::check_need_reverse(axis_order, need_reverse))) {
       LOG_WARN("failed to check need reverse", K(ret));
@@ -155,7 +161,10 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
       is_null_result = true;
     } else {
       wkb = datum->get_string();
-      if (OB_FAIL(ob_write_string(tmp_allocator, wkb, wkb_copy, false))) {
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+          expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
+        LOG_WARN("fail to get real string data", K(ret), K(wkb));
+      } else if (OB_FAIL(ob_write_string(tmp_allocator, wkb, wkb_copy, false))) {
         LOG_WARN("fail to deep copy wkb", K(ret));
       } else if (OB_FAIL(create_by_wkb_without_srid(tmp_allocator, wkb_copy, srs_item, geo, bo))) {
         LOG_WARN("failed to create geometry object with raw wkb", K(ret));

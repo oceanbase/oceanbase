@@ -1652,6 +1652,122 @@ int ObUpdateLSMetaP::process()
   return ret;
 }
 
+ObLobQueryP::ObLobQueryP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
+  : ObStorageStreamRpcP(bandwidth_throttle)
+{
+  // the streaming interface may return multi packet. The memory may be freed after the first packet has been sended.
+  // the deserialization of arg_ is shallow copy, so we need deep copy data to processor
+  set_preserve_recv_data();
+}
+
+int ObLobQueryP::process_read()
+{
+  int ret = OB_SUCCESS;
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  ObLobQueryBlock header;
+  blocksstable::ObBufferReader data;
+  char *out_buf = nullptr;
+  int64_t buf_len = ObLobQueryArg::OB_LOB_QUERY_BUFFER_LEN - sizeof(ObLobQueryBlock);
+  if (OB_ISNULL(out_buf = reinterpret_cast<char*>(allocator_.alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc out data buffer.", K(ret));
+  } else {
+    ObString out;
+    ObLobAccessParam param;
+    param.scan_backward_ = arg_.scan_backward_;
+    param.from_rpc_ = true;
+    ObLobQueryIter *iter;
+    if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
+        arg_.len_, ObStorageRpcProxy::STREAM_RPC_TIMEOUT, arg_.lob_locator_))) {
+      LOG_WARN("failed to build lob param", K(ret));
+    } else if (OB_FAIL(lob_mngr->query(param, iter))) {
+      LOG_WARN("failed to query lob.", K(ret), K(param));
+    } else {
+      while (OB_SUCC(ret)) {
+        out.assign_buffer(out_buf, buf_len);
+        if (OB_FAIL(iter->get_next_row(out))) {
+          if (OB_ITER_END != ret) {
+            STORAGE_LOG(WARN, "failed to get next buffer", K(ret));
+          }
+        } else {
+          header.size_ = out.length();
+          data.assign(out.ptr(), out.length());
+          // only scan backward need header
+          if (OB_FAIL(fill_data(header))) {
+            STORAGE_LOG(WARN, "failed to fill header", K(ret), K(header));
+          } else if (OB_FAIL(fill_buffer(data))) {
+            STORAGE_LOG(WARN, "failed to fill buffer", K(ret), K(data));
+          }
+        }
+      }
+      if (ret == OB_ITER_END) {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLobQueryP::process_getlength()
+{
+  int ret = OB_SUCCESS;
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  ObLobQueryBlock header;
+  blocksstable::ObBufferReader data;
+  ObLobAccessParam param;
+  param.scan_backward_ = arg_.scan_backward_;
+  param.from_rpc_ = true;
+  header.reset();
+  uint64_t len = 0;
+  int64_t timeout = ObTimeUtility::current_time() + ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+  if (OB_FAIL(lob_mngr->build_lob_param(param, allocator_, arg_.cs_type_, arg_.offset_,
+      arg_.len_, timeout, arg_.lob_locator_))) {
+    LOG_WARN("failed to build lob param", K(ret));
+  } else if (OB_FAIL(lob_mngr->getlength(param, len))) { // reuse size_ for lob_len
+    LOG_WARN("failed to getlength lob.", K(ret), K(param));
+  } else if (FALSE_IT(header.size_ = static_cast<int64_t>(len))) {
+  } else if (OB_FAIL(fill_data(header))) {
+    STORAGE_LOG(WARN, "failed to fill header", K(ret), K(header));
+  }
+  return ret;
+}
+
+int ObLobQueryP::process()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObLobManager *lob_mngr = MTL(ObLobManager*);
+    // init result_
+    char *buf = nullptr;
+    int64_t buf_len = ObLobQueryArg::OB_LOB_QUERY_BUFFER_LEN;
+    if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator_.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc result data buffer.", K(ret));
+    } else if (!result_.set_data(buf, buf_len)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "failed set data to result", K(ret));
+    } else if (!arg_.lob_locator_.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "lob locator is invalid", K(ret));
+    } else if (!arg_.lob_locator_.is_persist_lob()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupport remote query non-persist lob.", K(ret), K(arg_.lob_locator_));
+    } else if (arg_.qtype_ == ObLobQueryArg::QueryType::READ) {
+      if (OB_FAIL(process_read())) {
+        LOG_WARN("fail to process read", K(ret), K(arg_));
+      }
+    } else if (arg_.qtype_ == ObLobQueryArg::QueryType::GET_LENGTH) {
+      if (OB_FAIL(process_getlength())) {
+        LOG_WARN("fail to process read", K(ret), K(arg_));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid arg qtype.", K(ret), K(arg_));
+    }
+  }
+  return ret;
+}
+
 
 } //namespace obrpc
 

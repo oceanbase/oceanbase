@@ -18,6 +18,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/executor/ob_task_executor_ctx.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
 #include "lib/profile/ob_perf_event.h"
@@ -890,6 +891,11 @@ int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch
             ObDatum &param_datum = expr->locate_datum_for_write(eval_ctx);
             if (OB_FAIL(param_datum.from_obj(one_params.at(i), expr->obj_datum_map_))) {
               LOG_WARN("fail to cast datum", K(ret));
+            } else if (is_lob_storage(one_params.at(i).get_type()) &&
+                       OB_FAIL(ob_adjust_lob_datum(one_params.at(i), expr->obj_meta_,
+                                                   expr->obj_datum_map_, get_allocator(), param_datum))) {
+              LOG_WARN("adjust lob datum failed", K(ret), K(i),
+                       K(one_params.at(i).get_meta()), K(expr->obj_meta_));
             } else {
               expr->get_eval_info(eval_ctx).evaluated_ = true;
             }

@@ -21,6 +21,7 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_geo_bin.h"
 #include "lib/geo/ob_geo.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 
 using namespace oceanbase::common;
@@ -264,14 +265,8 @@ int ObExprPrivSTPoint::eval_priv_st_point(const ObExpr &expr,
   if (OB_SUCC(ret)) {
     if (is_null_result) {
       res.set_null();
-    } else {
-      char *res_buf = expr.get_str_res_mem(ctx, res_wkb_buf.length());
-      if (OB_ISNULL(res_buf)){
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else {
-        MEMCPY(res_buf, res_wkb_buf.ptr(), res_wkb_buf.length());
-        res.set_string(res_buf, res_wkb_buf.length());
-      }
+    } else if (OB_FAIL(ObGeoExprUtils::pack_geo_res(expr, ctx, res, res_wkb_buf.string()))) {
+      LOG_WARN("fail to pack geo res", K(ret));
     }
   }
 

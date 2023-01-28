@@ -48,7 +48,9 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     snapshot_version_(0),
     logic_id_(),
     macro_id_(),
-    column_checksums_()
+    column_checksums_(),
+    has_string_out_row_(false),
+    all_lob_in_row_(false)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -89,6 +91,8 @@ void ObDataBlockMetaVal::reset()
   logic_id_.reset();
   macro_id_.reset();
   column_checksums_.reset();
+  has_string_out_row_ = false;
+  all_lob_in_row_ = false;
 }
 
 bool ObDataBlockMetaVal::is_valid() const
@@ -151,6 +155,8 @@ int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
     snapshot_version_ = val.snapshot_version_;
     logic_id_ = val.logic_id_;
     macro_id_ = val.macro_id_;
+    has_string_out_row_ = val.has_string_out_row_;
+    all_lob_in_row_ = val.all_lob_in_row_;
   }
   return ret;
 }
@@ -226,6 +232,8 @@ DEFINE_SERIALIZE(ObDataBlockMetaVal)
                   macro_id_,
                   column_checksums_,
                   original_size_,
+                  has_string_out_row_,
+                  all_lob_in_row_,
                   is_last_row_last_flag_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
@@ -285,6 +293,8 @@ DEFINE_DESERIALIZE(ObDataBlockMetaVal)
                   macro_id_,
                   column_checksums_,
                   original_size_,
+                  has_string_out_row_,
+                  all_lob_in_row_,
                   is_last_row_last_flag_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
@@ -336,6 +346,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObDataBlockMetaVal)
               macro_id_,
               column_checksums_,
               original_size_,
+              has_string_out_row_,
+              all_lob_in_row_,
               is_last_row_last_flag_);
   return len;
 }

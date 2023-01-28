@@ -99,7 +99,10 @@ int ObExprSTTransform::eval_st_transform(const ObExpr &expr, ObEvalCtx &ctx, ObD
     uint32_t dest_srid = 0;
     ObString wkb = gis_datum->get_string();
     const ObSrsItem *dest_srs_item = NULL;
-    if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, src_srs_item, true, N_ST_TRANSFORM))) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum,
+              expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkb));
+    } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, src_srs_item, true, N_ST_TRANSFORM))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb));
     } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, src_srid))) {
       ret = OB_ERR_GIS_INVALID_DATA;

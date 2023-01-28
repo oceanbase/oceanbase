@@ -465,7 +465,8 @@ private:
                      ObSQLSessionInfo &session,
                      ObPhysicalPlan *plan,
                      bool from_plan_cache,
-                     const ParamStore *ps_params);
+                     const ParamStore *ps_params,
+                     uint64_t min_cluster_version);
   int need_add_plan(const ObPlanCacheCtx &ctx,
                     ObResultSet &result,
                     bool is_enable_pc,

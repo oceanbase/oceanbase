@@ -17,6 +17,7 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/engine/expr/ob_expr_add.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "share/ob_lob_access_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -134,8 +135,16 @@ int ObTableApiRowIterator::check_row(ObNewRow &row)
   int ret = OB_SUCCESS;
   const int64_t N = columns_type_.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+    ObObjType type = columns_type_.at(i).get_type();
     if (OB_FAIL(check_column_type(columns_type_.at(i), row.get_cell(i)))) {
       LOG_WARN("Fail to check column type, ", K(ret), K(i), K(columns_type_.at(i)), K(row.get_cell(i)));
+    } else if (is_lob_storage(type)) {
+      // TableApi inputs never have lob header, need to mock one for later processing
+      ObObj &obj = row.get_cell(i);
+      if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj, row_allocator_))) {
+        LOG_WARN("Fail to convert plain lob data to templob, ",
+          K(ret), K(i), K(columns_type_.at(i)), K(row.get_cell(i)));
+      }
     }
   } // end for
   return ret;

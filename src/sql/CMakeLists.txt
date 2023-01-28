@@ -582,6 +582,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_timestamp_to_scn.cpp
   engine/expr/ob_expr_scn_to_timestamp.cpp
   engine/expr/ob_expr_errno.cpp
+  engine/expr/ob_expr_lob_utils.cpp
   engine/expr/ob_expr_format_bytes.cpp
   engine/expr/ob_expr_format_pico_time.cpp
   engine/expr/ob_geo_expr_utils.cpp

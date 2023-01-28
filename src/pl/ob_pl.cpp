@@ -2708,7 +2708,8 @@ do {                                                                  \
             if (CS_TYPE_ANY == result_type.get_collation_type()) {
               result_type.set_collation_type(params->at(i).get_meta().get_collation_type());
             }
-            if ((result_type.is_blob() || result_type.is_blob_locator())
+            if ((result_type.is_blob() || result_type.is_blob_locator()
+                 || params->at(i).is_blob() || params->at(i).is_blob_locator())
                 && lib::is_oracle_mode()) {
               cast_ctx.cast_mode_ |= CM_ENABLE_BLOB_CAST;
             }
@@ -3461,10 +3462,15 @@ int ObPLFunction::set_variables(const ObPLSymbolTable &symbol_table)
       LOG_WARN("symbol var is NULL", K(i), K(symbol_table.get_symbol(i)), K(ret));
     } else if (OB_FAIL(type.deep_copy(allocator_, symbol_table.get_symbol(i)->get_type()))) {
       LOG_WARN("fail to deep copy pl data type", K(symbol_table.get_symbol(i)->get_type()), K(ret));
-    } else if (OB_FAIL(variables_.push_back(type))) {
-      LOG_WARN("push back error", K(i), K(type), K(symbol_table.get_symbol(i)), K(variables_), K(ret));
-    } else if (OB_FAIL(default_idxs_.push_back(symbol_table.get_symbol(i)->get_default()))) {
-      LOG_WARN("push back error", K(i), K(ret));
+    } else {
+      if (type.get_meta_type() != NULL && type.get_meta_type()->is_lob_storage()) {
+        type.get_data_type()->meta_.set_has_lob_header();
+      }
+      if (OB_FAIL(variables_.push_back(type))) {
+        LOG_WARN("push back error", K(i), K(type), K(symbol_table.get_symbol(i)), K(variables_), K(ret));
+      } else if (OB_FAIL(default_idxs_.push_back(symbol_table.get_symbol(i)->get_default()))) {
+        LOG_WARN("push back error", K(i), K(ret));
+      }
     }
   }
   return ret;

@@ -974,7 +974,7 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
     int64_t t2 = 0;
     int64_t t3 = 0;
     int64_t lob_cnt = 0;
-    ObArenaAllocator lob_allocator;
+    ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("ObComplementWriteTask is not inited", K(ret));
@@ -1051,12 +1051,14 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < org_col_ids_.count(); i++) {
-        ObStorageDatum &datum = tmp_row->storage_datums_[i]; 
-        if (org_col_ids_.at(i).col_type_.is_lob_v2() && !datum.is_nop() && !datum.is_null()) {
+        ObStorageDatum &datum = tmp_row->storage_datums_[i];
+        if (datum.is_nop() || datum.is_null()) {
+          // do nothing
+        } else if (org_col_ids_.at(i).col_type_.is_lob_storage()) {
           lob_cnt++;
           const int64_t timeout_ts = ObTimeUtility::current_time() + 60000000; // 60s
           if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-              lob_allocator, param_->ls_id_, param_->dest_tablet_id_, org_col_ids_.at(i), datum, timeout_ts))) {
+              lob_allocator, param_->ls_id_, param_->dest_tablet_id_, org_col_ids_.at(i), datum, timeout_ts, true))) {
             LOG_WARN("fail to insert_lob_col", K(ret), K(datum));
           }
         }
@@ -1285,6 +1287,7 @@ ObLocalScan::~ObLocalScan()
   }
   default_row_.reset();
   tmp_row_.reset();
+  access_ctx_.reset();
 }
 
 int ObLocalScan::init(
@@ -1421,10 +1424,8 @@ int ObLocalScan::table_scan(
     LOG_WARN("fail to construct range ctx", K(ret), K(query_flag));
   } else if (OB_FAIL(construct_multiple_scan_merge(table_iter, range))) {
     LOG_WARN("fail to construct multiple scan merge", K(ret), K(table_iter), K(range));
-  } else if (query_flag.is_skip_read_lob()) { // expected lob column should be with lob header
-    if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, extended_gc_.org_extended_col_ids_, default_row_))) {
-      LOG_WARN("fail to fill lob header for default row", K(ret));
-    }
+  } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, extended_gc_.org_extended_col_ids_, default_row_))) {
+    LOG_WARN("fail to fill lob header for default row", K(ret));
   }
   return ret;
 }
@@ -1528,7 +1529,11 @@ int ObLocalScan::construct_access_param(
     access_param_.iter_param_.out_cols_project_ = &output_projector;
     access_param_.iter_param_.read_info_ = &read_info_;
     access_param_.iter_param_.full_read_info_ = &full_read_info;
-    access_param_.is_inited_ = true;
+    if (OB_FAIL(access_param_.iter_param_.refresh_lob_column_out_status())) {
+      STORAGE_LOG(WARN, "Failed to refresh lob column", K(ret), K(access_param_.iter_param_));
+    } else {
+      access_param_.is_inited_ = true;
+    }
   }
   LOG_INFO("construct table access param", K(ret), K(tmp_col_ids), K(cols_index), K(extended_gc_.extended_col_ids_),
       K(extended_gc_.output_projector_), K(access_param_));
@@ -1557,6 +1562,11 @@ int ObLocalScan::construct_range_ctx(ObQueryFlag &query_flag,
 
   } else if (OB_FAIL(access_ctx_.init(query_flag, ctx_, allocator_, allocator_, trans_version_range))) {
     LOG_WARN("fail to init accesss ctx", K(ret));
+  } else if (OB_NOT_NULL(access_ctx_.lob_locator_helper_)) {
+    int64_t tx_id = (tx_desc == nullptr) ? 0 : tx_desc->tid().get_id();
+    access_ctx_.lob_locator_helper_->update_lob_locator_ctx(access_param_.iter_param_.table_id_,
+                                                            access_param_.iter_param_.tablet_id_.id(),
+                                                            tx_id);
   }
   return ret;
 }

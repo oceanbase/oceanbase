@@ -126,6 +126,8 @@ int ObExprPrivSTCovers::eval_st_covers(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   int ret = OB_SUCCESS;
   ObDatum *gis_datum1 = NULL;
   ObDatum *gis_datum2 = NULL;
+  ObString wkb1;
+  ObString wkb2;
   ObExpr *gis_arg1 = expr.args_[0];
   ObExpr *gis_arg2 = expr.args_[1];
   ObObjType input_type1 = gis_arg1->datum_meta_.type_;
@@ -136,10 +138,18 @@ int ObExprPrivSTCovers::eval_st_covers(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
+  } else if (FALSE_IT(wkb1 = gis_datum1->get_string())) {
+  } else if (FALSE_IT(wkb2 = gis_datum2->get_string())) {
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum1,
+            gis_arg1->datum_meta_, gis_arg1->obj_meta_.has_lob_header(), wkb1))) {
+    LOG_WARN("fail to get real string data", K(ret), K(wkb1));
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum2,
+            gis_arg2->datum_meta_, gis_arg2->obj_meta_.has_lob_header(), wkb2))) {
+    LOG_WARN("fail to get real string data", K(ret), K(wkb2));
   } else if (OB_FAIL(ObExprPrivSTCovers::eval_st_covers_common(ctx,
                                                                temp_allocator,
-                                                               gis_datum1->get_string(),
-                                                               gis_datum2->get_string(),
+                                                               wkb1,
+                                                               wkb2,
                                                                res))) {
     LOG_WARN("eval st covers failed", K(ret));
   }

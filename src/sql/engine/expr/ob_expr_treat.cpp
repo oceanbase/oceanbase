@@ -19,6 +19,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "lib/json_type/ob_json_parse.h"
 #include "lib/json_type/ob_json_base.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 namespace oceanbase
 {
 namespace sql
@@ -84,23 +85,6 @@ int ObExprTreat::cg_expr(ObExprCGCtx &expr_cg_ctx,
   return ret;
 }
 
-static int treat_string_as_json(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &temp_allocator,
-                                const ObString &in_str, ObDatum &res) {
-  INIT_SUCC(ret);
-  // just copy because oracle does this
-  uint64_t length = in_str.length();
-  char *buf = expr.get_str_res_mem(ctx, length);
-  if (OB_NOT_NULL(buf)) {
-    MEMCPY(buf, in_str.ptr(), length);
-    res.set_string(buf, length);
-    ret = OB_SUCCESS;
-  } else {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed: alloc memory for json object result.", K(ret), K(length));
-  }
-  return ret;
-}
-
 
 int ObExprTreat::eval_treat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) {
   INIT_SUCC(ret);
@@ -112,27 +96,29 @@ int ObExprTreat::eval_treat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) {
   ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
   ObDatum *child_res = nullptr;
 
+  ObString in_str;
+  bool is_null = false;
+
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_res))) {
     LOG_WARN("eval arg failed", K(ret), K(ctx));
   } else if (OB_ISNULL(child_res) || child_res->is_null()) {
     res.set_null();
-  } else {
-    if(ob_is_string_type(in_type)) {
-      const ObString &in_str = child_res->get_string();
-      if (OB_FAIL(treat_string_as_json(expr, ctx, temp_allocator, in_str, res))) {
-        LOG_WARN("fail to parse string as json tree", K(ret), K(in_type), K(in_str));
-      }
-    } else if(ob_is_raw(in_type)) {
-      if(OB_FAIL(ObDatumHexUtils::rawtohex(expr, child_res->get_string(), ctx, res))) {
-        LOG_WARN("fail raw to hex", K(ret), K(in_type), K(child_res->get_string()));
-      }
-    } else if (ob_is_extend(in_type)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not surpport udt type", K(ret));
-    } else {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_WARN("in type unexpected", K(ret), K(in_type), K(in_cs_type));
+  } else if (ob_is_extend(in_type)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not surpport udt type", K(ret));
+  } else if (ob_is_raw(in_type)) {
+    if(OB_FAIL(ObDatumHexUtils::rawtohex(expr, child_res->get_string(), ctx, res))) {
+      LOG_WARN("fail raw to hex", K(ret), K(in_type), K(child_res->get_string()));
     }
+  } else if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[0], ctx, temp_allocator, in_str, is_null))) {
+    LOG_WARN("eval arg failed", K(ret));
+  } else if (ob_is_string_type(in_type)) {
+    if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, in_str))) {
+      LOG_WARN("fail to pack result", K(ret), K(in_str.length()));
+    }
+  } else {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("in type unexpected", K(ret), K(in_type), K(in_cs_type));
   }
   return ret;
 }

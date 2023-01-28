@@ -43,6 +43,8 @@
 #include "rpc/obmysql/packet/ompk_resheader.h"
 #include "rpc/obmysql/packet/ompk_field.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
+#include "share/ob_lob_access_utils.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
 {
@@ -855,8 +857,14 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
       } else if (NULL == piece) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("piece is null before use.", K(ret), K(stmt_id), K(i));
-      } else if (ob_is_string_type(value.get_type()) || ob_is_raw(value.get_type()) || ob_is_json(value.get_type())
-                 || ob_is_geometry(value.get_type())) {
+      } else if (is_lob_storage(value.get_type())) {
+        ObTextStringIter iter(value);
+        if (OB_FAIL(iter.init(0, &session, &(THIS_WORKER.get_sql_arena_allocator())))) {
+          LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
+        } else if (OB_FAIL(iter.get_full_data(str))) {
+          LOG_WARN("Lob: get full data failed ", K(ret), K(value));
+        }
+      } else if (ob_is_string_type(value.get_type()) || ob_is_raw(value.get_type())) {
         str = value.get_string();
       } else if (ob_is_rowid_tc(value.get_type())) {
         str = value.get_string_ptr();

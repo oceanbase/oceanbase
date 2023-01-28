@@ -430,7 +430,7 @@ int ObAggregateExpression::calc_result_row(ObExprCtx &expr_ctx,
         LOG_WARN("failed to calc result row", K(ret), K(row));
       }
     } else {
-      if (OB_FAIL(infix_expr_.calc_row(expr_ctx, row, get_aggr_func(), result_row))) {
+      if (OB_FAIL(infix_expr_.calc_row(expr_ctx, row, get_aggr_func(), get_result_type(), result_row))) {
          LOG_WARN("failed to calc row", K(ret), K(row));
       }
     }

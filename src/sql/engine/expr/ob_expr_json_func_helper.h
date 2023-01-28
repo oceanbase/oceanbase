@@ -15,6 +15,7 @@
 #define OCEANBASE_SQL_OB_EXPR_JSON_FUNC_HELPER_H_
 
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/object/ob_obj_cast.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -45,6 +46,9 @@ class ObJsonExprHelper final
     ObJsonPathCache path_cache_;
   };
 public:
+  static int get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
+                                  common::ObArenaAllocator &allocator,
+                                  ObString& str, bool& is_null);
   /*
   get json doc to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -61,19 +65,6 @@ public:
                           bool &is_null, bool need_to_tree=true, bool relax = true);
 
   static int cast_to_json_tree(ObString &text, common::ObIAllocator *allocator, uint32_t parse_flag = 0);
-  /*
-  get json doc to JsonBase in old_typing_engine
-  @param[in]  objs       the input arguments
-  @param[in]  allocator  the Allocator in context
-  @param[in]  index      the input arguments index
-  @param[out] j_base     the pointer to JsonBase
-  @param[out] is_null    the flag for null situation
-  @return Returns OB_SUCCESS on success, error code otherwise.
-  */
-  static int get_json_doc(const ObObj *objs, common::ObIAllocator *allocator,
-                          uint16_t index, ObIJsonBase*& j_base,
-                          bool &is_null, bool need_to_tree = true);
-
   /*
   get json value to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -158,6 +149,7 @@ public:
                                              ObCollationType cs_type,
                                              ObIJsonBase*& j_base,
                                              bool to_bin,
+                                             bool has_lob_header,
                                              bool deep_copy = false,
                                              bool relax_type = true,
                                              bool format_json = false);
@@ -168,6 +160,7 @@ public:
                                            ObObjType type,
                                            ObCollationType cs_type,
                                            ObJsonBuffer &j_buf,
+                                           bool has_lob_header,
                                            bool format_json,
                                            bool strict_json,
                                            int32_t pos);
@@ -193,6 +186,12 @@ public:
   static void set_type_for_value(ObExprResType* types_stack, uint32_t index);
   static int ensure_collation(ObObjType type, ObCollationType cs_type);
   static ObJsonInType get_json_internal_type(ObObjType type);
+  template <typename T>
+  static int pack_json_str_res(const ObExpr &expr,
+                               ObEvalCtx &ctx,
+                               ObDatum &res,
+                               T &str,
+                               common::ObIAllocator *allocator = nullptr);
 
   /**
    * the following 3 functions is used for json_query and json_mergepatch

@@ -175,7 +175,9 @@ int ObCellWriter::write_text(const ObObj &obj, const enum ObObjType store_type, 
   }
   if (OB_SUCC(ret) && !old_text_format()) {
     ObLobScale lob_scale(obj.get_scale());
-    if (!lob_scale.is_in_row()) {
+    if (obj.has_lob_header()) {
+      lob_scale.set_has_lob_header();
+    } else if (!lob_scale.is_in_row()) {
       lob_scale.set_in_row();
     }
     if (OB_FAIL(append<uint8_t>(static_cast<uint8_t>(lob_scale.get_scale())))) {

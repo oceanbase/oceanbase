@@ -19,6 +19,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_physical_plan.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 
@@ -172,6 +173,7 @@ int ObExprRegexpCount::eval_regexp_count(
       bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
       uint32_t flags = 0;
       ObString text_utf16;
+      ObString text_str;
       bool is_null = true;
       if (reusable) {
         if (NULL == (regexp_ctx = static_cast<ObExprRegexContext *>(
@@ -184,6 +186,7 @@ int ObExprRegexpCount::eval_regexp_count(
           }
         }
       }
+
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_param, is_case_sensitive, flags))) {
         LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
@@ -192,6 +195,15 @@ int ObExprRegexpCount::eval_regexp_count(
                                           ctx.exec_ctx_.get_my_session(),
                                           pattern->get_string(), flags, reusable, expr.args_[1]->datum_meta_.cs_type_))) {
         LOG_WARN("fail to init regexp", K(pattern), K(flags), K(ret));
+      } else if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, text, text_str))) {
+          LOG_WARN("get text string failed", K(ret));
+        }
+      } else {
+        text_str = text->get_string();
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (text->is_null() || pattern->is_null() ||
                  (position != NULL && position->is_null())) {
         expr_datum.set_null();
@@ -199,13 +211,13 @@ int ObExprRegexpCount::eval_regexp_count(
         is_null = false;
         if (expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
             expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI) {
-          if (OB_FAIL(ObExprUtil::convert_string_collation(text->get_string(), expr.args_[0]->datum_meta_.cs_type_, text_utf16,
+          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str, expr.args_[0]->datum_meta_.cs_type_, text_utf16,
                                 ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI,
                                 tmp_alloc))) {
             LOG_WARN("convert charset failed", K(ret));
           }
         } else {
-          text_utf16 = text->get_string();
+          text_utf16 = text_str;
         }
       }
       if (OB_FAIL(ret) || is_null) {

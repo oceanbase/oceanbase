@@ -152,6 +152,11 @@ public:
 
   static int like_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int eval_like_expr_batch_only_text_vectorized(BATCH_EVAL_FUNC_ARG_DECL);
+  static int like_varchar_inner(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &expr_datum,
+                                ObDatum &text, ObDatum &pattern, ObDatum &escape);
+  static int like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
+                                        const ObBitVector &skip, const int64_t size,
+                                        ObExpr &text, ObDatum *pattern_datum, ObDatum *escape_datum);
 private:
   static int set_instr_info(common::ObIAllocator *exec_allocator,
                             const common::ObCollationType cs_type,

@@ -58,6 +58,7 @@ public:
 public:
   explicit ObTableCtx(common::ObIAllocator &allocator)
       : allocator_(allocator),
+        ctx_allocator_("ObTableCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         expr_info_(nullptr),
         exec_ctx_(allocator_),
         expr_factory_(allocator_),
@@ -93,6 +94,7 @@ public:
     batch_op_ = nullptr;
     return_affected_entity_ = false;
     return_rowkey_ = false;
+    cur_cluster_version_ = GET_MIN_CLUSTER_VERSION();
   }
   virtual ~ObTableCtx()
   {}
@@ -118,7 +120,8 @@ public:
                "is_update", is_for_update_,
                // insert up to string
                "is_for_insertup", is_for_insertup_,
-               "entity_type", entity_type_);
+               "entity_type", entity_type_,
+               "cur_cluster_version", cur_cluster_version_);
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -195,6 +198,7 @@ public:
   // for increment/append
   OB_INLINE bool return_affected_entity() const { return return_affected_entity_;}
   OB_INLINE bool return_rowkey() const { return return_rowkey_;}
+  OB_INLINE uint64_t get_cur_cluster_version() const { return cur_cluster_version_;}
 
   //////////////////////////////////////// setter ////////////////////////////////////////////////
   // for common
@@ -263,6 +267,11 @@ public:
   // insert 表达式
   int classify_insert_exprs();
   int init_das_context(ObDASCtx &das_ctx);
+public:
+  // convert lob的allocator需要保证obj写入表达式后才能析构
+  static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
+  // read lob的allocator需要保证obj序列化到rpc buffer后才能析构
+  static int read_real_lob(common::ObIAllocator &allocator, ObObj &obj);
 private:
   // for common
   int get_tablet_by_rowkey(const common::ObRowkey &rowkey,
@@ -280,16 +289,19 @@ private:
 private:
   int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema,
                               sql::ObExprResType &column_type);
-  int check_column_type(const ObExprResType &column_type, ObObj &obj);
-  int check_rowkey(ObRowkey &rowkey);
-  int check_properties(ObIArray<std::pair<ObString, ObObj>> &properties);
-  int check_entity();
+  int adjust_lob_obj(ObObj &obj);
+  int adjust_column_type(const ObExprResType &column_type, ObObj &obj);
+  int adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj);
+  int adjust_rowkey();
+  int adjust_properties();
+  int adjust_entity();
   bool has_exist_in_columns(const common::ObIArray<common::ObString>& columns,
                             const common::ObString &name,
                             int64_t *idx = nullptr) const;
 private:
   bool is_init_;
-  common::ObIAllocator &allocator_;
+  common::ObIAllocator &allocator_; // processor allocator
+  common::ObArenaAllocator ctx_allocator_;
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString table_name_;
@@ -345,6 +357,8 @@ private:
   const ObITableEntity *entity_;
   // for htable
   const ObTableBatchOperation *batch_op_;
+  // for lob adapt
+  uint64_t cur_cluster_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

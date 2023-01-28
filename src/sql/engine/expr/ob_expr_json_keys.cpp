@@ -123,7 +123,9 @@ int ObExprJsonKeys::eval_json_keys(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       ObJsonBaseVector sub_json_targets;
       ObJsonPath *json_path;
       ObString path_val = path_data->get_string();
-      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, 1, false))) {
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[1], ctx, temp_allocator, path_val, is_null_result))) {
+        LOG_WARN("fail to get real data.", K(ret), K(path_val));
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, 1, false))) {
         LOG_WARN("json parse failed", K(path_data->get_string()), K(ret));
       } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt(),
                                         false, true, sub_json_targets))) {
@@ -151,15 +153,8 @@ int ObExprJsonKeys::eval_json_keys(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     ObString str;
     if (OB_FAIL(get_keys_from_wrapper(json_doc, &temp_allocator, str))) {
       LOG_WARN("get_keys_from_wrapper failed", K(ret));
-    } else {
-      char *buf = expr.get_str_res_mem(ctx, str.length());
-      if (OB_ISNULL(buf)){
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("json_keys alloc jsonString failed", K(ret), K(str.length()));
-      } else {
-        MEMCPY(buf, str.ptr(), str.length());
-        res.set_string(buf, str.length());
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
 

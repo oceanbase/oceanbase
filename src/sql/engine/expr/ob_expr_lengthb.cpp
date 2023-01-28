@@ -80,7 +80,7 @@ int ObExprLengthb::calc(ObObj &result, const ObObj &text, ObExprCtx &expr_ctx)
   } else {
     ObString m_text = text.get_string();
     number::ObNumber num;
-    if(OB_FAIL(num.from(static_cast<int64_t>(m_text.length()), *(expr_ctx.calc_buf_)))) {
+    if (OB_FAIL(num.from(static_cast<int64_t>(m_text.length()), *(expr_ctx.calc_buf_)))) {
       LOG_WARN("copy number fail", K(ret));
     } else {
       result.set_number(num);
@@ -104,9 +104,17 @@ int ObExprLengthb::calc_lengthb_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     } else if (arg0->is_null() || !ob_is_castable_type_class(type_class)) {
       res_datum.set_null();
     } else {
+      int64_t byte_len = static_cast<int64_t>(arg0->len_);
+      if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+        ObLobLocatorV2 locator(arg0->get_string(), expr.args_[0]->obj_meta_.has_lob_header());
+        if (OB_FAIL(locator.get_lob_data_byte_len(byte_len))) {
+          LOG_WARN("get lob data byte length failed", K(ret));
+        }
+      }
       number::ObNumber num;
       ObNumStackOnceAlloc tmp_alloc;
-      if(OB_FAIL(num.from(static_cast<int64_t>(arg0->len_), tmp_alloc))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(num.from(byte_len, tmp_alloc))) {
         LOG_WARN("copy number fail", K(ret));
       } else {
         res_datum.set_number(num);

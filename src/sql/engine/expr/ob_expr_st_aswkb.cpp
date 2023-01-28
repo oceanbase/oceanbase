@@ -113,6 +113,7 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
   bool need_reverse = false;
   bool srid_default_ordering = true;
   ObDatum *wkb_datum = NULL;
+  ObString wkb;
   ObGeometry *geo = NULL;
   ObGeoAxisOrder axis_order = ObGeoAxisOrder::INVALID;
 
@@ -120,9 +121,13 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
     LOG_WARN("fail to eval wkb datum", K(ret));
   } else if (wkb_datum->is_null()) {
     is_null_result = true;
+  } else if (FALSE_IT(wkb = wkb_datum->get_string())) {
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *wkb_datum,
+             expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
+    LOG_WARN("fail to get real string data", K(ret), K(wkb));
   } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_allocator,
-      wkb_datum->get_string(), srs_guard, srs, geo, get_func_name()))) {
-    LOG_WARN("fail to create geo bin", K(ret), K(wkb_datum->get_string()));
+      wkb, srs_guard, srs, geo, get_func_name()))) {
+    LOG_WARN("fail to create geo bin", K(ret), K(wkb));
   } else if (OB_NOT_NULL(srs)) {
     is_geog = srs->is_geographical_srs();
     is_lat_long_order = srs->is_lat_long_order();
@@ -131,20 +136,25 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
 
   if (OB_SUCC(ret) && !is_null_result && arg_num == 2) {
     ObDatum *option_datum = NULL;
+    ObString option_str;
     if (OB_FAIL(expr.args_[1]->eval(ctx, option_datum))) {
       LOG_WARN("fail to eval option datum", K(ret));
     } else if (option_datum->is_null()){
       is_null_result = true;
-    } else if (is_blank_string(expr.args_[1]->datum_meta_.cs_type_, option_datum->get_string())) {
+    } else if (FALSE_IT(option_str = option_datum->get_string())) {
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *option_datum,
+              expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), option_str))) {
+      LOG_WARN("fail to get real string data", K(ret), K(option_str));
+    } else if (is_blank_string(expr.args_[1]->datum_meta_.cs_type_, option_str)) {
       // do nothing ====> select st_aswkb(point(1,1), '   '); ignore '   '
-    } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(option_datum->get_string(), get_func_name(),
+    } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(option_str, get_func_name(),
                                                         axis_order))) {
-      LOG_WARN("fail to parse axis order option string", K(ret), K(option_datum->get_string()));
+      LOG_WARN("fail to parse axis order option string", K(ret), K(option_str));
       ret = OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR; // adapt mysql errcode.
-      const int64_t len = option_datum->get_string().length();
+      const int64_t len = option_str.length();
       char str[len + 1];
       str[len] = '\0';
-      MEMCPY(str, option_datum->get_string().ptr(), len);
+      MEMCPY(str, option_str.ptr(), len);
       LOG_USER_ERROR(OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR, str, '=', get_func_name());
     } else if (OB_FAIL(ObGeoExprUtils::check_need_reverse(axis_order, need_reverse))) {
       LOG_WARN("fail to check need reverse", K(ret), K(axis_order));
@@ -176,10 +186,16 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
       res.set_null();
     } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*geo, expr, ctx, srs, res_wkb))) {
       LOG_WARN("failed to write geometry to wkb", K(ret));
-    } else if (ObGeoTypeUtil::get_wkb_from_swkb(res_wkb, wkb, offset)) {
-      LOG_WARN("failed to get wkb from swkb", K(ret));
     } else {
-      res.set_string(wkb); // skip srid + version
+      ObLobLocatorV2 lob(res_wkb, expr.obj_meta_.has_lob_header());
+      if (OB_FAIL(lob.get_inrow_data(res_wkb))) {
+        LOG_WARN("failed to get inrow data", K(ret), K(lob));
+      } else if (ObGeoTypeUtil::get_wkb_from_swkb(res_wkb, wkb, offset)) {
+        LOG_WARN("failed to get wkb from swkb", K(ret));
+      } else {
+        MEMMOVE(res_wkb.ptr(), res_wkb.ptr() + offset, res_wkb.length() - offset);
+        res.set_string(lob.ptr_, lob.size_ - offset); // skip srid + version
+      }
     }
   }
 

@@ -15,6 +15,7 @@
 #include "sql/engine/expr/ob_expr_soundex.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -137,14 +138,15 @@ int ObExprSoundex::convert_str_to_soundex(const ObString &input,
                                           const ObCollationType input_cs_type,
                                           const bool use_original_algo,
                                           const bool fix_min_len,
-                                          char *buf, const int64_t len, int64_t &pos)
+                                          char *buf, const int64_t len, int64_t &pos,
+                                          bool &is_first, int8_t &last_soundex_code)
 {
   int ret = OB_SUCCESS;
   ObStringScanner scanner(input, input_cs_type);
   ObString tmp_str;
   int32_t wchar = 0;
   int8_t soundex_code = 0;
-  int8_t pre_code = 0;
+  int8_t pre_code = last_soundex_code;
   if (OB_UNLIKELY(len < MIN_RESULT_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("buf is not enough", K(ret), K(len));
@@ -155,7 +157,7 @@ int ObExprSoundex::convert_str_to_soundex(const ObString &input,
         LOG_WARN("get next character failed", K(ret), K(input));
       }
     } else if (FALSE_IT(soundex_code = get_character_code(wchar))) {
-    } else if (0 == pos) {
+    } else if (0 == pos && is_first) {
       if (soundex_code >= 0) {
         // only expect alphabetic character as beginning of result.
         if (wchar <= static_cast<int32_t>('z') && wchar >= static_cast<int32_t>('a')) {
@@ -167,6 +169,7 @@ int ObExprSoundex::convert_str_to_soundex(const ObString &input,
           LOG_WARN("unexpected character", K(ret), K(wchar), K(soundex_code));
         }
         pre_code = soundex_code;
+        is_first = false;
       } else {
         // ignore nonalphabetic character
       }
@@ -198,6 +201,7 @@ int ObExprSoundex::convert_str_to_soundex(const ObString &input,
       while(pos < MIN_RESULT_LENGTH) {
         buf[pos++] = '0';
       }
+      last_soundex_code = pre_code;
     }
   }
   return ret;
@@ -219,11 +223,14 @@ int ObExprSoundex::calc(const ObString &input, const ObCollationType intput_cs_t
   } else {
     buf = static_cast<char *>(res_alloc.alloc(buf_len));
   }
+  bool is_first = true;
+  int8_t last_soundex_code = 0;
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(buf_len));
   } else if (OB_FAIL(convert_str_to_soundex(input, intput_cs_type, !is_oracle_mode,
-                                            is_oracle_mode, buf, buf_len, pos))) {
+                                            is_oracle_mode, buf, buf_len, pos,
+                                            is_first, last_soundex_code))) {
     LOG_WARN("calc soundex failed", K(ret));
   } else if (need_charset_convert) {
     if (OB_FAIL(ObExprUtil::convert_string_collation(ObString(pos, buf),
@@ -235,6 +242,90 @@ int ObExprSoundex::calc(const ObString &input, const ObCollationType intput_cs_t
     }
   } else {
     out.assign_ptr(buf, pos);
+  }
+  return ret;
+}
+
+int ObExprSoundex::calc_text(const ObDatum &input_datum,
+                             const ObObjType input_type,
+                             const ObObjType res_type,
+                             const ObCollationType input_cs_type,
+                             const ObCollationType res_cs_type,
+                             const bool input_has_lob_header,
+                             ObIAllocator &tmp_alloc, ObIAllocator &res_alloc,
+                             ObString &out,
+                             bool has_lob_header)
+{
+  int ret = OB_SUCCESS;
+  const bool need_charset_convert = ObCharset::is_cs_nonascii(res_cs_type);
+  const bool is_oracle_mode = lib::is_oracle_mode();
+  char *buf = NULL;
+  int64_t pos = 0;
+
+  ObTextStringIter input_iter(input_type, input_cs_type, input_datum.get_string(), input_has_lob_header);
+  ObTextStringResult out_result(res_type, has_lob_header, &res_alloc);
+  int64_t buf_size = 0;
+  int64_t data_len = 0;
+  if (OB_FAIL(input_iter.init(0, NULL, &tmp_alloc))) {
+    LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
+  } else if (OB_FAIL(input_iter.get_byte_len(data_len))) {
+    LOG_WARN("get input iter data len failed ", K(ret), K(input_iter));
+  } else if (FALSE_IT(buf_size = is_oracle_mode ? MIN_RESULT_LENGTH : MAX(MIN_RESULT_LENGTH, data_len))) {
+  } else if (OB_FAIL(out_result.init(buf_size))) {
+    LOG_WARN("init lob result failed", K(ret), K(out_result), K(buf_size));
+  } else if (OB_FAIL(out_result.get_reserved_buffer(buf, buf_size))) {
+    LOG_WARN("get empty buffer failed", K(ret), K(buf_size));
+  } else if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret), K(buf_size));
+  } else {
+    bool is_first = true;
+    int8_t last_soundex_code = 0;
+    ObTextStringIterState state;
+    ObString input_data;
+    ObString block_out;
+    char *block_buf = NULL;
+    while (OB_SUCC(ret)
+            && buf_size > 0
+            && (state = input_iter.get_next_block(input_data)) == TEXTSTRING_ITER_NEXT) {
+      ObDataBuffer buf_alloc(buf, buf_size);
+      int64_t block_buf_len = is_oracle_mode
+                              ? MIN_RESULT_LENGTH : MAX(MIN_RESULT_LENGTH, input_data.length());
+      if (need_charset_convert) {
+        block_buf = static_cast<char *>(tmp_alloc.alloc(block_buf_len));
+      } else {
+        block_buf = static_cast<char *>(buf_alloc.alloc(block_buf_len));
+      }
+      if (OB_FAIL(convert_str_to_soundex(input_data, input_cs_type, !is_oracle_mode,
+                                        is_oracle_mode, block_buf, block_buf_len, pos,
+                                        is_first, last_soundex_code))) {
+        LOG_WARN("calc soundex failed", K(ret));
+      } else if (need_charset_convert) {
+        if (OB_FAIL(ObExprUtil::convert_string_collation(ObString(pos, block_buf),
+                                                        CS_TYPE_UTF8MB4_GENERAL_CI,
+                                                        block_out,
+                                                        res_cs_type,
+                                                        buf_alloc))) {
+          LOG_WARN("convert string collation failed", K(ret));
+        } else if (OB_FAIL(out_result.lseek(block_out.length(), 0))) {
+          LOG_WARN("result lseek failed", K(ret));
+        }
+      } else { // nocharset convert
+        if (OB_FAIL(out_result.lseek(pos, 0))) {
+          LOG_WARN("result lseek failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (need_charset_convert) {
+          buf = buf + block_out.length();
+          buf_size = buf_size - block_out.length();
+        } else {
+          buf = buf + pos;
+          buf_size = buf_size - pos;
+        }
+      }
+    }
+    out_result.get_result_buffer(out);
   }
   return ret;
 }
@@ -263,9 +354,21 @@ int ObExprSoundex::eval_soundex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
     const ObCollationType res_cs_type = expr.datum_meta_.cs_type_;
     const ObCollationType input_cs_type = expr.args_[0]->datum_meta_.cs_type_;
     ObString out;
-    if (OB_FAIL(calc(param->get_string(), input_cs_type, res_cs_type,
-                     tmp_alloc_guard.get_allocator(),
-                     expr_res_alloc, out))) {
+    const ObObjType input_type = expr.args_[0]->datum_meta_.type_;
+    const ObObjType res_type = expr.datum_meta_.type_;
+    if (!ob_is_text_tc(input_type) && !ob_is_text_tc(res_type)) {
+      ret = calc(param->get_string(), input_cs_type, res_cs_type,
+                 tmp_alloc_guard.get_allocator(),
+                 expr_res_alloc, out);
+    } else { // text tc
+      const bool input_has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
+      bool has_lob_header = expr.obj_meta_.has_lob_header();
+      ret = calc_text(*param, input_type, res_type, input_cs_type, res_cs_type,
+                      input_has_lob_header,
+                      tmp_alloc_guard.get_allocator(),
+                      expr_res_alloc, out, has_lob_header);
+    }
+    if (OB_FAIL(ret)) {
       LOG_WARN("calc soundex failed", K(ret));
     } else if (out.empty() && is_oracle_mode()) {
       expr_datum.set_null();

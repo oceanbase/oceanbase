@@ -623,11 +623,18 @@ int ObGeoExprUtils::geo_to_wkb(ObGeometry &geo,
     LOG_WARN("failed to do wkb size visitor", K(ret));
   } else {
     // swkb format : srid + version + wkb
-    uint64_t res_size = WKB_OFFSET + wkb_size_visitor.geo_size();
-    char *res_buf = expr.get_str_res_mem(ctx, res_size);
-    if (OB_ISNULL(res_buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc res buf", K(ret), K(res_size));
+    int64_t res_size = WKB_OFFSET + wkb_size_visitor.geo_size();
+    char *res_buf = nullptr;
+    int64_t res_buf_len = 0;
+    ObDatum tmp_res;
+    ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &tmp_res);
+    if (OB_FAIL(str_result.init(res_size, nullptr))) {
+      LOG_WARN("fail to init result", K(ret), K(res_size));
+    } else if (OB_FAIL(str_result.get_reserved_buffer(res_buf, res_buf_len))) {
+      LOG_WARN("");
+    } else if (res_buf_len < res_size) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid res buf len", K(ret), K(res_buf_len), K(res_size));
     } else {
       uint32_t srid = srs_item == NULL ? srs_id : srs_item->get_srid();
       ObGeoWkbByteOrderUtil::write<uint32_t>(res_buf, srid);
@@ -637,8 +644,10 @@ int ObGeoExprUtils::geo_to_wkb(ObGeometry &geo,
       ObGeoWkbVisitor wkb_visitor(srs_item, &wkb_nosrid_buf);
       if (OB_FAIL(geo.do_visit(wkb_visitor))) {
         LOG_WARN("failed to do wkb visit", K(ret), K(srid));
+      } else if (OB_FAIL(str_result.lseek(res_size, 0))) {
+        LOG_WARN("failed to lseek res.", K(ret), K(str_result), K(res_size));
       } else {
-        res_wkb.assign_ptr(res_buf, res_size);
+        str_result.get_result_buffer(res_wkb);
       }
     }
   }
@@ -677,6 +686,20 @@ int ObGeoExprUtils::zoom_in_geos_for_relation(ObGeometry &geo1, ObGeometry &geo2
     } else if (OB_FAIL(geo2.do_visit(zoom_in_visitor))) {
       LOG_WARN("failed to zoom in visit", K(ret), K(zoom_in));
     }
+  }
+  return ret;
+}
+
+int ObGeoExprUtils::pack_geo_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str)
+{
+  int ret = OB_SUCCESS;
+  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+  if (OB_FAIL(text_result.init(str.length()))) {
+    LOG_WARN("init lob result failed");
+  } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
+    LOG_WARN("failed to append realdata", K(ret), K(text_result));
+  } else {
+    text_result.set_result();
   }
   return ret;
 }

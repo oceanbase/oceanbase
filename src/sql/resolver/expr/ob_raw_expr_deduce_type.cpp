@@ -29,6 +29,7 @@
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/engine/expr/ob_expr_between.h"
 #include "sql/engine/expr/ob_expr_cast.h"
+#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
 {
@@ -390,6 +391,9 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
           types.at(i).set_calc_accuracy(types.at(i).get_accuracy());
         }
       }
+    }
+    if (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0) {
+      result_type.set_has_lob_header();
     }
     if (OB_FAIL(ret)) {
     } else if (ObExprOperator::NOT_ROW_DIMENSION != row_dimension) {
@@ -1142,7 +1146,7 @@ int ObRawExprDeduceType::set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprR
         ObExprResType& col_type = const_cast<ObExprResType&>(col_expr->get_result_type());
         // check format json constrain
         if (format_json && col_type.get_type_class() != ObStringTC && col_type.get_type_class() != ObNullTC
-            && col_type.get_type_class() != ObLobTC && col_type.get_type_class() != ObRawTC
+            && col_type.get_type_class() != ObTextTC && col_type.get_type_class() != ObRawTC
             && col_expr->get_expr_class() != ObRawExpr::EXPR_OPERATOR) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(col_type.get_type()));
@@ -1218,11 +1222,15 @@ int ObRawExprDeduceType::set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprR
         if (key_type == ObNullType) {
           ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
           LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
-        } else if (!ob_is_string_type(key_type)) {
+        } else if (!ob_is_string_tc(key_type)) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(key_type));
+          if (key_type == ObLongTextType) {
+            LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", "LOB");
+          } else {
+            LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(key_type));
+          }
         } else if (format_json && col_type.get_type_class() != ObStringTC && col_type.get_type_class() != ObNullTC
-            && col_type.get_type_class() != ObLobTC && col_type.get_type_class() != ObRawTC
+            && col_type.get_type_class() != ObLobTC && col_type.get_type_class() != ObRawTC && col_type.get_type_class() != ObTextTC
             && value_expr->get_expr_class() != ObRawExpr::EXPR_OPERATOR) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(col_type.get_type()));
@@ -1311,13 +1319,16 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       case T_FUN_WM_CONCAT:
       case T_FUN_KEEP_WM_CONCAT: {
         need_add_cast = true;
-        result_type.set_clob_locator();
         const ObRawExpr *param_expr = expr.get_param_expr(0);
         if (OB_ISNULL(param_expr) || OB_ISNULL(my_session_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected NULL", K(param_expr), K(my_session_), K(ret));
         } else {
+          result_type.set_clob_locator();
           result_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][ObLobType]);
+          // should set result_type to longtext type after enabled lob locator v2,
+          // However, ObLobType is used for compatiablity, refer to static_engine.subplan_scan_oracle
+          // bug: https://work.aone.alibaba-inc.com/issue/38448577
           result_type.set_collation_type(my_session_->get_nls_collation());
           result_type.set_calc_collation_type(my_session_->get_nls_collation());
           result_type.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -1507,9 +1518,14 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           bool keep_from_type = false;
           //old sql engine can't support order by lob, So temporarily ban it.
           if (T_FUN_GROUP_PERCENTILE_DISC == expr.get_expr_type()) {
-            if (OB_UNLIKELY(ob_is_lob_locator(from_type) && is_oracle_mode())) {
+            if (OB_UNLIKELY(ob_is_lob_locator(from_type))) {
               ret = OB_ERR_INVALID_TYPE_FOR_OP;
               LOG_WARN("lob type parameter not expected", K(ret));
+            } else if (ob_is_clob(from_type, from_cs_type) || ob_is_blob(from_type, from_cs_type)) {
+              if (expr.get_order_items().at(0).is_descending()) {
+                ret = OB_ERR_INVALID_TYPE_FOR_OP;
+                LOG_WARN("lob type parameter not expected", K(ret));
+              }
             } else {
               keep_from_type = true;
             }
@@ -1921,14 +1937,12 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
       LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, (int64_t)1);
     } else if (OB_UNLIKELY(
                 is_oracle_mode()
-                && (ObLongTextType == param_expr->get_data_type()
-                  || (ob_is_lob_locator(param_expr->get_data_type())
-                      && T_FUN_ORA_JSON_OBJECTAGG != expr.get_expr_type()
-                      && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type())
-                  || (ob_is_json(param_expr->get_data_type())
-                      && T_FUN_ORA_JSON_OBJECTAGG != expr.get_expr_type()
-                      && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type()
-                      && T_FUN_COUNT != expr.get_expr_type()))
+                && ((ObLongTextType == param_expr->get_data_type()
+                        || ob_is_lob_locator(param_expr->get_data_type())
+                        || ob_is_json(param_expr->get_data_type()))
+                    && (T_FUN_ORA_JSON_OBJECTAGG != expr.get_expr_type()
+                        && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type()
+                        && T_FUN_COUNT != expr.get_expr_type()))
                 && T_FUN_MEDIAN != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_CONT != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_DISC != expr.get_expr_type()
@@ -3108,7 +3122,8 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
                parent.get_expr_type() == T_FUN_KEEP_WM_CONCAT ||
                (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 0) ||
                (parent.get_expr_type() == T_FUN_ORA_JSON_OBJECTAGG && i == 0)) {
-      if (ob_is_string_type(child_ptr->get_result_type().get_type())) {
+      if (ob_is_string_type(child_ptr->get_result_type().get_type())
+          && !ob_is_blob(child_ptr->get_result_type().get_type(), child_ptr->get_collation_type())) {
         /*do nothing*/
       } else {
         ObExprResType result_type(alloc_);

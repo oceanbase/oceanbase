@@ -15,6 +15,8 @@
 #include "sql/das/ob_das_define.h" // for ObDASTableLocMeta
 #include "lib/utility/utility.h"
 #include "ob_table_service.h"
+#include "share/ob_lob_access_utils.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 namespace table
@@ -126,8 +128,8 @@ int ObTableCtx::init_common(const ObTableApiCredential &credential,
                                                  is_cache_hit,
                                                  ls_id_))) {
     LOG_WARN("fail to get ls id", K(ret), K(tablet_id), K(arg_table_name));
-  } else if (!is_scan_ && OB_FAIL(check_entity())) {
-    LOG_WARN("fail to check entity", K(ret));
+  } else if (!is_scan_ && OB_FAIL(adjust_entity())) {
+    LOG_WARN("fail to adjust entity", K(ret));
   } else {
     tenant_id_ = tenant_id;
     database_id_ = database_id;
@@ -208,8 +210,38 @@ int ObTableCtx::cons_column_type(const ObColumnSchemaV2 &column_schema,
   return ret;
 }
 
-int ObTableCtx::check_column_type(const ObExprResType &column_type,
-                                  ObObj &obj)
+int ObTableCtx::convert_lob(ObIAllocator &allocator, ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+
+  ObString full_data;
+  if (obj.has_lob_header()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object should not have lob header", K(ret), K(obj));
+  } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj, allocator))) { // add lob header
+    LOG_WARN("fail to add lob header to obj", K(ret), K(obj));
+  }
+
+  return ret;
+}
+
+int ObTableCtx::read_real_lob(ObIAllocator &allocator, ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  ObString full_data;
+
+  if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, obj, full_data))) {
+    LOG_WARN("Lob: failed to get full data", K(ret), K(obj));
+  } else {
+    obj.set_string(obj.get_type(), full_data);
+    obj.set_inrow();
+  }
+
+  return ret;
+}
+
+int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
+                                   ObObj &obj)
 {
   int ret = OB_SUCCESS;
   const bool is_not_nullable = column_type.is_not_null_for_read();
@@ -245,6 +277,11 @@ int ObTableCtx::check_column_type(const ObExprResType &column_type,
       if (OB_SUCC(ret)) {
         // convert obj type to the column type (char, varchar or text)
         obj.set_type(column_type.get_type());
+        if (is_lob_storage(obj.get_type()) && cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
+          if (OB_FAIL(convert_lob(ctx_allocator_, obj))) {
+            LOG_WARN("fail to convert lob", K(ret), K(obj));
+          }
+        }
       }
     }
     // 4. check accuracy
@@ -258,9 +295,25 @@ int ObTableCtx::check_column_type(const ObExprResType &column_type,
   return ret;
 }
 
-int ObTableCtx::check_rowkey(ObRowkey &rowkey)
+int ObTableCtx::adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj)
 {
   int ret = OB_SUCCESS;
+  ObExprResType column_type;
+
+  if (OB_FAIL(cons_column_type(col_schema, column_type))) {
+    LOG_WARN("fail to construct column type", K(ret), K(col_schema));
+  } else if (OB_FAIL(adjust_column_type(column_type, obj))) {
+    LOG_WARN("fail to adjust rowkey column type", K(ret), K(obj));
+  }
+
+  return ret;
+}
+
+int ObTableCtx::adjust_rowkey()
+{
+  int ret = OB_SUCCESS;
+  ObRowkey rowkey = entity_->get_rowkey();
+
   if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
@@ -270,7 +323,6 @@ int ObTableCtx::check_rowkey(ObRowkey &rowkey)
       LOG_WARN("entity rowkey count mismatch table schema rowkey count",
            K(ret), K(rowkey.get_obj_cnt()), K(table_schema_->get_rowkey_column_num()));
     } else {
-      ObExprResType column_type;
       const ObRowkeyInfo &rowkey_info = table_schema_->get_rowkey_info();
       const ObColumnSchemaV2 *col_schema = nullptr;
       uint64_t column_id = OB_INVALID_ID;
@@ -281,10 +333,8 @@ int ObTableCtx::check_rowkey(ObRowkey &rowkey)
         } else if (OB_ISNULL(col_schema = table_schema_->get_column_schema(column_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get column schema", K(ret), K(column_id));
-        } else if (OB_FAIL(cons_column_type(*col_schema, column_type))) {
-          LOG_WARN("fali to construct column type", K(ret), K(column_id));
-        } else if (OB_FAIL(check_column_type(column_type, obj_ptr[i]))) {
-          LOG_WARN("fali to check rowkey column type", K(ret), K(i), K(obj_ptr[i]));
+        } else if (OB_FAIL(adjust_column(*col_schema, obj_ptr[i]))) {
+          LOG_WARN("fail to adjust column", K(ret), K(obj_ptr[i]));
         }
       }
     }
@@ -293,30 +343,29 @@ int ObTableCtx::check_rowkey(ObRowkey &rowkey)
   return ret;
 }
 
-int ObTableCtx::check_properties(ObIArray<std::pair<ObString, ObObj>> &properties)
+int ObTableCtx::adjust_properties()
 {
   int ret = OB_SUCCESS;
+
   bool is_get = (ObTableOperationType::Type::GET == operation_type_);
   if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
   } else {
+    ObTableEntity *entity = static_cast<ObTableEntity*>(const_cast<ObITableEntity *>(entity_));
+    const ObIArray<ObString> &prop_names = entity->get_properties_names();
+    const ObIArray<ObObj> &prop_objs = entity->get_properties_values();
     const ObColumnSchemaV2 *col_schema = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < properties.count(); i++) {
-      ObString &col_name = properties.at(i).first;
-      ObObj &prop_obj = properties.at(i).second;
+    for (int64_t i = 0; OB_SUCC(ret) && i < prop_names.count(); i++) {
+      const ObString &col_name = prop_names.at(i);
+      ObObj &prop_obj = const_cast<ObObj &>(prop_objs.at(i));
       if (OB_ISNULL(col_schema = table_schema_->get_column_schema(col_name))) {
         ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("fail to get column schema", K(ret), K(col_name));
       } else if (is_get) {
         // do nothing
-      } else {
-        ObExprResType column_type;
-        if (OB_FAIL(cons_column_type(*col_schema, column_type))) {
-          LOG_WARN("fail to construct column type", K(ret), K(*col_schema));
-        } else if (OB_FAIL(check_column_type(column_type, prop_obj))) {
-          LOG_WARN("fail to check rowkey column type", K(ret), K(prop_obj));
-        }
+      } else if (OB_FAIL(adjust_column(*col_schema, prop_obj))) {
+        LOG_WARN("fail to adjust column", K(ret), K(prop_obj));
       }
     }
   }
@@ -324,21 +373,16 @@ int ObTableCtx::check_properties(ObIArray<std::pair<ObString, ObObj>> &propertie
   return ret;
 }
 
-int ObTableCtx::check_entity()
+int ObTableCtx::adjust_entity()
 {
   int ret = OB_SUCCESS;
-  ObRowkey rowkey;
-  ObSEArray<std::pair<ObString, ObObj>, 16> properties;
 
   if (OB_ISNULL(entity_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
-  } else if (FALSE_IT(rowkey = entity_->get_rowkey())) {
-  } else if (!is_htable() && OB_FAIL(check_rowkey(rowkey))) {
-    LOG_WARN("fail to check rowkey", K(ret));
-  } else if (OB_FAIL(entity_->get_properties(properties))) {
-    LOG_WARN("fail to get properties name", K(ret));
-  } else if (OB_FAIL(check_properties(properties))) {
+  } else if (!is_htable() && OB_FAIL(adjust_rowkey())) {
+    LOG_WARN("fail to adjust rowkey", K(ret));
+  } else if (OB_FAIL(adjust_properties())) {
     LOG_WARN("fail to check properties", K(ret));
   }
 
@@ -398,8 +442,8 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
             ObObj &obj = const_cast<ObObj&>(p_key->get_obj_ptr()[k]);
             if (obj.is_min_value() || obj.is_max_value()) {
               // do nothing
-            } else if (OB_FAIL(check_column_type(columns_type.at(k), obj))) {
-              LOG_WARN("fail to check column type", K(ret), K(columns_type.at(k)), K(obj));
+            } else if (OB_FAIL(adjust_column_type(columns_type.at(k), obj))) {
+              LOG_WARN("fail to adjust column type", K(ret), K(columns_type.at(k)), K(obj));
             }
           }
         }
@@ -758,9 +802,9 @@ int ObTableCtx::init_append(bool return_affected_entity, bool return_rowkey)
       if (delta.is_null()) {
         ret = OB_OBJ_TYPE_ERROR;
         LOG_WARN("append NULL is illegal", K(ret), K(delta));
-      } else if (OB_UNLIKELY(ObVarcharType != delta.get_type())) {
+      } else if (OB_UNLIKELY(!ob_is_string_type(delta.get_type()))) {
         ret = OB_OBJ_TYPE_ERROR;
-        LOG_WARN("can only append varchar/varbinary type", K(ret), K(delta));
+        LOG_WARN("can only append string type", K(ret), K(delta));
       }
     }
   }

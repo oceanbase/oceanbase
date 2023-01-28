@@ -94,7 +94,8 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
                                                       const char *func_name)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObDatum *datum = NULL;
   int num_args = expr.arg_cnt_;
   bool is_null_result = false;
@@ -116,6 +117,10 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
     is_null_result = true;
   } else {
     wkt = datum->get_string();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+        expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkt))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkt));
+    }
   }
   // get srid
   if (!is_null_result && OB_SUCC(ret) && num_args > 1) {
@@ -144,11 +149,16 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
   }
   // get axis_order
   if (!is_null_result && OB_SUCC(ret) && num_args > 2 ) {
+    ObString axis_str;
     if (OB_FAIL(expr.args_[2]->eval(ctx, datum))) {
       LOG_WARN("failed to eval third argument", K(ret));
     } else if (datum->is_null()){
       is_null_result = true;
-    } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(datum->get_string(), func_name, axis_order))) {
+    } else if (FALSE_IT(axis_str = datum->get_string())) {
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+              expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), axis_str))) {
+      LOG_WARN("fail to get real string data", K(ret), K(axis_str));
+    } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(axis_str, func_name, axis_order))) {
       LOG_WARN("failed to parse axis order option string", K(ret));
     } else {
       switch (axis_order) {

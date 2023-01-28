@@ -153,6 +153,7 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
           false, /*is full row scan?*/
           false,
           false);
+      query_flag.skip_read_lob_ = 1;
       ObDatumRange range;
       bool allow_not_ready = false;
       ObArray<bool> need_reshape;

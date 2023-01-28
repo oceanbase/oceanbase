@@ -7511,7 +7511,8 @@ int ObPLCodeGenerator::final_expression(ObPLCompileUnit &pl_func)
                                       &session_info_,
                                       &schema_guard_,
                                       0 /* original param cnt */,
-                                      0/* param count*/);
+                                      0/* param count*/,
+                                      GET_MIN_CLUSTER_VERSION());
       se_cg.set_rt_question_mark_eval(true);
       OZ(se_cg.generate(raw_exprs, pl_func.get_frame_info()));
 

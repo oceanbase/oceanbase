@@ -39,6 +39,7 @@ ObTableIterParam::ObTableIterParam()
       is_same_schema_column_(false),
       vectorized_enabled_(false),
       has_virtual_columns_(false),
+      has_lob_column_out_(false),
       is_for_foreign_check_(false),
       ss_rowkey_prefix_cnt_(0),
       pd_storage_flag_(0)
@@ -67,6 +68,7 @@ void ObTableIterParam::reset()
   ss_rowkey_prefix_cnt_ = 0;
   vectorized_enabled_ = false;
   has_virtual_columns_ = false;
+  has_lob_column_out_ = false;
   is_for_foreign_check_ = false;
 }
 
@@ -94,18 +96,17 @@ int ObTableIterParam::check_read_info_valid()
   return ret;
 }
 
-int ObTableIterParam::has_lob_column_out(const bool is_get, bool &has_lob_column) const
+int ObTableIterParam::refresh_lob_column_out_status()
 {
   int ret = OB_SUCCESS;
-  const ObTableReadInfo *read_info = nullptr;
-  has_lob_column = false;
-  if (OB_ISNULL(read_info = get_read_info(is_get))) {
+  has_lob_column_out_ = false;
+  if (OB_ISNULL(read_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null read info", K(ret));
   } else {
-    const ObColDescIArray &out_cols = read_info->get_columns_desc();
-    for (int64_t i = 0; !has_lob_column && i < out_cols.count(); i++) {
-      has_lob_column = (out_cols.at(i).col_type_.is_lob_v2());
+    const ObColDescIArray &out_cols = read_info_->get_columns_desc();
+    for (int64_t i = 0; !has_lob_column_out_ && i < out_cols.count(); i++) {
+      has_lob_column_out_ = (is_lob_storage(out_cols.at(i).col_type_.get_type()));
     }
   }
   return ret;
@@ -114,11 +115,8 @@ int ObTableIterParam::has_lob_column_out(const bool is_get, bool &has_lob_column
 bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag) const
 {
   bool bret = is_x86() && query_flag.is_use_fuse_row_cache() && !query_flag.is_read_latest() &&
-      nullptr != full_read_info_ && !has_virtual_columns_ && !need_scn_ && is_same_schema_column_;
-  const ObColDescIArray &col_descs = full_read_info_->get_columns_desc();
-  for (int64_t i = 0; bret && i < col_descs.count(); i++) {
-    bret = !(col_descs.at(i).col_type_.is_lob_v2());
-  }
+      nullptr != full_read_info_ && !need_scn_ && is_same_schema_column_
+       && !has_virtual_columns_ && !has_lob_column_out_;
   return bret;
 }
 
@@ -137,7 +135,8 @@ DEF_TO_STRING(ObTableIterParam)
        K_(is_same_schema_column),
        K_(pd_storage_flag),
        K_(vectorized_enabled),
-       K_(has_virtual_columns));
+       K_(has_virtual_columns),
+       K_(has_lob_column_out));
   J_OBJ_END();
   return pos;
 }
@@ -226,6 +225,8 @@ int ObTableAccessParam::init(
 
     if (OB_FAIL(iter_param_.check_read_info_valid())) {
       STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
+    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+      STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
     } else if (scan_param.use_index_skip_scan() &&
         OB_FAIL(get_prefix_cnt_for_skip_scan(scan_param, iter_param_))) {
       STORAGE_LOG(WARN, "Failed to get prefix for skip scan", K(ret));
@@ -274,7 +275,13 @@ int ObTableAccessParam::init_merge_param(
     iter_param_.is_multi_version_minor_merge_ = is_multi_version_minor_merge;
     iter_param_.read_info_ = &read_info;
     iter_param_.full_read_info_ = &read_info;
-    is_inited_ = true;
+    if (OB_FAIL(iter_param_.check_read_info_valid())) {
+      STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
+    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+      STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -306,6 +313,8 @@ int ObTableAccessParam::init_dml_access_param(
     }
     if (OB_FAIL(iter_param_.check_read_info_valid())) {
       STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
+    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+      STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
     } else {
       is_inited_ = true;
     }

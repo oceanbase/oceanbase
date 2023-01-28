@@ -42,6 +42,13 @@ private:
                         const ObString &from_str,
                         const ObCollationType &to_type,
                         ObString &to_str);
+  static int eval_nlssort_inner(const ObExpr &expr,
+                                ObEvalCtx &ctx,
+                                ObDatum &expr_datum,
+                                const ObCollationType &coll_type,
+                                const ObCollationType &arg0_coll_type,
+                                const ObObjType &arg0_obj_type,
+                                ObString input_str);
 
   DISALLOW_COPY_AND_ASSIGN(ObExprNLSSort) const;
 };

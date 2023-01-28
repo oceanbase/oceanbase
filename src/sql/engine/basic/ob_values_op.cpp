@@ -14,6 +14,7 @@
 
 #include "ob_values_op.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -80,6 +81,10 @@ int ObValuesOp::inner_get_next_row()
         LOG_WARN("type mismatch", K(ret), K(i), K(cell.get_type()), K(*expr));
       } else if (OB_FAIL(datum.from_obj(cell, expr->obj_datum_map_))) {
         LOG_WARN("convert obj to datum failed", K(ret));
+      } else if (is_lob_storage(cell.get_type()) &&
+                 OB_FAIL(ob_adjust_lob_datum(cell, expr->obj_meta_, expr->obj_datum_map_,
+                                             get_exec_ctx().get_allocator(), datum))) {
+        LOG_WARN("adjust lob datum failed", K(ret), K(cell.get_meta()), K(expr->obj_meta_));
       } else {
         expr->set_evaluated_projected(eval_ctx_);
       }

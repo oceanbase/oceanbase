@@ -331,11 +331,11 @@ public:
   {
     return (ob_is_text_tc(get_type()) && CS_TYPE_BINARY == cs_type_);
   }
-  OB_INLINE bool is_lob_v2() const { return ob_is_large_text(get_type()) || ob_is_json_tc(get_type()) || ob_is_geometry_tc(get_type()); }
+  OB_INLINE bool is_lob_storage() const { return ob_is_large_text(get_type()) || ob_is_json_tc(get_type()) || ob_is_geometry_tc(get_type()); }
   OB_INLINE bool is_lob() const { return ob_is_text_tc(get_type()); }
   OB_INLINE bool is_inrow() const { return is_lob() && lob_scale_.is_in_row(); }
   OB_INLINE bool is_outrow() const { return is_lob() && lob_scale_.is_out_row(); }
-  OB_INLINE bool has_lob_header() const { return is_lob() && lob_scale_.has_lob_header(); }
+  OB_INLINE bool has_lob_header() const { return is_lob_storage() && lob_scale_.has_lob_header(); }
 
   OB_INLINE bool is_json() const { return type_ == static_cast<uint8_t>(ObJsonType); }
   OB_INLINE bool is_json_inrow() const { return is_json() && lob_scale_.is_in_row(); }
@@ -495,12 +495,13 @@ struct ObLobCommon
   ObLobCommon()
     : version_(LOB_DATA_VERSION), is_init_(0), is_empty_(0), in_row_(1),
       opt_encrypt_(0), opt_compress_(0), opt_deduplicate_(0), has_content_type_(0),
-      use_big_endian_(1), reserve_(0)
+      use_big_endian_(1), is_mem_loc_(0), reserve_(0)
   {}
   bool operator ==(const ObLobCommon &other) const;
   bool operator !=(const ObLobCommon &other) const;
   TO_STRING_KV(K_(version), K_(is_init), K_(is_empty), K_(in_row), K_(opt_encrypt),
-      K_(opt_compress), K_(opt_deduplicate), K_(has_content_type), K_(use_big_endian));
+      K_(opt_compress), K_(opt_deduplicate), K_(has_content_type), K_(use_big_endian), K_(is_mem_loc),
+      K_(reserve));
   int64_t get_handle_size(int64_t byte_size) const
   {
     int64_t s = static_cast<int64_t>(offsetof(ObLobCommon, buffer_));
@@ -510,7 +511,7 @@ struct ObLobCommon
     if (in_row_) {
       s += byte_size;
     } else {
-      s += sizeof(ObLobDataOutRowCtx);
+      s += sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t);
     }
     return s;
   }
@@ -534,7 +535,26 @@ struct ObLobCommon
     }
     return ptr;
   }
+
+  // Get full size of outrow lobs if it is built inrow, only used in reading of systables
+  static int64_t calc_inrow_handle_size(bool is_init, int64_t byte_size)
+  {
+    int64_t s = static_cast<int64_t>(offsetof(ObLobCommon, buffer_));
+    if (is_init) {
+      s += sizeof(ObLobData);
+    }
+    s += byte_size;
+    return s;
+  }
   void reset();
+  OB_INLINE bool is_valid() const
+  {
+    bool bret = (version_ == LOB_DATA_VERSION) && (reserve_ == 0);
+    if (!in_row_) {
+      bret = (bret && is_init_);
+    }
+    return bret;
+  }
   uint32_t version_ : 8;
   /*flag start*/
   uint32_t is_init_ : 1;
@@ -545,7 +565,8 @@ struct ObLobCommon
   uint32_t opt_deduplicate_ : 1;
   uint32_t has_content_type_ : 1;
   uint32_t use_big_endian_ : 1;
-  uint32_t reserve_ : 16;
+  uint32_t is_mem_loc_ : 1;
+  uint32_t reserve_ : 15;
   /*flag end*/
   char buffer_[0];
 };
@@ -609,6 +630,413 @@ struct ObLobLocator
   char data_[0]; // rowid + varchar
 };
 
+// New In-Memory LobLocator
+enum ObMemLobType
+{
+  INVALID_LOB = 0,
+  PERSISTENT_LOB = 1,
+  TEMP_FULL_LOB = 2,
+  TEMP_DELTA_LOB = 3,
+  MAX_LOB_TYPE
+};
+
+// Memory Locator V2, Common Header, https://yuque.antfin.com/ob/gtuwei/mo6g8w
+// Notice: Do not add or remove fields from this sturct!
+// 8 bytes
+struct ObMemLobCommon
+{
+  // locator version 2, the old was 1
+  static const uint8_t MEM_LOB_LOCATOR_VERSION = 2;
+  static const uint32_t MAGIC_CODE2 = 0x7F7FABCD; // LOB magic for debug
+
+  ObMemLobCommon(ObMemLobType type, bool is_simple) :
+    lob_common_(), type_(type), read_only_(0), has_inrow_data_(1), is_open_(0),
+    is_simple_(is_simple), has_extern_(0), reserved_(0), version_(MEM_LOB_LOCATOR_VERSION)
+  { lob_common_.is_mem_loc_ = 1; }
+
+  OB_INLINE void set_extern(bool has_extern) { has_extern_ = has_extern ? 1 : 0; };
+  OB_INLINE void set_read_only(bool is_read_only) { read_only_ = is_read_only ? 1 : 0; }
+  OB_INLINE void set_has_inrow_data(bool has_inrow_data) { has_inrow_data_ =  has_inrow_data ? 1 : 0 ; }
+  OB_INLINE void set_open(bool is_open) { is_open_ = is_open ? 1 : 0; }
+  OB_INLINE void set_simple(bool is_simple) { is_simple_ = is_simple ? 1 : 0; }
+
+  OB_INLINE bool is_read_only() { return read_only_ == 1; }
+  OB_INLINE bool has_inrow_data() { return has_inrow_data_ == 1; }
+  OB_INLINE bool is_open() { return is_open_ == 1; }
+  OB_INLINE bool is_simple() { return is_simple_ == 1; }
+  OB_INLINE bool has_extern() {return has_extern_ == 1; }
+  OB_INLINE bool is_persist() { return type_ == PERSISTENT_LOB; }
+  OB_INLINE bool is_temporary_full() { return type_ == TEMP_FULL_LOB; }
+  OB_INLINE bool is_temporary_delta() { return type_ == TEMP_DELTA_LOB; }
+
+  OB_INLINE bool has_rowkey_addr() { return has_extern(); } // Notice: rowkey maybe empty string
+
+  OB_INLINE bool is_valid() const
+  {
+    bool bret = (lob_common_.is_valid() && lob_common_.is_mem_loc_ == 1)
+                && (version_ == MEM_LOB_LOCATOR_VERSION)
+                && (type_ > INVALID_LOB && type_ <= TEMP_DELTA_LOB)
+                && ((is_simple_ & has_extern_) != 1);
+    if (!bret) {
+      COMMON_LOG(WARN, "Invalid lob locator v2!",
+        K(lob_common_), K(version_), K(type_), K(is_simple_), K(has_extern_), K(lbt()));
+    }
+    return bret;
+  }
+
+  TO_STRING_KV(K_(lob_common), K_(type), K_(read_only), K_(has_inrow_data), K_(is_open), K_(is_simple),
+               K_(has_extern), K_(reserved), K_(version));
+
+  ObLobCommon lob_common_;
+
+  // version, type, flags total 4 bytes, correspoinding to the old locator version
+  uint32_t type_ : 4;     // ObMemLobType (Persistent/TmpFull/TmpDelta)
+
+  // flags, 20 bits
+  uint32_t read_only_ : 1;
+  uint32_t has_inrow_data_ : 1;  // Indicate whether the lob is in-Memory inrow
+                                 // However, it may not be the same with the flag in disk locator.
+                                 // compatibility flag for client
+  uint32_t is_open_ : 1;   // Indicate whether the persist lob is open, compatible with oracle
+  uint32_t is_simple_ : 1; // Indicate whether the lob has this common part only. Used for inrow lobs
+                           // which do not need rowkey (Only used in mysql modes now)
+  uint32_t has_extern_ : 1; // Indicate whether the lob locator has extern segment
+  uint32_t reserved_  : 15;
+
+  uint32_t version_ : 8;
+
+  char data_[0];
+};
+
+struct ObMemLobExternFlags
+{
+  ObMemLobExternFlags() :
+    has_tx_info_(1), has_location_info_(1), reserved_(0)
+  {}
+
+  ObMemLobExternFlags(bool enable) :
+    has_tx_info_(enable), has_location_info_(enable), reserved_(0)
+  {}
+
+  ObMemLobExternFlags(const ObMemLobExternFlags &flags) { *this = flags; }
+
+  OB_INLINE bool is_empty() const
+  {
+    return (*(reinterpret_cast<const uint16_t *>(this)) == 0);
+  }
+
+  OB_INLINE bool set_empty()
+  {
+    return (*(reinterpret_cast<uint16_t *>(this)) = 0);
+  }
+
+  TO_STRING_KV(K_(has_tx_info), K_(has_location_info), K_(reserved));
+
+  uint16_t has_tx_info_ : 1; // Indicate whether tx info exists
+  uint16_t has_location_info_ : 1; // Indicate whether has cid exists (reserved)
+  uint16_t reserved_ : 14;
+};
+
+// Memory Locator V2, Extern Header:
+// Notice: Do not add or remove fields from this sturct!
+// 32 bytes
+struct ObMemLobExternHeader
+{
+  ObMemLobExternHeader(const ObMemLobExternFlags &flags, uint16_t rowkey_size) :
+    reserved_(0), table_id_(0), column_idx_(0), flags_(flags),
+    rowkey_size_(rowkey_size), payload_offset_(0), payload_size_(0)
+  {}
+
+  ObMemLobExternHeader(uint64_t table_id, uint64_t column_idx, uint16_t rowkey_size,
+                       uint32_t payload_offset, uint32_t payload_size) :
+    reserved_(0), table_id_(table_id), column_idx_(column_idx), flags_(),
+    rowkey_size_(rowkey_size),
+    payload_offset_(payload_offset), payload_size_(payload_size)
+  {}
+
+  TO_STRING_KV(K_(reserved), K_(table_id), K_(column_idx), K_(flags), K_(rowkey_size),
+               K_(payload_offset), K_(payload_size));
+
+  int64_t reserved_; // 8 bytes snpahot version is not enough for read, just reserved
+  uint64_t table_id_;
+  uint32_t column_idx_;
+
+  // correspoinding to ObLobLocator(v1) uint16_t mode_
+  ObMemLobExternFlags flags_;
+
+  // correspoinding to ObLobLocator(v1) uint16_t option_
+  uint16_t rowkey_size_; // Max rowkey size is 16KB
+
+  // correspoinding to ObLobLocator(v1) payload_offset_ and payload_size_
+  uint32_t payload_offset_;  // total length of extern fields, rowkey, and disk locator
+  uint32_t payload_size_;    // total inrow data size, <= 4GB
+
+  char data_[0];
+};
+
+// Memory Locator V2, Extern Body Structs
+struct ObMemLobTxInfo
+{
+  ObMemLobTxInfo(){}
+  ObMemLobTxInfo(int64_t snapshot_ver, int64_t tx_id, int64_t scn) :
+    version_(snapshot_ver), tx_id_(tx_id), scn_(scn)
+  {}
+  TO_STRING_KV(K_(version), K_(tx_id), K_(scn));
+
+  int64_t version_;
+  int64_t tx_id_;
+  int64_t scn_;
+  char data_[0];
+};
+
+struct ObMemLobLocationInfo
+{
+  ObMemLobLocationInfo(){}
+  ObMemLobLocationInfo(int64_t table_id, int64_t ls_id, ObCollationType collation_id) :
+    tablet_id_(table_id), ls_id_(ls_id), cid_(collation_id)
+  {}
+  TO_STRING_KV(K_(tablet_id), K_(ls_id), K_(cid));
+
+  int64_t tablet_id_;
+  int64_t ls_id_;
+  ObCollationType cid_; // charset for dbmslob
+  char data_[0];
+};
+
+OB_INLINE void validate_has_lob_header(const bool &has_header)
+{
+#ifdef VALIDATE_LOB_HEADER
+  // Debug only, disabled by default
+  OB_ASSERT(has_header == true);
+#endif
+};
+
+// In-Memory LobLocator Content:
+// ObMemLobCommon       (all lobs)|
+// ObMemLobExternHeader (has extern flag) |
+// externs length       (uint16_t, extern flags) |
+// ObMemLobExterns      (extern flags) |
+// Rowkey & Addr        (has extern flag) |
+// Disk locator         (all non-simple lobs)|
+// inline buffer
+struct ObLobLocatorV2
+{
+OB_UNIS_VERSION(1);
+public:
+  static const uint32_t MEM_LOB_COMMON_HEADER_LEN = sizeof(ObMemLobCommon);
+  static const uint32_t MEM_LOB_EXTERN_HEADER_LEN = sizeof(ObMemLobExternHeader);
+  static const uint32_t MEM_LOB_EXTERN_TXINFO_LEN = sizeof(ObMemLobTxInfo);
+  static const uint32_t MEM_LOB_EXTERN_LOCATIONINFO_LEN = sizeof(ObMemLobLocationInfo);
+  static const uint16_t MEM_LOB_EXTERN_SIZE_LEN = sizeof(uint16_t);
+  static const uint32_t MEM_LOB_ADDR_LEN = 0; // reserved for temp lob address
+
+  ObLobLocatorV2() : ptr_(NULL), size_(0), has_lob_header_(true) {}
+  ObLobLocatorV2(char *loc_ptr, uint32_t loc_size, uint32_t has_lob_header = true) :
+    ptr_(loc_ptr), size_(loc_size), has_lob_header_(has_lob_header)
+  {
+    if (loc_ptr == NULL || loc_size == 0) {
+    } else {
+      validate_has_lob_header(has_lob_header_);
+    }
+  }
+  ObLobLocatorV2(ObString &lob_str, uint32_t has_lob_header = true) :
+    ptr_(lob_str.ptr()), size_(lob_str.length()), has_lob_header_(has_lob_header)
+  {
+    if (lob_str.empty()) {
+    } else {
+      validate_has_lob_header(has_lob_header_);
+    }
+  }
+  ObLobLocatorV2(const ObString &lob_str, uint32_t has_lob_header = true) :
+    ptr_(const_cast<char *>(lob_str.ptr())), size_(lob_str.length()), has_lob_header_(has_lob_header)
+  {
+    if (lob_str.empty()) {
+    } else {
+      validate_has_lob_header(has_lob_header_);
+    }
+  }
+
+  ~ObLobLocatorV2() {}
+
+  DECLARE_TO_STRING;
+
+  OB_INLINE bool is_lob_locator_v1() const
+  {
+    // Notice: should be called only when ptr_ is from ObLobType data
+    ObLobLocator *loc_v1 = reinterpret_cast<ObLobLocator *>(ptr_);
+    return loc_v1->is_valid();
+  }
+
+  OB_INLINE bool is_lob_disk_locator() const
+  {
+    // Notice: should be called only when ptr_ is not null
+    ObLobCommon *loc = reinterpret_cast<ObLobCommon *>(ptr_);
+    return has_lob_header_ && (loc != nullptr) && (size_ >= sizeof(ObLobCommon)) &&
+           (loc->is_valid()) && (loc->is_mem_loc_ == 0);
+  }
+
+  OB_INLINE bool is_valid(bool is_assert = true) const
+  {
+    bool bret = true;
+    if (is_assert) {
+      validate_has_lob_header(has_lob_header_); // remove later
+    }
+    if (OB_UNLIKELY(!has_lob_header_ || size_ == 0)) {
+      // cannot validate without header or len is zero
+    } else if (OB_NOT_NULL(ptr_) && is_lob_disk_locator()) {
+      // cannot validate with disk
+    } else {
+      ObMemLobCommon *loc = reinterpret_cast<ObMemLobCommon *>(ptr_);
+      bret = (OB_NOT_NULL(loc) && size_ >= MEM_LOB_COMMON_HEADER_LEN) ? loc->is_valid() : false;
+      if (bret && loc->has_extern() && size_ < MEM_LOB_COMMON_HEADER_LEN + MEM_LOB_EXTERN_HEADER_LEN) {
+        bret = false;
+      }
+      if (!bret) {
+        COMMON_LOG(WARN, "Invalid lob locator!", KP(ptr_), K(size_));
+        if (OB_NOT_NULL(loc) && is_assert) {
+          OB_ASSERT(0);
+        }
+      }
+    }
+    return bret;
+  }
+
+  // remove if not used
+  void assign_ptr(const ObMemLobCommon *lobv2, uint32 len, uint32_t has_lob_header = true)
+  {
+    ptr_ = reinterpret_cast<char *>(const_cast<ObMemLobCommon *>(lobv2));
+    size_ = len;
+    has_lob_header_ = has_lob_header;
+  }
+
+  void assign_buffer(char *loc_buff, uint32 len, uint32_t has_lob_header = true)
+  {
+    ptr_ = loc_buff;
+    size_ = len;
+    has_lob_header_ = has_lob_header;
+  }
+
+  // Notice: disk_lob_full_size = (disk locator header size if any) + inline buffer
+  static uint32_t calc_locator_full_len(const ObMemLobExternFlags &flags,
+                                        uint32_t rowkey_size,
+                                        uint32_t disk_lob_full_size,
+                                        bool is_simple);
+
+  // interfaces for write
+  // fill empty lob locator
+  int fill(ObMemLobType type,
+           const ObMemLobExternFlags &flags,
+           const ObString &rowkey_str,
+           const ObLobCommon *disk_loc,
+           uint32_t disk_lob_full_size,
+           bool is_simple);
+
+  int copy(const ObLobLocatorV2* src_locator) const;
+  int set_table_info(const uint64_t &table_id, const uint32_t &column_idx);
+  int set_payload_data(const ObString& payload);
+  int set_payload_data(const ObLobCommon *lob_comm, const ObString& payload);
+  int set_tx_info(const ObMemLobTxInfo &tx_info);
+  int set_location_info(const ObMemLobLocationInfo &location_info);
+
+  // interfaces for read
+  // Notice: all the following functions should be called after is_valid() or fill()
+  int get_mem_locator(ObMemLobCommon *&mem_loc) const;
+  int get_extern_header(ObMemLobExternHeader *&extern_header) const;
+  int get_rowkey(ObString &rowkey_str) const;
+  int get_disk_locator(ObLobCommon *&disk_loc) const;
+  int get_disk_locator(ObString &disc_loc_buff) const;
+
+  int get_inrow_data(ObString &inrow_data) const;
+  int get_lob_data_byte_len(int64_t &len) const;
+  int get_table_info(uint64_t &table_id, uint32_t &column_idex);
+  int get_tx_info(ObMemLobTxInfo *&tx_info) const;
+  int get_location_info(ObMemLobLocationInfo *&location_info) const;
+  int get_real_locator_len(int64_t &real_len) const;
+
+  bool is_empty_lob() const;
+  bool is_inrow() const;
+  bool is_null() const { return ptr_ == NULL || size_ == 0; }
+
+  OB_INLINE bool is_readonly() const
+  {
+    validate_has_lob_header(has_lob_header_);
+    return has_lob_header_ && OB_NOT_NULL(ptr_) &&
+           !is_lob_disk_locator() &&
+           (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_read_only();
+  }
+
+  OB_INLINE bool has_inrow_data() const
+  {
+    bool bret = false;
+    if (!has_lob_header_) {
+      bret = true;
+    } else if (OB_NOT_NULL(ptr_)) {
+      if (is_lob_disk_locator()) {
+        bret = (reinterpret_cast<ObLobCommon *>(ptr_))->in_row_;
+      } else {
+        bret = (reinterpret_cast<ObMemLobCommon *>(ptr_))->has_inrow_data();
+      }
+    }
+    return bret;
+  }
+
+  OB_INLINE bool is_open() const
+  {
+    validate_has_lob_header(has_lob_header_);
+    return has_lob_header_ && OB_NOT_NULL(ptr_) &&
+           !is_lob_disk_locator() &&
+           (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_open();
+  }
+
+  OB_INLINE bool is_simple() const
+  {
+    validate_has_lob_header(has_lob_header_);
+    return has_lob_header_ && OB_NOT_NULL(ptr_) &&
+           !is_lob_disk_locator() &&
+           (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_simple();
+  }
+
+  OB_INLINE bool has_extern() const
+  {
+    validate_has_lob_header(has_lob_header_);
+    return has_lob_header_ && OB_NOT_NULL(ptr_) &&
+           !is_lob_disk_locator() &&
+           (reinterpret_cast<ObMemLobCommon *>(ptr_))->has_extern();
+  }
+
+  // all lob types without header are treated as full temp lob
+  OB_INLINE bool is_persist_lob() const
+  {
+    validate_has_lob_header(has_lob_header_);
+    return has_lob_header_ && OB_NOT_NULL(ptr_) &&
+           !is_lob_disk_locator() &&
+           (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_persist();
+  }
+
+  OB_INLINE bool is_full_temp_lob() const
+  {
+    validate_has_lob_header(has_lob_header_);
+    return (!has_lob_header_)
+           || (has_lob_header_ && OB_NOT_NULL(ptr_) &&
+              !is_lob_disk_locator() &&
+              (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_temporary_full());
+  }
+
+  OB_INLINE bool is_delta_temp_lob() const
+  {
+    validate_has_lob_header(has_lob_header_);
+    return has_lob_header_ && OB_NOT_NULL(ptr_) &&
+           !is_lob_disk_locator() &&
+           (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_temporary_delta();
+  }
+
+  OB_INLINE bool has_lob_header() const { return has_lob_header_; }
+
+  char *ptr_; // if has_lob_header ptr_ is ObMemLobCommon, else it is data content
+  uint32_t size_; // full MemLobLocator size;
+  bool has_lob_header_; // for observer 4.0 compatibility
+};
+
 struct ObObjPrintParams
 {
   ObObjPrintParams (const ObTimeZoneInfo *tz_info, ObCollationType cs_type):
@@ -668,6 +1096,7 @@ union ObObjValue
   int64_t unknown_;
   const ObLobCommon *lob_;
   const ObLobLocator *lob_locator_;
+  const ObMemLobCommon *lob_locator_v2_;
   int64_t nmonth_; //for interval year to month
   int64_t nsecond_; //for interval day to second
   void *ptr_;
@@ -1053,6 +1482,50 @@ public:
     return ObString(MIN(v_.lob_locator_->payload_size_, max_len),
                         v_.lob_locator_->get_payload_ptr());
   }
+  OB_INLINE ObString get_text_print_string(const int64_t max_len) const {
+    int ret = OB_SUCCESS;
+    ObString inrow_data;
+    if (val_len_ == 0 || !has_lob_header()) {
+      COMMON_LOG(DEBUG, "Lob: get string of null text obj", K(*this));
+      inrow_data.assign_ptr(v_.string_, val_len_);
+    } else {
+      ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
+      if (OB_UNLIKELY(!loc.is_valid(false))) {
+        inrow_data.assign_ptr(v_.string_, val_len_);
+      } else if (!loc.is_inrow()) {
+        inrow_data.assign_ptr("outrow", 6);
+      } else if (OB_FAIL(loc.get_inrow_data(inrow_data))) {
+        COMMON_LOG(WARN, "Lob: get inrow data failed in obobj", K(*this));
+      } else {
+        inrow_data.assign_ptr(inrow_data.ptr(), MIN(inrow_data.length(), max_len));
+      }
+    }
+    return inrow_data;
+  }
+
+  OB_INLINE int get_json_print_data(ObString &json_data, char *buf, int64_t buf_len, int64_t &pos) const {
+    int ret = OB_SUCCESS;
+    json_data = get_string();
+    if (!has_lob_header()) {
+      // if it called in log params, like K(json), it maybe a json with disk lob header only
+      // cannot judge here is a plain json data or json data with disk lob header
+      COMMON_LOG(DEBUG, "Lob: get json data without mem lob header", K(*this));
+    } else {
+      ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
+      if (OB_UNLIKELY(!loc.is_valid(false))) {
+        // do nothing, warn log inside
+        COMMON_LOG(WARN, "Lob: invalid json lob", K(ret), K(json_data));
+      } else if (!loc.is_inrow()) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s", "'outrow json'"))) {
+          COMMON_LOG(WARN, "Lob: fail to print \"\'outrow json\'\"", K(ret), K(buf_len), K(pos));
+        }
+        ret = OB_INVALID_ARGUMENT;
+      } else if (OB_FAIL(loc.get_inrow_data(json_data))) {
+        COMMON_LOG(WARN, "Lob: get inrow data failed in obobj", K(*this));
+      }
+    }
+    return ret;
+  }
 
   OB_INLINE bool get_bool() const { return (0 != v_.int64_); }
   inline int64_t get_ext() const;
@@ -1073,6 +1546,8 @@ public:
 
   inline int get_lob_locator(ObLobLocator *&lob_locator) const;
   inline const ObLobLocator* get_lob_locator() const { return v_.lob_locator_; }
+  inline int get_lob_locatorv2(ObLobLocatorV2 &lob_locator) const;
+  inline int get_lob_locatorv2(ObString &lob_locator) const;
   //TODO @shanting dangerous interface
   inline uint32_t get_lob_payload_size() const { return v_.lob_locator_->payload_size_; }
   inline const char *get_lob_payload_ptr() const
@@ -1153,8 +1628,11 @@ public:
   //OB_INLINE bool is_oracle_clob() const { return meta_.is_oracle_clob(); }
   OB_INLINE bool is_blob() const { return meta_.is_blob(); }
   //OB_INLINE bool is_oracle_blob() const { return meta_.is_oracle_blob(); }
-  OB_INLINE bool is_lob_v2() const { return meta_.is_lob_v2(); }
+  OB_INLINE bool is_lob_storage() const { return meta_.is_lob_storage(); }
   OB_INLINE bool is_lob() const { return meta_.is_lob(); }
+  OB_INLINE bool is_outrow_lob() const;
+  OB_INLINE bool is_delta_tmp_lob() const;
+  OB_INLINE bool is_persist_lob() const;
   OB_INLINE bool is_inrow() const { return meta_.is_inrow(); }
   OB_INLINE bool is_outrow() const { return meta_.is_outrow(); }
   OB_INLINE bool has_lob_header() const { return meta_.has_lob_header(); }
@@ -2039,9 +2517,12 @@ inline void ObObj::set_set_inner(const char *ptr, const ObString::obstr_size_t s
   val_len_ = size;
 }
 
+// used to set lob value without lob header
+// Notice: use set_null for null input!
 inline void ObObj::set_lob_value(const ObObjType type, const ObLobCommon *value, const int32_t length)
 {
   meta_.set_type(type);
+  meta_.set_inrow();
   meta_.set_collation_level(CS_LEVEL_IMPLICIT);
   v_.lob_ = value;
   val_len_ = length;
@@ -2519,7 +3000,7 @@ inline int ObObj::get_year(uint8_t &v) const
 inline int ObObj::get_string(ObString &v) const
 {
   int ret = OB_OBJ_TYPE_ERROR;
-  if (meta_.is_string_or_lob_locator_type()) {
+  if (meta_.is_string_or_lob_locator_type() || is_lob_storage()) {
     if (ObLobType == meta_.get_type()) {
       if (OB_ISNULL(v_.lob_locator_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2527,12 +3008,22 @@ inline int ObObj::get_string(ObString &v) const
       } else if (OB_FAIL(v_.lob_locator_->get_payload(v))) {
         OB_LOG(WARN, "Failed to get payload from lob locator", K(ret), KPC(v_.lob_locator_));
       }
+    } else if (is_lob_storage()) {
+      if (val_len_ == 0) {
+        OB_LOG(DEBUG, "Lob: get string of null text obj", K(*this));
+        v.assign_ptr(v_.string_, val_len_);
+      } else {
+        ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
+        if (OB_UNLIKELY(!loc.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "Unexpected invalid lob locator", K(*this), K(loc));
+        } else if (OB_FAIL(loc.get_inrow_data(v))) {
+          OB_LOG(WARN, "Lob: get inrow data failed", K(*this), K(loc));
+        }
+      }
     } else {
       v.assign_ptr(v_.string_, val_len_);
     }
-    ret = OB_SUCCESS;
-  } else if (meta_.is_json() || meta_.is_geometry()) {
-    v.assign_ptr(v_.string_, val_len_);
     ret = OB_SUCCESS;
   } else if (meta_.is_null()) {
     v.assign_ptr(NULL, 0);
@@ -2541,9 +3032,60 @@ inline int ObObj::get_string(ObString &v) const
   return ret;
 }
 
+inline bool ObObj::is_outrow_lob() const
+{
+  bool bret = false;
+  if (is_lob_storage()) {
+    if (val_len_ == 0) {
+    } else if (!has_lob_header()) {
+    } else {
+      ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
+      if (loc.is_valid()) {
+        bret = !loc.is_inrow();
+      }
+    }
+  }
+  return bret;
+}
+
+inline bool ObObj::is_delta_tmp_lob() const
+{
+  bool bret = false;
+  if (is_lob_storage()) {
+    if (val_len_ == 0) {
+    } else if (!has_lob_header()) {
+    } else {
+      ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
+      if (loc.is_valid()) {
+        bret = loc.is_delta_temp_lob();
+      }
+    }
+  }
+  return bret;
+}
+
+inline bool ObObj::is_persist_lob() const
+{
+  bool bret = false;
+  if (ob_is_text_tc(meta_.get_type()) || ob_is_json_tc(meta_.get_type())) {
+    if (val_len_ == 0) {
+    } else if (!has_lob_header()) {
+    } else {
+      ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
+      if (loc.is_valid()) {
+        bret = loc.is_persist_lob();
+      }
+    }
+  }
+  return bret;
+}
+
 inline int ObObj::get_print_string(ObString &v) const
 {
   int ret = OB_OBJ_TYPE_ERROR;
+  if (meta_.is_lob()) {
+    OB_LOG(WARN, "Lob: using get_print_string for text types", K(*this), K(lbt()));
+  }
   if (meta_.is_string_type()) {
     v.assign_ptr(v_.string_, MIN(val_len_, OB_MAX_VARCHAR_LENGTH));
     ret = OB_SUCCESS;
@@ -2643,7 +3185,7 @@ inline int ObObj::get_hex_string(ObString &v) const
 inline int ObObj::get_lob_value(const ObLobCommon *&value) const
 {
   int ret = OB_OBJ_TYPE_ERROR;
-  if (is_lob_v2()) {
+  if (is_lob_storage()) {
     value = v_.lob_;
     ret = OB_SUCCESS;
   }
@@ -2661,6 +3203,26 @@ inline int ObObj::get_lob_locator(ObLobLocator *&lob_locator) const
     } else {
       ret = OB_SUCCESS;
     }
+  }
+  return ret;
+}
+
+inline int ObObj::get_lob_locatorv2(ObLobLocatorV2 &v) const
+{
+  int ret = OB_OBJ_TYPE_ERROR;
+  if (is_lob_storage()) {
+    v.assign_ptr(v_.lob_locator_v2_, val_len_, has_lob_header());
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+inline int ObObj::get_lob_locatorv2(ObString &v) const
+{
+  int ret = OB_OBJ_TYPE_ERROR;
+  if (is_lob_storage()) {
+    v.assign_ptr(v_.string_, val_len_);
+    ret = OB_SUCCESS;
   }
   return ret;
 }

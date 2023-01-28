@@ -82,7 +82,7 @@ int ObExprIsJson::calc_result_typeN(ObExprResType& type,
 
 int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
                                 const ObDatum &data, ObObjType type,
-                                ObCollationType cs_type, ObArenaAllocator *allocator,
+                                ObCollationType cs_type, ObArenaAllocator &allocator,
                                 uint8_t strict_opt, uint8_t scalar_opt, uint8_t unique_opt,
                                 bool check_for_is_json, ObDatum &res)
 {
@@ -91,13 +91,15 @@ int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
   bool is_null = false;
   bool is_invalid = false;
   bool is_scalar = true;
+  ObExpr *json_arg = expr.args_[0];
 
   if (type == ObNullType || data.is_null()) {
     is_null = true;
   } else {
-    common::ObString j_str = data.get_string();
-
-    if (OB_FAIL(ret)) {
+    common::ObString j_str;
+    if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (is_null) {
     } else if (OB_UNLIKELY(j_str == "")) {
       if (type == ObJsonType) {
         is_null = true;
@@ -111,7 +113,7 @@ int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
       ADD_FLAG_IF_NEED(strict_opt != OB_JSON_MODE_STRICT, parse_flag, ObJsonParser::JSN_RELAXED_FLAG);
       ADD_FLAG_IF_NEED(unique_opt == OB_JSON_MODE_UNIQUE_KEYS, parse_flag, ObJsonParser::JSN_UNIQUE_FLAG);
 
-      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator, parse_flag))) {
+      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, &allocator, parse_flag))) {
         LOG_WARN("fail to check json syntax", K(ret), K(type), K(j_str));
       }
     }
@@ -144,7 +146,7 @@ int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
     } else {
       bool is_null_json = false;
       ObIJsonBase *json_data = NULL;
-      if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, *allocator, 0,
+      if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, allocator, 0,
                                                 json_data, is_null_json))) {
         LOG_WARN("get_json_doc failed", K(ret));
       } else {
@@ -275,7 +277,7 @@ int ObExprIsJson::eval_is_json(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     if (OB_FAIL(check_is_json(expr, ctx, *json_datum,
                               json_arg->datum_meta_.type_,
-                              cs_type, &temp_allocator,
+                              cs_type, temp_allocator,
                               strict_opt, scalar_opt, unique_opt,
                               check_for_is_json, res))) {
       LOG_WARN("fail to do checks whether is json", K(ret), K(json_arg->datum_meta_.type_));

@@ -54,7 +54,7 @@ public:
         K_(is_deleted), K_(contain_uncommitted_row), K_(compressor_type),
         K_(master_key_id), K_(encrypt_id), K_(encrypt_key), K_(row_store_type),
         K_(schema_version), K_(snapshot_version), K_(is_last_row_last_flag),
-        K_(logic_id), K_(macro_id), K_(column_checksums));
+        K_(logic_id), K_(macro_id), K_(column_checksums), K_(has_string_out_row), K_(all_lob_in_row));
 public:
   int32_t version_;
   int32_t length_;
@@ -86,6 +86,9 @@ public:
   ObLogicMacroBlockId logic_id_;
   MacroBlockId macro_id_;
   common::ObSEArray<int64_t, 4> column_checksums_;
+  bool has_string_out_row_;
+  bool all_lob_in_row_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDataBlockMetaVal);
 };

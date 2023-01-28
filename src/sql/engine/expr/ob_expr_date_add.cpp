@@ -169,7 +169,8 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
                                             get_timezone_info(session),
                                             ob_time,
                                             get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
-                                            false, date_sql_mode))) {
+                                            false, date_sql_mode,
+                                            expr.args_[0]->obj_meta_.has_lob_header()))) {
         uint64_t cast_mode = 0;
         ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
         if (CM_IS_WARN_ON_FAIL(cast_mode)) {

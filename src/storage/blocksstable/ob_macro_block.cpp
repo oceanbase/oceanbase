@@ -251,6 +251,7 @@ int ObDataStoreDesc::init(
       STORAGE_LOG(WARN, "Failed to reserve column desc array", K(ret));
     } else if (OB_FAIL(merge_schema.get_multi_version_column_descs(col_desc_array_))) {
       STORAGE_LOG(WARN, "Failed to generate multi version column ids", K(ret));
+    } else if (FALSE_IT(fresh_col_meta())) {
     } else if (OB_FAIL(datum_utils_.init(col_desc_array_, schema_rowkey_col_cnt_, lib::is_oracle_mode(), allocator_))) {
       STORAGE_LOG(WARN, "Failed to init datum utils", K(ret));
     } else if (is_major && major_working_cluster_version_ <= DATA_VERSION_4_0_0_0) {
@@ -353,6 +354,15 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc &desc)
   }
 
   return ret;
+}
+
+void ObDataStoreDesc::fresh_col_meta()
+{
+  for (int64_t i = 0; i < col_desc_array_.count(); i++) {
+    if (col_desc_array_.at(i).col_type_.is_lob_storage()) {
+      col_desc_array_.at(i).col_type_.set_has_lob_header();
+    }
+  }
 }
 
 /**

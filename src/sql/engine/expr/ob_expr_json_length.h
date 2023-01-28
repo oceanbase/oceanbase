@@ -32,9 +32,10 @@ public:
                                 ObExprResType* types_stack,
                                 int64_t param_num,
                                 ObExprTypeCtx& type_ctx) const override;
-  template <typename T>
-  static int calc(const T &data1, ObObjType type1, ObCollationType cs_type, const T *data2, 
-                  ObObjType type2, ObIAllocator *allocator, T &res,
+
+  static int calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta meta1, bool has_lob_header1,
+                  const ObDatum *data2, ObDatumMeta meta2, bool has_lob_header2,
+                  ObIAllocator *allocator, ObDatum &res,
                   ObJsonPathCache* path_cache);
   static int eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,

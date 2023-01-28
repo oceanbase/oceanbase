@@ -565,10 +565,7 @@ OB_INLINE int ObStorageDatum::from_obj_enhance(const common::ObObj &obj)
   int ret = common::OB_SUCCESS;
 
   reuse();
-  if (obj.has_lob_header()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "should not have lob header", K(ret), K(obj));
-  } else if (obj.is_ext()) {
+  if (obj.is_ext()) {
     set_ext_value(obj.get_ext());
   } else if (OB_FAIL(from_obj(obj))) {
     STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret), K(obj));
@@ -582,10 +579,7 @@ OB_INLINE int ObStorageDatum::from_obj_enhance(const common::ObObj &obj)
 OB_INLINE int ObStorageDatum::to_obj_enhance(common::ObObj &obj, const common::ObObjMeta &meta) const
 {
   int ret = common::OB_SUCCESS;
-  if (has_lob_header()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "should not have lob header", K(ret), K(*this));
-  } else if (is_outrow()) {
+  if (is_outrow()) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "lob should not set outrow in datum", K(ret), K(*this), K(obj), K(meta));
   } else if (is_ext()) {

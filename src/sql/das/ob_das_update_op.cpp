@@ -17,6 +17,7 @@
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/das/ob_das_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 namespace common
@@ -223,7 +224,10 @@ int ObDASUpdIterator::get_next_spatial_index_row(ObNewRow *&row)
         const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
         int64_t geo_idx = cur_proj.at(rowkey_num);
         ObString geo_wkb = sr->cells()[geo_idx].get_string();
-        if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_, ObGeometryType,
+                    CS_TYPE_UTF8MB4_BIN, true, geo_wkb))) {
+          LOG_WARN("fail to get real string data", K(ret), K(geo_wkb));
+        } else if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
                                                             cur_proj, *sr, *spatial_rows))) {
           LOG_WARN("generate spatial_index_rows failed", K(ret), K(geo_idx), K(geo_wkb), K(rowkey_num));
         }

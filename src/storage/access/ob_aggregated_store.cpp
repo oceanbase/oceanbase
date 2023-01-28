@@ -30,8 +30,11 @@ ObAggCell::ObAggCell(
     const share::schema::ObColumnParam *col_param,
     sql::ObExpr *expr,
     common::ObIAllocator &allocator)
-    : col_idx_(col_idx), datum_(), col_param_(col_param), expr_(expr), allocator_(allocator)
+    : col_idx_(col_idx), is_lob_col_(false), datum_(), col_param_(col_param), expr_(expr), allocator_(allocator)
 {
+  if (col_param_ != nullptr) {
+    is_lob_col_ = col_param_->get_meta_type().is_lob_storage();
+  }
 }
 
 ObAggCell::~ObAggCell()
@@ -42,6 +45,7 @@ ObAggCell::~ObAggCell()
 void ObAggCell::reset()
 {
   col_idx_ = -1;
+  is_lob_col_ = false;
   expr_ = nullptr;
 }
 
@@ -233,7 +237,7 @@ int ObCountAggCell::process(const blocksstable::ObMicroIndexInfo &index_info)
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("before count index info", K(index_info.get_row_count()), K(row_count_));
-  if (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border()) {
+  if (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Uexpected, the micro index info must can blockscan and not border", K(ret));
   } else if (!exclude_null_) {
@@ -462,6 +466,7 @@ int ObMinMaxAggCell::deep_copy_datum(const blocksstable::ObStorageDatum &src)
 ObAggRow::ObAggRow(common::ObIAllocator &allocator) :
     agg_cells_(allocator),
     need_exclude_null_(false),
+    has_lob_column_out_(false),
     allocator_(allocator)
 {
 }
@@ -481,6 +486,7 @@ void ObAggRow::reset()
   }
   agg_cells_.reset();
   need_exclude_null_ = false;
+  has_lob_column_out_ = false;
 }
 
 void ObAggRow::reuse()
@@ -518,6 +524,7 @@ int ObAggRow::init(const ObTableAccessParam &param)
       }
     }
     if (OB_SUCC(ret)) {
+      has_lob_column_out_ = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < param.aggregate_exprs_->count(); ++i) {
         int32_t col_idx = param.iter_param_.agg_cols_project_->at(i);
         sql::ObExpr *expr = param.aggregate_exprs_->at(i);
@@ -529,6 +536,9 @@ int ObAggRow::init(const ObTableAccessParam &param)
             exclude_null = col_param->is_nullable_for_write();
           } else {
             exclude_null = false;
+          }
+          if (nullptr != col_param && !has_lob_column_out_) {
+            has_lob_column_out_ = is_lob_storage(col_param->get_meta_type().get_type());
           }
           need_exclude_null_ = need_exclude_null_ || exclude_null;
           if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObCountAggCell))) ||

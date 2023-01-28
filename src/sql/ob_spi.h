@@ -156,6 +156,7 @@ public:
     //allocator_.reset();
     mem_context_->get_arena_allocator().reset();
     result_set_ = new (buf_) ObResultSet(session_info, mem_context_->get_arena_allocator());
+    result_set_->get_exec_context().get_task_exec_ctx().set_min_cluster_version(session_info.get_exec_min_cluster_version());
   }
 
   lib::MemoryContext &get_memory_ctx() { return mem_context_; }

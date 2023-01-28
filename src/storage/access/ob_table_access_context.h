@@ -125,7 +125,11 @@ struct ObTableAccessContext
     KP_(io_callback))
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
-  int build_lob_locator_helper(ObTableScanParam &scan_param, const common::ObVersionRange &trans_version_range);
+  int build_lob_locator_helper(ObTableScanParam &scan_param,
+                               const ObStoreCtx &ctx,
+                               const common::ObVersionRange &trans_version_range);
+  int build_lob_locator_helper(const ObStoreCtx &ctx,
+                               const ObVersionRange &trans_version_range); // local scan
   // init need_fill_scale_ and search column which need fill scale
   int init_column_scale_info(ObTableScanParam &scan_param);
 

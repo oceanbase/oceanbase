@@ -86,7 +86,8 @@ private:
   int get_next_normal_rows(int64_t &count, int64_t capacity);
   int get_next_aggregate_row(blocksstable::ObDatumRow *&row);
   int fuse_default(blocksstable::ObDatumRow &row);
-  int fill_lob_locator(blocksstable::ObDatumRow &row, const bool allow_nop_pk, bool &need_fill_again);
+  int fill_lob_locator(blocksstable::ObDatumRow &row);
+  int fuse_lob_default(ObObj &def_cell, const uint64_t col_id);
   int pad_columns(blocksstable::ObDatumRow &row);
   int fill_virtual_columns(blocksstable::ObDatumRow &row);
   int project_row(const blocksstable::ObDatumRow &unprojected_row, blocksstable::ObDatumRow &projected_row);
@@ -108,8 +109,9 @@ private:
   int fill_group_idx_if_need(blocksstable::ObDatumRow &row);
   int init_lob_reader(const ObTableIterParam &iter_param,
                      ObTableAccessContext &access_ctx);
-  int read_lob_columns(blocksstable::ObDatumRow &row);
+  int read_lob_columns_full_data(blocksstable::ObDatumRow &row);
   bool need_read_lob_columns(const blocksstable::ObDatumRow &row);
+  int handle_lob_before_fuse_row();
   void report_tablet_stat();
   OB_INLINE int update_and_report_tablet_stat();
 
@@ -139,7 +141,6 @@ protected:
   ObBlockRowStore *block_row_store_;
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;
-  bool has_lob_column_;
 private:
   enum ScanState
   {

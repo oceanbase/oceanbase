@@ -1054,7 +1054,9 @@ int ObIndexTreeMultiPassPrefetcher::drill_down()
   } else {
     while (OB_SUCC(ret)) {
       if (index_tree_height_ - 1 == cur_level_) {
-      } else if (OB_FAIL(tree_handles_[cur_level_ + 1].forward(*index_read_info_, border_rowkey_))) {
+      } else if (OB_FAIL(tree_handles_[cur_level_ + 1].forward(*index_read_info_,
+                                                               border_rowkey_,
+                                                               iter_param_->has_lob_column_out()))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to consume tree handle", K(ret), K(cur_level_), K(tree_handles_[cur_level_ + 1]));
         } else {
@@ -1333,7 +1335,7 @@ int ObIndexTreeMultiPassPrefetcher::check_blockscan(bool &can_blockscan)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (current_micro_info().can_blockscan()) {
+  } else if (current_micro_info().can_blockscan(iter_param_->has_lob_column_out())) {
     can_blockscan = true;
   } else if (!can_blockscan_) {
   } else if (OB_FAIL(check_data_infos_border(
@@ -1344,7 +1346,7 @@ int ObIndexTreeMultiPassPrefetcher::check_blockscan(bool &can_blockscan)
     LOG_WARN("Fail to check_data_infos_border", K(ret), K_(micro_data_prefetch_idx),
              K_(micro_data_prefetch_idx), K_(border_rowkey));
   } else {
-    can_blockscan = current_micro_info().can_blockscan();
+    can_blockscan = current_micro_info().can_blockscan(iter_param_->has_lob_column_out());
     if (!can_blockscan_) {
       clean_blockscan_check_info();
     }
@@ -1407,7 +1409,8 @@ int ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle::prefetch(
       if (OB_FAIL(parent.get_next_index_row(
                   read_info,
                   border_rowkey,
-                  index_info))) {
+                  index_info,
+                  prefetcher.iter_param_->has_lob_column_out()))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next", K(ret), KPC(this));
         } else {
@@ -1447,7 +1450,8 @@ int ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle::prefetch(
 
 int ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle::forward(
     const ObTableReadInfo &read_info,
-    const ObDatumRowkey &border_rowkey)
+    const ObDatumRowkey &border_rowkey,
+    const bool has_lob_out)
 {
   int ret = OB_SUCCESS;
   if (fetch_idx_ >= prefetch_idx_) {
@@ -1482,7 +1486,7 @@ int ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle::forward(
     }
 
     if (OB_SUCC(ret)) {
-      if (index_info.can_blockscan()) {
+      if (index_info.can_blockscan(has_lob_out)) {
       } else if (OB_FAIL(check_blockscan(border_rowkey))) {
         LOG_WARN("Fail to update_blockscan", K(ret), K(border_rowkey));
       }

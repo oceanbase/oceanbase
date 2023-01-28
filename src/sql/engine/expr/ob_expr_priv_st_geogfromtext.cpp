@@ -73,7 +73,8 @@ int ObExprPrivSTGeogFromText::eval_priv_st_geogfromtext_common(const ObExpr &exp
                                                                const char *func_name)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObDatum *datum = NULL;
 
   // get wkt
@@ -89,7 +90,10 @@ int ObExprPrivSTGeogFromText::eval_priv_st_geogfromtext_common(const ObExpr &exp
     ObGeometry *geo = NULL;
     bool is_geog = false;
     ObString wkt = datum->get_string();
-    if (OB_NOT_NULL(wkt.find(';'))) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+                expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkt))) {
+      LOG_WARN("fail to get real data.", K(ret), K(wkt));
+    } else if (OB_NOT_NULL(wkt.find(';'))) {
       ObString srid_str = wkt.split_on(';');
       if (OB_FAIL(ObGeoExprUtils::parse_srid(srid_str, srid))) {
         LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);

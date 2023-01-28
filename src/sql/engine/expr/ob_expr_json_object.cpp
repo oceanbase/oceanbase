@@ -218,7 +218,10 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     } else {
       ObString key = json_datum->get_string();
       ObIJsonBase *j_val = NULL;
-      if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, i+1, j_val))) {
+      bool is_null = false;
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(arg, ctx, temp_allocator, key, is_null))) {
+        LOG_WARN("fail to get real data.", K(ret), K(key));
+      } else if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, i+1, j_val))) {
         ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
       } else if (OB_FAIL(j_base->object_add(key, j_val))) {
@@ -234,16 +237,8 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObString raw_bin;
     if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
-    } else {
-      uint64_t length = raw_bin.length();
-      char *buf = expr.get_str_res_mem(ctx, length);
-      if (buf) {
-        MEMCPY(buf, raw_bin.ptr(), length);
-        res.set_string(buf, length);
-      } else {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed: alloc memory for json object result.", K(ret), K(length));
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
 
@@ -254,7 +249,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObIAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObJsonBuffer res_str(&temp_allocator);
   ObObjType val_type;
   ObCollationType value_cs_type;
@@ -328,9 +323,10 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
     }
     if (OB_SUCC(ret)) {
       ObString key = json_datum->get_string();
-      ObJsonString ob_str(key.ptr(), key.length());
-      if (dst_type == ObJsonType) {
-
+      bool is_null = false;
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(arg, ctx, temp_allocator, key, is_null))) {
+        LOG_WARN("fail to get real data.", K(ret), K(key));
+      } else if (dst_type == ObJsonType) {
         ObIJsonBase *j_val = NULL;
         uint32_t parse_flag = (strict_type == OB_JSON_ON_STRICT_IMPLICIT) ?
                                 ObJsonParser::JSN_STRICT_FLAG : ObJsonParser::JSN_RELAXED_FLAG;
@@ -355,6 +351,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
           LOG_WARN("failed: append json object kv", K(ret));
         }
       } else {
+        ObJsonString ob_str(key.ptr(), key.length());
         ObDatum *j_datum = NULL;
         bool t_is_null = false;
         if (OB_FAIL(get_ora_json_doc(expr, ctx, i+1, j_datum, t_is_null))) {
@@ -403,9 +400,11 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
           if (OB_SUCC(ret)) {
             value_cs_type = expr.args_[i + 1]->datum_meta_.cs_type_;
             if (ObJsonExprHelper::is_convertible_to_json(val_type) || ob_is_raw(val_type)) {
-              if (OB_FAIL(ObJsonExprHelper::transform_convertible_2String(*expr.args_[i + 1], ctx, *j_datum, val_type, value_cs_type, res_str, format_type,
-                                                          strict_type == OB_JSON_ON_STRICT_USE, i + 1))) {
-                                                          LOG_WARN("fail to transfrom to string");
+              if (OB_FAIL(ObJsonExprHelper::transform_convertible_2String(*expr.args_[i + 1], ctx, *j_datum,
+                                                           val_type, value_cs_type, res_str,
+                                                           expr.args_[i + 1]->obj_meta_.has_lob_header(), format_type,
+                                                           strict_type == OB_JSON_ON_STRICT_USE, i + 1))) {
+                LOG_WARN("fail to transfrom to string");
               }
             } else {
               ObScale scale = expr.args_[i + 1]->datum_meta_.scale_;
@@ -424,27 +423,17 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(res_str.append("}"))) {
-    LOG_WARN("symbol write fail");
-  }
-
-  if (OB_UNLIKELY(OB_FAIL(ret))) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("return value fail", K(ret));
+  } else if (OB_FAIL(res_str.append("}"))) {
+    LOG_WARN("symbol write fail");
   } else {
     if (dst_type == ObJsonType) {
       ObString raw_bin;
       if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
         LOG_WARN("failed: get json raw binary", K(ret));
-      } else {
-        uint64_t length = raw_bin.length();
-        char *buf = expr.get_str_res_mem(ctx, length);
-        if (buf) {
-          MEMCPY(buf, raw_bin.ptr(), length);
-          res.set_string(buf, length);
-        } else {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed: alloc memory for json object result.", K(ret), K(length));
-        }
+      } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
+        LOG_WARN("fail to pack json result", K(ret), K(raw_bin));
       }
     } else {
       if (dst_type == ObVarcharType && res_str.string().length()  > dst_len) {
@@ -493,17 +482,12 @@ int ObExprJsonObject::set_result(ObObjType dst_type, ObString str_res, common::O
     if (strict_type == OB_JSON_ON_STRICT_USE && OB_FAIL(ObJsonParser::check_json_syntax(str_res, allocator, ObJsonParser::JSN_STRICT_FLAG))) {
       ret = OB_ERR_JSON_SYNTAX_ERROR;
       LOG_WARN("fail to parse json text strict", K(ret));
-    } else {
-      uint64_t length = str_res.length();
-      char *buf = expr.get_str_res_mem(ctx, length);
-      if (buf) {
-        MEMCPY(buf, str_res.ptr(), length);
-        res.set_string(buf, length);
-      } else {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed: allocate res string buffer.", K(ret), K(length));
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str_res))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
+  } else {
+    ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
+    LOG_USER_ERROR(OB_ERR_INVALID_DATA_TYPE_RETURNING);
   }
   return ret;
 }

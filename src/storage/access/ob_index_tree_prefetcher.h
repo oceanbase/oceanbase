@@ -350,7 +350,7 @@ public:
   OB_INLINE ObMicroIndexInfo &current_micro_info()
   { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_]; }
   OB_INLINE bool is_current_micro_data_blockscan() const
-  { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_].can_blockscan(); }
+  { return micro_data_infos_[cur_micro_data_fetch_idx_ % max_micro_handle_cnt_].can_blockscan(iter_param_->has_lob_column_out()); }
   OB_INLINE int32_t prefetching_range_idx()
   {
     return 0 == cur_level_ ? cur_range_prefetch_idx_ - 1 :
@@ -484,7 +484,8 @@ private:
     OB_INLINE int get_next_index_row(
         const ObTableReadInfo &read_info,
         const blocksstable::ObDatumRowkey &border_rowkey,
-        ObMicroIndexInfo &block_info)
+        ObMicroIndexInfo &block_info,
+        const bool has_lob_out)
     {
       int ret = OB_SUCCESS;
       while (OB_SUCC(ret)) {
@@ -492,7 +493,7 @@ private:
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             STORAGE_LOG(WARN, "Fail to get_next index row", K(ret), K_(index_scanner));
           } else if (fetch_idx_ < prefetch_idx_) {
-            if (OB_FAIL(forward(read_info, border_rowkey))) {
+            if (OB_FAIL(forward(read_info, border_rowkey, has_lob_out))) {
               STORAGE_LOG(WARN, "Fail to forward index tree handle", K(ret));
             }
           }
@@ -523,7 +524,8 @@ private:
         ObIndexTreeMultiPassPrefetcher &prefetcher);
     int forward(
         const ObTableReadInfo &read_info,
-        const blocksstable::ObDatumRowkey &border_rowkey);
+        const blocksstable::ObDatumRowkey &border_rowkey,
+        const bool has_lob_out);
     OB_INLINE int check_blockscan(const blocksstable::ObDatumRowkey &border_rowkey)
     {
       int ret = OB_SUCCESS;

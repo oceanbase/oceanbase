@@ -378,7 +378,8 @@ int ObTableExprCgService::generate_expr_frame_info(ObTableCtx &ctx,
                                &ctx.get_session_info(),
                                &ctx.get_schema_guard(),
                                0,
-                               0);
+                               0,
+                               ctx.get_cur_cluster_version());
   if (OB_FAIL(expr_cg.generate(ctx.get_all_exprs(), expr_frame_info))) {
     LOG_WARN("fail to generate expr frame info by expr cg", K(ret), K(ctx));
   }
@@ -568,6 +569,34 @@ int ObTableExprCgService::refresh_delete_exprs_frame(ObTableCtx &ctx,
   return ret;
 }
 
+int ObTableExprCgService::write_datum(ObIAllocator &allocator,
+                                      const ObExpr &expr,
+                                      ObEvalCtx &eval_ctx,
+                                      const ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+
+  if (is_lob_storage(obj.get_type())) {
+    if (obj.has_lob_header() != expr.obj_meta_.has_lob_header()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to check lob header", K(ret), K(expr), K(obj));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else {
+    ObDatum &datum = expr.locate_datum_for_write(eval_ctx);
+    if (OB_FAIL(datum.from_obj(obj))) {
+      LOG_WARN("fail to convert object from datum", K(ret), K(obj));
+    } else {
+      expr.get_eval_info(eval_ctx).evaluated_ = true;
+      expr.get_eval_info(eval_ctx).projected_ = true;
+    }
+  }
+
+  return ret;
+}
+
 int ObTableExprCgService::refresh_exprs_frame(ObTableCtx &ctx,
                                               const ObIArray<ObExpr *> &exprs,
                                               const ObTableEntity &entity)
@@ -593,9 +622,9 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey.count(); i++) {
     const ObExpr *expr = exprs.at(i);
-    expr->locate_datum_for_write(eval_ctx).from_obj(rowkey.at(i));
-    expr->get_eval_info(eval_ctx).evaluated_ = true;
-    expr->get_eval_info(eval_ctx).projected_ = true;
+    if (OB_FAIL(write_datum(ctx.get_allocator(), *expr, eval_ctx, rowkey.at(i)))) {
+      LOG_WARN("fail to write datum", K(ret), K(rowkey.at(i)), K(*expr));
+    }
   }
 
   return ret;
@@ -637,9 +666,9 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
         } else {
           obj = &prop_value;
         }
-        expr->locate_datum_for_write(eval_ctx).from_obj(*obj);
-        expr->get_eval_info(eval_ctx).evaluated_ = true;
-        expr->get_eval_info(eval_ctx).projected_ = true;
+        if (OB_FAIL(write_datum(ctx.get_allocator(), *expr, eval_ctx, *obj))) {
+          LOG_WARN("fail to write datum", K(ret), K(*obj), K(*expr));
+        }
       }
     }
   }
@@ -761,9 +790,9 @@ int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
           LOG_WARN("invalid assign idx", K(ret), K(assign_id), K(new_row.count()));
         } else {
           const ObExpr *expr = new_row.at(assign_id);
-          expr->locate_datum_for_write(eval_ctx).from_obj(prop_value);
-          expr->get_eval_info(eval_ctx).evaluated_ = true;
-          expr->get_eval_info(eval_ctx).projected_ = true;
+          if (OB_FAIL(write_datum(ctx.get_allocator(), *expr, eval_ctx, prop_value))) {
+            LOG_WARN("fail to write datum", K(ret), K(prop_value), K(*expr));
+          }
         }
       }
     }
@@ -800,9 +829,9 @@ int ObTableExprCgService::refresh_delta_exprs_frame(ObTableCtx &ctx,
         LOG_WARN("fail to get assign propertity value", K(ret), K(col_schema->get_column_name_str()));
       } else {
         const ObExpr *expr = delta_exprs.at(i);
-        expr->locate_datum_for_write(eval_ctx).from_obj(prop_value);
-        expr->get_eval_info(eval_ctx).evaluated_ = true;
-        expr->get_eval_info(eval_ctx).projected_ = true;
+        if (OB_FAIL(write_datum(ctx.get_allocator(), *expr, eval_ctx, prop_value))) {
+          LOG_WARN("fail to write datum", K(ret), K(prop_value), K(*expr));
+        }
       }
     }
   }
@@ -852,7 +881,7 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
   ObSEArray<ObRawExpr*, 64> new_row;
   ObSEArray<ObRawExpr*, 64> full_row;
   ObSEArray<ObRawExpr*, 8> assign_exprs;
-  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
+  ObStaticEngineCG cg(ctx.get_cur_cluster_version());
 
   if (OB_FAIL(old_row.assign(ctx.get_old_row_exprs()))) {
     LOG_WARN("fail to assign old row expr", K(ret));
@@ -1222,7 +1251,7 @@ int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
                                             ObDASScanCtDef &tsc_ctdef)
 {
   int ret = OB_SUCCESS;
-  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
+  ObStaticEngineCG cg(ctx.get_cur_cluster_version());
   const ObIArray<ObRawExpr *> &all_exprs = ctx.is_for_insertup() ?
         ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
   ObSEArray<ObRawExpr*, 16> access_exprs;
@@ -1254,6 +1283,7 @@ int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
     }
   }
   if (OB_SUCC(ret)) {
+    tsc_ctdef.table_param_.get_enable_lob_locator_v2() = (ctx.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
     if (OB_FAIL(tsc_ctdef.table_param_.convert(*table_schema, tsc_ctdef.access_column_ids_))) {
       LOG_WARN("fail to convert table param", K(ret));
     } else if (OB_FAIL(ObTableTscCgService::generate_das_result_output(tsc_ctdef,
@@ -1367,7 +1397,7 @@ int ObTableDmlCgService::generate_constraint_ctdefs(ObTableCtx &ctx,
   ObDMLCtDefAllocator<ObRowkeyCstCtdef> cst_ctdef_allocator(allocator);
   ObSEArray<ObUniqueConstraintInfo, 2> cst_infos;
   ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
-  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
+  ObStaticEngineCG cg(ctx.get_cur_cluster_version());
 
   if (OB_FAIL(generate_constraint_infos(ctx, cst_infos))) {
     LOG_WARN("fail to generate constraint infos", K(ret), K(ctx));
@@ -1414,7 +1444,7 @@ int ObTableDmlCgService::generate_conflict_checker_ctdef(ObTableCtx &ctx,
       ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
   ObSEArray<ObRawExpr*, 16> table_column_exprs;
   ObSEArray<ObRawExpr*, 8> rowkey_exprs;
-  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
+  ObStaticEngineCG cg(ctx.get_cur_cluster_version());
 
   if (OB_FAIL(get_rowkey_exprs(ctx, rowkey_exprs))) {
     LOG_WARN("fail to get table rowkey exprs", K(ret), K(ctx));
@@ -1461,7 +1491,7 @@ int ObTableDmlCgService::generate_lock_ctdef(ObTableCtx &ctx,
                                              ObTableLockCtDef &lock_ctdef)
 {
   int ret = OB_SUCCESS;
-  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
+  ObStaticEngineCG cg(ctx.get_cur_cluster_version());
   ObArray<ObRawExpr*> old_row;
 
   if (OB_FAIL(old_row.assign(ctx.get_all_exprs().get_expr_array()))) {
@@ -1511,7 +1541,7 @@ int ObTableDmlCgService::generate_base_ctdef(ObTableCtx &ctx,
                                              ObIArray<ObRawExpr*> &new_row)
 {
   int ret = OB_SUCCESS;
-  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
+  ObStaticEngineCG cg(ctx.get_cur_cluster_version());
   const ObIArray<ObRawExpr *> &exprs = (ctx.is_for_update() || ctx.is_for_insertup()) ?
       ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
 
@@ -1617,6 +1647,11 @@ int ObTableDmlCgService::generate_column_info(ObTableID index_tid,
       ObObjMeta column_type;
       column_type = column->get_meta_type();
       column_type.set_scale(column->get_accuracy().get_scale());
+      if (is_lob_storage(column_type.get_type())) {
+        if (ctx.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0) {
+          column_type.set_has_lob_header();
+        }
+      }
       if (OB_FAIL(base_ctdef.column_ids_.push_back(column->get_column_id()))) {
         LOG_WARN("fail to add column id", K(ret));
       } else if (OB_FAIL(base_ctdef.column_types_.push_back(column_type))) {
@@ -1637,6 +1672,11 @@ int ObTableDmlCgService::generate_column_info(ObTableID index_tid,
           ObObjMeta column_type;
           column_type = column->get_meta_type();
           column_type.set_scale(column->get_accuracy().get_scale());
+          if (is_lob_storage(column_type.get_type())) {
+            if (ctx.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0) {
+              column_type.set_has_lob_header();
+            }
+          }
           if (OB_FAIL(base_ctdef.column_ids_.push_back(column->get_column_id()))) {
             LOG_WARN("fail to add column id", K(ret));
           } else if (OB_FAIL(base_ctdef.column_types_.push_back(column_type))) {
@@ -1909,7 +1949,8 @@ int ObTableTscCgService::generate_rt_exprs(const ObTableCtx &ctx,
                                session_info,
                                schema_guard,
                                0,
-                               0);
+                               0,
+                               ctx.get_cur_cluster_version());
   if (!src.empty()) {
     if (OB_FAIL(dst.reserve(src.count()))) {
       LOG_WARN("fail to init fixed array", K(ret), K(src.count()));
@@ -2060,6 +2101,8 @@ int ObTableTscCgService::generate_table_param(const ObTableCtx &ctx,
   }
 
   if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(das_tsc_ctdef.table_param_.get_enable_lob_locator_v2()
+                          = (ctx.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0))) {
   } else if (OB_FAIL(das_tsc_ctdef.table_param_.convert(*table_schema,
                                                         das_tsc_ctdef.access_column_ids_,
                                                         &tsc_out_cols))) {
@@ -2190,7 +2233,7 @@ int ObTableSpecCgService::generate_spec(ObIAllocator &alloc,
     LOG_WARN("fail to generate insert up ctdef", K(ret));
   } else {
     const ObIArray<ObRawExpr *> &exprs = ctx.get_old_row_exprs();
-    ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
+    ObStaticEngineCG cg(ctx.get_cur_cluster_version());
     if (ObTableDmlCgService::generate_conflict_checker_ctdef(ctx,
                                                              alloc,
                                                              spec.get_conflict_checker_ctdef())) {

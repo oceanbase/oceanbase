@@ -6119,8 +6119,9 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                     && ob_is_oracle_numeric_type(right_type.get_type()))
                 || (ob_is_oracle_temporal_type(left_type.get_type())
                     && (ob_is_oracle_temporal_type(right_type.get_type())))
-                || (left_type.is_urowid() && right_type.is_urowid())
-                || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
+                || (left_type.is_urowid() && right_type.is_urowid()))) {
+                // || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
+                // Originally, cases like "select clob from t union all select blob from t" return error
             if (session_info->is_ps_prepare_stage()) {
               skip_add_cast = true;
               LOG_WARN("ps prepare stage expression has different datatype", K(i), K(left_type), K(right_type));

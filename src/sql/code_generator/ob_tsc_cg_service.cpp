@@ -171,6 +171,8 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op, ObDASScanCtDe
   } else if (table_schema->is_spatial_index() && FALSE_IT(scan_ctdef.table_param_.set_is_spatial_index(true))) {
   } else if (OB_FAIL(extract_das_output_column_ids(op, index_id, *table_schema, tsc_out_cols))) {
     LOG_WARN("extract tsc output column ids failed", K(ret));
+  } else if (FALSE_IT(scan_ctdef.table_param_.get_enable_lob_locator_v2()
+                          = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0))) {
   } else if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema,
                                                      scan_ctdef.access_column_ids_,
                                                      &tsc_out_cols,
@@ -456,7 +458,7 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogPlan *log_plan,
             pd_filter = false;
           } else {
             auto col = static_cast<ObColumnRefRawExpr *>(*e);
-            if (col->is_lob_column()) {
+            if (col->is_lob_column() && cg_.cur_cluster_version_ < CLUSTER_VERSION_4_1_0_0) {
               pd_filter = false;
             }
           }

@@ -220,6 +220,7 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
                                                                   val_type,
                                                                   cs_type,
                                                                   jsn_buf,
+                                                                  val_expr->obj_meta_.has_lob_header(),
                                                                   is_format_json,
                                                                   opt_strict == 1, i))) {
         LOG_WARN("failed to transform to string", K(ret), K(val_type));
@@ -278,15 +279,8 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
         }
         ret = OB_OPERATE_OVERFLOW;
         LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_array");
-      } else {
-        char *buf = expr.get_str_res_mem(ctx, length);
-        if (buf) {
-          MEMCPY(buf, res_string.ptr(), length);
-          res.set_string(buf, length);
-        } else {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed: allocate res string buffer.", K(ret), K(length));
-        }
+      } else if (ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string)) {
+        LOG_WARN("fail to pack ressult.", K(ret));
       }
     }
   }
@@ -323,16 +317,8 @@ int ObExprJsonArray::eval_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     ObString raw_bin;
     if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
       LOG_WARN("failed: json get binary", K(ret));
-    } else {
-      uint64_t length = raw_bin.length();
-      char *buf = expr.get_str_res_mem(ctx, length);
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed: alloc memory for json array result", K(ret), K(length));
-      } else {
-        MEMMOVE(buf, raw_bin.ptr(), length);
-        res.set_string(buf, length);
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
 

@@ -396,7 +396,8 @@ int ObTableApiExecuteP::process_get()
       LOG_WARN("fail to get entity properties", K(ret));
     } else if (OB_FAIL(result_.get_entity(result_entity))) {
       LOG_WARN("fail to get result entity", K(ret));
-    } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(row,
+    } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator_,
+                                                                 row,
                                                                  table_schema,
                                                                  properties,
                                                                  result_entity))) {

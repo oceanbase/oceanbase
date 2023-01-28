@@ -286,7 +286,7 @@ struct ObExprBasicFuncs
   // use murmur_hash_ instead.
   ObExprHashFuncType default_hash_;
   ObBatchDatumHashFunc default_hash_batch_;
-  // For murmur/xx/wy functions, the specified hash method is used for all tyeps.
+  // For murmur/xx/wy functions, the specified hash method is used for all types.
   ObExprHashFuncType murmur_hash_;
   ObBatchDatumHashFunc murmur_hash_batch_;
   ObExprHashFuncType xx_hash_;

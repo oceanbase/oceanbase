@@ -135,7 +135,8 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
     // <5> fill header
     if (OB_SUCC(ret)) {
       header_->row_count_ = static_cast<int16_t>(datum_rows_.count());
-      header_->encoding_has_out_row_column_ = has_out_row_column_;
+      header_->has_string_out_row_ = has_string_out_row_;
+      header_->all_lob_in_row_ = !has_lob_out_row_;
 
 
       const int64_t header_size = header_->header_size_;

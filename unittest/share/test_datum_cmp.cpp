@@ -76,7 +76,7 @@ TEST(ObTestDatumCmp, defined_nullsafe_func_by_type)
                                                       NULL_FIRST,
                                                       CS_TYPE_COLLATION_FREE,
                                                       SCALE_UNKNOWN_YET,
-                                                      false)) {
+                                                      false, false)) {
         of_result << "defined\n";
       } else {
         of_result << "not defined\n";
@@ -108,7 +108,8 @@ TEST(ObTestDatumCmp, defined_expr_func_by_type)
                                                         SCALE_UNKNOWN_YET,
                                                         SCALE_UNKNOWN_YET,
                                                         false,
-                                                        CS_TYPE_COLLATION_FREE)) {
+                                                        CS_TYPE_COLLATION_FREE,
+                                                        false)) {
         of_result << "defined\n";
       } else {
         of_result << "not defined\n";

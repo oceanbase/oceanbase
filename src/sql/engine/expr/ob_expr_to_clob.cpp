@@ -16,6 +16,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "objit/common/ob_item_type.h"
 #include "lib/oblog/ob_log.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -71,6 +72,8 @@ int ObExprToClob::calc_to_clob_expr(const ObExpr &expr, ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObDatum *arg = NULL;
+  ObObjType input_type = expr.args_[0]->datum_meta_.type_;
+  ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
   if (OB_UNLIKELY(1 != expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg cnt or arg res type", K(ret), K(expr.arg_cnt_));
@@ -78,12 +81,22 @@ int ObExprToClob::calc_to_clob_expr(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("eval param failed", K(ret));
   } else if (arg->is_null()) {
     res.set_null();
-  } else {
+  } else if (ob_is_clob(input_type, cs_type)) {
     res.set_datum(*arg);
-    if (!res.is_null() && res.len_ > OB_MAX_LONGTEXT_LENGTH) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("wrong length of result in function to_clob", K(ret), K(res.len_));
+  } else {
+    ObString raw_string = arg->get_string();
+    ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+    if (OB_FAIL(str_result.init(raw_string.length()))) {
+      LOG_WARN("init lob result failed");
+    } else if (OB_FAIL(str_result.append(raw_string.ptr(), raw_string.length()))) {
+      LOG_WARN("append lob result failed");
+    } else {
+      str_result.set_result();
     }
+  }
+  if (OB_SUCC(ret) && !res.is_null() && res.len_ > OB_MAX_LONGTEXT_LENGTH) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("wrong length of result in function to_clob", K(ret), K(res.len_));
   }
   return ret;
 }

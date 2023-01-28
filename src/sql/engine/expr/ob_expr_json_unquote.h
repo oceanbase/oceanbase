@@ -28,8 +28,8 @@ class ObExprJsonUnquote : public ObFuncExprOperator
 public:
   explicit ObExprJsonUnquote(common::ObIAllocator &alloc);
   virtual ~ObExprJsonUnquote();
-  template <typename T>
-  static int calc(const T &data, ObObjType type, ObCollationType cs_type,
+
+  static int calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
                   ObIAllocator *allocator, ObJsonBuffer &j_buf, bool &is_null);
 
   virtual int calc_result_type1(ObExprResType &type,

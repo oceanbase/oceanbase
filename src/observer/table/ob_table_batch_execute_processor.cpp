@@ -394,13 +394,13 @@ int ObTableBatchExecuteP::multi_get()
         const ObITableEntity *request_entity = tb_ctx_.get_entity();
         if (OB_FAIL(request_entity->get_properties_names(properties))) {
           LOG_WARN("fail to get entity properties", K(ret), K(i));
-        } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(row,
+        } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator_,
+                                                                     row,
                                                                      table_schema,
                                                                      properties,
                                                                      result_entity))) {
           LOG_WARN("fail to fill result entity", K(ret), K(i));
         }
-
       }
       op_result.set_entity(*result_entity);
       op_result.set_errno(ret);
@@ -824,7 +824,8 @@ int ObTableBatchExecuteP::process_get(table::ObTableCtx &op_tb_ctx,
     }
   } else if (OB_FAIL(result.get_entity(result_entity))) {
     LOG_WARN("fail to get result entity", K(ret));
-  } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(row,
+  } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator_,
+                                                               row,
                                                                table_schema,
                                                                cnames,
                                                                result_entity))) {

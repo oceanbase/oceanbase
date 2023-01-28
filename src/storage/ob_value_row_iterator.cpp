@@ -187,7 +187,8 @@ int ObSingleRowGetter::init_dml_access_ctx(
 
 int ObSingleRowGetter::init_dml_access_param(ObRelativeTable &relative_table,
                                              const ObDMLBaseParam &dml_param,
-                                             const ObIArray<uint64_t> &out_col_ids)
+                                             const ObIArray<uint64_t> &out_col_ids,
+                                             const bool skip_read_lob)
 {
   int ret = OB_SUCCESS;
   relative_table_ = &relative_table;
@@ -208,6 +209,8 @@ int ObSingleRowGetter::init_dml_access_param(ObRelativeTable &relative_table,
                                                     *schema_param,
                                                     &output_projector_))) {
       LOG_WARN("init dml access param failed", K(ret));
+    } else if (skip_read_lob) {
+      access_param_.iter_param_.has_lob_column_out_ = false;
     }
   }
 

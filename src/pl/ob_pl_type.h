@@ -393,6 +393,9 @@ public:
   inline bool is_lob_type() const {
     return PL_OBJ_TYPE == type_ && obj_type_.get_meta_type().is_lob_locator();
   }
+  inline bool is_lob_storage_type() const {
+    return PL_OBJ_TYPE == type_ && obj_type_.get_meta_type().is_lob_storage();
+  }
   inline bool is_long_type() const {
     return PL_OBJ_TYPE == type_ && ObVarcharType == obj_type_.get_meta_type().get_type()
           && obj_type_.get_meta_type().is_cs_collation_free();

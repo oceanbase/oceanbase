@@ -207,7 +207,7 @@ public:
   int json_table_make_json_path(const ParseNode &parse_tree,
                                 ObIAllocator* allocator,
                                 ObString& path_str);
-  int json_table_resolve_col_name_and_path(const ParseNode *name_node,
+  int resolve_json_table_column_name_and_path(const ParseNode *name_node,
                                            const ParseNode *path_node,
                                            ObIAllocator* allocator,
                                            ObDmlJtColDef *col_def);

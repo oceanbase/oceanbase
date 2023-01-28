@@ -59,7 +59,8 @@ int ObExprPrivSTGeomFromEwkt::calc_result_type1(ObExprResType &type,
 int ObExprPrivSTGeomFromEwkt::eval_st_geomfromewkt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObDatum *datum = NULL;
   bool is_null_result = false;
   uint32_t srid = 0;
@@ -77,6 +78,10 @@ int ObExprPrivSTGeomFromEwkt::eval_st_geomfromewkt(const ObExpr &expr, ObEvalCtx
     is_null_result = true;
   } else {
     wkt = datum->get_string();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+        expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkt))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkt));
+    }
   }
   // get srid
   if (!is_null_result && OB_SUCC(ret) && OB_NOT_NULL(wkt.find(';'))) {

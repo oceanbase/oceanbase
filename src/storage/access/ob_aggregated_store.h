@@ -57,12 +57,15 @@ public:
       const int64_t row_count) = 0;
   virtual int process(const blocksstable::ObMicroIndexInfo &index_info) = 0;
   virtual int fill_result(sql::ObEvalCtx &ctx, bool need_padding);
+  OB_INLINE bool is_lob_col() const { return is_lob_col_; }
   OB_INLINE int32_t get_col_idx() const { return col_idx_; }
-  TO_STRING_KV(K_(col_idx), K_(datum), KPC(col_param_), K_(expr));
+  TO_STRING_KV(K_(col_idx), K_(is_lob_col), K_(datum), KPC(col_param_), K_(expr));
 protected:
   int fill_default_if_need(blocksstable::ObStorageDatum &datum);
   int pad_column_if_need(blocksstable::ObStorageDatum &datum);
+protected:
   int32_t col_idx_;
+  bool is_lob_col_;
   blocksstable::ObStorageDatum datum_;
   const share::schema::ObColumnParam *col_param_;
   sql::ObExpr *expr_;
@@ -176,8 +179,9 @@ public:
   void reset();
   void reuse();
   int init(const ObTableAccessParam &param);
-  int64_t get_agg_count() const { return agg_cells_.count(); }
-  bool need_exclude_null() const { return need_exclude_null_; };
+  OB_INLINE int64_t get_agg_count() const { return agg_cells_.count(); }
+  OB_INLINE bool need_exclude_null() const { return need_exclude_null_; };
+  OB_INLINE bool has_lob_column_out() const { return has_lob_column_out_; }
   // void set_firstrow_aggregated(bool aggregated) { is_firstrow_aggregated_ = aggregated; }
   // bool is_firstrow_aggregated() const { return is_firstrow_aggregated_; }
   OB_INLINE ObAggCell* at(int64_t idx) { return agg_cells_.at(idx); }
@@ -186,6 +190,7 @@ public:
 private:
   common::ObFixedArray<ObAggCell *, common::ObIAllocator> agg_cells_;
   bool need_exclude_null_;
+  bool has_lob_column_out_;
   common::ObIAllocator &allocator_;
 };
 
@@ -215,7 +220,7 @@ public:
   OB_INLINE bool can_agg_index_info(const blocksstable::ObMicroIndexInfo &index_info) const
   { 
     return filter_is_null() && !agg_row_.need_exclude_null() && can_batched_aggregate() &&
-           index_info.can_blockscan() &&
+           index_info.can_blockscan(agg_row_.has_lob_column_out()) &&
            !index_info.is_left_border() &&
            !index_info.is_right_border();
   }

@@ -1292,6 +1292,33 @@ int ObSchemaRetrieveUtils::fill_table_schema(
 }
 
 template<typename T>
+int fill_column_schema_default_value(T &result,
+                                     ObColumnSchemaV2 &column,
+                                     common::ColumnType default_type,
+                                     const uint64_t tenant_id)
+{
+  int ret = common::OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
+  bool is_oracle_mode = false;
+  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
+          column.get_tenant_id(), column.get_table_id(), is_oracle_mode))) {
+    SHARE_SCHEMA_LOG(WARN, "failed to get oracle mode", K(ret));
+  } else if (is_oracle_mode) {
+    compat_mode = lib::Worker::CompatMode::ORACLE;
+  }
+  lib::CompatModeGuard guard(compat_mode);
+  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value, default_type,
+                                    column,false, false, tenant_id);
+  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, cur_default_value, default_type,
+                                    column, true, false, tenant_id);
+  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value_v2, default_type,
+                                    column, false, true, tenant_id);
+  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, cur_default_value_v2, default_type,
+                                    column, true, true, tenant_id);
+  return ret;
+}
+
+template<typename T>
 int ObSchemaRetrieveUtils::fill_column_schema(
     const uint64_t tenant_id, const bool check_deleted, T &result,
     ObColumnSchemaV2 &column, bool &is_deleted)
@@ -1341,23 +1368,7 @@ int ObSchemaRetrieveUtils::fill_column_schema(
     }
 
     if (OB_SUCC(ret)) {
-      lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
-      bool is_oracle_mode = false;
-      if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
-              column.get_tenant_id(), column.get_table_id(), is_oracle_mode))) {
-        SHARE_SCHEMA_LOG(WARN, "failed to get oracle mode", K(ret));
-      } else if (is_oracle_mode) {
-        compat_mode = lib::Worker::CompatMode::ORACLE;
-      }
-      lib::CompatModeGuard guard(compat_mode);
-      EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value, default_type,
-                                        column,false, false, tenant_id);
-      EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, cur_default_value, default_type,
-                                        column, true, false, tenant_id);
-      EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value_v2, default_type,
-                                        column, false, true, tenant_id);
-      EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, cur_default_value_v2, default_type,
-                                        column, true, true, tenant_id);
+      ret = fill_column_schema_default_value<T>(result, column, default_type, tenant_id);
     }
 
     if (OB_SUCC(ret) && column.is_identity_column()) {

@@ -148,6 +148,9 @@ int ObMicroBlockEncoder::init(const ObMicroBlockEncodingCtx &ctx)
     for (int64_t i = 0; i < ctx.column_cnt_; ++i) {
       estimate_base_store_size_
           += get_estimate_base_store_size_map()[ctx.col_descs_->at(i).col_type_.get_type()];
+      if (!need_check_lob_ && ctx.col_descs_->at(i).col_type_.is_lob_storage()) {
+        need_check_lob_ = true;
+      }
     }
     ctx_ = ctx;
     is_inited_ = true;
@@ -403,9 +406,7 @@ int ObMicroBlockEncoder::append_row(const ObDatumRow &row)
       LOG_INFO("Try to encode more rows than maximum of row cnt in header, force to build a block",
           K(datum_rows_.count()), K(row));
     } else if (OB_FAIL(process_out_row_columns(row))) {
-      if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
-        LOG_WARN("failed to process out row columns", K(ret));
-      }
+      LOG_WARN("failed to process out row columns", K(ret));
     } else if (OB_FAIL(copy_and_append_row(row, store_size))) {
       if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
         LOG_WARN("copy and append row failed", K(ret));
@@ -618,7 +619,9 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
     // <5> fill header
     if (OB_SUCC(ret)) {
       header_->row_count_ = static_cast<uint32_t>(datum_rows_.count());
-      header_->encoding_has_out_row_column_ = has_out_row_column_;
+      header_->has_string_out_row_ = has_string_out_row_;
+      header_->all_lob_in_row_ = !has_lob_out_row_;
+
       const int64_t header_size = header_->header_size_;
       char *data = data_buffer_.data() + header_size;
       FOREACH(e, encoders_) {
@@ -887,24 +890,32 @@ int ObMicroBlockEncoder::process_out_row_columns(const ObDatumRow &row)
 {
   // make sure in&out row status of all values in a column are same
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(row.get_column_count() != col_ctxs_.count())) {
+  if (!need_check_lob_) {
+  } else if (OB_UNLIKELY(row.get_column_count() != col_ctxs_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected column count not match", K(ret));
-  } else if (datum_rows_.empty()) {
-    for (int64_t i = 0; i < col_ctxs_.count(); ++i) {
-      col_ctxs_.at(i).is_out_row_column_ = row.storage_datums_[i].is_outrow();
-      col_ctxs_.at(i).only_raw_encoding_ |= row.storage_datums_[i].is_outrow();
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < col_ctxs_.count(); ++i) {
-      if (col_ctxs_.at(i).is_out_row_column_ != row.storage_datums_[i].is_outrow()) {
-        // return OB_BUF_NOT_ENOUGH to store different out row column in different micro block
-        ret = OB_BUF_NOT_ENOUGH;
-      } else if (!has_out_row_column_ && row.storage_datums_[i].is_outrow()) {
-        has_out_row_column_ = true;
+  } else if (!has_lob_out_row_) {
+    for (int64_t i = 0; !has_lob_out_row_ && OB_SUCC(ret) && i < row.get_column_count(); ++i) {
+      ObStorageDatum &datum = row.storage_datums_[i];
+      if (ctx_.col_descs_->at(i).col_type_.is_lob_storage()) {
+        if (datum.is_nop() || datum.is_null()) {
+        } else if (datum.len_ < sizeof(ObLobCommon)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected lob datum len", K(ret), K(i), K(ctx_.col_descs_->at(i).col_type_), K(datum));
+        } else {
+          const ObLobCommon &lob_common = datum.get_lob_data();
+          has_lob_out_row_ = !lob_common.in_row_;
+          LOG_DEBUG("chaser debug lob out row", K(has_lob_out_row_), K(lob_common), K(datum));
+        }
       }
     }
   }
+  // uncomment this after varchar overflow supported
+  //} else if (need_check_string_out) {
+  //  if (!has_string_out_row_ && row.storage_datums_[i].is_outrow()) {
+  //    has_string_out_row_ = true;
+  //   }
+  //}
   return ret;
 }
 
@@ -1150,17 +1161,7 @@ int ObMicroBlockEncoder::encoder_detection()
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i <ctx_.column_cnt_; ++i) {
-      if (col_ctxs_.at(i).is_out_row_column_) {
-        // Use raw encoding for out row locator
-        ObIColumnEncoder *e = nullptr;
-        if (OB_FAIL(try_encoder<ObRawEncoder>(e, i))) {
-          LOG_WARN("failed to try column out row encoder", K(ret));
-        } else if (OB_FAIL(encoders_.push_back(e))) {
-          LOG_WARN("failed to append encoder", K(ret), KP(e));
-          free_encoder(e);
-          e = nullptr;
-        }
-      } else if (OB_FAIL(fast_encoder_detect(i, col_ctxs_.at(i)))) {
+      if (OB_FAIL(fast_encoder_detect(i, col_ctxs_.at(i)))) {
         LOG_WARN("fast encoder detect failed", K(ret), K(i));
       } else {
         if (encoders_.count() <= i) {

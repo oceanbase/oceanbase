@@ -47,7 +47,19 @@ public:
                      const bool &pad_space, // for oracle
                      common::ObIAllocator *allocator,
                      char* &result,
-                     int64_t &size);
+                     int64_t &size,
+                     ObObjType res_type,
+                     bool has_lob_header);
+  static int padding_inner(LRpadType type,
+                           const char *text,
+                           const int64_t &text_size,
+                           const char *pad,
+                           const int64_t &pad_size,
+                           const int64_t &prefix_size,
+                           const int64_t &repeat_count,
+                           const bool &pad_space,
+                           ObString &space_str,
+                           char* &result);
 
   int calc(const LRpadType type,
            const common::ObObj &text,
@@ -106,15 +118,24 @@ public:
   // for engine 3.0
   static int calc_mysql_pad_expr(const ObExpr &expr, ObEvalCtx &ctx, LRpadType pad_type,
                                  ObDatum &res);
-  static int calc_mysql(const LRpadType pad_type, const ObExpr &expr, const common::ObDatum &text,
-                                const common::ObDatum &len, const common::ObDatum &pad_text,
-                                const ObSQLSessionInfo &session, common::ObIAllocator &res_alloc,
-                                ObDatum &res);
+  static int calc_mysql(const LRpadType pad_type, const ObExpr &expr, ObEvalCtx &ctx,
+                        const common::ObDatum &text,
+                        const common::ObDatum &len, const common::ObDatum &pad_text,
+                        const ObSQLSessionInfo &session, common::ObIAllocator &res_alloc,
+                        ObDatum &res);
+  static int calc_mysql_inner(const LRpadType pad_type,
+                              const ObExpr &expr,
+                              const ObDatum &len,
+                              int64_t &max_result_size,
+                              const ObString &str_text,
+                              const ObString &str_pad,
+                              ObIAllocator &res_alloc,
+                              ObDatum &res);
   static int calc_oracle_pad_expr(const ObExpr &expr, ObEvalCtx &ctx, LRpadType pad_type,
                                   ObDatum &res);
   static int calc_oracle(LRpadType pad_type, const ObExpr &expr, const common::ObDatum &text,
                          const common::ObDatum &len, const common::ObDatum &pad_text,
-                         common::ObIAllocator &res_alloc, ObDatum &res);
+                         common::ObIAllocator &res_alloc, ObDatum &res, bool &is_unchanged_clob);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBaseLRpad);
 };

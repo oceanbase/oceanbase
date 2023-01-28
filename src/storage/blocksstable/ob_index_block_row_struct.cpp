@@ -28,7 +28,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc()
     row_count_(0), row_count_delta_(0), max_merged_trans_version_(0), block_size_(0),
     macro_block_count_(0), micro_block_count_(0),
     is_deleted_(false), contain_uncommitted_row_(false), is_data_block_(false),
-    is_secondary_meta_(false), is_macro_node_(false), has_out_row_column_(false),
+    is_secondary_meta_(false), is_macro_node_(false), has_string_out_row_(false), has_lob_out_row_(false),
     is_last_row_last_flag_(false) {}
 
 ObIndexBlockRowDesc::ObIndexBlockRowDesc(ObDataStoreDesc &data_store_desc)
@@ -36,7 +36,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc(ObDataStoreDesc &data_store_desc)
     row_count_(0), row_count_delta_(0), max_merged_trans_version_(0), block_size_(0),
     macro_block_count_(0), micro_block_count_(0),
     is_deleted_(false), contain_uncommitted_row_(false), is_data_block_(false),
-    is_secondary_meta_(false), is_macro_node_(false), has_out_row_column_(false),
+    is_secondary_meta_(false), is_macro_node_(false), has_string_out_row_(false), has_lob_out_row_(false),
     is_last_row_last_flag_(false) {}
 
 MacroBlockId ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID(0, DEFAULT_IDX_ROW_MACRO_IDX, 0);
@@ -293,6 +293,8 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
     header_->is_leaf_block_ = desc.is_macro_node_;
     header_->is_macro_node_ = desc.is_macro_node_;
     header_->is_major_node_ = desc.data_store_desc_->merge_type_ == MAJOR_MERGE;
+    header_->has_string_out_row_ = desc.has_string_out_row_;
+    header_->all_lob_in_row_ = !desc.has_lob_out_row_;
     // header_->is_pre_aggregated_ =
     header_->is_deleted_ = desc.is_deleted_;
     header_->macro_id_ =(desc.is_data_block_ && is_data_mid_micro_block)

@@ -65,6 +65,7 @@
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/slog/ob_storage_log_struct.h"
 #include "storage/slog/ob_storage_logger.h"
+#include "share/ob_lob_access_utils.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_service.h"
@@ -2573,7 +2574,7 @@ bool is_lob_update(ObDMLRunningCtx &run_ctx, const ObIArray<int64_t> &update_idx
   bool bool_ret = false;
   for (int64_t i = 0; i < update_idx.count() && !bool_ret; ++i) {
     int64_t idx = update_idx.at(i);
-    if (run_ctx.col_descs_->at(idx).col_type_.is_lob_v2()) {
+    if (run_ctx.col_descs_->at(idx).col_type_.is_lob_storage()) {
       bool_ret = true;
     }
   }
@@ -3512,7 +3513,7 @@ int ObLSTabletService::check_old_row_legitimacy(
     const ObIArray<uint64_t> &column_ids = *run_ctx.column_ids_;
     if (OB_FAIL(rowkey_helper.convert_datum_rowkey(rowkey.get_rowkey(), datum_rowkey))) {
       STORAGE_LOG(WARN, "Failed to transfer datum rowkey", K(ret), K(rowkey));
-    } else if (OB_FAIL(old_row_getter.init_dml_access_ctx(run_ctx.store_ctx_, dml_param))) {
+    } else if (OB_FAIL(old_row_getter.init_dml_access_ctx(run_ctx.store_ctx_, dml_param, true))) {
       LOG_WARN("init dml access ctx failed", K(ret));
     } else if (OB_FAIL(old_row_getter.init_dml_access_param(data_table, dml_param, column_ids))) {
       LOG_WARN("init dml access param failed", K(ret));
@@ -3536,7 +3537,9 @@ int ObLSTabletService::check_old_row_legitimacy(
         const ObObj &storage_val = storage_old_row->get_cell(i);
         const ObObj &sql_val = old_row.get_cell(i);
         int cmp = 0;
-        if (OB_UNLIKELY(ObLongTextType == storage_val.get_type() && sql_val.is_lob_locator())) {
+        if (sql_val.is_lob_storage()) {
+          // skip all text and lob
+        } else if (OB_UNLIKELY(ObLongTextType == storage_val.get_type() && sql_val.is_lob_locator())) {
           //skip check lob column type when do the normal sql write check
         } else if (OB_UNLIKELY(storage_val.is_nop_value())) {
           bool is_nop = false;
@@ -3732,10 +3735,9 @@ int ObLSTabletService::insert_lob_col(
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]failed to get lob manager handle.", K(ret));
-  } else if (!column.col_type_.is_lob_v2() || obj.is_nop_value() || obj.is_null()) {
+  } else if (!column.col_type_.is_lob_storage() || obj.is_nop_value() || obj.is_null()) {
     // do nothing
   } else {
-    ObString data = obj.get_string();
     // init lob access param
     ObLobAccessParam lob_param;
     lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
@@ -3765,16 +3767,17 @@ int ObLSTabletService::insert_lob_col(
     lob_param.timeout_ = run_ctx.dml_param_.timeout_;
     lob_param.scan_backward_ = false;
     lob_param.offset_ = 0;
-    lob_param.len_ = ObCharset::strlen_char(lob_param.coll_type_, data.ptr(), data.length());
-
-    if (OB_FAIL(lob_mngr->append(lob_param, data))) {
+    // Notice: currently only inrow data
+    ObString raw_data = obj.get_string();
+    ObString data;
+    ObLobLocatorV2 loc(raw_data, obj.has_lob_header());
+    if (OB_FAIL(lob_mngr->append(lob_param, loc))) {
       LOG_WARN("[STORAGE_LOB]lob append failed.", K(ret));
     } else {
       ObLobCommon *res_lob_common = lob_param.lob_common_;
-      obj.set_lob_value(obj.get_type(), res_lob_common, res_lob_common->get_handle_size(lob_param.byte_size_));
+      obj.set_lob_value(obj.get_type(), res_lob_common, lob_param.handle_size_);
       LOG_DEBUG("[STORAGE_LOB]write ob lob data.", K(lob_param), KPC(res_lob_common),
-                K(res_lob_common->get_handle_size(lob_param.byte_size_)),
-                K(column.col_type_.get_collation_type()));
+                K(lob_param.handle_size_), K(column.col_type_.get_collation_type()));
     }
   }
   return ret;
@@ -3832,9 +3835,9 @@ int ObLSTabletService::insert_lob_tablet_row(
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
       const ObColDesc &column = run_ctx.col_descs_->at(i);
       ObObj &obj = row.row_val_.get_cell(i);
-      if (!column.col_type_.is_lob_v2() || obj.is_null() || obj.is_nop_value()) {
+      if (obj.is_null() || obj.is_nop_value()) {
         // do nothing
-      } else {
+      } else if (column.col_type_.is_lob_storage()) {
         if (!check_lob) {
           if (OB_FAIL(check_lob_tablet_valid(data_tablet))) {
             LOG_WARN("failed to check_lob_tablet_valid", K(ret), K(data_tablet));
@@ -4071,6 +4074,68 @@ int ObLSTabletService::check_rowkey_value_change(
   return ret;
 }
 
+int ObLSTabletService::process_delta_lob(
+    ObDMLRunningCtx &run_ctx,
+    const ObColDesc &column,
+    ObObj &old_obj,
+    ObLobLocatorV2 &delta_lob,
+    ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  if (OB_ISNULL(lob_mngr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[STORAGE_LOB]failed to get lob manager handle.", K(ret));
+  } else if (!delta_lob.is_delta_temp_lob()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[STORAGE_LOB] invalid lob type", K(ret), K(delta_lob));
+  } else {
+    ObLobAccessParam lob_param;
+    // init lob param
+    lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
+    lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
+    if (lob_param.snapshot_.is_none_read()) {
+      // NOTE:
+      // lob_insert need table_scan, the snapshot already generated in
+      // run_ctx.store_ctx, use it as an LS ReadSnapshot
+      lob_param.snapshot_.init_ls_read(run_ctx.store_ctx_.ls_id_,
+                                       run_ctx.store_ctx_.mvcc_acc_ctx_.snapshot_);
+    }
+    lob_param.tx_id_ = lob_param.tx_desc_->get_tx_id();
+    lob_param.sql_mode_ = run_ctx.dml_param_.sql_mode_;
+    lob_param.ls_id_ = run_ctx.store_ctx_.ls_id_;
+    lob_param.tablet_id_ = run_ctx.relative_table_.get_tablet_id();
+    lob_param.coll_type_ = column.col_type_.get_collation_type();
+    lob_param.allocator_ = &run_ctx.lob_allocator_;
+    // should use old obj lob
+    ObLobLocatorV2 old_lob;
+    ObString old_disk_lob;
+    if (OB_FAIL(old_obj.get_lob_locatorv2(old_lob))) {
+      LOG_WARN("get old lob locator failed.", K(ret), K(old_obj));
+    } else if (!old_lob.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("old lob locator is invalid.", K(ret));
+    } else if (OB_FAIL(old_lob.get_disk_locator(old_disk_lob))) {
+      LOG_WARN("fail to get old lob disk locator.", K(ret));
+    } else {
+      lob_param.lob_locator_ = nullptr;
+      lob_param.lob_common_ = reinterpret_cast<ObLobCommon*>(old_disk_lob.ptr());
+      lob_param.handle_size_ = old_disk_lob.length();
+      lob_param.byte_size_ = lob_param.lob_common_->get_byte_size(lob_param.handle_size_);
+
+      lob_param.timeout_ = run_ctx.dml_param_.timeout_;
+      lob_param.scan_backward_ = false;
+      if (OB_FAIL(lob_mngr->process_delta(lob_param, delta_lob))) {
+        LOG_WARN("failed to process delta lob.", K(ret), K(lob_param), K(delta_lob));
+      } else {
+        // update obj with new disk locator
+        obj.set_lob_value(obj.get_type(), lob_param.lob_common_, lob_param.handle_size_);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSTabletService::process_lob_row(
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
@@ -4090,7 +4155,7 @@ int ObLSTabletService::process_lob_row(
     LOG_WARN("[STORAGE_LOB]invalid args", K(old_row), K(new_row), KPC(run_ctx.col_descs_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < old_row.row_val_.get_count(); ++i) {
-      if (run_ctx.col_descs_->at(i).col_type_.is_lob_v2()) {
+      if (run_ctx.col_descs_->at(i).col_type_.is_lob_storage()) {
         ObObj &old_obj = old_row.row_val_.get_cell(i);
         ObObj &old_sql_obj = old_sql_row.row_val_.get_cell(i);
         ObObj &new_obj = new_row.row_val_.get_cell(i);
@@ -4101,9 +4166,6 @@ int ObLSTabletService::process_lob_row(
           }
         }
         if (is_update) {
-          ObLobCommon *lob_common = nullptr;
-          ObLobAccessParam lob_param;
-          lob_param.update_len_ = new_obj.get_string_len();
           if (!check_lob) {
             ObTabletBindingInfo ddl_data;
             if (OB_FAIL(check_lob_tablet_valid(tablet_handle))) {
@@ -4112,11 +4174,27 @@ int ObLSTabletService::process_lob_row(
               check_lob = true;
             }
           }
+          // get new lob locator
+          ObString new_lob_str = (new_obj.is_null() || new_obj.is_nop_value())
+                                 ? ObString(0, nullptr) : new_obj.get_string();
+          ObLobLocatorV2 new_lob(new_lob_str, new_obj.has_lob_header());
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(delete_lob_col(run_ctx, run_ctx.col_descs_->at(i), old_obj, old_sql_obj, lob_common, lob_param))) {
-            LOG_WARN("[STORAGE_LOB]failed to erase old lob col", K(ret), K(old_sql_row), K(old_row));
-          } else if (OB_FAIL(insert_lob_col(run_ctx, run_ctx.col_descs_->at(i), new_obj, &lob_param, lob_common))) {
-            LOG_WARN("[STORAGE_LOB]failed to insert new lob col.", K(ret), K(new_row));
+          } else if (new_obj.is_null() || new_obj.is_nop_value() || new_lob.is_full_temp_lob() || new_lob.is_persist_lob()) {
+            ObLobCommon *lob_common = nullptr;
+            ObLobAccessParam lob_param;
+            if (OB_FAIL(new_lob.get_lob_data_byte_len(lob_param.update_len_))) {
+              LOG_WARN("fail to get new lob byte len", K(ret), K(new_lob));
+            } else if (OB_FAIL(delete_lob_col(run_ctx, run_ctx.col_descs_->at(i), old_obj, old_sql_obj, lob_common, lob_param))) {
+              LOG_WARN("[STORAGE_LOB]failed to erase old lob col", K(ret), K(old_sql_row), K(old_row));
+            } else if (OB_FAIL(insert_lob_col(run_ctx, run_ctx.col_descs_->at(i), new_obj, &lob_param, lob_common))) {
+              LOG_WARN("[STORAGE_LOB]failed to insert new lob col.", K(ret), K(new_row));
+            }
+          } else if (new_lob.is_delta_temp_lob()) {
+            if (OB_FAIL(process_delta_lob(run_ctx, run_ctx.col_descs_->at(i), old_sql_obj, new_lob, new_obj))) {
+              LOG_WARN("failed to process delta lob.", K(ret));
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
           }
         } else {
           if (old_obj.is_null()) {
@@ -4126,28 +4204,34 @@ int ObLSTabletService::process_lob_row(
           } else if (new_obj.is_nop_value() || new_obj.is_null()) {
             // do nothing
           } else {
-            ObString val_str = old_obj.get_string();
-            ObLobCommon *lob_common = reinterpret_cast<ObLobCommon*>(val_str.ptr());
-            if (!lob_common->in_row_ && data_tbl_rowkey_change) {
-              if (val_str.length() < ObLobManager::LOB_OUTROW_HEADER_SIZE) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("not enough space for lob header", K(ret), K(val_str));
-              } else {
-                char *buf = reinterpret_cast<char*>(run_ctx.lob_allocator_.alloc(val_str.length()));
-                if (OB_ISNULL(buf)) {
-                  ret = OB_ALLOCATE_MEMORY_FAILED;
-                  LOG_WARN("alloc memory failed.", K(ret), K(val_str));
-                } else {
-                  MEMCPY(buf, val_str.ptr(), val_str.length());
-                  lob_common = reinterpret_cast<ObLobCommon*>(buf);
-                  ObLobData *lob_data = reinterpret_cast<ObLobData*>(lob_common->buffer_);
-                  ObLobDataOutRowCtx *ctx = reinterpret_cast<ObLobDataOutRowCtx*>(lob_data->buffer_);
-                  ctx->op_ = ObLobDataOutRowCtx::OpType::EMPTY_SQL;
-                  new_obj.set_string(new_obj.get_type(), buf, val_str.length());
-                }
-              }
+            if (old_obj.is_null()) {
+              new_obj.set_null();
+            } else if (old_obj.is_nop_value()) {
+              new_obj.set_nop_value();
             } else {
-              new_obj.set_string(new_obj.get_type(), val_str);
+              ObString val_str = old_obj.get_string();
+              ObLobCommon *lob_common = reinterpret_cast<ObLobCommon*>(val_str.ptr());
+              if (!lob_common->in_row_ && data_tbl_rowkey_change) {
+                if (val_str.length() < ObLobManager::LOB_WITH_OUTROW_CTX_SIZE) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("not enough space for lob header", K(ret), K(val_str));
+                } else {
+                  char *buf = reinterpret_cast<char*>(run_ctx.lob_allocator_.alloc(val_str.length()));
+                  if (OB_ISNULL(buf)) {
+                    ret = OB_ALLOCATE_MEMORY_FAILED;
+                    LOG_WARN("alloc memory failed.", K(ret), K(val_str));
+                  } else {
+                    MEMCPY(buf, val_str.ptr(), val_str.length());
+                    lob_common = reinterpret_cast<ObLobCommon*>(buf);
+                    ObLobData *lob_data = reinterpret_cast<ObLobData*>(lob_common->buffer_);
+                    ObLobDataOutRowCtx *ctx = reinterpret_cast<ObLobDataOutRowCtx*>(lob_data->buffer_);
+                    ctx->op_ = ObLobDataOutRowCtx::OpType::EMPTY_SQL;
+                    new_obj.set_lob_value(new_obj.get_type(), buf, val_str.length()); // remove has lob header flag
+                  }
+                }
+              } else {
+                new_obj.set_lob_value(new_obj.get_type(), val_str.ptr(), val_str.length()); // remove has lob header flag
+              }
             }
           }
         }
@@ -4681,7 +4765,7 @@ int ObLSTabletService::get_conflict_rows(
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
   } else {
     ObSingleRowGetter single_row_getter(*allocator, *data_tablet);
-    if (OB_FAIL(init_single_row_getter(single_row_getter, run_ctx, out_col_ids, data_table))) {
+    if (OB_FAIL(init_single_row_getter(single_row_getter, run_ctx, out_col_ids, data_table, true))) {
       LOG_WARN("failed to init single row getter", K(ret));
     } else if (OB_FAIL(rowkey_helper.convert_datum_rowkey(rowkey.get_rowkey(), datum_rowkey))) {
       STORAGE_LOG(WARN, "Failed to transfer datum rowkey", K(ret), K(rowkey));
@@ -4712,7 +4796,7 @@ int ObLSTabletService::init_single_row_getter(
   if (OB_FAIL(row_getter.init_dml_access_ctx(run_ctx.store_ctx_, run_ctx.dml_param_, skip_read_lob))) {
     LOG_WARN("init dml access ctx failed", K(ret));
   } else if (OB_FAIL(row_getter.init_dml_access_param(relative_table,
-      run_ctx.dml_param_, out_col_ids))) {
+      run_ctx.dml_param_, out_col_ids, skip_read_lob))) {
     LOG_WARN("init dml access param failed", K(ret));
   }
 
@@ -4861,6 +4945,7 @@ int ObLSTabletService::process_old_row_lob_col(
   int ret = OB_SUCCESS;
   run_ctx.is_old_row_valid_for_lob_ = false;
   bool has_lob_col = false;
+  bool need_reread = is_sys_table(run_ctx.relative_table_.get_table_id());
   int64_t col_cnt = run_ctx.col_descs_->count();
   if (tbl_row.row_val_.count_ != col_cnt) {
     ret = OB_ERR_UNEXPECTED;
@@ -4868,17 +4953,49 @@ int ObLSTabletService::process_old_row_lob_col(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
       const ObColDesc &column = run_ctx.col_descs_->at(i);
-      if (column.col_type_.is_lob_v2()) {
+      if (is_lob_storage(column.col_type_.get_type())) {
         has_lob_col = true;
+        need_reread = need_reread || !(tbl_row.row_val_.cells_[i].has_lob_header());
         break;
       }
     }
   }
   if (OB_SUCC(ret) && has_lob_col) {
-    if (OB_FAIL(table_refresh_row(data_tablet_handle, run_ctx, tbl_row.row_val_))) {
-      LOG_WARN("[STORAGE_LOB]re-read lob col failed", K(ret));
+    if (!need_reread) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+        const ObColDesc &column = run_ctx.col_descs_->at(i);
+        if (is_lob_storage(column.col_type_.get_type())) {
+          ObObj &obj = tbl_row.row_val_.cells_[i];
+          bool has_lob_header = obj.has_lob_header();
+          if (obj.is_null() || obj.is_nop_value()) {
+            // do nothing
+          } else if (!has_lob_header) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("lob should have lob locator here.", K(ret), K(i), K(tbl_row.row_val_.cells_[i]));
+          } else {
+            ObLobLocatorV2 lob(obj.get_string(), has_lob_header);
+            ObString disk_loc;
+            if (!lob.is_valid()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid lob locator.", K(ret), K(lob));
+            } else if (lob.is_simple()) {
+              // do nothing
+            } else if (OB_FAIL(lob.get_disk_locator(disk_loc))) {
+              LOG_WARN("failed to get disk lob locator.", K(ret), K(lob));
+            } else {
+              obj.set_lob_value(obj.get_type(), disk_loc.ptr(), disk_loc.length());
+              if (has_lob_header) {
+                obj.set_has_lob_header();
+              }
+            }
+          }
+        }
+      }
+    } else {
+      if (OB_FAIL(table_refresh_row(data_tablet_handle, run_ctx, tbl_row.row_val_))) {
+        LOG_WARN("[STORAGE_LOB]re-read lob col failed", K(ret));
+      }
     }
-
   }
   return ret;
 }
@@ -5010,12 +5127,13 @@ int ObLSTabletService::delete_lob_col(
   ObLobManager *lob_mngr = MTL(ObLobManager*);
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[STORAGE_LOB]get lob manager instance failed.", K(ret));;
-  } else if (!column.col_type_.is_lob_v2() || obj.is_nop_value() || obj.is_null() ||
+    LOG_WARN("[STORAGE_LOB]get lob manager instance failed.", K(ret));
+  } else if (!column.col_type_.is_lob_storage() || obj.is_nop_value() || obj.is_null() ||
              !run_ctx.is_old_row_valid_for_lob_) {
     // do nothing
   } else {
     ObString data = obj.get_string();
+    // Notice: Only disk locator here!
     ObString sql_data = sql_obj.get_string();
     if (data.length() < sizeof(ObLobCommon)) {
       ret = OB_ERR_UNEXPECTED;
@@ -5043,7 +5161,8 @@ int ObLSTabletService::delete_lob_col(
         lob_param.timeout_ = run_ctx.dml_param_.timeout_;
         lob_param.scan_backward_ = false;
         lob_param.offset_ = 0;
-        lob_param.len_ = ObCharset::strlen_char(lob_param.coll_type_, sql_data.ptr(), sql_data.length());
+        // use byte size to delete all
+        lob_param.len_ = lob_param.byte_size_; //ObCharset::strlen_char(lob_param.coll_type_, sql_data.ptr(), sql_data.length());
         if (lob_param.byte_size_ < 0) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("calc byte size is negative.", K(ret), K(data), K(lob_param));
@@ -5111,6 +5230,7 @@ int ObLSTabletService::prepare_scan_table_param(
        } else {
          //TODO table param should not generate twice!!!!
          table_param = new (buf) ObTableParam(*param.allocator_);
+         table_param->get_enable_lob_locator_v2() = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0);
          if (OB_FAIL(table_param->convert(*table_schema, param.column_ids_))) {
            LOG_WARN("Fail to convert table param, ", K(ret));
          } else {

@@ -31,8 +31,9 @@ public:
                                 ObExprResType &type1,
                                 common::ObExprTypeCtx &type_ctx)
                                 const override;
-  template <typename T>
-  static int calc(const T &data, ObObjType type, ObCollationType cs_type, ObIAllocator *allocator, T &res);                             
+
+  static int calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
+                  ObIAllocator *allocator, ObDatum &res);
   static int eval_json_storage_size(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

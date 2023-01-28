@@ -45,7 +45,8 @@ void ObMicroBlockDesc::reset()
   row_count_delta_ = 0;
   contain_uncommitted_row_ = false;
   can_mark_deletion_ = false;
-  has_out_row_column_ = false;
+  has_string_out_row_ = false;
+  has_lob_out_row_ = false;
   original_size_ = 0;
   is_last_row_last_flag_ = false;
 }
@@ -73,7 +74,8 @@ int ObIMicroBlockWriter::build_micro_block_desc(ObMicroBlockDesc &micro_block_de
     micro_block_desc.max_merged_trans_version_ = get_max_merged_trans_version();
     micro_block_desc.contain_uncommitted_row_ = is_contain_uncommitted_row();
     micro_block_desc.block_checksum_ = get_micro_block_checksum();
-    micro_block_desc.has_out_row_column_ = has_out_row_column();
+    micro_block_desc.has_string_out_row_ = has_string_out_row_;
+    micro_block_desc.has_lob_out_row_ = has_lob_out_row_;
     micro_block_desc.original_size_ = get_original_size();
     micro_block_desc.is_last_row_last_flag_ = is_last_row_last_flag();
   }

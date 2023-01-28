@@ -269,6 +269,8 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   //sql optimizer estimate tablet block count
   RPC_PROCESSOR(ObEstimateTabletBlockCountP, gctx_);
 
+  // lob
+  RPC_PROCESSOR(ObLobQueryP, gctx_.bandwidth_throttle_);
   //standby switchover/failover
   RPC_PROCESSOR(ObRpcGetLSSyncScnP, gctx_);
   RPC_PROCESSOR(ObRefreshTenantInfoP, gctx_);

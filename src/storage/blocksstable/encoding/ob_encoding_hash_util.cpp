@@ -118,9 +118,10 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
     ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
     const bool need_binary_hash =
         (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC || store_class == ObGeometrySC);
+    bool has_lob_header = col_desc.col_type_.is_lob_storage();
     sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
         col_desc.col_type_.get_type(), col_desc.col_type_.get_collation_type(),
-        col_desc.col_type_.get_scale());
+        col_desc.col_type_.get_scale(), lib::is_oracle_mode(), has_lob_header);
     ObHashFunc hash_func;
     hash_func.hash_func_ = basic_funcs->murmur_hash_;
     const uint64_t mask = (bucket_num_ - 1);

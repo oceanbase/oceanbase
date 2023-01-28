@@ -35,9 +35,9 @@ public:
   static int eval_json_type(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
-  template <typename T>
-  static int calc(const T &data, ObObjType type, ObCollationType cs_type, ObIAllocator *allocator,
-                  uint32_t &type_idx, bool &is_null);
+
+  static int calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
+                  ObIAllocator *allocator, uint32_t &type_idx, bool &is_null);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonType);
 };

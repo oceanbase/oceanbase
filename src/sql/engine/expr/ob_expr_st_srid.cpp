@@ -86,7 +86,8 @@ int ObExprSTSRID::eval_st_srid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const char *func_name)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObDatum *datum = NULL;
   int num_args = expr.arg_cnt_;
   bool is_null_result = false;
@@ -132,7 +133,10 @@ int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
       is_null_result = true;
     } else if (!is_null_result) { // srid might be null, fix 42538503
       wkb = datum->get_string();
-      if (num_args == 1) {
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+                expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
+        LOG_WARN("fail to get real string data", K(ret), K(wkb));
+      } else if (num_args == 1) {
         if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs, true, func_name))) {
           LOG_WARN("fail to get srs item", K(ret), K(wkb));
           if (OB_ERR_SRS_NOT_FOUND == ret) {

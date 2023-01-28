@@ -1373,7 +1373,7 @@ int ObSql::handle_sql_execute(const ObString &sql,
 
   if (OB_SUCC(ret) && !context.is_text_ps_mode_) {
     if (OB_FAIL(after_get_plan(pc_ctx, *session, result.get_physical_plan(),
-                    result.get_is_from_plan_cache(), &params))) {
+                result.get_is_from_plan_cache(), &params, pc_ctx.exec_ctx_.get_min_cluster_version()))) {
       LOG_WARN("fail to handle after get plan", K(ret));
     }
   }
@@ -2027,7 +2027,8 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
                                                       session,
                                                       result.get_physical_plan(),
                                                       result.get_is_from_plan_cache(),
-                                                      &ps_params)))) {
+                                                      &ps_params,
+                                                      ectx.get_min_cluster_version())))) {
             LOG_WARN("fail to handle after get plan", K(ret));
           }
         }
@@ -2115,6 +2116,13 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
            "proxy_sess_id", session->get_proxy_sessid(),
            "execution_id", session->get_current_execution_id());
 #endif
+    if (exec_ctx.get_min_cluster_version() != session->get_exec_min_cluster_version()) {
+      // src min cluster version may different with local current min cluster version
+      // need to generate plan by src min cluster version
+      LOG_INFO("remote plan cluster version changed", K(exec_ctx.get_min_cluster_version()),
+                                                      K(session->get_exec_min_cluster_version()));
+      exec_ctx.get_task_exec_ctx().set_min_cluster_version(session->get_exec_min_cluster_version());
+    }
     const uint64_t tenant_id = session->get_effective_tenant_id();
     bool use_plan_cache = session->get_local_ob_enable_plan_cache();
     context.self_add_plan_ = false;
@@ -2231,7 +2239,8 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
                                       *session,
                                       plan,
                                       is_from_plan_cache,
-                                      NULL /*ps param*/))) {
+                                      NULL /*ps param*/,
+                                      exec_ctx.get_min_cluster_version()))) {
       LOG_WARN("fail to handle after get plan", K(ret));
     }
   }
@@ -2378,7 +2387,8 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   if (OB_SUCC(ret)) {
     if (!context.is_text_ps_mode_
         && OB_FAIL(after_get_plan(*pc_ctx, session, result.get_physical_plan(),
-                               result.get_is_from_plan_cache(), NULL))) {
+                                  result.get_is_from_plan_cache(), NULL,
+                                  ectx.get_min_cluster_version()))) {
       LOG_WARN("fail to handle after get plan", K(ret));
     }
   }
@@ -4110,7 +4120,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
                           ObSQLSessionInfo &session,
                           ObPhysicalPlan *phy_plan,
                           bool from_plan_cache,
-                          const ParamStore *ps_params)
+                          const ParamStore *ps_params,
+                          uint64_t min_cluster_version)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *pctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
@@ -4221,6 +4232,10 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
               pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt();
           pctx->get_remote_sql_info().remote_sql_ = pc_ctx.sql_ctx_.cur_sql_;
           pctx->get_remote_sql_info().ps_params_ = &param_store;
+        }
+        if (GET_MIN_CLUSTER_VERSION() != min_cluster_version) {
+          LOG_INFO("remote plan src diff cluster version",
+                   K(GET_MIN_CLUSTER_VERSION()), K(min_cluster_version));
         }
         LOG_DEBUG("generate remote sql info", K(pctx->get_remote_sql_info()),
                   K(session.get_local_ob_enable_plan_cache()),
@@ -4717,7 +4732,8 @@ int ObSql::calc_pre_calculable_exprs(const ObDMLStmt &stmt,
                                  exec_ctx.get_my_session(),
                                  exec_ctx.get_sql_ctx()->schema_guard_,
                                  phy_plan_ctx->get_original_param_cnt(),
-                                 datum_param_store.count());
+                                 datum_param_store.count(),
+                                 exec_ctx.get_min_cluster_version());
     pre_calc_frame = new(frame_buf)ObPreCalcExprFrameInfo(phy_plan.get_allocator());
     if (OB_FAIL(expr_cg.generate_calculable_exprs(calculable_exprs,
                                                   *pre_calc_frame))) {
@@ -4806,7 +4822,8 @@ int ObSql::create_expr_constraint(ObQueryCtx &query_ctx,
     ObStaticEngineExprCG expr_cg(exec_ctx.get_allocator(), exec_ctx.get_my_session(),
                                  exec_ctx.get_sql_ctx()->schema_guard_,
                                  plan_ctx->get_original_param_cnt(),
-                                 plan_ctx->get_datum_param_store().count());
+                                 plan_ctx->get_datum_param_store().count(),
+                                 exec_ctx.get_min_cluster_version());
     pre_calc_constraint = new(cons_buf)ObPreCalcExprConstraint(exec_ctx.get_allocator());
     pre_calc_constraint->expect_result_ = expect_result;
     if (OB_FAIL(expr_cg.generate_calculable_exprs(pre_calc_exprs,

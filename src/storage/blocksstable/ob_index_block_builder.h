@@ -287,7 +287,8 @@ protected:
   int64_t micro_block_count_;
   bool can_mark_deletion_;
   bool contain_uncommitted_row_;
-  bool has_out_row_column_;
+  bool has_string_out_row_;
+  bool has_lob_out_row_;
   bool is_last_row_last_flag_;
 private:
   ObBaseIndexBlockBuilder *next_level_builder_;

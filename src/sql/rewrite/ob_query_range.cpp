@@ -9074,7 +9074,10 @@ int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObGeoRel
     uint64_t columnid = out_key_part->id_.column_id_;
     ObGeoColumnInfo column_info;
     uint32_t input_srid;
-    if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, input_srid))) {
+    ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, wkb, wkb_str))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkb));
+    } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, input_srid))) {
       LOG_WARN("failed to get srid", K(ret), K(wkb_str));
     } else if (OB_FAIL(columnId_map_.get_refactored(columnid, column_info))) {
       LOG_WARN("failed to get from columnId_map_", K(ret));

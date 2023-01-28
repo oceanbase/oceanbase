@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -185,8 +186,8 @@ OB_DEF_DESERIALIZE(ObExpr)
   }
 
   if (OB_SUCC(ret)) {
-    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_,
-                                                datum_meta_.scale_);
+    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_, datum_meta_.scale_,
+                                                lib::is_oracle_mode(), obj_meta_.has_lob_header());
     CK(NULL != basic_funcs_);
   }
   if (is_batch_result()) {
@@ -404,6 +405,9 @@ int ObDatumObjParam::from_objparam(const ObObjParam &objparam, ObIAllocator *all
     accuracy_ = objparam.get_accuracy();
     res_flags_ = objparam.get_result_flag();
     flag_ = objparam.get_param_flag();
+    if (objparam.has_lob_header()) {
+      set_result_flag(HAS_LOB_HEADER_FLAG);
+    }
   }
 
   return ret;
@@ -416,6 +420,9 @@ int ObDatumObjParam::to_objparam(common::ObObjParam &obj_param, ObIAllocator *al
   meta.set_type(meta_.type_);
   meta.set_collation_type(meta_.cs_type_);
   meta.set_scale(meta_.scale_);
+  if (res_flags_ & HAS_LOB_HEADER_FLAG) {
+    meta.set_has_lob_header();
+  }
   if (OB_UNLIKELY(meta_.is_ext_sql_array())) {
     if (OB_ISNULL(allocator)) {
       ret = OB_ERR_UNEXPECTED;
@@ -730,6 +737,10 @@ int eval_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
         LOG_WARN("obj type miss match", K(ret), K(v), K(expr));
       } else if (OB_FAIL(expr_datum.from_obj(v, expr.obj_datum_map_))) {
         LOG_WARN("set obj to datum failed", K(ret));
+      } else if (is_lob_storage(v.get_type()) &&
+                 OB_FAIL(ob_adjust_lob_datum(v, expr.obj_meta_, expr.obj_datum_map_,
+                                             ctx.exec_ctx_.get_allocator(), expr_datum))) {
+        LOG_WARN("adjust lob datum failed", K(ret), K(v.get_meta()), K(expr.obj_meta_));
       }
     }
   }

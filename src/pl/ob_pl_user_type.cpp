@@ -25,6 +25,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "pl/ob_pl_allocator.h"
+#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
 {

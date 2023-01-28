@@ -261,6 +261,11 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       if (ObExtendType != rt_expr->obj_meta_.get_type()) {
         rt_expr->obj_meta_.set_scale(rt_expr->datum_meta_.scale_);
       }
+      if (is_lob_storage(rt_expr->obj_meta_.get_type())) {
+        if (cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
+          rt_expr->obj_meta_.set_has_lob_header();
+        }
+      }
       // init max_length_
       rt_expr->max_length_ = raw_expr->get_result_type().get_length();
       // init obj_datum_map_
@@ -1059,6 +1064,8 @@ int ObStaticEngineExprCG::alloc_const_frame(const ObIArray<ObRawExpr *> &exprs,
         datum->from_obj(tmp_obj);
         if (0 == datum->len_) {
           datum->ptr_ = NULL;
+        } else {
+          OB_ASSERT(rt_expr->obj_meta_.has_lob_header() == tmp_obj.has_lob_header());
         }
       }
     }
@@ -1081,7 +1088,9 @@ int ObStaticEngineExprCG::cg_expr_basic_funcs(const ObIArray<ObRawExpr *> &raw_e
     } else {
       rt_expr->basic_funcs_ = ObDatumFuncs::get_basic_func(rt_expr->datum_meta_.type_,
                                                         rt_expr->datum_meta_.cs_type_,
-                                                        rt_expr->datum_meta_.scale_);
+                                                        rt_expr->datum_meta_.scale_,
+                                                        lib::is_oracle_mode(),
+                                                        rt_expr->obj_meta_.has_lob_header());
       CK(NULL != rt_expr->basic_funcs_);
     }
   }
@@ -1476,7 +1485,8 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
                                  session,
                                  schema_guard,
                                  0,
-                                 0);
+                                 0,
+                                 GET_MIN_CLUSTER_VERSION()); // ?
     expr_cg.set_rt_question_mark_eval(true);
     expr_cg.set_need_flatten_gen_col(false);
     OZ(expr_cg.generate(const_cast<ObRawExpr *>(expr), flattened_raw_exprs, *temp_expr));

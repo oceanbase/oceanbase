@@ -79,7 +79,8 @@ int ObExprQuarter::calc_quater(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
                  *param_datum, expr.args_[0]->datum_meta_.type_, get_timezone_info(session),
                  ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
-                 false, date_sql_mode))) {
+                 false, date_sql_mode,
+                 expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
     uint64_t cast_mode = 0;
     ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);

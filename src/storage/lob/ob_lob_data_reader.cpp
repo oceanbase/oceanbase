@@ -14,6 +14,7 @@
 
 #include "ob_lob_data_reader.h"
 #include "ob_lob_manager.h"
+#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
 {
@@ -78,7 +79,7 @@ int ObLobDataReader::read_lob_data_impl(blocksstable::ObStorageDatum &datum, ObC
     LOG_WARN("ObLobDataReader has not been inited", K(ret));
   } else if (datum.len_ < sizeof(ObLobCommon)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Invalid datum len.", K(datum));
+    LOG_WARN("Invalid datum len", K(ret), K(datum));
   } else {
     ObLobManager* lob_mngr = MTL(ObLobManager*);
     if (OB_ISNULL(lob_mngr)) {
@@ -111,6 +112,8 @@ int ObLobDataReader::read_lob_data_impl(blocksstable::ObStorageDatum &datum, ObC
         output_data.assign_ptr(param.lob_common_->buffer_, param.len_);
         datum.set_string(output_data);
       } else {
+        // should not come here if lob locator v2 is used
+        // no need to read full lob data directly from storage
         char *buf = static_cast<char *>(allocator_.alloc(param.byte_size_));
         if (OB_ISNULL(buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -146,10 +149,10 @@ int ObLobDataReader::read_lob_data(blocksstable::ObStorageDatum &datum, ObCollat
   return ret;
 }
 
-int ObLobDataReader::fuse_lob_header(common::ObObj &obj)
+int ObLobDataReader::fuse_disk_lob_header(common::ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  if (!obj.is_lob_v2() || obj.is_nop_value() || obj.is_null()) {
+  if (!obj.is_lob_storage() || obj.is_nop_value() || obj.is_null()) {
   } else {
     ObString data = obj.get_string();
     ObString out;

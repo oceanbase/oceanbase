@@ -410,6 +410,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
     }
 
     ObString host_name;
+    uint64_t client_attr_cap_flags = 0;
     if (OB_DIAG_TENANT_ID == conn->tenant_id_) {
       const ObString scramble_str(conn->scramble_buf_);
       if (OB_FAIL(GCTX.diag_->check_passwd(hsr_.get_auth_response(), scramble_str))) {
@@ -446,8 +447,11 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
                                                         session.get_database_name(),
                                                         db_id))) {
           LOG_WARN("failed to get database id", K(ret));
+        } else if (OB_FAIL(get_client_attribute_capability(client_attr_cap_flags))) {
+          LOG_WARN("failed to get client attribute capability", K(ret));
         } else {
           session.set_database_id(db_id);
+          session.set_client_attrbuite_capability(client_attr_cap_flags);
         }
       }
     } else {
@@ -659,6 +663,10 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           LOG_WARN("failed to update database variables", K(ret));
         } else if (OB_FAIL(session.update_max_packet_size())) {
           LOG_WARN("failed to update max packet size", K(ret));
+        } else if (OB_FAIL(get_client_attribute_capability(client_attr_cap_flags))) {
+          LOG_WARN("failed to get client attribute capability", K(ret));
+        } else {
+          session.set_client_attrbuite_capability(client_attr_cap_flags);
         }
 
         if (OB_SUCC(ret) && !session.get_database_name().empty()) {
@@ -701,7 +709,8 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
     LOG_DEBUG("obmp connect info:", K_(tenant_name), K_(user_name),
               K(host_name), K_(client_ip), "database", hsr_.get_database(),
               K(hsr_.get_capability_flags().capability_),
-              K(session.is_client_use_lob_locator()));
+              K(session.is_client_use_lob_locator()),
+              K(session.is_client_support_lob_locatorv2()));
   }
   return ret;
 }
@@ -1449,6 +1458,32 @@ int ObMPConnect::get_proxy_capability(uint64_t &cap) const
     EXPR_GET_UINT64_V2(value, cap);
     if (OB_FAIL(ret)) {
       LOG_WARN("fail to cast capability flag to uint64", K_(kv.value), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMPConnect::get_client_attribute_capability(uint64_t &cap) const
+{
+  int ret = OB_SUCCESS;
+  cap = 0;
+  bool is_capability_flag_found = false;
+  ObStringKV kv;
+  for (int64_t i = 0; !is_capability_flag_found && i < hsr_.get_connect_attrs().count(); ++i) {
+    kv = hsr_.get_connect_attrs().at(i);
+    if (kv.key_ == OB_MYSQL_CLIENT_ATTRIBUTE_CAPABILITY_FLAG) {
+      is_capability_flag_found = true;
+    }
+  }
+
+  if (is_capability_flag_found) {
+    ObObj value;
+    value.set_varchar(kv.value_);
+    ObArenaAllocator allocator(ObModIds::OB_SQL_EXPR);
+    ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, ObCharset::get_system_collation());
+    EXPR_GET_UINT64_V2(value, cap);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to cast client attribute capability flag to uint64", K_(kv.value), K(ret));
     }
   }
   return ret;

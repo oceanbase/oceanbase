@@ -586,6 +586,7 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_data_reader.cpp
   lob/ob_lob_locator.cpp
   lob/ob_lob_util.cpp
+  lob/ob_lob_rpc_struct.cpp
 )
 
 ob_add_new_object_target(ob_storage ob_storage)

@@ -7949,7 +7949,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             ret = OB_ERR_UNEXPECTED;
           }
         }
-        if (OB_SUCC(ret) && is_lob_v2(column->get_data_type())) {
+        if (OB_SUCC(ret) && is_lob_storage(column->get_data_type())) {
           is_origin_table_has_lob_column = true;
         }
       }
@@ -13636,7 +13636,7 @@ int ObDDLService::build_aux_lob_table_schema_if_need(ObTableSchema &data_table_s
   ObLobPieceBuilder lob_piece_builder(*this);
   bool lob_col_found = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < data_table_schema.get_column_count() && !lob_col_found; ++i) {
-    if (is_lob_v2(data_table_schema.get_column_schema_by_idx(i)->get_data_type())) {
+    if (is_lob_storage(data_table_schema.get_column_schema_by_idx(i)->get_data_type())) {
       HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
         if (OB_FAIL(lob_meta_builder.generate_aux_lob_meta_schema(
           schema_service_->get_schema_service(), data_table_schema, lob_meta_schema, true))) {

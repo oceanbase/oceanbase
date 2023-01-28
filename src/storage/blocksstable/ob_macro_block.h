@@ -132,6 +132,7 @@ private:
       const share::schema::ObMergeSchema &schema,
       const storage::ObMergeType merge_type);
   int get_emergency_row_store_type();
+  void fresh_col_meta();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDataStoreDesc);
 };

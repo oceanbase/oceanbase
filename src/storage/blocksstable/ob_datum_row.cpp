@@ -633,10 +633,12 @@ int ObStorageDatumUtils::init(const ObIArray<share::schema::ObColDesc> &col_desc
         const share::schema::ObColDesc &col_desc = mv_col_descs.at(i);
         //TODO @hanhui support desc rowkey
         bool is_ascending = true || col_desc.col_order_ == ObOrderType::ASC;
+        bool has_lob_header = is_lob_storage(col_desc.col_type_.get_type());
         sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(col_desc.col_type_.get_type(),
                                                                           col_desc.col_type_.get_collation_type(),
                                                                           col_desc.col_type_.get_scale(),
-                                                                          is_oracle_mode);
+                                                                          is_oracle_mode,
+                                                                          has_lob_header);
         if (OB_UNLIKELY(nullptr == basic_funcs
                        || nullptr == basic_funcs->null_last_cmp_
                        || nullptr == basic_funcs->murmur_hash_)) {

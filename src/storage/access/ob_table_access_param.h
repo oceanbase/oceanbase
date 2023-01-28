@@ -83,7 +83,7 @@ public:
   void reset();
   bool is_valid() const;
   int check_read_info_valid();
-  int has_lob_column_out(const bool is_get, bool &has_lob_column) const;
+  int refresh_lob_column_out_status();
   bool enable_fuse_row_cache(const ObQueryFlag &query_flag) const;
   const ObTableReadInfo *get_read_info(const bool is_get = false) const
   {
@@ -141,6 +141,8 @@ public:
   { return use_iter_pool_; }
   OB_INLINE void set_use_iter_pool_flag()
   { use_iter_pool_ = 1; }
+  OB_INLINE bool has_lob_column_out() const
+  { return has_lob_column_out_; }
   DECLARE_TO_STRING;
 public:
   uint64_t table_id_;
@@ -158,6 +160,10 @@ public:
   bool is_same_schema_column_;
   bool vectorized_enabled_;
   bool has_virtual_columns_;
+  // use the flag to optimize blockscan for tables with text columns in mysql mode
+  // fuse row cache will be disabled when a table contains lob columns
+  // so we can generate from the request cols in readinfo without considering fuse row cache
+  bool has_lob_column_out_;
   bool is_for_foreign_check_;
   int64_t ss_rowkey_prefix_cnt_;
   union {

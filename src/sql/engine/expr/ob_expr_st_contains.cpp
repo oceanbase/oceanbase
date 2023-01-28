@@ -104,7 +104,13 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     omt::ObSrsCacheGuard srs_guard;
     const ObSrsItem *srs = NULL;
 
-    if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum1,
+              gis_arg1->datum_meta_, gis_arg1->obj_meta_.has_lob_header(), wkb1))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkb1));
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum2,
+              gis_arg2->datum_meta_, gis_arg2->obj_meta_.has_lob_header(), wkb2))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkb2));
+    } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
       if (ret == OB_ERR_GIS_INVALID_DATA) {
         LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CONTAINS);
       }

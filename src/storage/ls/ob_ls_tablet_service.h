@@ -675,6 +675,12 @@ private:
       const common::ObNewRow &new_row,
       const int64_t rowkey_len,
       bool &rowkey_change);
+  static int process_delta_lob(
+      ObDMLRunningCtx &run_ctx,
+      const ObColDesc &column,
+      ObObj &old_obj,
+      ObLobLocatorV2 &delta_lob,
+      ObObj &obj);
   static int process_lob_row(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,

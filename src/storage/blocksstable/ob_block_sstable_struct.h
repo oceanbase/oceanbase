@@ -301,7 +301,6 @@ struct ObColumnHeader
     HAS_EXTEND_VALUE = 0x2,
     BIT_PACKING = 0x4,
     LAST_VAR_FIELD = 0x8,
-    OUT_ROW = 0x10,
     MAX_ATTRIBUTE,
   };
   static constexpr int8_t OB_COLUMN_HEADER_V1 = 0;
@@ -332,7 +331,6 @@ struct ObColumnHeader
   inline bool has_extend_value() const { return attr_ & HAS_EXTEND_VALUE; }
   inline bool is_bit_packing() const { return attr_ & BIT_PACKING; }
   inline bool is_last_var_field() const { return attr_ & LAST_VAR_FIELD; }
-  inline bool is_out_row() const { return attr_ & OUT_ROW; }
   inline bool is_span_column() const
   {
     return COLUMN_EQUAL == type_ || COLUMN_SUBSTR == type_;
@@ -347,7 +345,6 @@ struct ObColumnHeader
   inline void set_has_extend_value_attr() { attr_ |= HAS_EXTEND_VALUE; }
   inline void set_bit_packing_attr() { attr_ |= BIT_PACKING; }
   inline void set_last_var_field_attr() { attr_ |= LAST_VAR_FIELD; }
-  inline void set_out_row() { attr_ |= OUT_ROW; }
 
   TO_STRING_KV(K_(version), K_(type), K_(attr), K_(obj_type),
       K_(extend_value_offset), K_(offset), K_(length));
@@ -578,7 +575,6 @@ struct ObColumnEncodingCtx
   bool only_raw_encoding_;
   bool is_refed_;
   bool need_sort_;
-  bool is_out_row_column_;
 
   ObColumnEncodingCtx() { reset(); }
   void reset() { memset(this, 0, sizeof(*this)); }
@@ -595,7 +591,7 @@ struct ObColumnEncodingCtx
       K_(extend_value_bit), KP_(col_datums), KP_(ht), KP_(prefix_tree),
       K_(*encoding_ctx), K_(detected_encoders),
       K_(last_prefix_length), K_(max_string_size), K_(only_raw_encoding),
-      K_(is_refed), K_(need_sort), K_(is_out_row_column));
+      K_(is_refed), K_(need_sort));
 };
 
 struct ObBloomFilterMacroBlockHeader

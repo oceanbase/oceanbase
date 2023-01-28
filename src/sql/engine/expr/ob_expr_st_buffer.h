@@ -81,6 +81,7 @@ protected:
   static int parse_text_strategy(common::ObString &str, common::ObGeoBufferStrategy &strategy);
   static int init_buffer_strategy(const ObExpr &expr,
                                   ObEvalCtx &ctx,
+                                  ObIAllocator &allocator,
                                   common::ObGeoBufferStrategy &buf_strat,
                                   double distance);
   static int init_buffer_strategy(const common::ObObj *params,

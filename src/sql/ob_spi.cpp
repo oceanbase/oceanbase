@@ -117,6 +117,7 @@ int ObSPIResultSet::init(sql::ObSQLSessionInfo &session_info)
   } else {
     result_set_ = new (buf_) ObResultSet(session_info, mem_context_->get_arena_allocator());
     is_inited_ = true;
+    result_set_->get_exec_context().get_task_exec_ctx().set_min_cluster_version(session_info.get_exec_min_cluster_version());
   }
   return ret;
 }
@@ -655,7 +656,7 @@ int ObSPIService::spi_convert(ObSQLSessionInfo &session,
     bool is_strict = is_strict_mode(session.get_sql_mode());
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
     ObCastCtx cast_ctx(&allocator, &dtc_params, cast_mode, dst_type.get_collation_type());
-    if ((dst_type.is_blob() || dst_type.is_blob_locator()) && lib::is_oracle_mode()) {
+    if ((dst_type.is_blob() || dst_type.is_blob_locator() || src.is_blob() || src.is_blob_locator()) && lib::is_oracle_mode()) {
       cast_ctx.cast_mode_ |= CM_ENABLE_BLOB_CAST;
     }
     if (dst_type.is_null() || dst_type.is_unknown() || dst_type.is_ext()) {
@@ -840,8 +841,12 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       ObObjParam &param = ctx->params_->at(result_idx);
       bool is_ref_cursor = param.is_ref_cursor_type();
       if (!result->is_ext()) {
+        bool has_lob_header = result->ObObj::has_lob_header();
         result->ObObj::set_scale(param.get_meta().get_scale());
         result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
+        if (has_lob_header) {
+          result->ObObj::set_has_lob_header();
+        }
         param = *result;
         param.set_is_ref_cursor_type(is_ref_cursor);
         param.set_param_meta();
@@ -5743,7 +5748,7 @@ int ObSPIService::collect_cells(ObNewRow &row,
         ObExprResType result_type;
         result_type.set_meta(result_types[i].get_meta_type());
         result_type.set_accuracy(result_types[i].get_accuracy());
-        if ((result_type.is_blob() || result_type.is_blob_locator()) && lib::is_oracle_mode()) {
+        if ((result_type.is_blob() || result_type.is_blob_locator() || obj.is_blob() || obj.is_blob_locator()) && lib::is_oracle_mode()) {
           cast_ctxs.at(i).cast_mode_ |= CM_ENABLE_BLOB_CAST;
         }
         OZ (ObExprColumnConv::convert_with_null_check(tmp_obj, obj, result_type, is_strict, cast_ctxs.at(i)));
@@ -5872,7 +5877,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       ObExprResType result_type;
       OX (result_type.set_meta(result_types[i].get_meta_type()));
       OX (result_type.set_accuracy(result_types[i].get_accuracy()));
-      if (OB_SUCC(ret) && (result_type.is_blob() || result_type.is_blob_locator())
+      if (OB_SUCC(ret) && (result_type.is_blob() || result_type.is_blob_locator() || obj.is_blob() || obj.is_blob_locator())
           && lib::is_oracle_mode()) {
         cast_ctx.cast_mode_ |= CM_ENABLE_BLOB_CAST;
       }

@@ -851,6 +851,7 @@ private:
   int init_topk_fre_histogram_item(const ObAggrInfo &aggr_info,
                                     ObTopKFrequencyHistograms *topk_fre_hist);
   int get_top_k_fre_hist_result(ObTopKFrequencyHistograms &top_k_fre_hist,
+                                bool has_lob_header,
                                 ObDatum &result_datum);
 
   int compute_hybrid_hist_result(const ObAggrInfo &aggr_info,
@@ -858,6 +859,7 @@ private:
                                  ObDatum &result);
 
   int get_hybrid_hist_result(ObHybridHistograms &hybrid_hist,
+                             bool has_lob_header,
                              ObDatum &result_datum);
 
   int get_json_arrayagg_result(const ObAggrInfo &aggr_info,

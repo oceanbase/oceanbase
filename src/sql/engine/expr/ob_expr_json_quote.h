@@ -29,9 +29,9 @@ class ObExprJsonQuote : public ObFuncExprOperator
 public:
   explicit ObExprJsonQuote(common::ObIAllocator &alloc);
   virtual ~ObExprJsonQuote();
-  template <typename T>
-  static int calc(const T &data, ObObjType type, ObCollationType cs_type,
-                  ObJsonBuffer &j_buf, bool &is_null);
+
+  static int calc(ObEvalCtx &ctx, ObIAllocator &temp_allocator, const ObDatum &data,
+                  ObDatumMeta meta, bool has_lob_header, ObJsonBuffer &j_buf, bool &is_null);
   int calc_result_type1(ObExprResType &type,
                         ObExprResType &type1,
                         common::ObExprTypeCtx &type_ctx) const override;

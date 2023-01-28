@@ -33,6 +33,7 @@ public:
                                 int64_t param_num,
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int get_path(const ObExpr &expr, ObEvalCtx &ctx, ObJsonPath* &j_path,
+                      common::ObArenaAllocator &allocator,
                       ObJsonPathCache &ctx_cache, ObJsonPathCache* &path_cache);
   static int get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObArenaAllocator &allocator,
                            uint16_t index, ObIJsonBase*& j_base);

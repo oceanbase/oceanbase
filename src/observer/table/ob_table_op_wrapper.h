@@ -47,10 +47,11 @@ class ObTableApiUtil
 {
 public:
   // schema序的ObNewRow组装成ObTableEntity
-  static int construct_entity_from_row(ObNewRow *row,
-                                      const ObTableSchema *table_schema,
-                                      const ObIArray<ObString> &cnames,
-                                      ObITableEntity *entity);
+  static int construct_entity_from_row(ObIAllocator &allocator,
+                                       ObNewRow *row,
+                                       const ObTableSchema *table_schema,
+                                       const ObIArray<ObString> &cnames,
+                                       ObITableEntity *entity);
 };
 
 class ObHTableDeleteExecutor

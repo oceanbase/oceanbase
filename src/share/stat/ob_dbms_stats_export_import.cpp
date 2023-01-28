@@ -23,6 +23,7 @@
 #include "share/stat/ob_opt_stat_sql_service.h"
 #include "share/stat/ob_dbms_stats_history_manager.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase {
 using namespace sql;
@@ -1444,11 +1445,14 @@ int ObDbmsStatsExportImport::convert_bin_hex_text_to_obj(ObIAllocator &allocator
 {
   int ret = OB_SUCCESS;
   ObString str;
+  ObTextStringIter text_iter(src_obj);
   if (OB_UNLIKELY(!src_obj.is_text())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(src_obj), K(src_obj.get_type()));
-  } else if (OB_FAIL(src_obj.get_string(str))) {
-    LOG_WARN("failed to get string", K(ret), K(src_obj));
+  } else if (OB_FAIL(text_iter.init(0, nullptr, &allocator))) {
+    LOG_WARN("failed to init text iter", K(ret), K(text_iter));
+  } else if (OB_FAIL(text_iter.get_full_data(str))) {
+    LOG_WARN("failed to get full string", K(ret), K(text_iter));
   } else if (OB_FAIL(ObOptStatSqlService::hex_str_to_obj(str.ptr(), str.length(), allocator, dst_obj))) {
     LOG_WARN("deserialize object value failed.", K(stat), K(ret));
   } else {

@@ -31,6 +31,7 @@
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
 #include "lib/timezone/ob_oracle_format_models.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 
 namespace oceanbase
@@ -890,8 +891,8 @@ int ObExprOperator::aggregate_string_type_and_charset_oracle(
 
   if (OB_SUCC(ret)) {
     result.set_type_simple(result_type);
-    if (ob_is_large_text(result_type) || ob_is_json(result_type)) {
-      result.set_inrow();
+    if (is_lob_storage(result_type)) {
+      result.set_has_lob_header();
     }
     result.set_collation_type(result_charset);
     result.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -1817,6 +1818,7 @@ bool ObRelationalExprOperator::can_cmp_without_cast(ObExprResType type1,
                                                     const ObSQLSessionInfo &session)
 {
   bool need_no_cast = false;
+  bool has_lob_header = type1.has_lob_header() || type2.has_lob_header();
   UNUSED(session);
   //特殊处理显示调用compare(例如：c1 > c2)，此时enum/set均应该转换成string处理
   //内部比较（order by）,enum/set不需要转换。
@@ -1849,7 +1851,8 @@ bool ObRelationalExprOperator::can_cmp_without_cast(ObExprResType type1,
                                                                    type2.get_scale(),
                                                                    cmp_op,
                                                                    lib::is_oracle_mode(),
-                                                                   CS_TYPE_BINARY);
+                                                                   CS_TYPE_BINARY,
+                                                                   has_lob_header);
       need_no_cast = (func_ptr != nullptr);
     }
   }
@@ -3305,6 +3308,7 @@ int ObSubQueryRelationalExpr::cg_expr(ObExprCGCtx &op_cg_ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < rt_expr.inner_func_cnt_; i++) {
       auto &l = left_types.at(i);
       auto &r = right_types.at(i);
+      bool has_lob_header = l.has_lob_header() || r.has_lob_header();
       if (ObDatumFuncs::is_string_type(l.get_type())
           && ObDatumFuncs::is_string_type(r.get_type())) {
         CK(l.get_collation_type() == r.get_collation_type());
@@ -3312,7 +3316,7 @@ int ObSubQueryRelationalExpr::cg_expr(ObExprCGCtx &op_cg_ctx,
       if (OB_SUCC(ret)) {
         funcs[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
             l.get_type(), r.get_type(), l.get_scale(), r.get_scale(),
-            lib::is_oracle_mode(), l.get_collation_type());
+            lib::is_oracle_mode(), l.get_collation_type(), has_lob_header);
         CK(NULL != funcs[i]);
       }
     }
@@ -5311,10 +5315,55 @@ int ObLocationExprOperator::calc_(const ObExpr &expr, const ObExpr &sub_arg,
     ObCollationType calc_cs_type = CS_TYPE_INVALID;
     if (OB_FAIL(get_calc_cs_type(expr, calc_cs_type))) {
       LOG_WARN("get_calc_cs_type failed", K(ret));
-    } else {
+    } else if (!ob_is_text_tc(sub_arg.datum_meta_.type_) && !ob_is_text_tc(ori_arg.datum_meta_.type_)) {
       uint32_t idx = ObCharset::locate(calc_cs_type, ori_str.ptr(), ori_str.length(),
                                        sub_str.ptr(), sub_str.length(), pos_int);
       res_datum.set_int(static_cast<int64_t>(idx));
+    } else { // at least one of the inputs are text tc
+      ObString sub_str_data;
+      ObString ori_str_data;
+      bool sub_has_lob_header = sub_arg.obj_meta_.has_lob_header();
+      bool ori_has_lob_header = ori_arg.obj_meta_.has_lob_header();
+      ObTextStringIter sub_str_iter(sub_arg.datum_meta_.type_, sub_arg.datum_meta_.cs_type_, sub_str, sub_has_lob_header);
+      ObTextStringIter ori_str_iter(ori_arg.datum_meta_.type_, ori_arg.datum_meta_.cs_type_, ori_str, ori_has_lob_header);
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+      if (OB_FAIL(ori_str_iter.init(0, NULL, &calc_alloc))) {
+        LOG_WARN("Lob: init ori_str_iter failed ", K(ret), K(ori_str_iter));
+      } else if (OB_FAIL(sub_str_iter.init(0, NULL, &calc_alloc))) {
+        LOG_WARN("Lob: init sub_str_iter failed ", K(ret), K(sub_str_iter));
+      } else if (OB_FAIL(sub_str_iter.get_full_data(sub_str_data))) {
+        LOG_WARN("Lob: init lob str iter failed ", K(ret), K(sub_str_iter));
+      } else {
+        uint32_t idx = 0;
+        ObTextStringIterState state;
+        if (ori_str_iter.is_outrow_lob()) { // set reserved len, to avoid sub_str split between get_next_block
+          size_t sub_str_char_len = ObCharset::strlen_char(sub_arg.datum_meta_.cs_type_,
+                                                          sub_str_data.ptr(),
+                                                          static_cast<int64_t>(sub_str_data.length()));
+          ori_str_iter.set_reserved_len(sub_str_char_len - 1);
+          ori_str_iter.set_start_offset(pos_int); // start char len
+          pos_int = 1; // start pos is handled by lob mngr for out row lobs
+        }
+        while (idx == 0 && (state = ori_str_iter.get_next_block(ori_str_data)) == TEXTSTRING_ITER_NEXT) {
+          idx = ObCharset::locate(calc_cs_type, ori_str_data.ptr(), ori_str_data.length(),
+                                  sub_str_data.ptr(), sub_str_data.length(), pos_int);
+        }
+        if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("get_calc_cs_type failed", K(ret), K(state));
+        } else {
+          if (idx != 0) {
+            // need to add length accessed by get_next_block
+            idx += ori_str_iter.get_last_accessed_len() + ori_str_iter.get_start_offset();
+            if (ori_str_iter.get_iter_count() > 1) { // minus reserved length
+              OB_ASSERT(idx > ori_str_iter.get_reserved_char_len());
+              idx -= ori_str_iter.get_reserved_char_len();
+            }
+          }
+          res_datum.set_int(static_cast<int64_t>(idx));
+        }
+      }
     }
   }
   return ret;
@@ -5797,6 +5846,8 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
     const ObCmpOp cmp_op = get_cmp_op(raw_expr.get_expr_type());
     const ObObjType input_type1 = rt_expr.args_[0]->datum_meta_.type_;
     const ObObjType input_type2 = rt_expr.args_[1]->datum_meta_.type_;
+    const bool has_lob_header = rt_expr.args_[0]->obj_meta_.has_lob_header() ||
+                                rt_expr.args_[1]->obj_meta_.has_lob_header();
     const ObScale input_scale1 = rt_expr.args_[0]->datum_meta_.scale_;
     const ObScale input_scale2 = rt_expr.args_[1]->datum_meta_.scale_;
     LOG_DEBUG("CG Datum CMP Expr", K(input_type1), K(input_type2), K(cmp_op));
@@ -5807,10 +5858,10 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
     if (OB_SUCC(ret)) {
       rt_expr.eval_func_ = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(
           input_type1, input_type2, input_scale1, input_scale2, cmp_op, lib::is_oracle_mode(),
-          cs_type);
+          cs_type, has_lob_header);
       rt_expr.eval_batch_func_ = ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
           input_type1, input_type2, input_scale1, input_scale2, cmp_op, lib::is_oracle_mode(),
-          cs_type);
+          cs_type, has_lob_header);
     }
     CK(NULL != rt_expr.eval_func_);
     CK(NULL != rt_expr.eval_batch_func_);
@@ -5873,6 +5924,8 @@ int ObRelationalExprOperator::cg_row_cmp_expr(const int row_dimension,
         const ObScale scale1 = left_row->args_[i]->datum_meta_.scale_;
         const ObScale scale2 = right_row->args_[i]->datum_meta_.scale_;
         const ObCollationType cs_type = left_row->args_[i]->datum_meta_.cs_type_;
+        const bool has_lob_header = left_row->args_[i]->obj_meta_.has_lob_header() ||
+                                    right_row->args_[i]->obj_meta_.has_lob_header();
         if (ObDatumFuncs::is_string_type(type1) && ObDatumFuncs::is_string_type(type2)) {
           CK(left_row->args_[i]->datum_meta_.cs_type_
                     == right_row->args_[i]->datum_meta_.cs_type_);
@@ -5880,10 +5933,11 @@ int ObRelationalExprOperator::cg_row_cmp_expr(const int row_dimension,
                                                                   type1, type2,
                                                                   scale1, scale2,
                                                                   lib::is_oracle_mode(),
-                                                                  cs_type);
+                                                                  cs_type,
+                                                                  has_lob_header);
         } else {
           rt_expr.inner_functions_[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-              type1, type2, scale1, scale2, lib::is_oracle_mode(), cs_type);
+              type1, type2, scale1, scale2, lib::is_oracle_mode(), cs_type, has_lob_header);
           if (OB_ISNULL(rt_expr.inner_functions_[i])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null function", K(ret), K(i), K(type1), K(type2));

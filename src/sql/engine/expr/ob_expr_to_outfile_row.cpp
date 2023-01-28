@@ -18,6 +18,7 @@
 #include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
+#include "share/ob_lob_access_utils.h"
 
 using namespace oceanbase::common;
 
@@ -180,7 +181,17 @@ int ObExprToOutfileRow::to_outfile_str(const ObExpr &expr, ObEvalCtx &ctx, ObDat
           const ObObjMeta &obj_meta = expr.args_[i]->obj_meta_;
           ObObj obj;
           OZ(v.to_obj(obj, obj_meta, expr.args_[i]->obj_datum_map_));
-          OZ(print_field(buf, buf_len, pos, obj, *out_info));
+          if (!ob_is_text_tc(obj_meta.get_type())) {
+            OZ(print_field(buf, buf_len, pos, obj, *out_info));
+          } else { // text tc
+            ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+            common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+            if (OB_SUCC(ret)
+                && OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(obj, obj, NULL, &temp_allocator))) {
+              LOG_WARN("failed to convert outrow lobs", K(ret), K(obj));
+            }
+            OZ(print_field(buf, buf_len, pos, obj, *out_info));
+          }
           // print field terminator
           if (OB_SUCC(ret) && i != expr.arg_cnt_ - 1) {
             OZ(out_info->field_.print_plain_str_literal(buf, buf_len, pos, out_info->print_params_));

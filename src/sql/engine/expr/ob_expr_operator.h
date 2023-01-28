@@ -1198,18 +1198,19 @@ public:
       common::ObCmpOp cmp_op)
   {
     bool need_no_cast = false;
+    bool has_lob_header = type1.has_lob_header() || type2.has_lob_header();
     //特殊处理显示调用compare(例如：c1 > c2)，此时enum/set均应该转换成string处理
     //内部比较（order by）,enum/set不需要转换。
     if (common::ObDatumFuncs::is_string_type(type1.get_type()) &&
         common::ObDatumFuncs::is_string_type(type2.get_type())) {
-      need_no_cast =
-          common::ObCharset::charset_type_by_coll(
-              type1.get_collation_type()) ==
-          common::ObCharset::charset_type_by_coll(type2.get_collation_type());
+      // if locator v2 enabled, cannot compare string/text directly remove this comment
+      // since cannot known whether a datum has locator in compare funcs
+      need_no_cast = common::ObCharset::charset_type_by_coll(type1.get_collation_type())
+                     == common::ObCharset::charset_type_by_coll(type2.get_collation_type());
     } else {
       auto func_ptr = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(
           type1.get_type(), type2.get_type(), type1.get_scale(), type2.get_scale(), cmp_op,
-          lib::is_oracle_mode(), common::CS_TYPE_MAX);
+          lib::is_oracle_mode(), common::CS_TYPE_MAX, has_lob_header);
       need_no_cast = (func_ptr != nullptr);
     }
     return need_no_cast;

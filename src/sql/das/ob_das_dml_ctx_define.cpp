@@ -16,6 +16,7 @@
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/dml/ob_dml_service.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 namespace sql
@@ -142,15 +143,20 @@ int ObDASDMLIterator::get_next_spatial_index_row(ObNewRow *&row)
         uint64_t rowkey_num = das_ctdef_->table_param_.get_data_table().get_rowkey_column_num();
         int64_t geo_idx = -1;
         ObString geo_wkb;
+        ObObjMeta geo_meta;
         for (uint64_t i = 0; i < main_ctdef_->column_ids_.count() && geo_idx == -1; i++) {
           if (geo_col_id == main_ctdef_->column_ids_.at(i)) {
             geo_idx = i;
             geo_wkb = sr->cells()[i].get_string();
+            geo_meta = main_ctdef_->column_types_.at(i);
           }
         }
         if (geo_idx == -1) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("can't get geo col idx", K(ret), K(geo_col_id));
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_, geo_meta.get_type(),
+                           geo_meta.get_collation_type(), geo_meta.has_lob_header(), geo_wkb))) {
+          LOG_WARN("fail to get real geo data", K(ret));
         } else if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
                                                                   *row_projector_, *sr, *spatial_rows))) {
           LOG_WARN("generate spatial_index_rows failed", K(ret), K(geo_col_id), K(geo_wkb));

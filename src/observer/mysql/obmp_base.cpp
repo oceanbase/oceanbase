@@ -44,6 +44,7 @@
 #include "observer/mysql/ob_query_driver.h"
 #include "share/config/ob_server_config.h"
 #include "storage/tx/ob_trans_define.h"
+#include "share/ob_lob_access_utils.h"
 #include "sql/monitor/flt/ob_flt_utils.h"
 
 namespace oceanbase
@@ -514,20 +515,28 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(session.get_character_set_results(charset_type))) {
         LOG_WARN("fail to get result charset", K(ret));
-      } else if (ob_is_string_type(value.get_type())
-                  && CS_TYPE_INVALID != value.get_collation_type()
-                  && OB_FAIL(value.convert_string_value_charset(charset_type,
-                      THIS_WORKER.get_sql_arena_allocator()))) {
-        LOG_WARN("convert string value charset failed", K(ret), K(value));
-      } else if (value.is_clob_locator()
-                  && OB_FAIL(ObQueryDriver::convert_lob_value_charset(value, charset_type,
-                              THIS_WORKER.get_sql_arena_allocator()))) {
-        LOG_WARN("convert lob value charset failed", K(ret));
-      }
-      if (OB_SUCC(ret) && OB_FAIL(ObQueryDriver::convert_lob_locator_to_longtext(value,
+      } else {
+        if (ob_is_string_tc(value.get_type())
+            && CS_TYPE_INVALID != value.get_collation_type()
+            && OB_FAIL(value.convert_string_value_charset(charset_type,
+                  THIS_WORKER.get_sql_arena_allocator()))) {
+          LOG_WARN("convert string value charset failed", K(ret), K(value));
+        } else if (value.is_clob_locator()
+                    && OB_FAIL(ObQueryDriver::convert_lob_value_charset(value, charset_type,
+                                THIS_WORKER.get_sql_arena_allocator()))) {
+          LOG_WARN("convert lob value charset failed", K(ret));
+        } else if (ob_is_text_tc(value.get_type())
+                    && OB_FAIL(ObQueryDriver::convert_text_value_charset(value, charset_type,
+                                THIS_WORKER.get_sql_arena_allocator(), &session))) {
+          LOG_WARN("convert text value charset failed", K(ret));
+        }
+        if (OB_SUCC(ret) && OB_FAIL(ObQueryDriver::process_lob_locator_results(value,
                                     session.is_client_use_lob_locator(),
-                                    &THIS_WORKER.get_sql_arena_allocator()))) {
-        LOG_WARN("convert lob locator to longtext failed", K(ret));
+                                    session.is_client_support_lob_locatorv2(),
+                                    &THIS_WORKER.get_sql_arena_allocator(),
+                                    &session))) {
+          LOG_WARN("convert lob locator to longtext failed", K(ret));
+        }
       }
     }
 

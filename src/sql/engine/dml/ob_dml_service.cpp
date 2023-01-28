@@ -26,6 +26,7 @@
 #include "share/ob_tablet_autoincrement_service.h"
 #include "storage/tx/ob_trans_service.h"
 #include "pl/ob_pl.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "sql/ob_sql_utils.h"
 
@@ -54,6 +55,7 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
     } else if (!is_nullable && datum->is_null()) {
       if (is_ignore) {
         ObObj zero_obj;
+        ObDatum &row_datum = row.at(col_idx)->locate_datum_for_write(eval_ctx);
         if (is_oracle_mode()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("dml with ignore not supported in oracle mode");
@@ -66,8 +68,16 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
             row.at(col_idx)->obj_meta_.get_collation_type(),
             zero_obj))) {
           LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)));
-        } else if (OB_FAIL(row.at(col_idx)->locate_datum_for_write(eval_ctx).from_obj(zero_obj))) {
+        } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(zero_obj, eval_ctx.exec_ctx_.get_allocator()))) {
+          LOG_WARN("convert lob types zero obj failed", K(ret), K(zero_obj));
+        } else if (OB_FAIL(row_datum.from_obj(zero_obj))) {
           LOG_WARN("assign zero obj to datum failed", K(ret), K(zero_obj));
+        } else if (is_lob_storage(zero_obj.get_type()) &&
+                   OB_FAIL(ob_adjust_lob_datum(zero_obj, row.at(col_idx)->obj_meta_,
+                                               eval_ctx.exec_ctx_.get_allocator(),
+                                               row_datum))) {
+          LOG_WARN("adjust lob datum failed", K(ret), K(i), K(col_idx),
+            K(zero_obj.get_meta()), K(row.at(col_idx)->obj_meta_));
         } else {
           //output warning msg
           const ObString &column_name = column_infos.at(i).column_name_;
@@ -91,6 +101,7 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
 {
   int ret = OB_SUCCESS;
   CK(dml_row.count() >= column_infos.count());
+  ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   for (int64_t i = 0; OB_SUCC(ret) && i < column_infos.count(); ++i) {
     const ColumnContent &column_info = column_infos.at(i);
     ObExpr *expr = dml_row.at(column_info.projector_index_);
@@ -101,9 +112,12 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
       // geo column type
       const uint32_t column_srid = column_info.srs_info_.srid_;
       const ObGeoType column_geo_type = static_cast<ObGeoType>(column_info.srs_info_.geo_type_);
-      const ObString &wkb = datum->get_string();
+      ObString wkb = datum->get_string();
       uint32_t input_srid = UINT32_MAX;
-      if (ObGeoTypeUtil::check_geo_type(column_geo_type, wkb)) {
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+          expr->datum_meta_, expr->obj_meta_.has_lob_header(), wkb))) {
+        LOG_WARN("fail to get real string data", K(ret), K(wkb));
+      } else if (ObGeoTypeUtil::check_geo_type(column_geo_type, wkb)) {
         LOG_WARN("check geo type failed", K(ret), K(wkb));
         ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
         LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);

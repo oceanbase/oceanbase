@@ -18,6 +18,7 @@
 #include "observer/ob_server.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/access/ob_table_read_info.h"
+#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
 {
@@ -572,7 +573,9 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     has_virtual_column_(false),
     use_lob_locator_(false),
     rowid_version_(ObURowIDData::INVALID_ROWID_VERSION),
-    rowid_projector_(allocator)
+    rowid_projector_(allocator),
+    enable_lob_locator_v2_(false),
+    is_spatial_index_(false)
 {
   reset();
 }
@@ -593,6 +596,7 @@ void ObTableParam::reset()
   rowid_version_ = ObURowIDData::INVALID_ROWID_VERSION;
   rowid_projector_.reset();
   main_read_info_.reset();
+  enable_lob_locator_v2_ = false;
   is_spatial_index_ = false;
 }
 
@@ -611,6 +615,7 @@ OB_DEF_SERIALIZE(ObTableParam)
               rowid_version_,
               rowid_projector_,
               main_read_info_,
+              enable_lob_locator_v2_,
               is_spatial_index_);
   return ret;
 }
@@ -633,7 +638,11 @@ OB_DEF_DESERIALIZE(ObTableParam)
     if (OB_FAIL(main_read_info_.deserialize(allocator_, buf, data_len, pos))) {
       LOG_WARN("Fail to deserialize read info", K(ret));
     }
-    OB_UNIS_DECODE(is_spatial_index_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                enable_lob_locator_v2_,
+                is_spatial_index_);
   }
   return ret;
 }
@@ -654,6 +663,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               rowid_version_,
               rowid_projector_,
               main_read_info_,
+              enable_lob_locator_v2_,
               is_spatial_index_);
   return len;
 }
@@ -787,6 +797,9 @@ int ObTableParam::construct_columns_and_projector(
         tmp_col_desc.col_id_ = column->get_column_id();
         tmp_col_desc.col_type_ = column->get_meta_type();
         tmp_col_desc.col_order_ = column->get_column_order();
+        if (tmp_col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
+          tmp_col_desc.col_type_.set_has_lob_header();
+        }
         if (OB_FAIL(tmp_access_cols_desc.push_back(tmp_col_desc))) {
           LOG_WARN("fail to push_back tmp_col_desc", K(ret));
         }
@@ -844,6 +857,9 @@ int ObTableParam::construct_columns_and_projector(
         tmp_col_desc.col_id_ = column->get_column_id();
         tmp_col_desc.col_type_ = column->get_meta_type();
         tmp_col_desc.col_order_ = column->get_column_order();
+        if (tmp_col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
+          tmp_col_desc.col_type_.set_has_lob_header();
+        }
         if (OB_FAIL(tmp_access_cols_param.push_back(column))) {
           LOG_WARN("fail to push_back tmp_access_cols_param", K(ret));
         } else if (OB_FAIL(tmp_access_cols_desc.push_back(tmp_col_desc))) {
@@ -1003,13 +1019,14 @@ int ObTableParam::convert(const ObTableSchema &table_schema,
     LOG_WARN("Fail to construct pad projector, ", K(ret));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
-  } else if (is_oracle_mode
-      && OB_FAIL(construct_lob_locator_param(table_schema,
-          main_read_info_.get_columns(),
-          output_projector_,
-          use_lob_locator_,
-          rowid_version_,
-          rowid_projector_))) {
+  } else if ((enable_lob_locator_v2_ || is_oracle_mode)
+             && OB_FAIL(construct_lob_locator_param(table_schema,
+                                                    main_read_info_.get_columns(),
+                                                    output_projector_,
+                                                    use_lob_locator_,
+                                                    rowid_version_,
+                                                    rowid_projector_,
+                                                    enable_lob_locator_v2_))) {
     LOG_WARN("fail to construct rowid dep column projector", K(ret));
   } else {
     LOG_DEBUG("construct columns", K(table_id_), K(access_column_ids), K_(main_read_info));
@@ -1063,32 +1080,57 @@ int ObTableParam::construct_lob_locator_param(const ObTableSchema &table_schema,
                                               const Projector &access_projector,
                                               bool &use_lob_locator,
                                               int64_t &rowid_version,
-                                              Projector &rowid_projector)
+                                              Projector &rowid_projector,
+                                              bool is_use_lob_locator_v2)
 {
   int ret = OB_SUCCESS;
   share::schema::ObColumnParam *col_param = nullptr;
   use_lob_locator = false;
-  if (!(table_schema.is_sys_table() || table_schema.is_sys_view() || table_schema.is_vir_table())) {
+  bool has_row_id = true;
+  if (is_use_lob_locator_v2) {
     for (int64_t i = 0; OB_SUCC(ret) && !use_lob_locator && i < access_projector.count(); i++) {
       int32_t idx = access_projector.at(i);
       if (OB_ISNULL(col_param = storage_project_columns.at(idx))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null col param", K(ret), K(idx), K(storage_project_columns));
       } else {
-        use_lob_locator = col_param->get_meta_type().get_type() == ObLongTextType;
+        ObObjType type = col_param->get_meta_type().get_type();
+        use_lob_locator = is_lob_storage(type);
       }
+    }
+    // Virtual table may not contain primary key columns, i.e. TENANT_VIRTUAL_SESSION_VARIABLE.
+    // When access such virtual table, get_column_ids_serialize_to_rowid may return failure because
+    // of the null rowkey info. So here skip the rowkey.
+    if (table_schema.is_sys_table()
+        || table_schema.is_sys_view()
+        || table_schema.is_vir_table()
+        || (table_schema.get_rowkey_info().get_size() == 0)
+        || lib::is_mysql_mode()) {
+      has_row_id = false; // need lob locator without rowid
+      rowid_version = ObURowIDData::INVALID_ROWID_VERSION;
+    }
+  } else {
+    if (!(table_schema.is_sys_table() || table_schema.is_sys_view() || table_schema.is_vir_table())) {
+      for (int64_t i = 0; OB_SUCC(ret) && !use_lob_locator && i < access_projector.count(); i++) {
+        int32_t idx = access_projector.at(i);
+        if (OB_ISNULL(col_param = storage_project_columns.at(idx))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null col param", K(ret), K(idx), K(storage_project_columns));
+        } else {
+          use_lob_locator = col_param->get_meta_type().get_type() == ObLongTextType;
+        }
+      }
+    }
+    // Virtual table may not contain primary key columns, i.e. TENANT_VIRTUAL_SESSION_VARIABLE.
+    // When access such virtual table, get_column_ids_serialize_to_rowid may return failure because
+    // of the null rowkey info. So here skip the lob locator.
+    if (use_lob_locator && 0 == table_schema.get_rowkey_info().get_size()) {
+      use_lob_locator = false;
     }
   }
 
-  // Virtual table may not contain primary key columns, i.e. TENANT_VIRTUAL_SESSION_VARIABLE.
-  // When access such virtual table, get_column_ids_serialize_to_rowid may return failure because
-  // of the null rowkey info. So here skip the lob locator.
-  if (use_lob_locator && 0 == table_schema.get_rowkey_info().get_size()) {
-    use_lob_locator = false;
-  }
-
   // generate rowid_projector
-  if (use_lob_locator && OB_SUCC(ret)) {
+  if (use_lob_locator && has_row_id && OB_SUCC(ret)) {
     ObSEArray<uint64_t, 4> rowid_col_ids;
     // The lob type generates column no need partition info in rowkey table.
     if (OB_FAIL(table_schema.get_rowkey_column_ids(rowid_col_ids))) {
@@ -1196,7 +1238,8 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(main_read_info),
        K_(use_lob_locator),
        K_(rowid_version),
-       K_(rowid_projector));
+       K_(rowid_projector),
+       K_(enable_lob_locator_v2));
   J_OBJ_END();
 
   return pos;

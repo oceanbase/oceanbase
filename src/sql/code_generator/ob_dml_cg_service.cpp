@@ -918,6 +918,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
     }
   }
   if (OB_SUCC(ret)) {
+    scan_ctdef.table_param_.get_enable_lob_locator_v2()
+        = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
     if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_))) {
       LOG_WARN("convert table param failed", K(ret));
     } else if (OB_FAIL(cg_.generate_calc_exprs(dep_exprs,
@@ -1025,6 +1027,11 @@ int ObDmlCgService::convert_dml_column_info(ObTableID index_tid,
     ObObjMeta column_type;
     column_type = column->get_meta_type();
     column_type.set_scale(column->get_accuracy().get_scale());
+    if (is_lob_storage(column_type.get_type())) {
+      if (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0) {
+        column_type.set_has_lob_header();
+      }
+    }
     if (OB_FAIL(das_dml_info.column_ids_.push_back(column->get_column_id()))) {
       LOG_WARN("store column id failed", K(ret));
     } else if (OB_FAIL(das_dml_info.column_types_.push_back(column_type))) {
@@ -1042,6 +1049,11 @@ int ObDmlCgService::convert_dml_column_info(ObTableID index_tid,
         //skip virtual generated column or rowkey
         column_type = column->get_meta_type();
         column_type.set_scale(column->get_accuracy().get_scale());
+        if (is_lob_storage(column_type.get_type())) {
+          if (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0) {
+            column_type.set_has_lob_header();
+          }
+        }
         if (OB_FAIL(das_dml_info.column_ids_.push_back(column->get_column_id()))) {
           LOG_WARN("store column id failed", K(ret));
         } else if (OB_FAIL(das_dml_info.column_types_.push_back(column_type))) {

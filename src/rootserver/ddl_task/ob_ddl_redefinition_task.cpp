@@ -586,7 +586,7 @@ int ObDDLRedefinitionTask::get_validate_checksum_columns_id(const ObTableSchema 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("dest column schema is null", K(ret), K(task_type_), "dest_table_id", target_object_id_, "dest_column_id", cur_column_id);
         }
-      } else if (is_lob_v2(dest_column_schema->get_data_type())) {
+      } else if (is_lob_storage(dest_column_schema->get_data_type())) {
         // ignore to validate the checksum of the dest column that may be LOB.
         // the checksum of dest column is calculated based on the LOB index if the dest column is LOB.
       } else {

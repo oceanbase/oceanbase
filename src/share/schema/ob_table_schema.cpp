@@ -3655,7 +3655,7 @@ bool ObTableSchema::is_same_type_category(
      (ObIntervalTC == src_col_type_class && ObIntervalTC == dst_col_type_class)) {
     ret_bool = true;
   }
-  if (src_meta.get_type() == ObTinyTextType && dst_meta.is_lob_v2()) {
+  if (src_meta.get_type() == ObTinyTextType && dst_meta.is_lob_storage()) {
     ret_bool = false;
   }
   return ret_bool;
@@ -3931,7 +3931,7 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
           is_offline = true;
         }
       }
-      if (!src_meta.is_lob_v2() && dst_meta.is_lob_v2()) {
+      if (!src_meta.is_lob_storage() && dst_meta.is_lob_storage()) {
         is_offline = true;
       }
     } else {
@@ -5749,7 +5749,7 @@ bool ObTableSchema::has_lob_column() const
   bool_ret = (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID);
   for (int64_t i = 0; !bool_ret && i < column_cnt_; ++i) {
     ObColumnSchemaV2& col = *column_array_[i];
-    if (is_lob_v2(col.get_data_type())) {
+    if (is_lob_storage(col.get_data_type())) {
       bool_ret = true;
     }
   }

@@ -25,6 +25,7 @@
 #include "sql/engine/pdml/static/ob_px_sstable_insert_op.h"
 #include "storage/lob/ob_lob_util.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -342,12 +343,13 @@ int ObSSTableInsertSliceWriter::append_row(const ObNewRow &row_val)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < col_descs_->count(); i++) {
       ObStorageDatum &datum = datum_row_.storage_datums_[i];
-      if (col_descs_->at(i).col_type_.is_lob_v2() && !datum.is_nop() && !datum.is_null()) {
+      if (col_descs_->at(i).col_type_.is_lob_storage() && !datum.is_nop() && !datum.is_null()) {
         lob_cnt_++;
         const int64_t timeout_ts =
           ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+        bool has_lob_header = store_row_.row_val_.cells_[i].has_lob_header();
         if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-              lob_allocator_, ls_id_, tablet_id_, col_descs_->at(i), datum, timeout_ts))) {
+              lob_allocator_, ls_id_, tablet_id_, col_descs_->at(i), datum, timeout_ts, has_lob_header))) {
           LOG_WARN("fail to insert_lob_col", KR(ret), K(datum));
         }
       }

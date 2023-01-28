@@ -19,6 +19,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "share/ob_encryption_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::common;
@@ -187,7 +188,7 @@ int ObExprStatementDigestText::eval_statement_digest_text(const ObExpr &expr, Ob
   } else if (arg->is_null()) {
     expr_datum.set_null();
   } else{
-    ObExprStrResAlloc res_alloc(expr, ctx);
+    // result must be clob
     ObString sql_str = arg->get_string();
     ObString digest_str;
     ObString res_str;
@@ -198,11 +199,11 @@ int ObExprStatementDigestText::eval_statement_digest_text(const ObExpr &expr, Ob
     if (OB_FAIL(calc_digest_text(calc_alloc, sql_str, in_cs_type, session,
                                  schema_guard, digest_str))) {
       LOG_WARN("fail to calc statement digest text", K(sql_str), K(ret));
-    } else if (OB_FAIL(ObSQLUtils::copy_and_convert_string_charset(res_alloc, digest_str, res_str,
+    } else if (OB_FAIL(ObSQLUtils::copy_and_convert_string_charset(calc_alloc, digest_str, res_str,
         in_cs_type, res_cs_type))) {
       LOG_WARN("fail to check need_convert_string_collation", K(ret));
-    } else {
-      expr_datum.set_string(res_str);
+    } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(expr, ctx, expr_datum, res_str))) {
+      LOG_WARN("fail to convert result to temporary lob", K(ret));
     }
   }
   return ret;

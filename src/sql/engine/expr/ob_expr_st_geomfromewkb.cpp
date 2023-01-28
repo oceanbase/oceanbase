@@ -69,7 +69,8 @@ int ObExprPrivSTGeomFromEWKB::calc_result_typeN(ObExprResType& type,
 int ObExprPrivSTGeomFromEWKB::eval_st_geomfromewkb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObDatum *datum = NULL;
   int num_args = expr.arg_cnt_;
   bool is_null_result = false;
@@ -92,7 +93,10 @@ int ObExprPrivSTGeomFromEWKB::eval_st_geomfromewkb(const ObExpr &expr, ObEvalCtx
   } else {
     ewkb = datum->get_string();
     ObGeoWkbHeader header;
-    if (OB_FAIL(ob_write_string(tmp_allocator, ewkb, ewkb_copy, false))) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+        expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), ewkb))) {
+      LOG_WARN("fail to get real string data", K(ret), K(ewkb));
+    } else if (OB_FAIL(ob_write_string(tmp_allocator, ewkb, ewkb_copy, false))) {
       LOG_WARN("fail to deep copy ewkb", K(ret));
     } else if (OB_FAIL(get_header_info_from_ewkb(ewkb_copy, header))) {
       LOG_WARN("fail to get ewkb header info from ewkb", K(ret), K(ewkb_copy));
@@ -119,10 +123,15 @@ int ObExprPrivSTGeomFromEWKB::eval_st_geomfromewkb(const ObExpr &expr, ObEvalCtx
 
   // get axis_order
   if (OB_SUCC(ret) && num_args > 1) {
+    ObString axis_str;
     expr.args_[1]->eval(ctx, datum);
     if (datum->is_null()){
       // do nothing
-    } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(datum->get_string(), N_PRIV_ST_GEOMFROMEWKB, axis_order))) {
+    } else if (FALSE_IT(axis_str = datum->get_string())) {
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+              expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), axis_str))) {
+      LOG_WARN("fail to get real string data", K(ret), K(axis_str));
+    } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(axis_str, N_PRIV_ST_GEOMFROMEWKB, axis_order))) {
       LOG_WARN("failed to parse axis order option string", K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::check_need_reverse(axis_order, need_reverse))) {
       LOG_WARN("failed to check need reverse", K(ret));

@@ -1309,9 +1309,10 @@ TEST_F(TestBatchExecute, partial_update)
     memset(big_value, 'A', big_value_len);
     ObString c3_big_value(big_value_len, big_value);
 
-    value.set_varchar(c3_big_value);
-    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, value));
+    ObObj val;
+    val.set_varchar(c3_big_value);
+    val.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C3, val));
     table_operation = ObTableOperation::append(*entity);
     ObTableRequestOptions req_options;
     req_options.set_returning_affected_entity(true);
@@ -1324,11 +1325,11 @@ TEST_F(TestBatchExecute, partial_update)
     // ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
     // ASSERT_TRUE(!result_entity->is_empty());
     // ASSERT_EQ(1, result_entity->get_rowkey_size());
-    // ASSERT_EQ(OB_SUCCESS, result_entity->get_rowkey_value(0, value));
-    // ASSERT_EQ(key_key, value.get_int());
+    // ASSERT_EQ(OB_SUCCESS, result_entity->get_rowkey_value(0, val));
+    // ASSERT_EQ(key_key, val.get_int());
     // ASSERT_EQ(1, result_entity->get_properties_count());
-    // ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-    // ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, value.get_collation_type());
+    // ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, val));
+    // ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, val.get_collation_type());
 
     if (NULL != big_value) {
       free(big_value);

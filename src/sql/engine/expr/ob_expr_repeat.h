@@ -53,6 +53,14 @@ public:
                     const int64_t count,
                     common::ObIAllocator &alloc,
                     const int64_t max_result_size);
+  static int repeat_text(ObObjType res_type,
+                         bool has_lob_header,
+                         ObString &output,
+                         bool &is_null,
+                         const ObString &text,
+                         const int64_t count,
+                         ObIAllocator &allocator,
+                         const int64_t max_result_size);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprRepeat);

@@ -162,16 +162,8 @@ int ObExprJsonMergePatch::eval_json_merge_patch(const ObExpr &expr, ObEvalCtx &c
       res.set_null();
     } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
-    } else {
-      uint64_t length = raw_bin.length();
-      char *buf = expr.get_str_res_mem(ctx, length);
-      if (buf) {
-        MEMCPY(buf, raw_bin.ptr(), length);
-        res.set_string(buf, length);
-      } else {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed: allocate res string buffer.", K(ret), K(length));
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
   return ret;
@@ -369,15 +361,8 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
             ret = OB_SUCCESS;
             res.set_null();
           }
-        } else {
-          char *buf = expr.get_str_res_mem(ctx, length);
-          if (buf) {
-            MEMCPY(buf, res_string.ptr(), length);
-            res.set_string(buf, length);
-          } else {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed: allocate res string buffer.", K(ret), K(length));
-          }
+        } else if (ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string)) {
+          LOG_WARN("fail to pack ressult.", K(ret));
         }
       }
     }

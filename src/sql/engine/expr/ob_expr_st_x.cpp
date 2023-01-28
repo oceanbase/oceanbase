@@ -97,9 +97,13 @@ int ObExprSTCoordinate::eval_common(const ObExpr &expr,
   } else if (datum->is_null()) {
     is_null_result = true;
   } else {
-    if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, datum->get_string(), srs, true, func_name))) {
-      LOG_WARN("fail to get srs item", K(ret), K(datum->get_string()));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, datum->get_string(),
+    ObString wkb = datum->get_string();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *datum,
+              expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkb));
+    } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs, true, func_name))) {
+      LOG_WARN("fail to get srs item", K(ret), K(wkb));
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb,
         geo, srs, func_name, false))) {
       LOG_WARN("failed to create geometry object with raw wkb", K(ret));
     } else if (ObGeoType::POINT != geo->type()) {

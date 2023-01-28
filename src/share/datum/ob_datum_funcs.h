@@ -33,7 +33,9 @@ public:
                                                   const ObCmpNullPos null_pos,
                                                   const ObCollationType cs_type,
                                                   const ObScale max_scale,
-                                                  const bool is_oracle_mode);
+                                                  const bool is_oracle_mode,
+                                                  const bool has_lob_header);
+
   static bool is_string_type(const ObObjType type);
   static bool is_json(const ObObjType type);
   static bool is_geometry(const ObObjType type);
@@ -51,7 +53,8 @@ public:
   static sql::ObExprBasicFuncs* get_basic_func(const ObObjType type,
                                                const ObCollationType cs_type,
                                                const ObScale scale = SCALE_UNKNOWN_YET,
-                                               const bool is_oracle_mode = lib::is_oracle_mode());
+                                               const bool is_oracle_mode = lib::is_oracle_mode(),
+                                               const bool is_lob_locator = true);
 };
 
 struct ObCmpFunc

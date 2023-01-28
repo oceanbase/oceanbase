@@ -53,7 +53,12 @@ int ObPCVSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *obj)
       LOG_WARN("fail to deep_copy_sql", K(ret), K(pc_ctx.raw_sql_));
     } else {
       is_inited_ = true;
-      min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
+      if (pc_ctx.exec_ctx_.get_min_cluster_version() != GET_MIN_CLUSTER_VERSION()) {
+        LOG_DEBUG("Lob Debug, using remote min cluster version",
+                K(pc_ctx.exec_ctx_.get_min_cluster_version()),
+                K(GET_MIN_CLUSTER_VERSION()));
+      }
+      min_cluster_version_ = pc_ctx.exec_ctx_.get_min_cluster_version();
       normal_parse_const_cnt_ = pc_ctx.normal_parse_const_cnt_;
       LOG_DEBUG("inited pcv set", K(pc_key_), K(ObTimeUtility::current_time()));
     }
@@ -122,8 +127,13 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
                  K(pc_ctx.fp_result_.raw_params_));
     }
   }
+  if (pc_ctx.exec_ctx_.get_min_cluster_version() != GET_MIN_CLUSTER_VERSION()) {
+    LOG_DEBUG("Lob Debug, using remote min cluster version",
+             K(pc_ctx.exec_ctx_.get_min_cluster_version()),
+             K(GET_MIN_CLUSTER_VERSION()));
+  }
   if (OB_FAIL(ret)) {
-  } else if (min_cluster_version_ != GET_MIN_CLUSTER_VERSION()) {
+  } else if (min_cluster_version_ != pc_ctx.exec_ctx_.get_min_cluster_version()) {
     ret = OB_OLD_SCHEMA_VERSION;
   } else if (need_check_gen_tbl_col_) {
     // 检查是否有generated table投影列同名的可能

@@ -20,6 +20,7 @@
 #include "observer/mysql/obmp_query.h"
 #include "rpc/obmysql/packet/ompk_row.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
+#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
 {
@@ -295,15 +296,18 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
     ObNewRow *tmp_row = const_cast<ObNewRow*>(row);
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row->get_count(); i++) {
       ObObj& value = tmp_row->get_cell(i);
-      if (ob_is_string_type(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
+      if (ob_is_string_tc(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
         OZ(convert_string_value_charset(value, result));
       } else if (value.is_clob_locator()
                 && OB_FAIL(convert_lob_value_charset(value, result))) {
         LOG_WARN("convert lob value charset failed", K(ret));
+      } else if (ob_is_text_tc(value.get_type())
+                && OB_FAIL(convert_text_value_charset(value, result))) {
+        LOG_WARN("convert text value charset failed", K(ret));
       }
-      if (OB_SUCC(ret) && lib::is_oracle_mode()
-                       && (value.is_lob() || value.is_lob_locator())
-                       && OB_FAIL(convert_lob_locator_to_longtext(value, result))) {
+      if (OB_SUCC(ret)
+          && (value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
+          && OB_FAIL(process_lob_locator_results(value, result))) {
         LOG_WARN("convert lob locator to longtext failed", K(ret));
       }
     }

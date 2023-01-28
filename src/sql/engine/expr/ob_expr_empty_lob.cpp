@@ -16,6 +16,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "objit/common/ob_item_type.h"
 #include "lib/oblog/ob_log.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -48,9 +49,16 @@ int ObExprEmptyClob::eval_empty_clob(
     ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  UNUSED(expr);
-  UNUSED(ctx);
-  expr_datum.set_string(NULL, 0);
+  if (expr.obj_meta_.has_lob_header()) {
+    ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+    if (OB_FAIL(str_result.init(0))) {
+      LOG_WARN("init lob result failed");
+    } else {
+      str_result.set_result();
+    }
+  } else {
+    expr_datum.set_string(NULL, 0);
+  }
   return ret;
 }
 
@@ -89,9 +97,16 @@ int ObExprEmptyBlob::eval_empty_blob(
     ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  UNUSED(expr);
-  UNUSED(ctx);
-  expr_datum.set_string(NULL, 0);
+  if (expr.obj_meta_.has_lob_header()) {
+    ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+    if (OB_FAIL(str_result.init(0))) {
+      LOG_WARN("init lob result failed");
+    } else {
+      str_result.set_result();
+    }
+  } else {
+    expr_datum.set_string(NULL, 0);
+  }
   return ret;
 }
 

@@ -94,7 +94,7 @@ public:
                        share::schema::ObSchemaGetterGuard *schema_guard,
                        const int64_t original_param_cnt,
                        int64_t param_cnt,
-                       const uint64_t cur_cluster_version = CLUSTER_CURRENT_VERSION)
+                       const uint64_t cur_cluster_version)
     : allocator_(allocator),
       original_param_cnt_(original_param_cnt),
       param_cnt_(param_cnt),
@@ -102,8 +102,10 @@ public:
       flying_param_cnt_(0),
       batch_size_(0),
       rt_question_mark_eval_(false),
-      need_flatten_gen_col_(true)
-  {}
+      need_flatten_gen_col_(true),
+      cur_cluster_version_(cur_cluster_version)
+  {
+  }
   virtual ~ObStaticEngineExprCG() {}
 
   //将所有raw exprs展开后, 生成ObExpr
@@ -416,6 +418,7 @@ private:
   bool rt_question_mark_eval_;
   //is code generate temp expr witch used in table location
   bool need_flatten_gen_col_;
+  uint64_t cur_cluster_version_;
 };
 
 } // end namespace sql

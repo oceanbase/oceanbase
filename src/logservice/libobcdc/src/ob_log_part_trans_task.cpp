@@ -405,19 +405,19 @@ int MutatorRow::parse_columns_(
           } else if (OB_FAIL(datum.to_obj_enhance(obj, obj_meta))) {
             LOG_ERROR("transfer datum to obj failed", K(ret), K(datum), K(obj_meta));
           } else {
-            const bool is_lob_v2 = obj_meta.is_lob_v2();
+            const bool is_lob_storage = obj_meta.is_lob_storage();
             // Default is false
             bool is_out_row = false;
 
             if (obj.is_null()) {
               // do nothing
-            } else if (is_lob_v2) {
+            } else if (is_lob_storage) {
               const ObLobCommon &lob_common = datum.get_lob_data();
               is_out_row = ! lob_common.in_row_;
               LOG_DEBUG("handle_lob_v2_data", K(column_stored_idx), K(lob_common), K(obj));
 
               if (! is_out_row) {
-                LOG_DEBUG("is_lob_v2 in row", K(column_id), K(is_lob_v2), K(lob_common), K(obj));
+                LOG_DEBUG("is_lob_storage in row", K(column_id), K(is_lob_storage), K(lob_common), K(obj));
                 obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
               } else {
                 const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
@@ -426,7 +426,7 @@ int MutatorRow::parse_columns_(
                   reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data.buffer_);
 
                 // TODO remove
-                LOG_DEBUG("is_lob_v2 out row", K(column_id), K(is_lob_v2), K(lob_data), K(obj),
+                LOG_DEBUG("is_lob_storage out row", K(column_id), K(is_lob_storage), K(lob_data), K(obj),
                     KPC(lob_data_out_row_ctx));
 
                 if (is_parse_new_col) {
@@ -453,7 +453,7 @@ int MutatorRow::parse_columns_(
                   }
                 }
               }
-            } // is_lob_v2
+            } // is_lob_storage
 
             if (OB_SUCC(ret) && OB_FAIL(add_column_(
                 column_id,
@@ -504,8 +504,14 @@ int MutatorRow::set_obj_propertie_(
     } else {
       obj_meta = column_table_schema->get_meta_type();
       obj_meta.set_scale(column_table_schema->get_accuracy().get_scale());
-    }
 
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (obj_meta.is_lob_storage()) {
+      obj_meta.set_has_lob_header();
+    }
   }
 
   return ret;
@@ -767,6 +773,7 @@ int MutatorRow::parse_columns_(
           } else if (OB_FAIL(datum.to_obj_enhance(obj, obj_meta))) {
             LOG_ERROR("transfer datum to obj failed", K(ret), K(datum), K(obj_meta));
           } else {
+            OB_ASSERT(obj.has_lob_header() == false); // debug only
             if (OB_FAIL(add_column_(cols, column_id, &obj))) {
               LOG_ERROR("add_column_ fail", K(cols), KR(ret), K(column_id), K(obj));
             }

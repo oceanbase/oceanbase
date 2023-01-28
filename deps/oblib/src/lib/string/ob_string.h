@@ -144,6 +144,30 @@ public:
   }
 
   /*
+   * write a stream to my buffer at front,
+   * return buffer
+   *
+   */
+
+  inline obstr_size_t write_front(const char *bytes, const obstr_size_t length)
+  {
+    obstr_size_t writed = 0;
+    if (OB_ISNULL(bytes) || OB_UNLIKELY(length <= 0)) {
+      // do nothing
+    } else {
+      if (OB_LIKELY(data_length_ + length <= buffer_size_)) {
+        if (data_length_ > 0) {
+          MEMMOVE(ptr_ + length, ptr_, data_length_);
+        }
+        MEMCPY(ptr_, bytes, length);
+        data_length_ += length;
+        writed = length;
+      }
+    }
+    return writed;
+  }
+
+  /*
    * DO NOT USE THIS ANY MORE
    */
 

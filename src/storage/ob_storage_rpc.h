@@ -28,6 +28,7 @@
 #include "storage/ls/ob_ls_meta_package.h"
 #include "tablet/ob_tablet_meta.h"
 #include "share/restore/ob_ls_restore_status.h"
+#include "storage/lob/ob_lob_rpc_struct.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
@@ -428,6 +429,8 @@ public:
   RPC_SS(PR5 fetch_tablet_info, OB_HA_FETCH_TABLET_INFO, (ObCopyTabletInfoArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_tablet_sstable_info, OB_HA_FETCH_SSTABLE_INFO, (ObCopyTabletsSSTableInfoArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_sstable_macro_info, OB_HA_FETCH_SSTABLE_MACRO_INFO, (ObCopySSTableMacroRangeInfoArg), common::ObDataBuffer);
+  // lob
+  RPC_SS(PR5 lob_query, OB_LOB_QUERY, (ObLobQueryArg), common::ObDataBuffer);
 
   RPC_S(PR5 fetch_ls_member_list, OB_HA_FETCH_LS_MEMBER_LIST, (ObFetchLSMemberListArg), ObFetchLSMemberListInfo);
   RPC_S(PR5 fetch_ls_meta_info, OB_HA_FETCH_LS_META_INFO, (ObFetchLSMetaInfoArg), ObFetchLSMetaInfoResp);
@@ -571,6 +574,17 @@ protected:
   int process();
 };
 
+class ObLobQueryP : public ObStorageStreamRpcP<OB_LOB_QUERY>
+{
+public:
+  explicit ObLobQueryP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObLobQueryP() {}
+protected:
+  int process();
+private:
+  int process_read();
+  int process_getlength();
+};
 
 } // obrpc
 

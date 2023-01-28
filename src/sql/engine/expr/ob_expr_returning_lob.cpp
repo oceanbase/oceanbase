@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_returning_lob.h"
+#include "ob_expr_lob_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -149,32 +150,47 @@ int ObExprReturningLob::eval_lob(const ObExpr &expr,
       LOG_WARN("fail to eval value_expr", K(ret));
     } else if (OB_ISNULL(value_col_datum)) {
       LOG_WARN("src_col_datum is null", K(ret));
-    } else if (OB_FAIL(value_col_datum->to_obj(value_lob_obj, value_expr->obj_meta_))) {
-      LOG_WARN("value_col_datum to_obj failed", K(ret));
+    } else if (!value_expr->obj_meta_.has_lob_header()) {
+      if (OB_FAIL(value_col_datum->to_obj(value_lob_obj, value_expr->obj_meta_))) {
+        LOG_WARN("value_col_datum to_obj failed", K(ret));
+      } else {
+        value_lob_obj.get_string(values_string);
+        locator_size = sizeof(ObLobLocator) + values_string.length() + rowid_str.length();
+        LOG_DEBUG("src_lob_obj values_string is", K(values_string.length()),
+                                                  K(locator_size),
+                                                  K(rowid_str.length()),
+                                                  K(values_string),
+                                                  K(rowid_str));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, locator_size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret));
+      } else if (FALSE_IT(MEMSET(buf, 0, locator_size))) {
+      } else if (FALSE_IT(locator = reinterpret_cast<ObLobLocator *>(buf))) {
+      } else if (OB_FAIL(locator->init(table_id,
+          column_id,
+          100, // use a default snapshot_version, now is unused
+          /*trans_desc.get_snapshot_version(),*/
+          // some bug: get_snapshot_version() is -1
+          LOB_DEFAULT_FLAGS, rowid_str, values_string))) {
+        LOG_WARN("Failed to init lob locator", K(ret), K(rowid_str));
+      } else {
+        expr_datum.set_lob_locator(*locator);
+      }
     } else {
-      value_lob_obj.get_string(values_string);
-      locator_size = sizeof(ObLobLocator) + values_string.length() + rowid_str.length();
-      LOG_DEBUG("src_lob_obj values_string is", K(values_string.length()),
-                                                K(locator_size),
-                                                K(rowid_str.length()),
-                                                K(values_string),
-                                                K(rowid_str));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, locator_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret));
-    } else if (FALSE_IT(MEMSET(buf, 0, locator_size))) {
-    } else if (FALSE_IT(locator = reinterpret_cast<ObLobLocator *>(buf))) {
-    } else if (OB_FAIL(locator->init(table_id,
-        column_id,
-        100, // use a default snapshot_version, now is unused
-        /*trans_desc.get_snapshot_version(),*/
-        // some bug: get_snapshot_version() is -1
-        LOB_DEFAULT_FLAGS, rowid_str, values_string))) {
-      LOG_WARN("Failed to init lob locator", K(ret), K(rowid_str));
-    } else {
-      expr_datum.set_lob_locator(*locator);
+      // use lob locator v2
+      // if rowid_str is empty use result is a temp lob, or it is a persist lob
+      // referer to build_returning_lob_expr
+      // do nothing? assert must be locator?
+      if (!value_col_datum->is_null()) {
+        ObLobLocatorV2 loc(value_col_datum->get_string(), value_expr->obj_meta_.has_lob_header());
+        if (!loc.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid lob value", K(ret), K(value_col_datum), K(loc));
+        }
+      }
+      expr_datum.set_datum(*value_col_datum);
     }
   }
   return ret;

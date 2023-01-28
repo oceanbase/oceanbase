@@ -51,6 +51,7 @@ public:
       const int64_t micro_block_size_limit,
       const int64_t rowkey_column_count,
       const int64_t column_count = 0,
+      const common::ObIArray<share::schema::ObColDesc> *col_desc_array = nullptr,
       const bool need_calc_column_chksum = false);
 
   virtual int append_row(const ObDatumRow &row);
@@ -82,6 +83,7 @@ private:
   bool is_exceed_limit(const int64_t row_length);
   int64_t get_data_base_offset() const;
   int64_t get_index_base_offset() const;
+  int process_out_row_columns(const ObDatumRow &row);
 private:
   int64_t micro_block_size_limit_;
   int64_t column_count_;
@@ -89,6 +91,7 @@ private:
   int64_t rowkey_column_count_;
   ObSelfBufferWriter data_buffer_;
   ObSelfBufferWriter index_buffer_;
+  const common::ObIArray<share::schema::ObColDesc> *col_desc_array_;
   bool need_calc_column_chksum_;
   bool is_inited_;
 };

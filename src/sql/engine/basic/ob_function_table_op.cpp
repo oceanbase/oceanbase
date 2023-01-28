@@ -21,6 +21,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 
 namespace oceanbase
@@ -185,9 +186,14 @@ int ObFunctionTableOp::inner_get_next_row()
           MY_SPEC.column_exprs_.at(i)->locate_datum_for_write(eval_ctx_).set_null();
         } else {
           const ObObjDatumMapType &datum_map = MY_SPEC.column_exprs_.at(i)->obj_datum_map_;
-          if (OB_FAIL(MY_SPEC.column_exprs_.at(i)->locate_datum_for_write(eval_ctx_)
-                                             .from_obj(obj_stack[i], datum_map))) {
+          ObExpr * const &expr = MY_SPEC.column_exprs_.at(i);
+          ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
+          if (OB_FAIL(datum.from_obj(obj_stack[i], datum_map))) {
             LOG_WARN("failed to convert datum", K(ret));
+          } else if (is_lob_storage(obj_stack[i].get_type()) &&
+                     OB_FAIL(ob_adjust_lob_datum(obj_stack[i], expr->obj_meta_, datum_map,
+                                                 get_exec_ctx().get_allocator(), datum))) {
+            LOG_WARN("adjust lob datum failed", K(ret), K(obj_stack[i].get_meta()), K(expr->obj_meta_));
           }
         }
         if (OB_SUCC(ret)) {

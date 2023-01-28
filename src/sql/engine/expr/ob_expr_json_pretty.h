@@ -28,8 +28,8 @@ class ObExprJsonPretty : public ObFuncExprOperator
 public:
   explicit ObExprJsonPretty(common::ObIAllocator &alloc);
   virtual ~ObExprJsonPretty();
-  template <typename T>
-  static int calc(const T &data, ObObjType type, ObCollationType cs_type,
+
+  static int calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
                   ObIAllocator *allocator, ObJsonBuffer &j_buf, bool &is_null);
   int calc_result_type1(ObExprResType &type,
                         ObExprResType &type1,

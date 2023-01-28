@@ -121,6 +121,7 @@ int ObExprPrivSTBestsrid::eval_st_bestsrid(const ObExpr &expr, ObEvalCtx &ctx, O
 
   for (uint8_t i = 0; i < param_num && OB_SUCC(ret); i++) {
     ObDatum *geo_datum = NULL;
+    ObString geo_str;
     ObExpr *geo_arg = expr.args_[i];
     ObObjType input_type = geo_arg->datum_meta_.type_;
     if (OB_FAIL(geo_arg->eval(ctx, geo_datum))) {
@@ -128,8 +129,12 @@ int ObExprPrivSTBestsrid::eval_st_bestsrid(const ObExpr &expr, ObEvalCtx &ctx, O
     } else if (geo_datum->is_null()) {
       res.set_null();
       is_null_res = true;
+    } else if (FALSE_IT(geo_str = geo_datum->get_string())) {
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *geo_datum,
+              geo_arg->datum_meta_, geo_arg->obj_meta_.has_lob_header(), geo_str))) {
+      LOG_WARN("fail to get real string data", K(ret), K(geo_str));
     } else if (OB_FAIL(ObExprPrivSTBestsrid::get_geog_box(ctx, temp_allocator,
-                                                          geo_datum->get_string(),
+                                                          geo_str,
                                                           input_type,
                                                           is_geo_empty,
                                                           i == 0 ? geo_box1 : geo_box2))) {

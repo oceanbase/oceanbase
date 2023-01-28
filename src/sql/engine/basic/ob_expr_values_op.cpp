@@ -18,6 +18,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
 #include "sql/engine/px/ob_dfo.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -344,6 +345,72 @@ int ObExprValuesOp::get_real_batch_obj_type(ObDatumMeta &src_meta,
   return ret;
 }
 
+int ObExprValuesOp::eval_values_op_dynamic_cast_to_lob(ObExpr &real_src_expr,
+                                                       ObObjMeta &src_obj_meta,
+                                                       ObExpr *dst_expr)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *datum = NULL;
+  // large string types to temp lob needs lots of memory,
+  // for example char type from send long/piece data which is 40M, cast to longtext
+  // 1. char to longtext 40M (only used to add lob header if cs type is the same)
+  // 2. deep copy use another 40M
+  // if cast only used to build temp lob header, memory allocation in step 1 can be avoid.
+  bool string_to_lob_withsame_cs_type = false;
+  if (ob_is_string_tc(src_obj_meta.get_type())
+      && ob_is_text_tc(dst_expr->obj_meta_.get_type())
+      && (src_obj_meta.get_charset_type() == dst_expr->obj_meta_.get_charset_type())) {
+    string_to_lob_withsame_cs_type = true;
+  }
+  ObDatum &dst_datum = dst_expr->locate_datum_for_write(eval_ctx_);
+  if (!string_to_lob_withsame_cs_type) {
+    if (OB_FAIL(datum_caster_.to_type(dst_expr->datum_meta_, real_src_expr,
+                                      cm_, datum))) {
+      LOG_WARN("fail to dynamic cast", K(dst_expr->datum_meta_),
+                                        K(real_src_expr), K(cm_), K(ret));
+    } else if (lib::is_oracle_mode() && dst_expr->datum_meta_.type_ == common::ObLongTextType) {
+      if (ob_is_text_tc(real_src_expr.datum_meta_.type_) && dst_expr->obj_meta_.has_lob_header()) {
+        if (datum->get_string().ptr() == NULL || datum->get_string().length() == 0) {
+          datum->set_null(); // compat 4.0, empty text to ObLobType, result is NULL
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObExprStrResAlloc res_alloc(*dst_expr, eval_ctx_);
+      // need adjust lob header, since lob to lob may not handle headers
+      if (is_lob_storage(src_obj_meta.get_type()) &&
+          OB_FAIL(ob_adjust_lob_datum(*datum,
+                                      src_obj_meta,
+                                      dst_expr->obj_meta_,
+                                      eval_ctx_.exec_ctx_.get_eval_tmp_allocator()))) {
+        LOG_WARN("adjust lob datum failed",
+                K(ret), K(*datum), K(src_obj_meta), K(dst_expr->obj_meta_));
+      } else if (OB_FAIL(dst_datum.deep_copy(*datum, res_alloc))) {
+        LOG_WARN("fail to deep copy datum from cast res datum", K(ret), K(*datum));
+      }
+    }
+  } else {
+    ObDatum *src_datum;
+    if (OB_FAIL(real_src_expr.eval(eval_ctx_, src_datum))) {
+      LOG_WARN("fail to eval src", K(real_src_expr), K(cm_), K(ret));
+    } else if (src_datum->get_string().empty()
+                && lib::is_oracle_mode()
+                && dst_expr->datum_meta_.type_ == common::ObLongTextType) {
+      dst_datum.set_null();
+    } else {
+      ObString src_string = src_datum->get_string();
+      ObTextStringDatumResult lob_result(dst_expr->obj_meta_.get_type(),
+                                         dst_expr, &eval_ctx_, &dst_datum);
+      if (OB_FAIL(lob_result.init(src_string.length()))) {
+      } else if (OB_FAIL(lob_result.append(src_string))) {
+      } else {
+        lob_result.set_result();
+      }
+    }
+  }
+  return ret;
+}
+
 OB_INLINE int ObExprValuesOp::calc_next_row()
 {
   int ret = OB_SUCCESS;
@@ -432,7 +499,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
         // T_QUESTIONMARK的表达式, 该表达式是没有reserve内存的，因此会导致ptr指向非预期
         // 内存， 可能出现结果不对
       } else if (src_meta.type_ == dst_expr->datum_meta_.type_
-                 && src_meta.cs_type_ == dst_expr->datum_meta_.cs_type_) {
+                 && src_meta.cs_type_ == dst_expr->datum_meta_.cs_type_
+                 && src_obj_meta.has_lob_header() == dst_expr->obj_meta_.has_lob_header()) {
         // 将values中数据copy到output中
         if (OB_FAIL(src_expr->eval(eval_ctx_, datum))) {
           // catch err and print log later
@@ -477,7 +545,7 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
               LOG_WARN("fail to do to_type", K(ret), K(*dst_expr), K(real_src_expr));
             }
           }
-        } else {
+        } else if (!dst_expr->obj_meta_.is_lob_storage()) {
           if (OB_FAIL(datum_caster_.to_type(dst_expr->datum_meta_, real_src_expr,
                                             cm_, datum))) {
             LOG_WARN("fail to dynamic cast", K(dst_expr->datum_meta_),
@@ -487,9 +555,16 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
               LOG_USER_WARN(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
             }
           }
+        } else { // dst type is lob
+          if (OB_FAIL(eval_values_op_dynamic_cast_to_lob(real_src_expr, src_obj_meta, dst_expr))) {
+            LOG_WARN("fail to dynamic cast to lob types", K(dst_expr->datum_meta_),
+                                                          K(real_src_expr), K(cm_), K(ret));
+          } else {
+            dst_expr->set_evaluated_projected(eval_ctx_);
+          }
         }
 
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && !dst_expr->obj_meta_.is_lob_storage()) {
           ObDatum &dst_datum = dst_expr->locate_datum_for_write(eval_ctx_);
           if (ObObjDatumMapType::OBJ_DATUM_STRING == dst_expr->obj_datum_map_) {
             ObExprStrResAlloc res_alloc(*dst_expr, eval_ctx_);

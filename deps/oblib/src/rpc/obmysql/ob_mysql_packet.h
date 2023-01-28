@@ -630,6 +630,20 @@ inline bool ObMySQLRawPacket::can_reroute_pkt() const
   return can_reroute_pkt_;
 }
 
+union ObClientAttributeCapabilityFlags
+{
+  ObClientAttributeCapabilityFlags() : capability_(0) {}
+  explicit ObClientAttributeCapabilityFlags(uint64_t cap) : capability_(cap) {}
+  bool is_support_lob_locatorv2() const { return 1 == cap_flags_.OB_CLIENT_CAP_OB_LOB_LOCATOR_V2; }
+
+  uint64_t capability_;
+  struct CapabilityFlags
+  {
+    uint64_t OB_CLIENT_CAP_OB_LOB_LOCATOR_V2:       1;
+    uint64_t OB_CLIENT_CAP_RESERVED_NOT_USE:       63;
+  } cap_flags_;
+};
+
 inline void ObMySQLRawPacket::set_txn_free_route(const bool txn_free_route)
 {
   txn_free_route_ = txn_free_route;

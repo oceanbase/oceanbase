@@ -792,6 +792,7 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
             pl::get_tenant_id_by_object_id(
               static_cast<const ObRoutineInfo *>(func_info)->get_package_id()))
         && OB_NOT_NULL(ret_pl_type.get_data_type())
+        && !(ret_pl_type.get_data_type()->get_meta_type().get_type() == ObLongTextType)
         && ob_is_string_type(ret_pl_type.get_data_type()->get_meta_type().get_type())) {
       result_type.set_collation_type(ob_is_nstring(ret_pl_type.get_data_type()
                                                            ->get_meta_type().get_type())
@@ -4140,6 +4141,12 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
         && (ObTextTC == expect_tc || ObLobTC == expect_tc)) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("cast to lob type not allowed", K(ret), K(expect_tc), K(ori_tc));
+    } else if (ObIntTC == ori_tc && ObLongTextType == dest_type) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("cast to lob type not allowed", K(ret), K(dest_type), K(ori_tc));
+    } else if (ori_tc == ObDateTimeTC && ObLongTextType == dest_type) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("cast to lob type not allowed", K(ret), K(dest_type), K(ori_tc));
     }
   }
   if (OB_FAIL(ret)) {

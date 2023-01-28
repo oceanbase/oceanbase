@@ -542,9 +542,14 @@ void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &
       if (col->get_result_type().is_urowid()) {
         found = true;
       } else if (col->get_result_type().is_lob_locator()
-                 || col->get_result_type().is_lob()
                  || col->get_result_type().is_json()
-                 || col->get_result_type().is_geometry()) {
+                 || col->get_result_type().is_geometry()
+                 || col->get_result_type().get_type() == ObLongTextType
+                 || col->get_result_type().get_type() == ObMediumTextType
+                 || (IS_CLUSTER_VERSION_BEFORE_4_1_0_0
+                     && ob_is_text_tc(col->get_result_type().get_type()))) {
+        // all lob types not support vectorize in 4.0
+        // tinytext and text support vectorize in 4.1
         found = true;
       }
     }
@@ -1109,7 +1114,8 @@ int ObStaticEngineCG::generate_spec(
                                 NULL_LAST,//这里null last还是first无所谓
                                 expr->datum_meta_.cs_type_,
                                 expr->datum_meta_.scale_,
-                                lib::is_oracle_mode());
+                                lib::is_oracle_mode(),
+                                expr->obj_meta_.has_lob_header());
           ObHashFunc hash_func;
           set_murmur_hash_func(hash_func, expr->basic_funcs_);
           if (OB_ISNULL(cmp_func.cmp_func_) || OB_ISNULL(hash_func.hash_func_)
@@ -1297,7 +1303,8 @@ int ObStaticEngineCG::generate_hash_set_spec(ObLogSet &op, ObHashSetSpec &spec)
                                                                 field_collation.null_pos_,
                                                                 field_collation.cs_type_,
                                                                 expr->datum_meta_.scale_,
-                                                                lib::is_oracle_mode());
+                                                                lib::is_oracle_mode(),
+                                                                expr->obj_meta_.has_lob_header());
         ObHashFunc hash_func;
         set_murmur_hash_func(hash_func, expr->basic_funcs_);
         if (OB_ISNULL(cmp_func.cmp_func_) || OB_ISNULL(hash_func.hash_func_)
@@ -1466,7 +1473,8 @@ int ObStaticEngineCG::generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec
                                                                   field_collation.null_pos_,
                                                                   field_collation.cs_type_,
                                                                   expr->datum_meta_.scale_,
-                                                                  lib::is_oracle_mode());
+                                                                  lib::is_oracle_mode(),
+                                                                  expr->obj_meta_.has_lob_header());
           if (OB_ISNULL(cmp_func.cmp_func_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("cmp_func is null, check datatype is valid", K(cmp_func.cmp_func_), K(ret));
@@ -1639,7 +1647,8 @@ int ObStaticEngineCG::fill_sort_funcs(
                                                                 sort_collation.null_pos_,
                                                                 sort_collation.cs_type_,
                                                                 expr->datum_meta_.scale_,
-                                                                lib::is_oracle_mode());
+                                                                lib::is_oracle_mode(),
+                                                                expr->obj_meta_.has_lob_header());
         if (OB_ISNULL(cmp_func.cmp_func_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
@@ -3955,7 +3964,8 @@ int ObStaticEngineCG::generate_pump_exprs(ObLogJoin &op, ObNLConnectBySpecBase &
                               NULL_LAST,//这里null last还是first无所谓
                               expr->datum_meta_.cs_type_,
                               expr->datum_meta_.scale_,
-                              lib::is_oracle_mode());
+                              lib::is_oracle_mode(),
+                              expr->obj_meta_.has_lob_header());
         if (OB_ISNULL(cmp_func.cmp_func_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
@@ -4196,11 +4206,14 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
       if (OB_SUCC(ret)){
         ObDatumMeta &l = equal_cond_info.expr_->args_[0]->datum_meta_;
         ObDatumMeta &r = equal_cond_info.expr_->args_[1]->datum_meta_;
+        bool has_lob_header = equal_cond_info.expr_->args_[0]->obj_meta_.has_lob_header() ||
+                              equal_cond_info.expr_->args_[1]->obj_meta_.has_lob_header();
         CK(l.cs_type_ == r.cs_type_);
         if (OB_SUCC(ret)) {
           const ObScale scale = ObDatumFuncs::max_scale(l.scale_, r.scale_);
           equal_cond_info.ns_cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(l.type_,
-                             r.type_, default_null_pos(), l.cs_type_, scale, is_oracle_mode());
+                             r.type_, default_null_pos(), l.cs_type_, scale, is_oracle_mode(),
+                             has_lob_header);
           CK(OB_NOT_NULL(equal_cond_info.ns_cmp_func_));
           OZ(calc_equal_cond_opposite(op, *raw_expr, equal_cond_info.is_opposite_));
           OZ(mj_spec.equal_cond_infos_.push_back(equal_cond_info));
@@ -5334,7 +5347,8 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
                                                                    field_collation.null_pos_,
                                                                    field_collation.cs_type_,
                                                                    expr->datum_meta_.scale_,
-                                                                   lib::is_oracle_mode());
+                                                                   lib::is_oracle_mode(),
+                                                                   expr->obj_meta_.has_lob_header());
           if (OB_ISNULL(cmp_func.cmp_func_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
@@ -5857,7 +5871,8 @@ int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem> &sort_keys,
                                                                  field_collation.null_pos_,
                                                                  field_collation.cs_type_,
                                                                  expr->datum_meta_.scale_,
-                                                                 lib::is_oracle_mode());
+                                                                 lib::is_oracle_mode(),
+                                                                 expr->obj_meta_.has_lob_header());
         if (OB_ISNULL(cmp_func.cmp_func_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
@@ -6088,6 +6103,7 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
       }
     }
 
+    bool need_set_lob_header = get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0;
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_stmt()->get_column_size(); ++i) {
       ObExpr *rt_expr = nullptr;
       const ColumnItem *col_item = op.get_stmt()->get_column_item(i);
@@ -6098,6 +6114,10 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
           && col_item->expr_->is_explicited_reference()) {
         OZ (mark_expr_self_produced(col_item->expr_));
         OZ (generate_rt_expr(*col_item->expr_, rt_expr));
+        if (OB_SUCC(ret) && is_lob_storage(rt_expr->obj_meta_.get_type()) && need_set_lob_header) {
+          rt_expr->obj_meta_.set_has_lob_header();
+        }
+
         OZ (spec.column_exprs_.push_back(rt_expr));
 
         if (OB_FAIL(ret)) {
@@ -6114,6 +6134,9 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
             ObExpr *err_expr = nullptr;
             OZ (mark_expr_self_produced(col_item->default_value_expr_));
             OZ (generate_rt_expr(*col_item->default_value_expr_, err_expr));
+            if (OB_SUCC(ret) && is_lob_storage(err_expr->obj_meta_.get_type()) && need_set_lob_header) {
+              err_expr->obj_meta_.set_has_lob_header();
+            }
             OX (col_info->error_expr_id_ = spec.err_default_exprs_.count());
             OZ (spec.err_default_exprs_.push_back(err_expr));
           }
@@ -6121,6 +6144,9 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
             ObExpr *emp_expr = nullptr;
             OZ (mark_expr_self_produced(col_item->default_empty_expr_));
             OZ (generate_rt_expr(*col_item->default_empty_expr_, emp_expr));
+            if (OB_SUCC(ret) && is_lob_storage(emp_expr->obj_meta_.get_type()) && need_set_lob_header) {
+              emp_expr->obj_meta_.set_has_lob_header();
+            }
             OX (col_info->empty_expr_id_ = spec.emp_default_exprs_.count());
             OZ (spec.emp_default_exprs_.push_back(emp_expr));
           }

@@ -112,7 +112,9 @@ int ObExprJsonInsert::eval_json_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     } else {
       ObString j_path_text = json_datum->get_string();
       ObJsonPath *j_path;
-      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, i, false))) {
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(arg, ctx, temp_allocator, j_path_text, is_null))) {
+        LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, i, false))) {
         LOG_WARN("failed: parse text to path.", K(j_path_text), K(ret));
       } else if (j_path->path_node_cnt() == 0) {
         // do nothing
@@ -184,16 +186,8 @@ int ObExprJsonInsert::eval_json_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       res.set_null();
     } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
-    } else {
-      uint64_t length = raw_bin.length();
-      char *buf = expr.get_str_res_mem(ctx, length);
-      if (buf) {
-        MEMCPY(buf, raw_bin.ptr(), length);
-        res.set_string(buf, length);
-      } else {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed: allocate res string buffer.", K(ret), K(length));
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
 

@@ -393,7 +393,7 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
     // we set avg_len outer size the set_col_stats function
     // since derive avg_len from obj is inaccurate.
     // and we need to calc avg_len before num_not_null/num_null.
-    if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(datum, col_len))) {
+    if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(expr, datum, col_len))) {
       LOG_WARN("fail to calc sys op opnsize", K(ret));
     } else if (FALSE_IT(set_col_stats_avg_len(all_stats, col_len))) {
       LOG_WARN("fail to set col_stats_avg_len", K(ret), K(col_len));

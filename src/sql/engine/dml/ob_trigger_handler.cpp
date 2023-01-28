@@ -25,6 +25,7 @@
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/ob_spi.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -437,12 +438,38 @@ int TriggerHandle::check_and_update_new_row(
           LOG_WARN("datum is NULL", K(ret));
         } else if (OB_FAIL(datum->to_obj(new_obj, new_row_exprs.at(i)->obj_meta_))) {
           LOG_WARN("failed to to obj", K(ret));
-        } else if (!new_obj.strict_equal(new_cells[i])) {
-          if (lib::is_oracle_mode() && !columns.get_flags()[i].is_update_) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify column not in update column list in before update row trigger");
+        } else {
+          bool is_strict_equal = false;
+          if (new_obj.is_lob_storage()) {
+            common::ObArenaAllocator lob_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+            ObObj cmp_obj;
+            ObObj other_obj;
+            if (new_obj.is_delta_tmp_lob() || new_cells[i].is_delta_tmp_lob()) {
+              is_strict_equal = false;
+            } else if (OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(new_obj,
+                                                                              cmp_obj,
+                                                                              NULL,
+                                                                              &lob_allocator))) {
+              LOG_WARN("failed to convert lob", K(ret), K(new_obj));
+            } else if (OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(new_cells[i],
+                                                                              other_obj,
+                                                                              NULL,
+                                                                              &lob_allocator))) {
+              LOG_WARN("failed to convert lob", K(ret), K(i), K(new_cells[i]));
+            } else {
+              is_strict_equal = cmp_obj.strict_equal(other_obj);
+            }
           } else {
-            updated = true;
+            is_strict_equal = new_obj.strict_equal(new_cells[i]);
+          }
+          if (OB_FAIL(ret)) {
+          } else if(!is_strict_equal) {
+            if (lib::is_oracle_mode() && !columns.get_flags()[i].is_update_) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify column not in update column list in before update row trigger");
+            } else {
+              updated = true;
+            }
           }
         }
       }
@@ -467,7 +494,11 @@ int TriggerHandle::check_and_update_new_row(
           ObDatum &write_datum = expr->locate_datum_for_write(eval_ctx);
           if (OB_FAIL(write_datum.from_obj(new_cells[i]))) {
             LOG_WARN("failed to from obj", K(ret));
-          } else {
+          } else if (is_lob_storage(new_cells[i].get_type()) &&
+                     OB_FAIL(ob_adjust_lob_datum(new_cells[i], expr->obj_meta_,
+                                                 eval_ctx.exec_ctx_.get_allocator(), write_datum))) {
+          LOG_WARN("adjust lob datum failed", K(ret), K(new_cells[i].get_meta()), K(expr->obj_meta_));
+        } else {
             expr->set_evaluated_flag(eval_ctx);
             LOG_DEBUG("trigger write new datum", K(new_cells[i]), K(i),
               K(ObToStringExpr(eval_ctx, *new_row_exprs.at(i))));

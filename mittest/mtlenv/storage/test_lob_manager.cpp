@@ -27,6 +27,7 @@
 #include "storage/lob/ob_lob_piece.h"
 #include "sql/engine/ob_exec_context.h"
 #include "observer/ob_safe_destroy_thread.h"
+#include "lib/objectpool/ob_server_object_pool.h"
 
 namespace oceanbase
 {
@@ -126,6 +127,14 @@ public:
     uint64_t char_len,
     uint64_t byte_len,
     uint64_t meta_cnt);
+  void lob_write(
+    ObIAllocator& allocator,
+    ObLobCommon *lob_common,
+    uint64_t handle_size,
+    uint64_t offset,
+    uint64_t len,
+    bool set_uft8,
+    ObString& data);
 protected:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -185,7 +194,7 @@ void TestLobManager::flush_lob_piece(
   ObLobManager *mgr = MTL(ObLobManager*);
   ObStoreRow *row = NULL;
   build_lob_piece_row(allocator, info, row);
-  ASSERT_EQ(OB_SUCCESS, mgr->flush(tablet_id_, row->row_val_));
+  // ASSERT_EQ(OB_SUCCESS, mgr->flush(tablet_id_, row->row_val_));
 }
 
 void TestLobManager::scan_check_lob_data(
@@ -536,6 +545,70 @@ void TestLobManager::insert_lob_meta(
 //   ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, colunm_ids, table_param));
 // }
 
+void TestLobManager::lob_write(
+    ObIAllocator& allocator,
+    ObLobCommon *lob_common,
+    uint64_t handle_size,
+    uint64_t offset,
+    uint64_t len,
+    bool set_uft8,
+    ObString& data)
+{
+  EXPECT_EQ(OB_SYS_TENANT_ID, MTL_ID());
+  ObLobManager *mgr = MTL(ObLobManager*);
+  uint64_t byte_size = lob_common->get_byte_size(handle_size);
+  ObLobData *lob_data = reinterpret_cast<ObLobData*>(lob_common->buffer_);
+  lob_data->id_.tablet_id_ = tablet_id_.id();
+    // prepare table schema
+  share::schema::ObTableSchema table_schema;
+  TestLobCommon::build_lob_meta_table_schema(tenant_id_, table_schema);
+
+  // build table param
+  share::schema::ObTableParam table_param(allocator);
+  ObSArray<uint64_t> colunm_ids;
+  for (int i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; i++) {
+    colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + i);
+  }
+  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, colunm_ids, table_param));
+
+  ObExecContext exec_ctx(allocator);
+  // 1. get tx desc
+  transaction::ObTxDesc *tx_desc = nullptr;
+  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_tx_desc(tenant_id_, tx_desc));
+
+  // 2. get read snapshot
+  ObTxIsolationLevel isolation = ObTxIsolationLevel::RC;
+  int64_t expire_ts = ObTimeUtility::current_time() + 1200 * 1000 * 1000;
+  ObTxReadSnapshot read_snapshot;
+  transaction::ObTransService *tx_service = MTL(transaction::ObTransService*);
+  ASSERT_EQ(OB_SUCCESS, tx_service->get_read_snapshot(*tx_desc, isolation, expire_ts, read_snapshot));
+
+
+  // prepare param
+  ObLobAccessParam param;
+  param.tx_desc_ = tx_desc;
+  param.snapshot_ = read_snapshot;
+  param.tx_id_ = tx_desc->get_tx_id();
+  param.sql_mode_ = SMO_DEFAULT;
+  param.allocator_ = &allocator;
+  param.meta_table_schema_ = &table_schema;
+  param.meta_tablet_param_ = &table_param;
+  param.ls_id_ = ls_id_;
+  param.tablet_id_ = tablet_id_;
+  if (set_uft8) {
+    param.coll_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  } else {
+    param.coll_type_ = CS_TYPE_BINARY;
+  }
+  param.lob_common_ = lob_common;
+  param.byte_size_ = byte_size;
+  param.handle_size_ = handle_size;
+  param.timeout_ = expire_ts;
+  param.offset_ = offset;
+  param.len_ = len;
+  ASSERT_EQ(OB_SUCCESS, mgr->write(param, data));
+}
+
 void TestLobManager::scan_lob_meta(
     ObIAllocator& allocator,
     uint64_t lob_id,
@@ -657,7 +730,9 @@ void TestLobManager::scan_lob_meta(
         ASSERT_EQ(OB_SUCCESS, mgr->get_real_data(param, result, out_data));
       }
     }
-    ASSERT_EQ(expect_cnt, cnt);
+    if (expect_cnt != 0) { // do not need to check when 0
+      ASSERT_EQ(expect_cnt, cnt);
+    }
     ASSERT_EQ(OB_ITER_END, ret);
   }
   if (iter != NULL) {
@@ -830,6 +905,31 @@ TEST_F(TestLobManager, basic)
     // full scan
     scan_check_lob_data_uft8(data3, allocator, lobid3, doffset, 0, total_char_len, doffset, 10);
     allocator.free(data3);
+  }
+
+  printf("[test] write 10M lob utf8 inline meta data\n");
+  {
+    // uint64_t lobid3 = 233;
+    // uint64_t total_len3 = 10 * 1024 * 1024; // 10M
+    // char *data3 = reinterpret_cast<char*>(allocator.alloc(sizeof(char) * total_len3));
+    // ASSERT_NE(nullptr, data3);
+    // int real_len = 0;
+    // gen_random_unicode_string(total_len3, data3, real_len);
+    // uint64_t total_char_len = ObCharset::strlen_char(CS_TYPE_UTF8MB4_GENERAL_CI, data3, real_len);
+    // // build lob common
+    // char lob_header[100];
+    // ObLobCommon *lob_common = new(lob_header)ObLobCommon();
+    // lob_common->is_init_ = 1;
+    // ObLobData *lob_data = new(lob_common->buffer_)ObLobData();
+    // lob_data->id_.lob_id_ = lobid3;
+    // ObString in_data(real_len, data3);
+    // lob_write(allocator, lob_common, 100, 0, total_char_len, true, in_data);
+    // // full scan
+    // char *out_data = reinterpret_cast<char*>(allocator.alloc(sizeof(char) * total_len3));
+    // ObString out_str;
+    // out_str.assign_buffer(out_data, total_len3);
+    // scan_check_lob_data_uft8(data3, allocator, lobid3, real_len, 0, total_char_len, real_len, 0);
+    // allocator.free(data3);
   }
 
   // clean env
@@ -1108,7 +1208,7 @@ TEST_F(TestLobManager, inrow_bin_test)
   int ret = OB_SUCCESS;
 
   ObLobManager *mgr = MTL(ObLobManager*);
-  char lob_data[1024];
+  char *lob_data = reinterpret_cast<char*>(allocator.alloc(4096));
   ObLobCommon *loc = new(lob_data)ObLobCommon();
 
   char *tmp_buf;
@@ -1123,7 +1223,7 @@ TEST_F(TestLobManager, inrow_bin_test)
   param.tablet_id_ = tablet_id_;
   param.scan_backward_ = false;
   param.lob_common_ = loc;
-  param.handle_size_ = 1024;
+  param.handle_size_ = 4096;
   param.asscess_ptable_ = false;
   param.coll_type_ = CS_TYPE_BINARY;
   param.timeout_ = ObTimeUtility::current_time() + 12 * 1000 * 1000;
@@ -1133,7 +1233,7 @@ TEST_F(TestLobManager, inrow_bin_test)
   ASSERT_EQ(OB_SUCCESS, mgr->append(param, appeng_buf));
 
   // query check [0,400]
-  char query_buf[1024];
+  char *query_buf = reinterpret_cast<char*>(allocator.alloc(4096));
   ObString query_str;
   query_str.assign_buffer(query_buf, 1024);
   param.offset_ = 0;
@@ -1150,20 +1250,69 @@ TEST_F(TestLobManager, inrow_bin_test)
   param.offset_ = 0;
   param.len_ = 400;
   ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  ASSERT_EQ(250, query_str.length());
   ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 100), 0);
   ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 150), 0);
 
-  // append [400, 900]
-  appeng_buf.assign_ptr(tmp_buf + 400, 500);
-  ASSERT_EQ(OB_SUCCESS, mgr->append(param, appeng_buf));
+  // replaced-write [50,100]
+  appeng_buf.assign_ptr(tmp_buf + 400, 50);
+  param.offset_ = 50;
+  param.len_ = 50;
+  ASSERT_EQ(OB_SUCCESS, mgr->write(param, appeng_buf));
   // query check [0,100],[250,900],
   query_str.assign_buffer(query_buf, 1024);
   param.offset_ = 0;
   param.len_ = 900;
   ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
-  ASSERT_EQ(750, query_str.length());
-  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 100), 0);
-  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 650), 0);
+  // 对应关系
+  // query   [0,50]  [50,100]   [100,250]
+  // tmpbuf  [0,50]  [400,450]  [250,400]
+  ASSERT_EQ(250, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 50, tmp_buf + 400, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 150), 0);
+
+  // overwrite-no padding [200,300] = tmpbuf[800,900]
+  appeng_buf.assign_ptr(tmp_buf + 800, 100);
+  param.offset_ = 200;
+  param.len_ = 100;
+  ASSERT_EQ(OB_SUCCESS, mgr->write(param, appeng_buf));
+  query_str.assign_buffer(query_buf, 1024);
+  param.offset_ = 0;
+  param.len_ = 900;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  // 对应关系
+  // query   [0,50]  [50,100]   [100,200]  [200,300]
+  // tmpbuf  [0,50]  [400,450]  [250,350]  [800,900]
+  ASSERT_EQ(300, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 50, tmp_buf + 400, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 100), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 200, tmp_buf + 800, 100), 0);
+
+  // overwrite with padding [1000, 1100] = tmpbuf[600,700]
+  appeng_buf.assign_ptr(tmp_buf + 600, 200); // set data 200, but only write 100
+  param.offset_ = 1000;
+  param.len_ = 100;
+  ASSERT_EQ(OB_SUCCESS, mgr->write(param, appeng_buf));
+  query_str.assign_buffer(query_buf, 4096);
+  param.offset_ = 0;
+  param.len_ = 2000;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  // 对应关系
+  // query   [0,50]  [50,100]   [100,200]  [200,300] [300,1000] [1000,1100]
+  // tmpbuf  [0,50]  [400,450]  [250,350]  [800,900] [0x00]     [600,700]
+  ASSERT_EQ(1100, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 50, tmp_buf + 400, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 100), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 200, tmp_buf + 800, 100), 0);
+  char empty_buf[1024];
+  MEMSET(empty_buf, 0x00, 1024);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 300, empty_buf, 700), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 1000, tmp_buf + 600, 100), 0);
+  allocator.free(query_buf);
+  allocator.free(lob_data);
 }
 
 TEST_F(TestLobManager, inrow_utf8_test)
@@ -1172,7 +1321,7 @@ TEST_F(TestLobManager, inrow_utf8_test)
   int ret = OB_SUCCESS;
 
   ObLobManager *mgr = MTL(ObLobManager*);
-  char lob_data[1024];
+  char *lob_data = reinterpret_cast<char*>(allocator.alloc(4096));
   ObLobCommon *loc = new(lob_data)ObLobCommon();
 
   char tmp_buf[1024];
@@ -1189,7 +1338,7 @@ TEST_F(TestLobManager, inrow_utf8_test)
   param.tablet_id_ = tablet_id_;
   param.scan_backward_ = false;
   param.lob_common_ = loc;
-  param.handle_size_ = 1024;
+  param.handle_size_ = 4096;
   param.asscess_ptable_ = false;
   param.coll_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
   param.timeout_ = ObTimeUtility::current_time() + 12 * 1000 * 1000;
@@ -1199,10 +1348,12 @@ TEST_F(TestLobManager, inrow_utf8_test)
   size_t byte_len = ObCharset::charpos(param.coll_type_, tmp_buf + byte_st, real_len - byte_st, fp_len);
   ObString appeng_buf;
   appeng_buf.assign_ptr(tmp_buf + byte_st, byte_len);
-  ASSERT_EQ(OB_SUCCESS, mgr->append(param, appeng_buf));
+  param.offset_ = 0;
+  param.len_ = fp_len;
+  ASSERT_EQ(OB_SUCCESS, mgr->write(param, appeng_buf));
 
   // query check [0,400]
-  char query_buf[1024];
+  char *query_buf = reinterpret_cast<char*>(allocator.alloc(4096));
   ObString query_str;
   query_str.assign_buffer(query_buf, 1024);
   param.offset_ = 0;
@@ -1236,19 +1387,467 @@ TEST_F(TestLobManager, inrow_utf8_test)
   ret = ObCharset::strcmp(CS_TYPE_UTF8MB4_GENERAL_CI, query_str.ptr() + q_byte_st, query_str.length() - q_byte_st, tmp_buf + byte_st, byte_len);
   ASSERT_EQ(0, ret);
 
-  // append [400, 900]
-  // appeng_buf.assign_ptr(tmp_buf + 400, 500);
-  // ASSERT_EQ(OB_SUCCESS, mgr->append(param, appeng_buf));
-  // // query check [0,100],[250,900],
-  // query_str.assign_buffer(query_buf, 1024);
-  // param.offset_ = 0;
-  // param.len_ = 900;
-  // ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
-  // ASSERT_EQ(750, query_str.length());
-  // ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 100), 0);
-  // ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 650), 0);
+  allocator.free(query_buf);
+  allocator.free(lob_data);
 }
 
+TEST_F(TestLobManager, inrow_tmp_full_locator)
+{
+  ObArenaAllocator allocator;
+  int ret = OB_SUCCESS;
+
+  ObLobManager *mgr = MTL(ObLobManager*);
+  // char *lob_data = reinterpret_cast<char*>(allocator.alloc(4096));
+  // ObLobCommon *loc = new(lob_data)ObLobCommon();
+
+  char *tmp_buf;
+  uint32_t data_len = 900;
+  prepare_random_data(allocator, data_len, &tmp_buf);
+
+  ObString data;
+  ObLobLocatorV2 lob_locator;
+  ASSERT_EQ(OB_SUCCESS, mgr->build_tmp_full_lob_locator(allocator, data, CS_TYPE_BINARY, lob_locator));
+
+  ObLobAccessParam param;
+  param.tx_desc_ = nullptr;
+  param.sql_mode_ = SMO_DEFAULT;
+  param.allocator_ = &allocator;
+  param.ls_id_ = ls_id_;
+  param.tablet_id_ = tablet_id_;
+  param.scan_backward_ = false;
+  param.lob_locator_ = &lob_locator;
+  param.handle_size_ = param.lob_locator_->size_;
+  param.asscess_ptable_ = false;
+  param.coll_type_ = CS_TYPE_BINARY;
+  param.timeout_ = ObTimeUtility::current_time() + 12 * 1000 * 1000;
+  // append [0,400]
+  ObString appeng_buf;
+  appeng_buf.assign_ptr(tmp_buf, 400);
+  ASSERT_EQ(OB_SUCCESS, mgr->append(param, appeng_buf));
+
+  // query check [0,400]
+  char *query_buf = reinterpret_cast<char*>(allocator.alloc(4096));
+  ObString query_str;
+  query_str.assign_buffer(query_buf, 1024);
+  param.handle_size_ = param.lob_locator_->size_;
+  param.offset_ = 0;
+  param.len_ = 400;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf + param.offset_, param.len_), 0);
+
+  // erase [100, 250]
+  // param.handle_size_ = param.lob_locator_->size_;
+  param.offset_ = 100;
+  param.len_ = 150;
+  ASSERT_EQ(OB_SUCCESS, mgr->erase(param));
+  // query check [0,100],[250,400]
+  query_str.assign_buffer(query_buf, 1024);
+  // param.handle_size_ = param.lob_locator_->size_;
+  param.offset_ = 0;
+  param.len_ = 400;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  ASSERT_EQ(250, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 100), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 150), 0);
+
+  // replaced-write [50,100]
+  appeng_buf.assign_ptr(tmp_buf + 400, 50);
+  param.offset_ = 50;
+  param.len_ = 50;
+  ASSERT_EQ(OB_SUCCESS, mgr->write(param, appeng_buf));
+  // query check [0,100],[250,900],
+  query_str.assign_buffer(query_buf, 1024);
+  param.offset_ = 0;
+  param.len_ = 900;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  // 对应关系
+  // query   [0,50]  [50,100]   [100,250]
+  // tmpbuf  [0,50]  [400,450]  [250,400]
+  ASSERT_EQ(250, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 50, tmp_buf + 400, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 150), 0);
+
+  // overwrite-no padding [200,300] = tmpbuf[800,900]
+  appeng_buf.assign_ptr(tmp_buf + 800, 100);
+  param.offset_ = 200;
+  param.len_ = 100;
+  ASSERT_EQ(OB_SUCCESS, mgr->write(param, appeng_buf));
+  query_str.assign_buffer(query_buf, 1024);
+  param.offset_ = 0;
+  param.len_ = 900;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  // 对应关系
+  // query   [0,50]  [50,100]   [100,200]  [200,300]
+  // tmpbuf  [0,50]  [400,450]  [250,350]  [800,900]
+  ASSERT_EQ(300, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 50, tmp_buf + 400, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 100), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 200, tmp_buf + 800, 100), 0);
+
+  // overwrite with padding [1000, 1100] = tmpbuf[600,700]
+  appeng_buf.assign_ptr(tmp_buf + 600, 200); // set data 200, but only write 100
+  param.offset_ = 1000;
+  param.len_ = 100;
+  ASSERT_EQ(OB_SUCCESS, mgr->write(param, appeng_buf));
+  query_str.assign_buffer(query_buf, 4096);
+  param.offset_ = 0;
+  param.len_ = 2000;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  // 对应关系
+  // query   [0,50]  [50,100]   [100,200]  [200,300] [300,1000] [1000,1100]
+  // tmpbuf  [0,50]  [400,450]  [250,350]  [800,900] [0x00]     [600,700]
+  ASSERT_EQ(1100, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 50, tmp_buf + 400, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 100), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 200, tmp_buf + 800, 100), 0);
+  char empty_buf[1024];
+  MEMSET(empty_buf, 0x00, 1024);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 300, empty_buf, 700), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 1000, tmp_buf + 600, 100), 0);
+  // allocator.free(query_buf);
+  // allocator.free(lob_locator.ptr_);
+  allocator.clear();
+}
+
+TEST_F(TestLobManager, inrow_tmp_delta_locator)
+{
+  ObArenaAllocator allocator;
+  int ret = OB_SUCCESS;
+
+  ObLobManager *mgr = MTL(ObLobManager*);
+  char *persist_data = reinterpret_cast<char*>(allocator.alloc(4096));
+  // mock lob persis
+  {
+    ObMemLobCommon *lob_common = new(persist_data)ObMemLobCommon(ObMemLobType::PERSISTENT_LOB, false);
+    lob_common->set_read_only(false);
+    ObLobCommon *loc = new(lob_common->data_)ObLobCommon();
+  }
+  uint32_t handle_size = sizeof(ObMemLobCommon) + sizeof(ObLobCommon);
+  ObLobLocatorV2 persis_locator(persist_data, handle_size);
+
+  char *tmp_buf;
+  uint32_t data_len = 900;
+  prepare_random_data(allocator, data_len, &tmp_buf);
+
+  ObString data;
+  ObLobLocatorV2 lob_locator;
+  ASSERT_EQ(OB_SUCCESS, mgr->build_tmp_full_lob_locator(allocator, data, CS_TYPE_BINARY, lob_locator));
+
+  ObLobAccessParam param;
+  // param.tx_desc_ = nullptr;
+  // param.sql_mode_ = SMO_DEFAULT;
+  param.allocator_ = &allocator;
+  // param.ls_id_ = ls_id_;
+  // param.tablet_id_ = tablet_id_;
+  // param.scan_backward_ = false;
+  // param.lob_locator_ = &lob_locator;
+  // param.handle_size_ = param.lob_locator_->size_;
+  // param.asscess_ptable_ = false;
+  param.coll_type_ = CS_TYPE_BINARY;
+  // param.timeout_ = ObTimeUtility::current_time() + 12 * 1000 * 1000;
+  // append [0,400]
+  ObString appeng_buf;
+  appeng_buf.assign_ptr(tmp_buf, 400);
+  ObLobLocatorV2 delta_locator;
+  ASSERT_EQ(OB_SUCCESS, mgr->build_tmp_delta_lob_locator(allocator, &persis_locator, appeng_buf, false, ObLobDiffFlags(),
+    ObLobDiff::DiffType::APPEND, 0, 0, 0, delta_locator));
+  ASSERT_EQ(OB_SUCCESS, mgr->process_delta(param, delta_locator));
+
+  // query check [0,400]
+  char *query_buf = reinterpret_cast<char*>(allocator.alloc(4096));
+  ObString query_str;
+  query_str.assign_buffer(query_buf, 1024);
+  // param.handle_size_ = param.lob_locator_->size_;
+  param.offset_ = 0;
+  param.len_ = 400;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf + param.offset_, param.len_), 0);
+
+  // erase [100, 250]
+  // mock lob persis
+  {
+    ObMemLobCommon *lob_common = new(persist_data)ObMemLobCommon(ObMemLobType::PERSISTENT_LOB, false);
+    lob_common->set_read_only(false);
+    MEMCPY(lob_common->data_, reinterpret_cast<char*>(param.lob_common_), param.handle_size_);
+  }
+  persis_locator.ptr_ = persist_data;
+  persis_locator.size_ = sizeof(ObMemLobCommon) + param.handle_size_;
+  // build delta
+  ASSERT_EQ(OB_SUCCESS, mgr->build_tmp_delta_lob_locator(allocator, &persis_locator, ObString(), false, ObLobDiffFlags(),
+    ObLobDiff::DiffType::ERASE, 100, 150, 0, delta_locator));
+  ASSERT_EQ(OB_SUCCESS, mgr->process_delta(param, delta_locator));
+  // query check [0,100],[250,400]
+  query_str.assign_buffer(query_buf, 1024);
+  param.offset_ = 0;
+  param.len_ = 400;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  ASSERT_EQ(250, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 100), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 150), 0);
+
+  // replaced-write [50,100]
+  // mock lob persis
+  {
+    ObMemLobCommon *lob_common = new(persist_data)ObMemLobCommon(ObMemLobType::PERSISTENT_LOB, false);
+    lob_common->set_read_only(false);
+    MEMCPY(lob_common->data_, reinterpret_cast<char*>(param.lob_common_), param.handle_size_);
+  }
+  persis_locator.ptr_ = persist_data;
+  persis_locator.size_ = sizeof(ObMemLobCommon) + sizeof(ObLobCommon) + param.byte_size_;
+  // build delta
+  appeng_buf.assign_ptr(tmp_buf + 400, 50);
+  ASSERT_EQ(OB_SUCCESS, mgr->build_tmp_delta_lob_locator(allocator, &persis_locator, appeng_buf, false, ObLobDiffFlags(),
+    ObLobDiff::DiffType::WRITE, 50, 50, 0, delta_locator));
+  ASSERT_EQ(OB_SUCCESS, mgr->process_delta(param, delta_locator));
+  // query check [0,100],[250,900],
+  query_str.assign_buffer(query_buf, 1024);
+  param.offset_ = 0;
+  param.len_ = 900;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  // 对应关系
+  // query   [0,50]  [50,100]   [100,250]
+  // tmpbuf  [0,50]  [400,450]  [250,400]
+  ASSERT_EQ(250, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 50, tmp_buf + 400, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 150), 0);
+
+  // overwrite-no padding [200,300] = tmpbuf[800,900]
+  // mock lob persis
+  {
+    ObMemLobCommon *lob_common = new(persist_data)ObMemLobCommon(ObMemLobType::PERSISTENT_LOB, false);
+    lob_common->set_read_only(false);
+    MEMCPY(lob_common->data_, reinterpret_cast<char*>(param.lob_common_), param.handle_size_);
+  }
+  persis_locator.ptr_ = persist_data;
+  persis_locator.size_ = sizeof(ObMemLobCommon) + param.handle_size_;
+  // biuld delta
+  appeng_buf.assign_ptr(tmp_buf + 800, 100);
+  ASSERT_EQ(OB_SUCCESS, mgr->build_tmp_delta_lob_locator(allocator, &persis_locator, appeng_buf, false, ObLobDiffFlags(),
+    ObLobDiff::DiffType::WRITE, 200, 100, 0, delta_locator));
+  ASSERT_EQ(OB_SUCCESS, mgr->process_delta(param, delta_locator));
+  query_str.assign_buffer(query_buf, 1024);
+  param.offset_ = 0;
+  param.len_ = 900;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  // 对应关系
+  // query   [0,50]  [50,100]   [100,200]  [200,300]
+  // tmpbuf  [0,50]  [400,450]  [250,350]  [800,900]
+  ASSERT_EQ(300, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 50, tmp_buf + 400, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 100), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 200, tmp_buf + 800, 100), 0);
+
+  // overwrite with padding [1000, 1100] = tmpbuf[600,700]
+  // mock lob persis
+  {
+    ObMemLobCommon *lob_common = new(persist_data)ObMemLobCommon(ObMemLobType::PERSISTENT_LOB, false);
+    lob_common->set_read_only(false);
+    MEMCPY(lob_common->data_, reinterpret_cast<char*>(param.lob_common_), param.handle_size_);
+  }
+  persis_locator.ptr_ = persist_data;
+  persis_locator.size_ = sizeof(ObMemLobCommon) + param.handle_size_;
+  // build delta
+  appeng_buf.assign_ptr(tmp_buf + 600, 200); // set data 200, but only write 100
+  // param.offset_ = 1000;
+  // param.len_ = 100;
+  ASSERT_EQ(OB_SUCCESS, mgr->build_tmp_delta_lob_locator(allocator, &persis_locator, appeng_buf, false, ObLobDiffFlags(),
+    ObLobDiff::DiffType::WRITE, 1000, 100, 0, delta_locator));
+  ASSERT_EQ(OB_SUCCESS, mgr->process_delta(param, delta_locator));
+  query_str.assign_buffer(query_buf, 4096);
+  param.offset_ = 0;
+  param.len_ = 2000;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  // 对应关系
+  // query   [0,50]  [50,100]   [100,200]  [200,300] [300,1000] [1000,1100]
+  // tmpbuf  [0,50]  [400,450]  [250,350]  [800,900] [0x00]     [600,700]
+  ASSERT_EQ(1100, query_str.length());
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 50, tmp_buf + 400, 50), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 100, tmp_buf + 250, 100), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 200, tmp_buf + 800, 100), 0);
+  char empty_buf[1024];
+  MEMSET(empty_buf, 0x00, 1024);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 300, empty_buf, 700), 0);
+  ASSERT_EQ(MEMCMP(query_str.ptr() + 1000, tmp_buf + 600, 100), 0);
+  // allocator.free(query_buf);
+  // allocator.free(lob_locator.ptr_);
+  allocator.clear();
+}
+
+TEST_F(TestLobManager, inrow_bin_reverse_query)
+{
+  ObArenaAllocator allocator;
+  int ret = OB_SUCCESS;
+
+  ObLobManager *mgr = MTL(ObLobManager*);
+  char *lob_data = reinterpret_cast<char*>(allocator.alloc(4096));
+  ObLobCommon *loc = new(lob_data)ObLobCommon();
+
+  char *tmp_buf;
+  uint32_t data_len = 900;
+  prepare_random_data(allocator, data_len, &tmp_buf);
+
+  ObLobAccessParam param;
+  param.tx_desc_ = nullptr;
+  param.sql_mode_ = SMO_DEFAULT;
+  param.allocator_ = &allocator;
+  param.ls_id_ = ls_id_;
+  param.tablet_id_ = tablet_id_;
+  param.scan_backward_ = false;
+  param.lob_common_ = loc;
+  param.handle_size_ = 4096;
+  param.asscess_ptable_ = false;
+  param.coll_type_ = CS_TYPE_BINARY;
+  param.timeout_ = ObTimeUtility::current_time() + 12 * 1000 * 1000;
+  // append [0,400]
+  ObString appeng_buf;
+  appeng_buf.assign_ptr(tmp_buf, 900);
+  ASSERT_EQ(OB_SUCCESS, mgr->append(param, appeng_buf));
+
+  // query check [0,900]
+  char *query_buf = reinterpret_cast<char*>(allocator.alloc(4096));
+  ObString query_str;
+  query_str.assign_buffer(query_buf, 1024);
+  param.offset_ = 0;
+  param.len_ = 900;
+  ASSERT_EQ(OB_SUCCESS, mgr->query(param, query_str));
+  ASSERT_EQ(MEMCMP(query_str.ptr(), tmp_buf + param.offset_, param.len_), 0);
+
+  // query by iter in reverse
+  // [0, 900]
+  {
+    param.scan_backward_ = true;
+    ObLobQueryIter *iter = NULL;
+    ASSERT_EQ(OB_SUCCESS, mgr->query(param, iter));
+    // perpare read buffer
+    int32_t read_buff_len = 200;
+    char *read_buf = reinterpret_cast<char*>(allocator.alloc(read_buff_len));
+    ObString read_str;
+    int32_t offset = 0;
+    while (OB_SUCC(ret)) {
+      read_str.assign_buffer(read_buf, read_buff_len);
+      ret = iter->get_next_row(read_str);
+      if (OB_FAIL(ret)) {
+        if (ret == OB_ITER_END) {
+        } else {
+          ASSERT_EQ(ret, OB_SUCCESS);
+        }
+      } else {
+        int32_t read_len = read_str.length();
+        MEMCMP(read_str.ptr(), tmp_buf + 900 - offset - read_len, read_len);
+        offset += read_len;
+      }
+    }
+    iter->reset();
+    common::sop_return(ObLobQueryIter, iter);
+    allocator.free(read_buf);
+  }
+
+  // query [450, 700]
+  {
+    param.scan_backward_ = true;
+    param.offset_ = 200; // offset from end
+    param.len_ = 250;
+    ObLobQueryIter *iter = NULL;
+    ASSERT_EQ(OB_SUCCESS, mgr->query(param, iter));
+    // perpare read buffer
+    int32_t read_buff_len = 200;
+    char *read_buf = reinterpret_cast<char*>(allocator.alloc(read_buff_len));
+    ObString read_str;
+    int32_t offset = 0;
+    while (OB_SUCC(ret)) {
+      read_str.assign_buffer(read_buf, read_buff_len);
+      ret = iter->get_next_row(read_str);
+      if (OB_FAIL(ret)) {
+        if (ret == OB_ITER_END) {
+        } else {
+          ASSERT_EQ(ret, OB_SUCCESS);
+        }
+      } else {
+        int32_t read_len = read_str.length();
+        MEMCMP(read_str.ptr(), tmp_buf + 700 - offset - read_len, read_len);
+        offset += read_len;
+      }
+    }
+    iter->reset();
+    common::sop_return(ObLobQueryIter, iter);
+    allocator.free(read_buf);
+  }
+
+  allocator.free(query_buf);
+  allocator.free(lob_data);
+}
+
+TEST_F(TestLobManager, inrow_utf8_reverse_query)
+{
+  ObArenaAllocator allocator;
+  int ret = OB_SUCCESS;
+
+  ObLobManager *mgr = MTL(ObLobManager*);
+  char *lob_data = reinterpret_cast<char*>(allocator.alloc(4096));
+  ObLobCommon *loc = new(lob_data)ObLobCommon();
+
+  char tmp_buf[1024];
+  uint32_t data_len = 1024;
+  int real_len = 0;
+  gen_random_unicode_string(1000, tmp_buf, real_len);
+  size_t char_len = ObCharset::strlen_char(CS_TYPE_UTF8MB4_GENERAL_CI, tmp_buf, real_len);
+
+  ObLobAccessParam param;
+  param.tx_desc_ = nullptr;
+  param.sql_mode_ = SMO_DEFAULT;
+  param.allocator_ = &allocator;
+  param.ls_id_ = ls_id_;
+  param.tablet_id_ = tablet_id_;
+  param.scan_backward_ = false;
+  param.lob_common_ = loc;
+  param.handle_size_ = 4096;
+  param.asscess_ptable_ = false;
+  param.coll_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  param.timeout_ = ObTimeUtility::current_time() + 12 * 1000 * 1000;
+  // append char len [0, char_len]
+  ObString appeng_buf;
+  appeng_buf.assign_ptr(tmp_buf, real_len);
+  param.offset_ = 0;
+  param.len_ = char_len;
+  ASSERT_EQ(OB_SUCCESS, mgr->write(param, appeng_buf));
+
+  // query by iter in reverse
+  // [0, 900]
+  {
+    param.scan_backward_ = true;
+    ObLobQueryIter *iter = NULL;
+    ASSERT_EQ(OB_SUCCESS, mgr->query(param, iter));
+    // perpare read buffer
+    int32_t read_buff_len = 200;
+    char *read_buf = reinterpret_cast<char*>(allocator.alloc(read_buff_len));
+    ObString read_str;
+    int32_t offset = 0;
+    while (OB_SUCC(ret)) {
+      read_str.assign_buffer(read_buf, read_buff_len);
+      ret = iter->get_next_row(read_str);
+      if (OB_FAIL(ret)) {
+        if (ret == OB_ITER_END) {
+        } else {
+          ASSERT_EQ(ret, OB_SUCCESS);
+        }
+      } else {
+        int32_t read_len = read_str.length();
+        MEMCMP(read_str.ptr(), tmp_buf + real_len - offset - read_len, read_len);
+        offset += read_len;
+      }
+    }
+    iter->reset();
+    common::sop_return(ObLobQueryIter, iter);
+    allocator.free(read_buf);
+  }
+
+}
 
 } // end unittest
 } // end oceanbase

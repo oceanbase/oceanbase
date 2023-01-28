@@ -18,6 +18,7 @@
 #include "sql/udr/ob_udr_mgr.h"
 #include "observer/ob_server_struct.h"
 #include "pl/sys_package/ob_dbms_user_define_rule.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -141,12 +142,10 @@ int ObCreateRuleProcessor::parse_request_param()
   } else if (lib::is_oracle_mode()) {
     OV (params_.at(0).is_varchar(), OB_INVALID_ARGUMENT);
     OZ (params_.at(0).get_string(arg_.rule_name_));
-    OV (params_.at(1).is_lob_locator(), OB_INVALID_ARGUMENT);
-    OX (arg_.pattern_.assign_ptr(params_.at(1).get_lob_locator()->get_payload_ptr(),
-        static_cast<int64_t>(params_.at(1).get_lob_locator()->get_payload_length())));
-    OV (params_.at(2).is_lob_locator(), OB_INVALID_ARGUMENT);
-    OX (arg_.replacement_.assign_ptr(params_.at(2).get_lob_locator()->get_payload_ptr(),
-        static_cast<int64_t>(params_.at(2).get_lob_locator()->get_payload_length())));
+    OV (params_.at(1).is_lob(), OB_INVALID_ARGUMENT);
+    OZ (sql::ObTextStringHelper::read_real_string_data(&ctx_.get_allocator(), params_.at(1), arg_.pattern_));
+    OV (params_.at(2).is_lob(), OB_INVALID_ARGUMENT);
+    OZ (sql::ObTextStringHelper::read_real_string_data(&ctx_.get_allocator(), params_.at(2), arg_.replacement_));
     OV (params_.at(3).is_varchar(), OB_INVALID_ARGUMENT);
     OZ (params_.at(3).get_string(enabled));
     OX (arg_.db_name_ = session->get_database_name());
@@ -156,9 +155,9 @@ int ObCreateRuleProcessor::parse_request_param()
     OV (params_.at(1).is_varchar(), OB_INVALID_ARGUMENT);
     OZ (params_.at(1).get_string(arg_.db_name_));
     OV (params_.at(2).is_text(), OB_INVALID_ARGUMENT);
-    OZ (params_.at(2).get_string(arg_.pattern_));
+    OZ (sql::ObTextStringHelper::read_real_string_data(&ctx_.get_allocator(), params_.at(2), arg_.pattern_));
     OV (params_.at(3).is_text(), OB_INVALID_ARGUMENT);
-    OZ (params_.at(3).get_string(arg_.replacement_));
+    OZ (sql::ObTextStringHelper::read_real_string_data(&ctx_.get_allocator(), params_.at(3), arg_.replacement_));
     OV (params_.at(4).is_varchar(), OB_INVALID_ARGUMENT);
     OZ (params_.at(4).get_string(enabled));
   }

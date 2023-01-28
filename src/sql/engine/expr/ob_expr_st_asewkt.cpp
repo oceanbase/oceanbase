@@ -88,7 +88,8 @@ int ObExprPrivSTAsEwkt::calc_result_typeN(ObExprResType& type,
 int ObExprPrivSTAsEwkt::eval_priv_st_asewkt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   int num_args = expr.arg_cnt_;
   bool is_null_result = false;
   ObString res_wkt;
@@ -112,22 +113,19 @@ int ObExprPrivSTAsEwkt::eval_priv_st_asewkt(const ObExpr &expr, ObEvalCtx &ctx, 
   } else { /* do nothing */ }
 
   if (OB_SUCC(ret)) {
-    if ((!is_null_result) && OB_FAIL(ObGeoTypeUtil::geo_to_ewkt(gis_datum->get_string(),
-                                                                res_wkt,
-                                                                tmp_allocator,
-                                                                maxdecimaldigits))) {
-      LOG_WARN("eval geo to ewkt failed", K(ret), K(gis_datum->get_string()), K(maxdecimaldigits));
-    } else if (is_null_result) {
+    ObString wkb = gis_datum->get_string();
+    if (is_null_result) {
       res.set_null();
-    } else {
-      char *buf = NULL;
-      if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, res_wkt.length()))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
-      } else {
-        MEMCPY(buf, res_wkt.ptr(), res_wkt.length());
-        res.set_string(buf, res_wkt.length());
-      }
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *gis_datum,
+               expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkb));
+    } else if (OB_FAIL(ObGeoTypeUtil::geo_to_ewkt(wkb,
+                                                  res_wkt,
+                                                  tmp_allocator,
+                                                  maxdecimaldigits))) {
+      LOG_WARN("eval geo to ewkt failed", K(ret), K(wkb), K(maxdecimaldigits));
+    } else if (OB_FAIL(ObGeoExprUtils::pack_geo_res(expr, ctx, res, res_wkt))) {
+      LOG_WARN("fail to pack geo res", K(ret));
     }
   }
 
@@ -140,7 +138,7 @@ int ObExprPrivSTAsEwkt::calc_resultN(common::ObObj &result,
                                      common::ObExprCtx &expr_ctx) const
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator;
+  ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   bool is_null_result = false;
   ObString res_wkt;
   int64_t maxdecimaldigits = DEFAULT_DIGITS_IN_DOUBLE;
@@ -157,23 +155,24 @@ int ObExprPrivSTAsEwkt::calc_resultN(common::ObObj &result,
   } else { /* do nothing */ }
 
   if (OB_SUCC(ret)) {
-    if ((!is_null_result) && OB_FAIL(ObGeoTypeUtil::geo_to_ewkt(objs[0].get_string(),
-                                                                res_wkt,
-                                                                tmp_allocator,
-                                                                maxdecimaldigits))) {
-      LOG_WARN("eval geo to ewkt failed", K(ret), K(objs[0].get_string()), K(maxdecimaldigits));
-    } else if (is_null_result) {
+    ObString wkb = objs[0].get_string();
+    if (is_null_result) {
       result.set_null();
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, objs[0], wkb))) {
+      LOG_WARN("fail to get real data", K(ret), K(objs[0]), K(wkb));
+    } else if (OB_FAIL(ObGeoTypeUtil::geo_to_ewkt(wkb,
+                                                  res_wkt,
+                                                  tmp_allocator,
+                                                  maxdecimaldigits))) {
+      LOG_WARN("eval geo to ewkt failed", K(ret), K(wkb), K(maxdecimaldigits));
     } else {
-      ObIAllocator *allocator = expr_ctx.calc_buf_;
-      char *buf = static_cast<char*>(allocator->alloc(res_wkt.length()));
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
+      ObTextStringObObjResult text_result(ObGeometryType, nullptr, &result, true);
+      if (OB_FAIL(text_result.init(res_wkt.length(), expr_ctx.calc_buf_))) {
+        LOG_WARN("init lob result failed");
+      } else if (OB_FAIL(text_result.append(res_wkt.ptr(), res_wkt.length()))) {
+        LOG_WARN("failed to append realdata", K(ret), K(res_wkt), K(text_result));
       } else {
-        MEMCPY(buf, res_wkt.ptr(), res_wkt.length());
-        result.set_string(ObLongTextType, buf, res_wkt.length());
-        result.set_collation_type(result_type_.get_collation_type());
+        text_result.set_result();
       }
     }
   }

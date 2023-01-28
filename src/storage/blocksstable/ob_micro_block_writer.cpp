@@ -26,6 +26,7 @@ ObMicroBlockWriter::ObMicroBlockWriter()
    rowkey_column_count_(0),
    data_buffer_(0, "MicrBlocWriter", false),
    index_buffer_(0, "MicrBlocWriter", false),
+   col_desc_array_(nullptr),
    need_calc_column_chksum_(false),
    is_inited_(false)
 {
@@ -39,6 +40,7 @@ int ObMicroBlockWriter::init(
     const int64_t micro_block_size_limit,
     const int64_t rowkey_column_count,
     const int64_t column_count/* = 0*/,
+    const common::ObIArray<share::schema::ObColDesc> *col_desc_array /* nullptr */,
     const bool need_calc_column_chksum/* = false*/)
 {
   int ret = OB_SUCCESS;
@@ -51,6 +53,12 @@ int ObMicroBlockWriter::init(
     rowkey_column_count_ = rowkey_column_count;
     column_count_ = column_count;
     need_calc_column_chksum_ = need_calc_column_chksum;
+    need_check_lob_ = false;
+    if (OB_NOT_NULL(col_desc_array_ = col_desc_array)) {
+      for (int64_t i = 0; OB_SUCC(ret) && !need_check_lob_ && i < col_desc_array_->count(); i++) {
+        need_check_lob_ = col_desc_array_->at(i).col_type_.is_lob_storage();
+      }
+    }
     is_inited_ = true;
   }
   return ret;
@@ -90,6 +98,39 @@ int ObMicroBlockWriter::try_to_append_row(const int64_t &row_length)
   return ret;
 }
 
+int ObMicroBlockWriter::process_out_row_columns(const ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+
+  if (!need_check_lob_) {
+  } else if (OB_UNLIKELY(nullptr == col_desc_array_ || row.get_column_count() != col_desc_array_->count())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN ,"unexpected column count not match", K(ret), K(need_check_lob_), K(row), KPC(col_desc_array_));
+  } else if (!has_lob_out_row_) {
+    for (int64_t i = 0; !has_lob_out_row_ && OB_SUCC(ret) && i < row.get_column_count(); ++i) {
+      ObStorageDatum &datum = row.storage_datums_[i];
+      if (col_desc_array_->at(i).col_type_.is_lob_storage()) {
+        if (datum.is_nop() || datum.is_null()) {
+        } else if (datum.len_ < sizeof(ObLobCommon)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "Unexpected lob datum len", K(ret), K(i), K(col_desc_array_->at(i).col_type_), K(datum));
+        } else {
+          const ObLobCommon &lob_common = datum.get_lob_data();
+          has_lob_out_row_ = !lob_common.in_row_;
+          STORAGE_LOG(DEBUG, "chaser debug lob out row", K(has_lob_out_row_), K(lob_common), K(datum));
+        }
+      }
+    }
+  }
+  // uncomment this after varchar overflow supported
+  //} else if (need_check_string_out) {
+  //  if (!has_string_out_row_ && row.storage_datums_[i].is_outrow()) {
+  //    has_string_out_row_ = true;
+  //   }
+  //}
+  return ret;
+}
+
 int ObMicroBlockWriter::append_row(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
@@ -102,6 +143,8 @@ int ObMicroBlockWriter::append_row(const ObDatumRow &row)
     STORAGE_LOG(WARN, "row was invalid", K(row), K(ret));
   } else if (OB_FAIL(inner_init())) {
     STORAGE_LOG(WARN, "failed to inner init", K(ret));
+  } else if (OB_FAIL(process_out_row_columns(row))) {
+    STORAGE_LOG(WARN, "Failed to process out row columns", K(ret), K(row));
   } else {
     if (OB_UNLIKELY(row.get_column_count() != header_->column_count_)) {
       ret = OB_INVALID_ARGUMENT;
@@ -153,6 +196,8 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
     header_->row_index_offset_ = static_cast<int32_t>(data_buffer_.length());
     header_->contain_uncommitted_rows_ = contain_uncommitted_row_;
     header_->max_merged_trans_version_ = max_merged_trans_version_;
+    header_->has_string_out_row_ = has_string_out_row_;
+    header_->all_lob_in_row_ = !has_lob_out_row_;
     header_->is_last_row_last_flag_ = is_last_row_last_flag_;
     if (data_buffer_.remain() < get_index_size()) {
       ret = OB_SIZE_OVERFLOW;
@@ -205,6 +250,7 @@ void ObMicroBlockWriter::reset()
   header_ = nullptr;
   data_buffer_.reset();
   index_buffer_.reset();
+  col_desc_array_ = nullptr;
   is_inited_ = false;
 }
 

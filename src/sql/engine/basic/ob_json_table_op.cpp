@@ -934,11 +934,14 @@ int JtFuncHelpler::cast_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNode& c
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected dst_type", K(dst_type));
-      int tmp_ret = set_error_val(ctx, col_node, ret);
-      if (tmp_ret != OB_SUCCESS) {
-        LOG_WARN("failed to set error val.", K(tmp_ret));
-      }
       break;
+    }
+  }
+
+  if (OB_SUCC(ret) && is_lob_storage(dst_type)) {
+    ObString val = res.get_string();
+    if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*expr, *ctx->eval_ctx_, res, val, &ctx->row_alloc_))) {
+      LOG_WARN("fail to pack res result.", K(ret));
     }
   }
   LOG_DEBUG("finish cast_to_res.", K(ret), K(dst_type));
@@ -982,7 +985,8 @@ int JtFuncHelpler::set_error_val(JtScanCtx* ctx, JtColNode& col_node, int& ret)
                                                                           default_expr->datum_meta_.type_,
                                                                           &ctx->row_alloc_,
                                                                           default_expr->datum_meta_.cs_type_,
-                                                                          col_node.err_val_, false))) {
+                                                                          col_node.err_val_, false,
+                                                                          default_expr->obj_meta_.has_lob_header()))) {
               LOG_WARN("failed: parse value to jsonBase", K(tmp_ret));
             }
           } else if (OB_SUCCESS != (tmp_ret = ObJsonExprHelper::transform_scalar_2jsonBase(datum,
@@ -1420,7 +1424,8 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
                                                                             default_expr->datum_meta_.type_,
                                                                             &ctx->row_alloc_,
                                                                             default_expr->datum_meta_.cs_type_,
-                                                                            err_val_, false))) {
+                                                                            err_val_, false,
+                                                                            default_expr->obj_meta_.has_lob_header()))) {
                 LOG_WARN("failed: parse value to jsonBase", K(ret));
               } else {
                 curr_ = iter_ = err_val_;
@@ -1463,7 +1468,8 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
                                                                           default_expr->datum_meta_.type_,
                                                                           &ctx->row_alloc_,
                                                                           default_expr->datum_meta_.cs_type_,
-                                                                          emp_val_, false))) {
+                                                                          emp_val_, false,
+                                                                          default_expr->obj_meta_.has_lob_header()))) {
               LOG_WARN("failed: parse value to jsonBase", K(ret));
             }
           } else if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(datum,
@@ -2650,38 +2656,41 @@ int ObJsonTableOp::inner_get_next_row()
     clear_evaluated_flag();
     reset_columns();
     if (OB_FAIL(jt_root_->get_next_row(in_, &jt_ctx_, is_root_null))) {
-      LOG_WARN("failed to open get next row.", K(ret));
+      if (ret != OB_ITER_END) {
+        LOG_WARN("failed to open get next row.", K(ret));
+      }
     }
   } else {
     clear_evaluated_flag();
-    ObDatum *value = nullptr;
-    if (OB_FAIL(MY_SPEC.value_expr_->eval(eval_ctx_, value))) {
-      LOG_WARN("failed to eval value expr", K(ret));
-    } else if (value->is_null()) {
+    common::ObObjMeta& doc_obj_datum = MY_SPEC.value_expr_->obj_meta_;
+    ObDatumMeta& doc_datum = MY_SPEC.value_expr_->datum_meta_;
+    ObObjType doc_type = doc_datum.type_;
+    ObCollationType doc_cs_type = doc_datum.cs_type_;
+    ObString j_str;
+    bool is_null = false;
+
+    if (doc_type == ObNullType) {
       ret = OB_ITER_END;
+    } else if (doc_type == ObNCharType || !(doc_type == ObJsonType || ob_is_string_type(doc_type))) {
+      ret = OB_ERR_INPUT_JSON_TABLE;
+      LOG_WARN("fail to get json base", K(ret), K(doc_type));
     } else {
       reset_columns();
-
-      ObObjType doc_type = MY_SPEC.value_expr_->datum_meta_.type_;
-      ObCollationType doc_cs_type = MY_SPEC.value_expr_->datum_meta_.cs_type_;
-
-      ObString j_str;
-      if (doc_type == ObLobType) {
-        const ObLobLocator& lob_locator = value->get_lob_locator();
-        j_str.assign_ptr(lob_locator.get_payload_ptr(), lob_locator.get_payload_length());
-      } else {
-        j_str = value->get_string();
-      }
-      if ((ob_is_string_type(doc_type))
-          && (doc_cs_type != CS_TYPE_BINARY)
-          && (ObCharset::charset_type_by_coll(doc_cs_type) != CHARSET_UTF8MB4)) {
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(MY_SPEC.value_expr_,eval_ctx_,
+                                                         jt_ctx_.row_alloc_, j_str, is_null))) {
+        LOG_WARN("get real data failed", K(ret));
+      } else if (is_null) {
+        ret = OB_ITER_END;
+      } else if ((ob_is_string_type(doc_type) || doc_type == ObLobType)
+                  && (doc_cs_type != CS_TYPE_BINARY)
+                  && (ObCharset::charset_type_by_coll(doc_cs_type) != CHARSET_UTF8MB4)) {
         // need convert to utf8 first, we are using GenericInsituStringStream<UTF8<> >
-        char *buf = NULL;
+        char *buf = nullptr;
         const int64_t factor = 2;
-        int64_t buf_len = value->get_string().length() * factor;
+        int64_t buf_len = j_str.length() * factor;
         uint32_t result_len = 0;
-        buf = reinterpret_cast<char*>(jt_ctx_.row_alloc_.alloc(buf_len));
-        if (OB_ISNULL(buf)) {
+
+        if (OB_ISNULL(buf = static_cast<char*>(jt_ctx_.row_alloc_.alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc memory failed", K(ret));
         } else if (OB_FAIL(ObCharset::charset_convert(doc_cs_type, j_str.ptr(),
@@ -2702,10 +2711,6 @@ int ObJsonTableOp::inner_get_next_row()
       bool is_ensure_json = (doc_type == ObJsonType);
 
       if (OB_FAIL(ret)) {
-      } else if (!((doc_type == ObLobType || doc_type == ObJsonType || ob_is_string_type(doc_type))
-                  && doc_type != ObNCharType)) {
-        ret = OB_ERR_INPUT_JSON_TABLE;
-        LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&jt_ctx_.row_alloc_, j_str, j_in_type, expect_type, in_, parse_flag))
                  || (in_->json_type() != ObJsonNodeType::J_ARRAY && in_->json_type() != ObJsonNodeType::J_OBJECT)) {
         if (OB_FAIL(ret) || (!is_ensure_json)) {

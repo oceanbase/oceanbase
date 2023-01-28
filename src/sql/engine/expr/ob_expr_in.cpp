@@ -836,11 +836,13 @@ int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator &allocator,
       ObObjType left_type = rt_expr.args_[0]->datum_meta_.type_;
       ObCollationType left_cs = rt_expr.args_[0]->datum_meta_.cs_type_;
       ObObjType right_type = rt_expr.args_[1]->args_[0]->datum_meta_.type_;
+      const bool has_lob_header = rt_expr.args_[0]->obj_meta_.has_lob_header() ||
+                                  rt_expr.args_[1]->args_[0]->obj_meta_.has_lob_header();
       ObScale scale1 = rt_expr.args_[0]->datum_meta_.scale_;
       ObScale scale2 = rt_expr.args_[1]->datum_meta_.scale_;
       rt_expr.inner_functions_ = func_buf;
       DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-          left_type, right_type, scale1, scale2, lib::is_oracle_mode(), left_cs);
+          left_type, right_type, scale1, scale2, lib::is_oracle_mode(), left_cs, has_lob_header);
       for (int i = 0; i < rt_expr.inner_func_cnt_; i++) {
         rt_expr.inner_functions_[i] = (void *)func_ptr;
       }
@@ -882,6 +884,7 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
     ObSEArray<ObObjType, 8> left_types;
     ObSEArray<ObCollationType, 8> left_cs_arr;
     ObSEArray<ObObjType, 8> right_types;
+    ObSEArray<bool, 8> has_lob_headers;
     ObSEArray<ObScale, 8> left_scales;
     ObSEArray<ObScale, 8> right_scales;
 
@@ -899,6 +902,9 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
       } else if (OB_FAIL(left_cs_arr.push_back(
                            LEFT_ROW_ELE(i)->datum_meta_.cs_type_))) {
         LOG_WARN("failed to push back element", K(ret));
+      } else if (OB_FAIL(has_lob_headers.push_back(
+                         LEFT_ROW_ELE(i)->obj_meta_.has_lob_header()))) {
+        LOG_WARN("failed to push back element", K(ret));
       } else if (OB_FAIL(left_scales.push_back(LEFT_ROW_ELE(i)->datum_meta_.scale_))) {
         LOG_WARN("failed to push back element", K(ret));
       } else { /* do nothing */ }
@@ -909,6 +915,8 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
         LOG_WARN("failed to push back element", K(ret));
       } else if (OB_FAIL(right_scales.push_back(RIGHT_ROW_ELE(0, i)->datum_meta_.scale_))) {
         LOG_WARN("failed to push back element", K(ret));
+      } else {
+        has_lob_headers.at(i) = has_lob_headers.at(i) || (RIGHT_ROW_ELE(0, i)->obj_meta_.has_lob_header());
       }
     }
     if (OB_SUCC(ret)) {
@@ -922,7 +930,7 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
         for (int i = 0; i < left_types.count(); i++) {
           DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
               left_types.at(i), right_types.at(i), left_scales.at(i), right_scales.at(i),
-              lib::is_oracle_mode(), left_cs_arr.at(i));
+              lib::is_oracle_mode(), left_cs_arr.at(i), has_lob_headers.at(i));
           func_buf[i] = (void *)func_ptr;
         }  // end for
         if (!is_param_all_const()) {
@@ -984,6 +992,7 @@ int ObExprInOrNotIn::cg_expr_with_subquery(common::ObIAllocator &allocator,
       for (int64_t i = 0; OB_SUCC(ret) && i < rt_expr.inner_func_cnt_; i++) {
         auto &l = left_types.at(i);
         auto &r = RIGHT_ROW_ELE(0, i)->obj_meta_;
+        bool has_lob_header = l.has_lob_header() || r.has_lob_header();
         if (ObDatumFuncs::is_string_type(l.get_type())
             && ObDatumFuncs::is_string_type(r.get_type())) {
           CK(l.get_collation_type() == r.get_collation_type());
@@ -991,7 +1000,7 @@ int ObExprInOrNotIn::cg_expr_with_subquery(common::ObIAllocator &allocator,
         if (OB_SUCC(ret)) {
           funcs[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
               l.get_type(), r.get_type(), l.get_scale(), r.get_scale(),
-              lib::is_oracle_mode(), l.get_collation_type());
+              lib::is_oracle_mode(), l.get_collation_type(), has_lob_header);
           CK(NULL != funcs[i]);
         }
       }

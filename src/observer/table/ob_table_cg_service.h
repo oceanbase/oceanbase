@@ -110,6 +110,10 @@ private:
   static int generate_column_ref_raw_expr(ObTableCtx &ctx,
                                           const ObColumnSchemaV2 &col_schema,
                                           sql::ObColumnRefRawExpr *&col_ref_expr);
+  static int write_datum(common::ObIAllocator &allocator,
+                         const sql::ObExpr &expr,
+                         sql::ObEvalCtx &eval_ctx,
+                         const ObObj &obj);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableExprCgService);
 };

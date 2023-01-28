@@ -920,7 +920,7 @@ int ObIndexBuildTask::check_need_acquire_lob_snapshot(const ObTableSchema *data_
             if (OB_ISNULL(data_table_col)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("column schema is null", K(ret));
-            } else if (is_lob_v2(data_table_col->get_data_type())) {
+            } else if (is_lob_storage(data_table_col->get_data_type())) {
               need_acquire = true;
             }
           }

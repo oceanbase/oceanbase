@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -240,20 +241,45 @@ int ObExprTimeFormat::calc_time_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (OB_UNLIKELY(format->get_string().empty())) {
     expr_datum.set_null();
   } else if (FALSE_IT(buf_len = format->get_string().length() * OB_TEMPORAL_BUF_SIZE_RATIO)) {
-  } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("no more memory to alloc for buf", K(ret), K(buf_len));
-  } else if (OB_FAIL(time_to_str_format(time->get_time(),
-                                        format->get_string(),
-                                        buf,
-                                        buf_len,
-                                        pos,
-                                        res_null))) {
-    LOG_WARN("failed to convert ob time to str with format");
-  } else if (res_null) {
-    expr_datum.set_null();
-  } else {
-    expr_datum.set_string(buf, static_cast<int32_t>(pos));
+  } else if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+    if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("no more memory to alloc for buf", K(ret), K(buf_len));
+    } else if (OB_FAIL(time_to_str_format(time->get_time(),
+                                          format->get_string(),
+                                          buf,
+                                          buf_len,
+                                          pos,
+                                          res_null))) {
+      LOG_WARN("failed to convert ob time to str with format");
+    } else if (res_null) {
+      expr_datum.set_null();
+    } else {
+      expr_datum.set_string(buf, static_cast<int32_t>(pos));
+    }
+  } else { // text tc
+    ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+    if (OB_FAIL(output_result.init(buf_len))) {
+      LOG_WARN("init lob result failed", K(ret), K(buf_len));
+    } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_len))) {
+      LOG_WARN("get reserved buffer for blob failed", K(ret), K(buf_len));
+    } else if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("no more memory to alloc for buf", K(ret), K(buf_len));
+    } else if (OB_FAIL(time_to_str_format(time->get_time(),
+                                          format->get_string(),
+                                          buf,
+                                          buf_len,
+                                          pos,
+                                          res_null))) {
+      LOG_WARN("failed to convert ob time to lob str with format");
+    } else if (res_null) {
+      expr_datum.set_null();
+    } else if (OB_FAIL(output_result.lseek(pos, 0))){
+      LOG_WARN("lseek text or string result failed", K(ret), K(pos));
+    } else {
+      output_result.set_result();
+    }
   }
   return ret;
 }

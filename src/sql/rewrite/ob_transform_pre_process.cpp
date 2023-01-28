@@ -6427,7 +6427,8 @@ int ObTransformPreProcess::add_rowid_constraint(ObDMLStmt &stmt)
                                          exec_ctx->get_my_session(),
                                          exec_ctx->get_sql_ctx()->schema_guard_,
                                          plan_ctx->get_original_param_cnt(),
-                                         plan_ctx->get_datum_param_store().count());
+                                         plan_ctx->get_datum_param_store().count(),
+                                         exec_ctx->get_min_cluster_version());
             rowid_cons->expect_result_ = PreCalcExprExpectResult::PRE_CALC_ROWID;
             if (OB_FAIL(expr_cg.generate_calculable_expr(const_expr,
                                                          rowid_cons->pre_calc_expr_info_))) {

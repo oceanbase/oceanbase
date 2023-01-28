@@ -16,6 +16,7 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "common/row/ob_row.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
@@ -1430,8 +1431,27 @@ int ObTableQueryResult::add_row(const ObNewRow &row)
   }
   for (int i = 0; OB_SUCCESS == ret && i < N; ++i)
   {
-    if (OB_FAIL(row.get_cell(i).serialize(buf_.get_data(), buf_.get_capacity(), buf_.get_position()))) {
-      LOG_WARN("failed to serialize obj", K(ret), K_(buf));
+    // Output of TableApi does not have lob locator header, remove lob header before serialize.
+    // Functions defined by DEF_TEXT_SERIALIZE_FUNCS is called here, refer to ob_obj_funcs.h
+    ObObjType type = row.get_cell(i).get_type();
+    if (is_lob_storage(type)) {
+      ObObj tmp_obj = row.get_cell(i);
+      ObString read_data;
+      if (tmp_obj.has_lob_header()) {
+        if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, tmp_obj, read_data))) {
+            LOG_WARN("failed to get obj", K(ret), K_(buf));
+        } else {
+          tmp_obj.set_lob_value(type, read_data.ptr(), read_data.length());
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tmp_obj.serialize(buf_.get_data(), buf_.get_capacity(), buf_.get_position()))) {
+        LOG_WARN("failed to serialize obj", K(ret), K_(buf));
+      }
+    } else {
+      if (OB_FAIL(row.get_cell(i).serialize(buf_.get_data(), buf_.get_capacity(), buf_.get_position()))) {
+        LOG_WARN("failed to serialize obj", K(ret), K_(buf));
+      }
     }
   } // end for
   if (OB_SUCC(ret)) {

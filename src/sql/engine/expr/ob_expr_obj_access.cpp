@@ -16,6 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/ob_spi.h"
 #include "pl/ob_pl.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -359,6 +360,9 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
                 expr.arg_cnt_));
 
   OZ(expr_datum.from_obj(result, expr.obj_datum_map_));
+  if (is_lob_storage(result.get_type())) {
+    OZ (ob_adjust_lob_datum(result, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), expr_datum));
+  }
   return ret;
 }
 

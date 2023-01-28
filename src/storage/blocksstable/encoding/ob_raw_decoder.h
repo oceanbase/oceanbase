@@ -57,7 +57,7 @@ public:
   static const ObColumnHeader::Type type_ = ObColumnHeader::RAW;
 
   ObRawDecoder()
-    : store_class_(ObExtendSC), integer_mask_(0), meta_data_(nullptr), is_out_row_column_(false) {}
+    : store_class_(ObExtendSC), integer_mask_(0), meta_data_(nullptr) {}
   virtual ~ObRawDecoder() {}
 
   OB_INLINE int init(
@@ -90,7 +90,6 @@ public:
   virtual ObColumnHeader::Type get_type() const override { return type_; }
 
   bool is_inited() const { return NULL != meta_data_; }
-  virtual bool can_vectorized() const override { return !is_out_row_column_; }
   virtual int batch_decode(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
@@ -185,7 +184,6 @@ private:
   ObObjTypeStoreClass store_class_;
   uint64_t integer_mask_;
   const char *meta_data_;
-  bool is_out_row_column_;
 };
 
 template <typename Header>
@@ -319,7 +317,7 @@ OB_INLINE int ObRawDecoder::init(
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "init twice", K(ret));
   } else {
-    const ObObjType store_type = column_header.is_out_row() ? ObVarcharType : column_header.get_store_obj_type();
+    const ObObjType store_type = column_header.get_store_obj_type();
     const common::ObObjTypeClass type_class = ob_obj_type_class(store_type);
     store_class_ = get_store_class_map()[type_class];
     if (common::ObIntTC == type_class) {
@@ -329,7 +327,6 @@ OB_INLINE int ObRawDecoder::init(
       integer_mask_ = 0;
     }
     meta_data_ = meta + column_header.offset_;
-    is_out_row_column_ = column_header.is_out_row();
   }
   return ret;
 }

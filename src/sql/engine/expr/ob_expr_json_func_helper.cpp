@@ -46,6 +46,26 @@ int ObJsonExprHelper::ensure_collation(ObObjType type, ObCollationType cs_type)
   return ret;
 }
 
+int ObJsonExprHelper::get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
+                                           common::ObArenaAllocator &allocator,
+                                           ObString& str, bool& is_null)
+{
+  INIT_SUCC(ret);
+  ObDatum *json_datum = NULL;
+  ObObjType val_type = expr->datum_meta_.type_;
+  if (OB_UNLIKELY(OB_FAIL(expr->eval(ctx, json_datum)))) {
+    LOG_WARN("eval json arg failed", K(ret));
+  } else if (json_datum->is_null() || val_type == ObNullType) {
+    is_null = true;
+  } else if (val_type != ObExtendType && val_type != ObJsonType && !ob_is_string_type(val_type)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("input type error", K(val_type));
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *json_datum,
+                expr->datum_meta_, expr->obj_meta_.has_lob_header(), str))) {
+    LOG_WARN("fail to get real data.", K(ret), K(str));
+  }
+  return ret;
+}
 int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
                                    common::ObArenaAllocator &allocator,
                                    uint16_t index, ObIJsonBase*& j_base,
@@ -69,25 +89,11 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
   } else if (lib::is_mysql_mode() && OB_FAIL(ObJsonExprHelper::ensure_collation(val_type, cs_type))) {
     LOG_WARN("fail to ensure collation", K(ret), K(val_type), K(cs_type));
   } else {
-    ObString j_str = json_datum->get_string();
-    if (val_type == ObLongTextType && cs_type == CS_TYPE_BINARY) {
-      const ObObjMeta obj_meta = json_arg->obj_meta_;
-      ObObj tmp_result;
-      ObObj obj;
-      ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, CS_TYPE_INVALID);
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(json_datum->to_obj(obj, obj_meta))) {
-        LOG_WARN("data to obj fail", K(ret));
-      }
-      if (OB_SUCC(ret) && is_oracle && ObJsonExprHelper::is_cs_type_bin(cs_type)) {
-        if (OB_FAIL(ObHexUtils::rawtohex(obj, cast_ctx, tmp_result))) {
-          LOG_WARN("fail to check json syntax", K(ret), K(val_type));
-        } else {
-          j_str = tmp_result.get_string();
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
+    ObString j_str;
+    if (OB_FAIL(get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (is_null) {
+    } else {
       ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
       ObJsonInType expect_type = need_to_tree ? ObJsonInType::JSON_TREE : j_in_type;
       bool relax_json = (lib::is_oracle_mode() && relax);
@@ -97,49 +103,13 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
                                                   expect_type, j_base, parse_flag))) {
         LOG_WARN("fail to get json base", K(ret), K(j_in_type));
-        if (is_oracle && ObJsonExprHelper::is_cs_type_bin(cs_type)) {
-          ObString j_str = json_datum->get_string();
-          if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
-                                                  expect_type, j_base, parse_flag))) {
-            ret = OB_ERR_JSON_SYNTAX_ERROR;
-          }
-        } else if (is_oracle) {
+        if (is_oracle) {
           ret = OB_ERR_JSON_SYNTAX_ERROR;
         } else {
           ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
         }
       }
-    }
-  }
-  return ret;
-}
-
-int ObJsonExprHelper::get_json_doc(const ObObj *objs, common::ObIAllocator *allocator,
-                                   uint16_t index, ObIJsonBase*& j_base,
-                                   bool &is_null, bool need_to_tree)
-{
-  INIT_SUCC(ret);
-  ObObjType val_type = objs[index].get_type();
-  ObCollationType cs_type = objs[index].get_collation_type();
-
-  if (objs[index].is_null() || val_type == ObNullType) {
-    is_null = true;
-  } else if (val_type != ObJsonType && !ob_is_string_type(val_type)) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_WARN("input type error", K(val_type));
-  } else if (lib::is_mysql_mode() && OB_FAIL(ObJsonExprHelper::ensure_collation(val_type, cs_type))) {
-    LOG_WARN("fail to ensure collation", K(ret), K(val_type), K(cs_type));
-  } else {
-    ObString j_str = objs[index].get_string();
-    ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
-    ObJsonInType expect_type = need_to_tree ? ObJsonInType::JSON_TREE : j_in_type;
-    uint32_t parse_flag = lib::is_oracle_mode() ? ObJsonParser::JSN_RELAXED_FLAG : 0;
-    if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
-                                                 expect_type, j_base, parse_flag))) {
-      LOG_WARN("fail to get json base", K(ret), K(j_in_type));
-      ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
-      LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
     }
   }
   return ret;
@@ -184,7 +154,8 @@ int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExprCtx &ctx,
   } else if (ObJsonExprHelper::is_convertible_to_json(val_type)) {
     ObCollationType cs_type = data.get_collation_type();
     if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(data, val_type, allocator,
-                                                                  cs_type, j_base, to_bin))) {
+                                                                  cs_type, j_base, to_bin,
+                                                                  data.has_lob_header(), false))) {
       LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
     }
   } else {
@@ -269,7 +240,9 @@ int ObJsonExprHelper::get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
     ObCollationType cs_type = json_arg->datum_meta_.cs_type_;
     if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(*json_datum, val_type,
                                                                   allocator, cs_type,
-                                                                  j_base, to_bin, false,
+                                                                  j_base, to_bin,
+                                                                  json_arg->obj_meta_.has_lob_header(),
+                                                                  false,
                                                                   HAS_FLAG(parse_flag, ObJsonParser::JSN_RELAXED_FLAG),
                                                                   format_json))) {
       LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
@@ -1059,6 +1032,7 @@ int ObJsonExprHelper::transform_convertible_2String(const ObExpr &expr,
                                                     ObObjType type,
                                                     ObCollationType cs_type,
                                                     ObJsonBuffer &j_buf,
+                                                    bool has_lob_header,
                                                     bool format_json,
                                                     bool strict_json,
                                                     int32_t pos)
@@ -1148,8 +1122,13 @@ int ObJsonExprHelper::transform_convertible_2String(const ObExpr &expr,
       } else {
         value = datum.get_string();
       }
-      if (OB_SUCC(ret) && lib::is_oracle_mode() && ObJsonExprHelper::is_cs_type_bin(cs_type) && !format_json) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, type,
+                          cs_type, has_lob_header, value))) {
+        LOG_WARN("fail to get real data.", K(ret), K(value));
+      } else if (lib::is_oracle_mode() && ObJsonExprHelper::is_cs_type_bin(cs_type) && !format_json) {
         is_bin = true;
+        obj.set_string(type, value);
         if (OB_FAIL(ObHexUtils::rawtohex(obj, cast_ctx, tmp_result))) {
           LOG_WARN("fail to check json syntax", K(ret), K(type));
         } else {
@@ -1190,7 +1169,9 @@ int ObJsonExprHelper::transform_convertible_2String(const ObExpr &expr,
       ObIJsonBase* json_node = NULL;
       ObString j_str;
       j_str = datum.get_string();
-      if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN,
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, type, cs_type, has_lob_header, j_str))) {
+        LOG_WARN("fail to get real data.", K(ret), K(j_str));
+      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN,
                                                    ObJsonInType::JSON_BIN, json_node))) {
         ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
         LOG_WARN("fail to get json base", K(ret));
@@ -1215,6 +1196,7 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
                                                       ObCollationType cs_type,
                                                       ObIJsonBase*& j_base,
                                                       bool to_bin,
+                                                      bool has_lob_header,
                                                       bool deep_copy,
                                                       bool relax_type,
                                                       bool format_json)
@@ -1248,6 +1230,9 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
         ret = deep_copy_ob_string(*allocator, datum.get_string(), j_str);
       } else {
         j_str = datum.get_string();
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, type, cs_type, has_lob_header, j_str))) {
+          LOG_WARN("fail to get real data.", K(ret), K(j_str));
+        }
       }
 
       if (OB_SUCC(ret)) {
@@ -1281,9 +1266,15 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
       ObString j_str;
       if (deep_copy) {
         if (OB_FAIL(deep_copy_ob_string(*allocator, datum.get_string(), j_str))) {
+          LOG_WARN("do deep copy failed", K(ret));
         }
       } else {
         j_str = datum.get_string();
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, type, cs_type, has_lob_header, j_str))) {
+          LOG_WARN("fail to get real data.", K(ret), K(j_str));
+        }
       }
       if (OB_SUCC(ret)) {
         ObJsonInType to_type = to_bin ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
@@ -1313,6 +1304,21 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
     }
   }
 
+  return ret;
+}
+
+template <typename T>
+int ObJsonExprHelper::pack_json_str_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, T &str, common::ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+  if (OB_FAIL(text_result.init(str.length(), allocator))) {
+    LOG_WARN("init lob result failed");
+  } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
+    LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
+  } else {
+    text_result.set_result();
+  }
   return ret;
 }
 

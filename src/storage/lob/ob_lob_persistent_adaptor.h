@@ -114,10 +114,16 @@ private:
       const ObTabletHandle& data_tablet,
       const ObTabletHandle& lob_piece_tablet);
 
+  int prepare_lob_meta_dml(
+      ObLobAccessParam& param,
+      const uint64_t tenant_id,
+      const ObTabletHandle& data_tablet,
+      const ObTabletHandle& lob_meta_tablet);
+
   int build_lob_meta_table_dml(
       ObLobAccessParam& param,
       const uint64_t tenant_id,
-      ObTableDMLParam& dml_param,
+      ObTableDMLParam* dml_param,
       ObDMLBaseParam& dml_base_param,
       ObSEArray<uint64_t, 6>& column_ids,
       const ObTabletHandle& data_tablet,

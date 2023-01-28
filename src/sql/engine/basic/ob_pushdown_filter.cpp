@@ -18,6 +18,7 @@
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -1078,9 +1079,13 @@ int ObBlackFilterExecutor::filter(ObObj *objs, int64_t col_cnt, bool &filtered)
     ObEvalCtx &eval_ctx = op_.get_eval_ctx();
     for (int64_t i = 0; OB_SUCC(ret) && i < filter_.column_exprs_.count(); ++i) {
       filter_.column_exprs_.at(i)->get_eval_info(eval_ctx).projected_ = true;
-      ObDatum &expr_datum = filter_.column_exprs_.at(i)->locate_datum_for_write(eval_ctx);
+      ObExpr * const &expr = filter_.column_exprs_.at(i);
+      ObDatum &expr_datum = expr->locate_datum_for_write(eval_ctx);
       if (OB_FAIL(expr_datum.from_obj(objs[i]))) {
         LOG_WARN("Failed to convert object from datum", K(ret), K(objs[i]));
+      } else if (is_lob_storage(objs[i].get_type()) &&
+                 OB_FAIL(ob_adjust_lob_datum(objs[i], expr->obj_meta_, allocator_, expr_datum))) {
+        LOG_WARN("adjust lob datum failed", K(ret), K(objs[i]), K(expr->obj_meta_));
       }
     }
     if (OB_SUCC(ret) && OB_FAIL(filter(eval_ctx, filtered))) {

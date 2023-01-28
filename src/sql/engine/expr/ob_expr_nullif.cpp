@@ -23,6 +23,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -126,6 +127,14 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
     if (OB_SUCC(ret)) {
       type.set_calc_meta(cmp_type.get_calc_meta());
       type.set_calc_accuracy(cmp_type.get_calc_accuracy());
+      if (ob_is_string_type(type1.get_type())
+          && ob_is_string_type(type2.get_type())
+          && ob_obj_type_class(type1.get_type()) != ob_obj_type_class(type2.get_type())
+          && ob_enable_lob_locator_v2()) {
+        // strings and texts cannot compare directly in 4.1
+        type1.set_calc_type(type.get_calc_meta().get_type());
+        type2.set_calc_type(type.get_calc_meta().get_type());
+      }
     }
   }
   return ret;
@@ -197,13 +206,16 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
       if (!cmp_meta.is_null()) {
         DatumCmpFunc cmp_func = NULL;
         if (rt_expr.args_[0]->datum_meta_.cs_type_ == rt_expr.args_[1]->datum_meta_.cs_type_) {
+          bool has_lob_header = rt_expr.args_[0]->obj_meta_.has_lob_header() ||
+                                rt_expr.args_[1]->obj_meta_.has_lob_header();
           cmp_func = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                             rt_expr.args_[0]->datum_meta_.type_,
                                                             rt_expr.args_[1]->datum_meta_.type_,
                                                             rt_expr.args_[0]->datum_meta_.scale_,
                                                             rt_expr.args_[1]->datum_meta_.scale_,
                                                             lib::is_oracle_mode(),
-                                                            rt_expr.args_[0]->datum_meta_.cs_type_);
+                                                            rt_expr.args_[0]->datum_meta_.cs_type_,
+                                                            has_lob_header);
         }
         if (NULL != cmp_func) {
           rt_expr.inner_func_cnt_ = 1;
@@ -218,7 +230,8 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                                             cmp_meta.get_scale(),
                                                             cmp_meta.get_scale(),
                                                             lib::is_oracle_mode(),
-                                                            cmp_meta.get_collation_type()))){
+                                                            cmp_meta.get_collation_type(),
+                                                            cmp_meta.has_lob_header()))){
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("cmp func is null", K(ret), K(cmp_meta));
           } else {

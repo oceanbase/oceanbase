@@ -289,13 +289,6 @@ int ObMicroBlockHeader::deserialize(const char *buf, int64_t buf_len, int64_t &p
   return ret;
 }
 
-bool ObMicroBlockHeader::has_out_row_column() const
-{
-  return row_store_type_ == common::FLAT_ROW_STORE
-      ? flat_has_out_row_column_
-      : encoding_has_out_row_column_;
-}
-
 bool ObMicroBlockHeader::is_contain_hash_index() const
 {
   return version_ >= MICRO_BLOCK_HEADER_VERSION_2 && contains_hash_index_ == 1;

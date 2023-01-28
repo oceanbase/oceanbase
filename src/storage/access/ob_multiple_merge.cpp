@@ -25,6 +25,8 @@
 #include "sql/engine/ob_operator.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "share/ob_lob_access_utils.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
@@ -61,7 +63,6 @@ ObMultipleMerge::ObMultipleMerge()
       block_row_store_(nullptr),
       out_project_cols_(),
       lob_reader_(),
-      has_lob_column_(false),
       scan_state_(ScanState::NONE)
 {
 }
@@ -149,6 +150,8 @@ int ObMultipleMerge::init(
         for (int64_t i = 0; OB_SUCC(ret) && i < param.iter_param_.out_cols_project_->count(); i++) {
           if (OB_FAIL(out_project_cols_.push_back(read_info->get_columns_desc().at(param.iter_param_.out_cols_project_->at(i))))) {
             STORAGE_LOG(WARN, "Failed to push back col desc", K(ret));
+          } else if (out_project_cols_.at(i).col_type_.is_lob_storage()) {
+            out_project_cols_.at(i).col_type_.set_has_lob_header();
           }
         }
       }
@@ -309,9 +312,11 @@ int ObMultipleMerge::project2output_exprs(ObDatumRow &unprojected_row, ObDatumRo
 int ObMultipleMerge::get_next_row(ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
+  bool not_using_static_engine = false;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The ObMultipleMerge has not been inited, ", K(ret));
+  } else if (FALSE_IT(not_using_static_engine = (nullptr == access_param_->output_exprs_))) {
   } else if (access_param_->iter_param_.enable_pd_aggregate()) {
     ret = get_next_aggregate_row(row);
   } else {
@@ -334,8 +339,8 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
             STORAGE_LOG(WARN, "Fail to inner get next row, ", K(ret), KP(this));
           }
         } else if (need_read_lob_columns(unprojected_row_)) {
-          if (OB_FAIL(read_lob_columns(unprojected_row_))) {
-            LOG_WARN("Failed to read lob columns from store row", K(ret), K(access_param_->iter_param_.tablet_id_), K(unprojected_row_));
+          if (OB_FAIL(handle_lob_before_fuse_row())) {
+            LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
           }
         }
         if (OB_SUCC(ret)) {
@@ -349,7 +354,7 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
         }
         if (OB_FAIL(fill_group_idx_if_need(unprojected_row_))) {
           LOG_WARN("Failed to fill iter idx", K(ret), KPC(access_param_), K(unprojected_row_));
-        } else if (OB_FAIL(process_fuse_row(nullptr == access_param_->output_exprs_, unprojected_row_, row))) {
+        } else if (OB_FAIL(process_fuse_row(not_using_static_engine, unprojected_row_, row))) {
           LOG_WARN("get row from fuse failed", K(ret), K(unprojected_row_));
         } else if (nullptr != row) {
           break;
@@ -475,8 +480,8 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
             LOG_WARN("Fail to inner get next row, ", K(ret), KP(this));
           }
         } else if (need_read_lob_columns(unprojected_row_)) {
-          if (OB_FAIL(read_lob_columns(unprojected_row_))) {
-            LOG_WARN("Failed to read lob columns from store row", K(ret), K(unprojected_row_));
+          if (OB_FAIL(handle_lob_before_fuse_row())) {
+            LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
           }
         }
         if (OB_SUCC(ret)) {
@@ -582,8 +587,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
             LOG_WARN("Fail to inner get next row, ", K(ret), KP(this));
           }
         } else if (need_read_lob_columns(unprojected_row_)) {
-          if (OB_FAIL(read_lob_columns(unprojected_row_))) {
-            LOG_WARN("Failed to read lob columns from store row", K(ret), K(unprojected_row_));
+          if (OB_FAIL(handle_lob_before_fuse_row())) {
+            LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
           }
         }
         if (OB_SUCC(ret)) {
@@ -663,7 +668,6 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
   bool need_skip = false;
   bool is_filter_filtered = false;
   out_row = nullptr;
-  bool need_fill_lob = false;
   if (OB_FAIL((not_using_static_engine)
           ?  project_row(in_row,
                          access_param_->iter_param_.out_cols_project_,
@@ -677,14 +681,16 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
     // this is for sample scan on increment data, we only output one row if increment data
     // has all the column data needed by the sample scan
     need_skip = true;
-  } else if (!not_using_static_engine && OB_FAIL(fill_lob_locator(cur_row_, true, need_fill_lob))) {
-    LOG_WARN("fill lob locator failed", K(ret));
+  } else if (!not_using_static_engine
+             && OB_NOT_NULL(access_ctx_->lob_locator_helper_)
+             && access_ctx_->lob_locator_helper_->enable_lob_locator_v2() == false
+             && OB_FAIL(fill_lob_locator(cur_row_))) {
+    LOG_WARN("fill lob locator v1 failed", K(ret));
   } else if (need_padding_ && OB_FAIL(pad_columns(cur_row_))) {
     LOG_WARN("Fail to padding columns, ", K(ret));
   } else if (need_fill_virtual_columns_ && OB_FAIL(fill_virtual_columns(cur_row_))) {
     LOG_WARN("Fail to fill virtual columns, ", K(ret));
   }
-
   if (OB_FAIL(ret) || need_skip) {
   } else{
     if (in_row.fast_filter_skipped_) {
@@ -755,7 +761,6 @@ void ObMultipleMerge::reset()
   read_memtable_only_ = false;
   out_project_cols_.reset();
   lob_reader_.reset();
-  has_lob_column_ = false;
   scan_state_ = ScanState::NONE;
 }
 
@@ -915,9 +920,9 @@ int ObMultipleMerge::fuse_default(ObDatumRow &row)
     } else {
       idx = access_param_->iter_param_.out_cols_project_->at(pos);
       ObObj def_cell(out_cols_param->at(idx)->get_orig_default_value());
-      if (access_ctx_->query_flag_.is_skip_read_lob() &&
-          OB_FAIL(lob_reader_.fuse_lob_header(def_cell))) {
-        STORAGE_LOG(WARN, "Failed to fuse lob header for nop val", K(ret));
+      if (is_lob_storage(def_cell.get_type())
+          && OB_FAIL(fuse_lob_default(def_cell, out_cols_param->at(idx)->get_column_id()))) {
+        STORAGE_LOG(WARN, "Fail to fuse lob default, ", K(ret));
       } else if (NULL == access_param_->output_exprs_) {
         if (OB_FAIL(row.storage_datums_[pos].from_obj(def_cell))) {
           STORAGE_LOG(WARN, "Failed to transform obj to datum", K(ret));
@@ -932,6 +937,10 @@ int ObMultipleMerge::fuse_default(ObDatumRow &row)
               access_param_->op_->get_eval_ctx());
           if (OB_FAIL(datum.from_obj(def_cell, expr->obj_datum_map_))) {
             LOG_WARN("convert obj to datum failed", K(ret));
+          } else if (is_lob_storage(def_cell.get_type()) &&
+                     OB_FAIL(sql::ob_adjust_lob_datum(def_cell, expr->obj_meta_, expr->obj_datum_map_,
+                                                      lob_reader_.get_allocator(), datum))) {
+            LOG_WARN("adjust lob datum failed", K(ret), K(def_cell.get_meta()), K(expr->obj_meta_));
           } else {
             eval_info.evaluated_ = true;
           }
@@ -942,17 +951,26 @@ int ObMultipleMerge::fuse_default(ObDatumRow &row)
   return ret;
 }
 
-int ObMultipleMerge::fill_lob_locator(ObDatumRow &row, const bool allow_nop_pk, bool &need_fill_again)
+int ObMultipleMerge::fill_lob_locator(ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
-  if (NULL != access_ctx_->lob_locator_helper_ && NULL != access_param_->output_exprs_) {
+  if (NULL != access_ctx_->lob_locator_helper_) {
     if (!access_ctx_->lob_locator_helper_->is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected lob locator helper", K(ret),
                   KPC(access_ctx_->lob_locator_helper_));
-    } else if (OB_FAIL(access_ctx_->lob_locator_helper_->fill_lob_locator(unprojected_row_,
-                                                               false, *access_param_))) {
-      STORAGE_LOG(WARN, "fill lob locator failed", K(ret));
+    } else if (access_ctx_->lob_locator_helper_->enable_lob_locator_v2()) {
+      if (OB_FAIL(access_ctx_->lob_locator_helper_->fill_lob_locator_v2(row,
+                                                                        *access_ctx_,
+                                                                        *access_param_))) {
+        STORAGE_LOG(WARN, "fill lob locator v2 failed", K(ret));
+      }
+    } else { // locator v1
+      if (OB_FAIL(access_ctx_->lob_locator_helper_->fill_lob_locator(unprojected_row_,
+                                                                     false,
+                                                                     *access_param_))) {
+        STORAGE_LOG(WARN, "fill lob locator failed", K(ret));
+      }
     }
   }
   return ret;
@@ -1239,12 +1257,7 @@ int ObMultipleMerge::init_lob_reader(
     ObTableAccessContext &access_ctx)
 {
   int ret = OB_SUCCESS;
-  has_lob_column_ = false;
-  if (access_ctx.query_flag_.is_skip_read_lob()) {
-    // do nothing
-  } else if (OB_FAIL(iter_param.has_lob_column_out(access_ctx.use_fuse_row_cache_, has_lob_column_))) {
-    LOG_WARN("fail to check has lob column", K(ret));
-  } else if (has_lob_column_) {
+  if (iter_param.has_lob_column_out_) {
     lob_reader_.reset();
     if (OB_FAIL(lob_reader_.init(iter_param, access_ctx))) {
       LOG_WARN("[LOB] fail to init lob reader", K(access_ctx.query_flag_), K(iter_param));
@@ -1270,7 +1283,7 @@ int ObMultipleMerge::fill_group_idx_if_need(blocksstable::ObDatumRow &row)
   return ret;
 }
 
-int ObMultipleMerge::read_lob_columns(blocksstable::ObDatumRow &row)
+int ObMultipleMerge::read_lob_columns_full_data(blocksstable::ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObColumnParam *> *out_cols_param = access_param_->iter_param_.get_col_params();
@@ -1287,7 +1300,7 @@ int ObMultipleMerge::read_lob_columns(blocksstable::ObDatumRow &row)
     lob_reader_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < row.count_; ++i) {
       blocksstable::ObStorageDatum &datum = row.storage_datums_[i];
-      if (out_cols_param->at(i)->get_meta_type().is_lob_v2()) {
+      if (out_cols_param->at(i)->get_meta_type().is_lob_storage()) {
         if (OB_FAIL(lob_reader_.read_lob_data(datum, out_cols_param->at(i)->get_meta_type().get_collation_type()))) {
           STORAGE_LOG(WARN, "Failed to read lob obj", K(ret), K(i), K(datum));
         } else {
@@ -1301,7 +1314,65 @@ int ObMultipleMerge::read_lob_columns(blocksstable::ObDatumRow &row)
 
 bool ObMultipleMerge::need_read_lob_columns(const blocksstable::ObDatumRow &row)
 {
-  return (has_lob_column_ && row.row_flag_.is_exist());
+  return (access_param_->iter_param_.has_lob_column_out_ && row.row_flag_.is_exist());
+}
+
+// handle lobs before process_fuse_row
+// 1. if query flag is skip_read_lob do nothing (LocalScan)
+// 2. if use lob locator v2, fill lob header
+// 3. if use lob locator v1, read full lob data (the same as 4.0)
+int ObMultipleMerge::handle_lob_before_fuse_row()
+{
+  int ret = OB_SUCCESS;
+  // Notice: should not  change behavior dynamicly by min cluster version:
+  // for example, while running in 4.0 compat mode, the min cluster version changes to 4.1
+  // but lob_locator_helper is not initialized.
+  if (OB_NOT_NULL(access_ctx_->lob_locator_helper_)
+            && access_ctx_->lob_locator_helper_->enable_lob_locator_v2()) {
+    if (OB_FAIL(fill_lob_locator(unprojected_row_))) {
+      LOG_WARN("Failed to read lob columns from store row with locator v2",
+        K(ret), K(access_param_->iter_param_.tablet_id_), K(unprojected_row_));
+    }
+  } else {
+    // no lob locator v2, read full lob data without header
+    if (OB_FAIL(read_lob_columns_full_data(unprojected_row_))) {
+      LOG_WARN("Failed to read lob columns full data from store row", K(ret),
+        K(access_param_->iter_param_.tablet_id_), K(unprojected_row_));
+    }
+  }
+  return ret;
+}
+
+int ObMultipleMerge::fuse_lob_default(ObObj &def_cell, const uint64_t col_id)
+{
+  // Notice: should not change behavior dynamicly by min cluster version
+  // for example, while running in 4.0 compat mode, the min cluster version changes to 4.1
+  // but lob_locator_helper is not initialized.
+  int ret = OB_SUCCESS;
+  ObLobLocatorHelper *lob_locator_helper = access_ctx_->lob_locator_helper_;
+  if (access_ctx_->query_flag_.is_skip_read_lob()) { // skip means skip read full lob data
+    if (OB_FAIL(lob_reader_.fuse_disk_lob_header(def_cell))) { // fuse disk locator
+      STORAGE_LOG(WARN, "Failed to fuse lob header for nop val", K(ret));
+    }
+  } else if (OB_NOT_NULL(lob_locator_helper)) {
+    if (nullptr == access_param_->output_exprs_) {
+      if (OB_FAIL(lob_reader_.fuse_disk_lob_header(def_cell))) { // fuse disk locator
+        STORAGE_LOG(WARN, "Failed to fuse lob header for nop val", K(ret));
+      }
+    } else { // fuse memory locator
+      if (!lob_locator_helper->is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected lob locator helper", K(ret),
+                    KPC(access_ctx_->lob_locator_helper_));
+      } else if (access_ctx_->lob_locator_helper_->fuse_mem_lob_header(def_cell,
+                  col_id, is_sys_table(access_param_->iter_param_.table_id_))) {
+        STORAGE_LOG(WARN, "fuse lob default with locator v2 failed", K(ret));
+      }
+    }
+  } else {
+    // not skip read lob, no lob locator helper, the result is full default value without header
+  }
+  return ret;
 }
 }
 }

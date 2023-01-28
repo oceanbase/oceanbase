@@ -794,12 +794,17 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
 
 
 // stringtc vs texttc temporarily
+// Notice:
+// 1. ObObj compare only support inrow lobs, because lob manager cannot be reached from here.
+//    Need to convert outrow lobs inrow before comparation
+// 2. ObObj::get_string(Obstring &) only gets inrow lob data
 #define DEFINE_CMP_OP_FUNC_STRING_TEXT(op, op_str) \
   template <> inline \
   int ObObjCmpFuncs::cmp_op_func<ObStringTC, ObTextTC, op>(const ObObj &obj1, \
                                                              const ObObj &obj2, \
                                                              const ObCompareCtx &cmp_ctx) \
   { \
+    int ret = CR_OB_ERROR; \
     OBJ_TYPE_CLASS_CHECK(obj1, ObStringTC);\
     OBJ_TYPE_CLASS_CHECK(obj2, ObTextTC);\
     ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
@@ -811,10 +816,21 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-	return CS_TYPE_INVALID != cs_type \
-           ? static_cast<int>(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
-                                                  obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
-           : CR_OB_ERROR; \
+    ObString data_str; \
+    if (obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.get_string(data_str))) { \
+      LOG_ERROR("invalid text object", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ret = CS_TYPE_INVALID != cs_type \
+            ? static_cast<int>(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
+                                                   data_str.ptr(), data_str.length(), \
+                                                   CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
   }
 
 #define DEFINE_CMP_FUNC_STRING_TEXT() \
@@ -823,6 +839,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
                                                       const ObObj &obj2, \
                                                       const ObCompareCtx &cmp_ctx) \
   { \
+    int ret = CR_OB_ERROR; \
     OBJ_TYPE_CLASS_CHECK(obj1, ObStringTC);\
     OBJ_TYPE_CLASS_CHECK(obj2, ObTextTC);\
     ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
@@ -834,11 +851,21 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-/*LOG_ERROR("END SPACE", K(obj1.v_.string_), K(obj1.val_len_), K(obj2.v_.string_), K(obj2.val_len_), K(lbt())); */\
-	return CS_TYPE_INVALID != cs_type \
-           ? INT_TO_CR(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
-                                           obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
-           : CR_OB_ERROR; \
+    ObString data_str; \
+    if (obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.get_string(data_str))) { \
+      LOG_ERROR("invalid text object", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ret = CS_TYPE_INVALID != cs_type \
+            ? INT_TO_CR(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
+                                            data_str.ptr(), data_str.length(), \
+                                            CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
   }
 
 // texttc vs stringtc temporarily
@@ -868,6 +895,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
                                                              const ObObj &obj2, \
                                                              const ObCompareCtx &cmp_ctx) \
   { \
+    int ret = CR_OB_ERROR; \
     OBJ_TYPE_CLASS_CHECK(obj1, ObTextTC);\
     OBJ_TYPE_CLASS_CHECK(obj2, ObTextTC);\
     ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
@@ -879,10 +907,25 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-    return CS_TYPE_INVALID != cs_type \
-           ? static_cast<int>(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
-                                                  obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
-           : CR_OB_ERROR; \
+    ObString data_str1; \
+    ObString data_str2; \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) { \
+      LOG_ERROR("invalid text object1", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) { \
+      LOG_ERROR("invalid text object2", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ret = CS_TYPE_INVALID != cs_type \
+            ? static_cast<int>(ObCharset::strcmpsp(cs_type, data_str1.ptr(), data_str1.length(), \
+                                                   data_str2.ptr(), data_str2.length(), \
+                                                   CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
   }
 
 #define DEFINE_CMP_FUNC_TEXT_TEXT() \
@@ -891,6 +934,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
                                                       const ObObj &obj2, \
                                                       const ObCompareCtx &cmp_ctx) \
   { \
+    int ret = CR_OB_ERROR; \
     OBJ_TYPE_CLASS_CHECK(obj1, ObTextTC);\
     OBJ_TYPE_CLASS_CHECK(obj2, ObTextTC);\
     ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
@@ -902,10 +946,25 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-	return CS_TYPE_INVALID != cs_type \
-           ? INT_TO_CR(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
-                                           obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
-           : CR_OB_ERROR; \
+    ObString data_str1; \
+    ObString data_str2; \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) { \
+      LOG_ERROR("invalid text object1", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) { \
+      LOG_ERROR("invalid text object2", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ret = CS_TYPE_INVALID != cs_type \
+            ? INT_TO_CR(ObCharset::strcmpsp(cs_type, data_str1.ptr(), data_str1.length(), \
+                                                   data_str2.ptr(), data_str2.length(), \
+                                                   CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
   }
 
 
@@ -1321,11 +1380,25 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     UNUSED(cmp_ctx);                                                                            \
     int cmp_ret = CR_OB_ERROR;                                                                  \
     if (op == CO_EQ || op == CO_NE) {                                                           \
-      cmp_ret = static_cast<int>(ObCharset::strcmpsp(CS_TYPE_BINARY,                            \
+      ObString wkb1 = obj1.get_string();                                                        \
+      ObString wkb2 = obj2.get_string();                                                        \
+      ObLobLocatorV2 lob1(wkb1, obj1.has_lob_header());                                         \
+      ObLobLocatorV2 lob2(wkb2, obj2.has_lob_header());                                         \
+      if (lob1.is_inrow() && lob2.is_inrow()) {                                                 \
+        (void)lob1.get_inrow_data(wkb1);                                                        \
+        (void)lob2.get_inrow_data(wkb2);                                                        \
+        cmp_ret = static_cast<int>(ObCharset::strcmpsp(CS_TYPE_BINARY,                          \
+                                                     wkb1.ptr(), wkb1.length(),                 \
+                                                     wkb2.ptr(), wkb2.length(),                 \
+                                                     false)                                     \
+                                                     op_str 0);                                 \
+      } else {                                                                                  \
+        cmp_ret = static_cast<int>(ObCharset::strcmpsp(CS_TYPE_BINARY,                          \
                                                      obj1.v_.string_, obj1.val_len_,            \
                                                      obj2.v_.string_, obj2.val_len_,            \
                                                      false)                                     \
                                                      op_str 0);                                 \
+      }                                                                                         \
     }                                                                                           \
     return cmp_ret;                                                                             \
   }
@@ -1340,8 +1413,16 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     OBJ_TYPE_CLASS_CHECK(obj1, ObGeometryTC);                                                   \
     OBJ_TYPE_CLASS_CHECK(obj2, ObGeometryTC);                                                   \
     UNUSED(cmp_ctx);                                                                            \
-    int result = ObCharset::strcmpsp(CS_TYPE_BINARY, obj1.v_.string_, obj1.val_len_,            \
-                                     obj2.v_.string_, obj2.val_len_, false);                    \
+    ObString wkb1 = obj1.get_string();                                                          \
+    ObString wkb2 = obj2.get_string();                                                          \
+    ObLobLocatorV2 lob1(wkb1, obj1.has_lob_header());                                           \
+    ObLobLocatorV2 lob2(wkb2, obj2.has_lob_header());                                           \
+    if (lob1.is_inrow() && lob2.is_inrow()) {                                                   \
+      (void)lob1.get_inrow_data(wkb1);                                                          \
+      (void)lob2.get_inrow_data(wkb2);                                                          \
+    }                                                                                           \
+    int result = ObCharset::strcmpsp(CS_TYPE_BINARY, wkb1.ptr(), wkb1.length(),                 \
+                                     wkb2.ptr(), wkb2.length(), false);                         \
     if (0 == result) {                                                                          \
       result = CR_EQ;                                                                           \
     } else if (0 > result) {                                                                    \

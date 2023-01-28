@@ -119,12 +119,13 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
   } else if (OB_FAIL(op_result.get_entity(result_entity))) {
     LOG_WARN("fail to get result entity", K(ret), K(result_entity));
   } else {
+    ObIAllocator &allocator = tb_ctx.get_allocator();
     const ObTableApiInsertUpSpec &ins_up_spec = static_cast<const ObTableApiInsertUpSpec&>(spec);
     const ObIArray<ObExpr *> &full_assign_exprs = ins_up_spec.get_ctdef().upd_ctdef_.full_assign_row_;
     const ObIArray<ObExpr *> &ins_exprs = ins_up_spec.get_ctdef().ins_ctdef_.new_row_;
     const ObTableCtx::ObAssignIds &assign_ids = tb_ctx.get_assign_ids();
     const int64_t N = assign_ids.count();
-    ObObj* obj_array = static_cast<ObObj*>(tb_ctx.get_allocator().alloc(sizeof(ObObj) * N));
+    ObObj* obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * N));
     if (OB_ISNULL(obj_array)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("faild to alloc memory for objs", K(ret));
@@ -137,16 +138,20 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
         ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("column not exist", K(ret), K(column_id));
       } else {
+        ObObj &obj = obj_array[i];
         bool is_duplicated = static_cast<ObTableApiInsertUpExecutor&>(executor).is_insert_duplicated();
         ObExpr *rt_expr = is_duplicated ? full_assign_exprs.at(idx) : ins_exprs.at(idx);
         ObDatum *datum = nullptr;
         const ObString &column_name = column_schema->get_column_name_str();
         if (OB_FAIL(rt_expr->eval(executor.get_eval_ctx(), datum))) {
           LOG_WARN("fail to eval datum", K(ret), K(*rt_expr));
-        } else if (OB_FAIL(datum->to_obj(obj_array[i], column_schema->get_meta_type()))){
-          LOG_WARN("fail to datum to obj", K(ret), K(*datum), K(column_schema->get_meta_type()));
-        } else if (OB_FAIL(result_entity->set_property(column_name, obj_array[i]))) {
-          LOG_WARN("fail to set property", K(ret), K(column_name), K(obj_array[i]));
+        } else if (OB_FAIL(datum->to_obj(obj, rt_expr->obj_meta_))) {
+          LOG_WARN("fail to datum to obj", K(ret), K(*datum), K(rt_expr->obj_meta_));
+        } else if (is_lob_storage(obj.get_type())
+            && OB_FAIL(ObTableCtx::read_real_lob(allocator, obj))) {
+          LOG_WARN("fail to read lob", K(ret), K(obj));
+        } else if (OB_FAIL(result_entity->set_property(column_name, obj))) {
+          LOG_WARN("fail to set property", K(ret), K(column_name), K(obj));
         }
       }
     }
@@ -213,7 +218,8 @@ int ObTableOpWrapper::process_get_with_spec(ObTableCtx &tb_ctx,
   return ret;
 }
 
-int ObTableApiUtil::construct_entity_from_row(ObNewRow *row,
+int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
+                                              ObNewRow *row,
                                               const ObTableSchema *table_schema,
                                               const ObIArray<ObString> &cnames,
                                               ObITableEntity *entity)
@@ -228,8 +234,10 @@ int ObTableApiUtil::construct_entity_from_row(ObNewRow *row,
       LOG_WARN("column not exist", K(ret), K(name));
     } else {
       int64_t column_idx = table_schema->get_column_idx(column_schema->get_column_id());
-      const ObObj &cell = row->get_cell(column_idx);
-      if (OB_FAIL(entity->set_property(name, cell))) {
+      ObObj &cell = row->get_cell(column_idx);
+      if (is_lob_storage(cell.get_type()) && OB_FAIL(ObTableCtx::read_real_lob(allocator, cell))) {
+        LOG_WARN("fail to read lob", K(ret));
+      } else if (OB_FAIL(entity->set_property(name, cell))) {
         LOG_WARN("fail to set property", K(ret), K(name), K(cell));
       }
     }

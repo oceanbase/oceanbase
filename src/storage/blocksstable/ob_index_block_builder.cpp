@@ -1105,7 +1105,8 @@ ObBaseIndexBlockBuilder::ObBaseIndexBlockBuilder()
    micro_block_count_(0),
    can_mark_deletion_(true),
    contain_uncommitted_row_(false),
-   has_out_row_column_(false),
+   has_string_out_row_(false),
+   has_lob_out_row_(false),
    is_last_row_last_flag_(false),
    next_level_builder_(nullptr),
    level_(0)
@@ -1227,7 +1228,8 @@ int ObBaseIndexBlockBuilder::append_row(const ObIndexBlockRowDesc &row_desc)
                               : row_desc.max_merged_trans_version_;
     contain_uncommitted_row_ = contain_uncommitted_row_
                             || row_desc.contain_uncommitted_row_;
-    has_out_row_column_ = has_out_row_column_ || row_desc.has_out_row_column_;
+    has_string_out_row_ = has_string_out_row_ || row_desc.has_string_out_row_;
+    has_lob_out_row_ = has_lob_out_row_ || row_desc.has_lob_out_row_;
     micro_block_count_ += row_desc.micro_block_count_;
     macro_block_count_ += row_desc.macro_block_count_;
     // use the flag of the last row in last micro block
@@ -1405,7 +1407,8 @@ void ObBaseIndexBlockBuilder::update_accumulative_info(ObIndexBlockRowDesc &next
   next_row_desc.is_deleted_ = can_mark_deletion_;
   next_row_desc.max_merged_trans_version_ = max_merged_trans_version_;
   next_row_desc.contain_uncommitted_row_ = contain_uncommitted_row_;
-  next_row_desc.has_out_row_column_ = has_out_row_column_;
+  next_row_desc.has_string_out_row_ = has_string_out_row_;
+  next_row_desc.has_lob_out_row_ = has_lob_out_row_;
   next_row_desc.macro_block_count_ = macro_block_count_;
   next_row_desc.micro_block_count_ = micro_block_count_;
   next_row_desc.is_last_row_last_flag_ = is_last_row_last_flag_;
@@ -1448,6 +1451,8 @@ void ObBaseIndexBlockBuilder::block_to_row_desc(
   row_desc.is_deleted_ = micro_block_desc.can_mark_deletion_;
   row_desc.max_merged_trans_version_ = micro_block_desc.max_merged_trans_version_;
   row_desc.contain_uncommitted_row_ = micro_block_desc.contain_uncommitted_row_;
+  row_desc.has_string_out_row_ = micro_block_desc.has_string_out_row_;
+  row_desc.has_lob_out_row_ = micro_block_desc.has_lob_out_row_;
   row_desc.is_last_row_last_flag_ = micro_block_desc.is_last_row_last_flag_;
 }
 
@@ -1486,6 +1491,8 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
     row_desc.contain_uncommitted_row_ = macro_meta.val_.contain_uncommitted_row_;
     row_desc.micro_block_count_ = macro_meta.val_.micro_block_count_;
     row_desc.macro_block_count_ = 1;
+    row_desc.has_string_out_row_ = macro_meta.val_.has_string_out_row_;
+    row_desc.has_lob_out_row_ = !macro_meta.val_.all_lob_in_row_;
   }
   return ret;
 }
@@ -1503,6 +1510,8 @@ void ObBaseIndexBlockBuilder::row_desc_to_meta(
   macro_meta.val_.is_deleted_ = macro_row_desc.is_deleted_;
   macro_meta.val_.max_merged_trans_version_ = macro_row_desc.max_merged_trans_version_;
   macro_meta.val_.contain_uncommitted_row_ = macro_row_desc.contain_uncommitted_row_;
+  macro_meta.val_.has_string_out_row_ = macro_row_desc.has_string_out_row_;
+  macro_meta.val_.all_lob_in_row_ = !macro_row_desc.has_lob_out_row_;
   macro_meta.val_.is_last_row_last_flag_ = macro_row_desc.is_last_row_last_flag_;
 }
 
@@ -1515,7 +1524,8 @@ void ObBaseIndexBlockBuilder::reset_accumulative_info()
   can_mark_deletion_ = true;
   max_merged_trans_version_ = 0;
   contain_uncommitted_row_ = false;
-  has_out_row_column_ = false;
+  has_string_out_row_ = false;
+  has_lob_out_row_ = false;
   is_last_row_last_flag_ = false;
   macro_block_count_ = 0;
   micro_block_count_ = 0;
@@ -1792,6 +1802,7 @@ int ObDataIndexBlockBuilder::append_macro_block(const ObMacroBlockDesc &macro_de
     STORAGE_LOG(WARN, "Invalid macro block desc", K(ret), K(macro_desc));
   } else {
     ObDataMacroBlockMeta *macro_meta = macro_desc.macro_meta_;
+
     if (OB_FAIL(add_macro_block_meta( *macro_meta, *macro_meta_list_, *sstable_allocator_))) {
       STORAGE_LOG(WARN, "failed to add macro block meta", K(ret), KPC(macro_meta));
     } else {

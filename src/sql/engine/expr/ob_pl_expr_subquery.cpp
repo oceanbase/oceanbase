@@ -21,6 +21,7 @@
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_resolver.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -243,6 +244,9 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
 
   if (OB_SUCC(ret)) {
     OZ(res.from_obj(result));
+    if (is_lob_storage(result.get_type())) {
+      OZ(ob_adjust_lob_datum(result, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), res));
+    }
     OZ(expr.deep_copy_datum(ctx, res));
   }
 

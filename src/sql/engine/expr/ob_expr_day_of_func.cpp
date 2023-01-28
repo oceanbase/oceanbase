@@ -111,7 +111,8 @@ int ObExprToSeconds::calc_toseconds(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
     if (OB_FAIL(ob_datum_to_ob_time_with_date(*param_datum, expr.args_[0]->datum_meta_.type_,
                                               get_timezone_info(session), ot,
                                               get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
-                                              false, date_sql_mode))) {
+                                              false, date_sql_mode,
+                                              expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret));
       uint64_t cast_mode = 0;
       ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
@@ -501,7 +502,8 @@ int ObExprSubAddtime::subaddtime_common(const ObExpr &expr,
     if (ObTimeType == expr.args_[1]->datum_meta_.type_) {
       time_val = time_arg->get_time();
     } else if (OB_FAIL(ob_datum_to_ob_time_without_date(*time_arg, expr.args_[1]->datum_meta_.type_,
-                                      get_timezone_info(ctx.exec_ctx_.get_my_session()), ot2))) {
+                                      get_timezone_info(ctx.exec_ctx_.get_my_session()), ot2,
+                                      expr.args_[1]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the second param failed", K(ret));
       expr_datum.set_null();
       null_res = true;
@@ -564,7 +566,7 @@ int ObExprSubAddtime::subaddtime_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObD
   } else if (!null_res) {
     ObTime ot1(DT_TYPE_TIME);
     if (OB_FAIL(ob_datum_to_ob_time_without_date(*date_arg, expr.args_[0]->datum_meta_.type_,
-                                                tz_info, ot1))) {
+                                                tz_info, ot1, expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the first param failed", K(ret));
       expr_datum.set_null();
     } else {

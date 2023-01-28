@@ -45,7 +45,8 @@ struct ObMicroBlockDesc
   int32_t row_count_delta_;
   bool contain_uncommitted_row_;
   bool can_mark_deletion_;
-  bool has_out_row_column_;
+  bool has_string_out_row_;
+  bool has_lob_out_row_;
   bool is_last_row_last_flag_;
 
   ObMicroBlockDesc() { reset(); }
@@ -68,7 +69,8 @@ struct ObMicroBlockDesc
       K_(row_count_delta),
       K_(contain_uncommitted_row),
       K_(can_mark_deletion),
-      K_(has_out_row_column),
+      K_(has_string_out_row),
+      K_(has_lob_out_row),
       K_(is_last_row_last_flag),
       K_(original_size));
 };
@@ -93,7 +95,9 @@ public:
     max_merged_trans_version_(0),
     block_size_upper_bound_(DEFAULT_UPPER_BOUND),
     contain_uncommitted_row_(false),
-    has_out_row_column_(false),
+    has_string_out_row_(false),
+    has_lob_out_row_(false),
+    need_check_lob_(false),
     is_last_row_last_flag_(false),
     header_(nullptr)
   {
@@ -126,7 +130,8 @@ public:
     max_merged_trans_version_ = 0;
     block_size_upper_bound_ = DEFAULT_UPPER_BOUND;
     contain_uncommitted_row_ = false;
-    has_out_row_column_ = false;
+    has_string_out_row_ = false;
+    has_lob_out_row_ = false;
     is_last_row_last_flag_ = false;
   }
   void set_block_size_upper_bound(const int64_t &size) { block_size_upper_bound_ = size; }
@@ -167,7 +172,8 @@ public:
     }
   }
   bool is_contain_uncommitted_row() const { return contain_uncommitted_row_; }
-  inline bool has_out_row_column() const { return has_out_row_column_; }
+  inline bool has_string_out_row() const { return has_string_out_row_; }
+  inline bool has_lob_out_row() const { return has_lob_out_row_; }
   inline bool is_last_row_last_flag() const { return is_last_row_last_flag_; }
   void set_contain_uncommitted_row()
   {
@@ -217,7 +223,9 @@ protected:
   int64_t max_merged_trans_version_;
   int64_t block_size_upper_bound_;
   bool contain_uncommitted_row_;
-  bool has_out_row_column_;
+  bool has_string_out_row_;
+  bool has_lob_out_row_;
+  bool need_check_lob_;
   bool is_last_row_last_flag_;
   ObMicroBlockHeader *header_;
 };

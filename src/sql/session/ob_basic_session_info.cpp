@@ -366,6 +366,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   plan_id_ = 0;
   capability_.capability_ = 0;
   proxy_capability_.capability_ = 0;
+  client_attribute_capability_.capability_ = 0;
   client_mode_ = OB_MIN_CLIENT_MODE;
   reset_session_changed_info();
   extra_info_allocator_.reset();
@@ -2513,6 +2514,15 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       }
       break;
     }
+    case SYS_VAR_LOG_ROW_VALUE_OPTIONS: {
+      ObString option;
+      if (OB_FAIL(val.get_string(option))) {
+        LOG_WARN("fail to get str value", K(ret), K(var));
+      } else {
+        sys_vars_cache_.set_log_row_value_option(option);
+      }
+      break;
+    }
     case SYS_VAR_OB_MAX_READ_STALE_TIME: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -2897,6 +2907,15 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
         LOG_WARN("fail to get str value", K(ret), K(var));
       } else {
         sys_vars_cache.set_base_ob_trace_info(trace_info);
+      }
+      break;
+    }
+    case SYS_VAR_LOG_ROW_VALUE_OPTIONS: {
+      ObString option;
+      if (OB_FAIL(val.get_string(option))) {
+        LOG_WARN("fail to get str value", K(ret), K(var));
+      } else {
+        sys_vars_cache.set_base_log_row_value_option(option);
       }
       break;
     }
@@ -4045,7 +4064,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               process_query_time_,
               flt_vars_.last_flt_trace_id_,
               flt_vars_.row_traceformat_,
-              flt_vars_.last_flt_span_id_);
+              flt_vars_.last_flt_span_id_,
+              exec_min_cluster_version_);
   }();
   return ret;
 }
@@ -4240,6 +4260,11 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
               flt_vars_.last_flt_trace_id_,
               flt_vars_.row_traceformat_,
               flt_vars_.last_flt_span_id_);
+  if (OB_SUCC(ret) && pos < data_len) {
+    OB_UNIS_DECODE(exec_min_cluster_version_);
+  } else {
+    exec_min_cluster_version_ = CLUSTER_VERSION_4_0_0_0;
+  }
   // deep copy string.
   if (OB_SUCC(ret)) {
     if (OB_FAIL(name_pool_.write_string(app_trace_id_, &app_trace_id_))) {
@@ -4549,7 +4574,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               process_query_time_,
               flt_vars_.last_flt_trace_id_,
               flt_vars_.row_traceformat_,
-              flt_vars_.last_flt_span_id_);
+              flt_vars_.last_flt_span_id_,
+              exec_min_cluster_version_);
   return len;
 }
 

@@ -1033,7 +1033,8 @@ int ObMacroBlockWriter::build_micro_block_desc_with_reuse(
     micro_block_desc.row_count_ = header.row_count_;
     micro_block_desc.buf_ = micro_block.payload_data_.get_buf() + header.header_size_;
     micro_block_desc.buf_size_ = header.data_zlength_;
-    micro_block_desc.has_out_row_column_ = micro_block.micro_index_info_->has_out_row_column();
+    micro_block_desc.has_string_out_row_ = micro_block.micro_index_info_->has_string_out_row();
+    micro_block_desc.has_lob_out_row_ = micro_block.micro_index_info_->has_lob_out_row();
     micro_block_desc.original_size_ = header.original_length_;
   }
   STORAGE_LOG(DEBUG, "build micro block desc reuse", K(data_store_desc_->tablet_id_), K(micro_block_desc), "lbt", lbt(), K(ret));
@@ -1093,7 +1094,8 @@ int ObMacroBlockWriter::build_micro_block_desc_with_rewrite(
       micro_block_desc.original_size_ = header.original_length_;
       micro_block_desc.column_count_ = header.column_count_;
       micro_block_desc.row_count_ = header.row_count_;
-      micro_block_desc.has_out_row_column_ = micro_block.micro_index_info_->has_out_row_column();
+      micro_block_desc.has_string_out_row_ = micro_block.micro_index_info_->has_string_out_row();
+      micro_block_desc.has_lob_out_row_ = micro_block.micro_index_info_->has_lob_out_row();
       if (header.has_column_checksum_) {
         MEMSET(curr_micro_column_checksum_, 0, sizeof(int64_t) * data_store_desc_->row_column_count_);
         if (OB_FAIL(calc_micro_column_checksum(header.column_count_, *reader, curr_micro_column_checksum_))) {
@@ -1520,6 +1522,7 @@ int ObMacroBlockWriter::build_micro_writer(ObDataStoreDesc *data_store_desc,
         data_store_desc->micro_block_size_limit_,
         data_store_desc->rowkey_column_count_,
         data_store_desc->row_column_count_,
+        &data_store_desc->col_desc_array_,
         need_calc_column_chksum))) {
       STORAGE_LOG(WARN, "Fail to init micro block flat writer, ", K(ret));
     } else {

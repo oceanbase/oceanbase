@@ -23,6 +23,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/das/ob_das_location_router.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -343,7 +344,9 @@ int ObVirtualTableIterator::convert_output_row(ObNewRow *&cur_row)
     for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
       const uint64_t column_id = output_column_ids_.at(i);
       const ObColumnSchemaV2 *col_schema = cols_schema_.at(i);
-      if (cur_row->get_cell(i).is_null() || (cur_row->get_cell(i).is_string_type() && 0 == cur_row->get_cell(i).get_data_length())) {
+      if (cur_row->get_cell(i).is_null()
+          || (cur_row->get_cell(i).is_string_type() && 0 == cur_row->get_cell(i).get_data_length())
+          || ob_is_empty_lob(cur_row->get_cell(i))) {
         convert_row_.cells_[i].set_null();
       } else if (OB_FAIL(ObObjCaster::to_type(col_schema->get_data_type(),
                                               col_schema->get_collation_type(),
@@ -405,6 +408,14 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
                   "column_name", col_schema->get_column_name_str(),
                   K(column_id), K(cur_row->cells_[i]), K(cur_row->cells_[i].get_type()),
                   K(col_schema->get_data_type()), K(output_column_ids_));
+      }
+    }
+    if (OB_SUCC(ret)
+        && is_lob_storage(col_schema->get_data_type())
+        && !cur_row->cells_[i].has_lob_header()) { // cannot be json type;
+        ObObj &obj_convert = cur_row->cells_[i];
+      if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj_convert, *allocator_))) {
+        LOG_WARN("fail to add lob header", KR(ret), "object", cur_row->cells_[i]);
       }
     }
     if (OB_SUCC(ret) && ob_is_string_tc(col_schema->get_data_type())
@@ -473,6 +484,10 @@ int ObVirtualTableIterator::get_next_row()
       ObDatum &datum = expr->locate_datum_for_write(scan_param_->op_->get_eval_ctx());
       if (OB_FAIL(datum.from_obj(row->cells_[i], expr->obj_datum_map_))) {
         LOG_WARN("convert ObObj to ObDatum failed", K(ret));
+      } else if (is_lob_storage(row->cells_[i].get_type()) &&
+                 OB_FAIL(ob_adjust_lob_datum(row->cells_[i], expr->obj_meta_,
+                                             expr->obj_datum_map_, *allocator_, datum))) {
+        LOG_WARN("adjust lob datum failed", K(ret), K(i), K(row->cells_[i].get_meta()), K(expr->obj_meta_));
       }
     }
   }

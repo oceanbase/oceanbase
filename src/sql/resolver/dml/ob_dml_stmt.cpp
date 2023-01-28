@@ -26,6 +26,7 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/dml/ob_stmt_expr_visitor.h"
 #include "common/ob_smart_call.h"
+#include "share/ob_lob_access_utils.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -4173,15 +4174,20 @@ int ObDMLStmt::has_lob_column(int64_t table_id, bool &has_lob) const
 {
   int ret = OB_SUCCESS;
   has_lob = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !has_lob && i < column_items_.count(); i++) {
-    const ObColumnRefRawExpr *column_expr = NULL;
-    if (OB_ISNULL(column_expr = column_items_.at(i).expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (column_expr->get_table_id() == table_id &&
-               column_expr->get_result_type().is_lob_locator()) {
-      has_lob = true;
-    } else { /*do nothing*/ }
+  // decide whether access rowkeys for selecting clob/blob
+  // mysql mode/json tc does not support rowid currently
+  if (lib::is_oracle_mode()) {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_lob && i < column_items_.count(); i++) {
+      const ObColumnRefRawExpr *column_expr = NULL;
+      if (OB_ISNULL(column_expr = column_items_.at(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (column_expr->get_table_id() == table_id
+                && (column_expr->get_result_type().is_lob_locator()
+                    || column_expr->get_result_type().is_lob_storage())) {
+        has_lob = true;
+      } else { /*do nothing*/ }
+    }
   }
   return ret;
 }

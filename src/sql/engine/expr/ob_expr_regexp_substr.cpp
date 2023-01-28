@@ -19,6 +19,7 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_regexp_count.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 
@@ -216,8 +217,10 @@ int ObExprRegexpSubstr::eval_regexp_substr(
       bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
       ObString res_substr;
       ObString text_utf16;
+      ObString text_str;
       ObCollationType res_coll_type = CS_TYPE_INVALID;
       bool is_null = true;
+      bool is_final = false;
       uint32_t flags = 0;
       if (reusable) {
         if (NULL == (regexp_ctx = static_cast<ObExprRegexContext *>(
@@ -245,46 +248,75 @@ int ObExprRegexpSubstr::eval_regexp_substr(
                 (NULL != subexpr && subexpr->is_null()) ||
                 (lib::is_mysql_mode() && NULL != match_type && match_type->is_null())) {
         expr_datum.set_null();
+        is_final = true;
+      } else if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_alloc, 0, text, text_str))) {
+          LOG_WARN("get text string failed", K(ret));
+        }
+      } else {
+        text_str = text->get_string();
+      }
+      if (OB_FAIL(ret) || is_final) {
       } else {
         is_null = false;
         if (expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
             expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI) {
           res_coll_type = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_) ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI;
-          if (OB_FAIL(ObExprUtil::convert_string_collation(text->get_string(), expr.args_[0]->datum_meta_.cs_type_, text_utf16,
+          if (OB_FAIL(ObExprUtil::convert_string_collation(text_str, expr.args_[0]->datum_meta_.cs_type_, text_utf16,
                                                       res_coll_type, tmp_alloc))) {
             LOG_WARN("convert charset failed", K(ret));
           }
         } else {
           res_coll_type = expr.args_[0]->datum_meta_.cs_type_;
-          text_utf16 = text->get_string();
+          text_utf16 = text_str;
         }
       }
-      if (OB_FAIL(ret) || is_null) {
+      if (OB_FAIL(ret) || is_null || is_final) {
       } else if (OB_FAIL(regexp_ctx->substr(tmp_alloc, text_utf16, pos - 1,
                                             occur, subexpr_val, res_substr))) {
         LOG_WARN("failed to regexp substr", K(ret));
       } else if (res_substr.empty() && lib::is_oracle_mode() && expr.args_[0]->datum_meta_.is_clob()) {
-        expr_datum.set_string(ObString().ptr(), ObString().length());
+        // emptyp clob
+        ObTextStringDatumResult empty_lob_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+        if (OB_FAIL(empty_lob_result.init(0))) {
+          LOG_WARN("init empty lob result failed");
+        } else {
+          empty_lob_result.set_result();
+        }
       } else if (res_substr.empty()) {
         expr_datum.set_null();
       } else {
         ObExprStrResAlloc out_alloc(expr, ctx);
         ObString out;
-        if (OB_FAIL(ObExprUtil::convert_string_collation(res_substr, res_coll_type,
-                                                        out, expr.datum_meta_.cs_type_, out_alloc))) {
-          LOG_WARN("convert charset failed", K(ret));
-        } else if (out.ptr() == res_substr.ptr()) {
-          // res_substr is allocated in temporary allocator, deep copy here.
-          char *mem = expr.get_str_res_mem(ctx, res_substr.length());
-          if (OB_ISNULL(mem)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("allocate memory failed", K(ret));
+        if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+          if (OB_FAIL(ObExprUtil::convert_string_collation(res_substr, res_coll_type,
+                                                           out, expr.datum_meta_.cs_type_, out_alloc))) {
+            LOG_WARN("convert charset failed", K(ret));
+          } else if (out.ptr() == res_substr.ptr()) {
+            // res_substr is allocated in temporary allocator, deep copy here.
+            char *mem = expr.get_str_res_mem(ctx, res_substr.length());
+            if (OB_ISNULL(mem)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("allocate memory failed", K(ret));
+            } else {
+              MEMCPY(mem, res_substr.ptr(), res_substr.length());
+              expr_datum.set_string(mem, res_substr.length());
+            }
           } else {
-            MEMCPY(mem, res_substr.ptr(), res_substr.length());
-            expr_datum.set_string(mem, res_substr.length());
+            expr_datum.set_string(out.ptr(), out.length());
           }
-        } else {
-          expr_datum.set_string(out.ptr(), out.length());
+        } else { // output is text type
+          ObTextStringDatumResult text_res(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+          if (OB_FAIL(ObExprUtil::convert_string_collation(res_substr, res_coll_type,
+                                                           out, expr.datum_meta_.cs_type_, tmp_alloc))) {
+            LOG_WARN("convert charset failed", K(ret));
+          } else if (OB_FAIL(text_res.init(out.length()))) {
+            LOG_WARN("init lob result failed", K(ret), K(out.length()));
+          } else if (OB_FAIL(text_res.append(out.ptr(), out.length()))) {
+            LOG_WARN("failed to append realdata", K(ret), K(out), K(text_res));
+          } else {
+            text_res.set_result();
+          }
         }
       }
     }

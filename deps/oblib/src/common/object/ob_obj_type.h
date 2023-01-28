@@ -1343,9 +1343,8 @@ inline bool ob_is_var_len_type(const ObObjType type) {
       || ob_is_rowid_tc(type)
       || ob_is_lob_locator(type);
 }
-inline bool is_lob_v2(ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type) || ob_is_geometry_tc(type); }
+inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type) || ob_is_geometry_tc(type); }
 inline bool ob_is_geometry(const ObObjType type) { return ObGeometryType == type; }
-inline bool ob_is_lob_group(const ObObjType type) { return ob_is_json(type) || ob_is_geometry(type) || ob_is_large_text(type); }
 
 // to_string adapter
 template<>

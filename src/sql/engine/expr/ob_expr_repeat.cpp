@@ -18,6 +18,7 @@
 
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -174,6 +175,56 @@ int ObExprRepeat::repeat(ObString &output,
   return ret;
 }
 
+int ObExprRepeat::repeat_text(ObObjType res_type,
+                              bool has_lob_header,
+                              ObString &output,
+                              bool &is_null,
+                              const ObString &text,
+                              const int64_t count,
+                              ObIAllocator &allocator,
+                              const int64_t max_result_size)
+{
+  // result is text tc, but text string is varchar (), refer to calc_result_type
+  is_null = false;
+  int ret = OB_SUCCESS;
+  if (count <= 0 || text.length() <= 0 || max_result_size <= 0) { // Notice: result is "", not null.
+    ObTextStringResult result_buffer(res_type, has_lob_header, &allocator);
+    if (OB_FAIL(result_buffer.init(0))) {
+      LOG_WARN("init stringtextbuffer failed", K(ret));
+    } else {
+      result_buffer.get_result_buffer(output);
+    }
+  } else {
+    int64_t length = static_cast<int64_t>(text.length());
+    // Safe length check
+    if ((length > max_result_size / count) || (length > INT_MAX / count)) {
+      LOG_WARN("Result of repeat was larger than max_allow_packet_size",
+          K(ret), K(length), K(count), K(max_result_size));
+      ret = OB_ERR_FUNC_RESULT_TOO_LARGE;
+      LOG_USER_ERROR(OB_ERR_FUNC_RESULT_TOO_LARGE, "repeat", static_cast<int>(max_result_size));
+    } else {
+      int64_t tot_length = length * count;
+      int64_t buffer_len = 0;
+      char *buf = NULL;
+      ObTextStringResult result_buffer(res_type, has_lob_header, &allocator);
+      if (OB_FAIL(result_buffer.init(tot_length))) {
+        LOG_WARN("init result failed", K(ret), K(tot_length));
+      } else {
+        int64_t tmp_count = count;
+        while (tmp_count-- && (OB_SUCC(ret))) {
+          if (OB_FAIL(result_buffer.append(text))) {
+            LOG_WARN("append result failed", K(ret), K(result_buffer), K(text));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          result_buffer.get_result_buffer(output);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExprRepeat::calc(ObObj &result,
                        const ObObjType res_type,
                        const ObString &text,
@@ -184,6 +235,7 @@ int ObExprRepeat::calc(ObObj &result,
   int ret = OB_SUCCESS;
   ObString output;
   bool is_null = false;
+  bool has_lob_header = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && (res_type != ObTinyTextType));
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null allocator", K(ret), K(allocator));
@@ -191,13 +243,22 @@ int ObExprRepeat::calc(ObObj &result,
     ret = OB_INVALID_ARGUMENT;
     // ObExprRepeat::calc_result_type2()方法中，规定返回结果的类型一定是属于某个string type
     LOG_WARN("make sure res_type is string type", K(ret), K(res_type));
-  } else if (OB_FAIL(repeat(output, is_null, text, count, *allocator, max_result_size))) {
+  } else if (!ob_is_text_tc(res_type)) {
+    ret = repeat(output, is_null, text, count, *allocator, max_result_size);
+  } else {
+    ret = repeat_text(res_type, has_lob_header, output, is_null,
+                      text, count, *allocator, max_result_size);
+  }
+  if (OB_FAIL(ret)) {
     LOG_WARN("do repeat failed", K(ret));
   } else {
     if (is_null) {
       result.set_null();
     } else {
       result.set_string(res_type, output);
+      if (has_lob_header) {
+        result.set_has_lob_header();
+      }
     }
   }
   return ret;
@@ -227,9 +288,16 @@ int ObExprRepeat::eval_repeat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
   } else {
     ObExprStrResAlloc expr_res_alloc(expr, ctx);
     bool is_null = false;
+    bool has_lob_header = expr.obj_meta_.has_lob_header();
     ObString output;
-    if (OB_FAIL(repeat(output, is_null,
-                       text->get_string(), count->get_int(), expr_res_alloc, max_size))) {
+    if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+      ret = repeat(output, is_null,
+                   text->get_string(), count->get_int(), expr_res_alloc, max_size);
+    } else { // text tc
+      ret = repeat_text(expr.datum_meta_.type_, has_lob_header, output, is_null,
+                        text->get_string(), count->get_int(), expr_res_alloc, max_size);
+    }
+    if (OB_FAIL(ret)) {
       LOG_WARN("do repeat failed", K(ret));
     } else {
       if (is_null) {

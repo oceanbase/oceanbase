@@ -16,6 +16,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_utils.h"
 #include "common/ob_smart_call.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/charset/ob_charset.h"
 
 using namespace oceanbase::common;
@@ -452,29 +453,60 @@ int ObExprUtil::set_expr_ascii_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
                                       const common::ObCollationType src_coll_type)
 {
   int ret = OB_SUCCESS;
-  if (ascii.empty()) {
-    if (lib::is_oracle_mode()) {
-      expr_datum.set_null();
+  if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+    if (ascii.empty()) {
+      if (lib::is_oracle_mode()) {
+        expr_datum.set_null();
+      } else {
+        expr_datum.set_string(ObString());
+      }
     } else {
-      expr_datum.set_string(ObString());
+      ObArenaAllocator temp_allocator;
+      ObString out;
+      char *buf = NULL;
+      if (is_ascii && !ObCharset::is_cs_nonascii(expr.datum_meta_.cs_type_)) {
+        out = ascii;
+      } else if (OB_FAIL(ObCharset::charset_convert(temp_allocator, ascii, src_coll_type,
+                                            expr.datum_meta_.cs_type_, out))) {
+        LOG_WARN("charset convert failed", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, out.length(), datum_idx))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(out.length()));
+      } else {
+        MEMCPY(buf, out.ptr(), out.length());
+        expr_datum.set_string(buf, out.length());
+      }
     }
-  } else {
-    ObArenaAllocator temp_allocator;
+  } else { // text tc
+    ObArenaAllocator temp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObString out;
     char *buf = NULL;
-    if (is_ascii && !ObCharset::is_cs_nonascii(expr.datum_meta_.cs_type_)) {
-     out = ascii;
-    } else if (OB_FAIL(ObCharset::charset_convert(temp_allocator, ascii, src_coll_type,
-                                           expr.datum_meta_.cs_type_, out))) {
-      LOG_WARN("charset convert failed", K(ret));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, out.length(), datum_idx))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret), K(out.length()));
+    ObTextStringDatumResult res(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+    if (ascii.empty()) {
+      if (lib::is_oracle_mode()) {
+        expr_datum.set_null();
+      } else if (OB_FAIL(res.init_with_batch_idx(0, datum_idx))) {
+        LOG_WARN("init text str result failed", K(ret));
+      } else {
+        res.set_result();
+      }
     } else {
-      MEMCPY(buf, out.ptr(), out.length());
-      expr_datum.set_string(buf, out.length());
+      if (is_ascii && !ObCharset::is_cs_nonascii(expr.datum_meta_.cs_type_)) {
+        out = ascii;
+      } else if (OB_FAIL(ObCharset::charset_convert(temp_allocator, ascii, src_coll_type,
+                                                    expr.datum_meta_.cs_type_, out))) {
+        LOG_WARN("charset convert failed", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(res.init_with_batch_idx(out.length(), datum_idx))) {
+        LOG_WARN("init text str result failed");
+      } else if (OB_FAIL(res.append(out.ptr(), out.length()))) {
+        LOG_WARN("append text str result failed", K(ret));
+      } else {
+        res.set_result();
+      }
     }
   }
   return ret;

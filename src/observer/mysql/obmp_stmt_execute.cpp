@@ -49,6 +49,8 @@
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "observer/mysql/obmp_utils.h"
+#include "share/ob_lob_access_utils.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
 {
@@ -2110,35 +2112,53 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
             param.set_urowid(urowid_data);
           }
         } else {
+          bool is_lob_v1 = false;
           if (MYSQL_TYPE_STRING == type
               || MYSQL_TYPE_VARCHAR == type
               || MYSQL_TYPE_VAR_STRING == type
               || MYSQL_TYPE_ORA_CLOB == type
               || MYSQL_TYPE_JSON == type
               || MYSQL_TYPE_GEOMETRY == type) {
-            const int64_t extra_len = MYSQL_TYPE_ORA_CLOB == type
-                ? str.length() - reinterpret_cast<const ObLobLocator *>(str.ptr())->payload_size_
-                : 0;
+            int64_t extra_len = 0;
             if (MYSQL_TYPE_ORA_CLOB == type) {
-              const ObLobLocator &lob = *(reinterpret_cast<const ObLobLocator *>(str.ptr()));
-              if (OB_UNLIKELY(! lob.is_valid() || lob.get_total_size() != length)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("got invalid ps lob param", K(length), K(lob.magic_code_), K(lob.table_id_),
-                          K(lob.column_id_), K(lob.payload_offset_), K(lob.payload_size_),
-                          K(type), K(cs_type), K(lob.get_total_size()), K(lob.get_data_length()));
+              ObLobLocatorV2 lob(str);
+              if (lob.is_lob_locator_v1()) {
+                is_lob_v1 = true;
+                const ObLobLocator &lobv1 = *(reinterpret_cast<const ObLobLocator *>(str.ptr()));
+                if (OB_UNLIKELY(! lobv1.is_valid() || lobv1.get_total_size() != length)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("got invalid ps lob param", K(length), K(lobv1.magic_code_), K(lobv1.table_id_),
+                            K(lobv1.column_id_), K(lobv1.payload_offset_), K(lobv1.payload_size_),
+                            K(type), K(cs_type), K(lobv1.get_total_size()), K(lobv1.get_data_length()));
+                } else {
+                  extra_len = str.length() - reinterpret_cast<const ObLobLocator *>(str.ptr())->payload_size_;
+                }
+              } else {
+                if (!lob.is_valid()) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("got invalid ps lob param", K(length), K(lob), K(type), K(cs_type));
+                } // if INROW, does it need to do copy_or_convert_str?
               }
             }
-            OZ(copy_or_convert_str(allocator,
+            if (is_lob_v1 || MYSQL_TYPE_ORA_CLOB != type) {
+              OZ(copy_or_convert_str(allocator,
                                   cur_cs_type,
                                   cs_type,
                                   ObString(str.length() - extra_len, str.ptr() + extra_len),
                                   dst,
                                   extra_len));
+            }
             if (OB_SUCC(ret) && MYSQL_TYPE_ORA_CLOB == type) {
-              // copy lob header
-              dst.assign_ptr(dst.ptr() - extra_len, dst.length() + extra_len);
-              MEMCPY(dst.ptr(), str.ptr(), extra_len);
-              reinterpret_cast<ObLobLocator *>(dst.ptr())->payload_size_ = dst.length() - extra_len;
+              if (is_lob_v1) {
+                // copy lob header
+                dst.assign_ptr(dst.ptr() - extra_len, dst.length() + extra_len);
+                MEMCPY(dst.ptr(), str.ptr(), extra_len);
+                reinterpret_cast<ObLobLocator *>(dst.ptr())->payload_size_ = dst.length() - extra_len;
+              } else {
+                if (OB_FAIL(ob_write_string(allocator, str, dst))) {
+                  LOG_WARN("Failed to write str", K(ret));
+                }
+              }
             }
           } else if (OB_FAIL(ob_write_string(allocator, str, dst))) {
             LOG_WARN("Failed to write str", K(ret));
@@ -2167,9 +2187,17 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
               } else {
                 param.set_collation_type(cs_type);
               }
-              const ObLobLocator &lob = *(reinterpret_cast<const ObLobLocator *>(dst.ptr()));
-              param.set_lob_locator(lob);
-              LOG_TRACE("get lob locator", K(lob), K(cs_type), K(type));
+              if (is_lob_v1) {
+                const ObLobLocator &lob = *(reinterpret_cast<const ObLobLocator *>(dst.ptr()));
+                param.set_lob_locator(lob);
+                param.set_has_lob_header();
+                LOG_TRACE("get lob locator", K(lob), K(cs_type), K(type));
+              } else {
+                ObLobLocatorV2 lob(str);
+                param.set_lob_value(ObLongTextType, dst.ptr(), dst.length());
+                param.set_has_lob_header();
+                LOG_TRACE("get lob locator v2", K(lob), K(cs_type), K(type));
+              }
             } else if (MYSQL_TYPE_TINY_BLOB == type
                       || MYSQL_TYPE_MEDIUM_BLOB == type
                       || MYSQL_TYPE_BLOB == type
@@ -2182,6 +2210,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
               // in text protocol:
               //    Oracle mode: server will call hextoraw()
               //    MySQL mode: no need to call hextoraw
+              // Notice: text tc without lob header here, should not set has_lob_header flag here
               param.set_collation_type(cs_type);
               if (MYSQL_TYPE_TINY_BLOB == type) {
                 param.set_lob_value(ObTinyTextType, dst.ptr(), dst.length());
@@ -2195,6 +2224,11 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                 param.set_json_value(ObJsonType, dst.ptr(), dst.length());
               } else if (MYSQL_TYPE_GEOMETRY == type) {
                 param.set_geometry_value(ObGeometryType, dst.ptr(), dst.length());
+              }
+              if (OB_SUCC(ret) && param.is_lob_storage() && dst.length() > 0) {
+                if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(param, allocator))) {
+                  LOG_WARN("Fail to convert plain lob data to templob",K(ret));
+                }
               }
             } else {
               param.set_collation_type(cs_type);

@@ -78,6 +78,9 @@ private:
                               ObObjMeta &src_obj_meta,
                               ObExpr *src_expr,
                               int64_t group_idx);
+  int eval_values_op_dynamic_cast_to_lob(ObExpr &real_src_expr,
+                                         ObObjMeta &src_obj_meta,
+                                         ObExpr *dst_expr);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprValuesOp);
 

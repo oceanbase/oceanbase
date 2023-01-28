@@ -17,6 +17,7 @@
 #include "lib/container/ob_array.h"
 #include "rpc/obmysql/ob_mysql_field.h"
 #include "observer/ob_server.h"
+#include "share/ob_lob_access_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::observer;
@@ -44,9 +45,14 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
 
     // 对于Varchar类，检查charset：
     mfield.flags_ &= (~BINARY_FLAG);
+    bool is_oracle_lob = false;
+    if (ObLongTextType == field.type_.get_type() && lib::is_oracle_mode()) { // was ObLobType
+      is_oracle_lob = true;
+    }
     if (ob_is_string_type(field.type_.get_type())
         && ObCharset::is_valid_collation(static_cast<ObCollationType>(field.charsetnr_))
-        && ObCharset::is_bin_sort(static_cast<ObCollationType>(field.charsetnr_))) {
+        && ObCharset::is_bin_sort(static_cast<ObCollationType>(field.charsetnr_))
+        && !is_oracle_lob) {
       mfield.flags_ |= BINARY_FLAG;
     }
 
@@ -56,6 +62,9 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
       mfield.type_ = MYSQL_TYPE_CURSOR;
     } else {
       ret = ObSMUtils::get_mysql_type(field.type_.get_type(), mfield.type_, mfield.flags_, decimals);
+    }
+    if (OB_SUCC(ret) && is_oracle_lob) {
+      mfield.flags_ &= (~BLOB_FLAG); // was ObLobType
     }
 
     mfield.type_owner_ = field.type_owner_;

@@ -159,8 +159,6 @@ struct ObDatumDesc {
   bool is_ext() const { return flag_ == FlagType::EXT; }
   void set_outrow() { null_ = 0; flag_ = FlagType::OUTROW; }
   bool is_outrow() const { return flag_ == FlagType::OUTROW; }
-  void set_has_lob_header() { null_ = 0; flag_ = FlagType::HAS_LOB_HEADER; }
-  bool has_lob_header() const { return flag_ == FlagType::HAS_LOB_HEADER; }
 } __attribute__ ((packed)) ;
 
 // Datum structure, multiple inheritance from ObDatumPtr and ObDatumDesc makes
@@ -549,9 +547,7 @@ inline void ObDatum::obj2datum<OBJ_DATUM_STRING>(const ObObj &obj)
 {
   ptr_ = const_cast<char *>(obj.v_.string_);
   pack_ = obj.val_len_;
-  if (obj.has_lob_header()) {
-    set_has_lob_header();
-  } else if (obj.is_outrow()) {
+  if (obj.is_outrow()) {
     set_outrow();
   }
 }
@@ -561,9 +557,7 @@ inline void ObDatum::datum2obj<OBJ_DATUM_STRING>(ObObj &obj) const
 {
   obj.val_len_ = len_;
   obj.v_.string_ = ptr_;
-  if (has_lob_header()) {
-    obj.set_has_lob_header();
-  } else if (is_outrow()) {
+  if (is_outrow()) {
     obj.set_outrow();
   }
 }

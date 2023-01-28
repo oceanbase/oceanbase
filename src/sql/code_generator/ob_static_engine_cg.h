@@ -495,6 +495,7 @@ private:
                                                                  || T_FUN_SUM == expr_type
                                                                  || T_FUN_MAX == expr_type
                                                                  || T_FUN_MIN == expr_type; }
+  uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
   int check_fk_nested_dup_del(const uint64_t table_id,
                               const uint64_t root_table_id,
                               DASTableIdList &parent_tables,
@@ -539,9 +540,7 @@ private:
   common::ObSEArray<uint64_t, 10> fake_cte_tables_;
   ObDmlCgService dml_cg_service_;
   ObTscCgService tsc_cg_service_;
-
   uint64_t cur_cluster_version_;
-
   common::ObSEArray<BatchExecParamCache, 8> batch_exec_param_caches_;
 
 };

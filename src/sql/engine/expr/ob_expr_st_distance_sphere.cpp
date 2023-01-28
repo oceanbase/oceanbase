@@ -91,6 +91,8 @@ int ObExprSTDistanceSphere::eval_st_distance_sphere(const ObExpr &expr,
   const ObSrsItem *srs2 = NULL;
   ObDatum *wkb1_datum = NULL;
   ObDatum *wkb2_datum = NULL;
+  ObString wkb1;
+  ObString wkb2;
   ObString wkb1_copy;
   ObString wkb2_copy;
   ObGeometry *g1 = NULL;
@@ -108,16 +110,24 @@ int ObExprSTDistanceSphere::eval_st_distance_sphere(const ObExpr &expr,
     LOG_WARN("fail to eval wkb2 datum", K(ret));
   } else if (wkb2_datum->is_null()) {
     is_null_result = true;
-  } else if (OB_FAIL(ob_write_string(tmp_allocator, wkb1_datum->get_string(), wkb1_copy))) {
-    LOG_WARN("fail to copy wkb1", K(ret), K(wkb1_datum->get_string()));
+  } else if (FALSE_IT(wkb1 = wkb1_datum->get_string())) {
+  } else if (FALSE_IT(wkb2 = wkb2_datum->get_string())) {
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *wkb1_datum,
+            expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb1))) {
+    LOG_WARN("fail to get real string data", K(ret), K(wkb1));
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *wkb2_datum,
+            expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), wkb2))) {
+    LOG_WARN("fail to get real string data", K(ret), K(wkb2));
+  } else if (OB_FAIL(ob_write_string(tmp_allocator, wkb1, wkb1_copy))) {
+    LOG_WARN("fail to copy wkb1", K(ret), K(wkb1));
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1_copy, srs1,
       true, N_ST_DISTANCE_SPHERE))) {
     LOG_WARN("fail to get srs1 item", K(ret), K(wkb1_copy));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_allocator, wkb1_copy,
       g1, srs1, N_ST_DISTANCE_SPHERE))) {
     LOG_WARN("fail to create geo1", K(ret), K(wkb1_copy));
-  } else if (OB_FAIL(ob_write_string(tmp_allocator, wkb2_datum->get_string(), wkb2_copy))) {
-    LOG_WARN("fail to copy wkb2", K(ret), K(wkb2_datum->get_string()));
+  } else if (OB_FAIL(ob_write_string(tmp_allocator, wkb2, wkb2_copy))) {
+    LOG_WARN("fail to copy wkb2", K(ret), K(wkb2));
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb2_copy, srs2,
       true, N_ST_DISTANCE_SPHERE))) {
     LOG_WARN("fail to get srs2 item", K(ret), K(wkb2_copy));

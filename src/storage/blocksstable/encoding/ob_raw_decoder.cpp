@@ -283,9 +283,7 @@ int ObRawDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int
   } else if (STORED_NOT_EXT != val) {
     set_stored_ext_value(cell, static_cast<ObStoredExtValue>(val));
   } else {
-    if (is_out_row_column_) {
-      cell.set_outrow();
-    } else if (cell.get_meta() != ctx.obj_meta_) {
+    if (cell.get_meta() != ctx.obj_meta_) {
       cell.set_meta_type(ctx.obj_meta_);
     }
     // read bit packing value
@@ -1010,9 +1008,6 @@ int ObRawDecoder::load_data_to_obj_cell(
     { // json and text storage class have the same behavior currently
       load_obj.val_len_ = static_cast<int32_t>(cell_len);
       load_obj.v_.string_ = cell_data;
-      if (is_out_row_column_) {
-        load_obj.set_outrow();
-      }
       break;
     }
     case ObOTimestampSC:

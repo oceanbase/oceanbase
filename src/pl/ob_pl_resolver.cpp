@@ -1488,8 +1488,8 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
             || scalar_data_type.get_meta_type().is_geometry()) {
       ObObjMeta tmp_meta = scalar_data_type.get_meta_type();
       if (ObLongTextType == tmp_meta.get_type() && is_oracle_mode()) {
-        tmp_meta.set_type(ObLobType);
         scalar_data_type.set_meta_type(tmp_meta);
+        scalar_data_type.set_length(-1); // was set ObLobType
       }
       ObCharsetType charset_type = scalar_data_type.get_charset_type();
       ObCollationType collation_type = scalar_data_type.get_collation_type();
@@ -1588,6 +1588,9 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
         scalar_data_type.meta_.set_scale(scalar_data_type.get_precision());
       } else {
         scalar_data_type.meta_.set_scale(scalar_data_type.get_scale());
+        if (is_lob_storage(scalar_data_type.get_meta_type().get_type())) {
+          scalar_data_type.meta_.set_has_lob_header();
+        }
       }
       data_type.set_data_type(scalar_data_type);
     }
@@ -2389,7 +2392,7 @@ int ObPLResolver::adjust_routine_param_type(ObPLDataType &type)
       case ObTextTC:
       case ObJsonTC:
       case ObGeometryTC: {
-        data_type.set_length(0);
+        data_type.set_length(-1);
         data_type.set_scale(default_accuracy.get_scale());
       } break;
       case ObBitTC: {
@@ -13824,7 +13827,8 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
           || ret_type.is_boolean_type()
           || ret_type.is_urowid_type()
           // || ret_type.is_long_type()
-          || ret_type.is_lob_type()))
+          || ret_type.is_lob_type()
+          || ret_type.is_lob_storage_type()))
       {
         ret = OB_ERR_MAP_RET_SCALAR_TYPE;
         LOG_USER_ERROR(OB_ERR_MAP_RET_SCALAR_TYPE);

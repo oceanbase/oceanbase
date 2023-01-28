@@ -37,6 +37,7 @@
 #include "sql/resolver/ddl/ob_column_sequence_resolver.h"
 #include "share/ob_get_compat_mode.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -5016,6 +5017,16 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
         if(OB_FAIL(ObObjCaster::to_type(column.get_data_type(), cast_ctx, default_value, dest_obj))) {
           LOG_WARN("cast obj failed, ", "src type", default_value.get_type(), "dest type", column.get_data_type(), K(default_value), K(ret));
         } else {
+          // remove lob header for lob
+          if (dest_obj.has_lob_header()) {
+            ObString str;
+            if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, dest_obj, str))) {
+              LOG_WARN("failed to read real data for lob obj", K(ret), K(dest_obj));
+            } else {
+              dest_obj.set_string(dest_obj.get_type(), str);
+              dest_obj.set_inrow();
+            }
+          }
           if (OB_UNLIKELY(lib::is_oracle_mode()
                           && dest_obj.is_number_float()
                           && PRECISION_UNKNOWN_YET != column.get_data_precision())) {

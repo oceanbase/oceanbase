@@ -26,6 +26,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include "observer/virtual_table/ob_virtual_data_access_service.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs_mgr.h"
 
 namespace oceanbase
@@ -2281,7 +2282,12 @@ int ObTableScanOp::construct_partition_range(ObArenaAllocator &allocator,
           sql::ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
           if (OB_FAIL(datum.from_obj(start_row_key[i], expr->obj_datum_map_))) {
             LOG_WARN("convert obj to datum failed", K(ret));
-          } else {
+          } else if (is_lob_storage(start_row_key[i].get_type()) &&
+                     OB_FAIL(ob_adjust_lob_datum(start_row_key[i], expr->obj_meta_, expr->obj_datum_map_,
+                                                 get_exec_ctx().get_allocator(), datum))) {
+            LOG_WARN("adjust lob datum failed", K(ret), K(i),
+                     K(start_row_key[i].get_meta()), K(expr->obj_meta_));
+          }else {
             expr->set_evaluated_projected(eval_ctx_);
           }
         }
@@ -2447,7 +2453,9 @@ int ObTableScanOp::init_ddl_column_checksum()
             LOG_WARN("invalid col param", K(ret));
           } else if (MY_SPEC.ddl_output_cids_.at(i) == col_param->get_column_id()) {
             found = true;
-            if (is_pad_char_to_full_length(session->get_sql_mode())) {
+            if (col_param->get_meta_type().is_lob_storage()) {
+              need_reshape = true;
+            } else if (is_pad_char_to_full_length(session->get_sql_mode())) {
               need_reshape = col_param->get_meta_type().is_fixed_len_char_type();
             }
           }
@@ -2574,6 +2582,21 @@ int ObTableScanOp::reshape_ddl_column_obj(ObDatum &datum, const ObObjMeta &obj_m
   int ret = OB_SUCCESS;
   if (datum.is_null()) {
     // do not need to reshape
+  } else if (obj_meta.is_lob_storage()) {
+    ObLobLocatorV2 lob(datum.get_string(), obj_meta.has_lob_header());
+    ObString disk_loc;
+    if (!lob.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid lob locator", K(ret));
+    } else if (!lob.is_lob_disk_locator() && !lob.is_persist_lob()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid lob locator, should be persist lob", K(ret), K(lob));
+    } else if (OB_FAIL(lob.get_disk_locator(disk_loc))) {
+      LOG_WARN("get disk locator failed", K(ret), K(lob));
+    }
+    if (OB_SUCC(ret)) {
+      datum.set_string(disk_loc);
+    }
   } else if (OB_UNLIKELY(!obj_meta.is_fixed_len_char_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no need to reshape non-char", K(ret));
@@ -2832,7 +2855,11 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
           ObS2Cellids cellids;
           ObString mbr_val(0, static_cast<char *>(spat_index_.mbr_buffer_));
 
-          if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(geo_wkb, srid))) {
+          ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *in_datum,
+                      expr->datum_meta_, expr->obj_meta_.has_lob_header(), geo_wkb))) {
+            LOG_WARN("failed to get real geo data.", K(ret));
+          } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(geo_wkb, srid))) {
             LOG_WARN("failed to get srid", K(ret), K(geo_wkb));
           } else if (srid != 0 &&
               OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(tenant_id, srs_guard))) {

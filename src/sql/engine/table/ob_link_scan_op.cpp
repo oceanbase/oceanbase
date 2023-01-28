@@ -19,6 +19,7 @@
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
 #include "sql/ob_sql_utils.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -539,6 +540,10 @@ int ObLinkScanOp::inner_get_next_row()
       if (OB_SUCC(ret)) {
         if (OB_FAIL(datum.from_obj(*res_obj))) {
           LOG_WARN("from obj failed", K(ret));
+        } else if (is_lob_storage(res_obj->get_type()) &&
+                   OB_FAIL(ob_adjust_lob_datum(*res_obj, expr->obj_meta_,
+                                               get_exec_ctx().get_allocator(), datum))) {
+          LOG_WARN("adjust lob datum failed", K(ret), K(i), K(res_obj->get_meta()), K(expr->obj_meta_));
         } else {
           expr->set_evaluated_projected(eval_ctx_);
         }

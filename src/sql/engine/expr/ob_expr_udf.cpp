@@ -20,6 +20,7 @@
 #include "sql/ob_spi.h"
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_stmt.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -578,6 +579,10 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                          K(result.get_type()), K(expr.datum_meta_.type_));
       }
       OZ(res.from_obj(result, expr.obj_datum_map_));
+      if (is_lob_storage(result.get_type())) {
+        OZ(ob_adjust_lob_datum(result, expr.obj_meta_, expr.obj_datum_map_,
+                              ctx.exec_ctx_.get_allocator(), res));
+      }
       OZ(expr.deep_copy_datum(ctx, res));
     }
     if (need_end_stmt) {

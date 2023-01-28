@@ -213,7 +213,13 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     omt::ObSrsCacheGuard srs_guard;
     const ObSrsItem *srs = NULL;
 
-    if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs, true, N_ST_DISTANCE))) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum1,
+              gis_arg1->datum_meta_, gis_arg1->obj_meta_.has_lob_header(), wkb1))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkb1));
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum2,
+              gis_arg2->datum_meta_, gis_arg2->obj_meta_.has_lob_header(), wkb2))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkb2));
+    } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs, true, N_ST_DISTANCE))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb1));
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_ST_DISTANCE))) {
       LOG_WARN("get first geo by wkb failed", K(ret));

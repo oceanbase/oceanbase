@@ -260,7 +260,9 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   } else {
     ObString j_str = json_datum->get_string();
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
-    if (j_str.length() == 0) { // maybe input json doc is null type
+    if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, j_str, is_null_result))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (j_str.length() == 0) { // maybe input json doc is null type
       is_null_result = true;
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&temp_allocator, j_str, j_in_type,
         j_in_type, j_base))) {
@@ -318,7 +320,9 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     } else {
       ObString j_path_text = json_datum->get_string();
       ObJsonPath *j_path;
-      if (j_path_text.length() == 0) {
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, j_path_text, is_null_result))) {
+        LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
+      } else if (j_path_text.length() == 0) {
         is_null_result = true;
       }
       
@@ -326,7 +330,8 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       ObJsonPathCache* path_cache = ObJsonExprHelper::get_path_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
       path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
 
-      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 1, true))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 1, true))) {
         is_cover_by_error = false;
         LOG_WARN("parse text to path failed", K(json_datum->get_string()), K(ret));
       } else if (OB_FAIL(doc_do_seek(hits, is_null_result, json_datum, j_path, j_base, expr, ctx, is_cover_by_error, accuracy,
@@ -398,7 +403,9 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
     }
     if OB_SUCC(ret) {
       ObString j_path_text = json_datum->get_string();
-      if (j_path_text.length() == 0) {
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, j_path_text, is_null_result))) {
+        LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
+      } else if (j_path_text.length() == 0) { // maybe input json doc is null type
         is_null_result = true;
       }
       ObJsonPathCache ctx_cache(&temp_allocator);
@@ -462,8 +469,11 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(dst_type), ob_obj_type_str(type));
   } else {
     ObString j_str = json_datum->get_string();
-    if (OB_SUCC(ret))
-    {
+    if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, j_str, is_null_result))) {
+        LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (j_str.length() == 0) {
+      is_null_result = true;
+    } else {
       j_in_type = ObJsonExprHelper::get_json_internal_type(type);
       uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
       if (j_str.length() == 0) { // maybe input json doc is null type
@@ -1574,35 +1584,38 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
     case ObLongTextType: {
       ObString val;
       ret = cast_to_string(allocator, j_base, in_coll_type, dst_coll_type, accuracy, dst_type, val, is_type_cast);
+      ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
       if (OB_FAIL(ret)) {
       } else if (ascii_type == 0) {
-        char *buf = expr.get_str_res_mem(ctx, val.length());
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory failed", K(ret));
-        } else {
-          MEMCPY(buf, val.ptr(), val.length());
-          val.assign_ptr(buf, val.length());
+        if (OB_FAIL(text_result.init(val.length()))) {
+          LOG_WARN("init lob result failed");
+        } else if (OB_FAIL(text_result.append(val))) {
+          LOG_WARN("failed to append realdata", K(ret), K(val), K(text_result));
         }
       } else {
         char *buf = NULL;
         int64_t buf_len = val.length() * ObCharset::MAX_MB_LEN * 2;
+        int64_t reserve_len = 0;
         int32_t length = 0;
 
-        if (OB_ISNULL(buf = static_cast<char*>(expr.get_str_res_mem(ctx, buf_len)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory", K(ret), K(val));
+        if (OB_FAIL(text_result.init(buf_len))) {
+          LOG_WARN("init lob result failed");
+        } else if (OB_FAIL(text_result.get_reserved_buffer(buf, reserve_len))) {
+          LOG_WARN("fail to get reserved buffer", K(ret));
+        } else if (reserve_len != buf_len) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get reserve len is invalid", K(ret), K(reserve_len), K(buf_len));
         } else if (OB_FAIL(ObJsonExprHelper::calc_asciistr_in_expr(val, expr.args_[0]->datum_meta_.cs_type_,
-                                                  expr.datum_meta_.cs_type_,
-                                                  buf, buf_len, length))) {
+                                                                   expr.datum_meta_.cs_type_,
+                                                                   buf, reserve_len, length))) {
           LOG_WARN("fail to calc unistr", K(ret));
-        } else {
-          val.assign_ptr(buf, length);
+        } else if (OB_FAIL(text_result.lseek(length, 0))) {
+          LOG_WARN("text_result lseek failed", K(ret), K(text_result), K(length));
         }
       }
       if (!try_set_error_val<ObDatum>(expr, ctx, res, ret, error_type, error_val, mismatch_val, mismatch_type, is_type_cast, accuracy, dst_type)) {
         // old engine set same alloctor for wrapper, so we can use val without copy
-        res.set_string(val);
+        text_result.set_result();
       }
       break;
     }
@@ -1617,18 +1630,16 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
     case ObJsonType: {
       ObString out_val;
       ret = cast_to_json(allocator, j_base, out_val, is_type_cast);
+      ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
       if (OB_SUCC(ret)) {
-        char *buf = expr.get_str_res_mem(ctx, out_val.length());
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory failed", K(ret));
-        } else {
-          MEMCPY(buf, out_val.ptr(), out_val.length());
-          out_val.assign_ptr(buf, out_val.length());
+        if (OB_FAIL(text_result.init(out_val.length()))) {
+          LOG_WARN("init lob result failed");
+        } else if (OB_FAIL(text_result.append(out_val))) {
+          LOG_WARN("failed to append realdata", K(ret), K(out_val), K(text_result));
         }
       }
       if (!try_set_error_val<ObDatum>(expr, ctx, res, ret, error_type, error_val, mismatch_val, mismatch_type, is_type_cast, accuracy, dst_type)) {
-        res.set_string(out_val);
+        text_result.set_result();
       }
       break;
     }

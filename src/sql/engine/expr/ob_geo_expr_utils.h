@@ -24,6 +24,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_i_sql_expression.h" // for ObExprCtx
 #include "observer/omt/ob_tenant_srs_mgr.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -109,6 +110,9 @@ public:
                         uint32_t srs_id = 0);
   static void geo_func_error_handle(int ret, const char* func_name);
   static int zoom_in_geos_for_relation(common::ObGeometry &geo1, common::ObGeometry &geo2);
+
+  static int pack_geo_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str);
+
 };
 
 } // sql

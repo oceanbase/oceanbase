@@ -108,7 +108,10 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
     uint32_t dest_srid = 0;
     ObString wkb = gis_datum->get_string();
     const ObSrsItem *dest_srs_item = NULL;
-    if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, src_srid))) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum,
+                expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
+      LOG_WARN("fail to get real data.", K(ret), K(wkb));
+    } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, src_srid))) {
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_TRANSFORM);
       LOG_WARN("get srid from wkb failed", K(wkb), K(ret));
@@ -157,6 +160,10 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
             LOG_USER_ERROR(OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED, src_srid);
           } else {
             dest_proj4_param = datum2->get_string();
+            if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *datum2,
+                        expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), dest_proj4_param))) {
+              LOG_WARN("fail to get real data.", K(ret), K(dest_proj4_param));
+            }
           }
         }
 
@@ -171,7 +178,10 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
         ObDatum *datum3 = NULL;
         src_proj4_param = datum2->get_string();
         src_srs_item = NULL;
-        if (OB_FAIL(expr.args_[2]->eval(ctx, datum3))) {
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *datum2,
+                    expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), src_proj4_param))) {
+          LOG_WARN("fail to get real data.", K(ret), K(src_proj4_param));
+        } else if (OB_FAIL(expr.args_[2]->eval(ctx, datum3))) {
           LOG_WARN("failed to eval datum", K(ret));
         } else if (ob_is_integer_type(expr.args_[2]->datum_meta_.type_)) {
           dest_srid = datum3->get_int();
@@ -192,6 +202,10 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
           }
         } else {
           dest_proj4_param = datum3->get_string();
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *datum3,
+                      expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), dest_proj4_param))) {
+            LOG_WARN("fail to get real data.", K(ret), K(dest_proj4_param));
+          }
         }
       }
 
