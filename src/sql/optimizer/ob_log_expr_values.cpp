@@ -102,6 +102,15 @@ int ObLogExprValues::add_values_expr(const common::ObIArray<ObRawExpr *> &value_
   return ret;
 }
 
+int ObLogExprValues::add_values_desc(const common::ObIArray<ObColumnRefRawExpr *> &value_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(value_desc_, value_desc))) {
+    LOG_WARN("failed to append desc", K(ret));
+  }
+  return ret;
+}
+
 int ObLogExprValues::compute_fd_item_set()
 {
   int ret = OB_SUCCESS;

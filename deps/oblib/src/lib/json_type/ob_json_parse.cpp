@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation support for the json parse abstraction.
  */
 
 #define USING_LOG_PREFIX SQL
@@ -16,14 +17,33 @@
 namespace oceanbase {
 namespace common {
 
-int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJsonNode *&j_tree)
+#define RELAXJSON_FLAG rapidjson::kParseInsituFlag
+/**
+ * rapidjson::kParseObjectKeyNoQuotesFlag \
+  | rapidjson::kParseIgnoreCaseForKeyword \
+  | rapidjson::kParseRelaxNumberFlag \
+  | rapidjson::kParseCommentsFlag \
+  | rapidjson::kParseTrailingCommasFlag
+ *
+ *
+*/
+
+#define STRICTJSON_FLAG rapidjson::kParseInsituFlag
+
+/**
+ * rapidjson::kParseObjectKeyNoQuotesFlag
+*/
+
+int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJsonNode *&j_tree,
+                           uint32_t parse_flag)
 {
   INIT_SUCC(ret);
   char buf[PARSE_SYNTAXERR_MESSAGE_LENGTH] = {0};
   const char *syntaxerr = buf;
   uint64_t offset = 0;
 
-  if (OB_FAIL(parse_json_text(allocator, text.ptr(), text.length(), syntaxerr, &offset, j_tree))) {
+  if (OB_FAIL(parse_json_text(allocator, text.ptr(), text.length(),
+                              syntaxerr, &offset, j_tree, parse_flag))) {
     LOG_WARN("fail to parse json text", K(ret), K(text), KCSTRING(syntaxerr));
   }
 
@@ -31,14 +51,17 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJson
 }
 
 int ObJsonParser::get_tree(ObIAllocator *allocator, const char *text,
-                    uint64_t length, ObJsonNode *&j_tree)
+                           uint64_t length, ObJsonNode *&j_tree,
+                           uint32_t parse_flag)
 {
   INIT_SUCC(ret);
   char buf[PARSE_SYNTAXERR_MESSAGE_LENGTH] = {0};
   const char *syntaxerr = buf;
   uint64_t offset = 0;
 
-  if (OB_FAIL(parse_json_text(allocator, text, length, syntaxerr, &offset, j_tree))) {
+  if (OB_FAIL(parse_json_text(allocator, text, length,
+                              syntaxerr, &offset, j_tree,
+                              parse_flag))) {
     LOG_WARN("fail to parse json text", K(ret), K(length), KCSTRING(syntaxerr));
   }
 
@@ -52,7 +75,7 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const char *text,
 int ObJsonParser::parse_json_text(ObIAllocator *allocator, 
                                   const char *text, uint64_t length,
                                   const char *&syntaxerr, uint64_t *offset,
-                                  ObJsonNode *&j_tree)
+                                  ObJsonNode *&j_tree, uint32_t parse_flag)
 {
   INIT_SUCC(ret);
 
@@ -66,13 +89,27 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
   } else {
     MEMCPY(buf, text, length);
     buf[length] = '\0';
-    ObRapidJsonHandler handler(allocator);
+    bool with_unique_key = HAS_FLAG(parse_flag, JSN_UNIQUE_FLAG);
+    ObRapidJsonHandler handler(allocator, with_unique_key);
     ObRapidJsonAllocator parse_allocator(allocator);
     rapidjson::InsituStringStream ss(static_cast<char *>(buf));
     ObRapidJsonReader reader(&parse_allocator);
+    rapidjson::ParseResult r;
+    try {
+      if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
+        r = reader.Parse<RELAXJSON_FLAG>(ss, handler);
+      } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
+        r = reader.Parse<STRICTJSON_FLAG>(ss, handler);
+      } else {
+        r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
+      }
+    } catch (const std::bad_alloc &e) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory for json text", K(ret), KCSTRING(text), K(length));
+    }
 
-    rapidjson::ParseResult r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
-    if (!r.IsError()) {
+    if (OB_FAIL(ret)) {
+    } else if (!r.IsError()) {
       j_tree = handler.get_built_doc();
       if (OB_ISNULL(j_tree) && OB_NOT_NULL(syntaxerr)) {
         allocator->free(buf);
@@ -82,7 +119,11 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
       }
     } else { // parse wrong, fill syntaxerr and offset.
       allocator->free(buf);
-      ret = OB_ERR_INVALID_JSON_TEXT;
+      if (handler.has_duplicate_key()) {
+        ret = OB_ERR_DUPLICATE_KEY;
+      } else {
+        ret = OB_ERR_INVALID_JSON_TEXT;
+      }
       if (offset != NULL){
         *offset = reader.GetErrorOffset();
       }
@@ -91,6 +132,10 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
       }
       LOG_WARN("fail to parse json text", K(ret), K(r.Code()));
     }
+  }
+
+  if (OB_SUCC(ret) && OB_ISNULL(j_tree->get_allocator())) {
+    j_tree->set_allocator(allocator);
   }
 
   return ret;
@@ -107,7 +152,8 @@ bool ObJsonParser::is_json_doc_over_depth(uint64_t depth)
   return is_over;
 }
 
-int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocator)
+int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocator,
+                                    uint32_t parse_flag)
 {
   INIT_SUCC(ret);
   char syntax_buf[PARSE_SYNTAXERR_MESSAGE_LENGTH] = {0};
@@ -127,22 +173,63 @@ int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocat
   } else {
     MEMCPY(alloc_buf, j_doc.ptr(), length);
     alloc_buf[length] = '\0';
-    ObJsonSyntaxCheckHandler handler(allocator);
-    ObRapidJsonAllocator parse_allocator(allocator);
-    rapidjson::InsituStringStream ss(static_cast<char *>(alloc_buf));
-    ObRapidJsonReader reader(&parse_allocator);
-
-    rapidjson::ParseResult r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
-    if (r.IsError()) {
-      allocator->free(alloc_buf);
-      if (handler.is_too_deep()) {
-        ret = OB_ERR_JSON_OUT_OF_DEPTH;
+    if (!HAS_FLAG(parse_flag, JSN_UNIQUE_FLAG)) {
+      ObJsonSyntaxCheckHandler handler(allocator);
+      ObRapidJsonAllocator parse_allocator(allocator);
+      rapidjson::InsituStringStream ss(static_cast<char *>(alloc_buf));
+      ObRapidJsonReader reader(&parse_allocator);
+      rapidjson::ParseResult r;
+      if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
+        r = reader.Parse<RELAXJSON_FLAG>(ss, handler);
+      } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
+        r = reader.Parse<STRICTJSON_FLAG>(ss, handler);
       } else {
-        ret = OB_ERR_INVALID_JSON_TEXT;
+        r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
       }
-      offset = reader.GetErrorOffset();
-      syntaxerr = rapidjson::GetParseError_En(reader.GetParseErrorCode());
-      LOG_WARN("fail to parse json text", K(ret), K(r.Code()), KCSTRING(syntaxerr), K(offset));
+      if (r.IsError()) {
+        allocator->free(alloc_buf);
+        if (handler.is_too_deep()) {
+          ret = OB_ERR_JSON_OUT_OF_DEPTH;
+        } else {
+          ret = OB_ERR_INVALID_JSON_TEXT;
+        }
+        offset = reader.GetErrorOffset();
+        syntaxerr = rapidjson::GetParseError_En(reader.GetParseErrorCode());
+        LOG_WARN("fail to parse json text", K(ret), K(r.Code()), KCSTRING(syntaxerr), K(offset));
+      }
+    } else {
+      ObRapidJsonHandler handler(allocator, true);
+      ObRapidJsonAllocator parse_allocator(allocator);
+      rapidjson::InsituStringStream ss(static_cast<char *>(alloc_buf));
+      ObRapidJsonReader reader(&parse_allocator);
+      rapidjson::ParseResult r;
+      if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
+        r = reader.Parse<RELAXJSON_FLAG>(ss, handler);
+      } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
+        r = reader.Parse<STRICTJSON_FLAG>(ss, handler);
+      } else {
+        r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
+      }
+
+      if (!r.IsError()) {
+        if (OB_ISNULL(handler.get_built_doc()) && OB_NOT_NULL(syntaxerr)) {
+          allocator->free(alloc_buf);
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("The parsing failed for some other reason than a syntax error.");
+          syntaxerr = NULL;
+        }
+      } else {
+        allocator->free(alloc_buf);
+        if (lib::is_oracle_mode() && handler.has_duplicate_key()) {
+          ret = OB_ERR_DUPLICATE_KEY;
+        } else {
+          ret = OB_ERR_INVALID_JSON_TEXT;
+        }
+        if (syntaxerr != NULL) {
+          syntaxerr = rapidjson::GetParseError_En(reader.GetParseErrorCode());
+        }
+        LOG_WARN("fail to parse json text", K(ret), K(r.Code()));
+      }
     }
   }
 
@@ -178,8 +265,11 @@ bool ObRapidJsonHandler::seeing_value(ObJsonNode *value)
         INIT_SUCC(ret);
         next_state_ = ObJsonExpectNextState::EXPECT_OBJECT_KEY;
         ObJsonObject *object = dynamic_cast<ObJsonObject *>(current_element_);
-        if (OB_FAIL(object->add(key_, value))) {
+        if (OB_FAIL(object->add(key_, value, with_unique_key_))) {
           LOG_WARN("fail to add element to json object", K(ret));
+          if (ret == OB_ERR_DUPLICATE_KEY) {
+            with_duplicate_key_ = true;
+          }
           is_continue = false;
         }
         break;
@@ -365,19 +455,36 @@ bool ObRapidJsonHandler::RawNumber(const char *, rapidjson::SizeType, bool copy)
 
 bool ObRapidJsonHandler::String(const char *str, rapidjson::SizeType length, bool copy)
 {
-  UNUSED(copy);
   bool is_continue = false;
 
   void *buf = alloc(sizeof(ObJsonString));
   if (OB_ISNULL(buf)) {
     LOG_WARN("fail to alloc memory for string json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
-    ObJsonString *node = new (buf) ObJsonString(str, length);
-    is_continue = seeing_value(node);
+    if (copy) {
+      void *dst_buf = NULL;
+      ObString src_str(length, str);
+      if (length > 0) {
+        if (OB_ISNULL(dst_buf = allocator_->alloc(length))) {
+          LOG_WARN("allocate memory fail", K(length));
+        } else {
+          MEMCPY(dst_buf, src_str.ptr(), src_str.length());
+          ObJsonString *node = new (buf) ObJsonString(static_cast<char *>(dst_buf), length);
+          is_continue = seeing_value(node);
+        }
+      } else {
+        ObJsonString *node = new (buf) ObJsonString(str, length);
+        is_continue = seeing_value(node);
+      }
+    } else {
+      ObJsonString *node = new (buf) ObJsonString(str, length);
+      is_continue = seeing_value(node);
+    }
   }
 
   return is_continue;
 }
+
 
 bool ObRapidJsonHandler::StartObject()
 {
@@ -441,19 +548,39 @@ bool ObRapidJsonHandler::EndArray(rapidjson::SizeType length)
 
 bool ObRapidJsonHandler::Key(const char *str, rapidjson::SizeType length, bool copy)
 {
-  UNUSED(copy);
   bool is_continue = false;
 
   if (next_state_ != ObJsonExpectNextState::EXPECT_OBJECT_KEY) {
     LOG_WARN("unexpected next json state", K(next_state_));
   } else {
-    is_continue = true;
-    next_state_ = ObJsonExpectNextState::EXPECT_OBJECT_VALUE;
-    key_.assign_ptr(str, length);
+    // need deep-copy
+    if (copy) {
+      void *dst_buf = NULL;
+      ObString src_str(length, str);
+      if (length > 0) {
+        if (OB_ISNULL(dst_buf = allocator_->alloc(length))) {
+          LOG_WARN("allocate memory fail", K(length));
+        } else {
+          MEMCPY(dst_buf, src_str.ptr(), src_str.length());
+          key_.assign_ptr(static_cast<char *>(dst_buf), length);
+          is_continue = true;
+          next_state_ = ObJsonExpectNextState::EXPECT_OBJECT_VALUE;
+        }
+      } else {
+        key_ = ObString();
+        is_continue = true;
+        next_state_ = ObJsonExpectNextState::EXPECT_OBJECT_VALUE;
+      }
+    } else {
+      is_continue = true;
+      next_state_ = ObJsonExpectNextState::EXPECT_OBJECT_VALUE;
+      key_.assign_ptr(str, length);
+    }
   }
 
   return is_continue;
 }
+#undef TEST_RELAXJSON_FLAG
 
 } // namespace common
 } // namespace oceanbase

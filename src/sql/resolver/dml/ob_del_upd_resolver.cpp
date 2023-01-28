@@ -2300,6 +2300,20 @@ int ObDelUpdResolver::resolve_check_constraints(const TableItem* table_item,
       } else if (OB_FAIL(view_pullup_column_ref_exprs_recursively(expr,
                                             table_item->get_base_table_item().ref_id_, dml_stmt))) {
         LOG_WARN("view pullup column_ref_exprs recursively failed", K(ret));
+      } else if (expr->get_expr_type() == T_FUN_SYS_IS_JSON &&
+                 expr->get_param_count() == 5 &&
+                 OB_NOT_NULL(expr->get_param_expr(0)) &&
+                 OB_NOT_NULL(expr->get_param_expr(2)) &&
+                 expr->get_param_expr(0)->get_expr_type() == T_REF_COLUMN &&
+                 expr->get_param_expr(2)->get_expr_type() == T_INT) {
+        const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(expr->get_param_expr(2));
+        ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(expr->get_param_expr(0));
+        int is_json_opt = const_expr->get_value().get_int();
+        if (is_json_opt == 1) {
+          col_expr->set_strict_json_column(IS_JSON_CONSTRAINT_STRICT);
+        } else {
+          col_expr->set_strict_json_column(IS_JSON_CONSTRAINT_RELAX);
+        }
       }
     }
   }

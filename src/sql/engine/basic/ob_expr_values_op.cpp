@@ -381,6 +381,9 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
       ObExpr *src_expr = MY_SPEC.values_.at(real_node_idx);
       ObExpr *dst_expr = MY_SPEC.output_.at(col_idx);
       ObDatumMeta src_meta = src_expr->datum_meta_;
+      bool is_strict_json = MY_SPEC.get_is_strict_json_desc_count() == 0 ? false :
+                            MY_SPEC.is_strict_json_desc_.at(node_idx_ % MY_SPEC.get_is_strict_json_desc_count());
+
       ObObjMeta src_obj_meta = src_expr->obj_meta_;
       if (MY_SPEC.contain_ab_param_) {
         if (OB_FAIL(get_real_batch_obj_type(src_meta, src_obj_meta, src_expr, group_idx))) {
@@ -458,6 +461,9 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
         // for table modify in oracle mode, we ignore charset convert failed
         if (lib::is_oracle_mode()) {
           cm_ = cm_ | CM_CHARSET_CONVERT_IGNORE_ERR;
+          if (is_strict_json) {
+            cm_ = cm_ | CM_STRICT_JSON;
+          }
         }
         if (dst_expr->obj_meta_.is_enum_or_set()) {
           if (OB_UNLIKELY(col_idx < 0 || col_idx >= MY_SPEC.str_values_array_.count())) {

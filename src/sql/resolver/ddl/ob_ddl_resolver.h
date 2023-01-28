@@ -367,6 +367,7 @@ public:
       const share::schema::ObTableSchema &table_schema,
       const ObString &column_name,
       ObAlterTableStmt *alter_table_stmt);
+  int check_is_json_contraint(ObTableSchema &tmp_table_schema, ObIArray<ObConstraint> &csts, ParseNode *cst_check_expr_node);
 
   int check_column_in_check_constraint(
       const share::schema::ObTableSchema &table_schema,

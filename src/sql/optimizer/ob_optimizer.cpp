@@ -298,6 +298,7 @@ int ObOptimizer::get_stmt_max_table_dop(ObDMLStmt &stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (table_item->is_function_table() ||
+                 table_item->is_json_table() ||
                  table_item->is_link_table() ||
                  table_item->is_fake_cte_table() ||
                  table_item->is_joined_table()) {

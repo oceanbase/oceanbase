@@ -2328,6 +2328,7 @@ public:
       is_rowkey_column_(false),
       is_unique_key_column_(false),
       is_mul_key_column_(false),
+      is_strict_json_column_(0),
       srs_id_(UINT64_MAX)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
@@ -2354,6 +2355,7 @@ public:
       is_rowkey_column_(false),
       is_unique_key_column_(false),
       is_mul_key_column_(false),
+      is_strict_json_column_(0),
       srs_id_(UINT64_MAX)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
@@ -2380,6 +2382,7 @@ public:
       is_rowkey_column_(false),
       is_unique_key_column_(false),
       is_mul_key_column_(false),
+      is_strict_json_column_(0),
       srs_id_(UINT64_MAX)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
@@ -2454,6 +2457,8 @@ public:
   void set_unique_key_column(bool v) { is_unique_key_column_ = v; }
   bool is_mul_key_column() const { return is_mul_key_column_; }
   void set_mul_key_column(bool v) { is_mul_key_column_ = v; }
+  int8_t is_strict_json_column() const { return is_strict_json_column_; }
+  void set_strict_json_column(int8_t v) { is_strict_json_column_ = v; }
   bool is_joined_dup_column() const { return is_joined_dup_column_; }
   void set_joined_dup_column(bool is_joined_dup_column) { is_joined_dup_column_ = is_joined_dup_column; }
   bool is_unpivot_mocked_column() const { return is_unpivot_mocked_column_; }
@@ -2493,6 +2498,7 @@ public:
                        K_(is_rowkey_column),
                        K_(is_unique_key_column),
                        K_(is_mul_key_column),
+                       K_(is_strict_json_column),
                        K_(srs_id));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObColumnRefRawExpr);
@@ -2513,6 +2519,7 @@ private:
   bool is_rowkey_column_;
   bool is_unique_key_column_;
   bool is_mul_key_column_;
+  int8_t is_strict_json_column_;
   union { // for geometry column
     struct {
       uint32_t geo_type_ : 5;

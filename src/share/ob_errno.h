@@ -774,6 +774,45 @@ constexpr int OB_OUTLINE_NOT_REPRODUCIBLE = -5435;
 constexpr int OB_EER_WINDOW_NO_CHILD_PARTITIONING = -5438;
 constexpr int OB_EER_WINDOW_NO_INHERIT_FRAME = -5439;
 constexpr int OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = -5440;
+constexpr int OB_ERR_INVALID_DATA_TYPE_RETURNING = -5443;
+constexpr int OB_ERR_JSON_VALUE_NO_VALUE = -5445;
+constexpr int OB_ERR_DEFAULT_VALUE_NOT_LITERAL = -5446;
+constexpr int OB_ERR_JSON_SYNTAX_ERROR = -5447;
+constexpr int OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE = -5448;
+constexpr int OB_ERR_WITHOUT_ARR_WRAPPER = -5449;
+constexpr int OB_ERR_JSON_PATCH_INVALID = -5450;
+constexpr int OB_ERR_ORDER_SIBLINGS_BY_NOT_ALLOWED = -5451;
+constexpr int OB_ERR_LOB_TYPE_NOT_SORTING = -5452;
+constexpr int OB_ERR_JSON_ILLEGAL_ZERO_LENGTH_IDENTIFIER_ERROR = -5455;
+constexpr int OB_ERR_NO_VALUE_IN_PASSING = -5456;
+constexpr int OB_ERR_INVALID_COLUMN_SPE = -5457;
+constexpr int OB_ERR_INPUT_JSON_NOT_BE_NULL = -5458;
+constexpr int OB_ERR_INVALID_DATA_TYPE = -5459;
+constexpr int OB_ERR_INVALID_CLAUSE = -5460;
+constexpr int OB_ERR_INVALID_CMP_OP = -5461;
+constexpr int OB_ERR_INVALID_INPUT = -5462;
+constexpr int OB_ERR_EMPTY_INPUT_TO_JSON_OPERATOR = -5463;
+constexpr int OB_ERR_ADDITIONAL_IS_JSON = -5464;
+constexpr int OB_ERR_FUNCTION_INVALID_STATE = -5465;
+constexpr int OB_ERR_MISS_VALUE = -5466;
+constexpr int OB_ERR_DIFFERENT_TYPE_SELECTED = -5467;
+constexpr int OB_ERR_NO_VALUE_SELECTED = -5468;
+constexpr int OB_ERR_NON_TEXT_RET_NOTSUPPORT = -5469;
+constexpr int OB_ERR_PL_JSONTYPE_USAGE = -5470;
+constexpr int OB_ERR_NULL_INPUT = -5471;
+constexpr int OB_ERR_DEFAULT_VALUE_NOT_MATCH = -5474;
+constexpr int OB_ERR_CONVERSION_FAIL = -5476;
+constexpr int OB_ERR_NOT_OBJ_REF = -5477;
+constexpr int OB_ERR_UNSUPPORT_TRUNCATE_TYPE = -5478;
+constexpr int OB_ERR_UNIMPLEMENT_JSON_FEATURE = -5479;
+constexpr int OB_ERR_USAGE_KEYWORD = -5480;
+constexpr int OB_ERR_INPUT_JSON_TABLE = -5481;
+constexpr int OB_ERR_BOOL_CAST_NUMBER = -5482;
+constexpr int OB_ERR_NESTED_PATH_DISJUNCT = -5483;
+constexpr int OB_ERR_INVALID_VARIABLE_IN_JSON_PATH = -5484;
+constexpr int OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED = -5486;
+constexpr int OB_ERR_PATH_EXPRESSION_NOT_LITERAL = -5487;
+constexpr int OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL = -5488;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -2567,6 +2606,54 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_EER_WINDOW_NO_CHILD_PARTITIONING__USER_ERROR_MSG "A window which depends on another cannot define partitioning"
 #define OB_EER_WINDOW_NO_INHERIT_FRAME__USER_ERROR_MSG "Window '%.*s' has a frame definition, so cannot be referenced by another window"
 #define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__USER_ERROR_MSG "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
+#define OB_ERR_INVALID_JSON_TYPE__USER_ERROR_MSG "invalid JSON type."
+#define OB_ERR_JSON_PATH_SYNTAX_ERROR__USER_ERROR_MSG "JSON path expression syntax error ('%s')"
+#define OB_ERR_INVALID_DATA_TYPE_RETURNING__USER_ERROR_MSG "invalid data type for return value"
+#define OB_ERR_JSON_VALUE_NO_SCALAR__USER_ERROR_MSG "JSON_VALUE evaluated to non-scalar value"
+#define OB_ERR_JSON_VALUE_NO_VALUE__USER_ERROR_MSG "JSON_VALUE evaluated to no value"
+#define OB_ERR_DEFAULT_VALUE_NOT_LITERAL__USER_ERROR_MSG "default value not a literal"
+#define OB_ERR_JSON_SYNTAX_ERROR__USER_ERROR_MSG "JSON syntax error"
+#define OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE__USER_ERROR_MSG "JSON_EQUAL used outside predicate"
+#define OB_ERR_WITHOUT_ARR_WRAPPER__USER_ERROR_MSG "result cannot be returned without array wrapper"
+#define OB_ERR_JSON_PATCH_INVALID__USER_ERROR_MSG "Patch specification is not valid JSON"
+#define OB_ERR_ORDER_SIBLINGS_BY_NOT_ALLOWED__USER_ERROR_MSG "ORDER SIBLINGS BY clause not allowed here"
+#define OB_ERR_LOB_TYPE_NOT_SORTING__USER_ERROR_MSG "Column of LOB type cannot be used for sorting"
+#define OB_ERR_DUPLICATE_KEY__USER_ERROR_MSG "duplicate key names in JSON object"
+#define OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR__USER_ERROR_MSG "JSON path expression syntax error ('%.*s')"
+#define OB_ERR_JSON_ILLEGAL_ZERO_LENGTH_IDENTIFIER_ERROR__USER_ERROR_MSG "illegal zero-length identifier"
+#define OB_ERR_NO_VALUE_IN_PASSING__USER_ERROR_MSG "Variable in JSON path expression has no value in PASSING clause."
+#define OB_ERR_INVALID_COLUMN_SPE__USER_ERROR_MSG "JSON syntax error"
+#define OB_ERR_INPUT_JSON_NOT_BE_NULL__USER_ERROR_MSG "JSON syntax error"
+#define OB_ERR_INVALID_DATA_TYPE__USER_ERROR_MSG "invalid data type for '%s' column"
+#define OB_ERR_INVALID_CLAUSE__USER_ERROR_MSG "invalid '%s' clause"
+#define OB_ERR_INVALID_CMP_OP__USER_ERROR_MSG "invalid comparison operation involving JSON type value"
+#define OB_ERR_INVALID_INPUT__USER_ERROR_MSG "Invalid Input"
+#define OB_ERR_EMPTY_INPUT_TO_JSON_OPERATOR__USER_ERROR_MSG "empty input to JSON operator"
+#define OB_ERR_ADDITIONAL_IS_JSON__USER_ERROR_MSG "cannot add additional IS jSON check constraint"
+#define OB_ERR_FUNCTION_INVALID_STATE__USER_ERROR_MSG "Package or function PRO is in an invalid state"
+#define OB_ERR_MISS_VALUE__USER_ERROR_MSG "missing VALUE keyword"
+#define OB_ERR_DIFFERENT_TYPE_SELECTED__USER_ERROR_MSG "JSON path expression selected a value of different data type"
+#define OB_ERR_NO_VALUE_SELECTED__USER_ERROR_MSG "JSON path expression did not select a value."
+#define OB_ERR_NON_TEXT_RET_NOTSUPPORT__USER_ERROR_MSG "ASCII or PRETTY not supported for non-textual return data type"
+#define OB_ERR_PL_JSONTYPE_USAGE__USER_ERROR_MSG "Invalid use of PL/SQL JSON object type"
+#define OB_ERR_NULL_INPUT__USER_ERROR_MSG "Input cannot be null"
+#define OB_ERR_NOT_ISO_8601_FORMAT__USER_ERROR_MSG "Jdate or time stamp string value does not conform to ISO 8601 format"
+#define OB_ERR_VALUE_EXCEEDED_MAX__USER_ERROR_MSG "%d value is out of range in %d"
+#define OB_ERR_DEFAULT_VALUE_NOT_MATCH__USER_ERROR_MSG "default value not matching type defined in RETURNING clause"
+#define OB_ERR_BOOL_NOT_CONVERT_NUMBER__USER_ERROR_MSG "cannot convert Boolean value to number"
+#define OB_ERR_CONVERSION_FAIL__USER_ERROR_MSG "JSON conversion failed"
+#define OB_ERR_NOT_OBJ_REF__USER_ERROR_MSG "not an object or REF"
+#define OB_ERR_UNSUPPORT_TRUNCATE_TYPE__USER_ERROR_MSG "Truncation is not supported with data type in RETURNING clause"
+#define OB_ERR_UNIMPLEMENT_JSON_FEATURE__USER_ERROR_MSG "Unimplemented JSON feature"
+#define OB_ERR_USAGE_KEYWORD__USER_ERROR_MSG "invalid usage of keyword EXISTS"
+#define OB_ERR_INPUT_JSON_TABLE__USER_ERROR_MSG "invalid input data type for JSON_TABLE"
+#define OB_ERR_BOOL_CAST_NUMBER__USER_ERROR_MSG "cannot convert Boolean value to number"
+#define OB_ERR_NESTED_PATH_DISJUNCT__USER_ERROR_MSG "JSON_TABLE nested path expressions not disjunct"
+#define OB_ERR_INVALID_VARIABLE_IN_JSON_PATH__USER_ERROR_MSG " Invalid use of bind variable in SQL/JSON path."
+#define OB_ERR_JSON_KEY_NOT_FOUND__USER_ERROR_MSG "JSON key name not found."
+#define OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED__USER_ERROR_MSG "Invalid numeric"
+#define OB_ERR_PATH_EXPRESSION_NOT_LITERAL__USER_ERROR_MSG "path expression not a literal"
+#define OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL__USER_ERROR_MSG "invalid argument for %s call"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -4495,10 +4582,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_PARAM_TO_PROCEDURE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5406, Incorrect parameters to procedure \'%.*s\'"
 #define OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5407, Incorrect parameters in the call to native function '%.*s'"
 #define OB_ERR_CTE_MAX_RECURSION_DEPTH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5408, Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value."
-#define OB_ERR_INVALID_JSON_TEXT__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text."
-#define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text in argument."
-#define OB_ERR_INVALID_JSON_BINARY_DATA__ORA_USER_ERROR_MSG "ORA-00600: The JSON binary value contains invalid data."
-#define OB_ERR_INVALID_JSON_PATH__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON path expression."
+#define OB_ERR_INVALID_JSON_TEXT__ORA_USER_ERROR_MSG "ORA-40441: JSON syntax error."
+#define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__ORA_USER_ERROR_MSG "ORA-40441: JSON syntax error"
+#define OB_ERR_INVALID_JSON_BINARY_DATA__ORA_USER_ERROR_MSG "ORA-40783: invalid binary JSON data\nstring"
+#define OB_ERR_INVALID_JSON_PATH__ORA_USER_ERROR_MSG "ORA-40442: JSON path expression syntax error ('INT')"
 #define OB_ERR_INVALID_JSON_CHARSET__ORA_USER_ERROR_MSG "ORA-00600: Cannot create a JSON value from a string."
 #define OB_ERR_INVALID_JSON_CHARSET_IN_FUNCTION__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON character data provided to function."
 #define OB_ERR_INVALID_TYPE_FOR_JSON__ORA_USER_ERROR_MSG "ORA-00600: Invalid data type for JSON data in argument %u to function %s; a JSON string or JSON type is required."
@@ -4506,18 +4593,18 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_JSON_PATH_CHARSET__ORA_USER_ERROR_MSG "ORA-00600: A path expression must be encoded in the utf8 character set."
 #define OB_ERR_INVALID_JSON_PATH_WILDCARD__ORA_USER_ERROR_MSG "ORA-00600: In this situation, path expressions may not contain the * and ** tokens."
 #define OB_ERR_JSON_VALUE_TOO_BIG__ORA_USER_ERROR_MSG "ORA-00600: The JSON value is too big to be stored in a JSON column."
-#define OB_ERR_JSON_KEY_TOO_BIG__ORA_USER_ERROR_MSG "ORA-00600: The JSON object contains a key name that is too long."
+#define OB_ERR_JSON_KEY_TOO_BIG__ORA_USER_ERROR_MSG "ORA-40476: JSON key too long."
 #define OB_ERR_JSON_USED_AS_KEY__ORA_USER_ERROR_MSG "ORA-00600: JSON column '%.*s' cannot be used in key specification."
 #define OB_ERR_JSON_VACUOUS_PATH__ORA_USER_ERROR_MSG "ORA-00600: The path expression is not allowed in this context."
 #define OB_ERR_JSON_BAD_ONE_OR_ALL_ARG__ORA_USER_ERROR_MSG "ORA-00600: The oneOrAll argument may take these values: \'one\' or \'all\'."
 #define OB_ERR_NUMERIC_JSON_VALUE_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-00600: Out of range JSON value for CAST"
 #define OB_ERR_INVALID_JSON_VALUE_FOR_CAST__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON value for CAST"
 #define OB_ERR_JSON_OUT_OF_DEPTH__ORA_USER_ERROR_MSG "ORA-00600: The JSON document exceeds the maximum depth."
-#define OB_ERR_JSON_DOCUMENT_NULL_KEY__ORA_USER_ERROR_MSG "ORA-00600: JSON documents may not contain NULL member names."
+#define OB_ERR_JSON_DOCUMENT_NULL_KEY__ORA_USER_ERROR_MSG "ORA-40595: Name input to JSON generation function cannot be null"
 #define OB_ERR_BLOB_CANT_HAVE_DEFAULT__ORA_USER_ERROR_MSG "ORA-00600: Invalid default value for \'%.*s\'"
 #define OB_ERR_INVALID_JSON_PATH_ARRAY_CELL__ORA_USER_ERROR_MSG "ORA-00600: A path expression is not a path to a cell in an array"
-#define OB_ERR_MISSING_JSON_VALUE__ORA_USER_ERROR_MSG "ORA-00600: No value was found by '%.192s' on the specified path."
-#define OB_ERR_MULTIPLE_JSON_VALUES__ORA_USER_ERROR_MSG "ORA-00600: More than one value was found by '%.192s' on the specified path."
+#define OB_ERR_MISSING_JSON_VALUE__ORA_USER_ERROR_MSG "ORA-40462: '%.192s' evaluated to no value"
+#define OB_ERR_MULTIPLE_JSON_VALUES__ORA_USER_ERROR_MSG "ORA-40470: More than one value was found by '%.192s' on the specified path."
 #define OB_SQL_RETRY_SPM__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5434, retry sql due to spm"
 #define OB_OUTLINE_NOT_REPRODUCIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5435, outline not reproducible"
 #define OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5436,  TIMESTAMP_TO_SCN expected timestamp argument"
@@ -4525,6 +4612,54 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_EER_WINDOW_NO_CHILD_PARTITIONING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5438, A window which depends on another cannot define partitioning"
 #define OB_EER_WINDOW_NO_INHERIT_FRAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5439, Window '%.*s' has a frame definition, so cannot be referenced by another window"
 #define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5440, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
+#define OB_ERR_INVALID_JSON_TYPE__ORA_USER_ERROR_MSG "ORA-40587: invalid JSON type."
+#define OB_ERR_JSON_PATH_SYNTAX_ERROR__ORA_USER_ERROR_MSG "ORA-40442: JSON path expression syntax error ('%s')"
+#define OB_ERR_INVALID_DATA_TYPE_RETURNING__ORA_USER_ERROR_MSG "ORA-40449: invalid data type for return value"
+#define OB_ERR_JSON_VALUE_NO_SCALAR__ORA_USER_ERROR_MSG "ORA-40456: JSON_VALUE evaluated to non-scalar value"
+#define OB_ERR_JSON_VALUE_NO_VALUE__ORA_USER_ERROR_MSG "ORA-40462: JSON_VALUE evaluated to no value"
+#define OB_ERR_DEFAULT_VALUE_NOT_LITERAL__ORA_USER_ERROR_MSG "ORA-40455: default value not a literal"
+#define OB_ERR_JSON_SYNTAX_ERROR__ORA_USER_ERROR_MSG "ORA-40441: JSON syntax error"
+#define OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE__ORA_USER_ERROR_MSG "ORA-40600: JSON_EQUAL used outside predicate"
+#define OB_ERR_WITHOUT_ARR_WRAPPER__ORA_USER_ERROR_MSG "ORA-40480: result cannot be returned without array wrapper"
+#define OB_ERR_JSON_PATCH_INVALID__ORA_USER_ERROR_MSG "ORA-40629: Patch specification is not valid JSON"
+#define OB_ERR_ORDER_SIBLINGS_BY_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-30929: ORDER SIBLINGS BY clause not allowed here"
+#define OB_ERR_LOB_TYPE_NOT_SORTING__ORA_USER_ERROR_MSG "ORA-40750: Column of LOB type cannot be used for sorting"
+#define OB_ERR_DUPLICATE_KEY__ORA_USER_ERROR_MSG "ORA-40473: duplicate key names in JSON object"
+#define OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR__ORA_USER_ERROR_MSG "ORA-40597: JSON path expression syntax error ('%.*s')"
+#define OB_ERR_JSON_ILLEGAL_ZERO_LENGTH_IDENTIFIER_ERROR__ORA_USER_ERROR_MSG "ORA-01741: illegal zero-length identifier"
+#define OB_ERR_NO_VALUE_IN_PASSING__ORA_USER_ERROR_MSG "ORA-40656: Variable in JSON path expression has no value in PASSING clause."
+#define OB_ERR_INVALID_COLUMN_SPE__ORA_USER_ERROR_MSG "ORA-01747: invalid user.table.column, table.column, or column specification"
+#define OB_ERR_INPUT_JSON_NOT_BE_NULL__ORA_USER_ERROR_MSG "ORA-40595: Name input to JSON generation function cannot be null"
+#define OB_ERR_INVALID_DATA_TYPE__ORA_USER_ERROR_MSG "ORA-40484: invalid data type for '%s' column"
+#define OB_ERR_INVALID_CLAUSE__ORA_USER_ERROR_MSG "ORA-40450: invalid '%s' clause"
+#define OB_ERR_INVALID_CMP_OP__ORA_USER_ERROR_MSG "ORA-40796: invalid comparison operation involving JSON type value"
+#define OB_ERR_INVALID_INPUT__ORA_USER_ERROR_MSG "ORA-30980: Invalid Input"
+#define OB_ERR_EMPTY_INPUT_TO_JSON_OPERATOR__ORA_USER_ERROR_MSG "ORA-40833: empty input to JSON operator"
+#define OB_ERR_ADDITIONAL_IS_JSON__ORA_USER_ERROR_MSG "ORA-40664: cannot add additional IS jSON check constraint"
+#define OB_ERR_FUNCTION_INVALID_STATE__ORA_USER_ERROR_MSG "ORA-06575: Package or function PRO is in an invalid state"
+#define OB_ERR_MISS_VALUE__ORA_USER_ERROR_MSG "ORA-02000: missing VALUE keyword"
+#define OB_ERR_DIFFERENT_TYPE_SELECTED__ORA_USER_ERROR_MSG "ORA-40566: JSON path expression selected a value of different data type"
+#define OB_ERR_NO_VALUE_SELECTED__ORA_USER_ERROR_MSG "ORA-40565: JSON path expression did not select a value."
+#define OB_ERR_NON_TEXT_RET_NOTSUPPORT__ORA_USER_ERROR_MSG "ORA-40481: ASCII or PRETTY not supported for non-textual return data type"
+#define OB_ERR_PL_JSONTYPE_USAGE__ORA_USER_ERROR_MSG "ORA-40573: Invalid use of PL/SQL JSON object type"
+#define OB_ERR_NULL_INPUT__ORA_USER_ERROR_MSG "ORA-64403: Input cannot be null"
+#define OB_ERR_NOT_ISO_8601_FORMAT__ORA_USER_ERROR_MSG "ORA-40688: date or time stamp string value does not conform to ISO 8601 format"
+#define OB_ERR_VALUE_EXCEEDED_MAX__ORA_USER_ERROR_MSG "ORA-40459: output value too large (actual: %d, maximum: %d)"
+#define OB_ERR_DEFAULT_VALUE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-40452: default value not matching type defined in RETURNING clause"
+#define OB_ERR_BOOL_NOT_CONVERT_NUMBER__ORA_USER_ERROR_MSG "ORA-40799: cannot convert Boolean value to number"
+#define OB_ERR_CONVERSION_FAIL__ORA_USER_ERROR_MSG "ORA-40570: JSON conversion failed"
+#define OB_ERR_NOT_OBJ_REF__ORA_USER_ERROR_MSG "ORA-22806: not an object or REF"
+#define OB_ERR_UNSUPPORT_TRUNCATE_TYPE__ORA_USER_ERROR_MSG "ORA-40779: Truncation is not supported with data type in RETURNING clause"
+#define OB_ERR_UNIMPLEMENT_JSON_FEATURE__ORA_USER_ERROR_MSG "ORA-40569: Unimplemented JSON feature"
+#define OB_ERR_USAGE_KEYWORD__ORA_USER_ERROR_MSG "ORA-40487: invalid usage of keyword EXISTS"
+#define OB_ERR_INPUT_JSON_TABLE__ORA_USER_ERROR_MSG "ORA-40491: invalid input data type for JSON_TABLE"
+#define OB_ERR_BOOL_CAST_NUMBER__ORA_USER_ERROR_MSG "ORA-40799: cannot convert Boolean value to number"
+#define OB_ERR_NESTED_PATH_DISJUNCT__ORA_USER_ERROR_MSG "ORA-40560: JSON_TABLE nested path expressions not disjunct"
+#define OB_ERR_INVALID_VARIABLE_IN_JSON_PATH__ORA_USER_ERROR_MSG "ORA-40576:  Invalid use of bind variable in SQL/JSON path."
+#define OB_ERR_JSON_KEY_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-40571: JSON key name not found."
+#define OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED__ORA_USER_ERROR_MSG "ORA-40451: invalid default value provided"
+#define OB_ERR_PATH_EXPRESSION_NOT_LITERAL__ORA_USER_ERROR_MSG "ORA-40454: path expression not a literal"
+#define OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL__ORA_USER_ERROR_MSG "PLS-00185: invalid argument for %s call"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"

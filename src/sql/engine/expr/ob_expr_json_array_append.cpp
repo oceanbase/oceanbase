@@ -8,7 +8,9 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implementation of func json_array_append
  */
+
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_array_append.h"
@@ -50,7 +52,6 @@ int ObExprJsonArrayAppend::calc_result_typeN(ObExprResType& type,
   } else {
     type.set_json();
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, 0, N_JSON_ARRAY_APPEND))) {
       LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[0].get_type()));
     } else {

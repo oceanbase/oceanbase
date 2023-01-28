@@ -582,6 +582,12 @@ class ObStatCollectorOp;
 REGISTER_OPERATOR(ObLogStatCollector, PHY_STAT_COLLECTOR, ObStatCollectorSpec, ObStatCollectorOp, NOINPUT,
                   VECTORIZED_OP);
 
+class ObLogJsonTable;
+class ObJsonTableSpec;
+class ObJsonTableOp;
+REGISTER_OPERATOR(ObLogJsonTable, PHY_JSON_TABLE, ObJsonTableSpec,
+                  ObJsonTableOp, NOINPUT);
+
 class ObLogOptimizerStatsGathering;
 class ObOptimizerStatsGatheringSpec;
 class ObOptimizerStatsGatheringOp;

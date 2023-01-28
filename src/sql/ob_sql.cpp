@@ -2546,6 +2546,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
 
       ObResolver resolver(resolver_ctx);
       NG_TRACE(resolve_begin);
+
       if (stmt::T_ANONYMOUS_BLOCK == context.stmt_type_
           && context.is_prepare_protocol_
           && !context.is_prepare_stage_

@@ -15,6 +15,7 @@
 
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/timezone/ob_time_convert.h"
+#include "lib/json_type/ob_json_parse.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "common/object/ob_object.h"
@@ -1568,7 +1569,8 @@ inline int obj_print_sql<ObJsonType>(const ObObj &obj, char *buffer, int64_t len
   ObJsonBuffer jbuf(&tmp_allocator);
   ObIJsonBase *j_base = NULL;
   ObJsonInType in_type = ObJsonInType::JSON_BIN;
-  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base))) {
+  uint32_t parse_flag = lib::is_mysql_mode() ? 0 : ObJsonParser::JSN_RELAXED_FLAG;
+  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
   } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
@@ -1601,7 +1603,8 @@ inline int obj_print_plain_str<ObJsonType>(const ObObj &obj, char *buffer, int64
   ObIJsonBase *j_base = NULL;
   ObJsonBuffer jbuf(&tmp_allocator);
   ObJsonInType in_type = ObJsonInType::JSON_BIN;
-  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base))) {
+  uint32_t parse_flag = lib::is_mysql_mode() ? 0 : ObJsonParser::JSN_RELAXED_FLAG;
+  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
   } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
@@ -1625,7 +1628,8 @@ inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_l
   ObIJsonBase *j_base = NULL;
   ObJsonInType in_type = ObJsonInType::JSON_BIN;
   ObJsonBuffer jbuf(&tmp_allocator);
-  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base))) {
+  uint32_t parse_flag = lib::is_mysql_mode() ? 0 : ObJsonParser::JSN_RELAXED_FLAG;
+  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
   } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));

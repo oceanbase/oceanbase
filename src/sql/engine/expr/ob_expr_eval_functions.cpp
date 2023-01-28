@@ -262,9 +262,14 @@
 #include "ob_expr_json_merge_patch.h"
 #include "ob_expr_json_pretty.h"
 #include "ob_expr_json_member_of.h"
+#include "ob_expr_json_equal.h"
 #include "ob_expr_sha.h"
 #include "ob_expr_compress.h"
 #include "ob_expr_statement_digest.h"
+#include "ob_expr_is_json.h"
+#include "ob_expr_json_query.h"
+#include "ob_expr_json_exists.h"
+#include "ob_expr_treat.h"
 #include "ob_expr_point.h"
 #include "ob_expr_spatial_collection.h"
 #include "ob_expr_st_geomfromtext.h"
@@ -945,6 +950,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprSTArea::eval_st_area,                                         /* 557 */
   ObExprCurrentUserPriv::eval_current_user_priv,                      /* 558 */
   ObExprSqlModeConvert::sql_mode_convert,                             /* 559 */
+  ObExprJsonValue::eval_ora_json_value,                               /* 560 */
+  ObExprIsJson::eval_is_json,                                         /* 561 */
+  ObExprJsonEqual::eval_json_equal,                                   /* 562 */
+  ObExprJsonQuery::eval_json_query,                                   /* 563 */
+  ObExprJsonMergePatch::eval_ora_json_merge_patch,                    /* 564 */
+  ObExprJsonExists::eval_json_exists,                                 /* 565 */
+  ObExprJsonArray::eval_ora_json_array,                               /* 566 */
+  ObExprJsonObject::eval_ora_json_object,                             /* 567 */
+  ObExprTreat::eval_treat,                                            /* 568 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

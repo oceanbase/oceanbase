@@ -64,6 +64,7 @@ class Path;
 class JoinPath;
 class SubQueryPath;
 class FunctionTablePath;
+class JsonTablePath;
 class TempTablePath;
 class CteTablePath;
 class ObJoinOrder;
@@ -164,6 +165,8 @@ struct FunctionTableDependInfo {
   ObSqlBitSet<> depend_table_set_;  //function table expr所依赖的表
   int64_t table_idx_; //function table的bit index
 };
+
+typedef struct FunctionTableDependInfo JsonTableDependInfo;
 
 // explain plan text
 class planText
@@ -638,6 +641,9 @@ public:
                                ObLogicalOperator *&out_access_path_op);
 
   int allocate_function_table_path(FunctionTablePath *func_table_path,
+                                   ObLogicalOperator *&out_access_path_op);
+
+  int allocate_json_table_path(JsonTablePath *json_table_path,
                                    ObLogicalOperator *&out_access_path_op);
 
   /*allocate table lookup operator*/
@@ -1260,6 +1266,11 @@ public:
     return function_table_depend_infos_;
   }
 
+  inline const common::ObIArray<JsonTableDependInfo> &get_json_table_depend_infos() const
+  {
+    return json_table_depend_infos_;
+  }
+
   int allocate_output_expr_for_values_op(ObLogicalOperator &values_op);
 
   inline common::ObIArray<JoinPath*> &get_recycled_join_paths()
@@ -1470,6 +1481,8 @@ protected:
   int init_bushy_tree_info_from_joined_tables(TableItem *table);
 
   int init_function_table_depend_info(const ObIArray<TableItem*> &table_items);
+
+  int init_json_table_depend_info(const ObIArray<TableItem*> &table_items);
 
   int check_need_bushy_tree(common::ObIArray<JoinOrderArray> &join_rels,
                             const int64_t join_level,
@@ -1698,6 +1711,7 @@ private: // member functions
                          ObPwjComparer &pwj_comparer,
                          PWJTabletIdMap &pwj_map) const;
   bool has_depend_function_table(const ObRelIds& table_ids);
+  bool has_depend_json_table(const ObRelIds& table_ids);
 public:
   const ObLogPlanHint &get_log_plan_hint() { return log_plan_hint_; }
   bool has_join_order_hint() { return !log_plan_hint_.join_order_.leading_tables_.is_empty(); }
@@ -1784,6 +1798,7 @@ private:
   common::ObSEArray<ObRelIds, 8, common::ModulePageAllocator, true> bushy_tree_infos_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> onetime_exprs_; // allocated onetime exprs
   common::ObSEArray<FunctionTableDependInfo, 8, common::ModulePageAllocator, true> function_table_depend_infos_;
+  common::ObSEArray<JsonTableDependInfo, 8, common::ModulePageAllocator, true> json_table_depend_infos_;
   common::ObSEArray<ConflictDetector*, 8, common::ModulePageAllocator, true> conflict_detectors_;
   ObJoinOrder *join_order_;
   IdOrderMapAllocer id_order_map_allocer_;

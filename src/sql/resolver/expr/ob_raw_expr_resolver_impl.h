@@ -56,6 +56,8 @@ public:
 
   bool is_contains_assignment() {return is_contains_assignment_;}
   void set_contains_assignment(bool v) {is_contains_assignment_ = v;}
+  static int malloc_new_specified_type_node(common::ObIAllocator &allocator, ObString col_name, ParseNode *col_node, ObItemType type);
+  int check_first_node(const ParseNode *node);
 
   static int check_sys_func(ObQualifiedName &q_name, bool &is_sys_func);
   static int check_pl_udf(ObQualifiedName &q_name, const ObSQLSessionInfo *session_info,
@@ -109,7 +111,27 @@ private:
   int process_fun_interval_node(const ParseNode *node, ObRawExpr *&expr);
   int process_isnull_node(const ParseNode *node, ObRawExpr *&expr);
   int process_lnnvl_node(const ParseNode *node, ObRawExpr *&expr);
+
+  const static uint8_t OB_JSON_TYPE_MISSING_DATA    = 4;
+  const static uint8_t OB_JSON_TYPE_EXTRA_DATA      = 5;
+  const static uint8_t OB_JSON_TYPE_TYPE_ERROR      = 6;
+  enum {
+    OPT_JSON_VALUE,
+    OPT_JSON_QUERY,
+    OPT_JSON_OBJECT,
+    OPT_JSON_ARRAY,
+  };
+  int remove_strict_opt_in_pl(ParseNode *node, int8_t expr_flag);
+  int remove_format_json_opt_in_pl(ParseNode *node, int8_t expr_flag);
   int process_json_value_node(const ParseNode *node, ObRawExpr *&expr);
+  int pre_check_json_path_valid(const ParseNode *node);
+  int process_ora_json_object_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_is_json_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_json_equal_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_json_query_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_json_exists_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_json_array_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_json_mergepatch_node(const ParseNode *node, ObRawExpr *&expr);
   int process_fun_sys_node(const ParseNode *node, ObRawExpr *&expr);
   int process_dll_udf_node(const ParseNode *node, ObRawExpr *&expr);
   int process_agg_udf_node(const ParseNode *node,
@@ -176,6 +198,7 @@ private:
                                              const bool has_frame);
   int convert_keep_aggr_to_common_aggr(ObAggFunRawExpr *&agg_expr);
   
+  int expand_node(common::ObIAllocator &allocator, ParseNode *node, int p, ObVector<const ParseNode*> &arr);
   static int not_int_check(const ObRawExpr *expr); 
   static int not_row_check(const ObRawExpr *expr);
   static int param_not_row_check(const ObRawExpr *expr);

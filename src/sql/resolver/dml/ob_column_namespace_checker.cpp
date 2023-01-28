@@ -317,6 +317,13 @@ int ObColumnNamespaceChecker::check_column_exists(const TableItem &table_item, c
     } else {
       is_exist = true;
     }
+  } else if (table_item.is_json_table()) {
+    if (OB_FAIL(ObResolverUtils::check_json_table_column_exists(table_item,
+                                                                params_,
+                                                                col_name,
+                                                                is_exist))) {
+      LOG_WARN("failed to check json table column exist", K(ret), K(col_name));
+    }
   } else if (table_item.is_link_table()) {
     const share::schema::ObColumnSchemaV2 *col_schema = NULL;
     ObSqlSchemaGuard *sql_schema_guard = params_.schema_checker_->get_sql_schema_guard();

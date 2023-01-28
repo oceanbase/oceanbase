@@ -3885,6 +3885,9 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()),
                                      ob_obj_type_str(type2.get_type()));
+  } else if (lib::is_oracle_mode() && (type1.is_json() || type2.is_json())) {
+    ret = OB_ERR_INVALID_CMP_OP;
+    LOG_USER_ERROR(OB_ERR_INVALID_CMP_OP);
   } else if (OB_SUCC(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
     type.set_int(); // not tinyint, compatiable with MySQL
     type.set_calc_collation(cmp_type);

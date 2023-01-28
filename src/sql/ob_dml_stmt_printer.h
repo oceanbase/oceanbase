@@ -14,6 +14,7 @@
 #define OCEANBASE_SRC_SQL_OB_DML_STMT_PRINTER_H_
 
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_printer.h"
 #include "share/schema/ob_schema_struct.h"
 
@@ -71,6 +72,7 @@ public:
   int print_limit();
   int print_fetch();
   int print_returning();
+  int print_json_table(const TableItem *table_item);
   int print_table(const TableItem *table_item,
                   bool expand_cte_table = false,
                   bool no_print_alias = false);
@@ -81,7 +83,13 @@ public:
     print_params_ = obj_print_params;
   }
 private:
-int print_parens_for_leading_hint(int64_t cur_idx,
+  // added for json table
+  int print_json_table_nested_column(const TableItem *table_item, const ObDmlJtColDef& col_def);
+  int print_json_return_type(int64_t value, ObDataType data_type);
+  int get_json_table_column_if_exists(int32_t id, ObDmlJtColDef* root, ObDmlJtColDef*& col);
+  int build_json_table_nested_tree(const TableItem* table_item, ObIAllocator* allocator, ObDmlJtColDef*& root);
+
+  int print_parens_for_leading_hint(int64_t cur_idx,
                                   const ObIArray<std::pair<uint8_t, uint8_t>> *join_order_pairs,
                                   bool is_left_parent);
   // disallow copy

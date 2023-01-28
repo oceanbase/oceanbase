@@ -132,6 +132,11 @@ public:
   static int check_function_table_column_exist(const TableItem &table_item,
                                                ObResolverParams &params,
                                                const ObString &column_name);
+  static int check_json_table_column_exists(const TableItem &table_item,
+                                           ObResolverParams &params,
+                                           const ObString &column_name,
+                                           bool& exists);
+
   static int resolve_extended_type_info(const ParseNode &str_list_node,
                                         ObIArray<ObString>& type_info_array);
   // type_infos is %ori_cs_type, need convert to %cs_type first
@@ -336,6 +341,7 @@ public:
                                const int is_oracle_mode/*1:Oracle, 0:MySql */,
                                const bool is_for_pl_type,
                                const ObSessionNLSParams &nls_session_param,
+                               uint64_t tenant_id,
                                const bool convert_real_type_to_decimal = false);
 
   static int resolve_str_charset_info(const ParseNode &type_node,

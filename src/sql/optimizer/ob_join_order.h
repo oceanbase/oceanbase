@@ -348,6 +348,7 @@ struct EstimateCostInfo {
     int assign(const Path &other, common::ObIAllocator *allocator);
     bool is_cte_path() const;
     bool is_function_table_path() const;
+    bool is_json_table_path() const;
     bool is_temp_table_path() const;
     bool is_access_path() const;
     bool is_join_path() const;
@@ -417,7 +418,7 @@ struct EstimateCostInfo {
     bool is_nl_style_pipelined_path() const { return is_nl_style_pipelined_path_; }
     virtual int compute_pipeline_info();
     bool contain_das_op() const { return contain_das_op_; }
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
     int get_name(char *buf, const int64_t buf_len, int64_t &pos)
     {
       int ret = common::OB_SUCCESS;
@@ -572,10 +573,13 @@ struct EstimateCostInfo {
             OptimizationMethod::RULE_BASED != table_opt_info_->optimization_method_;
     }
     const ObIArray<ObNewRange> &get_query_ranges() const;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@");
-      BUF_PRINTF("%lu", table_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return ret;
     }
 
     TO_STRING_KV(K_(table_id),
@@ -803,40 +807,48 @@ struct EstimateCostInfo {
     void set_contain_normal_nl(bool contain) { contain_normal_nl_ = contain; }
     int check_is_contain_normal_nl();
     virtual int compute_pipeline_info() override;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("<");
-      if (NULL != left_path_) {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("<"))) {
+      } else if (NULL != left_path_) {
         left_path_->get_name_internal(buf, buf_len, pos);
       }
-      BUF_PRINTF(" -");
 
-      switch (join_algo_)
-      {
-      case INVALID_JOIN_ALGO:
-      {
-      } break;
-      case NESTED_LOOP_JOIN:
-      {
-        BUF_PRINTF("NL");
-      } break;
-      case MERGE_JOIN:
-      {
-        BUF_PRINTF("M");
-      } break;
-      case HASH_JOIN:
-      {
-        BUF_PRINTF("H");
-      } break;
-      default:
-        break;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF(" -"))) {
+      } else {
+        switch (join_algo_)
+        {
+        case INVALID_JOIN_ALGO:
+        {
+        } break;
+        case NESTED_LOOP_JOIN:
+        {
+          ret = BUF_PRINTF("NL");
+        } break;
+        case MERGE_JOIN:
+        {
+          ret = BUF_PRINTF("M");
+        } break;
+        case HASH_JOIN:
+        {
+          ret = BUF_PRINTF("H");
+        } break;
+        default:
+          break;
+        }
       }
-      BUF_PRINTF("-> ");
 
-      if (NULL != right_path_) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF("-> "))) {
+      } else if (NULL != right_path_) {
         right_path_->get_name_internal(buf, buf_len, pos);
       }
-      BUF_PRINTF(">");
+      if (OB_SUCC(ret)) {
+        ret = BUF_PRINTF(">");
+      }
+      return ret;
     }
   private:
     int compute_hash_hash_sharding_info();
@@ -921,10 +933,13 @@ struct EstimateCostInfo {
     virtual int estimate_cost() override;
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost) override;
     virtual int compute_pipeline_info() override;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@sub_");
-      BUF_PRINTF("%lu", subquery_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@sub_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", subquery_id_))) {
+      }
+      return ret;
     }
   public:
     uint64_t subquery_id_;//该subquery所在TableItem的table_id_
@@ -944,16 +959,44 @@ struct EstimateCostInfo {
     virtual ~FunctionTablePath() { }
     int assign(const FunctionTablePath &other, common::ObIAllocator *allocator);
     virtual int estimate_cost() override;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@function_");
-      BUF_PRINTF("%lu", table_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@function_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return ret;
     }
   public:
     uint64_t table_id_;
     ObRawExpr* value_expr_;
   private:
       DISALLOW_COPY_AND_ASSIGN(FunctionTablePath);
+  };
+
+  class JsonTablePath : public Path
+  {
+  public:
+    JsonTablePath()
+      : Path(NULL),
+        table_id_(OB_INVALID_ID),
+        value_expr_(NULL) {}
+    virtual ~JsonTablePath() { }
+    int assign(const JsonTablePath &other, common::ObIAllocator *allocator);
+    virtual int estimate_cost() override;
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@json_table_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return ret;
+    }
+  public:
+    uint64_t table_id_;
+    ObRawExpr* value_expr_;
+  private:
+      DISALLOW_COPY_AND_ASSIGN(JsonTablePath);
   };
 
   class TempTablePath : public Path
@@ -970,10 +1013,13 @@ struct EstimateCostInfo {
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost) override;
     int compute_sharding_info();
     int compute_path_ordering();
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@temp_");
-      BUF_PRINTF("%lu", table_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@temp_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return  ret;
     }
   public:
     uint64_t table_id_;
@@ -993,10 +1039,13 @@ struct EstimateCostInfo {
     virtual ~CteTablePath() { }
     int assign(const CteTablePath &other, common::ObIAllocator *allocator);
     virtual int estimate_cost() override;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@cte_");
-      BUF_PRINTF("%lu", table_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@cte_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return ret;
     }
   public:
     uint64_t table_id_;
@@ -1183,6 +1232,10 @@ struct NullAwareAntiJoinInfo {
     int param_funct_table_expr(ObRawExpr* &function_table_expr,
                                ObIArray<ObExecParamRawExpr *> &nl_params,
                                ObIArray<ObRawExpr*> &subquery_exprs);
+
+    int param_json_table_expr(ObRawExpr* &json_table_expr,
+                              ObExecParamRawExpr*& nl_params,
+                              ObIArray<ObRawExpr*> &subquery_exprs);
 
     int extract_param_for_query_range(const ObIArray<ObRawExpr*> &range_conditions,
                                       common::ObIArray<int64_t> &param_pos);
@@ -1521,6 +1574,7 @@ struct NullAwareAntiJoinInfo {
                                   ObShardingInfo * sharding);
     int generate_cte_table_paths();
     int generate_function_table_paths();
+    int generate_json_table_paths();
 
     int generate_subquery_for_function_table(ObRawExpr *function_table_expr,
                                              ObLogicalOperator *&function_table_root);
@@ -2009,7 +2063,10 @@ struct NullAwareAntiJoinInfo {
                                     const ObJoinOrder &right_tree,
                                     const ObJoinType join_type,
                                     ValidPathInfo &path_info);
-
+    int check_depend_json_table(const ObJoinOrder &left_tree,
+                                    const ObJoinOrder &right_tree,
+                                    const ObJoinType join_type,
+                                    ValidPathInfo &path_info);
     int check_subquery_in_join_condition(const ObJoinType join_type,
                                          const ObIArray<ObRawExpr*> &join_conditions,
                                          ValidPathInfo &path_info);

@@ -98,6 +98,9 @@ private:
   int set_agg_udf_result_type(ObAggFunRawExpr &expr);
 
   int set_agg_group_concat_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
+  int set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type, bool &need_add_cast);
+
+  int set_agg_json_array_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
 
   // helper functions for add_implicit_cast
   int add_implicit_cast_for_op_row(ObOpRawExpr &parent,

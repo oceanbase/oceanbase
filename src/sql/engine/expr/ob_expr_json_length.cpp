@@ -8,15 +8,17 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_length.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "deps/oblib/src/lib/json_type/ob_json_path.h"
+#include "lib/json_type/ob_json_tree.h"
 #include "ob_expr_json_length.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "lib/json_type/ob_json_tree.h"
 #include "ob_expr_json_func_helper.h"
 
 using namespace oceanbase::common;

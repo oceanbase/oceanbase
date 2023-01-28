@@ -1190,6 +1190,46 @@
 //Action: No action required.
 #define OER_RESTORE_POINT_NOT_EXIST 38780
 
+// ORA-40441: JSON syntax error
+// Cause: The provided JavaScript Object Notation (JSON) data had invalid syntax and could not be parsed.
+// Action: Provide JSON data with the correct syntax.
+#define OB_ERR_JSON_SYNTAX_ERROR  40441
+
+// ORA-40442: JSON path expression syntax error ('string')string
+// Cause: The provided JavaScript Object Notation (JSON) path expression had an invalid syntax and could not be parsed.
+// Action: Provide JSON path expression with the correct syntax.
+#define OER_JSON_PATH_SYNTAX_ERROR  40442
+
+//ORA-40449: invalid data type for return value
+// Cause: The provided data type for the return value was invalid or unsupported.
+// Action: Provide a supported return value.
+#define OER_INVALID_DATA_TYPE_RETURNING 40449
+
+// ORA-40451:invalid default value provided
+// The provided default value was not allowed here.
+// Provide a valid default value.
+#define OER_INVALID_DEFAULT_VALUE_PROVIDED 40451
+
+// ORA-40454: path expression not a literal
+// Cause: The provided path expression was not a literal (a constant).
+// Action: Provide a constant path expression
+#define OER_PATH_EXPRESSION_NOT_LITERAL 40454
+
+// ORA-40455: default value not a literal
+// Cause: The provided default value was not a literal (a constant).
+// Action: Provide a constant default value.
+#define OER_DEFAULT_VALUE_NOT_LITERAL  40455
+
+// ORA-40456: JSON_VALUE evaluated to non-scalar value
+// Cause: The provided JavaScript Object Notation (JSON) path expression selected a non-scalar value.
+// Action: Correct the JSON path expression or use JSON_QUERY.
+#define OER_JSON_VALUE_NO_SCALAR  40456
+
+// ORA-40462: JSON_VALUE evaluated to no value
+// Cause: The provided JavaScript Object Notation (JSON) path expression did not select a value.
+// Action: Correct the JSON path expression.
+#define OER_JSON_VALUE_NO_VALUE  40462
+
 // ORA-42399: cannot perform a DML operation on a read-only view
 // Cause: An attempt was made to insert, delete, or update row(s) of a view created with read-only option. DML operations on such views are explicitly prohibited.
 // Action: Perform the desired DML operation on the view's underlying base table or issue ALTER VIEW ... READ WRITE command to make the view updatable.

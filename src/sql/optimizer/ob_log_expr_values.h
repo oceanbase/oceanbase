@@ -28,7 +28,16 @@ class ObLogExprValues : public ObLogicalOperator
     {}
     virtual ~ObLogExprValues() {}
     int add_values_expr(const common::ObIArray<ObRawExpr *> &value_exprs);
+    int add_values_desc(const common::ObIArray<ObColumnRefRawExpr *> &value_desc);
 
+    const common::ObIArray<ObColumnRefRawExpr *> &get_value_desc() const
+    {
+      return value_desc_;
+    }
+    common::ObIArray<ObColumnRefRawExpr *> &get_value_desc()
+    {
+      return value_desc_;
+    }
     const common::ObIArray<ObRawExpr *> &get_value_exprs() const
     {
       return value_exprs_;
@@ -65,6 +74,7 @@ class ObLogExprValues : public ObLogicalOperator
                                          ExplainType type);
   private:
     common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> value_exprs_;
+    common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> value_desc_;
     //add for error_logging
     ObErrLogDefine err_log_define_;
 

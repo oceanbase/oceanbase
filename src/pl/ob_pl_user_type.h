@@ -16,6 +16,7 @@
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "lib/hash/ob_array_index_hash_set.h"
 #include "lib/container/ob_array_wrap.h"
+#include "lib/json_type/ob_json_tree.h"
 
 namespace oceanbase
 {

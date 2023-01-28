@@ -2202,6 +2202,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
                                                    (OB_NOT_NULL(session_info_) && is_oracle_mode()),
                                                    false,
                                                    session_info_->get_session_nls_params(),
+                                                   session_info_->get_effective_tenant_id(),
                                                    convert_real_to_decimal))) {
       LOG_WARN("resolve data type failed", K(ret), K(column.get_column_name_str()));
     } else if (ObExtendType == data_type.get_obj_type()) {
@@ -2243,11 +2244,17 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
           column.set_charset_type(ObCharset::charset_type_by_coll(coll_type));
         }
       }
-      if (OB_SUCC(ret) && tenant_data_version < DATA_VERSION_4_1_0_0
-          && (column.is_geometry() || data_type.get_meta_type().is_geometry())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("tenant version is less than 4.1, geometry type not supported", K(ret), K(tenant_data_version));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, geometry type");
+      if (OB_SUCC(ret) && tenant_data_version < DATA_VERSION_4_1_0_0) {
+        if (column.is_geometry() || data_type.get_meta_type().is_geometry()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant version is less than 4.1, geometry type not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, geometry type");
+        } else if (is_oracle_mode() && (column.is_json() || data_type.get_meta_type().is_json())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant version is less than 4.1, json type not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, json type");
+        }
+
       }
       if (OB_SUCC(ret) && (column.is_string_type() || column.is_json() || column.is_geometry())
           && stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
@@ -6312,7 +6319,9 @@ int ObDDLResolver::resolve_check_constraint_node(
         if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
           LOG_WARN("get table schema failed", K(ret), K(cst_name));
         } else {
-          if (OB_FAIL(cst.set_constraint_name(cst_name))) {
+          if (OB_FAIL(check_is_json_contraint(tmp_table_schema, csts, cst_check_expr_node))) {
+            LOG_WARN("repeate is json check", K(ret));
+          } else if (OB_FAIL(cst.set_constraint_name(cst_name))) {
             LOG_WARN("set constraint name failed", K(ret), K(cst_name));
           } else if (OB_FAIL(resolve_check_constraint_expr(params_,
                                                            cst_check_expr_node,
@@ -6336,6 +6345,56 @@ int ObDDLResolver::resolve_check_constraint_node(
               cst.set_constraint_type(CONSTRAINT_TYPE_CHECK);
               ret = csts.push_back(cst);
             }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::check_is_json_contraint(ObTableSchema &t_table_schema, ObIArray<ObConstraint> &csts, ParseNode *cst_check_expr_node)
+{
+  INIT_SUCC(ret);
+  const share::schema::ObColumnSchemaV2 *column_schema = NULL;
+  uint64_t col_id = 0;
+  if (cst_check_expr_node->type_ == T_FUN_SYS_IS_JSON &&
+              OB_NOT_NULL(cst_check_expr_node->children_[0]) && OB_NOT_NULL(cst_check_expr_node->children_[0]->children_[0])) {
+    ParseNode *cur_node = cst_check_expr_node->children_[0]->children_[0];
+    ObString col_str(cur_node->str_len_, cur_node->str_value_);
+    if (OB_ISNULL(column_schema = t_table_schema.get_column_schema(col_str))) {
+      LOG_WARN("get column schema fail", K(ret));
+    } else {
+      col_id = column_schema->get_column_id();
+      const ParseNode *node = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && i < csts.count(); ++i) {
+        ObConstraint &cst = csts.at(i);
+        for (ObConstraint::const_cst_col_iterator cst_col_iter = cst.cst_col_begin();
+                OB_SUCC(ret) && (cst_col_iter != cst.cst_col_end()); ++cst_col_iter) {
+          if (*cst_col_iter == col_id) {
+            if (OB_ISNULL(cst.get_check_expr_str().ptr())) {
+            } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(
+                  cst.get_check_expr_str(), *allocator_, node))) {
+              LOG_WARN("parse expr node from string failed", K(ret));
+            } else {
+              if (node->type_ == T_FUN_SYS_IS_JSON) {
+                ret = OB_ERR_ADDITIONAL_IS_JSON;
+                LOG_WARN("cannot add additional is json check constraint", K(ret));
+              }
+            }
+          }
+        }
+      }
+      for (ObTableSchema::const_constraint_iterator iter = t_table_schema.constraint_begin(); OB_SUCC(ret) &&
+                          iter != t_table_schema.constraint_end(); iter ++) {
+        if (OB_ISNULL((*iter)->get_check_expr_str().ptr())) {
+        } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(
+                  (*iter)->get_check_expr_str(), *allocator_, node))) {
+          LOG_WARN("parse expr node from string failed", K(ret));
+        } else {
+          if (node->type_ == T_FUN_SYS_IS_JSON) {
+            ret = OB_ERR_ADDITIONAL_IS_JSON;
+            LOG_WARN("cannot add additional is json check constraint", K(ret));
           }
         }
       }

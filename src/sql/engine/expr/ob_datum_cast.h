@@ -17,6 +17,7 @@
 #include "common/ob_zerofill_info.h"
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/timezone/ob_time_convert.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "lib/charset/ob_charset.h"
 #include "share/ob_errno.h"
 #include "share/datum/ob_datum.h"
@@ -46,6 +47,12 @@ int datum_accuracy_check(const ObExpr &expr,
                          const common::ObDatum &in_datum,
                          ObDatum &res_datum,
                          int &warning);
+
+// 根据in_type,force_use_standard_format信息，从session中获取fromat_str
+int common_get_nls_format(const ObBasicSessionInfo *session,
+                                 const ObObjType in_type,
+                                 const bool force_use_standard_format,
+                                 ObString &format_str);
 
 // 检查str以check_cs_type作为字符集是否合法
 // strict_mode下，如果上述检查失败，返回错误码

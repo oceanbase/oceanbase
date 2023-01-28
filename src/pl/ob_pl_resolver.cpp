@@ -1457,6 +1457,7 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
                                       is_oracle_mode(),
                                       true,
                                       session_info.get_session_nls_params(),
+                                      session_info.get_effective_tenant_id(),
                                       convert_real_to_decimal))) {
       LOG_WARN("resolve data type failed", K(ret));
     } else if (scalar_data_type.get_meta_type().is_string_or_lob_locator_type()
@@ -7979,6 +7980,11 @@ int ObPLResolver::build_raw_expr(const ParseNode *node,
   return ret;
 }
 
+bool ObPLResolver::is_json_type_compatible(const ObUserDefinedType *left, const ObUserDefinedType *right)
+{
+  return false;
+}
+
 int ObPLResolver::check_composite_compatible(const ObPLINS &ns,
                                              uint64_t left_type_id,
                                              uint64_t right_type_id,
@@ -8000,6 +8006,8 @@ int ObPLResolver::check_composite_compatible(const ObPLINS &ns,
   // their fields match in number and order, and corresponding fields have the same data type.
   // For record components of composite variables, the types of the composite variables need not match.
   if (OB_FAIL(ret)) {
+  } else if (is_json_type_compatible(left_type, right_type)) {
+    is_compatible = true;
   } else if (left_type->is_cursor_type() && right_type->is_cursor_type()) {
     is_compatible = true;
   } else if (right_type->is_generic_type()) {
@@ -8209,7 +8217,8 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
                                      expected_type->get_user_type_id(),
                                      expr->get_result_type().get_udt_id(),
                                      is_compatible));
-      if (OB_SUCC(ret) && !is_compatible) {
+      if (OB_FAIL(ret)) {
+      } else if (!is_compatible) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("PLS-00382: expression is of wrong type",
                   K(ret), K(expected_type->is_obj_type()), KPC(expr),
@@ -9511,6 +9520,8 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
       // must have same attribute and param, exclude self param
       if (udf_info.ref_expr_->get_param_exprs().count() -1 == object_type->get_member_count()) {
         use_default_cons = true;
+
+
         for (int64_t i = 1; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
           const ObRawExpr *param_expr = udf_info.ref_expr_->get_param_exprs().at(i);
           if (OB_ISNULL(param_expr)) {

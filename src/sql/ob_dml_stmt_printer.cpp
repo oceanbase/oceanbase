@@ -331,6 +331,15 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       DATA_PRINTF(" \"%.*s\"", LEN_AND_PTR(table_item->alias_name_));
       break;
     }
+    case TableItem::JSON_TABLE: {
+      CK (lib::is_oracle_mode());
+      DATA_PRINTF("JSON_TABLE(");
+      OZ (expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE));
+      OZ (print_json_table(table_item));
+      DATA_PRINTF(")");
+      DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+      break;
+    }
     case TableItem::TEMP_TABLE: {
       PRINT_TABLE_NAME(table_item);
       if (! table_item->alias_name_.empty()) {
@@ -346,6 +355,505 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       }
     }
   }
+
+  return ret;
+}
+
+int ObDMLStmtPrinter::print_json_return_type(int64_t value, ObDataType data_type)
+{
+  int ret = OB_SUCCESS;
+
+  ParseNode parse_node;
+  parse_node.value_ = value;
+
+  int16_t cast_type = parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX];
+  const ObLengthSemantics length_semantics = data_type.get_length_semantics();
+  const ObScale scale = data_type.get_scale();
+
+  switch (cast_type) {
+    case T_CHAR: {
+      int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
+      int32_t len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+      DATA_PRINTF("char(%d %s)", len, get_length_semantics_str(length_semantics));
+      break;
+    }
+    case T_VARCHAR: {
+      int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
+      int32_t len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+      const int32_t DEFAULT_VARCHAR_LEN = 4000;
+      if (BINARY_COLLATION == collation) {
+        DATA_PRINTF("varbinary(%d)", len);
+      } else {
+        // CHARACTER
+        if (len == DEFAULT_VARCHAR_LEN) {
+          break;
+        } else if (length_semantics == LS_BYTE && len == -1) {
+          DATA_PRINTF(" VARCHAR2");
+          break;
+        } else {
+          DATA_PRINTF("varchar2(%d %s)", len, get_length_semantics_str(length_semantics));
+        }
+      }
+      break;
+    }
+    case T_NVARCHAR2: {
+      DATA_PRINTF("nvarchar2(%d)", parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
+      break;
+    }
+    case T_NCHAR: {
+      DATA_PRINTF("nchar(%d)", parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
+      break;
+    }
+    case T_DATETIME: {
+      //oracle mode treate date as datetime
+      DATA_PRINTF("date");
+      break;
+    }
+    case T_DATE: {
+      DATA_PRINTF("date");
+      break;
+    }
+    case T_TIME: {
+      int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+      if (scale >= 0) {
+        DATA_PRINTF("time(%d)", scale);
+      } else {
+        DATA_PRINTF("time");
+      }
+      break;
+    }
+    case T_NUMBER: {
+      int16_t precision = parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX];
+      int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+      DATA_PRINTF("number(%d,%d)", precision, scale);
+      break;
+    }
+    case T_NUMBER_FLOAT: {
+      int16_t precision = parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX];
+      DATA_PRINTF("float(%d)", precision);
+      break;
+    }
+    case T_TINYINT:
+    case T_SMALLINT:
+    case T_MEDIUMINT:
+    case T_INT32:
+    case T_INT: {
+      DATA_PRINTF("signed");
+      break;
+    }
+    case T_UTINYINT:
+    case T_USMALLINT:
+    case T_UMEDIUMINT:
+    case T_UINT32:
+    case T_UINT64: {
+      DATA_PRINTF("unsigned");
+      break;
+    }
+    case T_INTERVAL_YM: {
+      int year_scale = ObIntervalScaleUtil::ob_scale_to_interval_ym_year_scale(static_cast<int8_t>(scale));
+      DATA_PRINTF("interval year(%d) to month", year_scale);
+      break;
+    }
+    case T_INTERVAL_DS: {
+      int day_scale = ObIntervalScaleUtil::ob_scale_to_interval_ds_day_scale(static_cast<int8_t>(scale));
+      int fs_scale = ObIntervalScaleUtil::ob_scale_to_interval_ds_second_scale(static_cast<int8_t>(scale));
+      DATA_PRINTF("interval day(%d) to second(%d)", day_scale, fs_scale);
+      break;
+    }
+    case T_TIMESTAMP_TZ: {
+      int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+      if (scale >= 0) {
+        DATA_PRINTF("timestamp(%d) with time zone", scale);
+      } else {
+        DATA_PRINTF("timestamp with time zone");
+      }
+      break;
+    }
+    case T_TIMESTAMP_LTZ: {
+      int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+      if (scale >= 0) {
+        DATA_PRINTF("timestamp(%d) with local time zone", scale);
+      } else {
+        DATA_PRINTF("timestamp with local time zone");
+      }
+      break;
+    }
+    case T_TIMESTAMP_NANO: {
+      int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+      if (scale >= 0) {
+        DATA_PRINTF("timestamp(%d)", scale);
+      } else {
+        DATA_PRINTF("timestamp");
+      }
+      break;
+    }
+    case T_RAW: {
+      int32_t len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+      DATA_PRINTF("raw(%d)", len);
+      break;
+    }
+    case T_FLOAT: {
+      const char *type_str = lib::is_oracle_mode() ? "binary_float" : "float";
+      DATA_PRINTF("%s", type_str);
+      break;
+    }
+    case T_DOUBLE: {
+      const char *type_str = lib::is_oracle_mode() ? "binary_double" : "double";
+      DATA_PRINTF("%s", type_str);
+      break;
+    }
+    case T_UROWID: {
+      DATA_PRINTF("urowid(%d)", parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
+      break;
+    }
+    case T_LOB: {
+      int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
+      if (BINARY_COLLATION == collation) {
+        DATA_PRINTF("blob");
+      } else {
+        DATA_PRINTF("clob");
+      }
+      break;
+    }
+    case T_JSON: {
+      DATA_PRINTF("json");
+      break;
+    }
+    case T_LONGTEXT: {
+      int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
+      if (BINARY_COLLATION == collation) {
+        DATA_PRINTF("blob");
+      } else {
+        DATA_PRINTF("clob");
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unknown cast type", K(ret), K(cast_type));
+      break;
+    }
+  } // end switch
+  return ret;
+}
+
+int ObDMLStmtPrinter::get_json_table_column_if_exists(int32_t id, ObDmlJtColDef* root, ObDmlJtColDef*& col)
+{
+  INIT_SUCC(ret);
+  common::ObArray<ObDmlJtColDef*> col_stack;
+  if (OB_FAIL(col_stack.push_back(root))) {
+    LOG_WARN("fail to store col node tmp", K(ret));
+  }
+
+  bool exists = false;
+
+  while (OB_SUCC(ret) && !exists && col_stack.count() > 0) {
+    ObDmlJtColDef* cur_col = col_stack.at(col_stack.count() - 1);
+    if (OB_ISNULL(cur_col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("current column info is null", K(ret));
+    } else if (cur_col->col_base_info_.id_ == id) {
+      exists = true;
+      col = cur_col;
+    } else if (cur_col->col_base_info_.parent_id_ < 0
+               || cur_col->col_base_info_.col_type_ == static_cast<int32_t>(NESTED_COL_TYPE)) {
+      col_stack.remove(col_stack.count() - 1);
+      for (size_t i = 0; !exists && i < cur_col->nested_cols_.count(); ++i) {
+        ObDmlJtColDef* nest_col = cur_col->nested_cols_.at(i);
+        if (OB_ISNULL(nest_col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("current column info is null", K(ret));
+        } else if (nest_col->col_base_info_.id_ == id) {
+          exists = true;
+          col = nest_col;
+        } else if (nest_col->col_base_info_.col_type_ == static_cast<int32_t>(NESTED_COL_TYPE)
+                  && OB_FAIL(col_stack.push_back(nest_col))) {
+          LOG_WARN("fail to store col node tmp", K(ret));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !exists) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to find col node", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmtPrinter::build_json_table_nested_tree(const TableItem* table_item, ObIAllocator* allocator, ObDmlJtColDef*& root)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObJtColBaseInfo*>& plain_def = table_item->json_table_def_->all_cols_;
+
+  for (size_t i = 0; OB_SUCC(ret) && i < plain_def.count(); ++i) {
+    const ObJtColBaseInfo& info = *plain_def.at(i);
+    ObDmlJtColDef* col_def = static_cast<ObDmlJtColDef*>(allocator->alloc(sizeof(ObDmlJtColDef)));
+    if (OB_ISNULL(col_def)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate col node", K(ret));
+    } else {
+      col_def = new (col_def) ObDmlJtColDef();
+      col_def->col_base_info_.assign(info);
+
+      if (info.col_type_ != NESTED_COL_TYPE) {
+        ColumnItem* col_item = stmt_->get_column_item_by_id(table_item->table_id_, info.output_column_idx_);
+        if (OB_ISNULL(col_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get column item", K(ret), K(info.output_column_idx_));
+        } else {
+          col_def->error_expr_ = col_item->default_value_expr_;
+          col_def->empty_expr_ = col_item->default_empty_expr_;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObDmlJtColDef* parent = nullptr;
+      if (info.parent_id_ < 0) {
+        root = col_def;
+      } else if (OB_FAIL(get_json_table_column_if_exists(info.parent_id_, root, parent))) {
+        LOG_WARN("fail to find col node parent", K(ret), K(info.parent_id_));
+      } else if (info.col_type_ == static_cast<int32_t>(NESTED_COL_TYPE)) {
+        if (OB_FAIL(parent->nested_cols_.push_back(col_def))) {
+          LOG_WARN("fail to store col node", K(ret), K(parent->nested_cols_.count()));
+        }
+      } else if (OB_FAIL(parent->regular_cols_.push_back(col_def))) {
+        LOG_WARN("fail to store col node", K(ret), K(parent->nested_cols_.count()));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item, const ObDmlJtColDef& col_def)
+{
+  int ret = OB_SUCCESS;
+  ObJsonTableDef* tbl_def  = table_item->json_table_def_;
+
+  bool has_reg_column = false;
+  for (size_t i = 0; OB_SUCC(ret) && i < col_def.regular_cols_.count(); ++i) {
+    has_reg_column = true;
+    ObDmlJtColDef* cur_def = col_def.regular_cols_.at(i);
+    if (OB_ISNULL(cur_def)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("current column info is null", K(ret));
+    } else {
+      const ObJtColBaseInfo& col_info = col_def.regular_cols_.at(i)->col_base_info_;
+      if (i > 0) {
+        DATA_PRINTF(", ");
+      }
+      DATA_PRINTF("%.*s ", LEN_AND_PTR(col_info.col_name_));
+      if (OB_FAIL(ret)) {
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_ORDINALITY)) {
+        DATA_PRINTF(" for ordinality");
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_EXISTS)) {
+        // to print returning type
+        OZ (print_json_return_type(col_info.res_type_, col_info.data_type_));
+        DATA_PRINTF(" exists");
+        if (OB_SUCC(ret) && col_info.path_.length() > 0) {
+          DATA_PRINTF(" path \'%.*s\'", LEN_AND_PTR(col_info.path_));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (col_info.on_empty_ == 0) {
+          DATA_PRINTF(" false on empty");
+        } else if (col_info.on_empty_ == 1) {
+          DATA_PRINTF(" true on empty");
+        } else if (col_info.on_empty_ == 2) {
+          DATA_PRINTF(" error on empty");
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (col_info.on_error_ == 0) {
+          DATA_PRINTF(" false on error");
+        } else if (col_info.on_error_ == 1) {
+          DATA_PRINTF(" true on error");
+        } else if (col_info.on_error_ == 2) {
+          DATA_PRINTF(" error on error");
+        }
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_QUERY)) {
+        // to print returning type
+        OZ (print_json_return_type(col_info.res_type_, col_info.data_type_));
+        DATA_PRINTF(" format json");
+        if (OB_FAIL(ret)) {
+        } else if (col_info.allow_scalar_ == 0) {
+          DATA_PRINTF(" allow scalars");
+        } else if (col_info.allow_scalar_ == 1) {
+          DATA_PRINTF(" disallow scalars");
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (col_info.wrapper_ == 0) {
+          DATA_PRINTF(" without wrapper");
+        } else if (col_info.wrapper_ == 1) {
+          DATA_PRINTF(" without array wrapper");
+        } else if (col_info.wrapper_ == 2) {
+          DATA_PRINTF(" with wrapper");
+        } else if (col_info.wrapper_ == 3) {
+          DATA_PRINTF(" with array wrapper");
+        } else if (col_info.wrapper_ == 4) {
+          DATA_PRINTF(" with unconditional wrapper");
+        } else if (col_info.wrapper_ == 5) {
+          DATA_PRINTF(" with conditional wrapper");
+        } else if (col_info.wrapper_ == 6) {
+          DATA_PRINTF(" with unconditional array wrapper");
+        } else if (col_info.wrapper_ == 7) {
+          DATA_PRINTF(" with conditional array wrapper");
+        }
+
+        if (OB_SUCC(ret) && col_info.path_.length() > 0) {
+          DATA_PRINTF(" path \'%.*s\'", LEN_AND_PTR(col_info.path_));
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (col_info.on_empty_ == 0) {
+          DATA_PRINTF(" error on empty" );
+        } else if (col_info.on_empty_ == 1) {
+          DATA_PRINTF(" null on empty" );
+        } else if (col_info.on_empty_ == 2) {
+          DATA_PRINTF(" empty on empty" );
+        } else if (col_info.on_empty_ == 3) {
+          DATA_PRINTF(" empty array on empty" );
+        } else if (col_info.on_empty_ == 4) {
+          DATA_PRINTF(" empty object on empty" );
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (col_info.on_error_ == 0) {
+          DATA_PRINTF(" error on error" );
+        } else if (col_info.on_error_ == 1) {
+          DATA_PRINTF(" null on error" );
+        } else if (col_info.on_error_ == 2) {
+          DATA_PRINTF(" empty on error" );
+        } else if (col_info.on_error_ == 3) {
+          DATA_PRINTF(" empty array on error" );
+        } else if (col_info.on_error_ == 4) {
+          DATA_PRINTF(" empty object on error" );
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (col_info.on_mismatch_ == 0) {
+          DATA_PRINTF(" error on mismatch" );
+        } else if (col_info.on_mismatch_ == 1) {
+          DATA_PRINTF(" null on mismatch" );
+        }
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_VALUE)) {
+        OZ (print_json_return_type(col_info.res_type_, col_info.data_type_));
+        if (col_info.truncate_) {
+          DATA_PRINTF(" truncate" );
+        }
+
+        if (OB_SUCC(ret) && col_info.path_.length() > 0) {
+          DATA_PRINTF(" path \'%.*s\'", LEN_AND_PTR(col_info.path_));
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (col_info.on_empty_ == 0) {
+          DATA_PRINTF(" error on empty");
+        } else if (col_info.on_empty_ == 1) {
+          DATA_PRINTF(" null on empty");
+        } else if (col_info.on_empty_ == 2) {
+          DATA_PRINTF(" default ");
+          if (OB_SUCC(ret)
+              && OB_FAIL(expr_printer_.do_print(cur_def->empty_expr_, T_NONE_SCOPE))) {
+            LOG_WARN("fail to print default value col", K(ret));
+          }
+          DATA_PRINTF(" on empty");
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (col_info.on_error_ == 0) {
+          DATA_PRINTF(" error on error");
+        } else if (col_info.on_error_ == 1) {
+          DATA_PRINTF(" null on error");
+        } else if (col_info.on_error_ == 2) {
+          DATA_PRINTF(" default ");
+          if (OB_SUCC(ret)
+              && OB_FAIL(expr_printer_.do_print(cur_def->error_expr_, T_NONE_SCOPE))) {
+            LOG_WARN("fail to print default value col", K(ret));
+          }
+          DATA_PRINTF(" on error");
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (col_info.on_mismatch_ == 0) {
+          DATA_PRINTF(" error on mismatch");
+        } else if (col_info.on_mismatch_ == 1) {
+          DATA_PRINTF(" null on mismatch");
+        } else if (col_info.on_mismatch_ == 2) {
+          DATA_PRINTF(" ignore on mismatch");
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (col_info.on_mismatch_type_ == 0) {
+          DATA_PRINTF(" (missing data)");
+        } else if (col_info.on_mismatch_type_ == 1) {
+          DATA_PRINTF(" (extra data)");
+        } else if (col_info.on_mismatch_type_ == 2) {
+          DATA_PRINTF(" (type error)");
+        }
+      }
+    }
+  }
+
+  for (size_t i = 0; OB_SUCC(ret) && i < col_def.nested_cols_.count(); ++i) {
+    const ObJtColBaseInfo& col_info = col_def.nested_cols_.at(i)->col_base_info_;
+    if (i > 0 || has_reg_column) {
+      DATA_PRINTF(",");
+    }
+
+    DATA_PRINTF(" nested path \'%.*s\' columns(", LEN_AND_PTR(col_info.path_));
+    OZ (print_json_table_nested_column(table_item, *col_def.nested_cols_.at(i)));
+    DATA_PRINTF(")");
+  }
+
+  return ret;
+}
+
+int ObDMLStmtPrinter::print_json_table(const TableItem *table_item)
+{
+  int ret = OB_SUCCESS;
+  ObJsonTableDef* tbl_def  = table_item->json_table_def_;
+
+  ObArenaAllocator alloc;
+  ObDmlJtColDef* root_def = nullptr;
+  if (OB_SUCC(ret) && OB_FAIL(build_json_table_nested_tree(table_item, &alloc, root_def))) {
+    LOG_WARN("fail to build column tree.", K(ret));
+  } else if (root_def->col_base_info_.path_.length() > 0) {
+    DATA_PRINTF(" , \'%.*s\'", LEN_AND_PTR(root_def->col_base_info_.path_));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (root_def->col_base_info_.on_empty_ == 0) {
+      DATA_PRINTF(" error on empty");
+    } else if (root_def->col_base_info_.on_empty_ == 1) {
+      DATA_PRINTF(" null on empty");
+    } else if (root_def->col_base_info_.on_empty_ == 2) {
+      DATA_PRINTF(" default ");
+      if (OB_FAIL(expr_printer_.do_print(root_def->empty_expr_, T_NONE_SCOPE))) {
+        LOG_WARN("fail to print where expr", K(ret));
+      }
+      DATA_PRINTF(" on empty");
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (root_def->col_base_info_.on_error_ == 0) {
+      DATA_PRINTF(" error on error");
+    } else if (root_def->col_base_info_.on_error_ == 1) {
+      DATA_PRINTF(" null on error");
+    } else if (root_def->col_base_info_.on_error_ == 2) {
+      DATA_PRINTF(" default ");
+      if (OB_SUCC(ret) && OB_FAIL(expr_printer_.do_print(root_def->error_expr_, T_NONE_SCOPE))) {
+        LOG_WARN("fail to print default expr", K(ret));
+      }
+      DATA_PRINTF(" on error");
+    }
+  }
+
+  DATA_PRINTF(" columns (");
+  OZ (print_json_table_nested_column(table_item, *root_def));
+  DATA_PRINTF(" )");
 
   return ret;
 }

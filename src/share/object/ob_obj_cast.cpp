@@ -94,6 +94,38 @@ static int cast_inconsistent_types(const ObObjType expect_type,
   return OB_ERR_INVALID_TYPE_FOR_OP;
 }
 
+static int cast_inconsistent_types_json(const ObObjType expect_type,
+                                            ObObjCastParams &params,
+                                            const ObObj &in,
+                                            ObObj &out,
+                                            const ObCastMode cast_mode)
+{
+  UNUSED(params);
+  UNUSED(out);
+  int ret = OB_SUCCESS;
+  if (CM_IS_IMPLICIT_CAST(cast_mode)) {
+    ret = OB_ERR_INVALID_INPUT;
+    LOG_WARN("invalid input in implicit cast", K(ret));
+  } else {
+    LOG_WARN("inconsistent datatypes", "expected", expect_type, "got", in.get_type());
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+  }
+  return ret;
+}
+
+static int cast_inconsistent_type_json_explicit(const ObObjType expect_type,
+                                            ObObjCastParams &params,
+                                            const ObObj &in,
+                                            ObObj &out,
+                                            const ObCastMode cast_mode)
+{
+  UNUSED(params);
+  UNUSED(out);
+  LOG_WARN("inconsistent datatypes", "expected", expect_type, "got", in.get_type());
+  int ret = OB_ERR_INVALID_TYPE_FOR_OP;
+  return ret;
+}
+
 static int cast_not_support_enum_set(const ObExpectType &expect_type,
                                      ObObjCastParams &params,
                                      const ObObj &in,
@@ -5695,17 +5727,21 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonString j_string(j_text.ptr(), j_text.length());
     ObJsonNull j_null;
     ObJsonNode *j_tree = NULL;
+    uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
     if (expect_type == ObJsonType && j_text.length() == 0 && cast_mode == 0) { // add column json null
+      j_base = &j_null;
+    } else if (lib::is_oracle_mode() && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
       j_base = &j_null;
     } else if (CS_TYPE_BINARY == in.get_collation_type()) {
       j_base = &j_opaque;
-    } else if (CM_IS_IMPLICIT_CAST(cast_mode) && !CM_IS_COLUMN_CONVERT(cast_mode)
+    } else if (lib::is_mysql_mode()
+        && CM_IS_IMPLICIT_CAST(cast_mode) && !CM_IS_COLUMN_CONVERT(cast_mode)
         && !CM_IS_JSON_VALUE(cast_mode) && ob_is_string_type(in.get_type())) {
       // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
       ret = OB_SUCCESS;
       j_base = &j_string;
-    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, j_tree))) {
-      if (CM_IS_IMPLICIT_CAST(cast_mode) && !CM_IS_COLUMN_CONVERT(cast_mode)) {
+    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, j_tree, parse_flag))) {
+      if (lib::is_mysql_mode() && CM_IS_IMPLICIT_CAST(cast_mode) && !CM_IS_COLUMN_CONVERT(cast_mode)) {
         ret = OB_SUCCESS;
         j_base = &j_string;
       } else {
@@ -7424,6 +7460,7 @@ static int lob_json(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     ObObj tmp_in = in;
     tmp_in.set_string(ObLongTextType, in_str);
+    tmp_in.set_collation_type(params.expect_obj_collation_);
     if (OB_FAIL(string_json(expect_type, params, tmp_in, out, cast_mode))) {
       LOG_WARN("cast string to string failed", K(ret));
     }
@@ -7754,6 +7791,77 @@ static int json_year(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int json_raw(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  ObObj t_out;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() ||
+      OB_UNLIKELY(ObRawTC != ob_obj_type_class(expect_type)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (in.is_json_outrow()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid cast of out row json obj", K(ret), K(in), K(out.get_meta()), K(expect_type), K(cast_mode));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    ObJsonBuffer j_buf(params.allocator_v2_);
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else {
+      // get in cs type
+      bool need_charset_convert = ((CS_TYPE_BINARY == params.dest_collation_) ||
+                                   (ObCharset::charset_type_by_coll(in.get_collation_type()) !=
+                                    ObCharset::charset_type_by_coll(params.dest_collation_)));
+      ObString temp_str_val(j_buf.length(), j_buf.ptr());
+
+      /* this function maybe called in json generated column
+      * and the generated column may has limitaion constrain the string length */
+      uint64_t accuracy_max_len = 0;
+      if (params.res_accuracy_ && params.res_accuracy_->get_length()) {
+        accuracy_max_len = params.res_accuracy_->get_length();
+      }
+      if (!need_charset_convert) {
+        if (accuracy_max_len > 0 && accuracy_max_len < j_buf.length()) {
+          temp_str_val.assign_ptr(j_buf.ptr(), accuracy_max_len);
+        }
+        ret = copy_string(params, ObLongTextType, temp_str_val, t_out);
+        t_out.set_collation_type(params.dest_collation_);
+      } else {
+        ObObj tmp_obj;
+        tmp_obj.set_collation_type(in.get_collation_type());
+        tmp_obj.set_collation_level(in.get_collation_level());
+        tmp_obj.set_string(ObLongTextType, temp_str_val);
+        ret = string_string(ObLongTextType, params, tmp_obj, t_out, cast_mode);
+        if (accuracy_max_len && accuracy_max_len < t_out.get_string().length()) {
+          ObString tmp_str = t_out.get_string();
+          t_out.set_string(ObLongTextType, tmp_str.ptr(), accuracy_max_len);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObHexUtils::hextoraw(t_out, params, out))) {
+          LOG_WARN("fail to hextoraw", K(ret), K(in), K(expect_type));
+        } else {
+          res_length = static_cast<ObLength>(out.get_string_len());
+        }
+        SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+      }
+    }
+  }
+  return ret;
+}
+
 static int json_string(const ObObjType expect_type, ObObjCastParams &params,
                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -7878,17 +7986,82 @@ static int json_lob(const ObObjType expect_type, ObObjCastParams &params,
   if (!lib::is_oracle_mode()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected tenant mode", K(ret));
-  } else {
+  } else if (OB_UNLIKELY(ObJsonType != in.get_type())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only support mysql json type currently", K(ret));
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (in.is_json_outrow()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid cast of out row json obj", K(ret), K(in), K(out.get_meta()), K(expect_type), K(cast_mode));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    ObJsonBuffer j_buf(params.allocator_v2_);
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    ObString j_str;
+    ObString res_str;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else {
+      // get json string
+      uint64_t accuracy_max_len = 0;
+      if (params.res_accuracy_ && params.res_accuracy_->get_length()) {
+        accuracy_max_len = params.res_accuracy_->get_length();
+      }
+      if (accuracy_max_len > 0 && accuracy_max_len < j_buf.length()) {
+        j_str.assign_ptr(j_buf.ptr(), accuracy_max_len);
+      } else {
+        j_str.assign_ptr(j_buf.ptr(), j_buf.length());
+      }
+
+      bool need_charset_convert = ((CS_TYPE_BINARY != params.dest_collation_) &&
+                                   (ObCharset::charset_type_by_coll(in.get_collation_type()) !=
+                                    ObCharset::charset_type_by_coll(params.dest_collation_)));
+      if (!need_charset_convert) {
+        res_str = j_str;
+      } else {
+        ObObj tmp_in;
+        ObObj tmp_out;
+        tmp_in.set_collation_type(in.get_collation_type());
+        tmp_in.set_collation_level(in.get_collation_level());
+        tmp_in.set_string(ObLongTextType, j_str);
+        if(OB_FAIL(string_string(ObLongTextType, params, tmp_in, tmp_out, cast_mode))) {
+          LOG_WARN("fail to cast string to longtext", K(ret), K(tmp_in));
+        } else {
+          if (accuracy_max_len && accuracy_max_len < tmp_out.get_string().length()) {
+            res_str.assign_ptr(tmp_out.get_string().ptr(), accuracy_max_len);
+          } else {
+            res_str = tmp_out.get_string();
+          }
+        }
+      }
+
+      if(OB_SUCC(ret)) {
+        // add lob locator
+        ObLobLocator *lob_locator = nullptr;
+        const int64_t buf_len = sizeof(ObLobLocator) + res_str.length();
+        char *buf = nullptr;
+        if (OB_ISNULL(buf = static_cast<char*>(params.alloc(buf_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(res_str));
+        } else if (FALSE_IT(lob_locator = reinterpret_cast<ObLobLocator *> (buf))) {
+        } else if (OB_FAIL(lob_locator->init(res_str))) {
+          STORAGE_LOG(WARN, "Failed to init lob locator", K(ret), K(res_str), KPC(lob_locator));
+        } else {
+          out.set_lob_locator(*lob_locator);
+        }
+      }
+    }
   }
-  UNUSED(expect_type);
-  UNUSED(params);
-  UNUSED(in);
-  UNUSED(out);
-  UNUSED(cast_mode);
   return ret;
 }
+
 
 static int json_json(const ObObjType expect_type, ObObjCastParams &params,
                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
@@ -8125,6 +8298,9 @@ static int geom_copy_string(const ObObjCastParams &params,
     } else {
       obj.set_string(expect_type, buf, static_cast<int32_t>(len));
     }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "cast_as_year");
   }
   return ret;
 }
@@ -8947,7 +9123,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_inconsistent_types,/*json not support oracle yet*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -8974,7 +9150,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_inconsistent_types,/* json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9001,7 +9177,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_inconsistent_types,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9028,8 +9204,8 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*json */
+    cast_not_support,/*geometry*/
   },
   {
     /*number -> XXX*/
@@ -9055,7 +9231,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_inconsistent_types,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9082,7 +9258,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_inconsistent_types,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9109,7 +9285,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_not_expected,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9136,7 +9312,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_not_expected,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9163,7 +9339,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_not_expected,/* json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9190,7 +9366,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     string_interval,/*interval*/
     string_rowid,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    string_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9217,7 +9393,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
     cast_not_support,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9244,7 +9420,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     unknown_other,/*interval*/
     unknown_other,/*rowid*/
     cast_not_support,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_not_support,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9271,7 +9447,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     string_interval,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    string_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9298,7 +9474,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_not_expected,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9325,7 +9501,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_not_expected,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9352,7 +9528,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_not_expected,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9379,7 +9555,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9406,7 +9582,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9433,7 +9609,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     interval_interval,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9460,7 +9636,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*interval*/
     rowid_rowid,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9487,7 +9663,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     lob_interval,/*interval*/
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_not_support,/*json not support oracle yet*/
+    lob_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9502,10 +9678,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*date*/
     cast_not_support,/*time*/
     cast_not_support,/*year*/
-    cast_not_support,/*string*/
+    json_string,/*string*/
     cast_not_support,/*extend*/
     cast_not_support,/*unknown*/
-    cast_not_support,/*text*/
+    json_string,/*text*/
     cast_not_support,/*bit*/
     cast_not_support,/*enumset*/
     cast_not_support,/*enumset_inner*/
@@ -9513,8 +9689,8 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*raw*/
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
-    cast_not_support,/*lob*/
-    cast_not_support,/*json*/
+    json_lob,/*lob*/
+    json_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
   },
   {
@@ -9607,7 +9783,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9634,7 +9810,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9661,7 +9837,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9688,7 +9864,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9715,7 +9891,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     number_lob,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9742,7 +9918,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9769,7 +9945,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9796,7 +9972,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9823,7 +9999,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9850,7 +10026,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_interval,/*interval*/
     string_rowid,/*rowid*/
     string_lob,/*lob*/
-    cast_inconsistent_types,/*json*/
+    string_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9877,7 +10053,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
+    cast_inconsistent_type_json_explicit,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9904,7 +10080,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9931,7 +10107,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_interval,/*interval*/
     string_rowid,/*rowid*/
     string_lob,/*lob*/
-    cast_inconsistent_types,/*json*/
+    string_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9958,7 +10134,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -9985,7 +10161,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -10012,7 +10188,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_not_expected,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -10039,7 +10215,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -10066,7 +10242,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     raw_lob,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -10093,7 +10269,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     interval_interval,/*interval*/
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -10120,7 +10296,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     rowid_rowid,/*rowid*/
     cast_inconsistent_types,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
@@ -10147,11 +10323,11 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     lob_interval,/*interval*/
     lob_rowid,/*rowid*/
     lob_lob,/*lob*/
-    cast_inconsistent_types,/*json*/
+    lob_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {
-    /*json -> XXX, not support oracle currently*/
+    /*json -> XXX*/
     cast_not_support,/*null*/
     cast_not_support,/*int*/
     cast_not_support,/*uint*/
@@ -10162,19 +10338,19 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*date*/
     cast_not_support,/*time*/
     cast_not_support,/*year*/
-    cast_not_support,/*string*/
+    json_string,/*string*/
     cast_not_support,/*extend*/
     cast_not_support,/*unknown*/
-    cast_not_support,/*text*/
+    json_string,/*text*/
     cast_not_support,/*bit*/
     cast_not_support,/*enumset*/
     cast_not_support,/*enumset_inner*/
     cast_not_support,/*otimestamp*/
-    cast_not_support,/*raw*/
+    json_raw,/*raw*/
     cast_not_support,/*interval*/
     cast_not_support,/*rowid*/
-    cast_not_support,/*lob*/
-    cast_not_support,/*json*/
+    json_lob,/*lob*/
+    json_json,/*json*/
     cast_not_support,/*geometry*/
   },
   {

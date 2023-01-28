@@ -3994,6 +3994,11 @@ bool oceanbase::sql::Path::is_function_table_path() const
   return NULL != parent_ && parent_->get_type() == FUNCTION_TABLE_ACCESS;
 }
 
+bool oceanbase::sql::Path::is_json_table_path() const
+{
+  return NULL != parent_ && parent_->get_type() == JSON_TABLE_ACCESS;
+}
+
 bool oceanbase::sql::Path::is_temp_table_path() const
 {
   return NULL != parent_ && parent_->get_type() == TEMP_TABLE_ACCESS;
@@ -4279,6 +4284,26 @@ int FunctionTablePath::assign(const FunctionTablePath &other, common::ObIAllocat
 }
 
 int FunctionTablePath::estimate_cost()
+{
+  int ret = OB_SUCCESS;
+  op_cost_ = 1.0;
+  cost_ = 1.0;
+  return  ret;
+}
+
+int JsonTablePath::assign(const JsonTablePath &other, common::ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(Path::assign(other, allocator))) {
+    LOG_WARN("failed to deep copy path", K(ret));
+  } else {
+    table_id_ = other.table_id_;
+    value_expr_ = other.value_expr_;
+  }
+  return ret;
+}
+
+int JsonTablePath::estimate_cost()
 {
   int ret = OB_SUCCESS;
   op_cost_ = 1.0;
@@ -4903,6 +4928,7 @@ int JoinPath::can_use_batch_nlj(ObLogPlan *plan,
                       || access_path->is_cte_path()
                       || access_path->is_function_table_path()
                       || access_path->is_temp_table_path()
+                      || access_path->is_json_table_path()
                       || table_item->for_update_
                       || !access_path->subquery_exprs_.empty()
                       );
@@ -5828,6 +5854,8 @@ int ObJoinOrder::init_base_join_order(const TableItem *table_item)
       set_type(FAKE_CTE_TABLE_ACCESS);
     } else if (table_item->is_function_table()) {
       set_type(FUNCTION_TABLE_ACCESS);
+    } else if (table_item->is_json_table()) {
+      set_type(JSON_TABLE_ACCESS);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid type of table item", K(table_item->type_), K(ret));
@@ -5843,6 +5871,8 @@ int ObJoinOrder::generate_base_paths()
     ret = generate_cte_table_paths();
   } else if (FUNCTION_TABLE_ACCESS == get_type()) {
     ret = generate_function_table_paths();
+  } else if (JSON_TABLE_ACCESS == get_type()) {
+    ret = generate_json_table_paths();
   } else if (TEMP_TABLE_ACCESS == get_type()) {
     ret = generate_temp_table_paths();
   } else if (ACCESS == get_type()) {
@@ -5852,6 +5882,60 @@ int ObJoinOrder::generate_base_paths()
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected base path type", K(get_type()), K(ret));
+  }
+  return ret;
+}
+
+
+int ObJoinOrder::generate_json_table_paths()
+{
+  int ret = OB_SUCCESS;
+  JsonTablePath *json_path = NULL;
+  const ObDMLStmt *stmt = NULL;
+  const TableItem *table_item = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(allocator_), K(ret));
+  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_)) ||
+             OB_ISNULL(table_item->json_table_def_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(table_id_), K(table_item), K(ret));
+  } else if (OB_ISNULL(json_path = static_cast<JsonTablePath*>(allocator_->alloc(sizeof(JsonTablePath))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate access path", K(ret));
+  } else {
+    json_path = new(json_path) JsonTablePath();
+    json_path->table_id_ = table_id_;
+    json_path->parent_ = this;
+    ObExecParamRawExpr *nl_param = nullptr;
+    ObRawExpr* json_table_expr = NULL;
+    // magic number ? todo refine this
+    output_rows_ = 199;
+    output_row_size_ = 199;
+    json_path->strong_sharding_ = get_plan()->get_optimizer_context().get_match_all_sharding();
+    if (OB_FAIL(append(json_path->filter_, get_restrict_infos()))) {
+      LOG_WARN("failed to append filter", K(ret));
+    } else if (OB_ISNULL(json_table_expr = table_item->json_table_def_->doc_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to extract param for json table expr", K(ret));
+    } else if (OB_FAIL(param_json_table_expr(json_table_expr,
+                                             nl_param,
+                                             json_path->subquery_exprs_))) {
+      LOG_WARN("failed to extract param for json table expr", K(ret));
+    } else if (OB_NOT_NULL(nl_param) && OB_FAIL(json_path->nl_params_.push_back(nl_param))) {
+      LOG_WARN("failed to assign nl params", K(ret));
+    } else {
+      json_path->value_expr_ = json_table_expr;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(json_path->estimate_cost())) {
+        LOG_WARN("failed to estimate cost", K(ret));
+      } else if (OB_FAIL(json_path->compute_pipeline_info())) {
+        LOG_WARN("failed to compute pipelined path", K(ret));
+      } else if (OB_FAIL(add_path(json_path))) {
+        LOG_WARN("failed to add path", K(ret));
+      } else { /*do nothing*/ }
+    }
   }
   return ret;
 }
@@ -5935,6 +6019,37 @@ int ObJoinOrder::param_funct_table_expr(ObRawExpr* &function_table_expr,
     LOG_WARN("new function table expr is invalid", K(ret), K(new_func_exprs));
   } else {
     function_table_expr = new_func_exprs.at(0);
+  }
+  return ret;
+}
+
+
+int ObJoinOrder::param_json_table_expr(ObRawExpr* &json_table_expr,
+                                       ObExecParamRawExpr*& nl_params,
+                                       ObIArray<ObRawExpr*> &subquery_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  ObLogPlan *plan = get_plan();
+  ObSEArray<ObRawExpr *, 1> new_json_exprs;
+  if (OB_ISNULL(plan = get_plan()) || OB_ISNULL(stmt = plan->get_stmt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("NULL pointer error", K(plan), K(ret));
+  } else {
+    bool need_add_exec_param = (json_table_expr->get_relation_ids().bit_count() > 0);
+    if (need_add_exec_param &&
+        OB_FAIL(ObRawExprUtils::create_new_exec_param(stmt->get_query_ctx(),
+                                                      get_plan()->get_optimizer_context().get_expr_factory(),
+                                                      stmt->get_current_level(),
+                                                      json_table_expr))) {
+      LOG_WARN("failed to create quest mark expr", K(ret));
+    } else if (OB_FAIL(json_table_expr->extract_info())) {
+      LOG_WARN("failed to extract expr info", K(ret));
+    } else if (OB_FAIL(json_table_expr->pull_relation_id_and_levels(stmt->get_current_level()))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    } else if (need_add_exec_param) {
+      nl_params = static_cast<ObExecParamRawExpr*>(json_table_expr);
+    }
   }
   return ret;
 }
@@ -9024,10 +9139,10 @@ public:
       new_expr = new_query_ref;
     } else if (old_expr == root_expr_) {
       // do nothing
-    } else if (old_expr->get_relation_ids().is_subset(*left_table_set_) &&
-               T_OP_ROW != old_expr->get_expr_type() &&
-               !old_expr->has_flag(CNT_ONETIME) &&
-               !old_expr->has_flag(CNT_SUB_QUERY)) {
+    } else if (old_expr->get_relation_ids().is_subset(*left_table_set_)
+               && T_OP_ROW != old_expr->get_expr_type()
+               &&  !old_expr->has_flag(CNT_ONETIME)
+               && !old_expr->has_flag(CNT_SUB_QUERY)) {
       new_expr = old_expr;
       if (OB_FAIL(ObRawExprUtils::create_new_exec_param(query_ctx_,
                                                         expr_factory,
@@ -9312,6 +9427,11 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
                                               join_type,
                                               path_info))) {
         LOG_WARN("failed to check depend function table", K(ret));
+      } else if (OB_FAIL(check_depend_json_table(left_tree,
+                                                 right_tree,
+                                                 join_type,
+                                                 path_info))) {
+        LOG_WARN("failed to check depend function table", K(ret));
       } else if (OB_FAIL(check_subquery_in_join_condition(join_type,
                                                           join_conditions,
                                                           path_info))) {
@@ -9367,6 +9487,36 @@ int ObJoinOrder::check_depend_function_table(const ObJoinOrder &left_tree,
         if (RIGHT_OUTER_JOIN == join_type || FULL_OUTER_JOIN == join_type) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "depended function table in right/full outer join");
+        } else {
+          path_info.local_methods_ &= NESTED_LOOP_JOIN;
+          path_info.force_inner_nl_ = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_depend_json_table(const ObJoinOrder &left_tree,
+                                         const ObJoinOrder &right_tree,
+                                         const ObJoinType join_type,
+                                         ValidPathInfo &path_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Input argument error", K(get_plan()), K(ret));
+  } else {
+    const ObIArray<JsonTableDependInfo> &infos = get_plan()->get_json_table_depend_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
+      const JsonTableDependInfo &info = infos.at(i);
+      if (left_tree.get_tables().has_member(info.table_idx_) &&
+          info.depend_table_set_.is_subset(right_tree.get_tables())) {
+        path_info.local_methods_ = 0;
+      } else if (right_tree.get_tables().has_member(info.table_idx_) &&
+                  info.depend_table_set_.is_subset(left_tree.get_tables())) {
+        if (RIGHT_OUTER_JOIN == join_type || FULL_OUTER_JOIN == join_type) {
+          ret = OB_NOT_SUPPORTED;
         } else {
           path_info.local_methods_ &= NESTED_LOOP_JOIN;
           path_info.force_inner_nl_ = true;
@@ -11758,6 +11908,20 @@ int ObJoinOrder::copy_path(const Path& src_path, Path* &dst_path)
         LOG_WARN("failed to assign access path", K(ret));
       } else {
         dst_path = new_func_path;
+      }
+    }
+  } else if (src_path.is_json_table_path()) {
+    const JsonTablePath &json_table_path = static_cast<const JsonTablePath&>(src_path);
+    JsonTablePath *new_jt_path = NULL;
+    if (OB_ISNULL(new_jt_path = static_cast<JsonTablePath*>(allocator_->alloc(sizeof(JsonTablePath))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to allocate an JsonTablePath", K(ret));
+    } else {
+      new_jt_path = new(new_jt_path) JsonTablePath();
+      if (OB_FAIL(new_jt_path->assign(json_table_path, allocator_))) {
+        LOG_WARN("failed to assign access path", K(ret));
+      } else {
+        dst_path = new_jt_path;
       }
     }
   } else if (src_path.is_temp_table_path()) {

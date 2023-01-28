@@ -235,7 +235,7 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDMLResolver::resolve_table(*table_node, table_item))) {
         LOG_WARN("failed to resolve table", K(ret));
-      } else if (table_item->is_function_table()) {//兼容oracle行为
+      } else if (table_item->is_function_table() || table_item->is_json_table()) {//兼容oracle行为
         ret = OB_WRONG_TABLE_NAME;
         LOG_WARN("invalid table name", K(ret));
       } else if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {

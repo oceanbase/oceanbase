@@ -190,11 +190,50 @@ int ColumnItem::deep_copy(ObIRawExprCopier &expr_copier,
   } else {
     expr_ = static_cast<ObColumnRefRawExpr*>(temp_expr);
   }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    col_idx_= other.col_idx_;
+    if (OB_NOT_NULL(default_value_expr_)
+        && OB_FAIL(expr_copier.copy(other.default_value_expr_, default_value_expr_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to copy default value expr", K(ret));
+    } else if (OB_NOT_NULL(default_empty_expr_)
+               && OB_FAIL(expr_copier.copy(other.default_empty_expr_, default_empty_expr_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to copy default empty expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int TableItem::deep_copy_json_table_def(const ObJsonTableDef& jt_def, ObIRawExprCopier &expr_copier, ObIAllocator* allocator)
+{
+  int ret = OB_SUCCESS;
+  ObJsonTableDef* tmp_jt_def = nullptr;
+
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param, invalid param.", K(ret));
+  } else if (OB_ISNULL(tmp_jt_def = static_cast<ObJsonTableDef*>(allocator->alloc(sizeof(ObJsonTableDef))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory json table define strunct failed.", K(ret));
+  } else {
+    tmp_jt_def = new (tmp_jt_def) ObJsonTableDef();
+    if (OB_FAIL(tmp_jt_def->deep_copy(jt_def, expr_copier, allocator))) {
+      LOG_WARN("deep copy json table define failed.", K(ret));
+    } else {
+      json_table_def_ = tmp_jt_def;
+    }
+  }
+
+
   return ret;
 }
 
 int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
-                         const TableItem &other)
+                         const TableItem &other,
+                         ObIAllocator* allocator)
 {
   int ret = OB_SUCCESS;
   table_id_ = other.table_id_;
@@ -225,7 +264,11 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   ddl_schema_version_ = other.ddl_schema_version_;
   ddl_table_id_ = other.ddl_table_id_;
   ref_query_ = other.ref_query_;
-  if (OB_FAIL(expr_copier.copy(other.flashback_query_expr_,
+
+  if (is_json_table()
+      && OB_FAIL(deep_copy_json_table_def(*other.json_table_def_, expr_copier, allocator))) {
+    LOG_WARN("failed to deep copy json table define", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.flashback_query_expr_,
                                flashback_query_expr_))) {
     LOG_WARN("failed to deep copy raw expr", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.function_table_expr_,
@@ -248,7 +291,7 @@ int JoinedTable::deep_copy(ObIAllocator &allocator,
   if (OB_ISNULL(other.left_table_) || OB_ISNULL(other.right_table_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null table item", K(other.left_table_), K(other.right_table_), K(ret));
-  } else if (OB_FAIL(TableItem::deep_copy(expr_copier, other))) {
+  } else if (OB_FAIL(TableItem::deep_copy(expr_copier, other, &allocator))) {
     LOG_WARN("deep copy table item failed", K(ret));
   } else if (OB_FAIL(single_table_ids_.assign(other.single_table_ids_))) {
     LOG_WARN("failed to assign single table ids", K(ret));
@@ -506,6 +549,34 @@ int ObDMLStmt::deep_copy(ObStmtFactory &stmt_factory,
   return ret;
 }
 
+int deep_copy_stmt_tableItem(ObIAllocator &allocator,
+                           ObIRawExprCopier &expr_copier,
+                           const ObIArray<TableItem *> &objs,
+                           ObIArray<TableItem *> &new_objs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < objs.count(); ++i) {
+    const TableItem *obj = objs.at(i);
+    void *ptr = NULL;
+    TableItem *new_obj = NULL;
+    if (OB_LIKELY(NULL != obj)) {
+      if (OB_ISNULL(ptr = allocator.alloc(sizeof(TableItem)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_RESV_LOG(WARN, "failed to allocate memory", K(ret), K(lbt()));
+      } else {
+        new_obj = new (ptr) TableItem();
+        if (OB_FAIL(new_obj->deep_copy(expr_copier, *obj, &allocator))) {
+          SQL_RESV_LOG(WARN, "failed to deep copy obj", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(new_objs.push_back(new_obj))) {
+      SQL_RESV_LOG(WARN, "failed to push back new object", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
                                      ObRawExprCopier &expr_copier,
                                      const ObDMLStmt &other)
@@ -516,10 +587,10 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     LOG_WARN("stmt type does not match", K(ret), K(get_stmt_type()), K(other.get_stmt_type()));
   } else if (OB_FAIL(ObStmt::deep_copy(other))) {
     LOG_WARN("failed to copy stmt", K(ret));
-  } else if (OB_FAIL(deep_copy_stmt_objects<TableItem>(allocator,
-                                                       expr_copier,
-                                                       other.table_items_,
-                                                       table_items_))) {
+  } else if (OB_FAIL(deep_copy_stmt_tableItem(allocator,
+                                              expr_copier,
+                                              other.table_items_,
+                                              table_items_))) {
     LOG_WARN("failed to deep copy table items", K(ret));
   } else if (OB_FAIL(tables_hash_.assign(other.tables_hash_))) {
     LOG_WARN("assign table hash desc failed", K(ret));
@@ -794,9 +865,12 @@ int ObDMLStmt::replace_inner_stmt_expr(const ObIArray<ObRawExpr *> &other_exprs,
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is null", K(ret));
-    } else if (!table->is_function_table()) {
-      //do nothing
-    } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs,
+    } else if (table->is_json_table()
+               && OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs,
+                                                      table->json_table_def_->doc_expr_))) {
+      LOG_WARN("failed to replace function table exprs", K(ret));
+    } else if (table->is_function_table()
+               && OB_FAIL(ObTransformUtils::replace_expr(other_exprs, new_exprs,
                                                       table->function_table_expr_))) {
       LOG_WARN("failed to replace function table exprs", K(ret));
     } else { /* Do nothing */ }
@@ -1397,6 +1471,9 @@ int ObDMLStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
       } else if (NULL != table_items_.at(i)->function_table_expr_ &&
                  OB_FAIL(expr_checker.add_expr(table_items_.at(i)->function_table_expr_))) {
         LOG_WARN("failed to add function table expr", K(ret));
+      } else if (NULL != table_items_.at(i)->json_table_def_ &&
+                 OB_FAIL(expr_checker.add_expr(table_items_.at(i)->json_table_def_->doc_expr_))) {
+        LOG_WARN("failed to add function table expr", K(ret));
       }
     }
   }
@@ -1439,11 +1516,15 @@ int ObDMLStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
-      } else if (!table->is_function_table()) {
-        //do nothing
-      } else if (OB_FAIL(expr_checker.add_expr(table->function_table_expr_))) {
-        LOG_WARN("add function table expr failed", K(ret));
-      } else { /* Do nothing */ }
+      } else if (table->is_json_table()) {
+        if (OB_FAIL(expr_checker.add_expr(table->json_table_def_->doc_expr_))) {
+          LOG_WARN("add json table expr failed", K(ret));
+        }
+      } else if (table->is_function_table()) {
+        if (OB_FAIL(expr_checker.add_expr(table->function_table_expr_))) {
+          LOG_WARN("add function table expr failed", K(ret));
+        }
+      }
     }
   }
 
@@ -1556,6 +1637,22 @@ int ObDMLStmt::get_table_function_exprs(ObIArray<ObRawExpr *> &table_func_exprs)
       // do nothing
     } else if (OB_FAIL(table_func_exprs.push_back(table_items_.at(i)->function_table_expr_))) {
       LOG_WARN("failed to push back table func expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_json_table_exprs(ObIArray<ObRawExpr *> &json_table_exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_items_.count(); ++i) {
+    if (OB_ISNULL(table_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if (!table_items_.at(i)->is_json_table()) {
+      // do nothing
+    } else if (OB_FAIL(json_table_exprs.push_back(table_items_.at(i)->json_table_def_->doc_expr_))) {
+      LOG_WARN("failed to push back json table doc expr", K(ret));
     }
   }
   return ret;
@@ -1984,6 +2081,7 @@ int ObDMLStmt::formalize_stmt_expr_reference()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(column_item.expr_), K(table_item), K(ret));
       } else if (table_item->is_function_table() ||
+                 table_item->is_json_table() ||
                  table_item->for_update_ ||
                  is_hierarchical_query()) {
         if (OB_FAIL(set_sharable_expr_reference(*column_item.expr_))) {
@@ -2567,6 +2665,27 @@ int ObDMLStmt::generate_func_table_name(ObIAllocator &allocator, ObString &table
   int64_t pos = 0;
   const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
   const char *SUBQUERY_VIEW = "FUNC_TABLE";
+  char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
+  int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
+  if (OB_FAIL(BUF_PRINTF("%s", SUBQUERY_VIEW))) {
+    LOG_WARN("append name to buf error", K(ret));
+  } else if (OB_FAIL(append_id_to_view_name(buf, OB_MAX_SUBQUERY_NAME_LENGTH, pos, false))) {
+    LOG_WARN("append name to buf error", K(ret));
+  } else {
+    ObString generate_name(pos, buf);
+    if (OB_FAIL(ob_write_string(allocator, generate_name, table_name))) {
+      LOG_WARN("failed to write string", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::generate_json_table_name(ObIAllocator &allocator, ObString &table_name)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
+  const char *SUBQUERY_VIEW = "JSON_TABLE";
   char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
   int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
   if (OB_FAIL(BUF_PRINTF("%s", SUBQUERY_VIEW))) {
@@ -4397,4 +4516,154 @@ bool ObDMLStmt::is_hierarchical_query() const
 bool ObDMLStmt::is_set_stmt() const
 {
   return is_select_stmt() ? (static_cast<const ObSelectStmt*>(this)->is_set_stmt()) : false;
+}
+
+
+ObJtColBaseInfo::ObJtColBaseInfo()
+  : col_type_(0),
+    truncate_(0),
+    format_json_(0),
+    wrapper_(0),
+    allow_scalar_(0),
+    output_column_idx_(-1),
+    empty_expr_id_(-1),
+    error_expr_id_(-1),
+    col_name_(),
+    path_(),
+    on_empty_(3),
+    on_error_(3),
+    on_mismatch_(3),
+    on_mismatch_type_(3),
+    res_type_(-1),
+    data_type_(),
+    parent_id_(-1),
+    id_(-1) {}
+
+ObJtColBaseInfo::ObJtColBaseInfo(const ObJtColBaseInfo& info)
+  : col_type_(info.col_type_),
+    truncate_(info.truncate_),
+    format_json_(info.format_json_),
+    wrapper_(info.wrapper_),
+    allow_scalar_(info.allow_scalar_),
+    output_column_idx_(info.output_column_idx_),
+    empty_expr_id_(info.empty_expr_id_),
+    error_expr_id_(info.error_expr_id_),
+    col_name_(info.col_name_),
+    path_(info.path_),
+    on_empty_(info.on_empty_),
+    on_error_(info.on_error_),
+    on_mismatch_(info.on_mismatch_),
+    on_mismatch_type_(info.on_mismatch_type_),
+    res_type_(info.res_type_),
+    data_type_(info.data_type_),
+    parent_id_(info.parent_id_),
+    id_(info.id_) {}
+
+int ObJtColBaseInfo::deep_copy(const ObJtColBaseInfo& src, ObIAllocator* allocator)
+{
+  int ret = OB_SUCCESS;
+  if (src.col_name_.length() > 0) {
+    ObIAllocator& alloc = *allocator;
+    if (OB_FAIL(ob_write_string(alloc, src.col_name_, col_name_))) {
+      LOG_WARN("fail to copy string", K(src.col_name_));
+    }
+  }
+
+  if (OB_SUCC(ret) && src.path_.length() > 0) {
+    ObIAllocator& alloc = *allocator;
+    if (OB_FAIL(ob_write_string(alloc, src.path_, path_))) {
+      LOG_WARN("fail to copy string", K(src.path_));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    col_type_ = src.col_type_;
+    truncate_ = src.truncate_;
+    format_json_ = src.format_json_;
+    wrapper_ = src.wrapper_;
+    allow_scalar_ = src.allow_scalar_;
+    output_column_idx_ = src.output_column_idx_;
+    empty_expr_id_ = src.empty_expr_id_;
+    error_expr_id_ = src.error_expr_id_;
+    on_empty_ = src.on_empty_;
+    on_error_ = src.on_error_;
+    on_mismatch_ = src.on_mismatch_;
+    on_mismatch_type_ = src.on_mismatch_type_;
+    res_type_ = src.res_type_;
+    data_type_ = src.data_type_;
+    parent_id_ = src.parent_id_;
+    id_ = src.id_;
+  }
+  return ret;
+}
+
+int ObJtColBaseInfo::assign(const ObJtColBaseInfo& src)
+{
+  int ret = OB_SUCCESS;
+
+  col_name_ = src.col_name_;
+  path_ = src.path_;
+  col_type_ = src.col_type_;
+  truncate_ = src.truncate_;
+  format_json_ = src.format_json_;
+  wrapper_ = src.wrapper_;
+  allow_scalar_ = src.allow_scalar_;
+  output_column_idx_ = src.output_column_idx_;
+  empty_expr_id_ = src.empty_expr_id_;
+  error_expr_id_ = src.error_expr_id_;
+  on_empty_ = src.on_empty_;
+  on_error_ = src.on_error_;
+  on_mismatch_ = src.on_mismatch_;
+  on_mismatch_type_ = src.on_mismatch_type_;
+  res_type_ = src.res_type_;
+  data_type_ = src.data_type_;
+  parent_id_ = src.parent_id_;
+  id_ = src.id_;
+
+  return ret;
+}
+
+int ObJsonTableDef::deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(expr_copier.copy(src.doc_expr_, doc_expr_))) {
+    LOG_WARN("failed to deep copy raw expr", K(ret));
+  }
+
+  for (size_t i = 0; OB_SUCC(ret) && i < src.all_cols_.count(); ++i) {
+    if (OB_ISNULL(src.all_cols_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get col info, info is null", K(ret));
+    } else {
+      const ObJtColBaseInfo& src_col = *src.all_cols_.at(i);
+      ObJtColBaseInfo* col_info = nullptr;
+      if (OB_ISNULL(col_info = static_cast<ObJtColBaseInfo*>(allocator->alloc(sizeof(ObJtColBaseInfo))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate json table column struct", K(ret));
+      } else {
+        col_info = new (col_info) ObJtColBaseInfo();
+        if (OB_FAIL(col_info->deep_copy(src_col, allocator))) {
+          LOG_WARN("fail to allocate json table column struct", K(ret));
+        } else if (OB_FAIL(all_cols_.push_back(col_info))) {
+          LOG_WARN("fail to store col info", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObJsonTableDef::assign(const ObJsonTableDef& src)
+{
+  int ret = OB_SUCCESS;
+
+  doc_expr_ = src.doc_expr_;
+
+  if (OB_FAIL(all_cols_.assign(src.all_cols_))) {
+    LOG_WARN("fail to assign all cols.", K(ret));
+  }
+
+  return ret;
 }

@@ -45,6 +45,7 @@
 #include "sql/optimizer/ob_log_del_upd.h"
 #include "sql/optimizer/ob_log_expr_values.h"
 #include "sql/optimizer/ob_log_function_table.h"
+#include "sql/optimizer/ob_log_json_table.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_values.h"
@@ -1036,6 +1037,8 @@ int ObLogPlan::generate_join_orders()
       LOG_WARN("fail to generate base level join order", K(ret));
     } else if (OB_FAIL(init_function_table_depend_info(base_table_items))) {
       LOG_WARN("failed to init function table depend infos", K(ret));
+    } else if (OB_FAIL(init_json_table_depend_info(base_table_items))) {
+      LOG_WARN("failed to init json table depend infos", K(ret));
     } else if (OB_FAIL(generate_conflict_detectors(from_table_items,
                                                   stmt->get_semi_infos(),
                                                   quals,
@@ -2138,7 +2141,8 @@ int ObLogPlan::generate_cross_product_conflict_rule(ConflictDetector *cross_prod
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null expr", K(ret));
-        } else if (has_depend_function_table(expr->get_relation_ids())) {
+        } else if (has_depend_function_table(expr->get_relation_ids())
+                  || has_depend_json_table(expr->get_relation_ids())) {
           //do nothing
         } else {
           used_infos.reuse();
@@ -2918,6 +2922,40 @@ int ObLogPlan::init_width_estimation_info(const ObDMLStmt *stmt)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObLogPlan::init_json_table_depend_info(const ObIArray<TableItem*> &table_items)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = get_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
+    TableItem *table = table_items.at(i);
+    JsonTableDependInfo info;
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else if (!table->is_json_table()) {
+      //do nothing
+    } else if (OB_ISNULL(table->json_table_def_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null function table expr", K(ret));
+    } else if (table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
+      //do thing
+    } else if (OB_FAIL(info.depend_table_set_.add_members(table->json_table_def_->doc_expr_->get_relation_ids()))) {
+      LOG_WARN("failed to assign table ids", K(ret));
+    } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
+    } else if (OB_FAIL(json_table_depend_infos_.push_back(info))) {
+      LOG_WARN("failed to push back info", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_TRACE("succeed to init function table depend info", K(json_table_depend_infos_));
   }
   return ret;
 }
@@ -4100,6 +4138,42 @@ int ObLogPlan::allocate_function_table_path(FunctionTablePath *func_table_path,
   return ret;
 }
 
+int ObLogPlan::allocate_json_table_path(JsonTablePath *json_table_path,
+                                        ObLogicalOperator *&out_access_path_op)
+{
+  int ret = OB_SUCCESS;
+  ObLogJsonTable *op = NULL;
+  TableItem *table_item = NULL;
+  if (OB_ISNULL(json_table_path) || OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(json_table_path->table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(json_table_path), K(get_stmt()), K(ret));
+  } else if (OB_ISNULL(op = static_cast<ObLogJsonTable*>(get_log_op_factory().
+                                        allocate(*this, LOG_JSON_TABLE)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate json table path", K(ret));
+  } else {
+    op->set_table_id(json_table_path->table_id_);
+    op->add_values_expr(json_table_path->value_expr_);
+    op->set_table_name(table_item->get_table_name());
+    ObJsonTableDef* tbl_def = table_item->get_json_table_def();
+
+    if (OB_ISNULL(tbl_def)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param, table define can't be null", K(ret));
+    } else if (OB_FAIL(append(op->get_origin_cols_def(), tbl_def->all_cols_))) {
+      LOG_WARN("failed to append orgin defs", K(ret));
+    } else if (OB_FAIL(append(op->get_filter_exprs(), json_table_path->filter_))) {
+      LOG_WARN("failed to append expr", K(ret));
+    } else if (OB_FAIL(op->compute_property(json_table_path))) {
+      LOG_WARN("failed to compute property", K(ret));
+    } else {
+      out_access_path_op = op;
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::allocate_temp_table_path(TempTablePath *temp_table_path,
                                         ObLogicalOperator *&out_access_path_op)
 {
@@ -5240,6 +5314,11 @@ int ObLogPlan::create_plan_tree_from_path(Path *path,
       FunctionTablePath *func_table_path = static_cast<FunctionTablePath *>(path);
       if (OB_FAIL(allocate_function_table_path(func_table_path, op))) {
         LOG_WARN("failed to allocate function table path", K(ret));
+      } else { /* Do nothing */ }
+    } else if (path->is_json_table_path()) {
+      JsonTablePath *json_table_path = static_cast<JsonTablePath *>(path);
+      if (OB_FAIL(allocate_json_table_path(json_table_path, op))) {
+        LOG_WARN("failed to allocate json table path", K(ret));
       } else { /* Do nothing */ }
     } else if (path->is_temp_table_path()) {
       TempTablePath *temp_table_path = static_cast<TempTablePath *>(path);
@@ -7166,6 +7245,15 @@ int ObLogPlan::check_join_legal(const ObRelIds &left_set,
     //检查dependent function table的约束
     for (int64_t i = 0; OB_SUCC(ret) && legal && i < function_table_depend_infos_.count(); ++i) {
       FunctionTableDependInfo &info = function_table_depend_infos_.at(i);
+      if (left_set.has_member(info.table_idx_)) {
+        legal = info.depend_table_set_.is_subset(left_set);
+      } else if (right_set.has_member(info.table_idx_)) {
+        legal = info.depend_table_set_.is_subset(left_set) || info.depend_table_set_.is_subset(right_set);
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && legal && i < json_table_depend_infos_.count(); ++i) {
+      JsonTableDependInfo &info = json_table_depend_infos_.at(i);
       if (left_set.has_member(info.table_idx_)) {
         legal = info.depend_table_set_.is_subset(left_set);
       } else if (right_set.has_member(info.table_idx_)) {
@@ -11549,6 +11637,18 @@ bool ObLogPlan::has_depend_function_table(const ObRelIds& table_ids)
   bool b_ret = false;
   for (int64_t i = 0; !b_ret && i < function_table_depend_infos_.count(); ++i) {
     FunctionTableDependInfo &info = function_table_depend_infos_.at(i);
+    if (table_ids.has_member(info.table_idx_)) {
+      b_ret = true;
+    }
+  }
+  return b_ret;
+}
+
+bool ObLogPlan::has_depend_json_table(const ObRelIds& table_ids)
+{
+  bool b_ret = false;
+  for (int64_t i = 0; !b_ret && i < json_table_depend_infos_.count(); ++i) {
+    JsonTableDependInfo &info = json_table_depend_infos_.at(i);
     if (table_ids.has_member(info.table_idx_)) {
       b_ret = true;
     }

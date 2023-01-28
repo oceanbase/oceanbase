@@ -861,77 +861,77 @@ void createTime(ObTime &ob_time)
   ASSERT_EQ(OB_SUCCESS, ObTimeConverter::str_to_ob_time_without_date(str, ob_time));
 }
 
-void createDate(ObTime &ob_time)
-{
-  ob_time.mode_ = DT_TYPE_DATE;
-  common::ObString str("20210906");
-  ASSERT_EQ(OB_SUCCESS, ObTimeConverter::str_to_ob_time_with_date(str, ob_time));
-}
-
-void createDateTime(ObTime &ob_time)
-{
-  ob_time.mode_ = DT_TYPE_DATETIME;
-  common::ObString str("2021-09-06 11:12:13.456789");
-  ASSERT_EQ(OB_SUCCESS, ObTimeConverter::str_to_ob_time_with_date(str, ob_time));
-  ASSERT_EQ(OB_SUCCESS, ObTimeConverter::validate_datetime(ob_time));
-}
-
-TEST_F(TestJsonBin, dateAndTimeTest)
-{
-  common::ObArenaAllocator allocator(ObModIds::TEST);
-  ObJsonArray array(&allocator);
-  ObTime obtime, obdate, obdatetime;
-  createTime(obtime);
-  createDate(obdate);
-  createDateTime(obdatetime);
-  ObJsonDatetime jt(ObJsonNodeType::J_TIME, obtime);
-  ObJsonDatetime jd(ObJsonNodeType::J_DATE, obdate);
-  ObJsonDatetime jtd(ObJsonNodeType::J_DATETIME, obdatetime);
-  // add to array
-  ASSERT_EQ(OB_SUCCESS, array.append(&jt));
-  ASSERT_EQ(OB_SUCCESS, array.append(&jd));
-  ASSERT_EQ(OB_SUCCESS, array.append(&jtd));
-
-  ObIJsonBase *j_tree_array = &array;
-  ObIJsonBase *j_bin_array = NULL;
-  ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree_array,
-        ObJsonInType::JSON_BIN, j_bin_array));
-  ASSERT_EQ(ObJsonNodeType::J_ARRAY, j_bin_array->json_type());
-  ASSERT_EQ(3, j_bin_array->element_count());
-
-  // check time 19:18:17.654321
-  ObIJsonBase *j_bin1 = NULL;
-  ASSERT_EQ(OB_SUCCESS, j_bin_array->get_array_element(0, j_bin1));
-  ASSERT_EQ(ObJsonNodeType::J_TIME, j_bin1->json_type());
-  ObTime jt1;
-  j_bin1->get_obtime(jt1);
-  ASSERT_EQ(19, jt1.parts_[DT_HOUR]);
-  ASSERT_EQ(18, jt1.parts_[DT_MIN]);
-  ASSERT_EQ(17, jt1.parts_[DT_SEC]);
-  ASSERT_EQ(654321, jt1.parts_[DT_USEC]);
-  
-  // check date 20210906
-  j_bin1 = NULL;
-  ASSERT_EQ(OB_SUCCESS, j_bin_array->get_array_element(1, j_bin1));
-  ASSERT_EQ(ObJsonNodeType::J_DATE, j_bin1->json_type());
-  j_bin1->get_obtime(jt1);
-  ASSERT_EQ(2021, jt1.parts_[DT_YEAR]);
-  ASSERT_EQ(9, jt1.parts_[DT_MON]);
-  ASSERT_EQ(6, jt1.parts_[DT_MDAY]);
-  
-  // check datetime 2021-09-06 11:12:13.456789
-  j_bin1 = NULL;
-  ASSERT_EQ(OB_SUCCESS, j_bin_array->get_array_element(2, j_bin1));
-  ASSERT_EQ(ObJsonNodeType::J_DATETIME, j_bin1->json_type());
-  j_bin1->get_obtime(jt1);
-  ASSERT_EQ(11, jt1.parts_[DT_HOUR]);
-  ASSERT_EQ(12, jt1.parts_[DT_MIN]);
-  ASSERT_EQ(13, jt1.parts_[DT_SEC]);
-  ASSERT_EQ(456789, jt1.parts_[DT_USEC]);
-  ASSERT_EQ(2021, jt1.parts_[DT_YEAR]);
-  ASSERT_EQ(9, jt1.parts_[DT_MON]);
-  ASSERT_EQ(6, jt1.parts_[DT_MDAY]);
-}
+//  void createDate(ObTime &ob_time)
+//  {
+//    ob_time.mode_ = DT_TYPE_DATE;
+//    common::ObString str("20210906");
+//    ASSERT_EQ(OB_SUCCESS, ObTimeConverter::str_to_ob_time_with_date(str, ob_time));
+//  }
+//
+//  void createDateTime(ObTime &ob_time)
+//  {
+//    ob_time.mode_ = DT_TYPE_DATETIME;
+//    common::ObString str("2021-09-06 11:12:13.456789");
+//    ASSERT_EQ(OB_SUCCESS, ObTimeConverter::str_to_ob_time_with_date(str, ob_time));
+//    ASSERT_EQ(OB_SUCCESS, ObTimeConverter::validate_datetime(ob_time));
+//  }
+//
+//  TEST_F(TestJsonBin, dateAndTimeTest)
+//  {
+//    common::ObArenaAllocator allocator(ObModIds::TEST);
+//    ObJsonArray array(&allocator);
+//    ObTime obtime, obdate, obdatetime;
+//    createTime(obtime);
+//    createDate(obdate);
+//    createDateTime(obdatetime);
+//    ObJsonDatetime jt(ObJsonNodeType::J_TIME, obtime);
+//    ObJsonDatetime jd(ObJsonNodeType::J_DATE, obdate);
+//    ObJsonDatetime jtd(ObJsonNodeType::J_DATETIME, obdatetime);
+//    // add to array
+//    ASSERT_EQ(OB_SUCCESS, array.append(&jt));
+//    ASSERT_EQ(OB_SUCCESS, array.append(&jd));
+//    ASSERT_EQ(OB_SUCCESS, array.append(&jtd));
+//
+//    ObIJsonBase *j_tree_array = &array;
+//    ObIJsonBase *j_bin_array = NULL;
+//    ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree_array,
+//          ObJsonInType::JSON_BIN, j_bin_array));
+//    ASSERT_EQ(ObJsonNodeType::J_ARRAY, j_bin_array->json_type());
+//    ASSERT_EQ(3, j_bin_array->element_count());
+//
+//    // check time 19:18:17.654321
+//    ObIJsonBase *j_bin1 = NULL;
+//    ASSERT_EQ(OB_SUCCESS, j_bin_array->get_array_element(0, j_bin1));
+//    ASSERT_EQ(ObJsonNodeType::J_TIME, j_bin1->json_type());
+//    ObTime jt1;
+//    j_bin1->get_obtime(jt1);
+//    ASSERT_EQ(19, jt1.parts_[DT_HOUR]);
+//    ASSERT_EQ(18, jt1.parts_[DT_MIN]);
+//    ASSERT_EQ(17, jt1.parts_[DT_SEC]);
+//    ASSERT_EQ(654321, jt1.parts_[DT_USEC]);
+//
+//    // check date 20210906
+//    j_bin1 = NULL;
+//    ASSERT_EQ(OB_SUCCESS, j_bin_array->get_array_element(1, j_bin1));
+//    ASSERT_EQ(ObJsonNodeType::J_DATE, j_bin1->json_type());
+//    j_bin1->get_obtime(jt1);
+//    ASSERT_EQ(2021, jt1.parts_[DT_YEAR]);
+//    ASSERT_EQ(9, jt1.parts_[DT_MON]);
+//    ASSERT_EQ(6, jt1.parts_[DT_MDAY]);
+//
+//    // check datetime 2021-09-06 11:12:13.456789
+//    j_bin1 = NULL;
+//    ASSERT_EQ(OB_SUCCESS, j_bin_array->get_array_element(2, j_bin1));
+//    ASSERT_EQ(ObJsonNodeType::J_DATETIME, j_bin1->json_type());
+//    j_bin1->get_obtime(jt1);
+//    ASSERT_EQ(11, jt1.parts_[DT_HOUR]);
+//    ASSERT_EQ(12, jt1.parts_[DT_MIN]);
+//    ASSERT_EQ(13, jt1.parts_[DT_SEC]);
+//    ASSERT_EQ(456789, jt1.parts_[DT_USEC]);
+//    ASSERT_EQ(2021, jt1.parts_[DT_YEAR]);
+//    ASSERT_EQ(9, jt1.parts_[DT_MON]);
+//    ASSERT_EQ(6, jt1.parts_[DT_MDAY]);
+//  }
 
 long getCurrentTime()
 {

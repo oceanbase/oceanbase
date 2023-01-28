@@ -163,6 +163,39 @@ int ObResolverUtils::check_function_table_column_exist(const TableItem &table_it
   return ret;
 }
 
+
+
+int ObResolverUtils::check_json_table_column_exists(const TableItem &table_item,
+                                                    ObResolverParams &params,
+                                                    const ObString &column_name,
+                                                    bool& exists)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObString, 16> column_names;
+  bool exist = false;
+  CK(table_item.is_json_table());
+  CK (OB_NOT_NULL(table_item.json_table_def_));
+
+  ObJsonTableDef* jt_def = table_item.json_table_def_;
+
+  for (size_t i = 0; OB_SUCC(ret) && i < jt_def->all_cols_.count(); ++i) {
+    ObJtColBaseInfo* col_info = jt_def->all_cols_.at(i);
+    if (col_info->col_type_ != NESTED_COL_TYPE) {
+      ObString& cur_column_name = col_info->col_name_;
+      if (ObCharset::case_compat_mode_equal(cur_column_name, column_name)) {
+        exists = true;
+        break;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !exists) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("not found column in table function", K(ret), K(column_name));
+  }
+  return ret;
+}
+
 int ObResolverUtils::resolve_extended_type_info(const ParseNode &str_list_node, ObIArray<ObString>& type_info_array)
 {
   int ret = OB_SUCCESS;
@@ -967,12 +1000,14 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
     } else {
       dst_pl_type = routine_param->get_pl_data_type();
     }
-    OZ (check_type_match(resolve_ctx,
-                         match_info.match_info_.at(position),
-                         expr,
-                         src_type,
-                         src_type_id,
-                         dst_pl_type), K(i), KPC(expr_params.at(i)), K(dst_pl_type));
+    if (OB_SUCC(ret) && OB_FAIL(check_type_match(resolve_ctx,
+                                                 match_info.match_info_.at(position),
+                                                 expr,
+                                                 src_type,
+                                                 src_type_id,
+                                                 dst_pl_type))) {
+      LOG_WARN("argument type not match", K(ret), K(i), KPC(expr_params.at(i)), K(src_type), K(dst_pl_type));
+    }
   }
 
   // 处理空缺参数
@@ -4645,7 +4680,9 @@ int ObResolverUtils::resolve_check_constraint_expr(
   if (OB_SUCC(ret) && OB_FAIL(expr->formalize(session_info))) {
     LOG_WARN("formalize expr failed", K(ret));
   }
-  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+
+  if (OB_FAIL(ret)) {
+  } else if (lib::is_mysql_mode()) {
     if (T_INT == expr->get_expr_type()
         || T_TINYINT == expr->get_expr_type()
         || IS_BOOL_OP(expr->get_expr_type())) {
@@ -4658,7 +4695,21 @@ int ObResolverUtils::resolve_check_constraint_expr(
          constraint.get_constraint_name_str().length(), constraint.get_constraint_name_str().ptr());
       LOG_WARN("expr result type is not boolean", K(ret), K(expr->get_result_type().get_type()));
     }
+  } else {
+    if (expr->get_expr_type() == T_FUN_SYS_IS_JSON) {
+      ObObjType in_type = column_schema->get_data_type();
+      if (!(in_type == ObVarcharType
+            || in_type == ObNVarchar2Type
+            || in_type == ObLongTextType
+            || in_type == ObJsonType
+            || in_type == ObNVarchar2Type
+            || in_type == ObRawType)) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-", ob_obj_type_str(in_type));
+      }
+    }
   }
+
   if (OB_SUCC(ret)) {
     HEAP_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_str_buf) {
       MEMSET(expr_str_buf, 0, sizeof(expr_str_buf));
@@ -4926,6 +4977,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                                        const int is_oracle_mode/*1:Oracle, 0:MySql */,
                                        const bool is_for_pl_type,
                                        const ObSessionNLSParams &nls_session_param,
+                                       uint64_t tenant_id,
                                        const bool convert_real_type_to_decimal /*false*/)
 {
   int ret = OB_SUCCESS;
@@ -4933,9 +4985,9 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
   int32_t length = type_node.int32_values_[0];
   int16_t precision = type_node.int16_values_[0];
   int16_t scale = type_node.int16_values_[1];
-  uint64_t tenant_id = MTL_ID();
   const int16_t number_type = type_node.int16_values_[2];
   const bool has_specify_scale = (1 == type_node.int16_values_[2]);
+  uint64_t data_version = 0;
 
   if (convert_real_type_to_decimal && !is_oracle_mode &&
       (precision >= 0 && scale >= 0)) {
@@ -5240,10 +5292,20 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       }
       break;
     case ObJsonTC:
-      data_type.set_length(length);
-      data_type.set_scale(default_accuracy.get_scale());
-      data_type.set_charset_type(CHARSET_UTF8MB4);
-      data_type.set_collation_type(CS_TYPE_UTF8MB4_BIN); // ToDo: oracle, allow utf16
+      if (is_oracle_mode && !is_for_pl_type) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (data_version < DATA_VERSION_4_1_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create json column before cluster min version 4.1.");
+        }
+      }
+      if (OB_SUCC(ret)) {
+        data_type.set_length(length);
+        data_type.set_scale(default_accuracy.get_scale());
+        data_type.set_charset_type(CHARSET_UTF8MB4);
+        data_type.set_collation_type(CS_TYPE_UTF8MB4_BIN); // ToDo: oracle, allow utf16
+      }
       break;
     case ObGeometryTC: {
       uint64_t tenant_data_version = 0;

@@ -99,7 +99,8 @@ enum ObPLOpaqueType
   PL_INVALID = -1,
   PL_ANY_TYPE = 0,
   PL_ANY_DATA = 1,
-  PL_XML_TYPE = 2
+  PL_XML_TYPE = 2,
+  PL_JSON_TYPE = 3
 };
 
 enum ObPLIntegerType

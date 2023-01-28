@@ -979,6 +979,7 @@ int ObTransformPostProcess::transform_onetime_subquery(ObDMLStmt *stmt,
   ObSEArray<ObRawExpr *, 4> old_exprs;
   ObSEArray<ObRawExpr *, 4> new_exprs;
   ObArray<ObRawExpr *> func_table_exprs;
+  ObArray<ObRawExpr *> json_table_exprs;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
@@ -988,6 +989,8 @@ int ObTransformPostProcess::transform_onetime_subquery(ObDMLStmt *stmt,
       LOG_WARN("failed to get relation exprs", K(ret));
     } else if (OB_FAIL(stmt->get_table_function_exprs(func_table_exprs))) {
       LOG_WARN("failed to get table function exprs", K(ret));
+    } else if (OB_FAIL(stmt->get_json_table_exprs(json_table_exprs))) {
+      LOG_WARN("failed to get json table exprs", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < expr_ptrs.count(); ++i) {
       bool dummy = false;
@@ -997,6 +1000,8 @@ int ObTransformPostProcess::transform_onetime_subquery(ObDMLStmt *stmt,
       if (OB_FAIL(expr_ptrs.at(i).get(expr))) {
         LOG_WARN("failed to get expr", K(ret));
       } else if (ObOptimizerUtil::find_item(func_table_exprs, expr)) {
+        // do nothing
+      } else if (ObOptimizerUtil::find_item(json_table_exprs, expr)) {
         // do nothing
       } else if (OB_FAIL(extract_onetime_subquery(expr, onetime_list, dummy))) {
         LOG_WARN("failed to extract onetime subquery", K(ret));

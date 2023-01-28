@@ -95,6 +95,7 @@ public:
   // stmt中会出现若干expr, 为了避免反复实例化，这里将expr作为do_print的参数
   int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false, bool is_bool_expr = false);
   int set_gen_unique_name(GenUniqueAliasName *gen_unique_name);
+  int pre_check_treat_opt(ObRawExpr *expr, bool &is_treat);
 private:
   int print(ObRawExpr *expr);
 
@@ -113,7 +114,18 @@ private:
   int print_date_unit(ObRawExpr *expr);
   int print_get_format_unit(ObRawExpr *expr);
   int print_cast_type(ObRawExpr *expr);
-
+  int print_json_expr(ObSysFunRawExpr *expr);
+  int print_json_value(ObSysFunRawExpr *expr);
+  int print_json_query(ObSysFunRawExpr *expr);
+  int print_json_exists(ObSysFunRawExpr *expr);
+  int print_json_equal(ObSysFunRawExpr *expr);
+  int print_json_array(ObSysFunRawExpr *expr);
+  int print_json_mergepatch(ObSysFunRawExpr *expr);
+  int print_json_return_type(ObRawExpr *expr);
+  int print_is_json(ObSysFunRawExpr *expr);
+  int print_json_object(ObSysFunRawExpr *expr);
+  int print_ora_json_arrayagg(ObAggFunRawExpr *expr);
+  int print_ora_json_objectagg(ObAggFunRawExpr *expr);
   int print_partition_exprs(ObWinFunRawExpr *expr);
   int print_order_items(ObWinFunRawExpr *expr);
   int print_window_clause(ObWinFunRawExpr *expr);

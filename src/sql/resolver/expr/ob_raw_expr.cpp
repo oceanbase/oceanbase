@@ -1470,6 +1470,7 @@ int ObColumnRefRawExpr::assign(const ObRawExpr &other)
       is_rowkey_column_ = tmp.is_rowkey_column_;
       is_unique_key_column_ = tmp.is_unique_key_column_;
       is_mul_key_column_ = tmp.is_mul_key_column_;
+      is_strict_json_column_ = tmp.is_strict_json_column_;
     }
   }
   return ret;

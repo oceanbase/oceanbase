@@ -3781,7 +3781,7 @@ int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_colum
       } else {
         // increase column length
         if (ob_is_number_tc(src_col_type) || src_meta.is_char() || src_meta.is_varchar()
-         || src_meta.is_nvarchar2() || src_meta.is_raw()
+         || src_meta.is_nvarchar2() || src_meta.is_raw() || src_meta.is_json()
          || src_meta.is_timestamp_nano() || src_meta.is_timestamp_tz()
          || src_meta.is_timestamp_ltz() || src_meta.is_interval_ym()
          || src_meta.is_interval_ds() || src_meta.is_urowid()) {
@@ -3918,10 +3918,14 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
         is_offline = true;
       }
     } else {
-      if ((dst_meta.is_json() && (src_meta.is_string_type())) ||
-          (src_meta.is_json() && (dst_meta.is_string_type()))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter non string type");
+      if ((dst_meta.is_json() && src_meta.is_string_type()) ||
+          (src_meta.is_json() && dst_meta.is_string_type())) {
+        if (is_oracle_mode) {
+          is_offline = true;
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter non string type");
+        }
       } else if (!is_oracle_mode) {
         is_offline = true;
       } else {

@@ -271,7 +271,9 @@ int ObExprAbs::calc_result_type1(ObExprResType &type, ObExprResType &type1,
     // result type
     ObObjType itype;
     if (OB_SUCC(ObExprResultTypeUtil::get_abs_result_type(itype, type1.get_type()))) {
-      if (ObMaxType == itype) {
+      if (lib::is_oracle_mode() && ob_is_json(type1.get_type())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      } else if (ObMaxType == itype) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
       } else {
         type.set_type(itype);

@@ -1113,6 +1113,168 @@ int ObRawExprDeduceType::visit(ObCaseOpRawExpr &expr)
   return ret;
 }
 
+int ObRawExprDeduceType::set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type, bool &need_add_cast)
+{
+  int ret = OB_SUCCESS;
+
+  switch (expr.get_expr_type()) {
+    case T_FUN_JSON_ARRAYAGG: {
+      result_type.set_json();
+      result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+      expr.set_result_type(result_type);
+      break;
+    }
+    case T_FUN_ORA_JSON_ARRAYAGG: {
+      ObRawExpr *col_expr = NULL;
+      ObRawExpr *format_json_expr = NULL;
+      if (OB_UNLIKELY(expr.get_real_param_count() < DEDUCE_JSON_ARRAYAGG_FORMAT) ||
+          OB_ISNULL(col_expr = expr.get_param_expr(DEDUCE_JSON_ARRAYAGG_EXPR)) ||
+          OB_ISNULL(format_json_expr = expr.get_param_expr(DEDUCE_JSON_ARRAYAGG_FORMAT))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()),
+                                         K(expr.get_real_param_count()), K(expr));
+      } else {
+        bool format_json = (is_oracle_mode()
+                            && format_json_expr->get_data_type() == ObIntType
+                            && static_cast<ObConstRawExpr *>(format_json_expr)->get_value().get_int())
+                           ? true
+                           : false;
+        ObExprResType& col_type = const_cast<ObExprResType&>(col_expr->get_result_type());
+        // check format json constrain
+        if (format_json && col_type.get_type_class() != ObStringTC && col_type.get_type_class() != ObNullTC
+            && col_type.get_type_class() != ObLobTC && col_type.get_type_class() != ObRawTC
+            && col_expr->get_expr_class() != ObRawExpr::EXPR_OPERATOR) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(col_type.get_type()));
+        } else {
+          // check order by constrain
+          const common::ObIArray<OrderItem>& order_item = expr.get_order_items();
+          for (int64_t i = 0; OB_SUCC(ret) && i < order_item.count(); ++i) {
+            ObRawExpr* order_expr = order_item.at(i).expr_;
+            if (OB_ISNULL(order_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("internal order expr is null", K(ret));
+            } else if (order_expr->get_expr_type() == T_REF_COLUMN) {
+              const ObColumnRefRawExpr *order_column = static_cast<const ObColumnRefRawExpr *>(order_expr);
+              if (order_column->is_lob_column()) {
+                ret = OB_ERR_LOB_TYPE_NOT_SORTING;
+                LOG_WARN("Column of LOB type cannot be used for sorting", K(ret));
+              }
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(set_agg_json_array_result_type(expr, result_type))) {
+            LOG_WARN("set json_arrayagg result type failed", K(ret));
+          } else {
+            expr.set_result_type(result_type);
+          }
+        }
+      }
+      break;
+    }
+    case T_FUN_JSON_OBJECTAGG: {
+      ObRawExpr *param_expr1 = NULL;
+      ObRawExpr *param_expr2 = NULL;
+      if (OB_UNLIKELY(expr.get_real_param_count() != 2) ||
+          OB_ISNULL(param_expr1 = expr.get_param_expr(0)) ||
+          OB_ISNULL(param_expr2 = expr.get_param_expr(1))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()),
+                                         K(expr.get_real_param_count()), K(expr));
+      } else {
+        ObExprResType& expr_type1 = const_cast<ObExprResType&>(param_expr1->get_result_type());
+        if (expr_type1.get_type() == ObNullType) {
+          ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
+          LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
+        } else {
+          need_add_cast = true;
+        }
+        result_type.set_json();
+        result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+        expr.set_result_type(result_type);
+      }
+      break;
+    }
+    case T_FUN_ORA_JSON_OBJECTAGG: {
+      ObRawExpr *key_expr = NULL;
+      ObRawExpr *value_expr = NULL;
+      ObRawExpr *return_type_expr = NULL;
+      ObRawExpr *format_json_expr = NULL;
+      if (OB_ISNULL(key_expr = expr.get_param_expr(PARSE_JSON_OBJECTAGG_KEY)) ||
+          OB_ISNULL(value_expr = expr.get_param_expr(PARSE_JSON_OBJECTAGG_VALUE)) ||
+          OB_ISNULL(format_json_expr = expr.get_param_expr(PARSE_JSON_OBJECTAGG_FORMAT)) ||
+          OB_ISNULL(return_type_expr = expr.get_param_expr(PARSE_JSON_OBJECTAGG_RETURNING))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()),
+                                         K(expr.get_real_param_count()), K(expr));
+      } else {
+        bool format_json = (is_oracle_mode()
+                            && format_json_expr->get_data_type() == ObIntType
+                            && static_cast<ObConstRawExpr *>(format_json_expr)->get_value().get_int())
+                           ? true
+                           : false;
+        ObExprResType& col_type = const_cast<ObExprResType&>(value_expr->get_result_type());
+        ObObjType key_type = const_cast<ObExprResType&>(key_expr->get_result_type()).get_type();
+        if (key_type == ObNullType) {
+          ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
+          LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
+        } else if (!ob_is_string_type(key_type)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(key_type));
+        } else if (format_json && col_type.get_type_class() != ObStringTC && col_type.get_type_class() != ObNullTC
+            && col_type.get_type_class() != ObLobTC && col_type.get_type_class() != ObRawTC
+            && value_expr->get_expr_class() != ObRawExpr::EXPR_OPERATOR) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(col_type.get_type()));
+        } else {
+          ParseNode parse_node;
+          parse_node.value_ = static_cast<ObConstRawExpr *>(return_type_expr)->get_value().get_int();
+          ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+          result_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
+          if (ob_is_string_type(obj_type)) {
+            result_type.set_type(obj_type);
+            result_type.set_length(OB_MAX_SQL_LENGTH);
+            result_type.set_length_semantics(my_session_->get_actual_nls_length_semantics());
+            if (ob_is_blob(obj_type, result_type.get_collation_type())) {
+              result_type.set_collation_type(CS_TYPE_BINARY);
+              result_type.set_calc_collation_type(CS_TYPE_BINARY);
+            } else {
+              result_type.set_collation_type(my_session_->get_nls_collation());
+              result_type.set_calc_collation_type(my_session_->get_nls_collation());
+            }
+            result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+            expr.set_result_type(result_type);
+          } else if (ob_is_lob_locator(obj_type)) {
+            result_type.set_clob_locator();
+            result_type.set_collation_type(my_session_->get_nls_collation());
+            result_type.set_calc_collation_type(my_session_->get_nls_collation());
+            result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+            expr.set_result_type(result_type);
+          } else if (ob_is_json(obj_type)) {
+            result_type.set_json();
+            result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+          } else if (ob_is_raw(obj_type)) {
+            result_type.set_type(obj_type);
+            result_type.set_full_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX],
+                                        return_type_expr->get_result_type().get_accuracy().get_length_semantics());
+            result_type.set_collation_type(CS_TYPE_BINARY);
+            result_type.set_calc_collation_type(CS_TYPE_BINARY);
+            result_type.set_collation_level(CS_LEVEL_NUMERIC);
+          }
+          expr.set_result_type(result_type);
+        }
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to visit json agg function", K(ret), K(expr.get_expr_type()));
+    }
+  }
+
+  return ret;
+}
+
 int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
 {
   ObScale avg_scale_increment_ = 4;
@@ -1164,33 +1326,13 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         break;
       }
-      case T_FUN_JSON_ARRAYAGG: {
-        result_type.set_json();
-        result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-        expr.set_result_type(result_type);
-        break;
-      }
-      case T_FUN_JSON_OBJECTAGG: {
-        ObRawExpr *param_expr1 = NULL;
-        ObRawExpr *param_expr2 = NULL;
-        if (OB_UNLIKELY(expr.get_real_param_count() != 2) ||
-            OB_ISNULL(param_expr1 = expr.get_param_expr(0)) ||
-            OB_ISNULL(param_expr2 = expr.get_param_expr(1))) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()),
-                                           K(expr.get_real_param_count()), K(expr));
-        } else {
-          ObExprResType& expr_type1 = const_cast<ObExprResType&>(param_expr1->get_result_type());
-          if (expr_type1.get_type() == ObNullType) {
-            ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
-            LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
-          } else {
-            need_add_cast = true;
-          }
-          result_type.set_json();
-          result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-          expr.set_result_type(result_type);
-        }
+      case T_FUN_JSON_ARRAYAGG:
+      case T_FUN_ORA_JSON_ARRAYAGG:
+      case T_FUN_JSON_OBJECTAGG:
+      case T_FUN_ORA_JSON_OBJECTAGG: {
+        if (OB_FAIL(set_json_agg_result_type(expr, result_type, need_add_cast))) {
+          LOG_WARN("set json agg result type failed", K(ret));
+         }
         break;
       }
       case T_FUN_GROUP_CONCAT: {
@@ -1780,15 +1922,22 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
     } else if (OB_UNLIKELY(
                 is_oracle_mode()
                 && (ObLongTextType == param_expr->get_data_type()
-                  || ob_is_lob_locator(param_expr->get_data_type()))
+                  || (ob_is_lob_locator(param_expr->get_data_type())
+                      && T_FUN_ORA_JSON_OBJECTAGG != expr.get_expr_type()
+                      && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type())
+                  || (ob_is_json(param_expr->get_data_type())
+                      && T_FUN_ORA_JSON_OBJECTAGG != expr.get_expr_type()
+                      && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type()
+                      && T_FUN_COUNT != expr.get_expr_type()))
                 && T_FUN_MEDIAN != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_CONT != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_DISC != expr.get_expr_type()
                 && !expr.is_need_deserialize_row()
                 && !(T_FUN_PL_AGG_UDF == expr.get_expr_type() && !expr.is_param_distinct())
                 && !(T_FUN_WM_CONCAT == expr.get_expr_type() && !expr.is_param_distinct()))) {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_WARN("lob type parameter not expected", K(ret));
+      ret = ob_is_json(param_expr->get_data_type()) ?
+              OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("lob or json type parameter not expected", K(ret));
     }
   }
   return ret;
@@ -2724,6 +2873,48 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
   return ret;
 }
 
+int ObRawExprDeduceType::set_agg_json_array_result_type(ObAggFunRawExpr &expr,
+                                                        ObExprResType &result_type)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *returning_type = NULL;
+  if (OB_UNLIKELY(expr.get_real_param_count() < DEDUCE_JSON_ARRAYAGG_RETURNING) ||
+      OB_ISNULL(returning_type = expr.get_param_expr(DEDUCE_JSON_ARRAYAGG_RETURNING)) ||
+      returning_type->get_data_type() != ObIntType) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()),
+                                      K(expr.get_real_param_count()), K(expr));
+  } else {
+    ParseNode parse_node;
+    parse_node.value_ = static_cast<ObConstRawExpr *>(returning_type)->get_value().get_int();
+    ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+    result_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
+    result_type.set_type(obj_type);
+    if (ob_is_string_type(obj_type) || ob_is_lob_locator(obj_type)) {
+      result_type.set_full_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX],
+                                  returning_type->get_result_type().get_accuracy().get_length_semantics());
+      if (ob_is_blob(obj_type, result_type.get_collation_type())) {
+        result_type.set_collation_type(CS_TYPE_BINARY);
+        result_type.set_calc_collation_type(CS_TYPE_BINARY);
+      } else {
+        result_type.set_collation_type(my_session_->get_nls_collation());
+        result_type.set_calc_collation_type(my_session_->get_nls_collation());
+      }
+      result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+    } else if (ob_is_json(obj_type)) {
+      result_type.set_json();
+      result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+    } else if (ob_is_raw(obj_type)) {
+      result_type.set_full_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX],
+                                  returning_type->get_result_type().get_accuracy().get_length_semantics());
+      result_type.set_collation_type(CS_TYPE_BINARY);
+      result_type.set_calc_collation_type(CS_TYPE_BINARY);
+      result_type.set_collation_level(CS_LEVEL_NUMERIC);
+    }
+  }
+  return ret;
+}
+
 bool ObRawExprDeduceType::skip_cast_expr(const ObRawExpr &parent,
                                          const int64_t child_idx)
 {
@@ -2903,11 +3094,13 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
     } else if ((parent.get_expr_type() == T_FUN_REGR_SXX && i == 0) ||
                (parent.get_expr_type() == T_FUN_REGR_SYY && i == 1) ||
                (parent.get_expr_type() == T_FUN_REGR_SXY && i == 1) ||
-               (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 1)) {
+               (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 1) ||
+               (parent.get_expr_type() == T_FUN_ORA_JSON_OBJECTAGG && i > 0)) {
       //do nothing
     } else if (parent.get_expr_type() == T_FUN_WM_CONCAT ||
                parent.get_expr_type() == T_FUN_KEEP_WM_CONCAT ||
-               (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 0)) {
+               (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 0) ||
+               (parent.get_expr_type() == T_FUN_ORA_JSON_OBJECTAGG && i == 0)) {
       if (ob_is_string_type(child_ptr->get_result_type().get_type())) {
         /*do nothing*/
       } else {

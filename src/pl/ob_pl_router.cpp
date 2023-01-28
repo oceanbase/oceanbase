@@ -56,7 +56,8 @@ int ObPLRouter::check_error_in_resolve(int code)
     case OB_ERR_UNEXPECTED:
     case OB_ERR_RETURN_VALUE_REQUIRED:
     case OB_ERR_END_LABEL_NOT_MATCH:
-    case OB_ERR_TOO_LONG_IDENT: {
+    case OB_ERR_TOO_LONG_IDENT:
+    case OB_ERR_PL_JSONTYPE_USAGE: {
       ret = code;
     }
     break;

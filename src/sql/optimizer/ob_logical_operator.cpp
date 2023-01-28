@@ -48,6 +48,7 @@
 #include "ob_log_temp_table_access.h"
 #include "ob_log_temp_table_insert.h"
 #include "ob_log_function_table.h"
+#include "ob_log_json_table.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "common/ob_smart_call.h"
 #include "sql/resolver/expr/ob_raw_expr_printer.h"
@@ -1147,6 +1148,9 @@ int ObLogicalOperator::explain_collect_width_pre(void *ctx)
         } else if (log_op_def::LOG_FUNCTION_TABLE == type_) {
           ObLogFunctionTable *func_table = static_cast<ObLogFunctionTable *>(this);
           length = func_table->get_table_name().length();
+        } else if (log_op_def::LOG_JSON_TABLE == type_) {
+          ObLogJsonTable *json_table = static_cast<ObLogJsonTable *>(this);
+          length = json_table->get_table_name().length();
         } else {
           length = 0;
         }
@@ -1383,7 +1387,13 @@ int ObLogicalOperator::explain_write_buffer_pre(void *ctx)
           const ObString &name = func_table->get_table_name();
           databuff_printf(buffer, OB_MAX_PLAN_EXPLAIN_NAME_LENGTH, tmp_pos,
                           "%.*s", name.length(), name.ptr());
+        } else if (log_op_def::LOG_JSON_TABLE == type_) {
+          ObLogJsonTable *func_table = static_cast<ObLogJsonTable *>(this);
+          const ObString &name = func_table->get_table_name();
+          databuff_printf(buffer, OB_MAX_PLAN_EXPLAIN_NAME_LENGTH, tmp_pos,
+                          "%.*s", name.length(), name.ptr());
         }
+
         // left padding with space
         int64_t N = plan.formatter.column_width[i] - tmp_pos;
         for (int64_t n = 0; n < N; ++n) {

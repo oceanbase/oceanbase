@@ -1085,7 +1085,9 @@ int ObWindowFunctionOp::init()
           case T_FUN_TOP_FRE_HIST:
           case T_FUN_PL_AGG_UDF:
           case T_FUN_JSON_ARRAYAGG:
-          case T_FUN_JSON_OBJECTAGG: {
+          case T_FUN_JSON_OBJECTAGG:
+          case T_FUN_ORA_JSON_ARRAYAGG:
+          case T_FUN_ORA_JSON_OBJECTAGG: {
             void *tmp_ptr = local_allocator_.alloc(sizeof(AggrCell));
             void *tmp_array = local_allocator_.alloc(sizeof(AggrInfoFixedArray));
             ObIArray<ObAggrInfo> *aggr_infos = NULL;

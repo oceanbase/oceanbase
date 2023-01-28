@@ -127,6 +127,29 @@ struct InsertAllTableInfo;
 typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
                           1, common::ModulePageAllocator, true> RowParamMap;
+
+enum JsonAraayaggCGOffset
+{
+  CG_JSON_ARRAYAGG_EXPR,
+  CG_JSON_ARRAYAGG_FORMAT,
+  CG_JSON_ARRAYAGG_ON_NULL,
+  CG_JSON_ARRAYAGG_RETURNING,
+  CG_JSON_ARRAYAGG_STRICT,
+  CG_JSON_ARRAYAGG_MAX_IDX
+};
+
+enum JsonObjectaggCGOffset
+{
+  CG_JSON_OBJECTAGG_KEY,
+  CG_JSON_OBJECTAGG_VALUE,
+  CG_JSON_OBJECTAGG_FORMAT,
+  CG_JSON_OBJECTAGG_ON_NULL,
+  CG_JSON_OBJECTAGG_RETURNING,
+  CG_JSON_OBJECTAGG_STRICT,
+  CG_JSON_OBJECTAGG_UNIQUE_KEYS,
+  CG_JSON_OBJECTAGG_MAX_IDX
+};
+
 //
 // code generator for static typing engine.
 //
@@ -165,7 +188,9 @@ public:
   // detect physical operator type from logic operator.
   static int get_phy_op_type(ObLogicalOperator &op, ObPhyOperatorType &type,
                              const bool in_root_job);
-
+  //set is json constraint type is strict or relax
+  const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
+  const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
 private:
 
   int classify_anti_monotone_filter_exprs(const common::ObIArray<ObRawExpr*> &input_filters,
@@ -363,6 +388,7 @@ private:
   int generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec &spec, const bool in_root_job);
   int generate_spec(ObLogLink &op, ObLinkScanSpec &spec, const bool in_root_job);
   int generate_spec(ObLogInsertAll &op, ObTableInsertAllSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec, const bool in_root_job);
 
   // online optimizer stats gathering
   int generate_spec(ObLogOptimizerStatsGathering &op, ObOptimizerStatsGatheringSpec &spec, const bool in_root_job);

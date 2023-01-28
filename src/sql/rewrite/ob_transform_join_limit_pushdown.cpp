@@ -424,6 +424,8 @@ int ObTransformJoinLimitPushDown::split_cartesian_tables(ObSelectStmt *select_st
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(check_contain_correlated_function_table(select_stmt, is_contain))) {
     LOG_WARN("failed to check contain correlated function table", K(ret));
+  } else if (OB_FAIL(check_contain_correlated_json_table(select_stmt, is_contain))) {
+    LOG_WARN("failed to check contain correlated function table", K(ret));
   } else if (is_contain) {
     //do nothing
   } else {
@@ -461,6 +463,27 @@ int ObTransformJoinLimitPushDown::check_contain_correlated_function_table(ObDMLS
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
     } else if (!table->function_table_expr_->get_relation_ids().is_empty()) {
+      is_contain = true;
+    }
+  }
+  return ret;
+}
+
+int ObTransformJoinLimitPushDown::check_contain_correlated_json_table(ObDMLStmt *stmt, bool &is_contain)
+{
+  int ret = OB_SUCCESS;
+  is_contain = false;
+  for (int i = 0; OB_SUCC(ret) && !is_contain && i < stmt->get_table_items().count(); ++i) {
+    TableItem *table = stmt->get_table_item(i);
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else if (!table->is_json_table()) {
+      //do nothing
+    } else if (OB_ISNULL(table->json_table_def_) || OB_ISNULL(table->json_table_def_->doc_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (!table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
       is_contain = true;
     }
   }

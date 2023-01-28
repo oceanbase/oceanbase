@@ -1037,6 +1037,7 @@
     "is_rowkey_column":false,
     "is_unique_key_column":false,
     "is_mul_key_column":false,
+    "is_strict_json_column":0,
     "srs_id":-1
   },
   "default": {
@@ -1666,6 +1667,7 @@
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     }
   ],
@@ -1761,6 +1763,7 @@
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -2014,6 +2017,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -2063,6 +2067,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2359,6 +2364,7 @@
   "is_rowkey_column":false,
   "is_unique_key_column":false,
   "is_mul_key_column":false,
+  "is_strict_json_column":0,
   "srs_id":-1
 }
 [21] 10+10
@@ -2622,6 +2628,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -2671,6 +2678,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2750,6 +2758,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -2799,6 +2808,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2883,6 +2893,7 @@
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -2995,6 +3006,7 @@
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -3105,6 +3117,7 @@
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -3154,6 +3167,7 @@
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     }
   ]
@@ -3238,6 +3252,7 @@
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -3500,6 +3515,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -3611,6 +3627,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -3816,6 +3833,7 @@
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     }
   ]
@@ -3899,6 +3917,7 @@
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -4103,6 +4122,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -4275,6 +4295,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -4512,6 +4533,7 @@
                   "is_rowkey_column":false,
                   "is_unique_key_column":false,
                   "is_mul_key_column":false,
+                  "is_strict_json_column":0,
                   "srs_id":-1
                 }
               ]
@@ -4693,6 +4715,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -5136,6 +5159,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -5185,6 +5209,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -5329,6 +5354,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -5378,6 +5404,7 @@
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]

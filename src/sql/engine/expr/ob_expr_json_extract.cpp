@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_extract.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -73,8 +74,12 @@ int ObExprJsonExtract::calc_result_typeN(ObExprResType& type,
     }
 
     if (OB_SUCC(ret)) {
-      type.set_json();
-      type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+      if (is_null_result) {
+        type.set_null();
+      } else {
+        type.set_json();
+        type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+      }
     }
   }
   return ret;

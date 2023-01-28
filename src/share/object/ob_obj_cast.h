@@ -45,6 +45,7 @@ namespace common
 #define CM_STRICT_MODE                   (1ULL << 8)
 #define CM_SET_MIN_IF_OVERFLOW           (1ULL << 9)
 #define CM_ERROR_ON_SCALE_OVER           (1ULL << 10)
+#define CM_STRICT_JSON                   (1ULL << 11)
 
 #define CM_TO_COLUMN_CS_LEVEL            (1ULL << 52)
 #define CM_ERROR_FOR_DIVISION_BY_ZERO    (1ULL << 53)
@@ -105,6 +106,7 @@ typedef uint64_t ObCastMode;
   ((CM_FORCE_USE_STANDARD_NLS_FORMAT & (mode)) != 0)
 #define CM_IS_SET_MIN_IF_OVERFLOW(mode)       ((CM_SET_MIN_IF_OVERFLOW & (mode)) != 0)
 #define CM_IS_ERROR_ON_SCALE_OVER(mode)       ((CM_ERROR_ON_SCALE_OVER & (mode)) != 0)
+#define CM_IS_STRICT_JSON(mode)               ((CM_STRICT_JSON & (mode)) != 0)
 #define CM_IS_JSON_VALUE(mode)                CM_IS_ERROR_ON_SCALE_OVER(mode)
 #define CM_IS_TO_COLUMN_CS_LEVEL(mode)        ((CM_TO_COLUMN_CS_LEVEL & (mode)) != 0)
 // for geomerty type cast

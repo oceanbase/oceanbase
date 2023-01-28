@@ -143,6 +143,8 @@ private:
 
   int check_contain_correlated_function_table(ObDMLStmt *stmt, bool &is_contain);
 
+  int check_contain_correlated_json_table(ObDMLStmt *stmt, bool &is_contain);
+
   int check_cartesian(ObSelectStmt *stmt, UnionFind &uf, bool &is_valid);
 
   int connect_tables(ObSelectStmt *stmt,

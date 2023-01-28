@@ -119,6 +119,7 @@ enum ObObjOType
   ObONCharType        = 21,
   ObOURowIDType       = 22,
   ObOLobLocatorType   = 23,
+  ObOJsonType         = 24,
   ObOMaxType          //invalid type, or count of ObObjOType
 };
 
@@ -191,6 +192,7 @@ static ObObjOType OBJ_TYPE_TO_O_TYPE[ObMaxType+1] = {
   ObONCharType,              //ObNChar=44,
   ObOURowIDType,             //ObURowID=45
   ObOLobLocatorType,         //ObLobType = 46,
+  ObOJsonType,               //ObJsonType = 47,
   ObONotSupport              //ObMaxType,
 };
 
@@ -352,6 +354,7 @@ static ObObjTypeClass OBJ_O_TYPE_TO_CLASS[ObOMaxType + 1] =
   ObStringTC,     // ObONChar
   ObRowIDTC,      // ObOURowID
   ObLobTC,        // ObOLobLocator
+  ObJsonTC,       // ObOJsonType
   ObMaxTC
 };
 
@@ -392,6 +395,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*Unknown*/
     IC_NOT_SUPPORT,  /*Raw*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Null->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -418,6 +422,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NO_CAST,  /*NChar*/
     IC_NO_CAST,  /*URowID*/
     IC_NO_CAST,  /*LobLocator*/
+    IC_A_TO_B,  /*JsonType*/
   },
   {/*SmallInt->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -444,6 +449,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_TO_MIDDLE_TYPE,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Int->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -470,6 +476,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_TO_MIDDLE_TYPE,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Float->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -496,6 +503,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_TO_MIDDLE_TYPE,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*BinaryFloat->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -522,6 +530,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*BinaryDouble->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -548,6 +557,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Number->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -574,6 +584,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*Char->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -600,6 +611,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_A_TO_B,  /*NChar*/
     IC_A_TO_B,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B,  /*JsonType*/
   },
   {/*Varchar->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -626,6 +638,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_A_TO_C,  /*NChar*/
     IC_A_TO_B,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B,  /*JsonType*/
   },
   {/*Date->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -652,6 +665,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*TimestampTZ->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -678,6 +692,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*TimestampLTZ->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -704,6 +719,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*Timestamp->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -730,6 +746,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*ObRowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*IntervalYM->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -756,6 +773,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*ObRowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*IntervalDS->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -782,6 +800,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*ObRowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*Lob->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -808,6 +827,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B, /*JsonType*/
   },
   {/*Extend->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -834,6 +854,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*UnKnown->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -860,6 +881,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Raw->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -886,6 +908,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_A_TO_B,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*NVarchar->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -912,6 +935,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NO_CAST,   /*NChar*/
     IC_A_TO_B,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B, /*JsonType*/
   },
   {/*NChar->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -938,6 +962,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NO_CAST,  /*NChar*/
     IC_A_TO_B, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B, /*JsonType*/
   },
   {/*URowID->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -964,6 +989,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NO_CAST, /*URowID*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*LobLocator->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -990,6 +1016,34 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_A_TO_B,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_NO_CAST,  /*LobLocator*/
+    IC_A_TO_B, /*JsonType*/
+  },
+    {/*JsonType->XXX*/
+    IC_NOT_SUPPORT,  /*ObONotSupport*/
+    IC_B_TO_A,  /*Null*/
+    IC_NOT_SUPPORT,  /*SmallInt*/
+    IC_NOT_SUPPORT,  /*Int*/
+    IC_NOT_SUPPORT, /*Float*/
+    IC_NOT_SUPPORT, /*BinaryFloat*/
+    IC_NOT_SUPPORT, /*BinaryDouble*/
+    IC_NOT_SUPPORT,  /*Number*/
+    IC_B_TO_A,  /*Char*/
+    IC_B_TO_A,  /*Varchar*/
+    IC_NOT_SUPPORT,  /*Date*/
+    IC_NOT_SUPPORT,  /*TimestampTZ*/
+    IC_NOT_SUPPORT,  /*TimestampLTZ*/
+    IC_NOT_SUPPORT,  /*Timestamp*/
+    IC_NOT_SUPPORT,  /*IntervalYM*/
+    IC_NOT_SUPPORT,  /*IntervalDS*/
+    IC_B_TO_A,  /*Lob*/
+    IC_NOT_SUPPORT,  /*Extend*/
+    IC_NOT_SUPPORT,  /*Unknown*/
+    IC_NOT_SUPPORT,  /*Raw*/
+    IC_B_TO_A,  /*NVarchar2*/
+    IC_B_TO_A,  /*NChar*/
+    IC_NOT_SUPPORT, /*URowID*/
+    IC_B_TO_A,  /*LobLocator*/
+    IC_B_TO_A, /*JsonType*/
   },
 };
 

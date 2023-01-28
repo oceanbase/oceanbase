@@ -270,7 +270,9 @@ bool ObExprCast::check_cast_allowed(const ObObjType orig_type,
   if (is_oracle_mode() && is_explicit_cast) {
     // can't cast lob to other type except char/varchar/nchar/nvarchar2/raw. clob to raw not allowed too.
     if (ObLobTC == ori_tc || ObTextTC == ori_tc) {
-      if (ObStringTC == expect_tc) {
+      if (expect_tc == ObJsonTC) {
+        /* oracle mode, json text use lob store */
+      } else if (ObStringTC == expect_tc) {
         // do nothing
       } else if (ObRawTC == expect_tc) {
         res = CS_TYPE_BINARY == orig_cs_type;

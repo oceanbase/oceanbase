@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_keys.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -44,7 +45,6 @@ int ObExprJsonKeys::calc_result_typeN(ObExprResType& type,
     // set result to json
     type.set_json();
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-    
     // set type of json_doc
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, 0, N_JSON_KEYS))) {
       LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[0].get_type()));
@@ -138,7 +138,7 @@ int ObExprJsonKeys::eval_json_keys(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     }
   }
 
-  if (!is_null_result && OB_SUCC(ret) && json_doc->json_type() != ObJsonNodeType::J_OBJECT) {
+  if (!is_null_result && OB_SUCC(ret) && !OB_ISNULL(json_doc) && json_doc->json_type() != ObJsonNodeType::J_OBJECT) {
     is_null_result = true;
   }
 

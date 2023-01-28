@@ -10116,6 +10116,13 @@ int ObTransformUtils::check_if_subquery_contains_correlated_table_item(
       } else if (table->function_table_expr_->get_expr_levels().has_member(subquery.get_current_level() - 1)) {
         contains = true;
       }
+    } else if (table->is_json_table()) {
+      if (OB_ISNULL(table->json_table_def_->doc_expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (table->json_table_def_->doc_expr_->get_expr_levels().has_member(subquery.get_current_level() - 1)) {
+        contains = true;
+      }
     }
   }
   return ret;

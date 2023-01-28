@@ -149,6 +149,7 @@ public:
   int64_t unpivot_column_count_;
 };
 
+struct ObJsonTableDef;
 
 struct TableItem
 {
@@ -175,6 +176,7 @@ struct TableItem
     dblink_id_ = 0;
     ddl_schema_version_ = 0;
     ddl_table_id_ = common::OB_INVALID_ID;
+    json_table_def_ = nullptr;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -207,6 +209,7 @@ struct TableItem
     FUNCTION_TABLE,
     UNPIVOT_TABLE,
     TEMP_TABLE,
+    JSON_TABLE,
   };
 
   /**
@@ -240,6 +243,7 @@ struct TableItem
   bool is_fake_cte_table() const { return CTE_TABLE == type_; }
   bool is_joined_table() const { return JOINED_TABLE == type_; }
   bool is_function_table() const { return FUNCTION_TABLE == type_; }
+  bool is_json_table() const { return JSON_TABLE == type_; }
   bool is_link_table() const { return !dblink_name_.empty(); }
   bool is_oracle_all_or_user_sys_view() const
   {
@@ -255,7 +259,8 @@ struct TableItem
   }
   bool access_all_part() const { return part_ids_.empty(); }
   int deep_copy(ObIRawExprCopier &expr_copier,
-                const TableItem &other);
+                const TableItem &other,
+                ObIAllocator* allocator = nullptr);
   const common::ObString &get_table_name() const { return alias_name_.empty() ? table_name_ : alias_name_; }
   const common::ObString &get_object_name() const
   {
@@ -266,6 +271,10 @@ struct TableItem
     return (is_generated_table() || is_temp_table()) && view_base_item_ != NULL
         ? view_base_item_->get_base_table_item() : *this;
   }
+
+  ObJsonTableDef* get_json_table_def() { return json_table_def_; }
+  int deep_copy_json_table_def(const ObJsonTableDef& jt_def, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
+
   virtual bool has_for_update() const { return for_update_; }
   // if real table id, it is valid for all threads,
   // else if generated id, it is unique just during the thread session
@@ -314,6 +323,8 @@ struct TableItem
   // table partition
   common::ObSEArray<ObObjectID, 1, common::ModulePageAllocator, true> part_ids_;
   common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> part_names_;
+  // json table
+  ObJsonTableDef* json_table_def_;
 };
 
 struct ColumnItem
@@ -326,8 +337,10 @@ struct ColumnItem
        default_value_(),
        auto_filled_timestamp_(false),
        default_value_expr_(NULL),
+       default_empty_expr_(NULL),
        base_tid_(common::OB_INVALID_ID),
        base_cid_(common::OB_INVALID_ID),
+       col_idx_(common::OB_INVALID_ID),
        is_geo_(false)
   {}
   bool is_invalid() const { return NULL == expr_; }
@@ -357,6 +370,9 @@ struct ColumnItem
     default_value_expr_ = NULL;
     base_tid_ = common::OB_INVALID_ID;
     base_cid_ = common::OB_INVALID_ID;
+    col_idx_ = common::OB_INVALID_ID;
+    default_empty_expr_ = NULL;
+    default_value_expr_ = NULL;
     is_geo_ = false;
   }
   void set_ref_id(uint64_t table_id, uint64_t column_id)
@@ -389,10 +405,14 @@ struct ColumnItem
   // the following two are used by DML operations, such as insert or update
   common::ObObj default_value_;
   bool auto_filled_timestamp_;
+  // json table reuse default_value_expr_ for on error default
   ObRawExpr *default_value_expr_;
+  // add for json table for on emtpy default expr
+  ObRawExpr *default_empty_expr_;
   // base table id and column id
   uint64_t base_tid_;
   uint64_t base_cid_;
+  uint64_t col_idx_;
   bool is_geo_;
 };
 
@@ -407,6 +427,47 @@ inline uint64_t ColumnItem::hash(uint64_t seed) const
   return seed;
 }
 
+typedef struct ObJtColBaseInfo
+{
+  ObJtColBaseInfo();
+  ObJtColBaseInfo(const ObJtColBaseInfo& info);
+
+  int32_t col_type_;
+  int32_t truncate_;
+  int32_t format_json_;
+  int32_t wrapper_;
+  int32_t allow_scalar_;
+  int64_t output_column_idx_;
+  int64_t empty_expr_id_;
+  int64_t error_expr_id_;
+  ObString col_name_;
+  ObString path_;
+  int32_t on_empty_;
+  int32_t on_error_;
+  int32_t on_mismatch_;
+  int32_t on_mismatch_type_;
+  int64_t res_type_;
+  ObDataType data_type_;
+  int32_t parent_id_;
+  int32_t id_;
+
+  int deep_copy(const ObJtColBaseInfo& src, ObIAllocator* allocator);
+  int assign(const ObJtColBaseInfo& src);
+
+  TO_STRING_KV(K_(col_type), K_(format_json), K_(wrapper), K_(allow_scalar),
+   K_(output_column_idx), K_(col_name), K_(path), K_(parent_id), K_(id));
+} ObJtColBaseInfo;
+
+typedef struct ObJsonTableDef {
+  ObJsonTableDef()
+    : all_cols_(),
+      doc_expr_(nullptr) {}
+
+  int deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
+  int assign(const ObJsonTableDef& src);
+  common::ObSEArray<ObJtColBaseInfo*, 4, common::ModulePageAllocator, true> all_cols_;
+  ObRawExpr *doc_expr_;
+} ObJsonTableDef;
 
 struct FromItem
 {
@@ -667,6 +728,7 @@ public:
   const common::ObIArray<PartExprItem> &get_part_exprs() const{ return part_expr_items_; }
 
   int get_table_function_exprs(ObIArray<ObRawExpr *> &table_func_exprs) const;
+  int get_json_table_exprs(ObIArray<ObRawExpr *> &json_table_exprs) const;
 
   int reset_from_item(const common::ObIArray<FromItem> &from_items);
   void clear_from_item() { from_items_.reset(); }
@@ -827,6 +889,7 @@ public:
   int generate_view_name(ObIAllocator &allocator, ObString &view_name, bool is_temp = false);
   int generate_anonymous_view_name(ObIAllocator &allocator, ObString &view_name);
   int generate_func_table_name(ObIAllocator &allocator, ObString &table_name);
+  int generate_json_table_name(ObIAllocator &allocator, ObString &table_name);
   int append_id_to_view_name(char *buf,
                              int64_t buf_len,
                              int64_t &pos,
@@ -1193,6 +1256,7 @@ int deep_copy_stmt_object(ObIAllocator &allocator,
   }
   return ret;
 }
+
 
 template <typename T>
 int deep_copy_stmt_objects(ObIAllocator &allocator,

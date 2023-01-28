@@ -290,6 +290,7 @@ not not a > b
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -339,6 +340,7 @@ not not a > b
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     }
   ]
@@ -419,6 +421,7 @@ not a > b
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -468,6 +471,7 @@ not a > b
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     }
   ]
@@ -548,6 +552,7 @@ not a = b
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -597,6 +602,7 @@ not a = b
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     }
   ]
@@ -677,6 +683,7 @@ not a < b
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -726,6 +733,7 @@ not a < b
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     }
   ]
@@ -807,6 +815,7 @@ not a is true
       "is_rowkey_column":false,
       "is_unique_key_column":false,
       "is_mul_key_column":false,
+      "is_strict_json_column":0,
       "srs_id":-1
     },
      {
@@ -980,6 +989,7 @@ not a between 1 and 100
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -1091,6 +1101,7 @@ not a between 1 and 100
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         },
          {
@@ -1784,6 +1795,7 @@ not(not(a))
               "is_rowkey_column":false,
               "is_unique_key_column":false,
               "is_mul_key_column":false,
+              "is_strict_json_column":0,
               "srs_id":-1
             }
           ]
@@ -1930,6 +1942,7 @@ A or (A And B) or (A And C)
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2041,6 +2054,7 @@ A or (A And B) or (A And C)
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2121,6 +2135,7 @@ A or (A And B) or (A And C)
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2232,6 +2247,7 @@ A or (A And B) or (A And C)
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2312,6 +2328,7 @@ A or (A And B) or (A And C)
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2423,6 +2440,7 @@ A or (A And B) or (A And C)
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2503,6 +2521,7 @@ A or (A And B) or (A And C)
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]
@@ -2583,6 +2602,7 @@ A or (A And B) or (A And C)
           "is_rowkey_column":false,
           "is_unique_key_column":false,
           "is_mul_key_column":false,
+          "is_strict_json_column":0,
           "srs_id":-1
         }
       ]

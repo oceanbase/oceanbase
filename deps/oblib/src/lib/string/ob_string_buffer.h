@@ -50,6 +50,7 @@ public:
   bool empty() const { return 0 == length(); }
   char *ptr() { return data_; }
   int set_length(const uint64_t len);
+  char back() { return data_[len_ - 1]; };
   const ObString string() const;
   int64_t to_string(char *buf, const int64_t buf_len) const
   {

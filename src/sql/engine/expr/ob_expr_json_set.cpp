@@ -8,9 +8,11 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implementation of func json_set
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "deps/oblib/src/lib/json_type/ob_json_path.h"
 #include "ob_expr_json_func_helper.h"
 #include "ob_expr_json_set.h"
 

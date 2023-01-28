@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implementation of func json_merge_patch
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -25,7 +26,7 @@ ObExprJsonMergePatch::ObExprJsonMergePatch(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc,
       T_FUN_SYS_JSON_MERGE_PATCH,
       N_JSON_MERGE_PATCH, 
-      MORE_THAN_ONE,
+      PARAM_NUM_UNKNOWN,
       NOT_ROW_DIMENSION)
 {
 }
@@ -41,12 +42,60 @@ int ObExprJsonMergePatch::calc_result_typeN(ObExprResType& type,
 {
   UNUSED(type_ctx);
   INIT_SUCC(ret);
+  if (lib::is_mysql_mode()) {
+    const ObString name(N_JSON_MERGE_PATCH);
+    if (param_num < 2) {
+      ret = OB_ERR_PARAM_SIZE;
+      LOG_USER_ERROR(OB_ERR_PARAM_SIZE, name.length(), name.ptr());
+    }
 
-  type.set_json();
-  type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
-    if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, i, N_JSON_MERGE_PRESERVE))) {
-      LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[i].get_type()));
+    type.set_json();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
+      if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, i, N_JSON_MERGE_PRESERVE))) {
+        LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[i].get_type()));
+      }
+    }
+  } else {
+    for (size_t i = 0; i < 2 && OB_SUCC(ret); ++i) {
+      ObObjType doc_type = types_stack[i].get_type();
+      if (types_stack[i].get_type() == ObNullType) {
+        if (i == 1) {
+          ret = OB_ERR_JSON_PATCH_INVALID;
+          LOG_USER_ERROR(OB_ERR_JSON_PATCH_INVALID);
+        }
+      } else if (!ObJsonExprHelper::is_convertible_to_json(doc_type)) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(types_stack[i].get_type()), "JSON");
+      } else if (ob_is_string_type(doc_type)) {
+        if (types_stack[i].get_collation_type() == CS_TYPE_BINARY) {
+          types_stack[i].set_calc_collation_type(types_stack[i].get_collation_type());
+        } else if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
+          types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+        }
+      } else if (doc_type == ObJsonType) {
+        types_stack[i].set_calc_type(ObJsonType);
+        types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+      } else {
+        types_stack[i].set_calc_type(types_stack[i].get_type());
+        types_stack[i].set_calc_collation_type(types_stack[i].get_collation_type());
+      }
+    }
+
+    // returning type : 2
+    if (OB_SUCC(ret)
+        && OB_FAIL(ObJsonExprHelper::parse_res_type(types_stack[0], types_stack[2], type, type_ctx))) {
+       LOG_WARN("fail to parse res type.", K(ret));
+    }
+
+    for (size_t i = 2; OB_SUCC(ret) && i < param_num; ++i) {
+      if (!ob_is_integer_type(types_stack[i].get_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to calc type param type should be int type", K(types_stack[i].get_type()));
+      } else {
+        types_stack[i].set_calc_collation_type(types_stack[i].get_collation_type());
+        types_stack[i].set_calc_type(types_stack[i].get_type());
+      }
     }
   }
 
@@ -128,12 +177,226 @@ int ObExprJsonMergePatch::eval_json_merge_patch(const ObExpr &expr, ObEvalCtx &c
   return ret;
 }
 
+#define SET_COVER_ERROR(error) \
+{ \
+  if (!is_cover_error) { \
+    is_cover_error = true; \
+    err_code = (error); \
+  } \
+}
+
+int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  INIT_SUCC(ret);
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+
+  bool is_cover_error = false;
+  int err_code = 0;
+
+  int64_t opt_array[OPT_MAX_ID] = {0};
+  for (size_t i = 2; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
+    ObDatum *opt_datum = NULL;
+    ObExpr *opt_expr = expr.args_[i];
+    ObObjType val_type = opt_expr->datum_meta_.type_;
+    ObCollationType cs_type = opt_expr->datum_meta_.cs_type_;
+    if (OB_UNLIKELY(OB_FAIL(opt_expr->eval(ctx, opt_datum)))) {
+      SET_COVER_ERROR(ret);
+      LOG_WARN("eval json arg failed", K(ret));
+    } else if (val_type == ObNullType || opt_datum->is_null()) {
+    } else if (!ob_is_integer_type(val_type)) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      SET_COVER_ERROR(ret);
+      LOG_WARN("input type error", K(val_type));
+    } else {
+      opt_array[i-2] = opt_datum->get_int();
+    }
+  }
+
+  int64_t& err_type = opt_array[OPT_ERROR_ID];
+  int64_t& return_type = opt_array[OPT_RES_TYPE_ID];
+  ObObjType dst_type;
+  int32_t dst_len; // bugfix: https://work.aone.alibaba-inc.com/issue/47046350
+  if (OB_FAIL(ret)) {
+  } else if (return_type == 0) {
+    dst_type = expr.args_[0]->datum_meta_.type_;
+    const ObAccuracy &default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[dst_type];
+    dst_len = expr.args_[0]->max_length_ > 0 ? expr.args_[0]->max_length_ : default_accuracy.get_length();
+    if (dst_len == 0 && dst_type == ObVarcharType) {
+      dst_len = OB_MAX_ORACLE_VARCHAR_LENGTH;
+    }
+  } else if (OB_FAIL(ObJsonExprHelper::eval_and_check_res_type(return_type, dst_type, dst_len))) {
+    LOG_WARN("fail to check returning type", K(ret));
+  }
+
+  if ((expr.datum_meta_.cs_type_ == CS_TYPE_BINARY || dst_type == ObJsonType) && (opt_array[OPT_PRETTY_ID] > 0 || opt_array[OPT_ASCII_ID] > 0)) {
+    ret = OB_ERR_NON_TEXT_RET_NOTSUPPORT;
+    LOG_WARN("ASCII or PRETTY not supported for non-textual return data type", K(ret));
+  }
+
+  ObIJsonBase *j_base = NULL;
+  bool has_null = false;
+  ObJsonNull j_null;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0, j_base, has_null))) {
+    LOG_WARN("get_json_doc failed", K(ret));
+    SET_COVER_ERROR(ret);
+  } else if (has_null) {
+    j_base = &j_null;
+  }
+
+  ObIJsonBase *j_patch_node = NULL;
+  if (OB_FAIL(ret) || has_null) {
+    // do nothing
+  } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 1, j_patch_node, has_null, true, false))) {
+    if (ret == OB_ERR_JSON_SYNTAX_ERROR) {
+      ret = OB_ERR_JSON_PATCH_INVALID;
+      LOG_USER_ERROR(OB_ERR_JSON_PATCH_INVALID);
+    }
+    LOG_WARN("get_json_doc failed", K(ret));
+  } else if (has_null) {
+    ret = OB_ERR_JSON_PATCH_INVALID;
+    LOG_USER_ERROR(OB_ERR_JSON_PATCH_INVALID);
+  } else if (j_patch_node->json_type() != ObJsonNodeType::J_OBJECT) {
+    j_base = j_patch_node;
+  } else {
+    ObJsonObject *j_obj = NULL;
+    if (j_base->json_type() == ObJsonNodeType::J_OBJECT) {
+      j_obj = static_cast<ObJsonObject *>(j_base);
+    } else {
+      void *buf = temp_allocator.alloc(sizeof(ObJsonObject));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SET_COVER_ERROR(ret);
+        LOG_WARN("error, json merge patch allocate jsonobject buffer failed", K(ret));
+      } else {
+        j_obj = new (buf) ObJsonObject(&temp_allocator);
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(j_obj->merge_patch(&temp_allocator, static_cast<ObJsonObject*>(j_patch_node)))) {
+        LOG_WARN("error, json merge patch failed", K(ret));
+        SET_COVER_ERROR(ret);
+      } else {
+        j_base = j_obj;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    if (is_cover_error && err_type) {
+      res.set_null();
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_SUCC(ret)) {
+    if (has_null) {
+      res.set_null();
+    } else {
+      ObJsonBuffer jbuf(&temp_allocator);
+      ObString res_string;
+      if (dst_type == ObJsonType) {
+        if (OB_FAIL(j_base->get_raw_binary(res_string, &temp_allocator))) {
+          LOG_WARN("failed: get json raw binary", K(ret));
+        }
+      } else {
+        int64_t& is_pretty = opt_array[OPT_PRETTY_ID];
+        int64_t& is_trunc = opt_array[OPT_TRUNC_ID];
+        bool is_quote = j_base->json_type() == ObJsonNodeType::J_STRING;
+        if (OB_FAIL(j_base->print(jbuf, is_quote, is_pretty > 0))) {
+          LOG_WARN("json binary to string failed", K(ret));
+        } else if (jbuf.empty()) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory for result failed", K(ret));
+        } else if (is_trunc && dst_type != ObLongTextType) {
+          if (jbuf.length() > dst_len) {
+            if (ob_is_string_type(dst_type)) {
+              int64_t char_len; // not used
+              int64_t real_dst_len;
+              real_dst_len = ObCharset::max_bytes_charpos(expr.datum_meta_.cs_type_, jbuf.ptr(),
+                                                     jbuf.length(), dst_len, char_len);
+              jbuf.set_length(real_dst_len);
+              // compact with oracle: https://work.aone.alibaba-inc.com/issue/46640577
+              if (real_dst_len != dst_len && real_dst_len > 0) {
+                // get last char
+                // must be utf8
+                bool append_quote = false;
+                int64_t last_char_len = 0;
+                if (OB_FAIL(ObCharset::last_valid_char(expr.datum_meta_.cs_type_,
+                                                       jbuf.ptr(), jbuf.length(),
+                                                       last_char_len))) {
+                  LOG_WARN("failed to get last char", K(ret), K(expr.datum_meta_.cs_type_), K(jbuf));
+                } else if (last_char_len == 1) {
+                  if (real_dst_len > 1) {
+                    if (OB_FAIL(ObCharset::last_valid_char(expr.datum_meta_.cs_type_,
+                                                          jbuf.ptr(), jbuf.length() - 1,
+                                                          last_char_len))) {
+                      LOG_WARN("failed to get second last char", K(ret), K(expr.datum_meta_.cs_type_), K(jbuf));
+                    } else if (last_char_len == 1) {
+                      if ((jbuf.ptr()[real_dst_len - 1] == '"') && (jbuf.ptr()[real_dst_len - 2] != '"')) {
+                        append_quote = true;
+                      }
+                    }
+                  } else {
+                    append_quote = true;
+                  }
+                }
+                if (OB_FAIL(ret)) {
+                } else if (append_quote && OB_FAIL(jbuf.append("\"", 1))) {
+                  LOG_WARN("fail to append \"", K(ret));
+                }
+              }
+            } else {
+              jbuf.set_length(dst_len);
+            }
+
+          }
+        }
+        res_string.assign_ptr(jbuf.ptr(), jbuf.length());
+      }
+
+      if (OB_SUCC(ret)) {
+        uint64_t length = res_string.length();
+        if (dst_type == ObVarcharType && length > dst_len) {
+          char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
+          if (OB_ISNULL(ObCharset::lltostr(dst_len, res_ptr, 10, 1))) {
+            LOG_WARN("failed to lltostr", K(ret), K(dst_len));
+          }
+          if (!err_type) {
+            ret = OB_OPERATE_OVERFLOW;
+            LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_mergepatch");
+          } else {
+            ret = OB_SUCCESS;
+            res.set_null();
+          }
+        } else {
+          char *buf = expr.get_str_res_mem(ctx, length);
+          if (buf) {
+            MEMCPY(buf, res_string.ptr(), length);
+            res.set_string(buf, length);
+          } else {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed: allocate res string buffer.", K(ret), K(length));
+          }
+        }
+      }
+    }
+  }
+
+
+  return ret;
+}
+
 int ObExprJsonMergePatch::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                               ObExpr &rt_expr) const
 {
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  rt_expr.eval_func_ = eval_json_merge_patch;
+  if (lib::is_mysql_mode()) {
+    rt_expr.eval_func_ = eval_json_merge_patch;
+  } else {
+    rt_expr.eval_func_ = eval_ora_json_merge_patch;
+  }
   return OB_SUCCESS;
 }
 

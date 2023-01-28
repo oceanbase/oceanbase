@@ -1076,6 +1076,22 @@ bool ObResultSet::need_end_trans_callback() const
   return need;
 }
 
+static int check_is_pl_jsontype(const oceanbase::pl::ObUserDefinedType *user_type)
+{
+  INIT_SUCC(ret);
+
+  if (OB_ISNULL(user_type)) {
+  } else if (user_type->get_type() == oceanbase::pl::PL_OPAQUE_TYPE) {
+    if (user_type->get_name().compare("JSON_OBJECT_T") == 0
+        || user_type->get_name().compare("JSON_ELEMENT_T") == 0) {
+      ret = OB_ERR_PL_JSONTYPE_USAGE;
+      LOG_WARN("invalid pl json type userage in pl/sql", K(ret),
+                K(user_type->get_type()), K(user_type->get_user_type_id()));
+    }
+  }
+  return ret;
+}
+
 int ObResultSet::ExternalRetrieveInfo::build_into_exprs(
         ObStmt &stmt, pl::ObPLBlockNS *ns, bool is_dynamic_sql)
 {
@@ -1119,6 +1135,7 @@ int ObResultSet::ExternalRetrieveInfo::build_into_exprs(
             const pl::ObUserDefinedType *user_type = NULL;
             OZ (ns->get_pl_data_type_by_id(final_type.get_user_type_id(), user_type));
             OZ (ns->expand_data_type(user_type, basic_types));
+            OZ (check_is_pl_jsontype(user_type));
           }
         } else {
           ObDataType type;

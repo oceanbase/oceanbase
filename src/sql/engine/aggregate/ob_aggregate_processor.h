@@ -96,7 +96,12 @@ public:
     bucket_num_param_expr_(NULL),
     rollup_idx_(INT64_MAX),
     grouping_idxs_(),
-    group_idxs_()
+    group_idxs_(),
+    format_json_(false),
+    strict_json_(false),
+    absent_on_null_(false),
+    returning_type_(INT64_MAX),
+    with_unique_keys_(false)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
   : expr_(NULL),
@@ -119,7 +124,12 @@ public:
     pl_result_type_(),
     bucket_num_param_expr_(NULL),
     grouping_idxs_(),
-    group_idxs_()
+    group_idxs_(),
+    format_json_(false),
+    strict_json_(false),
+    absent_on_null_(false),
+    returning_type_(INT64_MAX),
+    with_unique_keys_(false)
   {}
   virtual ~ObAggrInfo();
 
@@ -191,6 +201,13 @@ public:
   // for group_id
   // for example: select group_id() from t1 groupby c1, rollup(c1,c2);  the idx of c1 is in group_idxs_;
   ObFixedArray<int64_t, common::ObIAllocator> group_idxs_;
+
+  //used for json aggregate function in oracle mode
+  bool format_json_;
+  bool strict_json_;
+  bool absent_on_null_;
+  int64_t returning_type_;
+  bool with_unique_keys_;
 };
 
 typedef common::ObFixedArray<ObAggrInfo, common::ObIAllocator> AggrInfoFixedArray;
@@ -844,6 +861,13 @@ private:
   int get_json_objectagg_result(const ObAggrInfo &aggr_info,
                                 GroupConcatExtraResult *&extra,
                                 ObDatum &concat_result);
+  int get_ora_json_arrayagg_result(const ObAggrInfo &aggr_info,
+                                   GroupConcatExtraResult *&extra,
+                                   ObDatum &concat_result);
+  int get_ora_json_objectagg_result(const ObAggrInfo &aggr_info,
+                                   GroupConcatExtraResult *&extra,
+                                   ObDatum &concat_result);
+  int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
   OB_INLINE void clear_op_evaluated_flag()
   {
@@ -969,7 +993,9 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_HYBRID_HIST:
     case T_FUN_TOP_FRE_HIST:
     case T_FUN_JSON_ARRAYAGG:
+    case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
+    case T_FUN_ORA_JSON_OBJECTAGG:
     {
       need_extra = true;
       break;

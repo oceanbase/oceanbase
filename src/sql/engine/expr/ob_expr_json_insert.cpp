@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implement of func json_insert
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -51,7 +52,6 @@ int ObExprJsonInsert::calc_result_typeN(ObExprResType& type,
   } else {
     type.set_json();
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, 0, N_JSON_INSERT))) {
       LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[0].get_type()));
     } else {

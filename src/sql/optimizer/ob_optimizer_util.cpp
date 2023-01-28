@@ -6036,6 +6036,9 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                 (left_type.is_lob() || left_type.is_lob_locator())) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
+      } else if (lib::is_oracle_mode() && is_distinct && right_type.is_json()) {
+        ret = OB_ERR_INVALID_CMP_OP;
+        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
       } else {
         res_type = left_type;
       }

@@ -755,8 +755,9 @@ int ObSelectResolver::check_group_by()
                   || ObJsonType == group_by_expr->get_data_type()
                   || ObGeometryType == group_by_expr->get_data_type()
                   || ObExtendType == group_by_expr->get_data_type()) {
-          ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("group by lob or udt expr is not allowed", K(ret));
+          ret = (lib::is_oracle_mode() && ObJsonType == group_by_expr->get_data_type())
+                  ? OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("group by lob expr is not allowed", K(ret));
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_rollup_expr_size(); i++) {
@@ -895,8 +896,9 @@ int ObSelectResolver::check_order_by()
             || ob_is_json_tc(order_items.at(i).expr_->get_data_type())
             || ob_is_geometry_tc(order_items.at(i).expr_->get_data_type())
             || ob_is_extend(order_items.at(i).expr_->get_data_type())) {
-          ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("lob expr or udt can't order", K(ret), K(*order_items.at(i).expr_));
+          ret = (lib::is_oracle_mode() && ob_is_json_tc(order_items.at(i).expr_->get_data_type()))
+            ? OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("lob or json expr can't order", K(ret), K(*order_items.at(i).expr_));
         } else if (has_distinct) {
           if (OB_FAIL(order_item_exprs.push_back(order_items.at(i).expr_))) {
             LOG_WARN("fail to push back expr", K(ret));
@@ -944,6 +946,9 @@ int ObSelectResolver::check_field_list()
       } else if (ObLongTextType == expr->get_data_type() || ObLobType == expr->get_data_type()) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("select distinct lob not allowed", K(ret));
+      } else if (lib::is_oracle_mode() && ObJsonType == expr->get_data_type()) {
+        ret = OB_ERR_INVALID_CMP_OP;
+        LOG_WARN("select distinct json not allowed", K(ret));
       }
     }
   }
@@ -2115,6 +2120,10 @@ int ObSelectResolver::expand_target_list(
     if (OB_FAIL(resolve_all_function_table_columns(table_item, &column_items))) {
       LOG_WARN("resolve function table columns failed", K(ret));
     }
+  } else if (table_item.is_json_table()) {
+    if (OB_FAIL(resolve_all_json_table_columns(table_item, &column_items))) {
+      LOG_WARN("resolve function table columns failed", K(ret));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table type", K_(table_item.type));
@@ -2342,6 +2351,19 @@ int ObSelectResolver::resolve_star_for_table_groups()
     }
   }
 
+  return ret;
+}
+
+int ObSelectResolver::resolve_all_json_table_columns(
+  const TableItem &table_item, ObIArray<ColumnItem> *column_items)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(column_items)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid params, null column items", K(ret));
+  } else if (OB_FAIL(resolve_json_table_column_all_items(table_item, *column_items))) {
+    LOG_WARN("fail to resolve json table column items", K(ret));
+  }
   return ret;
 }
 

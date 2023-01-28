@@ -176,6 +176,8 @@ extern const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char
       char * upper_value = NULL;                                           \
       node->str_value_ = NULL;                                             \
       node->str_len_ = 0;                                                  \
+      node->raw_text_ = NULL;                                             \
+      node->text_len_ = 0;                                                 \
       while (start <= expr_end && ISSPACE(parse_ctx->stmt_str_[start])) { \
         start++;                                                           \
       }                                                                    \
@@ -185,6 +187,8 @@ extern const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char
       } else {                                                             \
         node->str_value_ = upper_value; \
         node->str_len_ = expr_end - start + 1;                             \
+        node->raw_text_ = upper_value;                                      \
+        node->text_len_ = expr_end - start + 1;                               \
       }                                                                    \
     }                                                                      \
   } while (0)

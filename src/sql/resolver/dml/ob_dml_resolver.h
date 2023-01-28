@@ -16,6 +16,7 @@
 #include "sql/resolver/dml/ob_column_namespace_checker.h"
 #include "sql/resolver/dml/ob_sequence_namespace_checker.h"
 #include "sql/resolver/ob_stmt_resolver.h"
+#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 
@@ -28,6 +29,7 @@ class ObChildStmtResolver;
 class ObDelUpdStmt;
 
 static const char *err_log_default_columns_[] = { "ORA_ERR_NUMBER$", "ORA_ERR_MESG$", "ORA_ERR_ROWID$", "ORA_ERR_OPTYP$", "ORA_ERR_TAG$" };
+static char *str_to_lower(char *pszBuf, int64_t length);
 /*
  * ResolverJoinInfo is used to store temporary join information that would only be used in resolver.
  */
@@ -55,6 +57,25 @@ struct ResolverJoinInfo {
   TO_STRING_KV(K_(table_id),
                K_(using_columns),
                K_(coalesce_expr));
+};
+
+struct ObDmlJtColDef
+{
+  ObDmlJtColDef()
+    : col_base_info_(),
+      table_id_(common::OB_INVALID_ID),
+      regular_cols_(),
+      nested_cols_(),
+      error_expr_(nullptr),
+      empty_expr_(nullptr) {}
+
+  ObJtColBaseInfo col_base_info_;
+  int64_t table_id_;
+  common::ObSEArray<ObDmlJtColDef*, 4, common::ModulePageAllocator, true> regular_cols_;
+  common::ObSEArray<ObDmlJtColDef*, 4, common::ModulePageAllocator, true> nested_cols_;
+  ObRawExpr* error_expr_;
+  ObRawExpr* empty_expr_;
+  TO_STRING_KV(K_(col_base_info));
 };
 
 class ObDMLResolver : public ObStmtResolver
@@ -90,7 +111,8 @@ public:
   int resolve_joined_table_item(const ParseNode &parse_node, JoinedTable *&joined_table);
   int resolve_function_table_item(const ParseNode &table_node,
                                   TableItem *&table_item);
-
+  int resolve_json_table_item(const ParseNode &table_node,
+                              TableItem *&table_item);
   int fill_same_column_to_using(JoinedTable* &joined_table);
   int get_columns_from_table_item(const TableItem *table_item, common::ObIArray<common::ObString> &column_names);
 
@@ -100,10 +122,40 @@ public:
   int resolve_join_table_column_item(const JoinedTable &joined_table,
                                      const common::ObString &column_name,
                                      ObRawExpr *&real_ref_expr);
+  int json_table_make_json_path(const ParseNode &parse_tree,
+                                ObIAllocator* allocator,
+                                ObString& path_str);
+  int json_table_resolve_col_name_and_path(const ParseNode *name_node,
+                                           const ParseNode *path_node,
+                                           ObIAllocator* allocator,
+                                           ObDmlJtColDef *col_def);
   int resolve_single_table_column_item(const TableItem &table_item,
                                        const common::ObString &column_name,
                                        bool include_hidden,
                                        ColumnItem *&col_item);
+  // dot notation
+  int pre_process_dot_notation(ParseNode &node);
+  int print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str);
+  int check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bool &exist_fun, ObJsonBuffer &sql_str);
+  int check_first_node_name(const ObString &node_name, bool &check_res);
+  int transform_dot_notation2_json_query(ParseNode &node, const ObString &sql_str);
+  int transform_dot_notation2_json_value(ParseNode &node, const ObString &sql_str);
+  int check_column_json_type(ParseNode *tab_col, bool &is_json_col, int8_t only_is_json = 1);
+  int check_size_obj_access_ref(ParseNode *node);
+  /* json object resolve star */
+  int get_target_column_list(ObSEArray<ColumnItem, 4> &target_list, ObString &tab_name, bool all_tab,
+                            bool &tab_has_alias, TableItem *&tab_item, bool is_col = false);
+  int add_column_expr_for_json_object_node(ParseNode *node,
+                                common::ObIAllocator &allocator,
+                                ObVector<ParseNode *> &t_vec,
+                                ObString col_name,
+                                ObString table_name);
+  int expand_star_in_json_object(ParseNode *node, common::ObIAllocator &allocator, int64_t pos, int64_t& col_num);
+  int check_is_json_constraint(common::ObIAllocator &allocator, ParseNode *col_node, bool& format_json, int8_t only_is_json = 0); // 1 is json & json type ; 0 is json; 2 json type
+  bool is_array_json_expr(ParseNode *node);
+  bool is_object_json_expr(ParseNode *node);
+  int set_format_json_output(ParseNode *node);
+  int pre_process_json_object_contain_star(ParseNode *node, common::ObIAllocator &allocator);
   int transfer_to_inner_joined(const ParseNode &parse_node, JoinedTable *&joined_table);
   virtual int check_special_join_table(const TableItem &join_table, bool is_left_child, ObItemType join_type);
   virtual int init_stmt()
@@ -477,8 +529,53 @@ protected:
       bool is_rowkey,
       bool is_depend_col);
 
+  int check_json_table_column_constrain(ObDmlJtColDef *col_def);
+  bool check_generated_column_has_json_constraint(const ObSelectStmt *stmt,
+                                                  const ObColumnRefRawExpr *col_expr);
+
+  int resolve_json_table_check_dup_path(ObIArray<ObDmlJtColDef*>& columns,
+                                            const ObString& column_name);
+  int resolve_json_table_check_dup_name(const ObJsonTableDef* table_def,
+                                            const ObString& column_name,
+                                            bool& exists);
+
+  int resolve_json_table_column_type(const ParseNode &parse_tree,
+                                     const int col_type,
+                                     ObDataType &data_type);
+
+  int generate_json_table_output_column_item(TableItem *table_item,
+                                          const ObDataType &data_type,
+                                          const ObString &column_name,
+                                          int64_t column_id,
+                                          ColumnItem *&col_item);
+  int resolve_json_table_regular_column(const ParseNode &parse_tree,
+                                        TableItem *table_item,
+                                        ObDmlJtColDef *&col_def,
+                                        int32_t parent,
+                                        int32_t& id,
+                                        int64_t& column_id);
+  int resolve_json_table_nested_column(const ParseNode &parse_tree,
+                                        TableItem *table_item,
+                                        ObDmlJtColDef *&col_def,
+                                        int32_t parent,
+                                        int32_t& id,
+                                        int64_t& column_id);
+  int resolve_json_table_column_item(const ParseNode &parse_tree,
+                                      TableItem *table_item,
+                                      ObDmlJtColDef* col,
+                                      int32_t parent,
+                                      int32_t& id,
+                                      int64_t& column_id);
+
+  int resolve_json_table_column_item(const TableItem &table_item,
+                                         const ObString &column_name,
+                                         ColumnItem *&col_item);
+  int resolve_json_table_column_all_items(const TableItem &table_item,
+                                          ObIArray<ColumnItem> &col_items);
+
   int resolve_function_table_column_item(const TableItem &table_item,
                                          ObIArray<ColumnItem> &col_items);
+
   int resolve_function_table_column_item(const TableItem &table_item,
                                          const common::ObString &column_name,
                                          ColumnItem *&col_item);
@@ -563,6 +660,7 @@ protected:
                                                 ObQueryRefRawExpr *&query_ref);
   int get_view_id_for_trigger(const TableItem &view_item, uint64_t &view_id);
   bool get_joininfo_by_id(int64_t table_id, ResolverJoinInfo *&join_info);
+  int get_json_table_column_by_id(uint64_t table_id, ObDmlJtColDef *&col_def);
 
   int get_table_schema(const uint64_t table_id,
                        const uint64_t ref_table_id,
@@ -732,6 +830,8 @@ protected:
   common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> parent_cte_tables_;
   //store cte tables of current level
   common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> current_cte_tables_;
+  //store json table column info
+  common::ObSEArray<ObDmlJtColDef *, 1, common::ModulePageAllocator, true> json_table_infos_;
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObDMLResolver);
 };

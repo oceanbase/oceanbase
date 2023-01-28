@@ -784,6 +784,14 @@ typedef enum ObItemType
   // gis expr should add above
   // please maintain is_geo_expr / is_mysql_geo_expr / is_priv_geo_expr if other gis expr added
 
+  T_FUN_SYS_IS_JSON = 1681,
+  T_FUN_SYS_JSON_EQUAL = 1682,
+  T_FUN_SYS_JSON_QUERY = 1683,
+  T_FUN_ORA_JSON_ARRAYAGG = 1684,
+  T_FUN_ORA_JSON_OBJECTAGG = 1685,
+  T_FUN_SYS_JSON_EXISTS = 1686,
+  T_FUN_SYS_TREAT = 1687,
+
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -1031,6 +1039,8 @@ typedef enum ObItemType
   T_EXPR_WITH_ALIAS,
   T_TABLE_COLLECTION_EXPRESSION,
   T_DIAGNOSTICS,
+  T_JSON_TABLE_EXPRESSION,
+  T_JSON_TABLE_COLUMN,
 
   //pseudo_column
   T_PSEUDO_COLUMN,
@@ -2211,6 +2221,9 @@ typedef enum ObContextType {
     || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
     || ((op) == T_FUN_SYS_JSON_CONTAINS) \
     || ((op) == T_FUN_SYS_JSON_CONTAINS_PATH) \
+    || ((op) == T_FUN_SYS_JSON_EQUAL) \
+    || ((op) == T_FUN_SYS_IS_JSON) \
+    || ((op) == T_FUN_SYS_JSON_EXISTS) \
     || ((op) == T_BOOL) \
     || ((op) == T_OP_XOR) \
     || ((op) == T_FUN_SYS_ST_CONTAINS) \
@@ -2232,6 +2245,8 @@ typedef enum ObContextType {
     || ((op) == T_OP_ARG_CASE) \
     || ((op) == T_OP_CASE) \
     || ((op) == T_OP_OUTPUT_PACK) \
+    || ((op) == T_FUN_SYS_JSON_OBJECT) \
+    || ((op) == T_FUN_SYS_JSON_ARRAY) \
     || ((op) == T_OP_TO_OUTFILE_ROW)) \
 
 
@@ -2295,6 +2310,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_TOP_FRE_HIST || (op) == T_FUN_HYBRID_HIST || \
                          (op) == T_FUN_AGG_UDF || (op) == T_FUN_GROUPING_ID || \
                          (op) == T_FUN_JSON_ARRAYAGG || (op) == T_FUN_JSON_OBJECTAGG ||\
+                         (op) == T_FUN_ORA_JSON_ARRAYAGG || (op) == T_FUN_ORA_JSON_OBJECTAGG ||\
                          (op) == T_FUN_GROUP_ID || \
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)

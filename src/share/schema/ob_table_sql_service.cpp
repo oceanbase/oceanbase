@@ -3650,7 +3650,6 @@ int ObTableSqlService::gen_column_dml(
     ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
-
   ObString orig_default_value;
   ObString cur_default_value;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
@@ -3658,6 +3657,10 @@ int ObTableSqlService::gen_column_dml(
   uint64_t tenant_data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_1_0_0 && ob_is_json(column.get_data_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.1, json type is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, json type");
   } else if (tenant_data_version < DATA_VERSION_4_1_0_0 &&
              (ob_is_geometry(column.get_data_type()) ||
              column.get_srs_id() != OB_DEFAULT_COLUMN_SRS_ID ||

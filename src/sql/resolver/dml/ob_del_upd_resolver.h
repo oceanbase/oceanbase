@@ -45,6 +45,10 @@ public:
 
   ObDelUpdStmt *get_del_upd_stmt() { return static_cast<ObDelUpdStmt*>(stmt_); }
 
+  //set is json constraint type is strict or relax
+  const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
+  const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
+
 protected:
 
   int resolve_assignments(const ParseNode &parse_node,

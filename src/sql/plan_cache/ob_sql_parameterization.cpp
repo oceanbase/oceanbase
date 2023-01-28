@@ -1073,11 +1073,16 @@ int ObSqlParameterization::gen_ps_not_param_var(const ObIArray<int64_t> &offsets
     const int64_t offset = offsets.at(i);
     PsNotParamInfo ps_not_param_var;
     ps_not_param_var.idx_ = offset;
-    ps_not_param_var.ps_param_ = params.at(offset);
-    if (OB_FAIL(pc_ctx.not_param_var_.push_back(ps_not_param_var))) {
-      LOG_WARN("fail to push item to array", K(ret));
-    } else if (OB_FAIL(pc_ctx.not_param_index_.add_member(offset))) {
-      LOG_WARN("add member failed", K(ret), K(offset));
+    if (offset >= params.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("offset should not oversize param size", K(ret), K(offset), K(params.count()));
+    } else {
+      ps_not_param_var.ps_param_ = params.at(offset);
+      if (OB_FAIL(pc_ctx.not_param_var_.push_back(ps_not_param_var))) {
+        LOG_WARN("fail to push item to array", K(ret));
+      } else if (OB_FAIL(pc_ctx.not_param_index_.add_member(offset))) {
+        LOG_WARN("add member failed", K(ret), K(offset));
+      }
     }
   }
   return ret;
@@ -1592,14 +1597,113 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
       }
     } else { /*do nothing*/ }
   } else if(T_FUN_SYS_JSON_VALUE == tree->type_) {
-    if (7 != tree->num_child_) {
+    if (9 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
       SQL_PC_LOG(WARN, "invalid json value expr argument", K(ret), K(tree->num_child_)); 
     } else {
-      const int64_t ARGS_NUMBER_SEVEN = 7;
-      bool mark_arr[ARGS_NUMBER_SEVEN] = {1, 1, 1, 1, 1, 1, 1};
-      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_SEVEN, sql_info))) {
+      const int64_t ARGS_NUMBER_NINE = 9;
+      bool mark_arr[ARGS_NUMBER_NINE] = {0, 1, 1, 1, 1, 1, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_NINE, sql_info))) {
         SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+      }
+    }
+  } else if(T_FUN_SYS_JSON_OBJECT == tree->type_) {
+    if (5 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid json object expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_FIVE = 5;
+      bool mark_arr[ARGS_NUMBER_FIVE] = {1, 1, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_FIVE, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+      }
+    }
+  } else if(T_FUN_SYS_IS_JSON == tree->type_) {
+    if (5 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid argument num for IS json", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_FIVE = 5;
+      bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_FIVE, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+      }
+    }
+  } else if(T_FUN_SYS_JSON_QUERY == tree->type_) {
+    if (10 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid json query expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_TEN = 10;
+      bool mark_arr[ARGS_NUMBER_TEN] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};   // json doc type will affect returning type,
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TEN, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+      }
+    }
+  } else if(T_FUN_SYS_JSON_EXISTS == tree->type_) {
+    if (5 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid argument num for json_exists", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_FIVE = 5;
+      bool mark_arr[ARGS_NUMBER_FIVE] = {0, 0, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_FIVE, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark json_exists arg", K(ret));
+      }
+    }
+  } else if(T_FUN_SYS_JSON_EQUAL == tree->type_) {
+    if (3 < tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid json query expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_THREE = 3;
+      bool mark_arr[ARGS_NUMBER_THREE] = {0, 0, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_THREE, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+      }
+    }
+  } else if(T_FUN_SYS_JSON_ARRAY == tree->type_) {
+    if (4 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid json array expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_FOUR = 4;
+      bool mark_arr[ARGS_NUMBER_FOUR] = {0, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_FOUR, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark json array arg", K(ret));
+      }
+    }
+  } else if(T_FUN_SYS_JSON_MERGE_PATCH == tree->type_) {
+    if (7 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid json mergepatch expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_SEVEN = 7;
+      bool mark_arr[ARGS_NUMBER_SEVEN] = {0, 0, 1, 1, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_SEVEN, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark json mergepatch arg", K(ret));
+      }
+    }
+  } else if (T_JSON_TABLE_EXPRESSION == tree->type_) {
+    if (5 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid json mergepatch expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_FIVE = 5;
+      bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_FIVE, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark json mergepatch arg", K(ret));
+      }
+    }
+  } else if (T_FUN_SYS_TREAT == tree->type_) {
+    if (2 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid treat expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_TWO = 2;
+      bool mark_arr[ARGS_NUMBER_TWO] = {1, 0};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TWO, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark treat arg", K(ret));
       }
     }
   } else { /*do nothing*/ }

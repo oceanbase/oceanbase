@@ -333,12 +333,17 @@
 #include "sql/engine/expr/ob_expr_json_merge_patch.h"
 #include "sql/engine/expr/ob_expr_json_pretty.h"
 #include "sql/engine/expr/ob_expr_json_member_of.h"
+#include "sql/engine/expr/ob_expr_is_json.h"
+#include "sql/engine/expr/ob_expr_json_equal.h"
 #include "sql/engine/expr/ob_expr_sha.h"
 #include "sql/engine/expr/ob_expr_compress.h"
 #include "sql/engine/expr/ob_expr_statement_digest.h"
 #include "sql/engine/expr/ob_expr_timestamp_to_scn.h"
 #include "sql/engine/expr/ob_expr_scn_to_timestamp.h"
 #include "sql/engine/expr/ob_expr_errno.h"
+#include "sql/engine/expr/ob_expr_json_query.h"
+#include "sql/engine/expr/ob_expr_json_exists.h"
+#include "sql/engine/expr/ob_expr_treat.h"
 #include "sql/engine/expr/ob_expr_point.h"
 #include "sql/engine/expr/ob_expr_spatial_collection.h"
 #include "sql/engine/expr/ob_expr_st_geomfromtext.h"
@@ -1217,6 +1222,16 @@ void ObExprOperatorFactory::register_expr_operators()
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
   REG_OP_ORCL(ObExprErrno);
 #endif
+  REG_OP_ORCL(ObExprJsonValue);
+  REG_OP_ORCL(ObExprIsJson);
+  REG_OP_ORCL(ObExprJsonEqual);
+  REG_OP_ORCL(ObExprJsonQuery);
+  REG_OP_ORCL(ObExprJsonMergePatch);
+  REG_OP_ORCL(ObExprJsonExists);
+  REG_OP_ORCL(ObExprJsonArray);
+  REG_OP_ORCL(ObExprJsonObject);
+  REG_OP_ORCL(ObExprTreat);
+
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

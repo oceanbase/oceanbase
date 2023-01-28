@@ -208,6 +208,8 @@ int ObInsertLogPlan::allocate_insert_values_as_top(ObLogicalOperator *&top)
       LOG_WARN("failed to allocate subplan filter as top", K(ret));
     } else if (OB_FAIL(values_op->add_values_expr(insert_stmt->get_values_vector()))) {
       LOG_WARN("failed to add values expr", K(ret));
+    } else if (OB_FAIL(values_op->add_values_desc(insert_stmt->get_values_desc()))) {
+      LOG_WARN("failed to add values desc", K(ret));
     } else { /*do nothing*/ }
   }
   return ret;

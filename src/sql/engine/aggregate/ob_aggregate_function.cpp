@@ -3756,6 +3756,7 @@ int ObAggregateFunction::get_json_arrayagg_result(const ObAggregateExpression *&
           if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(converted_obj, val_type,
                                                                    &tmp_alloc, scale,
                                                                    expr_ctx_.my_session_->get_timezone_info(),
+                                                                   expr_ctx_.my_session_,
                                                                    json_val, false))) {
             LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
           }
@@ -3902,6 +3903,7 @@ int ObAggregateFunction::get_json_objectagg_result(const ObAggregateExpression *
               if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(converted_obj, val_type1,
                                                                       &tmp_alloc, val_type1,
                                                                       expr_ctx_.my_session_->get_timezone_info(),
+                                                                      expr_ctx_.my_session_,
                                                                       json_val, false))) {
                 LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type1));
               }

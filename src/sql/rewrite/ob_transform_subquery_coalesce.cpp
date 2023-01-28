@@ -947,6 +947,8 @@ int ObTransformSubqueryCoalesce::merge_exists_subqueries(TransformParam &trans_p
     ObColumnRefRawExpr *col_expr = not_exist_stmt->get_column_items().at(i).expr_;
     ObRawExpr *new_expr = NULL;
     TableItem *new_table_item = NULL;
+    ObRawExpr *error_expr = NULL;
+    ObRawExpr *empty_expr = NULL;
     int64_t idx = not_exist_stmt->get_table_bit_index(col_item.table_id_) - 1;
     if (idx < 0 || idx >= map_info.table_map_.count() ||
         map_info.table_map_.at(idx) < 0 ||
@@ -959,15 +961,24 @@ int ObTransformSubqueryCoalesce::merge_exists_subqueries(TransformParam &trans_p
       // do nothing
     } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.expr_, new_expr))) {
       LOG_WARN("failed to copy expr node", K(ret));
+    } else if (OB_NOT_NULL(col_item.default_value_expr_)
+               && OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.default_value_expr_, error_expr))) {
+      LOG_WARN("failed to error expr node", K(ret));
+    } else if (OB_NOT_NULL(col_item.default_empty_expr_)
+               && OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.default_empty_expr_, empty_expr))) {
+      LOG_WARN("failed to empty expr node", K(ret));
     } else {
       ColumnItem new_col_item;
       new_col_item.table_id_ = new_table_item->table_id_;
       new_col_item.column_id_ = col_item.column_id_;
       new_col_item.column_name_ = col_item.column_name_;
+      new_col_item.default_value_expr_ = error_expr;
+      new_col_item.default_empty_expr_ = empty_expr;
       new_col_item.expr_ = static_cast<ObColumnRefRawExpr *>(new_expr);
       new_col_item.expr_->set_table_id(new_table_item->table_id_);
       new_col_item.expr_->set_table_name(new_table_item->table_name_);
       new_col_item.is_geo_ = col_item.is_geo_;
+      new_col_item.col_idx_= col_item.col_idx_;
       if (OB_FAIL(new_exist_stmt->add_column_item(new_col_item))) {
         LOG_WARN("failed to add column item", K(ret));
       }
@@ -1121,6 +1132,8 @@ int ObTransformSubqueryCoalesce::merge_any_all_subqueries(ObQueryRefRawExpr *any
     ObColumnRefRawExpr *col_expr = all_stmt->get_column_items().at(i).expr_;
     ObRawExpr *new_expr = NULL;
     TableItem *new_table_item = NULL;
+    ObRawExpr *error_expr = NULL;
+    ObRawExpr *empty_expr = NULL;
     int64_t idx = all_stmt->get_table_bit_index(col_item.table_id_) - 1;
     if (OB_UNLIKELY(idx < 0 || idx >= map_info.table_map_.count() ||
         map_info.table_map_.at(idx) < 0 ||
@@ -1133,6 +1146,12 @@ int ObTransformSubqueryCoalesce::merge_any_all_subqueries(ObQueryRefRawExpr *any
       // do nothing
     } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.expr_, new_expr))) {
       LOG_WARN("failed to copy expr node", K(ret));
+    } else if (OB_NOT_NULL(col_item.default_value_expr_)
+               && OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.default_value_expr_, error_expr))) {
+      LOG_WARN("failed to error expr node", K(ret));
+    } else if (OB_NOT_NULL(col_item.default_empty_expr_)
+               && OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.default_empty_expr_, empty_expr))) {
+      LOG_WARN("failed to empty expr node", K(ret));
     } else {
       ColumnItem new_col_item;
       new_col_item.table_id_ = new_table_item->table_id_;
@@ -1142,6 +1161,9 @@ int ObTransformSubqueryCoalesce::merge_any_all_subqueries(ObQueryRefRawExpr *any
       new_col_item.expr_->set_table_id(new_table_item->table_id_);
       new_col_item.expr_->set_table_name(new_table_item->table_name_);
       new_col_item.is_geo_ = col_item.is_geo_;
+      new_col_item.default_value_expr_ = error_expr;
+      new_col_item.default_empty_expr_ = empty_expr;
+      new_col_item.col_idx_= col_item.col_idx_;
       if (OB_FAIL(new_any_stmt->add_column_item(new_col_item))) {
         LOG_WARN("failed to add column item", K(ret));
       }

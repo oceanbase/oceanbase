@@ -131,6 +131,7 @@ public:
   const common::ObAccuracy &get_accuracy() const;
   uint64_t get_udt_id() const;
   uint32_t get_result_flag() const;
+  inline ExprClass get_expr_class() {return expr_class_;}
   int get_length_for_meta_in_bytes(common::ObLength &length) const;
   void set_meta_type(const common::ObObjMeta &meta_type);
   void set_result_type(const sql::ObExprResType &result_type);

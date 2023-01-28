@@ -29,6 +29,7 @@
 #include "sql/optimizer/ob_log_merge.h"
 #include "sql/optimizer/ob_log_expr_values.h"
 #include "sql/optimizer/ob_log_function_table.h"
+#include "sql/optimizer/ob_log_json_table.h"
 #include "sql/optimizer/ob_log_values.h"
 #include "sql/optimizer/ob_log_set.h"
 #include "sql/optimizer/ob_log_subplan_filter.h"
@@ -130,6 +131,7 @@
 #include "sql/engine/dml/ob_err_log_op.h"
 #include "sql/engine/basic/ob_select_into_op.h"
 #include "sql/engine/basic/ob_function_table_op.h"
+#include "sql/engine/basic/ob_json_table_op.h"
 #include "sql/engine/table/ob_link_scan_op.h"
 #include "sql/engine/dml/ob_table_insert_all_op.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
@@ -1805,6 +1807,8 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues &op,
       LOG_WARN("init fixed array failed", K(ret), K(op.get_value_exprs().count()));
     } else if (OB_FAIL(spec.str_values_array_.prepare_allocate(op.get_output_exprs().count()))) {
       LOG_WARN("init fixed array failed", K(ret), K(op.get_output_exprs().count()));
+    } else if (OB_FAIL(spec.is_strict_json_desc_.prepare_allocate(op.get_value_desc().count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(op.get_value_desc().count()));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < op.get_value_exprs().count(); i++) {
         ObRawExpr *raw_expr = op.get_value_exprs().at(i);
@@ -1822,6 +1826,10 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues &op,
         } else {
           spec.values_.at(i) = expr;
         }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < op.get_value_desc().count(); i++) {
+        ObColumnRefRawExpr *col_expr = op.get_value_desc().at(i);
+        spec.is_strict_json_desc_.at(i) = (col_expr->is_strict_json_column() == IS_JSON_CONSTRAINT_STRICT);
       }
       // Add str_values to spec: str_values_ is worked for enum/set type for type conversion.
       // According to code in ob_expr_values_op.cpp, it should be in the same order as output_exprs.
@@ -5168,6 +5176,66 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
              OB_FAIL(generate_hybrid_hist_expr_operator(raw_expr, aggr_info))) {
     LOG_WARN("failed to generate_top_fre_hist_expr_operator", K(ret));
   } else {
+    if (is_oracle_mode()
+        && raw_expr.get_expr_type() == T_FUN_ORA_JSON_ARRAYAGG
+        && raw_expr.get_real_param_count() > CG_JSON_ARRAYAGG_STRICT) {
+      ObRawExpr *format_json_expr = NULL;
+      ObRawExpr *absent_on_null_expr = NULL;
+      ObRawExpr *returning_type_expr = NULL;
+      ObRawExpr *strict_json_expr = NULL;
+      aggr_info.format_json_ = (OB_NOT_NULL(format_json_expr = raw_expr.get_param_expr(CG_JSON_ARRAYAGG_FORMAT))
+                                && format_json_expr->get_data_type() == ObIntType
+                                && static_cast<ObConstRawExpr *>(format_json_expr)->get_value().get_int())
+                               ? true
+                               : false;
+      aggr_info.absent_on_null_ = (OB_NOT_NULL(absent_on_null_expr = raw_expr.get_param_expr(CG_JSON_ARRAYAGG_ON_NULL))
+                                   && absent_on_null_expr->get_data_type() == ObIntType
+                                   && static_cast<ObConstRawExpr *>(absent_on_null_expr)->get_value().get_int() <= 1)
+                                  ? false
+                                  : true;
+      aggr_info.returning_type_ = (OB_NOT_NULL(returning_type_expr = raw_expr.get_param_expr(CG_JSON_ARRAYAGG_RETURNING))
+                                   && returning_type_expr->get_data_type() == ObIntType)
+                                  ? static_cast<ObConstRawExpr *>(returning_type_expr)->get_value().get_int()
+                                  : INT64_MAX;
+      aggr_info.strict_json_ = (OB_NOT_NULL(strict_json_expr = raw_expr.get_param_expr(CG_JSON_ARRAYAGG_STRICT))
+                                && strict_json_expr->get_data_type() == ObIntType
+                                && static_cast<ObConstRawExpr *>(strict_json_expr)->get_value().get_int())
+                               ? true
+                               : false;
+    }
+    if (is_oracle_mode()
+        && raw_expr.get_expr_type() == T_FUN_ORA_JSON_OBJECTAGG
+        && raw_expr.get_real_param_count() > CG_JSON_OBJECTAGG_UNIQUE_KEYS) {
+      ObRawExpr *absent_on_null_expr = NULL;
+      ObRawExpr *returning_type_expr = NULL;
+      ObRawExpr *unique_keys_expr = NULL;
+      ObRawExpr *strict_json_expr = NULL;
+      ObRawExpr *format_json_expr = NULL;
+      aggr_info.format_json_ = (OB_NOT_NULL(format_json_expr = raw_expr.get_param_expr(CG_JSON_OBJECTAGG_FORMAT))
+                                && format_json_expr->get_data_type() == ObIntType
+                                && static_cast<ObConstRawExpr *>(format_json_expr)->get_value().get_int())
+                               ? true
+                               : false;
+      aggr_info.absent_on_null_ = (OB_NOT_NULL(absent_on_null_expr = raw_expr.get_param_expr(CG_JSON_OBJECTAGG_ON_NULL))
+                                   && absent_on_null_expr->get_data_type() == ObIntType
+                                   && static_cast<ObConstRawExpr *>(absent_on_null_expr)->get_value().get_int())
+                                  ? false
+                                  : true;
+      aggr_info.returning_type_ = (OB_NOT_NULL(returning_type_expr = raw_expr.get_param_expr(CG_JSON_OBJECTAGG_RETURNING))
+                                   && returning_type_expr->get_data_type() == ObIntType)
+                                  ? static_cast<ObConstRawExpr *>(returning_type_expr)->get_value().get_int()
+                                  : INT64_MAX;
+      aggr_info.strict_json_ = (OB_NOT_NULL(strict_json_expr = raw_expr.get_param_expr(CG_JSON_OBJECTAGG_STRICT))
+                                && strict_json_expr->get_data_type() == ObIntType
+                                && static_cast<ObConstRawExpr *>(strict_json_expr)->get_value().get_int())
+                               ? true
+                               : false;
+      aggr_info.with_unique_keys_ = (OB_NOT_NULL(unique_keys_expr = raw_expr.get_param_expr(CG_JSON_OBJECTAGG_UNIQUE_KEYS))
+                                     && unique_keys_expr->get_data_type() == ObIntType
+                                     && static_cast<ObConstRawExpr *>(unique_keys_expr)->get_value().get_int())
+                                    ? true
+                                    : false;
+    }
     const int64_t group_concat_param_count =
         (is_oracle_mode()
          && raw_expr.get_expr_type() == T_FUN_GROUP_CONCAT
@@ -5271,7 +5339,8 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
                          T_FUN_KEEP_MIN == raw_expr.get_expr_type() ||
                          T_FUN_KEEP_COUNT == raw_expr.get_expr_type() ||
                          T_FUN_KEEP_WM_CONCAT == raw_expr.get_expr_type() ||
-                         T_FUN_HYBRID_HIST == raw_expr.get_expr_type())) {
+                         T_FUN_HYBRID_HIST == raw_expr.get_expr_type() ||
+                         T_FUN_ORA_JSON_ARRAYAGG == raw_expr.get_expr_type())) {
       const ObRawExpr *param_raw_expr = (is_oracle_mode()
           && T_FUN_GROUP_CONCAT == raw_expr.get_expr_type()
           && raw_expr.get_real_param_count() > 1)
@@ -5932,6 +6001,87 @@ int ObStaticEngineCG::generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec 
         OZ (mark_expr_self_produced(col_item->expr_));
         OZ (generate_rt_expr(*col_item->expr_, rt_expr));
         OZ (spec.column_exprs_.push_back(rt_expr));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
+    const bool in_root_job)
+{
+  UNUSED(in_root_job);
+  ObIAllocator &alloc = phy_plan_->get_allocator();
+  ObRawExpr *value_raw_expr = nullptr;
+  ObExpr *value_expr = nullptr;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op.get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get stmt", K(ret));
+  } else if (OB_FAIL(spec.column_exprs_.init(op.get_stmt()->get_column_size()))
+          || OB_FAIL(spec.emp_default_exprs_.init(op.get_stmt()->get_column_size()))
+          || OB_FAIL(spec.err_default_exprs_.init(op.get_stmt()->get_column_size()))
+          || OB_FAIL(spec.cols_def_.init(op.get_origin_cols_def().count()))) {
+    LOG_WARN("failed to init array", K(ret));
+  } else if (OB_UNLIKELY(op.get_num_of_child() > 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected count of children", K(ret), K(op.get_num_of_child()));
+  } else if (OB_ISNULL(value_raw_expr = op.get_value_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get value raw expr", K(ret));
+  } else if (OB_FAIL(generate_rt_expr(*value_raw_expr, value_expr))) {
+    LOG_WARN("failed to generate rt expr", K(ret));
+  } else {
+    spec.has_correlated_expr_ = value_raw_expr->has_flag(CNT_DYNAMIC_PARAM);
+    spec.value_expr_ = value_expr;
+
+    if (OB_FAIL(spec.dup_origin_column_defs(op.get_origin_cols_def()))) {
+      LOG_WARN("failed to append col define", K(ret));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_output_exprs().count(); ++i) {
+      if (OB_FAIL(mark_expr_self_produced(op.get_output_exprs().at(i)))) {
+        LOG_WARN("failed to mark expr self produced", K(ret));
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_stmt()->get_column_size(); ++i) {
+      ObExpr *rt_expr = nullptr;
+      const ColumnItem *col_item = op.get_stmt()->get_column_item(i);
+      CK (OB_NOT_NULL(col_item));
+      CK (OB_NOT_NULL(col_item->expr_));
+      if (OB_SUCC(ret)
+          && col_item->table_id_ == op.get_table_id()
+          && col_item->expr_->is_explicited_reference()) {
+        OZ (mark_expr_self_produced(col_item->expr_));
+        OZ (generate_rt_expr(*col_item->expr_, rt_expr));
+        OZ (spec.column_exprs_.push_back(rt_expr));
+
+        if (OB_FAIL(ret)) {
+        } else if (col_item->col_idx_ == common::OB_INVALID_ID
+                   || col_item->col_idx_ >= spec.cols_def_.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get origin column info", K(ret), K(col_item->col_idx_),
+                   K(col_item->column_name_));
+        } else {
+          ObJtColInfo* col_info = spec.cols_def_.at(col_item->col_idx_);
+          col_info->output_column_idx_ = spec.column_exprs_.count() - 1;
+
+          if (OB_NOT_NULL(col_item->default_value_expr_)) {
+            ObExpr *err_expr = nullptr;
+            OZ (mark_expr_self_produced(col_item->default_value_expr_));
+            OZ (generate_rt_expr(*col_item->default_value_expr_, err_expr));
+            OX (col_info->error_expr_id_ = spec.err_default_exprs_.count());
+            OZ (spec.err_default_exprs_.push_back(err_expr));
+          }
+          if (OB_SUCC(ret) && OB_NOT_NULL(col_item->default_empty_expr_)) {
+            ObExpr *emp_expr = nullptr;
+            OZ (mark_expr_self_produced(col_item->default_empty_expr_));
+            OZ (generate_rt_expr(*col_item->default_empty_expr_, emp_expr));
+            OX (col_info->empty_expr_id_ = spec.emp_default_exprs_.count());
+            OZ (spec.emp_default_exprs_.push_back(emp_expr));
+          }
+        }
       }
     }
   }
@@ -6622,6 +6772,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
     }
     case log_op_def::LOG_FUNCTION_TABLE: {
       type = PHY_FUNCTION_TABLE;
+      break;
+    }
+    case log_op_def::LOG_JSON_TABLE: {
+      type = PHY_JSON_TABLE;
       break;
     }
     case log_op_def::LOG_MONITORING_DUMP: {

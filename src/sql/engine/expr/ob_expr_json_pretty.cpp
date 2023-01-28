@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implementation of func json_pretty
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -77,7 +78,7 @@ int ObExprJsonPretty::calc(const T &data, ObObjType type, ObCollationType cs_typ
       ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
     }
     LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
-  } else if (OB_FAIL(j_base->print(j_buf, true, true))) {
+  } else if (OB_FAIL(j_base->print(j_buf, true, true, 0, true))) {
     LOG_WARN("fail to print json", K(ret), K(type), K(j_str), K(j_in_type));
   }
 

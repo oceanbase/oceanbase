@@ -140,12 +140,18 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
     r_type2 = ObLobType == r_type2 ? ObLongTextType : r_type2;
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
       // oracle 模式下不支持 lob 进行条件比较
-      if (OB_UNLIKELY(ObLongTextType == r_type1 || ObLongTextType == r_type2)
-          && IS_COMPARISON_OP(op_type)
+      // oracle 模式 不支持json类型的比较
+      if (IS_COMPARISON_OP(op_type)
           && sub_expr1->is_called_in_sql() && sub_expr2->is_called_in_sql()) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("can't calculate with lob type in oracle mode",
+        if (ObLongTextType == r_type1 || ObLongTextType == r_type2) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("can't calculate with lob type in oracle mode",
                   K(ret), K(r_type1), K(r_type2), K(op_type));
+        } else if (ObJsonType == r_type1 || ObJsonType == r_type2) {
+          ret = OB_ERR_INVALID_CMP_OP;
+          LOG_WARN("can't calculate with json type in oracle mode",
+                  K(ret), K(r_type1), K(r_type2), K(op_type));
+        }
       }
     }
     if (OB_SUCC(ret)) {

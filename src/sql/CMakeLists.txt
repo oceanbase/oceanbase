@@ -148,6 +148,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_function_table_op.cpp
   engine/basic/ob_group_join_buffer.cpp
   engine/basic/ob_hash_partitioning_infrastructure_op.cpp
+  engine/basic/ob_json_table_op.cpp
   engine/basic/ob_limit_op.cpp
   engine/basic/ob_material_op.cpp
   engine/basic/ob_monitoring_dump_op.cpp
@@ -373,11 +374,16 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_json_unquote.cpp
   engine/expr/ob_expr_json_valid.cpp
   engine/expr/ob_expr_json_value.cpp
+  engine/expr/ob_expr_json_query.cpp
+  engine/expr/ob_expr_json_exists.cpp
   engine/expr/ob_expr_json_type.cpp
   engine/expr/ob_expr_json_length.cpp
   engine/expr/ob_expr_json_storage_size.cpp
   engine/expr/ob_expr_json_storage_free.cpp
   engine/expr/ob_expr_json_set.cpp
+  engine/expr/ob_expr_is_json.cpp
+  engine/expr/ob_expr_json_equal.cpp
+  engine/expr/ob_expr_treat.cpp
   engine/expr/ob_expr_join_filter.cpp
   engine/expr/ob_expr_last_exec_id.cpp
   engine/expr/ob_expr_last_insert_id.cpp
@@ -785,6 +791,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_insert_all.cpp
   optimizer/ob_log_join.cpp
   optimizer/ob_log_join_filter.cpp
+  optimizer/ob_log_json_table.cpp
   optimizer/ob_log_limit.cpp
   optimizer/ob_log_link.cpp
   optimizer/ob_log_material.cpp

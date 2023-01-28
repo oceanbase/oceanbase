@@ -857,6 +857,21 @@ int ObInsertResolver::resolve_insert_constraint()
                     K(i), K(table_info.view_check_exprs_.at(i)));
         }
       }
+      const ObIArray<ObColumnRefRawExpr *> &table_columns = table_info.column_exprs_;
+      for (uint64_t i = 0; OB_SUCC(ret) && i < table_columns.count(); ++i) {
+        ObColumnRefRawExpr *table_column = table_columns.at(i);
+        if (OB_ISNULL(table_column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to resolve table desc as tbl column expr is null", K(ret));
+        } else if (table_column->is_strict_json_column() > 0) {   // 0 not json  1 relax json  4 strict json
+          for (uint64_t j = 0; OB_SUCC(ret) && j < table_info.values_desc_.count(); ++j) {
+            ObColumnRefRawExpr *table_column_desc = table_info.values_desc_.at(j);
+            if (table_column_desc->get_column_id() == table_column->get_column_id()) {
+              table_column_desc->set_strict_json_column(table_column->is_strict_json_column());
+            }
+          }
+        }
+      }
     }
   }
   return ret;
