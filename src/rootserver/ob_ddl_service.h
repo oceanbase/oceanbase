@@ -1505,7 +1505,7 @@ private:
                               const common::ObString *ddl_stmt_str,
                               const common::ObString &db_name);
   int new_truncate_table_in_trans(const ObIArray<const share::schema::ObTableSchema*> &orig_table_schemas,
-                                  ObMySQLTransaction &trans,
+                                  ObDDLSQLTransaction &trans,
                                   const ObString *ddl_stmt_str);
   int restore_obj_priv_after_truncation(
       ObDDLOperator &ddl_operator,
@@ -2336,6 +2336,8 @@ public:
                        const transaction::ObTxDataSourceType &type,
                        const char *buf,
                        const int64_t buf_len);
+  // serialize inc schemas from (start_schema_version, ]
+  int serialize_inc_schemas(const int64_t start_schema_version);
 private:
   // generate inc schema_metas and regist multi_data_source data
   // all schemas should contains basic info(id/name/schema_version/charset_type/collation_type)
@@ -2377,7 +2379,7 @@ private:
   bool need_end_signal_;
   // Used for fetch increment schemas generate by this DDL trans.
   // 1. when bootstrap/create tenant, trans_start_schema_version_ is 0, won't fetch increment schema.
-  // 2. TODO(yanmu.ztl): when truncate table in 4.1, trans_start_schema_version_ maybe meaningless.
+  // 2. when enable_ddl_parallel_ = true(truncate table in 4.1), trans_start_schema_version_ is meaningless, it needs fetch increment schema alone.
   // 3. other situations, fetch increament schemas in (trans_start_schema_version_, ].
   int64_t trans_start_schema_version_;
   // enable ddl parallel

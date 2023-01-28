@@ -16148,7 +16148,7 @@ int ObDDLService::generate_table_schemas(const ObIArray<const ObTableSchema*> &o
 }
 
 int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema*> &orig_table_schemas,
-                                              ObMySQLTransaction &trans,
+                                              ObDDLSQLTransaction &trans,
                                               const ObString *ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
@@ -16157,6 +16157,7 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
   uint64_t tenant_id = OB_INVALID_ID;
   ObArenaAllocator allocator("TruncInTrans");
   int64_t tablet_cost = OB_INVALID_ID;
+  int64_t before_fetch_schema  = OB_INVALID_ID;
   int64_t start_time = ObTimeUtility::current_time();
   ObSchemaService *schema_service = NULL;
   if (OB_FAIL(check_inner_stat())) {
@@ -16252,10 +16253,18 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
         }
       }
     } // else
+
+    before_fetch_schema  = ObTimeUtility::current_time();
+    LOG_INFO("truncate cost after truncate part and update attribute", KR(ret), "cost_ts", before_fetch_schema - tablet_cost);
+
+    // serialize increment table schemas
+    if (FAILEDx(trans.serialize_inc_schemas(first_schema_version - 1))) {
+      LOG_WARN("fail to serialize inc schemas", KR(ret), K(tenant_id), "start_schema_version", first_schema_version - 1);
+    }
   } // else
 
+
   int64_t before_wait_task = ObTimeUtility::current_time();
-  LOG_INFO("truncate cost after truncate part and update attribute", KR(ret), "cost_ts", before_wait_task - tablet_cost);
   // Serial Submit
   if (FAILEDx(schema_service_->get_ddl_trans_controller().wait_task_ready(task_id, THIS_WORKER.get_timeout_remain()))) {
     LOG_WARN("wait_task_ready", KR(ret), K(table_name), K(task_id));
@@ -16285,10 +16294,12 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     }
   }
   int64_t finish_truncate_in_trans = ObTimeUtility::current_time();
-  LOG_INFO("truncate cost after truncate_in_trans finish", KR(ret), K(task_id), "cost", finish_truncate_in_trans - start_time,
-                                                                    "wait_task_cost", wait_task - before_wait_task,
-                                                                    "trans_end_cost", trans_end - wait_task,
-                                                                    "publish_schema_cost", finish_truncate_in_trans - trans_end);
+  LOG_INFO("truncate cost after truncate_in_trans finish", KR(ret), K(task_id),
+           "cost", finish_truncate_in_trans - start_time,
+           "fetch_schema_cost", before_wait_task - before_fetch_schema,
+           "wait_task_cost", wait_task - before_wait_task,
+           "trans_end_cost", trans_end - wait_task,
+           "publish_schema_cost", finish_truncate_in_trans - trans_end);
 
   return ret;
 }
@@ -30733,7 +30744,9 @@ int ObDDLSQLTransaction::end(const bool commit)
     }
   }
 
-  if (OB_SUCC(ret) && commit) {
+  // new truncate table implement will pass an unusable start schema version,
+  // it needs record increment table schemas alone.
+  if (OB_SUCC(ret) && !enable_ddl_parallel_ && commit) {
     ObArenaAllocator allocator;
     ObSEArray<const ObTenantSchema*, 2> tenant_schemas;
     ObSEArray<const ObDatabaseSchema*, 2> database_schemas;
@@ -30769,6 +30782,38 @@ int ObDDLSQLTransaction::end(const bool commit)
   ret = OB_SUCC(ret) ? tmp_ret : ret;
   // Clear tenant_id_ for success or failure
   tenant_id_ = OB_INVALID_ID;
+  return ret;
+}
+
+int ObDDLSQLTransaction::serialize_inc_schemas(const int64_t start_schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObSEArray<const ObTenantSchema*, 2> tenant_schemas;
+  ObSEArray<const ObDatabaseSchema*, 2> database_schemas;
+  ObSEArray<const ObTableSchema*, 8> table_schemas;
+  uint64_t data_version = 0;
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema service is null", K(ret));
+  } else if (OB_UNLIKELY(!is_started()
+             || tenant_id_ == OB_INVALID_TENANT_ID
+             || start_schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K_(in_trans), K_(tenant_id), K(start_schema_version));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K_(tenant_id));
+  } else if (data_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version is less than 4.1", KR(ret), K_(tenant_id), K(data_version));
+  } else if (OB_FAIL(schema_service_->get_increment_schemas_for_data_dict(
+             *this, tenant_id_, start_schema_version, allocator,
+             tenant_schemas, database_schemas, table_schemas))) {
+    LOG_WARN("fail to get increment schemas for data dict",
+             KR(ret), K_(tenant_id), K(start_schema_version));
+  } else if (OB_FAIL(serialize_inc_schemas_(allocator, tenant_schemas, database_schemas, table_schemas))) {
+    LOG_WARN("serialize_inc_schemas_ fail", KR(ret), K_(tenant_id), K(start_schema_version));
+  }
   return ret;
 }
 
