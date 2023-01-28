@@ -867,7 +867,6 @@ ob_set_subtarget(ob_sql plan_cache
   plan_cache/ob_pcv_set.cpp
   plan_cache/ob_plan_cache.cpp
   plan_cache/ob_plan_cache_callback.cpp
-  plan_cache/ob_plan_cache_manager.cpp
   plan_cache/ob_plan_cache_util.cpp
   plan_cache/ob_plan_cache_value.cpp
   plan_cache/ob_plan_set.cpp

@@ -21,7 +21,6 @@
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/signal/ob_signal_utils.h"
 #include "lib/signal/ob_signal_worker.h"
-#include "lib/signal/ob_memory_cutter.h"
 #include "common/ob_common_utility.h"
 
 namespace oceanbase

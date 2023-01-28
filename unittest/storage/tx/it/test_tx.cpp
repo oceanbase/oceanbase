@@ -47,6 +47,7 @@ class ObTestTx : public ::testing::Test
 public:
   virtual void SetUp() override
   {
+    ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
     const uint64_t tv = ObTimeUtility::current_time();
     ObCurTraceId::set(&tv);
     GCONF._ob_trans_rpc_timeout = 500;
@@ -63,6 +64,7 @@ public:
     auto test_name = test_info->name();
     _TRANS_LOG(INFO, ">>>> tearDown test : %s", test_name);
     ObClockGenerator::destroy();
+    ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
   }
   MsgBus bus_;
 };

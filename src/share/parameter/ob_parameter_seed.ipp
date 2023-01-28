@@ -1198,6 +1198,9 @@ DEF_BOOL(_enable_resource_limit_spec, OB_CLUSTER_PARAMETER, "False",
 DEF_STR_WITH_CHECKER(_resource_limit_spec, OB_CLUSTER_PARAMETER, "auto", common::ObConfigResourceLimitSpecChecker,
         "this parameter encodes some resource limit parameters to json",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_resource_limit_max_session_num, OB_TENANT_PARAMETER, "0", "[0,1000000]",
+        "the maximum number of sessions that can be created concurrently",
+        ObParameterAttr(Section::RESOURCE_LIMIT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_px_bloom_filter_sync, OB_TENANT_PARAMETER, "false",
          "specifies whether wait px bloom filter ready with all thread",
@@ -1298,6 +1301,8 @@ DEF_INT(sql_login_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,32]",
 #else
 DEF_STR_LIST(sanity_whitelist, OB_CLUSTER_PARAMETER, "", "vip who wouldn't leading to coredump",
              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_tenant_leak_memory_protection, OB_CLUSTER_PARAMETER, "True", "protect unfreed objects while deletes tenant",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #endif
 DEF_TIME(_advance_checkpoint_timeout, OB_CLUSTER_PARAMETER, "30m", "[10s,180m]",
          "the timeout for backup/migrate advance checkpoint Range: [10s,180m]",

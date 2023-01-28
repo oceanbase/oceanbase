@@ -24,6 +24,10 @@ namespace common
 {
 class ObString;
 }
+namespace sql
+{
+class ObPlanCache;
+}
 namespace share
 {
 class ObResourceColMappingRuleManager
@@ -176,7 +180,9 @@ public:
   { }
   virtual ~ObResourceColMappingRuleManager() = default;
   int init();
-  int refresh_resource_column_mapping_rule(uint64_t tenant_id, const common::ObString &plan);
+  int refresh_resource_column_mapping_rule(uint64_t tenant_id,
+                                           sql::ObPlanCache *plan_cache,
+                                           const common::ObString &plan);
   uint64_t get_column_mapping_rule_id(uint64_t tenant_id, uint64_t database_id,
                                      const common::ObString &table_name,
                                      const common::ObString &column_name,

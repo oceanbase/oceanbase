@@ -23,10 +23,6 @@
 
 namespace oceanbase
 {
-namespace observer
-{
-class ObServerMemoryCutter;
-}
 namespace common
 {
 template <typename MBWrapper>
@@ -62,7 +58,6 @@ protected:
 class ObKVCacheStore : public ObIKVCacheStore<ObKVMemBlockHandle>,
     public ObIMBHandleAllocator
 {
-  friend class observer::ObServerMemoryCutter;
 public:
   ObKVCacheStore();
   virtual ~ObKVCacheStore();
@@ -77,7 +72,7 @@ public:
 
   int get_washable_size(const uint64_t tenant_id, int64_t &washable_size, const int64_t ratio = 0);
   void flush_washable_mbs();
-  void flush_washable_mbs(const uint64_t tenant_id);
+  int flush_washable_mbs(const uint64_t tenant_id, const bool force_flush = false);
   void flush_washable_mbs(const int64_t cache_id);
   void flush_washable_mbs(const uint64_t tenant_id, const int64_t cache_id);
 
@@ -113,7 +108,8 @@ private:
     const uint64_t tenant_id, 
     lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks, 
     const int64_t cache_id = -1, 
-    const int64_t size_need_washed = INT64_MAX);
+    const int64_t size_need_washed = INT64_MAX,
+    const bool force_flush = false);
   int inner_push_memblock_info(const ObKVMemBlockHandle &handle, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos);
 
 private:
@@ -121,7 +117,7 @@ private:
   static const int64_t RETIRE_LIMIT = 16;
   static const int64_t WASH_THREAD_RETIRE_LIMIT = 2048;
   static const int64_t SUPPLY_MB_NUM_ONCE = 128;
-  static const int64_t SAFE_COUNT = 5; 
+  static const int64_t SAFE_COUNT = 5;
   static const int64_t MAX_SKIP_REFRESH_TIMES = 100; // max skip refresh_score times during free time
   static const int64_t TENANT_WASH_THRESHOLD_RATIO = 8; // 1/256
   static const int64_t GLOBAL_WASH_THRESHOLD_RATIO = 9; // 1/512
@@ -129,7 +125,7 @@ private:
   static const int64_t MIN_TENANT_WASH_THRESHOLD = 8L << 20;  // 8MB
   static const int64_t MAX_GLOBAL_WASH_THRESHOLD = 64L;  // 64 * 2M = 128M
   static const int64_t MIN_GLOBAL_WASH_THRESHOLD = 8L;  // 8 * 2M = 16M
-  static const int64_t FLUSH_PRESERVE_TENANT_NUM = 10; // number preversed for flush 
+  static const int64_t FLUSH_PRESERVE_TENANT_NUM = 10; // number preversed for flush
   struct StoreMBHandleCmp
   {
     bool operator()(const ObKVMemBlockHandle *a, const ObKVMemBlockHandle *b) const;

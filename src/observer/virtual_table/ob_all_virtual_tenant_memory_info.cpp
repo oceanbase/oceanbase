@@ -65,8 +65,8 @@ int ObAllVirtualTenantMemoryInfo::inner_get_next_row(ObNewRow *&row)
     for (int i = 0; i < tenant_cnt; ++i) {
       uint64_t tenant_id = tenant_ids_[i];
       ret = add_row(tenant_id,
-                    ObMallocAllocator::get_tenant_hold(tenant_id),
-                    ObMallocAllocator::get_tenant_limit(tenant_id));
+                    ObMallocAllocator::get_instance()->get_tenant_hold(tenant_id),
+                    ObMallocAllocator::get_instance()->get_tenant_limit(tenant_id));
     }
     if (OB_SUCC(ret)) {
       scanner_it_ = scanner_.begin();

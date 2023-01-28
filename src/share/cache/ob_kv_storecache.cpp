@@ -441,12 +441,10 @@ int ObKVGlobalCache::get(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited, ", K(ret));
-  } else {
-    revert(mb_handle);
-    if (OB_FAIL(map_.get(cache_id, key, pvalue, mb_handle))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        COMMON_LOG(WARN, "fail to get value from map, ", K(ret));
-      }
+  } else if (FALSE_IT(revert(mb_handle))) {
+  } else if (OB_FAIL(map_.get(cache_id, key, pvalue, mb_handle))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      COMMON_LOG(WARN, "fail to get value from map, ", K(ret));
     }
   }
   return ret;
@@ -491,6 +489,37 @@ int ObKVGlobalCache::erase_cache(const uint64_t tenant_id)
       COMMON_LOG(WARN, "fail to erase cache, ", K(ret), K(tenant_id));
     }
   }
+  return ret;
+}
+
+int ObKVGlobalCache::sync_flush_tenant(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "The global kvcache has not been inited", K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(mem_limit_getter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "Unexpected null mem limit getter", K(ret), KP(mem_limit_getter_));
+  } else if (mem_limit_getter_->has_tenant(tenant_id)) {  // check tenant
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "The tenant is still existed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(insts_.mark_tenant_delete(tenant_id))) {
+    COMMON_LOG(WARN, "Fail to mark tenant cache inst delete", K(ret), K(tenant_id));
+  } else if (OB_FAIL(store_.flush_washable_mbs(tenant_id, true /* force flush */))) {
+    COMMON_LOG(WARN, "Fail to erase tenant from store", K(ret), K(tenant_id));
+  } else if (OB_FAIL(map_.erase_tenant(tenant_id, true /* force_erase */))) {
+    COMMON_LOG(WARN, "Fail to retire cache node from map", K(ret), K(tenant_id));
+  } else if (OB_FAIL(insts_.erase_tenant(tenant_id))) {
+    COMMON_LOG(WARN, "Fail to erase tenant from insts", K(ret), K(tenant_id));
+  }
+
+  COMMON_LOG(INFO, "erase tenant cache details", K(ret), K(tenant_id));
+
   return ret;
 }
 
@@ -677,7 +706,6 @@ void ObKVGlobalCache::wash()
     static int64_t wash_count = 0;
     if (store_.wash() || (++wash_count >= MAP_WASH_CLEAN_INTERNAL)) {
       map_.clean_garbage_node(map_clean_pos_, map_once_clean_num_);
-      insts_.clean_garbage_inst();
       wash_count = 0;
     }
   }

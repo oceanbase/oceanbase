@@ -416,8 +416,7 @@ public:
     ObMemAttr inner_attr = param_.attr_;
     auto *ma = ObMallocAllocator::get_instance();
     // tenant_allocator is created synchronously when the tenant is built, and 500 tenant memory is used when there is no such tenant
-    ObTenantCtxAllocator *ta = ma != nullptr ?
-      ma->get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_) : nullptr;
+    auto ta = ma->get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_);
     if (nullptr == ta) {
       inner_attr.tenant_id_ = common::OB_SERVER_TENANT_ID;
     }

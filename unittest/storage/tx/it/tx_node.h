@@ -14,8 +14,10 @@
 #define OCEANBASE_TRANSACTION_TEST_TX_NODE_DEFINE_
 #define private public
 #define protected public
+#include "lib/objectpool/ob_server_object_pool.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_trans_part_ctx.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_alive_server_tracer.h"
 #include "storage/tablelock/ob_lock_memtable.h"
@@ -265,6 +267,7 @@ public:
   ObLSID ls_id_;
   int64_t tenant_id_;
   ObTenantBase tenant_;
+  common::ObServerObjectPool<ObPartTransCtx> fake_part_trans_ctx_pool_;
   ObTransService txs_;
   memtable::ObMemtable *memtable_;
   ObSEArray<ObColDesc, 2> columns_;

@@ -561,11 +561,6 @@ int ObExecContext::fast_check_status_ignore_interrupt(const int64_t n)
   return ret;
 }
 
-ObPlanCacheManager* ObExecContext::get_plan_cache_manager()
-{
-  return GCTX.sql_engine_->get_plan_cache_manager();
-}
-
 int ObExecContext::init_pl_ctx()
 {
   int ret = OB_SUCCESS;

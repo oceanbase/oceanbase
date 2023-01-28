@@ -641,7 +641,7 @@ int ObHashSetDumpTest::init_tenant_mgr()
   EXPECT_EQ(OB_SUCCESS, ret);
   ret = tm.set_tenant_mem_limit(OB_SERVER_TENANT_ID, ulmt, llmt);
   EXPECT_EQ(OB_SUCCESS, ret);
-  lib::ObTenantCtxAllocator *ctx_allocator =
+  auto ctx_allocator =
     lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(
           OB_SERVER_TENANT_ID, common::ObCtxIds::DEFAULT_CTX_ID);
   EXPECT_EQ(OB_SUCCESS, ret);

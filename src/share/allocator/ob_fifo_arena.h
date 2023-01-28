@@ -231,7 +231,7 @@ private:
   static const int64_t DEFAULT_TRIGGER_PERCENTAGE = 100;
   static const int64_t DEFAULT_DURATION = 60 * 60 * 1000 * 1000L;//us
   lib::ObMemAttr attr_;
-  ObIAllocator* allocator_;
+  lib::ObIAllocator *allocator_;
   int64_t nway_;
   int64_t allocated_;
   int64_t reclaimed_;

@@ -249,7 +249,7 @@ int ObOptStatMonitorManager::update_local_cache(uint64_t tenant_id,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FALSE_IT(col_map = new(buff)ColumnUsageMap())) {
-      } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", tenant_id))) {
+      } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", OB_SERVER_TENANT_ID))) {
         LOG_WARN("failed to create column usage map", K(ret));
       } else if (OB_FAIL(column_usage_maps_.set_refactored(tenant_id, col_map))) {
         // set refacter failed, may created by other thread
@@ -294,7 +294,7 @@ int ObOptStatMonitorManager::update_local_cache(uint64_t tenant_id, ObOptDmlStat
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FALSE_IT(dml_stat_map = new(buff)DmlStatMap())) {
-      } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatsHashMap", "DmlStatsHashMap", tenant_id))) {
+      } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatsHashMap", "DmlStatsHashMap", OB_SERVER_TENANT_ID))) {
         LOG_WARN("failed to create column usage map", K(ret));
       } else if (OB_FAIL(dml_stat_maps_.set_refactored(tenant_id, dml_stat_map))) {
         // set refacter failed, may created by other thread
@@ -721,7 +721,7 @@ int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapP
     } else if (NULL == (col_map = new(buff)ColumnUsageMap())) {
       ret = OB_NOT_INIT;
       LOG_WARN("fail to constructor column usage map", K(ret));
-    } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", entry.first))) {
+    } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", OB_SERVER_TENANT_ID))) {
       LOG_WARN("failed to create column usage map", K(ret));
     } else {
       column_usage_map_ = entry.second;
@@ -757,7 +757,7 @@ int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapP
     } else if (NULL == (dml_stat_map = new(buff)DmlStatMap())) {
       ret = OB_NOT_INIT;
       LOG_WARN("fail to constructor DmlStatMap", K(ret));
-    } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatMap", "DmlStatMap", entry.first))) {
+    } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatMap", "DmlStatMap", OB_SERVER_TENANT_ID))) {
       LOG_WARN("failed to create column usage map", K(ret));
     } else {
       dml_stat_map_ = entry.second;

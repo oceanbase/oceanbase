@@ -17,7 +17,6 @@
 #include "lib/alloc/alloc_func.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/rc/ob_rc.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/ob_sql_trans_control.h"
 #include "sql/session/ob_sql_session_mgr.h"
@@ -49,7 +48,7 @@
 #include "lib/utility/ob_proto_trans_util.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "share/stat/ob_opt_stat_manager.h"
-
+#include "sql/plan_cache/ob_ps_cache.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -127,7 +126,6 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       trans_type_(transaction::ObTxClass::USER),
       version_provider_(NULL),
       config_provider_(NULL),
-      plan_cache_manager_(NULL),
       with_tenant_ctx_(NULL),
       request_manager_(NULL),
       flt_span_mgr_(NULL),
@@ -184,10 +182,7 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
 
 ObSQLSessionInfo::~ObSQLSessionInfo()
 {
-  if (NULL != plan_cache_) {
-    plan_cache_->dec_ref_count();
-    plan_cache_ = NULL;
-  }
+  plan_cache_ = NULL;
   destroy(false);
 }
 
@@ -277,7 +272,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     trans_type_ = transaction::ObTxClass::USER;
     version_provider_ = NULL;
     config_provider_ = NULL;
-    plan_cache_manager_ = NULL;
     request_manager_ = NULL;
     flt_span_mgr_ = NULL;
     if (NULL != with_tenant_ctx_) {
@@ -285,10 +279,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
       with_tenant_ctx_ = NULL;
     }
     MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
-    if (NULL != ps_cache_) {
-      ps_cache_->dec_ref_count();
-      ps_cache_ = NULL;
-    }
+    ps_cache_ = NULL;
     found_rows_ = 1;
     affected_rows_ = -1;
     global_sessid_ = 0;
@@ -336,10 +327,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
       mem_context_ = NULL;
     }
     cur_exec_ctx_ = nullptr;
-    if (NULL != plan_cache_) {
-      plan_cache_->dec_ref_count();
-      plan_cache_ = NULL;
-    }
+    plan_cache_ = NULL;
     client_app_info_.reset();
     flt_control_info_.reset();
     is_send_control_info_ = false;
@@ -937,52 +925,34 @@ void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &s
 
 ObPlanCache *ObSQLSessionInfo::get_plan_cache()
 {
-  plan_cache_manager_ = GCTX.sql_engine_->get_plan_cache_manager();
-  if (OB_LIKELY(NULL != plan_cache_manager_)) {
-    if (OB_NOT_NULL(plan_cache_)) {
-      // do nothing
+  if (OB_NOT_NULL(plan_cache_)) {
+    // do nothing
+  } else {
+    //release old plancache and get new
+    ObPCMemPctConf pc_mem_conf;
+    if (OB_SUCCESS != get_pc_mem_conf(pc_mem_conf)) {
+      LOG_ERROR("fail to get pc mem conf");
+      plan_cache_ = NULL;
     } else {
-      //release old plancache and get new
-      if (NULL != plan_cache_) {
-        plan_cache_->dec_ref_count();
-      }
-      ObPCMemPctConf pc_mem_conf;
-      if (OB_SUCCESS != get_pc_mem_conf(pc_mem_conf)) {
-        LOG_ERROR("fail to get pc mem conf");
-        plan_cache_ = NULL;
-      } else {
-        uint64_t tenant_id = MTL_ID();
-        if (tenant_id > OB_SYS_TENANT_ID && tenant_id <= OB_MAX_RESERVED_TENANT_ID) {
-          // all virtual tenants use sys tenant's plan cache
-          tenant_id = OB_SYS_TENANT_ID;
-        } else if (OB_INVALID_TENANT_ID == tenant_id) {
-          // When it is used by threads regardless of tenants, it switches to the system tenant for execution.
-          tenant_id = OB_SYS_TENANT_ID;
-        }
-        plan_cache_ = plan_cache_manager_->get_or_create_plan_cache(tenant_id,
-                                                                    pc_mem_conf);
-        if (NULL == plan_cache_) {
-          LOG_WARN("failed to get plan cache");
-        }
+      plan_cache_ = MTL(ObPlanCache*);
+      if (OB_ISNULL(plan_cache_)) {
+        LOG_WARN("failed to get plan cache");
+      } else if (MTL_ID() != get_effective_tenant_id()) {
+        LOG_ERROR("unmatched tenant_id", K(MTL_ID()), K(get_effective_tenant_id()));
+      } else if (OB_SUCCESS != plan_cache_->set_mem_conf(pc_mem_conf)) {
+        LOG_ERROR("fail to set plan cache memory conf");
       }
     }
-  } else {
-    LOG_WARN("Invalid status", K(plan_cache_), K(plan_cache_manager_));
   }
   return plan_cache_;
 }
 
 ObPsCache *ObSQLSessionInfo::get_ps_cache()
 {
-  if (OB_ISNULL(plan_cache_manager_)) {
-    LOG_WARN("invalid status", K_(ps_cache), K_(plan_cache_manager));
-  } else if (OB_NOT_NULL(ps_cache_)) {
+  if (OB_NOT_NULL(ps_cache_)) {
     //do nothing
   } else {
     int ret = OB_SUCCESS;
-    if (NULL != ps_cache_) {
-      ps_cache_->dec_ref_count();
-    }
     const uint64_t tenant_id = get_effective_tenant_id();
     ObPCMemPctConf pc_mem_conf;
     ObMemAttr mem_attr;
@@ -993,10 +963,14 @@ ObPsCache *ObSQLSessionInfo::get_ps_cache()
       LOG_ERROR("failed to get pc mem conf");
       ps_cache_ = NULL;
     } else {
-      ps_cache_ = plan_cache_manager_->get_or_create_ps_cache(tenant_id,
-                                                              pc_mem_conf);
+      ps_cache_ = MTL(ObPsCache*);
       if (OB_ISNULL(ps_cache_)) {
-        LOG_WARN("failed to get ps plan cache");
+        LOG_WARN("failed to get ps cache");
+      } else if (MTL_ID() != get_effective_tenant_id()) {
+        LOG_ERROR("unmatched tenant_id", K(MTL_ID()), K(get_effective_tenant_id()));
+      } else if (!ps_cache_->is_inited() &&
+                  OB_FAIL(ps_cache_->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
+        LOG_WARN("failed to init ps cache");
       } else {
         ps_session_info_allocator_.set_attr(mem_attr);
       }
@@ -3078,4 +3052,3 @@ int ObSQLSessionInfo::set_xa_end_timeout_seconds(int64_t seconds)
   }
   return ret;
 }
-

@@ -30,10 +30,14 @@ struct ObMemAttr;
 class IBlockMgr
 {
 public:
+  IBlockMgr() {}
+  IBlockMgr(int64_t tenant_id, int64_t ctx_id)
+    : tenant_id_(tenant_id), ctx_id_(ctx_id) {}
   virtual ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) = 0;
   virtual void free_block(ABlock *block) = 0;
-  virtual ObTenantCtxAllocator& get_tenant_ctx_allocator() = 0;
-  virtual int64_t sync_wash(int64_t wash_size) { return 0; }
+  virtual int64_t sync_wash(int64_t wash_size) = 0;
+  int64_t tenant_id_;
+  int64_t ctx_id_;
 }; // end of class IBlockMgr
 
 class ISetLocker

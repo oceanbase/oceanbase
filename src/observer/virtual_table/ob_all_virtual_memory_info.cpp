@@ -170,7 +170,11 @@ int ObAllVirtualMemoryInfo::inner_get_next_row(ObNewRow *&row)
       for (int tenant_idx = 0; OB_SUCC(ret) && tenant_idx < tenant_cnt; tenant_idx++) {
         uint64_t tenant_id = tenant_ids_[tenant_idx];
         for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
-          auto *ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+          auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+          if (nullptr == ta) {
+            ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                                        ctx_id);
+          }
           if (nullptr == ta) {
             continue;
           }

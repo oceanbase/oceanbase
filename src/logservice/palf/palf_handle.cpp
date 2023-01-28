@@ -523,7 +523,7 @@ int PalfHandle::unregister_rebuild_cb()
   } else {
     MTL_DELETE(PalfRebuildCbNode, "RebuildCbNode", rebuild_cb_);
     rebuild_cb_ = NULL;
-    PALF_LOG(INFO, "unregister_rebuild_cb success", K(ret));
+    PALF_LOG(INFO, "unregister_rebuild_cb success", K(ret), KPC(this));
   }
 	return ret;
 }

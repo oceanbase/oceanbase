@@ -43,8 +43,8 @@ public:
     lib::ObMallocAllocator *malloc_allocator = lib::ObMallocAllocator::get_instance();
     //ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID);
     //ASSERT_EQ(OB_SUCCESS, ret);
-    ret = malloc_allocator->create_tenant_ctx_allocator(
-      OB_SYS_TENANT_ID, common::ObCtxIds::WORK_AREA);
+    ret = malloc_allocator->create_and_add_tenant_allocator(
+      OB_SYS_TENANT_ID);
     ASSERT_EQ(OB_SUCCESS, ret);
     int s = (int)time(NULL);
     LOG_INFO("initial setup random seed", K(s));

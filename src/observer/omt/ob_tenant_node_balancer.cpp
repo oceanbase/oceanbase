@@ -282,15 +282,6 @@ int ObTenantNodeBalancer::check_del_tenants(const TenantUnits &local_units, Tena
       } else if (OB_FAIL(omt_->del_tenant(local_unit.tenant_id_))) {
         LOG_WARN("delete tenant fail", K(local_unit), K(ret));
       }
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(OB_TMP_FILE_STORE.free_tenant_file_store(local_unit.tenant_id_))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          STORAGE_LOG(WARN, "fail to free tmp tenant file store", K(ret), K(local_unit.tenant_id_));
-        }
-      }
     }
   }
 

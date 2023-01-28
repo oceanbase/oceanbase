@@ -263,7 +263,7 @@ int ObMySQLRequestManager::mtl_init(ObMySQLRequestManager* &req_mgr)
   } else {
     uint64_t tenant_id = lib::current_resource_owner_id();
     int64_t mem_limit = lib::get_tenant_memory_limit(tenant_id);
-    int64_t queue_size = lib::is_mini_mode() ? MINI_MODE_MAX_QUEUE_SIZE : MAX_QUEUE_SIZE;
+    int64_t queue_size = (lib::is_mini_mode() || MTL_IS_MINI_MODE())? MINI_MODE_MAX_QUEUE_SIZE : MAX_QUEUE_SIZE;
     if (OB_FAIL(req_mgr->init(tenant_id, mem_limit, queue_size))) {
       LOG_WARN("failed to init request manager", K(ret));
     } else {

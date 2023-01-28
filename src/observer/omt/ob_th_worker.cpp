@@ -359,6 +359,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
   int64_t req_end_time = 0;
   th_created();
 
+  ObTLTaGuard ta_guard(tenant_ != NULL? tenant_->id() : OB_SERVER_TENANT_ID);
   // Avoid adding and deleting entities from the root node for every request, the parameters are meaningless
   CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, OB_SERVER_TENANT_ID) {
     auto *pm = common::ObPageManager::thread_local_instance();

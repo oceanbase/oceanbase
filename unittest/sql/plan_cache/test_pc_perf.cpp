@@ -246,7 +246,6 @@ int ObTestPlanCachePerformance::test(const char * query_str) {
     context.schema_manager_ = test_sql->get_schema_manager();
     context.session_info_ = &session_info_;
     context.partition_location_cache_ = &part_cache_;
-    session_info_.set_plan_cache_manager(sql_engine.get_plan_cache_manager());
     session_info_.set_plan_cache(sql_engine.get_plan_cache(OB_SYS_TENANT_ID));
   }
 

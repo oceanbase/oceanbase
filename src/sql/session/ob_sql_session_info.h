@@ -77,7 +77,6 @@ namespace sql
 class ObResultSet;
 class ObPlanCache;
 class ObPsCache;
-class ObPlanCacheManager;
 class ObPsSessionInfo;
 class ObPsStmtInfo;
 class ObStmt;
@@ -553,7 +552,6 @@ public:
   void destroy(bool skip_sys_var = false);
   void reset(bool skip_sys_var);
   void clean_status();
-  void set_plan_cache_manager(ObPlanCacheManager *pcm) { plan_cache_manager_ = pcm; }
   void set_plan_cache(ObPlanCache *cache) { plan_cache_ = cache; }
   void set_ps_cache(ObPsCache *cache) { ps_cache_ = cache; }
   const common::ObWarningBuffer &get_show_warnings_buffer() const { return show_warnings_buf_; }
@@ -571,7 +569,6 @@ public:
   ObPlanCache *get_plan_cache();
   ObPlanCache *get_plan_cache_directly() const { return plan_cache_; };
   ObPsCache *get_ps_cache();
-  ObPlanCacheManager *get_plan_cache_manager() { return plan_cache_manager_; }
   obmysql::ObMySQLRequestManager *get_request_manager();
   sql::ObFLTSpanMgr *get_flt_span_manager();
   ObSqlPlanMgr *get_sql_plan_manager();
@@ -1024,7 +1021,6 @@ private:
   transaction::ObTxClass trans_type_;
   const common::ObVersionProvider *version_provider_;
   const ObSQLConfigProvider *config_provider_;
-  ObPlanCacheManager *plan_cache_manager_;
   char tenant_buff_[sizeof(share::ObTenantSpaceFetcher)];
   share::ObTenantSpaceFetcher* with_tenant_ctx_;
   obmysql::ObMySQLRequestManager *request_manager_;

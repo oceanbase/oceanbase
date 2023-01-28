@@ -164,7 +164,6 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
     LOG_WARN("get query timeout failed", K(ret));
   } else {
     THIS_WORKER.set_timeout_ts(query_timeout + session_info->get_query_start_time());
-    session_info->set_plan_cache_manager(gctx_.sql_engine_->get_plan_cache_manager());
     session_info->set_peer_addr(ObRpcProcessor<T>::arg_.get_ctrl_server());
     exec_ctx_.set_my_session(session_info);
     exec_ctx_.show_session();

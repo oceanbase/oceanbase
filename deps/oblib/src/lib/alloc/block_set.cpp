@@ -64,12 +64,12 @@ void BlockSet::reset()
   cache_shared_lock_.reset();
 }
 
-void BlockSet::set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator, const ObMemAttr &attr)
+void BlockSet::set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator)
 {
   if (&allocator != tallocator_) {
     reset();
     tallocator_ = &allocator;
-    attr_ = attr;
+    attr_ = ObMemAttr(allocator.get_tenant_id(), nullptr, allocator.get_ctx_id());
   }
 }
 
@@ -163,7 +163,7 @@ void BlockSet::free_block(ABlock *const block)
       }
 
       ABlock *head = NULL != prev_block && !prev_block->in_use_ && !prev_block->is_washed_ ? prev_block : block;
-      
+
       // head won't been NULL,
       if (head != NULL) {
         head->in_use_ = false;
@@ -178,7 +178,7 @@ void BlockSet::free_block(ABlock *const block)
         } else {
           all_blocks_unused = -1 == chunk->blk_bs_.min_bit_ge(1);
         }
-        
+
         if (all_blocks_unused) {
           if (0 != chunk->washed_size_) {
             int offset = 0;
@@ -269,7 +269,7 @@ ABlock* BlockSet::get_free_block(const int cls, const ObMemAttr &attr)
     AChunk *chunk = block->chunk();
     chunk->unmark_unused_blk_offset_bit(chunk->blk_offset(block));
   }
-  
+
   return block;
 }
 
@@ -372,11 +372,6 @@ void BlockSet::free_chunk(AChunk *const chunk)
       tallocator_->free_chunk(chunk, attr_);
     }
   }
-}
-
-ObTenantCtxAllocator &BlockSet::get_tenant_ctx_allocator() const
-{
-  return *tallocator_;
 }
 
 int64_t BlockSet::sync_wash(int64_t wash_size)

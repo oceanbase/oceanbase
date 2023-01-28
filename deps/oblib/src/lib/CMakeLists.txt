@@ -194,7 +194,6 @@ ob_set_subtarget(oblib_lib oblog
 
 
 ob_set_subtarget(oblib_lib signal
-  signal/ob_memory_cutter.cpp
   signal/ob_signal_handlers.cpp
   signal/ob_signal_processor.cpp
   signal/ob_signal_struct.cpp

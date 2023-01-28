@@ -34,6 +34,7 @@
 #include "sql/ob_result_set.h"
 #include "sql/optimizer/ob_log_plan_factory.h"
 #include "sql/plan_cache/ob_plan_cache.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 #include "sql/plan_cache/ob_pcv_set.h"
 #include "sql/engine/table/ob_virtual_table_ctx.h"
 #include "sql/ob_sql_init.h"
@@ -116,9 +117,7 @@ int ObSql::init(common::ObOptStatManager *opt_stat_mgr,
              KP(transport),
              KP(vt_partition_service));
   } else {
-    if (OB_FAIL(plan_cache_manager_.init(addr))) {
-      LOG_WARN("Failed to init plan cache manager", K(ret));
-    } else if (OB_FAIL(queue_.init(1, 8192))) {
+    if (OB_FAIL(queue_.init(1, 8192))) {
       LOG_WARN("queue init failed", K(ret));
     } else {
       opt_stat_mgr_ = opt_stat_mgr;
@@ -135,7 +134,6 @@ int ObSql::init(common::ObOptStatManager *opt_stat_mgr,
 
 void ObSql::destroy() {
   if (inited_) {
-    plan_cache_manager_.destroy();
     queue_.destroy();
     inited_ = false;
   }
@@ -3464,21 +3462,6 @@ OB_INLINE int ObSql::init_exec_context(const ObSqlCtx &context, ObExecContext &e
     }
   }
   return ret;
-}
-
-ObPlanCache* ObSql::get_plan_cache(uint64_t tenant_id, const ObPCMemPctConf &pc_mem_conf)
-{
-  return plan_cache_manager_.get_or_create_plan_cache(tenant_id, pc_mem_conf);
-}
-
-ObPsCache* ObSql::get_ps_cache(const uint64_t tenant_id, const ObPCMemPctConf &pc_mem_conf)
-{
-  return plan_cache_manager_.get_or_create_ps_cache(tenant_id, pc_mem_conf);
-}
-
-int ObSql::revert_plan_cache(uint64_t tenant_id)
-{
-  return plan_cache_manager_.revert_plan_cache(tenant_id);
 }
 
 int ObSql::execute_get_plan(ObPlanCache &plan_cache,

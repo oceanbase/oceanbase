@@ -310,42 +310,6 @@ TEST(TestTenantMemoryMgr, DISABLED_large_sync_wash)
   ASSERT_EQ(0, memory_mgr.get_sum_hold());
 }
 
-TEST(TestResourceMgrList, basic)
-{
-  oceanbase::lib::set_memory_limit(2L<<30);
-  ObTenantResourceMgrList mgr_list;
-  const int64_t max_count = 10;
-  ObTenantResourceMgr *mgrs[100];
-  ObTenantResourceMgr *mgr = NULL;
-  ASSERT_EQ(OB_INVALID_ARGUMENT, mgr_list.init(0));
-  ASSERT_EQ(OB_NOT_INIT, mgr_list.push(NULL));
-  ASSERT_EQ(OB_NOT_INIT, mgr_list.pop(mgr));
-  ASSERT_EQ(OB_SUCCESS, mgr_list.init(max_count));
-  ASSERT_EQ(OB_INIT_TWICE, mgr_list.init(max_count));
-  for (int64_t i = 0; i < max_count; ++i) {
-    ObTenantResourceMgr *mgr = NULL;
-    ASSERT_EQ(OB_SUCCESS, mgr_list.pop(mgr));
-    mgrs[i] = mgr;
-  }
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, mgr_list.pop(mgr));
-
-  for (int64_t i = 0; i < max_count; ++i) {
-    ASSERT_EQ(OB_SUCCESS, mgr_list.push(mgrs[i]));
-  }
-  ASSERT_EQ(OB_INVALID_ARGUMENT, mgr_list.push(NULL));
-
-  for (int64_t i = 0; i < max_count; ++i) {
-    ObTenantResourceMgr *mgr = NULL;
-    ASSERT_EQ(OB_SUCCESS, mgr_list.pop(mgr));
-    mgrs[i] = mgr;
-  }
-  mgr = NULL;
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, mgr_list.pop(mgr));
-  mgr_list.destroy();
-  ASSERT_EQ(OB_SUCCESS, mgr_list.init(10));
-  mgr_list.destroy();
-}
-
 TEST(TestResourceMgr, basic)
 {
   ObResourceMgr mgr;
@@ -364,7 +328,6 @@ TEST(TestResourceMgr, basic)
     ASSERT_EQ(OB_SUCCESS, mgr.get_tenant_resource_mgr(i, tenant_mgrs[i]));
     ASSERT_EQ(i, tenant_mgrs[i].get_memory_mgr()->get_tenant_id());
   }
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, mgr.get_tenant_resource_mgr(ObResourceMgr::MAX_TENANT_COUNT + 100, tenant_mgr));
 
   ObArray<void *> mbs;
   for (int64_t i = 0; i < 10; ++i) {

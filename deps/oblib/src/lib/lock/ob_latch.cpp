@@ -268,7 +268,7 @@ int ObLatchWaitQueue::wait(
           if (OB_EAGAIN == ret) {
             if (OB_FAIL(try_lock(bucket, proc, latch_id, uid, lock_func_ignore))) {
               if (OB_EAGAIN != ret) {
-                COMMON_LOG(ERROR, "Fail to try lock, ", K(ret), K(tmp_ret), K(proc));               
+                COMMON_LOG(ERROR, "Fail to try lock, ", K(ret), K(tmp_ret), K(proc));
               }
             }
           }
@@ -475,11 +475,12 @@ ObLDHandleNode::ObLDHandleNode()
 
 void ObLDHandle::reset()
 {
-  abort_unless(node_ != nullptr);
-  abort_unless(node_->slot_ != nullptr);
-  node_->slot_->remove(node_);
-  delete node_;
-  node_ = nullptr;
+  if (node_ != nullptr) {
+    abort_unless(node_->slot_ != nullptr);
+    node_->slot_->remove(node_);
+    delete node_;
+    node_ = nullptr;
+  }
 }
 
 void ObLDSlot::add(ObLDHandleNode *node)

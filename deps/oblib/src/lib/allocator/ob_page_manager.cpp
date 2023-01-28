@@ -92,7 +92,7 @@ int ObPageManagerCenter::print_tenant_stat(int64_t tenant_id,
   int ret = OB_SUCCESS;
   char cmp_buf[sizeof(ObPageManager)];
   ObPageManager *cmp_node = (ObPageManager*)cmp_buf;
-  cmp_node->attr_.tenant_id_ = tenant_id - 1;
+  cmp_node->tenant_id_ = tenant_id - 1;
   cmp_node->id_ = INT64_MAX;
   ObPageManager *start = nullptr;
   rb_tree_.nsearch(cmp_node, start);
@@ -133,7 +133,7 @@ AChunk *ObPageManagerCenter::alloc_from_thread_local_cache_(int64_t tenant_id, i
 
   char cmp_buf[sizeof(ObPageManager)];
   ObPageManager *cmp_node = (ObPageManager*)cmp_buf;
-  cmp_node->attr_.tenant_id_ = tenant_id - 1;
+  cmp_node->tenant_id_ = tenant_id - 1;
   cmp_node->id_ = INT64_MAX;
   ObPageManager *start = nullptr;
   rb_tree_.nsearch(cmp_node, start);
@@ -167,7 +167,7 @@ AChunk *ObPageManagerCenter::alloc_from_thread_local_cache_(int64_t tenant_id, i
 
 void ObPageManager::reset()
 {
-  attr_.ctx_id_ = ObCtxIds::GLIBC;
+  ctx_id_ = ObCtxIds::GLIBC;
   bs_.reset();
   used_ = 0;
   is_inited_ = false;

@@ -15,9 +15,9 @@
 #define OCEANBASE_PL_CACHE_MGR_H_
 #include "share/ob_define.h"
 #include "ob_pl_cache.h"
+#include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_i_lib_cache_key.h"
 #include "sql/plan_cache/ob_i_lib_cache_node.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 
 namespace oceanbase
 {

@@ -55,7 +55,6 @@ class ObDatabaseSchema;
 
 namespace sql
 {
-class ObPlanCacheManager;
 class ObPlanCacheObject;
 class ObPlanCache;
 }

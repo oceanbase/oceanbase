@@ -113,9 +113,12 @@ int ObTableApiCacheGuard::init(ObTableCtx *tb_ctx)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tb_ctx->get_tenant_id();
-  if (OB_ISNULL(lib_cache_ = ObCacheObjectFactory::get_plan_cache(tenant_id))) {
+  if (MTL_ID() != tenant_id) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get lib cache", K(ret));
+    LOG_WARN("unmatched tenant_id", K(MTL_ID()), K(tenant_id), K(lbt()));
+  } else if (OB_ISNULL(lib_cache_ = MTL(ObPlanCache*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get plan cache", K(ret));
   } else if (OB_FAIL(create_cache_key(tb_ctx))) {
     LOG_WARN("fail to create cache key", K(ret));
   } else if (OB_FAIL(get_or_create_cache_obj())) {

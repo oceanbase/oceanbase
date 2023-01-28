@@ -900,9 +900,6 @@ int ObTenantWeakReadService::mtl_init(ObTenantWeakReadService* &twrs)
   } else if (OB_ISNULL(mysql_proxy) || OB_ISNULL(wrs)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("modules not ready, unexpected", KR(ret), K(mysql_proxy), K(wrs));
-  } else if (OB_ISNULL(twrs = OB_NEW(ObTenantWeakReadService, ObModIds::OB_WRS_TENANT_SERVICE))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("allocate memory for ObTenantWeakReadService fail", KR(ret));
   } else if (OB_FAIL(twrs->init(tenant_id, *mysql_proxy, wrs->get_wrs_rpc(), self))) {
     LOG_ERROR("init tenant weak read service instance fail", KR(ret), K(tenant_id), K(mysql_proxy),
         K(wrs), K(self));
@@ -915,14 +912,6 @@ int ObTenantWeakReadService::mtl_init(ObTenantWeakReadService* &twrs)
     twrs = NULL;
   }
   return ret;
-}
-
-void ObTenantWeakReadService::mtl_destroy(ObTenantWeakReadService* &twrs)
-{
-  if (NULL != twrs) {
-    OB_DELETE(ObTenantWeakReadService, unused, twrs);
-    twrs = NULL;
-  }
 }
 
 /////////////////////////// ObTenantWeakReadService::ModuleInfo ////////////////////////////

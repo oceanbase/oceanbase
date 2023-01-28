@@ -369,6 +369,7 @@ int ObLogService::add_ls(const ObLSID &id,
 {
   int ret = OB_SUCCESS;
   PalfHandle palf_handle;
+  PalfHandle &log_handler_palf_handle = log_handler.palf_handle_;
   PalfRoleChangeCb *rc_cb = &role_change_service_;
   PalfLocationCacheCb *loc_cache_cb = &location_adapter_;
   if (IS_NOT_INIT) {
@@ -386,9 +387,9 @@ int ObLogService::add_ls(const ObLSID &id,
     CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), K(id), KP(palf_env_), K(palf_handle));
   } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
-  } else if (OB_FAIL(palf_handle.register_role_change_cb(rc_cb))) {
+  } else if (OB_FAIL(log_handler_palf_handle.register_role_change_cb(rc_cb))) {
     CLOG_LOG(WARN, "register_role_change_cb failed", K(ret));
-  } else if (OB_FAIL(palf_handle.set_location_cache_cb(loc_cache_cb))) {
+  } else if (OB_FAIL(log_handler_palf_handle.set_location_cache_cb(loc_cache_cb))) {
     CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
   } else {
     FLOG_INFO("add_ls success", K(ret), K(id), K(replica_type), KP(this));
@@ -596,6 +597,7 @@ int ObLogService::create_ls_(const share::ObLSID &id,
   PalfRoleChangeCb *rc_cb = &role_change_service_;
   PalfLocationCacheCb *loc_cache_cb = &location_adapter_;
   const bool is_arb_replica = (replica_type == REPLICA_TYPE_ARBITRATION);
+  PalfHandle &log_handler_palf_handle = log_handler.palf_handle_;
   if (false == id.is_valid() ||
       INVALID_TENANT_ROLE == tenant_role ||
       false == palf_base_info.is_valid()) {
@@ -615,9 +617,9 @@ int ObLogService::create_ls_(const share::ObLSID &id,
     CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), KP(palf_env_), K(palf_handle));
   } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
-  } else if (OB_FAIL(palf_handle.register_role_change_cb(rc_cb))) {
+  } else if (OB_FAIL(log_handler_palf_handle.register_role_change_cb(rc_cb))) {
     CLOG_LOG(WARN, "register_role_change_cb failed", K(ret), K(id));
-  } else if (OB_FAIL(palf_handle.set_location_cache_cb(loc_cache_cb))) {
+  } else if (OB_FAIL(log_handler_palf_handle.set_location_cache_cb(loc_cache_cb))) {
     CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
   } else {
     CLOG_LOG(INFO, "ObLogService create_ls success", K(ret), K(id), K(log_handler));

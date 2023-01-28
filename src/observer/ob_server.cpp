@@ -36,7 +36,6 @@
 #include "observer/ob_server_utils.h"
 #include "observer/ob_rpc_extra_payload.h"
 #include "observer/ob_safe_destroy_thread.h"
-#include "observer/ob_server_memory_cutter.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/omt/ob_tenant_srs_mgr.h"
 #include "observer/table/ob_table_rpc_processor.h"
@@ -179,7 +178,6 @@ ObServer::ObServer()
     log_block_mgr_()
 {
   memset(&gctx_, 0, sizeof (gctx_));
-  lib::g_mem_cutter = &observer::g_server_mem_cutter;
 }
 
 ObServer::~ObServer()
@@ -377,8 +375,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(init_collect_info_gc_task())) {
       LOG_ERROR("init collect info gc task failed", KR(ret));
     } else if (OB_FAIL(ObOptStatManager::get_instance().init(
-                         &sql_proxy_, &config_,
-                         sql_engine_.get_plan_cache_manager()))) {
+                         &sql_proxy_, &config_))) {
       LOG_ERROR("init opt stat manager failed", KR(ret));
     } else if (OB_FAIL(ObOptStatMonitorManager::get_instance().init(&sql_proxy_))) {
       LOG_ERROR("init opt stat monitor manager failed", KR(ret));
@@ -1446,6 +1443,8 @@ int ObServer::init_config()
   // update gctx_.startup_mode_
   if (FAILEDx(parse_mode())) {
     LOG_ERROR("parse_mode failed", KR(ret));
+  } else if (is_arbitration_mode()) {
+    ObMallocAllocator::get_instance()->make_allocator_create_on_demand();
   }
 
   config_.print();

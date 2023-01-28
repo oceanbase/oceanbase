@@ -21,6 +21,8 @@
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "optimizer/ob_mock_opt_stat_manager.h"
+#include "sql/plan_cache/ob_plan_cache.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 #define CLUSTER_VERSION_2100 (oceanbase::common::cal_version(2, 1, 0, 0))
 #define CLUSTER_VERSION_2200 (oceanbase::common::cal_version(2, 2, 0, 0))
 using namespace oceanbase::observer;
@@ -249,17 +251,19 @@ void TestSqlUtils::init()
       int64_t default_collation = 45;  // utf8mb4_general_ci
       ASSERT_TRUE(OB_SUCCESS == session_info_.update_sys_variable(SYS_VAR_COLLATION_CONNECTION, default_collation));
       ObAddr addr;
-      if (OB_FAIL(plan_cache_mgr_.init(addr))) {
-        OB_LOG(WARN,"fail to init plan cache manager", K(ret));
-      }
+      ObPlanCache* pc = new ObPlanCache();
+      ObPsCache* ps = new ObPsCache();
       ObPCMemPctConf pc_mem_conf;
-      if (OB_FAIL(session_info_.get_pc_mem_conf(pc_mem_conf))) {
+      if (OB_FAIL(pc->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
+        LOG_WARN("failed to init request manager", K(ret));
+      } else if (OB_FAIL(ps->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
+        LOG_WARN("failed to init request manager", K(ret));
+      } else if (OB_FAIL(session_info_.get_pc_mem_conf(pc_mem_conf))) {
         _OB_LOG(WARN,"fail to get pc mem conf, ret=%ld", ret);
         ASSERT_TRUE(0);
       } else {
-        session_info_.set_plan_cache_manager(&plan_cache_mgr_);
-        session_info_.set_plan_cache(plan_cache_mgr_.get_or_create_plan_cache(tenant_id, pc_mem_conf));
-        session_info_.set_ps_cache(plan_cache_mgr_.get_or_create_ps_cache(tenant_id, pc_mem_conf));
+        session_info_.set_plan_cache(pc);
+        session_info_.set_ps_cache(ps);
       }
     }
   }
@@ -268,6 +272,8 @@ void TestSqlUtils::init()
 
 void TestSqlUtils::destroy()
 {
+  ObPlanCache* pc = session_info_.get_plan_cache();
+  ObPsCache* ps = session_info_.get_ps_cache();
   sys_user_id_ = OB_SYS_USER_ID;
   next_user_id_ = OB_MIN_USER_OBJECT_ID;
   sys_database_id_ = OB_SYS_DATABASE_ID;
@@ -285,6 +291,12 @@ void TestSqlUtils::destroy()
   // destroy
   if (NULL != schema_service_) {
     delete schema_service_;
+  }
+  if (NULL != ps) {
+    delete ps;
+  }
+  if (NULL != pc) {
+    delete pc;
   }
   ObKVGlobalCache::get_instance().destroy();
 }

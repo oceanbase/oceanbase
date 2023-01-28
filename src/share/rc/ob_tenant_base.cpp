@@ -44,7 +44,9 @@ ObTenantBase::ObTenantBase(const uint64_t id, bool enable_tenant_ctx_check)
     tenant_role_value_(share::ObTenantRole::Role::PRIMARY_TENANT),
     cgroups_(nullptr),
     enable_tenant_ctx_check_(enable_tenant_ctx_check),
-    thread_count_(0)
+    thread_count_(0),
+    memory_size_(0),
+    mini_mode_(false)
 {
 }
 #undef CONSTRUCT_MEMBER
@@ -352,6 +354,18 @@ int ObTenantBase::unregister_module_thread_dynamic(ThreadDynamicImpl *dynamic_im
   return thread_dynamic_factor_map_.erase_refactored(dynamic_impl);
 }
 
+int64_t ObTenantBase::get_max_session_num(const int64_t rl_max_session_num)
+{
+  int64_t max_session_num = 0;
+  if (rl_max_session_num != 0) {
+    max_session_num = rl_max_session_num;
+  } else {
+    /* As test, one session occupies 100K bytes*/
+    max_session_num = max(100, (memory_size_ * 5 / 100) / (100<<10));
+  }
+  return max_session_num;
+}
+
 int ObTenantBase::update_thread_cnt(double tenant_unit_cpu)
 {
   int64_t old_thread_count = ATOMIC_LOAD(&thread_count_);
@@ -427,6 +441,7 @@ int ObTenantSwitchGuard::switch_to(ObTenantBase *ctx)
     on_switch_ = true;
     stash_tenant_ = ObTenantEnv::get_tenant();
     ObTenantEnv::set_tenant(ctx);
+    ta_guard_.switch_to(ctx->id());
   } else {
     on_switch_ = false;
     stash_tenant_ = nullptr;
@@ -487,6 +502,9 @@ int ObTenantSwitchGuard::switch_to(uint64_t tenant_id, bool need_check_allow)
       ret = OB_TENANT_NOT_IN_SERVER;
     }
     LOG_WARN("switch tenant fail", K(tenant_id), K(ret), K(lbt()));
+  }
+  if (OB_SUCC(ret)) {
+    ta_guard_.switch_to(tenant_id);
   }
   return ret;
 }

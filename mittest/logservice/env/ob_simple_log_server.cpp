@@ -126,6 +126,10 @@ int ObSimpleLogServer::simple_init(
   ObTimeGuard guard("simple_init", 0);
   SERVER_LOG(INFO, "simple_log_server simple_init start", K(node_id), K(addr_));
   tenant_base_ = OB_NEW(ObTenantBase, "TestBase", node_id);
+  auto malloc = ObMallocAllocator::get_instance();
+  if (NULL == malloc->get_tenant_ctx_allocator(node_id, 0)) {
+    malloc->create_and_add_tenant_allocator(node_id);
+  }
   tenant_base_->init();
   tenant_base_->set(&log_service_);
   ObTenantEnv::set_tenant(tenant_base_);

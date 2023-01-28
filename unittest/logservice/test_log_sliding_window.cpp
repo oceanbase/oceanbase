@@ -87,12 +87,14 @@ public:
 TestLogSlidingWindow::TestLogSlidingWindow() {}
 TestLogSlidingWindow::~TestLogSlidingWindow() {}
 
+const static uint64_t tenant_id = 1001;
 void TestLogSlidingWindow::SetUp()
 {
   palf_id_ = 1001;
   self_.set_ip_addr("127.0.0.1", 12345);
 
-  const uint64_t tenant_id = 1001;
+  int ret = ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(tenant_id);
+  OB_ASSERT(OB_SUCCESS == ret);
   ObMemAttr attr(tenant_id, ObModIds::OB_TENANT_MUTIL_ALLOCATOR);
   void *buf = ob_malloc(sizeof(common::ObTenantMutilAllocator), attr);
   if (NULL == buf) {
@@ -110,6 +112,7 @@ void TestLogSlidingWindow::TearDown()
 {
   ob_free(alloc_mgr_);
   ob_free(data_buf_);
+  ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
 }
 
 void gen_default_palf_base_info_(PalfBaseInfo &palf_base_info)

@@ -19,9 +19,9 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_stat_service.h"
 #include "share/stat/ob_opt_stat_sql_service.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_stat_item.h"
+#include "sql/plan_cache/ob_plan_cache.h"
 
 namespace oceanbase
 {
@@ -34,7 +34,6 @@ namespace  common
 ObOptStatManager::ObOptStatManager()
   : inited_(false),
     stat_service_(),
-    pc_mgr_(NULL),
     last_schema_version_(-1)
 {
 }
@@ -74,22 +73,17 @@ int ObOptStatManager::refresh_on_schema_change(int64_t schema_version)
 #endif
 
 int ObOptStatManager::init(ObMySQLProxy *proxy,
-                           ObServerConfig *config,
-                           sql::ObPlanCacheManager *pc_mgr)
+                           ObServerConfig *config)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("optimizer statistics manager has already been initialized.", K(ret));
-  } else if (OB_ISNULL(pc_mgr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("initialize optimizer statistics manager with invalid arguments.", K(ret));
   } else if (OB_FAIL(stat_service_.init(proxy, config))) {
     LOG_WARN("failed to init stat service", K(ret));
   } else if (OB_FAIL(refresh_stat_task_queue_.init(1, "OptRefTask", REFRESH_STAT_TASK_NUM, REFRESH_STAT_TASK_NUM))) {
     LOG_WARN("initialize timer failed. ", K(ret));
   } else {
-    pc_mgr_ = pc_mgr;
     inited_ = true;
   }
   return ret;
@@ -419,13 +413,9 @@ int ObOptStatManager::handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg
 int ObOptStatManager::invalidate_plan(const uint64_t tenant_id, const uint64_t table_id)
 {
   int ret = OB_SUCCESS;
-  sql::ObPlanCache *pc = NULL;
-  if (OB_ISNULL(pc_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plan cache manager is null", K(ret), K(pc_mgr_));
-  } else if (NULL == (pc = pc_mgr_->get_plan_cache(tenant_id))) {
-    // do nothing
-  } else if (OB_FAIL(pc->evict_plan(table_id))) {
+  sql::ObPlanCache *pc = MTL(sql::ObPlanCache*);
+
+  if (OB_FAIL(pc->evict_plan(table_id))) {
     LOG_WARN("failed to evict plan", K(ret));
     // use OB_SQL_PC_NOT_EXIST represent evict plan failed
     ret = OB_SQL_PC_NOT_EXIST;

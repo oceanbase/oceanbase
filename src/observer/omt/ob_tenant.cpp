@@ -235,10 +235,12 @@ void ObPxPool::run1()
 {
   int ret = OB_SUCCESS;
   set_px_thread_name();
+  ObTLTaGuard ta_guard(tenant_id_);
   auto *pm = common::ObPageManager::thread_local_instance();
   if (OB_LIKELY(nullptr != pm)) {
     pm->set_tenant_ctx(tenant_id_, common::ObCtxIds::WORK_AREA);
   }
+  //ObTaTLCacheGuard ta_guard(tenant_id_);
   CLEAR_INTERRUPTABLE();
   ObCgroupCtrl *cgroup_ctrl = GCTX.cgroup_ctrl_;
   LOG_INFO("run px pool", K(group_id_), K(tenant_id_));
@@ -680,6 +682,10 @@ int ObTenant::init(const ObTenantMeta &meta)
     tenant_meta_ = meta;
     set_unit_min_cpu(meta.unit_.config_.min_cpu());
     set_unit_max_cpu(meta.unit_.config_.max_cpu());
+    const int64_t memory_size = static_cast<double>(tenant_meta_.unit_.config_.memory_size());
+    update_memory_size(memory_size);
+    constexpr static int64_t MINI_MEM_UPPER = 512L<<20; // 512M
+    update_mini_mode(memory_size <= MINI_MEM_UPPER);
 
     if (!is_virtual_tenant_id(id_)) {
       ret = create_tenant_module();
@@ -1887,7 +1893,8 @@ void ObTenant::check_resource_manager_plan()
     LOG_WARN("refresh resource mapping rule fail."
              "Tenant resource isolation may not work",
              K(id_), K(plan_name), K(ret));
-  } else if (OB_FAIL(col_rule_mgr.refresh_resource_column_mapping_rule(id_, plan_name))) {
+  } else if (OB_FAIL(col_rule_mgr.refresh_resource_column_mapping_rule(id_, get<ObPlanCache*>(),
+                                                                       plan_name))) {
     LOG_WARN("refresh resource column mapping rule fail."
              "Tenant resource isolation may not work",
              K(id_), K(plan_name), K(ret));

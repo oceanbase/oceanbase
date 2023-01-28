@@ -83,6 +83,8 @@ static void SetUpTestCase()
   system("mkdir -p " TEST_DATA_DIR);
   system("mkdir -p " TEST_SSTABLE_DIR);
 
+  ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
+  ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1002);
   // init io device
   static oceanbase::share::ObLocalDevice local_device;
   ASSERT_SUCC(init_device(0, local_device));
@@ -92,6 +94,8 @@ static void SetUpTestCase()
 static void TearDownTestCase()
 {
   THE_IO_DEVICE->destroy();
+  ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
+  ObMallocAllocator::get_instance()->recycle_tenant_allocator(1002);
 }
 
 static ObIOInfo get_random_io_info()
@@ -508,7 +512,7 @@ TEST_F(TestIOStruct, IOScheduler)
   ASSERT_FALSE(scheduler.is_inited_);
 
   ObIOCalibration::get_instance().destroy();
-}  
+}
 
 TEST_F(TestIOStruct, MClockQueue)
 {
@@ -1176,9 +1180,9 @@ TEST_F(TestIOManager, modify)
   }
   // prepare perf runners
   char *runner_buf = (char *)malloc(perf_loads.count() * sizeof(IOPerfRunner));
-  char *modifyer_buf = (char *)malloc(perf_loads.count() * sizeof(IOConfModify));  
+  char *modifyer_buf = (char *)malloc(perf_loads.count() * sizeof(IOConfModify));
   ObArray<IOPerfRunner *> runners;
-  ObArray<IOConfModify *> modifyers;  
+  ObArray<IOConfModify *> modifyers;
   const int64_t start_ts = ObTimeUtility::current_time() + 10000L;
   for (int64_t i = 0; i < perf_loads.count(); ++i) {
     IOPerfRunner *runner = new (runner_buf + i * sizeof(IOPerfRunner)) IOPerfRunner();
@@ -1194,7 +1198,7 @@ TEST_F(TestIOManager, modify)
     int64_t modify_init_ts = start_ts;
     int64_t modify_delay_ts = 3000000L; //2s后开始修改
     ASSERT_SUCC(modifyer->init(modify_init_ts, modify_delay_ts, curr_tenant));
-    ASSERT_SUCC(modifyers.push_back(modifyer));  
+    ASSERT_SUCC(modifyers.push_back(modifyer));
   }
   // wait perf finished
   for (int64_t i = 0; i < runners.count(); ++i) {
@@ -1204,7 +1208,7 @@ TEST_F(TestIOManager, modify)
     runner->destroy();
   }
   free(runner_buf);
-  free(modifyer_buf);  
+  free(modifyer_buf);
 
   ObIOManager::get_instance().stop();
   ObIOManager::get_instance().destroy();
@@ -1513,7 +1517,7 @@ int IOPerfRunner::init(const int64_t absolute_ts, const IOPerfLoad &load)
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(set_thread_count(load_.thread_count_ + 2))) {
-      LOG_WARN("set thread count failed", K(ret), K(load_)); 
+      LOG_WARN("set thread count failed", K(ret), K(load_));
     } else if (OB_FAIL(start())) {
       LOG_WARN("start thread pool failed", K(ret), K(load_));
     }
@@ -1803,7 +1807,7 @@ int IOConfModify::init(int64_t modify_init_ts, int64_t modify_delay_ts, const IO
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(set_thread_count(load_.thread_count_ + 1))) {
-      LOG_WARN("set thread count failed", K(ret), K(modify_init_ts_), K(curr_tenant_)); 
+      LOG_WARN("set thread count failed", K(ret), K(modify_init_ts_), K(curr_tenant_));
     } else if (OB_FAIL(start())) {
       LOG_WARN("start thread failed", K(ret), K(modify_init_ts_), K(curr_tenant_));
     }
@@ -1831,7 +1835,7 @@ void IOConfModify::run1()
     usleep(modify_init_ts_ + modify_delay_ts_ - current_ts);
   }
   int64_t min_test = 50000;
-  int64_t max_test = 1000000; 
+  int64_t max_test = 1000000;
   int64_t weight_test = 1000;
   if (OB_FAIL(modify_tenant_io(min_test, max_test, weight_test, curr_tenant_))) {
     LOG_WARN("modify config failed", K(ret), K(curr_tenant_));

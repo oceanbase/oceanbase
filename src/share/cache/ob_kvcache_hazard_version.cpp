@@ -21,7 +21,8 @@ namespace common{
  * -----------------------------------------------------------KVCacheHazardNode-----------------------------------------------------------
  */
 KVCacheHazardNode::KVCacheHazardNode()
-    : hazard_next_(nullptr), 
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      hazard_next_(nullptr),
       version_(UINT64_MAX)
 {
 }
@@ -45,8 +46,9 @@ KVCacheHazardThreadStore::KVCacheHazardThreadStore()
       delete_list_(nullptr),
       waiting_nodes_count_(0),
       last_retire_version_(0),
-      next_(nullptr), 
+      next_(nullptr),
       thread_id_(0),
+      is_retiring_(false),
       inited_(false)
 {
 }
@@ -62,9 +64,6 @@ int KVCacheHazardThreadStore::init(const int64_t thread_id)
   if (OB_UNLIKELY(thread_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid arguments", K(ret), K(thread_id));
-  } else if (OB_UNLIKELY(ATOMIC_LOAD(&inited_))) {
-    ret = OB_INIT_TWICE;
-    COMMON_LOG(WARN, "This KVCacheHazardThreadStore has been inited", K(ret), K(inited_));
   } else if (!ATOMIC_BCAS(&inited_, false, true)) {
     ret = OB_INIT_TWICE;
     COMMON_LOG(WARN, "This KVCacheHazardThreadStore has been inited", K(ret), K(inited_));
@@ -97,23 +96,29 @@ int KVCacheHazardThreadStore::delete_node(KVCacheHazardNode &node)
   return ret;
 }
 
-void KVCacheHazardThreadStore::retire(const uint64_t version)
+void KVCacheHazardThreadStore::retire(const uint64_t version, const uint64_t tenant_id)
 {
-  if (version > ATOMIC_LOAD(&last_retire_version_)) {
+  if (version > ATOMIC_LOAD(&last_retire_version_) || tenant_id != OB_INVALID_TENANT_ID) {
+    while(!ATOMIC_BCAS(&is_retiring_, false, true)) {
+      // wait until get retiring
+      PAUSE();
+    }
     KVCacheHazardNode *head = ATOMIC_LOAD(&delete_list_);
     if (nullptr != head) {
-      (void) ATOMIC_SET(&last_retire_version_, version);
+      if (version > last_retire_version_) {
+        (void) ATOMIC_SET(&last_retire_version_, version);
+      }
       KVCacheHazardNode *temp_node = head;
       while (temp_node != (head = ATOMIC_VCAS(&delete_list_, temp_node, nullptr))) {
         temp_node = head;
       }
-      
+
       int64_t retire_count = 0;
       KVCacheHazardNode *remain_list = nullptr;
       while (head != nullptr) {
         temp_node = head;
         head = head->get_next();
-        if (temp_node->get_version() < version) {
+        if (temp_node->get_version() < version || tenant_id == temp_node->tenant_id_) {
           temp_node->retire();
           temp_node = nullptr;
           ++retire_count;
@@ -129,6 +134,7 @@ void KVCacheHazardThreadStore::retire(const uint64_t version)
         ATOMIC_SAF(&waiting_nodes_count_, retire_count);
       }
     }
+    ATOMIC_SET(&is_retiring_, false);  // return retiring
   }
 }
 
@@ -216,9 +222,9 @@ int GlobalHazardVersion::delete_node(KVCacheHazardNode *node)
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret), K(inited_));
-  } else if (OB_UNLIKELY(nullptr == node)) {
+  } else if (OB_UNLIKELY(nullptr == node || OB_INVALID_TENANT_ID == node->tenant_id_)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(ret), KP(node));
+    COMMON_LOG(WARN, "Invalid argument", K(ret), KPC(node));
   } else if (OB_FAIL(get_thread_store(ts))) {
     COMMON_LOG(WARN, "Fail to get thread store", K(ret));
   } else {
@@ -268,7 +274,7 @@ void GlobalHazardVersion::release()
       if (OB_FAIL(get_min_version(min_version))) {
         COMMON_LOG(WARN, "Fail to get min version", K(ret));
       } else {
-        ts->retire(min_version);
+        ts->retire(min_version, OB_INVALID_TENANT_ID);
       }
     }
   }
@@ -277,7 +283,7 @@ void GlobalHazardVersion::release()
   }
 }
 
-int GlobalHazardVersion::retire()
+int GlobalHazardVersion::retire(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 
@@ -290,9 +296,13 @@ int GlobalHazardVersion::retire()
   } else {
     KVCacheHazardThreadStore *ts = thread_stores_;
     while (ts != nullptr) {
-      ts->retire(min_version);
+      ts->retire(min_version, tenant_id);
       ts = ts->get_next();
     }
+  }
+
+  if (tenant_id != OB_INVALID_TENANT_ID) {
+    COMMON_LOG(INFO, "erase tenant hazard map node details", K(ret), K(tenant_id));
   }
 
   return ret;
@@ -425,6 +435,7 @@ int GlobalHazardVersion::get_min_version(uint64_t &min_version) const
 {
   int ret = OB_SUCCESS;
 
+  min_version = INT64_MAX;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret), K(inited_));

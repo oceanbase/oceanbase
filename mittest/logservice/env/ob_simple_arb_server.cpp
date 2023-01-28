@@ -84,6 +84,10 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
   arb_opts.mittest_ = true;
   int ret = OB_SUCCESS;
   tenant_base_ = OB_NEW(ObTenantBase, "TestBase", node_id);
+  auto malloc = ObMallocAllocator::get_instance();
+  if (NULL == malloc->get_tenant_ctx_allocator(node_id, 0)) {
+    malloc->create_and_add_tenant_allocator(node_id);
+  }
   tenant_base_->init();
   ObTenantEnv::set_tenant(tenant_base_);
   std::vector<std::string> dirs{logserver_dir, clog_dir};

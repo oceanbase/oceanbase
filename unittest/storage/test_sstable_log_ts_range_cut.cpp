@@ -60,14 +60,14 @@ class TestSSTableScnRangeCut : public ::testing::Test
 {
 public:
   TestSSTableScnRangeCut()
-    : tenant_id_(1001),
+    : tenant_id_(1),
       t3m_(nullptr),
-      tenant_base_(1001)
+      tenant_base_(1)
   { }
   ~TestSSTableScnRangeCut() {}
   void SetUp()
   {
-    t3m_ = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, 1001);
+    t3m_ = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, 1);
     t3m_->init();
     tenant_base_.set(t3m_);
 
@@ -257,4 +257,3 @@ int main(int argc, char** argv)
   oceanbase::lib::set_memory_limit(40L << 30);
   return RUN_ALL_TESTS();
 }
-

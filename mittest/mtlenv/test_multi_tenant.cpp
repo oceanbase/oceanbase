@@ -277,7 +277,7 @@ TEST_F(TestMultiTenant, idle)
   ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
   for (int i = 0 ; i < configs.size(); i++) {
     ObCtxMemConfig &cfg = configs.at(i);
-    ObTenantCtxAllocator *ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, cfg.ctx_id_);
+    auto ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, cfg.ctx_id_);
     ASSERT_TRUE(NULL != ta);
     int64_t chunk_cnt = cfg.idle_size_/INTACT_ACHUNK_SIZE;
     ASSERT_EQ(ta->chunk_cnt_, chunk_cnt);
@@ -289,8 +289,9 @@ TEST_F(TestMultiTenant, idle)
   GCTX.omt_->remove_tenant(tenant_id, lock_succ);
   for (int i = 0 ; i < configs.size(); i++) {
     ObCtxMemConfig &cfg = configs.at(i);
-    ObTenantCtxAllocator *ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, cfg.ctx_id_);
+    auto ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, cfg.ctx_id_);
     ASSERT_TRUE(NULL != ta);
+    ta->set_idle(0);
     ASSERT_EQ(0, malloc_allocator->get_tenant_ctx_hold(tenant_id, cfg.ctx_id_));
   }
 }

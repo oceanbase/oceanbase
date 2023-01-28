@@ -96,7 +96,7 @@ int64_t ObILibCacheObject::inc_ref_count(const CacheRefHandleID ref_handle)
 {
   int ret = OB_SUCCESS;
   if (GCONF._enable_plan_cache_mem_diagnosis) {
-    ObPlanCache *lib_cache = ObCacheObjectFactory::get_plan_cache(tenant_id_);
+    ObPlanCache *lib_cache = MTL(ObPlanCache*);
     if (OB_ISNULL(lib_cache)) {
       LOG_ERROR("invalid null lib cache", K(ret));
     } else {
@@ -110,7 +110,7 @@ int64_t ObILibCacheObject::dec_ref_count(const CacheRefHandleID ref_handle)
 {
   int ret = OB_SUCCESS;
   if (GCONF._enable_plan_cache_mem_diagnosis) {
-    ObPlanCache *lib_cache = ObCacheObjectFactory::get_plan_cache(tenant_id_);
+    ObPlanCache *lib_cache = MTL(ObPlanCache*);
     if (OB_ISNULL(lib_cache)) {
       LOG_ERROR("invalid null lib cache", K(ret));
     } else {

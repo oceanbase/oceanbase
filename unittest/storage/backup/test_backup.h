@@ -123,7 +123,7 @@ static void make_random_cache_key(ObBackupIndexCacheKey &cache_key)
   make_random_offset(block_desc.offset_);
   make_random_length(block_desc.length_);
   cache_key.mode_ = BACKUP_MODE;
-  cache_key.tenant_id_ = 1002;
+  cache_key.tenant_id_ = 1;
   make_random_backup_set_id(cache_key.backup_set_id_);
   make_random_ls_id(cache_key.ls_id_);
   cache_key.backup_data_type_.type_ = share::ObBackupDataType::BACKUP_SYS;

@@ -30,7 +30,7 @@ void TestTableSessPool::prepare_sess_pool(ObTableApiSessPoolMgr &mgr)
   uint64_t user_ids[USER_CNT];
   ObTableApiSessPoolGuard pool_guards[TENANT_CNT];
   for (uint64_t i = 0; i < TENANT_CNT; i++) {
-    tenant_ids[i] = i + 1001;
+    tenant_ids[i] = i + 1;
     ASSERT_EQ(OB_SUCCESS, mgr.extend_sess_pool(tenant_ids[i], pool_guards[i]));
     ObTableApiSessPool *tmp_pool = pool_guards[i].get_sess_pool();
     ASSERT_NE(nullptr, tmp_pool);
@@ -94,7 +94,7 @@ TEST_F(TestTableSessPool, get_session)
 
 TEST_F(TestTableSessPool, remove_session)
 {
-  int64_t tenant_id = 1001;
+  int64_t tenant_id = 1;
   uint64_t user_id = 0;
   ObTableApiCredential credential;
   credential.tenant_id_ = tenant_id;
@@ -166,7 +166,7 @@ TEST_F(TestTableSessPool, reference_session)
   // prepare
   ObTableApiSessPoolMgr mgr;
   ASSERT_EQ(OB_SUCCESS, mgr.init());
-  uint64_t tenant_id = 1001;
+  uint64_t tenant_id = 1;
   uint64_t user_id = 0;
   ObTableApiSessPoolGuard pool_guard;
   ASSERT_EQ(OB_SUCCESS, mgr.extend_sess_pool(tenant_id, pool_guard));

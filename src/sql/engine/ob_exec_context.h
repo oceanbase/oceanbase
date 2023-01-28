@@ -81,7 +81,6 @@ class ObPhysicalPlanCtx;
 class ObIPhyOperatorInput;
 class ObTaskExecutorCtx;
 class ObSQLSessionInfo;
-class ObPlanCacheManager;
 class ObSQLSessionMgr;
 class ObExprOperatorCtx;
 class ObPxSqcHandler;
@@ -343,7 +342,6 @@ public:
   inline void set_pl_ctx(pl::ObPLCtx *pl_ctx) { pl_ctx_ = pl_ctx; }
   pl::ObPLPackageGuard* get_package_guard();
 
-  ObPlanCacheManager* get_plan_cache_manager();
   int init_pl_ctx();
 
   ObPartIdRowMapManager& get_part_row_manager() { return part_row_map_manager_; }

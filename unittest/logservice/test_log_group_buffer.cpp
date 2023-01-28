@@ -53,6 +53,7 @@ TestLogGroupBuffer::~TestLogGroupBuffer()
 
 void TestLogGroupBuffer::SetUp()
 {
+  ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
   // init MTL
   ObTenantBase tbase(1001);
   ObTenantEnv::set_tenant(&tbase);
@@ -62,6 +63,7 @@ void TestLogGroupBuffer::TearDown()
 {
   PALF_LOG(INFO, "TestLogGroupBuffer has TearDown");
   PALF_LOG(INFO, "TearDown success");
+  ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
 }
 
 TEST_F(TestLogGroupBuffer, test_init)

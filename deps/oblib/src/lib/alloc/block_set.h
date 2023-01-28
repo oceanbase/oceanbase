@@ -67,8 +67,7 @@ public:
   inline uint64_t get_total_payload() const;
   inline uint64_t get_total_used() const;
 
-  void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator, const ObMemAttr &attr);
-  ObTenantCtxAllocator &get_tenant_ctx_allocator() const;
+  void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator);
   void set_max_chunk_cache_cnt(const int cnt)
   { chunk_free_list_.set_max_chunk_cache_cnt(cnt); }
   void reset();

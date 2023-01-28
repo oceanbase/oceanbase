@@ -89,13 +89,8 @@ int ObFifoArena::init(uint64_t tenant_id)
   if (OB_ISNULL(allocator)) {
     ret = OB_INIT_FAIL;
     OB_LOG(ERROR, "mallocator instance is NULLL", K(ret));
-  } else if (OB_ISNULL(allocator_ = allocator->get_tenant_ctx_allocator(tenant_id, ctx_id))) {
-    if (OB_FAIL(allocator->create_tenant_ctx_allocator(tenant_id, ctx_id))) {
-      OB_LOG(ERROR, "fail to create tenant allocator", K(tenant_id), K(ctx_id), K(ret));
-    } else if (OB_ISNULL(allocator_ = allocator->get_tenant_ctx_allocator(tenant_id, ctx_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(ERROR, "tenant allocator is null", K(tenant_id), K(ctx_id), K(ret));
-    }
+  } else {
+    allocator_ = allocator;
   }
 
   if (OB_SUCC(ret)) {

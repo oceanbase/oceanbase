@@ -53,6 +53,7 @@ int Threads::do_set_thread_count(int64_t n_threads)
         thread->wait();
         thread->destroy();
         thread->~Thread();
+        ob_free(thread);
         threads_[i] = nullptr;
       }
       n_threads_ = n_threads;
@@ -204,6 +205,7 @@ int Threads::start()
 
 void Threads::run(int64_t idx)
 {
+  ObTLTaGuard ta_guard(GET_TENANT_ID() ?:OB_SERVER_TENANT_ID);
   thread_idx_ = static_cast<uint64_t>(idx);
   Worker worker;
   run1();
@@ -233,6 +235,7 @@ void Threads::destroy_thread(Thread *thread)
   thread->wait();
   thread->destroy();
   thread->~Thread();
+  ob_free(thread);
 }
 
 void Threads::wait()

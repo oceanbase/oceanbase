@@ -22,7 +22,6 @@
 #include "sql/resolver/cmd/ob_bootstrap_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "lib/allocator/page_arena.h"
@@ -38,7 +37,8 @@
 #include "rootserver/freeze/ob_major_freeze_helper.h" //ObMajorFreezeHelper
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
 #include "rpc/obmysql/ob_sql_sock_session.h"
-
+#include "sql/plan_cache/ob_plan_cache.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 namespace oceanbase
 {
 using namespace common;
@@ -173,36 +173,64 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
     common::ObString sql_id = stmt.flush_cache_arg_.sql_id_;
     switch (stmt.flush_cache_arg_.cache_type_) {
       case CACHE_TYPE_LIB_CACHE: {
-        if (OB_ISNULL(GCTX.sql_engine_->get_plan_cache_manager())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("plan cache manager is null");
-        } else if (stmt.flush_cache_arg_.ns_type_ != ObLibCacheNameSpace::NS_INVALID) {
+        if (stmt.flush_cache_arg_.ns_type_ != ObLibCacheNameSpace::NS_INVALID) {
           ObLibCacheNameSpace ns = stmt.flush_cache_arg_.ns_type_;
           if (0 == tenant_num) { // purge in tenant level, aka. coarse-grained plan evict
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_lib_cache_by_ns(ns);
+            common::ObArray<uint64_t> tenant_ids;
+            if (OB_ISNULL(GCTX.omt_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+            } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+              LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+            } else {
+              for (int64_t i = 0; i < tenant_ids.size(); i++) {
+                MTL_SWITCH(tenant_ids.at(i)) {
+                  ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                  ret = plan_cache->flush_lib_cache_by_ns(ns);
+                }
+                // ignore errors at switching tenant
+                ret = OB_SUCCESS;
+              }
+            }
           } else {
             for (int64_t i = 0; i < tenant_num; ++i) { //ignore ret
-              ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_lib_cache_by_ns(
-                    stmt.flush_cache_arg_.tenant_ids_.at(i), ns);
+              MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_lib_cache_by_ns(ns);
+              }
             }
           }
         } else {
           if (0 == tenant_num) { // purge in tenant level, aka. coarse-grained plan evict
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_lib_cache();
+            common::ObArray<uint64_t> tenant_ids;
+            if (OB_ISNULL(GCTX.omt_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+            } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+              LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+            } else {
+              for (int64_t i = 0; i < tenant_ids.size(); i++) {
+                MTL_SWITCH(tenant_ids.at(i)) {
+                  ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                  ret = plan_cache->flush_lib_cache();
+                }
+                // ignore errors at switching tenant
+                ret = OB_SUCCESS;
+              }
+            }
           } else {
             for (int64_t i = 0; i < tenant_num; ++i) { //ignore ret
-              ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_lib_cache(
-                    stmt.flush_cache_arg_.tenant_ids_.at(i));
+              MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_lib_cache();
+              }
             }
           }
         }
         break;
       }
       case CACHE_TYPE_PLAN: {
-        if (OB_ISNULL(GCTX.sql_engine_->get_plan_cache_manager())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("plan cache manager is null");
-        } else if (stmt.flush_cache_arg_.is_fine_grained_) {
+        if (stmt.flush_cache_arg_.is_fine_grained_) {
           // purge in sql_id level, aka. fine-grained plan evict
           // we assume tenant_list must not be empty and this will be checked in resolve phase
           if (0 == tenant_num) {
@@ -211,22 +239,42 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
           } else {
             for (int64_t i = 0; i < tenant_num; i++) { // ignore ret
               int64_t t_id = stmt.flush_cache_arg_.tenant_ids_.at(i);
-              if (db_num == 0) { // not specified db_name, evcit all dbs
-                ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache_by_sql_id(t_id, OB_INVALID_ID, sql_id);
-              } else { // evict db by db
-                for(int64_t j = 0; j < db_num; j++) { // ignore ret
-                  ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache_by_sql_id(
-                                    t_id, stmt.flush_cache_arg_.db_ids_.at(j), sql_id);
+              MTL_SWITCH(t_id) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                // not specified db_name, evcit all dbs
+                if (db_num == 0) {
+                  ret = plan_cache->flush_plan_cache_by_sql_id(OB_INVALID_ID, sql_id);
+                } else { // evict db by db
+                  for(int64_t j = 0; j < db_num; j++) { // ignore ret
+                    ret = plan_cache->flush_plan_cache_by_sql_id(stmt.flush_cache_arg_.db_ids_.at(j), sql_id);
+                  }
                 }
               }
             }
           }
         } else if (0 == tenant_num) { // purge in tenant level, aka. coarse-grained plan evict
-          ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_plan_cache();
+          common::ObArray<uint64_t> tenant_ids;
+          if (OB_ISNULL(GCTX.omt_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+          } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+            LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+          } else {
+            for (int64_t i = 0; i < tenant_ids.size(); i++) {
+              MTL_SWITCH(tenant_ids.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_plan_cache();
+              }
+              // ignore errors at switching tenant
+              ret = OB_SUCCESS;
+            }
+          }
         } else {
-          for (int64_t i = 0; i < tenant_num; ++i) { //ignore ret
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache(
-                stmt.flush_cache_arg_.tenant_ids_.at(i));
+          for (int64_t i = 0; OB_SUCC(ret) && i < tenant_num; ++i) { //ignore ret
+            MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+              ObPlanCache* plan_cache = MTL(ObPlanCache*);
+              ret = plan_cache->flush_plan_cache();
+            }
           }
         }
         break;
@@ -270,20 +318,60 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
       }
       case CACHE_TYPE_PL_OBJ: {
         if (0 == tenant_num) {
-          ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_pl_cache();
+          common::ObArray<uint64_t> tenant_ids;
+          if (OB_ISNULL(GCTX.omt_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+          } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+            LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+          } else {
+            for (int64_t i = 0; i < tenant_ids.size(); i++) {
+              MTL_SWITCH(tenant_ids.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_pl_cache();
+              }
+              // ignore errors at switching tenant
+              ret = OB_SUCCESS;
+            }
+          }
         } else {
           for (int64_t i = 0; i < tenant_num; i++) { // ignore internal err code
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_pl_cache(stmt.flush_cache_arg_.tenant_ids_.at(i));
+            MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+              ObPlanCache* plan_cache = MTL(ObPlanCache*);
+              ret = plan_cache->flush_pl_cache();
+            }
           }
         }
         break;
       }
       case CACHE_TYPE_PS_OBJ: {
         if (0 == tenant_num) {
-          ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_ps_cache();
+          common::ObArray<uint64_t> tenant_ids;
+          if (OB_ISNULL(GCTX.omt_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+          } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+            LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+          } else {
+            for (int64_t i = 0; i < tenant_ids.size(); i++) {
+              MTL_SWITCH(tenant_ids.at(i)) {
+                ObPsCache* ps_cache = MTL(ObPsCache*);
+                if (ps_cache->is_inited()) {
+                  ret = ps_cache->cache_evict_all_ps();
+                }
+              }
+              // ignore errors at switching tenant
+              ret = OB_SUCCESS;
+            }
+          }
         } else {
           for (int64_t i = 0; i < tenant_num; i++) { // ignore internal err code
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_ps_cache(stmt.flush_cache_arg_.tenant_ids_.at(i));
+            MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+              ObPsCache* ps_cache = MTL(ObPsCache*);
+              if (ps_cache->is_inited()) {
+                ret = ps_cache->cache_evict_all_ps();
+              }
+            }
           }
         }
         break;
@@ -986,7 +1074,7 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
     LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
   } else if (OB_FAIL(common_rpc->admin_set_config(stmt.get_rpc_arg()))) {
     LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
-  } 
+  }
   return ret;
 }
 
@@ -1626,9 +1714,9 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
     LOG_WARN("chang tenant is not allow when prepared stmt already opened in session", KR(ret), KPC(session_info));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "change tenant when has prepared stmt already opened in session");
   } else {
+    observer::ObSMConnection* conn = nullptr;
     // switch connection
     if (OB_SUCC(ret)) {
-      observer::ObSMConnection* conn = nullptr;
       if (OB_ISNULL(conn = session_info->get_sm_connection())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("connection is null", KR(ret), KPC(session_info));
@@ -1657,16 +1745,15 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
     }
     // switch session
     if (OB_SUCC(ret)) {
-      ObPlanCacheManager *plan_cache_mgr = session_info->get_plan_cache_manager();
       ObPCMemPctConf pc_mem_conf;
+      // tenant has been locked before
+      ObPlanCache *pc  = conn->tenant_->get<ObPlanCache*>();
+      ObPsCache *ps = conn->tenant_->get<ObPsCache*>();
       int64_t received_schema_version = OB_INVALID_VERSION;
       if (OB_SUCC(ret)) {
         ret = OB_E(EventTable::EN_CHANGE_TENANT_FAILED) OB_SUCCESS;
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(plan_cache_mgr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("plan_cache_mgr is null", KR(ret));
       } else if (OB_FAIL(session_info->get_pc_mem_conf(pc_mem_conf))) {
         LOG_WARN("fail to get pc mem conf", KR(ret), KPC(session_info));
       } else if (OB_FAIL(GCTX.schema_service_->get_tenant_received_broadcast_version(
@@ -1681,10 +1768,14 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
         // bugfix: https://work.aone.alibaba-inc.com/issue/18698167
         LOG_WARN("fail to set session variable for last_schema_version", KR(ret),
                  K(effective_tenant_id), K(pre_effective_tenant_id), K(received_schema_version));
+      } else if (OB_FAIL(pc->set_mem_conf(pc_mem_conf))) {
+        SQL_PC_LOG(WARN, "fail to set plan cache memory conf", K(ret));
+      } else if (OB_FAIL(ps->set_mem_conf(pc_mem_conf))) {
+        SQL_PC_LOG(WARN, "fail to set plan cache memory conf", K(ret));
       } else {
         session_info->set_database_id(OB_SYS_DATABASE_ID);
-        session_info->set_plan_cache(plan_cache_mgr->get_or_create_plan_cache(effective_tenant_id, pc_mem_conf));
-        session_info->set_ps_cache(plan_cache_mgr->get_or_create_ps_cache(effective_tenant_id, pc_mem_conf));
+        session_info->set_plan_cache(pc);
+        session_info->set_ps_cache(ps);
 
         if (OB_SUCC(ret)) {
           // System tenant's __oceanbase_inner_standby_user is used to execute remote sqls
@@ -1993,7 +2084,7 @@ int ObDeletePolicyExecutor::execute(ObExecContext &ctx, ObDeletePolicyStmt &stmt
     if (OB_FAIL(databuff_printf(arg.policy_name_, sizeof(arg.policy_name_), "%s", stmt.get_policy_name()))) {
       LOG_WARN("failed to set policy name", K(ret), K(stmt));
     } else if (OB_FAIL(databuff_printf(arg.recovery_window_, sizeof(arg.recovery_window_), "%s", stmt.get_recovery_window()))) {
-      LOG_WARN("failed to set recovery window", K(ret), K(stmt));   
+      LOG_WARN("failed to set recovery window", K(ret), K(stmt));
     } else if (OB_FAIL(arg.clean_tenant_ids_.assign(stmt.get_clean_tenant_ids()))) {
       LOG_WARN("set clean tenant ids failed", K(ret));
     } else if (OB_FAIL(common_proxy->delete_policy(arg))) {

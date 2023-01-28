@@ -54,6 +54,7 @@ int ObTxTable::online()
 }  // namespace storage
 
 namespace transaction {
+
 ObTxDescGuard::~ObTxDescGuard() {
   if (tx_desc_) {
     release();
@@ -79,6 +80,7 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   ls_id_(ls_id),
   tenant_id_(1001),
   tenant_(tenant_id_),
+  fake_part_trans_ctx_pool_(1001, false, false),
   memtable_(NULL),
   msg_consumer_(ObString("TxNode"),
                 &msg_queue_,
@@ -89,10 +91,12 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   lock_memtable_(),
   fake_tx_log_adapter_(nullptr)
 {
+  fake_part_trans_ctx_pool_.init();
   addr.to_string(name_buf_, sizeof(name_buf_));
   msg_consumer_.set_name(name_);
   role_ = Leader;
   tenant_.set(&fake_tenant_freezer_);
+  tenant_.set(&fake_part_trans_ctx_pool_);
   ObTenantEnv::set_tenant(&tenant_);
   ObTableHandleV2 lock_memtable_handle;
   lock_memtable_handle.set_table(&lock_memtable_, &t3m_, ObITable::LOCK_MEMTABLE);

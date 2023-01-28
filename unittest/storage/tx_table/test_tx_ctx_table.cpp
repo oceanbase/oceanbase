@@ -73,7 +73,7 @@ public:
       log_handler_(),
       tablet_id_(LS_TX_DATA_TABLET),
       ls_id_(1),
-      tenant_id_(1001),
+      tenant_id_(1),
       freezer_(&ls_),
       t3m_(common::OB_SERVER_TENANT_ID),
       mt_mgr_(nullptr),
@@ -231,7 +231,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ObTransID id1(1);
   ObLSID ls_id(1);
   static ObPartTransCtx ctx1;
-  ctx1.tenant_id_ = 1001;
+  ctx1.tenant_id_ = 1;
   ctx1.trans_id_ = id1;
   ctx1.is_inited_ = true;
   ctx1.ls_id_ = ls_id;
@@ -242,7 +242,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
 
   ObTransID id2(2);
   static ObPartTransCtx ctx2;
-  ctx2.tenant_id_ = 1001;
+  ctx2.tenant_id_ = 1;
   ctx2.trans_id_ = id2;
   ctx2.is_inited_ = true;
   ctx2.ls_id_ = ls_id;

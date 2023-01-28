@@ -17,6 +17,7 @@
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "share/schema/ob_schema_getter_guard.h"
+#include "lib/rc/ob_rc.h"
 
 namespace oceanbase
 {
@@ -31,7 +32,6 @@ ObPsCache::ObPsCache()
     inited_(false),
     tenant_id_(OB_INVALID_ID),
     host_(),
-    ref_count_(0),
     stmt_id_map_(),
     stmt_info_map_(),
     mem_limit_pct_(0),
@@ -41,26 +41,52 @@ ObPsCache::ObPsCache()
     access_count_(0),
     mutex_(common::ObLatchIds::PS_CACHE_EVICT_MUTEX_LOCK),
     mem_context_(NULL),
-    inner_allocator_(NULL)
+    inner_allocator_(NULL),
+    tg_id_(-1)
 {
+}
+
+void ObPsCache::destroy()
+{
+  if (inited_) {
+    // ps_stmt_id和ps_stmt_info创建时，会给其增加引用计数
+    // 现在PsCache要析构了，对所有内部对象减去1,如果引用计数到0，会显式free内存
+    TG_DESTROY(tg_id_);
+    cache_evict_all_ps();
+
+    if (NULL != mem_context_) {
+      DESTROY_CONTEXT(mem_context_);
+      mem_context_ = NULL;
+    }
+    inited_ = false;
+  }
 }
 
 ObPsCache::~ObPsCache()
 {
   int ret = OB_SUCCESS;
-  // ps_stmt_id和ps_stmt_info创建时，会给其增加引用计数
-  // 现在PsCache要析构了，对所有内部对象减去1,如果引用计数到0，会显式free内存
-  cache_evict_all_ps();
-
-  if (NULL != mem_context_) {
-    DESTROY_CONTEXT(mem_context_);
-    mem_context_ = NULL;
-  }
+  destroy();
   LOG_INFO("release ps plan cache", "bt", lbt(), K(tenant_id_), K(ret));
 }
 
+int ObPsCache::mtl_init(ObPsCache* &ps_cache)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = lib::current_resource_owner_id();
+  int64_t mem_limit = lib::get_tenant_memory_limit(tenant_id);
+  ps_cache->inited_ = false;
+  return ret;
+}
+
+void ObPsCache::mtl_stop(ObPsCache * &ps_cache)
+{
+  if (OB_LIKELY(nullptr != ps_cache && ps_cache->is_inited())) {
+    TG_CANCEL(ps_cache->tg_id_, ps_cache->evict_task_);
+    TG_STOP(ps_cache->tg_id_);
+  }
+}
+
 int ObPsCache::init(const int64_t hash_bucket,
-                    const common::ObAddr addr,
                     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -88,35 +114,26 @@ int ObPsCache::init(const int64_t hash_bucket,
         mem_context_,
         param))) {
       LOG_WARN("create memory entity failed", K(ret));
+    } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::PsCacheEvict, tg_id_))) {
+      LOG_WARN("failed to create tg", K(ret));
+    } else if (OB_FAIL(TG_START(tg_id_))) {
+      LOG_WARN("failed to start tg", K(ret));
+    } else if (OB_FAIL(TG_SCHEDULE(tg_id_, evict_task_, GCONF.plan_cache_evict_interval, true))) {
+      LOG_WARN("failed to schedule refresh task", K(ret));
+
     } else if (OB_ISNULL(mem_context_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL memory entity returned", K(ret));
     } else {
+      evict_task_.ps_cache_ = this;
       inner_allocator_ = &mem_context_->get_allocator();
       tenant_id_ = tenant_id;
-      host_ = addr;
+      host_ = const_cast<ObAddr &>(GCTX.self_addr());
       inited_ = true;
-      LOG_INFO("init ps plan cache success", K(addr), K(tenant_id), K(hash_bucket));
+      LOG_INFO("init ps cache success", K(GCTX.self_addr()), K(tenant_id), K(hash_bucket));
     }
   }
   return ret;
-}
-
-int64_t ObPsCache::inc_ref_count()
-{
-  int64_t ret = ATOMIC_AAF((int64_t *)&ref_count_, 1);
-  return ret;
-}
-
-void ObPsCache::dec_ref_count()
-{
-  int64_t ref_count = ATOMIC_SAF((int64_t *)&ref_count_, 1);
-  if (ref_count > 0) {
-  } else if (0 == ref_count) {
-    this->~ObPsCache();
-  } else if (ref_count < 0) {
-    BACKTRACE(ERROR, true, "Ps Plan Cache %p ref count < 0, ref_count = %ld", this, ref_count);
-  }
 }
 
 //for close a session explicitly
@@ -441,16 +458,16 @@ int ObPsCache::erase_stmt_item(ObPsStmtId stmt_id, ObPsSqlKey &ps_key)
 {
   int ret = OB_SUCCESS;
   ObPsStmtItem *ps_item = NULL;
-/* 
+/*
  *              Thread A                                            Thread B
  *     Get stmt_item successfully                           Get stmt_item successfully
  *
- *      Check stmt_info expired                          
+ *      Check stmt_info expired
  *                                                            Check stmt_info expired
  *
  *  Delete stmt_item by key(db_id, ps_sql)
  *
- *                                                          
+ *
  *
  * Add stmt_item with (db_id, ps_sql) as key
  *
@@ -868,6 +885,65 @@ int ObPsCache::check_schema_version(ObSchemaGetterGuard &schema_guard,
       }
     }
   }
+
+  return ret;
+}
+
+void ObPsCacheEliminationTask::runTimerTask()
+{
+  ps_cache_->update_memory_conf();
+  ps_cache_->cache_evict();
+}
+
+int ObPsCache::update_memory_conf()
+{
+  int ret = OB_SUCCESS;
+  ObPCMemPctConf pc_mem_conf;
+  const char* conf_names[3] =
+      {
+        "ob_plan_cache_percentage",
+        "ob_plan_cache_evict_low_percentage",
+        "ob_plan_cache_evict_high_percentage"
+      };
+  int64_t *conf_values[3] =
+      {
+        &pc_mem_conf.limit_pct_,
+        &pc_mem_conf.low_pct_,
+        &pc_mem_conf.high_pct_
+      };
+  ObArenaAllocator alloc;
+  ObObj obj_val;
+
+  if (tenant_id_ > OB_SYS_TENANT_ID && tenant_id_ <= OB_MAX_RESERVED_TENANT_ID) {
+    // tenant id between (OB_SYS_TENANT_ID, OB_MAX_RESERVED_TENANT_ID) is a virtual tenant,
+    // virtual tenants do not have schema
+    // do nothing
+  } else {
+    for (int32_t i = 0; i < 3 && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(tenant_id_,
+                                                            alloc,
+                                                            ObDataTypeCastParams(),
+                                                            ObString(conf_names[i]), obj_val))) {
+      } else if (OB_FAIL(obj_val.get_int(*conf_values[i]))) {
+        LOG_WARN("failed to get int", K(ret), K(obj_val));
+      } else if (*conf_values[i] < 0 || *conf_values[i] > 100) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid value of plan cache conf", K(obj_val));
+      }
+    }  // end for
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(set_mem_conf(pc_mem_conf))) {
+        SQL_PC_LOG(WARN, "fail to update plan cache mem conf", K(ret));
+      }
+    }
+  }
+
+  LOG_TRACE("update plan cache memory config",
+            "ob_plan_cache_percentage", pc_mem_conf.limit_pct_,
+            "ob_plan_cache_evict_high_percentage", pc_mem_conf.high_pct_,
+            "ob_plan_cache_evict_low_percentage", pc_mem_conf.low_pct_,
+            "tenant_id", tenant_id_);
 
   return ret;
 }

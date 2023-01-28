@@ -24,12 +24,6 @@
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
-void ObTenantCtxAllocator::set_tenant_deleted()
-{
-  ATOMIC_STORE(&has_deleted_, true);
-  set_idle(0);
-}
-
 void *ObTenantCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range

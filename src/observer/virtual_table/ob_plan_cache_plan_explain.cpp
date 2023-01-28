@@ -19,7 +19,6 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "common/ob_range.h"
 #include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/ob_sql.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "sql/engine/table/ob_table_scan_op.h"
@@ -304,32 +303,27 @@ int ObPlanCachePlanExplain::inner_open()
         K(effective_tenant_id_), K(tenant_id_), K(plan_id_));
   } else if (OB_INVALID_INDEX != tenant_id_ && OB_INVALID_INDEX != plan_id_) {
     ObPlanCache *plan_cache = NULL;
-    ObPlanCacheManager * pcm = GCTX.sql_engine_->get_plan_cache_manager();
     ObCacheObjGuard guard(PLAN_EXPLAIN_HANDLE);
     int tmp_ret = OB_SUCCESS;
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_ISNULL(plan_cache = pcm->get_plan_cache(tenant_id_))) {
-      // should not panic
-    } else if (OB_SUCCESS != (tmp_ret = plan_cache->ref_plan(plan_id_, guard))) {
-      // should not panic
-    } else if (FALSE_IT(plan = static_cast<ObPhysicalPlan*>(guard.get_cache_obj()))) {
-      // do nothing
-    } else if (OB_ISNULL(plan)) {
-      // maybe pl object, do nothing
-    } else if (OB_NOT_NULL(plan->get_root_op_spec())) {
-      if (OB_FAIL(static_engine_exp_visitor_.init(tenant_id_, plan_id_, allocator_))) {
-        SERVER_LOG(WARN, "failed to init visitor", K(ret));
-      } else if (OB_FAIL(plan->get_root_op_spec()->accept(static_engine_exp_visitor_))) {
-        SERVER_LOG(WARN, "fail to traverse physical plan", K(ret));
+
+    MTL_SWITCH(tenant_id_) {
+      plan_cache = MTL(ObPlanCache*);
+      if (OB_SUCCESS != (tmp_ret = plan_cache->ref_plan(plan_id_, guard))) {
+        // should not panic
+      } else if (FALSE_IT(plan = static_cast<ObPhysicalPlan*>(guard.get_cache_obj()))) {
+        // do nothing
+      } else if (OB_ISNULL(plan)) {
+        // maybe pl object, do nothing
+      } else if (OB_NOT_NULL(plan->get_root_op_spec())) {
+        if (OB_FAIL(static_engine_exp_visitor_.init(tenant_id_, plan_id_, allocator_))) {
+          SERVER_LOG(WARN, "failed to init visitor", K(ret));
+        } else if (OB_FAIL(plan->get_root_op_spec()->accept(static_engine_exp_visitor_))) {
+          SERVER_LOG(WARN, "fail to traverse physical plan", K(ret));
+        }
+      } else {
+        // done
       }
-    } else {
-      // done
-    }
-    if (NULL != plan_cache) {
-      plan_cache->dec_ref_count();
-      plan_cache = NULL;
-    }
+    } // mtl switch ends
   } else {
     SERVER_LOG(DEBUG, "invalid tenant_id or plan_id", K_(tenant_id), K_(plan_id));
   }

@@ -59,7 +59,7 @@ void TestBackupIndexCache::SetUp()
   const int64_t bucket_num = 1024;
   const int64_t max_cache_size = 1024 * 1024 * 1024;
   const int64_t block_size = lib::ACHUNK_SIZE;
-  const uint64_t tenant_id = 1002;
+  const uint64_t tenant_id = 1;
   ret = getter.add_tenant(tenant_id, lower_mem_limit_, upper_mem_limit_);
   ret = ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
   if (OB_INIT_TWICE == ret) {

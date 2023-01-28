@@ -20,7 +20,6 @@
 #include "sql/resolver/prepare/ob_execute_stmt.h"
 #include "sql/resolver/prepare/ob_deallocate_stmt.h"
 #include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "sql/optimizer/ob_optimizer.h"
@@ -157,14 +156,10 @@ public:
   //
   // @param tenant_id [in]
   //
-  // @return Return ObPlanCache if get/create success, else return NULL
-  ObPlanCache* get_plan_cache(uint64_t tenant_id, const ObPCMemPctConf &pc_mem_conf);
   ObPsCache* get_ps_cache(const uint64_t tenant_id, const ObPCMemPctConf &pc_mem_conf);
   int get_plan_retry(ObPlanCache &plan_cache, ObPlanCacheCtx &pc_ctx, ObCacheObjGuard &guard);
 
   int revert_plan_cache(uint64_t tenant_id);
-
-  ObPlanCacheManager* get_plan_cache_manager() {return &plan_cache_manager_;}
 
   int64_t get_execution_id() { return ATOMIC_AAF(&execution_id_, 1); }
   int64_t get_px_sequence_id() { return ATOMIC_AAF(&px_sequence_id_, 1); }
@@ -502,7 +497,6 @@ private:
   common::ObITabletScan *vt_partition_service_;
   // END 全局单例依赖接口
 
-  ObPlanCacheManager plan_cache_manager_;
   common::ObAddr self_addr_;
   share::ObRsMgr *rs_mgr_;
   volatile int64_t execution_id_ CACHE_ALIGNED;

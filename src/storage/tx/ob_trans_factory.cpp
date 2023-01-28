@@ -118,8 +118,7 @@ ObTransCtx *ObTransCtxFactory::alloc(const int64_t ctx_type)
       if (ATOMIC_LOAD(&active_part_ctx_count_) > MAX_PART_CTX_COUNT && GCTX.status_ == observer::SS_SERVING) {
         TRANS_LOG(ERROR, "participant context memory alloc failed", K_(active_part_ctx_count));
         tmp_ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
-      //} else if (NULL != (ctx = op_reclaim_alloc(ObPartTransCtx))) {
-      } else if (NULL != (ctx = sop_borrow(ObPartTransCtx))) {
+      } else if (NULL != (ctx = mtl_sop_borrow(ObPartTransCtx))) {
         (void)ATOMIC_FAA(&active_part_ctx_count_, 1);
         TRANS_LOG(DEBUG,
                   "[Tx Ctx] alloc part_ctx success",
@@ -153,7 +152,7 @@ void ObTransCtxFactory::release(ObTransCtx *ctx)
   } else {
     ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx);
     part_ctx->destroy();
-    sop_return(ObPartTransCtx, part_ctx);
+    mtl_sop_return(ObPartTransCtx, part_ctx);
     (void)ATOMIC_FAA(&active_part_ctx_count_, -1);
     (void)ATOMIC_FAA(&total_release_part_ctx_count_, 1);
     TRANS_LOG(DEBUG,

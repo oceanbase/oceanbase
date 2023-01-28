@@ -913,7 +913,6 @@ int ObSQLUtils::make_default_expr_context(uint64_t tenant_id, ObIAllocator &allo
       LOG_WARN("load default system variable to session failed", K(ret));
     } else {
       expr_ctx.my_session_ = default_session;
-      default_session->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
     }
   }
 

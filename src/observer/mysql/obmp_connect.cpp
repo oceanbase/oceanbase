@@ -332,7 +332,7 @@ int ObMPConnect::process()
     }
 
     if (NULL != session) {
-      // oracle temp table need to be refactored 
+      // oracle temp table need to be refactored
       //if (OB_SUCCESS == proc_ret) {
       //  proc_ret = session->drop_reused_oracle_temp_tables();
       //}
@@ -1746,6 +1746,37 @@ int ObMPConnect::verify_connection(const uint64_t tenant_id) const
       LOG_INFO("server is initializing, ignore verify_ip_white_list", "status", GCTX.status_, K(ret));
     } else if (OB_FAIL(verify_ip_white_list(tenant_id))) {
       LOG_WARN("failed to verify_ip_white_list", K(ret));
+    } else {
+      const int64_t tenant_id = conn->tenant_id_;
+      if (OB_SYS_TENANT_ID == tenant_id ||
+          0 == user_name_.compare(OB_SYS_USER_NAME)) {
+        // sys tenant or root user is considered as vip
+      } else {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+        if (tenant_config.is_valid()) {
+          int64_t max_sess_num = 0;
+          int64_t sess_count = 0;
+          MTL_SWITCH(tenant_id) {
+            auto *tenant_base = MTL_CTX();
+            max_sess_num = tenant_base->get_max_session_num(tenant_config->_resource_limit_max_session_num);
+          } else {
+            /*ignore fails*/
+            ret = OB_SUCCESS;
+          }
+          if (max_sess_num != 0) {
+            bool tenant_exists = false;
+            uint64_t cur_connections = 0;
+            if (OB_FAIL(gctx_.conn_res_mgr_->get_tenant_cur_connections(tenant_id, tenant_exists,
+                                                                        cur_connections))) {
+              LOG_WARN("fail to get session count", K(ret));
+            } else if (tenant_exists && cur_connections >= max_sess_num) {
+              ret = OB_RESOURCE_OUT;
+              LOG_WARN("too much sessions", K(ret), K(tenant_id), K(cur_connections), K(max_sess_num),
+                       K(tenant_name_), K(user_name_));
+            }
+          }
+        }
+      }
     }
   }
   return ret;
@@ -1814,9 +1845,6 @@ int ObMPConnect::verify_identify(ObSMConnection &conn, ObSQLSessionInfo &session
     session.update_last_active_time();
     SQL_REQ_OP.get_sock_desc(req_, session.get_sock_desc());
     SQL_REQ_OP.set_sql_session_to_sock_desc(req_, (void *)&session);
-    if (NULL != gctx_.sql_engine_) {
-      session.set_plan_cache_manager(gctx_.sql_engine_->get_plan_cache_manager());
-    }
     session.set_peer_addr(get_peer());
     session.set_client_addr(get_peer());
     session.set_trans_type(transaction::ObTxClass::USER);
@@ -2010,5 +2038,3 @@ int ObMPConnect::update_charset_sys_vars(ObSMConnection &conn, ObSQLSessionInfo 
   }
   return ret;
 }
-
-

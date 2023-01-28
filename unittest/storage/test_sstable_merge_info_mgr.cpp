@@ -37,6 +37,7 @@ public:
   ~TestSSTableMergeInfoMgr() {}
   void SetUp()
   {
+    ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
     ObUnitInfoGetter::ObTenantConfig unit_config;
     unit_config.mode_ = lib::Worker::CompatMode::MYSQL;
     unit_config.tenant_id_ = 0;
@@ -55,6 +56,7 @@ public:
     merge_info_mgr_ = nullptr;
     tenant_base_.destroy();
     ObTenantEnv::set_tenant(nullptr);
+    ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
   }
 private:
   const uint64_t tenant_id_;

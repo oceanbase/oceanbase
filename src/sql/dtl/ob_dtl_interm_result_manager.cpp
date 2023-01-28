@@ -165,6 +165,18 @@ void ObAtomicAppendPartBlockCall::operator() (common::hash::HashMapPair<ObDTLInt
   }
 }
 
+int ObEraseTenantIntermResultInfo::operator() (common::hash::HashMapPair<ObDTLIntermResultKey, ObDTLIntermResultInfo *> &entry)
+{
+  int ret = OB_SUCCESS;
+  if (entry.second->datum_store_->get_tenant_id() == tenant_id_) {
+    if (OB_FAIL(expire_keys_.push_back(entry.first))) {
+      LOG_WARN("push back failed", K(ret));
+      ret_ = ret;
+    }
+  }
+  return OB_SUCCESS;
+}
+
 ObDTLIntermResultManager &ObDTLIntermResultManager::getInstance()
 {
   static ObDTLIntermResultManager the_ir_manager;
@@ -382,6 +394,29 @@ int ObDTLIntermResultManager::generate_monitor_info_rows(observer::ObDTLIntermRe
   int ret = OB_SUCCESS;
   if (OB_FAIL(map_.foreach_refactored(monitor_info_getter))) {
     LOG_WARN("fail to generate monitor info array from map", K(ret));
+  }
+  return ret;
+}
+
+int ObDTLIntermResultManager::erase_tenant_interm_result_info(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObEraseTenantIntermResultInfo eraser;
+  eraser.tenant_id_ = tenant_id;
+  if (OB_FAIL(map_.foreach_refactored(eraser))) {
+    LOG_WARN("fail to get tenant result info in result manager", K(ret), K(tenant_id));
+  } else {
+    ret = eraser.ret_;
+    for (int i = 0; i < eraser.expire_keys_.count(); ++i) {
+      ObDTLIntermResultKey &key = eraser.expire_keys_.at(i);
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+        if (OB_HASH_NOT_EXIST != tmp_ret) {
+          LOG_WARN("fail to erase result info", K(key), K(ret));
+          ret = tmp_ret;
+        }
+      }
+    }
   }
   return ret;
 }

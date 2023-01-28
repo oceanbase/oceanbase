@@ -30,9 +30,6 @@ namespace oceanbase
 {
 namespace sql
 {
-
-const char *plan_cache_gc_confs[3] = { "OFF", "REPORT", "AUTO" };
-
 int ObGetAllPlanIdOp::set_key_array(common::ObIArray<uint64_t> *key_array)
 {
 int ret = common::OB_SUCCESS;

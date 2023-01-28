@@ -911,7 +911,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               }
 
               if (OB_SUCC(ret)) {
-                pcs->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
                 vt_iter = static_cast<ObVirtualTableIterator *>(pcs);
               }
             } break;
@@ -919,7 +918,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllPlanCacheBase *pcs = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObGVSql, pcs))) {
             } else {
-              pcs->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
               vt_iter = static_cast<ObVirtualTableIterator *>(pcs);
             }
           } break;
@@ -942,7 +940,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "ps_stat init failed", K(ret));
             } else {
               // init code
-              ps_stat->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
               vt_iter = static_cast<ObAllVirtualPsStat *>(ps_stat);
             }
             break;
@@ -956,7 +953,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "ps_item_info init failed", K(ret));
             } else {
               // init code
-              ps_item_info->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
               vt_iter = static_cast<ObAllVirtualPsItemInfo *>(ps_item_info);
             }
             break;

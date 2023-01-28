@@ -21,7 +21,6 @@ ob_set_subtarget(ob_server common
   ob_rpc_processor_simple.cpp
   ob_safe_destroy_thread.cpp
   ob_server_event_history_table_operator.cpp
-  ob_server_memory_cutter.cpp
   ob_server_reload_config.cpp
   ob_server_schema_updater.cpp
   ob_server_struct.cpp

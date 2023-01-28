@@ -31,7 +31,6 @@ namespace oceanbase
 {
 namespace observer
 {
-class ObServerMemoryCutter;
 class ObServer;
 }
 namespace common
@@ -127,7 +126,6 @@ private:
 class ObKVCacheHandle;
 class ObKVGlobalCache : public lib::ObICacheWasher
 {
-  friend class observer::ObServerMemoryCutter;
   friend class observer::ObServer;
 public:
   static ObKVGlobalCache &get_instance();
@@ -145,6 +143,7 @@ public:
   void print_all_cache_info();
   int erase_cache();
   virtual int erase_cache(const uint64_t tenant_id) override;
+  int sync_flush_tenant(const uint64_t tenant_id);
   int erase_cache(const uint64_t tenant_id, const char *cache_name);
   int erase_cache(const char *cache_name);
 

@@ -42,7 +42,6 @@
 #include "sql/executor/ob_task_executor_ctx.h"
 #include "sql/ob_sql_context.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "../share/schema/mock_schema_service.h"
 
 using namespace oceanbase;
@@ -159,7 +158,6 @@ public:
   ObSqlCtx sql_ctx_;
   ObExecContext exec_ctx_;
   ParamStore param_list_;
-  ObPlanCacheManager plan_cache_mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(TestSqlUtils);
 };

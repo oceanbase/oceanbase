@@ -1272,7 +1272,7 @@ bool ObRADatumStore::need_dump()
   } else {
     const int64_t mem_ctx_pct_trigger = 80;
     lib::ObMallocAllocator *instance = lib::ObMallocAllocator::get_instance();
-    lib::ObTenantCtxAllocator *allocator = NULL;
+    lib::ObTenantCtxAllocatorGuard allocator = NULL;
     if (NULL == instance) {
       ret = common::OB_ERR_SYS;
       LOG_ERROR("NULL allocator", K(ret));

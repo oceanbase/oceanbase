@@ -136,7 +136,7 @@ public:
     spec9_.plan_ = phy_plan;
     spec10_.plan_ = phy_plan;
     spec11_.plan_ = phy_plan;
-    
+
   }
 
   int init_tenant_mgr();
@@ -430,7 +430,7 @@ public:
     return ret;
   }
 
-  int generate_hash_distinct_spec(ObHashDistinctSpec &spec) 
+  int generate_hash_distinct_spec(ObHashDistinctSpec &spec)
   {
     int ret = OB_SUCCESS;
 
@@ -699,7 +699,7 @@ protected:
 int ObHashSetDumpTest::SetPlan::setup_plan(ObOperator *set_op)
 {
   int ret = OB_SUCCESS;
-  bool is_hash = (nullptr != dynamic_cast<ObHashSetOp *> (set_op)); 
+  bool is_hash = (nullptr != dynamic_cast<ObHashSetOp *> (set_op));
   bool is_distinct = (nullptr != dynamic_cast<ObHashDistinctOp *> (set_op) || nullptr != dynamic_cast<ObMergeDistinctOp *> (set_op));
   left_.init_expr(is_hash ? 0 : 30000);
   right_.init_expr(is_hash ? 0 : 30000);
@@ -1015,7 +1015,7 @@ int ObHashSetDumpTest::init_tenant_mgr()
                           ulmt,
                           llmt);
   EXPECT_EQ(OB_SUCCESS, ret);
-  lib::ObTenantCtxAllocator *ctx_allocator =
+  auto ctx_allocator =
     lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(
           OB_SERVER_TENANT_ID, common::ObCtxIds::DEFAULT_CTX_ID);
   EXPECT_EQ(OB_SUCCESS, ret);

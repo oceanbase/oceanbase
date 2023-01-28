@@ -21,6 +21,7 @@
 #include "common/storage/ob_io_device.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/random/ob_mysql_random.h"
+#include "lib/objectpool/ob_server_object_pool.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/election/interface/election.h"
 #include "logservice/palf/palf_options.h"
@@ -41,7 +42,6 @@
 #include "share/schema/ob_tenant_schema_service.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "sql/ob_sql.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "storage/blocksstable/ob_log_file_spec.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
@@ -61,6 +61,7 @@
 #include "storage/tx/ob_timestamp_service.h"
 #include "storage/tx/ob_trans_id_service.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
+#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/ob_file_system_router.h"
 #include "ob_mittest_utils.h"
 #include "storage/mock_disk_usage_report.h"
@@ -86,6 +87,29 @@ using namespace concurrency_control;
 int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
 {
   return 1000;
+}
+
+template<typename T>
+static int server_obj_pool_mtl_new(common::ObServerObjectPool<T> *&pool)
+{
+  int ret = common::OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  pool = MTL_NEW(common::ObServerObjectPool<T>, "TntSrvObjPool", tenant_id, false,
+                 MTL_IS_MINI_MODE());
+  if (OB_ISNULL(pool)) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    ret = pool->init();
+  }
+  return ret;
+}
+
+template<typename T>
+static void server_obj_pool_mtl_destroy(common::ObServerObjectPool<T> *&pool)
+{
+  using Pool = common::ObServerObjectPool<T>;
+  MTL_DELETE(Pool, "TntSrvObjPool", pool);
+  pool = nullptr;
 }
 
 class MockObService : public observer::ObService
@@ -579,14 +603,6 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(ERROR, "init server checkpoint slog handler fail", K(ret));
   } else if (OB_FAIL(multi_tenant_.init(self_addr_, nullptr, false))) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (OB_FAIL(sql_engine_.get_plan_cache_manager()->get_plan_cache_map().create(hash::cal_next_prime(512),
-                            ObModIds::OB_HASH_BUCKET_PLAN_CACHE,
-                            ObModIds::OB_HASH_NODE_PLAN_CACHE))) {
-    STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (OB_FAIL(sql_engine_.get_plan_cache_manager()->get_ps_cache_map().create(hash::cal_next_prime(512),
-                                      ObModIds::OB_HASH_BUCKET_PLAN_CACHE,
-                                      ObModIds::OB_HASH_NODE_PS_CACHE))) {
-    STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(ObTsMgr::get_instance().init(self_addr_,
                          schema_service_, location_service_, net_frame_.get_req_transport()))) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
@@ -650,6 +666,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, storage::ObTenantFreezeInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSharedMacroBlockMgr::mtl_init,  mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObMultiVersionGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(server_obj_pool_mtl_new<transaction::ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<transaction::ObPartTransCtx>);
     }
     if (OB_FAIL(ret)) {
 

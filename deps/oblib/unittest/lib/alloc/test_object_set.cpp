@@ -54,7 +54,7 @@ public:
     tallocator_.set_tenant_memory_mgr();
     tallocator_.set_limit(1000L << 20);
     bs_.reset();
-    bs_.set_tenant_ctx_allocator(tallocator_, attr);
+    bs_.set_tenant_ctx_allocator(tallocator_);
     os_.set_block_mgr(&bs_);
     os_.set_locker(&os_locker_);
     os_.reset();

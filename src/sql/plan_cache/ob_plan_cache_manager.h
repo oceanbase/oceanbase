@@ -28,49 +28,6 @@ namespace sql
 {
 class ObPlanCache;
 
-struct ObKVEntryTraverseOp
-{
-  typedef common::hash::HashMapPair<ObILibCacheKey *, ObILibCacheNode *> LibCacheKVEntry;
-  explicit ObKVEntryTraverseOp(LCKeyValueArray *key_val_list,
-                               const CacheRefHandleID ref_handle)
-    : ref_handle_(ref_handle),
-      key_value_list_(key_val_list)
-  {
-  }
-
-  virtual int check_entry_match(LibCacheKVEntry &entry, bool &is_match)
-  {
-    UNUSED(entry);
-    int ret = OB_SUCCESS;
-    is_match = true;
-    return ret;
-  }
-  virtual int operator()(LibCacheKVEntry &entry)
-  {
-    int ret = common::OB_SUCCESS;
-    bool is_match = false;
-    if (OB_ISNULL(key_value_list_) || OB_ISNULL(entry.first) || OB_ISNULL(entry.second)) {
-      ret = common::OB_INVALID_ARGUMENT;
-      PL_CACHE_LOG(WARN, "invalid argument",
-      K(key_value_list_), K(entry.first), K(entry.second), K(ret));
-    } else if (OB_FAIL(check_entry_match(entry, is_match))) {
-      PL_CACHE_LOG(WARN, "failed to check entry match", K(ret));
-    } else if (is_match) {
-      if (OB_FAIL(key_value_list_->push_back(ObLCKeyValue(entry.first, entry.second)))) {
-        PL_CACHE_LOG(WARN, "fail to push back key", K(ret));
-      } else {
-        entry.second->inc_ref_count(ref_handle_);
-      }
-    }
-    return ret;
-  }
-  CacheRefHandleID get_ref_handle() { return ref_handle_; } const
-  LCKeyValueArray *get_key_value_list() { return key_value_list_; }
-
-  const CacheRefHandleID ref_handle_;
-  LCKeyValueArray *key_value_list_;
-};
-
 class ObPlanCacheManager
 {
 public:

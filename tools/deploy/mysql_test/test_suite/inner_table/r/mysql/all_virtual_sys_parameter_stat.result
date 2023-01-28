@@ -303,6 +303,7 @@ _px_max_pipeline_depth
 _px_message_compression
 _px_object_sampling
 _recyclebin_object_purge_frequency
+_resource_limit_max_session_num
 _resource_limit_spec
 _restore_idle_time
 _rowsets_enabled

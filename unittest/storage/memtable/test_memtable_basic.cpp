@@ -116,7 +116,7 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
 class TestMemtable : public testing::Test
 {
 public:
-  TestMemtable() : tenant_base_(1001),tablet_id_(1000),rowkey_cnt_(1) { freezer_.init(&ls_); }
+  TestMemtable() : tenant_base_(1),tablet_id_(1000),rowkey_cnt_(1) { freezer_.init(&ls_); }
   void SetUp() override {
     share::ObTenantEnv::set_tenant(&tenant_base_);
     // mock columns

@@ -379,17 +379,7 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
   int err = OB_SUCCESS;
   session_info = NULL;
   ObSQLSessionInfo *tmp_sess = NULL;
-  if (RL_IS_ENABLED) {
-    int64_t sess_count = 0;
-    if (OB_FAIL(get_session_count(sess_count))) {
-      LOG_WARN("fail to get session count", K(ret));
-    } else if (sess_count > RL_CONF.get_max_session_count()) {
-      ret = OB_RESOURCE_OUT;
-      LOG_WARN("too much sessions", K(ret), K(sess_count), K(RL_CONF.get_max_session_count()));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(sessinfo_map_.create(tenant_id, Key(sessid, proxy_sessid), tmp_sess))) {
+  if (OB_FAIL(sessinfo_map_.create(tenant_id, Key(sessid, proxy_sessid), tmp_sess))) {
     LOG_WARN("fail to create session", K(ret), K(sessid));
     if (OB_ENTRY_EXIST == ret) {
       ret = OB_SESSION_ENTRY_EXIST;

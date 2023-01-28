@@ -44,9 +44,7 @@ public:
     common::ObClusterVersion::get_instance().update_cluster_version(cluster_version);
     int ret = OB_SUCCESS;
     lib::ObMallocAllocator *malloc_allocator = lib::ObMallocAllocator::get_instance();
-    ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    ret = malloc_allocator->create_tenant_ctx_allocator(OB_SYS_TENANT_ID, common::ObCtxIds::WORK_AREA);
+    ret = malloc_allocator->create_and_add_tenant_allocator(OB_SYS_TENANT_ID);
     ASSERT_EQ(OB_SUCCESS, ret);
     int s = (int)time(NULL);
     SQL_ENG_LOG(WARN, "initial setup random seed", K(s));
@@ -660,4 +658,3 @@ int main(int argc, char **argv)
   return ret;
 
 }
-

@@ -28,6 +28,7 @@ namespace oceanbase
 namespace common {
   class ObLDHandle;
   class ObTenantIOManager;
+  template<typename T> class ObServerObjectPool;
 }
 namespace omt {
  class ObPxPools;
@@ -45,6 +46,8 @@ namespace sql {
   class ObSqlPlanMgr;
   class ObPlanRealInfoMgr;
   class ObUDRMgr;
+  class ObPlanCache;
+  class ObPsCache;
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
@@ -79,6 +82,7 @@ namespace transaction {
   class ObTimestampAccess;
   class ObTransIDService;
   class ObTxLoopWorker;
+  class ObPartTransCtx;
   namespace tablelock {
     class ObTableLockService;
   }
@@ -144,8 +148,6 @@ namespace storage {
   class MockTenantModuleEnv;
 }
 
-
-
 namespace share
 {
 class ObCgroupCtrl;
@@ -167,8 +169,10 @@ namespace detector
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
 // 实例的初始化和销毁逻辑由MTL_BIND接口指定。
 // 使用MTL接口可以获取实例。
+using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTransCtx>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
+      ObPartTransCtxObjPool*,                        \
       common::ObTenantIOManager*,                    \
       storage::ObStorageLogger*,                     \
       blocksstable::ObSharedMacroBlockMgr*,          \
@@ -203,6 +207,8 @@ namespace detector
       transaction::ObStandbyTimestampService*,       \
       transaction::ObTimestampAccess*,               \
       transaction::ObTransIDService*,                \
+      sql::ObPsCache*,                               \
+      sql::ObPlanCache*,                             \
       sql::ObPlanBaselineMgr*,                  \
       sql::dtl::ObTenantDfc*,                        \
       omt::ObPxPools*,                               \
@@ -256,6 +262,7 @@ namespace detector
 // 取消线程池动态变更
 #define MTL_UNREGISTER_THREAD_DYNAMIC(th) \
   share::ObTenantEnv::get_tenant() == nullptr ? OB_ERR_UNEXPECTED : share::ObTenantEnv::get_tenant()->unregister_module_thread_dynamic(th)
+#define MTL_IS_MINI_MODE() share::ObTenantEnv::get_tenant()->is_mini_mode()
 
 // 注意MTL_BIND调用需要在租户创建之前，否则会导致租户创建时无法调用到绑定的函数。
 #define MTL_BIND(INIT, DESTROY) \
@@ -358,6 +365,21 @@ public:
   }
 
   int update_thread_cnt(double tenant_unit_cpu);
+  int64_t update_memory_size(int64_t memory_size)
+  {
+    int orig_size_ = memory_size_;
+    memory_size_ = memory_size;
+    return orig_size_;
+  }
+  int64_t get_memory_size() { return memory_size_; }
+  bool update_mini_mode(bool mini_mode)
+  {
+    bool orig_mode = mini_mode_;
+    mini_mode_ = mini_mode;
+    return orig_mode;
+  }
+  bool is_mini_mode() const { return mini_mode_; }
+  int64_t get_max_session_num(const int64_t rl_max_session_num);
   int register_module_thread_dynamic(double dynamic_factor, int tg_id);
   int unregister_module_thread_dynamic(int tg_id);
 
@@ -479,6 +501,8 @@ private:
   ObCgroupCtrl *cgroups_;
   bool enable_tenant_ctx_check_;
   int64_t thread_count_;
+  int64_t memory_size_;
+  bool mini_mode_;
 };
 
 using ReleaseCbFunc = std::function<int (common::ObLDHandle&)>;
@@ -558,6 +582,7 @@ private:
   ObTenantBase *stash_tenant_;
   common::ObLDHandle lock_handle_;
   ReleaseCbFunc release_cb_;
+  lib::ObTLTaGuard ta_guard_;
 };
 
 inline ObTenantSwitchGuard _make_tenant_switch_guard()
@@ -637,6 +662,10 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
         ptr = NULL;                               \
       }                                           \
     } while(0)
+
+
+#define mtl_sop_borrow(type) MTL(common::ObServerObjectPool<type>*)->borrow_object()
+#define mtl_sop_return(type, ptr) MTL(common::ObServerObjectPool<type>*)->return_object(ptr)
 
 } // end of namespace share
 

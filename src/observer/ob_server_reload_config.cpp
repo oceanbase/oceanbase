@@ -207,6 +207,8 @@ int ObServerReloadConfig::operator()()
 #else
   {
     sanity_set_whitelist(GCONF.sanity_whitelist.str());
+    ObMallocAllocator::get_instance()->enable_tenant_leak_memory_protection_ =
+      GCONF._enable_tenant_leak_memory_protection;
   }
 #endif
   {

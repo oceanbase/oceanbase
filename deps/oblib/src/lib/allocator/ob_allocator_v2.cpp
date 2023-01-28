@@ -37,8 +37,9 @@ void *ObAllocator::alloc(const int64_t size, const ObMemAttr &attr)
     }
     AObject *obj = os_.alloc_object(size, inner_attr);
     if (OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
-      ObTenantCtxAllocator &ta = os_.get_block_mgr()->get_tenant_ctx_allocator();
-      int64_t total_size = ta.sync_wash();
+      auto ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(attr_.tenant_id_,
+                                                                                 attr_.ctx_id_);
+      int64_t total_size = ta->sync_wash();
       obj = os_.alloc_object(size, inner_attr);
     }
     if (NULL != obj) {
@@ -49,13 +50,14 @@ void *ObAllocator::alloc(const int64_t size, const ObMemAttr &attr)
       SANITY_POISON((void*)upper_align((int64_t)obj->data_ + obj->alloc_bytes_, 8), sizeof(AOBJECT_TAIL_MAGIC_CODE));
     }
     if (OB_UNLIKELY(nullptr == obj) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-      ObTenantCtxAllocator &ta = os_.get_block_mgr()->get_tenant_ctx_allocator();
+      auto ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(attr_.tenant_id_,
+                                                                                 attr_.ctx_id_);
       _OB_LOG(WARN, "[OOPS] alloc failed reason: %s", alloc_failed_msg());
       _OB_LOG(WARN, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
               "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
               inner_attr.tenant_id_, inner_attr.ctx_id_,
               common::get_global_ctx_info().get_ctx_name(inner_attr.ctx_id_),
-              ta.get_hold(), ta.get_limit(), ta.get_tenant_hold(), ta.get_tenant_limit());
+              ta->get_hold(), ta->get_limit(), ta->get_tenant_hold(), ta->get_tenant_limit());
       // 49 is the user defined signal to dump memory
       raise(49);
     }

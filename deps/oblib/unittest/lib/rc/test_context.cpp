@@ -53,7 +53,7 @@ TEST_F(TestContext, Basic)
   uint64_t tenant_id = 1001;
   uint64_t ctx_id = ObCtxIds::WORK_AREA;
   ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-  ASSERT_EQ(OB_SUCCESS, ma->create_tenant_ctx_allocator(tenant_id, ctx_id));
+  ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(tenant_id));
 
   ObPageManager g_pm;
   ObPageManager::set_thread_local_instance(g_pm);

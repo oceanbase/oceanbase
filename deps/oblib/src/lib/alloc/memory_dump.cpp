@@ -427,8 +427,12 @@ void ObMemoryDump::handle(void *task)
     for (int tenant_idx = 0; tenant_idx < tenant_cnt; tenant_idx++) {
       uint64_t tenant_id = tenant_ids_[tenant_idx];
       for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
-        auto *ta =
+        auto ta =
           ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+        if (nullptr == ta) {
+          ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                                      ctx_id);
+        }
         if (nullptr == ta) {
           continue;
         }
@@ -493,7 +497,7 @@ void ObMemoryDump::handle(void *task)
         if (segv_cnt > 128) {
           LOG_WARN("too many sigsegv, maybe there is a low-level bug", K(segv_cnt));
           segv_cnt_over = true;
-        } 
+        }
         if (OB_SUCC(ret) && (chunk_cnt != 0 || segv_cnt != 0)) {
           IGNORE_RETURN databuff_printf(log_buf_, LOG_BUF_LEN, log_pos,
                                         "%-15lu%-15d%-15d%-15ld%-15d\n",
@@ -560,7 +564,7 @@ void ObMemoryDump::handle(void *task)
         if (m_task->dump_all_) {
           ret = ObMallocAllocator::get_instance()->get_chunks(chunks_, MAX_CHUNK_CNT, cnt);
         } else if (m_task->dump_tenant_ctx_) {
-          auto *ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(m_task->tenant_id_,
+          auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(m_task->tenant_id_,
                                                                                  m_task->ctx_id_);
           if (ta != nullptr) {
             ta->get_chunks(chunks_, MAX_CHUNK_CNT, cnt);

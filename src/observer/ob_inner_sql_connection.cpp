@@ -45,6 +45,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
 {
@@ -375,7 +376,6 @@ int ObInnerSQLConnection::init_session_info(
           } else if (OB_FAIL(session->get_pc_mem_conf(pc_mem_conf))) {
             LOG_WARN("fail to get pc mem conf", K(ret));
           } else {
-            session->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
             session->set_database_id(OB_SYS_DATABASE_ID);
             //TODO shengle ?
             session->get_ddl_info().set_is_ddl(is_ddl);

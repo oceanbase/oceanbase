@@ -181,7 +181,7 @@ TEST_F(TestBackupTmpFile, test_read_write_meta_index)
     write_meta_index_list.reset();
     read_meta_index_list.reset();
     ObBackupIndexBufferNode node;
-    EXPECT_EQ(OB_SUCCESS, node.init(1002 /*tenant_id*/, BACKUP_BLOCK_META_INDEX, 1 /*node_level*/));
+    EXPECT_EQ(OB_SUCCESS, node.init(1 /*tenant_id*/, BACKUP_BLOCK_META_INDEX, 1 /*node_level*/));
     EXPECT_EQ(OB_SUCCESS, prepare_meta_index_list(count, write_meta_index_list));
     EXPECT_EQ(OB_SUCCESS, put(write_meta_index_list, node));
     EXPECT_EQ(OB_SUCCESS, get(node, read_meta_index_list));
@@ -201,7 +201,7 @@ TEST_F(TestBackupTmpFile, test_read_write_macro_index)
     write_macro_index_list.reset();
     read_macro_index_list.reset();
     ObBackupIndexBufferNode node;
-    EXPECT_EQ(OB_SUCCESS, node.init(1002 /*tenant_id*/, BACKUP_BLOCK_MACRO_INDEX, 1 /*node_level*/));
+    EXPECT_EQ(OB_SUCCESS, node.init(1 /*tenant_id*/, BACKUP_BLOCK_MACRO_INDEX, 1 /*node_level*/));
     EXPECT_EQ(OB_SUCCESS, prepare_macro_index_list(count, write_macro_index_list));
     EXPECT_EQ(OB_SUCCESS, put(write_macro_index_list, node));
     EXPECT_EQ(OB_SUCCESS, get(node, read_macro_index_list));

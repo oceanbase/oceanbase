@@ -90,7 +90,6 @@ int ObDBMSSchedJobExecutor::init_session(
   OZ (session.set_default_database(database_name));
   OZ (session.get_pc_mem_conf(pc_mem_conf));
   CK (OB_NOT_NULL(GCTX.sql_engine_));
-  OX (session.set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager()));
   OX (session.set_database_id(database_id));
   OZ (session.set_user(
     user_info->get_user_name(), user_info->get_host_name_str(), user_info->get_user_id()));

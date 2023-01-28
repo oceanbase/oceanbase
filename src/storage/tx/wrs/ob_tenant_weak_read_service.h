@@ -111,7 +111,6 @@ public:
 public:
   // tenant level variables init and destroy function
   static int mtl_init(ObTenantWeakReadService* &twrs);
-  static void mtl_destroy(ObTenantWeakReadService* &twrs);
 
 public:
   TO_STRING_KV(K_(inited), K_(tenant_id), K_(self), K_(svr_version_mgr), K_(cluster_service));

@@ -494,13 +494,13 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
           if (ObObjDatumMapType::OBJ_DATUM_STRING == dst_expr->obj_datum_map_) {
             ObExprStrResAlloc res_alloc(*dst_expr, eval_ctx_);
             if (OB_FAIL(dst_datum.deep_copy(*datum, res_alloc))) {
-              LOG_WARN("fail to deep copy datum from cast res datum", K(ret), K(*datum));
+              LOG_WARN("fail to deep copy datum from cast res datum", K(ret), KP(datum));
             }
           } else {
             ObDataBuffer res_alloc(const_cast<char*>(dst_datum.ptr_),
                                    dst_expr->res_buf_len_);
             if (OB_FAIL(dst_datum.deep_copy(*datum, res_alloc))) {
-              LOG_WARN("fail to deep copy datum from cast res datum", K(ret), K(*datum));
+              LOG_WARN("fail to deep copy datum from cast res datum", K(ret), KP(datum));
             }
           }
           dst_expr->set_evaluated_projected(eval_ctx_);

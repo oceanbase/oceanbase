@@ -285,6 +285,7 @@ void LogIOWorker::BatchLogIOFlushLogTaskMgr::destroy()
   for (int i = 0; i < batch_io_task_array_.count(); i++) {
     BatchLogIOFlushLogTask *&io_task = batch_io_task_array_[i];
     if (NULL != io_task) {
+      io_task->~BatchLogIOFlushLogTask();
       mtl_free(io_task);
       io_task = NULL;
     }

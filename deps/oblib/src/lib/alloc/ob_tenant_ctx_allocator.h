@@ -31,18 +31,17 @@ struct LabelItem;
 }
 namespace lib
 {
-class MemoryCutter;
 class ObTenantCtxAllocator
     : public common::ObIAllocator,
       private common::ObLink
 {
-friend class ObMemoryCutter;
+friend class ObTenantCtxAllocatorGuard;
+friend class ObMallocAllocator;
 using InvokeFunc = std::function<int (const ObTenantMemoryMgr*)>;
 public:
   explicit ObTenantCtxAllocator(uint64_t tenant_id, uint64_t ctx_id = 0)
-    : resource_handle_(), tenant_id_(tenant_id),
-      ctx_id_(ctx_id), has_deleted_(false),
-      obj_mgr_(*this, tenant_id_, ctx_id_),
+    : resource_handle_(), ref_cnt_(0), tenant_id_(tenant_id),
+      ctx_id_(ctx_id), obj_mgr_(*this, tenant_id_, ctx_id_),
       idle_size_(0), head_chunk_(), chunk_cnt_(0),
       chunk_freelist_mutex_(common::ObLatchIds::CHUNK_FREE_LIST_LOCK),
       using_list_mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
@@ -77,11 +76,6 @@ public:
   uint64_t get_ctx_id()
   {
     return ctx_id_;
-  }
-  void set_tenant_deleted();
-  bool has_tenant_deleted()
-  {
-    return ATOMIC_LOAD(&has_deleted_);
   }
   inline ObTenantCtxAllocator *&get_next()
   {
@@ -171,8 +165,11 @@ public:
   int iter_label(VisitFunc func) const;
   int64_t sync_wash(int64_t wash_size);
   int64_t sync_wash();
+  bool check_has_unfree(const char **first_label) { return obj_mgr_.check_has_unfree(first_label); }
   void update_wash_stat(int64_t related_chunks, int64_t blocks, int64_t size);
 private:
+  int64_t inc_ref_cnt(int64_t cnt) { return ATOMIC_FAA(&ref_cnt_, cnt); }
+  int64_t get_ref_cnt() const { return ATOMIC_LOAD(&ref_cnt_); }
   void print_usage() const;
   AChunk *pop_chunk();
   void push_chunk(AChunk *chunk);
@@ -189,9 +186,9 @@ private:
   }
 private:
   ObTenantResourceMgrHandle resource_handle_;
+  int64_t ref_cnt_;
   uint64_t tenant_id_;
   uint64_t ctx_id_;
-  bool has_deleted_;
   ObjectMgr obj_mgr_;
   int64_t idle_size_;
   AChunk head_chunk_;

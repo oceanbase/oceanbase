@@ -95,21 +95,14 @@ int ObTenantMemoryPrinter::print_tenant_usage()
       const int64_t now = ObTimeUtility::current_time();
       const int64_t INTERVAL = 10 * 60 * 1000000L;
       if (now - last_print_ts >= INTERVAL) {
-        omt::TenantIdList current_ids(nullptr, ObModIds::OMT);
-        omt->get_tenant_ids(current_ids);
         int tenant_cnt = 0;
         static uint64_t all_tenant_ids[OB_MAX_SERVER_TENANT_CNT] = {0};
-        common::get_tenant_ids(all_tenant_ids, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
+        lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
+        mallocator->get_unrecycled_tenant_ids(all_tenant_ids, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
         for (int64_t i = 0; OB_SUCC(ret) && i < tenant_cnt; ++i) {
           uint64_t id = all_tenant_ids[i];
-          if (OB_SERVER_TENANT_ID != id && current_ids.find(id) == current_ids.end()) {
-            // id is deleted tenant
-            lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
-            if (OB_NOT_NULL(mallocator)) {
-              mallocator->print_tenant_memory_usage(id);
-              mallocator->print_tenant_ctx_memory_usage(id);
-            }
-          }
+          mallocator->print_tenant_memory_usage(id);
+          mallocator->print_tenant_ctx_memory_usage(id);
         }
         last_print_ts = now;
       }

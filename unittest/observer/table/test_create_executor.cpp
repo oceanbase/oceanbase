@@ -7,7 +7,6 @@
 #include "observer/table/ob_table_context.h"
 #include "../share/schema/mock_schema_service.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "lib/net/ob_addr.h"
 #include "sql/plan_cache/ob_lib_cache_register.h"
 #include "observer/ob_req_time_service.h"
@@ -506,19 +505,25 @@ TEST_F(TestCreateExecutor, generate_key_range)
 
 TEST_F(TestCreateExecutor, test_cache)
 {
+  uint64_t tenant_id = 1;
+  ObTenantBase tenant_ctx(tenant_id);
+  ObTenantEnv::set_tenant(&tenant_ctx);
+  // init plan cache
+  ObPlanCache plan_cache;
+  int ret = plan_cache.init(OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  plan_cache.set_mem_limit_pct(20);
+  plan_cache.set_mem_high_pct(90);
+  plan_cache.set_mem_low_pct(50);
+
   ObAddr addr;
   ObPCMemPctConf conf;
-  ObPlanCacheManager lib_cache_mgr;
   ObLibCacheNameSpace ns = ObLibCacheNameSpace::NS_TABLEAPI;
-  uint64_t tenant_id = 1;
   ObReqTimeGuard req_timeinfo_guard;
   // register cache obj
   ObLibCacheRegister::register_cache_objs();
-  //init lib cache manager
-  ASSERT_EQ(OB_SUCCESS, lib_cache_mgr.init(addr));
   // get lib cache
-  ObPlanCache *lib_cache = lib_cache_mgr.get_or_create_plan_cache(tenant_id, conf);
-  ASSERT_TRUE(nullptr != lib_cache);
+  ObPlanCache *lib_cache = &plan_cache;
   // construct cache key
   ObTableApiCacheKey cache_key(1001, 1001, 1, ObTableOperationType::Type::INSERT);
   // construct ctx

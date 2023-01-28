@@ -49,6 +49,16 @@ public:
 private:
   ObSQLSessionInfo &session_info_;
 };
+class ObPsCacheEliminationTask : public common::ObTimerTask
+{
+public:
+  ObPsCacheEliminationTask() : ps_cache_(NULL)
+  {
+  }
+  void runTimerTask(void);
+public:
+  ObPsCache* ps_cache_;
+};
 
 class ObPsCache
 {
@@ -62,17 +72,18 @@ public:
 
   ObPsCache();
   virtual ~ObPsCache();
+  static int mtl_init(ObPsCache* &ps_cache);
+  static void mtl_stop(ObPsCache * &ps_cache);
   int init(const int64_t hash_bucket,
-           const common::ObAddr addr,
            const uint64_t tenant_id);
   bool is_inited() const { return inited_; }
-  int64_t inc_ref_count();
-  void dec_ref_count();
-  int64_t get_ref_count() const { return ref_count_; }
   int set_mem_conf(const ObPCMemPctConf &conf);
+  int update_memory_conf();
+  void destroy();
 
 public:
   // always make sure stmt_id is inner_stmt_id!!!
+  int64_t get_tenant_id() const { return tenant_id_; }
   int get_stmt_info_guard(const ObPsStmtId ps_stmt_id, ObPsStmtInfoGuard &guard);
   int ref_stmt_item(const uint64_t db_id, const common::ObString &ps_sql, ObPsStmtItem *&stmt_item);
   int ref_stmt_info(const ObPsStmtId stmt_id, ObPsStmtInfo *&ps_stmt_info);
@@ -156,7 +167,6 @@ private:
   bool inited_;
   int64_t tenant_id_;
   common::ObAddr host_;
-  volatile int64_t ref_count_;
   PsStmtIdMap stmt_id_map_;
   PsStmtInfoMap stmt_info_map_;
 
@@ -170,6 +180,8 @@ private:
   lib::ObMutex mutex_;
   lib::MemoryContext mem_context_;
   common::ObIAllocator *inner_allocator_;
+  ObPsCacheEliminationTask evict_task_;
+  int tg_id_;
 };
 
 } // end namespace sql

@@ -11,7 +11,6 @@
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "observer/ob_server_struct.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/ob_sql.h"
 
 
@@ -40,7 +39,8 @@ int ObResourceColMappingRuleManager::init()
 }
 
 int ObResourceColMappingRuleManager::refresh_resource_column_mapping_rule(uint64_t tenant_id,
-                                                                      const common::ObString &plan)
+                                                                          sql::ObPlanCache *plan_cache,
+                                                                          const common::ObString &plan)
 {
   int ret = OB_SUCCESS;
   ObResourceManagerProxy proxy;
@@ -50,6 +50,9 @@ int ObResourceColMappingRuleManager::refresh_resource_column_mapping_rule(uint64
     LOG_WARN("get resource mapping version failed", K(ret));
   } else if (cache_version >= inner_table_version) {
     LOG_TRACE("local version is latest, don't need refresh", K(tenant_id), K(cache_version), K(inner_table_version));
+  } else if (OB_ISNULL(plan_cache)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get plan cache failed", K(ret), K(tenant_id));
   } else if (lock_.trylock()) {
     LOG_INFO("local version is not latest, need refresh", K(tenant_id), K(cache_version), K(inner_table_version));
     // update cache
@@ -76,15 +79,12 @@ int ObResourceColMappingRuleManager::refresh_resource_column_mapping_rule(uint64
             //use current_time as new rule id and insert into rule_id_map_.
             rule_id = current_time;
             current_time++;
-            ObPlanCacheManager * pcm = NULL;
             if (OB_FAIL(rule_id_map_.set_refactored(
                   ColumnNameKey(tenant_id, rule.database_id_, rule.table_name_, rule.column_name_, rule.case_mode_),
                   rule_id))) {
               rule.reset();
               LOG_WARN("rule id map set refactored failed", K(ret));
-            } else if (OB_ISNULL(pcm = GCTX.sql_engine_->get_plan_cache_manager())) {
-              LOG_ERROR("plan cache manager is null");
-            } else if (OB_FAIL(pcm->evict_plan_by_table_name(tenant_id, rule.database_id_, rule.table_name_))) {
+            } else if (OB_FAIL(plan_cache->evict_plan_by_table_name(rule.database_id_, rule.table_name_))) {
               ret = OB_SUCCESS;
               LOG_ERROR("evict plan by table name failed", K(ret), K(tenant_id),
                         K(rule.database_id_), K(rule.table_name_));

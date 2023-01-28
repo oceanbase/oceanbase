@@ -92,6 +92,8 @@ int ObLogTenant::init(const uint64_t tenant_id,
     LOG_ERROR("invalid argument", K(tenant_id), K(tenant_name), K(start_tstamp_ns), K(start_seq),
         K(start_schema_version), K(cf_handle));
     ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(tenant_id))) {
+    LOG_ERROR("create and add tenant allocator failed", K(ret), K(tenant_id));
   } else if (OB_ISNULL(task_queue_ = OB_NEW(ObLogTenantTaskQueue, ObModIds::OB_LOG_TENANT_TASK_QUEUE, *this))) {
     LOG_ERROR("create task queue fail", K(task_queue_));
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -204,6 +206,7 @@ void ObLogTenant::reset()
   committer_cur_schema_version_ = OB_INVALID_VERSION;
   committer_next_trans_schema_version_ = OB_INVALID_VERSION;
   cf_handle_ = NULL;
+  ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
 }
 
 int ObLogTenant::alloc_global_trans_seq_and_schema_version_for_ddl(

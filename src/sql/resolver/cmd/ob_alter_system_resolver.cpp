@@ -842,6 +842,10 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
         // for normal tenant: this node has been set as NULL in parse phase,
         //                    and already adds its tenant id to tenant list in above
         // Therefore, do nothing
+        if (OB_SYS_TENANT_ID != sess->get_effective_tenant_id()
+              && OB_FAIL(stmt->flush_cache_arg_.push_tenant(sess->get_effective_tenant_id()))) {
+            LOG_WARN("failed  to adds tenant for normal tenant", K(sess->get_effective_tenant_id()), K(ret));
+        }
       } else { // fine-grained cache evcit
         // for fine-grained plan evict, we must specify tenant list
         uint64_t t_id = OB_INVALID_ID;
@@ -915,7 +919,8 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
         tenant_name.reset();
       } //for tenant end
     }
-    LOG_INFO("resolve flush command finished!", K(ret), K(stmt->is_global_), K(stmt->flush_cache_arg_.cache_type_),
+    LOG_INFO("resolve flush command finished!", K(ret), K(sess->get_effective_tenant_id()),
+                K(stmt->is_global_), K(stmt->flush_cache_arg_.cache_type_),
                 K(stmt->flush_cache_arg_.sql_id_), K(stmt->flush_cache_arg_.is_fine_grained_),
                 K(stmt->flush_cache_arg_.tenant_ids_), K(stmt->flush_cache_arg_.db_ids_));
   }

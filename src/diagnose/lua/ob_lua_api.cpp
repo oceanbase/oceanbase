@@ -912,7 +912,11 @@ int select_memory_info(lua_State *L)
     for (int64_t i = 0; i < tenant_cnt && !gen.is_end(); ++i) {
       auto tenant_id = tenant_ids[i];
       for (int64_t ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
-        auto *ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+        auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+        if (nullptr == ta) {
+          ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                                      ctx_id);
+        }
         if (nullptr == ta) {
           // do nothing
         } else {
@@ -977,7 +981,11 @@ int select_tenant_ctx_memory_info(lua_State *L)
     for (int64_t i = 0; i < tenant_cnt && !gen.is_end(); ++i) {
       auto tenant_id = tenant_ids[i];
       for (int64_t ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
-        auto *ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+        auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+        if (nullptr == ta) {
+          ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                                      ctx_id);
+        }
         if (nullptr == ta) {
           // do nothing
         } else {
@@ -1477,9 +1485,9 @@ int select_tenant_memory_info(lua_State *L)
       // tenant_id
       gen.next_column(tenant_id);
       // hold
-      gen.next_column(ObMallocAllocator::get_tenant_hold(tenant_id));
+      gen.next_column(ObMallocAllocator::get_instance()->get_tenant_hold(tenant_id));
       // limit
-      gen.next_column(ObMallocAllocator::get_tenant_limit(tenant_id));
+      gen.next_column(ObMallocAllocator::get_instance()->get_tenant_limit(tenant_id));
 
       gen.row_end();
     }

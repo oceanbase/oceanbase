@@ -148,6 +148,10 @@ TEST_F(TestObSimpleMutilArbServer, test_gc)
 
         for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); i++) {
           auto tenant_id = tenant_ids[i];
+          auto malloc = ObMallocAllocator::get_instance();
+          if (NULL == malloc->get_tenant_ctx_allocator(tenant_id, 0)) {
+            malloc->create_and_add_tenant_allocator(tenant_id);
+          }
           PalfEnvKey palf_env_key(cluster_id, tenant_id);
           PalfEnvLite *palf_env_lite;
 

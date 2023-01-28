@@ -311,6 +311,12 @@ public:
     : node_(nullptr) {}
   void reset();
   int64_t to_string(char*, const int64_t) const { return 0; }
+  ObLDHandle &operator=(ObLDHandle &&other)
+  {
+    node_ = other.node_;
+    other.node_;
+    return *this;
+  }
   ObLDHandleNode *node_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLDHandle);

@@ -23,10 +23,6 @@
 #include "share/stat/ob_stat_define.h"
 
 namespace oceanbase {
-namespace sql
-{
-class ObPlanCacheManager;
-}
 namespace common {
 class ObOptColumnStatHandle;
 
@@ -36,8 +32,7 @@ public:
   ObOptStatManager();
   virtual ~ObOptStatManager() {}
   virtual int init(ObMySQLProxy *proxy,
-                   ObServerConfig *config,
-                   sql::ObPlanCacheManager *pc_mgr);
+                   ObServerConfig *config);
 
   static int64_t get_default_data_size();
 
@@ -196,7 +191,6 @@ protected:
   bool inited_;
   common::ObDedupQueue refresh_stat_task_queue_;
   ObOptStatService stat_service_;
-  sql::ObPlanCacheManager *pc_mgr_;
   int64_t last_schema_version_;
 };
 

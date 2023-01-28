@@ -98,6 +98,8 @@ void ObLeaderCoordinator::stop_and_wait()
   recovery_detect_timer_.stop_and_wait();
   failure_detect_timer_.stop_and_wait();
   ObSpinLockGuard guard(lock_);
+  AllLsElectionReferenceInfoFactory::delete_obj(all_ls_election_reference_info_);
+  all_ls_election_reference_info_ = NULL;
   is_inited_ = false;
 }
 
