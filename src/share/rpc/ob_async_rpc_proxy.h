@@ -262,14 +262,10 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::call(
         RPC_LOG(WARN, "call rpc func failed", K(server), K(timeout),
                K(cluster_id), K(tenant_id), K(arg), KR(ret));
       }
-      if (OB_FAIL(ret)) {
-        cb_list_.remove_last();
-      }
     }
     if (OB_FAIL(ret)) {
-      // free memory
-      cb->~ObAsyncCB();
-      allocator_.free(mem);
+      // if send rpc failed, just call on_timeout to fill the result and add response count
+      cb->on_timeout();
     }
   }
 
