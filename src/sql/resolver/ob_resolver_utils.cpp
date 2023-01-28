@@ -4548,7 +4548,7 @@ int ObResolverUtils::resolve_check_constraint_expr(
   }
   if (OB_ISNULL(expr_factory) || OB_ISNULL(session_info) || OB_ISNULL(node) || OB_ISNULL(params.schema_checker_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("resolve status is invalid", K_(params.expr_factory), K(session_info), K(node));
+    LOG_WARN("resolve status is invalid", K_(params.expr_factory), K(session_info), K(node), K(params.schema_checker_));
   } else if (OB_FAIL(ObRawExprUtils::build_check_constraint_expr(*expr_factory, *session_info, *node, expr, columns))) {
     LOG_WARN("build generated column expr failed", K(ret));
   }

@@ -6689,6 +6689,7 @@ int ObDDLResolver::check_uniq_allow(ObTableSchema &table_schema,
       uint64_t tenant_id = table_schema.get_tenant_id();
       const ObTenantSchema *tenant_schema = NULL;
       ObSchemaGetterGuard guard;
+      ObSchemaChecker schema_checker;
       params.expr_factory_ = &expr_factory;
       params.allocator_ = &allocator;
       params.session_info_ = &empty_session;
@@ -6705,7 +6706,10 @@ int ObDDLResolver::check_uniq_allow(ObTableSchema &table_schema,
         LOG_WARN("session load default system variable failed", K(ret));
       } else if (OB_FAIL(empty_session.load_default_configs_in_pc())) {
         LOG_WARN("session load default configs failed", K(ret));
+      } else if (OB_FAIL(schema_checker.init(guard))) {
+        LOG_WARN("failed to init schema checker", K(ret));
       } else {
+        params.schema_checker_ = &schema_checker;
         const share::schema::ObPartitionFuncType part_func_type = table_schema.get_part_option().get_part_func_type();
         const ParseNode *node = NULL;
         common::ObSEArray<common::ObString, 8> part_keys;
