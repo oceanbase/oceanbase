@@ -250,6 +250,7 @@ public:
       fetch_rowkey_idx_(0),
       prefetch_rowkey_idx_(0),
       prefetched_rowkey_cnt_(0),
+      max_handle_prefetching_cnt_(0),
       rowkeys_(nullptr),
       ext_read_handles_()
   {}
