@@ -104,7 +104,7 @@ struct ObLabel
   }
   // for format print
   operator const char*() const;
-  bool is_valid() const { return nullptr != str_; }
+  bool is_valid() const { return nullptr != str_ && '\0' != str_[0]; }
   int64_t to_string(char *buf, const int64_t buf_len) const;
   const char *str_;
 };
