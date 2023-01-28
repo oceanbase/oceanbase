@@ -13,6 +13,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/ob_define.h"
 #include "common/sql_mode/ob_sql_mode.h"
+#include "common/ob_tablet_id.h"
 #include "lib/worker.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 
@@ -35,6 +36,7 @@ public:
   //对外提供全局函数接口
   static int get_tenant_mode(const uint64_t tenant_id, lib::Worker::CompatMode& mode);
   static int get_table_compat_mode(const uint64_t tenant_id, const int64_t table_id, lib::Worker::CompatMode& mode);
+  static int get_tablet_compat_mode(const uint64_t tenant_id, const common::ObTabletID &tablet_id, lib::Worker::CompatMode& mode);
   static int check_is_oracle_mode_with_tenant_id(const uint64_t tenant_id, bool &is_oracle_mode);
   static int check_is_oracle_mode_with_table_id(
              const uint64_t tenant_id,
