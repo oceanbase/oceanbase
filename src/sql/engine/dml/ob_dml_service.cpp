@@ -485,8 +485,6 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
                                       ins_ctdef.das_ctdef_.is_ignore_,
                                       dml_op))) {
       LOG_WARN("check row null failed", K(ret));
-    } else if (OB_FAIL(ForeignKeyHandle::do_handle(dml_op, ins_ctdef, ins_rtdef))) {
-      LOG_WARN("do handle new row with foreign key failed", K(ret));
     } else if (OB_FAIL(filter_row_for_view_check(ins_ctdef.view_check_exprs_,
                                                  eval_ctx, is_filtered))) {
       //check column constraint expr
@@ -582,7 +580,7 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
       }
     }
 
-    if (OB_SUCC(ret) && !is_skipped && !OB_ISNULL(del_rtdef.se_rowkey_dist_ctx_) && !has_instead_of_trg) {
+    if (OB_SUCC(ret) && !is_skipped && OB_NOT_NULL(del_rtdef.se_rowkey_dist_ctx_) && !has_instead_of_trg) {
       bool is_distinct = false;
       ObExecContext *root_ctx = nullptr;
       if (OB_FAIL(dml_op.get_exec_ctx().get_root_ctx(root_ctx))) {
@@ -606,16 +604,11 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
     }
 
     if (OB_SUCC(ret) && !is_skipped) {
-      if (!has_instead_of_trg && OB_FAIL(ForeignKeyHandle::do_handle(dml_op, del_ctdef, del_rtdef))) {
-        LOG_WARN("do handle old row for delete op failed", K(ret), K(del_ctdef), K(del_rtdef));
-      } else if (OB_FAIL(TriggerHandle::init_param_old_row(
+      if (OB_FAIL(TriggerHandle::init_param_old_row(
         dml_op.get_eval_ctx(), del_ctdef.trig_ctdef_, del_rtdef.trig_rtdef_))) {
         LOG_WARN("failed to handle before trigger", K(ret));
       } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
           dml_op, del_ctdef.das_base_ctdef_, del_ctdef.trig_ctdef_, del_rtdef.trig_rtdef_))) {
-        LOG_WARN("failed to handle before trigger", K(ret));
-      } else if (OB_SUCC(ret) && OB_FAIL(TriggerHandle::do_handle_after_row(
-          dml_op, del_ctdef.trig_ctdef_, del_rtdef.trig_rtdef_, ObTriggerEvents::get_delete_event()))) {
         LOG_WARN("failed to handle before trigger", K(ret));
       } else if (has_instead_of_trg) {
         is_skipped = true;
@@ -710,8 +703,6 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
         LOG_WARN("check row whether changed failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else if (OB_UNLIKELY(!upd_rtdef.is_row_changed_)) {
         //do nothing
-      } else if (OB_FAIL(ForeignKeyHandle::do_handle(dml_op, upd_ctdef, upd_rtdef))) {
-        LOG_WARN("do handle row for update op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else if (OB_FAIL(filter_row_for_view_check(upd_ctdef.view_check_exprs_, dml_op.get_eval_ctx(), is_filtered))) {
         LOG_WARN("filter row for view check exprs failed", K(ret));
       } else if (OB_UNLIKELY(is_filtered)) {
@@ -764,7 +755,8 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
 int ObDMLService::insert_row(const ObInsCtDef &ins_ctdef,
                              ObInsRtDef &ins_rtdef,
                              const ObDASTabletLoc *tablet_loc,
-                             ObDMLRtCtx &dml_rtctx)
+                             ObDMLRtCtx &dml_rtctx,
+                             ObChunkDatumStore::StoredRow* &stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_dml_tablet_validity(dml_rtctx,
@@ -777,7 +769,8 @@ int ObDMLService::insert_row(const ObInsCtDef &ins_ctdef,
                                 ins_rtdef.das_rtdef_,
                                 tablet_loc,
                                 dml_rtctx,
-                                ins_ctdef.new_row_))) {
+                                ins_ctdef.new_row_,
+                                stored_row))) {
     LOG_WARN("insert row to das failed", K(ret));
   }
   return ret;
@@ -787,15 +780,19 @@ int ObDMLService::insert_row(const ObDASInsCtDef &ins_ctdef,
                              ObDASInsRtDef &ins_rtdef,
                              const ObDASTabletLoc *tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
-                             const ExprFixedArray &new_row)
+                             const ExprFixedArray &new_row,
+                             ObChunkDatumStore::StoredRow* &stored_row)
 {
-  return write_row_to_das_op<DAS_OP_TABLE_INSERT>(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx, new_row);
+  int ret = OB_SUCCESS;
+  ret = write_row_to_das_op<DAS_OP_TABLE_INSERT>(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx, new_row, stored_row);
+  return ret;
 }
 
 int ObDMLService::delete_row(const ObDelCtDef &del_ctdef,
                              ObDelRtDef &del_rtdef,
                              const ObDASTabletLoc *tablet_loc,
-                             ObDMLRtCtx &dml_rtctx)
+                             ObDMLRtCtx &dml_rtctx,
+                             ObChunkDatumStore::StoredRow* &stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_dml_tablet_validity(dml_rtctx,
@@ -808,7 +805,8 @@ int ObDMLService::delete_row(const ObDelCtDef &del_ctdef,
                                                               del_rtdef.das_rtdef_,
                                                               tablet_loc,
                                                               dml_rtctx,
-                                                              del_ctdef.old_row_))) {
+                                                              del_ctdef.old_row_,
+                                                              stored_row))) {
     LOG_WARN("delete old row from das failed", K(ret));
   }
   return ret;
@@ -819,6 +817,7 @@ int ObDMLService::lock_row(const ObLockCtDef &lock_ctdef,
                            ObDMLRtCtx &dml_rtctx)
 {
   int ret = OB_SUCCESS;
+  ObChunkDatumStore::StoredRow* stored_row = nullptr;
   if (OB_FAIL(check_dml_tablet_validity(dml_rtctx,
                                         *tablet_loc,
                                         lock_ctdef.old_row_,
@@ -829,7 +828,8 @@ int ObDMLService::lock_row(const ObLockCtDef &lock_ctdef,
                                                 lock_rtdef.das_rtdef_,
                                                 tablet_loc,
                                                 dml_rtctx,
-                                                lock_ctdef.old_row_))) {
+                                                lock_ctdef.old_row_,
+                                                stored_row))) {
     LOG_WARN("lock row to das failed", K(ret));
   }
   return ret;
@@ -841,18 +841,23 @@ int ObDMLService::lock_row(const ObDASLockCtDef &dlock_ctdef,
                            ObDMLRtCtx &das_rtctx,
                            const ExprFixedArray &old_row)
 {
+  ObChunkDatumStore::StoredRow* stored_row = nullptr;
   return write_row_to_das_op<DAS_OP_TABLE_LOCK>(dlock_ctdef,
                                                 dlock_rtdef,
                                                 tablet_loc,
                                                 das_rtctx,
-                                                old_row);
+                                                old_row,
+                                                stored_row);
 }
 
 int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                              ObUpdRtDef &upd_rtdef,
                              const ObDASTabletLoc *old_tablet_loc,
                              const ObDASTabletLoc *new_tablet_loc,
-                             ObDMLRtCtx &dml_rtctx)
+                             ObDMLRtCtx &dml_rtctx,
+                             ObChunkDatumStore::StoredRow* &old_row,
+                             ObChunkDatumStore::StoredRow* &new_row,
+                             ObChunkDatumStore::StoredRow* &full_row)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(dml_rtctx.get_exec_ctx());
@@ -870,6 +875,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
     LOG_WARN("check update new row tablet validity failed", K(ret));
   } else if (OB_UNLIKELY(!upd_rtdef.is_row_changed_)) {
     //old row is equal to new row, only need to lock row
+    ObChunkDatumStore::StoredRow* stored_row = nullptr;
     if (OB_ISNULL(upd_rtdef.dlock_rtdef_)) {
       ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
       if (OB_FAIL(init_das_lock_rtdef_for_update(dml_rtctx, upd_ctdef, upd_rtdef))) {
@@ -884,7 +890,8 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                          *upd_rtdef.dlock_rtdef_,
                                                          old_tablet_loc,
                                                          dml_rtctx,
-                                                         upd_ctdef.old_row_))) {
+                                                         upd_ctdef.old_row_,
+                                                         stored_row))) {
         LOG_WARN("write row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       }
     }
@@ -910,7 +917,8 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                            *upd_rtdef.ddel_rtdef_,
                                                            old_tablet_loc,
                                                            dml_rtctx,
-                                                           upd_ctdef.old_row_))) {
+                                                           upd_ctdef.old_row_,
+                                                           old_row))) {
         LOG_WARN("delete row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else if (upd_ctdef.is_heap_table_ &&
           OB_FAIL(set_update_hidden_pk(dml_rtctx.get_eval_ctx(),
@@ -921,7 +929,8 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                                   *upd_rtdef.dins_rtdef_,
                                                                   new_tablet_loc,
                                                                   dml_rtctx,
-                                                                  upd_ctdef.new_row_))) {
+                                                                  upd_ctdef.new_row_,
+                                                                  new_row))) {
         LOG_WARN("insert row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else {
         LOG_DEBUG("update pkey changed", K(ret), KPC(old_tablet_loc), KPC(new_tablet_loc),
@@ -933,7 +942,8 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                               upd_rtdef.dupd_rtdef_,
                                                               old_tablet_loc,
                                                               dml_rtctx,
-                                                              upd_ctdef.full_row_))) {
+                                                              upd_ctdef.full_row_,
+                                                              full_row))) {
     LOG_WARN("write row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
   } else {
     LOG_DEBUG("update pkey not changed", K(ret), KPC(old_tablet_loc),
@@ -949,24 +959,28 @@ int ObDMLService::update_row(const ObDASUpdCtDef &ctdef,
                              ObDMLRtCtx &dml_rtctx,
                              const ExprFixedArray &full_row)
 {
+  ObChunkDatumStore::StoredRow* stored_row = nullptr;
   return write_row_to_das_op<DAS_OP_TABLE_UPDATE>(ctdef,
                                                   rtdef,
                                                   tablet_loc,
                                                   dml_rtctx,
-                                                  full_row);
+                                                  full_row,
+                                                  stored_row);
 }
 
 int ObDMLService::delete_row(const ObDASDelCtDef &das_del_ctdef,
                              ObDASDelRtDef &das_del_rtdef,
                              const ObDASTabletLoc *tablet_loc,
                              ObDMLRtCtx &das_rtctx,
-                             const ExprFixedArray &old_row)
+                             const ExprFixedArray &old_row,
+                             ObChunkDatumStore::StoredRow* &stored_row)
 {
   return write_row_to_das_op<DAS_OP_TABLE_DELETE>(das_del_ctdef,
                                                   das_del_rtdef,
                                                   tablet_loc,
                                                   das_rtctx,
-                                                  old_row);
+                                                  old_row,
+                                                  stored_row);
 }
 
 int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
@@ -1305,7 +1319,6 @@ int ObDMLService::init_das_lock_rtdef_for_update(ObDMLRtCtx &dml_rtctx,
   }
   return ret;
 }
-
 int ObDMLService::init_lock_rtdef(ObDMLRtCtx &dml_rtctx,
                                   const ObLockCtDef &lock_ctdef,
                                   ObLockRtDef &lock_rtdef,
@@ -1321,7 +1334,8 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
                                       ObDASDMLBaseRtDef &rtdef,
                                       const ObDASTabletLoc *tablet_loc,
                                       ObDMLRtCtx &dml_rtctx,
-                                      const ExprFixedArray &row)
+                                      const ExprFixedArray &row,
+                                      ObChunkDatumStore::StoredRow* &stored_row)
 {
   int ret = OB_SUCCESS;
   bool need_retry = false;
@@ -1355,35 +1369,20 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     }
     //2. try add row to das dml buffer
     if (OB_SUCC(ret)) {
-      int64_t simulate_row_cnt = - EVENT_CALL(EventTable::EN_DAS_DML_BUFFER_OVERFLOW);
-      if (OB_UNLIKELY(simulate_row_cnt > 0 && dml_op->get_row_cnt() >= simulate_row_cnt)) {
-        buffer_full = true;
-      } else if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), buffer_full))) {
+      if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), stored_row, buffer_full))) {
         LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
       }
       LOG_DEBUG("write row to das op", K(ret), K(buffer_full), "op_type", N,
                 "table_id", ctdef.table_id_, "index_tid", ctdef.index_tid_,
                 "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row));
     }
-    //3. if buffer is full, flush das task, and retry to add row
+    //3. if buffer is full, frozen node, create a new das op to add row
     if (OB_SUCC(ret) && buffer_full) {
       need_retry = true;
       if (REACH_COUNT_INTERVAL(10)) { // print log per 10 times.
         LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.das_ref_.get_das_mem_used()));
       }
-      if (OB_UNLIKELY(dml_rtctx.need_non_sub_full_task())) {
-        // 因为replace into 和 insert up在做try_insert时，需要返回duplicated row，
-        // 所以写满的das task现在不能提交，先frozen das task list，
-        // 等所有insert_row全部写完之后再统一提交
-        dml_rtctx.das_ref_.set_frozen_node();
-      } else {
-        if (dml_rtctx.need_pick_del_task_first() &&
-                   OB_FAIL(dml_rtctx.das_ref_.pick_del_task_to_first())) {
-          LOG_WARN("fail to pick delete das task to first", K(ret));
-        } else if (OB_FAIL(dml_rtctx.op_.submit_all_dml_task())) {
-          LOG_WARN("submit all dml task failed", K(ret));
-        }
-      }
+      dml_rtctx.das_ref_.set_frozen_node();
     }
   } while (OB_SUCC(ret) && need_retry);
   return ret;
@@ -1801,6 +1800,92 @@ int ObDMLService::get_nested_dup_table_ctx(const uint64_t table_id,  DASDelCtxLi
     if (del_ctx.table_id_ == table_id) {
       find = true;
       rowkey_dist_ctx = del_ctx.deleted_rows_;
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::handle_after_row_processing_batch(ObDMLModifyRowsList *dml_modify_rows)
+{
+  int ret = OB_SUCCESS;
+  ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
+  for (; OB_SUCC(ret) && row_iter != dml_modify_rows->end(); row_iter++) {
+    ObDMLModifyRowNode &modify_row = *row_iter;
+    if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parameter for batch post row processing", K(ret));
+    } else {
+      ObTableModifyOp &op = *modify_row.dml_op_;
+      const ObDMLBaseCtDef &dml_ctdef = *modify_row.dml_ctdef_;
+      ObDMLBaseRtDef &dml_rtdef = *modify_row.dml_rtdef_;
+      // process foreign key
+      if (OB_NOT_NULL(modify_row.full_row_) && OB_FAIL(modify_row.full_row_->to_expr(modify_row.dml_ctdef_->full_row_, op.get_eval_ctx()))) {
+        LOG_WARN("failed to covert stored full row to expr", K(ret));
+      } else if (OB_NOT_NULL(modify_row.old_row_) && OB_FAIL(modify_row.old_row_->to_expr(dml_ctdef.old_row_, op.get_eval_ctx()))) {
+        LOG_WARN("failed to covert stored old row to expr", K(ret));
+      } else if (OB_NOT_NULL(modify_row.new_row_) && OB_FAIL(modify_row.new_row_->to_expr(dml_ctdef.new_row_, op.get_eval_ctx()))) {
+        LOG_WARN("failed to covert stored new row to expr", K(ret));
+      } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
+        LOG_WARN("failed to handle foreign key constraints", K(ret));
+      }
+      // process after row trigger
+      const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
+      const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
+      const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
+      const ObDmlEventType dml_event = modify_row.dml_event_;
+      if (OB_SUCC(ret)) {
+        ObEvalCtx &eval_ctx = op.get_eval_ctx();
+        if (dml_event != t_insert && dml_event != t_update && dml_event != t_delete) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid trigger event", K(ret));
+        } else if (t_insert == dml_event && OB_FAIL(TriggerHandle::init_param_new_row(
+            eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
+          LOG_WARN("failed to init trigger parameter for new row", K(ret));
+        } else if (t_delete == dml_event && OB_FAIL(TriggerHandle::init_param_old_row(
+            eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
+          LOG_WARN("failed to init trigger parameter for old row", K(ret));
+        } else if (t_update == dml_event && OB_FAIL(TriggerHandle::init_param_rows(
+            eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
+          LOG_WARN("failed to init trigger parameter for old row and new row", K(ret));
+        } else if (OB_FAIL(TriggerHandle::do_handle_after_row(op, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_, dml_event))) {
+          LOG_WARN("failed to handle after trigger", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::handle_after_row_processing(ObDMLModifyRowsList *dml_modify_rows)
+{
+  int ret = OB_SUCCESS;
+  if (1 < dml_modify_rows->size()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the number of rows in the list is more than 1", K(ret), K(dml_modify_rows->size()));
+  } else if (1 == dml_modify_rows->size()) {
+    // for single-row processing, the expr defined in ctdef and trig parameters haven't been refreshed
+    // Therefore, there is no need to re-convert the rows to be modified into an expression and init trig parameters
+    ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
+    ObDMLModifyRowNode &modify_row = *row_iter;
+    if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parameter for batch post row processing", K(ret));
+    } else {
+      ObTableModifyOp &op = *modify_row.dml_op_;
+      const ObDMLBaseCtDef &dml_ctdef = *modify_row.dml_ctdef_;
+      ObDMLBaseRtDef &dml_rtdef = *modify_row.dml_rtdef_;
+      const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
+      const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
+      const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
+      const ObDmlEventType dml_event = modify_row.dml_event_;
+      if (dml_event != t_insert && dml_event != t_update && dml_event != t_delete) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid trigger event", K(ret));
+      } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
+        LOG_WARN("failed to handle foreign key constraints", K(ret));
+      } else if (OB_FAIL(TriggerHandle::do_handle_after_row(op, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_, dml_event))) {
+        LOG_WARN("failed to handle after trigger", K(ret));
+      }
     }
   }
   return ret;

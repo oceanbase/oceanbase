@@ -233,14 +233,15 @@ int ObTableApiModifyExecutor::insert_row_to_das(const ObTableInsCtDef &ins_ctdef
 {
   int ret = OB_SUCCESS;
   ObDASTabletLoc *tablet_loc = nullptr;
-
+  ObChunkDatumStore::StoredRow* stored_row = nullptr;
   if (OB_FAIL(calc_tablet_loc(tablet_loc))) {
     LOG_WARN("fail to calc partition key", K(ret));
   } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef.das_ctdef_,
                                               ins_rtdef.das_rtdef_,
                                               tablet_loc,
                                               dml_rtctx_,
-                                              ins_ctdef.new_row_))) {
+                                              ins_ctdef.new_row_,
+                                              stored_row))) {
     LOG_WARN("fail to insert row by dml service", K(ret));
   }
 
@@ -252,7 +253,7 @@ int ObTableApiModifyExecutor::delete_row_to_das(const ObTableDelCtDef &del_ctdef
 {
   int ret = OB_SUCCESS;
   ObDASTabletLoc *tablet_loc = nullptr;
-
+  ObChunkDatumStore::StoredRow* stored_row = nullptr;
   // todo:linjing check rowkey null and skip
   if (OB_FAIL(calc_tablet_loc(tablet_loc))) {
     LOG_WARN("fail tp calc tablet location", K(ret));
@@ -260,7 +261,8 @@ int ObTableApiModifyExecutor::delete_row_to_das(const ObTableDelCtDef &del_ctdef
                                               del_rtdef.das_rtdef_,
                                               tablet_loc,
                                               dml_rtctx_,
-                                              del_ctdef.old_row_))) {
+                                              del_ctdef.old_row_,
+                                              stored_row))) {
     LOG_WARN("fail to delete row to das op", K(ret), K(del_ctdef), K(del_rtdef));
   }
 

@@ -176,6 +176,7 @@ int ObPxMultiPartInsertOp::write_rows(ObExecContext &ctx,
     LOG_WARN("get physical plan context failed", K(ret));
   } else {
     while (OB_SUCC(ret)) {
+      ObChunkDatumStore::StoredRow* stored_row = nullptr;
       clear_evaluated_flag();
       if (OB_FAIL(try_check_status())) {
         LOG_WARN("check status failed", K(ret));
@@ -185,8 +186,10 @@ int ObPxMultiPartInsertOp::write_rows(ObExecContext &ctx,
         } else {
           iter_end_ = true;
         }
-      } else if (OB_FAIL(ObDMLService::insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, tablet_loc, dml_rtctx_, stored_row))) {
         LOG_WARN("insert row to das failed", K(ret));
+      } else if (OB_FAIL(discharge_das_write_buffer())) {
+        LOG_WARN("failed to submit all dml task when the buffer of das op is full", K(ret));
       }
     }
 

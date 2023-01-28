@@ -379,6 +379,7 @@ public:
   int try_add_row(const common::ObIArray<ObExpr*> &exprs,
                   ObEvalCtx *ctx,
                   const int64_t memory_limit,
+                  DmlRow* &stored_row,
                   bool &row_added,
                   bool strip_lob_locator);
   int try_add_row(const DmlShadowRow &sr, const int64_t memory_limit, bool &row_added, DmlRow **stored_row = nullptr);

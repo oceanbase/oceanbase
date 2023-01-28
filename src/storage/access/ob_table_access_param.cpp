@@ -39,6 +39,7 @@ ObTableIterParam::ObTableIterParam()
       is_same_schema_column_(false),
       vectorized_enabled_(false),
       has_virtual_columns_(false),
+      is_for_foreign_check_(false),
       ss_rowkey_prefix_cnt_(0),
       pd_storage_flag_(0)
 {
@@ -66,6 +67,7 @@ void ObTableIterParam::reset()
   ss_rowkey_prefix_cnt_ = 0;
   vectorized_enabled_ = false;
   has_virtual_columns_ = false;
+  is_for_foreign_check_ = false;
 }
 
 bool ObTableIterParam::is_valid() const
@@ -192,6 +194,7 @@ int ObTableAccessParam::init(
     iter_param_.out_cols_project_ = &table_param.get_output_projector();
     iter_param_.agg_cols_project_ = &table_param.get_aggregate_projector();
     iter_param_.need_scn_ = scan_param.need_scn_;
+    iter_param_.is_for_foreign_check_ = scan_param.is_for_foreign_check_;
     padding_cols_ = &table_param.get_pad_col_projector();
     projector_size_ = scan_param.projector_size_;
 

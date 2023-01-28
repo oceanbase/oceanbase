@@ -101,7 +101,8 @@ public:
       pd_storage_flag_(false),
       stmt_allocator_("StmtScanAlloc"),
       scan_allocator_("TableScanAlloc"),
-      sample_info_(nullptr)
+      sample_info_(nullptr),
+      is_for_foreign_check_(false)
   { }
   virtual ~ObDASScanRtDef();
   INHERIT_TO_STRING_KV("ObDASBaseRtDef", ObDASBaseRtDef,
@@ -133,6 +134,7 @@ public:
   common::ObWrapperAllocatorWithAttr stmt_allocator_;
   common::ObWrapperAllocatorWithAttr scan_allocator_;
   const common::SampleInfo *sample_info_; //Block(Row)SampleScan, only support local das scan
+  bool is_for_foreign_check_;
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;

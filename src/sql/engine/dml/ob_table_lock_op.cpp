@@ -212,10 +212,8 @@ int ObTableLockOp::inner_get_next_row()
     if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
       //DML operator reach iter end,
       //now submit the remaining rows in the DAS Write Buffer to the storage
-      if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
-        LOG_WARN("execute all dml das task failed", K(ret));
-      } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
-        LOG_WARN("close all das task failed", K(ret));
+      if (OB_FAIL(submit_all_dml_task())) {
+        LOG_WARN("failed to submit the remaining dml tasks", K(ret));
       }
       //to post process the DML info after writing all data to the storage
       ret = write_rows_post_proc(ret);
@@ -287,10 +285,8 @@ int ObTableLockOp::inner_get_next_batch(const int64_t max_row_cnt)
   if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
     //DML operator reach iter end,
     //now submit the remaining rows in the DAS Write Buffer to the storage
-    if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
-      LOG_WARN("execute all dml das task failed", K(ret));
-    } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
-      LOG_WARN("close all das task failed", K(ret));
+    if (OB_FAIL(submit_all_dml_task())) {
+      LOG_WARN("failed to submit the remaining dml tasks", K(ret));
     }
     //to post process the DML info after writing all data to the storage
     ret = write_rows_post_proc(ret);

@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObStoreRowLockState;
+}
 namespace memtable
 {
 
@@ -128,6 +132,11 @@ public:
     version_iter_ = NULL;
     last_trans_version_ = share::SCN::max_scn();
   }
+  int check_row_locked(storage::ObStoreRowLockState &lock_state);
+  const transaction::ObTransID get_trans_id() const { return ctx_->get_tx_id(); }
+  share::SCN get_snapshot_version() const { return ctx_->get_snapshot_version(); }
+  ObMvccAccessCtx *get_mvcc_acc_ctx() { return ctx_; }
+  const ObMvccAccessCtx *get_mvcc_acc_ctx() const { return ctx_; }
   const ObMvccRow *get_mvcc_row() const { return value_; }
   const ObMvccTransNode *get_trans_node() const { return version_iter_; }
 private:

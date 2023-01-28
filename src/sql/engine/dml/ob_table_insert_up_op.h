@@ -157,6 +157,10 @@ protected:
                         ObInsRtDef &ins_rtdef,
                         const ObDASTabletLoc *tablet_loc);
 
+  int insert_row_to_das(const ObInsCtDef &ins_ctdef,
+                                         ObInsRtDef &ins_rtdef,
+                                         const ObDASTabletLoc *tablet_loc,
+                                         ObDMLModifyRowNode &modify_row);
 
   int calc_update_tablet_loc(const ObUpdCtDef &upd_ctdef,
                              ObUpdRtDef &upd_rtdef,

@@ -14,6 +14,7 @@
 #define DEV_SRC_SQL_ENGINE_DML_OB_DML_SERVICE_H_
 #include "sql/engine/dml/ob_dml_ctx_define.h"
 #include "sql/das/ob_das_context.h"
+#include "ob_table_modify_op.h"
 namespace oceanbase
 {
 namespace sql
@@ -86,16 +87,19 @@ public:
   static int insert_row(const ObInsCtDef &ins_ctdef,
                         ObInsRtDef &ins_rtdef,
                         const ObDASTabletLoc *tablet_loc,
-                        ObDMLRtCtx &dml_rtctx);
+                        ObDMLRtCtx &dml_rtctx,
+                        ObChunkDatumStore::StoredRow* &stored_row);
   static int insert_row(const ObDASInsCtDef &ins_ctdef,
                         ObDASInsRtDef &ins_rtdef,
                         const ObDASTabletLoc *tablet_loc,
                         ObDMLRtCtx &das_rtctx,
-                        const ExprFixedArray &new_row);
+                        const ExprFixedArray &new_row,
+                        ObChunkDatumStore::StoredRow* &stored_row);
   static int delete_row(const ObDelCtDef &del_ctdef,
                         ObDelRtDef &del_rtdef,
                         const ObDASTabletLoc *tablet_loc,
-                        ObDMLRtCtx &dml_rtctx);
+                        ObDMLRtCtx &dml_rtctx,
+                        ObChunkDatumStore::StoredRow* &stored_row);
   static int update_row(const ObDASUpdCtDef &ctdef,
                         ObDASUpdRtDef &rtdef,
                         const ObDASTabletLoc *tablet_loc,
@@ -105,13 +109,17 @@ public:
                         ObUpdRtDef &upd_rtdef,
                         const ObDASTabletLoc *old_tablet_loc,
                         const ObDASTabletLoc *new_tablet_loc,
-                        ObDMLRtCtx &dml_rtctx);
+                        ObDMLRtCtx &dml_rtctx,
+                        ObChunkDatumStore::StoredRow* &old_row,
+                        ObChunkDatumStore::StoredRow* &new_row,
+                        ObChunkDatumStore::StoredRow* &full_row);
 
   static int delete_row(const ObDASDelCtDef &ctdef,
                         ObDASDelRtDef &rtdef,
                         const ObDASTabletLoc *tablet_loc,
                         ObDMLRtCtx &das_rtctx,
-                        const ExprFixedArray &old_row);
+                        const ExprFixedArray &old_row,
+                        ObChunkDatumStore::StoredRow* &stored_row);
 
   static int lock_row(const ObDASLockCtDef &dlock_ctdef,
                       ObDASLockRtDef &dlock_rtdef,
@@ -215,14 +223,16 @@ public:
   static int get_nested_dup_table_ctx(const uint64_t table_id,
                                       DASDelCtxList& del_ctx_list,
                                       SeRowkeyDistCtx* &rowkey_dist_ctx);
-
+  static int handle_after_row_processing(ObDMLModifyRowsList *dml_modify_rows);
+  static int handle_after_row_processing_batch(ObDMLModifyRowsList *dml_modify_rows);
 private:
   template <int N>
   static int write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
                                  ObDASDMLBaseRtDef &rtdef,
                                  const ObDASTabletLoc *tablet_loc,
                                  ObDMLRtCtx &dml_rtctx,
-                                 const ExprFixedArray &row);
+                                 const ExprFixedArray &row,
+                                 ObChunkDatumStore::StoredRow* &stored_row);
   template <typename T>
   static const ObDASTableLocMeta *get_table_loc_meta(const T *multi_ctdef);
   static int check_nested_sql_legality(ObExecContext &ctx, common::ObTableID ref_table_id);

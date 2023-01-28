@@ -459,6 +459,8 @@ int ObTableMergeOp::update_row_das()
     ObDASTabletLoc *old_tablet_loc = nullptr;
     ObDASTabletLoc *new_tablet_loc = nullptr;
     ObUpdRtDef &upd_rtdef = merge_rtdefs_.at(i).upd_rtdef_;
+    ObDMLModifyRowNode modify_row(this, merge_ctdef->upd_ctdef_, &upd_rtdef, ObDmlEventType::DE_UPDATING);
+    ObChunkDatumStore::StoredRow* stored_row = nullptr;
     if (OB_ISNULL(merge_ctdef)) {
       // merge_ctdef can't be NULL
       ret = OB_ERR_UNEXPECTED;
@@ -475,11 +477,11 @@ int ObTableMergeOp::update_row_das()
       break;
     } else if (OB_FAIL(calc_update_tablet_loc(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc))) {
       LOG_WARN("calc partition key failed", K(ret));
-    } else if (OB_FAIL(TriggerHandle::do_handle_after_row(
-        *this, upd_ctdef->trig_ctdef_, upd_rtdef.trig_rtdef_, ObTriggerEvents::get_update_event()))) {
-      LOG_WARN("failed to handle after trigger", K(ret));
-    } else if (OB_FAIL(ObDMLService::update_row(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, dml_rtctx_))) {
+    } else if (OB_FAIL(ObDMLService::update_row(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, dml_rtctx_,
+                                                modify_row.old_row_, modify_row.new_row_, modify_row.full_row_))) {
       LOG_WARN("insert row with das failed", K(ret));
+    } else if (need_after_row_process(*upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
     } else {
       affected_rows_++;
     }
@@ -497,6 +499,7 @@ int ObTableMergeOp::delete_row_das()
     bool is_skipped = false;
     ObDASTabletLoc *tablet_loc = nullptr;
     ObDelRtDef &del_rtdef = merge_rtdefs_.at(i).del_rtdef_;
+    ObDMLModifyRowNode modify_row(this, (merge_ctdef->del_ctdef_), &del_rtdef, ObDmlEventType::DE_DELETING);
     if (OB_ISNULL(merge_ctdef)) {
       // merge_ctdef can't be NULL
       ret = OB_ERR_UNEXPECTED;
@@ -514,8 +517,10 @@ int ObTableMergeOp::delete_row_das()
       // 这里貌似不应该出现is_skipped == true的场景
     } else if (OB_FAIL(calc_delete_tablet_loc(*del_ctdef, del_rtdef, tablet_loc))) {
       LOG_WARN("calc partition key failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::delete_row(*del_ctdef, del_rtdef, tablet_loc, dml_rtctx_))) {
+    } else if (OB_FAIL(ObDMLService::delete_row(*del_ctdef, del_rtdef, tablet_loc, dml_rtctx_, modify_row.old_row_))) {
       LOG_WARN("insert row with das failed", K(ret));
+    } else if (need_after_row_process(*del_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+      LOG_WARN("failed to push dml modify row to modified row list", K(ret));
     }
   }
 
@@ -543,6 +548,7 @@ int ObTableMergeOp::do_insert()
       ObInsCtDef *ins_ctdef = NULL;
       ObInsRtDef &ins_rtdef = merge_rtdefs_.at(i).ins_rtdef_;
       ObDASTabletLoc *tablet_loc = nullptr;
+      ObDMLModifyRowNode modify_row(this, (merge_ctdef->ins_ctdef_), &ins_rtdef, ObDmlEventType::DE_INSERTING);
       if (OB_ISNULL(merge_ctdef)) {
         // merge_ctdef can't be NULL
         ret = OB_ERR_UNEXPECTED;
@@ -567,14 +573,11 @@ int ObTableMergeOp::do_insert()
                                                                 tablet_loc->tablet_id_,
                                                                 eval_ctx_))) {
         LOG_WARN("set_heap_table_hidden_pk failed", K(ret), KPC(tablet_loc), KPC(ins_ctdef));
-      } else if (OB_FAIL(ObDMLService::insert_row(*ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::insert_row(*ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_, modify_row.new_row_))) {
         LOG_WARN("insert row with das failed", K(ret));
       // TODO(yikang): fix trigger related for heap table
-      } else if (ins_ctdef->is_primary_index_ && OB_FAIL(TriggerHandle::do_handle_after_row(*this,
-                                                            ins_ctdef->trig_ctdef_,
-                                                            ins_rtdef.trig_rtdef_,
-                                                            ObTriggerEvents::get_insert_event()))) {
-        LOG_WARN("failed to handle before trigger", K(ret));
+      } else if (need_after_row_process(*ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
       }
     }
 

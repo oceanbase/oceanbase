@@ -384,6 +384,7 @@ public:
                        K_(column_ids),
                        K_(old_row),
                        K_(new_row),
+                       K_(full_row),
                        K_(view_check_exprs),
                        K_(is_primary_index),
                        K_(is_heap_table),
@@ -397,6 +398,7 @@ public:
   UIntFixedArray column_ids_;
   ExprFixedArray old_row_;
   ExprFixedArray new_row_;
+  ExprFixedArray full_row_;
   //reference the das base ctdef to facilitate
   //some modules to access the das ctdef
   //don't need to serialize
@@ -420,6 +422,7 @@ protected:
       column_ids_(alloc),
       old_row_(alloc),
       new_row_(alloc),
+      full_row_(alloc),
       das_base_ctdef_(das_base_ctdef),
       error_logging_ctdef_(alloc),
       view_check_exprs_(alloc),
@@ -541,7 +544,6 @@ struct ObUpdCtDef : ObDMLBaseCtDef
 public:
   ObUpdCtDef(common::ObIAllocator &alloc)
     : ObDMLBaseCtDef(alloc, dupd_ctdef_, DAS_OP_TABLE_UPDATE),
-      full_row_(alloc),
       dupd_ctdef_(alloc),
       need_check_filter_null_(false),
       distinct_algo_(T_DISTINCT_NONE),
@@ -557,7 +559,6 @@ public:
       alloc_(alloc)
   { }
   INHERIT_TO_STRING_KV("ObDMLBaseCtDef", ObDMLBaseCtDef,
-                       K_(full_row),
                        K_(dupd_ctdef),
                        K_(need_check_filter_null),
                        K_(distinct_algo),
@@ -571,7 +572,6 @@ public:
                        K_(related_upd_ctdefs),
                        K_(related_del_ctdefs),
                        K_(related_ins_ctdefs));
-  ExprFixedArray full_row_;
   ObDASUpdCtDef dupd_ctdef_;
   bool need_check_filter_null_;
   DistinctType distinct_algo_;
@@ -967,6 +967,29 @@ public:
 private:
   common::ObIAllocator &alloc_;
 };
+
+struct ObDMLModifyRowNode
+{
+public:
+  ObDMLModifyRowNode(ObTableModifyOp  *dml_op, const ObDMLBaseCtDef *dml_ctdef, ObDMLBaseRtDef *dml_rtdef, const ObDmlEventType dml_event)
+          : new_row_(nullptr),
+            old_row_(nullptr),
+            full_row_(nullptr),
+            dml_op_(dml_op),
+            dml_ctdef_(dml_ctdef),
+            dml_rtdef_(dml_rtdef),
+            dml_event_(dml_event)
+  {}
+  ObChunkDatumStore::StoredRow *new_row_;
+  ObChunkDatumStore::StoredRow *old_row_;
+  ObChunkDatumStore::StoredRow *full_row_;
+  ObTableModifyOp  *dml_op_;
+  const ObDMLBaseCtDef *dml_ctdef_;
+  ObDMLBaseRtDef *dml_rtdef_;
+  ObDmlEventType dml_event_;
+};
+
+typedef common::ObList<ObDMLModifyRowNode, common::ObIAllocator> ObDMLModifyRowsList;
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* DEV_SRC_SQL_ENGINE_DML_OB_DML_CTX_DEFINE_H_ */

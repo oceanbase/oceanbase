@@ -1,4 +1,4 @@
-/**
+/**ob_das_scan_op.cpp
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -67,7 +67,8 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     sql_mode_,
     scan_flag_,
     pd_storage_flag_,
-    need_check_output_datum_);
+    need_check_output_datum_,
+    is_for_foreign_check_);
   return ret;
 }
 
@@ -86,7 +87,8 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     sql_mode_,
     scan_flag_,
     pd_storage_flag_,
-    need_check_output_datum_);
+    need_check_output_datum_,
+    is_for_foreign_check_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -108,7 +110,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     sql_mode_,
     scan_flag_,
     pd_storage_flag_,
-    need_check_output_datum_);
+    need_check_output_datum_,
+    is_for_foreign_check_);
   return len;
 }
 
@@ -202,6 +205,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.tx_lock_timeout_ = scan_rtdef_->tx_lock_timeout_;
   scan_param_.index_id_ = scan_ctdef_->ref_table_id_;
   scan_param_.is_get_ = scan_ctdef_->is_get_;
+  scan_param_.is_for_foreign_check_ = scan_rtdef_->is_for_foreign_check_;
   scan_param_.timeout_ = scan_rtdef_->timeout_ts_;
   scan_param_.scan_flag_ = scan_rtdef_->scan_flag_;
   scan_param_.reserved_cell_count_ = scan_ctdef_->access_column_ids_.count();
@@ -219,8 +223,10 @@ int ObDASScanOp::init_scan_param()
   scan_param_.tenant_schema_version_ = scan_rtdef_->tenant_schema_version_;
   scan_param_.limit_param_ = scan_rtdef_->limit_param_;
   scan_param_.need_scn_ = scan_rtdef_->need_scn_;
-  scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_;
-  scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
+  scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_; scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
+  if (scan_rtdef_->is_for_foreign_check_) {
+    scan_param_.trans_desc_ = trans_desc_;
+  }
   scan_param_.ls_id_ = ls_id_;
   scan_param_.tablet_id_ = tablet_id_;
   if (scan_rtdef_->sample_info_ != nullptr) {

@@ -467,6 +467,7 @@ private:
   void execute_commit_cb();
 private:
   int update_part_(ObTxPart &p, bool append = true);
+  int add_conflict_tx_(const ObTransIDAndAddr &conflict_tx);
   int merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_ids);
   int update_parts_(const ObTxPartList &list);
   void implicit_start_tx_();
@@ -522,6 +523,7 @@ public:
   { ObSpinLockGuard guard(lock_); return array.assign(cflict_txs_); }
   void reset_conflict_txs()
   { ObSpinLockGuard guard(lock_); cflict_txs_.reset(); }
+  int add_conflict_tx(const ObTransIDAndAddr conflict_tx);
   int merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_ids);
   bool contain(const ObTransID &trans_id) const { return tx_id_ == trans_id; } /*used by TransHashMap*/
   uint64_t get_tenant_id() const { return tenant_id_; }

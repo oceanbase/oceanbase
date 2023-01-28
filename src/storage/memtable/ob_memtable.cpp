@@ -28,6 +28,7 @@
 #include "storage/memtable/ob_memtable_util.h"
 #include "storage/memtable/ob_memtable_context.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
+#include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/memtable/ob_concurrent_control.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
@@ -785,6 +786,7 @@ int ObMemtable::get(
     TRANS_LOG(WARN, "Unexpected null read info", K(ret), K(param), K(context.use_fuse_row_cache_));
   } else {
     const ObColDescIArray &out_cols = read_info->get_columns_desc();
+    ObStoreRowLockState lock_state;
     if (OB_FAIL(parameter_mtk.encode(out_cols, &rowkey.get_store_rowkey()))) {
       TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
     } else if (OB_FAIL(mvcc_engine_.get(context.store_ctx_->mvcc_acc_ctx_,
@@ -794,6 +796,18 @@ int ObMemtable::get(
                                         &returned_mtk,
                                         value_iter))) {
       TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
+    } else if (param.is_for_foreign_check_ &&
+               OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(&value_iter, lock_state))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+        ObRowConflictHandler::post_row_read_conflict(
+                      *value_iter.get_mvcc_acc_ctx(),
+                      *parameter_mtk.get_rowkey(),
+                      lock_state,
+                      key_.tablet_id_,
+                      freezer_->get_ls_id(),
+                      value_iter.get_mvcc_row()->get_last_compact_cnt(),
+                      value_iter.get_mvcc_row()->get_total_trans_node_cnt());
+      }
     } else {
       if (OB_UNLIKELY(!row.is_valid())) {
         if (OB_FAIL(row.init(*context.stmt_allocator_, out_cols.count()))) {

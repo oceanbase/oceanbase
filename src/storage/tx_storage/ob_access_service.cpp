@@ -222,6 +222,10 @@ int ObAccessService::table_scan(
   ObLS *ls = nullptr;
   ObLSTabletService *tablet_service = nullptr;
   ObTableScanParam &param = static_cast<ObTableScanParam &>(vparam);
+  // TODO(yichang): maybe we need to move this scan_flag_ setting to sql layer?
+  if (param.is_for_foreign_check_) {
+    param.scan_flag_.set_iter_uncommitted_row();
+  }
   ObStoreAccessType access_type = param.scan_flag_.is_read_latest() ?
     ObStoreAccessType::READ_LATEST : ObStoreAccessType::READ;
   SCN user_specified_snapshot_scn;
@@ -425,6 +429,22 @@ int ObAccessService::check_read_allowed_(
         } else {
           ctx.mvcc_acc_ctx_.tx_id_ = scan_param.tx_id_;
         }
+      }
+    }
+    // If this select is for foreign key check,
+    // we should get tx_id and tx_desc for deadlock detection.
+    if (scan_param.is_for_foreign_check_) {
+      if (scan_param.tx_id_.is_valid()) {
+        ctx.mvcc_acc_ctx_.tx_id_ = scan_param.tx_id_;
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("foreign key check need scan_param.tx_id_ valid", K(ret), K(scan_param.tx_id_));
+      }
+      if (OB_NOT_NULL(scan_param.trans_desc_) && scan_param.trans_desc_->is_valid()) {
+        ctx.mvcc_acc_ctx_.tx_desc_ = scan_param.trans_desc_;
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("foreign key check need scan_param.trans_desc_ valid", K(ret), KPC(scan_param.trans_desc_));
       }
     }
   }

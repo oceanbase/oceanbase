@@ -227,6 +227,7 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
       const ObInsCtDef &ins_ctdef = *(ctdefs.at(j));
       ObInsRtDef &ins_rtdef = rtdefs.at(j);
       ObDASTabletLoc *tablet_loc = nullptr;
+      ObDMLModifyRowNode modify_row(this, &ins_ctdef, &ins_rtdef, ObDmlEventType::DE_INSERTING);
       if (!MY_SPEC.ins_ctdefs_.at(0).at(0)->has_instead_of_trigger_) {
         ++ins_rtdef.cur_row_num_;
       }
@@ -246,21 +247,16 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
                                                                 tablet_loc->tablet_id_,
                                                                 eval_ctx_))) {
         LOG_WARN("set_heap_table_hidden_pk failed", K(ret), KPC(tablet_loc));
-      } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_, modify_row.new_row_))) {
         LOG_WARN("insert row with das failed", K(ret));
       // TODO(yikang): fix trigger related for heap table
-      } else if (ins_ctdef.is_primary_index_ &&
-          OB_FAIL(TriggerHandle::do_handle_after_row(*this,
-                                                     ins_ctdef.trig_ctdef_,
-                                                     ins_rtdef.trig_rtdef_,
-                                                     ObTriggerEvents::get_insert_event()))) {
-        LOG_WARN("failed to handle before trigger", K(ret));
+      } else if (need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
       }
       if (OB_FAIL(ret)) {
         record_err_for_load_data(ret, ins_rtdef.cur_row_num_);
       }
     } // end for global index ctdef loop
-
     if (OB_SUCC(ret)) {
       int64_t insert_rows = is_skipped ? 0 : 1;
       if (OB_FAIL(merge_implict_cursor(insert_rows, 0, 0, 0))) {

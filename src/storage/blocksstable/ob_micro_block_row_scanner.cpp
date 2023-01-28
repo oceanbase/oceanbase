@@ -17,6 +17,7 @@
 #include "storage/access/ob_block_row_store.h"
 #include "storage/access/ob_block_batched_row_store.h"
 #include "storage/access/ob_index_sstable_estimator.h"
+#include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/blocksstable/ob_index_block_row_scanner.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/tx/ob_tx_data_functor.h"
@@ -1025,6 +1026,8 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
     bool read_uncommitted_row = false;
     bool is_ghost_row_flag = false;
     const int64_t snapshot_version = context_->trans_version_range_.snapshot_version_;
+    memtable::ObMvccAccessCtx &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
+
     if (OB_UNLIKELY(context_->query_flag_.is_ignore_trans_stat())) {
       version_fit = true;
     } else if (OB_FAIL(reader_->get_multi_version_info(
@@ -1041,18 +1044,47 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
     } else if (FALSE_IT(flag = row_header->get_row_multi_version_flag())) {
     } else if (flag.is_uncommitted_row()) {
       have_uncommited_row = true;  // TODO @lvling check transaction status instead
-      auto &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
       transaction::ObLockForReadArg lock_for_read_arg(acc_ctx,
-                                                      row_header->get_trans_id(),
+                                                      transaction::ObTransID(row_header->get_trans_id()),
                                                       sql_sequence,
                                                       context_->query_flag_.read_latest_);
 
-        if (OB_FAIL(lock_for_read(lock_for_read_arg,
+      if (OB_FAIL(lock_for_read(lock_for_read_arg,
                                   can_read,
                                   trans_version,
                                   is_determined_state))) {
-          STORAGE_LOG(WARN, "fail to check transaction status", K(ret), KPC(row_header), K_(macro_id));
+        STORAGE_LOG(WARN, "fail to check transaction status", K(ret), KPC(row_header), K_(macro_id));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObStoreRowLockState lock_state;
+      if (param_->is_for_foreign_check_ &&
+          OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_sstable(
+                  acc_ctx.get_tx_table_guard(),
+                  acc_ctx.get_tx_id(),
+                  transaction::ObTransID(row_header->get_trans_id()),
+                  sql_sequence,
+                  trans_version,
+                  snapshot_version,
+                  lock_state))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+          int tmp_ret = OB_SUCCESS;
+          ObStoreRowkey store_rowkey;
+          ObDatumRowkeyHelper rowkey_helper;
+          if (OB_TMP_FAIL(get_store_rowkey(store_rowkey, rowkey_helper))) {
+            LOG_WARN("get store rowkey fail", K(tmp_ret));
+          } else {
+            ObRowConflictHandler::post_row_read_conflict(
+                      acc_ctx,
+                      store_rowkey,
+                      lock_state,
+                      context_->tablet_id_,
+                      context_->ls_id_,
+                      0, 0 /* these two params get from mvcc_row, and for statistics, so we ignore them */);
+          }
         }
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -1287,6 +1319,31 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
   } else {
     trans_version = scn_trans_version.get_val_for_tx();
   }
+  return ret;
+}
+
+int ObMultiVersionMicroBlockRowScanner::get_store_rowkey(ObStoreRowkey &store_rowkey,
+                                                         ObDatumRowkeyHelper &rowkey_helper)
+{
+  int ret = OB_SUCCESS;
+  ObDatumRowkey datum_rowkey;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
+    LOG_WARN("Fail to reserve datum row", K(ret), K_(row));
+  } else if (OB_FAIL(end_of_block())) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("fail to judge end of block or not", K(ret));
+    }
+  } else if (OB_FAIL(reader_->get_row(current_, row_))) {
+    LOG_WARN("micro block reader fail to get block_row", K(ret), K(current_));
+  } else if (OB_FAIL(datum_rowkey.assign(row_.storage_datums_, read_info_->get_schema_rowkey_count()))) {
+    LOG_WARN("assign datum_rowkey fail", K(ret), K(row_), KPC(read_info_));
+  } else if (OB_FAIL(rowkey_helper.convert_store_rowkey(datum_rowkey, read_info_->get_columns_desc(), store_rowkey))) {
+    LOG_WARN("convert datumn_rowkey to store_rowkey fail", K(ret), KPC(read_info_), K(datum_rowkey));
+  }
+
   return ret;
 }
 

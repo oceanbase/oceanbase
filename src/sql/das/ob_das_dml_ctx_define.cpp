@@ -365,6 +365,7 @@ int ObDASWriteBuffer::init_dml_shadow_row(int64_t column_cnt, bool strip_lob_loc
 int ObDASWriteBuffer::try_add_row(const ObIArray<ObExpr*> &exprs,
                                   ObEvalCtx *ctx,
                                   const int64_t memory_limit,
+                                  DmlRow* &stored_row,
                                   bool &row_added,
                                   bool strip_lob_locator)
 {
@@ -377,7 +378,6 @@ int ObDASWriteBuffer::try_add_row(const ObIArray<ObExpr*> &exprs,
     dml_shadow_row_->reuse();
   }
   if (OB_SUCC(ret)) {
-    DmlRow *stored_row = nullptr;
     if (OB_FAIL(dml_shadow_row_->shadow_copy(exprs, *ctx))) {
       LOG_WARN("shadow copy dml row failed", K(ret));
     } else if (OB_FAIL(try_add_row(*dml_shadow_row_, memory_limit, row_added, &stored_row))) {

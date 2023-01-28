@@ -230,6 +230,10 @@ private:
       bool &can_read,
       int64_t &trans_version,
       bool &is_determined_state);
+  // The store_rowkey is a decoration of the ObObj pointer,
+  // and it will be destroyed when the life cycle of the rowkey_helper is end.
+  // So we have to send it into the function to avoid this situation.
+  int get_store_rowkey(ObStoreRowkey &store_rowkey, ObDatumRowkeyHelper &rowkey_helper);
 private:
   ObDatumRow prev_micro_row_;
   storage::ObNopPos nop_pos_;

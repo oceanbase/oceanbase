@@ -50,7 +50,8 @@ public:
       mem_ctx_(NULL),
       tx_scn_(-1),
       write_flag_(),
-      handle_start_time_(OB_INVALID_TIMESTAMP)
+      handle_start_time_(OB_INVALID_TIMESTAMP),
+      lock_wait_start_ts_(0)
   {}
   ~ObMvccAccessCtx() {
     type_ = T::INVL;
@@ -186,6 +187,12 @@ public:
   ObMemtableCtx *get_mem_ctx() const {
     return mem_ctx_;
   }
+  transaction::ObTxDesc *get_tx_desc() const {
+    return tx_desc_;
+  }
+  int64_t get_lock_wait_start_ts() const { return lock_wait_start_ts_; }
+  void set_lock_wait_start_ts(const int64_t lock_wait_start_ts)
+  { lock_wait_start_ts_ = lock_wait_start_ts; }
   bool is_read() const { return type_ == T::STRONG_READ || type_ == T::WEAK_READ; }
   bool is_weak_read() const { return type_ == T::WEAK_READ; }
   bool is_write() const { return type_ == T::WRITE; }
@@ -219,7 +226,9 @@ public:
                KP_(tx_ctx),
                KP_(mem_ctx),
                K_(tx_scn),
-               K_(write_flag));
+               K_(write_flag),
+               K_(handle_start_time),
+               K_(lock_wait_start_ts));
 private:
   void warn_tx_ctx_leaky_();
 public: // NOTE: those field should only be accessed by txn relative routine
@@ -250,6 +259,8 @@ public: // NOTE: those field should only be accessed by txn relative routine
 
   // this was used for runtime mertic
   int64_t handle_start_time_;
+protected:
+  int64_t lock_wait_start_ts_;
 };
 } // memtable
 } // oceanbase

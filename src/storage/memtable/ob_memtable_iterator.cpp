@@ -21,6 +21,7 @@
 #include "storage/memtable/ob_memtable_data.h"
 #include "storage/memtable/mvcc/ob_mvcc_engine.h"
 #include "storage/memtable/mvcc/ob_mvcc_row.h"
+#include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/tx/ob_trans_define.h"
 #include "ob_memtable_context.h"
 #include "ob_memtable.h"
@@ -347,11 +348,26 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
     key->get_rowkey(rowkey);
 
     bool is_committed = false;
-    if (OB_NOT_NULL(value_iter) && OB_NOT_NULL(value_iter->get_trans_node())
-        && value_iter->get_trans_node()->is_committed()) {
+    const ObMvccTransNode *latest_trans_node = value_iter->get_trans_node();
+    if (OB_NOT_NULL(latest_trans_node)
+        && latest_trans_node->is_committed()) {
       is_committed = true;
     }
-    if (OB_FAIL(ObReadRow::iterate_row(*read_info_, *rowkey, *(context_->allocator_), *value_iter, row_, bitmap_, row_scn))) {
+
+    ObStoreRowLockState lock_state;
+    if (param_->is_for_foreign_check_ &&
+        OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(value_iter, lock_state))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+        ObRowConflictHandler::post_row_read_conflict(
+                      *value_iter->get_mvcc_acc_ctx(),
+                      *rowkey,
+                      lock_state,
+                      context_->tablet_id_,
+                      context_->ls_id_,
+                      value_iter->get_mvcc_row()->get_last_compact_cnt(),
+                      value_iter->get_mvcc_row()->get_total_trans_node_cnt());
+      }
+    } else if (OB_FAIL(ObReadRow::iterate_row(*read_info_, *rowkey, *(context_->allocator_), *value_iter, row_, bitmap_, row_scn))) {
       TRANS_LOG(WARN, "iterate_row fail", K(ret), K(*rowkey), KP(value_iter));
     } else {
       STORAGE_LOG(DEBUG, "chaser debug memtable next row", K(row_));
@@ -1419,4 +1435,3 @@ int ObReadRow::iterate_row(
 
 }
 }
-

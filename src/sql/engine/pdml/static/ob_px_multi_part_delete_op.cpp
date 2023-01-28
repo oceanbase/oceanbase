@@ -202,6 +202,7 @@ int ObPxMultiPartDeleteOp::write_rows(ObExecContext &ctx,
   } else {
     while (OB_SUCC(ret)) {
       clear_evaluated_flag();
+      ObChunkDatumStore::StoredRow* stored_row = nullptr;
       if (OB_FAIL(try_check_status())) {
         LOG_WARN("check status failed", K(ret));
       } else if (OB_FAIL(dml_row_iter.get_next_row(child_->get_spec().output_))) {
@@ -210,8 +211,10 @@ int ObPxMultiPartDeleteOp::write_rows(ObExecContext &ctx,
         } else {
           iter_end_ = true;
         }
-      } else if (OB_FAIL(ObDMLService::delete_row(MY_SPEC.del_ctdef_, del_rtdef_, tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::delete_row(MY_SPEC.del_ctdef_, del_rtdef_, tablet_loc, dml_rtctx_, stored_row))) {
         LOG_WARN("delete row to das failed", K(ret));
+      } else if (OB_FAIL(discharge_das_write_buffer())) {
+        LOG_WARN("failed to submit all dml task when the buffer of das op is full", K(ret));
       }
     }
 

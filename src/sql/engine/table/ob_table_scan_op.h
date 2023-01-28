@@ -473,6 +473,8 @@ protected:
                                eval_ctx_, pd_expr_spec.max_batch_size_);
     }
   }
+  bool is_foreign_check_nested_session() { return ObSQLUtils::is_fk_nested_sql(&ctx_);}
+
 private:
   const ObTableScanSpec& get_tsc_spec() {return MY_SPEC;}
   const ObTableScanCtDef& get_tsc_ctdef() {return MY_SPEC.tsc_ctdef_;}

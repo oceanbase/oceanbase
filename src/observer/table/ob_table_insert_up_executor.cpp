@@ -387,7 +387,7 @@ int ObTableApiInsertUpExecutor::delete_upd_old_row_to_das(const ObRowkey &constr
         LOG_WARN("fail to generate del rtdef for update", K(ret), K(upd_ctdef), K(upd_rtdef));
       }
     }
-
+    ObChunkDatumStore::StoredRow* stored_row = nullptr;
     if (OB_FAIL(ret)) {
       //do nothing
     } else if (OB_ISNULL(upd_rtdef.ddel_rtdef_)) {
@@ -397,7 +397,8 @@ int ObTableApiInsertUpExecutor::delete_upd_old_row_to_das(const ObRowkey &constr
                                                 *upd_rtdef.ddel_rtdef_,
                                                 tablet_loc,
                                                 upd_rtctx_,
-                                                upd_ctdef.old_row_))) {
+                                                upd_ctdef.old_row_,
+                                                stored_row))) {
       LOG_WARN("fail to delete row with das", K(ret));
     }
   }
@@ -470,6 +471,7 @@ int ObTableApiInsertUpExecutor::insert_upd_new_row_to_das()
     }
 
     clear_evaluated_flag();
+    ObChunkDatumStore::StoredRow* stored_row = nullptr;
     if (OB_FAIL(ret)) {
       //do nothing
     } else if (OB_ISNULL(upd_rtdef.dins_rtdef_)) {
@@ -479,7 +481,8 @@ int ObTableApiInsertUpExecutor::insert_upd_new_row_to_das()
                                                 *upd_rtdef.dins_rtdef_,
                                                 tablet_loc,
                                                 upd_rtctx_,
-                                                upd_ctdef.new_row_))) {
+                                                upd_ctdef.new_row_,
+                                                stored_row))) {
       LOG_WARN("fail to insert row with das", K(ret));
     }
   }

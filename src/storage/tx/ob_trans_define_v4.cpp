@@ -779,6 +779,25 @@ void ObTxDesc::release_implicit_savepoint(const int64_t savepoint)
   }
 }
 
+int ObTxDesc::add_conflict_tx(const ObTransIDAndAddr conflict_tx) {
+  ObSpinLockGuard guard(lock_);
+  return add_conflict_tx_(conflict_tx);
+}
+
+int ObTxDesc::add_conflict_tx_(const ObTransIDAndAddr &conflict_tx) {
+  int ret = OB_SUCCESS;
+  if (cflict_txs_.count() >= MAX_RESERVED_CONFLICT_TX_NUM) {
+    ret = OB_SIZE_OVERFLOW;
+    int64_t max_reserved_conflict_tx_num = MAX_RESERVED_CONFLICT_TX_NUM;
+    DETECT_LOG(WARN, "too many conflict trans id", K(max_reserved_conflict_tx_num), K(cflict_txs_), K(conflict_tx));
+  } else if (!is_contain(cflict_txs_, conflict_tx)) {
+    if (OB_FAIL(cflict_txs_.push_back(conflict_tx))) {
+      DETECT_LOG(WARN, "fail to push conflict tx to cflict_txs_", K(ret), K(cflict_txs_), K(conflict_tx));
+    }
+  }
+  return ret;
+}
+
 int ObTxDesc::merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_txs)
 {
   ObSpinLockGuard guard(lock_);
@@ -788,15 +807,14 @@ int ObTxDesc::merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_txs)
 int ObTxDesc::merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_txs)
 {
   int ret = OB_SUCCESS;
-  for (int64_t idx = 0; idx < conflict_txs.count() && OB_SUCC(ret); ++idx) {
-    if (cflict_txs_.count() > MAX_RESERVED_CONFLICT_TX_NUM) {
-      int64_t max_reserved_conflict_tx_num = MAX_RESERVED_CONFLICT_TX_NUM;
-      DETECT_LOG(WARN, "too many conflict trans id", K(max_reserved_conflict_tx_num), K(cflict_txs_), K(conflict_txs));
-      break;
-    } else if (is_contain(cflict_txs_, conflict_txs.at(idx))) {
-      continue;
-    } else if (OB_FAIL(cflict_txs_.push_back(conflict_txs.at(idx)))) {
-      DETECT_LOG(WARN, "fail to push conflict id to cflict_txs_", K(cflict_txs_), K(conflict_txs));
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t idx = 0; idx < conflict_txs.count() && OB_SUCC(tmp_ret); ++idx) {
+    // This function should try its best to push the conflict_tx into the array.
+    // However, whether the insertion is successful or not
+    // should not affect the normal execution process.
+    // So we just use tmp_ret to catch the error code here.
+    if (OB_TMP_FAIL(add_conflict_tx_(conflict_txs.at(idx)))) {
+      DETECT_LOG(WARN, "fail to add conflict tx to cflict_txs_", K(tmp_ret), K(cflict_txs_), K(conflict_txs.at(idx)));
     }
   }
   return ret;

@@ -210,6 +210,7 @@ ObVTableScanParam() :
       fb_snapshot_(),
       is_get_(false),
       force_refresh_lc_(false),
+      is_for_foreign_check_(false),
       output_exprs_(NULL),
       aggregate_exprs_(NULL),
       op_(NULL),
@@ -273,6 +274,7 @@ ObVTableScanParam() :
   share::SCN fb_snapshot_;
   bool is_get_;
   bool force_refresh_lc_;
+  bool is_for_foreign_check_;
 
   //
   // for static typing engine, set to NULL if the old engine is used

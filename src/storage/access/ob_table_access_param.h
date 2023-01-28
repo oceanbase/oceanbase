@@ -158,6 +158,7 @@ public:
   bool is_same_schema_column_;
   bool vectorized_enabled_;
   bool has_virtual_columns_;
+  bool is_for_foreign_check_;
   int64_t ss_rowkey_prefix_cnt_;
   union {
     struct {

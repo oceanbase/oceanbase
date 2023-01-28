@@ -25,6 +25,7 @@
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "lib/worker.h"
+#include "share/ob_debug_sync.h"
 
 namespace oceanbase
 {
@@ -153,11 +154,12 @@ int ForeignKeyHandle::check_exist(ObTableModifyOp &op,
                                   const ObExprPtrIArray &row,
                                   bool expect_zero)
 {
+  DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
   int ret = OB_SUCCESS;
   static const char *SELECT_FMT_MYSQL  =
-    "select /*+ no_parallel */ 1 from `%.*s`.`%.*s` where %.*s limit 2 for update";
+    "select /*+ no_parallel */ 1 from `%.*s`.`%.*s` where %.*s limit 2";
   static const char *SELECT_FMT_ORACLE =
-    "select /*+ no_parallel */ 1 from \"%.*s\".\"%.*s\" where %.*s and rownum <= 2 for update";
+    "select /*+ no_parallel */ 1 from \"%.*s\".\"%.*s\" where %.*s and rownum <= 2";
   const char *select_fmt = lib::is_mysql_mode() ? SELECT_FMT_MYSQL : SELECT_FMT_ORACLE;
   ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR,
                           OB_MALLOC_NORMAL_BLOCK_SIZE,
@@ -246,7 +248,7 @@ int ForeignKeyHandle::check_exist(ObTableModifyOp &op,
               } else if (is_zero && !is_self_ref) {
                 ret = OB_ERR_NO_REFERENCED_ROW;
                 LOG_WARN("parent row is not exist", K(ret), K(fk_arg), K(row));
-              } else if (!is_zero && (!is_self_ref || !is_affect_only_one)) {
+              } else if (!is_zero) {
                 ret = OB_ERR_ROW_IS_REFERENCED;
                 LOG_WARN("child row is exist", K(ret), K(fk_arg), K(row));
               }
@@ -524,7 +526,9 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
     iter_end_(false),
     dml_rtctx_(eval_ctx_, ctx, *this),
     is_error_logging_(false),
+    execute_single_row_(false),
     err_log_rt_def_(),
+    dml_modify_rows_(ctx.get_allocator()),
     saved_session_(NULL)
 {
   obj_print_params_ = CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
@@ -559,6 +563,8 @@ int ObTableModifyOp::inner_open()
     LOG_WARN("failed to open inner conn", K(ret));
   } else if (OB_FAIL(calc_single_table_loc())) {
     LOG_WARN("calc single table loc failed", K(ret));
+  } else if (OB_FAIL(check_need_exec_single_row())) {
+    LOG_WARN("failed to perform single row execution check", K(ret));
   } else {
     init_das_dml_ctx();
   }
@@ -692,6 +698,7 @@ int ObTableModifyOp::inner_close()
       dml_rtctx_.das_ref_.reset();
     }
   }
+  dml_modify_rows_.clear();
   // Release the hash sets created at root ctx for delete distinct check
   if (OB_SUCC(ret) && get_exec_ctx().is_root_ctx()) {
     DASDelCtxList& del_ctx_list = get_exec_ctx().get_das_ctx().get_das_del_ctx_list();
@@ -736,10 +743,17 @@ int ObTableModifyOp::inner_rescan()
     }
   }
   if (OB_SUCC(ret)) {
+    dml_modify_rows_.clear();
     if (OB_FAIL(calc_single_table_loc())) {
       LOG_WARN("calc single table loc failed", K(ret));
     }
   }
+  return ret;
+}
+
+int ObTableModifyOp::check_need_exec_single_row() {
+  int ret = OB_SUCCESS;
+  execute_single_row_ = false;
   return ret;
 }
 
@@ -971,7 +985,6 @@ int ObTableModifyOp::check_stack()
   }
   return ret;
 }
-
 OperatorOpenOrder ObTableModifyOp::get_operator_open_order() const
 {
   OperatorOpenOrder open_order = OPEN_CHILDREN_FIRST;
@@ -1058,11 +1071,19 @@ int ObTableModifyOp::submit_all_dml_task()
 {
   int ret = OB_SUCCESS;
   if (dml_rtctx_.das_ref_.has_task()) {
-    if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
+    if (dml_rtctx_.need_pick_del_task_first() &&
+                OB_FAIL(dml_rtctx_.das_ref_.pick_del_task_to_first())) {
+      LOG_WARN("fail to pick delete das task to first", K(ret));
+    } else if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
       LOG_WARN("execute all dml das task failed", K(ret));
     } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
       LOG_WARN("close all das task failed", K(ret));
+    } else if (!execute_single_row_ && OB_FAIL(ObDMLService::handle_after_row_processing_batch(&get_dml_modify_row_list()))) {
+      LOG_WARN("perform batch foreign key constraints and after row trigger failed", K(ret));
+    } else if (execute_single_row_ && OB_FAIL(ObDMLService::handle_after_row_processing(&get_dml_modify_row_list()))) {
+      LOG_WARN("perform single row foreign key constraints and after row trigger failed", K(ret));
     } else {
+      dml_modify_rows_.clear();
       dml_rtctx_.reuse();
     }
   }
@@ -1075,9 +1096,9 @@ int ObTableModifyOp::submit_all_dml_task()
 int ObTableModifyOp::discharge_das_write_buffer()
 {
   int ret = OB_SUCCESS;
-  if (dml_rtctx_.das_ref_.get_das_mem_used() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE) {
-    LOG_INFO("DASWriteBuffer full, now to write storage",
-             "buffer memory", dml_rtctx_.das_ref_.get_das_mem_used());
+  if (dml_rtctx_.das_ref_.get_das_mem_used() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE || execute_single_row_) {
+    LOG_INFO("DASWriteBuffer full or need single row execution, now to write storage",
+             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(execute_single_row_));
     ret = submit_all_dml_task();
   }
   return ret;
@@ -1138,13 +1159,8 @@ int ObTableModifyOp::inner_get_next_row()
     if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
       //DML operator reach iter end,
       //now submit the remaining rows in the DAS Write Buffer to the storage
-      if (dml_rtctx_.need_pick_del_task_first() &&
-          OB_FAIL(dml_rtctx_.das_ref_.pick_del_task_to_first())) {
-        LOG_WARN("pick delete das task to first failed", K(ret));
-      } else if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
-        LOG_WARN("execute all dml das task failed", K(ret));
-      } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
-        LOG_WARN("close all das task failed", K(ret));
+      if (OB_FAIL(submit_all_dml_task())) {
+        LOG_WARN("failed to submit the remaining dml tasks", K(ret));
       }
     }
     //to post process the DML info after writing all data to the storage or returning one row

@@ -325,6 +325,23 @@ void ObMvccValueIterator::move_to_next_node_()
   }
 }
 
+int ObMvccValueIterator::check_row_locked(ObStoreRowLockState &lock_state)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "not init", KP(this));
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(value_)) {
+    ret = OB_SUCCESS;
+    TRANS_LOG(WARN, "get value iter but mvcc row in it is null", K(ret));
+  } else if (OB_FAIL(value_->check_row_locked(*ctx_, lock_state))){
+    TRANS_LOG(WARN, "check row locked fail", K(ret), KPC(value_), KPC(ctx_), K(lock_state));
+  } else {
+    lock_state.mvcc_row_ = value_;
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ObMvccRowIterator::ObMvccRowIterator()

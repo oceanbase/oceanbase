@@ -368,12 +368,12 @@ int ObDASUpdateOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
   return ret;
 }
 
-int ObDASUpdateOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, bool &buffer_full)
+int ObDASUpdateOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, ObChunkDatumStore::StoredRow* &stored_row, bool &buffer_full)
 {
   int ret = OB_SUCCESS;
   bool added = false;
   buffer_full = false;
-  if (OB_FAIL(write_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, added, true))) {
+  if (OB_FAIL(write_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
     LOG_WARN("try add row to datum store failed", K(ret), K(row), K(write_buffer_));
   } else if (!added) {
     buffer_full = true;
