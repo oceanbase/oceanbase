@@ -30044,6 +30044,7 @@ int ObDDLService::update_oracle_tenant_sys_var(
        * In Oracle mode, we are only compatible with binary mode, so collate can only end with _bin
        */
       if (CS_TYPE_UTF8MB4_BIN == tenant_schema.get_collation_type()
+          || CS_TYPE_LATIN1_BIN == tenant_schema.get_collation_type()
           || CS_TYPE_GBK_BIN == tenant_schema.get_collation_type()
           || CS_TYPE_UTF16_BIN == tenant_schema.get_collation_type()
           || CS_TYPE_GB18030_BIN == tenant_schema.get_collation_type()) {
@@ -30059,6 +30060,9 @@ int ObDDLService::update_oracle_tenant_sys_var(
         } else if (CHARSET_GB18030 ==
                    ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
           OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "ZHS32GB18030"));
+        } else if (CHARSET_LATIN1 ==
+                   ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
+          OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "WE8MSWIN1252"));
         }
         SET_TENANT_VARIABLE(SYS_VAR_NLS_CHARACTERSET, val_buf);
       } else {

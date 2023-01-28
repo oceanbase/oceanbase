@@ -16,6 +16,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_utils.h"
 #include "common/ob_smart_call.h"
+#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -527,8 +528,7 @@ int ObExprUtil::convert_string_collation(const ObString &in_str,
     out_str = in_str;
   } else {
     char *buf = NULL;
-    const int32_t CharConvertFactorNum = 4; //最多使用4字节存储一个字符
-    int32_t buf_len = in_str.length() * CharConvertFactorNum;
+    int32_t buf_len = in_str.length() * ObCharset::CharConvertFactorNum;
     uint32_t result_len = 0;
     if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -622,7 +622,7 @@ int ObExprUtil::convert_utf8_charset(ObIAllocator& allocator,
   int ret = OB_SUCCESS;
   char *buf = NULL;
   //一个字符最多4个byte
-  int32_t buf_len = from_string.length() * 4;
+  int32_t buf_len = from_string.length() * ObCharset::CharConvertFactorNum;
   uint32_t result_len = 0;
   if (0 == buf_len) {
   } else if (from_collation == CS_TYPE_UTF8MB4_BIN) {

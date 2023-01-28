@@ -33,7 +33,7 @@
 #include "share/backup/ob_backup_info_mgr.h"
 #include "rootserver/ob_root_service.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-
+#include "sql/ob_sql_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2501,6 +2501,9 @@ int ObTableSqlService::gen_table_dml(
   uint64_t data_version = 0;
   if (OB_FAIL(check_ddl_allowed(table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(table));
+  } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(table.get_charset_type(),
+                                                                    exec_tenant_id))) {
+    LOG_WARN("failed to check charset data version valid", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(table.get_tenant_id(), data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (data_version < DATA_VERSION_4_1_0_0
@@ -3662,6 +3665,9 @@ int ObTableSqlService::gen_column_dml(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is less than 4.1, geometry type is not supported", K(ret), K(tenant_data_version), K(column));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, geometry type");
+  } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(column.get_charset_type(),
+                                                                    exec_tenant_id))) {
+    LOG_WARN("failed to check charset data version valid", K(ret));
   } else if (column.is_generated_column() ||
       column.is_identity_column() ||
       ob_is_string_type(column.get_data_type()) ||

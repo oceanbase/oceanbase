@@ -50,6 +50,8 @@ public:
   /* data version related */
   int get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version);
   int tenant_need_upgrade(const uint64_t tenant_id, bool &need_upgrade);
+  // ATTENTION!!! this interface only work for unittest
+  void update_data_version(const uint64_t data_version);
   /*------------------------*/
 public:
   static ObClusterVersion &get_instance();
@@ -70,6 +72,8 @@ private:
   const common::ObServerConfig *config_;
   const omt::ObTenantConfigMgr *tenant_config_mgr_;
   uint64_t cluster_version_;
+  // ATTENTION!!! this member is only valid for unittest
+  uint64_t data_version_;
 };
 
 #define OB_VSN_MAJOR_SHIFT 32

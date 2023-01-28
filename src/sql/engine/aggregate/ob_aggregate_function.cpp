@@ -27,6 +27,8 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "common/ob_smart_call.h"
+#include "lib/charset/ob_charset.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -2170,7 +2172,7 @@ int ObAggregateFunction::get_result(ObNewRow &row, const common::ObTimeZoneInfo 
                 } else if (ObCharset::charset_type_by_coll(sep_obj.get_collation_type())
                            != ObCharset::charset_type_by_coll(cexpr->get_collation_type())) {
                   // Four bytes for one character at most
-                  int64_t buf_len = sep_str.length() * 4;
+                  int64_t buf_len = sep_str.length() * ObCharset::CharConvertFactorNum;
                   char *buf = static_cast<char *>(expr_ctx_.calc_buf_->alloc(buf_len));
                   uint32_t res_len = 0;
                   if (OB_ISNULL(buf)) {

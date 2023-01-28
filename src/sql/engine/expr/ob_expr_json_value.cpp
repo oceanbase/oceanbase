@@ -22,6 +22,8 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "lib/oblog/ob_log_module.h"
 #include "ob_expr_json_func_helper.h"
+#include "lib/charset/ob_charset.h"
+
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
 
@@ -865,8 +867,7 @@ int ObExprJsonValue::cast_to_string(common::ObIAllocator *allocator,
             && (ObCharset::charset_type_by_coll(in_cs_type) !=
             ObCharset::charset_type_by_coll(dst_cs_type))) {
           char *buf = NULL;
-          const int64_t factor = 2;
-          int64_t buf_len = temp_str_val.length() * factor;
+          int64_t buf_len = temp_str_val.length() * ObCharset::CharConvertFactorNum;
           uint32_t result_len = 0;
           buf = reinterpret_cast<char*>(allocator->alloc(buf_len));
           if (OB_ISNULL(buf)) {

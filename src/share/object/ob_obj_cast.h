@@ -442,6 +442,12 @@ private:
       case CS_TYPE_GB18030_CHINESE_CI:
         idx = 10;
         break;
+      case CS_TYPE_LATIN1_BIN:
+        idx = 11;
+        break;
+      case CS_TYPE_LATIN1_SWEDISH_CI:
+        idx = 12;
+        break;
       default:
         idx = -1;
     }

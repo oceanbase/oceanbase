@@ -3990,6 +3990,8 @@ int ObAlterTableResolver::resolve_convert_to_character(const ParseNode &node)
       if (CHARSET_INVALID == charset_type) {
         ret = OB_ERR_UNKNOWN_CHARSET;
         LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(charset_type, session_info_->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
       } else {
         charset_type_ = charset_type;
       }
@@ -4004,6 +4006,9 @@ int ObAlterTableResolver::resolve_convert_to_character(const ParseNode &node)
     if (CS_TYPE_INVALID == collation_type) {
       ret = OB_ERR_UNKNOWN_COLLATION;
       LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, collation.length(), collation.ptr());
+    } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(collation_type),
+                                                                      session_info_->get_effective_tenant_id()))) {
+      LOG_WARN("failed to check charset data version valid", K(ret));
     } else {
       collation_type_ = collation_type;
     }

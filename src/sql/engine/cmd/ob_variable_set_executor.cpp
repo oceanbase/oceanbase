@@ -522,6 +522,9 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
       } else if (OB_UNLIKELY(!ObCharset::is_valid_collation(coll_int64))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid collation", K(ret), K(coll_int64), K(val));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_int64)),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
       } else if (FALSE_IT(coll_str = ObString::make_string(ObCharset::collation_name(static_cast<ObCollationType>(coll_int64))))) {
         //do nothing
       } else if (OB_FAIL(ObBasicSysVar::get_charset_var_and_val_by_collation(
@@ -535,8 +538,8 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
         should_update_extra_var = true;
       }
     } else if (set_var.var_name_ == OB_SV_CHARACTER_SET_SERVER ||
-        set_var.var_name_ == OB_SV_CHARACTER_SET_DATABASE ||
-        set_var.var_name_ == OB_SV_CHARACTER_SET_CONNECTION) {
+               set_var.var_name_ == OB_SV_CHARACTER_SET_DATABASE ||
+               set_var.var_name_ == OB_SV_CHARACTER_SET_CONNECTION) {
       ObString cs_str;
       int64_t coll_int64 = OB_INVALID_INDEX;
       if (OB_FAIL(val.get_int(coll_int64))) {
@@ -544,8 +547,11 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
       } else if (OB_UNLIKELY(!ObCharset::is_valid_collation(coll_int64))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid collation", K(ret), K(coll_int64));
-      } else if (FALSE_IT(cs_str = ObString::make_string(ObCharset::charset_name(ObCharset::charset_type_by_coll(
-            static_cast<ObCollationType>(coll_int64)))))) {
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_int64)),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (FALSE_IT(cs_str = ObString::make_string(ObCharset::charset_name(
+                                   ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_int64)))))) {
         //do nothing
       } else if (OB_FAIL(ObBasicSysVar::get_collation_var_and_val_by_charset(
           set_var.var_name_, cs_str, extra_var_name, extra_val, extra_coll_type))) {

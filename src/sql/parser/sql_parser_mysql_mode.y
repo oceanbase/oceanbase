@@ -186,7 +186,7 @@ APPEND NO_GATHER_OPTIMIZER_STATISTICS GATHER_OPTIMIZER_STATISTICS
 NEG_SIGN
 
 %token /*can not be relation name*/
-_BINARY _UTF8 _UTF8MB4 _GBK _UTF16 _GB18030 CNNOP
+_BINARY _UTF8 _UTF8MB4 _GBK _UTF16 _GB18030 _LATIN1 CNNOP
 SELECT_HINT_BEGIN UPDATE_HINT_BEGIN DELETE_HINT_BEGIN INSERT_HINT_BEGIN REPLACE_HINT_BEGIN HINT_HINT_BEGIN HINT_END
 LOAD_DATA_HINT_BEGIN CREATE_HINT_BEGIN
 END_P SET_VAR DELIMITER
@@ -947,6 +947,15 @@ _UTF8
 {
   malloc_terminal_node($$, result->malloc_pool_, T_CHARSET);
   $$->str_value_ = parse_strdup("gbk", result->malloc_pool_, &($$->str_len_));
+  if (OB_UNLIKELY(NULL == $$->str_value_)) {
+    yyerror(NULL, result, "No more space for mallocing string");
+    YYABORT_NO_MEMORY;
+  }
+}
+| _LATIN1
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CHARSET);
+  $$->str_value_ = parse_strdup("latin1", result->malloc_pool_, &($$->str_len_));
   if (OB_UNLIKELY(NULL == $$->str_value_)) {
     yyerror(NULL, result, "No more space for mallocing string");
     YYABORT_NO_MEMORY;

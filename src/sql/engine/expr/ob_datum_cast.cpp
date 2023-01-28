@@ -1262,8 +1262,8 @@ static int common_string_string(const ObExpr &expr,
       ObCharset::charset_type_by_coll(out_cs_type))) {
     // handle !blob->!blob
     char *buf = NULL;
-    const int64_t factor = 2;
-    int64_t buf_len = in_str.length() * factor;
+    //latin1 1bytes,utf8mb4 4bytes,the factor should be 4
+    int64_t buf_len = in_str.length() * ObCharset::CharConvertFactorNum;
     uint32_t result_len = 0;
     buf = expr.get_str_res_mem(ctx, buf_len);
     if (OB_ISNULL(buf)) {

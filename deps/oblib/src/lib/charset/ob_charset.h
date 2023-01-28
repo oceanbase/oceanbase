@@ -37,15 +37,36 @@ enum ObCharsetType
   CHARSET_GBK = 3,
   CHARSET_UTF16 = 4,
   CHARSET_GB18030 = 5,
+  CHARSET_LATIN1 = 6,
   CHARSET_MAX,
+};
+
+/*
+*AGGREGATE_2CHARSET[CHARSET_UTF8MB4][CHARSET_GBK]=1表示结果为CHARSET_UTF8MB4
+*AGGREGATE_2CHARSET[CHARSET_GBK][CHARSET_UTF8MB4]=2表示结果为CHARSET_UTF8MB4
+*矩阵中只对当前需要考虑的情况填值1&2,其余补0
+*return value means idx of the resule type， 0 means OB_CANT_AGGREGATE_2COLLATIONS
+*there is no possibly to reach AGGREGATE_2CHARSET[CHARSET_UTF8MB4][CHARSET_UTF8MB4] and so on
+*/
+static const int AGGREGATE_2CHARSET[CHARSET_MAX][CHARSET_MAX] = {
+                                //CHARSET_INVALI,CHARSET_UTF8MB4...
+{0,0,0,0,0,0,0},//CHARSET_INVALI
+{0,0,0,0,0,0,0},//CHARSET_BINARY
+{0,0,0,1,2,1,1},//CHARSET_UTF8MB4
+{0,0,2,0,2,2,1},//CHARSET_GBK
+{0,0,1,1,0,1,1},//CHARSET_UTF16
+{0,0,2,1,2,0,1},//CHARSET_GB18030
+{0,0,2,2,2,2,0},//CHARSET_LATIN1
 };
 
 enum ObCollationType
 {
   CS_TYPE_INVALID = 0,
+  CS_TYPE_LATIN1_SWEDISH_CI = 8,
   CS_TYPE_GBK_CHINESE_CI = 28,
   CS_TYPE_UTF8MB4_GENERAL_CI = 45,
   CS_TYPE_UTF8MB4_BIN = 46,
+  CS_TYPE_LATIN1_BIN = 47,
   CS_TYPE_UTF16_GENERAL_CI = 54,
   CS_TYPE_UTF16_BIN = 55,
   CS_TYPE_BINARY = 63,
@@ -67,18 +88,21 @@ enum ObCollationType
   CS_TYPE_GBK_ZH_0900_AS_CS,
   CS_TYPE_UTF16_ZH_0900_AS_CS,
   CS_TYPE_GB18030_ZH_0900_AS_CS,
+  CS_TYPE_latin1_ZH_0900_AS_CS, //invaid, not really used
   //radical-stroke order
   CS_TYPE_RADICAL_BEGIN_MARK,
   CS_TYPE_UTF8MB4_ZH2_0900_AS_CS,
   CS_TYPE_GBK_ZH2_0900_AS_CS,
   CS_TYPE_UTF16_ZH2_0900_AS_CS,
   CS_TYPE_GB18030_ZH2_0900_AS_CS,
+  CS_TYPE_latin1_ZH2_0900_AS_CS ,//invaid
   //stroke order
   CS_TYPE_STROKE_BEGIN_MARK,
   CS_TYPE_UTF8MB4_ZH3_0900_AS_CS,
   CS_TYPE_GBK_ZH3_0900_AS_CS,
   CS_TYPE_UTF16_ZH3_0900_AS_CS,
-  CS_TYPE_GB18030_ZH3_0900_AS_CS,  
+  CS_TYPE_GB18030_ZH3_0900_AS_CS,
+  CS_TYPE_latin1_ZH3_0900_AS_CS, //invaid
   CS_TYPE_MAX
 };
 
@@ -88,6 +112,7 @@ enum ObCollationType
 enum ObNlsCharsetId
 {
   CHARSET_INVALID_ID = 0,
+  CHARSET_WE8MSWIN1252_ID=31,
   CHARSET_ZHS16GBK_ID = 852,
   CHARSET_ZHS32GB18030_ID = 854,
   CHARSET_UTF8_ID = 871,
@@ -122,6 +147,7 @@ enum ObCollationLevel
                       // fortunately we didn't need to use it to define array like charset_arr,
                       // and we didn't persist it on storage.
 };
+
 
 struct ObCharsetWrapper
 {
@@ -167,9 +193,11 @@ public:
   static const int32_t MIN_MB_LEN = 1;
 
   static const int32_t MAX_CASE_MULTIPLY = 4;
+  //比如latin1 1byte ,utf8mb4 4byte,转换因子为4，也可以理解为最多使用4字节存储一个字符
+  static const int32_t CharConvertFactorNum = 4;
 
-  static const int64_t VALID_CHARSET_TYPES = 5;
-  static const int64_t VALID_COLLATION_TYPES = 11;
+  static const int64_t VALID_CHARSET_TYPES = 6;
+  static const int64_t VALID_COLLATION_TYPES = 13;
 
   static int init_charset();
   // strntodv2 is an enhanced version of strntod,
@@ -348,7 +376,8 @@ public:
       || CHARSET_UTF8MB4 == charset_type
       || CHARSET_GBK == charset_type
       || CHARSET_UTF16 == charset_type
-      || CHARSET_GB18030 == charset_type;
+      || CHARSET_GB18030 == charset_type
+      || CHARSET_LATIN1 == charset_type;
   }
   static ObCharsetType charset_type_by_coll(ObCollationType coll_type);
   static int charset_name_by_coll(const ObString &coll_name, common::ObString &cs_name);

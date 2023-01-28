@@ -49,6 +49,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "storage/ob_locality_manager.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/charset/ob_charset.h"
 #include "pl/ob_pl_user_type.h"
 #include "observer/omt/ob_tenant_srs_mgr.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
@@ -578,6 +579,20 @@ int ObSQLUtils::calc_const_expr(const ObRawExpr *expr,
   } else {
     need_check = true;
     result = const_expr->get_value();
+  }
+  return ret;
+}
+
+int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    SQL_LOG(WARN, "failed to GET_MIN_DATA_VERSION", K(ret));
+  } else if (CHARSET_LATIN1 == charset_type && data_version < DATA_VERSION_4_1_0_0 ) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "latin1 not supported when data_version < 4_1_0_0", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, charset latin1 is");
   }
   return ret;
 }
@@ -2928,8 +2943,7 @@ int ObSQLUtils::ConvertFiledNameAttribute(ObIAllocator& allocator,
     OZ(ob_write_string(allocator, src, dst));
   } else {
     char *buf = nullptr;
-    const int32_t CharConvertFactorNum = 2;
-    int32_t buf_len = src.length() * CharConvertFactorNum;
+    int32_t buf_len = src.length() * ObCharset::CharConvertFactorNum;
     uint32_t result_len = 0;
     const ObCollationType from_collation =
               ObCharset::get_default_collation(ObCharset::get_default_charset());

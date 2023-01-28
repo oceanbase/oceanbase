@@ -191,6 +191,8 @@ inline int64_t ObFastParserBase::is_identifier_flags(const int64_t pos)
     idf_pos = is_utf8_char(pos);
   } else if (CHARSET_GBK == charset_type_ || CHARSET_GB18030 == charset_type_) {
     idf_pos = is_gbk_char(pos);
+  } else if (CHARSET_LATIN1 == charset_type_) {
+    idf_pos = is_latin1_char(pos);
   }
   return idf_pos;
 }
@@ -499,6 +501,15 @@ int ObFastParserBase::process_interval()
     }
   }
   return ret;
+}
+
+inline int64_t ObFastParserBase::is_latin1_char(const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (is_latin1(raw_sql_.char_at(pos))) {
+    idf_pos = pos + 1;
+  }
+  return idf_pos;
 }
 
 // ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}
@@ -1154,6 +1165,8 @@ inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos)
     idf_pos = is_utf8_char(pos);
   } else if (CHARSET_GBK == charset_type_ || CHARSET_GB18030 == charset_type_) {
     idf_pos = is_gbk_char(pos);
+  } else if (CHARSET_LATIN1 == charset_type_) {
+    idf_pos = is_latin1_char(pos);
   }
   return idf_pos;
 }

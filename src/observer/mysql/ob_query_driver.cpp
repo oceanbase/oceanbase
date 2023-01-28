@@ -21,7 +21,7 @@
 #include "rpc/obmysql/packet/ompk_field.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
 #include <string.h>
-
+#include "lib/charset/ob_charset.h"
 namespace oceanbase
 {
 using namespace common;
@@ -238,7 +238,7 @@ int ObQueryDriver::convert_field_charset(ObIAllocator& allocator,
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
-  int32_t buf_len = from_string.length() * 4;
+  int32_t buf_len = from_string.length() * ObCharset::CharConvertFactorNum;
   uint32_t result_len = 0;
   if (0 == buf_len) {
   } else if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(
@@ -299,7 +299,7 @@ int ObQueryDriver::convert_string_value_charset(ObObj& value,
     } else if (CS_TYPE_BINARY != value.get_collation_type() && CS_TYPE_BINARY != collation_type
         && strcmp(from_charset_info->csname, to_charset_info->csname) != 0) {
       char *buf = NULL;
-      int32_t buf_len = str.length() * 4;
+      int32_t buf_len = str.length() * ObCharset::CharConvertFactorNum;
       uint32_t result_len = 0;
       if (0 == buf_len) {
         //do noting

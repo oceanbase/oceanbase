@@ -93,7 +93,7 @@ static int parse_version(const char *str, uint64_t *versions, const int64_t size
 
 ObClusterVersion::ObClusterVersion()
   : is_inited_(false), config_(NULL),
-    tenant_config_mgr_(NULL), cluster_version_(0)
+    tenant_config_mgr_(NULL), cluster_version_(0), data_version_(0)
 {
   cluster_version_ = cal_version(DEF_MAJOR_VERSION,
                                  DEF_MINOR_VERSION,
@@ -150,6 +150,7 @@ void ObClusterVersion::destroy()
     is_inited_ = false;
     config_ = NULL;
     cluster_version_ = 0;
+    data_version_ = 0;
   }
 }
 
@@ -258,13 +259,21 @@ void ObClusterVersion::update_cluster_version(const uint64_t cluster_version)
   ATOMIC_SET(&cluster_version_, cluster_version);
 }
 
+void ObClusterVersion::update_data_version(const uint64_t data_version)
+{
+  ATOMIC_SET(&data_version_, data_version);
+}
+
 int ObClusterVersion::get_tenant_data_version(
     const uint64_t tenant_id,
     uint64_t &data_version)
 {
   int ret = OB_SUCCESS;
   data_version = 0;
-  if (OB_ISNULL(tenant_config_mgr_)) {
+  if (OB_UNLIKELY(0 != data_version_)) {
+    // only work for unittest
+    data_version = ATOMIC_LOAD(&cluster_version_);
+  } else  if (OB_ISNULL(tenant_config_mgr_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "tenant_config is null", KR(ret), KP(tenant_config_mgr_));
   } else {

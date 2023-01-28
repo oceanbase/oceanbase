@@ -18,6 +18,7 @@
 #include "sql/resolver/expr/ob_raw_expr_print_visitor.h"
 #include "sql/ob_sql_init.h"
 #include "lib/json/ob_json_print_utils.h"
+#include "share/ob_cluster_version.h"
 #include <fstream>
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -51,6 +52,7 @@ TestRawExprResolver::~TestRawExprResolver()
 
 void TestRawExprResolver::SetUp()
 {
+  oceanbase::common::ObClusterVersion::get_instance().update_data_version(DATA_VERSION_4_1_0_0);
 }
 
 void TestRawExprResolver::TearDown()

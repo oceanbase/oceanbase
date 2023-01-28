@@ -18,7 +18,7 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ob_stmt.h"
 #include "lib/charset/ob_charset.h"
-
+#include "sql/session/ob_sql_session_info.h"
 namespace oceanbase
 {
 namespace sql
@@ -38,10 +38,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDatabaseResolver);
 public:
   static int resolve_primary_zone(T *stmt, ParseNode *node);
-  int resolve_database_options(T *stmt, ParseNode *node);
+  int resolve_database_options(T *stmt, ParseNode *node, ObSQLSessionInfo *session_info);
   const common::ObBitSet<> &get_alter_option_bitset() const { return alter_option_bitset_; };
 private:
-  int resolve_database_option(T *stmt, ParseNode *node);
+  int resolve_database_option(T *stmt, ParseNode *node, ObSQLSessionInfo *session_info);
   int resolve_zone_list(T *stmt, ParseNode *node) const;
 private:
   common::ObBitSet<> alter_option_bitset_;
@@ -50,7 +50,7 @@ private:
 };
 
 template <class T>
-int ObDatabaseResolver<T>::resolve_database_options(T *stmt, ParseNode *node)
+int ObDatabaseResolver<T>::resolve_database_options(T *stmt, ParseNode *node, ObSQLSessionInfo *session_info)
 {
   int ret = common::OB_SUCCESS;
   if (OB_ISNULL(stmt) || OB_ISNULL(node)) {
@@ -66,7 +66,7 @@ int ObDatabaseResolver<T>::resolve_database_options(T *stmt, ParseNode *node)
     int32_t num = node->num_child_;
     for (int32_t i = 0; ret == common::OB_SUCCESS && i < num; i++) {
       option_node = node->children_[i];
-      if (OB_FAIL(resolve_database_option(stmt, option_node))) {
+      if (OB_FAIL(resolve_database_option(stmt, option_node, session_info))) {
         OB_LOG(WARN, "resolve database option failed", K(ret));
       }
     }
@@ -103,7 +103,7 @@ int ObDatabaseResolver<T>::resolve_primary_zone(T *stmt, ParseNode *node)
 }
 
 template <class T>
-int ObDatabaseResolver<T>::resolve_database_option(T *stmt, ParseNode *node)
+int ObDatabaseResolver<T>::resolve_database_option(T *stmt, ParseNode *node, ObSQLSessionInfo *session_info)
 {
   int ret = common::OB_SUCCESS;
   ParseNode *option_node = node;
@@ -157,6 +157,9 @@ int ObDatabaseResolver<T>::resolve_database_option(T *stmt, ParseNode *node)
             ret = common::OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "all valid charset types should have default collation type",
                             K(ret), K(charset_type), K(collation_type));
+          } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(charset_type,
+                                                                            session_info->get_effective_tenant_id()))) {
+            OB_LOG(WARN, "failed to check charset data version valid", K(ret));
           } else if (OB_UNLIKELY(collation_already_set_
                               && stmt->get_charset_type() != charset_type)) {
             // mysql执行下面这条sql时会报错，为了行为与mysql一致，resolve时即检查collation/charset不一致的问题

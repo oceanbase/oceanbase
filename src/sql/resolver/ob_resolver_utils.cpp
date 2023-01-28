@@ -2116,8 +2116,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
              * utf8mb4是1~4个字节，gbk是1到2，utf16是2或者4
              * 进行转换，极限情况是1个字节转成4个，所以这里放大了4倍
              */
-            const int CharConvertFactorNum = 4;
-            int32_t buf_len = str.length() * CharConvertFactorNum;
+            int32_t buf_len = str.length() * ObCharset::CharConvertFactorNum;
             uint32_t result_len = 0;
             uint32_t incomplete_len = 0;
             if (0 == buf_len) {

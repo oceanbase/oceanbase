@@ -247,7 +247,7 @@ public:
       expr_idx++;
     }
   }
-
+  static int is_charset_data_version_valid(ObCharsetType charset_type, const int64_t tenant_id);
   static int calc_calculable_expr(ObSQLSessionInfo *session,
                                   const ObRawExpr *expr,
                                   common::ObObj &result,

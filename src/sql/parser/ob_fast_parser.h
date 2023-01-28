@@ -318,6 +318,8 @@ protected:
 		return is_valid_char(ch) && USER_VAR_CHAR[static_cast<uint8_t>(ch)];
 	}
 	void reset_parser_node(ParseNode *node);
+	//{U}
+	int64_t is_latin1_char(const int64_t pos);
 	// ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}
 	int64_t is_utf8_char(const int64_t pos);
 	// NOTES: No boundary check, the caller guarantees safety!!!
@@ -375,7 +377,11 @@ protected:
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x40 && static_cast<uint8_t>(ch) <= 0xfe;
 	}
-
+    inline bool is_latin1(char ch)
+	{
+		return is_valid_char(ch) &&
+		static_cast<uint8_t>(ch) >= 0x00 && static_cast<uint8_t>(ch) <= 0xFF;
+	}
 	// [0-9]{n}
 	inline bool is_n_continuous_digits(const char *str,
 									   const int64_t pos,

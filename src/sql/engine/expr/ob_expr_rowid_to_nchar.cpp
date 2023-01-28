@@ -75,7 +75,7 @@ int ObExprRowIDToNChar::eval_rowid_to_nchar(const ObExpr &expr, ObEvalCtx &ctx, 
     ObURowIDData rowid_data = arg->get_urowid();
     char *buf = NULL;
     char *utf16_buf = NULL;
-    const int32_t CharConvertFactorNum = 4; //最多使用4字节存储一个字符
+    //const int32_t CharConvertFactorNum = 4; //最多使用4字节存储一个字符
     int64_t size = rowid_data.needed_base64_buffer_size();
     int64_t pos = 0;
     uint32_t res_len = 0;
@@ -86,12 +86,12 @@ int ObExprRowIDToNChar::eval_rowid_to_nchar(const ObExpr &expr, ObEvalCtx &ctx, 
       LOG_WARN("alloc mem failed", K(ret), K(size));
     } else if (OB_FAIL(rowid_data.get_base64_str(buf, size, pos))) {
       LOG_WARN("encode rowid obj failed", K(ret));
-    } else if (OB_ISNULL(utf16_buf = (char*)(expr.get_str_res_mem(ctx, pos * CharConvertFactorNum)))) {
+    } else if (OB_ISNULL(utf16_buf = (char*)(expr.get_str_res_mem(ctx, pos * ObCharset::CharConvertFactorNum)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc mem failed", K(ret), K(pos * CharConvertFactorNum));
+      LOG_WARN("alloc mem failed", K(ret), K(pos * ObCharset::CharConvertFactorNum));
     } else if (OB_FAIL(ObCharset::charset_convert(CS_TYPE_UTF8MB4_GENERAL_CI,
                                                   buf, pos, expr.datum_meta_.cs_type_,
-                                                  utf16_buf, pos * CharConvertFactorNum, res_len))) {
+                                                  utf16_buf, pos * ObCharset::CharConvertFactorNum, res_len))) {
       LOG_WARN("charset convert failed", K(ret));
     } else {
       expr_datum.set_string(ObString(res_len, utf16_buf));

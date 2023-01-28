@@ -28,6 +28,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/worker.h"
 #include "common/object/ob_obj_funcs.h"
+#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -1410,7 +1411,7 @@ int ObObj::convert_string_value_charset(ObCharsetType charset_type, ObIAllocator
     } else if (CS_TYPE_BINARY != get_collation_type() && CS_TYPE_BINARY != collation_type
         && strcmp(from_charset_info->csname, to_charset_info->csname) != 0) {
       char *buf = NULL;
-      int32_t buf_len = str.length() * 4;
+      int32_t buf_len = str.length() * ObCharset::CharConvertFactorNum;
       uint32_t result_len = 0;
       if (0 == buf_len) {
         //do noting
