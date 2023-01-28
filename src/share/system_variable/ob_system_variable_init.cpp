@@ -1508,7 +1508,7 @@ static struct VarsInit{
       ObSysVars[111].name_ = "ob_enable_show_trace" ;
       ObSysVars[111].data_type_ = ObIntType ;
       ObSysVars[111].value_ = "0" ;
-      ObSysVars[111].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[111].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[111].id_ = SYS_VAR_OB_ENABLE_SHOW_TRACE ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_SHOW_TRACE)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_SHOW_TRACE] = 111 ;

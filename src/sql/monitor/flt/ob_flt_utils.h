@@ -38,12 +38,15 @@ namespace sql
       flt_trace_id_[0] = '\0';
       flt_span_id_[0] = '\0';
       last_flt_trace_id_buf_[0] = '\0';
+      last_flt_span_id_buf_[0] = '\0';
     }
     void reset() {
       flt_trace_id_[0] = '\0';
       flt_span_id_[0] = '\0';
       last_flt_trace_id_buf_[0] = '\0';
       last_flt_trace_id_.reset();
+      last_flt_span_id_buf_[0] = '\0';
+      last_flt_span_id_.reset();
       row_traceformat_ = true;
       trc_granuality_ = ObTraceGranularity::TRANS_LEVEL;
     }
@@ -52,6 +55,8 @@ namespace sql
     char flt_span_id_[common::OB_MAX_UUID_LENGTH + 1];
     ObString last_flt_trace_id_;
     char last_flt_trace_id_buf_[OB_MAX_UUID_STR_LENGTH + 1];
+    ObString last_flt_span_id_;
+    char last_flt_span_id_buf_[OB_MAX_UUID_STR_LENGTH + 1];
     bool row_traceformat_;
     ObTraceGranularity trc_granuality_;
   };

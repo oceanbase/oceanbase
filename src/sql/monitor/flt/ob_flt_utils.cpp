@@ -54,13 +54,23 @@ namespace sql
   int ObFLTUtils::record_flt_last_trace_id(sql::ObSQLSessionInfo &session) {
     int ret = OB_SUCCESS;
     trace::UUID trc_uuid = OBTRACE->get_trace_id();
+    trace::UUID span_id;
     char last_trace_id[OB_MAX_UUID_STR_LENGTH + 1];
+    char last_span_id_buf[OB_MAX_UUID_STR_LENGTH + 1];
+    ObString last_span_id;
+    session.get_flt_span_id(last_span_id);
     int64_t pos = 0;
+    span_id.deserialize(last_span_id.ptr(), last_span_id.length(), pos);
+    pos = 0;
     trc_uuid.tostring(last_trace_id, OB_MAX_UUID_STR_LENGTH + 1, pos);
+    pos = 0;
+    span_id.tostring(last_span_id_buf, OB_MAX_UUID_STR_LENGTH + 1, pos);
     if (last_trace_id[0] == '\0') {
       // do nothing
     } else if (OB_FAIL(session.set_last_flt_trace_id(ObString(OB_MAX_UUID_STR_LENGTH + 1, last_trace_id)))) {
       LOG_WARN("failed  to set last flt trace id", K(ret), K(ObString(OB_MAX_UUID_STR_LENGTH + 1, last_trace_id)));
+    } else if (OB_FAIL(session.set_last_flt_span_id(ObString(OB_MAX_UUID_STR_LENGTH + 1, last_span_id_buf)))) {
+      LOG_WARN("failed  to set last flt span id", K(ret), K(ObString(OB_MAX_UUID_STR_LENGTH + 1, last_span_id_buf)));
     } else {
       // do nothing
     }
@@ -328,6 +338,9 @@ namespace sql
               LOG_WARN("failed to deserialize full link trace extra info", KP(buf), K(ret), K(pos), K(v_len));
             } else {
               // add to span
+              ObString empty_str;
+              empty_str.reset();
+              sess.set_last_flt_span_id(empty_str);
             }
             break;
           }

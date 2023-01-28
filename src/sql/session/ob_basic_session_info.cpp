@@ -2023,6 +2023,24 @@ void ObBasicSessionInfo::get_flt_span_id(ObString &span_id) const
   }
 }
 
+const ObString &ObBasicSessionInfo::get_last_flt_span_id() const
+{
+  return flt_vars_.last_flt_span_id_;
+}
+int ObBasicSessionInfo::set_last_flt_span_id(const common::ObString &span_id)
+{
+  int ret = OB_SUCCESS;
+  if (span_id.empty()) {
+    flt_vars_.last_flt_span_id_.reset();
+  } else {
+    int64_t span_len = std::min(static_cast<int64_t>(span_id.length()), OB_MAX_UUID_STR_LENGTH);
+    MEMCPY(flt_vars_.last_flt_span_id_buf_, span_id.ptr(), span_len);
+    flt_vars_.last_flt_span_id_buf_[span_len] = '\0';
+    flt_vars_.last_flt_span_id_.assign_ptr(flt_vars_.last_flt_span_id_buf_, span_len);
+  }
+  return ret;
+}
+
 const ObString &ObBasicSessionInfo::get_last_flt_trace_id() const
 {
   return flt_vars_.last_flt_trace_id_;
@@ -4026,7 +4044,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               thread_data_.user_client_addr_,
               process_query_time_,
               flt_vars_.last_flt_trace_id_,
-              flt_vars_.row_traceformat_);
+              flt_vars_.row_traceformat_,
+              flt_vars_.last_flt_span_id_);
   }();
   return ret;
 }
@@ -4183,6 +4202,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   sys_var_in_pc_str_.reset(); //sys_var_in_pc_str_在反序列化系统变量阶段可能会被污染，需要reset掉
   config_in_pc_str_.reset();
   flt_vars_.last_flt_trace_id_.reset();
+  flt_vars_.last_flt_span_id_.reset();
   const ObTZInfoMap *tz_info_map = tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
   LST_DO_CODE(OB_UNIS_DECODE,
               sys_vars_cache_.inc_data_,
@@ -4218,7 +4238,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
               thread_data_.user_client_addr_,
               process_query_time_,
               flt_vars_.last_flt_trace_id_,
-              flt_vars_.row_traceformat_);
+              flt_vars_.row_traceformat_,
+              flt_vars_.last_flt_span_id_);
   // deep copy string.
   if (OB_SUCC(ret)) {
     if (OB_FAIL(name_pool_.write_string(app_trace_id_, &app_trace_id_))) {
@@ -4244,7 +4265,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   is_deserialized_ = true;
   tz_info_wrap_.set_tz_info_map(tz_info_map);
   set_last_flt_trace_id(flt_vars_.last_flt_trace_id_);
-
+  set_last_flt_span_id(flt_vars_.last_flt_span_id_);
   //在升级过程中,由于版本差异,高版本server如果收到低版本server发来的session变量,需要兼容处理
   //反序列化完成后, 由于后面存在再次序列化给其他server的场景, 所以需要补齐需要序列化的系统变量
   //fix以下场景   A(2.1)->B(2.2)->C(2.2)-> ret = -4016
@@ -4527,7 +4548,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               thread_data_.user_client_addr_,
               process_query_time_,
               flt_vars_.last_flt_trace_id_,
-              flt_vars_.row_traceformat_);
+              flt_vars_.row_traceformat_,
+              flt_vars_.last_flt_span_id_);
   return len;
 }
 

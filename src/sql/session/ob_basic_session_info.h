@@ -905,6 +905,8 @@ public:
   int set_flt_trace_id(ObString trace_id);
   const ObString &get_last_flt_trace_id() const;
   int set_last_flt_trace_id(const common::ObString &trace_id);
+  const ObString &get_last_flt_span_id() const;
+  int set_last_flt_span_id(const common::ObString &span_id);
   bool is_row_traceformat() const { return flt_vars_.row_traceformat_; }
   void set_is_row_traceformat(bool v) { flt_vars_.row_traceformat_ = v; }
   bool is_query_trc_granuality() const { return sys_vars_cache_.get_ob_enable_trace_log()?

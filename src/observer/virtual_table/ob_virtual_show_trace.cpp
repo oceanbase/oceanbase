@@ -269,7 +269,13 @@ int ObVirtualShowTrace::generate_span_info_tree()
       if (OB_ISNULL(show_trace_arr_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "record ptr is null", K(i));
-      } else if (show_trace_arr_.at(i)->data_.parent_span_id_ == "00000000-0000-0000-0000-000000000000") {
+      } else if (session_->get_last_flt_span_id().empty() &&
+            show_trace_arr_.at(i)->data_.parent_span_id_ == "00000000-0000-0000-0000-000000000000") {
+        found_root = true;
+        show_trace_arr_.at(i)->formatter_.level_ = depth;
+        OZ(root_arr.push_back(show_trace_arr_.at(i)));
+      } else if (!session_->get_last_flt_span_id().empty() &&
+          show_trace_arr_.at(i)->data_.parent_span_id_.compare(session_->get_last_flt_span_id()) == 0) {
         found_root = true;
         show_trace_arr_.at(i)->formatter_.level_ = depth;
         OZ(root_arr.push_back(show_trace_arr_.at(i)));
@@ -279,7 +285,7 @@ int ObVirtualShowTrace::generate_span_info_tree()
       // do nothing
     } else if (!found_root) {
       show_trace_arr_.reset();
-      LOG_TRACE("not found root span reset show trace");
+      LOG_INFO("not found root span reset show trace");
     } else {
       // recursively generate span tree
       for (int64_t i = 0; OB_SUCC(ret) && i < root_arr.count(); ++i) {

@@ -1489,7 +1489,7 @@
     "value": "0",
     "data_type": "bool",
     "info": "control whether use show trace",
-    "flags": "Global | SESSION | NEED_SERIALIZE",
+    "flags": "SESSION | NEED_SERIALIZE",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
