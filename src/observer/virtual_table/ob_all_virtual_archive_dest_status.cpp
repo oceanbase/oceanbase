@@ -72,6 +72,9 @@ int ObVirtualArchiveDestStatus::init(ObMySQLProxy *sql_proxy)
   } else if (OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "sql proxy is NULL", K(ret));
+  } else if (OB_ISNULL(schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_guard is null", K(ret));
   } else if (OB_FAIL(schema_guard_->get_table_schema(effective_tenant_id_,
     OB_ALL_VIRTUAL_ARCHIVE_DEST_STATUS_TID, table_schema_))) {
     SERVER_LOG(WARN, "failed to get table schema", K(ret));
@@ -181,7 +184,7 @@ int ObVirtualArchiveDestStatus::inner_get_next_row(common::ObNewRow *&row)
       scanner_it_ = scanner_.begin();
       start_to_read_ = true;
     }
-  }
+  } // start to read
   if (OB_SUCC(ret)) {
     if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
       if (OB_ITER_END != ret) {
@@ -230,7 +233,7 @@ int ObVirtualArchiveDestStatus::get_all_tenant_()
   ObArray<uint64_t> all_tenant_array_;
 
   if (is_sys_tenant(effective_tenant_id_)) { // sys tenant
-    if(OB_FAIL(schema_guard_->get_tenant_ids(all_tenant_array_))) {
+    if (OB_FAIL(schema_guard_->get_available_tenant_ids(all_tenant_array_))) {
       SERVER_LOG(WARN, "get tenant ids failed", K(ret));
     } else {
       for (int64_t tenant_idx = 0; OB_SUCC(ret) && tenant_idx < all_tenant_array_.count(); tenant_idx++) {
@@ -240,7 +243,7 @@ int ObVirtualArchiveDestStatus::get_all_tenant_()
         }
       }
     }
-  } else { // non-sys tenant
+  } else { // user tenant
     if (OB_FAIL(tenant_array_.push_back(effective_tenant_id_))) {
       SERVER_LOG(WARN, "failed to push back", K(effective_tenant_id_), K(ret));
     }
