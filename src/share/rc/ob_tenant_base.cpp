@@ -182,7 +182,7 @@ void ObTenantBase::stop_mtl_module()
       int64_t start_time_us = ObTimeUtility::current_time();                    \
       this->stop_m##IDX##_func(this->m##IDX##_);                                \
       int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us;     \
-      LOG_INFO("finish stop mtl"#IDX, K(cost_time_us));                         \
+      FLOG_INFO("finish stop mtl"#IDX, K(cost_time_us));                         \
     };                                                                          \
     func_arr.push_back(fw);                                                     \
   }
@@ -205,7 +205,7 @@ void ObTenantBase::wait_mtl_module()
       int64_t start_time_us = ObTimeUtility::current_time();                    \
       this->wait_m##IDX##_func(this->m##IDX##_);                                \
       int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us;     \
-      LOG_INFO("finish wait mtl"#IDX, K(cost_time_us));                         \
+      FLOG_INFO("finish wait mtl"#IDX, K(cost_time_us));                         \
     };                                                                          \
     func_arr.push_back(fw);                                                     \
   }
@@ -239,7 +239,7 @@ void ObTenantBase::destroy_mtl_module()
       int64_t start_time_us = ObTimeUtility::current_time();                    \
       this->destroy_m##IDX##_func(this->m##IDX##_);                             \
       int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us;     \
-      LOG_INFO("finish destroy mtl"#IDX, K(cost_time_us));                      \
+      FLOG_INFO("finish destroy mtl"#IDX, K(cost_time_us));                      \
     };                                                                          \
     func_arr.push_back(fw);                                                     \
   }

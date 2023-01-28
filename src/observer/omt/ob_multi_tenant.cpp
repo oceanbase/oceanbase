@@ -1291,6 +1291,10 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &try_clock_succ)
   } else if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
     LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
   } else {
+    LOG_INFO("removed_tenant begin to stop", K(tenant_id));
+    removed_tenant->stop();
+    LOG_INFO("removed_tenant begin to wait", K(tenant_id));
+    removed_tenant->wait();
     LOG_INFO("removed_tenant begin to try wlock", K(tenant_id));
     ObLDHandle handle;
     for (int i = 0; i < DEL_TRY_TIMES && !try_clock_succ; ++i) {
@@ -1306,10 +1310,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &try_clock_succ)
           KP(removed_tenant), K(removed_tenant->lock_));
       removed_tenant->lock_.ld_.print();
     } else {
-      LOG_INFO("removed_tenant begin to stop", K(tenant_id));
-      removed_tenant->stop();
-      LOG_INFO("removed_tenant begin to wait", K(tenant_id));
-      removed_tenant->wait();
       ObTenant *removed_tenant_tmp = nullptr;
       SpinWLockGuard guard(lock_);
 
@@ -1442,7 +1442,7 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
   ObTenant *tenant = nullptr;
   bool lock_succ = false;
   int64_t bucket_lock_idx = -1;
-  TIMEGUARD_INIT(SERVER_OMT, 30_s, 60_s); // report hung cost more than 60s
+  TIMEGUARD_INIT(SERVER_OMT, 60_s, 120_s); // report hung cost more than 120s
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
