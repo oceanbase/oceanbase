@@ -809,6 +809,7 @@ public:
 
   ObDropDatabaseArg &operator=(const ObDropDatabaseArg &other) = delete;
   ObDropDatabaseArg(const ObDropDatabaseArg &other) = delete;
+  virtual ~ObDropDatabaseArg() = default;
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const { return true; }
   DECLARE_TO_STRING;
@@ -1487,6 +1488,7 @@ public:
 
   ObTruncateTableArg &operator=(const ObTruncateTableArg &other) = delete;
   ObTruncateTableArg(const ObTruncateTableArg &other) = delete;
+  virtual ~ObTruncateTableArg() = default;
   bool is_valid() const;
   DECLARE_TO_STRING;
 
@@ -2081,6 +2083,7 @@ public:
   bool is_valid() const;
   ObDropTableArg &operator=(const ObDropTableArg &other) = delete;
   ObDropTableArg(const ObDropTableArg &other) = delete;
+  virtual ~ObDropTableArg() { tables_.reset(); }
   virtual bool is_allow_when_upgrade() const { return true; }
   DECLARE_TO_STRING;
 

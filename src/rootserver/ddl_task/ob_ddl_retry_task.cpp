@@ -38,12 +38,13 @@ ObDDLRetryTask::ObDDLRetryTask()
 ObDDLRetryTask::~ObDDLRetryTask()
 {
   if (OB_NOT_NULL(ddl_arg_)) {
-    allocator_.free(ddl_arg_);
+    ddl_arg_->~ObDDLArg();
     ddl_arg_ = nullptr;
   }
   if (nullptr != forward_user_message_.ptr()) {
     allocator_.free(forward_user_message_.ptr());
   }
+  allocator_.reset();
 }
 
 int ObDDLRetryTask::deep_copy_ddl_arg(
