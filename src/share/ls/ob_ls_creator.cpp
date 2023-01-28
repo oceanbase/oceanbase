@@ -385,6 +385,7 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
       for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); ++i) {
         arg.reset();
         const ObLSReplicaAddr &addr = addrs.at(i);
+        rpc_count++;
         if (OB_FAIL(arg.init(tenant_id_, id_, addr.replica_type_,
                 addr.replica_property_, tenant_info, create_scn, new_compat_mode,
                 create_with_palf, palf_base_info))) {
@@ -394,8 +395,6 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
                 GCONF.cluster_id, tenant_id_, arg))) {
           LOG_WARN("failed to all async rpc", KR(tmp_ret), K(addr), K(ctx.get_timeout()),
               K(arg), K(tenant_id_));
-        } else {
-          rpc_count++;
         }
       }
       //wait all
@@ -473,6 +472,7 @@ int ObLSCreator::check_create_ls_result_(const int64_t rpc_count,
 int ObLSCreator::persist_ls_member_list_(const common::ObMemberList &member_list)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_SET_LS_MEMBER_LIST);
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
@@ -497,7 +497,6 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
                                   const int64_t paxos_replica_num)
 {
   int ret = OB_SUCCESS;
-  DEBUG_SYNC(BEFORE_SET_LS_MEMBER_LIST);
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
@@ -520,14 +519,13 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
         ObAddr addr;
+        rpc_count++;
         if (OB_FAIL(member_list.get_server_by_index(i, addr))) {
           LOG_WARN("failed to get member by index", KR(ret), K(i), K(member_list));
         } else if (OB_TMP_FAIL(set_member_list_proxy_.call(addr, ctx.get_timeout(),
                 GCONF.cluster_id, tenant_id_, arg))) {
           LOG_WARN("failed to set member list", KR(tmp_ret), K(ctx.get_timeout()), K(arg),
               K(tenant_id_));
-        } else {
-          rpc_count++;
         }
       }
 
