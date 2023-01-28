@@ -247,7 +247,7 @@ int do_commit_tx_(ObTxDesc &tx,
                   ObITxCallback &cb,
                   share::SCN &commit_version);
 int do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts);
-int register_commit_retry_task_(ObTxDesc &tx, const int64_t max_delay = INT64_MAX);
+int register_commit_retry_task_(ObTxDesc &tx, int64_t max_delay = INT64_MAX);
 int unregister_commit_retry_task_(ObTxDesc &tx);
 int handle_tx_commit_result_(ObTxDesc &tx,
                              const int result,

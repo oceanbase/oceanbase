@@ -50,6 +50,7 @@ public:
   void set_running(const bool is_running) { is_running_ = is_running; }
   bool is_running() const { return is_running_; }
   void set_delay(const int64_t delay) { delay_ = delay; }
+  int64_t get_delay() const { return delay_; }
 protected:
   bool is_registered_;
   bool is_running_;

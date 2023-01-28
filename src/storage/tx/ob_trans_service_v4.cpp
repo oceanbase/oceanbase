@@ -258,16 +258,19 @@ int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts
   return ret;
 }
 
-int ObTransService::register_commit_retry_task_(ObTxDesc &tx, const int64_t max_delay)
+int ObTransService::register_commit_retry_task_(ObTxDesc &tx, int64_t max_delay)
 {
+  const int64_t MIN_DELAY = 50 * 1000;// 50ms
   int ret = OB_SUCCESS;
-  int64_t delay = ObTransCtx::MAX_TRANS_2PC_TIMEOUT_US;
+  max_delay = max_delay == INT64_MAX ? ObTransCtx::MAX_TRANS_2PC_TIMEOUT_US : max_delay;
   int64_t now = ObClockGenerator::getClock();
   int64_t expire_after = std::min(tx.expire_ts_ - now, tx.commit_expire_ts_ - now);
-  if (expire_after > 0) { // KEEP delay always > 0
-    delay = std::min(delay, expire_after);
+  int64_t delay = std::min(max_delay, tx.commit_task_.get_delay() * 2);
+  if (expire_after > 0) { delay = std::min(delay, expire_after); }
+  delay = std::max(delay, MIN_DELAY);
+  if (delay != MIN_DELAY) {
+    delay = ObRandom::rand(MIN_DELAY, delay);
   }
-  delay = std::min(delay, max_delay);
   if (OB_FAIL(tx_desc_mgr_.acquire_tx_ref(tx.tx_id_))) {
     TRANS_LOG(WARN, "acquire tx ref fail", KR(ret), K(tx));
   } else {
