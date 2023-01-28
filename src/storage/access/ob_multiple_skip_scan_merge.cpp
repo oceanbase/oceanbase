@@ -116,6 +116,7 @@ int ObMultipleSkipScanMerge::open(const blocksstable::ObDatumRange &range, const
     prepare_rowkey(start_key_of_scan_rowkey_range(), range.start_key_, schema_rowkey_cnt_, true);
     prepare_rowkey(end_key_of_scan_rowkey_range(), range.end_key_, schema_rowkey_cnt_, false);
     scan_rowkey_range_.set_border_flag(range.get_border_flag());
+    scan_rowkey_range_.set_group_idx(range.get_group_idx());
     // generate key range for outputing rows
     for (int64_t i = 0; i < ss_rowkey_prefix_cnt_; ++i) {
       start_key_of_scan_rows_range()[i].set_min();
@@ -130,7 +131,17 @@ int ObMultipleSkipScanMerge::open(const blocksstable::ObDatumRange &range, const
                    schema_rowkey_cnt_ - ss_rowkey_prefix_cnt_,
                    false);
     scan_rows_range_.set_border_flag(skip_scan_range.get_border_flag());
-    STORAGE_LOG(TRACE, "open skip scan", K(schema_rowkey_cnt_), K(ss_rowkey_prefix_cnt_),
+    scan_rowkey_range_.set_group_idx(range.get_group_idx());
+    const ObColDescIArray *col_descs = nullptr;
+    if (OB_ISNULL(col_descs = access_param_->iter_param_.get_out_col_descs())) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "Unexpected null out cols", K(ret));
+    } else if (OB_FAIL(scan_rowkey_range_.prepare_memtable_readable(*col_descs, rowkey_allocator_))) {
+      STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(scan_rowkey_range_));
+    } else if (OB_FAIL(scan_rows_range_.prepare_memtable_readable(*col_descs, range_allocator_))) {
+      STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(scan_rows_range_));
+    }
+    STORAGE_LOG(TRACE, "open skip scan", K(ret), K(schema_rowkey_cnt_), K(ss_rowkey_prefix_cnt_),
         K(scan_rows_range_), K(range), K(skip_scan_range));
   }
   return ret;
