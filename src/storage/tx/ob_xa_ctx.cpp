@@ -2367,7 +2367,9 @@ int ObXACtx::xa_prepare_(const ObXATransID &xid, const int64_t timeout_us)
           int64_t affected_rows = 0;
           target_info.state_ = ObXATransState::PREPARING;
           xa_trans_state_ = ObXATransState::PREPARING;
+          // update xid in local including tx desc
           xid_ = xid;
+          tx_desc_->set_xid(xid);
           share::ObLSID coord;
           (void)unregister_timeout_task_();
           if (OB_FAIL(MTL(ObTransService*)->prepare_tx_coord(*tx_desc_, coord))) {
@@ -2425,9 +2427,6 @@ int ObXACtx::drive_prepare_(const ObXATransID &xid, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   share::ObLSID coordinator;
-  // TODO, FIX ME
-  const bool is_readonly = false;
-  // TODO, get a sche ctx (may be newly created), and use sche ctx to drive commit
   // first update coordinator into inner table
   if (OB_FAIL(MTL(ObTransService*)->prepare_tx(*tx_desc_, timeout_us, end_trans_cb_))) {
     if (OB_LIKELY(!is_exiting_)) {
