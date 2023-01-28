@@ -1576,6 +1576,7 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
 
+  TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
   common::ObAddr resource_server_addr; // MYADDR
   share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
   int64_t query_timeout = OB_INVALID_TIMESTAMP;
