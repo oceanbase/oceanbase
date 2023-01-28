@@ -77,7 +77,7 @@ TEST_F(TestChangeArbServiceStatus, test_change_arb_service_status)
   }
 
   // 2. enable tenant's arbitration service without arbitration service addr
-  ASSERT_EQ(OB_SUCCESS, sql.assign("alter tenant arbitration_tenant_1 enable arbitration service;"));
+  ASSERT_EQ(OB_SUCCESS, sql.assign("alter tenant arbitration_tenant_1 enable_arbitration_service = true;"));
   ASSERT_EQ(OB_OP_NOT_ALLOW, sql_proxy.write(sql.ptr(), affected_rows));
 
   // 3. enable tenant's arbitration service with arbitration service addr
@@ -95,7 +95,7 @@ TEST_F(TestChangeArbServiceStatus, test_change_arb_service_status)
   }
 
   // 1F not allow to enable arb service
-  ASSERT_EQ(OB_SUCCESS, sql.assign("alter tenant arbitration_tenant_1 enable arbitration service;"));
+  ASSERT_EQ(OB_SUCCESS, sql.assign("alter tenant arbitration_tenant_1 enable_arbitration_service = true;"));
   ASSERT_EQ(OB_OP_NOT_ALLOW, sql_proxy.write(sql.ptr(), affected_rows));
 
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as cnt "
@@ -112,7 +112,7 @@ TEST_F(TestChangeArbServiceStatus, test_change_arb_service_status)
   }
 
   // 5. disable tenant's arbitration service when tenant already in disabled status
-  ASSERT_EQ(OB_SUCCESS, sql.assign("alter tenant arbitration_tenant_1 disable arbitration service;"));
+  ASSERT_EQ(OB_SUCCESS, sql.assign("alter tenant arbitration_tenant_1 enable_arbitration_service = false;"));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
 
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as cnt "
@@ -128,8 +128,6 @@ TEST_F(TestChangeArbServiceStatus, test_change_arb_service_status)
     ASSERT_EQ(0, tmp_cnt);
   }
 
-  ASSERT_EQ(OB_SUCCESS, sql.assign("drop tenant arbitration_tenant_1 force;"));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
 }
 } // namespace share
 } // namespace oceanbase

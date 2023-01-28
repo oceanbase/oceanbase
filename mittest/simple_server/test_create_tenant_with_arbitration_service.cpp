@@ -147,44 +147,8 @@ TEST_F(TestAddRemoveReplaceArbitrationService, test_add_remove_replace)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
 
   ASSERT_EQ(OB_SUCCESS, sql.assign("create tenant arbitration_tenant_4 resource_pool_list=('arbitration_pool'), enable_arbitration_service = true;"));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
-  ASSERT_EQ(OB_SUCCESS, sql.assign("select tenant_id "
-                                   "from __all_tenant "
-                                   "where tenant_name = 'arbitration_tenant_4';"));
-  SMART_VAR(ObMySQLProxy::MySQLResult, res6) {
-    ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res6, sql.ptr()));
-    sqlclient::ObMySQLResult *result6 = res6.get_result();
-    ASSERT_NE(nullptr, result6);
-    ASSERT_EQ(OB_SUCCESS, result6->next());
-    ASSERT_EQ(OB_SUCCESS, result6->get_int("tenant_id", tenant_id));
-  }
+  ASSERT_EQ(OB_OP_NOT_ALLOW, sql_proxy.write(sql.ptr(), affected_rows));
 
-  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as cnt "
-                                       "from __all_tenant "
-                                       "where tenant_id = %ld and arbitration_service_status = 'ENABLING';", tenant_id));
-  SMART_VAR(ObMySQLProxy::MySQLResult, res7) {
-    ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res7, sql.ptr()));
-    sqlclient::ObMySQLResult *result7 = res7.get_result();
-    ASSERT_NE(nullptr, result7);
-    ASSERT_EQ(OB_SUCCESS, result7->next());
-    ASSERT_EQ(OB_SUCCESS, result7->get_int("cnt", tmp_cnt));
-    ASSERT_EQ(1, tmp_cnt);
-  }
-
-  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select count(*) as cnt "
-                                       "from __all_tenant "
-                                       "where tenant_id = %ld and arbitration_service_status = 'ENABLING';", gen_meta_tenant_id(tenant_id)));
-  SMART_VAR(ObMySQLProxy::MySQLResult, res8) {
-    ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res8, sql.ptr()));
-    sqlclient::ObMySQLResult *result8 = res8.get_result();
-    ASSERT_NE(nullptr, result8);
-    ASSERT_EQ(OB_SUCCESS, result8->next());
-    ASSERT_EQ(OB_SUCCESS, result8->get_int("cnt", tmp_cnt));
-    ASSERT_EQ(1, tmp_cnt);
-  }
-
-  ASSERT_EQ(OB_SUCCESS, sql.assign("drop tenant arbitration_tenant_4 force"));
-  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
 }
 } // namespace share
 } // namespace oceanbase

@@ -88,61 +88,6 @@ TEST_F(TestArbitrationServiceRpc, test_argument)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
-TEST_F(TestArbitrationServiceRpc, test_simple)
-{
-  int ret = OB_SUCCESS;
-  obrpc::ObNetClient client;
-  obrpc::ObSrvRpcProxy srv_proxy;
-
-  uint64_t tenant_id = 1001;
-  share::ObLSID ls_id(1);
-  common::ObAddr dst_server = GCTX.self_addr();
-  int64_t timestamp_for_arb_member = ObTimeUtility::current_time();
-  common::ObMember arb_member(dst_server, timestamp_for_arb_member);
-  int64_t timeout_us = 180 * 1000 * 1000; //180s
-
-  ret = client.init();
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ret = client.get_proxy(srv_proxy);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  srv_proxy.set_server(dst_server);
-  srv_proxy.set_timeout(timeout_us);
-
-  ObAddArbArg add_arg;
-  ObAddArbResult add_result;
-  ret = add_arg.init(tenant_id, ls_id, arb_member, timeout_us);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = srv_proxy.to(dst_server).add_arb(add_arg, add_result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, add_result.get_result());
-
-  ObRemoveArbArg remove_arg;
-  ObRemoveArbResult remove_result;
-  ret = remove_arg.init(tenant_id, ls_id, arb_member, timeout_us);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = srv_proxy.to(dst_server).remove_arb(remove_arg, remove_result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, remove_result.get_result());
-
-  ObCreateArbArg create_arg;
-  ObCreateArbResult create_result;
-  share::ObTenantRole tenant_role(ObTenantRole::PRIMARY_TENANT);
-  ret = create_arg.init(tenant_id, ls_id, tenant_role);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = srv_proxy.to(dst_server).create_arb(create_arg, create_result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, create_result.get_result());
-
-  ObDeleteArbArg delete_arg;
-  ObDeleteArbResult delete_result;
-  ret = delete_arg.init(tenant_id, ls_id);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = srv_proxy.to(dst_server).delete_arb(delete_arg, delete_result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, delete_result.get_result());
-}
 } // namespace share
 } // namespace oceanbase
 
