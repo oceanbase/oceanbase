@@ -1129,7 +1129,12 @@ int ObBlackFilterExecutor::init_evaluated_datums()
     }
     FOREACH_CNT_X(e, eval_exprs, OB_SUCC(ret)) {
       eval_infos_[n_eval_infos_++] = &(*e)->get_eval_info(op_.get_eval_ctx());
-      datum_eval_flags_[n_datum_eval_flags_++] = &(*e)->get_evaluated_flags(op_.get_eval_ctx());
+      if (op_.is_vectorized() && (*e)->is_batch_result()) {
+        datum_eval_flags_[n_datum_eval_flags_++] = &(*e)->get_evaluated_flags(op_.get_eval_ctx());
+      }
+    }
+    if (OB_SUCC(ret)) {
+      clear_evaluated_infos();
     }
   }
   return ret;
