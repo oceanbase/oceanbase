@@ -3163,7 +3163,7 @@ drop procedure bug7013|
 #
 --disable_warnings ONCE
 drop table if exists t4|
---error 1115
+
 create table t4 (
   a mediumint(8) unsigned not null auto_increment,
   b smallint(5) unsigned not null,

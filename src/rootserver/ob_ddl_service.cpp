@@ -28426,7 +28426,7 @@ int ObDDLService::recompile_view(const ObTableSchema &view_schema, const bool re
   ObSchemaService *schema_service = nullptr;
   uint64_t data_version = 0;
   CK (OB_NOT_NULL(schema_service_) && OB_NOT_NULL(schema_service = schema_service_->get_schema_service()));
-  LOG_WARN("recompile view", K(view_schema.get_table_id()), K(view_schema.get_table_name()), K(ret), K(reset_view_column_infos));
+  LOG_TRACE("recompile view", K(view_schema.get_table_id()), K(view_schema.get_table_name()), K(ret), K(reset_view_column_infos));
   ObSchemaGetterGuard schema_guard;
   const ObSimpleTableSchemaV2 *view_schema_in_guard = nullptr;
   if (OB_FAIL(ret)) {
