@@ -1175,7 +1175,6 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
                             ObTabletHandle &handle) const
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_meta_.ls_id_, tablet_id);
   const SCN tablet_change_checkpoint_scn = ls_meta_.get_tablet_change_checkpoint_scn();
   ObTabletHandle tablet_handle;
@@ -1192,18 +1191,29 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
       LOG_WARN("failed to get tablet", K(ret), K(key));
     } else if (scn <= tablet_change_checkpoint_scn) {
       LOG_WARN("tablet already gc", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
-    } else if (OB_TMP_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_scn(ls_meta_.ls_id_, min_scn))) {
-      ret = tmp_ret;
+    } else if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_scn(ls_meta_.ls_id_, min_scn))) {
       LOG_WARN("failed to get_min_unreplayed_scn", KR(ret), K_(ls_meta), K(scn), K(tablet_id));
-    } else if (!min_scn.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("min_scn is invalid", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
-    } else if (scn > min_scn) {
-      ret = OB_EAGAIN;
-      LOG_INFO("tablet does not exist, but need retry", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(min_scn));
-    } else {
-      LOG_INFO("tablet already gc, but scn is more than min scn", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(min_scn));
     }
+    // double check for this scenario:
+    // 1. get_tablet return OB_TABLET_NOT_EXIST
+    // 2. create tablet
+    // 3. get_min_unreplayed_scn > scn
+    else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST != ret) {
+        LOG_WARN("failed to get tablet", K(ret), K(key));
+      } else if (!min_scn.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("min_scn is invalid", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
+      } else if (scn > min_scn) {
+        ret = OB_EAGAIN;
+        LOG_INFO("tablet does not exist, but need retry", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(min_scn));
+      } else {
+        LOG_INFO("tablet already gc, but scn is more than min scn", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(min_scn));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else {
     ObTabletTxMultiSourceDataUnit tx_data;
     if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data, false/*check_valid*/))) {
