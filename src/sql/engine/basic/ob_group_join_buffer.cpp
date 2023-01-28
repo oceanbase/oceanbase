@@ -508,16 +508,16 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
         }
         ignore_end = true;
       }
-      if (OB_SUCC(ret)) {
-        if (!rescan_params_->empty()) {
-          op_->set_pushdown_param_null(*rescan_params_);
-        }
-        if (batch_rows->size_ == 0 && batch_rows->end_) {
-          // do nothing
-        } else {
-          last_batch_.from_exprs(*eval_ctx_, batch_rows->skip_, batch_rows->size_);
-          save_last_batch_ = true;
-        }
+    }
+    if (OB_SUCC(ret)) {
+      if (!rescan_params_->empty()) {
+        op_->set_pushdown_param_null(*rescan_params_);
+      }
+      if (batch_rows->size_ == 0 && batch_rows->end_) {
+        // do nothing
+      } else {
+        last_batch_.from_exprs(*eval_ctx_, batch_rows->skip_, batch_rows->size_);
+        save_last_batch_ = true;
       }
       op_->clear_evaluated_flag();
     }
@@ -607,6 +607,9 @@ int ObGroupJoinBufffer::get_next_batch_from_store(int64_t max_rows, int64_t &rea
         max_rows = tmp_max_rows;
       }
       if (max_rows > 0) {
+        // since we do not know how many rows we got last time, we need to save all possible
+        // batch datums and restore them before getting next batch from left child
+        last_batch_.extend_save(*eval_ctx_, spec_->max_batch_size_);
         // we are still reading results for the current rescan param,
         // need to rescan right child
         if (OB_FAIL(left_store_iter_.get_next_batch(left_->get_spec().output_,
