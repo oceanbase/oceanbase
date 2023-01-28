@@ -19,6 +19,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "share/ob_encryption_util.h"
+#include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -49,17 +50,24 @@ int calc_digest_text(ObIAllocator &allocator,
     ObParser parser(allocator, session->get_sql_mode(), cs_type);
     ParseResult parse_result;
     ParamStore tmp_params((ObWrapperAllocator(allocator)));
+    stmt::StmtType stmt_type = stmt::T_NONE;
     if (OB_FAIL(parser.parse(sql_str, parse_result))) {
       LOG_WARN("fail to parse sql str", K(sql_str), K(ret));
-    } else if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
-                                                                       true,
-                                                                       pc_ctx,
-                                                                       parse_result.result_tree_,
-                                                                       tmp_params,
-                                                                       cs_type))) {
-      LOG_WARN("fail to parameterize syntax tree", K(sql_str), K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
+      LOG_WARN("failed to resolve stmt type", K(ret));
+    } else if (ObStmt::is_dml_stmt(stmt_type) && !ObStmt::is_show_stmt(stmt_type)) {
+      if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
+                                                                  true,
+                                                                  pc_ctx,
+                                                                  parse_result.result_tree_,
+                                                                  tmp_params,
+                                                                  cs_type))) {
+        LOG_WARN("fail to parameterize syntax tree", K(sql_str), K(ret));
+      } else {
+        digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+      }
     } else {
-      digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+      digest_str = sql_str;
     }
   }
   return ret;
