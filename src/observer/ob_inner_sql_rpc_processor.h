@@ -73,8 +73,24 @@ private:
       const ObInnerSQLTransmitArg &transmit_arg);
   int process_lock_table(sqlclient::ObISQLConnection *con,
                          const ObInnerSQLTransmitArg &arg);
+  int process_unlock_table(sqlclient::ObISQLConnection *con,
+                           const ObInnerSQLTransmitArg &arg);
+  int process_lock_partition(sqlclient::ObISQLConnection *con,
+                             const ObInnerSQLTransmitArg &arg);
+  int process_unlock_partition(sqlclient::ObISQLConnection *con,
+                               const ObInnerSQLTransmitArg &arg);
+  int process_lock_subpartition(sqlclient::ObISQLConnection *con,
+                                const ObInnerSQLTransmitArg &arg);
+  int process_unlock_subpartition(sqlclient::ObISQLConnection *con,
+                                  const ObInnerSQLTransmitArg &arg);
   int process_lock_tablet(sqlclient::ObISQLConnection *con,
                           const ObInnerSQLTransmitArg &arg);
+  int process_unlock_tablet(sqlclient::ObISQLConnection *con,
+                            const ObInnerSQLTransmitArg &arg);
+  int process_lock_obj(sqlclient::ObISQLConnection *con,
+                       const ObInnerSQLTransmitArg &arg);
+  int process_unlock_obj(sqlclient::ObISQLConnection *con,
+                         const ObInnerSQLTransmitArg &arg);
   const observer::ObGlobalContext &gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObInnerSqlRpcP);
 };

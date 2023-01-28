@@ -975,7 +975,7 @@ int ObBootstrap::batch_create_schema(ObDDLService &ddl_service,
 {
   int ret = OB_SUCCESS;
   const int64_t begin_time = ObTimeUtility::current_time();
-  ObDDLSQLTransaction trans(&(ddl_service.get_schema_service()), true, true);
+  ObDDLSQLTransaction trans(&(ddl_service.get_schema_service()), true, true, false, false);
   if (begin < 0 || begin >= end || end > table_schemas.count()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(begin), K(end),
@@ -1188,6 +1188,7 @@ int ObBootstrap::init_global_stat()
     const int64_t rootservice_epoch = 0;
     const SCN snapshot_gc_scn = SCN::min_scn();
     const int64_t snapshot_gc_timestamp = 0;
+    const int64_t ddl_epoch = 0;
     ObGlobalStatProxy global_stat_proxy(trans, OB_SYS_TENANT_ID);
     ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
     if (OB_FAIL(trans.start(&sql_proxy, OB_SYS_TENANT_ID))) {
@@ -1197,10 +1198,10 @@ int ObBootstrap::init_global_stat()
       LOG_WARN("schema_status_proxy is null", KR(ret));
     } else if (OB_FAIL(global_stat_proxy.set_init_value(
                OB_CORE_SCHEMA_VERSION, baseline_schema_version,
-               rootservice_epoch, snapshot_gc_scn, snapshot_gc_timestamp,
+               rootservice_epoch, snapshot_gc_scn, snapshot_gc_timestamp, ddl_epoch,
                DATA_CURRENT_VERSION, DATA_CURRENT_VERSION))) {
       LOG_WARN("set_init_value failed", KR(ret), "schema_version", OB_CORE_SCHEMA_VERSION,
-               K(baseline_schema_version), K(rootservice_epoch), "data_version", DATA_CURRENT_VERSION);
+               K(baseline_schema_version), K(rootservice_epoch), K(ddl_epoch), "data_version", DATA_CURRENT_VERSION);
     }
 
     int temp_ret = OB_SUCCESS;

@@ -30,12 +30,10 @@ class ObTabletDrop
 public:
   ObTabletDrop(
       const uint64_t tenant_id,
-      share::ObLSTableOperator &lst_operator,
       ObMySQLTransaction &trans,
       int64_t schema_version)
                 : tenant_id_(tenant_id),
                   trans_(trans),
-                  lst_operator_(&lst_operator),
                   allocator_("TbtDrop"),
                   schema_version_(schema_version),
                   inited_(false) {}
@@ -52,23 +50,17 @@ public:
   // 2. or all are local indexes of a table
   int add_drop_tablets_of_table_arg(
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas);
+  int get_ls_from_table(const share::schema::ObTableSchema &table_schema,
+                        common::ObIArray<share::ObLSID> &assign_ls_id_array);
 private:
-  int find_leader_of_ls_(const share::ObLSID &id, ObAddr &addr);
   int drop_tablet_(
       const common::ObIArray<const share::schema::ObTableSchema *> &table_schema_ptr_array,
       const share::ObLSID &ls_key,
       const int64_t i, 
       const int64_t j);
-  int get_ls_for_table_(
-      const share::schema::ObTableSchema &table_schema,
-      common::ObIArray<share::ObLSID> &ls_ids);
-  int get_tablet_list_str_(
-      const share::schema::ObTableSchema &table_schema,
-      ObSqlString &tablet_list);
 private:
   const uint64_t tenant_id_;
   ObMySQLTransaction &trans_;
-  share::ObLSTableOperator *lst_operator_;
   ObArenaAllocator allocator_;
   common::hash::ObHashMap<share::ObLSID, common::ObIArray<ObTabletID>*> args_map_;
   int64_t schema_version_;

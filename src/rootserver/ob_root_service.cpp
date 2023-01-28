@@ -95,6 +95,9 @@
 #include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "share/scn.h"
+#include "logservice/palf_handle_guard.h"
+#include "logservice/ob_log_service.h"
+
 namespace oceanbase
 {
 
@@ -854,7 +857,7 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init inner queue failed",
               "thread_count", 1,
               "queue_size", static_cast<int64_t>(config_->rootservice_async_task_queue_size), KR(ret));
-  } else if (OB_FAIL(zone_manager_.init(sql_proxy_))) { 
+  } else if (OB_FAIL(zone_manager_.init(sql_proxy_))) {
     // init zone manager
     FLOG_WARN("init zone manager failed", KR(ret));
   } else if (OB_FAIL(server_manager_.init(status_change_cb_, server_change_callback_, sql_proxy_,
@@ -1104,6 +1107,8 @@ int ObRootService::start_service()
       FLOG_WARN("failed to schedule refresh_server task", KR(ret));
     } else if (OB_FAIL(schedule_restart_timer_task(0))) {
       FLOG_WARN("failed to schedule restart task", KR(ret));
+    } else if (OB_FAIL(schema_service_->get_ddl_epoch_mgr().remove_all_ddl_epoch())) {
+      FLOG_WARN("fail to remove ddl epoch", KR(ret));
     } else if (debug_) {
       if (OB_FAIL(init_debug_database())) {
         FLOG_WARN("init_debug_database failed", KR(ret));
@@ -4287,6 +4292,36 @@ int ObRootService::truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::O
   return ret;
 }
 
+/*
+ * new parallel truncate table
+ */
+int ObRootService::truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else {
+    uint64_t compat_version = 0;
+    SCN frozen_scn;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, compat_version))) {
+      LOG_WARN("get min data_version failed", K(ret), K(arg.tenant_id_));
+    } else if (compat_version < DATA_VERSION_4_1_0_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("server state is not suppported when tenant's data version is below 4.1.0.0", KR(ret), K(compat_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.1.0.0, truncate table is ");
+    } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.tenant_id_, frozen_scn))) {
+      LOG_WARN("get_frozen_scn failed", K(ret));
+    } else if (OB_FAIL(ddl_service_.new_truncate_table(arg, res, frozen_scn))) {
+      LOG_WARN("ddl service failed to truncate table", K(arg), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObRootService::create_table_like(const ObCreateTableLikeArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -6874,7 +6909,7 @@ int ObRootService::get_readwrite_servers(
         LOG_WARN("fail to get zone", K(ret));
       } else {
         ObZoneType zone_type = static_cast<ObZoneType>(zone_info.zone_type_.value_);
-        if (common::ZONE_TYPE_READWRITE == zone_type 
+        if (common::ZONE_TYPE_READWRITE == zone_type
             || common::ZONE_TYPE_ENCRYPTION == zone_type) {
           if (OB_FAIL(readwrite_servers.push_back(server))) {
             LOG_WARN("fail to push back", K(ret));
@@ -9635,9 +9670,9 @@ int ObRootService::admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg
   } else if (!arg.is_backup_config_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("admin set config type not backup config", K(ret), K(arg));
-  } 
+  }
   share::BackupConfigItemPair config_item;
-  share::ObBackupConfigParserMgr config_parser_mgr;  
+  share::ObBackupConfigParserMgr config_parser_mgr;
   ARRAY_FOREACH_X(arg.items_, i , cnt, OB_SUCC(ret)) {
     const ObAdminSetConfigItem &item = arg.items_.at(i);
     uint64_t exec_tenant_id = OB_INVALID_TENANT_ID;
@@ -9661,7 +9696,7 @@ int ObRootService::admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg
     } else {
       exec_tenant_id = item.exec_tenant_id_;
     }
-    
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(trans.start(&sql_proxy_, gen_meta_tenant_id(exec_tenant_id)))) {
       LOG_WARN("fail to start trans", K(ret));
@@ -9757,7 +9792,7 @@ int ObRootService::check_majority_and_log_in_sync_(
       } while ((OB_OP_NOT_ALLOW == ret) && need_retry);
     }
   }
-  LOG_INFO("check majority and log in sync finish", K(to_stop_servers), 
+  LOG_INFO("check majority and log in sync finish", K(to_stop_servers),
       K(skip_log_sync_check), "cost_time", ObTimeUtility::current_time() - start_time);
   return ret;
 }

@@ -28,18 +28,20 @@ using namespace common::sqlclient;
 namespace share
 {
 const char *ObGlobalStatProxy::TENANT_ID_CNAME = "tenant_id";
+
 int ObGlobalStatProxy::set_init_value(
     const int64_t core_schema_version,
     const int64_t baseline_schema_version,
     const int64_t rootservice_epoch,
     const SCN &snapshot_gc_scn,
     const int64_t gc_schema_version,
+    const int64_t ddl_epoch,
     const uint64_t target_data_version,
     const uint64_t current_data_version)
 {
   int ret = OB_SUCCESS;
   if (!is_valid() || core_schema_version <= 0 || baseline_schema_version < -1
-      || !snapshot_gc_scn.is_valid() || OB_INVALID_ID == rootservice_epoch || gc_schema_version < 0
+      || !snapshot_gc_scn.is_valid() || OB_INVALID_ID == rootservice_epoch || gc_schema_version < 0 || ddl_epoch < 0
       || target_data_version <= 0 || current_data_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "self valid", is_valid(), K(rootservice_epoch),
@@ -52,6 +54,7 @@ int ObGlobalStatProxy::set_init_value(
     ObGlobalStatItem rootservice_epoch_item(list, "rootservice_epoch", rootservice_epoch);
     ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn.get_val_for_inner_table_field());
     ObGlobalStatItem gc_schema_version_item(list, "gc_schema_version", gc_schema_version);
+    ObGlobalStatItem ddl_epoch_item(list, "ddl_epoch", ddl_epoch);
     ObGlobalStatItem target_data_version_item(list, "target_data_version", static_cast<int64_t>(target_data_version));
     ObGlobalStatItem current_data_version_item(list, "current_data_version", static_cast<int64_t>(current_data_version));
 
@@ -66,6 +69,7 @@ int ObGlobalStatProxy::set_tenant_init_global_stat(
     const int64_t core_schema_version,
     const int64_t baseline_schema_version,
     const SCN &snapshot_gc_scn,
+    const int64_t ddl_epoch,
     const uint64_t target_data_version,
     const uint64_t current_data_version)
 {
@@ -84,6 +88,7 @@ int ObGlobalStatProxy::set_tenant_init_global_stat(
     ObGlobalStatItem::ItemList list;
     ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
     ObGlobalStatItem baseline_schema_version_item(list, "baseline_schema_version", baseline_schema_version);
+    ObGlobalStatItem ddl_epoch_item(list, "ddl_epoch", ddl_epoch);
     ObGlobalStatItem target_data_version_item(list, "target_data_version", static_cast<int64_t>(target_data_version));
     ObGlobalStatItem current_data_version_item(list, "current_data_version", static_cast<int64_t>(current_data_version));
     // only Normal state tenant can refresh snapshot_gc_scn
@@ -166,6 +171,18 @@ int ObGlobalStatProxy::get_snapshot_gc_scn(SCN &snapshot_gc_scn)
   return ret;
 }
 
+int ObGlobalStatProxy::set_ddl_epoch(const int64_t ddl_epoch, bool is_incremental)
+{
+  int ret = OB_SUCCESS;
+  if (ddl_epoch < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_epoch));
+  } else {
+    SET_ITEM("ddl_epoch", ddl_epoch, is_incremental);
+  }
+  return ret;
+}
+
 int ObGlobalStatProxy::update_current_data_version(const uint64_t current_data_version)
 {
   int ret = OB_SUCCESS;
@@ -177,6 +194,22 @@ int ObGlobalStatProxy::update_current_data_version(const uint64_t current_data_v
     LOG_WARN("invalid arg", KR(ret), "valid", is_valid(), K(current_data_version));
   } else if (OB_FAIL(update(list, is_incremental))) {
     LOG_WARN("update failed", KR(ret), K(list));
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::get_ddl_epoch(int64_t &ddl_epoch)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem ddl_epoch_item(list, "ddl_epoch", ddl_epoch);
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), "self valid", is_valid());
+  } else if (OB_FAIL(get(list))) {
+    LOG_WARN("get failed", K(ret));
+  } else {
+    ddl_epoch = ddl_epoch_item.value_;
   }
   return ret;
 }
@@ -472,7 +505,7 @@ int ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
           snapshot_gc_scn_val = strtoll(buf, &endptr, 0);
           if ('\0' != *endptr) {
             ret = OB_INVALID_DATA;
-            LOG_WARN("invalid data, is not int value", KR(ret), K(snapshot_gc_scn_str), 
+            LOG_WARN("invalid data, is not int value", KR(ret), K(snapshot_gc_scn_str),
               K(snapshot_gc_scn_str.ptr()), K(strlen(snapshot_gc_scn_str.ptr())));
           } else if (OB_FAIL(snapshot_gc_scn.convert_for_inner_table_field(snapshot_gc_scn_val))) {
             LOG_WARN("fail to convert val to SCN", KR(ret), K(snapshot_gc_scn_val));
@@ -514,6 +547,67 @@ int ObGlobalStatProxy::update_snapshot_gc_scn(
       LOG_WARN("fail to append sql", KR(ret), K(tenant_id), K(snapshot_gc_scn_val));
     } else if (OB_FAIL(sql_client.write(tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(sql));
+    }
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::select_ddl_epoch_for_update(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    int64_t &ddl_epoch)
+{
+  int ret = OB_SUCCESS;
+  ddl_epoch = 0;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt(
+                "SELECT column_value FROM %s WHERE TABLE_NAME = '__all_global_stat' AND COLUMN_NAME"
+                " = 'ddl_epoch' FOR UPDATE", OB_ALL_CORE_TABLE_TNAME))) {
+      LOG_WARN("assign sql failed", K(ret));
+    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", K(ret), K(sql));
+    } else if (NULL == (result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get sql result", K(ret));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("fail to get next row", K(ret));
+    } else {
+      ObString ddl_epoch_str;
+      EXTRACT_VARCHAR_FIELD_MYSQL(*result, "column_value", ddl_epoch_str);
+
+      char *endptr = NULL;
+      char buf[common::MAX_ZONE_INFO_LENGTH];
+      if (OB_SUCC(ret)) {
+        const int64_t str_len = ddl_epoch_str.length();
+        const int64_t buf_len = sizeof(buf);
+        if ((str_len <= 0) || ddl_epoch_str.empty()) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("get invalid gc timestamp str", KR(ret), K(str_len), K(ddl_epoch_str));
+        } else if (str_len >= buf_len) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("buf is not enough to hold ddl_epoch_str", KR(ret), K(str_len), K(buf_len));
+        } else {
+          MEMCPY(buf, ddl_epoch_str.ptr(), str_len);
+          buf[str_len] = '\0';
+          ddl_epoch = strtoll(buf, &endptr, 0);
+          if ('\0' != *endptr) {
+            ret = OB_INVALID_DATA;
+            LOG_WARN("invalid data, is not int value", KR(ret), K(ddl_epoch_str));
+          }
+        }
+      }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      //nothing todo
+    } else if (OB_ITER_END != (tmp_ret = result->next())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get more row than one", KR(ret), KR(tmp_ret));
+    } else {
+      ret = OB_SUCCESS;
     }
   }
   return ret;

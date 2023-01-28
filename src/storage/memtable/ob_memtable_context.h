@@ -454,6 +454,7 @@ public:
   int check_lock_exist(const ObLockID &lock_id,
                        const ObTableLockOwnerID &owner_id,
                        const ObTableLockMode mode,
+                       const ObTableLockOpType op_type,
                        bool &is_exist,
                        ObTableLockMode &lock_mode_in_same_trans) const;
   int check_modify_schema_elapsed(const common::ObTabletID &tablet_id,

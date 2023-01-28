@@ -196,6 +196,8 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObHighPriorityTableLockTaskP, gctx_);
   RPC_PROCESSOR(ObOutTransLockTableP, gctx_);
   RPC_PROCESSOR(ObOutTransUnlockTableP, gctx_);
+  RPC_PROCESSOR(ObBatchLockTaskP, gctx_);
+  RPC_PROCESSOR(ObHighPriorityBatchLockTaskP, gctx_);
   RPC_PROCESSOR(ObAdminRemoveLockP);
   RPC_PROCESSOR(ObAdminUpdateLockP);
 

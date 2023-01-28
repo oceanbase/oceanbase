@@ -13,6 +13,7 @@
 #ifndef _OCEANBASE_ROOTSERVER_OB_DDL_SERVICE_H_
 #define _OCEANBASE_ROOTSERVER_OB_DDL_SERVICE_H_
 
+#include "lib/ob_define.h"
 #include "share/ob_define.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/string/ob_string.h"
@@ -34,6 +35,7 @@
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/ddl/ob_ddl_clog.h"
 #include "share/ob_freeze_info_proxy.h"
+#include "common/ob_common_utility.h"
 #include "share/config/ob_config.h" // ObConfigPairs
 
 namespace oceanbase
@@ -91,6 +93,27 @@ class ObDDLSQLTransaction;
 class ObTableGroupHelp;
 //class ObFreezeInfoManager;
 class ObSnapshotInfoManager;
+
+class ObDDLTaskController
+{
+public:
+  ObDDLTaskController() : inited_(false) {}
+  int init();
+  static const int DDL_TASK_COND_SLOT = 16;
+  int register_task_and_assign_schema_version(share::schema::ObMultiVersionSchemaService *schema_service,
+      const uint64_t tenant_id,
+      const uint64_t schema_version_count,
+      ObIArray<int64_t> &schema_version_res);
+  int wait_task_ready(int64_t schema_version);
+  int del_task_schema_version(int64_t schema_version);
+private:
+  int check_task_ready(int64_t schema_version, bool &ready);
+private:
+  bool inited_;
+  ObThreadCond cond_slot_[DDL_TASK_COND_SLOT];
+  ObSEArray<int64_t, 32> tasks_;
+  common::SpinRWLock lock_;
+};
 
 class ObDDLService
 {
@@ -403,6 +426,35 @@ public:
   virtual int truncate_table(const obrpc::ObTruncateTableArg &arg,
                              const obrpc::ObDDLRes &ddl_res,
                              const share::SCN &frozen_scn);
+  int get_last_schema_version(int64_t &last_schema_version);
+  int check_db_and_table_is_exist(const obrpc::ObTruncateTableArg &arg,
+                                  ObMySQLTransaction &trans,
+                                  uint64_t &database_id,
+                                  uint64_t &table_id);
+  int get_index_lob_table_schema(const ObTableSchema &orig_table_schema,
+                                 const ObRefreshSchemaStatus &schema_status,
+                                 common::ObArray<const ObTableSchema*> &table_schemas,
+                                 ObArenaAllocator &allocator,
+                                 ObMySQLTransaction &trans);
+  int check_table_schema_is_legal(const ObDatabaseSchema & databae_schema,
+                                  const ObTableSchema &table_schema,
+                                  const bool check_foreign_key,
+                                  ObMySQLTransaction &trans);
+  int check_is_foreign_key_parent_table(const ObTableSchema &table_schema,
+                                        ObMySQLTransaction &trans);
+
+  int drop_and_create_tablet(const int64_t &schema_version,
+                             const ObIArray<const ObTableSchema*> &orig_table_schemas,
+                             const ObIArray<ObTableSchema*> &new_table_schemas,
+                             ObMySQLTransaction &trans);
+  int generate_table_schemas(const ObIArray<const ObTableSchema*> &orig_table_schemas,
+                             ObIArray<ObTableSchema*> &new_table_schemas,
+                             ObIArray<int64_t> &gen_schema_version_array,
+                             ObArenaAllocator &allocator,
+                             int64_t &task_id);
+  virtual int new_truncate_table(const obrpc::ObTruncateTableArg &arg,
+                                 const obrpc::ObDDLRes &ddl_res,
+                                 const share::SCN &frozen_scn);
   int drop_not_null_cst_in_column_flag(const ObTableSchema &orig_table_schema,
                                        const AlterTableSchema &alter_table_schema,
                                        ObTableSchema &new_table_schema,
@@ -511,6 +563,13 @@ public:
                                      char* buf,
                                      const int64_t &buf_len,
                                      int64_t &pos) const;
+  int fill_truncate_table_fk_err_msg_without_schema_guard(const share::schema::ObForeignKeyInfo &foreign_key_info,
+                                                          const share::schema::ObTableSchema &parent_table_schema,
+                                                          const ObRefreshSchemaStatus &schema_status,
+                                                          ObMySQLTransaction &trans,
+                                                          char *buf,
+                                                          const int64_t &buf_len,
+                                                          int64_t &pos) const;
   int get_uk_cst_id_for_self_ref(const ObIArray<share::schema::ObTableSchema> &table_schemas,
                                  const obrpc::ObCreateForeignKeyArg &foreign_key_arg,
                                  share::schema::ObForeignKeyInfo &foreign_key_info);
@@ -529,7 +588,7 @@ public:
       const ObTableSchema *orig_table_schema,
       obrpc::ObAlterTableArg &alter_table_arg,
       ObMockFKParentTableSchema &mock_fk_parent_table_schema);
-  
+
   int check_can_drop_primary_key(
       const share::schema::ObTableSchema &orgin_table_schema);
   int drop_primary_key(ObTableSchema &new_table_schema);
@@ -1422,6 +1481,16 @@ private:
                               ObMySQLTransaction &trans,
                               const common::ObString *ddl_stmt_str,
                               const common::ObString &db_name);
+  int new_truncate_table_in_trans(const ObIArray<const share::schema::ObTableSchema*> &orig_table_schemas,
+                                  ObMySQLTransaction &trans,
+                                  const ObString *ddl_stmt_str);
+  int restore_obj_priv_after_truncation(
+      ObDDLOperator &ddl_operator,
+      ObMySQLTransaction &trans,
+      common::ObIArray<share::schema::ObObjPriv> &orig_obj_privs_ora,
+      uint64_t new_table_id,
+      const common::ObString &database_name,
+      const common::ObString &table_name);
   int drop_aux_table_in_truncate(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1719,6 +1788,10 @@ public:
       const SCHEMA &schema,
       share::schema::ObSchemaGetterGuard &schema_guard,
       common::ObIArray<common::ObRegion> &primary_regions);
+public:
+  int ddl_rlock();
+  int ddl_wlock();
+  int ddl_unlock() { return ddl_lock_.unlock(); }
 
 private:
   int generate_tenant_schema(
@@ -2166,6 +2239,10 @@ private:
                                   ObDDLOperator &ddl_operator,
                                   ObMySQLTransaction &trans,
                                   common::ObIArray<share::schema::ObObjPriv> &orig_obj_privs_ora);
+  int inner_drop_and_create_tablet_(const int64_t &schema_version,
+                                    const ObIArray<const ObTableSchema*> &orig_table_schemas,
+                                    const ObIArray<ObTableSchema*> &new_table_schemas,
+                                    ObMySQLTransaction &trans);
 private:
   bool inited_;
   volatile bool stopped_;
@@ -2179,7 +2256,9 @@ private:
   ObZoneManager *zone_mgr_;
   ObUnitManager *unit_mgr_;
   ObSnapshotInfoManager *snapshot_mgr_;
-
+  mutable common::SpinRWLock pz_entity_cnt_lock_;
+  ObDDLTaskController ddl_task_controller_;
+  ObLatch ddl_lock_; // for ddl concurrent control
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLService);
 };
@@ -2189,15 +2268,20 @@ class ObDDLSQLTransaction : public common::ObMySQLTransaction
 public:
   ObDDLSQLTransaction(share::schema::ObMultiVersionSchemaService *schema_service,
                       const bool need_end_signal = true,
-                      const bool enable_query_stash = false)
+                      const bool enable_query_stash = false,
+                      const bool enable_ddl_parallel = false,
+                      const bool enable_check_ddl_epoch = true)
                       : common::ObMySQLTransaction(enable_query_stash),
                         schema_service_(schema_service),
                         tenant_id_(OB_INVALID_TENANT_ID),
                         start_operation_schema_version_(OB_INVALID_VERSION),
                         start_operation_tenant_id_(OB_INVALID_TENANT_ID),
-                        need_end_signal_(need_end_signal)
+                        need_end_signal_(need_end_signal),
+                        enable_ddl_parallel_(enable_ddl_parallel),
+                        enable_check_ddl_epoch_(enable_check_ddl_epoch),
+                        trans_start_ddl_epoch_(OB_INVALID_VERSION)
                         {}
-  virtual ~ObDDLSQLTransaction() {};
+  virtual ~ObDDLSQLTransaction();
 
 public:
   // If you commit the transaction, you need to write a line in ddl_operation once, the mark of end
@@ -2213,10 +2297,14 @@ public:
   virtual int start(ObISQLClient *proxy,
                     const uint64_t tenant_id,
                     bool with_snapshot = false) override;
-
   static int lock_all_ddl_operation(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id);
+  // use table_lock support ddl exclusive
+  int lock_all_ddl_operation(
+      common::ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const bool enable_ddl_parallel);
   int register_tx_data(const uint64_t tenant_id,
                        const share::ObLSID &ls_id,
                        const transaction::ObTxDataSourceType &type,
@@ -2225,6 +2313,7 @@ public:
 private:
   // regist multi_data_source data into trans
   int regist_multi_source_data_();
+  int lock_ddl_epoch(ObISQLClient *proxy);
 
 private:
   share::schema::ObMultiVersionSchemaService *schema_service_;
@@ -2237,6 +2326,12 @@ private:
   uint64_t start_operation_tenant_id_;
   //no need to set end_signal while ddl end transaction
   bool need_end_signal_;
+  // enable ddl parallel
+  bool enable_ddl_parallel_;
+
+  bool enable_check_ddl_epoch_;
+  // for compare
+  int64_t trans_start_ddl_epoch_;
 };
 // Fill in the partition name and the high values of the last partition
 template<typename SCHEMA, typename ALTER_SCHEMA>

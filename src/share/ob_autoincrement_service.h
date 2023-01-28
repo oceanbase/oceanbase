@@ -381,6 +381,18 @@ public:
                           const common::ObIArray<AutoincKey> &order_autokeys,
                           const common::ObIArray<AutoincKey> &noorder_autokeys,
                           common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values);
+  int reinit_autoinc_row(const uint64_t &tenant_id,
+                         const uint64_t &table_id,
+                         const uint64_t &column_id,
+                         common::ObMySQLTransaction &trans);
+  int lock_autoinc_row(const uint64_t &tenant_id,
+                       const uint64_t &table_id,
+                       const uint64_t &column_id,
+                       common::ObMySQLTransaction &trans);
+  int reset_autoinc_row(const uint64_t &tenant_id,
+                        const uint64_t &table_id,
+                        const uint64_t &column_id,
+                        common::ObMySQLTransaction &trans);
 
 private:
   uint64_t get_max_value(const common::ObObjType type);

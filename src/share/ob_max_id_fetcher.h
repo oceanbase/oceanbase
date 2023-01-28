@@ -105,8 +105,10 @@ private:
   static const char *max_id_name_info_[OB_MAX_ID_TYPE][2];
   int convert_id_type(const ObMaxIdType &src, ObMaxIdType &dst);
 
+  static const int64_t MAX_TENANT_MUTEX_BUCKET_CNT = 4096;
 private:
   common::ObMySQLProxy &proxy_;
+  static lib::ObMutex mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
 
   DISALLOW_COPY_AND_ASSIGN(ObMaxIdFetcher);
 };

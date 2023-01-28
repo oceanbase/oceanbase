@@ -124,6 +124,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -139,6 +140,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
   ret = mem_ctx_.check_lock_exist(DEFAULT_OUT_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -150,6 +152,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -160,6 +163,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
   ret = mem_ctx_.check_lock_exist(DEFAULT_OUT_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -174,6 +178,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -184,6 +189,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -219,6 +225,7 @@ TEST_F(TestMemCtxTableLock, clear_table_lock)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -233,6 +240,7 @@ TEST_F(TestMemCtxTableLock, clear_table_lock)
   ret = mem_ctx_.check_lock_exist(DEFAULT_OUT_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -247,6 +255,7 @@ TEST_F(TestMemCtxTableLock, clear_table_lock)
   ret = mem_ctx_.check_lock_exist(DEFAULT_OUT_TRANS_UNLOCK_OP.lock_id_,
                                   DEFAULT_OUT_TRANS_UNLOCK_OP.owner_id_,
                                   DEFAULT_OUT_TRANS_UNLOCK_OP.lock_mode_,
+                                  DEFAULT_OUT_TRANS_UNLOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -262,6 +271,7 @@ TEST_F(TestMemCtxTableLock, clear_table_lock)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -292,6 +302,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -299,6 +310,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ret = mem_ctx_.check_lock_exist(DEFAULT_OUT_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -311,6 +323,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -318,6 +331,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ret = mem_ctx_.check_lock_exist(DEFAULT_OUT_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -330,6 +344,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -388,6 +403,7 @@ TEST_F(TestMemCtxTableLock, check_lock_need_replay)
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
                                   lock_mode_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);

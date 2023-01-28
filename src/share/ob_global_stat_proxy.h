@@ -52,12 +52,14 @@ public:
                              const int64_t rootservice_epoch,
                              const SCN &snapshot_gc_scn,
                              const int64_t gc_schema_version,
+			                       const int64_t ddl_epoch,
                              const uint64_t target_data_version,
                              const uint64_t current_data_version);
 
   virtual int set_tenant_init_global_stat(const int64_t core_schema_version,
                                           const int64_t baseline_schema_version,
                                           const SCN &snapshot_gc_scn,
+                                          const int64_t ddl_epoch,
                                           const uint64_t target_data_version,
                                           const uint64_t current_data_version);
 
@@ -87,6 +89,14 @@ public:
   int get_snapshot_gc_scn(share::SCN &snapshot_gc_scn);
   //interface of standby
   int set_snapshot_gc_scn(const SCN &snapshot_gc_scn);
+  int set_snapshot_gc_scn(const int64_t snapshot_gc_scn);
+
+  int set_ddl_epoch(const int64_t ddl_epoch, bool is_incremental = true);
+
+  static int select_ddl_epoch_for_update(common::ObISQLClient &sql_client,
+                                               const uint64_t tenant_id,
+                                               int64_t &ddl_epoch);
+  int get_ddl_epoch(int64_t &ddl_epoch);
 private:
   int update(const ObGlobalStatItem::ItemList &list, const bool is_incremental = false);
   int get(ObGlobalStatItem::ItemList &list, bool for_update = false);

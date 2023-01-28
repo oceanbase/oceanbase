@@ -33,6 +33,7 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "share/schema/ob_part_mgr_util.h"
 namespace oceanbase
 {
 namespace share
@@ -1131,6 +1132,79 @@ int ObSimpleTableSchemaV2::get_part_by_idx(const int64_t part_idx, const int64_t
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("part level is unexpected", KPC(this), KR(ret));
+  }
+  return ret;
+}
+
+int ObSimpleTableSchemaV2::get_tablet_ids_by_part_object_id(
+    const ObObjectID &part_object_id,
+    common::ObIArray<ObTabletID> &tablet_ids) const
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel part_level = get_part_level();
+  const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+  int64_t part_idx = OB_INVALID_INDEX;
+  const ObPartition *partition = NULL;
+  tablet_ids.reset();
+  if (PARTITION_LEVEL_ONE != part_level
+      && PARTITION_LEVEL_TWO != part_level) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported part_level", KR(ret), K(part_level));
+  } else if (OB_FAIL(get_partition_index_loop(part_object_id, mode, part_idx))) {
+    LOG_WARN("fail to get part idx", KR(ret), K(part_object_id), K(mode));
+  } else if (OB_FAIL(get_partition_by_partition_index(part_idx, mode, partition))) {
+    LOG_WARN("fail to get partition", KR(ret), K(part_object_id), K(part_idx), K(mode));
+  } else if (OB_ISNULL(partition)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition is null", KR(ret), K(part_object_id), K(part_idx), K(mode));
+  } else if (PARTITION_LEVEL_ONE == part_level) {
+    if (OB_FAIL(tablet_ids.push_back(partition->get_tablet_id()))) {
+      LOG_WARN("fail to push back tablet_id", KR(ret), KPC(partition));
+    }
+  } else {
+    if (partition->get_subpartition_num() <= 0
+        || OB_ISNULL(partition->get_subpart_array())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subpartitions is empty", KR(ret), KPC(partition));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition->get_subpartition_num(); i++) {
+      ObSubPartition *&subpartition = partition->get_subpart_array()[i];
+      if (OB_ISNULL(subpartition)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subpartition is empty", KR(ret), KPC(partition), K(i));
+      } else if (OB_FAIL(tablet_ids.push_back(subpartition->get_tablet_id()))) {
+        LOG_WARN("fail to push back tablet_id", KR(ret), KPC(subpartition));
+      }
+    } // end for
+  }
+  return ret;
+}
+
+int ObSimpleTableSchemaV2::get_tablet_id_by_object_id(
+    const ObObjectID &object_id,
+    ObTabletID &tablet_id) const
+{
+  int ret = OB_SUCCESS;
+  const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+  ObPartitionSchemaIter iter(*this, mode);
+  tablet_id.reset();
+  ObPartitionSchemaIter::Info info;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(iter.next_partition_info(info))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("object_id not found", KR(ret), K(object_id));
+      } else {
+        LOG_WARN("iter partition failed", KR(ret));
+      }
+    } else if (info.object_id_ == object_id) {
+      tablet_id = info.tablet_id_;
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && !tablet_id.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet_id is invalid", KR(ret), K(object_id));
   }
   return ret;
 }

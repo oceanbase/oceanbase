@@ -56,10 +56,10 @@ public:
 
   //update schema version and max used_column_id
   int update_table_attribute(common::ObISQLClient &sql_client,
-                             ObTableSchema &new_table_schema,
+                             const ObTableSchema &new_table_schema,
                              const ObSchemaOperationType operation_type,
                              const bool update_object_status_ignore_version,
-                             const common::ObString *ddl_stmt_str = NULL);
+                             const common::ObString *ddl_stmt_str = nullptr);
   int update_partition_option(common::ObISQLClient &sql_client,
                               ObTableSchema &table,
                               const common::ObString *ddl_stmt_str = NULL);
@@ -164,15 +164,22 @@ public:
       const ObTableSchema &ori_table,
       const ObTableSchema &inc_table,
       const int64_t schema_version);
+  int drop_inc_partition_add_extra_str(const ObTableSchema &inc_table,
+                                       ObSqlString &sql,
+                                       ObSqlString &condition_str);
   int drop_inc_partition(common::ObISQLClient &sql_client,
                          const ObTableSchema &ori_table,
-                         const ObTableSchema &inc_table);
+                         const ObTableSchema &inc_table,
+                         bool is_truncate_table);
   int drop_inc_sub_partition(common::ObISQLClient &sql_client,
                              const ObTableSchema &ori_table,
                              const ObTableSchema &inc_table);
+  int drop_inc_all_sub_partition_add_extra_str(const ObTableSchema &inc_table,
+                                               ObSqlString &sql);
   int drop_inc_all_sub_partition(common::ObISQLClient &sql_client,
                              const ObTableSchema &ori_table,
-                             const ObTableSchema &inc_table);
+                             const ObTableSchema &inc_table,
+                             bool is_truncate_table);
   int truncate_part_info(
       common::ObISQLClient &sql_client,
       const ObTableSchema &ori_table,
@@ -283,9 +290,9 @@ private:
                    const uint64_t table_id,
                    const uint64_t column_id,
                    const uint64_t auto_increment);
-  int add_transition_point_val(share::ObDMLSqlSplicer &dml, 
+  int add_transition_point_val(share::ObDMLSqlSplicer &dml,
                                const ObTableSchema &table);
-  int add_interval_range_val(share::ObDMLSqlSplicer &dml, 
+  int add_interval_range_val(share::ObDMLSqlSplicer &dml,
                                const ObTableSchema &table);
   int gen_table_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
                     const bool update_object_status_ignore_version, share::ObDMLSqlSplicer &dml);

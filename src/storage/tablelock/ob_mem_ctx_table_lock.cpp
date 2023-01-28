@@ -124,7 +124,7 @@ int ObLockMemCtx::commit_table_lock_(const SCN &commit_version, const SCN &commi
     DLIST_FOREACH_REMOVESAFE(curr, lock_list_) {
       switch (curr->lock_op_.op_type_) {
       case IN_TRANS_DML_LOCK:
-      case IN_TRANS_LOCK_TABLE_LOCK: {
+      case IN_TRANS_COMMON_LOCK: {
         // remove the lock op.
         memtable->remove_lock_record(curr->lock_op_);
         break;
@@ -300,6 +300,7 @@ int ObLockMemCtx::check_lock_exist(
     const ObLockID &lock_id,
     const ObTableLockOwnerID &owner_id,
     const ObTableLockMode mode,
+    const ObTableLockOpType op_type,
     bool &is_exist,
     ObTableLockMode &lock_mode_in_same_trans) const
 {
@@ -315,6 +316,7 @@ int ObLockMemCtx::check_lock_exist(
     DLIST_FOREACH(curr, lock_list_) {
       if (curr->lock_op_.lock_id_ == lock_id &&
           curr->lock_op_.owner_id_ == owner_id &&
+          curr->lock_op_.op_type_ == op_type &&   // different op type may lock twice.
           curr->lock_op_.lock_op_status_ == LOCK_OP_DOING) {
         if (curr->lock_op_.lock_mode_ == mode) {
           is_exist = true;

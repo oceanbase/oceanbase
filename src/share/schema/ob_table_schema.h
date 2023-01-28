@@ -613,6 +613,13 @@ public:
       const int64_t part_id,
       const int64_t subpart_id,
       ObBasePartition *&partition) const;
+  // return tablet_ids with specified partition's object_id
+  int get_tablet_ids_by_part_object_id(
+      const ObObjectID &part_object_id,
+      common::ObIArray<ObTabletID> &tablet_ids) const;
+  int get_tablet_id_by_object_id(
+      const ObObjectID &object_id,
+      ObTabletID &tablet_id) const;
   int set_specific_replica_attr_array(
       share::SchemaReplicaAttrArray &schema_replica_set,
       const common::ObIArray<ReplicaAttr> &src);

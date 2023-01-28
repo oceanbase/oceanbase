@@ -35,8 +35,6 @@ public:
   ObDDLSqlService(ObSchemaService &schema_service)
     : schema_service_(schema_service){}
   virtual ~ObDDLSqlService() {}
-  int64_t get_last_operation_schema_version() const { return schema_service_.get_last_operation_schema_version(); }
-  uint64_t get_last_operation_tenant_id() const { return schema_service_.get_last_operation_tenant_id(); }
   // Do nothing, simply push the schema version once
   int log_nop_operation(const ObSchemaOperation &schema_operation,
                         const int64_t new_schema_version,
@@ -70,6 +68,15 @@ struct TSIDDLVar
   TSIDDLVar() :
       exec_tenant_id_(common::OB_SYS_TENANT_ID),
       ddl_id_str_(NULL)
+  {}
+};
+
+struct TSILastOper {
+  uint64_t last_operation_schema_version_;
+  uint64_t last_operation_tenant_id_;
+  TSILastOper():
+      last_operation_schema_version_(OB_INVALID_VERSION),
+      last_operation_tenant_id_(OB_INVALID_TENANT_ID)
   {}
 };
 

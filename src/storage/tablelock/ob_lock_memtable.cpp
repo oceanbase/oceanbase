@@ -147,6 +147,7 @@ int ObLockMemtable::lock_(
   } else if (OB_FAIL(mem_ctx->check_lock_exist(lock_op.lock_id_,
                                                lock_op.owner_id_,
                                                lock_op.lock_mode_,
+                                               lock_op.op_type_,
                                                lock_exist,
                                                lock_mode_in_same_trans))) {
     LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));
@@ -219,6 +220,8 @@ int ObLockMemtable::unlock_(
 {
   int ret = OB_SUCCESS;
   ObMemtableCtx *mem_ctx = NULL;
+  bool lock_op_exist = false;
+  ObTableLockMode unused_lock_mode_in_same_trans = 0x0;
   ObLockStep succ_step = STEP_BEGIN;
   ObMvccWriteGuard guard(true);
 
@@ -228,6 +231,16 @@ int ObLockMemtable::unlock_(
   if (OB_FAIL(guard.write_auth(ctx))) {
     LOG_WARN("not allow unlock table.", K(ret), K(ctx));
   } else if (FALSE_IT(mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_))) {
+    // check whether the unlock op exist already
+  } else if (OB_FAIL(mem_ctx->check_lock_exist(unlock_op.lock_id_,
+                                               unlock_op.owner_id_,
+                                               unlock_op.lock_mode_,
+                                               unlock_op.op_type_,
+                                               lock_op_exist,
+                                               unused_lock_mode_in_same_trans))) {
+    LOG_WARN("failed to check lock exist ", K(ret), K(unlock_op));
+  } else if (lock_op_exist) {
+    // do nothing
   } else if (OB_FAIL(obj_lock_map_.unlock(unlock_op,
                                           is_try_lock,
                                           expired_time))) {
@@ -373,6 +386,7 @@ int ObLockMemtable::check_lock_conflict(
   } else if (OB_FAIL(mem_ctx->check_lock_exist(lock_op.lock_id_,
                                                lock_op.owner_id_,
                                                lock_op.lock_mode_,
+                                               lock_op.op_type_,
                                                lock_exist,
                                                lock_mode_in_same_trans))) {
     LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));

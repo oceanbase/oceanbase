@@ -95,6 +95,7 @@ private:
   common::ObAddr host_;
   QueueThread *lease_queue_;
   QueueThread *ddl_queue_;
+  QueueThread *ddl_parallel_queue_;
   QueueThread *mysql_queue_;
   QueueThread *diagnose_queue_;
   ObRpcSessionHandler &session_handler_;

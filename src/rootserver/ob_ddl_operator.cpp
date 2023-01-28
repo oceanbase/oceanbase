@@ -164,21 +164,6 @@ ObDDLOperator::~ObDDLOperator()
 {
 }
 
-int64_t ObDDLOperator::get_last_operation_schema_version() const
-{
-  return schema_service_.get_schema_service() == NULL ? common::OB_INVALID_VERSION :
-      schema_service_.get_schema_service()->get_last_operation_schema_version();
-}
-
-int ObDDLOperator::get_tenant_last_operation_schema_version(const uint64_t tenant_id, int64_t &schema_version) const
-{
-  UNUSED(tenant_id);
-  int ret = OB_SUCCESS;
-  schema_version = schema_service_.get_schema_service() == NULL ? common::OB_INVALID_VERSION :
-      schema_service_.get_schema_service()->get_last_operation_schema_version();
-  return ret;
-}
-
 int ObDDLOperator::create_tenant(ObTenantSchema &tenant_schema,
                                  const ObSchemaOperationType op,
                                  ObMySQLTransaction &trans,
@@ -233,7 +218,7 @@ int ObDDLOperator::insert_tenant_merge_info(
                   (ObZoneMergeInfoArray, merge_info_array),
                   (ObZoneArray, zone_list),
                   (ObZoneMergeInfo, tmp_merge_info)) {
-        
+
         global_info.tenant_id_ = tenant_id;
         tmp_merge_info.tenant_id_ = tenant_id;
         if (OB_FAIL(tenant_schema.get_zone_list(zone_list))) {
@@ -248,12 +233,12 @@ int ObDDLOperator::insert_tenant_merge_info(
         }
         // add zone merge info of current tenant(sys tenant or meta tenant)
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObGlobalMergeTableOperator::insert_global_merge_info(trans, 
+          if (OB_FAIL(ObGlobalMergeTableOperator::insert_global_merge_info(trans,
               tenant_id, global_info))) {
             LOG_WARN("fail to insert global merge info of current tenant", KR(ret), K(global_info));
           } else if (OB_FAIL(ObZoneMergeTableOperator::insert_zone_merge_infos(
                      trans, tenant_id, merge_info_array))) {
-            LOG_WARN("fail to insert zone merge infos of current tenant", KR(ret), K(tenant_id), 
+            LOG_WARN("fail to insert zone merge infos of current tenant", KR(ret), K(tenant_id),
               K(merge_info_array));
           }
         }
@@ -264,12 +249,12 @@ int ObDDLOperator::insert_tenant_merge_info(
           for (int64_t i = 0; i < merge_info_array.count(); ++i) {
             merge_info_array.at(i).tenant_id_ = user_tenant_id;
           }
-          if (OB_FAIL(ObGlobalMergeTableOperator::insert_global_merge_info(trans, 
+          if (OB_FAIL(ObGlobalMergeTableOperator::insert_global_merge_info(trans,
               user_tenant_id, global_info))) {
             LOG_WARN("fail to insert global merge info of user tenant", KR(ret), K(global_info));
           } else if (OB_FAIL(ObZoneMergeTableOperator::insert_zone_merge_infos(
                     trans, user_tenant_id, merge_info_array))) {
-            LOG_WARN("fail to insert zone merge infos of user tenant", KR(ret), K(user_tenant_id), 
+            LOG_WARN("fail to insert zone merge infos of user tenant", KR(ret), K(user_tenant_id),
               K(merge_info_array));
           }
         }
@@ -1635,8 +1620,8 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
             sequence_schema = sequence_ddl_arg->seq_schema_;
           } else {
             const ObSequenceSchema *tmp_sequence_schema = NULL;
-            if (OB_FAIL(schema_guard.get_sequence_schema(table_schema.get_tenant_id(), 
-                                                         column_schema.get_sequence_id(), 
+            if (OB_FAIL(schema_guard.get_sequence_schema(table_schema.get_tenant_id(),
+                                                         column_schema.get_sequence_id(),
                                                          tmp_sequence_schema))) {
               LOG_WARN("get sequence schema failed", K(ret), K(column_schema));
             } else if (OB_ISNULL(tmp_sequence_schema)) {
@@ -1650,7 +1635,7 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
             sequence_schema.set_database_id(table_schema.get_database_id());
             sequence_schema.set_sequence_name(sequence_name);
             if (nullptr == sequence_ddl_arg) {
-              // In some scenes like trunctae table and offline ddl, should inherit the sequce object from origin table except sequence id, etc. 
+              // In some scenes like trunctae table and offline ddl, should inherit the sequce object from origin table except sequence id, etc.
               // Validity check and set of option bitset are completed in creating origin table phase,
               // thus we do not have to check the validity of option_bitset again for the hidden table.
               if (OB_FAIL(ddl_operator.create_sequence_without_bitset(sequence_schema,
@@ -1665,7 +1650,7 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
                                                             schema_guard,
                                                             NULL))) {
               LOG_WARN("create sequence fail", K(ret), K(table_schema));
-            } 
+            }
             if (OB_SUCC(ret)) {
               column_schema.set_sequence_id(sequence_schema.get_sequence_id());
               char sequence_string[OB_MAX_SEQUENCE_NAME_LENGTH + 1] = { 0 };
@@ -1813,6 +1798,47 @@ int ObDDLOperator::drop_sequence_in_drop_column(const ObColumnSchemaV2 &column_s
       LOG_WARN("drop sequence fail", K(ret), K(column_schema));
     }
   }
+  return ret;
+}
+
+int ObDDLOperator::reinit_autoinc_row(const ObTableSchema &table_schema,
+                                      common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  uint64_t table_id = table_schema.get_table_id();
+  ObString table_name = table_schema.get_table_name();
+  uint64_t schema_version = table_schema.get_schema_version();
+  uint64_t column_id = table_schema.get_autoinc_column_id();
+  ObAutoincrementService &autoinc_service = share::ObAutoincrementService::get_instance();
+
+  if (0 != column_id) {
+    bool is_oracle_mode = false;
+    if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode",
+                KR(ret), K(table_id), K(table_name), K(schema_version), K(column_id));
+    } else if (is_oracle_mode) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("in oracle mode, autoic_column_id must be illegal",
+              KR(ret), K(table_id), K(table_name), K(schema_version), K(column_id));
+    } else {
+      // 1、reinit auto_increment value
+      // 2、clear increment cache
+      uint64_t tenant_id = table_schema.get_tenant_id();
+      if (OB_FAIL(autoinc_service.reinit_autoinc_row(tenant_id, table_id,
+                                                     column_id, trans))) {
+        LOG_WARN("failed to reint auto_increment",
+                KR(ret), K(tenant_id), K(table_id), K(table_name), K(schema_version), K(column_id));
+        // to do
+        // Cache can't be cleaned totally when RS change leader in autoinc_in_order mode
+      } else if (OB_FAIL(cleanup_autoinc_cache(table_schema))) {
+        LOG_WARN("failed to cleanup_autoinc_caceh",
+                KR(ret), K(tenant_id), K(table_id), K(table_name), K(schema_version), K(column_id));
+      }
+    }
+  }
+  int64_t finish_time = ObTimeUtility::current_time();
+  LOG_INFO("finish reinit_auto_row", KR(ret), "cost_ts", finish_time - start_time);
   return ret;
 }
 
@@ -2231,6 +2257,77 @@ int ObDDLOperator::add_table_subpartitions(const ObTableSchema &orig_table_schem
           new_table_schema, update_part_array))) {
         LOG_WARN("update sub partition option failed");
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::truncate_table(const ObString *ddl_stmt_str,
+                                  const share::schema::ObTableSchema &orig_table_schema,
+                                  const share::schema::ObTableSchema &new_table_schema,
+                                  common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  bool is_truncate_table = true;
+  uint64_t table_id = new_table_schema.get_table_id();
+  uint64_t schema_version = new_table_schema.get_schema_version();
+  ObSchemaOperationType operation_type = OB_DDL_TRUNCATE_TABLE;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", KR(ret));
+  } else if (new_table_schema.is_partitioned_table()) {
+    if (OB_INVALID_VERSION == schema_version) {
+      ret  = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema version is not legal", KR(ret), K(table_id), K(schema_version));
+    } else if (OB_FAIL(schema_service->get_table_sql_service()
+                                      .drop_inc_part_info(trans,
+                                                          orig_table_schema,
+                                                          orig_table_schema,
+                                                          schema_version,
+                                                          is_truncate_table))) {
+      LOG_WARN("delete part info failed", KR(ret), K(table_id), K(schema_version));
+    } else if (OB_FAIL(schema_service->get_table_sql_service()
+                                      .add_inc_part_info(trans,
+                                                        orig_table_schema,
+                                                        new_table_schema,
+                                                        schema_version,
+                                                        is_truncate_table))) {
+      LOG_WARN("add part info failed", KR(ret), K(table_id), K(schema_version));
+    }
+  }
+  if (FAILEDx(schema_service->get_table_sql_service()
+                            .update_table_attribute(trans,
+                                                    new_table_schema,
+                                                    operation_type,
+                                                    false,
+                                                    ddl_stmt_str))) {
+    LOG_WARN("failed to update table schema attribute", KR(ret), K(table_id), K(schema_version));
+  }
+  return ret;
+}
+
+int ObDDLOperator::update_boundary_schema_version(const uint64_t &tenant_id,
+                                                  const uint64_t &boundary_schema_version,
+                                                  common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", KR(ret));
+  } else {
+    ObSchemaOperation schema_operation;
+    schema_operation.tenant_id_ = tenant_id;
+    schema_operation.op_type_ = OB_DDL_END_SIGN;
+    share::schema::ObDDLSqlService ddl_sql_service(*schema_service);
+
+    if (OB_FAIL(ddl_sql_service.log_nop_operation(schema_operation,
+                                                  boundary_schema_version,
+                                                  NULL,
+                                                  trans))) {
+      LOG_WARN("log end ddl operation failed", KR(ret), K(tenant_id), K(boundary_schema_version));
     }
   }
   return ret;
@@ -4046,7 +4143,7 @@ int ObDDLOperator::drop_tablet_of_table(
     } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
       LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
     } else {
-      ObTabletDrop tablet_drop(tenant_id, *GCTX.lst_operator_, trans, new_schema_version);
+      ObTabletDrop tablet_drop(tenant_id, trans, new_schema_version);
       if (OB_FAIL(schemas.push_back(&table_schema))) {
         LOG_WARN("failed to push_back", KR(ret), K(table_schema));
       } else if (OB_FAIL(tablet_drop.init())) {

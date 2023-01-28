@@ -22,6 +22,8 @@
 #include "share/schema/ob_schema_cache.h"
 #include "share/schema/ob_schema_store.h"
 #include "share/inner_table/ob_inner_table_schema.h"
+#include "share/schema/ob_ddl_trans_controller.h"
+#include "share/schema/ob_ddl_epoch.h"
 
 namespace oceanbase
 {
@@ -40,6 +42,7 @@ namespace schema
 {
 
 static const int64_t MAX_CACHED_VERSION_NUM = 4;
+
 // singleton class
 // concurrency control for schema manager constructing tasks.
 class ObSchemaConstructTask
@@ -216,7 +219,7 @@ public:
       int64_t &baseline_schema_version);
   int get_new_schema_version(uint64_t tenant_id, int64_t &schema_version);
   int get_tenant_mem_info(const uint64_t &tenant_id, common::ObIArray<ObSchemaMemory> &tenant_mem_infos);
-  int get_tenant_slot_info(common::ObIAllocator &allocator, const uint64_t &tenant_id, 
+  int get_tenant_slot_info(common::ObIAllocator &allocator, const uint64_t &tenant_id,
                            common::ObIArray<ObSchemaSlot> &tenant_slot_infos);
   int get_schema_store_tenants(common::ObIArray<uint64_t> &tenant_ids);
   bool check_schema_store_tenant_exist(const uint64_t &tenant_id);
@@ -333,9 +336,12 @@ public:
       const uint64_t tenant_id,
       int64_t &schema_version);
 
+  ObDDLTransController &get_ddl_trans_controller() { return ddl_trans_controller_; }
+  ObDDLEpochMgr &get_ddl_epoch_mgr() { return ddl_epoch_mgr_; }
 //this friend class only for backup
 friend class tools::ObAgentTaskGenerator;
 friend class tools::ObAgentTaskWorker;
+friend class ObDDLEpochMgr;
 
 protected:
   ObMultiVersionSchemaService();
@@ -446,6 +452,8 @@ private:
   int64_t init_version_cnt_;
   int64_t init_version_cnt_for_liboblog_;
   ObSchemaStoreMap schema_store_map_;
+  ObDDLTransController ddl_trans_controller_;
+  ObDDLEpochMgr ddl_epoch_mgr_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMultiVersionSchemaService);
 };

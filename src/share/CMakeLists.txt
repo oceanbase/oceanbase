@@ -399,6 +399,8 @@ ob_set_subtarget(ob_share schema
   schema/ob_context_sql_service.cpp
   schema/ob_context_mgr.cpp
   schema/ob_context_ddl_proxy.cpp
+  schema/ob_ddl_epoch.cpp
+  schema/ob_ddl_trans_controller.cpp
   schema/ob_schema_getter_guard.cpp
   schema/ob_schema_struct.cpp
   schema/ob_sequence_sql_service.cpp

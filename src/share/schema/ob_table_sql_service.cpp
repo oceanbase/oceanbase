@@ -191,9 +191,59 @@ int ObTableSqlService::delete_table_part_info(const ObTableSchema &table_schema,
   return ret;
 }
 
+int ObTableSqlService::drop_inc_partition_add_extra_str(const ObTableSchema &inc_table,
+                                                        ObSqlString &sql,
+                                                        ObSqlString &condition_str)
+{
+  int ret = OB_SUCCESS;
+  ObPartition **part_array = inc_table.get_part_array();
+  const int64_t inc_part_num = inc_table.get_partition_num();
+  if (OB_ISNULL(part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition array is null", KR(ret), K(inc_table));
+  } else if (OB_FAIL(condition_str.assign_fmt(" (0 = 1"))) {
+    LOG_WARN("assign sql str fail", KR(ret));
+  } else if (OB_FAIL(sql.append_fmt(" AND (0 = 1"))) {
+    LOG_WARN("append sql str fail", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; i++) {
+    ObPartition *part = part_array[i];
+    if (OB_ISNULL(part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition is null", KR(ret), K(i), K(inc_part_num), K(inc_table));
+    } else if (OB_FAIL(sql.append_fmt(" OR part_id = %lu", part->get_part_id()))) {
+      LOG_WARN("append_fmt failed", KR(ret));
+    } else if (OB_FAIL(condition_str.append_fmt(" OR partition_id = %lu",
+                                                part->get_part_id()))) {
+      LOG_WARN("fail to append fmt", KR(ret));
+    } else {
+      // get subpartition info
+      for (int64_t j = 0; OB_SUCC(ret) && j < part->get_subpartition_num(); j++) {
+        ObSubPartition *subpart = part->get_subpart_array()[j];
+        if (OB_ISNULL(subpart)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("subpartition is null", KR(ret), K(i), K(inc_part_num), K(inc_table));
+        } else if (OB_FAIL(condition_str.append_fmt(" OR partition_id = %lu",
+                                                    subpart->get_sub_part_id()))) {
+          LOG_WARN("append_fmt failed", KR(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(condition_str.append_fmt(" )"))) {
+      LOG_WARN("append_fmt failed", KR(ret));
+    } else if (OB_FAIL(sql.append_fmt(" )"))) {
+      LOG_WARN("append_fmt failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableSqlService::drop_inc_partition(common::ObISQLClient &sql_client,
                                            const ObTableSchema &ori_table,
-                                           const ObTableSchema &inc_table)
+                                           const ObTableSchema &inc_table,
+                                           bool is_truncate_table)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = ori_table.get_tenant_id();
@@ -216,61 +266,31 @@ int ObTableSqlService::drop_inc_partition(common::ObISQLClient &sql_client,
     if (OB_ISNULL(part_array)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("partition array is null", K(ret), K(inc_table));
-    } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %ld AND table_id=%lu AND",
+    } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %ld AND table_id=%lu",
                                       OB_ALL_PART_TNAME,
                                       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                       ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id)))) {
       LOG_WARN("append_fmt failed", K(ret));
-    } else if (OB_FAIL(condition_str.assign_fmt(" (0 = 1"))) {
-      LOG_WARN("assign sql str fail", K(ret));
-    } else if (OB_FAIL(sql.append_fmt(" (0 = 1"))) {
-      LOG_WARN("append sql str fail", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; i++) {
-      ObPartition *part = part_array[i];
-      if (OB_ISNULL(part)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition is null", K(ret), K(i), K(inc_part_num), K(inc_table));
-      } else if (OB_FAIL(sql.append_fmt(" OR part_id = %lu", part->get_part_id()))) {
-        LOG_WARN("append_fmt failed", K(ret));
-      } else if (OB_FAIL(condition_str.append_fmt(" OR partition_id = %lu",
-                                                 part->get_part_id()))) {
-        LOG_WARN("fail to append fmt", K(ret));
-      } else {
-        // get subpartition info
-        for (int64_t j = 0; OB_SUCC(ret) && j < part->get_subpartition_num(); j++) {
-          ObSubPartition *subpart = part->get_subpart_array()[j];
-          if (OB_ISNULL(subpart)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("subpartition is null", K(ret), K(i), K(inc_part_num), K(inc_table));
-          } else if (OB_FAIL(condition_str.append_fmt(" OR partition_id = %lu",
-                                                      subpart->get_sub_part_id()))) {
-            LOG_WARN("append_fmt failed", K(ret));
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(condition_str.append_fmt(" )"))) {
-        LOG_WARN("append_fmt failed", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" )"))) {
-        LOG_WARN("append_fmt failed", K(ret));
+    } else if (!is_truncate_table) {
+      if (OB_FAIL(drop_inc_partition_add_extra_str(inc_table, sql, condition_str))) {
+        LOG_WARN("fail to add extra str when drop inc partition", K(ret), K(inc_table));
       }
     }
     // delete stat info here.
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(delete_from_all_table_stat(sql_client, tenant_id, table_id, &condition_str))) {
+      ObSqlString *extra_str = condition_str.empty() ? NULL : &condition_str;
+      if (OB_FAIL(delete_from_all_table_stat(sql_client, tenant_id, table_id, extra_str))) {
         LOG_WARN("delete from all table stat failed", K(ret));
-      } else if (OB_FAIL(delete_from_all_column_stat(sql_client, tenant_id, table_id, &condition_str))) {
+      } else if (OB_FAIL(delete_from_all_column_stat(sql_client, tenant_id, table_id, extra_str))) {
         LOG_WARN("failed to delete all column stat", K(table_id),
                 "column count", ori_table.get_column_count(), K(ret));
-      } else if (OB_FAIL(delete_from_all_histogram_stat(sql_client, tenant_id, table_id, &condition_str))) {
+      } else if (OB_FAIL(delete_from_all_histogram_stat(sql_client, tenant_id, table_id, extra_str))) {
         LOG_WARN("failed to delete all histogram_stat", K(table_id), K(ret));
-      } else if (OB_FAIL(delete_from_all_table_stat_history(sql_client, tenant_id, table_id, &condition_str))) {
+      } else if (OB_FAIL(delete_from_all_table_stat_history(sql_client, tenant_id, table_id, extra_str))) {
         LOG_WARN("delete from all table stat history failed", K(ret));
-      } else if (OB_FAIL(delete_from_all_column_stat_history(sql_client, tenant_id, table_id, &condition_str))) {
+      } else if (OB_FAIL(delete_from_all_column_stat_history(sql_client, tenant_id, table_id, extra_str))) {
         LOG_WARN("failed to delete all column stat history", K(ret));
-      } else if (OB_FAIL(delete_from_all_histogram_stat_history(sql_client, tenant_id, table_id, &condition_str))) {
+      } else if (OB_FAIL(delete_from_all_histogram_stat_history(sql_client, tenant_id, table_id, extra_str))) {
         LOG_WARN("failed to delete all histogram_stat history", K(ret));
       }
     } 
@@ -383,9 +403,39 @@ int ObTableSqlService::drop_inc_sub_partition(common::ObISQLClient &sql_client,
   return ret;
 }
 
+int ObTableSqlService::drop_inc_all_sub_partition_add_extra_str(const ObTableSchema &inc_table,
+                                                                ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  ObPartition **part_array = inc_table.get_part_array();
+  const int64_t inc_part_num = inc_table.get_partition_num();
+  if (OB_ISNULL(part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition array is null", KR(ret), K(inc_table));
+  } else if (OB_FAIL(sql.append(" AND (0 = 1"))) {
+    LOG_WARN("append failed", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; i++) {
+    ObPartition *part = part_array[i];
+    if (OB_ISNULL(part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition is null", KR(ret), K(i), K(inc_part_num), K(inc_table));
+    } else if (OB_FAIL(sql.append_fmt(" OR (part_id = %lu)", part->get_part_id()))) {
+      LOG_WARN("append_fmt failed", KR(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql.append_fmt(" )"))) {
+      LOG_WARN("append_fmt failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableSqlService::drop_inc_all_sub_partition(common::ObISQLClient &sql_client,
-                                              const ObTableSchema &ori_table,
-                                              const ObTableSchema &inc_table)
+                                                  const ObTableSchema &ori_table,
+                                                  const ObTableSchema &inc_table,
+                                                  bool is_truncate_table)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = ori_table.get_tenant_id();
@@ -405,25 +455,14 @@ int ObTableSqlService::drop_inc_all_sub_partition(common::ObISQLClient &sql_clie
     if (OB_ISNULL(part_array)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("partition array is null", K(ret), K(inc_table));
-    } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %ld AND table_id=%lu AND (0 = 1",
+    } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %ld AND table_id=%lu",
                                       OB_ALL_SUB_PART_TNAME,
                                       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                       ObSchemaUtils::get_extract_schema_id(exec_tenant_id, ori_table.get_table_id())))) {
       LOG_WARN("append_fmt failed", K(ret));
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; i++) {
-      ObPartition *part = part_array[i];
-      if (OB_ISNULL(part)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition is null", K(ret), K(i), K(inc_part_num), K(inc_table));
-      } else if (OB_FAIL(sql.append_fmt(" OR (part_id = %lu)", part->get_part_id()))) {
-        LOG_WARN("append_fmt failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(sql.append_fmt(" )"))) {
-        LOG_WARN("append_fmt failed", K(ret));
+    } else if (!is_truncate_table) {
+      if (OB_FAIL(drop_inc_all_sub_partition_add_extra_str(inc_table, sql))) {
+        LOG_WARN("fail to drop inc all sub_partition add extra str", K(ret), K(inc_table));
       }
     }
 
@@ -452,10 +491,10 @@ int ObTableSqlService::drop_inc_part_info(
       && !table_schema.is_vir_table()
       && !table_schema.is_view_table()) {
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(drop_inc_partition(sql_client, table_schema, inc_table_schema))) {
+    } else if (OB_FAIL(drop_inc_partition(sql_client, table_schema, inc_table_schema, is_truncate_table))) {
       // remove from __all_part
       LOG_WARN("failed to drop partition", K(ret), K(inc_table_schema));
-    } else if (OB_FAIL(drop_inc_all_sub_partition(sql_client, table_schema, inc_table_schema))) {
+    } else if (OB_FAIL(drop_inc_all_sub_partition(sql_client, table_schema, inc_table_schema, is_truncate_table))) {
       // remove from __all_sub_part
       LOG_WARN("failed to drop subpartition", K(ret), K(inc_table_schema));
     } else {
@@ -2671,7 +2710,7 @@ int ObTableSqlService::gen_table_options_dml(
 }
 
 int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
-                                              ObTableSchema &new_table_schema,
+                                              const ObTableSchema &new_table_schema,
                                               const ObSchemaOperationType operation_type,
                                               const bool update_object_status_ignore_version,
                                               const ObString *ddl_stmt_str/*=NULL*/)

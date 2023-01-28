@@ -262,7 +262,13 @@ public:
                            const common::ObString *ddl_stmt_str = NULL,
                            const bool need_sync_schema_version = true,
                            const bool is_truncate_table = false);
-
+  int truncate_table(const ObString *ddl_stmt_str,
+                     const share::schema::ObTableSchema &orig_table_schema,
+                     const share::schema::ObTableSchema &new_table_schema,
+                     common::ObMySQLTransaction &trans);
+  int update_boundary_schema_version(const uint64_t &tenant_id,
+                                     const uint64_t &boundary_schema_version,
+                                     common::ObMySQLTransaction &trans);
   int truncate_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                 share::schema::ObTableSchema &inc_table_schema,
                                 share::schema::ObTableSchema &del_table_schema,
@@ -303,6 +309,8 @@ public:
       const common::ObIArray<uint64_t> &add_column_ids,
       const common::ObIArray<uint64_t> &alter_column_ids,
       const common::ObString *ddl_stmt_str = NULL);
+  int reinit_autoinc_row(const ObTableSchema &table_schema,
+                         common::ObMySQLTransaction &trans);
   int create_sequence_in_create_table(share::schema::ObTableSchema &table_schema,
                                       common::ObMySQLTransaction &trans,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -896,10 +904,6 @@ public:
                               uint64_t tenant_id,
                               uint64_t dep_obj_id,
                               uint64_t schema_version, uint64_t owner_id);
-
-  // FIXME: After the schema split, the interface is outdated and replaced with a new interface.
-  int64_t get_last_operation_schema_version() const;
-  int get_tenant_last_operation_schema_version(const uint64_t tenant_id, int64_t &schema_version) const;
 
   virtual int insert_temp_table_info(common::ObMySQLTransaction &trans,
                                      const share::schema::ObTableSchema &table_schema);

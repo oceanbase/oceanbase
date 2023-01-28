@@ -122,7 +122,7 @@ int ObFreezeInfo::get_frozen_status(
         break;
       }
     }
-    
+
     if (idx >= 0) {
       frozen_status = frozen_statuses_.at(idx);
     } else {
@@ -246,7 +246,7 @@ int ObFreezeInfoManager::inner_reload(ObFreezeInfo &freeze_info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid frozen status", KR(ret), K(global_broadcast_scn));
   } else {
-    std::sort(simple_frozen_statuses.begin(), simple_frozen_statuses.end(), 
+    std::sort(simple_frozen_statuses.begin(), simple_frozen_statuses.end(),
               [](const ObSimpleFrozenStatus &a, const ObSimpleFrozenStatus &b)
                  { return a.frozen_scn_ < b.frozen_scn_; });
   }
@@ -258,7 +258,7 @@ int ObFreezeInfoManager::inner_reload(ObFreezeInfo &freeze_info)
       LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
     }
   }
-  
+
   if (FAILEDx(freeze_info.frozen_statuses_.assign(simple_frozen_statuses))) {
     LOG_WARN("fail to assign", KR(ret), K(simple_frozen_statuses));
   } else {
@@ -291,7 +291,8 @@ int ObFreezeInfoManager::set_freeze_info()
     LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K_(tenant_id));
   } else {
     ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
-    ObDDLSQLTransaction trans(GCTX.schema_service_, false/*need_end_signal*/);
+    // freeze get_schema_version need interactive with ddl trans but don't use gen_new_schema_version so no need check_in_rs
+    ObDDLSQLTransaction trans(GCTX.schema_service_, false/*need_end_signal*/, false/*stash*/, false/*parallel*/, false/*check_in_rs*/);
 
     // In 'ddl_sql_transaction.start()', it implements the semantics of 'lock_all_ddl_operation'.
     if (OB_FAIL(trans.start(sql_proxy_, tenant_id_, tenant_schema_version))) {
@@ -335,7 +336,7 @@ int ObFreezeInfoManager::set_freeze_info()
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(freeze_info_.frozen_statuses_.push_back(frozen_status))) {
-      LOG_WARN("fail to push back", KR(ret), K(frozen_status)); 
+      LOG_WARN("fail to push back", KR(ret), K(frozen_status));
     } else {
       LOG_INFO("succ to set new freeze_info", K_(tenant_id), K_(freeze_info));
     }
@@ -346,7 +347,7 @@ int ObFreezeInfoManager::set_freeze_info()
   }
 
   LOG_INFO("finish set freeze info", KR(ret), K(frozen_status), K_(tenant_id));
-  ROOTSERVICE_EVENT_ADD("root_service", "root_major_freeze", K_(tenant_id), 
+  ROOTSERVICE_EVENT_ADD("root_service", "root_major_freeze", K_(tenant_id),
                         K(ret), "new_frozen_scn", new_frozen_scn.get_val_for_inner_table_field());
   return ret;
 }
@@ -359,9 +360,9 @@ int ObFreezeInfoManager::check_inner_stat()
     LOG_WARN("inner stat error", KR(ret));
   } else if ((nullptr == sql_proxy_) || (nullptr == merge_info_mgr_)) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("inner stat error", KR(ret), KP_(sql_proxy), KP_(merge_info_mgr)); 
+    LOG_WARN("inner stat error", KR(ret), KP_(sql_proxy), KP_(merge_info_mgr));
   } else if (OB_FAIL(try_reload())) {
-    LOG_INFO("fail to reload", KR(ret), K_(tenant_id)); 
+    LOG_INFO("fail to reload", KR(ret), K_(tenant_id));
   }
   return ret;
 }
@@ -376,12 +377,12 @@ int ObFreezeInfoManager::get_schema_version(
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
-  } else if (OB_ISNULL(server_schema_service = GCTX.schema_service_->get_schema_service())) { 
+  } else if (OB_ISNULL(server_schema_service = GCTX.schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("server_schema_service is null", KR(ret));
   } else {
     ObRefreshSchemaStatus status;
-    status.tenant_id_ = tenant_id_; 
+    status.tenant_id_ = tenant_id_;
     // TODO snapshot_timestamp_ should be SCN
     status.snapshot_timestamp_ = frozen_scn.get_val_for_inner_table_field();
 
@@ -484,7 +485,7 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
   ObMySQLTransaction trans;
   ObRecursiveMutexGuard guard(lock_);
   int64_t max_stale_time_ns = transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency() * 1000;
-  
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner error", KR(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
@@ -510,7 +511,7 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
   } else if (OB_FAIL(set_local_snapshot_gc_scn(new_snapshot_gc_scn))) {
     LOG_WARN("fail to set latest snapshot_gc_scn", KR(ret), K_(tenant_id), K(new_snapshot_gc_scn));
   }
-  
+
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
@@ -613,7 +614,7 @@ int ObFreezeInfoManager::try_update_zone_info(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   ObRecursiveMutexGuard guard(lock_);
-  
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(merge_info_mgr_->try_update_zone_merge_info(expected_epoch))) {
@@ -687,7 +688,7 @@ int ObFreezeInfoManager::get_min_freeze_info_to_broadcast(
     LOG_WARN("fail to get global_last_merged_version", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(freeze_info_.get_min_freeze_info_greater_than(
              global_last_merged_scn, frozen_status))) {
-    LOG_WARN("fail to get freeze info", KR(ret), K(global_last_merged_scn)); 
+    LOG_WARN("fail to get freeze info", KR(ret), K(global_last_merged_scn));
   }
 
   return ret;
@@ -710,7 +711,7 @@ int ObFreezeInfoManager::check_need_broadcast(bool &need_broadcast)
 {
   int ret = OB_SUCCESS;
   ObRecursiveMutexGuard guard(lock_);
-  
+
   ObSimpleFrozenStatus frozen_status;
   if (OB_FAIL(get_min_freeze_info(frozen_status))) {
     LOG_WARN("fail to get min freeze info", KR(ret), K_(tenant_id));

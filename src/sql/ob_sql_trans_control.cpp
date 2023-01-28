@@ -80,7 +80,7 @@ static int get_tx_service(ObBasicSessionInfo *session,
 }
 
 static inline int get_lock_service(uint64_t tenant_id,
-                            transaction::tablelock::ObTableLockService *&lock_service)
+                                   transaction::tablelock::ObTableLockService *&lock_service)
 {
   int ret = OB_SUCCESS;
   lock_service = MTL_WITH_CHECK_TENANT(transaction::tablelock::ObTableLockService*,
@@ -968,6 +968,7 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
     OZ (txs->acquire_tx(session->get_tx_desc(), session->get_sessid()), *session);
   }
   ObTxParam tx_param;
+  ObLockTableRequest arg;
   OZ (build_tx_param_(session, tx_param));
   // calculate lock table timeout
   int64_t lock_timeout_us = 0;
@@ -978,11 +979,14 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
     OZ (get_trans_expire_ts(*session, tx_expire_ts));
     OX (lock_timeout_us = MAX(200L, MIN(stmt_expire_ts, tx_expire_ts) - ObTimeUtility::current_time()));
   }
+  arg.table_id_ = table_id;
+  arg.owner_id_ = 0;
+  arg.lock_mode_ = lock_mode;
+  arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
+  arg.timeout_us_ = lock_timeout_us;
   OZ (lock_service->lock_table(*session->get_tx_desc(),
                                tx_param,
-                               table_id,
-                               lock_mode,
-                               lock_timeout_us),
+                               arg),
       tx_param, table_id, lock_mode, lock_timeout_us);
   return ret;
 }

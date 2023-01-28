@@ -121,11 +121,7 @@ public:
   /* sequence_id related */
   virtual int init_sequence_id(const int64_t rootservice_epoch);
   virtual int inc_sequence_id();
-  virtual uint64_t get_sequence_id() { return schema_info_.get_sequence_id(); };
-
-  virtual int64_t get_last_operation_schema_version() const { return last_operation_schema_version_; };
-  virtual uint64_t get_last_operation_tenant_id() const { return last_operation_tenant_id_; };
-  virtual int set_last_operation_info(const uint64_t tenant_id, const int64_t schema_version);
+  virtual uint64_t get_sequence_id() { SpinRLockGuard guard(rw_lock_); return sequence_id_;}
 
   virtual int get_refresh_schema_info(ObRefreshSchemaInfo &schema_info);
   //enable refresh schema info
@@ -232,7 +228,15 @@ public:
                                                 const uint64_t table_id,
                                                 common::ObISQLClient &sql_client,
                                                 ObTableSchema &table_schema);
-
+  virtual int get_db_schema_from_inner_table(const ObRefreshSchemaStatus &schema_status,
+                                             const uint64_t &database_id,
+                                             ObIArray<ObDatabaseSchema> &database_schema,
+                                             ObISQLClient &sql_client);
+  virtual int get_full_table_schema_from_inner_table(const ObRefreshSchemaStatus &schema_status,
+                                                     const int64_t &table_id,
+                                                     ObTableSchema &table_schema,
+                                                     ObArenaAllocator &allocator,
+                                                     ObMySQLTransaction &trans);
   // get mock fk parent table schema of a single mock fk parent table
   virtual int get_mock_fk_parent_table_schema_from_inner_table(
       const ObRefreshSchemaStatus &schema_status,

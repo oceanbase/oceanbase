@@ -73,7 +73,7 @@ int ObOBJLockCallback::trans_commit()
   ObMemtableCtx *mem_ctx = static_cast<ObMemtableCtx*>(ctx_);
   switch (lock_op_->lock_op_.op_type_) {
   case IN_TRANS_DML_LOCK:
-  case IN_TRANS_LOCK_TABLE_LOCK: {
+  case IN_TRANS_COMMON_LOCK: {
     // TODO: yanyuan.cxf can we use ObLockMemCtx?
     // 1. delete the lock in ObOBJLockMgr.
     // 2. delete the lock in memtable_ctx.
@@ -112,7 +112,7 @@ int ObOBJLockCallback::lock_abort_()
   LOG_DEBUG("ObOBJLockCallback::lock_abort", K(*this));
   switch (lock_op_->lock_op_.op_type_) {
   case IN_TRANS_DML_LOCK:
-  case IN_TRANS_LOCK_TABLE_LOCK: {
+  case IN_TRANS_COMMON_LOCK: {
     ObMemtableCtx *mem_ctx = static_cast<ObMemtableCtx*>(ctx_);
     // 1. delete the lock in ObLockMemtable.
     // 2. delete the lock in memtable_ctx.
@@ -192,7 +192,7 @@ int64_t ObOBJLockCallback::get_seq_no() const
 bool ObOBJLockCallback::must_log() const
 {
   return (lock_op_->lock_op_.op_type_ != IN_TRANS_DML_LOCK &&
-          lock_op_->lock_op_.op_type_ != IN_TRANS_LOCK_TABLE_LOCK);
+          lock_op_->lock_op_.op_type_ != IN_TRANS_COMMON_LOCK);
 }
 
 }

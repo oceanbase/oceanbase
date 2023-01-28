@@ -79,6 +79,8 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_partition_id", "max used partition_id" },
 };
 
+lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
+
 ObMaxIdFetcher::ObMaxIdFetcher(ObMySQLProxy &proxy)
   : proxy_(proxy)
 {
@@ -159,7 +161,11 @@ int ObMaxIdFetcher::fetch_new_max_ids(const uint64_t tenant_id,
   uint64_t fetch_id;
   uint64_t pure_fetch_id;
   ObMySQLTransaction trans;
-  if (OB_INVALID_ID == tenant_id) {
+  // for ddl parallel use ObLatch make conflict trans serial
+  lib::ObMutexGuard guard(mutex_bucket_[tenant_id % MAX_TENANT_MUTEX_BUCKET_CNT]);
+  if (OB_FAIL(guard.get_ret())) {
+    LOG_WARN("fail to lock", K(ret), K(tenant_id));
+  } else if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(max_id_type));
   } else if (OB_MAX_USED_NORMAL_ROWID_TABLE_TABLET_ID_TYPE != max_id_type

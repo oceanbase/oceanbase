@@ -27,6 +27,20 @@ using namespace transaction::tablelock;
 namespace observer
 {
 
+#define BATCH_PROCESS(arg, func_name)                               \
+  ({                                                                \
+    int ret = OB_SUCCESS;                                           \
+    ObAccessService *access_srv = MTL(ObAccessService *);           \
+    for (int i = 0; i < arg.params_.count() && OB_SUCC(ret); i++) { \
+      if (OB_FAIL(access_srv->func_name(arg.lsid_,                  \
+                                        *(arg.tx_desc_),            \
+                                        arg.params_[i]))) {         \
+        LOG_WARN("failed to exec", K(ret), K(arg.params_[i]));      \
+      }                                                             \
+    }                                                               \
+    ret;                                                            \
+  })
+
 int ObTableLockTaskP::process()
 {
   int ret = OB_SUCCESS;
@@ -55,7 +69,10 @@ int ObTableLockTaskP::process()
         break;
       }
       case ObTableLockTaskType::LOCK_TABLE:
-      case ObTableLockTaskType::LOCK_TABLET: {
+      case ObTableLockTaskType::LOCK_PARTITION:
+      case ObTableLockTaskType::LOCK_SUBPARTITION:
+      case ObTableLockTaskType::LOCK_TABLET:
+      case ObTableLockTaskType::LOCK_OBJECT: {
         ObAccessService *access_srv = MTL(ObAccessService *);
         if (arg_.is_timeout()) {
           ret = OB_TIMEOUT;
@@ -107,7 +124,10 @@ int ObHighPriorityTableLockTaskP::process()
     ObTransService *tx_srv = MTL(ObTransService *);
     switch (arg_.task_type_) {
       case ObTableLockTaskType::UNLOCK_TABLE:
-      case ObTableLockTaskType::UNLOCK_TABLET: {
+      case ObTableLockTaskType::UNLOCK_PARTITION:
+      case ObTableLockTaskType::UNLOCK_SUBPARTITION:
+      case ObTableLockTaskType::UNLOCK_TABLET:
+      case ObTableLockTaskType::UNLOCK_OBJECT: {
         ObAccessService *access_srv = MTL(ObAccessService *);
         if (arg_.is_timeout()) {
           ret = OB_TIMEOUT;
@@ -137,6 +157,107 @@ int ObHighPriorityTableLockTaskP::process()
 
   result_.ret_code_ = ret;
   LOG_DEBUG("ObHighPriorityTableLockTaskP::process", KR(ret), K(result_), K(arg_));
+  ret = OB_SUCCESS;
+
+  return ret;
+}
+
+int ObBatchLockTaskP::process()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  // lock/unlock process:
+  // 1. get ls
+  // 2. get store ctx
+  // 3. lock/unlock
+  // 4. collect tx exec result.
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg_));
+  } else {
+    ObTransService *tx_srv = MTL(ObTransService *);
+    switch (arg_.task_type_) {
+      case ObTableLockTaskType::PRE_CHECK_TABLET: {
+        // NOTE: yanyuan.cxf pre check should not check timeout
+        ret = BATCH_PROCESS(arg_, pre_check_lock);
+        break;
+      }
+      case ObTableLockTaskType::LOCK_TABLE:
+      case ObTableLockTaskType::LOCK_PARTITION:
+      case ObTableLockTaskType::LOCK_SUBPARTITION:
+      case ObTableLockTaskType::LOCK_TABLET:
+      case ObTableLockTaskType::LOCK_OBJECT: {
+        if (OB_FAIL(BATCH_PROCESS(arg_, lock_obj))) {
+          LOG_WARN("failed to exec lock obj operation", K(ret), K(arg_));
+        }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid task type", K(ret), K(arg_));
+        break;
+      } // default
+    } // switch
+
+    if (OB_SUCCESS != (tmp_ret = tx_srv->
+                       get_tx_exec_result(*(arg_.tx_desc_),
+                                          result_.get_tx_result()))) {
+      result_.tx_result_ret_code_ = tmp_ret;
+      LOG_WARN("get trans_result fail", KR(tmp_ret), K(arg_.tx_desc_));
+    }
+  }
+
+  result_.ret_code_ = ret;
+  LOG_DEBUG("ObBatchLockTaskP::process", KR(ret), K(result_), K(arg_));
+  ret = OB_SUCCESS;
+
+  return ret;
+}
+
+int ObHighPriorityBatchLockTaskP::process()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  // lock/unlock process:
+  // 1. get ls
+  // 2. get store ctx
+  // 3. lock/unlock
+  // 4. collect tx exec result.
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg_));
+  } else {
+    ObTransService *tx_srv = MTL(ObTransService *);
+    switch (arg_.task_type_) {
+      case ObTableLockTaskType::UNLOCK_TABLE:
+      case ObTableLockTaskType::UNLOCK_PARTITION:
+      case ObTableLockTaskType::UNLOCK_SUBPARTITION:
+      case ObTableLockTaskType::UNLOCK_TABLET:
+      case ObTableLockTaskType::UNLOCK_OBJECT: {
+        if (OB_FAIL(BATCH_PROCESS(arg_, unlock_obj))) {
+          LOG_WARN("failed to exec unlock obj operation", K(ret), K(arg_));
+        }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid task type", K(ret), K(arg_));
+        break;
+      } // default
+    } // switch
+
+    if (OB_SUCCESS != (tmp_ret = tx_srv->
+                       get_tx_exec_result(*(arg_.tx_desc_),
+                                          result_.get_tx_result()))) {
+      result_.tx_result_ret_code_ = tmp_ret;
+      LOG_WARN("get trans_result fail", KR(tmp_ret), K(arg_.tx_desc_));
+    }
+  }
+
+  result_.ret_code_ = ret;
+  LOG_DEBUG("ObHighPriorityBatchLockTaskP::process", KR(ret), K(result_), K(arg_));
   ret = OB_SUCCESS;
 
   return ret;

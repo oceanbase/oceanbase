@@ -41,6 +41,9 @@ const int64_t ObTabletGCHandler::FLUSH_CHECK_MAX_TIMES = 72;
 // The time interval for checking tablet_persist_trigger_ is 5s
 const int64_t ObTabletGCService::GC_CHECK_INTERVAL = 5 * 1000 * 1000L;
 
+// The time interval for checking deleted tablet trigger is 5s
+const int64_t ObTabletGCService::GC_CHECK_DELETE_INTERVAL = 30 * 1000 * 1000L;
+
 // The time interval for gc tablet and persist tablet whether the tablet_persist_trigger_ is 24 * 720 * 5s = 1d
 const int64_t ObTabletGCService::GLOBAL_GC_CHECK_INTERVAL_TIMES = 24 * 720;
 
@@ -64,10 +67,15 @@ int ObTabletGCService::init()
 int ObTabletGCService::start()
 {
   int ret = OB_SUCCESS;
-  timer_.set_run_wrapper(MTL_CTX());
-  if (OB_FAIL(timer_.init())) {
+  timer_for_tablet_change_.set_run_wrapper(MTL_CTX());
+  timer_for_tablet_gc_.set_run_wrapper(MTL_CTX());
+  if (OB_FAIL(timer_for_tablet_change_.init())) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
-  } else if (OB_FAIL(timer_.schedule(tablet_gc_task_, GC_CHECK_INTERVAL, true))) {
+  } else if (OB_FAIL(timer_for_tablet_gc_.init())) {
+    STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
+  } else if (OB_FAIL(timer_for_tablet_change_.schedule(tablet_gc_task_, GC_CHECK_INTERVAL, true))) {
+    STORAGE_LOG(ERROR, "fail to schedule task", KR(ret));
+  } else if (OB_FAIL(timer_for_tablet_gc_.schedule(tablet_change_task_, GC_CHECK_DELETE_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule task", KR(ret));
   }
   return ret;
@@ -82,24 +90,27 @@ int ObTabletGCService::stop()
   } else {
     STORAGE_LOG(INFO, "ObTabletGCService stoped");
   }
-  timer_.stop();
+  timer_for_tablet_change_.stop();
+  timer_for_tablet_gc_.stop();
   return ret;
 }
 
 void ObTabletGCService::wait()
 {
-  timer_.wait();
+  timer_for_tablet_change_.wait();
+  timer_for_tablet_gc_.wait();
 }
 
 void ObTabletGCService::destroy()
 {
   is_inited_ = false;
-  timer_.destroy();
+  timer_for_tablet_change_.destroy();
+  timer_for_tablet_gc_.destroy();
 }
 
-void ObTabletGCService::ObTabletGCTask::runTimerTask()
+void ObTabletGCService::ObTabletChangeTask::runTimerTask()
 {
-  STORAGE_LOG(INFO, "====== [tabletgc] timer task ======", K(GC_CHECK_INTERVAL));
+  STORAGE_LOG(INFO, "====== [tabletchange] timer task ======", K(GC_CHECK_INTERVAL));
   static int64_t times = 0;
   times = (times + 1) % GLOBAL_GC_CHECK_INTERVAL_TIMES;
   int ret = OB_SUCCESS;
@@ -107,9 +118,9 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
   common::ObSharedGuard<ObLSIterator> guard;
   ObLSService *ls_svr = MTL(ObLSService*);
   bool skip_gc_task = false;
-  
+
   skip_gc_task = (OB_SUCCESS != (OB_E(EventTable::EN_TABLET_GC_TASK_FAILED) OB_SUCCESS));
-  
+
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", KR(ret));
@@ -130,20 +141,21 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
         STORAGE_LOG(WARN, "ls is NULL", KR(ret));
       } else if (FALSE_IT(tablet_gc_handler = ls->get_tablet_gc_handler())) {
       } else if (tablet_gc_handler->check_stop()) {
+        STORAGE_LOG(INFO, "[tabletgc] tablet_gc_handler is offline", K(ls->get_ls_id()));
       } else {
         uint8_t tablet_persist_trigger = tablet_gc_handler->get_tablet_persist_trigger_and_reset();
-        STORAGE_LOG(INFO, "[tabletgc] task check ls", K(ls->get_ls_id()), K(tablet_persist_trigger));
+        STORAGE_LOG(INFO, "[tabletchange] task check ls", K(ls->get_ls_id()), K(tablet_persist_trigger));
         if (times == 0
             || ObTabletGCHandler::is_set_tablet_persist_trigger(tablet_persist_trigger)
             || ObTabletGCHandler::is_tablet_gc_trigger(tablet_persist_trigger)) {
-          obsys::ObWLockGuard lock(tablet_gc_handler->wait_lock_);
+          obsys::ObRLockGuard lock(tablet_gc_handler->wait_lock_);
           bool need_retry = false;
           SCN checkpoint_scn;
           ObFreezer *freezer = ls->get_freezer();
           common::ObTabletIDArray unpersist_tablet_ids;
-          common::ObTabletIDArray deleted_tablet_ids;
           const bool is_deleted = true;
           const bool only_deleted = true;
+          bool is_gc = false;
 
           if (OB_ISNULL(freezer)) {
             ret = OB_ERR_UNEXPECTED;
@@ -159,37 +171,29 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
             STORAGE_LOG(INFO, "no any log callback and no need to update clog checkpoint",
               K(freezer->get_ls_id()), K(checkpoint_scn), KPC(ls), K(ls->get_ls_meta()));
           }
-          // 2. get gc tablet. persist tablet must gc tablet
-          else if (OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(deleted_tablet_ids, only_deleted))) {
+          // 2. get gc tablet. tablet_change_ts cannot update when gc tablet failed.
+          else if (OB_FAIL(tablet_gc_handler->gc_tablets(is_gc))) {
+            need_retry = true;
+            STORAGE_LOG(WARN, "failed to gc tablet", KR(ret));
+          }
+          // 3. get unpersist_tablet_ids
+          else if (OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(unpersist_tablet_ids, !only_deleted))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls), KR(ret));
           }
-          // 3. check and gc deleted_tablet_ids. tablet_change_ts cannot update when gc tablet failed.
-          else if (!deleted_tablet_ids.empty() && OB_FAIL(tablet_gc_handler->gc_tablets(deleted_tablet_ids))) {
-            need_retry = true;
-            STORAGE_LOG(WARN, "failed to gc tablet", KR(ret), K(deleted_tablet_ids));
-          }
-          // 4. get unpersist_tablet_ids
-          else if ((times == 0 || ObTabletGCHandler::is_set_tablet_persist_trigger(tablet_persist_trigger))
-                   && OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(unpersist_tablet_ids, !only_deleted))) {
-            need_retry = true;
-            STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls), KR(ret));
-          }
-          // 5. flush unpersit_tablet_ids
-          else if ((times == 0 || ObTabletGCHandler::is_set_tablet_persist_trigger(tablet_persist_trigger))
-                   && OB_FAIL(tablet_gc_handler->flush_unpersist_tablet_ids(unpersist_tablet_ids, checkpoint_scn))) {
+          // 4. flush unpersit_tablet_ids
+          else if (OB_FAIL(tablet_gc_handler->flush_unpersist_tablet_ids(unpersist_tablet_ids, checkpoint_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to flush_unpersist_tablet_ids", KPC(ls), KR(ret), K(unpersist_tablet_ids));
           }
-          // 6. update tablet_change_checkpoint in log meta
-          else if ((times == 0 || ObTabletGCHandler::is_set_tablet_persist_trigger(tablet_persist_trigger))
-                   && OB_FAIL(ls->set_tablet_change_checkpoint_scn(checkpoint_scn))) {
+          // 5. update tablet_change_checkpoint in log meta
+          else if (OB_FAIL(ls->set_tablet_change_checkpoint_scn(checkpoint_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set_tablet_change_checkpoint_scn", KPC(ls), KR(ret), K(checkpoint_scn));
           }
-          STORAGE_LOG(INFO, "[tabletgc] tablet in a ls persist and gc process end", KR(ret), KPC(ls), K(checkpoint_scn), K(deleted_tablet_ids), K(unpersist_tablet_ids));
+          STORAGE_LOG(INFO, "[tabletchange] tablet in a ls persist and gc process end", KR(ret), KPC(ls), K(checkpoint_scn), K(unpersist_tablet_ids));
           if (need_retry) {
-            STORAGE_LOG(INFO, "[tabletgc] persist or gc error, need try", KR(ret), KPC(ls), K(checkpoint_scn), K(tablet_persist_trigger));
+            STORAGE_LOG(INFO, "[tabletchange] persist or gc error, need try", KR(ret), KPC(ls), K(checkpoint_scn), K(tablet_persist_trigger));
             if (ObTabletGCHandler::is_set_tablet_persist_trigger(tablet_persist_trigger)) {
               tablet_gc_handler->set_tablet_persist_trigger();
             }
@@ -203,9 +207,77 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
       if (ls_cnt > 0) {
-        STORAGE_LOG(INFO, "[tabletgc] succeed to gc_tablet", KR(ret), K(ls_cnt), K(times));
+        STORAGE_LOG(INFO, "[tabletchange] succeed to gc_tablet", KR(ret), K(ls_cnt), K(times));
       } else {
-        STORAGE_LOG(INFO, "[tabletgc] no logstream", KR(ret), K(ls_cnt), K(times));
+        STORAGE_LOG(INFO, "[tabletchange] no logstream", KR(ret), K(ls_cnt), K(times));
+      }
+    }
+  }
+}
+
+void ObTabletGCService::ObTabletGCTask::runTimerTask()
+{
+  STORAGE_LOG(INFO, "====== [tabletgc] timer task ======", K(GC_CHECK_INTERVAL));
+  int ret = OB_SUCCESS;
+  ObLSIterator *iter = NULL;
+  common::ObSharedGuard<ObLSIterator> guard;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  bool skip_gc_task = false;
+
+  if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "mtl ObLSService should not be null", KR(ret));
+  } else if (OB_UNLIKELY(skip_gc_task)) {
+    // do nothing
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+    STORAGE_LOG(WARN, "get log stream iter failed", KR(ret));
+  } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "iter is NULL", KR(ret));
+  } else {
+    ObLS *ls = NULL;
+    int ls_cnt = 0;
+    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+      ObTabletGCHandler *tablet_gc_handler = NULL;
+      if (OB_ISNULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "ls is NULL", KR(ret));
+      } else if (FALSE_IT(tablet_gc_handler = ls->get_tablet_gc_handler())) {
+      } else if (tablet_gc_handler->check_stop()) {
+        STORAGE_LOG(INFO, "[tabletgc] tablet_gc_handler is stop", K(ls->get_ls_id()));
+      } else {
+        bool is_tablet_gc = tablet_gc_handler->is_tablet_gc_trigger_and_reset();
+        STORAGE_LOG(INFO, "[tabletgc] task check ls", K(ls->get_ls_id()), K(is_tablet_gc));
+        if (is_tablet_gc) {
+          obsys::ObRLockGuard lock(tablet_gc_handler->wait_lock_);
+          bool need_retry = false;
+          SCN checkpoint_scn;
+          const bool is_deleted = true;
+          const bool only_deleted = true;
+          bool is_gc = false;
+
+          if (OB_FAIL(tablet_gc_handler->gc_tablets(is_gc))) {
+            need_retry = true;
+            STORAGE_LOG(WARN, "failed to gc tablet", KR(ret));
+          } else if (is_gc) {
+            tablet_gc_handler->set_tablet_persist_trigger();
+          }
+          STORAGE_LOG(INFO, "[tabletgc] tablet in a ls gc process end", KR(ret), KPC(ls), K(checkpoint_scn));
+          if (need_retry) {
+            STORAGE_LOG(INFO, "[tabletgc] persist or gc error, need try", KR(ret), KPC(ls), K(checkpoint_scn));
+            if (is_tablet_gc) {
+              tablet_gc_handler->set_tablet_gc_trigger();
+            }
+          }
+        }
+      }
+    }
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+      if (ls_cnt > 0) {
+        STORAGE_LOG(INFO, "[tabletgc] succeed to gc_tablet", KR(ret), K(ls_cnt));
+      } else {
+        STORAGE_LOG(INFO, "[tabletgc] no logstream", KR(ret), K(ls_cnt));
       }
     }
   }
@@ -264,6 +336,20 @@ uint8_t ObTabletGCHandler::get_tablet_persist_trigger_and_reset()
     }
   } while (ATOMIC_CAS(&tablet_persist_trigger_, old_v, new_v) != old_v);
   return old_v;
+}
+
+bool ObTabletGCHandler::is_tablet_gc_trigger_and_reset()
+{
+  uint8_t old_v = 0;
+  uint8_t new_v = 0;
+  do {
+    old_v = ATOMIC_LOAD(&tablet_persist_trigger_);
+    new_v = old_v & (~2);
+    if (old_v == new_v) {
+      break;
+    }
+  } while (ATOMIC_CAS(&tablet_persist_trigger_, old_v, new_v) != old_v);
+  return 0 != (old_v & 2);
 }
 
 int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_tablet_ids,
@@ -417,19 +503,26 @@ int ObTabletGCHandler::wait_unpersist_tablet_ids_flushed(const common::ObTabletI
   return ret;
 }
 
-int ObTabletGCHandler::gc_tablets(const common::ObTabletIDArray &tablet_ids)
+int ObTabletGCHandler::gc_tablets(bool &is_gc)
 {
   int ret = OB_SUCCESS;
+  obsys::ObWLockGuard lock(gc_lock_);
+  const bool only_deleted = true;
+  common::ObTabletIDArray deleted_tablet_ids;
+  is_gc = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tablet gc handler is not inited", KR(ret));
   } else if (check_stop()) {
     ret = OB_EAGAIN;
     STORAGE_LOG(INFO, "tablet gc handler stop", KR(ret), KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
-  } else if (OB_FAIL(ls_->get_tablet_svr()->remove_tablets(tablet_ids))) {
-    STORAGE_LOG(WARN, "[tabletgc] failed to remove tablets", K(ret), K(tablet_ids));
+  } else if (OB_FAIL(get_unpersist_tablet_ids(deleted_tablet_ids, only_deleted))) {
+    STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls_), KR(ret));
+  } else if (!deleted_tablet_ids.empty() && OB_FAIL(ls_->get_tablet_svr()->remove_tablets(deleted_tablet_ids))) {
+    STORAGE_LOG(WARN, "failed to remove tablets", K(ret), K(deleted_tablet_ids));
   } else {
-    STORAGE_LOG(INFO, "[tabletgc] gc tablet finish", K(ret), K(tablet_ids));
+    is_gc = !deleted_tablet_ids.empty();
+    STORAGE_LOG(INFO, "gc tablet finish", K(ret), K(deleted_tablet_ids));
   }
   return ret;
 }

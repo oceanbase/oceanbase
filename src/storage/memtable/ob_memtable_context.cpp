@@ -1086,6 +1086,7 @@ int ObMemtableCtx::check_lock_need_replay(const SCN &scn,
 int ObMemtableCtx::check_lock_exist(const ObLockID &lock_id,
                                     const ObTableLockOwnerID &owner_id,
                                     const ObTableLockMode mode,
+                                    const ObTableLockOpType op_type,
                                     bool &is_exist,
                                     ObTableLockMode &lock_mode_in_same_trans) const
 {
@@ -1094,6 +1095,7 @@ int ObMemtableCtx::check_lock_exist(const ObLockID &lock_id,
   if (OB_FAIL(lock_mem_ctx_.check_lock_exist(lock_id,
                                              owner_id,
                                              mode,
+                                             op_type,
                                              is_exist,
                                              lock_mode_in_same_trans))) {
     TRANS_LOG(WARN, "check lock exist failed. ", K(ret), K(lock_id),

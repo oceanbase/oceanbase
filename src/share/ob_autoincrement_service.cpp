@@ -506,6 +506,81 @@ int ObAutoincrementService::refresh_sync_value(const obrpc::ObAutoincSyncArg &ar
   return ret;
 }
 
+int ObAutoincrementService::lock_autoinc_row(const uint64_t &tenant_id,
+                                             const uint64_t &table_id,
+                                             const uint64_t &column_id,
+                                             common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString lock_sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObISQLClient *sql_client = &trans;
+    if (OB_FAIL(lock_sql.assign_fmt("SELECT sequence_key, sequence_value, sync_value "
+                                    "FROM %s WHERE tenant_id = %lu AND sequence_key = %lu "
+                                    "AND column_id = %lu FOR UPDATE",
+                                    OB_ALL_AUTO_INCREMENT_TNAME,
+                                    ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                    ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
+                                    column_id))) {
+      LOG_WARN("failed to assign sql", KR(ret));
+    } else if (OB_FAIL(trans.read(res, tenant_id, lock_sql.ptr()))) {
+      LOG_WARN("failded to execute sql", KR(ret), K(lock_sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get result, result is NULL", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_ITER_END == ret) {
+        LOG_WARN("autoincrement not exist", KR(ret), K(lock_sql));
+      } else {
+        LOG_WARN("iterate next result fail", KR(ret), K(lock_sql));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAutoincrementService::reset_autoinc_row(const uint64_t &tenant_id,
+                                               const uint64_t &table_id,
+                                               const uint64_t &column_id,
+                                               common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString update_sql;
+  int64_t affected_rows = 0;
+  if (OB_FAIL(update_sql.assign_fmt("UPDATE %s SET sequence_value = 1, sync_value = 0 ",
+                                    OB_ALL_AUTO_INCREMENT_TNAME))) {
+    LOG_WARN("failed to assign sql", KR(ret));
+  } else if (OB_FAIL(update_sql.append_fmt("WHERE sequence_key = %lu AND tenant_id = %lu AND column_id = %lu",
+                                            ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
+                                            ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                            column_id))) {
+    LOG_WARN("failed to append sql", KR(ret));
+  } else if (OB_FAIL(trans.write(tenant_id, update_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to update __all_auto_increment", KR(ret), K(update_sql));
+  } else if (OB_UNLIKELY(affected_rows > 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected rows", KR(ret), K(table_id), K(affected_rows), K(update_sql));
+  }
+  return ret;
+}
+
+// for new truncate table
+int ObAutoincrementService::reinit_autoinc_row(const uint64_t &tenant_id,
+                                               const uint64_t &table_id,
+                                               const uint64_t &column_id,
+                                               common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(lock_autoinc_row(tenant_id, table_id, column_id, trans))) {
+    LOG_WARN("failed to select for update", KR(ret));
+  } else if (OB_FAIL(reset_autoinc_row(tenant_id, table_id, column_id, trans))) {
+    LOG_WARN("failed to update auto increment", KR(ret));
+  }
+  return ret;
+}
+
 int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
                                                     const uint64_t table_id,
                                                     const uint64_t column_id,

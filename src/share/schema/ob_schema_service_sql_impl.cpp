@@ -303,6 +303,7 @@ int ObSchemaServiceSQLImpl::init(
 
 void ObSchemaServiceSQLImpl::set_refreshed_schema_version(const int64_t schema_version)
 {
+  SpinWLockGuard guard(rw_lock_);
   refreshed_schema_version_ = std::max(schema_version, refreshed_schema_version_ + 1);
 }
 
@@ -406,6 +407,8 @@ int ObSchemaServiceSQLImpl::get_new_schema_version(uint64_t tenant_id, int64_t &
 {
   int ret = OB_SUCCESS;
   schema_version = OB_INVALID_VERSION;
+  SpinRLockGuard guard(rw_lock_);
+
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
@@ -458,6 +461,7 @@ int ObSchemaServiceSQLImpl::gen_leader_sys_schema_version(const int64_t tenant_i
   // 1. lasted schema version(refreshed_schema_version_, gen_schema_version_)
   // 2. next_new_schema_version_(for standby cluster's system tenant's ddl execution)
   // 3. rs local timestamp
+  SpinWLockGuard guard(rw_lock_);
   schema_version = std::max(refreshed_schema_version_, gen_schema_version_);
   schema_version = std::max(schema_version + SYS_SCHEMA_VERSION_INC_STEP,
       ObTimeUtility::current_time());
@@ -483,6 +487,7 @@ int ObSchemaServiceSQLImpl::gen_leader_normal_schema_version(const uint64_t tena
     // 2. next_new_schema_version_(for standby cluster's system tenant's ddl execution)
     // 3. rs local timestamp
     int64_t gen_schema_version = OB_INVALID_VERSION;
+    SpinWLockGuard guard(rw_lock_);
     if (OB_FAIL(gen_schema_version_map_.get_refactored(tenant_id, gen_schema_version))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -845,6 +850,93 @@ int ObSchemaServiceSQLImpl::get_table_schema_from_inner_table(
       } else if (OB_FAIL(table_schema.assign(*tables.at(0)))){
         LOG_WARN("fail to assign schema", KR(ret), K(schema_status));
       }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::get_full_table_schema_from_inner_table(
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t &table_id,
+    ObTableSchema &table_schema,
+    ObArenaAllocator &allocator,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = schema_status.tenant_id_;
+  ObTableSchema *tmp_table_schema = NULL;
+  ObArray<ObAuxTableMetaInfo> aux_table_metas;
+  int64_t schema_version = OB_INVALID_VERSION;
+
+  if (OB_FAIL(get_table_schema(schema_status,
+                               table_id,
+                               INT64_MAX - 1,
+                               trans,
+                               allocator,
+                               tmp_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(tmp_table_schema)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("can not get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(fetch_aux_tables(schema_status,
+                                      tenant_id,
+                                      table_id,
+                                      tmp_table_schema->get_schema_version(),
+                                      trans,
+                                      aux_table_metas))) {
+    LOG_WARN("fail to fetch aux tables", KR(ret), K(tenant_id), K(table_id), K(tmp_table_schema->get_schema_version()));
+  } else {
+    schema_version = tmp_table_schema->get_schema_version();
+    FOREACH_CNT_X(tmp_aux_table_meta, aux_table_metas, OB_SUCC(ret)) {
+      const ObAuxTableMetaInfo &aux_table_meta = *tmp_aux_table_meta;
+      if (USER_INDEX == aux_table_meta.table_type_) {
+        if (OB_FAIL(tmp_table_schema->add_simple_index_info(ObAuxTableMetaInfo(
+                                                          aux_table_meta.table_id_,
+                                                          aux_table_meta.table_type_,
+                                                          aux_table_meta.index_type_)))) {
+          LOG_WARN("fail to add simple_index_info", KR(ret), K(tenant_id), K(table_id), K(schema_version), K(aux_table_meta));
+        }
+      } else if (AUX_LOB_META == aux_table_meta.table_type_) {
+        tmp_table_schema->set_aux_lob_meta_tid(aux_table_meta.table_id_);
+      } else if (AUX_LOB_PIECE == aux_table_meta.table_type_) {
+        tmp_table_schema->set_aux_lob_piece_tid(aux_table_meta.table_id_);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(table_schema.assign(*tmp_table_schema))) {
+        LOG_WARN("fail to assing table schema", KR(ret), K(tenant_id), K(table_id), K(schema_version));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::get_db_schema_from_inner_table(
+    const ObRefreshSchemaStatus &schema_status,
+    const uint64_t &database_id,
+    ObIArray<ObDatabaseSchema> &db_schema_array,
+    ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  db_schema_array.reset();
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check inner stat fail", KR(ret), K(schema_status));
+  } else {
+    // set schema_version to get newest table_schema
+    int64_t schema_version = INT64_MAX - 1;
+    ObArray<uint64_t> db_ids;
+
+    if (OB_FAIL(db_ids.reserve(1))) {
+      LOG_WARN("fail to reserve db_ids size", KR(ret), K(schema_status));
+    } else if (OB_FAIL(db_ids.push_back(database_id))) {
+      LOG_WARN("push database_id to array failed", KR(ret), K(schema_status));
+    } else if (OB_FAIL(get_batch_databases(schema_status, schema_version,
+                                           db_ids, sql_client, db_schema_array))) {
+      LOG_WARN("get database schema failed", KR(ret), K(schema_version), K(database_id), K(schema_status));
+    } else if (db_schema_array.count() <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("databse array should not be empty", KR(ret), K(schema_status));
     }
   }
   return ret;
@@ -7353,25 +7445,13 @@ int ObSchemaServiceSQLImpl::inc_sequence_id()
   return ret;
 }
 
-int ObSchemaServiceSQLImpl::set_last_operation_info(const uint64_t tenant_id, const int64_t schema_version)
-{
-  int ret = OB_SUCCESS;
-  SpinWLockGuard guard(rw_lock_);
-  if (OB_INVALID_TENANT_ID == tenant_id
-      || schema_version <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id or schema_version", K(ret), K(tenant_id), K(schema_version));
-  } else {
-    last_operation_schema_version_ = schema_version;
-    last_operation_tenant_id_ = tenant_id;
-  }
-  return ret;
-}
-
 int ObSchemaServiceSQLImpl::set_refresh_schema_info(const ObRefreshSchemaInfo &schema_info)
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard guard(rw_lock_);
+  // TODO
+  // init_sequence_id、inc_sequence_id、set_refresh_schema_info to
+  // atomic update squence_id and schema_info
+  SpinWLockGuard guard(rw_lock_);
   schema_info_.set_tenant_id(schema_info.get_tenant_id());
   schema_info_.set_schema_version(schema_info.get_schema_version());
   schema_info_.set_sequence_id(sequence_id_);

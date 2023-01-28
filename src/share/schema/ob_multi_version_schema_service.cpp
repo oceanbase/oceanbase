@@ -1715,6 +1715,10 @@ int ObMultiVersionSchemaService::init(
   } else if (OB_FAIL(schema_mgr_cache_for_liboblog_.init(init_version_count_for_liboblog,
                                                          ObSchemaMgrCache::FALLBACK))) {
     LOG_WARN("fail to init schema mgr cache", K(ret));
+  } else if (OB_FAIL(ddl_trans_controller_.init(this))) {
+    LOG_WARN("fail to init ddl trans controller", KR(ret));
+  } else if (OB_FAIL(ddl_epoch_mgr_.init(sql_proxy, this))) {
+    LOG_WARN("fail to init ddl epoch mgr", KR(ret));
   } else {
     // init sys schema struct
     init_version_cnt_ = init_version_count;
@@ -2660,8 +2664,9 @@ int ObMultiVersionSchemaService::refresh_tenant_schema(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get schema store", KR(ret));
           } else {
-            schema_store->update_received_version(new_received_schema_version);
-            if (schema_store->get_refreshed_version() >= schema_store->get_received_version()) {
+            // schema_store->update_received_version(new_received_schema_version);
+            // if (schema_store->get_refreshed_version() >= schema_store->get_received_version()) {
+            if (schema_store->get_refreshed_version() >= new_received_schema_version) {
               need_refresh = false;
               LOG_TRACE("[REFRESH_SCHEMA] local refreshed schema version is greater than received schema version, just skip",
                         KR(ret), K(tenant_id), K(schema_store->received_version_), K(schema_store->refreshed_version_));
@@ -2673,6 +2678,13 @@ int ObMultiVersionSchemaService::refresh_tenant_schema(
       if (OB_SUCC(ret) && need_refresh) {
         if (OB_FAIL(refresh_schema(refresh_schema_status))) {
           LOG_WARN("fail to refresh schema by tenant", KR(ret), K(refresh_schema_status));
+        }
+      }
+      int64_t tmp_ret = OB_SUCCESS;
+      if (OB_INVALID_SCHEMA_VERSION != new_received_schema_version) {
+        if (OB_SUCCESS != (tmp_ret = set_tenant_received_broadcast_version(tenant_id, new_received_schema_version))) {
+          LOG_WARN("fail to set tenant received schema version", KR(tmp_ret), K(tenant_id), K(new_received_schema_version));
+          ret = OB_SUCC(ret) ? tmp_ret : ret;
         }
       }
     }

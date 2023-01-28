@@ -503,6 +503,16 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
 }
 
+inline bool index_has_tablet(const ObIndexType &index_type)
+{
+  return INDEX_TYPE_NORMAL_LOCAL == index_type
+        || INDEX_TYPE_UNIQUE_LOCAL == index_type
+        || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type
+        || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
+        || INDEX_TYPE_NORMAL_GLOBAL == index_type
+        || INDEX_TYPE_UNIQUE_GLOBAL == index_type;
+}
+
 struct ObTenantTableId
 {
   ObTenantTableId() : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID)

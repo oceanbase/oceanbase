@@ -165,6 +165,7 @@ TEST_F(TestLockTableCallback, callback)
   ret = mt_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                 DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
                                  lock_mode_in_same_trans);
   ASSERT_EQ(lock_exist, true);
@@ -173,6 +174,7 @@ TEST_F(TestLockTableCallback, callback)
   ret = mt_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                 DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
                                  lock_mode_in_same_trans);
   ASSERT_EQ(lock_exist, false);
@@ -182,6 +184,7 @@ TEST_F(TestLockTableCallback, callback)
   ret = mt_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                 DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
                                  lock_mode_in_same_trans);
   ASSERT_EQ(lock_exist, true);
@@ -190,6 +193,7 @@ TEST_F(TestLockTableCallback, callback)
   ret = mt_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                 DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
                                  lock_mode_in_same_trans);
   ASSERT_EQ(lock_exist, false);
@@ -199,6 +203,7 @@ TEST_F(TestLockTableCallback, callback)
   ret = mt_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                 DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
                                  lock_mode_in_same_trans);
   ASSERT_EQ(lock_exist, true);
@@ -207,6 +212,7 @@ TEST_F(TestLockTableCallback, callback)
   ret = mt_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
+                                 DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
                                  lock_mode_in_same_trans);
   ASSERT_EQ(lock_exist, false);

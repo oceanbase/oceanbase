@@ -112,6 +112,7 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_TRUNCATE_SUB_PARTITION, = 56)                       \
   ACT(OB_DDL_SET_INTERVAL, = 57)                                 \
   ACT(OB_DDL_INTERVAL_TO_RANGE, = 58)                            \
+  ACT(OB_DDL_TRUNCATE_TABLE, = 59)                               \
   ACT(OB_DDL_TABLE_OPERATION_END, = 100)                         \
   ACT(OB_DDL_TENANT_OPERATION_BEGIN, = 101)                      \
   ACT(OB_DDL_ADD_TENANT,)                                        \
@@ -731,12 +732,9 @@ public:
   virtual int inc_sequence_id() = 0;
   virtual uint64_t get_sequence_id() = 0;
 
-  virtual int set_last_operation_info(const uint64_t tenant_id, const int64_t schema_version) = 0;
   virtual int set_refresh_schema_info(const ObRefreshSchemaInfo &schema_info) = 0;
   virtual int get_refresh_schema_info(ObRefreshSchemaInfo &schema_info) = 0;
 
-  virtual int64_t get_last_operation_schema_version() const = 0;
-  virtual uint64_t get_last_operation_tenant_id() const = 0;
   virtual void set_cluster_schema_status(const ObClusterSchemaStatus &schema_status) = 0;
   virtual ObClusterSchemaStatus get_cluster_schema_status() const = 0;
   //get all core table schema
@@ -1019,6 +1017,15 @@ public:
                                                 const uint64_t table_id,
                                                 common::ObISQLClient &sql_client,
                                                 ObTableSchema &table_schema) = 0;
+  virtual int get_db_schema_from_inner_table(const ObRefreshSchemaStatus &schema_status,
+                                             const uint64_t &database_id,
+                                             ObIArray<ObDatabaseSchema> &database_schema,
+                                             ObISQLClient &sql_client) = 0;
+  virtual int get_full_table_schema_from_inner_table(const ObRefreshSchemaStatus &schema_status,
+                                                     const int64_t &table_id,
+                                                     ObTableSchema &table_schema,
+                                                     ObArenaAllocator &allocator,
+                                                     ObMySQLTransaction &trans) = 0;
   // get mock fk parent table schema of a single mock fk parent table
   virtual int get_mock_fk_parent_table_schema_from_inner_table(
       const ObRefreshSchemaStatus &schema_status,

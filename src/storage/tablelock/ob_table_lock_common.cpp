@@ -99,6 +99,20 @@ int ObLockID::set(const ObLockOBJType &type, const uint64_t obj_id)
   return ret;
 }
 
+int get_lock_id(const ObLockOBJType obj_type,
+                const uint64_t obj_id,
+                ObLockID &lock_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_lock_obj_type_valid(obj_type) || !is_valid_id(obj_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument ", K(ret), K(obj_type), K(obj_id));
+  } else if (OB_FAIL(lock_id.set(obj_type, obj_id))) {
+    LOG_WARN("create lock id failed.", K(ret));
+  }
+  return ret;
+}
+
 int get_lock_id(const uint64_t table_id,
                 ObLockID &lock_id)
 {

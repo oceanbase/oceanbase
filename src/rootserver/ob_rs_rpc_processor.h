@@ -181,7 +181,23 @@ protected:
         }
         if (OB_SUCC(ret)) {
           int64_t start_ts = ObTimeUtility::current_time();
-          if (OB_FAIL(leader_process())) {
+          bool with_ddl_lock = false;
+          if (is_ddl_like_) {
+            if (obrpc::OB_TRUNCATE_TABLE_V2 == pcode) {
+              if (OB_FAIL(root_service_.get_ddl_service().ddl_rlock())) {
+                RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
+              }
+            } else {
+              if (OB_FAIL(root_service_.get_ddl_service().ddl_wlock())) {
+                RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
+              }
+            }
+            if (OB_SUCC(ret)) {
+              with_ddl_lock = true;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(leader_process())) {
             RS_LOG(WARN, "process failed", K(ret));
             if (!root_service_.in_service()) {
               RS_LOG(WARN, "root service stoped, overwrite return code",
@@ -191,6 +207,15 @@ protected:
             EVENT_ADD(RS_RPC_FAIL_COUNT, 1);
           } else {
             EVENT_ADD(RS_RPC_SUCC_COUNT, 1);
+          }
+          if (with_ddl_lock) {
+            int tmp_ret = root_service_.get_ddl_service().ddl_unlock();
+            if (tmp_ret != OB_SUCCESS) {
+              RS_LOG(WARN, "root service ddl unlock fail", K(tmp_ret), K(ddl_arg_));
+              if (OB_SUCC(ret)) {
+                ret = tmp_ret;
+              }
+            }
           }
           RS_LOG(INFO, "[DDL] execute ddl like stmt", K(ret),
                  "cost", ObTimeUtility::current_time() - start_ts, KPC_(ddl_arg));
@@ -252,7 +277,8 @@ protected:
     explicit pname(ObRootService &rs)                                                         \
       : ObRootServerRPCProcessor<pcode>(rs, full_service, major_freeze_done, is_ddl_like, arg) {}               \
   protected:                                                                                  \
-    virtual int leader_process() { return root_service_.stmt; }                               \
+    virtual int leader_process() {                   \
+      return root_service_.stmt; }                   \
   };
 
 // RPC need rs in full service status (RS restart task success)
@@ -304,6 +330,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_TABLE, ObRpcAlterTableP, alter_table
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_TABLE, ObRpcDropTableP, drop_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RENAME_TABLE, ObRpcRenameTableP, rename_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE, ObRpcTruncateTableP, truncate_table(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE_V2, ObRpcTruncateTableV2P, truncate_table_v2(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_INDEX, ObRpcCreateIndexP, create_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_INDEX, ObRpcDropIndexP, drop_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TABLE_LIKE, ObRpcCreateTableLikeP, create_table_like(arg_));

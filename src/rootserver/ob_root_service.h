@@ -504,6 +504,7 @@ public:
   int maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLArg &arg);
   int rename_table(const obrpc::ObRenameTableArg &arg);
   int truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
+  int truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes &res);
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);
@@ -679,7 +680,7 @@ public:
   int admin_upgrade_cmd(const obrpc::Bool &arg);
   int admin_rolling_upgrade_cmd(const obrpc::ObAdminRollingUpgradeArg &arg);
   int admin_set_tracepoint(const obrpc::ObAdminSetTPArg &arg);
-  int admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg); 
+  int admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg);
   /* physical restore */
   int physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantArg &arg);
   int check_restore_tenant_valid(const share::ObPhysicalRestoreJob &job_info,
@@ -861,6 +862,7 @@ private:
 private:
   int construct_rs_list_arg(obrpc::ObRsListArg &rs_list_arg);
   int precheck_interval_part(const obrpc::ObAlterTableArg &arg);
+
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

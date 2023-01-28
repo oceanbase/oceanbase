@@ -1303,6 +1303,7 @@ int ObService::switch_schema(
     } else if (OB_FAIL(ObShareUtil::get_abs_timeout(GCONF.rpc_timeout, abs_timeout))) {
       LOG_WARN("fail to get abs timeout", KR(ret), "default_timeout", static_cast<int64_t>(GCONF.rpc_timeout));
     } else {
+      /*
       bool need_retry = arg.force_refresh_; // sync refresh schema should retry until timeout
       do {
         int tmp_ret = OB_SUCCESS;
@@ -1320,6 +1321,15 @@ int ObService::switch_schema(
           break;
         }
       } while (OB_SUCC(ret));
+      */
+      if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version))) {
+        LOG_WARN("fail to async schema version", KR(ret), K(tenant_id), K(schema_version));
+      }
+      int64_t tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = schema_service->set_tenant_received_broadcast_version(tenant_id, schema_version))) {
+        LOG_WARN("failt to update received schema version", KR(tmp_ret), K(tenant_id), K(schema_version));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
 
       if (OB_FAIL(ret)) {
       } else if (schema_info.get_schema_version() <= 0) {

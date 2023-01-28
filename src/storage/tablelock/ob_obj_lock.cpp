@@ -1298,10 +1298,10 @@ int ObOBJLock::check_op_allow_lock_from_list_(
   DLIST_FOREACH_NORET(curr, *op_list) {
     switch (lock_op.op_type_) {
     case IN_TRANS_DML_LOCK:
-    case IN_TRANS_LOCK_TABLE_LOCK: {
+    case IN_TRANS_COMMON_LOCK: {
       if (curr->lock_op_.create_trans_id_ == lock_op.create_trans_id_ &&
           (curr->lock_op_.op_type_ == IN_TRANS_DML_LOCK ||
-           curr->lock_op_.op_type_ == IN_TRANS_LOCK_TABLE_LOCK)) {
+           curr->lock_op_.op_type_ == IN_TRANS_COMMON_LOCK)) {
         if (curr->lock_op_.lock_op_status_ != LOCK_OP_DOING) {
           // should never be here.
           ret = OB_ERR_UNEXPECTED;
@@ -1332,6 +1332,9 @@ int ObOBJLock::check_op_allow_lock_from_list_(
           ret = OB_TRY_LOCK_ROW_CONFLICT;
           has_unlock_op = true;
           need_break = true;
+        } else if (curr->lock_op_.op_type_ == IN_TRANS_COMMON_LOCK &&
+                   curr->lock_op_.create_trans_id_ == lock_op.create_trans_id_) {
+          // continue
         } else {
           ret = OB_ERR_UNEXPECTED;
           need_break = true;

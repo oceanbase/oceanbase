@@ -21,6 +21,7 @@
 #include "sql/monitor/ob_exec_stat.h"
 #include "observer/ob_restore_sql_modifier.h"
 #include "observer/mysql/ob_query_retry_ctrl.h"
+#include "observer/ob_inner_sql_rpc_proxy.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "share/location_cache/ob_location_service.h"
 #include "storage/tablelock/ob_table_lock_common.h"   //ObTableLockMode
@@ -53,6 +54,18 @@ class ObSql;
 namespace transaction
 {
 enum class ObTxDataSourceType : int64_t;
+namespace tablelock
+{
+class ObLockRequest;
+class ObLockObjRequest;
+class ObLockTableRequest;
+class ObLockTabletRequest;
+class ObLockPartitionRequest;
+using ObUnLockObjRequest = ObLockObjRequest;
+using ObUnLockTableRequest = ObLockTableRequest;
+using ObUnLockPartitionRequest = ObLockPartitionRequest;
+using ObUnLockTabletRequest = ObLockTabletRequest;
+}
 }
 namespace observer
 {
@@ -152,11 +165,31 @@ public:
                          const uint64_t table_id,
                          const transaction::tablelock::ObTableLockMode lock_mode,
                          const int64_t timeout_us);
+  virtual int lock_table(const uint64_t tenant_id,
+                         const transaction::tablelock::ObLockTableRequest &arg);
+  virtual int unlock_table(const uint64_t tenant_id,
+                           const transaction::tablelock::ObUnLockTableRequest &arg);
+  virtual int lock_partition(const uint64_t tenant_id,
+                             const transaction::tablelock::ObLockPartitionRequest &arg);
+  virtual int unlock_partition(const uint64_t tenant_id,
+                               const transaction::tablelock::ObUnLockPartitionRequest &arg);
+  virtual int lock_subpartition(const uint64_t tenant_id,
+                                const transaction::tablelock::ObLockPartitionRequest &arg);
+  virtual int unlock_subpartition(const uint64_t tenant_id,
+                                  const transaction::tablelock::ObUnLockPartitionRequest &arg);
   virtual int lock_tablet(const uint64_t tenant_id,
                           const uint64_t table_id,
                           const ObTabletID tablet_id,
                           const transaction::tablelock::ObTableLockMode lock_mode,
                           const int64_t timeout_us);
+  virtual int lock_tablet(const uint64_t tenant_id,
+                          const transaction::tablelock::ObLockTabletRequest &arg);
+  virtual int unlock_tablet(const uint64_t tenant_id,
+                            const transaction::tablelock::ObUnLockTabletRequest &arg);
+  virtual int lock_obj(const uint64_t tenant_id,
+                       const transaction::tablelock::ObLockObjRequest &arg);
+  virtual int unlock_obj(const uint64_t tenant_id,
+                         const transaction::tablelock::ObUnLockObjRequest &arg);
   virtual sqlclient::ObCommonServerConnectionPool *get_common_server_pool() override;
   virtual int rollback() override;
   virtual int commit() override;
@@ -341,7 +374,15 @@ private:
                        const ObString &sql,
                        ObInnerSQLResult &res);
   int get_session_timeout_for_rpc(int64_t &query_timeout, int64_t &trx_timeout);
-
+  int request_table_lock_(const uint64_t tenant_id,
+                          const uint64_t table_id,
+                          const ObTabletID tablet_id, //just used when lock_tablet
+                          const transaction::tablelock::ObTableLockMode lock_mode,
+                          const int64_t timeout_us,
+                          const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type);
+  int request_table_lock_(const uint64_t tenant_id,
+                          const transaction::tablelock::ObLockRequest &arg,
+                          const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type);
 private:
   bool inited_;
   observer::ObQueryRetryCtrl retry_ctrl_;
