@@ -17,22 +17,13 @@
 namespace oceanbase {
 namespace common {
 
-#define RELAXJSON_FLAG rapidjson::kParseInsituFlag
-/**
- * rapidjson::kParseObjectKeyNoQuotesFlag \
-  | rapidjson::kParseIgnoreCaseForKeyword \
-  | rapidjson::kParseRelaxNumberFlag \
-  | rapidjson::kParseCommentsFlag \
-  | rapidjson::kParseTrailingCommasFlag
- *
- *
-*/
+#define RELAXJSON_FLAG rapidjson::kParseObjectKeyNoQuotesFlag \
+                      | rapidjson::kParseIgnoreCaseForKeyword \
+                      | rapidjson::kParseRelaxNumberFlag \
+                      | rapidjson::kParseCommentsFlag \
+                      | rapidjson::kParseTrailingCommasFlag
 
-#define STRICTJSON_FLAG rapidjson::kParseInsituFlag
-
-/**
- * rapidjson::kParseObjectKeyNoQuotesFlag
-*/
+#define STRICTJSON_FLAG rapidjson::kParseObjectKeyNoQuotesFlag
 
 int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJsonNode *&j_tree,
                            uint32_t parse_flag)
