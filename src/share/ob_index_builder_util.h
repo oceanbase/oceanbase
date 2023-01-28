@@ -122,6 +122,7 @@ private:
   static int adjust_spatial_args(
       obrpc::ObCreateIndexArg &arg,
       share::schema::ObTableSchema &data_schema,
+      common::ObIAllocator &allocator,
       common::ObIArray<share::schema::ObColumnSchemaV2*> &spatial_cols);
   static int generate_spatial_columns(
       const common::ObString &col_name,
