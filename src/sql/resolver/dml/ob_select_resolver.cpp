@@ -62,6 +62,7 @@ ObSelectResolver::ObSelectResolver(ObResolverParams &params)
 {
   params_.is_from_create_view_ = params.is_from_create_view_;
   params_.is_from_create_table_ = params.is_from_create_table_;
+  params_.is_specified_col_name_ = params.is_specified_col_name_;
   auto_name_id_ = 1;
 }
 
@@ -1760,6 +1761,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           LOG_WARN("alias name too long", K(ret), K(select_item.alias_name_));
         }
       } else if (OB_UNLIKELY((params_.is_from_create_view_ || params_.is_from_create_table_)
+                             && !params_.is_specified_col_name_
                              && 0 == select_item.expr_name_.case_compare(
                                      OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME))) {
         // must name alias for rowid
