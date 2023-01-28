@@ -1441,7 +1441,11 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
 
       if (OB_FAIL(ret)) {
         if (OB_NOT_NULL(tablet_restore_dag)) {
-          scheduler->free_dag(*tablet_restore_dag, sys_tablets_restore_dag);
+          if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(tablet_restore_dag, sys_tablets_restore_dag))) {
+            LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(tablet_restore_dag));
+            scheduler->free_dag(*tablet_restore_dag, sys_tablets_restore_dag);
+            tmp_ret = OB_SUCCESS;
+          }
           tablet_restore_dag = nullptr;
         }
       }
