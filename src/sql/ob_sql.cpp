@@ -1363,7 +1363,7 @@ int ObSql::handle_sql_execute(const ObString &sql,
       if (mode == PC_PS_MODE || mode == PC_PL_MODE) {
         pctx->get_param_store_for_update().reset();
       }
-      if (OB_FAIL(handle_physical_plan(sql, context, result, pc_ctx, get_plan_err, mode))) {
+      if (OB_FAIL(handle_physical_plan(sql, context, result, pc_ctx, get_plan_err))) {
         if (OB_ERR_PROXY_REROUTE == ret) {
           LOG_DEBUG("fail to handle physical plan", K(ret));
         } else {
@@ -2017,7 +2017,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
           } else if (!result.get_is_from_plan_cache()) {
             pctx->set_original_param_cnt(origin_params_count);
             pctx->get_param_store_for_update().reset();
-            if (OB_FAIL(handle_physical_plan(sql, context, result, pc_ctx, get_plan_err, PC_PS_MODE))) {
+            if (OB_FAIL(handle_physical_plan(sql, context, result, pc_ctx, get_plan_err))) {
               if (OB_ERR_PROXY_REROUTE == ret) {
                 LOG_DEBUG("fail to handle physical plan", K(ret));
               } else {
@@ -2202,7 +2202,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
         remote_sql_info.ps_params_->pop_back();
       }
       PlanCacheMode mode = remote_sql_info.use_ps_ ? PC_PS_MODE : PC_TEXT_MODE;
-      if (OB_FAIL(handle_physical_plan(trimed_stmt, context, tmp_result, *pc_ctx, get_plan_err, mode))) {
+      if (OB_FAIL(handle_physical_plan(trimed_stmt, context, tmp_result, *pc_ctx, get_plan_err))) {
         if (OB_ERR_PROXY_REROUTE == ret) {
           LOG_DEBUG("fail to handle physical plan", K(ret));
         } else {
@@ -4368,12 +4368,12 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
                                             ObSqlCtx &context,
                                             ObResultSet &result,
                                             ObPlanCacheCtx &pc_ctx,
-                                            const int get_plan_err,
-                                            PlanCacheMode mode)
+                                            const int get_plan_err)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(hard_parse);
   bool is_valid = true;
+  PlanCacheMode mode = pc_ctx.mode_;
   ObString outlined_stmt = trimed_stmt;//use outline if available
   ObString signature_sql;
   ObOutlineState outline_state;

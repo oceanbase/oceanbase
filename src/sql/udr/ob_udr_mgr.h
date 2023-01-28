@@ -10,6 +10,7 @@
 #include "sql/udr/ob_udr_sql_service.h"
 #include "sql/udr/ob_udr_item_mgr.h"
 #include "lib/task/ob_timer.h"
+#include "sql/plan_cache/ob_plan_cache_struct.h"
 
 
 namespace oceanbase
@@ -42,6 +43,7 @@ private:
   ObPlanCacheCtx &pc_ctx_;
   bool is_prepare_protocol_;
   common::ObString cur_sql_;
+  PlanCacheMode mode_;
 };
 
 class UDRTmpAllocatorGuard

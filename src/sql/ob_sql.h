@@ -337,8 +337,7 @@ private:
                            ObSqlCtx &context,
                            ObResultSet &result,
                            ObPlanCacheCtx &pc_ctx,
-                           const int get_plan_err,
-                           PlanCacheMode mode = PC_INVALID_MODE);
+                           const int get_plan_err);
   // @brief  Generate 'stmt' from syntax tree
   // @param parse_result[in]     syntax tree
   // @param select_item_param_infos           select_item_param_infos from fast parser
@@ -370,7 +369,7 @@ private:
                              ObSqlCtx &context,
                              ObResultSet &result,
                              const bool is_begin_commit_stmt,
-                             const PlanCacheMode mode = PC_INVALID_MODE,
+                             const PlanCacheMode mode,
                              ParseResult *outline_parse_result = NULL);
 
   int generate_plan(ParseResult &parse_result,

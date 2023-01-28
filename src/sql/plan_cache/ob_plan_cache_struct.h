@@ -55,7 +55,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
       : key_id_(common::OB_INVALID_ID),
         db_id_(common::OB_INVALID_ID),
         sessid_(0),
-        mode_(PC_INVALID_MODE) {}
+        mode_(PC_TEXT_MODE) {}
   ObPlanCacheKey(const ObString &name,
                  uint64_t key_id,
                  uint64_t db_id,
@@ -79,7 +79,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
     key_id_ = common::OB_INVALID_ID;
     db_id_ = common::OB_INVALID_ID;
     sessid_ = 0;
-    mode_ = PC_INVALID_MODE;
+    mode_ = PC_TEXT_MODE;
     sys_vars_str_.reset();
     config_str_.reset();
     namespace_ = NS_INVALID;
@@ -386,6 +386,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   bool is_rewrite_sql() const { return is_rewrite_sql_; }
   void set_need_retry_add_plan(bool v) { need_retry_add_plan_ = v; }
   bool need_retry_add_plan() const { return need_retry_add_plan_; }
+  void set_pc_key_mode() { fp_result_.pc_key_.mode_ = mode_; }
   TO_STRING_KV(
     K(mode_),
     K(raw_sql_),

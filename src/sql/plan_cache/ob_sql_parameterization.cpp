@@ -972,6 +972,10 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
                           || (is_prepare_mode(mode) && sql_info.ps_need_parameterized_));
   }
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_related_user_vars(tree, user_var_names))) {
+    LOG_WARN("failed to get related session vars", K(ret));
+  } else if (OB_FAIL(pc_ctx.sql_ctx_.set_related_user_var_names(user_var_names, allocator))) {
+    LOG_WARN("failed to set related user var names for sql ctx", K(ret));
   } else if (is_execute_mode(mode)) {
     if (OB_FAIL(gen_ps_not_param_var(sql_info.ps_not_param_offsets_, params, pc_ctx))) {
       SQL_PC_LOG(WARN, "fail to gen ps not param var", K(ret));
@@ -991,10 +995,6 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
       }
     } else if (OB_FAIL(gen_special_param_info(sql_info, pc_ctx))) {
       SQL_PC_LOG(WARN, "fail to gen special param info", K(ret));
-    } else if (OB_FAIL(get_related_user_vars(tree, user_var_names))) {
-      LOG_WARN("failed to get related session vars", K(ret));
-    } else if (OB_FAIL(pc_ctx.sql_ctx_.set_related_user_var_names(user_var_names, allocator))) {
-      LOG_WARN("failed to set related user var names for sql ctx", K(ret));
     } else {
       // do nothing
     }
