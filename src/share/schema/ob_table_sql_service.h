@@ -158,6 +158,7 @@ public:
       const ObTableSchema &ori_table,
       const ObTableSchema &inc_table,
       const int64_t schema_version,
+      bool is_truncate_partition,
       bool is_truncate_table);
   int drop_inc_subpart_info(
       common::ObISQLClient &sql_client,

@@ -2270,6 +2270,7 @@ int ObDDLOperator::truncate_table(const ObString *ddl_stmt_str,
 {
   int ret = OB_SUCCESS;
   bool is_truncate_table = true;
+  bool is_truncate_partition = false;
   uint64_t table_id = new_table_schema.get_table_id();
   uint64_t schema_version = new_table_schema.get_schema_version();
   ObSchemaOperationType operation_type = OB_DDL_TRUNCATE_TABLE;
@@ -2286,6 +2287,7 @@ int ObDDLOperator::truncate_table(const ObString *ddl_stmt_str,
                                                           orig_table_schema,
                                                           orig_table_schema,
                                                           schema_version,
+                                                          is_truncate_partition,
                                                           is_truncate_table))) {
       LOG_WARN("delete part info failed", KR(ret), K(table_id), K(schema_version));
     } else if (OB_FAIL(schema_service->get_table_sql_service()
@@ -2561,6 +2563,8 @@ int ObDDLOperator::drop_table_partitions(const ObTableSchema &orig_table_schema,
                                          ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  bool is_truncate_table = false;
+  bool is_truncate_partition = false;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
@@ -2575,7 +2579,8 @@ int ObDDLOperator::drop_table_partitions(const ObTableSchema &orig_table_schema,
                                                                          orig_table_schema,
                                                                          inc_table_schema,
                                                                          new_schema_version,
-                                                                         false))) {
+                                                                         is_truncate_partition,
+                                                                         is_truncate_table))) {
     LOG_WARN("delete inc part info failed", K(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
@@ -2694,6 +2699,8 @@ int ObDDLOperator::drop_table_partitions(const ObTableSchema &orig_table_schema,
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
+  bool is_truncate_table = false;
+  bool is_truncate_partition = false;
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
@@ -2705,7 +2712,8 @@ int ObDDLOperator::drop_table_partitions(const ObTableSchema &orig_table_schema,
                      orig_table_schema,
                      inc_table_schema,
                      schema_version,
-                     false))) {
+                     is_truncate_partition,
+                     is_truncate_table))) {
     LOG_WARN("delete inc part info failed", K(ret));
   } else {
     ObTableSchema new_table_schema;

@@ -481,6 +481,7 @@ int ObTableSqlService::drop_inc_part_info(
     const ObTableSchema &table_schema,
     const ObTableSchema &inc_table_schema,
     const int64_t new_schema_version,
+    bool is_truncate_partition,
     bool is_truncate_table)
 {
   int ret = OB_SUCCESS;
@@ -505,7 +506,8 @@ int ObTableSqlService::drop_inc_part_info(
       if (OB_SUCC(ret) && OB_FAIL(drop_part_helper.drop_partition_info())) {
         LOG_WARN("drop increment partition info failed", K(table_schema),
                  KPC(inc_table_schema_ptr), K(new_schema_version), K(ret));
-      } else if (!is_truncate_table && OB_INVALID_ID == table_schema.get_tablegroup_id()) {
+      } else if (!(is_truncate_partition || is_truncate_table)
+                && OB_INVALID_ID == table_schema.get_tablegroup_id()) {
         /*
          * While table is in tablegroup, we only support to modify partition schema by tablegroup.
          * For tablegroup's partition modification, we only record tablegroup's ddl operation.
@@ -580,6 +582,8 @@ int ObTableSqlService::truncate_part_info(
     const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
+  bool is_truncate_table = false;
+  bool is_truncate_partition = true;
   // drop first partitions
   if (OB_FAIL(check_ddl_allowed(ori_table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(ori_table));
@@ -587,7 +591,8 @@ int ObTableSqlService::truncate_part_info(
                                  ori_table,
                                  del_table,
                                  schema_version,
-                                 true))) {
+                                 is_truncate_partition,
+                                 is_truncate_table))) {
     LOG_WARN("delete inc part info failed", KR(ret));
   } else if (OB_FAIL(add_inc_partition_info(sql_client,
                                             ori_table,
