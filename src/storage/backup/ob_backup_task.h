@@ -526,7 +526,8 @@ public:
 
 private:
   int may_inject_simulated_error_();
-  int report_tablet_skipped_(const common::ObTabletID &tablet_id);
+  int report_tablet_skipped_(const common::ObTabletID &tablet_id,
+      const share::ObBackupSkippedType &skipped_type);
 
 private:
   int build_backup_file_header_(ObBackupFileHeader &file_header);

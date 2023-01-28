@@ -986,6 +986,8 @@ int ObStartLSRestoreTask::choose_leader_src_()
 {
   int ret = OB_SUCCESS;
   ObArray<common::ObTabletID> tablet_id_array;
+  ObArray<common::ObTabletID> deleted_tablet_id_array;
+  ObArray<common::ObTabletID> need_schedule_tablet_id_array;
   ObMigrationStatus migration_status;
   ObLSRestoreStatus restore_status;
   share::ObBackupDataStore store;
@@ -1016,13 +1018,21 @@ int ObStartLSRestoreTask::choose_leader_src_()
           ctx_->arg_.ls_id_,
           tablet_id_array))) {
         LOG_WARN("failed to read tablet to ls info", K(ret), KPC(ctx_));
+      } else if (OB_FAIL(store.read_deleted_tablet_info(
+          ctx_->arg_.ls_id_,
+          deleted_tablet_id_array))) {
+        LOG_WARN("failed to read deleted tablet info", K(ret), KPC(ctx_));
+      } else if (OB_FAIL(get_difference(tablet_id_array, deleted_tablet_id_array, need_schedule_tablet_id_array))) {
+        LOG_WARN("failed to get difference", K(ret), K(tablet_id_array), K(deleted_tablet_id_array));
       } else {
         FLOG_INFO("succeed get backup ls meta info and tablet id array", K(ls_meta_package), K(tablet_id_array));
         ctx_->src_ls_meta_package_ = ls_meta_package;
         ctx_->need_check_seq_ = false;
         ctx_->ls_rebuild_seq_ = -1;
-        if (OB_FAIL(generate_tablet_id_array_(tablet_id_array))) {
-          LOG_WARN("failed to generate tablet id array", K(ret), K(ls_meta_package), K(tablet_id_array));
+        if (OB_FAIL(generate_tablet_id_array_(need_schedule_tablet_id_array))) {
+          LOG_WARN("failed to generate tablet id array", K(ret), K(ls_meta_package), K(need_schedule_tablet_id_array));
+        } else {
+          LOG_INFO("get deleted tablet ids", KPC(ctx_), K(deleted_tablet_id_array));
         }
       }
     }

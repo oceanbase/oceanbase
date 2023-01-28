@@ -1047,6 +1047,19 @@ int ObBackupPathUtil::get_backup_data_tablet_ls_info_path(const share::ObBackupD
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/infos/deleted_tablet_info
+
+int ObBackupPathUtil::get_deleted_tablet_info_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, path))) {
+    LOG_WARN("failed to get ls info dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join(OB_STR_DELETED_TABLET_INFO))) {
+    LOG_WARN("failed to join tablet_log_stream_info", K(ret));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full_20211231/log_stream_1/complement_log/
 int ObBackupPathUtil::get_ls_complement_log_dir_path(const share::ObBackupDest &backup_set_dest, 
     const share::ObLSID &ls_id, ObBackupPath &backup_path)

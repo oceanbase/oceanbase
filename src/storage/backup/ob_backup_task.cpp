@@ -39,6 +39,7 @@
 #include "share/ls/ob_ls_table_operator.h"
 #include "storage/ob_storage_rpc.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/backup/ob_backup_struct.h"
 #include <algorithm>
 
 using namespace oceanbase::blocksstable;
@@ -2478,6 +2479,13 @@ int ObLSBackupDataTask::process()
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (param_.ls_id_.is_sys_ls()) {
+      SERVER_EVENT_SYNC_ADD("backup_errsim", "before_backup_sys_tablets",
+                            "ls_id", param_.ls_id_.id());
+      DEBUG_SYNC(BEFORE_BACKUP_SYS_TABLETS);
+    }
+  }
 #endif
   if (OB_FAIL(ret)) {
   } else if (IS_NOT_INIT) {
@@ -2580,7 +2588,8 @@ int ObLSBackupDataTask::may_inject_simulated_error_()
   return ret;
 }
 
-int ObLSBackupDataTask::report_tablet_skipped_(const common::ObTabletID &tablet_id)
+int ObLSBackupDataTask::report_tablet_skipped_(const common::ObTabletID &tablet_id,
+    const share::ObBackupSkippedType &skipped_type)
 {
   int ret = OB_SUCCESS;
   ObBackupSkippedTablet skipped_tablet;
@@ -2591,14 +2600,15 @@ int ObLSBackupDataTask::report_tablet_skipped_(const common::ObTabletID &tablet_
   skipped_tablet.tablet_id_ = tablet_id;
   skipped_tablet.backup_set_id_ = param_.backup_set_desc_.backup_set_id_;
   skipped_tablet.ls_id_ = param_.ls_id_;
-  if (!tablet_id.is_valid()) {
+  skipped_tablet.skipped_type_ = skipped_type;
+  if (!skipped_tablet.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(tablet_id));
+    LOG_WARN("get invalid args", K(ret), K(skipped_tablet));
   } else if (OB_FAIL(ObLSBackupOperator::report_tablet_skipped(
                  param_.tenant_id_, skipped_tablet, *report_ctx_.sql_proxy_))) {
     LOG_WARN("failed to report tablet skipped", K(ret), K_(param), K(tablet_id));
   } else {
-    FLOG_INFO("report tablet skipping", K(tablet_id));
+    FLOG_INFO("report tablet skipping", K(tablet_id), K(skipped_tablet));
   }
   return ret;
 }

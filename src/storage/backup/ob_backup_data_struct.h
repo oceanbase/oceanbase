@@ -665,7 +665,8 @@ struct ObBackupSkippedTablet {
   ObBackupSkippedTablet();
   ~ObBackupSkippedTablet();
   bool is_valid() const;
-  TO_STRING_KV(K_(task_id), K_(tenant_id), K_(turn_id), K_(retry_id), K_(tablet_id), K_(ls_id), K_(backup_set_id));
+  TO_STRING_KV(K_(task_id), K_(tenant_id), K_(turn_id), K_(retry_id), K_(tablet_id),
+      K_(ls_id), K_(backup_set_id), K_(skipped_type));
   int64_t task_id_;
   uint64_t tenant_id_;
   int64_t turn_id_;
@@ -673,6 +674,7 @@ struct ObBackupSkippedTablet {
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   int64_t backup_set_id_;
+  share::ObBackupSkippedType skipped_type_;
 };
 
 struct ObBackupReportCtx final {

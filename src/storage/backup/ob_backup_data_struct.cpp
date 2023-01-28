@@ -18,6 +18,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "storage/backup/ob_backup_task.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/backup/ob_backup_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -1204,7 +1205,7 @@ void ObBackupLSTaskInfo::reset()
 /* ObBackupSkippedTablet */
 
 ObBackupSkippedTablet::ObBackupSkippedTablet()
-    : task_id_(), tenant_id_(), turn_id_(), retry_id_(), tablet_id_(), ls_id_(), backup_set_id_()
+    : task_id_(), tenant_id_(), turn_id_(), retry_id_(), tablet_id_(), ls_id_(), backup_set_id_(), skipped_type_()
 {}
 
 ObBackupSkippedTablet::~ObBackupSkippedTablet()
@@ -1213,7 +1214,7 @@ ObBackupSkippedTablet::~ObBackupSkippedTablet()
 bool ObBackupSkippedTablet::is_valid() const
 {
   return task_id_ > 0 && OB_INVALID_ID != tenant_id_ && turn_id_ > 0 && retry_id_ >= 0 && tablet_id_.is_valid() &&
-         ls_id_.is_valid() && backup_set_id_ > 0;
+         ls_id_.is_valid() && backup_set_id_ > 0 && skipped_type_.is_valid();
 }
 
 /* ObBackupReportCtx */

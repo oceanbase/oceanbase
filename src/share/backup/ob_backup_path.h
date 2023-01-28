@@ -231,6 +231,9 @@ struct ObBackupPathUtil
   static int get_backup_data_tablet_ls_info_path(const share::ObBackupDest &backup_set_dest,
       const uint64_t turn_id, share::ObBackupPath &path);
 
+  // file:///obbackup/backup_set_1_full/infos/deleted_tablet_info
+  static int get_deleted_tablet_info_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path);
+
   // file:///obbackup/backup_set_1_full/log_stream_1/complement_log/
   static int get_ls_complement_log_dir_path(const share::ObBackupDest &backup_set_dest,
       const share::ObLSID &ls_id, share::ObBackupPath &backup_path);

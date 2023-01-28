@@ -690,6 +690,12 @@ int ObAdminDumpBackupDataExecutor::do_execute_()
       }
       break;
     }
+    case share::ObBackupFileType::BACKUP_DELETED_TABLET_INFO: {
+      if (OB_FAIL(print_deleted_tablet_info_())) {
+        STORAGE_LOG(WARN, "failed to print deleted tablet info", K(ret));
+      }
+      break;
+    }
     case share::ObBackupFileType::BACKUP_TENANT_LOCALITY_INFO: {
       if (OB_FAIL(print_tenant_locality_info_())) {
         STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
@@ -1298,6 +1304,26 @@ int ObAdminDumpBackupDataExecutor::print_tablet_to_ls_info_()
   } else {
     ARRAY_FOREACH_X(tablet_to_ls_desc.tablet_to_ls_, i , cnt, OB_SUCC(ret)) {
       const share::ObBackupDataTabletToLSInfo tablet_to_ls = tablet_to_ls_desc.tablet_to_ls_.at(i);
+      if (OB_FAIL(dump_tablet_to_ls_info_(tablet_to_ls))) {
+        STORAGE_LOG(WARN, "fail to dump ls attr info", K(ret), K(tablet_to_ls));
+      }
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_deleted_tablet_info_()
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDeletedTabletToLSDesc deleted_tablet_to_ls;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), deleted_tablet_to_ls))) {
+    STORAGE_LOG(WARN, "fail to read tablet to ls info", K(ret), K(backup_path_), K(storage_info_));
+  } else {
+    ARRAY_FOREACH_X(deleted_tablet_to_ls.deleted_tablet_to_ls_, i , cnt, OB_SUCC(ret)) {
+      const share::ObBackupDataTabletToLSInfo tablet_to_ls = deleted_tablet_to_ls.deleted_tablet_to_ls_.at(i);
       if (OB_FAIL(dump_tablet_to_ls_info_(tablet_to_ls))) {
         STORAGE_LOG(WARN, "fail to dump ls attr info", K(ret), K(tablet_to_ls));
       }

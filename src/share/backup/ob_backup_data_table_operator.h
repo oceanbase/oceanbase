@@ -47,8 +47,9 @@ class ObBackupSkippedTabletOperator : public ObBackupBaseTableOperator
 {
 public:
   static int get_skip_tablet(common::ObISQLClient &proxy, const bool need_lock, const uint64_t tenant_id, 
-      const int64_t task_id, ObIArray<ObBackupSkipTabletAttr> &tablet_attrs);
-  static int move_skip_tablet_to_his(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t task_id);
+      const int64_t task_id, const share::ObBackupSkippedType &skipped_type, ObIArray<ObBackupSkipTabletAttr> &tablet_attrs);
+  static int move_skip_tablet_to_his(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t task_id,
+      const share::ObBackupSkippedType &skipped_type);
 private:  
   static int fill_select_skip_tablet_sql_(ObSqlString &sql);
   static int parse_skip_tablet_result_(sqlclient::ObMySQLResult &result, ObIArray<ObBackupSkipTabletAttr> &tablet_attrs);

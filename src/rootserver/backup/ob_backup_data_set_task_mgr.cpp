@@ -1122,13 +1122,14 @@ int ObBackupSetTaskMgr::get_change_turn_tablets_(
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupSkipTabletAttr> tablet_attrs;
-  if (OB_FAIL(ObBackupSkippedTabletOperator::get_skip_tablet(trans_, true/*lock*/, set_task_attr_.tenant_id_, set_task_attr_.task_id_, tablet_attrs))) {
+  ObBackupSkippedType skipped_type(ObBackupSkippedType::TRANSFER);
+  if (OB_FAIL(ObBackupSkippedTabletOperator::get_skip_tablet(trans_, true/*lock*/, set_task_attr_.tenant_id_, set_task_attr_.task_id_, skipped_type, tablet_attrs))) {
     LOG_WARN("[DATA_BACKUP]failed to get skip tablet", K(ret), "teannt_id", set_task_attr_.tenant_id_, "task_id", set_task_attr_.task_id_);
   } else if (tablet_attrs.empty()) {
     LOG_INFO("[DATA_BACKUP]no change turn tablets found", K(ret));
   } else if (OB_FAIL(do_get_change_turn_tablets_(ls_tasks, tablet_attrs, tablet_to_ls, new_ls_ids))) {
     LOG_WARN("[DATA_BACKUP]failed to do get change turn tables", K(ret), K(tablet_attrs), K(set_task_attr_));
-  } else if (OB_FAIL(ObBackupSkippedTabletOperator::move_skip_tablet_to_his(trans_, set_task_attr_.tenant_id_, set_task_attr_.task_id_))) {
+  } else if (OB_FAIL(ObBackupSkippedTabletOperator::move_skip_tablet_to_his(trans_, set_task_attr_.tenant_id_, set_task_attr_.task_id_, skipped_type))) {
     LOG_WARN("[DATA_BACKUP]failed to move skip tablet to history", K(ret), K(tablet_attrs));
   }
   return ret;
@@ -1219,6 +1220,78 @@ int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
 
     if (OB_SUCC(ret)) {
       FLOG_INFO("[DATA_BACKUP]get new turn tablet_to_ls", K(tablet_to_ls));
+    }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::persist_deleted_tablets_info_(const common::ObIArray<ObBackupSkipTabletAttr> &skipped_tablets)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_BUCKET = 1024;
+  ObHashMap<ObLSID, ObArray<ObTabletID> *> deleted_tablet_to_ls_map;
+  if (OB_FAIL(deleted_tablet_to_ls_map.create(MAX_BUCKET, ObModIds::BACKUP))) {
+    LOG_WARN("[DATA_BACKUP]failed to create map", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < skipped_tablets.count(); ++i) {
+      const ObBackupSkipTabletAttr &skip_tablet = skipped_tablets.at(i);
+      const share::ObLSID &ls_id = skip_tablet.ls_id_;
+      ObArray<ObTabletID> *tablet_ids_ptr = NULL;
+      if (OB_FAIL(deleted_tablet_to_ls_map.get_refactored(ls_id, tablet_ids_ptr))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          if (OB_ISNULL(tablet_ids_ptr = OB_NEW(ObArray<ObTabletID>, ObModIds::BACKUP))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("[DATA_BACKUP]failed to construct tablet id array", KR(ret));
+          } else if (OB_FAIL(deleted_tablet_to_ls_map.set_refactored(ls_id, tablet_ids_ptr, 1/*overwrite*/))) {
+            LOG_WARN("[DATA_BACKUP]failed to set refactored", K(ret), K(ls_id), KP(tablet_ids_ptr));
+          }
+          if (OB_FAIL(ret)) {
+            OB_DELETE(ObArray<ObTabletID>, ObModIds::BACKUP, tablet_ids_ptr);
+          }
+        } else {
+          LOG_WARN("[DATA_BACKUP]failed to get refactored", K(ret), K(skip_tablet));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(tablet_ids_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("[DATA_BACKUP]tmp tablet id array is null", K(ret));
+      } else if (OB_FAIL(tablet_ids_ptr->push_back(skip_tablet.tablet_id_))) {
+        LOG_WARN("[DATA_BACKUP]failed to push back", K(ret), K(skip_tablet));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObBackupDeletedTabletToLSDesc deleted_tablet_to_ls;
+    ObHashMap<ObLSID, ObArray<ObTabletID> *>::hashtable::const_iterator map_iter = deleted_tablet_to_ls_map.begin();
+    for (; OB_SUCC(ret) && map_iter != deleted_tablet_to_ls_map.end(); ++map_iter) {
+      share::ObBackupDataTabletToLSInfo ls_info;
+      ls_info.ls_id_ = map_iter->first;
+      if (OB_ISNULL(map_iter->second)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("[DATA_BACKUP]map iter should not be null", K(ret), K(ls_info));
+      } else if (map_iter->second->empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("[DATA_BACKUP]failed to get tablet to ls", K(ret), K(ls_info));
+      } else if (OB_FAIL(append(ls_info.tablet_id_list_, *map_iter->second))) {
+        LOG_WARN("[DATA_BACKUP]failed to append tablet to ls array", K(ret));
+      } else if (OB_FAIL(deleted_tablet_to_ls.deleted_tablet_to_ls_.push_back(ls_info))) {
+        LOG_WARN("[DATA_BACKUP]failed to push backup ls info", K(ret));
+      }
+    }
+    if (FAILEDx(store_.write_deleted_tablet_info(deleted_tablet_to_ls))) {
+      LOG_WARN("[DATA_BACKUP]failed to write deleted tablet info", K(ret));
+    } else {
+      LOG_INFO("write deleted tablet info", K(deleted_tablet_to_ls));
+    }
+  }
+  if (deleted_tablet_to_ls_map.created()) {
+    ObHashMap<ObLSID, ObArray<ObTabletID> *>::hashtable::iterator del_map_iter = deleted_tablet_to_ls_map.begin();
+    for (; del_map_iter != deleted_tablet_to_ls_map.end(); ++del_map_iter) {
+      if (OB_NOT_NULL(del_map_iter->second)) {
+        OB_DELETE(ObArray<ObTabletID>, ObModIds::BACKUP, del_map_iter->second);
+      }
     }
   }
   return ret;
@@ -1436,6 +1509,7 @@ int ObBackupSetTaskMgr::do_backup_completing_log_(ObArray<ObBackupLSTaskAttr> &l
 int ObBackupSetTaskMgr::do_clean_up(ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  ObBackupSkippedType skipped_type(ObBackupSkippedType::DELETED);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[DATA_BACKUP]not init", K(ret));
@@ -1448,7 +1522,10 @@ int ObBackupSetTaskMgr::do_clean_up(ObMySQLTransaction &trans)
     LOG_WARN("[DATA_BACKUP]failed to move ls to history", K(ret), K(set_task_attr_));
   } else if (OB_FAIL(ObBackupTaskOperator::move_task_to_his(trans, set_task_attr_.tenant_id_, set_task_attr_.job_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to move task to history", K(ret), K(set_task_attr_));
-  } 
+  } else if (OB_FAIL(ObBackupSkippedTabletOperator::move_skip_tablet_to_his(
+      trans, set_task_attr_.tenant_id_, set_task_attr_.task_id_, skipped_type))) {
+    LOG_WARN("[DATA_BACKUP]failed to move skip tablet to history", K(ret), K(set_task_attr_));
+  }
   return ret;
 }
 
@@ -1526,7 +1603,9 @@ int ObBackupSetTaskMgr::write_extern_infos()
       LOG_WARN("[DATA_BACKUP]failed to write extern tenant diagnose info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_backup_set_placeholder(false/*finish job*/))) {
       LOG_WARN("[DATA_BACKUP]failed to write backup set finish placeholder", K(ret), KPC(job_attr_));
-    } 
+    } else if (OB_FAIL(write_deleted_tablet_infos_())) {
+      LOG_WARN("[DATA_BACKUP]failed to write deleted tablet infos", K(ret), KPC(job_attr_));
+    }
   }
   return ret;
 }
@@ -1578,6 +1657,22 @@ int ObBackupSetTaskMgr::write_backup_set_info_(
   } else if (OB_FAIL(ObBackupSetFileOperator::update_backup_set_file(*sql_proxy_, backup_set_info.backup_set_file_))) {
     LOG_WARN("[DATA_BACKUP]failed to update backup set", K(ret), K(backup_set_info));
   } 
+  return ret;
+}
+
+int ObBackupSetTaskMgr::write_deleted_tablet_infos_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObBackupSkipTabletAttr> tablet_attrs;
+  ObBackupSkippedType skipped_type(ObBackupSkippedType::DELETED);
+  if (OB_FAIL(ObBackupSkippedTabletOperator::get_skip_tablet(*sql_proxy_, false/*lock*/,
+      set_task_attr_.tenant_id_, set_task_attr_.task_id_, skipped_type, tablet_attrs))) {
+    LOG_WARN("[DATA_BACKUP]failed to get skip tablet", K(ret), "teannt_id", set_task_attr_.tenant_id_, "task_id", set_task_attr_.task_id_);
+  } else if (tablet_attrs.empty()) {
+    LOG_INFO("[DATA_BACKUP]no change turn tablets found", K(ret));
+  } else if (OB_FAIL(persist_deleted_tablets_info_(tablet_attrs))) {
+    LOG_WARN("[DATA_BACKUP]failed to do persist deleted tablets info", K(ret), K(tablet_attrs), K(set_task_attr_));
+  }
   return ret;
 }
 

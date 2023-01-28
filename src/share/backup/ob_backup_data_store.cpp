@@ -65,6 +65,16 @@ bool ObBackupDataTabletToLSDesc::is_valid() const
 }
 
 /*
+ *------------------------------ObBackupDeletedTabletToLSDesc----------------------------
+ */
+OB_SERIALIZE_MEMBER(ObBackupDeletedTabletToLSDesc, deleted_tablet_to_ls_);
+
+bool ObBackupDeletedTabletToLSDesc::is_valid() const
+{
+  return true;
+}
+
+/*
  *------------------------------ObExternTenantLocalityInfo----------------------------
  */
 OB_SERIALIZE_MEMBER(ObExternTenantLocalityInfoDesc, tenant_id_, backup_set_id_, cluster_id_, compat_mode_, tenant_name_, cluster_name_, locality_, primary_zone_);
@@ -498,6 +508,59 @@ int ObBackupDataStore::read_tablet_to_ls_info(const ObLSID &ls_id, const int64_t
     LOG_WARN("failed to read single file", K(ret), K(full_path));
   }
 
+  return ret;
+}
+
+int ObBackupDataStore::write_deleted_tablet_info(const ObBackupDeletedTabletToLSDesc &deleted_tablet_info)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString full_path;
+  share::ObBackupPath path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_deleted_tablet_info_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, deleted_tablet_info))) {
+    LOG_WARN("fail to write single file", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_deleted_tablet_info(const ObLSID &ls_id, ObIArray<ObTabletID> &deleted_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  deleted_tablet_ids.reset();
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  ObBackupDeletedTabletToLSDesc deleted_tablet_info;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_deleted_tablet_info_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get tenant ls attr info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, deleted_tablet_info))) {
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("backup deleted file not exist", K(ret));
+    } else {
+      LOG_WARN("failed to read single file", K(ret), K(full_path));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < deleted_tablet_info.deleted_tablet_to_ls_.count(); ++i) {
+      const ObBackupDataTabletToLSInfo &info = deleted_tablet_info.deleted_tablet_to_ls_.at(i);
+      if (info.ls_id_ == ls_id) {
+        if (OB_FAIL(deleted_tablet_ids.assign(info.tablet_id_list_))) {
+          LOG_WARN("failed to assign", K(ret), K(info));
+        }
+        break;
+      }
+    }
+  }
   return ret;
 }
 

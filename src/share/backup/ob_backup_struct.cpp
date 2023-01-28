@@ -2087,7 +2087,6 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_BACKUP_FILE_NOT_EXIST :
     case OB_LOG_ARCHIVE_INTERRUPTED :
     case OB_LOG_ARCHIVE_NOT_RUNNING :
-    case OB_TABLET_NOT_EXIST :
     case OB_CHECKSUM_ERROR :
       bret = false;
       break;
@@ -3669,7 +3668,8 @@ ObBackupSkipTabletAttr::ObBackupSkipTabletAttr()
     retry_id_(0),
     backup_set_id_(0),
     tablet_id_(0),
-    ls_id_()
+    ls_id_(),
+    skipped_type_()
 {
 }
 
@@ -3681,7 +3681,8 @@ bool ObBackupSkipTabletAttr::is_valid() const
       && retry_id_ > 0
       && tablet_id_.is_valid()
       && backup_set_id_ > 0
-      && ls_id_.is_valid();
+      && ls_id_.is_valid()
+      && skipped_type_.is_valid();
 }
 
 ObBackupLSTaskInfoAttr::ObBackupLSTaskInfoAttr()
@@ -4104,6 +4105,42 @@ int ObRestoreBackupSetBriefInfo::assign(const ObRestoreBackupSetBriefInfo &that)
     LOG_WARN("fail to assign backup set path", K(ret), K(that));
   } else {
     backup_set_desc_ = that.backup_set_desc_;
+  }
+  return ret;
+}
+
+/* ObBackupSkippedType */
+
+const char *ObBackupSkippedType::str() const
+{
+  const char *str = "INVALID_TYPE";
+  switch (type_) {
+  case DELETED: {
+    str = "DELETED";
+    break;
+  }
+  case TRANSFER: {
+    str = "TRANSFER";
+    break;
+  }
+  default: {
+    str = "INVALID_TYPE";
+  }
+  }
+  return str;
+}
+
+int ObBackupSkippedType::parse_from_str(const ObString &str)
+{
+  int ret = OB_SUCCESS;
+  if (0 == str.case_compare("DELETED")) {
+    type_ = DELETED;
+  } else if (0 == str.case_compare("TRANSFER")) {
+    type_ = TRANSFER;
+  } else {
+    type_ = MAX_TYPE;
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid backup skipped type str", KR(ret), K(str));
   }
   return ret;
 }

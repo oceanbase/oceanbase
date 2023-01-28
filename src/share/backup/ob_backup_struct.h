@@ -258,6 +258,7 @@ const char *const OB_STR_LOG_ARCHIVE_SOURCE_ID = "id";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_TYPE = "type";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_VALUE = "value";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_SCN = "recovery_until_scn";
+const char *const OB_STR_BACKUP_SKIPPED_TYPE = "skipped_type";
 
 const char *const OB_STR_TENANT = "tenant";
 const char *const OB_STR_DATA = "data";
@@ -280,6 +281,7 @@ const char *const OB_STR_DATA_INTO_TURN = "data_info_turn";
 const char *const OB_STR_META_INFO_TURN = "meta_info_turn";
 const char *const OB_STR_LS_META_INFO = "ls_meta_info";
 const char *const OB_STR_TABLET_LOG_STREAM_INFO = "tablet_log_stream_info";
+const char *const OB_STR_DELETED_TABLET_INFO = "deleted_tablet_info";
 const char *const OB_STR_TENANT_MINOR_MACRO_INDEX = "tenant_minor_data_macro_range_index";
 const char *const OB_STR_TENANT_MINOR_META_INDEX = "tenant_minor_data_meta_index";
 const char *const OB_STR_TENANT_MINOR_SEC_META_INDEX = "tenant_minor_data_sec_meta_index";
@@ -420,6 +422,7 @@ enum ObBackupFileType
   BACKUP_CHECK_FILE = 33,
   BACKUP_LS_META_INFOS_FILE = 34,
   BACKUP_TENANT_ARCHIVE_PIECE_INFOS = 35,
+  BACKUP_DELETED_TABLET_INFO = 36,
   // type <=255 is write header struct to disk directly
   // type > 255 is use serialization to disk
   BACKUP_MAX_DIRECT_WRITE_TYPE = 255,
@@ -427,6 +430,30 @@ enum ObBackupFileType
   BACKUP_ARCHIVE_INDEX_FILE = 0x4149, // 16713 AI means ARCHIVE INDEX
   BACKUP_ARCHIVE_KEY_FILE = 0x414B, // 16713 AK means ARCHIVE  KEY
   BACKUP_TYPE_MAX
+};
+
+struct ObBackupSkippedType final
+{
+public:
+  enum TYPE : uint8_t
+  {
+    DELETED = 0,
+    TRANSFER = 1,
+    MAX_TYPE
+  };
+public:
+  ObBackupSkippedType() : type_(MAX_TYPE) {}
+  ~ObBackupSkippedType() = default;
+  explicit ObBackupSkippedType(const TYPE &type) : type_(type) {}
+
+  bool is_valid() const { return DELETED <= type_ && type_ < MAX_TYPE; }
+  void reset() { type_ = MAX_TYPE; }
+  const char *str() const;
+  int parse_from_str(const ObString &str);
+
+  TO_STRING_KV(K_(type), "type", str());
+private:
+  TYPE type_;
 };
 
 enum ObBackupMetaType
@@ -1441,6 +1468,8 @@ public:
   int64_t meta_turn_id_;
 };
 
+struct ObBackupSkippedType;
+
 struct ObBackupSkipTabletAttr final
 {
 public:
@@ -1448,7 +1477,7 @@ public:
   ~ObBackupSkipTabletAttr() = default;
   bool is_valid() const;
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(turn_id), K_(retry_id), K_(backup_set_id), K_(ls_id),
-      K_(tablet_id));
+      K_(tablet_id), K_(skipped_type));
 public:
   int64_t task_id_;
   uint64_t tenant_id_;
@@ -1457,6 +1486,7 @@ public:
   int64_t backup_set_id_;
   ObTabletID tablet_id_;
   ObLSID ls_id_;
+  share::ObBackupSkippedType skipped_type_;
 };
 
 struct ObBackupLSTaskInfoAttr final

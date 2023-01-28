@@ -21,6 +21,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_ls_id.h"
+#include "share/backup/ob_backup_struct.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/ob_i_table.h"
@@ -261,7 +262,7 @@ private:
   int get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle);
   int check_tablet_deleted_(const uint64_t tenant_id, const common::ObTabletID &tablet_id, bool &is_deleted);
-  int report_tablet_skipped_(const common::ObTabletID &tablet_id);
+  int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type);
   int hold_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
   int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle,
       const share::ObBackupDataType &backup_data_type, common::ObIArray<storage::ObITable *> &sstable_array);

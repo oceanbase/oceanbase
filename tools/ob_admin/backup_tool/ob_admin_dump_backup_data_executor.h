@@ -105,6 +105,7 @@ private:
   int print_meta_index_index_list_();
   int print_ls_attr_info_();
   int print_tablet_to_ls_info_();
+  int print_deleted_tablet_info_();
   int print_tenant_locality_info_();
   int print_tenant_diagnose_info_();
   int print_backup_set_info_();

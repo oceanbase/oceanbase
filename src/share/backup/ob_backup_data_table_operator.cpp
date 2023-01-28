@@ -2195,6 +2195,7 @@ int ObBackupSkippedTabletOperator::get_skip_tablet(
     const bool need_lock,
     const uint64_t tenant_id,
     const int64_t task_id,
+    const share::ObBackupSkippedType &skipped_type,
     ObIArray<ObBackupSkipTabletAttr> &tablet_attrs)
 {
   int ret = OB_SUCCESS;
@@ -2207,7 +2208,10 @@ int ObBackupSkippedTabletOperator::get_skip_tablet(
       ObMySQLResult *result = NULL;
       if (OB_FAIL(fill_select_skip_tablet_sql_(sql))) {
         LOG_WARN("[DATA_BACKUP]failed to fill select ls task sql", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" where %s=%lu and %s=%ld", OB_STR_TENANT_ID, tenant_id, OB_STR_TASK_ID, task_id))) {
+      } else if (OB_FAIL(sql.append_fmt(" where %s=%lu and %s=%ld and %s='%s'",
+          OB_STR_TENANT_ID, tenant_id, OB_STR_TASK_ID, task_id,
+          OB_STR_BACKUP_SKIPPED_TYPE, skipped_type.str()))) {
+        LOG_WARN("[DATA_BACKUP]failed to append sql", K(ret), K(tenant_id), K(task_id), K(skipped_type));
       } else if (need_lock && OB_FAIL(sql.append_fmt(" for update"))) {
         LOG_WARN("[DATA_BACKUP]failed to append sql", K(ret));
       } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(tenant_id), sql.ptr()))) {
@@ -2226,9 +2230,9 @@ int ObBackupSkippedTabletOperator::get_skip_tablet(
 int ObBackupSkippedTabletOperator::fill_select_skip_tablet_sql_(ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(sql.assign_fmt("select %s", OB_STR_TASK_ID))) {
+  if (OB_FAIL(sql.assign_fmt("select %s", OB_STR_TENANT_ID))) {
     LOG_WARN("[DATA_BACKUP]failed to assign fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_TENANT_ID))) {
+  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_TASK_ID))) {
     LOG_WARN("[DATA_BACKUP]failed to append fmt", K(ret));
   } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_TURN_ID))) {
     LOG_WARN("[DATA_BACKUP]failed to append fmt", K(ret));
@@ -2239,6 +2243,8 @@ int ObBackupSkippedTabletOperator::fill_select_skip_tablet_sql_(ObSqlString &sql
   } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_LS_ID))) {
     LOG_WARN("[DATA_BACKUP]failed to append fmt", K(ret));
   } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_BACKUP_SET_ID))) {
+    LOG_WARN("[DATA_BACKUP]failed to append fmt", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_BACKUP_SKIPPED_TYPE))) {
     LOG_WARN("[DATA_BACKUP]failed to append fmt", K(ret));
   } else if (OB_FAIL(sql.append_fmt(" from %s", OB_ALL_BACKUP_SKIPPED_TABLET_TNAME))) {
     LOG_WARN("[DATA_BACKUP]failed to append fmt", K(ret));
@@ -2275,24 +2281,32 @@ int ObBackupSkippedTabletOperator::do_parse_skip_tablet_result_(
     ObBackupSkipTabletAttr &tablet_attr)
 {
   int ret = OB_SUCCESS;
+  int64_t real_length = 0;
   int64_t tablet_id = -1;
   int64_t ls_id = -1;
-  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TASK_ID, tablet_attr.task_id_, int64_t);
+  char skipped_type_str[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = "";
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, tablet_attr.tenant_id_, uint64_t);  
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TASK_ID, tablet_attr.task_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TURN_ID, tablet_attr.turn_id_, int64_t);  
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RETRY_ID, tablet_attr.retry_id_, int64_t);
-  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_BACKUP_SET_ID, tablet_attr.backup_set_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TABLET_ID, tablet_id, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_LS_ID, ls_id, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_BACKUP_SET_ID, tablet_attr.backup_set_id_, int64_t);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_BACKUP_SKIPPED_TYPE, skipped_type_str, OB_INNER_TABLE_DEFAULT_VALUE_LENTH, real_length);
   tablet_attr.tablet_id_ = tablet_id;
   tablet_attr.ls_id_ = ls_id;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tablet_attr.skipped_type_.parse_from_str(skipped_type_str))) {
+    LOG_WARN("failed to parse from str", K(ret), K(skipped_type_str));
+  }
   return ret;
 }
 
 int ObBackupSkippedTabletOperator::move_skip_tablet_to_his(
     common::ObISQLClient &proxy, 
     const uint64_t tenant_id, 
-    const int64_t task_id)
+    const int64_t task_id,
+    const share::ObBackupSkippedType &skipped_type)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -2301,18 +2315,20 @@ int ObBackupSkippedTabletOperator::move_skip_tablet_to_his(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(sql.assign_fmt(
-      "insert into %s select * from %s where %s=%lu and %s=%lu", 
+      "insert into %s select * from %s where %s=%lu and %s=%lu and %s='%s'",
       OB_ALL_BACKUP_SKIPPED_TABLET_HISTORY_TNAME, OB_ALL_BACKUP_SKIPPED_TABLET_TNAME,
-      OB_STR_TENANT_ID, tenant_id, OB_STR_TASK_ID, task_id))) {
+      OB_STR_TENANT_ID, tenant_id, OB_STR_TASK_ID, task_id,
+      OB_STR_BACKUP_SKIPPED_TYPE, skipped_type.str()))) {
     LOG_WARN("[DATA_BACKUP]failed to init sql", K(ret));
   } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
   } else if (OB_FALSE_IT(sql.reset())) {
   } else if (OB_FAIL(sql.assign_fmt(
-      "delete from %s where %s=%lu and %s=%lu", 
-      OB_ALL_BACKUP_SKIPPED_TABLET_TNAME, OB_STR_TENANT_ID, tenant_id, OB_STR_TASK_ID, task_id))) {
+      "delete from %s where %s=%lu and %s=%lu and %s='%s'",
+      OB_ALL_BACKUP_SKIPPED_TABLET_TNAME, OB_STR_TENANT_ID, tenant_id, OB_STR_TASK_ID, task_id,
+      OB_STR_BACKUP_SKIPPED_TYPE, skipped_type.str()))) {
     LOG_WARN("[DATA_BACKUP]failed to init sql", K(ret));
-  } else if (OB_FAIL(proxy.write(sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
   } 
   return ret;
