@@ -51,6 +51,7 @@ public:
   int open() override;
   int get_next_row() override;
   int close() override;
+  void destroy() override {}
 public:
   OB_INLINE const ObTableApiScanSpec& get_spec() const { return scan_spec_; }
   OB_INLINE void reset()

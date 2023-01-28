@@ -284,6 +284,9 @@ private:
   int check_rowkey(ObRowkey &rowkey);
   int check_properties(ObIArray<std::pair<ObString, ObObj>> &properties);
   int check_entity();
+  bool has_exist_in_columns(const common::ObIArray<common::ObString>& columns,
+                            const common::ObString &name,
+                            int64_t *idx = nullptr) const;
 private:
   bool is_init_;
   common::ObIAllocator &allocator_;

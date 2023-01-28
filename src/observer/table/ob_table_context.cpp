@@ -345,6 +345,23 @@ int ObTableCtx::check_entity()
   return ret;
 }
 
+bool ObTableCtx::has_exist_in_columns(const ObIArray<ObString> &columns,
+                                      const ObString &name,
+                                      int64_t *idx /* =nullptr */) const
+{
+  bool exist = false;
+  int64_t num = columns.count();
+  for (int64_t i = 0; i < num && !exist; i++) {
+    if (0 == name.case_compare(columns.at(i))) {
+      exist = true;
+      if (idx != NULL) {
+        *idx = i;
+      }
+    }
+  }
+  return exist;
+}
+
 int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
 {
   int ret = OB_SUCCESS;
@@ -495,7 +512,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column schema is NULL", K(ret));
-        } else if (has_exist_in_array(select_columns, column_schema->get_column_name_str())) {
+        } else if (has_exist_in_columns(select_columns, column_schema->get_column_name_str())) {
           if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
             LOG_WARN("fail to add column id", K(ret));
           } else if (OB_FAIL(select_metas_.push_back(column_schema->get_meta_type()))) {

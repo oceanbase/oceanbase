@@ -307,6 +307,21 @@ int64_t ObTableEntity::hash_rowkey() const
   return hash_value;
 }
 
+bool ObTableEntity::has_exist_in_properties(const ObString &name, int64_t *idx /* =nullptr */) const
+{
+  bool exist = false;
+  int64_t num = properties_names_.count();
+  for (int64_t i = 0; i < num && !exist; i++) {
+    if (0 == name.case_compare(properties_names_.at(i))) {
+      exist = true;
+      if (idx != NULL) {
+        *idx = i;
+      }
+    }
+  }
+  return exist;
+}
+
 int ObTableEntity::get_property(const ObString &prop_name, ObObj &prop_value) const
 {
   int ret = OB_SUCCESS;
@@ -315,7 +330,7 @@ int ObTableEntity::get_property(const ObString &prop_name, ObObj &prop_value) co
     LOG_WARN("property name should not be empty string", K(ret), K(prop_name));
   } else {
     int64_t idx = -1;
-    if (has_exist_in_array(properties_names_, prop_name, &idx)) {
+    if (has_exist_in_properties(prop_name, &idx)) {
       prop_value = properties_values_.at(idx);
     } else {
       ret = OB_SEARCH_NOT_FOUND;
@@ -332,7 +347,7 @@ int ObTableEntity::set_property(const ObString &prop_name, const ObObj &prop_val
     LOG_WARN("property name should not be empty string", K(ret), K(prop_name));
   } else {
     int64_t idx = -1;
-    if (has_exist_in_array(properties_names_, prop_name, &idx)) {
+    if (has_exist_in_properties(prop_name, &idx)) {
       properties_values_.at(idx) = prop_value;
     } else {
       if (OB_FAIL(properties_names_.push_back(prop_name))) {

@@ -31,11 +31,18 @@ public:
         is_opened_(false)
   {
   }
-  virtual ~ObTableApiExecutor() {}
+  virtual ~ObTableApiExecutor()
+  {
+    if (OB_NOT_NULL(child_)) {
+      child_->~ObTableApiExecutor();
+      child_ = nullptr;
+    }
+  }
 public:
   virtual int open() = 0;
   virtual int get_next_row() = 0;
   virtual int close() = 0;
+  virtual void destroy() = 0;
 public:
   void set_parent(ObTableApiExecutor *parent);
   void set_child(ObTableApiExecutor *child);

@@ -55,10 +55,20 @@ public:
         cur_idx_(0)
   {
   }
+  virtual ~ObTableApiReplaceExecutor()
+  {
+    destroy();
+  }
 public:
   virtual int open();
   virtual int get_next_row();
   virtual int close();
+  virtual void destroy()
+  {
+    // destroy
+    conflict_checker_.destroy();
+    ObTableApiModifyExecutor::destroy();
+  }
 private:
   const static int64_t DEFAULT_REPLACE_BATCH_ROW_COUNT = 1000L;
   OB_INLINE const common::ObIArray<sql::ObExpr *>& get_primary_table_new_row()

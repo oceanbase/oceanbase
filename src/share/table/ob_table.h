@@ -121,6 +121,8 @@ public:
   const ObSEArray<ObObj, 8> &get_rowkey_objs() const { return rowkey_; };
   DECLARE_TO_STRING;
 private:
+  bool has_exist_in_properties(const ObString &name, int64_t *idx = nullptr) const;
+private:
   ObSEArray<ObObj, 8> rowkey_;
   ObSEArray<ObString, 8> properties_names_;
   ObSEArray<ObObj, 8> properties_values_;

@@ -92,12 +92,14 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
         && OB_FAIL(process_affected_entity(tb_ctx, *spec, *executor, op_result))) {
       LOG_WARN("fail to process affected entity", K(ret), K(tb_ctx));
     }
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = executor->close())) {
-      LOG_WARN("fail to close executor", K(tmp_ret));
-      ret = COVER_SUCC(tmp_ret);
-    }
   }
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = executor->close())) {
+    LOG_WARN("fail to close executor", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  }
+
   op_result.set_errno(ret);
   op_result.set_type(tb_ctx.get_opertion_type());
   spec->destroy_executor(executor);

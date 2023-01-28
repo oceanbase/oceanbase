@@ -61,10 +61,21 @@ public:
         cur_idx_(0)
   {
   }
+  virtual ~ObTableApiInsertUpExecutor()
+  {
+    destroy();
+  }
 public:
   virtual int open();
   virtual int get_next_row();
   virtual int close();
+  virtual void destroy()
+  {
+    // destroy
+    conflict_checker_.destroy();
+    upd_rtctx_.cleanup();
+    ObTableApiModifyExecutor::destroy();
+  }
 public:
   OB_INLINE bool is_insert_duplicated()
   {

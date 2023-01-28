@@ -64,10 +64,16 @@ public:
   }
   virtual ~ObTableApiModifyExecutor()
   {
+    destroy();
   }
 public:
   virtual int open() override;
   virtual int close() override;
+  virtual void destroy() override
+  {
+    dml_rtctx_.cleanup();
+  }
+
   int init_das_ref();
   int submit_all_dml_task();
   int init_das_dml_rtdef(const sql::ObDASDMLBaseCtDef &das_ctdef,
