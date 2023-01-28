@@ -115,7 +115,8 @@ int ObStorageHATabletsBuilderParam::assign(const ObStorageHATabletsBuilderParam 
 ObStorageHATabletsBuilder::ObStorageHATabletsBuilder()
   : is_inited_(false),
     param_(),
-    tablet_simple_info_map_()
+    tablet_simple_info_map_(),
+    deleted_tablet_id_list_()
 {
 }
 
@@ -173,6 +174,10 @@ int ObStorageHATabletsBuilder::create_or_update_tablets()
           break;
         } else {
           LOG_WARN("failed to fetch tablet info", K(ret));
+        }
+      } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == tablet_info.status_) {
+        if (OB_FAIL(deleted_tablet_id_list_.push_back(tablet_info.tablet_id_))) {
+          LOG_WARN("failed to push deleted tablet id into array", K(ret), K(tablet_info));
         }
       } else if (OB_FAIL(create_or_update_tablet_(tablet_info, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
@@ -1152,6 +1157,21 @@ int ObStorageHATabletsBuilder::create_tablet_with_major_sstables_(
   } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(ls,
       tablet_info.tablet_id_, major_tables, storage_schema))) {
     LOG_WARN("failed to build tablet with major tables", K(ret), K(tablet_info), KPC(ls));
+  }
+  return ret;
+}
+
+int ObStorageHATabletsBuilder::get_src_deleted_tablet_list(
+    common::ObIArray<common::ObTabletID> &tablet_id_list)
+{
+  int ret = OB_SUCCESS;
+  tablet_id_list.reset();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage ha tablets builder do not init", K(ret));
+  } else if (OB_FAIL(tablet_id_list.assign(deleted_tablet_id_list_))) {
+    LOG_WARN("failed to assign tablet id list", K(ret), K(deleted_tablet_id_list_));
   }
   return ret;
 }

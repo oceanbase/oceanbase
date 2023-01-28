@@ -966,38 +966,82 @@ int ObCopyTabletInfoObProducer::get_next_tablet_info(obrpc::ObCopyTabletInfo &ta
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("copy tablet info ob producer do not init", K(ret));
+  } else if (tablet_index_ == tablet_id_array_.count()) {
+    ret = OB_ITER_END;
   } else {
-    while (OB_SUCC(ret)) {
-      if (tablet_index_ == tablet_id_array_.count()) {
-        ret = OB_ITER_END;
-      } else {
-        const ObTabletID &tablet_id = tablet_id_array_.at(tablet_index_);
-        if (OB_ISNULL(ls = ls_handle_.get_ls())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("log stream should not be NULL", K(ret), KP(ls));
-        } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, timeout_us))) {
-          if (OB_TABLET_NOT_EXIST == ret) {
-            LOG_INFO("tablet in src not exist", K(ls->get_ls_id()), K(tablet_id));
-            tablet_index_++;
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("failed to get tablet", K(ret), K(tablet_id), K(tablet_handle));
-          }
-        } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id));
-        } else if (OB_FAIL(tablet->build_migration_tablet_param(tablet_info.param_))) {
-          LOG_WARN("failed to build migration tablet param", K(ret), K(tablet_id));
-        } else if (OB_FAIL(tablet->get_ha_sstable_size(tablet_info.data_size_))) {
-          LOG_WARN("failed to get sstable size", K(ret), K(tablet_id));
+    const ObTabletID &tablet_id = tablet_id_array_.at(tablet_index_);
+    if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream should not be NULL", K(ret), KP(ls));
+    } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, timeout_us))) {
+      LOG_WARN("failed to get tablet", K(ret), K(tablet_id), K(tablet_handle));
+      if (OB_TABLET_NOT_EXIST == ret) {
+        //overwrite ret
+        if (OB_FAIL(build_deleted_tablet_info_(ls->get_ls_id(), tablet_id, tablet_info))) {
+          LOG_WARN("failed to build delete tablet info", K(ret), KPC(ls), K(tablet_id));
         } else {
-          tablet_info.tablet_id_ = tablet_id;
-          tablet_info.status_ = ObCopyTabletStatus::TABLET_EXIST;
           tablet_index_++;
-          LOG_INFO("succeed get copy tablet info", K(tablet_info), K(tablet_index_));
-          break;
         }
+      } else {
+        LOG_WARN("failed to get tablet", K(ret), K(tablet_id), K(tablet_handle));
       }
+    } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id));
+    } else if (OB_FAIL(tablet->build_migration_tablet_param(tablet_info.param_))) {
+      LOG_WARN("failed to build migration tablet param", K(ret), K(tablet_id));
+    } else if (OB_FAIL(tablet->get_ha_sstable_size(tablet_info.data_size_))) {
+      LOG_WARN("failed to get sstable size", K(ret), K(tablet_id));
+    } else {
+      tablet_info.tablet_id_ = tablet_id;
+      tablet_info.status_ = ObCopyTabletStatus::TABLET_EXIST;
+      tablet_index_++;
+      LOG_INFO("succeed get copy tablet info", K(tablet_info), K(tablet_index_));
+    }
+  }
+  return ret;
+}
+
+int ObCopyTabletInfoObProducer::build_deleted_tablet_info_(
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    obrpc::ObCopyTabletInfo &tablet_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("copy tablet info ob producer do not init", K(ret));
+  } else {
+    const ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::FULL;
+    const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
+    tablet_info.tablet_id_ = tablet_id;
+    tablet_info.status_ = ObCopyTabletStatus::TABLET_NOT_EXIST;
+    tablet_info.param_.ls_id_ = ls_id;
+    tablet_info.param_.tablet_id_ = tablet_id;
+    tablet_info.param_.data_tablet_id_ = tablet_id;
+    tablet_info.param_.create_scn_ = ObTabletMeta::INIT_CREATE_SCN;
+    tablet_info.param_.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+    tablet_info.param_.clog_checkpoint_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+    tablet_info.param_.compat_mode_ = lib::Worker::get_compatibility_mode();
+    tablet_info.param_.multi_version_start_ = 0;
+    tablet_info.param_.snapshot_version_ = 0;
+    tablet_info.param_.tx_data_.tablet_status_ = ObTabletStatus::DELETED;
+    tablet_info.param_.tx_data_.tx_id_ = ObTabletCommon::FINAL_TX_ID;
+    tablet_info.param_.tx_data_.tx_scn_ = SCN::min_scn();
+
+    if (OB_FAIL(tablet_info.param_.ha_status_.set_restore_status(restore_status))) {
+      LOG_WARN("failed to set restore status", K(ret), K(restore_status));
+    } else if (OB_FAIL(tablet_info.param_.ha_status_.set_data_status(data_status))) {
+      LOG_WARN("failed to set data status", K(ret), K(data_status));
+    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
+        tablet_info.param_.allocator_,
+        tablet_info.param_.storage_schema_,
+        tablet_info.param_.medium_info_list_))) {
+      LOG_WARN("failed to construct placeholder storage schema");
+    } else if (!tablet_info.param_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("create tablet param is invalid", K(ret), K(tablet_info));
     }
   }
   return ret;
@@ -1829,6 +1873,7 @@ int ObCopySSTableInfoObProducer::get_tablet_meta_(ObMigrationTabletParam &tablet
   return ret;
 }
 
+//TODO(muwei.ym) This code will not been needed in 4.2
 int ObCopySSTableInfoObProducer::fake_deleted_tablet_meta_(
     ObMigrationTabletParam &tablet_meta)
 {

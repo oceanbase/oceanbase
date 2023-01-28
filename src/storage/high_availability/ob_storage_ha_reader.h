@@ -266,7 +266,11 @@ public:
       const common::ObIArray<common::ObTabletID> &tablet_id_array);
 
   int get_next_tablet_info(obrpc::ObCopyTabletInfo &tablet_info);
-
+private:
+  int build_deleted_tablet_info_(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      obrpc::ObCopyTabletInfo &tablet_info);
 private:
   bool is_inited_;
   ObArray<common::ObTabletID> tablet_id_array_;

@@ -327,7 +327,8 @@ int ObStorageHADag::check_is_in_retry(bool &is_in_retry)
 /******************ObStorageHADagUtils*********************/
 int ObStorageHADagUtils::deal_with_fo(
     const int err,
-    share::ObIDag *dag)
+    share::ObIDag *dag,
+    const bool allow_retry)
 {
   int ret = OB_SUCCESS;
   ObStorageHADag *ha_dag = nullptr;
@@ -342,7 +343,7 @@ int ObStorageHADagUtils::deal_with_fo(
   } else if (OB_ISNULL(ha_dag = static_cast<ObStorageHADag *>(dag))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ha dag should not be NULL", K(ret), KPC(ha_dag));
-  } else if (OB_FAIL(ha_dag->set_result(err))) {
+  } else if (OB_FAIL(ha_dag->set_result(err, allow_retry))) {
     LOG_WARN("failed to set result", K(ret), K(err));
   }
   return ret;

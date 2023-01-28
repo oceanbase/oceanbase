@@ -242,8 +242,6 @@ private:
   int get_tablet_id_array_(common::ObIArray<common::ObTabletID> &tablet_id_array);
   int check_ls_need_copy_data_(bool &need_copy);
   int deal_local_restore_ls_(bool &need_generate_dag);
-  int try_remove_unneeded_tablets_();
-
   int record_server_event_();
 
 private:
@@ -418,6 +416,7 @@ private:
       common::ObIArray<ObTabletGroupMigrationDag *> &tablet_group_dag_array);
   int build_tablet_group_info_();
   int generate_tablet_group_dag_();
+  int try_remove_unneeded_tablets_();
   int record_server_event_();
 
 private:

@@ -162,7 +162,8 @@ class ObStorageHADagUtils
 public:
   static int deal_with_fo(
       const int err,
-      share::ObIDag *dag);
+      share::ObIDag *dag,
+      const bool allow_retry = true);
   static int get_ls(
       const share::ObLSID &ls_id,
       ObLSHandle &ls_handle);

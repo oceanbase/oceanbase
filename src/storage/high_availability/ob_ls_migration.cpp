@@ -946,9 +946,7 @@ int ObStartMigrationTask::process()
     LOG_WARN("failed to choose src", K(ret), K(*ctx_));
   } else if (OB_FAIL(update_ls_())) {
     LOG_WARN("failed to update_ls_", K(ret), K(*ctx_));
-  } else if (OB_FAIL(try_remove_unneeded_tablets_())) {
-    LOG_WARN("failed to try remove unneeded tablets", K(ret), KPC(ctx_));
-  }  else if (OB_FAIL(deal_local_restore_ls_(need_generate_dag))) {
+  } else if (OB_FAIL(deal_local_restore_ls_(need_generate_dag))) {
     LOG_WARN("failed to deal local restore ls", K(ret), KPC(ctx_));
   } else if (!need_generate_dag) {
     //do nothing
@@ -1402,84 +1400,6 @@ int ObStartMigrationTask::deal_local_restore_ls_(bool &need_generate_dag)
     } else {
       LOG_INFO("ls restore status is in restore start or in restore sys tablets, no need generate dag",
           K(ls_restore_status), "ls_id", ctx_->arg_.ls_id_);
-    }
-  }
-  return ret;
-}
-
-int ObStartMigrationTask::try_remove_unneeded_tablets_()
-{
-  int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-  hash::ObHashSet<ObTabletID> tablet_id_set;
-  int64_t bucket_num = 0;
-  ObArray<ObTabletID> tablet_id_array;
-  const int64_t MAX_BUCKET_NUM = 1024;
-  const bool need_initial_state = true;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
-    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_));
-  } else if (FALSE_IT(bucket_num = std::max(MAX_BUCKET_NUM,
-      ctx_->sys_tablet_id_array_.count() + ctx_->data_tablet_id_array_.count()))) {
-  } else if (OB_FAIL(tablet_id_set.create(bucket_num))) {
-    LOG_WARN("failed to create tablet id set", K(ret), KPC(ctx_));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->sys_tablet_id_array_.count(); ++i) {
-      const ObTabletID &tablet_id = ctx_->sys_tablet_id_array_.at(i);
-      if (OB_FAIL(tablet_id_set.set_refactored(tablet_id))) {
-        LOG_WARN("failed to set tablet into set", K(ret), K(tablet_id), KPC(ctx_));
-      }
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->data_tablet_id_array_.count(); ++i) {
-      const ObTabletID &tablet_id = ctx_->data_tablet_id_array_.at(i);
-      if (OB_FAIL(tablet_id_set.set_refactored(tablet_id))) {
-        LOG_WARN("failed to set tablet into set", K(ret), K(tablet_id), KPC(ctx_));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
-      ObTabletID tablet_id;
-      if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
-        LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));
-      } else {
-        while (OB_SUCC(ret)) {
-          if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-              break;
-            } else {
-              LOG_WARN("failed to get tablet id", K(ret));
-            }
-          } else {
-            int32_t hash_ret = tablet_id_set.exist_refactored(tablet_id);
-            if (OB_HASH_EXIST == hash_ret) {
-              //do nothing
-            } else if (OB_HASH_NOT_EXIST == hash_ret) {
-              if (OB_FAIL(tablet_id_array.push_back(tablet_id))) {
-                LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id));
-              }
-            } else {
-              ret = hash_ret == OB_SUCCESS ? OB_ERR_UNEXPECTED : hash_ret;
-            }
-          }
-        }
-
-        if (OB_FAIL(ret)) {
-        } else if (tablet_id_array.empty()) {
-          //do nothing
-        } else if (OB_FAIL(ls->remove_tablets(tablet_id_array))) {
-          LOG_WARN("failed to remove tablets", K(ret), KPC(ls), K(tablet_id_array));
-        }
-      }
     }
   }
   return ret;
@@ -2956,6 +2876,7 @@ int ObDataTabletsMigrationTask::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  bool is_ls_online_success = false;
   LOG_INFO("start do data tablets migration task", K(ret), KPC(ctx_));
 
   if (!is_inited_) {
@@ -2965,16 +2886,26 @@ int ObDataTabletsMigrationTask::process()
     //do nothing
   } else if (OB_FAIL(create_or_update_tablets_())) {
     LOG_WARN("failed to create or update tablets", K(ret), K(*ctx_));
+  } else if (OB_FAIL(try_remove_unneeded_tablets_())) {
+    LOG_WARN("failed to try remove unneeded tablets", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ls_online_())) {
     LOG_WARN("failed to start realy log", K(ret), K(*ctx_));
+  } else if (FALSE_IT(is_ls_online_success = true)) {
   } else if (OB_FAIL(build_tablet_group_info_())) {
     LOG_WARN("failed to build tablet group info", K(ret), KPC(ctx_));
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = OB_E(EventTable::EN_DATA_TABLETS_MIGRATION_TASK_FAILED) OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "fake EN_DATA_TABLETS_MIGRATION_TASK_FAILED", K(ret));
+      int32_t retry_count = 0;
+      if (OB_SUCCESS != (tmp_ret = ctx_->get_retry_count(retry_count))) {
+        LOG_WARN("failed to get retry count", K(tmp_ret), K(retry_count));
+      } else if (retry_count > 0) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_E(EventTable::EN_DATA_TABLETS_MIGRATION_TASK_FAILED) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          STORAGE_LOG(ERROR, "fake EN_DATA_TABLETS_MIGRATION_TASK_FAILED", K(ret));
+        }
       }
     }
 #endif
@@ -2990,7 +2921,8 @@ int ObDataTabletsMigrationTask::process()
 
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) {
+    const bool allow_retry = !is_ls_online_success;
+    if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag(), allow_retry))) {
       LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), K(*ctx_));
     }
   }
@@ -3074,6 +3006,8 @@ int ObDataTabletsMigrationTask::build_tablet_group_info_()
   ObArray<ObTabletID> tablet_group_id_array;
   ObArray<ObTabletID> tablet_id_array;
   hash::ObHashSet<ObTabletID> remove_tablet_set;
+
+  DEBUG_SYNC(BEFORE_BUILD_TABLET_GROUP_INFO);
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3239,6 +3173,89 @@ int ObDataTabletsMigrationTask::generate_tablet_group_dag_()
   }
   return ret;
 }
+
+int ObDataTabletsMigrationTask::try_remove_unneeded_tablets_()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  hash::ObHashSet<ObTabletID> tablet_id_set;
+  int64_t bucket_num = 0;
+  ObArray<ObTabletID> tablet_id_array;
+  const int64_t MAX_BUCKET_NUM = 1024;
+  const bool need_initial_state = true;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("start migration task do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_));
+  } else if (FALSE_IT(bucket_num = std::max(MAX_BUCKET_NUM,
+      ctx_->sys_tablet_id_array_.count() + ctx_->data_tablet_id_array_.count()))) {
+  } else if (OB_FAIL(tablet_id_set.create(bucket_num))) {
+    LOG_WARN("failed to create tablet id set", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(ha_tablets_builder_.get_src_deleted_tablet_list(tablet_id_array))) {
+    LOG_WARN("failed to get src deleted tablet list", K(ret), KPC(ctx_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->sys_tablet_id_array_.count(); ++i) {
+      const ObTabletID &tablet_id = ctx_->sys_tablet_id_array_.at(i);
+      if (OB_FAIL(tablet_id_set.set_refactored(tablet_id))) {
+        LOG_WARN("failed to set tablet into set", K(ret), K(tablet_id), KPC(ctx_));
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->data_tablet_id_array_.count(); ++i) {
+      const ObTabletID &tablet_id = ctx_->data_tablet_id_array_.at(i);
+      if (OB_FAIL(tablet_id_set.set_refactored(tablet_id))) {
+        LOG_WARN("failed to set tablet into set", K(ret), K(tablet_id), KPC(ctx_));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
+      ObTabletID tablet_id;
+      if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
+        LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("failed to get tablet id", K(ret));
+            }
+          } else {
+            int32_t hash_ret = tablet_id_set.exist_refactored(tablet_id);
+            if (OB_HASH_EXIST == hash_ret) {
+              //do nothing
+            } else if (OB_HASH_NOT_EXIST == hash_ret) {
+              if (OB_FAIL(tablet_id_array.push_back(tablet_id))) {
+                LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id));
+              }
+            } else {
+              ret = hash_ret == OB_SUCCESS ? OB_ERR_UNEXPECTED : hash_ret;
+            }
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (tablet_id_array.empty()) {
+          //do nothing
+        } else if (OB_FAIL(ls->remove_tablets(tablet_id_array))) {
+          LOG_WARN("failed to remove tablets", K(ret), KPC(ls), K(tablet_id_array));
+        } else {
+          FLOG_INFO("succeed remove tablets", K(tablet_id_array));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObDataTabletsMigrationTask::record_server_event_()
 {

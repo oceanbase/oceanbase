@@ -73,6 +73,7 @@ public:
   int build_tablets_sstable_info();
   int update_local_tablets();
   const CopyTabletSimpleInfoMap &get_tablets_simple_info_map() { return tablet_simple_info_map_ ; }
+  int get_src_deleted_tablet_list(common::ObIArray<common::ObTabletID> &tablet_id_list);
 
 private:
   int get_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
@@ -146,6 +147,7 @@ private:
   bool is_inited_;
   ObStorageHATabletsBuilderParam param_;
   CopyTabletSimpleInfoMap tablet_simple_info_map_;
+  ObArray<common::ObTabletID> deleted_tablet_id_list_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletsBuilder);
 };
 
