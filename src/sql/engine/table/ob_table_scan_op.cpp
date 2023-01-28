@@ -376,8 +376,7 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     tsc_ctdef_(alloc),
     pdml_partition_id_(NULL),
     agent_vt_meta_(alloc),
-    flags_(0),
-    is_spatial_ddl_(false)
+    flags_(0)
 {
 }
 
@@ -400,8 +399,7 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     tsc_ctdef_,
                     pdml_partition_id_,
                     agent_vt_meta_,
-                    ddl_output_cids_,
-                    is_spatial_ddl_);
+                    ddl_output_cids_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
@@ -425,8 +423,7 @@ DEF_TO_STRING(ObTableScanSpec)
        K(tsc_ctdef_),
        K(report_col_checksum_),
        K_(agent_vt_meta),
-       K_(ddl_output_cids),
-       K_(is_spatial_ddl));
+       K_(ddl_output_cids));
   J_OBJ_END();
   return pos;
 }

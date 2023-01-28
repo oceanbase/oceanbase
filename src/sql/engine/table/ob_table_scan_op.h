@@ -349,10 +349,10 @@ public:
       uint64_t batch_scan_flag_                 : 1;
       uint64_t report_col_checksum_             : 1;
       uint64_t has_tenant_id_col_               : 1;
-      uint64_t reserved_                        : 55;
+      uint64_t is_spatial_ddl_                  : 1;
+      uint64_t reserved_                        : 54;
     };
   };
-  bool is_spatial_ddl_;
 };
 
 class ObTableScanOp : public ObOperator
