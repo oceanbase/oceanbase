@@ -682,6 +682,7 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   ObTabletHandle tablet_handle;
   ObLSTabletIterator iterator;
   ObMigrationStatus migration_status;
+  share::ObLSRestoreStatus restore_status;
   SCN min_end_scn = SCN::max_scn();
   SCN min_end_scn_from_old_tablets = SCN::max_scn();
   SCN min_end_scn_from_latest_tablets = SCN::max_scn();
@@ -696,7 +697,12 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
     STORAGE_LOG(WARN, "get migration status failed", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
     recycle_scn.set_min();
-    STORAGE_LOG(INFO, "logstream is not in a normal state. skip recycle tx data", "ls_id", ls_->get_ls_id());
+    STORAGE_LOG(INFO, "logstream is in migration state. skip recycle tx data", "ls_id", ls_->get_ls_id());
+  } else if (OB_FAIL(ls_->get_restore_status(restore_status))) {
+    STORAGE_LOG(WARN, "get restore status failed", KR(ret), "ls_id", ls_->get_ls_id());
+  } else if (ObLSRestoreStatus::RESTORE_NONE != restore_status) {
+    recycle_scn.set_min();
+    STORAGE_LOG(INFO, "logstream is in restore state. skip recycle tx data", "ls_id", ls_->get_ls_id());
   } else if (OB_FAIL(get_ls_min_end_scn_in_latest_tablets_(min_end_scn_from_latest_tablets))) {
     // get_ls_min_end_scn_in_latest_tablets must before get_ls_min_end_scn_in_old_tablets
     STORAGE_LOG(WARN, "fail to get ls min end log ts in all of latest tablets", KR(ret));
@@ -709,7 +715,7 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
     }
   }
 
-  FLOG_INFO("get tx data recycle ts finish.",
+  FLOG_INFO("get tx data recycle scn finish.",
             KR(ret),
             "ls_id", ls_->get_ls_id(),
             K(recycle_scn),
