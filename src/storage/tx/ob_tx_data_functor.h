@@ -160,19 +160,22 @@ public:
                      bool &can_read,
                      share::SCN &trans_version,
                      bool &is_determined_state,
+                     const share::ObLSID ls_id,
                      const ObCleanoutOp &cleanout_op = ObCleanoutNothingOperation(),
                      const ObReCheckOp &recheck_op = ObReCheckNothingOperation())
     : lock_for_read_arg_(lock_for_read_arg),
       can_read_(can_read),
       is_determined_state_(is_determined_state),
       trans_version_(trans_version),
+      ls_id_(ls_id),
       cleanout_op_(cleanout_op),
       recheck_op_(recheck_op) {}
   virtual ~LockForReadFunctor() {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
   virtual bool recheck() override;
+  int check_for_standby(const transaction::ObTransID &tx_id);
   TO_STRING_KV(K(lock_for_read_arg_), K(can_read_), K(is_determined_state_),
-               K(trans_version_));
+               K(trans_version_), K(ls_id_));
 private:
   int inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx);
 
@@ -181,6 +184,7 @@ public:
   bool &can_read_;
   bool &is_determined_state_;
   share::SCN &trans_version_;
+  share::ObLSID ls_id_;
   // Cleanout the tx node if necessary
   ObCleanoutOp cleanout_op_;
   // ReCheck whether tx node is valid.

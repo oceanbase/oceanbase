@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <gtest/gtest.h>
 #include <signal.h>
+#include <thread>
 #define private public
 #include "ob_simple_log_cluster_env.h"
 #include "ob_simple_log_cluster_testbase.h"
@@ -43,6 +44,58 @@ using namespace logservice;
 using namespace palf;
 namespace unittest
 {
+
+PalfHandleImplGuard::PalfHandleImplGuard() : palf_id_(),
+                                             palf_handle_impl_(NULL),
+                                             palf_env_impl_(NULL)
+{
+}
+
+PalfHandleImplGuard::~PalfHandleImplGuard()
+{
+  reset();
+}
+
+bool PalfHandleImplGuard::is_valid() const
+{
+  return true == is_valid_palf_id(palf_id_) && NULL != palf_handle_impl_ && NULL != palf_env_impl_;
+}
+
+void PalfHandleImplGuard::reset()
+{
+  if (NULL != palf_handle_impl_ && NULL != palf_env_impl_) {
+    palf_env_impl_->revert_palf_handle_impl(palf_handle_impl_);
+  }
+  palf_handle_impl_ = NULL;
+  palf_env_impl_ = NULL;
+  palf_id_ = -1;
+};
+
+PalfHandleLiteGuard::PalfHandleLiteGuard() : palf_id_(),
+                                             palf_handle_lite_(NULL),
+                                             palf_env_lite_(NULL)
+{
+}
+
+PalfHandleLiteGuard::~PalfHandleLiteGuard()
+{
+  reset();
+}
+
+bool PalfHandleLiteGuard::is_valid() const
+{
+  return true == is_valid_palf_id(palf_id_) && NULL != palf_handle_lite_ && NULL != palf_env_lite_;
+}
+
+void PalfHandleLiteGuard::reset()
+{
+  if (NULL != palf_handle_lite_ && NULL != palf_env_lite_) {
+    palf_env_lite_->revert_palf_handle_impl(palf_handle_lite_);
+  }
+  palf_handle_lite_ = NULL;
+  palf_env_lite_ = NULL;
+  palf_id_ = -1;
+};
 
 int generate_data(char *&buf, const int buf_len, int &real_data_size, const int wanted_data_size = 0)
 {
@@ -135,31 +188,34 @@ int ObSimpleLogClusterTestEnv::delete_paxos_group(const int64_t id)
   int ret = OB_SUCCESS;
   auto cluster = get_cluster();
   for (auto svr : get_cluster()) {
-    ObTenantEnv::set_tenant(svr->tenant_base_);
-    auto ls_id = ObLSID(id);
-    if (OB_FAIL(svr->get_palf_env()->remove(id))) {
+    ObTenantEnv::set_tenant(svr->get_tenant_base());
+    auto palf_env = svr->get_palf_env();
+    if (OB_ISNULL(palf_env)) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(WARN, "unexpected error", K(ret), KP(svr), K(svr->is_arb_server()));
+    } else if (OB_FAIL(palf_env->remove_palf_handle_impl(id))) {
       CLOG_LOG(WARN, "remove_ls failed", K(ret));
       break;
     }
+    svr->revert_palf_env(palf_env);
   }
   return ret;
 }
-
-int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, int64_t &leader_idx, PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, int64_t &leader_idx, PalfHandleImplGuard &leader)
 {
   PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
   return create_paxos_group(id, palf_base_info, NULL, leader_idx, leader);
 }
 
-int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleImplGuard &leader)
 {
   PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
   return create_paxos_group(id, palf_base_info, loc_cb, leader_idx, leader);
 }
 
-int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const share::SCN &create_scn, int64_t &leader_idx, PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const share::SCN &create_scn, int64_t &leader_idx, PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
   PalfBaseInfo palf_base_info;
@@ -168,7 +224,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const share:
   return create_paxos_group(id, palf_base_info, NULL, leader_idx, leader);
 }
 
-int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const LSN &lsn, int64_t &leader_idx, PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const LSN &lsn, int64_t &leader_idx, PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
   PalfBaseInfo palf_base_info;
@@ -177,48 +233,100 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const LSN &l
   return create_paxos_group(id, palf_base_info, NULL, leader_idx, leader);
 }
 
-int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const PalfBaseInfo &palf_base_info, int64_t &leader_idx, PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const PalfBaseInfo &palf_base_info, int64_t &leader_idx, PalfHandleImplGuard &leader)
 {
   return create_paxos_group(id, palf_base_info, NULL, leader_idx, leader);
 }
 
-int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const PalfBaseInfo &palf_base_info, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const PalfBaseInfo &palf_base_info, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
   for (auto svr : get_cluster()) {
-    ObTenantEnv::set_tenant(svr->tenant_base_);
-    PalfHandle handle;
+    ObTenantEnv::set_tenant(svr->get_tenant_base());
+    IPalfHandleImpl* handle = NULL;
     share::ObLSID sid(id);
     if (svr->get_palf_env() == NULL) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "svr is null", KPC(svr));
-    } else if (OB_FAIL(svr->get_palf_env()->create(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
+    } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
       CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
       break;
     } else {
-      handle.set_location_cache_cb(loc_cb);
+      handle->set_location_cache_cb(loc_cb);
       const ObMemberList &member_list = get_member_list();
-      handle.set_initial_member_list(member_list, member_list.get_member_number());
-      handle.set_paxos_member_region_map(get_member_region_map());
+      handle->set_initial_member_list(member_list, member_list.get_member_number());
+      handle->set_paxos_member_region_map(get_member_region_map());
       CLOG_LOG(INFO, "set_initial_member_list success", K(id), "addr", svr->get_addr(), K(member_list));
     }
-    svr->get_palf_env()->close(handle);
+    if (NULL != handle) {
+      svr->get_palf_env()->revert_palf_handle_impl(handle);
+    }
   }
   if (OB_SUCC(ret)) {
     ret = get_leader(id, leader, leader_idx);
-    ObTenantEnv::set_tenant(get_cluster()[leader_idx]->tenant_base_);
+    ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
   }
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::update_server_log_disk_size(const int64_t new_size)
+int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
+    const int64_t id,
+    int64_t &arb_replica_idx,
+    int64_t &leader_idx,
+    PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
-  for (auto svr : get_cluster()) {
-    ObTenantEnv::set_tenant(svr->tenant_base_);
-    if (OB_FAIL(svr->log_block_pool_.resize(new_size))) {
-      PALF_LOG(ERROR, "resize failed", K(ret), K(new_size));
-      break;
+  PalfBaseInfo palf_base_info;
+  palf_base_info.generate_by_default();
+  // if member_cnt_ is 3, arb_replica_idx should be 0,1,2
+  ObMemberList member_list = get_member_list();
+  ObMember arb_replica;
+  arb_replica_idx = 2;
+  for (int i = 0; i < get_cluster().size(); i++) {
+    auto svr = get_cluster()[i];
+    if (svr->is_arb_server()) {
+      arb_replica_idx = i;
+    }
+  }
+  if (-1 == arb_replica_idx) {
+    ret = OB_NOT_SUPPORTED;
+    PALF_LOG(ERROR, "there is not any arb server");
+  } else {
+    if (OB_FAIL(member_list.get_member_by_index(arb_replica_idx, arb_replica))) {
+      PALF_LOG(ERROR, "get_member_by_index failed", K(ret), K(arb_replica_idx));
+    } else {
+      member_list.remove_member(arb_replica);
+      for (auto svr : get_cluster()) {
+        ObTenantEnv::set_tenant(svr->get_tenant_base());
+        IPalfHandleImpl *handle = NULL;
+        share::ObLSID sid(id);
+        if (svr->get_palf_env() == NULL) {
+          ret = OB_ERR_UNEXPECTED;
+          CLOG_LOG(ERROR, "svr is null", KPC(svr));
+          break;
+        } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
+          CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
+        } else if (OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, get_member_cnt()-1))) {
+          CLOG_LOG(ERROR, "set_initial_member_list failed", K(ret), K(id), KPC(svr));
+        } else {
+          handle->set_paxos_member_region_map(get_member_region_map());
+          CLOG_LOG(INFO, "set_initial_member_list success", K(member_list));
+        }
+        if (NULL == svr->get_palf_env()) {
+          ret = OB_ERR_UNEXPECTED;
+          ObSimpleLogServer *log_p = dynamic_cast<ObSimpleLogServer*>(svr);
+          ObSimpleArbServer *arb_p = dynamic_cast<ObSimpleArbServer*>(svr);
+          CLOG_LOG(ERROR, "palf env is nullptr", K(ret), K(svr->is_arb_server()), KPC(svr), KP(log_p), K(arb_p), KPC(log_p), KPC(arb_p));
+        } else {
+        }
+        if (NULL != handle) {
+          svr->get_palf_env()->revert_palf_handle_impl(handle);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ret = get_leader(id, leader, leader_idx);
+        ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
+      }
     }
   }
   return ret;
@@ -228,14 +336,20 @@ int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t server_id, cons
 {
   int ret = OB_SUCCESS;
   const int64_t MB = 1024 * 1024;
-  PalfDiskOptions opts;
-  opts.log_disk_usage_limit_size_ = file_block_num * PALF_PHY_BLOCK_SIZE;
-  opts.log_disk_utilization_threshold_ = 80;
-  opts.log_disk_utilization_limit_threshold_ = 95;
+  PalfOptions opts;
+  opts.disk_options_.log_disk_usage_limit_size_ = file_block_num * PALF_PHY_BLOCK_SIZE;
+  opts.disk_options_.log_disk_utilization_threshold_ = 80;
+  opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
   auto cluster = get_cluster();
   if (server_id >= 0 && server_id < cluster.size()) {
-    ObTenantEnv::set_tenant(cluster[server_id]->tenant_base_);
-    ret = cluster[server_id]->get_palf_env()->palf_env_impl_.update_disk_options(opts);
+    ObTenantEnv::set_tenant(cluster[server_id]->get_tenant_base());
+    auto srv = cluster[server_id];
+    if  (true == srv->is_arb_server()) {
+      ret = OB_NOT_SUPPORTED;
+    } else {
+      auto palf_env_impl = dynamic_cast<PalfEnvImpl*>(srv->get_palf_env());
+      ret = palf_env_impl->update_options(opts);
+    }
   }
   return ret;
 }
@@ -244,15 +358,31 @@ int ObSimpleLogClusterTestEnv::restart_paxos_groups()
 {
   int ret = OB_SUCCESS;
   int64_t node_idx = get_node_idx_base();
-  for (auto svr : get_cluster()) {
-    ObTenantEnv::set_tenant(svr->tenant_base_);
+  int64_t finished_cnt = 0;
+  auto func = [&finished_cnt, this](const int64_t node_idx, ObISimpleLogServer *svr) -> int{
+    int ret = OB_SUCCESS;
+    ObTenantEnv::set_tenant(svr->get_tenant_base());
     if (OB_FAIL(svr->simple_restart(get_test_name(), node_idx))) {
       PALF_LOG(WARN, "simple_restart failed", K(ret), K(node_idx));
-      break;
     } else {
-      node_idx++;
-      PALF_LOG(INFO, "restart_paxos_groups success", K(svr->get_addr()), KPC(svr));
+      ATOMIC_INC(&finished_cnt);
+      PALF_LOG(INFO, "restart_paxos_groups success", K(node_idx), K(svr->get_addr()), KPC(svr));
     }
+    return ret;
+  };
+  std::vector<std::thread> threads;
+  for (auto svr : get_cluster()) {
+    threads.emplace_back(std::thread(func, node_idx, svr));
+    node_idx++;
+  }
+  for (auto &thread: threads) {
+    thread.join();
+  }
+  if (finished_cnt != get_cluster().size()) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "restart failed", K(ret), K(finished_cnt));
+  } else {
+    ObTenantEnv::set_tenant(get_cluster()[finished_cnt-1]->get_tenant_base());
   }
   return ret;
 }
@@ -263,7 +393,7 @@ int ObSimpleLogClusterTestEnv::restart_server(const int64_t server_id)
   auto cluster = get_cluster();
   if (server_id >= 0 && server_id < cluster.size()) {
     const auto svr = cluster[server_id];
-    ObTenantEnv::set_tenant(svr->tenant_base_);
+    ObTenantEnv::set_tenant(svr->get_tenant_base());
     if (OB_FAIL(svr->simple_restart(get_test_name(), get_node_idx_base() + server_id))) {
       PALF_LOG(WARN, "simple_restart failed", K(ret), K(server_id));
     } else {
@@ -283,35 +413,46 @@ int ObSimpleLogClusterTestEnv::remove_dir()
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::get_leader(const int64_t id, PalfHandleGuard &leader, int64_t &leader_idx)
+int ObSimpleLogClusterTestEnv::get_log_pool(const int64_t leader_idx, ObServerLogBlockMgr *&pool)
 {
   int ret = OB_SUCCESS;
+  auto cluster = get_cluster();
+  pool = dynamic_cast<ObServerLogBlockMgr*>(cluster[leader_idx]->get_block_pool());
+  return ret;
+}
+
+int ObSimpleLogClusterTestEnv::get_leader(const int64_t id, PalfHandleImplGuard &leader, int64_t &leader_idx)
+{
+  int ret = OB_SUCCESS;
+  leader.reset();
   leader_idx = 0;
   do {
     auto cluster = get_cluster();
     for (int i = 0; i < cluster.size(); i++) {
+      IPalfHandleImpl *ipalf_handle_impl = NULL;
       auto svr = cluster[i];
-      PalfHandle handle;
       bool is_pending_state = false;
       ObRole role = LEADER;
       int64_t epoch;
       if (false == svr->is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         PALF_LOG(WARN, "svr is invalid", K(ret), KPC(svr));
-      } else if (OB_FAIL(svr->get_palf_env()->open(id, handle))) {
+      } else if (OB_FAIL(svr->get_palf_env()->get_palf_handle_impl(id, ipalf_handle_impl))) {
         PALF_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
-      } else if (OB_FAIL(handle.get_role(role, epoch, is_pending_state))) {
+      } else if (OB_FAIL(ipalf_handle_impl->get_role(role, epoch, is_pending_state))) {
         PALF_LOG(WARN, "get_role failed", K(ret));
       } else if (role == LEADER
-                  && false == is_pending_state
-                  && !FALSE_IT(leader.set(handle, svr->get_palf_env()))) {
+                  && false == is_pending_state) {
         leader_idx = i;
-        PALF_LOG(INFO, "get_leader is", K(svr->get_addr()), K(leader_idx), K(epoch), KP(leader.palf_env_));
+        leader.palf_handle_impl_ = dynamic_cast<PalfHandleImpl *>(ipalf_handle_impl);
+        leader.palf_id_ = id;
+        leader.palf_env_impl_ = dynamic_cast<PalfEnvImpl*>(svr->get_palf_env());
+        PALF_LOG(INFO, "get_leader is", K(svr->get_addr()), K(leader_idx), K(epoch));
         break;
       }
-      svr->get_palf_env()->close(handle);
+      svr->get_palf_env()->revert_palf_handle_impl(ipalf_handle_impl);
     }
-    if (false == leader.get_palf_handle()->is_valid()) {
+    if (NULL== leader.palf_handle_impl_) {
       ret = OB_ENTRY_NOT_EXIST;
       PALF_LOG(WARN, "leader not exist", K(ret), K(id));
       sleep(1);
@@ -321,74 +462,110 @@ int ObSimpleLogClusterTestEnv::get_leader(const int64_t id, PalfHandleGuard &lea
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::get_cluster_palf_handle_guard(const int64_t palf_id, std::vector<PalfHandleGuard*> &palf_list)
+int ObSimpleLogClusterTestEnv::get_cluster_palf_handle_guard(const int64_t palf_id, std::vector<PalfHandleImplGuard*> &palf_list)
 {
   int ret = OB_SUCCESS;
   for (auto svr : get_cluster()) {
-    PalfHandle handle;
-    auto guard  = OB_NEW(PalfHandleGuard, "TestLogCluster");
-    if (OB_FAIL(svr->get_palf_env()->open(palf_id, handle))) {
+    PALF_LOG(INFO, "current", KPC(svr));
+    IPalfHandleImpl *ipalf_handle_impl = NULL;
+    auto guard = OB_NEW(PalfHandleImplGuard, "TestLogCluster");
+    if (svr->is_arb_server()) {
+      palf_list.push_back(guard);
+    } else if (OB_FAIL(svr->get_palf_env()->get_palf_handle_impl(palf_id, ipalf_handle_impl))) {
       PALF_LOG(WARN, "open palf failed", K(ret), K(palf_id), KPC(svr));
     } else {
-      guard->set(handle, svr->get_palf_env());
+      guard->palf_handle_impl_ = dynamic_cast<PalfHandleImpl*>(ipalf_handle_impl);
+      guard->palf_env_impl_ = dynamic_cast<PalfEnvImpl*>(svr->get_palf_env());
+      guard->palf_id_ = palf_id;
       palf_list.push_back(guard);
     }
   }
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::revert_cluster_palf_handle_guard(std::vector<PalfHandleGuard*> &palf_list)
+int ObSimpleLogClusterTestEnv::get_arb_member_guard(const int64_t palf_id, PalfHandleLiteGuard &guard)
 {
-  int ret = OB_SUCCESS;
-  for (auto palf_handle_guard : palf_list) {
-    palf_handle_guard->~PalfHandleGuard();
-    OB_DELETE(PalfHandleGuard, "TestLogCluster", palf_handle_guard);
+  int ret = OB_ENTRY_NOT_EXIST;
+  for (auto svr : get_cluster()) {
+    PALF_LOG(INFO, "current", KPC(svr));
+    IPalfHandleImpl *ipalf_handle_impl = NULL;
+    palflite::PalfEnvLite *palf_env = NULL;
+    ObSimpleArbServer *arb_svr = dynamic_cast<ObSimpleArbServer*>(svr);
+    if (svr->is_arb_server()) {
+      palf_env = dynamic_cast<palflite::PalfEnvLite*>(arb_svr->get_palf_env());
+      if (OB_FAIL(palf_env->get_palf_handle_impl(palf_id, ipalf_handle_impl))) {
+        PALF_LOG(WARN, "open palf failed", K(ret), K(palf_id), KPC(svr));
+      } else {
+        guard.palf_handle_lite_ = dynamic_cast<palflite::PalfHandleLite*>(ipalf_handle_impl);
+        guard.palf_env_lite_ = palf_env;
+        guard.palf_id_ = palf_id;
+        ret = OB_SUCCESS;
+      }
+      if (OB_NOT_NULL(palf_env)) {
+        arb_svr->revert_palf_env(palf_env);
+      }
+      break;
+    }
   }
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::get_palf_handle_guard(const std::vector<PalfHandleGuard*> &palf_list,
+int ObSimpleLogClusterTestEnv::revert_cluster_palf_handle_guard(std::vector<PalfHandleImplGuard*> &palf_list)
+{
+  int ret = OB_SUCCESS;
+  for (auto palf_handle_guard : palf_list) {
+    OB_DELETE(PalfHandleImplGuard, "TestLogCluster", palf_handle_guard);
+  }
+  return ret;
+}
+
+int ObSimpleLogClusterTestEnv::get_palf_handle_guard(const std::vector<PalfHandleImplGuard*> &palf_list,
                                                      const common::ObAddr &server,
-                                                     PalfHandleGuard &palf_handle)
+                                                     PalfHandleImplGuard &palf_handle)
 {
   int ret = OB_SUCCESS;
   int64_t palf_id = INVALID_PALF_ID;;
-  PalfEnv *palf_env = NULL;
+  PalfEnvImpl *palf_env = NULL;
   for (auto handle: palf_list) {
-    if (handle->palf_handle_.palf_handle_impl_->self_ == server) {
-      palf_id = handle->palf_handle_.palf_handle_impl_->palf_id_;
-      palf_env = handle->palf_env_;
+    if (handle->palf_handle_impl_->self_ == server) {
+      palf_id = handle->palf_handle_impl_->palf_id_;
+      palf_env = handle->palf_env_impl_;
       break;
     }
   }
   if (false == is_valid_palf_id(palf_id)) {
     ret = OB_ENTRY_NOT_EXIST;
   } else {
-    PalfHandle handle;
-    ret = palf_env->open(palf_id, handle);
-    palf_handle.set(handle, palf_env);
+    IPalfHandleImpl *ipalf_handle_impl = NULL;
+    ret = palf_env->get_palf_handle_impl(palf_id, ipalf_handle_impl);
+    palf_handle.palf_env_impl_= palf_env;
+    palf_handle.palf_handle_impl_ = dynamic_cast<PalfHandleImpl*>(ipalf_handle_impl);
   }
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::switch_leader(const int64_t id, const int64_t new_leader_idx, PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::switch_leader(const int64_t id, const int64_t new_leader_idx, PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
   auto cluster = get_cluster();
   int64_t old_leader_idx = 0;
   common::ObAddr leader_addr = cluster[new_leader_idx]->get_addr();
-  PalfHandleGuard old_leader;
+  PalfHandleImplGuard old_leader;
   if (OB_FAIL(get_leader(id, old_leader, old_leader_idx))) {
     PALF_LOG(WARN, "get_leader failed", K(ret), K(id));
   } else {
-    ObTenantEnv::set_tenant(cluster[old_leader_idx]->tenant_base_);
-    old_leader.change_leader_to(leader_addr);
+    ObTenantEnv::set_tenant(cluster[old_leader_idx]->get_tenant_base());
+    old_leader.palf_handle_impl_->change_leader_to(leader_addr);
     CLOG_LOG(INFO, "switch_leader success", K(ret), "prev_leader:", cluster[prev_leader_idx_]->get_addr(), "new_leader:", cluster[new_leader_idx]->get_addr(),
              "old_leader:", cluster[old_leader_idx]->get_addr());
     prev_leader_idx_ = new_leader_idx;
     // 确保election已经切主成功.
-    sleep(2);
-    ret = get_leader(id, leader, old_leader_idx);
+    do {
+      ret = get_leader(id, leader, old_leader_idx);
+    } while (old_leader_idx != new_leader_idx);
+  }
+  if (OB_SUCC(ret)) {
+    ObTenantEnv::set_tenant(cluster[new_leader_idx]->get_tenant_base());
   }
   return ret;
 }
@@ -399,12 +576,12 @@ void ObSimpleLogClusterTestEnv::set_need_drop_packet(const int64_t id, const boo
   cluster[id]->set_need_drop_packet(need_drop_packet);
 }
 
-int ObSimpleLogClusterTestEnv::check_replica_sync(const int64_t id, PalfHandleGuard *pf1, PalfHandleGuard *pf2, const int64_t timeout_us)
+int ObSimpleLogClusterTestEnv::check_replica_sync(const int64_t id, PalfHandleImplGuard *pf1, PalfHandleImplGuard *pf2, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   auto cluster = get_cluster();
-  ObAddr addr1 = pf1->palf_handle_.palf_handle_impl_->self_;
-  ObAddr addr2 = pf2->palf_handle_.palf_handle_impl_->self_;
+  ObAddr addr1 = pf1->palf_handle_impl_->self_;
+  ObAddr addr2 = pf2->palf_handle_impl_->self_;
 
   const int64_t start_ts = ObTimeUtility::current_time();
   LSN max_lsn_1, max_lsn_2;
@@ -414,10 +591,10 @@ int ObSimpleLogClusterTestEnv::check_replica_sync(const int64_t id, PalfHandleGu
     SERVER_LOG(ERROR, "invalid argumemt", KP(pf1), KP(pf2));
   } else {
     while (OB_SUCC(ret)) {
-      pf1->palf_handle_.get_max_lsn(max_lsn_1);
-      pf2->palf_handle_.get_max_lsn(max_lsn_2);
-      pf1->palf_handle_.get_end_lsn(end_lsn_1);
-      pf2->palf_handle_.get_end_lsn(end_lsn_2);
+      max_lsn_1 = pf1->palf_handle_impl_->get_max_lsn();
+      max_lsn_2 = pf2->palf_handle_impl_->get_max_lsn();
+      end_lsn_1 = pf1->palf_handle_impl_->get_end_lsn();
+      end_lsn_2 = pf2->palf_handle_impl_->get_end_lsn();
       if (!end_lsn_1.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(ERROR, "end_lsn_1 is invalid", K(addr1), K(addr2), K(max_lsn_1), K(end_lsn_1), K(end_lsn_2));
@@ -447,6 +624,32 @@ int ObSimpleLogClusterTestEnv::check_replica_sync(const int64_t id, PalfHandleGu
 }
 
 // Bidirectional network isolation
+void ObSimpleLogClusterTestEnv::block_all_net(const int64_t id)
+{
+  auto cluster = get_cluster();
+  const ObAddr this_addr = cluster[id]->get_addr();
+  for (auto server : cluster) {
+    if (this_addr != server->get_addr()) {
+      cluster[id]->block_net(server->get_addr());
+      server->block_net(this_addr);
+    }
+  }
+  SERVER_LOG(INFO, "block_net success", K(this_addr));
+}
+
+void ObSimpleLogClusterTestEnv::unblock_all_net(const int64_t id)
+{
+  auto cluster = get_cluster();
+  const ObAddr this_addr = cluster[id]->get_addr();
+  for (auto server : cluster) {
+    if (this_addr != server->get_addr()) {
+      cluster[id]->unblock_net(server->get_addr());
+      server->unblock_net(this_addr);
+    }
+  }
+  SERVER_LOG(INFO, "unblock_net success", K(this_addr));
+}
+
 void ObSimpleLogClusterTestEnv::block_net(const int64_t id1, const int64_t id2, const bool is_single_direction)
 {
   auto cluster = get_cluster();
@@ -488,31 +691,31 @@ void ObSimpleLogClusterTestEnv::reset_rpc_loss(const int64_t id1, const int64_t 
   SERVER_LOG(INFO, "reset_rpc_loss success", K(addr1), K(addr2));
 }
 
-int ObSimpleLogClusterTestEnv::submit_log(PalfHandleGuard &leader, int count, int id)
+int ObSimpleLogClusterTestEnv::submit_log(PalfHandleImplGuard &leader, int count, int id)
 {
   std::vector<LSN> lsn_array;
   std::vector<SCN> scn_array;
   return submit_log_impl(leader, count, id, 0, lsn_array, scn_array);
 }
 
-int ObSimpleLogClusterTestEnv::submit_log(PalfHandleGuard &leader, int count, int id, int data_len)
+int ObSimpleLogClusterTestEnv::submit_log(PalfHandleImplGuard &leader, int count, int id, int data_len)
 {
   std::vector<LSN> lsn_array;
   std::vector<SCN> scn_array;
   return submit_log_impl(leader, count, id, data_len, lsn_array, scn_array);
 }
 
-int ObSimpleLogClusterTestEnv::submit_log(PalfHandleGuard &leader, int count, int id, std::vector<LSN> &lsn_array, std::vector<SCN> &scn_array)
+int ObSimpleLogClusterTestEnv::submit_log(PalfHandleImplGuard &leader, int count, int id, std::vector<LSN> &lsn_array, std::vector<SCN> &scn_array)
 {
   return submit_log_impl(leader, count, id, 0, lsn_array, scn_array);
 }
 
-int ObSimpleLogClusterTestEnv::submit_log(PalfHandleGuard &leader, int count, int data_len, int id, std::vector<LSN> &lsn_array, std::vector<SCN> &scn_array)
+int ObSimpleLogClusterTestEnv::submit_log(PalfHandleImplGuard &leader, int count, int data_len, int id, std::vector<LSN> &lsn_array, std::vector<SCN> &scn_array)
 {
   return submit_log_impl(leader, count, id, data_len, lsn_array, scn_array);
 }
 
-int ObSimpleLogClusterTestEnv::submit_log(PalfHandleGuard &leader, LSN &lsn, share::SCN &scn)
+int ObSimpleLogClusterTestEnv::submit_log(PalfHandleImplGuard &leader, LSN &lsn, share::SCN &scn)
 {
   const int64_t ref_ts = ObTimeUtility::current_time_ns();
   share::SCN ref_scn;
@@ -520,7 +723,7 @@ int ObSimpleLogClusterTestEnv::submit_log(PalfHandleGuard &leader, LSN &lsn, sha
   return submit_log(leader, ref_scn, lsn, scn);
 }
 
-int ObSimpleLogClusterTestEnv::submit_log(PalfHandleGuard &leader, const share::SCN &ref_scn, LSN &lsn, share::SCN &scn)
+int ObSimpleLogClusterTestEnv::submit_log(PalfHandleImplGuard &leader, const share::SCN &ref_scn, LSN &lsn, share::SCN &scn)
 {
   int ret = OB_SUCCESS;
   std::vector<LSN> lsn_array;
@@ -534,7 +737,7 @@ int ObSimpleLogClusterTestEnv::submit_log(PalfHandleGuard &leader, const share::
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::submit_log_impl(PalfHandleGuard &leader,
+int ObSimpleLogClusterTestEnv::submit_log_impl(PalfHandleImplGuard &leader,
                                                const int64_t count,
                                                const int64_t id,
                                                const int64_t data_len,
@@ -548,7 +751,7 @@ int ObSimpleLogClusterTestEnv::submit_log_impl(PalfHandleGuard &leader,
 }
 
 // params[in] wanted_data_size: if equals to 0, it will generate data randomly
-int ObSimpleLogClusterTestEnv::submit_log_impl(PalfHandleGuard &leader,
+int ObSimpleLogClusterTestEnv::submit_log_impl(PalfHandleImplGuard &leader,
                                                const int64_t count,
                                                const int64_t id,
                                                const int64_t data_len,
@@ -565,17 +768,21 @@ int ObSimpleLogClusterTestEnv::submit_log_impl(PalfHandleGuard &leader,
   while (buf == NULL) {
     buf = static_cast<char *>(ob_malloc(buf_len));
   }
+  bool state;
   if (OB_FAIL(generate_data(buf, buf_len, real_log_data_size, data_len))) {
     PALF_LOG(ERROR, "generate_data failed", KP(buf), K(buf_len), K(real_log_data_size));
-  } else if (OB_FAIL(leader.get_role(role, opts.proposal_id))) {
+  } else if (OB_FAIL(leader.palf_handle_impl_->get_role(role, opts.proposal_id, state))) {
     PALF_LOG(WARN, "get_fole failed");
+  } else if (LEADER != role) {
+    ret = OB_STATE_NOT_MATCH;
+    PALF_LOG(WARN, "self is not leader, can't submit log", K(ret), K(role));
   } else {
     for (int i  = 0; i < count && OB_SUCC(ret); i++) {
       do {
         usleep(10);
         LSN lsn;
         share::SCN scn;
-        ret = leader.append(opts, buf, real_log_data_size, ref_scn, lsn, scn);
+        ret = leader.palf_handle_impl_->submit_log(opts, buf, real_log_data_size, ref_scn, lsn, scn);
         if (OB_SUCC(ret) && lsn.is_valid()) {
           lsn_array.push_back(lsn);
           scn_array.push_back(scn);
@@ -598,7 +805,7 @@ int ObSimpleLogClusterTestEnv::submit_log_impl(PalfHandleGuard &leader,
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::raw_write(PalfHandleGuard &leader,
+int ObSimpleLogClusterTestEnv::raw_write(PalfHandleImplGuard &leader,
                                          const LSN lsn,
                                          const char *buf,
                                          const int64_t buf_len)
@@ -607,12 +814,13 @@ int ObSimpleLogClusterTestEnv::raw_write(PalfHandleGuard &leader,
   int real_log_data_size = 0;
   PalfAppendOptions opts;
   ObRole role;
-  if (OB_FAIL(leader.get_role(role, opts.proposal_id))) {
+  bool state;
+  if (OB_FAIL(leader.palf_handle_impl_->get_role(role, opts.proposal_id, state))) {
     PALF_LOG(WARN, "get_fole failed");
   } else {
     do {
       usleep(10);
-      ret = (leader.get_palf_handle())->raw_write(opts, lsn, buf, buf_len);
+      ret = (leader.palf_handle_impl_)->submit_group_log(opts, lsn, buf, buf_len);
       if (OB_SUCC(ret)) {
         PALF_LOG(INFO, "raw_write success", KR(ret), K(lsn));
       } else {
@@ -628,19 +836,20 @@ int ObSimpleLogClusterTestEnv::raw_write(PalfHandleGuard &leader,
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::change_access_mode_to_raw_write(PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::change_access_mode_to_raw_write(PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
   palf::AccessMode new_access_mode = palf::AccessMode::RAW_WRITE;
   palf::AccessMode curr_access_mode;
   int64_t proposal_id, mode_version;
   ObRole unused_role;
+  bool state;
   const int64_t timeout_ns = 10 * 1000 * 1000 * 1000l;
-  if (OB_FAIL(leader.get_access_mode(mode_version, curr_access_mode))) {
+  if (OB_FAIL(leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode))) {
     PALF_LOG(WARN, "get_access_mode failed", K(ret));
-  } else if (OB_FAIL(leader.get_role(unused_role, proposal_id))) {
+  } else if (OB_FAIL(leader.palf_handle_impl_->get_role(unused_role, proposal_id, state))) {
     PALF_LOG(WARN, "get_access_mode failed", K(ret));
-  } else if (OB_FAIL(leader.change_access_mode(proposal_id, mode_version, new_access_mode, share::SCN::min_scn()))) {
+  } else if (OB_FAIL(leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, new_access_mode, share::SCN::min_scn()))) {
     PALF_LOG(WARN, "change_access_mode failed", K(ret));
   } else {
     PALF_LOG(INFO, "change_access_mode to raw_write success", K(ret));
@@ -648,16 +857,37 @@ int ObSimpleLogClusterTestEnv::change_access_mode_to_raw_write(PalfHandleGuard &
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::read_log(PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::change_access_mode_to_append(PalfHandleImplGuard &leader)
+{
+  int ret = OB_SUCCESS;
+  palf::AccessMode new_access_mode = palf::AccessMode::APPEND;
+  palf::AccessMode curr_access_mode;
+  int64_t proposal_id, mode_version;
+  ObRole unused_role;
+  bool state;
+  const int64_t timeout_ns = 10 * 1000 * 1000 * 1000l;
+  if (OB_FAIL(leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode))) {
+    PALF_LOG(WARN, "get_access_mode failed", K(ret));
+  } else if (OB_FAIL(leader.palf_handle_impl_->get_role(unused_role, proposal_id, state))) {
+    PALF_LOG(WARN, "get_access_mode failed", K(ret));
+  } else if (OB_FAIL(leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, new_access_mode, SCN::min_scn()))) {
+    PALF_LOG(WARN, "change_access_mode failed", K(ret));
+  } else {
+    PALF_LOG(INFO, "change_access_mode to raw_write success", K(ret));
+  }
+  return ret;
+}
+
+int ObSimpleLogClusterTestEnv::read_log(PalfHandleImplGuard &leader)
 {
   return read_log(leader, LSN(PALF_INITIAL_LSN_VAL));
 }
 
-int ObSimpleLogClusterTestEnv::read_log(PalfHandleGuard &leader, const LSN &lsn)
+int ObSimpleLogClusterTestEnv::read_log(PalfHandleImplGuard &leader, const LSN &lsn)
 {
   int ret = OB_SUCCESS;
   PalfBufferIterator iterator;
-  if (OB_FAIL(leader.seek(lsn, iterator))) {
+  if (OB_FAIL(leader.palf_handle_impl_->alloc_palf_buffer_iterator(lsn, iterator))) {
   } else {
     while (OB_SUCCESS == ret) {
       const char *buf;
@@ -676,28 +906,33 @@ int ObSimpleLogClusterTestEnv::read_log(PalfHandleGuard &leader, const LSN &lsn)
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::read_group_log(PalfHandleGuard &leader, LSN lsn)
+int ObSimpleLogClusterTestEnv::read_group_log(PalfHandleImplGuard &leader, LSN lsn)
 {
   int ret = OB_SUCCESS;
   PalfGroupBufferIterator iterator;
-  if (OB_FAIL(leader.seek(lsn, iterator))) {
+  if (OB_FAIL(leader.palf_handle_impl_->alloc_palf_group_buffer_iterator(lsn, iterator))) {
   } else {
     LogGroupEntry entry;
     while (OB_SUCCESS == ret) {
       LSN log_offset;
       if (OB_FAIL(iterator.next())) {
       } else if (OB_FAIL(iterator.get_entry(entry, log_offset))) {
-      } else {}
+      } else if (iterator.iterator_impl_.curr_entry_is_raw_write_ != entry.get_header().is_raw_write()) {
+        ret = OB_ERR_UNEXPECTED;
+        PALF_LOG(ERROR, "raw write not match, unexpected error", K(ret), K(iterator));
+      }
     }
   }
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::read_and_submit_group_log(PalfHandleGuard &leader, PalfHandleGuard &leader_raw_write)
+int ObSimpleLogClusterTestEnv::read_and_submit_group_log(PalfHandleImplGuard &leader,
+                                                         PalfHandleImplGuard &leader_raw_write,
+                                                         const LSN &start_lsn)
 {
   int ret = OB_SUCCESS;
   PalfGroupBufferIterator iterator;
-  if (OB_FAIL(leader.seek(LSN(0), iterator))) {
+  if (OB_FAIL(leader.palf_handle_impl_->alloc_palf_group_buffer_iterator(LSN(start_lsn), iterator))) {
   } else {
     LogGroupEntry entry;
     while (OB_SUCCESS == ret) {
@@ -712,9 +947,9 @@ int ObSimpleLogClusterTestEnv::read_and_submit_group_log(PalfHandleGuard &leader
       }
     }
     if (OB_ITER_END == ret) {
-      wait_until_has_committed(leader_raw_write, LSN(leader.palf_handle_.palf_handle_impl_->get_end_lsn()));
+      wait_until_has_committed(leader_raw_write, LSN(leader.palf_handle_impl_->get_end_lsn()));
       PalfBufferIterator iterator_raw_write;
-      if (OB_FAIL(leader_raw_write.seek(LSN(0), iterator_raw_write))) {
+      if (OB_FAIL(leader_raw_write.palf_handle_impl_->alloc_palf_buffer_iterator(LSN(0), iterator_raw_write))) {
         PALF_LOG(WARN, "leader seek failed", K(ret), K(iterator_raw_write));
       } else {
         while (OB_SUCCESS == ret) {
@@ -727,9 +962,6 @@ int ObSimpleLogClusterTestEnv::read_and_submit_group_log(PalfHandleGuard &leader
             PALF_LOG(WARN, "iterator next failed", K(ret), K(iterator_raw_write));
           } else if (OB_FAIL(iterator_raw_write.get_entry(buffer, nbytes, scn, lsn, is_raw_write))) {
             PALF_LOG(WARN, "iterator get_entry failed", K(ret), K(iterator_raw_write), K(is_raw_write));
-          } else if (false == is_raw_write) {
-            ret = OB_ERR_UNEXPECTED;
-            PALF_LOG(ERROR, "the log is must be raw_write", K(ret), K(is_raw_write), K(iterator_raw_write));
           }
         }
       }
@@ -741,14 +973,14 @@ int ObSimpleLogClusterTestEnv::read_and_submit_group_log(PalfHandleGuard &leader
 int ping_buf(const block_id_t min_block_id, const block_id_t max_block_id, char *&buf, LogEngine *log_engine)
 {
   int ret = OB_SUCCESS;
-  int64_t size = (max_block_id - min_block_id) * PALF_BLOCK_SIZE;
+  int64_t size = PALF_BLOCK_SIZE;
   buf = nullptr;
   buf = reinterpret_cast<char *>(ob_malloc_align(4 * 1024, size, "Dummy"));
   OB_ASSERT(nullptr != buf);
   memset(buf, 0, size);
   PALF_LOG(INFO, "runlin trace ping buf after memset");
   int64_t cursor = 0;
-  for (block_id_t block_id = min_block_id; block_id < max_block_id && OB_SUCC(ret); block_id++) {
+  for (block_id_t block_id = min_block_id; block_id <= min_block_id && OB_SUCC(ret); block_id++) {
     ReadBuf read_buf(buf + cursor, PALF_BLOCK_SIZE);
     int64_t out_read_size = 0;
     if (OB_FAIL(
@@ -761,7 +993,7 @@ int ping_buf(const block_id_t min_block_id, const block_id_t max_block_id, char 
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::read_log_from_memory(PalfHandleGuard &leader)
+int ObSimpleLogClusterTestEnv::read_log_from_memory(PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
   LSN lsn(0);
@@ -769,19 +1001,19 @@ int ObSimpleLogClusterTestEnv::read_log_from_memory(PalfHandleGuard &leader)
   MemoryStorage mem_storage;
   char *buf = nullptr;
   block_id_t min_block_id, max_block_id;
-  LogEngine *log_engine = &leader.palf_handle_.palf_handle_impl_->log_engine_;
+  LogEngine *log_engine = &leader.palf_handle_impl_->log_engine_;
   if (OB_FAIL(log_engine->get_block_id_range(min_block_id, max_block_id))) {
     PALF_LOG(WARN, "get_block_id_range failed", K(ret));
   } else {
-    auto func = [&leader](){return leader.palf_handle_.palf_handle_impl_->get_end_lsn();};
+    auto func = [&leader](){return leader.palf_handle_impl_->get_end_lsn();};
     if (OB_FAIL(ping_buf(min_block_id, max_block_id, buf, log_engine))) {
       PALF_LOG(ERROR, "ping_buf failed", K(ret));
     } else if (OB_FAIL(mem_storage.init(LSN(min_block_id * PALF_BLOCK_SIZE)))) {
       PALF_LOG(ERROR, "mem_storage init failed", K(ret));
-    } else if (OB_FAIL(mem_storage.append(buf, PALF_BLOCK_SIZE * (max_block_id - min_block_id)))) {
-      PALF_LOG(ERROR, "append failed", K(ret));
-    } else if (OB_FAIL(iterator.init(LSN(min_block_id * PALF_BLOCK_SIZE), &mem_storage, func))) {
-      PALF_LOG(ERROR, "init failed", K(ret));
+    } else if (OB_FAIL(mem_storage.append(buf, PALF_BLOCK_SIZE))) {
+      PALF_LOG(ERROR, "append failed", K(ret), KP(buf), K(max_block_id), K(min_block_id));
+    } else if (OB_FAIL(iterator.init(LSN(min_block_id * PALF_BLOCK_SIZE), func, &mem_storage))) {
+      PALF_LOG(ERROR, "init failed", K(ret), KP(buf));
     } else {
       LogEntry entry;
       LSN lsn;
@@ -802,23 +1034,23 @@ int ObSimpleLogClusterTestEnv::advance_base_info(const int64_t id, const PalfBas
 {
   int ret = OB_SUCCESS;
   for (auto svr : get_cluster()) {
-    ObTenantEnv::set_tenant(svr->tenant_base_);
-    PalfHandle handle;
+    ObTenantEnv::set_tenant(svr->get_tenant_base());
+    IPalfHandleImplGuard guard;
     share::ObLSID sid(id);
-    if (svr->get_palf_env() == NULL) {
+    if (svr->is_arb_server()) {
+    } else if (svr->get_palf_env() == NULL) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "svr is null", KPC(svr));
-    } else if (OB_FAIL(svr->get_palf_env()->open(id, handle))) {
+    } else if (OB_FAIL(svr->get_palf_env()->get_palf_handle_impl(id, guard))) {
       CLOG_LOG(WARN, "open palf failed", K(ret), K(id), KPC(svr));
-    } else if (OB_FAIL(handle.disable_sync())) {
+    } else if (OB_FAIL(guard.palf_handle_impl_->disable_sync())) {
       CLOG_LOG(WARN, "disable_sync failed", K(ret), K(id), KPC(svr));
-    } else if (OB_FAIL(handle.advance_base_info(base_info, true))) {
-      CLOG_LOG(WARN, "advance_base_info failed", K(ret), K(handle));
-    } else if (OB_FAIL(handle.enable_sync())) {
+    } else if (OB_FAIL(guard.palf_handle_impl_->advance_base_info(base_info, true))) {
+      CLOG_LOG(WARN, "advance_base_info failed", K(ret));
+    } else if (OB_FAIL(guard.palf_handle_impl_->enable_sync())) {
       CLOG_LOG(WARN, "enable_sync failed", K(ret), K(id), KPC(svr));
     } else {
     }
-    svr->get_palf_env()->close(handle);
   }
   return ret;
 }
@@ -831,18 +1063,22 @@ int ObSimpleLogClusterTestEnv::get_palf_env(const int64_t server_idx,
   if (server_idx >= cluster.size()) {
     ret = OB_ENTRY_NOT_EXIST;
   } else {
-    palf_env = cluster[server_idx]->get_palf_env();
+    ret = cluster[server_idx]->get_palf_env(palf_env);
   }
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::wait_until_has_committed(PalfHandleGuard &leader, const LSN &lsn)
+int ObSimpleLogClusterTestEnv::wait_until_has_committed(PalfHandleImplGuard &leader, const LSN &lsn)
 {
   int ret = OB_SUCCESS;
   LSN end_lsn;
+  SCN end_scn;
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(leader.get_end_lsn(end_lsn))) {
-    } else if (end_lsn < lsn) {
+    end_lsn = leader.palf_handle_impl_->get_end_lsn();
+    end_scn = leader.palf_handle_impl_->get_end_scn();
+    auto &sw = leader.palf_handle_impl_->sw_;
+    CLOG_LOG(INFO, "runlin trace wait_until_has_committed", K(end_lsn), K(lsn), K(end_scn), K(sw));
+    if (end_lsn < lsn) {
       usleep(1000);
     } else {
       break;
@@ -851,21 +1087,109 @@ int ObSimpleLogClusterTestEnv::wait_until_has_committed(PalfHandleGuard &leader,
   return ret;
 }
 
-int ObSimpleLogClusterTestEnv::wait_lsn_until_flushed(const LSN &lsn, PalfHandleGuard &guard)
+int ObSimpleLogClusterTestEnv::wait_lsn_until_flushed(const LSN &lsn, PalfHandleImplGuard &guard)
 {
   int ret = OB_SUCCESS;
 
   int64_t print_log_time = OB_INVALID_TIMESTAMP;
-  LSN max_flushed_end_lsn = guard.palf_handle_.palf_handle_impl_->sw_.max_flushed_end_lsn_;
+  LSN max_flushed_end_lsn = guard.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   while (lsn > max_flushed_end_lsn) {
     usleep(5*1000);
     if (palf_reach_time_interval(1*1000*1000, print_log_time)) {
       PALF_LOG(WARN, "wait_lsn_until_flushed", K(ret), K(max_flushed_end_lsn), K(lsn));
     }
-    max_flushed_end_lsn = guard.palf_handle_.palf_handle_impl_->sw_.max_flushed_end_lsn_;
+    max_flushed_end_lsn = guard.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   }
   return ret;
 }
 
+void ObSimpleLogClusterTestEnv::wait_all_replcias_log_sync(const int64_t palf_id)
+{
+  std::vector<PalfHandleImplGuard*> palf_list;
+  PalfHandleImplGuard leader;
+  int64_t leader_idx;
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(palf_id, palf_list));
+  EXPECT_EQ(OB_SUCCESS, get_leader(palf_id, leader, leader_idx));
+  const LSN &end_lsn = leader.palf_handle_impl_->get_end_lsn();
+  bool need_check = true;
+  while (need_check) {
+    need_check = false;
+    for (auto srv: palf_list) {
+      LSN max_flushed_end_lsn;
+      srv->palf_handle_impl_->sw_.get_max_flushed_end_lsn(max_flushed_end_lsn);
+      if (end_lsn != max_flushed_end_lsn) {
+        need_check = true;
+        break;
+      }
+    }
+    ::usleep(1000);
+  }
+  revert_cluster_palf_handle_guard(palf_list);
+}
+
+int ObSimpleLogClusterTestEnv::get_middle_scn(const int64_t log_num, PalfHandleImplGuard &leader, SCN &mid_scn, LogEntryHeader &log_entry_header)
+{
+	int ret = OB_SUCCESS;
+	PalfBufferIterator iterator;
+	LSN init_lsn(PALF_INITIAL_LSN_VAL);
+	if (OB_FAIL(leader.palf_handle_impl_->alloc_palf_buffer_iterator(init_lsn, iterator))) {
+		PALF_LOG(ERROR, "seek failed", K(ret), K(iterator));
+	} else {
+		LogEntry entry;
+		LSN lsn;
+		int i = 0;
+		while (i < log_num && OB_SUCC(ret) && OB_SUCC(iterator.next())) {
+			if (OB_FAIL(iterator.get_entry(entry, lsn))) {
+			} else {
+				mid_scn = entry.get_scn();
+			}
+			i++;
+		};
+    if (OB_SUCCESS == ret) {
+      log_entry_header = entry.get_header();
+    }
+	PALF_LOG(INFO, "runlin trace entry", K(i), K(log_num), K(entry));
+	}
+	return ret;
+}
+
+void ObSimpleLogClusterTestEnv::switch_append_to_raw_write(PalfHandleImplGuard &leader, int64_t &mode_version)
+{
+  AccessMode access_mode = AccessMode::INVALID_ACCESS_MODE;
+  int64_t proposal_id = INVALID_PROPOSAL_ID;
+  ObRole unused_role;
+  bool state;
+  leader.palf_handle_impl_->get_role(unused_role, proposal_id, state);
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::RAW_WRITE, SCN::min_scn()));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+}
+
+void ObSimpleLogClusterTestEnv::switch_append_to_flashback(PalfHandleImplGuard &leader, int64_t &mode_version)
+{
+  AccessMode access_mode = AccessMode::INVALID_ACCESS_MODE;
+  int64_t proposal_id = INVALID_PROPOSAL_ID;
+  ObRole unused_role;
+  bool state;
+  leader.palf_handle_impl_->get_role(unused_role, proposal_id, state);
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::RAW_WRITE, SCN::min_scn()));
+  leader.palf_handle_impl_->get_role(unused_role, proposal_id, state);
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::FLASHBACK, SCN::min_scn()));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+}
+
+void ObSimpleLogClusterTestEnv::switch_flashback_to_append(PalfHandleImplGuard &leader, int64_t &mode_version)
+{
+  AccessMode access_mode = AccessMode::INVALID_ACCESS_MODE;
+  int64_t proposal_id = INVALID_PROPOSAL_ID;
+  ObRole unused_role;
+  bool state;
+  leader.palf_handle_impl_->get_role(unused_role, proposal_id, state);
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::APPEND, SCN::min_scn()));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+}
 } // end namespace unittest
 } // end namespace oceanbase

@@ -72,14 +72,16 @@ int ObLeaderCoordinator::init_and_start()
   if(is_inited_) {
     ret = OB_INIT_TWICE;
     COORDINATOR_LOG(ERROR, "has been inited alread]y", KR(ret), K(MTL_ID()));
-  } else if (CLICK_FAIL(timer_.init_and_start(1, 1_ms, "CoordTimer"))) {
-    COORDINATOR_LOG(ERROR, "fail to init and start timer", KR(ret), K(MTL_ID()));
+  } else if (CLICK_FAIL(recovery_detect_timer_.init_and_start(1, 1_ms, "CoordTR"))) {
+    COORDINATOR_LOG(ERROR, "fail to init and start recovery_detect_timer", KR(ret), K(MTL_ID()));
+  } else if (CLICK_FAIL(failure_detect_timer_.init_and_start(1, 1_ms, "CoordTF"))) {
+    COORDINATOR_LOG(ERROR, "fail to init and start failure_detect_timer", KR(ret), K(MTL_ID()));
   } else if (nullptr == (all_ls_election_reference_info_ = AllLsElectionReferenceInfoFactory::create_new())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COORDINATOR_LOG(ERROR, "fail to new all_ls_election_reference_info_", KR(ret), K(MTL_ID()));
   } else {
     new(all_ls_election_reference_info_) ObArray<LsElectionReferenceInfo>();
-    if (CLICK_FAIL(timer_.schedule_task_ignore_handle_repeat(500_ms,
+    if (CLICK_FAIL(recovery_detect_timer_.schedule_task_ignore_handle_repeat(500_ms,
                                                           [this](){ refresh(); return false; }))) {
       COORDINATOR_LOG(ERROR, "schedule repeat task failed", KR(ret), K(MTL_ID()));
     } else {
@@ -93,7 +95,8 @@ int ObLeaderCoordinator::init_and_start()
 void ObLeaderCoordinator::stop_and_wait()
 {
   LC_TIME_GUARD(1_s);
-  timer_.stop_and_wait();
+  recovery_detect_timer_.stop_and_wait();
+  failure_detect_timer_.stop_and_wait();
   ObSpinLockGuard guard(lock_);
   is_inited_ = false;
 }

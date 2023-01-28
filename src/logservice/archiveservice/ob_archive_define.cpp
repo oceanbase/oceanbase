@@ -12,6 +12,7 @@
 
 #include "ob_archive_define.h"
 #include "lib/checksum/ob_crc64.h"
+#include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_unify_serialize.h"
@@ -299,6 +300,84 @@ int ObArchiveFileHeader::generate_header(const LSN &lsn)
     unit_size_ = DEFAULT_ARCHIVE_UNIT_SIZE;
     start_lsn_ = lsn.val_;
     checksum_ = static_cast<int64_t>(ob_crc64(this, sizeof(*this) - sizeof(checksum_)));
+  }
+  return ret;
+}
+
+DEFINE_SERIALIZE(ObLSMetaFileHeader)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(0 >= buf_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(WARN, "invalid arguments", KP(buf), K(buf_len), K(ret));
+  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, magic_))) {
+    ARCHIVE_LOG(WARN, "failed to encode magic_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, version_))) {
+    ARCHIVE_LOG(WARN, "failed to encode version_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, place_holder_))) {
+    ARCHIVE_LOG(WARN, "failed to encode place_holder_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(timestamp_.fixed_serialize(buf, buf_len, pos))) {
+    ARCHIVE_LOG(WARN, "failed to encode timestamp_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, data_checksum_))) {
+    ARCHIVE_LOG(WARN, "failed to encode data_checksum_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, header_checksum_))) {
+    ARCHIVE_LOG(WARN, "failed to encode header_checksum_", KP(buf), K(buf_len), K(pos), K(ret));
+  }
+  return ret;
+}
+
+DEFINE_DESERIALIZE(ObLSMetaFileHeader)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || 0 > data_len) {
+    ret = OB_INVALID_DATA;
+    ARCHIVE_LOG(WARN, "invalid arguments", KP(buf), K(data_len), K(ret));
+  } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &magic_))) {
+    ARCHIVE_LOG(WARN, "failed to decode magic_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &version_))) {
+    ARCHIVE_LOG(WARN, "failed to decode version_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &place_holder_))) {
+    ARCHIVE_LOG(WARN, "failed to decode place_holder_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(timestamp_.fixed_deserialize(buf, data_len, pos))) {
+    ARCHIVE_LOG(WARN, "failed to decode timestamp_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &data_checksum_))) {
+    ARCHIVE_LOG(WARN, "failed to decode data_checksum_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &header_checksum_))) {
+    ARCHIVE_LOG(WARN, "failed to decode header_checksum_", KP(buf), K(data_len), K(pos), K(ret));
+  }
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(ObLSMetaFileHeader)
+{
+  int64_t size = 0;
+  size += serialization::encoded_length_i16(magic_);
+  size += serialization::encoded_length_i16(version_);
+  size += serialization::encoded_length_i32(place_holder_);
+  size += timestamp_.get_fixed_serialize_size();
+  size += serialization::encoded_length_i64(data_checksum_);
+  size += serialization::encoded_length_i64(header_checksum_);
+  return size;
+}
+
+bool ObLSMetaFileHeader::is_valid() const
+{
+  return LS_META_FILE_HEADER_MAGIC == magic_
+    && header_checksum_ == ob_crc64(this, sizeof(*this) - sizeof(header_checksum_));
+}
+
+int ObLSMetaFileHeader::generate_header(const share::SCN &timestamp, const int64_t data_checksum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!timestamp.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    magic_ = LS_META_FILE_HEADER_MAGIC;
+    version_ = 1;
+    place_holder_ = 0;
+    timestamp_ = timestamp;
+    data_checksum_ = data_checksum;
+    header_checksum_ = static_cast<int64_t>(ob_crc64(this, sizeof(*this) - sizeof(header_checksum_)));
   }
   return ret;
 }

@@ -1083,6 +1083,7 @@ int ObPartitionMergePolicy::split_parallel_minor_range(
       } else if (OB_FAIL(parallel_result.push_back(tmp_result))) {
         LOG_WARN("failed to add tmp result", K(ret), K(tmp_result));
       } else {
+        LOG_DEBUG("success to push result", K(ret), K(tmp_result), K(parallel_result));
         tmp_result.handle_.reset();
         tmp_result.scn_range_.reset();
       }

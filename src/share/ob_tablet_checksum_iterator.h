@@ -52,7 +52,10 @@ private:
   int fetch_next_batch();
 
 private:
-  static const int64_t BATCH_FETCH_COUNT = 100;
+  // Keep BATCH_FETCH_COUNT consistent with MAX_BATCH_COUNT in ob_tablet_checksum_operator.h for efficiency.
+  // E.g., if BATCH_FETCH_COUNT = 100 and MAX_BATCH_COUNT = 99, then it will launch two query in fetch_next_batch.
+  // The second query only get one row, which is inefficient.
+  static const int64_t BATCH_FETCH_COUNT = 99;
 
   bool is_inited_;
   uint64_t tenant_id_;

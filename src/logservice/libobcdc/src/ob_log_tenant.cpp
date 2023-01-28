@@ -895,8 +895,11 @@ int ObLogTenant::init_tz_info_(const uint64_t tenant_id)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(tz_info_map_->init(ObModIds::OB_HASH_BUCKET_TIME_ZONE_INFO_MAP))) {
     LOG_ERROR("fail to init tz_info_map_", K(tenant_id), KR(ret));
-  } else if (TCTX.timezone_info_getter_->init_tz_info_wrap(tenant_id, tz_info_map_version_,
-        *tz_info_map_, *tz_info_wrap_)) {
+  } else if (TCTX.timezone_info_getter_->init_tz_info_wrap(
+      tenant_id,
+      tz_info_map_version_,
+      *tz_info_map_,
+      *tz_info_wrap_)) {
     LOG_ERROR("fail to init tz info wrap", KR(ret), K(tenant_id));
   } else {
     // succ

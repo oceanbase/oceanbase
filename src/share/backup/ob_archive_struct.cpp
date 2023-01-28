@@ -24,7 +24,7 @@ using namespace share;
 /**
  * ------------------------------ObArchiveRoundState---------------------
  */
-const char *OB_ARCHIVE_ROUND_STATE_STR[] = {"INVALID", "PREPARE", "BEGINNING", "DOING", "INTERRUPTED", "STOPPING", "STOP", "MAX_STATUS"};
+const char *OB_ARCHIVE_ROUND_STATE_STR[] = {"INVALID", "PREPARE", "BEGINNING", "DOING", "INTERRUPTED", "STOPPING", "STOP", "SUSPENDING", "SUSPEND", "MAX_STATUS"};
 
 bool ObArchiveRoundState::is_valid() const
 {
@@ -1109,4 +1109,36 @@ int ObDestRoundSummary::add_ls_dest_round_summary(const ObLSDestRoundSummary &de
     LOG_WARN("failed to push back ls dest round summary", K(ret), K(dest_round_summary));
   }
   return ret;
+}
+
+/**
+ * ------------------------------ObArchiveLSMetaType---------------------
+ */
+bool ObArchiveLSMetaType::is_valid() const
+{
+  return type_ > Type::INVALID_TYPE && type_ < Type::MAX_TYPE;
+}
+
+int ObArchiveLSMetaType::compare(const ObArchiveLSMetaType &other) const
+{
+  int ret = 0;
+  if (type_ == other.type_) {
+    ret = 0;
+  } else if (type_ > other.type_) {
+    ret = 1;
+  } else {
+    ret = -1;
+  }
+  return ret;
+}
+
+const char *ObArchiveLSMetaType::get_type_str() const
+{
+  #define CHECK_TYPE_STR(x) case(Type::x): return #x
+  switch (type_) {
+    CHECK_TYPE_STR(SCHEMA_META);
+    default:
+      return "Invalid";
+  };
+  #undef CHECK_TYPE_STR
 }

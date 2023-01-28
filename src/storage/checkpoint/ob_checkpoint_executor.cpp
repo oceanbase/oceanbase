@@ -177,13 +177,6 @@ int ObCheckpointExecutor::update_clog_checkpoint()
           }
         } else if (OB_FAIL(ls_->set_clog_checkpoint(clog_checkpoint_lsn, checkpoint_scn))) {
           STORAGE_LOG(WARN, "set clog checkpoint failed", K(ret), K(clog_checkpoint_lsn), K(checkpoint_scn), K(ls_id));
-        } else if (OB_FAIL(loghandler_->advance_base_lsn(clog_checkpoint_lsn))) {
-          if (OB_NOT_INIT == ret) {
-            STORAGE_LOG(WARN, "palf has been disabled", K(ret), K(clog_checkpoint_lsn), K(ls_->get_ls_id()));
-            ret = OB_SUCCESS;
-          } else {
-            STORAGE_LOG(ERROR, "set base lsn failed", K(ret), K(clog_checkpoint_lsn), K(ls_id));
-          }
         } else {
           FLOG_INFO("[CHECKPOINT] update clog checkpoint successfully",
                     K(clog_checkpoint_lsn), K(checkpoint_scn), K(ls_id),

@@ -117,7 +117,8 @@ private:
   int add_served_ls_pre_check_(const TenantLSID &tls_id);
 
   // call callbacks of add-ls
-  int call_add_ls_callbacks_(const TenantLSID &tls_id,
+  int call_add_ls_callbacks_(
+      const TenantLSID &tls_id,
       const int64_t start_tstamp,
       const palf::LSN &start_lsn);
 

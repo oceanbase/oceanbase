@@ -102,7 +102,8 @@ public:
         mds_cache_(reserve_allocator_),
         role_state_(TxCtxRoleState::FOLLOWER),
         coord_prepare_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE,
-                                ModulePageAllocator(reserve_allocator_, "PREPARE_INFO"))
+                                ModulePageAllocator(reserve_allocator_, "PREPARE_INFO")),
+        standby_part_collected_(), ask_state_info_interval_(100 * 1000), refresh_state_info_interval_(100 * 1000)
   { /*reset();*/ }
   ~ObPartTransCtx() { destroy(); }
   void destroy();
@@ -203,6 +204,15 @@ public:
 
   // for elr
   bool is_can_elr() const { return can_elr_; }
+
+  int check_for_standby(const share::SCN &snapshot,
+                        bool &can_read,
+                        share::SCN &trans_version,
+                        bool &is_determined_state);
+  int handle_trans_ask_state(const share::SCN &snapshot, ObAskStateRespMsg &resp);
+  int handle_trans_ask_state_resp(const ObAskStateRespMsg &msg);
+  int handle_trans_collect_state(ObStateInfo &state_info, const SCN &snapshot);
+  int handle_trans_collect_state_resp(const ObCollectStateRespMsg &msg);
 public:
   // thread safe
   int64_t to_string(char* buf, const int64_t buf_len) const;
@@ -228,11 +238,12 @@ private:
                 K_(retain_cause),
                 "2pc_role",
                 get_2pc_role(),
-                KPC(msg_2pc_cache_),
                 K_(collected),
                 K_(ref),
                 K_(rec_log_ts),
                 K_(prev_rec_log_ts),
+                K_(lastest_snapshot),
+                K_(state_info_array),
                 K_(last_request_ts));
 public:
   static const int64_t OP_LOCAL_NUM = 16;
@@ -286,6 +297,13 @@ public:
 
   int push_repalying_log_ts(const share::SCN log_ts_ns);
   int push_replayed_log_ts(const share::SCN log_ts_ns, const palf::LSN &offset);
+
+  int iter_next_log_for_replay(ObTxLogBlock &log_block,
+                               ObTxLogHeader &log_header,
+                               const share::SCN log_scn);
+  int replay_one_part_of_big_segment(const palf::LSN &offset,
+                                     const share::SCN &timestamp,
+                                     const int64_t &part_log_no);
 
   int replay_redo_in_ctx(const ObTxRedoLog &redo_log,
                          const palf::LSN &offset,
@@ -404,6 +422,17 @@ private:
   int submit_redo_commit_info_log_(ObTxLogBlock &log_block,
                                    bool &has_redo,
                                    memtable::ObRedoLogSubmitHelper &helper);
+
+  int submit_big_segment_log_();
+  int prepare_big_segment_submit_(ObTxLogCb *segment_cb,
+                                  const share::SCN &base_scn,
+                                  logservice::ObReplayBarrierType barrier_type,
+                                  const ObTxLogType & segment_log_type);
+  void add_unsynced_segment_cb_(ObTxLogCb *log_cb);
+  void remove_unsynced_segment_cb_(ObTxLogCb *log_cb);
+  share::SCN get_min_unsyncd_segment_scn_();
+  void replay_part_in_big_segment(share::SCN part_scn);
+
   int compensate_abort_log_();
   int validate_commit_info_log_(const ObTxCommitInfoLog &commit_info_log);
 
@@ -665,6 +694,10 @@ private:
   int tx_keepalive_response_(const int64_t status);
   int rollback_to_savepoint_(const int64_t from_scn, const int64_t to_scn);
   int submit_rollback_to_log_(const int64_t from_scn, const int64_t to_scn, ObTxData *tx_data);
+  int set_state_info_array_();
+  void build_and_post_collect_state_msg_(const share::SCN &snapshot);
+  int build_and_post_ask_state_msg_(const share::SCN &snapshot);
+  int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
 protected:
   // for xa
   virtual bool is_sub2pc() const override
@@ -724,6 +757,7 @@ private:
   common::ObDList<ObTxLogCb> free_cbs_;
   common::ObDList<ObTxLogCb> busy_cbs_;
   ObTxLogCb final_log_cb_;
+  ObTxLogBigSegmentInfo big_segment_info_;
   // flag if the first callback is linked to a logging_block memtable
   // to prevent unnecessary submit_log actions for freeze
   memtable::ObMemtable *block_frozen_memtable_;
@@ -767,6 +801,12 @@ private:
   TransModulePageAllocator reserve_allocator_;
   // tmp scheduler addr is used to post response for the second phase of xa commit/rollback
   common::ObAddr tmp_scheduler_;
+  // for standby
+  ObStateInfoArray state_info_array_;
+  share::SCN lastest_snapshot_; /* for coord */
+  common::ObBitSet<> standby_part_collected_; /* for coord */
+  common::ObTimeInterval ask_state_info_interval_;
+  common::ObTimeInterval refresh_state_info_interval_;
   // this is used to denote the time of last request including start_access, commit, rollback
   // this is a tempoary variable which is set to now by default
   // therefore, if a follower switchs to leader, the variable is set to now

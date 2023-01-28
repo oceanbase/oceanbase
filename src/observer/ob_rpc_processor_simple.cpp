@@ -375,6 +375,7 @@ int ObRpcLSCheckDRTaskExistP::process()
   return ret;
 }
 
+
 int ObRpcSetConfigP::process()
 {
   LOG_INFO("process set config", K(arg_));
@@ -442,6 +443,18 @@ int ObInitTenantConfigP::process()
     LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
   } else {
     ret = gctx_.ob_service_->init_tenant_config(arg_, result_);
+  }
+  return ret;
+}
+
+int ObGetLeaderLocationsP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->get_leader_locations(arg_, result_);
   }
   return ret;
 }
@@ -1212,6 +1225,7 @@ int ObRpcCreateLSP::process()
   return ret;
 }
 
+
 int ObRpcCheckLSCanOfflineP::process()
 {
   int ret = OB_SUCCESS;
@@ -1405,13 +1419,16 @@ int ObRpcSetMemberListP::process()
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "ls should not be null", K(ret));
-  } else if (OB_FAIL(ls->set_initial_member_list(arg_.get_member_list(),
-                                                 arg_.get_paxos_replica_num()))) {
-    COMMON_LOG(WARN, "failed to set member list", KR(ret), K(arg_));
+  } else {
+    if (OB_FAIL(ls->set_initial_member_list(arg_.get_member_list(),
+                                            arg_.get_paxos_replica_num()))) {
+      COMMON_LOG(WARN, "failed to set member list", KR(ret), K(arg_));
+    }
   }
   result_.set_result(ret);
   return ret;
 }
+
 int ObRpcDetectMasterRsLSP::process()
 {
   int ret = OB_SUCCESS;
@@ -2132,6 +2149,30 @@ int ObEstimateTabletBlockCountP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->estimate_tablet_block_count(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcGetLSSyncScnP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->get_ls_sync_scn(arg_, result_))) {
+    COMMON_LOG(WARN, "failed to get_ls_sync_scn", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObRefreshTenantInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->refresh_tenant_info(arg_, result_))) {
+    COMMON_LOG(WARN, "failed to refresh_tenant_info", KR(ret), K(arg_));
   }
   return ret;
 }

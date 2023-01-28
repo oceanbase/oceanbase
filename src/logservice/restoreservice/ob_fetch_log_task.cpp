@@ -10,12 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX CLOG
 #include "ob_fetch_log_task.h"
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "share/ob_ls_id.h"
-#include <cstdint>
+#include "storage/tx_storage/ob_ls_service.h"           // ObLSService
+#include "storage/ls/ob_ls.h"                           // ObLS
+#include "ob_log_restore_handler.h"                     // ObLogRestore
+#include "ob_log_restore_allocator.h"                  // ObLogRestoreeHandler
 
 namespace oceanbase
 {
@@ -23,6 +26,52 @@ using namespace palf;
 using namespace share;
 namespace logservice
 {
+  auto get_source_func = [](const share::ObLSID &id, ObRemoteSourceGuard &source_guard) -> int {
+    int ret = OB_SUCCESS;
+    ObLSHandle handle;
+    ObLS *ls = NULL;
+    ObLogRestoreHandler *restore_handler = NULL;
+    if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(id, handle, ObLSGetMod::LOG_MOD))) {
+      LOG_WARN("get ls failed", K(ret), K(id));
+    } else if (OB_ISNULL(ls = handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("ls is NULL", K(ret), K(id), K(ls));
+    } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("restore_handler is NULL", K(ret), K(id));
+    } else {
+      restore_handler->deep_copy_source(source_guard);
+      LOG_TRACE("print get_source_", KPC(restore_handler), KPC(source_guard.get_source()));
+    }
+    return ret;
+  };
+
+  auto update_source_func = [](const share::ObLSID &id, ObRemoteLogParent *source) -> int {
+    int ret = OB_SUCCESS;
+    ObLSHandle handle;
+    ObLS *ls = NULL;
+    ObLogRestoreHandler *restore_handler = NULL;
+    if (OB_ISNULL(source) || ! share::is_valid_log_source_type(source->get_source_type())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid source type", K(ret), KPC(source));
+    } else if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(id, handle, ObLSGetMod::LOG_MOD))) {
+      LOG_WARN("get ls failed", K(ret), K(id));
+    } else if (OB_ISNULL(ls = handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("ls is NULL", K(ret), K(id), K(ls));
+    } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("restore_handler is NULL", K(ret), K(id));
+    } else if (OB_FAIL(restore_handler->update_location_info(source))) {
+      LOG_WARN("update locate info failed", K(ret), KPC(source), KPC(restore_handler));
+    }
+    return ret;
+  };
+
+  auto refresh_storage_info_func = [](share::ObBackupDest &dest) -> int {
+    return OB_NOT_SUPPORTED;
+  };
+
 ObFetchLogTask::ObFetchLogTask(const share::ObLSID &id,
     const SCN &pre_scn,
     const palf::LSN &lsn,
@@ -35,7 +84,7 @@ ObFetchLogTask::ObFetchLogTask(const share::ObLSID &id,
   end_lsn_(lsn + size),
   max_fetch_scn_(),
   max_submit_scn_(),
-  status_(Status::NORMAL)
+  iter_(get_source_func, update_source_func, refresh_storage_info_func)
 {
   pre_scn_ = pre_scn;
 }
@@ -51,23 +100,17 @@ bool ObFetchLogTask::is_valid() const
     && end_lsn_ > start_lsn_;
 }
 
-int ObFetchLogTask::update_cur_lsn_scn(const palf::LSN &lsn, const SCN &max_submit_scn, const SCN &max_fetch_scn)
+void ObFetchLogTask::reset()
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! lsn.is_valid() || ! max_fetch_scn.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    cur_lsn_ = lsn;
-    max_submit_scn_ = max_submit_scn > max_submit_scn_ ? max_submit_scn : max_submit_scn_;
-    max_fetch_scn_ = max_fetch_scn > max_fetch_scn_ ? max_fetch_scn: max_fetch_scn_;
-    if (cur_lsn_ >= end_lsn_) {
-      status_ = Status::FINISH;
-    }
-    if (max_submit_scn != max_fetch_scn) {
-      status_ = Status::TO_END;
-    }
-  }
-  return ret;
+  id_.reset();
+  proposal_id_ = 0;
+  pre_scn_.reset();
+  start_lsn_.reset();
+  cur_lsn_.reset();
+  end_lsn_.reset();
+  max_fetch_scn_.reset();
+  max_submit_scn_.reset();
+  iter_.reset();
 }
 
 } // namespace logservice

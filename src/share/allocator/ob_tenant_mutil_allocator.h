@@ -18,6 +18,7 @@
 #include "lib/allocator/ob_slice_alloc.h"
 #include "lib/allocator/ob_vslice_alloc.h"
 #include "lib/queue/ob_link.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -28,6 +29,7 @@ class LogIOTruncateLogTask;
 class LogIOFlushMetaTask;
 class LogIOTruncatePrefixBlocksTask;
 class LogIOFlushMetaTask;
+class LogIOFlashbackTask;
 class FetchLogTask;
 }
 namespace logservice
@@ -41,7 +43,7 @@ class ObTraceProfile;
 class ObILogAllocator : public ObIAllocator
 {
 public:
-  ObILogAllocator() {}
+  ObILogAllocator() : flying_log_task_(0), flying_meta_task_(0) {}
   virtual ~ObILogAllocator() {}
 
 public:
@@ -51,13 +53,13 @@ public:
   virtual void *ge_alloc(const int64_t size) = 0;
   virtual void ge_free(void *ptr) = 0;
   virtual const ObBlockAllocMgr &get_clog_blk_alloc_mgr() const = 0;
-  virtual palf::LogIOFlushLogTask *alloc_log_io_flush_log_task() = 0;
+  virtual palf::LogIOFlushLogTask *alloc_log_io_flush_log_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
   virtual void free_log_io_flush_log_task(palf::LogIOFlushLogTask *ptr) = 0;
-  virtual palf::LogIOTruncateLogTask *alloc_log_io_truncate_log_task() = 0;
+  virtual palf::LogIOTruncateLogTask *alloc_log_io_truncate_log_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
   virtual void free_log_io_truncate_log_task(palf::LogIOTruncateLogTask *ptr) = 0;
-  virtual palf::LogIOFlushMetaTask *alloc_log_io_flush_meta_task() = 0;
+  virtual palf::LogIOFlushMetaTask *alloc_log_io_flush_meta_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
   virtual void free_log_io_flush_meta_task(palf::LogIOFlushMetaTask *ptr) = 0;
-  virtual palf::LogIOTruncatePrefixBlocksTask *alloc_log_io_truncate_prefix_blocks_task() = 0;
+  virtual palf::LogIOTruncatePrefixBlocksTask *alloc_log_io_truncate_prefix_blocks_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
   virtual void free_log_io_truncate_prefix_blocks_task(palf::LogIOTruncatePrefixBlocksTask *ptr) = 0;
   virtual palf::FetchLogTask *alloc_palf_fetch_log_task() = 0;
   virtual void free_palf_fetch_log_task(palf::FetchLogTask *ptr) = 0;
@@ -65,6 +67,13 @@ public:
   virtual void *alloc_replay_log_buf(const int64_t size) = 0;
   virtual void free_replay_task(logservice::ObLogReplayTask *ptr) = 0;
   virtual void free_replay_log_buf(void *ptr) = 0;
+  virtual palf::LogIOFlashbackTask *alloc_log_io_flashback_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
+  virtual void free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr) = 0;
+  TO_STRING_KV(K_(flying_log_task), K_(flying_meta_task));
+
+protected:
+  int64_t flying_log_task_;
+  int64_t flying_meta_task_;
 };
 
 // Interface for ReplayEngine module
@@ -126,13 +135,13 @@ public:
   void dec_pending_replay_mutator_size(int64_t size);
   int64_t get_pending_replay_mutator_size() const;
   // V4.0
-  palf::LogIOFlushLogTask *alloc_log_io_flush_log_task();
+  palf::LogIOFlushLogTask *alloc_log_io_flush_log_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_flush_log_task(palf::LogIOFlushLogTask *ptr);
-  palf::LogIOTruncateLogTask *alloc_log_io_truncate_log_task();
+  palf::LogIOTruncateLogTask *alloc_log_io_truncate_log_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_truncate_log_task(palf::LogIOTruncateLogTask *ptr);
-  palf::LogIOFlushMetaTask *alloc_log_io_flush_meta_task();
+  palf::LogIOFlushMetaTask *alloc_log_io_flush_meta_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_flush_meta_task(palf::LogIOFlushMetaTask *ptr);
-  palf::LogIOTruncatePrefixBlocksTask *alloc_log_io_truncate_prefix_blocks_task();
+  palf::LogIOTruncatePrefixBlocksTask *alloc_log_io_truncate_prefix_blocks_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_truncate_prefix_blocks_task(palf::LogIOTruncatePrefixBlocksTask *ptr);
   palf::FetchLogTask *alloc_palf_fetch_log_task();
   void free_palf_fetch_log_task(palf::FetchLogTask *ptr);
@@ -140,6 +149,8 @@ public:
   void *alloc_replay_log_buf(const int64_t size);
   void free_replay_task(logservice::ObLogReplayTask *ptr);
   void free_replay_log_buf(void *ptr);
+  palf::LogIOFlashbackTask *alloc_log_io_flashback_task(const int64_t palf_id, const int64_t palf_epoch);
+  void free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr);
 
 private:
   uint64_t tenant_id_ CACHE_ALIGNED;
@@ -150,6 +161,7 @@ private:
   const int LOG_IO_FLUSH_META_TASK_SIZE;
   const int LOG_IO_TRUNCATE_PREFIX_BLOCKS_TASK_SIZE;
   const int PALF_FETCH_LOG_TASK_SIZE;
+  const int LOG_IO_FLASHBACK_TASK_SIZE;
   ObBlockAllocMgr clog_blk_alloc_;
   ObBlockAllocMgr inner_table_replay_blk_alloc_;
   ObBlockAllocMgr user_table_replay_blk_alloc_;
@@ -164,6 +176,7 @@ private:
   ObSliceAlloc log_io_truncate_prefix_blocks_task_alloc_;
   ObSliceAlloc palf_fetch_log_task_alloc_;
   ObVSliceAlloc replay_log_task_alloc_;
+  ObSliceAlloc log_io_flashback_task_alloc_;;
 };
 
 } // end of namespace common

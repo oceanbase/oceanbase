@@ -659,6 +659,15 @@ void ObQueryRetryCtrl::location_error_proc(ObRetryParam &v)
   }
 }
 
+void ObQueryRetryCtrl::nonblock_location_error_proc(ObRetryParam &v)
+{
+  ObRetryObject retry_obj(v);
+  ObFastFailRetryPolicy fast_fail;
+  ObCommonRetryIndexLongWaitPolicy retry_long_wait;
+  ObRefreshLocationCacheNonblockPolicy nonblock_refresh;
+  retry_obj.test(fast_fail).test(retry_long_wait).test(nonblock_refresh);
+}
+
 void ObQueryRetryCtrl::location_error_nothing_readable_proc(ObRetryParam &v)
 {
   // 强一致性读的情况，主不可读了，有可能是invalid servers将主过滤掉了。
@@ -947,10 +956,11 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("NETWORK",  OB_RPC_POST_ERROR,                  peer_server_status_uncertain_proc, inner_peer_server_status_uncertain_proc);
 
   /* storage */
-  ERR_RETRY_FUNC("STORAGE",  OB_SNAPSHOT_DISCARDED,              snapshot_discard_proc,      short_wait_retry_proc);
-  ERR_RETRY_FUNC("STORAGE",  OB_DATA_NOT_UPTODATE,               long_wait_retry_proc,       short_wait_retry_proc);
-  ERR_RETRY_FUNC("STORAGE",  OB_REPLICA_NOT_READABLE,            long_wait_retry_proc,       short_wait_retry_proc);
-  ERR_RETRY_FUNC("STORAGE",  OB_PARTITION_IS_SPLITTING,          short_wait_retry_proc,      short_wait_retry_proc);
+  ERR_RETRY_FUNC("STORAGE",  OB_SNAPSHOT_DISCARDED,              snapshot_discard_proc,         short_wait_retry_proc);
+  ERR_RETRY_FUNC("STORAGE",  OB_DATA_NOT_UPTODATE,               long_wait_retry_proc,          short_wait_retry_proc);
+  ERR_RETRY_FUNC("STORAGE",  OB_REPLICA_NOT_READABLE,            long_wait_retry_proc,          short_wait_retry_proc);
+  ERR_RETRY_FUNC("STORAGE",  OB_PARTITION_IS_SPLITTING,          short_wait_retry_proc,         short_wait_retry_proc);
+  ERR_RETRY_FUNC("STORAGE",  OB_DISK_CORRUPTED,                  nonblock_location_error_proc,  empty_proc);
 
   /* trx */
   ERR_RETRY_FUNC("TRX",      OB_TRY_LOCK_ROW_CONFLICT,           try_lock_row_conflict_proc, inner_try_lock_row_conflict_proc);

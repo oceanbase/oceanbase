@@ -61,9 +61,10 @@ public:
                      common::ObOccamTimer *election_timer,
                      ElectionMsgSender *msg_handler,
                      const common::ObAddr &self_addr,
+                     const uint64_t inner_priority_seed,
                      const int64_t restart_counter,
                      const ObFunction<int(const int64_t, const ObAddr &)> &prepare_change_leader_cb,
-                     const ObFunction<void(ElectionImpl *, common::ObRole, common::ObRole, RoleChangeReason)> &role_change_cb = DefaultRoleChangeCallBack());
+                     const ObFunction<void(ElectionImpl *, common::ObRole, common::ObRole, RoleChangeReason)> &cb = DefaultRoleChangeCallBack());
   int revoke(const RoleChangeReason &reason) override;
   virtual void stop() override final;
   virtual int set_memberlist(const MemberList &new_memberlist) override final;
@@ -166,6 +167,11 @@ private:// 定向暴露给友元类
     } else if (lhs.get_membership_version() < rhs.get_membership_version()) {
       rhs_is_higher = true;
       (void) reason.assign("MEMBERSHIP VERSION");
+    } else if (lhs.get_inner_priority_seed() < rhs.get_inner_priority_seed()) {
+      (void) reason.assign("PRIORITY SEED");
+    } else if (lhs.get_inner_priority_seed() > rhs.get_inner_priority_seed()) {
+      rhs_is_higher = true;
+      (void) reason.assign("PRIORITY SEED");
     } else {
       if (!lhs.is_buffer_valid()) {// lhs的优先级为空，此时lhs消息具有最低优先级
         /* 这里解释一下，为什么空优先级要比非空优先级更低，而不是认为空优先级与所有优先级一样，举一个反例如下：
@@ -181,7 +187,7 @@ private:// 定向暴露给友元类
         if (rhs.is_buffer_valid()) {// 如果rhs消息的优先级非空，rhs消息高于lhs消息
           rhs_is_higher = true;
           (void) reason.assign("priority is valid");
-        } else if (rhs.get_sender() < lhs.get_sender()) {// 如果lhs的消息和rhs消息的优先级都是空的，那么比较IP
+        } else if (compare_with_ip_port && rhs.get_sender() < lhs.get_sender()) {// 如果lhs的消息和rhs消息的优先级都是空的，那么比较IP
           rhs_is_higher = true;
           (void) reason.assign("IP-PORT(priority invalid)");
         } else {
@@ -192,7 +198,7 @@ private:// 定向暴露给友元类
           (void) reason.assign("old message priority is valid and new message priority is invalid");
         } else {// rhs优先级非空，具备可比较的基础
           if (OB_ISNULL(self_priority)) {// 本机的优先级还没有设置，无法感知子类类型，此时没办法进行比较，只能比较IP大小
-            if (rhs.get_sender() < lhs.get_sender()) {
+            if (compare_with_ip_port && rhs.get_sender() < lhs.get_sender()) {
               rhs_is_higher = true;
               (void) reason.assign("IP-PORT(priority invalid)");
             } else {
@@ -262,6 +268,7 @@ private:
   ObFunction<void(ElectionImpl *,common::ObRole,common::ObRole,RoleChangeReason)> role_change_cb_;
   bool is_inited_;
   bool is_running_;
+  uint64_t inner_priority_seed_;
   common::ObOccamThreadPool *thread_pool_;
   common::ObOccamTimer *timer_;
   EventRecorder event_recorder_;

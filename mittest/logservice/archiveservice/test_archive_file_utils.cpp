@@ -27,21 +27,21 @@ typedef ObSEArray<int64_t, 16>  IntArray;
 class FakeArchiveFilUtils : public archive::ObArchiveFileUtils
 {
 public:
-  static int locate_file_by_ts(IntArray &array, const int64_t ts, const bool upper_bound, int64_t &file_id)
+  static int locate_file_by_scn(IntArray &array, const share::SCN &ref_scn, int64_t &file_id)
   {
     int ret = OB_SUCCESS;
-    auto get_value = [&](const int64_t index, int64_t &log_ts, palf::LSN &lsn) -> int
+    auto get_value = [&](const int64_t index, share::SCN &scn, palf::LSN &lsn) -> int
     {
       int ret = 0;
       if (index >= array.count()) {
         ret = OB_SIZE_OVERFLOW;
       } else {
         lsn = palf::LSN(index);
-        log_ts = array[index];
+        scn.convert_for_tx(array[index]);
       }
       return ret;
     };
-    ret = locate_(0, array.count() - 1, ts, upper_bound, file_id, get_value);
+    ret = locate_(0, array.count() - 1, ref_scn, file_id, get_value);
     return ret;
   }
 };
@@ -60,75 +60,45 @@ TEST(TestLocateFunc, test_archive_locate_func)
   array1.push_back(89);
   array1.push_back(99);
 
-  int64_t ts = 0;
+  share::SCN scn = share::SCN::min_scn();
   int64_t file_id = -1;
-  bool upper_bound = true;
 
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 0);
 
-  upper_bound = false;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 0);
 
-  ts = 1;
-  upper_bound = true;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  scn.convert_for_tx(1);
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 0);
 
-  ts = 1;
-  upper_bound = false;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  scn.convert_for_tx(2);
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 0);
 
-  ts = 2;
-  upper_bound = true;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
-  EXPECT_EQ(file_id, 1);
-
-  ts = 2;
-  upper_bound = false;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  scn.convert_for_tx(2);
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 0);
 
-  ts = 33;
-  upper_bound = true;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  scn.convert_for_tx(33);
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 3);
 
-  ts = 33;
-  upper_bound = false;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  scn.convert_for_tx(33);
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 3);
 
-  ts = 34;
-  upper_bound = true;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
-  EXPECT_EQ(file_id, 4);
-
-  ts = 34;
-  upper_bound = false;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  scn.convert_for_tx(34);
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 3);
 
-  ts = 99;
-  upper_bound = true;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  scn.convert_for_tx(99);
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 9);
 
-  ts = 99;
-  upper_bound = false;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
-  EXPECT_EQ(file_id, 9);
-
-  ts = 101;
-  upper_bound = true;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
-  EXPECT_EQ(file_id, 9);
-
-  ts = 101;
-  upper_bound = false;
-  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_ts(array1, ts, upper_bound, file_id));
+  scn.convert_for_tx(101);
+  EXPECT_EQ(OB_SUCCESS, FakeArchiveFilUtils::locate_file_by_scn(array1, scn, file_id));
   EXPECT_EQ(file_id, 9);
 }
 

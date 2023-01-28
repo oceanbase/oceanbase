@@ -117,7 +117,7 @@ TEST_F(TestLogReconfirm, test_init_reconfirm)
 {
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
         &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
-  EXPECT_EQ(OB_ERR_UNEXPECTED, log_reconfirm_.init_reconfirm_());
+  EXPECT_EQ(OB_NOT_INIT, log_reconfirm_.init_reconfirm_());
   set_default_config_meta();
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init_reconfirm_());
 }
@@ -128,31 +128,40 @@ TEST_F(TestLogReconfirm, test_handle_prepare_response)
   int64_t src_accept_proposal_id = 1;
   ObAddr src_server;
   LSN last_lsn;
+  LSN committed_end_lsn;
   EXPECT_EQ(OB_NOT_INIT, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
-        src_accept_proposal_id, last_lsn));
+        src_accept_proposal_id, last_lsn, committed_end_lsn));
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.init(palf_id_, self_, &mock_sw_,
         &mock_state_mgr_, &mock_mm_, &mock_mode_mgr_, &mock_log_engine_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
-        src_accept_proposal_id, last_lsn));
+        src_accept_proposal_id, last_lsn, committed_end_lsn));
   src_server = self_;
+  log_reconfirm_.curr_paxos_follower_list_.add_server(self_);
   last_lsn.val_ = 0;
+  committed_end_lsn.val_ = 0;
   log_reconfirm_.new_proposal_id_ = 2;
   EXPECT_EQ(OB_STATE_NOT_MATCH, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
-        src_accept_proposal_id, last_lsn));
+        src_accept_proposal_id, last_lsn, committed_end_lsn));
+  // src_proposal_id < majority_max_accept_pid_, not receive
   log_reconfirm_.majority_max_accept_pid_ = 2;
   log_reconfirm_.majority_max_lsn_.val_ = 100;
   last_lsn.val_ = 50;
   log_reconfirm_.state_ = MockLogReconfirm::FETCH_MAX_LOG_LSN;
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
-        src_accept_proposal_id, last_lsn));
+        src_accept_proposal_id, last_lsn, committed_end_lsn));
+  // src_proposal_id == majority_max_accept_pid_, receive
   src_accept_proposal_id = 2;
   last_lsn.val_ = 120;
+  committed_end_lsn.val_ = 100;
+  EXPECT_EQ(0, log_reconfirm_.follower_end_lsn_list_.count());
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
-        src_accept_proposal_id, last_lsn));
+        src_accept_proposal_id, last_lsn, committed_end_lsn));
+  EXPECT_EQ(1, log_reconfirm_.follower_end_lsn_list_.count());
+  EXPECT_EQ(committed_end_lsn, log_reconfirm_.follower_end_lsn_list_[0].last_flushed_end_lsn_);
+  EXPECT_EQ(last_lsn, log_reconfirm_.majority_max_lsn_);
   log_reconfirm_.majority_max_accept_pid_ = 1;
   EXPECT_EQ(OB_SUCCESS, log_reconfirm_.handle_prepare_response(src_server, src_proposal_id,
-        src_accept_proposal_id, last_lsn));
-
+        src_accept_proposal_id, last_lsn, committed_end_lsn));
 }
 
 TEST_F(TestLogReconfirm, test_try_fetch_log)

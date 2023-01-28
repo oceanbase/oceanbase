@@ -897,7 +897,7 @@ int ObTxTable::lock_for_read(const transaction::ObLockForReadArg &lock_for_read_
                              const ObCleanoutOp &cleanout_op,
                              const ObReCheckOp &recheck_op)
 {
-  LockForReadFunctor fn(lock_for_read_arg, can_read, trans_version, is_determined_state, cleanout_op, recheck_op);
+  LockForReadFunctor fn(lock_for_read_arg, can_read, trans_version, is_determined_state, ls_->get_ls_id(), cleanout_op, recheck_op);
   int ret = check_with_tx_data(lock_for_read_arg.data_trans_id_, fn, read_epoch);
   // TODO(handora.qc): remove it
   LOG_DEBUG("finish lock for read", K(lock_for_read_arg), K(can_read), K(trans_version), K(is_determined_state));

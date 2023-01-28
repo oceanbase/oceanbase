@@ -70,6 +70,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObGetDiagnoseArgsP);
   RPC_PROCESSOR(ObGetMinSSTableSchemaVersionP, gctx_);
   RPC_PROCESSOR(ObInitTenantConfigP, gctx_);
+  RPC_PROCESSOR(ObGetLeaderLocationsP, gctx_);
   RPC_PROCESSOR(ObBatchBroadcastSchemaP, gctx_);
 
   // interrupt
@@ -137,6 +138,11 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxSubCommitRespP);
   RPC_PROCESSOR(ObTxSubRollbackP);
   RPC_PROCESSOR(ObTxSubRollbackRespP);
+  // for standby
+  RPC_PROCESSOR(ObTxAskStateP);
+  RPC_PROCESSOR(ObTxAskStateRespP);
+  RPC_PROCESSOR(ObTxCollectStateP);
+  RPC_PROCESSOR(ObTxCollectStateRespP);
   // for tx free route
   RPC_PROCESSOR(ObTxFreeRouteCheckAliveP);
   RPC_PROCESSOR(ObTxFreeRouteCheckAliveRespP);
@@ -166,6 +172,9 @@ void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
 {
   RPC_PROCESSOR(logservice::LogMembershipChangeP);
   RPC_PROCESSOR(logservice::LogGetPalfStatReqP);
+  RPC_PROCESSOR(logservice::LogGetLeaderMaxScnP);
+  RPC_PROCESSOR(logservice::LogChangeAccessModeP);
+  RPC_PROCESSOR(logservice::LogFlashbackMsgP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_palfenv(ObSrvRpcXlator *xlator)
@@ -190,6 +199,7 @@ void oceanbase::observer::init_srv_xlator_for_palfenv(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(palf::ElectionAcceptResponseMsgP);
   RPC_PROCESSOR(palf::ElectionChangeLeaderMsgP);
   RPC_PROCESSOR(palf::LogGetMCStP);
+  RPC_PROCESSOR(palf::LogGetStatP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_cdc(ObSrvRpcXlator *xlator)

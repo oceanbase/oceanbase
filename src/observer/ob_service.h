@@ -145,10 +145,12 @@ public:
   int check_sys_task_exist(const share::ObTaskId &arg, bool &res);
   int check_migrate_task_exist(const share::ObTaskId &arg, bool &res);
   int delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg);
-
+  int get_ls_sync_scn(const obrpc::ObGetLSSyncScnArg &arg,
+                           obrpc::ObGetLSSyncScnRes &result);
+  int refresh_tenant_info(const obrpc::ObRefreshTenantInfoArg &arg,
+                          obrpc::ObRefreshTenantInfoRes &result);
   int estimate_partition_rows(const obrpc::ObEstPartArg &arg,
                               obrpc::ObEstPartRes &res) const;
-
   int estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
                                   obrpc::ObEstBlockRes &res) const;
 
@@ -182,6 +184,9 @@ public:
   int is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::Bool &is_empty);
   // ObRpcCheckDeploymentModeP
   int check_deployment_mode_match(const obrpc::ObCheckDeploymentModeArg &arg, obrpc::Bool &match);
+  int get_leader_locations(
+      const obrpc::ObGetLeaderLocationsArg &arg,
+      obrpc::ObGetLeaderLocationsResult &result);
   int batch_broadcast_schema(
       const obrpc::ObBatchBroadcastSchemaArg &arg,
       obrpc::ObBatchBroadcastSchemaResult &result);

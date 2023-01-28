@@ -80,6 +80,8 @@ public:
   }
 };
 
+easy_addr_t to_ez_addr(const common::ObAddr &addr);
+
 class ObReqTransport
 {
 public:
@@ -242,7 +244,6 @@ private:
   int balance_assign(easy_session_t *s) const;
   ObPacket *send_session(easy_session_t *s) const;
   int post_session(easy_session_t *s) const;
-  easy_addr_t to_ez_addr(const ObAddr &addr) const;
 
 private:
   static const int32_t OB_RPC_CONNECTION_COUNT_PER_THREAD = 1;

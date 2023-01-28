@@ -489,7 +489,8 @@ all_tenant_def = dict(
       ('compatibility_mode', 'int', 'false', '0'),
       ('drop_tenant_time', 'int', 'false', 'OB_INVALID_TIMESTAMP'),
       ('status', 'varchar:MAX_TENANT_STATUS_LENGTH', 'false', 'NORMAL'),
-      ('in_recyclebin', 'int', 'false', '0')
+      ('in_recyclebin', 'int', 'false', '0'),
+      ('arbitration_service_status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false', 'DISABLED'),
   ],
 )
 
@@ -4038,6 +4039,8 @@ def_table_schema(
     ('sync_scn', 'uint'),
     ('replayable_scn', 'uint'),
     ('readable_scn', 'uint'),
+    ('recovery_until_scn', 'uint', 'false', 'OB_MAX_SCN_TS_NS'),
+    ('log_mode', 'varchar:100', 'false', 'NOARCHIVELOG'),
   ],
 )
 
@@ -5147,6 +5150,92 @@ def_table_schema(
 # 420 : __all_column_group_history
 # 421 : __all_column_group_mapping
 # 422 : __all_column_group_mapping_history
+
+def_table_schema(
+    owner = 'jingyu.cr',
+    table_name = '__all_arbitration_service',
+    table_id = '429',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('arbitration_service_key', 'varchar:OB_MAX_ARBITRATION_SERVICE_NAME_LENGTH'),
+    ],
+
+    in_tenant_space = False,
+    is_cluster_private = False,
+
+    normal_columns = [
+        ('arbitration_service', 'varchar:OB_MAX_ARBITRATION_SERVICE_LENGTH', 'false', '0.0.0.0:0'),
+        ('previous_arbitration_service', 'varchar:OB_MAX_ARBITRATION_SERVICE_LENGTH', 'true'),
+        ('type', 'varchar:64'),
+    ],
+)
+
+def_table_schema(
+  owner = 'jingyu.cr',
+  table_name    = '__all_ls_arb_replica_task',
+  table_id = '430',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('task_id', 'int'),
+    ('trace_id', 'varchar:OB_TRACE_STAT_BUFFER_SIZE'),
+    ('task_type', 'varchar:MAX_ARB_REPLICA_TASK_TYPE_LENGTH'),
+    ('arbitration_service', 'varchar:OB_MAX_ARBITRATION_SERVICE_LENGTH', 'false', '0.0.0.0:0'),
+    ('arbitration_service_type', 'varchar:64'),
+    ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
+  ],
+)
+
+def_table_schema(
+    owner = 'bohou.ws',
+    table_name    = '__all_data_dictionary_in_log',
+    table_id      = '431',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('snapshot_scn', 'uint'),
+    ],
+    normal_columns = [
+      ('start_lsn', 'uint'),
+      ('end_lsn', 'uint')
+    ],
+    in_tenant_space = True,
+    is_cluster_private = False,
+)
+
+def_table_schema(
+  owner = 'jingyu.cr',
+  table_name    = '__all_ls_arb_replica_task_history',
+  table_id = '432',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('task_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('execute_result', 'varchar:MAX_COLUMN_COMMENT_LENGTH'),
+    ('create_time', 'timestamp', 'false'),
+    ('finish_time', 'timestamp', 'false'),
+    ('trace_id', 'varchar:OB_TRACE_STAT_BUFFER_SIZE'),
+    ('task_type', 'varchar:MAX_ARB_REPLICA_TASK_TYPE_LENGTH'),
+    ('arbitration_service', 'varchar:OB_MAX_ARBITRATION_SERVICE_LENGTH', 'false', '0.0.0.0:0'),
+    ('arbitration_service_type', 'varchar:64'),
+    ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
+  ],
+)
 # 423 : __all_transfer_task
 # 424 : __all_transfer_task_history
 # 425 : __all_balance_task
@@ -5154,7 +5243,6 @@ def_table_schema(
 # 427 : __all_ls_balance_job
 # 428 : __all_ls_balance_job_history
 
-# 429 : __all_arbitration_service
 # 430 : __all_arbitration_service_replica_task
 # 431 : __all_meta_dictionary_location;
 
@@ -6447,7 +6535,42 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 11029: __all_virtual_trans_scheduler not used on 4.0
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name     = '__all_virtual_trans_scheduler',
+  table_id       = '11029',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('tenant_id', 'int'),
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('session_id', 'int'),
+  ('trans_id', 'int'),
+  ('state', 'int'),
+  ('cluster_id', 'int'),
+  ('XA_trans_id', 'varchar:1024'),
+  ('coordinator', 'int'),
+  ('participants', 'varchar:1024'),
+  ('isolation_level', 'int'),
+  ('snapshot_version', 'int'),
+  ('access_mode', 'int'),
+  ('tx_op_sn', 'int'),
+  ('flag', 'int'),
+  ('active_time', 'timestamp', 'true'),
+  ('expire_time', 'timestamp', 'true'),
+  ('timeout_us', 'int'),
+  ('savepoints', 'varchar:1024'),
+  ('savepoints_total_cnt', 'int'),
+  ('internal_abort_cause', 'int'),
+  ('can_early_lock_release', 'bool'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'xiaoyi.xy',
@@ -10009,6 +10132,8 @@ def_table_schema(
   ('end_scn', 'uint'),
   ('max_lsn', 'uint'),
   ('max_scn', 'uint'),
+  ('arbitration_member', 'varchar:128'),
+  ('degraded_list', 'varchar:1024'),
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -11112,7 +11237,11 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
-# 12341: __all_virtual_meta_dictionary_location
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12341',
+  table_name = '__all_virtual_data_dictionary_in_log',
+  keywords = all_def_keywords['__all_data_dictionary_in_log']))
 
 # 12342: __all_virtual_transfer_task
 # 12343: __all_virtual_transfer_task_history
@@ -11170,6 +11299,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12357',
   table_name = '__all_virtual_rls_attribute_history',
   keywords = all_def_keywords['__all_rls_attribute_history']))
+
+def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12358', all_def_keywords['__all_tenant']))
 
 # 12358: __all_virtual_tenant_mysql_sys_agent
 
@@ -11326,6 +11457,37 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_core_table']))
 
 # 12363: __all_virtual_malloc_sample_info
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12364',
+  table_name = '__all_virtual_ls_arb_replica_task',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_ls_arb_replica_task']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12365',
+  table_name = '__all_virtual_ls_arb_replica_task_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_ls_arb_replica_task_history']))
+
+def_table_schema(
+  owner = 'zhaoyongheng.zyh',
+  table_name = '__all_virtual_archive_dest_status',
+  table_id = '12366',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('dest_id', 'int'),
+    ('path', 'varchar:4096'),
+    ('status', 'varchar:64'),
+    ('checkpoint_scn', 'uint'),
+    ('synchronized', 'varchar:32'),
+    ('comment', 'varchar:262144')
+  ],
+)
 # 12364: __all_virtual_ls_arb_replica_task
 # 12365: __all_virtual_ls_arb_replica_task_history
 
@@ -11603,6 +11765,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15279', all_def_keywords['__all_rls_context'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15280', all_def_keywords['__all_rls_attribute'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
+def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15282', all_def_keywords['__all_tenant'])))
 
 # 15282: ALL_VIRTUAL_TENANT_SYS_AGENT
 # 15283: __all_virtual_tenant_info_agent
@@ -11612,6 +11775,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15285', all_def_keyword
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15286', all_def_keywords['__all_virtual_plan_real_info'])))
 
 # 15287: __all_virtual_trans_scheduler
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15287', all_def_keywords['__all_virtual_trans_scheduler'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15288', all_def_keywords['__all_virtual_ls_arb_replica_task'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15289', all_def_keywords['__all_virtual_ls_arb_replica_task_history'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290', all_def_keywords['__all_virtual_archive_dest_status'])))
 
 # 15288: __all_virtual_ls_arb_replica_task
 # 15289: __all_virtual_ls_arb_replica_task_history
@@ -15278,7 +15445,6 @@ def_table_schema(
   ],
 )
 
-#### sys tenant only view
 def_table_schema(
     owner = 'wanhong.wwh',
     table_name     = 'DBA_OB_TENANTS',
@@ -15287,17 +15453,17 @@ def_table_schema(
     rowkey_columns  = [],
     normal_columns  = [],
     gm_columns      = [],
-    in_tenant_space = False,
+    in_tenant_space = True,
     view_definition = """
-SELECT TENANT_ID,
+SELECT A.TENANT_ID,
        TENANT_NAME,
        (CASE
-            WHEN TENANT_ID = 1 THEN 'SYS'
-            WHEN (TENANT_ID & 0x1) = 1 THEN 'META'
+            WHEN A.TENANT_ID = 1 THEN 'SYS'
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN 'META'
             ELSE 'USER'
         END) AS TENANT_TYPE,
-       gmt_create AS CREATE_TIME,
-       gmt_modified AS MODIFY_TIME,
+       A.gmt_create AS CREATE_TIME,
+       A.gmt_modified AS MODIFY_TIME,
        PRIMARY_ZONE,
        LOCALITY,
        CASE previous_locality
@@ -15318,8 +15484,59 @@ SELECT TENANT_ID,
        CASE locked
           WHEN 0 THEN 'NO'
           ELSE 'YES'
-       END AS LOCKED
-FROM oceanbase.__all_tenant
+       END AS LOCKED,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN 'PRIMARY'
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN 'PRIMARY'
+            ELSE TENANT_ROLE
+        END) AS TENANT_ROLE,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN 'NORMAL'
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN 'NORMAL'
+            ELSE SWITCHOVER_STATUS
+        END) AS SWITCHOVER_STATUS,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN 0
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN 0
+            ELSE SWITCHOVER_EPOCH
+        END) AS SWITCHOVER_EPOCH,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN NULL
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
+            ELSE SYNC_SCN
+        END) AS SYNC_SCN,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN NULL
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
+            ELSE REPLAYABLE_SCN
+        END) AS REPLAYABLE_SCN,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN NULL
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
+            ELSE READABLE_SCN
+        END) AS READABLE_SCN,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN NULL
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
+            ELSE RECOVERY_UNTIL_SCN
+        END) AS RECOVERY_UNTIL_SCN,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN 'NOARCHIVELOG'
+            WHEN (A.TENANT_ID & 0x1) = 1 THEN 'NOARCHIVELOG'
+            ELSE LOG_MODE
+        END) AS LOG_MODE,
+       ARBITRATION_SERVICE_STATUS
+FROM OCEANBASE.__ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT AS A
+LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TENANT_INFO AS B
+    ON A.TENANT_ID = B.TENANT_ID
 """.replace("\n", " ")
 )
 
@@ -23093,7 +23310,9 @@ def_table_schema(
     END_LSN,
     END_SCN,
     MAX_LSN,
-    MAX_SCN
+    MAX_SCN,
+    ARBITRATION_MEMBER,
+    DEGRADED_LIST
   FROM oceanbase.__all_virtual_log_stat
 """.replace("\n", " "),
 )
@@ -25082,8 +25301,90 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-# 21353 : GV$OB_TRANSACTION_SCHEDULERS
-# 21354 : V$OB_TRANSACTION_SCHEDULERS
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'GV$OB_TRANSACTION_SCHEDULERS',
+  table_id        = '21353',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+    tenant_id AS TENANT_ID,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    session_id AS SESSION_ID,
+    trans_id AS TX_ID,
+    CASE
+      WHEN state = 0 THEN 'INVALID'
+      WHEN state = 1 THEN 'IDLE'
+      WHEN state = 2 THEN 'EXPLICIT_ACTIVE'
+      WHEN state = 3 THEN 'IMPLICIT_ACTIVE'
+      WHEN state = 4 THEN 'ROLLBACK_SAVEPOINT'
+      WHEN state = 5 THEN 'IN_TERMINATE'
+      WHEN state = 6 THEN 'ABORTED'
+      WHEN state = 7 THEN 'ROLLED_BACK'
+      WHEN state = 8 THEN 'COMMIT_TIMEOUT'
+      WHEN state = 9 THEN 'COMMIT_UNKNOWN'
+      WHEN state = 10 THEN 'COMMITTED'
+      WHEN state = 11 THEN 'SUB_PREPARING'
+      WHEN state = 12 THEN 'SUB_PREPARED'
+      WHEN state = 13 THEN 'SUB_COMMITTING'
+      WHEN state = 14 THEN 'SUB_COMMITTED'
+      WHEN state = 15 THEN 'SUB_ROLLBACKING'
+      WHEN state = 16 THEN 'SUB_ROLLBACKED'
+      ELSE 'UNKNOWN'
+      END AS STATE,
+    cluster_id AS CLUSTER_ID,
+    XA_trans_id AS XA_TX_ID,
+    coordinator AS COORDINATOR,
+    participants AS PARTICIPANTS,
+    CASE
+      WHEN isolation_level = -1 THEN 'INVALID'
+      WHEN isolation_level = 0 THEN 'READ UNCOMMITTED'
+      WHEN isolation_level = 1 THEN 'READ COMMITTED'
+      WHEN isolation_level = 2 THEN 'REPEATABLE READ'
+      WHEN isolation_level = 3 THEN 'SERIALIZABLE'
+      ELSE 'UNKNOWN'
+      END AS ISOLATION_LEVEL,
+    snapshot_version AS SNAPSHOT_VERSION,
+    CASE
+      WHEN access_mode = -1 THEN 'INVALID'
+      WHEN access_mode = 0 THEN 'READ_WRITE'
+      WHEN access_mode = 1 THEN 'READ_ONLY'
+      ELSE 'UNKNOWN'
+      END AS ACCESS_MODE,
+    tx_op_sn AS TX_OP_SN,
+    flag AS FLAG,
+    active_time AS ACTIVE_TIME,
+    expire_time AS EXPIRE_TIME,
+    timeout_us AS TIMEOUT_US,
+    savepoints AS SAVEPOINTS,
+    savepoints_total_cnt AS SAVEPOINTS_TOTAL_CNT,
+    CASE
+      WHEN can_early_lock_release = 0 THEN 'FALSE'
+      WHEN can_early_lock_release = 1 THEN 'TRUE'
+      ELSE 'UNKNOWN'
+      END AS CAN_EARLY_LOCK_RELEASE
+    FROM oceanbase.__all_virtual_trans_scheduler
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'V$OB_TRANSACTION_SCHEDULERS',
+  table_id        = '21354',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT *
+    FROM OCEANBASE.GV$OB_TRANSACTION_SCHEDULERS
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+)
 
 def_table_schema(
     owner           = 'webber.wb',
@@ -25264,6 +25565,212 @@ WHERE T.TABLE_TYPE IN (3,6,8,9)
 
 )
 
+
+def_table_schema(
+  owner           = 'jingyu.cr',
+  table_name      = 'DBA_OB_ARBITRATION_SERVICE',
+  table_id        = '21357',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
+         CAST(GMT_MODIFIED AS DATETIME) AS MODIFY_TIME,
+         ARBITRATION_SERVICE_KEY,
+         ARBITRATION_SERVICE,
+         PREVIOUS_ARBITRATION_SERVICE,
+         TYPE
+  FROM OCEANBASE.__all_arbitration_service;
+  """.replace("\n", " ")
+)
+
+
+def_table_schema(
+  owner           = 'jingyu.cr',
+  table_name      = 'CDB_OB_LS_ARB_REPLICA_TASKS',
+  table_id        = '21358',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
+         CAST(GMT_MODIFIED AS DATETIME) AS MODIFY_TIME,
+         TENANT_ID,
+         LS_ID,
+         TASK_ID,
+         TRACE_ID,
+         TASK_TYPE,
+         ARBITRATION_SERVICE,
+         ARBITRATION_SERVICE_TYPE,
+         COMMENT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_ARB_REPLICA_TASK
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'jingyu.cr',
+  table_name      = 'DBA_OB_LS_ARB_REPLICA_TASKS',
+  table_id        = '21359',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
+         CAST(GMT_MODIFIED AS DATETIME) AS MODIFY_TIME,
+         TENANT_ID,
+         LS_ID,
+         TASK_ID,
+         TRACE_ID,
+         TASK_TYPE,
+         ARBITRATION_SERVICE,
+         ARBITRATION_SERVICE_TYPE,
+         COMMENT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_ARB_REPLICA_TASK
+  WHERE
+    TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'jingyu.cr',
+  table_name      = 'CDB_OB_LS_ARB_REPLICA_TASK_HISTORY',
+  table_id        = '21360',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         LS_ID,
+         TASK_ID,
+         EXECUTE_RESULT,
+         CAST(CREATE_TIME AS DATETIME) AS CREATE_TIME,
+         CAST(FINISH_TIME AS DATETIME) AS FINISH_TIME,
+         TRACE_ID,
+         TASK_TYPE,
+         ARBITRATION_SERVICE,
+         ARBITRATION_SERVICE_TYPE,
+         COMMENT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_ARB_REPLICA_TASK_HISTORY
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'jingyu.cr',
+  table_name      = 'DBA_OB_LS_ARB_REPLICA_TASK_HISTORY',
+  table_id        = '21361',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         LS_ID,
+         TASK_ID,
+         EXECUTE_RESULT,
+         CAST(CREATE_TIME AS DATETIME) AS CREATE_TIME,
+         CAST(FINISH_TIME AS DATETIME) AS FINISH_TIME,
+         TRACE_ID,
+         TASK_TYPE,
+         ARBITRATION_SERVICE,
+         ARBITRATION_SERVICE_TYPE,
+         COMMENT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_ARB_REPLICA_TASK_HISTORY
+  WHERE
+    TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'V$OB_ARCHIVE_DEST_STATUS',
+  table_id        = '21362',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         DEST_ID,
+         PATH,
+         STATUS,
+         CHECKPOINT_SCN,
+         SYNCHRONIZED,
+         COMMENT
+  FROM OCEANBASE.__all_virtual_archive_dest_status;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'DBA_OB_LS_LOG_ARCHIVE_PROGRESS',
+  table_id        = '21363',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT DEST_ID,
+         LS_ID,
+         ROUND_ID,
+         PIECE_ID,
+         INCARNATION,
+         START_SCN,
+         MIN_LSN,
+         MAX_LSN,
+         CHECKPOINT_SCN,
+         STATUS,
+         FILE_ID,
+         FILE_OFFSET,
+         INPUT_BYTES,
+         OUTPUT_BYTES
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_LOG_ARCHIVE_PROGRESS
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'CDB_OB_LS_LOG_ARCHIVE_PROGRESS',
+  table_id        = '21364',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         DEST_ID,
+         LS_ID,
+         ROUND_ID,
+         PIECE_ID,
+         INCARNATION,
+         START_SCN,
+         MIN_LSN,
+         MAX_LSN,
+         CHECKPOINT_SCN,
+         STATUS,
+         FILE_ID,
+         FILE_OFFSET,
+         INPUT_BYTES,
+         OUTPUT_BYTES
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_LOG_ARCHIVE_PROGRESS;
+  """.replace("\n", " ")
+)
 
 # 21357: DBA_OB_ARBITRATION_SERVICE
 # 21358: CDB_OB_LS_ARB_REPLICA_TASKS
@@ -41869,6 +42376,103 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
+def_table_schema(
+  owner           = 'zbf271370',
+  table_name      = 'DBA_OB_TENANTS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25208',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+SELECT A.TENANT_ID,
+       TENANT_NAME,
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN 'SYS'
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 'META'
+            ELSE 'USER'
+        END) AS TENANT_TYPE,
+       A.gmt_create AS CREATE_TIME,
+       A.gmt_modified AS MODIFY_TIME,
+       PRIMARY_ZONE,
+       LOCALITY,
+       CASE previous_locality
+          WHEN '' THEN NULL
+          ELSE previous_locality
+       END AS PREVIOUS_LOCALITY,
+       CASE compatibility_mode
+          WHEN 0 THEN 'MYSQL'
+          WHEN 1 THEN 'ORACLE'
+          ELSE NULL
+       END AS COMPATIBILITY_MODE,
+       STATUS,
+       CASE in_recyclebin
+          WHEN 0 THEN 'NO'
+          ELSE 'YES'
+       END AS IN_RECYCLEBIN,
+
+       CASE locked
+          WHEN 0 THEN 'NO'
+          ELSE 'YES'
+       END AS LOCKED,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN 'PRIMARY'
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 'PRIMARY'
+            ELSE TENANT_ROLE
+        END) AS TENANT_ROLE,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN 'NORMAL'
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 'NORMAL'
+            ELSE SWITCHOVER_STATUS
+        END) AS SWITCHOVER_STATUS,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN 0
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 0
+            ELSE SWITCHOVER_EPOCH
+        END) AS SWITCHOVER_EPOCH,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN NULL
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN NULL
+            ELSE SYNC_SCN
+        END) AS SYNC_SCN,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN NULL
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN NULL
+            ELSE REPLAYABLE_SCN
+        END) AS REPLAYABLE_SCN,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN NULL
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN NULL
+            ELSE READABLE_SCN
+        END) AS READABLE_SCN,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN NULL
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN NULL
+            ELSE RECOVERY_UNTIL_SCN
+        END) AS RECOVERY_UNTIL_SCN,
+
+       (CASE
+            WHEN A.TENANT_ID = 1 THEN 'NOARCHIVELOG'
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 'NOARCHIVELOG'
+            ELSE LOG_MODE
+        END) AS LOG_MODE
+FROM SYS.ALL_VIRTUAL_TENANT_SYS_AGENT A
+LEFT JOIN SYS.ALL_VIRTUAL_TENANT_INFO B
+    ON A.TENANT_ID = B.TENANT_ID
+WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " "),
+)
 # 25208: DBA_OB_TENANTS
 
 def_table_schema(
@@ -42379,6 +42983,64 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+def_table_schema(
+  owner           = 'jingyu.cr',
+  table_name      = 'DBA_OB_LS_ARB_REPLICA_TASKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25221',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT CAST(GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,
+         CAST(GMT_MODIFIED AS TIMESTAMP(6)) AS MODIFY_TIME,
+         TENANT_ID,
+         LS_ID,
+         TASK_ID,
+         TRACE_ID,
+         TASK_TYPE,
+         ARBITRATION_SERVICE,
+         ARBITRATION_SERVICE_TYPE,
+         "COMMENT"
+  FROM SYS.ALL_VIRTUAL_LS_ARB_REPLICA_TASK
+  WHERE
+    TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'jingyu.cr',
+  table_name      = 'DBA_OB_LS_ARB_REPLICA_TASK_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25222',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         LS_ID,
+         TASK_ID,
+         EXECUTE_RESULT,
+         CAST(CREATE_TIME AS TIMESTAMP(6)) AS CREATE_TIME,
+         CAST(FINISH_TIME AS TIMESTAMP(6)) AS FINISH_TIME,
+         TRACE_ID,
+         TASK_TYPE,
+         ARBITRATION_SERVICE,
+         ARBITRATION_SERVICE_TYPE,
+         "COMMENT"
+  FROM SYS.ALL_VIRTUAL_LS_ARB_REPLICA_TASK_HISTORY
+  WHERE
+    TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " "),
+)
 # 25221: DBA_OB_LS_ARB_REPLICA_TASKS
 # 25222: DBA_OB_LS_ARB_REPLICA_TASK_HISTORY
 #### End Data Dictionary View
@@ -47138,7 +47800,9 @@ def_table_schema(
     END_LSN,
     END_SCN,
     MAX_LSN,
-    MAX_SCN
+    MAX_SCN,
+    ARBITRATION_MEMBER,
+    DEGRADED_LIST
   FROM SYS.ALL_VIRTUAL_LOG_STAT
 """.replace("\n", " "),
 )
@@ -47472,8 +48136,94 @@ def_table_schema(
 
 # 28158: DBA_OB_SWITCHOVER_CHECKPOINTS
 
-# 28159: GV$OB_TRANSACTION_SCHEDULERS
-# 28160: V$OB_TRANSACTION_SCHEDULERS
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'GV$OB_TRANSACTION_SCHEDULERS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28159',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+    tenant_id AS TENANT_ID,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    session_id AS SESSION_ID,
+    trans_id AS TX_ID,
+    CASE
+      WHEN state = 0 THEN 'INVALID'
+      WHEN state = 1 THEN 'IDLE'
+      WHEN state = 2 THEN 'EXPLICIT_ACTIVE'
+      WHEN state = 3 THEN 'IMPLICIT_ACTIVE'
+      WHEN state = 4 THEN 'ROLLBACK_SAVEPOINT'
+      WHEN state = 5 THEN 'IN_TERMINATE'
+      WHEN state = 6 THEN 'ABORTED'
+      WHEN state = 7 THEN 'ROLLED_BACK'
+      WHEN state = 8 THEN 'COMMIT_TIMEOUT'
+      WHEN state = 9 THEN 'COMMIT_UNKNOWN'
+      WHEN state = 10 THEN 'COMMITTED'
+      WHEN state = 11 THEN 'SUB_PREPARING'
+      WHEN state = 12 THEN 'SUB_PREPARED'
+      WHEN state = 13 THEN 'SUB_COMMITTING'
+      WHEN state = 14 THEN 'SUB_COMMITTED'
+      WHEN state = 15 THEN 'SUB_ROLLBACKING'
+      WHEN state = 16 THEN 'SUB_ROLLBACKED'
+      ELSE 'UNKNOWN'
+      END AS STATE,
+    cluster_id AS CLUSTER_ID,
+    XA_trans_id AS XA_TX_ID,
+    coordinator AS COORDINATOR,
+    participants AS PARTICIPANTS,
+    CASE
+      WHEN isolation_level = -1 THEN 'INVALID'
+      WHEN isolation_level = 0 THEN 'READ UNCOMMITTED'
+      WHEN isolation_level = 1 THEN 'READ COMMITTED'
+      WHEN isolation_level = 2 THEN 'REPEATABLE READ'
+      WHEN isolation_level = 3 THEN 'SERIALIZABLE'
+      ELSE 'UNKNOWN'
+      END AS ISOLATION_LEVEL,
+    snapshot_version AS SNAPSHOT_VERSION,
+    CASE
+      WHEN access_mode = -1 THEN 'INVALID'
+      WHEN access_mode = 0 THEN 'READ_WRITE'
+      WHEN access_mode = 1 THEN 'READ_ONLY'
+      ELSE 'UNKNOWN'
+      END AS ACCESS_MODE,
+    tx_op_sn AS TX_OP_SN,
+    flag AS FLAG,
+    active_time AS ACTIVE_TIME,
+    expire_time AS EXPIRE_TIME,
+    timeout_us AS TIMEOUT_US,
+    savepoints AS SAVEPOINTS,
+    savepoints_total_cnt AS SAVEPOINTS_TOTAL_CNT,
+    CASE
+      WHEN can_early_lock_release = 0 THEN 'FALSE'
+      WHEN can_early_lock_release = 1 THEN 'TRUE'
+      ELSE 'UNKNOWN'
+      END AS CAN_EARLY_LOCK_RELEASE
+    FROM SYS.ALL_VIRTUAL_TRANS_SCHEDULER
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'V$OB_TRANSACTION_SCHEDULERS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28160',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT *
+    FROM SYS.GV$OB_TRANSACTION_SCHEDULERS
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner           = 'luofan.zp',
@@ -47678,6 +48428,61 @@ def_table_schema(
 )
 
 
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'V$OB_ARCHIVE_DEST_STATUS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28176',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         DEST_ID,
+         PATH,
+         STATUS,
+         CHECKPOINT_SCN,
+         SYNCHRONIZED,
+         "COMMENT"
+  FROM SYS.ALL_VIRTUAL_ARCHIVE_DEST_STATUS
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'DBA_OB_LS_LOG_ARCHIVE_PROGRESS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28177',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT DEST_ID,
+         LS_ID,
+         ROUND_ID,
+         PIECE_ID,
+         INCARNATION,
+         START_SCN,
+         MIN_LSN,
+         MAX_LSN,
+         CHECKPOINT_SCN,
+         STATUS,
+         FILE_ID,
+         FILE_OFFSET,
+         INPUT_BYTES,
+         OUTPUT_BYTES
+  FROM SYS.ALL_VIRTUAL_LS_LOG_ARCHIVE_PROGRESS
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 # 28176:  V$OB_ARCHIVE_DEST_STATUS
 # 28177:  DBA_OB_LS_LOG_ARCHIVE_PROGRESS
 # 28178:  DBA_OB_LS_LOG_RESTORE_STAT

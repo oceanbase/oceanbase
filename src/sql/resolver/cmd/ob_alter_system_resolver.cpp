@@ -29,6 +29,7 @@
 #include "sql/resolver/cmd/ob_alter_system_stmt.h"
 #include "sql/resolver/cmd/ob_system_cmd_stmt.h"
 #include "sql/resolver/cmd/ob_clear_balance_task_stmt.h"
+#include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
 #include "sql/resolver/ddl/ob_drop_table_stmt.h"
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
@@ -315,9 +316,9 @@ int ObAlterSystemResolverUtil::resolve_string(const ParseNode *node, ObString &s
   if (OB_UNLIKELY(NULL == node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node should not be null");
-  } else if (OB_UNLIKELY(T_VARCHAR != node->type_)) {
+  } else if (OB_UNLIKELY(T_VARCHAR != node->type_ && T_CHAR != node->type_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node type is not T_VARCHAR", "type", get_type_name(node->type_));
+    LOG_WARN("node type is not T_VARCHAR/T_CHAR", "type", get_type_name(node->type_));
   } else if (OB_UNLIKELY(node->str_len_ <= 0)) {
     ret = OB_ERR_PARSER_SYNTAX;
     LOG_WARN("empty string");
@@ -2354,6 +2355,36 @@ int ObMigrateUnitResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObAddArbitrationServiceResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(parse_tree);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not supported in CE version", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "add arbitration service in CE version");
+  return ret;
+}
+
+int ObRemoveArbitrationServiceResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(parse_tree);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not supported in CE version", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "remove arbitration service in CE version");
+  return ret;
+}
+
+int ObReplaceArbitrationServiceResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(parse_tree);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not supported in CE version", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace arbitration service in CE version");
+  return ret;
+}
+
 int ObUpgradeVirtualSchemaResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -2489,57 +2520,10 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
         // resolve datetime
         if (OB_ISNULL(parse_tree.children_[2])) {
           stmt->get_rpc_arg().with_restore_scn_ = false;
-        } else {
-          ParseNode *time_node = parse_tree.children_[2];
-          if (OB_UNLIKELY(T_PHYSICAL_RESTORE_TENANT != time_node->type_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("type is not T_PHYSICAL_RESTORE_TENANT", "type", get_type_name(time_node->type_));
-          } else if (OB_UNLIKELY(NULL == time_node->children_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("children should not be null");
-          } else if (OB_UNLIKELY(2 != time_node->num_child_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("num of children not match", K(ret), "child_num", time_node->num_child_);
-          } else if (0/*timestamp*/ == time_node->children_[0]->value_) {
-            uint64_t time_val = 0;
-            ObString time_str;
-            ObString sys_time_zone;
-            ObTimeZoneInfoWrap tz_info_wrap;
-            const ObTimeZoneInfo *time_zone_info = nullptr;
-            const ObTimeZoneInfo *sys_tz_info = nullptr;
-            if (OB_ISNULL(time_zone_info = session_info_->get_timezone_info())) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("time zone info is null", K(ret), KP(session_info_), KP(time_zone_info));
-            } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_SYSTEM_TIME_ZONE, sys_time_zone))) {
-              LOG_WARN("Get sys variable error", K(ret));
-            } else if (OB_FAIL(tz_info_wrap.init_time_zone(sys_time_zone, OB_INVALID_VERSION, 
-                *(const_cast<ObTZInfoMap *>(time_zone_info->get_tz_info_map()))))) {
-              LOG_WARN("tz_info_wrap init_time_zone fail", KR(ret), K(sys_time_zone));
-            } else if (OB_ISNULL(sys_tz_info = tz_info_wrap.get_time_zone_info())) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("sys time zone info is null", K(ret));
-            } else if (OB_FAIL(Util::resolve_string(time_node->children_[1], time_str))) {
-              LOG_WARN("resolve string failed", K(ret));
-            } else if (OB_FAIL(ObTimeConverter::str_to_scn_value(time_str,
-                                                                 sys_tz_info,
-                                                                 time_zone_info,
-                                                                 ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT,
-                                                                 true/*oracle mode*/,
-                                                                 time_val))) {
-              ret = OB_ERR_WRONG_VALUE;
-              LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", to_cstring(time_str));
-            } else if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_sql(time_val))) {
-              LOG_WARN("fail to set scn", K(ret));
-            } else {
-              stmt->get_rpc_arg().with_restore_scn_ = true;
-            }
-          } else if (1/*scn*/ == time_node->children_[0]->value_) {
-            if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_sql(time_node->children_[1]->value_))) {
-              LOG_WARN("fail to set scn", K(ret));
-            } else {
-              stmt->get_rpc_arg().with_restore_scn_ = true;
-            }
-          }
+        } else if (OB_FAIL(resolve_restore_until(*parse_tree.children_[2], session_info_,
+                                                 stmt->get_rpc_arg().restore_scn_,
+                                                 stmt->get_rpc_arg().with_restore_scn_))) {
+          LOG_WARN("failed to resolve restore until", KR(ret), KP(parse_tree.children_[2]));
         }
       }
 
@@ -4320,6 +4304,144 @@ int ObCheckpointSlogResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(Util::resolve_server(parse_tree.children_[1], stmt->server_))) {
         LOG_WARN("resolve server failed", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTenantResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  share::SCN recovery_until_scn = SCN::min_scn();
+  obrpc::ObRecoverTenantArg::RecoverType type = obrpc::ObRecoverTenantArg::RecoverType::INVALID;
+  ObString tenant_name;
+  bool with_restore_scn = false;
+  if (OB_UNLIKELY(T_RECOVER != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_RECOVER", "type", get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null");
+  } else if (OB_UNLIKELY(2 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("num of children not match", KR(ret), "child_num", parse_tree.num_child_);
+  } else {
+    ObRecoverTenantStmt *stmt = create_stmt<ObRecoverTenantStmt>();
+    if (OB_ISNULL(stmt)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObRecoverTenantStmt failed");
+    } else {
+      if (OB_FAIL(resolve_tenant_name(parse_tree.children_[0],
+                                      session_info_->get_effective_tenant_id(), tenant_name))) {
+        LOG_WARN("resolve_tenant_name", KR(ret), KP(parse_tree.children_[0]),
+                                        K(session_info_->get_effective_tenant_id()), K(tenant_name));
+      } else if (OB_ISNULL(parse_tree.children_[1])) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "restore until, should specify restore until point");
+        LOG_WARN("should specify restore until point", KR(ret));
+      } else if (T_PHYSICAL_RESTORE_UNTIL == parse_tree.children_[1]->type_) {
+        if (OB_FAIL(resolve_restore_until(*parse_tree.children_[1], session_info_, recovery_until_scn,
+                                          with_restore_scn))) {
+          LOG_WARN("failed to resolve restore until", KR(ret), KP(parse_tree.children_[1]),
+                                                      K(recovery_until_scn), K(with_restore_scn));
+        } else {
+          type = obrpc::ObRecoverTenantArg::RecoverType::UNTIL;
+        }
+      } else if (T_RECOVER_UNLIMITED == parse_tree.children_[1]->type_) {
+        //TODO(yaoying):need check  recovery_until_scn
+        recovery_until_scn.set_max();
+        type = obrpc::ObRecoverTenantArg::RecoverType::UNTIL;
+      } else if (T_RECOVER_CANCEL == parse_tree.children_[1]->type_) {
+        recovery_until_scn.set_min();
+        type = obrpc::ObRecoverTenantArg::RecoverType::CANCEL;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected node type", KR(ret), "type", get_type_name(parse_tree.children_[1]->type_));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(stmt->get_rpc_arg().init(session_info_->get_effective_tenant_id(),
+                                              tenant_name, type, recovery_until_scn))) {
+        LOG_WARN("fail to init arg", KR(ret), K(stmt->get_rpc_arg()),
+                 K(session_info_->get_effective_tenant_id()), K(tenant_name), K(type),
+                 K(recovery_until_scn));
+      } else {
+        stmt_ = stmt;
+      }
+    }
+  }
+  return ret;
+}
+
+int resolve_restore_until(const ParseNode &time_node,
+                          const ObSQLSessionInfo *session_info,
+                          share::SCN &recovery_until_scn,
+                          bool &with_restore_scn)
+{
+  int ret = OB_SUCCESS;
+  recovery_until_scn.set_min();
+  with_restore_scn = false;
+
+  if (OB_UNLIKELY(T_PHYSICAL_RESTORE_UNTIL != time_node.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_PHYSICAL_RESTORE_UNTIL", "type", get_type_name(time_node.type_));
+  } else if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("arg should not be null", KP(session_info));
+  } else if (OB_ISNULL(time_node.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null");
+  } else if (OB_UNLIKELY(2 != time_node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("num of children not match", K(ret), "child_num", time_node.num_child_);
+  } else if (OB_ISNULL(time_node.children_[0]) || OB_ISNULL(time_node.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", KP(time_node.children_[0]), KP(time_node.children_[1]));
+  } else if (0/*timestamp*/ == time_node.children_[0]->value_) {
+    uint64_t time_val = 0;
+    ObString time_str;
+    ObString sys_time_zone;
+    ObTimeZoneInfoWrap tz_info_wrap;
+    const ObTimeZoneInfo *time_zone_info = nullptr;
+    const ObTimeZoneInfo *sys_tz_info = nullptr;
+    if (OB_ISNULL(time_zone_info = session_info->get_timezone_info())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("time zone info is null", K(ret), KP(session_info), KP(time_zone_info));
+    } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_SYSTEM_TIME_ZONE, sys_time_zone))) {
+      LOG_WARN("Get sys variable error", K(ret));
+    } else if (OB_ISNULL(time_zone_info->get_tz_info_map())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("should not be null", KP(time_zone_info->get_tz_info_map()));
+    } else if (OB_FAIL(tz_info_wrap.init_time_zone(sys_time_zone, OB_INVALID_VERSION,
+        *(const_cast<ObTZInfoMap *>(time_zone_info->get_tz_info_map()))))) {
+      LOG_WARN("tz_info_wrap init_time_zone fail", KR(ret), K(sys_time_zone));
+    } else if (OB_ISNULL(sys_tz_info = tz_info_wrap.get_time_zone_info())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("sys time zone info is null", K(ret));
+    } else if (OB_FAIL(ObAlterSystemResolverUtil::resolve_string(time_node.children_[1], time_str))) {
+      LOG_WARN("resolve string failed", K(ret));
+    } else if (OB_FAIL(ObTimeConverter::str_to_scn_value(time_str,
+                                                         sys_tz_info,
+                                                         time_zone_info,
+                                                         ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT,
+                                                         true/*oracle mode*/,
+                                                         time_val))) {
+      ret = OB_ERR_WRONG_VALUE;
+      LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", to_cstring(time_str));
+    } else if (recovery_until_scn.convert_for_sql(time_val)) {
+      LOG_WARN("fail to set scn", K(ret));
+    } else {
+      with_restore_scn = true;
+    }
+  } else if (1/*scn*/ == time_node.children_[0]->value_) {
+    if (share::OB_BASE_SCN_TS_NS >= time_node.children_[1]->value_) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "until scn, it should be positive integer");
+        LOG_WARN("until scn, it should be positive integer", KR(ret), K(time_node.children_[1]->value_));
+    } else if (OB_FAIL(recovery_until_scn.convert_for_sql(time_node.children_[1]->value_))) {
+      LOG_WARN("fail to set scn", K(ret));
+    } else {
+      with_restore_scn = true;
     }
   }
   return ret;

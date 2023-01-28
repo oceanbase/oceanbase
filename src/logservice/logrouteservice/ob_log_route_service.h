@@ -358,6 +358,7 @@ private:
   ObLogSysTableQueryer systable_queryer_;
   ObLogAllSvrCache all_svr_cache_;
   ObLSRouteTimerTask ls_route_timer_task_;
+  common::ObTimer timer_;
   int timer_id_;
   int tg_id_;
   int64_t background_refresh_time_sec_;

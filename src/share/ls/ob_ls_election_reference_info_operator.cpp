@@ -33,10 +33,11 @@ using namespace common;
 int ObLsElectionReferenceInfoOperator::create_new_ls(const ObLSStatusInfo &ls_info,
                                                      const SCN &create_ls_scn,
                                                      const common::ObString &zone_priority,
+                                                     const share::ObTenantSwitchoverStatus &working_sw_status,
                                                      ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  UNUSED(create_ls_scn);
+  UNUSEDx(create_ls_scn, working_sw_status);
   if (OB_UNLIKELY(!ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid_argument", KR(ret), K(ls_info));
@@ -58,8 +59,10 @@ int ObLsElectionReferenceInfoOperator::create_new_ls(const ObLSStatusInfo &ls_in
 
 int ObLsElectionReferenceInfoOperator::drop_ls(const uint64_t &tenant_id,
                                                const share::ObLSID &ls_id,
+                                               const ObTenantSwitchoverStatus &working_sw_status,
                                                ObMySQLTransaction &trans)
 {
+  UNUSEDx(working_sw_status);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -81,6 +84,7 @@ int ObLsElectionReferenceInfoOperator::set_ls_offline(const uint64_t &,
                                                       const share::ObLSID &,
                                                       const ObLSStatus &,
                                                       const SCN &,
+                                                      const ObTenantSwitchoverStatus &,
                                                       ObMySQLTransaction &) { return OB_SUCCESS; }
 
 

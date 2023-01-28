@@ -16,6 +16,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "ob_archive_define.h"      // *ID
 #include "observer/ob_server_event_history_table_operator.h"   // SERVER_EVENT
+#include <cstdint>
 
 namespace oceanbase
 {
@@ -58,15 +59,23 @@ void ObArchiveRoundMgr::destroy()
 
 
 int ObArchiveRoundMgr::set_archive_start(const ArchiveKey &key,
+    const int64_t piece_switch_interval,
+    const SCN &genesis_scn,
+    const int64_t base_piece_id,
     const share::ObTenantLogArchiveStatus::COMPATIBLE compatible,
     const share::ObBackupDest &dest)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
 
-  if (OB_UNLIKELY(!key.is_valid() || !dest.is_valid())) {
+  if (OB_UNLIKELY(!key.is_valid()
+        || piece_switch_interval <= 0
+        || base_piece_id < 1
+        || !genesis_scn.is_valid()
+        || !dest.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid arguments", K(ret), K(key), K(compatible), K(dest));
+    ARCHIVE_LOG(WARN, "invalid arguments", K(ret), K(key), K(piece_switch_interval),
+        K(genesis_scn), K(base_piece_id), K(compatible), K(dest));
   } else if (share::ObTenantLogArchiveStatus::COMPATIBLE::NONE != compatible
       && share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_1 != compatible
       && share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2 != compatible) {
@@ -76,6 +85,9 @@ int ObArchiveRoundMgr::set_archive_start(const ArchiveKey &key,
     ARCHIVE_LOG(WARN, "backup dest set failed", K(ret), K(dest));
   } else {
     key_ = key;
+    piece_switch_interval_ = piece_switch_interval;
+    genesis_scn_ = genesis_scn;
+    base_piece_id_ = base_piece_id;
     compatible_ = compatible >= share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2;
     log_archive_state_.status_ = ObArchiveRoundState::Status::DOING;
     ARCHIVE_LOG(INFO, "set_archive_start succ", KPC(this));
@@ -108,6 +120,18 @@ void ObArchiveRoundMgr::set_archive_interrupt(const ArchiveKey &key)
   }
 }
 
+void ObArchiveRoundMgr::set_archive_suspend(const ArchiveKey &key)
+{
+  WLockGuard guard(rwlock_);
+
+  if (OB_UNLIKELY(! key.is_valid())) {
+    ARCHIVE_LOG(WARN, "invalid arguments", K(key));
+  } else {
+    key_ = key;
+    log_archive_state_.status_ = ObArchiveRoundState::Status::SUSPEND;
+  }
+}
+
 int ObArchiveRoundMgr::get_backup_dest(const ArchiveKey &key,
     share::ObBackupDest &dest)
 {
@@ -129,6 +153,23 @@ void ObArchiveRoundMgr::get_archive_round_info(ArchiveKey &key,
   state = log_archive_state_;
 }
 
+int ObArchiveRoundMgr::get_piece_info(const ArchiveKey &key,
+      int64_t &piece_switch_interval,
+      SCN &genesis_scn,
+      int64_t &base_piece_id)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(rwlock_);
+  if (key != key_) {
+    ret = OB_EAGAIN;
+  } else {
+    piece_switch_interval = piece_switch_interval_;
+    genesis_scn = genesis_scn_;
+    base_piece_id = base_piece_id_;
+  }
+  return ret;
+}
+
 void ObArchiveRoundMgr::get_archive_round_compatible(ArchiveKey &key,
     bool &compatible)
 {
@@ -141,12 +182,6 @@ bool ObArchiveRoundMgr::is_in_archive_status(const ArchiveKey &key) const
 {
   RLockGuard guard(rwlock_);
   return key == key_ && log_archive_state_.is_doing();
-}
-
-bool ObArchiveRoundMgr::is_in_interrupt_status(const ArchiveKey &key) const
-{
-  RLockGuard guard(rwlock_);
-  return key == key_ && log_archive_state_.is_interrupted();
 }
 
 bool ObArchiveRoundMgr::is_in_archive_stopping_status(const ArchiveKey &key) const
@@ -167,7 +202,7 @@ void ObArchiveRoundMgr::update_log_archive_status(const ObArchiveRoundState::Sta
   log_archive_state_.status_ = status;
 }
 
-int ObArchiveRoundMgr::mark_fata_error(const ObLSID &id,
+int ObArchiveRoundMgr::mark_fatal_error(const ObLSID &id,
     const ArchiveKey &key,
     const ObArchiveInterruptReason &reason)
 {
@@ -176,10 +211,10 @@ int ObArchiveRoundMgr::mark_fata_error(const ObLSID &id,
   if (key != key_) {
     ARCHIVE_LOG(WARN, "encount error with different archive key, just skip", K(key), KPC(this));
   } else {
-    ARCHIVE_LOG(ERROR, "archive mark_fata_error", K(key), K(id), K(reason));
+    ARCHIVE_LOG(ERROR, "archive mark_fatal_error", K(key), K(id), K(reason));
     if (!log_archive_state_.is_interrupted()) {
       log_archive_state_.set_interrupted();
-      SERVER_EVENT_ADD("log_archive", "mark_fata_error",
+      SERVER_EVENT_ADD("log_archive", "mark_fatal_error",
                        "id", id.id(),
                        "reason", reason.get_str(),
                        "ret_code", reason.get_code(),

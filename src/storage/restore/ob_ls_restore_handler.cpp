@@ -2225,7 +2225,7 @@ int ObLSQuickRestoreState::check_clog_replay_finish_(bool &is_finish)
   if (OB_ISNULL(log_restore_handle = ls_->get_log_restore_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log restore handler can't nullptr", K(ret));
-  } else if (OB_FAIL(log_restore_handle->check_restore_done(done))) {
+  } else if (OB_FAIL(log_restore_handle->check_restore_done(ls_restore_arg_->get_restore_scn(), done))) {
     if (OB_EAGAIN == ret) {
       ret = OB_SUCCESS;
     } else {

@@ -456,7 +456,7 @@ int MockTenantModuleEnv::prepare_io()
   storage_env_.default_block_size_ = common::OB_DEFAULT_MACRO_BLOCK_SIZE;
   storage_env_.data_disk_size_ = macro_block_count * common::OB_DEFAULT_MACRO_BLOCK_SIZE;
   storage_env_.data_disk_percentage_ = 0;
-  storage_env_.log_disk_size_ = 10LL * 1024 * 1024 * 1024;
+  storage_env_.log_disk_size_ = 20 * 1024 * 1024 * 1024ll;
   share::ObLocalDevice *local_device = static_cast<share::ObLocalDevice*>(get_device_inner());
   THE_IO_DEVICE = local_device;
   iod_opt_array[0].set("data_dir", storage_env_.data_dir_);
@@ -487,11 +487,6 @@ int MockTenantModuleEnv::prepare_io()
   } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, io_config))) {
     STORAGE_LOG(WARN, "add tenant io config failed", K(ret));
   } else {
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(log_block_mgr_.reserve(storage_env_.log_disk_size_))) {
-        SERVER_LOG(ERROR, "log pool start failed", KR(ret));
-      }
-    }
   }
   return ret;
 }
@@ -501,6 +496,7 @@ void MockTenantModuleEnv::init_gctx_gconf()
   GCONF.rpc_port = rpc_port_;
   GCONF.mysql_port = mysql_port_;
   GCONF.self_addr_ = self_addr_;
+  GCONF.__min_full_resource_pool_memory = 2 * 1024 * 1024 * 1024ul;
   GCTX.self_addr_seq_.set_addr(self_addr_);
   GCTX.location_service_ = &location_service_;
   GCTX.batch_rpc_ = &batch_rpc_;
@@ -679,7 +675,9 @@ int MockTenantModuleEnv::start_()
   int64_t succ_num = 0;
 
 
-  if (OB_FAIL(OB_SERVER_BLOCK_MGR.start(0))) {
+  if (OB_FAIL(log_block_mgr_.start(storage_env_.log_disk_size_))) {
+    SERVER_LOG(ERROR, "log pool start failed", KR(ret));
+  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.start(0))) {
     STORAGE_LOG(WARN, "fail to start block manager", K(ret));
   } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance().mock_start())) {
     STORAGE_LOG(ERROR, "server checkpoint slog handler mock start fail", K(ret));

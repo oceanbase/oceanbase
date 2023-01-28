@@ -113,8 +113,11 @@ int ObTabletLocationProxy::cons_replica_location(const sqlclient::ObMySQLResult 
   EXTRACT_INT_FIELD_MYSQL(res, "replica_type", replica_type, int64_t);
   ObReplicaProperty replica_property;
   ObLSRestoreStatus restore_status;
+  int64_t proposal_id = (LEADER == role_value ? 1 : 0);
 
-  if (OB_SUCC(ret) && OB_FAIL(replica_location.init(server, static_cast<ObRole>(role_value), sql_port, static_cast<ObReplicaType>(replica_type), replica_property, restore_status))) {
+  if (OB_SUCC(ret) && OB_FAIL(replica_location.init(server, static_cast<ObRole>(role_value),
+                                                    sql_port, static_cast<ObReplicaType>(replica_type),
+                                                    replica_property, restore_status, proposal_id))) {
     LOG_WARN("fail to init replica location", K(ret));
   }
   return ret;

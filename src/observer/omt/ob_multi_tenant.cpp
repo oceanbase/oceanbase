@@ -39,11 +39,13 @@
 #include "share/ob_get_compat_mode.h"
 #include "storage/tx/wrs/ob_tenant_weak_read_service.h"   // ObTenantWeakReadService
 #include "share/allocator/ob_tenant_mutil_allocator.h"
+#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "share/ob_global_autoinc_service.h"
 #include "lib/thread/ob_thread_name.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/archiveservice/ob_archive_service.h"    // ObArchiveService
+#include "logservice/data_dictionary/ob_data_dict_service.h" // ObDataDictService
 #include "ob_tenant_mtl_helper.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_access_service.h"
@@ -276,6 +278,7 @@ int ObMultiTenant::init(ObAddr myaddr,
 
     // other mtl
     MTL_BIND2(mtl_new_default, ObArchiveService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, datadict::ObDataDictService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantTabletScheduler::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantDagScheduler::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantFreezeInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -287,7 +290,8 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, memtable::ObLockWaitMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, logservice::ObGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTableLockService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, rootserver::ObMajorFreezeService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, rootserver::ObPrimaryMajorFreezeService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, rootserver::ObRestoreMajorFreezeService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantMetaChecker::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObTenantRecoveryReportor::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObPrimaryLSService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
@@ -642,6 +646,7 @@ int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObT
 int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   const double min_cpu = static_cast<double>(meta.unit_.config_.min_cpu());
   const double max_cpu = static_cast<double>(meta.unit_.config_.max_cpu());
@@ -652,6 +657,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   ObTenantCreateStep create_step = ObTenantCreateStep::STEP_BEGIN;  // step0
   bool lock_succ = false;
   int64_t bucket_lock_idx = -1;
+  const int64_t log_disk_size = meta.unit_.config_.log_disk_size();
   int64_t lock_timeout_ts = abs_timeout_us - 5000000; // reserve 5s for creating tenant
 
   if (IS_NOT_INIT) {
@@ -766,13 +772,26 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     if (OB_SUCC(get_tenant_unsafe(tenant_id, tmp_tenant))) {
       ret = OB_TENANT_EXIST;
       LOG_ERROR("tenant exist", K(ret), K(tenant_id));
+    // NB: hold log disk firstly, guarded by lock_ to avoid create tenant concurrently.
+    } else if (false == is_virtual_tenant_id(tenant_id) && OB_FAIL(GCTX.log_block_mgr_->create_tenant(log_disk_size))) {
+      LOG_WARN("create_tenant in ObServerLogBlockMgr failed", K(ret), K(meta));
     } else if (OB_FAIL(tenants_.insert(tenant, iter, compare_tenant))) {
       LOG_ERROR("fail to insert tenant", K(ret), K(tenant_id));
     }
+    // Need ensure that after insert tenant into tenants_ success, means create tenant success.
+    // NB:
+    // 1. need call ObServerLogBlockMgr::abort_create_tenant after create tenant failed.
+    // 2. need guarded by lock, avoid concurrent with create_tenant or del_tenant
+    if (false == is_valid_tenant_id(tenant_id) && OB_FAIL(ret)) {
+      GCTX.log_block_mgr_->abort_create_tenant(log_disk_size);
+    }
+  }
+  // TODO: @lingyang 预期不能失败
+  if (!is_virtual_tenant_id(tenant_id) && OB_TMP_FAIL(update_tenant_config(tenant_id))) {
+    LOG_ERROR("update tenant config fail", K(tenant_id), K(tmp_ret));
   }
   // no need rollback when replaying slog and creating a virtual tenant,
   // in which two case the write_slog flag is set to false
-  int tmp_ret = OB_SUCCESS;
   if (OB_FAIL(ret) && write_slog) {
     do {
       tmp_ret = OB_SUCCESS;
@@ -927,16 +946,32 @@ int ObMultiTenant::update_tenant_log_disk_size(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  int64_t old_log_disk_size = 0;
+  int64_t unused_log_disk_size = 0;
   if (OB_SUCC(guard.switch_to(tenant_id))) {
     ObLogService *log_service = MTL(ObLogService *);
     if (OB_ISNULL(log_service)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(log_service->update_log_disk_usage_limit_size(expected_log_disk_size))) {
-      LOG_WARN("failed to update_log_disk_usage_limit_size", K(ret), K(tenant_id),
-               K(expected_log_disk_size));
+    } else if (OB_FAIL(log_service->get_palf_disk_usage(unused_log_disk_size, old_log_disk_size))) {
+      LOG_WARN("failed to get_palf_disk_usage", K(ret), K(unused_log_disk_size), K(old_log_disk_size),
+          K(expected_log_disk_size));
+    } else if (old_log_disk_size == expected_log_disk_size) {
+      LOG_INFO("no need to update tenant log disk size", K(tenant_id), K(old_log_disk_size), K(expected_log_disk_size));
+    } else if(false == is_valid_tenant_id(tenant_id)
+        && OB_FAIL(GCTX.log_block_mgr_->update_tenant(old_log_disk_size, expected_log_disk_size))) {
+      LOG_WARN("failed to update_tenant in ObServerLogBlockMgr", K(ret), K(old_log_disk_size),
+          K(expected_log_disk_size));
     } else {
-      LOG_INFO("update_tenant_log_disk_size success", K(ret), K(tenant_id),
+      if (OB_FAIL(log_service->update_log_disk_usage_limit_size(expected_log_disk_size))) {
+        LOG_WARN("failed to update_log_disk_usage_limit_size", K(ret), K(tenant_id),
                K(expected_log_disk_size));
+      } else {
+        LOG_INFO("update_tenant_log_disk_size success", K(ret), K(tenant_id),
+               K(expected_log_disk_size));
+      }
+      if (false == is_virtual_tenant_id(tenant_id) && OB_FAIL(ret)) {
+        GCTX.log_block_mgr_->abort_update_tenant(expected_log_disk_size, old_log_disk_size);
+      }
     }
   }
   return ret;
@@ -951,7 +986,7 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
   } else {
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
     if (OB_SUCC(guard.switch_to(tenant_id))) {
-      if (OB_SUCCESS != (tmp_ret = update_palf_disk_config(tenant_config))) {
+      if (OB_SUCCESS != (tmp_ret = update_palf_config())) {
         LOG_WARN("failed to update palf disk config", K(tmp_ret), K(tenant_id));
       }
       if (OB_SUCCESS != (tmp_ret = update_tenant_dag_scheduler_config())) {
@@ -963,16 +998,14 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
   return ret;
 }
 
-int ObMultiTenant::update_palf_disk_config(ObTenantConfigGuard &tenant_config)
+int ObMultiTenant::update_palf_config()
 {
   int ret = OB_SUCCESS;
   ObLogService *log_service = MTL(ObLogService *);
   if (NULL == log_service) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    ret = log_service->update_log_disk_util_threshold(
-        tenant_config->log_disk_utilization_threshold,
-        tenant_config->log_disk_utilization_limit_threshold);
+    ret = log_service->update_palf_options_except_disk_usage_limit_size();
   }
   return ret;
 }
@@ -1323,10 +1356,12 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &try_clock_succ)
       } else if (removed_tenant_tmp != removed_tenant) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("must be same tenant", K(tenant_id), K(ret));
+      } else {
       }
     }
 
     if (OB_SUCC(ret)) {
+      GCTX.log_block_mgr_->remove_tenant();
       removed_tenant->destroy();
       ob_delete(removed_tenant);
       LOG_INFO("remove tenant success", K(tenant_id));

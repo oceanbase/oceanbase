@@ -72,12 +72,15 @@ public:
    * @param {*}
    * @return {*}
    * @Date: 2021-12-27 20:30:39
-   */  
+   */
   void refresh();
   int get_ls_election_reference_info(const share::ObLSID &ls_id, LsElectionReferenceInfo &reference_info) const;
 private:
   common::ObArray<LsElectionReferenceInfo> *all_ls_election_reference_info_;
-  common::ObOccamTimer timer_;
+  // refresh priority and detect recovery from failure
+  common::ObOccamTimer recovery_detect_timer_;
+  // detect whether failure has occured
+  common::ObOccamTimer failure_detect_timer_;
   bool is_inited_;
   mutable ObSpinLock lock_;
 };

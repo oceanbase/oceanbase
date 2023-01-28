@@ -187,7 +187,7 @@ public:
     ObLSReplicaLocation rep_loc;
     ObLSRestoreStatus restore_status(ObLSRestoreStatus::Status::RESTORE_NONE);
     auto p = ObReplicaProperty::create_property(100);
-    OZ(rep_loc.init(leader, ObRole::LEADER, 10000, ObReplicaType::REPLICA_TYPE_FULL, p, restore_status));
+    OZ(rep_loc.init(leader, ObRole::LEADER, 10000, ObReplicaType::REPLICA_TYPE_FULL, p, restore_status, 1));
     OZ(location.add_replica_location(rep_loc));
     return ret;
   }
@@ -442,7 +442,7 @@ public:
 
   int submit_log(const char *buf,
                  const int64_t size,
-                 const share::SCN base_ts,
+                 const share::SCN &base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_nonblock)
   {
@@ -495,6 +495,12 @@ public:
   int get_role(bool &is_leader, int64_t &epoch) {
     is_leader = true;
     epoch = 1;
+    return OB_SUCCESS;
+  }
+
+  int get_max_decided_scn(share::SCN &scn)
+  {
+    UNUSED(scn);
     return OB_SUCCESS;
   }
 

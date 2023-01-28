@@ -143,6 +143,7 @@ protected:
   //日志提交
   int submit_log_(const int64_t last_id, const int64_t limited_id);
   int submit_log_with_lock_(const int64_t last_id, const int64_t limited_id);
+  int64_t max_pre_allocated_id_(const int64_t base_id);
 protected:
   ServiceType service_type_;
   //预分配大小

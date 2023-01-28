@@ -147,7 +147,6 @@ int ObFreezeInfoManager::init(
     tenant_id_ = tenant_id;
     sql_proxy_ = &proxy;
     merge_info_mgr_ = &merge_info_mgr;
-
     is_inited_ = true;
   }
 
@@ -212,6 +211,18 @@ int ObFreezeInfoManager::get_global_broadcast_scn(SCN &global_broadcast_scn) con
   return ret;
 }
 
+int ObFreezeInfoManager::adjust_global_merge_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(merge_info_mgr_)) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("merge info mgr is null", KR(ret));
+  } else if (OB_FAIL(merge_info_mgr_->adjust_global_merge_info())) {
+    LOG_WARN("fail to adjust global merge info", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
 void ObFreezeInfoManager::reset_freeze_info()
 {
   freeze_info_.set_invalid();
@@ -226,21 +237,18 @@ int ObFreezeInfoManager::inner_reload(ObFreezeInfo &freeze_info)
   ObSEArray<ObSimpleFrozenStatus, 4> simple_frozen_statuses;
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
   SCN global_broadcast_scn;
-  ObMySQLTransaction trans;
 
   if (OB_FAIL(merge_info_mgr_->try_reload())) {
     LOG_WARN("fail to try_reload zone_merge_info", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(merge_info_mgr_->get_global_broadcast_scn(global_broadcast_scn))) {
     LOG_WARN("fail to get broadcast version", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
-    LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id));
-  // 1. use 'select for update' to get snapshot_gc_scn
-  } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
-             trans, tenant_id_, freeze_info.latest_snapshot_gc_scn_))) {
+  // 1. get snapshot_gc_scn
+  } else if (OB_FAIL(ObGlobalStatProxy::get_snapshot_gc_scn(
+             *sql_proxy_, tenant_id_, freeze_info.latest_snapshot_gc_scn_))) {
     LOG_WARN("fail to select for update snapshot_gc_scn", KR(ret), K_(tenant_id));
   // 2. acquire freeze info in same trans, ensure we can get the latest freeze info
   } else if (OB_FAIL(freeze_info_proxy.get_freeze_info_larger_or_equal_than(
-             trans, global_broadcast_scn, simple_frozen_statuses))) {
+             *sql_proxy_, global_broadcast_scn, simple_frozen_statuses))) {
     LOG_WARN("fail to get freeze info", KR(ret), K(global_broadcast_scn));
   } else if (OB_UNLIKELY(simple_frozen_statuses.empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -249,14 +257,6 @@ int ObFreezeInfoManager::inner_reload(ObFreezeInfo &freeze_info)
     std::sort(simple_frozen_statuses.begin(), simple_frozen_statuses.end(),
               [](const ObSimpleFrozenStatus &a, const ObSimpleFrozenStatus &b)
                  { return a.frozen_scn_ < b.frozen_scn_; });
-  }
-
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-      LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
-    }
   }
 
   if (FAILEDx(freeze_info.frozen_statuses_.assign(simple_frozen_statuses))) {
@@ -479,12 +479,11 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
   SCN cur_snapshot_gc_scn;
   SCN new_snapshot_gc_scn;
   SCN cur_gts_scn;
-  const int64_t default_weak_ts = transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency();
-  const uint64_t WEAK_TS_NS = (uint64_t)(default_weak_ts * 1000L);
   int64_t affected_rows = 0;
   ObMySQLTransaction trans;
   ObRecursiveMutexGuard guard(lock_);
-  int64_t max_stale_time_ns = transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency() * 1000;
+  int64_t max_stale_time_ns = transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(
+            tenant_id_, transaction::ObWeakReadUtil::IGNORE_TENANT_EXIST_WARN) * 1000;
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner error", KR(ret));
@@ -565,10 +564,12 @@ int ObFreezeInfoManager::try_gc_freeze_info()
   const int64_t MAX_KEEP_INTERVAL_NS =  30 * 24 * 60 * 60 * 1000L * 1000L * 1000L; // 30 day
   const int64_t MIN_REMAINED_VERSION_COUNT = 32;
   SCN cur_gts_scn;
+  SCN min_frozen_scn;
   if (OB_FAIL(get_gts(cur_gts_scn))) {
     LOG_WARN("fail to get_gts", KR(ret));
+  } else {
+    min_frozen_scn = SCN::minus(cur_gts_scn, MAX_KEEP_INTERVAL_NS);
   }
-  SCN min_frozen_scn = SCN::minus(cur_gts_scn, MAX_KEEP_INTERVAL_NS);
 
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
   ObMySQLTransaction trans;

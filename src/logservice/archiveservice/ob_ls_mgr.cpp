@@ -14,7 +14,6 @@
 #include "lib/guard/ob_shared_guard.h"        // ObShareGuard
 #include "lib/ob_define.h"
 #include "lib/time/ob_time_utility.h"
-#include "ob_archive_define.h"
 #include "share/backup/ob_backup_struct.h"    // ObBackupPathString
 #include "storage/ls/ob_ls.h"                 // ObLS
 #include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
@@ -80,24 +79,25 @@ public:
 
     if (! is_in_archive_) {
       bret = true;
+      ARCHIVE_LOG(INFO, "tenant not in archive, need gc ls archive task", K(id));
     } else if (OB_ISNULL(ls_svr_) || OB_ISNULL(log_service_)) {
       bret = true;
       ret = OB_ERR_UNEXPECTED;
       ARCHIVE_LOG(ERROR, "ls_svr_ or log_service_ is NULL", K(ret), K(ls_svr_), K(log_service_));
     } else if (OB_FAIL(log_service_->open_palf(id, palf_handle_guard))) {
       bret = true;
-      ARCHIVE_LOG(WARN, "open ls failed", K(ret), K(id));
+      ARCHIVE_LOG(WARN, "open ls failed, gc ls archive task", K(ret), K(id));
     } else if (OB_FAIL(palf_handle_guard.get_role(role, epoch))) {
       ARCHIVE_LOG(WARN, "get role failed", K(ret), K(id));
     } else if (! check_ls_need_do_archive(role)) {
       bret = true;
+      ARCHIVE_LOG(INFO, "check_ls_need_do_archive return false, gc ls archive task", K(id), K(epoch), K(role));
     } else {
       // TODO: fake lease
       ObArchiveLease lease(epoch, 0, 0);
       ArchiveWorkStation station(key_, lease);
-      bret = task->check_task_valid(station);
+      bret = ! task->check_task_valid(station);
     }
-    ARCHIVE_LOG(INFO, "ls archive task need delete", K(id));
     return bret;
   }
 
@@ -340,8 +340,10 @@ void ObArchiveLSMgr::do_thread_task_()
   ArchiveKey key;
   share::ObArchiveRoundState state;
   round_mgr_->get_archive_round_info(key, state);
-  const bool is_in_doing = state.is_doing();
-  gc_stale_ls_task_(is_in_doing);
+  // not only in doing state but also in interrupt or suspend state, ls mgr should work,
+  // otherwise ls archive state can not persist in table successfully
+  const bool is_in_doing = state.is_doing() || state.is_interrupted() || state.is_suspend();
+  gc_stale_ls_task_(key, is_in_doing);
 
   if (is_in_doing) {
     add_ls_task_();
@@ -521,12 +523,9 @@ int ObArchiveLSMgr::insert_or_update_ls_(const StartArchiveHelper &helper)
   return ret;
 }
 
-void ObArchiveLSMgr::gc_stale_ls_task_(const bool is_in_doing)
+void ObArchiveLSMgr::gc_stale_ls_task_(const ArchiveKey &key, const bool is_in_doing)
 {
   int ret = OB_SUCCESS;
-  ArchiveKey key;
-  share::ObArchiveRoundState state;
-  round_mgr_->get_archive_round_info(key, state);
   CheckDeleteFunctor functor(key, is_in_doing, ls_svr_, log_service_);
 
   if (OB_FAIL(ls_map_.remove_if(functor))) {
@@ -549,7 +548,7 @@ void ObArchiveLSMgr::reset_task()
   ls_map_.reset();
 }
 
-int ObArchiveLSMgr::mark_fata_error(const ObLSID &id,
+int ObArchiveLSMgr::mark_fatal_error(const ObLSID &id,
     const ArchiveKey &key,
     const ObArchiveInterruptReason &reason)
 {
@@ -561,7 +560,7 @@ int ObArchiveLSMgr::mark_fata_error(const ObLSID &id,
     GET_LS_TASK_CTX(this, id) {
       if (OB_FAIL(ls_archive_task->mark_error(key))) {
         ARCHIVE_LOG(WARN, "ls archive task mark fatal error failed", K(ret), K(id), K(key), K(reason));
-      } else if (OB_FAIL(round_mgr_->mark_fata_error(id, key, reason))) {
+      } else if (OB_FAIL(round_mgr_->mark_fatal_error(id, key, reason))) {
         ARCHIVE_LOG(WARN, "archive round mgr  mark fatal error failed", K(ret),
             K(id), K(key), K(reason));
       }

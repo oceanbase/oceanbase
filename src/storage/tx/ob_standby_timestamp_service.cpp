@@ -117,7 +117,7 @@ int ObStandbyTimestampService::query_and_update_last_id()
   } else if (OB_UNLIKELY(!tenant_info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid tenant info", K(ret), K(tenant_info));
-  } else if (tenant_info.is_standby() && tenant_info.is_normal_status()) {
+  } else if (!tenant_info.is_primary()) {
     if (last_id_ > 0 && (tenant_info.get_standby_scn().get_val_for_gts() < last_id_)) {
       TRANS_LOG(ERROR, "snapshot rolls back ", K(tenant_info), K_(last_id));
     } else {

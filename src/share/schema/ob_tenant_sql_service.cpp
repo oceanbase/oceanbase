@@ -21,7 +21,9 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/ob_zone_merge_table_operator.h"
+#include "share/ob_share_util.h" // for ObShareUtils
 #include "sql/ob_sql_utils.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -237,6 +239,7 @@ int ObTenantSqlService::replace_tenant(
             OB_RANDOM_PRIMARY_ZONE : tenant_schema.get_primary_zone().ptr();
     if (OB_SUCC(ret)) {
       const int64_t INVALID_REPLICA_NUM = -1;
+      bool is_compatible_with_arbitration_service = false;
       if (OB_SUCC(ret) && (OB_FAIL(dml.add_pk_column(OBJ_GET_K(tenant_schema, tenant_id)))
           || OB_FAIL(dml.add_column("tenant_name", ObHexEscapeSqlStr(tenant_schema.get_tenant_name_str())))
           || OB_FAIL(dml.add_column(OBJ_GET_K(tenant_schema, locked)))
@@ -252,6 +255,11 @@ int ObTenantSqlService::replace_tenant(
           || OB_FAIL(dml.add_column("status", ob_tenant_status_str(tenant_schema.get_status())))
           || OB_FAIL(dml.add_column("in_recyclebin", tenant_schema.is_in_recyclebin())))) {
         LOG_WARN("add column failed", K(ret));
+      }
+      if (OB_SUCC(ret) && !tenant_schema.get_arbitration_service_status().is_disabled()) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("arbitration service is not supported in CE version", KR(ret), K(tenant_schema));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "create tenant with arbitration service in CE version");
       }
     }
     // insert into __all_tenant

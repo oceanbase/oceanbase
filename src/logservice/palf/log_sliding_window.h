@@ -17,6 +17,7 @@
 #include "lib/hash/ob_linear_hash_map.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/thread/ob_thread_lease.h"
+#include "log_ack_info.h"
 #include "share/scn.h"
 #include "log_group_entry.h"
 #include "log_group_buffer.h"
@@ -62,6 +63,8 @@ enum FetchTriggerType
   LEARNER_REGISTER = 4,
   CLEAN_CACHED_LOG = 5,
   MODE_META_BARRIER = 6,
+  RECONFIRM_NOTIFY_FETCH = 7,
+  ADD_MEMBER_PRE_CHECK = 8,
 };
 
 enum TruncateType
@@ -98,6 +101,36 @@ struct TruncateLogInfo
   TO_STRING_KV(K_(truncate_type), K_(truncate_log_id), K_(truncate_begin_lsn), K_(truncate_log_proposal_id));
 };
 
+class UpdateMatchLsnFunc
+{
+public:
+  UpdateMatchLsnFunc(const LSN &end_lsn, const int64_t new_ack_time_us)
+      : new_end_lsn_(end_lsn), new_ack_time_us_(new_ack_time_us)
+  {}
+  ~UpdateMatchLsnFunc() {}
+  bool operator()(const common::ObAddr &server, LsnTsInfo &value);
+  TO_STRING_KV(K_(new_end_lsn), K_(new_ack_time_us));
+private:
+  LSN new_end_lsn_;
+  int64_t new_ack_time_us_;
+};
+
+class GetLaggedListFunc
+{
+public:
+  GetLaggedListFunc(const LSN &dst_lsn)
+      : dst_lsn_(dst_lsn), lagged_list_()
+  {}
+  ~GetLaggedListFunc() {}
+  bool operator()(const common::ObAddr &server, LsnTsInfo &value);
+  int get_lagged_list(common::ObMemberList &out_list) const
+  { return out_list.deep_copy(lagged_list_); }
+  TO_STRING_KV(K_(dst_lsn), K_(lagged_list));
+private:
+  LSN dst_lsn_;
+  common::ObMemberList lagged_list_;
+};
+
 class LogSlidingWindow : public ISlidingCallBack
 {
 public:
@@ -105,31 +138,33 @@ public:
   virtual ~LogSlidingWindow() { destroy(); }
 public:
   virtual void destroy();
+  virtual int flashback(const PalfBaseInfo &palf_base_info, const int64_t palf_id, common::ObILogAllocator *alloc_mgr);
   virtual int init(const int64_t palf_id,
-           const common::ObAddr &self,
-           LogStateMgr *state_mgr,
-           LogConfigMgr *mm,
-           LogModeMgr *mode_mgr,
-           LogEngine *log_engine,
-           palf::PalfFSCbWrapper *palf_fs_cb,
-           common::ObILogAllocator *alloc_mgr,
-           const PalfBaseInfo &palf_base_info);
+                   const common::ObAddr &self,
+                   LogStateMgr *state_mgr,
+                   LogConfigMgr *mm,
+                   LogModeMgr *mode_mgr,
+                   LogEngine *log_engine,
+                   palf::PalfFSCbWrapper *palf_fs_cb,
+                   common::ObILogAllocator *alloc_mgr,
+                   const PalfBaseInfo &palf_base_info,
+                   const bool is_normal_replica);
   virtual int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data);
   virtual int64_t get_max_log_id() const;
   virtual const share::SCN get_max_scn() const;
   virtual LSN get_max_lsn() const;
   virtual int64_t get_start_id() const;
   virtual int get_committed_end_lsn(LSN &committed_end_lsn) const;
-  virtual int get_majority_lsn(const ObMemberList &member_list,
-                      const int64_t replica_num,
-                      LSN &result_lsn) const;
   virtual int try_fetch_log(const FetchTriggerType &fetch_log_type,
                             const LSN prev_lsn = LSN(),
                             const LSN fetch_start_lsn = LSN(),
                             const int64_t fetch_start_log_id = OB_INVALID_LOG_ID);
   virtual int try_fetch_log_for_reconfirm(const common::ObAddr &dest, const LSN &fetch_end_lsn, bool &is_fetched);
+  virtual int submit_push_log_resp(const common::ObAddr &server);
   virtual bool is_empty() const;
   virtual bool check_all_log_has_flushed();
+  virtual int get_majority_match_lsn(LSN &majority_match_lsn);
+  virtual int get_lagged_member_list(const LSN &dst_lsn, ObMemberList &lagged_list);
   virtual bool is_all_committed_log_slided_out(LSN &prev_lsn, int64_t &prev_log_id, LSN &committed_end_lsn) const;
   // ================= log sync part begin
   virtual int submit_log(const char *buf,
@@ -197,6 +232,10 @@ public:
   virtual int check_and_switch_freeze_mode();
   virtual int period_freeze_last_log();
   virtual int inc_update_scn_base(const share::SCN &scn);
+  virtual int get_server_ack_info(const common::ObAddr &server, LsnTsInfo &ack_info) const;
+  virtual int get_ack_info_array(LogMemberAckInfoList &ack_info_array) const;
+  virtual int pre_check_before_degrade_upgrade(const LogMemberAckInfoList &servers,
+                                               bool is_degrade);
   // location cache will be removed TODO by yunlong
   virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
   virtual int reset_location_cache_cb();
@@ -212,6 +251,9 @@ public:
   K_(last_slide_log_pid), K_(last_slide_log_accum_checksum), K_(last_fetch_end_lsn),               \
   K_(last_fetch_max_log_id), K_(last_fetch_committed_end_lsn), K_(last_truncate_lsn), KP(this));
 private:
+  int do_init_mem_(const int64_t palf_id,
+                   const PalfBaseInfo &palf_base_info,
+                   common::ObILogAllocator *alloc_mgr);
   int get_fetch_log_dst_(common::ObAddr &leader) const;
   int clean_log_();
   int reset_match_lsn_map_();
@@ -341,8 +383,9 @@ private:
                                 const LSN &lsn,
                                 const LogWriteBuf &log_write_buf);
 public:
-  typedef common::ObLinearHashMap<common::ObAddr, LSN> SvrMatchOffsetMap;
+  typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
+  static const int64_t INITIAL_LAST_ACK_TS = 0;      // last_ack_ts默认值为0
   static const int64_t APPEND_CNT_ARRAY_SIZE = 32;   // append次数统计数组的size
   static const uint64_t APPEND_CNT_ARRAY_MASK = APPEND_CNT_ARRAY_SIZE - 1;
   static const int64_t APPEND_CNT_LB_FOR_PERIOD_FREEZE = 140000;   // 切为PERIOD_FREEZE_MODE的append count下界

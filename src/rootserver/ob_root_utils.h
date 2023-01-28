@@ -467,7 +467,8 @@ public:
       common::ObIArray<AlterPaxosLocalityTask> &alter_paxos_tasks,
       bool &non_paxos_locality_modified,
       int64_t &pre_paxos_num,
-      int64_t &cur_paxos_num);
+      int64_t &cur_paxos_num,
+      const share::ObArbitrationServiceStatus &arb_service_status);
   static int calc_paxos_replica_num(
       const common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality,
       int64_t &paxos_num);
@@ -574,7 +575,8 @@ private:
   static int check_alter_locality_valid(
       common::ObIArray<AlterPaxosLocalityTask> &alter_paxos_tasks,
       int64_t pre_paxos_num,
-      int64_t cur_paxos_num);
+      int64_t cur_paxos_num,
+      const share::ObArbitrationServiceStatus &arb_service_status);
   static int add_multi_zone_locality_task(
       common::ObIArray<AlterPaxosLocalityTask> &alter_paxos_tasks,
       const share::ObZoneReplicaAttrSet &multi_zone_locality,

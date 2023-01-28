@@ -90,7 +90,7 @@ public:
   }
   // if restore status is not in [RESTORE_START, RESTORE_SYS_TABLETS], log_replay_service can replay log.
   bool can_replay_log() const { return ! (status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS); }
-  bool can_restore_log() const { return ! (status_ > Status::RESTORE_NONE && status_ < Status::QUICK_RESTORE); }
+  bool can_restore_log() const { return status_ == RESTORE_NONE || (status_ >= QUICK_RESTORE && status_ < RESTORE_FAILED); }
   Status get_status() const { return status_; }
   int set_status(int32_t status);
 

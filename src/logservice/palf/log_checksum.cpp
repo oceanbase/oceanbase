@@ -41,6 +41,14 @@ int LogChecksum::init(const int64_t palf_id, const int64_t accum_checksum)
   return ret;
 }
 
+void LogChecksum::destroy()
+{
+  is_inited_ = false;
+  palf_id_ = INVALID_PALF_ID;
+  accum_checksum_ = 0;
+  verify_checksum_ = 0;
+}
+
 int LogChecksum::acquire_accum_checksum(const int64_t data_checksum,
                                         int64_t &accum_checksum)
 {

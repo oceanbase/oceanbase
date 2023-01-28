@@ -25,7 +25,6 @@
 #include "common/object/ob_object.h"          // ObObj
 #include "share/schema/ob_column_schema.h"    // ObColumnSchemaV2
 #include "storage/blocksstable/ob_datum_row.h"// ObRowDml
-#include "ob_log_schema_cache_info.h"         // ColumnSchemaInfo
 #include "share/schema/ob_schema_service.h"   // ObSchemaService
 #include "share/inner_table/ob_inner_table_schema.h"   // OB_ALL_SEQUENCE_VALUE_TID
 #include "ob_cdc_define.h"
@@ -291,6 +290,7 @@ private:
 };
 
 void column_cast(common::ObObj &obj, const share::schema::ObColumnSchemaV2 &column_schema);
+class ColumnSchemaInfo;
 void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info);
 
 /*
@@ -562,6 +562,16 @@ struct CDCLSNComparator
 int sort_and_unique_lsn_arr(ObLogLSNArray &lsn_arr);
 
 typedef int32_t offset_t;
+
+// write specified buf to specified file.
+int write_to_file(const char *file_path, const char *buf, const int64_t buf_len);
+// read content from specified file to buffer
+// NOTE: buf should be allocated by invoker.
+// @retval OB_SIZE_OVERFLOW buf_len is not enough.
+// @retval OB_IO_ERROR      open or read file error.
+// @retval OB_INVALID_CONFIG file_path is not valid or buf is NULL of buf_len <= 0
+// @retval OB_EMPTY_RESULT  nothing exist in file.
+int read_from_file(const char *file_path, char *buf, const int64_t buf_len);
 
 #define RETRY_FUNC_ON_ERROR_WITH_USLEEP_MS(err_no, sleep_ms, stop_flag, var, func, args...) \
   do {\

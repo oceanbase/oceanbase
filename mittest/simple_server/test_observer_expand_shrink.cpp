@@ -19,7 +19,11 @@
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_utils.h"
+#include "env/ob_simple_server_restart_helper.h"
 
+const char *TEST_FILE_NAME = "test_observer_expand_shrink";
+const char *BORN_CASE_NAME= "ObserverExpandShink";
+const char *RESTART_CASE_NAME = "ObserverExpandShinkRestart";
 namespace oceanbase
 {
 using namespace logservice;
@@ -34,14 +38,17 @@ public:
 };
 
 TestRunCtx RunCtx;
-std::string TEST_FILE_NAME="observer_expand_shrink_dir";
-std::string LOGGER_FILE_NAME=TEST_FILE_NAME + "/observer_expand_shrink.log";
 class ObserverExpandShink : public ObSimpleClusterTestBase
 {
 public:
   // 指定case运行目录前缀 test_ob_simple_cluster_
   ObserverExpandShink() : ObSimpleClusterTestBase(TEST_FILE_NAME) {}
 };
+
+TEST_F(ObserverExpandShink, observer_start)
+{
+  SERVER_LOG(INFO, "start observer success");
+}
 
 TEST_F(ObserverExpandShink, basic_func)
 {
@@ -122,6 +129,16 @@ TEST_F(ObserverExpandShink, direct_set_observer)
   sleep(2);
   // tenant_node_balancer 1 s 运行一次
   EXPECT_EQ(true, GCTX.log_block_mgr_->check_space_is_enough_(2*share::ObUnitResource::UNIT_MIN_LOG_DISK_SIZE));
+  bool tenant_exist = false;
+  EXPECT_EQ(OB_SUCCESS, check_tenant_exist(tenant_exist, "tt2"));
+  EXPECT_EQ(true, tenant_exist);
+  EXPECT_EQ(OB_SUCCESS, delete_tenant("tt2"));
+  int ret = OB_SUCCESS;
+  while (true == tenant_exist && OB_SUCC(ret)) {
+    if (OB_FAIL(check_tenant_exist(tenant_exist, "tt2"))) {
+      SERVER_LOG(WARN, "check_tenant_exist failed", K(ret));
+    }
+  }
 }
 
 TEST_F(ObserverExpandShink, paralle_set)
@@ -129,13 +146,15 @@ TEST_F(ObserverExpandShink, paralle_set)
   share::ObTenantSwitchGuard tguard;
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(1));
   ObLogService *log_service = MTL(ObLogService*);
-  palf::PalfDiskOptions disk_opts;
+  palf::PalfOptions opts;
   ASSERT_NE(nullptr, log_service);
-  EXPECT_EQ(OB_SUCCESS, log_service->get_palf_disk_options(disk_opts));
+  EXPECT_EQ(OB_SUCCESS, log_service->get_palf_options(opts));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_service->update_log_disk_usage_limit_size(1000));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_service->update_log_disk_util_threshold(12, 11));
+  opts.disk_options_.log_disk_utilization_limit_threshold_ = 12;
+  opts.disk_options_.log_disk_utilization_threshold_ = 11;
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_service->palf_env_->update_options(opts));
   {
-    const int64_t new_log_disk_size = disk_opts.log_disk_usage_limit_size_*50/100;
+    const int64_t new_log_disk_size = opts.disk_options_.log_disk_usage_limit_size_*50/100;
     EXPECT_EQ(OB_SUCCESS, log_service->update_log_disk_usage_limit_size(new_log_disk_size));
     sleep(1);
     EXPECT_EQ(log_service->palf_env_->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_,
@@ -155,9 +174,26 @@ TEST_F(ObserverExpandShink, paralle_set)
     std::thread t2(update_size, count2);
     t1.join();
     t2.join();
-    EXPECT_EQ(OB_SUCCESS, log_service->get_palf_disk_options(disk_opts));
-    EXPECT_EQ(disk_opts.log_disk_usage_limit_size_, 1*1024*1024*1024+count1+count2);
+    EXPECT_EQ(OB_SUCCESS, log_service->get_palf_options(opts));
+    EXPECT_EQ(opts.disk_options_.log_disk_usage_limit_size_, 1*1024*1024*1024+count1+count2);
   }
+}
+
+class ObserverExpandShinkRestart: public ObSimpleClusterTestBase
+{
+public:
+  ObserverExpandShinkRestart() : ObSimpleClusterTestBase(TEST_FILE_NAME) {}
+};
+
+TEST_F(ObserverExpandShinkRestart, observer_start)
+{
+  SERVER_LOG(INFO, "restart observer success");
+}
+
+TEST_F(ObserverExpandShinkRestart, create_tenant_after_restart)
+{
+  EXPECT_NE(0, GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_);
+  SERVER_LOG(INFO, "create_tenant_after_restart trace", KPC(GCTX.log_block_mgr_));
 }
 
 } // end unittest
@@ -182,10 +218,9 @@ int main(int argc, char **argv)
     }
   }
   oceanbase::unittest::init_log_and_gtest(argc, argv);
-  OB_LOGGER.set_log_level(log_level);
-
-  LOG_INFO("main>>>");
-  oceanbase::unittest::RunCtx.time_sec_ = time_sec;
-  ::testing::InitGoogleTest(&argc, argv);
+  ObSimpleServerRestartHelper restart_helper(argc, argv, TEST_FILE_NAME, BORN_CASE_NAME,
+                                             RESTART_CASE_NAME);
+  restart_helper.set_sleep_sec(time_sec);
+  restart_helper.run();
   return RUN_ALL_TESTS();
 }

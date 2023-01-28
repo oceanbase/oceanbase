@@ -50,7 +50,71 @@ RoleChangeEvent::RoleChangeEvent(const RoleChangeEventType &event_type,
 
 bool RoleChangeEvent::is_valid() const
 {
-  return RoleChangeEventType::INVALID_RC_EVENT_TYPE != event_type_ && true == ls_id_.is_valid();
+  return RoleChangeEventType::INVALID_RC_EVENT_TYPE != event_type_
+         && false != ls_id_.is_valid();
+}
+
+void RoleChangeEvent::reset()
+{
+  event_type_ = RoleChangeEventType::INVALID_RC_EVENT_TYPE;
+  ls_id_.reset();
+  dst_addr_.reset();
+}
+
+bool RoleChangeEvent::operator==(const RoleChangeEvent &rhs) const
+{
+  // for change leader event, we just check 'ls_id'.
+  return event_type_ == rhs.event_type_ && ls_id_ == rhs.ls_id_;
+}
+
+RoleChangeEventSet::RoleChangeEventSet()
+{}
+
+RoleChangeEventSet::~RoleChangeEventSet()
+{}
+
+int RoleChangeEventSet::insert(const RoleChangeEvent &event)
+{
+  int ret = OB_SUCCESS;
+  int64_t free_idx = -1;
+  ObSpinLockGuard guard(lock_);
+  for (int64_t i = 0; i < MAX_ARRAY_SIZE; i++) {
+    if (event == events_[i]) {
+      ret = OB_ENTRY_EXIST;
+    }
+  }
+  for (int64_t i = 0; i < MAX_ARRAY_SIZE && -1 == free_idx && OB_SUCC(ret); i++) {
+    if (false == events_[i].is_valid()) {
+      free_idx = i;
+    }
+  }
+  if (OB_ENTRY_EXIST == ret) {
+  } else if (-1 != free_idx) {
+    events_[free_idx] = event;
+  } else {
+    ret = OB_SIZE_OVERFLOW;
+  }
+  CLOG_LOG(INFO, "insert event into set success", K(ret), K(event), K(free_idx));
+  return ret;
+}
+
+int RoleChangeEventSet::remove(const RoleChangeEvent &event)
+{
+  int ret = OB_SUCCESS;
+  int64_t delete_idx = -1;
+  ObSpinLockGuard guard(lock_);
+  for (int64_t i = 0; i < MAX_ARRAY_SIZE && -1 == delete_idx; i++) {
+    if (event == events_[i]) {
+      delete_idx = i;
+    }
+  };
+  if (-1 != delete_idx) {
+    events_[delete_idx].reset();
+  } else {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+  CLOG_LOG(INFO, "remove slog from set success", K(ret), K(delete_idx), K(event));
+  return ret;
 }
 
 ObRoleChangeService::ObRoleChangeService() : ls_service_(NULL),
@@ -190,11 +254,41 @@ int ObRoleChangeService::on_need_change_leader(const int64_t ls_id, const common
 int ObRoleChangeService::submit_role_change_event_(const RoleChangeEvent &event)
 {
   int ret = OB_SUCCESS;
-  RoleChangeEvent *rc_event = MTL_NEW(RoleChangeEvent, "RCService", event.event_type_, event.ls_id_, event.dst_addr_);
-  if (OB_FAIL(TG_PUSH_TASK(tg_id_, rc_event))) {
-    CLOG_LOG(WARN, "ObRoleChangeTask push task failed", K(ret), K(event));
+  if(OB_FAIL(rc_set_.insert(event)) && OB_ENTRY_EXIST != ret) {
+    CLOG_LOG(ERROR, "insert into rc_set failed", K(ret), K(event));
+  } else if (OB_ENTRY_EXIST == ret) {
+    CLOG_LOG(INFO, "repeat role change event, filter it", K(ret), K(event));
+    ret = OB_SUCCESS;
+  } else if (OB_FAIL(push_event_into_queue_(event))) {
+    CLOG_LOG(WARN, "push_event_into_queue_ failed", K(ret), K(event));
   } else {
     CLOG_LOG(INFO, "submit_role_change_event_ success", K(ret), K(event));
+  }
+  return ret;
+}
+
+// TODO: use poll to avoid alloc memory failed.
+int ObRoleChangeService::push_event_into_queue_(const RoleChangeEvent &event)
+{
+  int ret = OB_SUCCESS;
+  RoleChangeEvent *rc_event = NULL;
+
+  int64_t warn_time = OB_INVALID_TIMESTAMP;
+  do {
+    if (NULL == (rc_event =
+          MTL_NEW(RoleChangeEvent, "RCService", event.event_type_, event.ls_id_, event.dst_addr_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      if (palf_reach_time_interval(1 * 1000 * 1000, warn_time)) {
+        CLOG_LOG(WARN, "allocate memory failed", K(ret), K(event));
+      }
+      usleep(1 * 1000);
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } while(OB_FAIL(ret));
+
+  if (OB_FAIL(TG_PUSH_TASK(tg_id_, rc_event))) {
+    CLOG_LOG(WARN, "ObRoleChangeTask push task failed", K(ret), K(event));
   }
   if (OB_FAIL(ret) && NULL != rc_event) {
     MTL_DELETE(RoleChangeEvent, "RCService", rc_event);
@@ -209,6 +303,7 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event)
   ObLS *ls = NULL;
   AccessMode curr_access_mode;
   int64_t unused_mode_version;
+  OB_ASSERT(OB_SUCCESS == rc_set_.remove(event));
   if (false == event.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(event));
@@ -222,10 +317,10 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event)
     switch (event.event_type_) {
       case RoleChangeEventType::CHANGE_LEADER_EVENT_TYPE:
         CLOG_LOG(INFO, "begin change leader", K(curr_access_mode), K(event), KPC(ls));
-        if (AccessMode::APPEND == curr_access_mode
+        if (is_append_mode(curr_access_mode)
             && OB_FAIL(handle_change_leader_event_for_log_handler_(event.dst_addr_, ls))) {
           CLOG_LOG(WARN, "ObLogHandler change leader failed", K(ret), K(event), KPC(ls));
-        } else if (AccessMode::RAW_WRITE == curr_access_mode
+        } else if (is_raw_write_or_flashback_mode(curr_access_mode)
             && OB_FAIL(handle_change_leader_event_for_restore_handler_(event.dst_addr_, ls))) {
           CLOG_LOG(WARN, "ObRestoreHandler change leader failed", K(ret), K(event), KPC(ls));
         }
@@ -271,6 +366,7 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
   // when 'curr_access_mode' is RAW_WRITE or FLASHBACK
   const bool only_need_change_to_follower =
     !is_raw_write_or_flashback_mode(curr_access_mode) || log_handler_is_offline;
+
   RoleChangeOptType opt_type;
   ObRole curr_role = ObRole::INVALID_ROLE;
   ObRole new_role  = ObRole::INVALID_ROLE;
@@ -852,15 +948,16 @@ int ObRoleChangeService::diagnose(RCDiagnoseInfo &diagnose_info)
   return ret;
 }
 
-bool ObRoleChangeService::is_append_mode(const palf::AccessMode &access_mode) const
+bool ObRoleChangeService::is_append_mode(const AccessMode &mode) const
 {
-  return palf::AccessMode::APPEND == access_mode;
+  return (AccessMode::APPEND == mode);
 }
 
-bool ObRoleChangeService::is_raw_write_or_flashback_mode(const palf::AccessMode &access_mode) const
+bool ObRoleChangeService::is_raw_write_or_flashback_mode(const AccessMode &mode) const
 {
-  return palf::AccessMode::RAW_WRITE == access_mode
-    || palf::AccessMode::FLASHBACK == access_mode;
+  return (AccessMode::RAW_WRITE == mode || AccessMode::FLASHBACK == mode ||
+      AccessMode::PREPARE_FLASHBACK == mode);
 }
+
 } // end namespace logservice
 } // end namespace oceanbase

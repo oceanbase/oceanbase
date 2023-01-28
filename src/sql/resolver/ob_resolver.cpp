@@ -396,6 +396,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(SwitchTenant);
         break;
       }
+      case T_RECOVER: {
+        REGISTER_STMT_RESOLVER(RecoverTenant);
+        break;
+      }
       case T_REPORT_REPLICA: {
         REGISTER_STMT_RESOLVER(ReportReplica);
         break;
@@ -486,6 +490,18 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_MIGRATE_UNIT: {
         REGISTER_STMT_RESOLVER(MigrateUnit);
+        break;
+      }
+      case T_ADD_ARBITRATION_SERVICE: {
+        REGISTER_STMT_RESOLVER(AddArbitrationService);
+        break;
+      }
+      case T_REMOVE_ARBITRATION_SERVICE: {
+        REGISTER_STMT_RESOLVER(RemoveArbitrationService);
+        break;
+      }
+      case T_REPLACE_ARBITRATION_SERVICE: {
+        REGISTER_STMT_RESOLVER(ReplaceArbitrationService);
         break;
       }
       case T_RUN_JOB: {

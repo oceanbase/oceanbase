@@ -24,6 +24,8 @@
 #include "common/storage/ob_sequence.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/stat/ob_latch_define.h"
+#include "ob_trans_functor.h"
+#include "ob_tx_stat.h"
 #include "ob_xa_ctx.h"
 
 #define USING_LOG_PREFIX TRANS
@@ -529,6 +531,7 @@ int ObTxDesc::update_clean_part(const share::ObLSID &id,
  */
 int ObTxDesc::update_part(ObTxPart &p)
 {
+  ObSpinLockGuard guard(lock_);
   return update_part_(p, true);
 }
 
@@ -817,6 +820,26 @@ int ObTxDesc::merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_txs
     if (OB_TMP_FAIL(add_conflict_tx_(conflict_txs.at(idx)))) {
       DETECT_LOG(WARN, "fail to add conflict tx to cflict_txs_", K(tmp_ret), K(cflict_txs_), K(conflict_txs.at(idx)));
     }
+  }
+  return ret;
+}
+
+int ObTxDesc::get_parts_copy(ObTxPartList &copy_parts)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  if (OB_FAIL(copy_parts.assign(parts_))) {
+    TRANS_LOG(WARN, "TxDesc get participants copy error", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObTxDesc::get_savepoints_copy(ObTxSavePointList &copy_savepoints)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  if (OB_FAIL(copy_savepoints.assign(savepoints_))) {
+    TRANS_LOG(WARN, "TxDesc get savepoints copy error", K(ret), KPC(this));
   }
   return ret;
 }
@@ -1306,6 +1329,22 @@ int ObTxDescMgr::release_tx_ref(ObTxDesc *tx_desc)
   CK(OB_NOT_NULL(tx_desc));
   OX(revert(*tx_desc));
   LOG_TRACE("txDescMgr.release tx ref", K(ret), KP(tx_desc));
+  return ret;
+}
+
+int ObTxDescMgr::iterate_tx_scheduler_stat(ObTxSchedulerStatIterator &tx_scheduler_stat_iter)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    TRANS_LOG(WARN, "ObTxDescMgr not inited");
+    ret = OB_NOT_INIT;
+  } else {
+    IterateTxSchedulerFunctor fn(tx_scheduler_stat_iter);
+    if (OB_FAIL(map_.for_each(fn))) {
+      TRANS_LOG(WARN, "for each transaction scheduler error", KR(ret));
+    }
+  }
+
   return ret;
 }
 

@@ -82,6 +82,9 @@ public:
   static int select_snapshot_gc_scn_for_update(common::ObISQLClient &sql_client,
                                                const uint64_t tenant_id,
                                                SCN &snapshot_gc_scn);
+  static int get_snapshot_gc_scn(common::ObISQLClient &sql_client,
+                                 const uint64_t tenant_id,
+                                 share::SCN &snapshot_gc_scn);
   static int update_snapshot_gc_scn(common::ObISQLClient &sql_client,
                                     const uint64_t tenant_id,
                                     const SCN &snapshot_gc_scn,
@@ -98,6 +101,10 @@ public:
                                                int64_t &ddl_epoch);
   int get_ddl_epoch(int64_t &ddl_epoch);
 private:
+  static int inner_get_snapshot_gc_scn_(common::ObISQLClient &sql_client,
+                                        const uint64_t tenant_id,
+                                        SCN &snapshot_gc_scn,
+                                        const bool is_for_update);
   int update(const ObGlobalStatItem::ItemList &list, const bool is_incremental = false);
   int get(ObGlobalStatItem::ItemList &list, bool for_update = false);
 

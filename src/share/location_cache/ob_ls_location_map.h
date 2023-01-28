@@ -65,7 +65,9 @@ public:
   ~ObLSLocationMap() { destroy(); }
   void destroy();
   int init();
-  int update(const ObLSLocationCacheKey &key, const ObLSLocation &ls_location);
+  int update(const bool from_rpc,
+             const ObLSLocationCacheKey &key,
+             ObLSLocation &ls_location);
   int get(const ObLSLocationCacheKey &key, ObLSLocation &location) const;
   int del(const ObLSLocationCacheKey &key);
   int check_and_generate_dead_cache(ObLSLocationArray &arr);

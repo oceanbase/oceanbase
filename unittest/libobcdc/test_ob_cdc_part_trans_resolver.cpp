@@ -73,9 +73,11 @@ using namespace storage;
     EXPECT_EQ(OB_SUCCESS, fetcher_dispatcher.init(&sys_ls_handler, &committer, 0)); \
     ObLogClusterIDFilter cluster_id_filter; \
     const char *cluster_id_black_list = "2147473648"; \
+    double a = 1.0; \
+    void *fetcher = &a; \
     EXPECT_EQ(OB_SUCCESS, cluster_id_filter.init(cluster_id_black_list, 2147473648, 2147483647)); \
     EXPECT_EQ(OB_SUCCESS, resolver_factory.init(task_pool, log_entry_task_pool, fetcher_dispatcher, cluster_id_filter)); \
-    EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.init(1, progress_controller, resolver_factory));
+    EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.init(1, progress_controller, resolver_factory, fetcher));
 
 
 #define PREPARE_LS_FETCH_CTX() \
@@ -87,7 +89,10 @@ using namespace storage;
     ObLogLSFetchMgr ls_fetch_mgr; \
     GET_LS_FETCH_MGR(ls_fetch_mgr); \
     LSFetchCtx *ls_fetch_ctx = NULL; \
-    EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.add_ls(tls_id, start_ts_ns, start_lsn)); \
+    ObLogFetcherStartParameters start_paras; \
+    start_paras.reset(start_ts_ns, start_lsn); \
+    EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.add_ls(tls_id, start_paras, false, \
+        ClientFetchingMode::FETCHING_MODE_INTEGRATED, "|")); \
     EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.get_ls_fetch_ctx(tls_id, ls_fetch_ctx)); \
     ObTxLogGenerator log_generator(tenant_id, ls_id, tx_id, cluster_id);
 

@@ -57,6 +57,7 @@
 #include "storage/high_availability/ob_ls_remove_member_handler.h"
 #include "storage/high_availability/ob_ls_rebuild_cb_impl.h"
 #include "storage/tx_storage/ob_tablet_gc_service.h"
+#include "rootserver/ob_ls_recovery_stat_handler.h" //ObLSRecoveryStatHandler
 
 namespace oceanbase
 {
@@ -164,6 +165,7 @@ public:
   ObLockTable *get_lock_table() { return &lock_table_; }
   ObTxTable *get_tx_table() { return &tx_table_; }
   ObLSWRSHandler *get_ls_wrs_handler() { return &ls_wrs_handler_; }
+  rootserver::ObLSRecoveryStatHandler *get_ls_recovery_stat_handler() { return &ls_recovery_stat_handler_; }
   ObLSTabletService *get_tablet_svr() { return &ls_tablet_svr_; }
   share::ObLSID get_ls_id() const { return ls_meta_.ls_id_; }
   bool is_sys_ls() const { return ls_meta_.ls_id_.is_sys_ls(); }
@@ -237,8 +239,10 @@ public:
   int load_ls_inner_tablet();
 
   // get the meta package of ls: ObLSMeta, PalfBaseInfo
+  // @param[in] check_archive, if need check archive,
+  // for backup task is false, migration/rebuild is true
   // @param[out] meta_package, the meta package.
-  int get_ls_meta_package(ObLSMetaPackage &meta_package);
+  int get_ls_meta_package(const bool check_archive, ObLSMetaPackage &meta_package);
   // get only the meta of ls.
   const ObLSMeta &get_ls_meta() const { return ls_meta_; }
   // get current ls meta.
@@ -355,9 +359,12 @@ public:
   // @param [in] scn
   int set_tablet_change_checkpoint_scn(const share::SCN &scn);
   // get ls_meta_package and unsorted tablet_ids, add read lock of LSLOCKLOGMETA.
+  // @param [in] check_archive if need check archive, for backup task is false, migration/rebuild is true
   // @param [out] meta_package
   // @param [out] tablet_ids
-  int get_ls_meta_package_and_tablet_ids(ObLSMetaPackage &meta_package, common::ObIArray<common::ObTabletID> &tablet_ids);
+  int get_ls_meta_package_and_tablet_ids(const bool check_archive,
+                                         ObLSMetaPackage &meta_package,
+                                         common::ObIArray<common::ObTabletID> &tablet_ids);
   DELEGATE_WITH_RET(ls_meta_, get_migration_and_restore_status, int);
 
   // ObLSTabletService interface:
@@ -476,6 +483,12 @@ public:
   // @param[in] palf_base_info, the palf meta used to advance base lsn.
   // int advance_base_info(const palf::PalfBaseInfo &palf_base_info);
   DELEGATE_WITH_RET(log_handler_, advance_base_info, int);
+
+  // get ls readable_scn considering readable scn, sync scn and replayable scn.
+  // @param[out] readable_scn ls readable_scn
+  // int get_ls_replica_readable_scn(share::SCN &readable_scn)
+  DELEGATE_WITH_RET(ls_recovery_stat_handler_, get_ls_replica_readable_scn, int);
+
   // disable clog sync.
   // with ls read lock and log write lock.
   int disable_sync();
@@ -715,6 +728,7 @@ private:
   ObLSReservedSnapshotMgr reserved_snapshot_mgr_;
   ObLSResvSnapClogHandler reserved_snapshot_clog_handler_;
   ObMediumCompactionClogHandler medium_compaction_clog_handler_;
+  rootserver::ObLSRecoveryStatHandler ls_recovery_stat_handler_;
 private:
   bool is_inited_;
   uint64_t tenant_id_;

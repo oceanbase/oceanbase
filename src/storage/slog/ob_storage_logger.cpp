@@ -184,25 +184,6 @@ int ObStorageLogger::start_log(const ObLogCursor &start_cursor)
   return ret;
 }
 
-
-int ObStorageLogger::is_logger_ok(bool &is_ok)
-{
-  int ret = OB_SUCCESS;
-  is_ok = true;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_REDO_LOG(WARN, "The ObStorageLogger has not been inited.", K(ret));
-  } else {
-    is_ok = log_writer_->is_ok();
-    if (!is_ok) {
-      STORAGE_REDO_LOG(WARN, "Storage log writer is not ok.");
-    }
-  }
-
-  return ret;
-}
-
 int ObStorageLogger::get_active_cursor(ObLogCursor &log_cursor)
 {
   int ret = OB_SUCCESS;

@@ -14,6 +14,7 @@
 
 #include "rootserver/freeze/ob_zone_merge_manager.h"
 
+#include "share/ob_freeze_info_proxy.h"
 #include "share/ob_zone_merge_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "observer/ob_server_struct.h"
@@ -895,6 +896,30 @@ int ObZoneMergeManagerBase::try_update_zone_merge_info(const int64_t expected_ep
   return ret;
 }
 
+int ObZoneMergeManagerBase::adjust_global_merge_info()
+{
+  int ret = OB_SUCCESS;
+  ObSimpleFrozenStatus max_frozen_status;
+  ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(freeze_info_proxy.get_max_freeze_info(*proxy_, max_frozen_status))) {
+    LOG_WARN("fail to get freeze info with max frozen_scn", KR(ret), K_(tenant_id));
+  } else if (OB_UNLIKELY(max_frozen_status.frozen_scn_ < SCN::base_scn())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected frozen_scn", KR(ret), K(max_frozen_status), K_(tenant_id));
+  } else {
+    // Adjust global_merge_info in memory with (max_frozen_status.frozen_scn_ - 1).
+    // So as to launch one major freeze with max_frozen_status.frozen_scn_.
+    inner_adjust_global_merge_info(SCN::minus(max_frozen_status.frozen_scn_, 1));
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("succ to adjust global merge info", K_(tenant_id), "max_frozen_scn",
+      max_frozen_status.frozen_scn_);
+  }
+  return ret;
+}
+
 int ObZoneMergeManagerBase::check_valid(const ObZone &zone, int64_t &idx) const
 {
   int ret = OB_SUCCESS;
@@ -1095,6 +1120,18 @@ int ObZoneMergeManagerBase::handle_zone_merge_info_to_insert(
     }
   }
   return ret;
+}
+
+void ObZoneMergeManagerBase::inner_adjust_global_merge_info(const SCN &min_compaction_scn)
+{
+  // Here, only adjust global_merge_info in memory, not adjust global_merge_info in table.
+  // The next round of major freeze would update global_merge_info in table.
+  // Note that, here not only adjust last_merged_scn, but also adjust global_broadcast_scn and
+  // frozen_scn. So as to avoid error in ObMajorMergeScheduler::do_work(), which works based on
+  // these global_merge_info in memory.
+  global_merge_info_.last_merged_scn_.set_scn(min_compaction_scn, false);
+  global_merge_info_.global_broadcast_scn_.set_scn(min_compaction_scn, false);
+  global_merge_info_.frozen_scn_.set_scn(min_compaction_scn, false);
 }
 
 // only used for copying data to/from shadow_
@@ -1411,6 +1448,22 @@ int ObZoneMergeManager::try_update_zone_merge_info(const int64_t expected_epoch)
       *(static_cast<ObZoneMergeManagerBase *> (this)), shadow_, ret);
     if (OB_SUCC(ret)) {
       ret = shadow_.try_update_zone_merge_info(expected_epoch);
+    }
+  }
+  return ret;
+}
+
+int ObZoneMergeManager::adjust_global_merge_info()
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(write_lock_);
+  // destruct shadow_copy_guard before return
+  // otherwise the ret_ in shadow_copy_guard will never be returned
+  {
+    ObZoneMergeMgrGuard shadow_guard(lock_,
+      *(static_cast<ObZoneMergeManagerBase *> (this)), shadow_, ret);
+    if (OB_SUCC(ret)) {
+      ret = shadow_.adjust_global_merge_info();
     }
   }
   return ret;

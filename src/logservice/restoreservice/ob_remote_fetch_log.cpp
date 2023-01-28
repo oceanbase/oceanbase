@@ -24,6 +24,8 @@
 #include "ob_log_restore_handler.h"           // ObTenantRole
 #include "ob_remote_fetch_log_worker.h"       // ObRemoteFetchWorker
 #include "ob_fetch_log_task.h"                // ObFetchLogTask
+#include "observer/omt/ob_tenant_config_mgr.h"  // tenant_config
+#include "logservice/archiveservice/ob_archive_define.h"
 
 namespace oceanbase
 {
@@ -126,32 +128,28 @@ int ObRemoteFetchLogImpl::do_fetch_log_(ObLS &ls)
   SCN pre_scn;   // scn to locate piece
   LSN max_fetch_lsn;
   int64_t last_fetch_ts = OB_INVALID_TIMESTAMP;
-  int64_t size = 0;
+  int64_t task_count = 0;
   const ObLSID &id = ls.get_ls_id();
-  ObLSRestoreStatus restore_status;
   if (OB_UNLIKELY(! id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(id));
-  } else if (OB_FAIL(ls.get_restore_status(restore_status))) {
-    LOG_WARN("failed to get ls restore status", K(ret), K(id));
-  } else if (!restore_status.can_restore_log()) {
   } else if (OB_FAIL(check_replica_status_(ls, can_fetch_log))) {
     LOG_WARN("check replica status failed", K(ret), K(ls));
   } else if (! can_fetch_log) {
     // just skip
   } else if (OB_FAIL(check_need_schedule_(ls, need_schedule,
-          proposal_id, max_fetch_lsn, last_fetch_ts))) {
+          proposal_id, max_fetch_lsn, last_fetch_ts, task_count))) {
     LOG_WARN("check need schedule failed", K(ret), K(id));
   } else if (! need_schedule) {
-  } else if (OB_FAIL(get_fetch_log_base_lsn_(ls, max_fetch_lsn, last_fetch_ts, pre_scn, lsn, size))) {
+  } else if (OB_FAIL(get_fetch_log_base_lsn_(ls, max_fetch_lsn, last_fetch_ts, pre_scn, lsn))) {
     LOG_WARN("get fetch log base lsn failed", K(ret), K(id));
-  } else if (OB_FAIL(submit_fetch_log_task_(ls, pre_scn, lsn, size, proposal_id))) {
-    LOG_WARN("submit fetch log task failed", K(ret), K(id), K(lsn), K(size));
+  } else if (OB_FAIL(submit_fetch_log_task_(ls, pre_scn, lsn, task_count, proposal_id))) {
+    LOG_WARN("submit fetch log task failed", K(ret), K(id), K(lsn), K(task_count));
   } else {
-    LOG_TRACE("do fetch log succ", K(id), K(lsn), K(size));
+    LOG_TRACE("do fetch log succ", K(id), K(lsn), K(task_count));
   }
   LOG_INFO("print do_fetch_log_", K(lsn), K(max_fetch_lsn), K(need_schedule),
-      K(proposal_id), K(last_fetch_ts), K(size), K(ls));
+      K(proposal_id), K(last_fetch_ts), K(task_count), K(ls));
   return ret;
 }
 
@@ -171,52 +169,73 @@ int ObRemoteFetchLogImpl::check_need_schedule_(ObLS &ls,
     bool &need_schedule,
     int64_t &proposal_id,
     LSN &lsn,
-    int64_t &last_fetch_ts)
+    int64_t &last_fetch_ts,
+    int64_t &task_count)
 {
   int ret = OB_SUCCESS;
   ObRemoteFetchContext context;
   ObLogRestoreHandler *restore_handler = NULL;
+  bool need_delay = false;
   need_schedule = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  const int64_t concurrency =
+    tenant_config.is_valid() ? tenant_config->log_restore_concurrency : 1L;
   if (OB_ISNULL(restore_handler = ls.get_log_restore_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get restore_handler failed", K(ret), "id", ls.get_ls_id());
   } else if (OB_FAIL(restore_handler->need_schedule(need_schedule, proposal_id, context))) {
     LOG_WARN("get fetch log context failed", K(ret), K(ls));
+  } else if (! need_schedule) {
+    // do nothing
+  } else if (context.issue_task_num_ >= concurrency) {
+    need_schedule = false;
+  } else if (OB_FAIL(check_need_delay_(ls.get_ls_id(), need_delay))) {
+    LOG_WARN("check need delay failed", K(ret), K(ls));
+  } else if (need_delay) {
+    need_schedule = false;
   } else {
-    lsn = context.max_fetch_lsn_;
+    lsn = context.max_submit_lsn_;
     last_fetch_ts = context.last_fetch_ts_;
+    task_count = concurrency - context.issue_task_num_;
   }
   return ret;
 }
 
-// TODO 参考租户同步位点/可回放点/日志盘空间等, 计算可以拉取日志上限
-int ObRemoteFetchLogImpl::get_fetch_log_max_lsn_(ObLS &ls, palf::LSN &max_lsn)
+// Restore log need be under control, otherwise log disk may be full as single ls restore log too fast
+// NB: Logs can be replayed only if its scn not bigger than replayable_point
+int ObRemoteFetchLogImpl::check_need_delay_(const ObLSID &id, bool &need_delay)
 {
-  UNUSED(ls);
-  UNUSED(max_lsn);
   int ret = OB_SUCCESS;
+  SCN replayable_point;
+  SCN end_scn;
+  PalfHandleGuard palf_handle;
+  if (OB_FAIL(log_service_->get_replayable_point(replayable_point))) {
+    ARCHIVE_LOG(WARN, "get replayable point failed", K(ret));
+  } else if (OB_FAIL(log_service_->open_palf(id, palf_handle))) {
+    LOG_WARN("open palf failed", K(ret), K(id));
+  } else if (OB_FAIL(palf_handle.get_end_scn(end_scn))) {
+    LOG_WARN("get end log ts failed", K(ret), K(id));
+  } else {
+    need_delay = (end_scn.convert_to_ts() - replayable_point.convert_to_ts()) > FETCH_LOG_AHEAD_THRESHOLD_US;
+  }
   return ret;
 }
 
-//TODO fetch log strategy
 int ObRemoteFetchLogImpl::get_fetch_log_base_lsn_(ObLS &ls,
     const LSN &max_fetch_lsn,
     const int64_t last_fetch_ts,
     SCN &heuristic_scn,
-    LSN &lsn,
-    int64_t &size)
+    LSN &lsn)
 {
   int ret = OB_SUCCESS;
   LSN end_lsn;
   LSN restore_lsn;
-  const int64_t default_fetch_size = LEADER_DEFAULT_GROUP_BUFFER_SIZE;
   const bool ignore_restore = OB_INVALID_TIMESTAMP == last_fetch_ts
     || last_fetch_ts < ObTimeUtility::current_time() - 5 * 1000 * 1000L;
   if (OB_FAIL(get_palf_base_lsn_scn_(ls, end_lsn, heuristic_scn))) {
     LOG_WARN("get palf base lsn failed", K(ret), K(ls));
   } else {
     lsn = ignore_restore ? end_lsn : max_fetch_lsn;
-    size = default_fetch_size;
   }
   return ret;
 }
@@ -243,16 +262,42 @@ int ObRemoteFetchLogImpl::get_palf_base_lsn_scn_(ObLS &ls, LSN &lsn, SCN &scn)
 int ObRemoteFetchLogImpl::submit_fetch_log_task_(ObLS &ls,
     const SCN &scn,
     const LSN &lsn,
-    const int64_t size,
+    const int64_t task_count,
     const int64_t proposal_id)
+{
+  int ret = OB_SUCCESS;
+  LSN start_lsn = lsn;
+  const int64_t max_size = archive::MAX_ARCHIVE_FILE_SIZE;
+  bool scheduled = false;
+  for (int64_t index = 0; OB_SUCC(ret) && index < task_count; index++) {
+    // To avoid fetch log from one archive repeatedly, then range of task equals to a single archive file
+    const LSN end_lsn = LSN((start_lsn.val_ / max_size + 1) * max_size);
+    const int64_t size = static_cast<int64_t>(end_lsn - start_lsn);
+    scheduled = false;
+    if (OB_FAIL(do_submit_fetch_log_task_(ls, scn, start_lsn, size, proposal_id, scheduled))) {
+      LOG_WARN("do submit fetch log task failed", K(ret), K(ls));
+    } else if (! scheduled) {
+      break;
+    } else {
+      start_lsn = end_lsn;
+    }
+  }
+  return ret;
+}
+
+int ObRemoteFetchLogImpl::do_submit_fetch_log_task_(ObLS &ls,
+    const SCN &scn,
+    const LSN &lsn,
+    const int64_t size,
+    const int64_t proposal_id,
+    bool &scheduled)
 {
   int ret = OB_SUCCESS;
   void *data = NULL;
   ObFetchLogTask *task = NULL;
   ObMemAttr attr(MTL_ID(), "FetchLogTask");
   const ObLSID &id = ls.get_ls_id();
-  bool scheduled = false;
-  if (OB_ISNULL(data = mtl_malloc(sizeof(FetchLogTask), "RFLTask"))) {
+  if (OB_ISNULL(data = mtl_malloc(sizeof(ObFetchLogTask), "RFLTask"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(id));
   } else {
@@ -270,7 +315,8 @@ int ObRemoteFetchLogImpl::submit_fetch_log_task_(ObLS &ls,
       LOG_ERROR("submit fetch log task failed", K(ret), K(id));
     } else {
       worker_->signal();
-      LOG_INFO("submit fetch log task succ", KPC(task));
+      LOG_INFO("submit fetch log task succ", K(task),
+          "id", ls.get_ls_id(), K(scn), K(lsn), K(size), K(proposal_id));
     }
     if (! scheduled && NULL != data) {
       mtl_free(data);

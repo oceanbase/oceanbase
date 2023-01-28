@@ -36,9 +36,10 @@ public:
     uint64_t max_lsn_;
     int64_t input_bytes_;
     int64_t output_bytes_;
+    bool is_ls_deleted_;
 
     TO_STRING_KV(K_(ls_id), K_(start_scn), K_(checkpoint_scn), K_(min_lsn), K_(max_lsn), 
-      K_(input_bytes), K_(output_bytes));
+      K_(input_bytes), K_(output_bytes), K_(is_ls_deleted));
   };
 
   struct GeneratedPiece
@@ -81,6 +82,8 @@ private:
     int64_t doing_cnt_;
     // Count of log streams whose archive state are in STOP.
     int64_t stopped_cnt_;
+    // Count of log streams whose archive state are in SUSPEND.
+    int64_t suspended_cnt_;
 
     // First interrupt ls id.
     ObLSID interrupted_ls_id_;

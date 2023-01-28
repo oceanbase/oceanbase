@@ -51,10 +51,15 @@ public:
       obrpc::ObSrvRpcProxy &rpc_proxy,
       common::ObMySQLProxy &sql_proxy);
 
+  int open_archive_mode();
+  int close_archive_mode();
+
   // Just mark archive is open, actual actions to open archive is a background task.
   int enable_archive(const int64_t dest_no);
   // Just mark archive is stop, actual actions to close archive is a background task.
   int disable_archive(const int64_t dest_no);
+  // Just mark archive is suspend, actual actions to suspend archive is a background task.
+  int defer_archive(const int64_t dest_no);
   int check_can_do_archive(bool &can) const;
   int checkpoint();
 

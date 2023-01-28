@@ -1,5 +1,6 @@
 set(OBLOGSVR_TEST_SRCS
   env/ob_simple_log_server.cpp
+  env/ob_simple_arb_server.cpp
   env/ob_simple_log_cluster_testbase.cpp
   env/ob_simple_log_cluster_env.cpp)
 
@@ -23,6 +24,10 @@ ob_unittest_clog(test_ob_simple_log_access_mode test_ob_simple_log_access_mode.c
 ob_unittest_clog(test_ob_simple_log_engine test_ob_simple_log_engine.cpp)
 ob_unittest_clog(test_ob_simple_log_replay test_ob_simple_log_replay.cpp)
 ob_unittest_clog(test_ob_simple_log_apply test_ob_simple_log_apply.cpp)
+ob_unittest_clog(test_ob_simple_log_flashback test_ob_simple_log_flashback.cpp)
+ob_unittest_clog(test_ob_simple_log_arb test_ob_simple_log_arb.cpp)
 ob_unittest_clog(test_ob_simple_log_single_replica_func test_ob_simple_log_single_replica_func.cpp)
+ob_unittest_clog(test_ob_simple_arb_server_single_replica test_ob_simple_arb_server_single_replica.cpp)
+ob_unittest_clog(test_ob_simple_arb_server_mutil_replica test_ob_simple_arb_server_mutil_replica.cpp)
 
 add_subdirectory(archiveservice)

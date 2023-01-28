@@ -2194,8 +2194,6 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request,
     int temp_ret = OB_SUCCESS;
     int64_t lease_info_version = 0;
     bool is_stopped = false;
-    int64_t leader_cnt = -1;
-    bool has_leader = true;
     if (is_full_service()) {
       if (OB_FAIL(zone_manager_.get_lease_info_version(lease_info_version))) {
         LOG_WARN("get_lease_info_version failed", K(ret));
@@ -2204,17 +2202,6 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request,
         LOG_WARN("get server status failed", K(ret), "server", lease_request.server_);
       } else if (OB_FAIL(server_manager_.is_server_stopped(lease_request.server_, is_stopped))) {
         LOG_WARN("check_server_stopped failed", K(ret), "server", lease_request.server_);
-      } else if (OB_FAIL(server_manager_.get_server_leader_cnt(lease_request.server_, leader_cnt))) {
-        LOG_WARN("fail to get server leader cnt", K(ret));
-      } else {
-        if (leader_cnt > 0) {
-          has_leader = true;
-        } else if (0 == leader_cnt) {
-          has_leader = false;
-        } else if (leader_cnt < 0) {
-          // leader_cnt has not reported to server manager by leader_coordinator
-          has_leader = true;
-        }
       }
     }
 
@@ -2226,7 +2213,7 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request,
       lease_response.force_frozen_status_ = to_alive;
       lease_response.baseline_schema_version_ = baseline_schema_version_;
       // set observer stopped after has no leader
-      lease_response.rs_server_status_ = (is_stopped && !has_leader) ? RSS_IS_STOPPED : RSS_IS_WORKING;
+      lease_response.rs_server_status_ = is_stopped ? RSS_IS_STOPPED : RSS_IS_WORKING;
       (void)OTC_MGR.get_lease_response(lease_response);
 
       // after split schema, the schema_version is not used, but for the legality detection, set schema_version to sys's schema_version
@@ -7978,6 +7965,7 @@ int ObRootService::admin_clear_merge_error(const obrpc::ObAdminMergeArg &arg)
   return ret;
 }
 
+
 int ObRootService::admin_migrate_unit(const obrpc::ObAdminMigrateUnitArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -9411,10 +9399,10 @@ int ObRootService::handle_archive_log(const obrpc::ObArchiveLogArg &arg)
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(wait_refresh_config())) {
     LOG_WARN("failed to wait refresh config", K(ret));
-  } else if (arg.enable_ && OB_FAIL(archive_service_.start_archive(arg.tenant_id_, arg.archive_tenant_ids_))) {
-    LOG_WARN("failed to start archive", K(ret), K(arg));
-  } else if (!arg.enable_ && OB_FAIL(archive_service_.stop_archive(arg.tenant_id_, arg.archive_tenant_ids_))) {
-    LOG_WARN("failed to stop archive", K(ret), K(arg));
+  } else if (arg.enable_ && OB_FAIL(archive_service_.open_archive_mode(arg.tenant_id_, arg.archive_tenant_ids_))) {
+    LOG_WARN("failed to open archive mode", K(ret), K(arg));
+  } else if (!arg.enable_ && OB_FAIL(archive_service_.close_archive_mode(arg.tenant_id_, arg.archive_tenant_ids_))) {
+    LOG_WARN("failed to close archive mode", K(ret), K(arg));
   }
   return ret;
 }

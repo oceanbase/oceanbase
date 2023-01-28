@@ -57,6 +57,8 @@ LogStateMgr::LogStateMgr()
     is_sync_enabled_(true),
     allow_vote_(true),
     replica_type_(NORMAL_REPLICA),
+    is_changing_config_with_arb_(false),
+    last_set_changing_config_with_arb_time_us_(OB_INVALID_TIMESTAMP),
     is_inited_(false)
 {}
 
@@ -97,9 +99,9 @@ int LogStateMgr::init(const int64_t palf_id,
     role_ = FOLLOWER;
     state_ = INIT;
     scan_disk_log_finished_ = false;
-    is_sync_enabled_ = true;
     allow_vote_ = replica_property_meta.allow_vote_;
     replica_type_ = replica_property_meta.replica_type_;
+    is_sync_enabled_ = !is_arb_replica();
     is_inited_ = true;
     PALF_LOG(INFO, "LogStateMgr init success", K(ret), K_(palf_id), K_(self));
   }
@@ -172,7 +174,7 @@ bool LogStateMgr::can_append(const int64_t proposal_id, const bool need_check_pr
   if (is_leader_active_()
       && ((need_check_proposal_id && proposal_id == get_proposal_id())
           || false == need_check_proposal_id)
-      && mode_mgr_->can_append()) {
+      && OB_LIKELY(mode_mgr_->can_append())) {
     bool_ret = true;
   }
   return bool_ret;
@@ -181,7 +183,8 @@ bool LogStateMgr::can_append(const int64_t proposal_id, const bool need_check_pr
 bool LogStateMgr::can_raw_write() const
 {
   bool bool_ret = false;
-  if (is_leader_active_() && mode_mgr_->can_raw_write()) {
+  if (is_leader_active_()
+      && OB_LIKELY(mode_mgr_->can_raw_write())) {
     bool_ret = true;
   }
   return bool_ret;
@@ -224,7 +227,7 @@ bool LogStateMgr::is_state_changed()
   return state_changed;
 }
 
-// State machine for each replica
+// State machine for normal replica
 // ┌──────────────────────────────────────────────────────────┐
 // │                                                          │
 // │                  follower init                           │
@@ -391,7 +394,22 @@ bool LogStateMgr::can_handle_committed_info(const int64_t &proposal_id) const
 bool LogStateMgr::can_receive_log(const int64_t &proposal_id) const
 {
   bool bool_ret = false;
-  if (proposal_id == get_proposal_id() && true == is_sync_enabled()) {
+  if (proposal_id == get_proposal_id() && true == is_sync_enabled() && mode_mgr_->can_receive_log()) {
+    bool_ret = (is_follower_active_() || is_follower_pending_() || is_reconfirm_can_receive_log_());
+  }
+  return bool_ret;
+}
+
+bool LogStateMgr::is_reconfirm_can_receive_log_() const
+{
+  return (is_leader_reconfirm_() && reconfirm_->can_receive_log());
+}
+
+bool LogStateMgr::can_receive_config_log(const int64_t &proposal_id) const
+{
+  bool bool_ret = false;
+  if (proposal_id == get_proposal_id()) {
+    // can receive config log even if is_sync_enabled is false
     bool_ret = (is_follower_active_() || is_follower_pending_() || is_leader_reconfirm_());
   }
   return bool_ret;
@@ -457,7 +475,7 @@ int LogStateMgr::reject_prepare_request_(const common::ObAddr &server,
     LSN fake_lsn;
     LogModeMeta fake_mode_meta;
     if (OB_FAIL(log_engine_->submit_prepare_meta_resp(server, proposal_id,
-            vote_granted, fake_log_proposal_id, fake_lsn, fake_mode_meta))) {
+            vote_granted, fake_log_proposal_id, fake_lsn, fake_lsn, fake_mode_meta))) {
       PALF_LOG(WARN, "submit_prepare_response failed", K(ret), K_(palf_id));
     } else {
       PALF_LOG(INFO, "reject_prepare_request_ success", K(ret), K_(palf_id), K(server), K(proposal_id), K(vote_granted));
@@ -481,6 +499,7 @@ void LogStateMgr::destroy()
   leader_epoch_ = OB_INVALID_TIMESTAMP;
   pending_end_lsn_.reset();
   self_.reset();
+  is_changing_config_with_arb_ = false;
 }
 
 int LogStateMgr::write_prepare_meta_(const int64_t &proposal_id,
@@ -600,8 +619,9 @@ int LogStateMgr::reconfirm_to_leader_active_()
   const int64_t reconfirm_stage_cost = ObTimeUtility::current_time() - reconfirm_start_time_us_;
   PALF_EVENT("reconfirm_to_leader_active begin", palf_id_, K_(self), K(reconfirm_stage_cost));
   ObMemberList member_list;
-  if (OB_FAIL(mm_->get_curr_member_list(member_list))) {
-    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), K_(palf_id));
+  int64_t replica_num = -1;
+  if (OB_FAIL(mm_->get_alive_member_list_with_arb(member_list, replica_num))) {
+    PALF_LOG(WARN, "get_alive_member_list_with_arb failed", K(ret), K_(palf_id));
   } else if (!member_list.contains(self_)) {
     PALF_LOG(ERROR, "curr_member_list doesn't contain self, revoke", K_(palf_id),
              K(member_list), K_(self));
@@ -651,6 +671,7 @@ void LogStateMgr::reset_status_()
   leader_.reset();
   leader_epoch_ = OB_INVALID_TIMESTAMP;
   last_check_start_id_time_us_ = OB_INVALID_TIMESTAMP;
+  is_changing_config_with_arb_ = false;
   mm_->reset_status();
   mode_mgr_->reset_status();
   PALF_LOG(INFO, "reset_status_", K_(palf_id), K_(self), K_(leader_epoch), K(leader_));
@@ -747,7 +768,11 @@ bool LogStateMgr::follower_active_need_switch_()
     state_changed = true;
   } else if (new_leader.is_valid()
              && self_ == new_leader) {
-    state_changed = true;
+    if (is_arb_replica()) {
+      PALF_LOG(INFO, "arb replica is leader, skip", K_(palf_id), K_(self), K(new_leader));
+    } else {
+      state_changed = true;
+    }
   } else {}
   return state_changed;
 }
@@ -905,8 +930,11 @@ bool LogStateMgr::follower_need_update_role_(common::ObAddr &new_leader,
     new_leader_epoch = OB_INVALID_TIMESTAMP;
   } else {
     bool_ret = (self_ == new_leader);
-    PALF_LOG(TRACE, "follower_need_update_role_", K(bool_ret), K(new_leader), K(new_leader_epoch),
-        "is_allow_vote", is_allow_vote());
+    if (bool_ret && is_arb_replica()) {
+      PALF_LOG(INFO, "arb replica is leader, skip", K_(palf_id), K_(self), K(new_leader), K(new_leader_epoch));
+      bool_ret = false;
+    }
+    PALF_LOG(TRACE, "follower_need_update_role_", K(new_leader), K(new_leader_epoch));
   }
   return bool_ret;
 }
@@ -979,7 +1007,7 @@ bool LogStateMgr::can_receive_log_ack(const int64_t &proposal_id) const
 {
   bool bool_ret = false;
   if (proposal_id == get_proposal_id()) {
-    bool_ret = (LEADER == role_);
+    bool_ret = (LEADER == role_ && mode_mgr_->can_receive_log());
   }
   return bool_ret;
 }
@@ -1035,6 +1063,10 @@ int LogStateMgr::enable_sync()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (is_arb_replica()) {
+    ret = OB_NOT_SUPPORTED;
+    PALF_LOG(INFO, "can not enable_sync in arb_replica", K(ret), K_(palf_id), K(self_),
+        "replica_type", replica_type_2_str(replica_type_));
   } else {
     ATOMIC_STORE(&is_sync_enabled_, true);
     PALF_LOG(INFO, "enable_sync success", K(ret), K_(palf_id), K(self_));
@@ -1091,17 +1123,58 @@ LogReplicaType LogStateMgr::get_replica_type() const
   return ATOMIC_LOAD(&replica_type_);
 }
 
+bool LogStateMgr::is_arb_replica() const
+{
+  return get_replica_type() == LogReplicaType::ARBITRATION_REPLICA;
+}
+
 int LogStateMgr::get_election_role(common::ObRole &role, int64_t &epoch) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(election_->get_role(role, epoch))) {
-    PALF_LOG(WARN, "get elect role failed", K(ret));
+    PALF_LOG(WARN, "get elect role failed", K(ret), K_(self), K_(palf_id));
   } else {
     // do nothing
   }
   return ret;
 }
+
+// protected by wlock in PalfHandleImpl
+int LogStateMgr::set_changing_config_with_arb()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (false == is_changing_config_with_arb_) {
+    is_changing_config_with_arb_ = true;
+    last_set_changing_config_with_arb_time_us_ = common::ObTimeUtility::current_time();
+    PALF_LOG(INFO, "set_changing_config_with_arb to true", K(ret), K_(self), K_(palf_id));
+  }
+  return ret;
+}
+
+// protected by wlock in PalfHandleImpl
+int LogStateMgr::reset_changing_config_with_arb()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (true == is_changing_config_with_arb_) {
+    is_changing_config_with_arb_ = false;
+    const int64_t cost_time_us = (common::ObTimeUtility::current_time()
+      - last_set_changing_config_with_arb_time_us_);
+    PALF_EVENT("set_changing_config_with_arb to false", palf_id_, K(ret), K_(self), K(cost_time_us));
+  }
+  return ret;
+}
+
+// protected by rlock in PalfHandleImpl
+bool LogStateMgr::is_changing_config_with_arb() const
+{
+  return is_changing_config_with_arb_;
+}
+
 } // namespace palf
 } // namespace oceanbase

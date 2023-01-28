@@ -76,16 +76,34 @@ int ObTxReplayExecutor::do_replay_(const char *buf,
     first_created_ctx_ = false;
 
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(log_block_.get_next_log(header))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          TRANS_LOG(WARN, "[Replay Tx] get_next_log error in replay_buf", KPC(this));
+      if (OB_FAIL(try_get_tx_ctx_(
+                                  log_block_header_.get_tx_id(),
+                                  tenant_id,
+                                  ls_id))) {
+        TRANS_LOG(WARN, "try get tx ctx failed", K(ret), K(replay_hint), K(log_block_header_));
+      } else if (OB_ISNULL(ctx_)) {
+        if (OB_FAIL(log_block_.get_next_log(header))) {
+
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            TRANS_LOG(WARN, "[Replay Tx] get_next_log error in replay_buf", KPC(this));
+          }
         }
-      } else if (OB_FAIL(try_get_tx_ctx_(header.get_tx_log_type(), log_block_header_.get_tx_id(),
-                                                         tenant_id, ls_id))) {
-        TRANS_LOG(WARN, "try get tx ctx failed", K(ret), K(replay_hint),K(log_block_header_));
+      } else {
+        if (OB_FAIL(ctx_->iter_next_log_for_replay(log_block_, header, log_ts_ns_))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            TRANS_LOG(WARN, "[Replay Tx] get_next_log error in replay_buf", KPC(this));
+          }
+        }
+      }
+
+      if(OB_FAIL(ret)) {
+          //do nothing
       } else if (ctx_ != nullptr
                && OB_FAIL(ctx_->validate_replay_log_entry_no(first_created_ctx_,
                                                              log_block_header_.get_log_entry_no(),
@@ -167,6 +185,12 @@ int ObTxReplayExecutor::do_replay_(const char *buf,
           }
           break;
         }
+        case ObTxLogType::TX_BIG_SEGMENT_LOG: {
+          if (OB_FAIL(ctx_->replay_one_part_of_big_segment(lsn_, log_ts_ns_, tx_part_log_no_))) {
+            TRANS_LOG(WARN, "[Replay Tx] replay big segment log error", KR(ret));
+          }
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "[Replay Tx] Unknown Log Type in replay buf",
@@ -191,15 +215,13 @@ int ObTxReplayExecutor::prepare_replay_(const char *buf, const int64_t &size, co
   return ret;
 }
 
-int ObTxReplayExecutor::try_get_tx_ctx_(ObTxLogType type,
-                                        int64_t tx_id,
-                                        int64_t tenant_id,
-                                        const ObLSID &ls_id)
+int ObTxReplayExecutor::try_get_tx_ctx_(int64_t tx_id, int64_t tenant_id, const ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
 
+  ObTransID trans_id(tx_id);
   // replay ls log without part_ctx
-  if (!ObTxLogTypeChecker::is_ls_log(type) && nullptr == ctx_) {
+  if (trans_id.is_valid() && nullptr == ctx_) {
 
     if (OB_FAIL(ls_tx_srv_->get_tx_ctx(tx_id, true, ctx_)) && OB_TRANS_CTX_NOT_EXIST != ret) {
       TRANS_LOG(WARN, "[Replay Tx] get tx ctx from ctx_mgr failed", K(ret), K(tx_id), KP(ctx_));
@@ -207,15 +229,10 @@ int ObTxReplayExecutor::try_get_tx_ctx_(ObTxLogType type,
       ret = OB_SUCCESS;
       bool tx_ctx_existed = false;
       common::ObAddr scheduler;
-      ObTxCreateArg arg(true,  /* for_replay */
-                        tenant_id,
-                        tx_id,
-                        ls_id,
-                        log_block_header_.get_org_cluster_id(),
-                        GET_MIN_CLUSTER_VERSION(),
-                        0, /*session_id*/
-                        scheduler,
-                        INT64_MAX, /*trans_expired_time_*/
+      ObTxCreateArg arg(true, /* for_replay */
+                        tenant_id, tx_id, ls_id, log_block_header_.get_org_cluster_id(),
+                        GET_MIN_CLUSTER_VERSION(), 0, /*session_id*/
+                        scheduler, INT64_MAX,         /*trans_expired_time_*/
                         ls_tx_srv_->get_trans_service());
       if (OB_FAIL(ls_tx_srv_->create_tx_ctx(arg, tx_ctx_existed, ctx_))) {
         TRANS_LOG(WARN, "get_tx_ctx error", K(ret), K(tx_id), KP(ctx_));

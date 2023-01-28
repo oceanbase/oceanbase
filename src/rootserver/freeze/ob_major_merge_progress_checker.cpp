@@ -20,6 +20,7 @@
 #include "share/tablet/ob_tablet_table_iterator.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_all_server_tracer.h"
+#include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/scn.h"
@@ -36,7 +37,7 @@ ObMajorMergeProgressChecker::ObMajorMergeProgressChecker()
   : is_inited_(false), tenant_id_(OB_INVALID_ID), sql_proxy_(nullptr),
     schema_service_(nullptr), zone_merge_mgr_(nullptr), lst_operator_(nullptr),
     server_trace_(nullptr), tablet_compaction_map_(), table_count_(0), table_compaction_map_(),
-    index_validator_()
+    tablet_validator_(), index_validator_(), cross_cluster_validator_()
 {}
 
 int ObMajorMergeProgressChecker::init(
@@ -58,8 +59,12 @@ int ObMajorMergeProgressChecker::init(
     LOG_WARN("fail to create tablet compaction status map", KR(ret), K(tenant_id), K(DEFAULT_TABLET_CNT));
   } else if (OB_FAIL(table_compaction_map_.create(DEFAULT_TABLE_CNT, "MFTbCompMap", "MFTbCompMap", tenant_id))) {
     LOG_WARN("fail to create table compaction status map", KR(ret), K(tenant_id), K(DEFAULT_TABLE_CNT));
+  } else if (OB_FAIL(tablet_validator_.init(tenant_id, sql_proxy, zone_merge_mgr))) {
+    LOG_WARN("fail to init tablet validator", KR(ret), K(tenant_id));
   } else if (OB_FAIL(index_validator_.init(tenant_id, sql_proxy, zone_merge_mgr))) {
     LOG_WARN("fail to init index validator", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(cross_cluster_validator_.init(tenant_id, sql_proxy, zone_merge_mgr))) {
+    LOG_WARN("fail to init cross cluster validator", KR(ret), K(tenant_id));
   } else {
     tenant_id_ = tenant_id;
     sql_proxy_ = &sql_proxy;
@@ -115,8 +120,53 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_uncompacted, boo
           "unverified cnt", unverified_tables.count(), K(uncompacted_tables), K(unverified_tables));
       } else if (ele_count != table_count_) {
         ret = OB_INNER_STAT_ERROR;
-        LOG_WARN("table_compaction_map element count should not be less than table cunt", KR(ret), K(ele_count),
+        LOG_WARN("table_compaction_map element count should not be less than table count", KR(ret), K(ele_count),
           K_(table_count));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
+    const volatile bool &stop,
+    const share::SCN &global_broadcast_scn,
+    const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  ObTableCompactionInfo cur_compaction_info;
+  const uint64_t special_table_id = cross_cluster_validator_.get_special_table_id();
+  if (OB_UNLIKELY(OB_INVALID_ID == special_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid special table id", KR(ret), K_(tenant_id), K(special_table_id));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, special_table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(special_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema is null", KR(ret), K_(tenant_id), K(special_table_id));
+  } else {
+    SMART_VAR(ObArray<ObTabletLSPair>, pairs) {
+      FREEZE_TIME_GUARD;
+      if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(tenant_id_, *table_schema,
+                                                                       *sql_proxy_, pairs))) {
+        LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(special_table_id));
+      } else if (OB_UNLIKELY(pairs.count() < 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get tablet_ls pairs of current table schema", KR(ret), K_(tenant_id),
+                 K(special_table_id));
+      } else if (OB_FAIL(table_compaction_map_.get_refactored(special_table_id, cur_compaction_info))) {
+        LOG_WARN("fail to get refactored", KR(ret), K(special_table_id));
+      } else if (OB_FAIL(cross_cluster_validator_.write_tablet_checksum_at_table_level(stop, pairs,
+                   global_broadcast_scn, cur_compaction_info, special_table_id, expected_epoch))) {
+        LOG_WARN("fail to write tablet checksum at table level", KR(ret), K_(tenant_id), K(pairs));
+      } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
+                   tenant_id_, global_broadcast_scn.get_val_for_tx(),
+                   pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
+        LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(pairs));
       }
     }
   }
@@ -224,6 +274,12 @@ int ObMajorMergeProgressChecker::check_merge_progress(
   return ret;
 }
 
+void ObMajorMergeProgressChecker::set_major_merge_start_time(
+     const int64_t major_merge_start_us)
+{
+  cross_cluster_validator_.set_major_merge_start_time(major_merge_start_us);
+}
+
 int ObMajorMergeProgressChecker::check_tablet(
     const ObTabletInfo &tablet_info,
     const common::hash::ObHashMap<ObTabletID, uint64_t> &tablet_map,
@@ -308,22 +364,19 @@ int ObMajorMergeProgressChecker::check_tablet_compaction_scn(
                    KPC(r), K(ls_info));
         } else {
           LOG_WARN("fail to find ls replica", KR(ret), "addr", r->get_server());
-	}
+	      }
       } else if (OB_UNLIKELY(nullptr == ls_r)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid ls replica", KR(ret), KPC(r));
-      } else if (r->get_status() == ObTabletReplica::ScnStatus::SCN_STATUS_ERROR) {
-        ret = OB_CHECKSUM_ERROR;
-        LOG_ERROR("ERROR! ERROR! ERROR! find error status tablet replica", KR(ret), K(tablet_info));
       } else {
         ObAllZoneMergeProgress::iterator p =
           std::lower_bound(all_progress.begin(), all_progress.end(), ls_r->get_zone());
-	if ((p != all_progress.end()) && (p->zone_ == ls_r->get_zone())) {
+        if ((p != all_progress.end()) && (p->zone_ == ls_r->get_zone())) {
           SCN replica_snapshot_scn;
-	  if (OB_FAIL(replica_snapshot_scn.convert_for_tx(r->get_snapshot_version()))) {
-	    LOG_WARN("fail to convert val to SCN", KR(ret), "snapshot_version", r->get_snapshot_version());
-	  } else if ((REPLICA_TYPE_LOGONLY == ls_r->get_replica_type())
-              || (REPLICA_TYPE_ENCRYPTION_LOGONLY == ls_r->get_replica_type())) {
+          if (OB_FAIL(replica_snapshot_scn.convert_for_tx(r->get_snapshot_version()))) {
+            LOG_WARN("fail to convert val to SCN", KR(ret), "snapshot_version", r->get_snapshot_version());
+          } else if ((REPLICA_TYPE_LOGONLY == ls_r->get_replica_type())
+                    || (REPLICA_TYPE_ENCRYPTION_LOGONLY == ls_r->get_replica_type())) {
             // logonly replica no need check
           } else {
             if ((p->smallest_snapshot_scn_ <= SCN::min_scn())
@@ -333,6 +386,16 @@ int ObMajorMergeProgressChecker::check_tablet_compaction_scn(
             if (replica_snapshot_scn >= global_broadcast_scn) {
               if (replica_snapshot_scn > global_broadcast_scn) {
                 tablet_need_verify = false; // this tablet doesn't need to execute checksum verification
+              } else {  // replica_snapshot_scn == global_broadcast_scn
+                // check tablet replica status when replica_snapshot_scn = global_broadcast_scn,
+                // so as to find out checksum error occured before this round of major freeze.
+                // not check tablet replica status when replica_snapshot_scn > global_broadcast_scn,
+                // since the checksum error detected here may be caused by medium compaction after
+                // this round of major freeze.
+                if (ObTabletReplica::ScnStatus::SCN_STATUS_ERROR == r->get_status()) {
+                  ret = OB_CHECKSUM_ERROR;
+                  LOG_ERROR("ERROR! ERROR! ERROR! find error status tablet replica", KR(ret), K(tablet_info));
+                }
               }
               ++(p->merged_tablet_cnt_);
               p->merged_data_size_ += r->get_data_size();
@@ -473,21 +536,34 @@ int ObMajorMergeProgressChecker::get_associated_replica_num(
 
 int ObMajorMergeProgressChecker::check_verification(
     const volatile bool &stop,
+    const bool is_primary_service,
     const share::SCN &global_broadcast_scn,
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
-  if (stop) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if (stop) {
     ret = OB_CANCELED;
     LOG_WARN("already stop", KR(ret), K_(tenant_id));
+  }
+  // check and set need_validate for index_validator and cross_cluster_validator. tablet_validator
+  // always need validate, thus there is no need to check and set need_validate for tablet_validator.
+  else if (FALSE_IT(index_validator_.check_and_set_validate(is_primary_service))) {
+  } else if (OB_FAIL(cross_cluster_validator_.check_and_set_validate(is_primary_service, global_broadcast_scn))) {
+    LOG_WARN("fail to check and set validate for cross_cluster_validator", KR(ret), K(global_broadcast_scn));
+  } else if (OB_FAIL(tablet_validator_.validate_checksum(stop, global_broadcast_scn, tablet_compaction_map_,
+      table_count_, table_compaction_map_, expected_epoch))) {
+    LOG_WARN("fail to validate checksum of tablet validator", KR(ret), K(global_broadcast_scn));
   } else if (!tablet_compaction_map_.empty()) {
-    if (index_validator_.need_validate() && OB_FAIL(index_validator_.validate_checksum(stop,
-        global_broadcast_scn, tablet_compaction_map_, table_count_, table_compaction_map_,
-        expected_epoch))) {
-      LOG_WARN("fail to validate checksum of index validator", KR(ret), K(global_broadcast_scn),
-               K(expected_epoch));
+    if (OB_FAIL(index_validator_.validate_checksum(stop, global_broadcast_scn,
+        tablet_compaction_map_, table_count_, table_compaction_map_, expected_epoch))) {
+      LOG_WARN("fail to validate checksum of index validator", KR(ret), K(global_broadcast_scn));
+    } else if (OB_FAIL(cross_cluster_validator_.validate_checksum(stop, global_broadcast_scn,
+        tablet_compaction_map_, table_count_, table_compaction_map_, expected_epoch))) {
+      LOG_WARN("fail to validate checksum of cross cluster validator", KR(ret), K(global_broadcast_scn));
     }
-    // TODO @donglou.zl add cross-cluster validator
   } else {
     LOG_INFO("none tablet finished compaction, no need to check verification", K(global_broadcast_scn));
   }

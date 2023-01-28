@@ -381,7 +381,7 @@ int ObIDService::get_number(const int64_t range, const int64_t base_id, int64_t 
       }
     }
     if (OB_EAGAIN == ret || (limited_id_ - last_id_) < (pre_allocated_range_ * 2 / 3)) {
-      const int64_t pre_allocated_id = max(base_id, limited_id_) + max(range * 10, pre_allocated_range_);
+      const int64_t pre_allocated_id = min(max_pre_allocated_id_(base_id), max(base_id, limited_id_) + max(range * 10, pre_allocated_range_));
       submit_log_with_lock_(pre_allocated_id, pre_allocated_id);
     }
   }
@@ -391,7 +391,20 @@ int ObIDService::get_number(const int64_t range, const int64_t base_id, int64_t 
 	return ret;
 }
 
-void ObIDService::get_virtual_info(int64_t &last_id, int64_t &limited_id, SCN &rec_log_ts,
+
+int64_t ObIDService::max_pre_allocated_id_(const int64_t base_id)
+{
+  int64_t max_pre_allocated_id = INT64_MAX;
+  if (TimestampService == service_type_) {
+    if (base_id > ATOMIC_LOAD(&limited_id_)) {
+      (void)inc_update(&last_id_, base_id);
+    }
+    max_pre_allocated_id = ATOMIC_LOAD(&last_id_) + 2 * pre_allocated_range_;
+  }
+  return max_pre_allocated_id;
+}
+
+void ObIDService::get_virtual_info(int64_t &last_id, int64_t &limited_id, SCN &rec_scn,
                                    SCN &latest_log_ts, int64_t &pre_allocated_range,
                                    int64_t &submit_log_ts, bool &is_master)
 {
@@ -399,7 +412,7 @@ void ObIDService::get_virtual_info(int64_t &last_id, int64_t &limited_id, SCN &r
   RLockGuard guard(rwlock_);
   last_id = last_id_;
   limited_id = limited_id_;
-  rec_log_ts = rec_log_ts_;
+  rec_scn = rec_log_ts_;
   latest_log_ts = latest_log_ts_;
   pre_allocated_range = pre_allocated_range_;
   submit_log_ts = submit_log_ts_;

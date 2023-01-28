@@ -454,6 +454,7 @@ void FetchLogARpc::discard_request(const char *discard_reason, const bool is_nor
 
 int FetchLogARpc::async_fetch_log(
     const palf::LSN &req_start_lsn,
+    const int64_t client_progress,
     const int64_t upper_limit,
     bool &rpc_send_succeed)
 {
@@ -479,7 +480,7 @@ int FetchLogARpc::async_fetch_log(
     ret = OB_INVALID_ERROR;
   }
     // Initiating asynchronous requests
-  else if (OB_FAIL(launch_async_rpc_(*cur_req_, req_start_lsn, upper_limit, false, rpc_send_succeed))) {
+  else if (OB_FAIL(launch_async_rpc_(*cur_req_, req_start_lsn, client_progress, upper_limit, false, rpc_send_succeed))) {
     LOG_ERROR("launch async rpc fail", KR(ret), K(req_start_lsn), K(upper_limit), KPC(cur_req_));
   } else {
     // success
@@ -700,8 +701,9 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
         rpc_req.mark_flying_state(false);
       } else {
         bool rpc_send_succeed = false;
+        int64_t server_progress = resp->get_progress();
         // Launch the next RPC
-        if (OB_FAIL(launch_async_rpc_(rpc_req, req_start_lsn, next_upper_limit, true, rpc_send_succeed))) {
+        if (OB_FAIL(launch_async_rpc_(rpc_req, req_start_lsn, server_progress, next_upper_limit, true, rpc_send_succeed))) {
           LOG_ERROR("launch_async_rpc_ fail", KR(ret), K(rpc_req), K(req_start_lsn), K(next_upper_limit));
         }
       }
@@ -860,6 +862,7 @@ void FetchLogARpc::print_handle_info_(RpcRequest &rpc_req,
 
 int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
     const palf::LSN &req_start_lsn,
+    const int64_t progress,
     const int64_t upper_limit,
     const bool launch_by_cb,
     bool &rpc_send_succeed)
@@ -871,7 +874,7 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
   if (OB_ISNULL(rpc_)) {
     LOG_ERROR("invalid handlers", K(rpc_));
     ret = OB_INVALID_ERROR;
-  } else if (OB_FAIL(rpc_req.prepare(req_start_lsn, upper_limit))) {
+  } else if (OB_FAIL(rpc_req.prepare(req_start_lsn, upper_limit, progress))) {
     // First prepare the RPC request and update the req_start_lsn and upper limit
     LOG_ERROR("rpc_req prepare failed", KR(ret), K(req_start_lsn), K(upper_limit));
   } else {
@@ -1196,7 +1199,8 @@ void FetchLogARpc::RpcRequest::update_request(const int64_t upper_limit,
 
 int FetchLogARpc::RpcRequest::prepare(
     const palf::LSN &req_start_lsn,
-    const int64_t upper_limit)
+    const int64_t upper_limit,
+    const int64_t progress)
 {
   int ret = OB_SUCCESS;
 
@@ -1205,7 +1209,7 @@ int FetchLogARpc::RpcRequest::prepare(
     LOG_ERROR("invalid argument", KR(ret), K(req_start_lsn));
   } else {
     req_.set_client_pid(static_cast<uint64_t>(getpid()));
-
+    req_.set_progress(progress);
     // set start lsn
     req_.set_start_lsn(req_start_lsn);
     // set request parameter: upper limit

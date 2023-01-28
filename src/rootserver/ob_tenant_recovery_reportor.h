@@ -64,14 +64,15 @@ public:
  static int update_ls_recovery(storage::ObLS *ls, common::ObMySQLProxy *sql_proxy);
 
  int get_tenant_info(share::ObAllTenantInfo &tenant_info);
+ int get_tenant_readable_scn(share::SCN &readable_scn);
  static int get_readable_scn(const share::ObLSID &id, share::SCN &read_scn);
+ int load_tenant_info();
 private:
   int load_tenant_info_();
   static int get_sync_point_(const share::ObLSID &id, share::SCN &scn, share::SCN &read_scn);
   int update_ls_recovery_stat_();
 
 public:
- static constexpr int64_t IDLE_TIME_US = 100 * 1000;
  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(tenant_info));
 private:
   bool is_inited_;
@@ -84,6 +85,7 @@ private:
   int update_replayable_point_();
   int update_replayable_point_from_tenant_info_();
   int update_replayable_point_from_meta_();
+  int submit_tenant_refresh_schema_task_();
   DISALLOW_COPY_AND_ASSIGN(ObTenantRecoveryReportor);
 };
 

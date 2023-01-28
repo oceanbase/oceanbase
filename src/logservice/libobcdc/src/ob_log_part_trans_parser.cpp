@@ -612,7 +612,7 @@ int ObLogPartTransParser::parse_ddl_stmts_(
     } else if (OB_FAIL(br->set_table_meta(ddl_table_meta))) {
       LOG_ERROR("set table meta fail", KR(ret), K(br), K(ddl_table_meta));
     } else {
-      new (stmt_task) DdlStmtTask(task, row, cluster_id_);
+      new (stmt_task) DdlStmtTask(task, row);
       uint64_t exec_tennat_id = OB_INVALID_TENANT_ID;
 
       // Parsing DDL statement information

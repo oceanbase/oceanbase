@@ -12,9 +12,11 @@
 
 #ifndef LOGSERVICE_LOG_IO_TASK_CB_UTILS_
 #define LOGSERVICE_LOG_IO_TASK_CB_UTILS_
+#include "lib/ob_define.h"
 #include "lib/oblog/ob_log_print_kv.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"               // TO_STRING_KV
+#include "log_group_entry_header.h"
 #include "share/scn.h"
 #include "lsn.h"
 #include "palf_base_info.h"
@@ -66,6 +68,17 @@ struct TruncatePrefixBlocksCbCtx {
   LSN lsn_;
 };
 
+struct FlashbackCbCtx {
+  FlashbackCbCtx(const share::SCN &flashback_scn);
+  FlashbackCbCtx();
+  ~FlashbackCbCtx();
+  bool is_valid() const { return flashback_scn_.is_valid(); }
+  void reset();
+  FlashbackCbCtx& operator=(const FlashbackCbCtx& flashback_ctx);
+  TO_STRING_KV(K_(flashback_scn));
+  share::SCN flashback_scn_;
+};
+
 enum MetaType {
   PREPARE_META = 0,
   CHANGE_CONFIG_META = 1,
@@ -89,6 +102,7 @@ struct FlushMetaCbCtx {
   LSN base_lsn_;
   bool allow_vote_;
   // log_mode_meta_ is apply-effective, so need record log_mode_meta in FlushCtx
+  bool is_applied_mode_meta_;
   LogModeMeta log_mode_meta_;
 };
 }

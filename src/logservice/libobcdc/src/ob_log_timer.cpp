@@ -72,6 +72,7 @@ int ObLogFixedTimer::init(IObLogErrHandler &err_handler, const int64_t max_task_
 
 void ObLogFixedTimer::destroy()
 {
+  LOG_INFO("destroy oblog timer begin");
   stop();
 
   destroy_all_tasks_();

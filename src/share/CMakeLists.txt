@@ -20,10 +20,12 @@ ob_set_subtarget(ob_share allocator
   allocator/ob_tenant_mutil_allocator_mgr.cpp
 )
 
+
 ob_set_subtarget(ob_share backup
   backup/ob_archive_piece.cpp
   backup/ob_archive_struct.cpp
   backup/ob_archive_compatible.cpp
+  backup/ob_archive_mode.cpp
   backup/ob_archive_persist_helper.cpp
   backup/ob_backup_clean_operator.cpp
   backup/ob_backup_clean_struct.cpp
@@ -73,6 +75,7 @@ ob_set_subtarget(ob_share scheduler
 ob_set_subtarget(ob_share common
   ob_alive_server_tracer.cpp
   ob_all_server_tracer.cpp
+  ob_arbitration_service_status.cpp
   ob_autoincrement_param.cpp
   ob_autoincrement_service.cpp
   ob_bg_thread_monitor.cpp
@@ -218,8 +221,8 @@ ob_set_subtarget(ob_share common_mixed
   restore/ob_restore_type.cpp
   restore/ob_physical_restore_info.cpp
   restore/ob_physical_restore_table_operator.cpp
-  restore/ob_log_archive_source.cpp
-  restore/ob_log_archive_source_mgr.cpp
+  restore/ob_log_restore_source.cpp
+  restore/ob_log_restore_source_mgr.cpp
   restore/ob_restore_table_operator.cpp
   restore/ob_restore_persist_helper.cpp
   sequence/ob_sequence_cache.cpp

@@ -81,6 +81,7 @@ public:
 public:
   int init(const int64_t worker_thread_num,
       const int64_t max_timer_task_count,
+      void *fetcher_host,
       IObLogFetcherIdlePool &idle_pool,
       IObLogFetcherDeadPool &dead_pool,
       IObLogErrHandler &err_handler);
@@ -121,6 +122,7 @@ private:
   // record time of fetcher resume
   int64_t                       fetcher_resume_time_ CACHE_ALIGNED;
 
+  void                          *fetcher_host_;
   // External modules
   IObLogFetcherIdlePool         *idle_pool_;              // IDLE POOl
   IObLogFetcherDeadPool         *dead_pool_;              // DEAD POOL

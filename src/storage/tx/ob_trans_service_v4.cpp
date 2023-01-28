@@ -917,6 +917,9 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
         if (OB_TRANS_CTX_NOT_EXIST == ret && !exist) {
           ret = OB_SUCCESS;
         } else {
+          if (!MTL_IS_PRIMARY_TENANT()) {
+            ret = OB_STANDBY_READ_ONLY;
+          }
           TRANS_LOG(WARN, "get tx ctx fail",
                     K(ret), K(store_ctx), K(snapshot), K(ls_id), K(exist), K(read_latest));
         }
@@ -1030,6 +1033,9 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   }
   // fail, rollback
   if (OB_FAIL(ret)) {
+    if (!MTL_IS_PRIMARY_TENANT()) {
+      ret = OB_STANDBY_READ_ONLY;
+    }
     if (OB_NOT_NULL(tx_ctx)) {
       if (access_started) { tx_ctx->end_access(); }
       revert_tx_ctx_(store_ctx.ls_, tx_ctx);
@@ -1090,6 +1096,17 @@ int ObTransService::acquire_tx_ctx(const share::ObLSID &ls_id, const ObTxDesc &t
   TRANS_LOG(TRACE, "acquire tx ctx", K(ret), K(*this), K(ls_id), K(tx), KP(ctx));
   return ret;
 }
+
+// for standby
+int ObTransService::get_tx_ctx(const share::ObLSID &ls_id,
+                               const ObTransID &tx_id,
+                               ObPartTransCtx *&ctx)
+{
+  return tx_ctx_mgr_.get_tx_ctx(ls_id, tx_id, true, ctx);
+}
+
+int ObTransService::revert_tx_ctx(ObPartTransCtx *ctx)
+{ return revert_tx_ctx_(NULL, ctx); }
 
 // plain create
 int ObTransService::get_tx_ctx_(const share::ObLSID &ls_id,
@@ -1296,7 +1313,7 @@ int ObTransService::validate_snapshot_version_(const SCN snapshot,
  *    if so, update replica_readable_snapshot = v and return OK, otherwise
  * 4. return OB_REPLICA_NOT_READABLE
  */
-int ObTransService::check_replica_readable_(const SCN snapshot,
+int ObTransService::check_replica_readable_(const SCN &snapshot,
                                             const bool elr,
                                             const ObTxReadSnapshot::SRC src,
                                             const share::ObLSID &ls_id,
@@ -1306,8 +1323,7 @@ int ObTransService::check_replica_readable_(const SCN snapshot,
   int ret = OB_SUCCESS;
   bool leader = false;
   int64_t epoch = 0;
-  SCN ls_weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
-  bool readable = snapshot <= ls_weak_read_ts;
+  bool readable = check_ls_readable_(ls, snapshot);
   if (!readable) {
     if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader, epoch))) {
       TRANS_LOG(WARN, "get replica status fail", K(ls_id));
@@ -1329,9 +1345,27 @@ int ObTransService::check_replica_readable_(const SCN snapshot,
   return ret;
 }
 
+bool ObTransService::check_ls_readable_(ObLS &ls, const SCN &snapshot)
+{
+  int ret = OB_SUCCESS;
+  bool readable = false;
+  SCN scn;
+  if (MTL_IS_PRIMARY_TENANT()) {
+    readable = snapshot <= ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
+  } else if (OB_FAIL(ls.get_ls_replica_readable_scn(scn))) {
+    TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls.get_ls_id()));
+  } else {
+    readable = snapshot <= scn;
+    if (!readable) {
+      TRANS_LOG(INFO, "check replica readable fail", K(ret), K(snapshot), K(scn));
+    }
+  }
+  return readable;
+}
+
 int ObTransService::wait_follower_readable_(ObLS &ls,
                                             const int64_t expire_ts,
-                                            const SCN snapshot)
+                                            const SCN &snapshot)
 {
   int ret = OB_REPLICA_NOT_READABLE;
   int64_t compare_timeout = 0;
@@ -1347,7 +1381,7 @@ int ObTransService::wait_follower_readable_(ObLS &ls,
     do {
       if (OB_UNLIKELY(ObClockGenerator::getClock() >= expire_ts)) {
         ret = OB_TIMEOUT;
-      } else if (snapshot <= ls.get_ls_wrs_handler()->get_ls_weak_read_ts()) {
+      } else if (check_ls_readable_(ls, snapshot)) {
         TRANS_LOG(WARN, "read from follower", K(snapshot), K(ls.get_ls_id()), K(tenant_id));
         ret = OB_SUCCESS;
       } else if (ObClockGenerator::getClock() >= compare_expired_time) {
@@ -1481,11 +1515,16 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
   int ret = OB_SUCCESS;
   const MonotonicTs now0 = MonotonicTs::current_time();
   const MonotonicTs now = now0 - MonotonicTs(gts_ahead);
+  int retry_times = 0;
+  const int MAX_RETRY_TIMES = 100;
   do {
     int64_t n = ObClockGenerator::getClock();
     MonotonicTs rts(0);
     if (n >= expire_ts) {
       ret = OB_TIMEOUT;
+    } else if (retry_times++ > MAX_RETRY_TIMES) {
+      ret = OB_GTS_NOT_READY;
+      TRANS_LOG(WARN, "gts not ready", K(ret), K(retry_times));
     } else if (OB_FAIL(ts_mgr_->get_gts(tenant_id_, now, NULL, snapshot, rts))) {
       if (OB_EAGAIN == ret) {
         if (interrupt_checker()) {
@@ -2229,10 +2268,24 @@ int ObTransService::iterate_all_observer_tx_stat(ObTxStatIterator &tx_stat_iter)
   } else {
     // do nothing
   }
-  if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-    // TODO 4.0, dump scheduler trans ...
-  }
 
+  return ret;
+}
+
+int ObTransService::iterate_tx_scheduler_stat(ObTxSchedulerStatIterator &tx_scheduler_stat_iter)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(tx_desc_mgr_.iterate_tx_scheduler_stat(tx_scheduler_stat_iter))) {
+    TRANS_LOG(WARN, "iterate tx stat error", KR(ret));
+  } else {
+    // do nothing
+  }
   return ret;
 }
 
@@ -2921,6 +2974,189 @@ int ObTransService::create_in_txn_implicit_savepoint(ObTxDesc &tx, int64_t &save
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "create in txn implicit savepoint, but txn not in txn", K(ret), K(tx));
   }
+  return ret;
+}
+
+int ObTransService::handle_trans_ask_state(const ObAskStateMsg &msg,
+                                           obrpc::ObTransRpcResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTransID tx_id = msg.get_trans_id();
+  share::ObLSID coord = msg.get_receiver();
+  ObPartTransCtx *ctx = NULL;
+  ObAskStateRespMsg resp;
+  if (OB_FAIL(get_tx_ctx_(coord, tx_id, ctx))) {
+    TRANS_LOG(INFO, "fail to get coordinator tx context", K(ret), K(tx_id), K(coord));
+    if (OB_TRANS_CTX_NOT_EXIST == ret) {
+      ObStateInfo state_info;
+      state_info.ls_id_ = coord;
+      state_info.snapshot_version_ = msg.snapshot_;
+      if (OB_FAIL(check_and_fill_state_info(tx_id, state_info))) {
+        TRANS_LOG(WARN, "fill state info fail", K(ret), K(coord), K(tx_id), K(state_info));
+      } else if (OB_FAIL(resp.state_info_array_.push_back(state_info))) {
+        TRANS_LOG(WARN, "state info array push back fail", K(ret), K(coord), K(tx_id), K(state_info));
+      }
+    }
+  } else if (OB_FAIL(ctx->handle_trans_ask_state(msg.snapshot_, resp))) {
+    TRANS_LOG(WARN, "fail to handle trans ask state", K(ret), K(coord), K(tx_id));
+  }
+  if (OB_NOT_NULL(ctx)) {
+    revert_tx_ctx_(ctx);
+  }
+  if (OB_SUCC(ret)) {
+    build_tx_ask_state_resp_(resp, msg);
+    if (OB_FAIL(rpc_->post_msg(msg.sender_addr_, resp))) {
+      TRANS_LOG(WARN, "post ask state msg fail", K(ret), K(resp));
+    }
+  }
+  result.reset();
+  result.init(ret, msg.get_timestamp());
+  TRANS_LOG(INFO, "handle trans ask state", K(ret), K(msg), K(resp));
+  return ret;
+}
+
+int ObTransService::check_and_fill_state_info(const ObTransID &tx_id, ObStateInfo &state_info)
+{
+  int ret = OB_SUCCESS;
+  int tx_state = ObTxData::RUNNING;
+  SCN version;
+  if (OB_FAIL(get_tx_state_from_tx_table_(state_info.ls_id_, tx_id, tx_state, version))) {
+    TRANS_LOG(INFO, "get tx state from tx table fail", K(ret), K(state_info.ls_id_), K(tx_id));
+    ObLSService *ls_svr =  MTL(ObLSService *);
+    ObLSHandle handle;
+    ObLS *ls = nullptr;
+
+    if (OB_ISNULL(ls_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "log stream service is NULL", K(ret));
+    } else if (OB_FAIL(ls_svr->get_ls(state_info.ls_id_, handle, ObLSGetMod::TRANS_MOD))) {
+      TRANS_LOG(WARN, "get log stream failed", K(ret));
+    } else if (OB_ISNULL(ls = handle.get_ls())) {
+      // todo:获取ls的状态，等待RS接口
+    } else if (OB_FAIL(ls->get_ls_replica_readable_scn(version))) {
+      TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls_id));
+    } else {
+      state_info.state_ = ObTxState::UNKNOWN;
+      state_info.version_ = version;
+    }
+  } else {
+    switch (tx_state) {
+      case ObTxData::COMMIT:
+        state_info.state_ = ObTxState::COMMIT;
+        break;
+      case ObTxData::ABORT:
+        state_info.state_ = ObTxState::ABORT;
+        break;
+      case ObTxData::RUNNING:
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "tx in-progress but ctx miss", K(ret), K(tx_state), K(tx_id), K(state_info));
+    }
+    state_info.version_ = version;
+  }
+  return ret;
+}
+
+void ObTransService::build_tx_ask_state_resp_(ObAskStateRespMsg &resp, const ObAskStateMsg &msg)
+{
+  resp.cluster_version_ = msg.cluster_version_;
+  resp.tenant_id_ = msg.tenant_id_;
+  resp.tx_id_ = msg.tx_id_;
+  resp.sender_addr_ = self_;
+  resp.sender_ = msg.receiver_;
+  resp.request_id_ = ObTimeUtility::current_time();
+  resp.cluster_id_ = msg.cluster_id_;
+  resp.receiver_ = msg.sender_;
+}
+
+int ObTransService::handle_trans_ask_state_response(const ObAskStateRespMsg &msg,
+                                                    obrpc::ObTransRpcResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTransID tx_id = msg.get_trans_id();
+  share::ObLSID ls_id = msg.get_receiver();
+  ObPartTransCtx *ctx = NULL;
+  if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
+    TRANS_LOG(INFO, "fail to get tx context", K(ret), K(tx_id), K(ls_id));
+  } else if (OB_FAIL(ctx->handle_trans_ask_state_resp(msg))) {
+    TRANS_LOG(WARN, "fail to handle trans ask state resp", K(ret), K(ls_id), K(tx_id));
+  }
+  if (OB_NOT_NULL(ctx)) {
+    revert_tx_ctx_(ctx);
+  }
+  result.reset();
+  result.init(ret, msg.get_timestamp());
+  TRANS_LOG(INFO, "handle trans ask state resp state", K(ret), K(msg));
+  return ret;
+}
+
+int ObTransService::handle_trans_collect_state(const ObCollectStateMsg &msg,
+                                               obrpc::ObTransRpcResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTransID tx_id = msg.get_trans_id();
+  share::ObLSID ls_id = msg.get_receiver();
+  ObPartTransCtx *ctx = NULL;
+  ObCollectStateRespMsg resp;
+  if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
+    TRANS_LOG(INFO, "fail to get tx context", K(ret), K(tx_id), K(ls_id));
+    if (OB_TRANS_CTX_NOT_EXIST == ret) {
+      ObStateInfo state_info;
+      state_info.ls_id_ = ls_id;
+      if (OB_FAIL(check_and_fill_state_info(tx_id, state_info))) {
+        TRANS_LOG(WARN, "fill state info fail", K(ret), K(ls_id), K(tx_id), K(state_info));
+      } else {
+        resp.state_info_ = state_info;
+      }
+    }
+  } else if (OB_FAIL(ctx->handle_trans_collect_state(resp.state_info_, msg.snapshot_))) {
+    TRANS_LOG(WARN, "fail to handle trans ask state", K(ret), K(ls_id), K(tx_id));
+  }
+  if (OB_NOT_NULL(ctx)) {
+    revert_tx_ctx_(ctx);
+  }
+  if (OB_SUCC(ret)) {
+    build_tx_collect_state_resp_(resp, msg);
+    if (OB_FAIL(rpc_->post_msg(msg.sender_addr_, resp))) {
+      TRANS_LOG(WARN, "post tx collect state resp fail", K(ret), K(resp));
+    }
+  }
+  result.reset();
+  result.init(ret, msg.get_timestamp());
+  TRANS_LOG(INFO, "handle trans collect state", K(ret), K(msg), K(resp));
+  return ret;
+}
+
+void ObTransService::build_tx_collect_state_resp_(ObCollectStateRespMsg &resp, const ObCollectStateMsg &msg)
+{
+  resp.cluster_version_ = msg.cluster_version_;
+  resp.tenant_id_ = msg.tenant_id_;
+  resp.tx_id_ = msg.tx_id_;
+  resp.sender_addr_ = self_;
+  resp.sender_ = msg.receiver_;
+  resp.request_id_ = ObTimeUtility::current_time();
+  resp.cluster_id_ = msg.cluster_id_;
+  resp.receiver_ = msg.sender_;
+  resp.state_info_.snapshot_version_ = msg.snapshot_;
+}
+
+int ObTransService::handle_trans_collect_state_response(const ObCollectStateRespMsg &msg,
+                                                        obrpc::ObTransRpcResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTransID tx_id = msg.get_trans_id();
+  share::ObLSID ls_id = msg.get_receiver();
+  ObPartTransCtx *ctx = NULL;
+  if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
+    TRANS_LOG(INFO, "fail to get tx context", K(ret), K(tx_id), K(ls_id));
+  } else if (OB_FAIL(ctx->handle_trans_collect_state_resp(msg))) {
+    TRANS_LOG(WARN, "fail to handle trans collect state resp", K(ret), K(ls_id), K(tx_id));
+  }
+  if (OB_NOT_NULL(ctx)) {
+    revert_tx_ctx_(ctx);
+  }
+  result.reset();
+  result.init(ret, msg.get_timestamp());
   return ret;
 }
 

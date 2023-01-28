@@ -14,6 +14,8 @@
 #include "share/backup/ob_archive_path.h"
 #include "share/backup/ob_backup_struct.h"
 #include "lib/ob_define.h"
+#include "lib/string/ob_fixed_length_string.h"
+#include "lib/file/ob_string_util.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -310,6 +312,37 @@ int ObArchivePathUtil::get_ls_archive_file_path(const ObBackupDest &dest, const 
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id), K(ls_id), K(file_id));
   } else if (OB_FAIL(path.join(file_id))) {
     LOG_WARN("failed to join file id", K(ret), K(path), K(file_id));
+  }
+  return ret;
+}
+
+
+  // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/"meta_type"/
+int ObArchivePathUtil::get_ls_meta_record_prefix(const ObBackupDest &dest, const int64_t dest_id,
+    const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
+    const ObArchiveLSMetaType &meta_type, ObBackupPath &prefix)
+{
+  int ret = OB_SUCCESS;
+  ObFixedLengthString<ObArchiveLSMetaType::MAX_TYPE_LEN> s(meta_type.get_type_str());
+  if (OB_FAIL(get_piece_ls_dir_path(dest, dest_id, round_id, piece_id, ls_id, prefix))) {
+    LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id), K(ls_id));
+  } else if (OB_FAIL(prefix.join(::obsys::ObStringUtil::str_to_lower(s.ptr())))) {
+    LOG_WARN("failed to join meta_type", K(ret), K(prefix));
+  }
+  return ret;
+}
+
+  // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/"meta_type"/[file_id]
+int ObArchivePathUtil::get_ls_meta_record_path(const ObBackupDest &dest, const int64_t dest_id,
+    const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
+    const ObArchiveLSMetaType &meta_type, const int64_t file_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_meta_record_prefix(dest, dest_id, round_id, piece_id, ls_id, meta_type, path))) {
+    LOG_WARN("failed to get ls meta record perfix", K(ret), K(dest), K(round_id),
+        K(dest_id), K(piece_id), K(ls_id), K(meta_type));
+  } else if (OB_FAIL(path.join(file_id))) {
+    LOG_WARN("failed to join file_id", K(ret), K(path));
   }
   return ret;
 }

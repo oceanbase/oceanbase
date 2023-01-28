@@ -384,6 +384,29 @@ private:
   obrpc::ObAdminMigrateUnitArg rpc_arg_;
 };
 
+class ObAddArbitrationServiceStmt : public ObSystemCmdStmt
+{
+public:
+  ObAddArbitrationServiceStmt() : ObSystemCmdStmt(stmt::T_ADD_ARBITRATION_SERVICE) {}
+  virtual ~ObAddArbitrationServiceStmt() {}
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+};
+
+class ObRemoveArbitrationServiceStmt : public ObSystemCmdStmt
+{
+public:
+  ObRemoveArbitrationServiceStmt() : ObSystemCmdStmt(stmt::T_REMOVE_ARBITRATION_SERVICE) {}
+  virtual ~ObRemoveArbitrationServiceStmt() {}
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+};
+
+class ObReplaceArbitrationServiceStmt : public ObSystemCmdStmt
+{
+public:
+  ObReplaceArbitrationServiceStmt() : ObSystemCmdStmt(stmt::T_REPLACE_ARBITRATION_SERVICE) {}
+  virtual ~ObReplaceArbitrationServiceStmt() {}
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+};
 
 class ObClearLocationCacheStmt : public ObSystemCmdStmt
 {
@@ -1162,6 +1185,18 @@ public:
   common::ObAddr server_;
 };
 
+class ObRecoverTenantStmt : public ObSystemCmdStmt
+{
+public:
+  ObRecoverTenantStmt()
+    : ObSystemCmdStmt(stmt::T_RECOVER),
+      rpc_arg_() {}
+  virtual ~ObRecoverTenantStmt() {}
+
+  obrpc::ObRecoverTenantArg &get_rpc_arg() { return rpc_arg_; }
+private:
+  obrpc::ObRecoverTenantArg rpc_arg_;
+};
 
 } // end namespace sql
 } // end namespace oceanbase

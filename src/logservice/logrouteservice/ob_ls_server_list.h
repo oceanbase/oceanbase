@@ -129,7 +129,11 @@ private:
 
     bool is_log_served(const palf::LSN &lsn)
     {
-      return (lsn >= start_lsn_) && (lsn <= end_lsn_);
+      // when lsn < start_lsn_, it doesn't mean that the log not exists in the server,
+      // because the log could be archived, and the logroute service doesn't know whether
+      // archive is on or log exists in archive, so the rpc would be lauched.
+      // In this perspective, the log is served, because we need to lauch rpc.
+      return lsn <= end_lsn_;
     }
 
     bool is_lower_bound(const palf::LSN &lsn)

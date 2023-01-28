@@ -3755,9 +3755,11 @@ int ObBackupLevel::set_level(const char *str)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObLogArchiveDestState, state_);
+
 bool ObLogArchiveDestState::is_valid() const
 {
-  return state_ >= State::ENBALE && state_ < State::MAX;
+  return state_ >= State::ENABLE && state_ < State::MAX;
 }
 
 int ObLogArchiveDestState::set_state(const char *buf)
@@ -3765,10 +3767,8 @@ int ObLogArchiveDestState::set_state(const char *buf)
   int ret = OB_SUCCESS;
   ObString s(buf);
   const char *str[] = {
-    "ENBALE",
-    "DISABLE",
-    "DEFER",
-    "INTERRUPT"
+    "ENABLE",
+    "DEFER"
   };
   STATIC_ASSERT(State::MAX == ARRAYSIZEOF(str), "count mismatch");
   const int64_t count = ARRAYSIZEOF(str);
@@ -3779,6 +3779,7 @@ int ObLogArchiveDestState::set_state(const char *buf)
     for (int64_t i = 0; i < count; ++i) {
       if (0 == s.case_compare(str[i])) {
         state_ = static_cast<State>(i);
+        break;
       }
     }
   }
@@ -3801,10 +3802,8 @@ const char *ObLogArchiveDestState::get_str() const
 {
   const char *str = "UNKNOWN";
   const char *state_strs[] = {
-    "ENBALE",
-    "DISABLE",
-    "DEFER",
-    "INTERRUPT"
+    "ENABLE",
+    "DEFER"
   };
   if (!is_valid()) {
     LOG_ERROR("invalid state", K(state_));
@@ -3822,7 +3821,7 @@ ObLogArchiveDestAtrr::ObLogArchiveDestAtrr()
   dest_id_ = 0;
   piece_switch_interval_ = OB_DEFAULT_PIECE_SWITCH_INTERVAL;
   lag_target_ = OB_DEFAULT_LAG_TARGET;
-  state_.set_disable();
+  state_.set_enable();
 }
 
 int ObLogArchiveDestAtrr::set_piece_switch_interval(const char *buf)
@@ -3997,6 +3996,32 @@ int ObLogArchiveDestAtrr::gen_config_items(common::ObIArray<BackupConfigItemPair
     LOG_WARN("failed to assign value", K(ret));
   } else if(OB_FAIL(items.push_back(config))) {
      LOG_WARN("failed to push backup config", K(ret));
+  }
+
+  return ret;
+}
+
+int ObLogArchiveDestAtrr::gen_path_config_items(common::ObIArray<BackupConfigItemPair> &items) const
+{
+  int ret = OB_SUCCESS;
+  items.reset();
+  BackupConfigItemPair config;
+  if (!dest_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguement", KR(ret), KPC(this));
+  }
+
+  // gen path config
+  ObBackupPathString tmp;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(config.key_.assign(OB_STR_PATH))) {
+    LOG_WARN("failed to assign key", KR(ret), KPC(this));
+  } else if (OB_FAIL(dest_.get_backup_dest_str(tmp.ptr(), tmp.capacity()))) {
+    LOG_WARN("failed to get backup dest", KR(ret), KPC(this));
+  } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
+    LOG_WARN("failed to assign value", KR(ret), KPC(this));
+  } else if(OB_FAIL(items.push_back(config))) {
+     LOG_WARN("failed to push backup config", KR(ret), KPC(this));
   }
 
   return ret;

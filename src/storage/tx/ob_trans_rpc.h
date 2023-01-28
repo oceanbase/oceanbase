@@ -90,6 +90,11 @@ public:
   RPC_AP(PR3 post_rollback_sp_msg, OB_TX_ROLLBACK_SAVEPOINT, (transaction::ObTxRollbackSPMsg), ObTxRpcRollbackSPResult);
   RPC_AP(PR3 post_keep_alive_msg, OB_TX_KEEPALIVE, (transaction::ObTxKeepaliveMsg), ObTransRpcResult);
   RPC_AP(PR3 post_keep_alive_resp_msg, OB_TX_KEEPALIVE_RESP, (transaction::ObTxKeepaliveRespMsg), ObTransRpcResult);
+  // for standby
+  RPC_AP(PR3 post_ask_state_msg, OB_TX_ASK_STATE, (transaction::ObAskStateMsg), ObTransRpcResult);
+  RPC_AP(PR3 post_ask_state_resp_msg, OB_TX_ASK_STATE_RESP, (transaction::ObAskStateRespMsg), ObTransRpcResult);
+  RPC_AP(PR3 post_collect_state_msg, OB_TX_COLLECT_STATE, (transaction::ObCollectStateMsg), ObTransRpcResult);
+  RPC_AP(PR3 post_collect_state_resp_msg, OB_TX_COLLECT_STATE_RESP, (transaction::ObCollectStateRespMsg), ObTransRpcResult);
   // xa
   RPC_AP(PR3 post_sub_prepare_msg, OB_TX_SUB_PREPARE, (transaction::ObTxSubPrepareMsg), ObTransRpcResult);
   RPC_AP(PR3 post_sub_prepare_resp_msg, OB_TX_SUB_PREPARE_RESP, (transaction::ObTxSubPrepareRespMsg), ObTransRpcResult);
@@ -120,6 +125,11 @@ TX_P_(Abort, OB_TX_ABORT);
 TX_P_(RollbackSP, OB_TX_ROLLBACK_SAVEPOINT);
 TX_P_(Keepalive, OB_TX_KEEPALIVE);
 TX_P_(KeepaliveResp, OB_TX_KEEPALIVE_RESP);
+//for standby
+TX_P_(AskState, OB_TX_ASK_STATE);
+TX_P_(AskStateResp, OB_TX_ASK_STATE_RESP);
+TX_P_(CollectState, OB_TX_COLLECT_STATE);
+TX_P_(CollectStateResp, OB_TX_COLLECT_STATE_RESP);
 // for xa
 TX_P_(SubPrepare, OB_TX_SUB_PREPARE);
 TX_P_(SubPrepareResp, OB_TX_SUB_PREPARE_RESP);
@@ -407,6 +417,7 @@ private:
   int post_commit_msg_(const ObAddr &server, ObTxMsg &msg);
   int post_sub_request_msg_(const ObAddr &server, ObTxMsg &msg);
   int post_sub_response_msg_(const ObAddr &server, ObTxMsg &msg);
+  int post_standby_msg_(const ObAddr &server, ObTxMsg &msg);
   void statistics_();
 private:
   static const int64_t STAT_INTERVAL = 1 * 1000 * 1000;
@@ -424,6 +435,10 @@ private:
   obrpc::ObTxRPCCB<obrpc::OB_TX_ROLLBACK_SAVEPOINT> tx_rollback_sp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_KEEPALIVE> tx_keepalive_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_KEEPALIVE_RESP> tx_keepalive_resp_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_ASK_STATE> tx_ask_state_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_ASK_STATE_RESP> tx_ask_state_resp_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_COLLECT_STATE> tx_collect_state_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_COLLECT_STATE_RESP> tx_collect_state_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_PREPARE> tx_sub_prepare_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_PREPARE_RESP> tx_sub_prepare_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_COMMIT> tx_sub_commit_cb_;

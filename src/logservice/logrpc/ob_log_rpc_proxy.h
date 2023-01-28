@@ -25,8 +25,16 @@ class ObLogServiceRpcProxy : public obrpc::ObRpcProxy
 {
 public:
   DEFINE_TO(ObLogServiceRpcProxy);
-  RPC_S(PR3 send_log_config_change_cmd, OB_LOG_CONFIG_CHANGE_CMD, 
+  RPC_S(PR3 send_log_config_change_cmd, OB_LOG_CONFIG_CHANGE_CMD,
       (logservice::LogConfigChangeCmd), logservice::LogConfigChangeCmdResp);
+  RPC_S(PR3 get_leader_max_scn, OB_LOG_GET_LEADER_MAX_SCN,
+      (logservice::LogGetLeaderMaxScnReq), logservice::LogGetLeaderMaxScnResp);
+  RPC_AP(PR3 send_server_probe_req, OB_LOG_ARB_PROBE_MSG,
+      (logservice::LogServerProbeMsg));
+  RPC_AP(PR3 send_change_access_mode_cmd, OB_LOG_CHANGE_ACCESS_MODE_CMD,
+      (logservice::LogChangeAccessModeCmd));
+  RPC_AP(PR3 send_log_flashback_msg, OB_LOG_FLASHBACK_CMD,
+      (logservice::LogFlashbackMsg));
   RPC_S(PR3 get_palf_stat, OB_LOG_GET_PALF_STAT,
       (logservice::LogGetPalfStatReq), logservice::LogGetPalfStatResp);
 };

@@ -666,7 +666,7 @@ void ObApplyStatus::close_palf_handle()
   }
 }
 
-int ObApplyStatus::get_min_unapplied_scn(SCN &scn)
+int ObApplyStatus::get_max_applied_scn(SCN &scn)
 {
   int ret = OB_SUCCESS;
   //保证此接口不会被并发调用, 两把锁的顺序不能更改
@@ -724,12 +724,10 @@ int ObApplyStatus::get_min_unapplied_scn(SCN &scn)
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "max_applied_cb_scn_ larger than last_check_scn_, unexpected", K(ret), KPC(this));
   }
-  if (OB_SUCC(ret) && max_applied_cb_scn_.is_valid()) {
-    scn = SCN::plus(max_applied_cb_scn_, 1);
-  }
-  CLOG_LOG(TRACE, "get_min_unapplied_scn finish", K(ret), KPC(this), K(scn));
+  scn = max_applied_cb_scn_;
+  CLOG_LOG(TRACE, "get_max_applied_scn finish", K(ret), KPC(this), K(scn));
   if (palf_reach_time_interval(5 * 1000 * 1000, get_info_debug_time_)) {
-    CLOG_LOG(INFO, "get_min_unapplied_log_info", K(scn), KPC(this));
+    CLOG_LOG(INFO, "get_max_applied_scn", K(scn), KPC(this));
   }
   return ret;
 }
@@ -768,11 +766,11 @@ int ObApplyStatus::handle_drop_cb()
 int ObApplyStatus::diagnose(ApplyDiagnoseInfo &diagnose_info)
 {
   int ret = OB_SUCCESS;
-  SCN min_unapplied_scn;
-  if (OB_FAIL(get_min_unapplied_scn(min_unapplied_scn))) {
-    CLOG_LOG(WARN, "get_min_unapplied_scn failed", KPC(this), K(ret));
+  SCN max_applied_scn;
+  if (OB_FAIL(get_max_applied_scn(max_applied_scn))) {
+    CLOG_LOG(WARN, "get_max_applied_scn failed", KPC(this), K(ret));
   } else {
-    diagnose_info.max_applied_scn_ = min_unapplied_scn.is_valid_and_not_min() ? SCN::minus(min_unapplied_scn, 1) : SCN::min_scn();
+    diagnose_info.max_applied_scn_ = max_applied_scn;
   }
   return ret;
 }
@@ -1226,7 +1224,7 @@ int ObLogApplyService::switch_to_follower(const share::ObLSID &id)
   return ret;
 }
 
-int ObLogApplyService::get_min_unapplied_scn(const share::ObLSID &id, SCN &scn)
+int ObLogApplyService::get_max_applied_scn(const share::ObLSID &id, SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObApplyStatus *apply_status = NULL;
@@ -1239,10 +1237,10 @@ int ObLogApplyService::get_min_unapplied_scn(const share::ObLSID &id, SCN &scn)
   } else if (NULL == (apply_status = guard.get_apply_status())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
-  } else if (OB_FAIL(apply_status->get_min_unapplied_scn(scn))) {
-    CLOG_LOG(WARN, "apply status get_min_unapplied_scn failed", K(ret), K(id));
+  } else if (OB_FAIL(apply_status->get_max_applied_scn(scn))) {
+    CLOG_LOG(WARN, "apply status get_max_applied_scn failed", K(ret), K(id));
   } else {
-    CLOG_LOG(TRACE, "apply service get_min_unapplied_scn success", K(id));
+    CLOG_LOG(TRACE, "apply service get_max_applied_scn success", K(id));
   }
   return ret;
 }

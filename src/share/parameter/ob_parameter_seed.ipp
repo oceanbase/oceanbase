@@ -57,6 +57,8 @@ DEF_STR(devname, OB_CLUSTER_PARAMETER, "bond0", "name of network adapter",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(zone, OB_CLUSTER_PARAMETER, "", "specifies the zone name",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR(ob_startup_mode, OB_CLUSTER_PARAMETER, "NORMAL", "specifies the observer startup mode",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 DEF_TIME(internal_sql_execute_timeout, OB_CLUSTER_PARAMETER, "30s", "[1000us, 1h]",
          "the number of microseconds an internal DML request is permitted to "
          "execute before it is terminated. Range: [1000us, 1h]",
@@ -496,17 +498,15 @@ DEF_INT(log_disk_percentage, OB_CLUSTER_PARAMETER, "0", "[0,99]",
         " b) if the data and the log are on the different disks, means log_disk_perecentage = 90",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-// TODO(xianlin.lh): add the feature on 4.1
-//DEF_BOOL(clog_transport_compress_all, OB_CLUSTER_PARAMETER, "False",
-//         "If this option is set to true, use compression for clog transport. "
-//         "The default is false(no compression)",
-//         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(log_transport_compress_all, OB_TENANT_PARAMETER, "False",
+         "If this option is set to true, use compression for log transport. "
+         "The default is false(no compression)",
+         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-// TODO(xianlin.lh): add the feature on 4.1
-//DEF_STR_WITH_CHECKER(clog_transport_compress_func, OB_CLUSTER_PARAMETER, "lz4_1.0",
-//                     common::ObConfigBatchRpcCompressFuncChecker,
-//                     "compressor used for clog transport. Values: none, lz4_1.0, zstd_1.0, zstd_1.3.8",
-//                     ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(log_transport_compress_func, OB_TENANT_PARAMETER, "lz4_1.0",
+                     common::ObConfigCompressFuncChecker,
+                     "compressor used for log transport. Values: none, lz4_1.0, zstd_1.0, zstd_1.3.8",
+                     ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // TODO(xianlin.lh): add the feature on 4.1
 //DEF_BOOL(enable_clog_persistence_compress, OB_TENANT_PARAMETER, "False",
@@ -525,17 +525,15 @@ DEF_INT(log_disk_percentage, OB_CLUSTER_PARAMETER, "0", "[0,99]",
 //         "control if enable log archive",
 //         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-// TODO(shuning.tsn) : add the feature on 4.1
-//DEF_INT(log_restore_concurrency, OB_CLUSTER_PARAMETER, "10", "[1,]",
-//        "concurrency for log restoring"
-//        "Range: [1, ] in integer",
-//        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(log_restore_concurrency, OB_TENANT_PARAMETER, "1", "[1, 100]",
+        "log restore concurrency, for both restore tenant and standby tenant. "
+        "Range: [1, 100] in integer",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-// TODO(shuning.tsn) : add the feature on 4.1
-//DEF_INT(log_archive_concurrency, OB_CLUSTER_PARAMETER, "0", "[0,]",
-//        "concurrency  for log_archive_sender and log_archive_spiter"
-//        "Range: [0, ] in integer",
-//        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(log_archive_concurrency, OB_TENANT_PARAMETER, "1", "[1, 100]",
+        "log archive concurrency, for both archive fetcher and sender"
+        "Range: [1, 100] in integer",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(log_disk_utilization_limit_threshold, OB_TENANT_PARAMETER, "95",
         "[80, 100]",
@@ -717,12 +715,12 @@ DEF_INT(bf_cache_miss_count_threshold, OB_CLUSTER_PARAMETER, "100", "[0,)", "bf 
 DEF_INT(fuse_row_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "fuse row cache priority. Range:[1, )", ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //background limit config
-DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "120s", "[5s,600s]",
-        "io timeout for data storage, Range [5s,600s]. "
-        "The default value is 120s",
+DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",
+        "io timeout for data storage, Range [1s,600s]. "
+        "The default value is 10s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(data_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "30s", "[10s,300s]",
-        "time to tolerate disk read failure, after that, the disk status will be set warning. Range [10s,300s]. The default value is 30s",
+DEF_TIME(data_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "5s", "[1s,300s]",
+        "time to tolerate disk read failure, after that, the disk status will be set warning. Range [1s,300s]. The default value is 5s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME_WITH_CHECKER(data_storage_error_tolerance_time, OB_CLUSTER_PARAMETER, "300s", common::ObDataStorageErrorToleranceTimeChecker, "[10s,7200s]",
         "time to tolerate disk read failure, after that, the disk status will be set error. Range [10s,7200s]. The default value is 300s",
@@ -1277,6 +1275,10 @@ DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
     "Select base of log for QUERY_RESPONSE_TIME ranges. WARNING: variable change takes affect only after flush."
     "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(arbitration_timeout, OB_TENANT_PARAMETER, "5s", "[3s,]",
+        "timeout which will trigger automatic degrading when arbitration replica exists"
+        "Range: [3s,+∞]",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ignore_system_memory_over_limit_error, OB_CLUSTER_PARAMETER, "False",
          "When the hold of observer tenant is over the system_memory, print ERROR with False, or WARN with True",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1300,6 +1302,10 @@ DEF_STR_LIST(sanity_whitelist, OB_CLUSTER_PARAMETER, "", "vip who wouldn't leadi
 DEF_TIME(_advance_checkpoint_timeout, OB_CLUSTER_PARAMETER, "30m", "[10s,180m]",
          "the timeout for backup/migrate advance checkpoint Range: [10s,180m]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(dump_data_dictionary_to_log_interval, OB_TENANT_PARAMETER, "24h", "(0s,]",
+         "data dictionary dump to log(SYS LS) interval"
+        "Range: (0s,+∞)",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_INT(errsim_migration_tablet_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "the tablet id that migration want to insert error"
         "Range: [0,) in integer",

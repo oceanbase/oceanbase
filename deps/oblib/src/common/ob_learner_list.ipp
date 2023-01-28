@@ -216,6 +216,18 @@ int BaseLearnerList<MAX_SIZE, T>::get_server_by_index(const int64_t idx, common:
 }
 
 template <int64_t MAX_SIZE, typename T>
+int BaseLearnerList<MAX_SIZE, T>::get_member_by_index(const int64_t idx, common::ObMember &member) const
+{
+  int ret = OB_SUCCESS;
+  T learner;
+  if (OB_FAIL(get_learner(idx, learner))) {
+  } else {
+    member = learner;
+  }
+  return ret;
+}
+
+template <int64_t MAX_SIZE, typename T>
 BaseLearnerList<MAX_SIZE, T> &BaseLearnerList<MAX_SIZE, T>::operator=(const BaseLearnerList<MAX_SIZE, T> &learner_list)
 {
   if (this != &learner_list) {

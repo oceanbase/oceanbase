@@ -33,7 +33,8 @@ LogMeta::~LogMeta() { reset(); }
 
 LogMeta::LogMeta(const LogMeta &rmeta) { *this = rmeta; }
 
-int LogMeta::generate_by_default(const AccessMode &access_mode)
+int LogMeta::generate_by_default(const AccessMode &access_mode,
+                                 const LogReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
   if (false == is_valid_access_mode(access_mode)) {
@@ -51,18 +52,18 @@ int LogMeta::generate_by_default(const AccessMode &access_mode)
     version_ = LOG_META_VERSION;
     log_prepare_meta_.generate(LogVotedFor(), init_log_proposal_id);
     log_snapshot_meta_.generate(init_base_lsn);
-    log_config_meta_.version_ = LogConfigMeta::LOG_CONFIG_META_VERSION;
-    log_config_meta_.proposal_id_ = init_log_proposal_id;
-    log_config_meta_.curr_ = init_config_info;
-    log_config_meta_.prev_ = init_config_info;
+    log_config_meta_.generate_for_default(init_log_proposal_id, init_config_info, init_config_info);
     log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, init_ref_scn);
-    log_replica_property_meta_.generate(true, LogReplicaType::NORMAL_REPLICA);
+    const bool allow_vote = (replica_type != ARBITRATION_REPLICA);
+    log_replica_property_meta_.generate(allow_vote, replica_type);
     PALF_LOG(INFO, "generate_by_default success", KPC(this));
   }
   return ret;
 }
 
-int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info, const AccessMode &access_mode)
+int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info,
+                                        const AccessMode &access_mode,
+                                        const LogReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
   if (false == is_valid_access_mode(access_mode) || false == palf_base_info.is_valid()) {
@@ -82,12 +83,10 @@ int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info, cons
     init_config_info.config_version_ = init_config_version;
     version_ = LOG_META_VERSION;
     log_prepare_meta_.generate(LogVotedFor(), init_log_proposal_id);
-    log_config_meta_.version_ = LogConfigMeta::LOG_CONFIG_META_VERSION;
-    log_config_meta_.proposal_id_ = init_log_proposal_id;
-    log_config_meta_.curr_ = init_config_info;
-    log_config_meta_.prev_ = init_config_info;
+    log_config_meta_.generate_for_default(init_log_proposal_id, init_config_info, init_config_info);
     log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, init_ref_scn);
-    log_replica_property_meta_.generate(true, LogReplicaType::NORMAL_REPLICA);
+    const bool allow_vote = (replica_type != ARBITRATION_REPLICA);
+    log_replica_property_meta_.generate(allow_vote, replica_type);
     PALF_LOG(INFO, "generate_by_palf_base_info success", KPC(this));
   }
   return ret;

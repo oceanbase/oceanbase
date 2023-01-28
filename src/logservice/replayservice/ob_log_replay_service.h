@@ -118,6 +118,18 @@ public:
     int64_t replayed_log_size_;
     int64_t unreplayed_log_size_;
   };
+  class FetchLogFunctor
+  {
+  public:
+    explicit FetchLogFunctor()
+        : ret_code_(common::OB_SUCCESS) {}
+    ~FetchLogFunctor(){}
+    bool operator()(const share::ObLSID &id, ObReplayStatus *replay_status);
+    int get_ret_code() const { return ret_code_; }
+    TO_STRING_KV(K(ret_code_));
+  private:
+    int ret_code_;
+  };
 public:
   void handle(void *task);
   int add_ls(const share::ObLSID &id,
@@ -136,10 +148,11 @@ public:
   int is_replay_done(const share::ObLSID &id,
                      const palf::LSN &end_lsn,
                      bool &is_done);
-  int get_min_unreplayed_scn(const share::ObLSID &id,
-                                 share::SCN &scn);
+  int flashback(const share::ObLSID &id);
+  int get_max_replayed_scn(const share::ObLSID &id, share::SCN &scn);
   int submit_task(ObReplayServiceTask *task);
   int update_replayable_point(const share::SCN &replayable_scn);
+  int get_replayable_point(share::SCN &replayable_scn);
   int stat_for_each(const common::ObFunction<int (const ObReplayStatus &)> &func);
   int stat_all_ls_replay_process(int64_t &replayed_log_size, int64_t &unreplayed_log_size);
   int diagnose(const share::ObLSID &id, ReplayDiagnoseInfo &diagnose_info);
@@ -201,7 +214,9 @@ private:
   const int64_t MAX_SUBMIT_TIME_PER_ROUND = 100 * 1000; //100ms
   const int64_t TASK_QUEUE_WAIT_IN_GLOBAL_QUEUE_TIME_THRESHOLD = 5 * 1000 * 1000; //5s
   const int64_t PENDING_TASK_MEMORY_LIMIT = 128 * (1LL << 20); //128MB
-
+  //每个日志流累计拉日志到阈值时batch提交所有task queue
+  static const int64_t BATCH_PUSH_REPLAY_TASK_COUNT_THRESOLD = 1024;
+  static const int64_t BATCH_PUSH_REPLAY_TASK_SIZE_THRESOLD = 16 * (1LL << 20); //16MB
   // params of adaptive thread pool
   const int64_t LEAST_THREAD_NUM = 8;
   const int64_t ESTIMATE_TS = 200000;

@@ -149,25 +149,72 @@ int ObLogPartMgr::add_all_user_tablets_info(const int64_t timeout)
         if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
           LOG_ERROR("get_tablet_ids failed", KR(ret), K_(tenant_id), K_(cur_schema_version));
         } else {
-          const uint64_t table_id = table_schema->get_table_id();
-          ObTableType table_type = table_schema->get_table_type();
-          ObCDCTableInfo table_info;
-          table_info.reset(table_id, table_type);
-
-          for (int j = 0; OB_SUCC(ret) && j < tablet_ids.count(); j++) {
-            const common::ObTabletID &tablet_id = tablet_ids.at(j);
-
-            if (OB_FAIL(tablet_to_table_info_.insert_tablet_table_info(tablet_id, table_info))) {
-              LOG_ERROR("insert_tablet_table_info failed", KR(ret), K(tablet_id), K(table_info));
-            }
+          if (OB_FAIL(insert_tablet_table_info_(*table_schema, tablet_ids))) {
+            LOG_ERROR("insert_tablet_table_info_ failed", KR(ret), K_(tenant_id),
+                KPC(table_schema));
           }
         }
       }
-    }
+    } // for
   }
 
   ISTAT("[ADD_ALL_USER_TABLETS_INFO]", KR(ret), K_(tenant_id),
       K_(cur_schema_version), K_(tablet_to_table_info));
+
+  return ret;
+}
+
+int ObLogPartMgr::add_all_user_tablets_info(
+    const ObIArray<const datadict::ObDictTableMeta *> &table_metas,
+    const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K_(tenant_id));
+  } else {
+    ARRAY_FOREACH_N(table_metas, idx, count) {
+      const datadict::ObDictTableMeta *table_meta = table_metas.at(idx);
+
+      if (OB_ISNULL(table_meta)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid table_meta", KR(ret), K_(tenant_id), K_(cur_schema_version));
+      } else if (table_meta->has_tablet()) {
+        const common::ObTabletIDArray &tablet_ids = table_meta->get_tablet_ids();
+        if (OB_FAIL(insert_tablet_table_info_(*table_meta, tablet_ids))) {
+          LOG_ERROR("insert_tablet_table_info_ failed", KR(ret), K_(tenant_id),
+              KPC(table_meta));
+
+        }
+      }
+    } // ARRAY_FOREACH_N
+  }
+
+  ISTAT("[ADD_ALL_USER_TABLETS_INFO]", KR(ret), K_(tenant_id),
+      K_(cur_schema_version), K_(tablet_to_table_info));
+
+  return ret;
+}
+
+template<class TableMeta>
+int ObLogPartMgr::insert_tablet_table_info_(
+    TableMeta &table_meta,
+    const common::ObIArray<common::ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t table_id = table_meta.get_table_id();
+  ObTableType table_type = table_meta.get_table_type();
+  ObCDCTableInfo table_info;
+  table_info.reset(table_id, table_type);
+
+  ARRAY_FOREACH_N(tablet_ids, idx, count) {
+    const common::ObTabletID &tablet_id = tablet_ids.at(idx);
+
+    if (OB_FAIL(tablet_to_table_info_.insert_tablet_table_info(tablet_id, table_info))) {
+      LOG_ERROR("insert_tablet_table_info failed", KR(ret), K(tablet_id), K(table_info));
+    }
+  }
 
   return ret;
 }

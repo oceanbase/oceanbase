@@ -37,13 +37,14 @@ public:
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 7;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
+bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 
-bool check_children_valid(const std::vector<PalfHandleGuard*> &palf_list, const LogLearnerList &all_learner)
+bool check_children_valid(const std::vector<PalfHandleImplGuard*> &palf_list, const LogLearnerList &all_learner)
 {
   int ret = OB_SUCCESS;
   LogLearnerList all_children;
   for (auto palf : palf_list) {
-    const LogLearnerList &self_children = palf->palf_handle_.palf_handle_impl_->config_mgr_.children_;
+    const LogLearnerList &self_children = palf->palf_handle_impl_->config_mgr_.children_;
     int64_t children_cnt = self_children.get_member_number();
     for (int i = 0; i < children_cnt; ++i) {
       LogLearner tmp_server;
@@ -57,13 +58,13 @@ bool check_children_valid(const std::vector<PalfHandleGuard*> &palf_list, const 
   return ret;
 }
 
-bool check_parent(const std::vector<PalfHandleGuard*> &palf_list, const LogLearnerList &all_learner, const ObAddr &parent)
+bool check_parent(const std::vector<PalfHandleImplGuard*> &palf_list, const LogLearnerList &all_learner, const ObAddr &parent)
 {
   bool bool_ret = true;
   for (auto palf : palf_list) {
-    const ObAddr &self = palf->palf_handle_.palf_handle_impl_->self_;
+    const ObAddr &self = palf->palf_handle_impl_->self_;
     if (all_learner.contains(self)) {
-      const ObAddr &my_parent = palf->palf_handle_.palf_handle_impl_->config_mgr_.parent_;
+      const ObAddr &my_parent = palf->palf_handle_impl_->config_mgr_.parent_;
       if (my_parent.is_valid() && (my_parent == parent)) {
         continue;
       } else {
@@ -75,22 +76,22 @@ bool check_parent(const std::vector<PalfHandleGuard*> &palf_list, const LogLearn
   return bool_ret;
 }
 
-int check_log_sync(const std::vector<PalfHandleGuard*> &palf_list,
+int check_log_sync(const std::vector<PalfHandleImplGuard*> &palf_list,
                    const common::ObMemberList &member_list,
                    const LogLearnerList &learner_list,
-                   PalfHandleGuard &leader)
+                   PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
-  const int64_t max_flushed_proposal_id = leader.palf_handle_.palf_handle_impl_->sw_.max_flushed_log_pid_;
-  const LSN max_flushed_end_lsn = leader.palf_handle_.palf_handle_impl_->sw_.max_flushed_end_lsn_;
+  const int64_t max_flushed_proposal_id = leader.palf_handle_impl_->sw_.max_flushed_log_pid_;
+  const LSN max_flushed_end_lsn = leader.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   PALF_LOG(INFO, "before check_log_sync", K(max_flushed_proposal_id), K(max_flushed_end_lsn));
   for (auto palf : palf_list) {
-    const common::ObAddr parent_addr = palf->palf_handle_.palf_handle_impl_->config_mgr_.parent_;
+    const common::ObAddr parent_addr = palf->palf_handle_impl_->config_mgr_.parent_;
     // for paxos member, log must sync with leader
     // for learner, sync with parent's committed_end_lsn
-    const int64_t this_max_flushed_proposal_id = palf->palf_handle_.palf_handle_impl_->sw_.max_flushed_log_pid_;
-    const LSN this_max_flushed_end_lsn = palf->palf_handle_.palf_handle_impl_->sw_.max_flushed_end_lsn_;
-    const common::ObAddr self = palf->palf_handle_.palf_handle_impl_->self_;
+    const int64_t this_max_flushed_proposal_id = palf->palf_handle_impl_->sw_.max_flushed_log_pid_;
+    const LSN this_max_flushed_end_lsn = palf->palf_handle_impl_->sw_.max_flushed_end_lsn_;
+    const common::ObAddr self = palf->palf_handle_impl_->self_;
     if (member_list.contains(self)) {
       PALF_LOG(INFO, "before check", K(max_flushed_proposal_id), K(max_flushed_end_lsn), K(this_max_flushed_proposal_id),
           K(this_max_flushed_end_lsn), K(self));
@@ -103,12 +104,12 @@ int check_log_sync(const std::vector<PalfHandleGuard*> &palf_list,
       break;
     } else {
       for (auto parent: palf_list) {
-        if (parent->palf_handle_.palf_handle_impl_->self_ == parent_addr) {
-          const LSN parent_committed_end_lsn = parent->palf_handle_.palf_handle_impl_->sw_.committed_end_lsn_;
+        if (parent->palf_handle_impl_->self_ == parent_addr) {
+          const LSN parent_committed_end_lsn = parent->palf_handle_impl_->sw_.committed_end_lsn_;
           EXPECT_EQ(parent_committed_end_lsn, this_max_flushed_end_lsn) \
               << parent_committed_end_lsn.val_ << "," << this_max_flushed_end_lsn.val_;
           if (parent_committed_end_lsn != this_max_flushed_end_lsn) {
-            PALF_LOG(ERROR, "log not sync", K(parent_addr), "self", palf->palf_handle_.palf_handle_impl_->self_,
+            PALF_LOG(ERROR, "log not sync", K(parent_addr), "self", palf->palf_handle_impl_->self_,
                 K(parent_committed_end_lsn), K(this_max_flushed_end_lsn));
           }
         }
@@ -123,7 +124,7 @@ MockLocCB loc_cb;
 TEST_F(TestObSimpleLogClusterConfigChange, split_brain)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "split_brain");
-  std::vector<PalfHandleGuard*> palf_list;
+  std::vector<PalfHandleImplGuard*> palf_list;
   int ret = OB_SUCCESS;
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "begin test split_brain", K(id));
@@ -135,7 +136,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, split_brain)
   // 5. unblock_net B, create new C
   // 6. may be split-brain {B, C} {A, D}
   {
-    PalfHandleGuard leader;
+    PalfHandleImplGuard leader;
     const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
@@ -148,31 +149,31 @@ TEST_F(TestObSimpleLogClusterConfigChange, split_brain)
     // step 3
     const ObAddr follower_b_addr = get_cluster()[follower_B_idx]->get_addr();
     PALF_LOG(INFO, "before remove member");
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(follower_b_addr, 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(follower_b_addr, 1), 3, CONFIG_CHANGE_TIMEOUT));
     PALF_LOG(INFO, "after remove member");
 
-    PalfHandleGuard new_leader;
+    PalfHandleImplGuard new_leader;
     int64_t new_leader_idx;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
     loc_cb.leader_ = get_cluster()[new_leader_idx]->get_addr();
     PALF_LOG(INFO, "set leader for loc_cb", "leader", loc_cb.leader_);
 
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     // step 4
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(get_cluster()[follower_C_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_C_idx]->get_palf_env()->remove(id));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_C_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_C_idx]->get_palf_env()->remove_palf_handle_impl(id));
     // step 5
     EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_B_idx]->simple_init(get_test_name(), follower_b_addr, follower_B_idx, false));
     EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_B_idx]->simple_start(false));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     PalfBaseInfo palf_base_info;
-    PalfHandle follower_C_handle;
+    IPalfHandleImpl* follower_C_handle = NULL;
     palf_base_info.generate_by_default();
+    //PalfHandleImplGuard leader;
     palf_base_info.prev_log_info_.scn_ = share::SCN::min_scn();
-    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_C_idx]->get_palf_env()->create(id, palf::AccessMode::APPEND, palf_base_info, follower_C_handle));
-    get_cluster()[follower_C_idx]->get_palf_env()->close(follower_C_handle);
-
+    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_C_idx]->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, follower_C_handle));
+    get_cluster()[follower_C_idx]->get_palf_env()->revert_palf_handle_impl(follower_C_handle);
     sleep(5);
     // check if split-brain happens
     int64_t leader_cnt = 0;
@@ -180,7 +181,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, split_brain)
     for (auto palf: palf_list) {
       ObRole role;
       palf::ObReplicaState unused_state;
-      palf->palf_handle_.palf_handle_impl_->state_mgr_.get_role_and_state(role, unused_state);
+      palf->palf_handle_impl_->state_mgr_.get_role_and_state(role, unused_state);
       if (role == LEADER) {
         leader_cnt += 1;
       }
@@ -199,9 +200,9 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_config_change_defensive)
   PALF_LOG(INFO, "begin test_config_change_defensive");
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   {
-	int64_t leader_idx = 0;
-    PalfHandleGuard leader;
-    std::vector<PalfHandleGuard*> palf_list;
+    int64_t leader_idx = 0;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
     const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
     common::ObMember dummy_member;
     const LogConfigChangeArgs args(dummy_member, 1, STARTWORKING);
@@ -213,17 +214,17 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_config_change_defensive)
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     sleep(1);
     // remove member who is in majority
-    EXPECT_EQ(OB_TIMEOUT, leader.remove_member(ObMember(palf_list[remove_follower_idx]->palf_handle_.palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT / 2));
+    EXPECT_EQ(OB_TIMEOUT, leader.palf_handle_impl_->remove_member(ObMember(palf_list[remove_follower_idx]->palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT / 2));
     unblock_net(leader_idx, lag_follower_idx);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(palf_list[remove_follower_idx]->palf_handle_.palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
-    PalfHandleGuard new_leader;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(palf_list[remove_follower_idx]->palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
+    PalfHandleImplGuard new_leader;
     int64_t new_leader_idx;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
     loc_cb.leader_ = get_cluster()[new_leader_idx]->get_addr();
     PALF_LOG(INFO, "set leader for loc_cb", "leader", get_cluster()[new_leader_idx]->get_addr());
 
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[remove_follower_idx]->palf_handle_.palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[remove_follower_idx]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
     block_net(leader_idx, lag_follower_idx);
 
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
@@ -235,7 +236,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_config_change_defensive)
     // children of leader, we will uncomment this line
     // EXPECT_EQ(OB_TIMEOUT, leader.add_member(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT / 2));
     unblock_net(leader_idx, lag_follower_idx);
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
 
     revert_cluster_palf_handle_guard(palf_list);
   }
@@ -251,11 +252,10 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_change_replica_num)
   PALF_LOG(INFO, "begin test_change_replica_num", K(id));
   {
 	  int64_t leader_idx = 0;
-    int64_t log_ts = 1;
-    PalfHandleGuard leader;
+    PalfHandleImplGuard leader;
     const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
-    PalfHandleGuard new_leader;
+    PalfHandleImplGuard new_leader;
     int64_t new_leader_idx;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
     loc_cb.leader_ = get_cluster()[new_leader_idx]->get_addr();
@@ -263,20 +263,20 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_change_replica_num)
 
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     // 3->5
-    EXPECT_EQ(OB_SUCCESS, leader.change_replica_num(get_member_list(), 3, 5, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(get_cluster()[4]->addr_, 1), 5, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(get_cluster()[5]->addr_, 1), 5, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(get_member_list(), 3, 5, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[4]->get_addr(), 1), 5, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[5]->get_addr(), 1), 5, CONFIG_CHANGE_TIMEOUT));
     common::ObMemberList curr_member_list;
     int64_t curr_replica_num;
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(get_cluster()[4]->addr_, 1), 5, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(get_cluster()[5]->addr_, 1), 5, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.get_paxos_member_list(curr_member_list, curr_replica_num));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[4]->get_addr(), 1), 5, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[5]->get_addr(), 1), 5, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_paxos_member_list(curr_member_list, curr_replica_num));
     // 5->3
-    EXPECT_EQ(OB_SUCCESS, leader.change_replica_num(curr_member_list, curr_replica_num, 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(curr_member_list, curr_replica_num, 3, CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
     // 3->4
-    EXPECT_EQ(OB_SUCCESS, leader.get_paxos_member_list(curr_member_list, curr_replica_num));
-    EXPECT_EQ(OB_SUCCESS, leader.change_replica_num(curr_member_list, curr_replica_num, 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_paxos_member_list(curr_member_list, curr_replica_num));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(curr_member_list, curr_replica_num, 4, CONFIG_CHANGE_TIMEOUT));
   }
   delete_paxos_group(id);
   PALF_LOG(INFO, "end test_change_replica_num", K(id));
@@ -290,48 +290,47 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_basic_config_change)
   PALF_LOG(INFO, "begin test config change", K(id));
   {
 	  int64_t leader_idx = 0;
-    int64_t log_ts = 1;
-    std::vector<PalfHandleGuard*> palf_list;
+    std::vector<PalfHandleImplGuard*> palf_list;
     const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
-    PalfHandleGuard leader;
+    PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
-    PalfHandleGuard new_leader;
+    PalfHandleImplGuard new_leader;
     int64_t new_leader_idx;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
     loc_cb.leader_ = get_cluster()[new_leader_idx]->get_addr();
     PALF_LOG(INFO, "set leader for loc_cb", "leader", get_cluster()[new_leader_idx]->get_addr());
     EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
     // add member when no log
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_.palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(palf_list[(leader_idx+2)%3]->palf_handle_.palf_handle_impl_->self_, 1), 1, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_INVALID_ARGUMENT, leader.add_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_.palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[(leader_idx+2)%3]->palf_handle_.palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(palf_list[(leader_idx+2)%3]->palf_handle_impl_->self_, 1), 1, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->add_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[(leader_idx+2)%3]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
 
     // add member when contains log
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[4]->palf_handle_.palf_handle_impl_->self_, 1), 5, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[4]->palf_handle_impl_->self_, 1), 5, CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
 
     // remove member
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(palf_list[4]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(palf_list[4]->palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
 
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
 
     // replace member
-    EXPECT_EQ(OB_SUCCESS, leader.replace_member(ObMember(palf_list[5]->palf_handle_.palf_handle_impl_->self_, 1),
-                                               ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1),
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member(ObMember(palf_list[5]->palf_handle_impl_->self_, 1),
+                                               ObMember(palf_list[3]->palf_handle_impl_->self_, 1),
                                                CONFIG_CHANGE_TIMEOUT));
 
     // switch acceptor to learner
-    EXPECT_EQ(OB_SUCCESS, leader.switch_acceptor_to_learner(ObMember(palf_list[5]->palf_handle_.palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(palf_list[5]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
     // add learner
-    EXPECT_EQ(OB_SUCCESS, leader.add_learner(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_learner(ObMember(palf_list[4]->palf_handle_.palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_learner(ObMember(palf_list[6]->palf_handle_.palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[4]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[6]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
 
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     revert_cluster_palf_handle_guard(palf_list);
@@ -347,13 +346,12 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_replace_member)
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "begin test replace_member", K(id));
   {
-    std::vector<PalfHandleGuard*> palf_list;
+    std::vector<PalfHandleImplGuard*> palf_list;
 	  int64_t leader_idx = 0;
-    int64_t log_ts = 1;
-    PalfHandleGuard leader;
+    PalfHandleImplGuard leader;
     const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
 	  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
-    PalfHandleGuard new_leader;
+    PalfHandleImplGuard new_leader;
     int64_t new_leader_idx;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
     loc_cb.leader_ = get_cluster()[new_leader_idx]->get_addr();
@@ -361,36 +359,36 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_replace_member)
     EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     // replace member when no log
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_.palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(palf_list[(leader_idx+2)%3]->palf_handle_.palf_handle_impl_->self_, 1), 1, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_INVALID_ARGUMENT, leader.add_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_.palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[(leader_idx+2)%3]->palf_handle_.palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(palf_list[(leader_idx+2)%3]->palf_handle_impl_->self_, 1), 1, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->add_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[(leader_idx+1)%3]->palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[(leader_idx+2)%3]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
 
     // add member when contains log
-    EXPECT_EQ(OB_SUCCESS, leader.add_member(ObMember(palf_list[4]->palf_handle_.palf_handle_impl_->self_, 1), 5, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[4]->palf_handle_impl_->self_, 1), 5, CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
 
     // remove member
-    EXPECT_EQ(OB_SUCCESS, leader.remove_member(ObMember(palf_list[4]->palf_handle_.palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(palf_list[4]->palf_handle_impl_->self_, 1), 4, CONFIG_CHANGE_TIMEOUT));
 
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
 
     // replace member
-    EXPECT_EQ(OB_SUCCESS, leader.replace_member(ObMember(palf_list[5]->palf_handle_.palf_handle_impl_->self_, 1),
-                                               ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1),
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member(ObMember(palf_list[5]->palf_handle_impl_->self_, 1),
+                                               ObMember(palf_list[3]->palf_handle_impl_->self_, 1),
                                                CONFIG_CHANGE_TIMEOUT));
 
     // switch acceptor to learner
-    EXPECT_EQ(OB_SUCCESS, leader.switch_acceptor_to_learner(ObMember(palf_list[5]->palf_handle_.palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(palf_list[5]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
     // add learner
-    EXPECT_EQ(OB_SUCCESS, leader.add_learner(ObMember(palf_list[3]->palf_handle_.palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_learner(ObMember(palf_list[4]->palf_handle_.palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
-    EXPECT_EQ(OB_SUCCESS, leader.add_learner(ObMember(palf_list[6]->palf_handle_.palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[4]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[6]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
 
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     revert_cluster_palf_handle_guard(palf_list);
@@ -408,9 +406,9 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
 	int64_t leader_idx = 0;
   int64_t log_ts = 1;
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   LogLearnerList all_learner;
-  std::vector<PalfHandleGuard*> palf_list;
+  std::vector<PalfHandleImplGuard*> palf_list;
   std::vector<ObRegion> region_list;
   common::ObRegion default_region(DEFAULT_REGION_NAME);
   LogMemberRegionMap region_map;
@@ -433,12 +431,12 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   // case 1: set region and switch_acceptor_to_learner
   // add_learner
   for (int64_t i = 3; i < ObSimpleLogClusterTestBase::node_cnt_; ++i) {
-    PalfHandleGuard tmp_handle;
+    PalfHandleImplGuard tmp_handle;
     common::ObMember added_learner;
     EXPECT_EQ(OB_SUCCESS, node_list.get_member_by_index(i, added_learner));
     LogLearner learner(added_learner.get_server(), 1);
     EXPECT_EQ(OB_SUCCESS, all_learner.add_learner(learner));
-    EXPECT_EQ(OB_SUCCESS, leader.add_learner(added_learner, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_learner, CONFIG_CHANGE_TIMEOUT));
   }
   // check children_cnt
   while (false == check_children_valid(palf_list, all_learner))
@@ -449,20 +447,20 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   bool has_change_region = false;
   int64_t another_follower_idx = -1;
   for (int i = 0; i < ObSimpleLogClusterTestBase::member_cnt_; i++) {
-    const bool not_leader = palf_list[i]->palf_handle_.palf_handle_impl_->self_ != leader.palf_handle_.palf_handle_impl_->self_;
+    const bool not_leader = palf_list[i]->palf_handle_impl_->self_ != leader.palf_handle_impl_->self_;
     if (!has_change_region && not_leader) {
-      EXPECT_EQ(OB_SUCCESS, palf_list[i]->set_region(region_list[0]));
-      region_map.insert(palf_list[i]->palf_handle_.palf_handle_impl_->self_, region_list[0]);
+      EXPECT_EQ(OB_SUCCESS, palf_list[i]->palf_handle_impl_->set_region(region_list[0]));
+      region_map.insert(palf_list[i]->palf_handle_impl_->self_, region_list[0]);
       has_change_region = true;
     } else {
       if (not_leader) {
         another_follower_idx = i;
       }
-      region_map.insert(palf_list[0]->palf_handle_.palf_handle_impl_->self_, default_region);
+      region_map.insert(palf_list[0]->palf_handle_impl_->self_, default_region);
     }
   }
   // notify leader region of follower i has changed
-  EXPECT_EQ(OB_SUCCESS, leader.set_paxos_member_region_map(region_map));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_paxos_member_region_map(region_map));
   // check children_cnt again
   while (false == check_children_valid(palf_list, all_learner))
   {
@@ -471,7 +469,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   // after setting region of a follower, parents of all learners should be another follower
   EXPECT_GE(another_follower_idx, 0);
   EXPECT_LE(another_follower_idx, 2);
-  ObAddr curr_parent = palf_list[another_follower_idx]->palf_handle_.palf_handle_impl_->self_;
+  ObAddr curr_parent = palf_list[another_follower_idx]->palf_handle_impl_->self_;
   while (false == check_parent(palf_list, all_learner, curr_parent))
   {
     sleep(1);
@@ -483,7 +481,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
 
   // switch current unique parent to learner
   EXPECT_EQ(OB_SUCCESS, all_learner.add_learner(LogLearner(curr_parent, 1)));
-  EXPECT_EQ(OB_SUCCESS, leader.switch_acceptor_to_learner(ObMember(curr_parent, 1), CONFIG_CHANGE_TIMEOUT));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(curr_parent, 1), CONFIG_CHANGE_TIMEOUT));
   // after switch follower 1 to learner, a learner will be registered to leader, and other learners will
   // be registerd to this learner
   while (false == check_children_valid(palf_list, all_learner))
@@ -492,14 +490,14 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   }
   // check learner topology
   ObAddr leaderschild;
-  PalfHandleGuard leaderschild_handle;
+  PalfHandleImplGuard leaderschild_handle;
   LogLearnerList expect_children;
-  EXPECT_EQ(1, leader.palf_handle_.palf_handle_impl_->config_mgr_.children_.get_member_number());
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_.palf_handle_impl_->config_mgr_.children_.get_server_by_index(0, leaderschild));
+  EXPECT_EQ(1, leader.palf_handle_impl_->config_mgr_.children_.get_member_number());
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.children_.get_server_by_index(0, leaderschild));
   EXPECT_EQ(OB_SUCCESS, get_palf_handle_guard(palf_list, leaderschild, leaderschild_handle));
   expect_children = all_learner;
   EXPECT_EQ(OB_SUCCESS, expect_children.remove_learner(leaderschild));
-  EXPECT_TRUE(expect_children.learner_addr_equal(leaderschild_handle.palf_handle_.palf_handle_impl_->config_mgr_.children_));
+  EXPECT_TRUE(expect_children.learner_addr_equal(leaderschild_handle.palf_handle_impl_->config_mgr_.children_));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id));
   // EXPECT_EQ(OB_SUCCESS, check_log_sync(palf_list, get_member_list(), all_learner, leader));
   revert_cluster_palf_handle_guard(palf_list);
@@ -510,25 +508,25 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   // // learners' regions are different from paxos member, so parent of all learners is leader
   // // set regions
   // for (int64_t i = 3; i < 7; ++i) {
-  //   PalfHandleGuard tmp_handle;
+  //   PalfHandleImplGuard tmp_handle;
   //   common::ObMember added_learner;
   //   EXPECT_EQ(OB_SUCCESS, node_list.get_member_by_index(i, added_learner));
   //   EXPECT_EQ(OB_SUCCESS, all_learner.add_learner(LogLearner(added_learner.get_server(), region_list[i - 3])));
   //   EXPECT_EQ(OB_SUCCESS, get_palf_handle_guard(id, added_learner.get_server(), tmp_handle));
   //   EXPECT_EQ(OB_SUCCESS, tmp_handle.set_region(region_list[i-3]));
-  //   EXPECT_EQ(OB_SUCCESS, leader.add_learner(added_learner, CONFIG_CHANGE_TIMEOUT));
+  //   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_learner, CONFIG_CHANGE_TIMEOUT));
   // }
   // sleep(1);
   // // check children_cnt
   // check_children_valid(palf_list, all_learner);
-  // check_parent(palf_list, leader.palf_handle_.palf_handle_impl_->self_);
+  // check_parent(palf_list, leader.palf_handle_impl_->self_);
   // // switch leader
   // const int64_t new_leader_idx = 1;
-  // PalfHandleGuard new_leader;
+  // PalfHandleImplGuard new_leader;
   // switch_leader(id, new_leader_idx, new_leader);
   // sleep(5);
   // check_children_valid(palf_list, all_learner);
-  // check_parent(palf_list, new_leader.palf_handle_.palf_handle_impl_->self_);
+  // check_parent(palf_list, new_leader.palf_handle_impl_->self_);
 }
 */
 

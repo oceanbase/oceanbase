@@ -34,45 +34,10 @@ private:
   int resolve_switch_tenant(const ParseNode &parse_tree);
 };
 
-template<class T>
 int resolve_tenant_name(
-    T &stmt,
     const ParseNode *node,
-    const uint64_t effective_tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(node)) {
-    if (OB_SYS_TENANT_ID == effective_tenant_id) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", KR(ret));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name, should specify tenant name");
-    }
-  } else if (OB_UNLIKELY(T_TENANT_NAME != node->type_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid type", K(node->type_));
-  } else if (OB_UNLIKELY(node->num_child_ <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid num_child", "num_child", node->num_child_);
-  } else if (OB_ISNULL(node->children_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("node should not be null");
-  } else {
-    const ParseNode *tenant_name_node = node->children_[0];
-    if (OB_ISNULL(tenant_name_node)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant_name_node should not be null");
-    } else if (tenant_name_node->value_ <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("empty tenant string");
-    } else {
-      ObString tenant_name;
-      tenant_name.assign_ptr((char *)(tenant_name_node->str_value_),
-                            static_cast<int32_t>(tenant_name_node->str_len_));
-      stmt.set_tenant_name(tenant_name);
-    }
-  }
-  return ret;
-}
+    const uint64_t effective_tenant_id,
+    ObString &tenant_name);
 
 } //end sql
 } //end oceanbase

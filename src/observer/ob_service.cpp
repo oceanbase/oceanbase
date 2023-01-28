@@ -46,6 +46,7 @@
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "rootserver/ob_bootstrap.h"
+#include "rootserver/ob_tenant_recovery_reportor.h" // ObTenantRecoveryReportor
 #include "observer/ob_server.h"
 #include "observer/ob_dump_task_generator.h"
 #include "observer/ob_server_schema_updater.h"
@@ -1803,6 +1804,7 @@ int ObService::detect_master_rs_ls(
     obrpc::ObDetectMasterRsLSResult &result)
 {
   int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
   const int64_t local_cluster_id = GCONF.cluster_id;
   const ObAddr &self_addr = gctx_.self_addr();
   ObAddr master_rs;
@@ -1850,6 +1852,12 @@ int ObService::detect_master_rs_ls(
       LOG_WARN("fail to init result", KR(ret), K(master_rs), K(replica), K(ls_info));
     }
   }
+  int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+  const int64_t DETECT_THRESHOLD = 2 * 1000 * 1000L; // 2s
+  if (cost_ts >= DETECT_THRESHOLD) {
+    FLOG_WARN("detect rs too much time", KR(ret), K(cost_ts), K(result));
+  }
+  LOG_TRACE("detect rs cost", KR(ret), K(cost_ts), K(result));
   return ret;
 }
 
@@ -2304,6 +2312,107 @@ int ObService::fill_ls_replica(
   return ret;
 }
 
+int ObService::get_leader_locations(
+    const obrpc::ObGetLeaderLocationsArg &arg,
+    obrpc::ObGetLeaderLocationsResult &result)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_ISNULL(GCTX.omt_) || OB_ISNULL(GCTX.config_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP(GCTX.omt_), KP(GCTX.config_));
+  } else {
+    omt::TenantIdList all_tenants;
+    (void) GCTX.omt_->get_tenant_ids(all_tenants);
+    int actual_ret = OB_SUCCESS;
+    // ignore ret to return more ls leader infos as possible
+    for (int64_t i = 0; OB_SUCCESS == actual_ret && i < all_tenants.size(); i++) {
+      const uint64_t tenant_id = all_tenants[i];
+      if (!is_virtual_tenant_id(tenant_id)) {
+      const int64_t tenant_start_ts = ObTimeUtility::current_time();
+      MTL_SWITCH(tenant_id) {
+        ObLSService *ls_svr = NULL;
+        logservice::ObLogService *log_service = NULL;
+        ObSharedGuard<storage::ObLSIterator> ls_iter_guard;
+        common::ObRole role = FOLLOWER;
+        int64_t proposal_id = 0;
+        ObReplicaProperty property; // unused now
+        ObLSRestoreStatus restore_status;
+        ObLSID ls_id;
+        ObLSLeaderLocation leader_location;
+        ObLS *ls = NULL;
+        if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(ls_svr->get_ls_iter(ls_iter_guard, ObLSGetMod::OBSERVER_MOD))) {
+          LOG_WARN("fail to get ls iter guard", KR(ret), K(tenant_id));
+        }
+        while (OB_SUCC(ret) && OB_SUCCESS == actual_ret) {
+          if (OB_FAIL(ls_iter_guard->get_next(ls))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next ls", KR(ret));
+            }
+          } else {
+            palf::PalfHandleGuard palf_handle_guard;
+            ls_id = ls->get_ls_id();
+            if (OB_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
+              LOG_WARN("open palf failed", KR(ret), K(tenant_id), K(ls_id));
+            } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
+              LOG_WARN("get role failed", KR(ret), K(tenant_id), K(ls_id));
+            } else if (LEADER != role) {
+              // skip
+            /*
+             * This function may be blocked when dick is hang,
+             * we consider leader's status is always RESTORE_NONE
+             * } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
+             *   LOG_WARN("get restore status failed", KR(ret));
+             */
+            } else if (FALSE_IT(restore_status = ObLSRestoreStatus::RESTORE_NONE)) {
+            } else if (OB_FAIL(leader_location.init(
+                  GCTX.config_->cluster_id,  /*cluster_id*/
+                  tenant_id,                 /*tenant_id*/
+                  ls_id,                     /*ls_id*/
+                  GCTX.self_addr(),          /*server*/
+                  role,                      /*role*/
+                  GCTX.config_->mysql_port,  /*sql_port*/
+                  REPLICA_TYPE_FULL,         /*replica_type*/
+                  property,                  /*property*/
+                  restore_status,            /*restore_status*/
+                  proposal_id                /*proposal_id*/
+                  ))) {
+              LOG_WARN("fail to init a ls replica", KR(ret), K(tenant_id), K(ls_id), K(role), K(proposal_id));
+            } else if (OB_SUCCESS != (actual_ret = result.add_leader_replica(leader_location))) {
+              LOG_WARN("fail to add leader replica", KR(actual_ret), K(leader_location));
+            }
+            ret = OB_SUCCESS; // ignore get leader location error
+          }
+        } // end iter ls
+      } // end MTL
+      LOG_TRACE("get tenant leader locations cost", KR(ret), K(tenant_id),
+                "cost", ObTimeUtility::current_time() - tenant_start_ts);
+      }
+    } // end iter tenant
+    ret = actual_ret; // overwrite ret
+    result.set_addr(GCTX.self_addr());
+  }
+  int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+  const int64_t FETCH_THRESHOLD = 2 * 1000 * 1000L; // 2s
+  if (cost_ts >= FETCH_THRESHOLD) {
+    FLOG_WARN("get leader locations cost too much time", KR(ret), K(cost_ts), K(result));
+  }
+  LOG_TRACE("get leader locations cost", KR(ret), K(cost_ts), K(result));
+  return ret;
+}
+
 int ObService::check_backup_dest_connectivity(const obrpc::ObCheckBackupConnectivityArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -2333,6 +2442,110 @@ int ObService::estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
     LOG_WARN("service is not inited", K(ret));
   } else if (OB_FAIL(sql::ObStorageEstimator::estimate_block_count(arg, res))) {
     LOG_WARN("failed to estimate partition rowcount", K(ret));
+  }
+  return ret;
+}
+
+int ObService::get_ls_sync_scn(
+    const ObGetLSSyncScnArg &arg,
+    ObGetLSSyncScnRes &result)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_svr = nullptr;
+  SCN cur_sync_scn = SCN::min_scn();
+  bool restore_to_newest = false;
+  LOG_INFO("start get_ls_sync_scn", K(arg));
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    ls_svr = MTL(ObLSService*);
+    logservice::ObLogService *log_ls_svr = MTL(logservice::ObLogService*);
+    ObLS *ls = nullptr;
+    ObLSHandle handle;
+    logservice::ObLogHandler *log_handler = NULL;
+    logservice::ObLogRestoreHandler *restore_handler = NULL;
+    ObLSID ls_id = arg.get_ls_id();
+    common::ObRole role;
+    int64_t first_leader_epoch = 0;
+    int64_t second_leader_epoch = 0;
+    if (OB_ISNULL(ls_svr) || OB_ISNULL(log_ls_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "should not be null", KR(ret), KP(ls_svr), KP(log_ls_svr));
+    } else if (OB_FAIL(log_ls_svr->get_palf_role(ls_id, role, first_leader_epoch))) {
+      COMMON_LOG(WARN, "failed to get palf role", KR(ret), K(ls_id));
+    } else if (!is_strong_leader(role)) {
+      ret = OB_NOT_MASTER;
+      LOG_WARN("ls on this server is not master", KR(ret), K(ls_id));
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+      COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "ls should not be null", KR(ret), K(ls_id));
+    } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log_handler is null", KR(ret), K(ls_id), KP(ls));
+    } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get restore_handler failed", KR(ret), K(ls_id), KP(ls));
+    } else if (FALSE_IT(restore_to_newest =
+               arg.check_sync_to_latest() ? restore_handler->check_restore_to_newest() : false)) {
+    } else if (OB_FAIL(log_handler->get_end_scn(cur_sync_scn))) {
+      LOG_WARN("failed to get ls cur_sync_scn", KR(ret), K(ls_id), KPC(ls));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id(), ls_id, cur_sync_scn, restore_to_newest))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()), K(ls_id), K(cur_sync_scn),
+                                     K(restore_to_newest));
+    } else if (OB_FAIL(log_ls_svr->get_palf_role(ls_id, role, second_leader_epoch))) {
+      COMMON_LOG(WARN, "failed to get palf role", KR(ret), K(ls_id));
+    } else if (first_leader_epoch != second_leader_epoch || !is_strong_leader(role)) {
+      ret = OB_NOT_MASTER;
+      LOG_WARN("the ls not master", KR(ret), K(ls_id), K(first_leader_epoch),
+          K(second_leader_epoch), K(role));
+    }
+  }
+  LOG_INFO("finish get_ls_sync_scn", KR(ret), K(cur_sync_scn), K(arg), K(result));
+  return ret;
+}
+
+int ObService::refresh_tenant_info(
+    const ObRefreshTenantInfoArg &arg,
+    ObRefreshTenantInfoRes &result)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    rootserver::ObTenantRecoveryReportor *tenant_reportor = MTL(rootserver::ObTenantRecoveryReportor*);
+
+    if (OB_ISNULL(tenant_reportor)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "tenant_reportor should not be null", KR(ret));
+    } else if (OB_FAIL(tenant_reportor->load_tenant_info())) {
+      COMMON_LOG(WARN, "load_tenant_info failed", KR(ret), K(arg));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id()))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()));
+    } else {
+      LOG_INFO("finish refresh_tenant_info", KR(ret), K(arg), K(result));
+    }
   }
   return ret;
 }

@@ -928,6 +928,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_show_resolver.cpp
   resolver/cmd/ob_variable_set_resolver.cpp
   resolver/cmd/ob_variable_set_stmt.cpp
+  resolver/cmd/ob_alter_system_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl

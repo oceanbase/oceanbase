@@ -47,7 +47,7 @@ public:
       COORDINATOR_LOG(ERROR, "encode size failed", KR(ret), K(MTL_ID()), K(element));
     } else if (CLICK_FAIL(serialization::encode(buf_, buf_len_, pos_, element))) {
       COORDINATOR_LOG(ERROR, "encode element failed", KR(ret), K(MTL_ID()), K(element));
-    } else {  
+    } else {
       COORDINATOR_LOG(DEBUG, "encode element", KR(ret), K(MTL_ID()), K(element), K(size), K(pos_));
     }
     return ret;
@@ -281,6 +281,20 @@ int64_t ElectionPriorityImpl::to_string(char *buf, const int64_t buf_len) const
     databuff_printf(buf, buf_len, pos, "{priority:%s}", common::to_cstring(*functor.get_closest_priority()));
   }
   return pos;
+}
+
+bool ElectionPriorityImpl::has_fatal_failure() const
+{
+  bool ret = false;
+  GetClosestVersionPriority functor(GET_MIN_CLUSTER_VERSION());
+  (void) priority_tuple_.for_each(functor);
+  if (functor.get_closest_priority() == nullptr) {
+    ret = OB_ERR_UNEXPECTED;
+    COORDINATOR_LOG(ERROR, "can't get closest priority from tuple", K(ret), K(MTL_ID()), K(*this));
+  } else {
+    ret = functor.get_closest_priority()->has_fatal_failure();
+  }
+  return ret;
 }
 
 }

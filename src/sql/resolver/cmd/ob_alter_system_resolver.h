@@ -14,6 +14,8 @@
 #define OCEANBASE_RESOLVER_CMD_OB_ALTER_SYSTEM_RESOLVER_
 
 #include "sql/resolver/cmd/ob_system_cmd_resolver.h"
+#include "sql/session/ob_sql_session_info.h" // ObSqlSessionInfo
+#include "share/ls/ob_ls_i_life_manager.h" //OB_LS_MAX_SCN_VALUE
 
 namespace oceanbase
 {
@@ -118,6 +120,10 @@ DEF_SIMPLE_CMD_RESOLVER(ObReloadZoneResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObClearMergeErrorResolver);
 
+DEF_SIMPLE_CMD_RESOLVER(ObAddArbitrationServiceResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObRemoveArbitrationServiceResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObReplaceArbitrationServiceResolver);
+
 DEF_SIMPLE_CMD_RESOLVER(ObMigrateUnitResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObUpgradeVirtualSchemaResolver);
@@ -154,6 +160,11 @@ DEF_SIMPLE_CMD_RESOLVER(ObAddRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObClearRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCheckpointSlogResolver);
 
+int resolve_restore_until(const ParseNode &time_node,
+                          const ObSQLSessionInfo *session_info,
+                          share::SCN &recovery_until_scn,
+                          bool &with_restore_scn);
+
 class ObPhysicalRestoreTenantResolver : public ObSystemCmdResolver
 {
   public:
@@ -163,6 +174,15 @@ class ObPhysicalRestoreTenantResolver : public ObSystemCmdResolver
   private:
     int resolve_decryption_passwd(obrpc::ObPhysicalRestoreTenantArg &arg);
     int resolve_restore_source_array(obrpc::ObPhysicalRestoreTenantArg &arg);
+};
+
+class ObRecoverTenantResolver : public ObSystemCmdResolver
+{
+  public:
+    ObRecoverTenantResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
+    virtual ~ObRecoverTenantResolver() {}
+    virtual int resolve(const ParseNode &parse_tree);
+  private:
 };
 
 class ObAlterSystemSetResolver : public ObSystemCmdResolver

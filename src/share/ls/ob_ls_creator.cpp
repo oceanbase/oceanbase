@@ -36,7 +36,7 @@ using namespace oceanbase::palf;
 
 namespace oceanbase
 {
-namespace share 
+namespace share
 {
 ////ObLSReplicaAddr
 int ObLSReplicaAddr::init(const common::ObAddr &addr,
@@ -108,6 +108,7 @@ int ObLSCreator::create_sys_tenant_ls(
     const common::ObCompatibilityMode compat_mode = MYSQL_MODE;
     const SCN create_scn = SCN::base_scn();//SYS_LS no need create_scn
     palf::PalfBaseInfo palf_base_info;
+    common::ObMember arbitration_service;
     for (int64_t i = 0; OB_SUCC(ret) && i < rs_list.count(); ++i) {
       replica_addr.reset();
       if (rs_list.at(i).zone_ != unit_array.at(i).zone_) {
@@ -129,12 +130,13 @@ int ObLSCreator::create_sys_tenant_ls(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(create_ls_(addr, paxos_replica_num, tenant_info,
-            create_scn, compat_mode, false/*create_with_palf*/, palf_base_info, member_list))) {
+            create_scn, compat_mode, false/*create_with_palf*/, palf_base_info,
+            member_list, arbitration_service))) {
       LOG_WARN("failed to create log stream", KR(ret), K_(id), K_(tenant_id),
                                               K(addr), K(paxos_replica_num), K(tenant_info),
                                               K(create_scn), K(compat_mode), K(palf_base_info));
-    } else if (OB_FAIL(set_member_list_(member_list, paxos_replica_num))) {
-      LOG_WARN("failed to set member list", KR(ret), K(member_list), K(paxos_replica_num));
+    } else if (OB_FAIL(set_member_list_(member_list, arbitration_service, paxos_replica_num))) {
+      LOG_WARN("failed to set member list", KR(ret), K(member_list), K(arbitration_service), K(paxos_replica_num));
     }
   }
   return ret;
@@ -142,16 +144,16 @@ int ObLSCreator::create_sys_tenant_ls(
 
 #define REPEAT_CREATE_LS()                     \
   do {                                                                         \
-    if (OB_FAIL(ret)) {\
+    if (OB_FAIL(ret)) {                        \
     } else if (0 >= member_list.get_member_number()) {                       \
-      if (OB_FAIL(do_create_ls_(addr, status_info, paxos_replica_num, \
+      if (OB_FAIL(do_create_ls_(addr, arbitration_service, status_info, paxos_replica_num, \
               create_scn, compat_mode, member_list, create_with_palf, palf_base_info))) {         \
         LOG_WARN("failed to create log stream", KR(ret), K_(id),             \
             K_(tenant_id), K(addr), K(paxos_replica_num),               \
             K(status_info), K(create_scn), K(palf_base_info));                  \
       }                                                                      \
     }                                                                        \
-    if (FAILEDx(process_after_has_member_list_(member_list,                  \
+    if (FAILEDx(process_after_has_member_list_(member_list, arbitration_service,   \
             paxos_replica_num))) {        \
       LOG_WARN("failed to process after has member list", KR(ret),           \
           K(member_list), K(paxos_replica_num));                        \
@@ -189,6 +191,7 @@ int ObLSCreator::create_user_ls(
     common::ObMemberList member_list;
     share::ObLSStatusInfo exist_status_info;
     share::ObLSStatusOperator ls_operator;
+    ObMember arbitration_service;
     if (OB_FAIL(alloc_user_ls_addr(tenant_id_, status_info.unit_group_id_,
             zone_locality, addr))) {
       LOG_WARN("failed to alloc user ls addr", KR(ret), K(tenant_id_), K(status_info));
@@ -243,6 +246,7 @@ int ObLSCreator::create_tenant_sys_ls(
     share::ObLSStatusInfo exist_status_info;
     const SCN create_scn = SCN::base_scn();
     share::ObLSStatusOperator ls_operator;
+    ObMember arbitration_service;
     if (OB_FAIL(status_info.init(tenant_id_, id_, 0, share::OB_LS_CREATING, 0,
                                    primary_zone))) {
       LOG_WARN("failed to init ls info", KR(ret), K(id_), K(primary_zone),
@@ -259,7 +263,8 @@ int ObLSCreator::create_tenant_sys_ls(
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           share::ObLSLifeAgentManager ls_life_agent(*proxy_);
-          if (OB_FAIL(ls_life_agent.create_new_ls(status_info, create_scn, zone_priority))) {
+          if (OB_FAIL(ls_life_agent.create_new_ls(status_info, create_scn, zone_priority,
+                                                  share::NORMAL_SWITCHOVER_STATUS))) {
             LOG_WARN("failed to create new ls", KR(ret), K(status_info), K(create_scn), K(zone_priority));
           }
         }
@@ -276,6 +281,7 @@ int ObLSCreator::create_tenant_sys_ls(
 }
 
 int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
+                              ObMember &arbitration_service,
                               const share::ObLSStatusInfo &info,
                               const int64_t paxos_replica_num,
                               const SCN &create_scn,
@@ -298,7 +304,7 @@ int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, proxy_, false, tenant_info))) {
    LOG_WARN("failed to load tenant info", KR(ret), K_(tenant_id));
  } else if (OB_FAIL(create_ls_(addr, paxos_replica_num, tenant_info, create_scn,
-                               compat_mode, create_with_palf, palf_base_info, member_list))) {
+                               compat_mode, create_with_palf, palf_base_info, member_list, arbitration_service))) {
    LOG_WARN("failed to create log stream", KR(ret), K_(id), K_(tenant_id), K(create_with_palf),
             K(addr), K(paxos_replica_num), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info));
  } else if (OB_FAIL(persist_ls_member_list_(member_list))) {
@@ -309,15 +315,17 @@ int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
 }
 
 int ObLSCreator::process_after_has_member_list_(
-    const common::ObMemberList &member_list, const int64_t paxos_replica_num)
+    const common::ObMemberList &member_list,
+    const common::ObMember &arbitration_service,
+    const int64_t paxos_replica_num)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
-  } else if (OB_FAIL(set_member_list_(member_list, paxos_replica_num))) {
+  } else if (OB_FAIL(set_member_list_(member_list, arbitration_service, paxos_replica_num))) {
     LOG_WARN("failed to set member list", KR(ret), K_(id), K_(tenant_id),
-        K(member_list), K(paxos_replica_num));
+        K(member_list), K(arbitration_service), K(paxos_replica_num));
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
@@ -330,8 +338,8 @@ int ObLSCreator::process_after_has_member_list_(
       LOG_WARN("failed to update ls status", KR(ret), K(id_));
     } else if (id_.is_sys_ls()) {
       if (OB_FAIL(ls_operator.update_ls_status(
-              tenant_id_, id_, share::OB_LS_CREATED, share::OB_LS_NORMAL,
-              share::NORMAL_SWITCHOVER_STATUS, *proxy_))) {
+                  tenant_id_, id_, share::OB_LS_CREATED, share::OB_LS_NORMAL,
+                  share::NORMAL_SWITCHOVER_STATUS, *proxy_))) {
         LOG_WARN("failed to update ls status", KR(ret), K(id_));
       }
     }
@@ -346,7 +354,8 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
                            const common::ObCompatibilityMode &compat_mode,
                            const bool create_with_palf,
                            const palf::PalfBaseInfo &palf_base_info,
-                           common::ObMemberList &member_list)
+                           common::ObMemberList &member_list,
+                           common::ObMember &arbitration_service)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
@@ -397,10 +406,12 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
       if (FAILEDx(check_create_ls_result_(rpc_count, paxos_replica_num, return_code_array, member_list))) {
         LOG_WARN("failed to check ls result", KR(ret), K(rpc_count), K(paxos_replica_num), K(return_code_array));
       }
+
     }
   }
   return ret;
 }
+
 
 int ObLSCreator::check_create_ls_result_(const int64_t rpc_count,
                                         const int64_t paxos_replica_num,
@@ -482,7 +493,8 @@ int ObLSCreator::persist_ls_member_list_(const common::ObMemberList &member_list
 }
 
 int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
-                                 const int64_t paxos_replica_num)
+                                  const common::ObMember &arbitration_service,
+                                  const int64_t paxos_replica_num)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_SET_LS_MEMBER_LIST);
@@ -502,9 +514,9 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
       int64_t rpc_count = 0;
       int tmp_ret = OB_SUCCESS;
       ObArray<int> return_code_array;
-      if (OB_FAIL(arg.init(tenant_id_, id_, paxos_replica_num, member_list))) {
+      if (OB_FAIL(arg.init(tenant_id_, id_, paxos_replica_num, member_list, arbitration_service))) {
         LOG_WARN("failed to init set member list arg", KR(ret), K_(id), K_(tenant_id),
-            K(paxos_replica_num), K(member_list));
+            K(paxos_replica_num), K(member_list), K(arbitration_service));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
         ObAddr addr;
@@ -531,8 +543,8 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
     }
   }
   return ret;
-
 }
+
 
 int ObLSCreator::check_set_memberlist_result_(const int64_t rpc_count,
                             const ObIArray<int> &return_code_array,

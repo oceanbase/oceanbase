@@ -114,18 +114,22 @@ public:
    * description: override of ObLSLifeIAgent
    * @param[in] ls_info: ls info
    * @param[in] create_ls_scn: ls's create ts
+   * @param[in] working_sw_status UNUSED
    * @param[in] trans:*/
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
                             const SCN &create_ls_scn,
                             const common::ObString &zone_priority,
+                            const share::ObTenantSwitchoverStatus &working_sw_status,
                             ObMySQLTransaction &trans) override;
   /*
    * description: override of ObLSLifeIAgent
    * @param[in] tenant_id
    * @param[in] ls_id
+   * @param[in] working_sw_status UNUSED
    * @param[in] trans:*/
   virtual int drop_ls(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) override;
   /*
    * description: for primary cluster set ls to wait offline from tenant_dropping or dropping status
@@ -133,12 +137,14 @@ public:
    * @param[in] ls_id: need delete ls
    * @param[in] ls_status: tenant_dropping or dropping status
    * @param[in] drop_scn: there is no user data after drop_scn except offline
+   * @param[in] working_sw_status UNUSED
    * @param[in] trans
    * */
   virtual int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
                       const SCN &drop_scn,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) override;
   /*
    * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 
@@ -161,7 +167,7 @@ public:
 
   /*
    * description:construct ls_recovery by read from inner table*/
-  int fill_cell(sqlclient::ObMySQLResult*result, ObLSRecoveryStat &ls_recovery);
+  static int fill_cell(sqlclient::ObMySQLResult *result, ObLSRecoveryStat &ls_recovery);
 public:
   /*
    * description: update ls recovery stat, only update sync_ts/readable_ts
@@ -199,6 +205,17 @@ public:
                                ObISQLClient &client,
                                SCN &sync_scn,
                                SCN &min_wrs);
+
+    /*
+   * description: get tenant max sync_scn across all ls
+   * @param[in] tenant_id
+   * @param[in] client
+   * @param[out] max_sync_scn
+   * */
+  int get_tenant_max_sync_scn(const uint64_t tenant_id,
+                              ObISQLClient &client,
+                              SCN &max_sync_scn);
+
   /*
    * description: get user ls sync scn, for recovery ls
    * @param[in] tenant_id

@@ -243,7 +243,7 @@ END_P SET_VAR DELIMITER
 %token <non_reserved_keyword>
         ACCESS ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALWAYS ANALYSE ANY
         APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
-        ASCII AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
+        ARBITRATION ASCII AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
         ACTIVATE AVAILABILITY ARCHIVELOG AUDIT
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING BINLOG BIT BIT_AND
@@ -263,7 +263,7 @@ END_P SET_VAR DELIMITER
         DIRECTORY DISABLE DISCARD DISK DISKGROUP DO DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT
 
-        EFFECTIVE EMPTY ENABLE ENABLE_EXTENDED_ROWID ENCRYPTION END ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
+        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPTION END ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED
 
@@ -320,7 +320,7 @@ END_P SET_VAR DELIMITER
         RANK READ_ONLY RECOVERY REJECT
 
         SAMPLE SAVEPOINT SCHEDULE SCHEMA_NAME SCN SCOPE SECOND SECURITY SEED SEQUENCES SERIAL SERIALIZABLE SERVER
-        SERVER_IP SERVER_PORT SERVER_TYPE SESSION SESSION_USER SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
+        SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
         SET_TP SHARE SHUTDOWN SIGNED SIMPLE SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
@@ -337,7 +337,7 @@ END_P SET_VAR DELIMITER
         TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES
 
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
-        UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP
+        UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED
 
         VALID VALUE VARIANCE VARIABLES VERBOSE VERIFY VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
         VAR_SAMP
@@ -494,6 +494,7 @@ END_P SET_VAR DELIMITER
 %type <node> method_opt method_list method extension
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause
+%type <node> recover_tenant_stmt recover_point_clause
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -637,6 +638,7 @@ stmt:
   | pl_expr_stmt            { $$ = $1; question_mark_issue($$, result); }
   | method_opt              { $$ = $1; check_question_mark($$, result); }
   | switchover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
+  | recover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -3657,6 +3659,11 @@ LOGONLY_REPLICA_NUM opt_equal_mark INTNUM
 {
   (void)($2) ; /* make bison mute */
   merge_nodes($$, result, T_TENANT_RESOURCE_POOL_LIST, $4);
+}
+| ENABLE_ARBITRATION_SERVICE opt_equal_mark BOOL_VALUE
+{
+  (void)($2) ;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ENABLE_ARBITRATION_SERVICE, 1, $3);
 }
 | ZONE_LIST opt_equal_mark '(' zone_list ')'
 {
@@ -13941,6 +13948,21 @@ ALTER SYSTEM CLEAR MERGE ERROR_P opt_tenant_list_v2
   malloc_non_terminal_node($$, result->malloc_pool_, T_CLEAR_MERGE_ERROR, 1, $6);
 }
 |
+ALTER SYSTEM ADD ARBITRATION SERVICE STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ADD_ARBITRATION_SERVICE, 1, $6);
+}
+|
+ALTER SYSTEM REMOVE ARBITRATION SERVICE STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REMOVE_ARBITRATION_SERVICE, 1, $6);
+}
+|
+ALTER SYSTEM REPLACE ARBITRATION SERVICE STRING_VALUE WITH STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REPLACE_ARBITRATION_SERVICE, 2, $6, $8);
+}
+|
 ALTER SYSTEM CANCEL cancel_task_type TASK STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_TASK, 2, $4, $6);
@@ -15946,14 +15968,14 @@ opt_restore_until:
   ParseNode *is_scn = NULL;
   malloc_terminal_node(is_scn, result->malloc_pool_, T_INT);
   is_scn->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 2, is_scn, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_UNTIL, 2, is_scn, $4);
 }
 | UNTIL SCN COMP_EQ INTNUM
 {
   ParseNode *is_scn = NULL;
   malloc_terminal_node(is_scn, result->malloc_pool_, T_INT);
   is_scn->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 2, is_scn, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_UNTIL, 2, is_scn, $4);
 }
 ;
 
@@ -16017,7 +16039,36 @@ ACTIVATE STANDBY opt_tenant_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FAILOVER_TO_PRIMARY, 1, $3);
 }
+| SWITCHOVER TO PRIMARY opt_tenant_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SWITCHOVER_TO_PRIMARY, 1, $4);
+}
+| SWITCHOVER TO STANDBY opt_tenant_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SWITCHOVER_TO_STANDBY, 1, $4);
+}
 ;
+
+recover_tenant_stmt:
+ALTER SYSTEM RECOVER STANDBY opt_tenant_name recover_point_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RECOVER, 2, $5, $6);
+}
+;
+
+recover_point_clause:
+opt_restore_until
+{
+  $$ = $1;
+}
+| UNTIL UNLIMITED
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_RECOVER_UNLIMITED);
+}
+| CANCEL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_RECOVER_CANCEL);
+};
 
 /*===========================================================
  *
@@ -16520,6 +16571,7 @@ ACCOUNT
 |       APPROX_COUNT_DISTINCT_SYNOPSIS
 |       APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
 |       ARCHIVELOG
+|       ARBITRATION
 |       ASCII
 |       AT
 |       AUDIT
@@ -16662,6 +16714,7 @@ ACCOUNT
 |       EFFECTIVE
 |       EMPTY
 |       ENABLE
+|       ENABLE_ARBITRATION_SERVICE
 |       ENABLE_EXTENDED_ROWID
 |       ENCRYPTION
 |       END
@@ -17026,6 +17079,7 @@ ACCOUNT
 |       SERVER_IP
 |       SERVER_PORT
 |       SERVER_TYPE
+|       SERVICE
 |       SESSION %prec LOWER_PARENS
 |       SESSION_USER
 |       SET_MASTER_CLUSTER
@@ -17158,6 +17212,7 @@ ACCOUNT
 |       USER
 |       USER_RESOURCES
 |       UNBOUNDED
+|       UNLIMITED
 |       VALID
 |       VALIDATE
 |       VALUE

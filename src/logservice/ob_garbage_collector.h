@@ -291,6 +291,8 @@ private:
   bool is_ls_offline_finished_(const LSGCState &state);
   void try_check_and_set_tablet_clear_(const ObGarbageCollector::LSStatus &ls_status);
   void try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_status);
+  int get_tenant_readable_scn_(share::SCN &readable_scn);
+  int check_if_tenant_in_archive_(bool &in_archive);
   void submit_log_(const ObGCLSLOGType log_type);
   void update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
                                             const share::SCN &scn);

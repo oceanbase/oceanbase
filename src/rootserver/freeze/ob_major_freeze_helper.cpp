@@ -16,6 +16,7 @@
 #include "share/ob_freeze_info_proxy.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/ob_tenant_info_proxy.h"
 
 namespace oceanbase
 {
@@ -87,12 +88,21 @@ int ObMajorFreezeHelper::get_freeze_info(
   } else {
     const int64_t info_cnt = tmp_info_array.count();
     for (int64_t i = 0; OB_SUCC(ret) && (i < info_cnt); ++i) {
+      share::ObAllTenantInfo tenant_info;
       bool is_restore = false;
       const uint64_t tenant_id = tmp_info_array.at(i).tenant_id_;
       if (OB_FAIL(check_tenant_is_restore(tenant_id, is_restore))) {
         LOG_WARN("fail to check tenant is restore", KR(ret), K(i), "freeze_info", tmp_info_array.at(i));
       } else if (is_restore) {
         LOG_INFO("skip restoring tenant to do major freeze", K(tenant_id));
+      } else if (OB_FAIL(share::ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_,
+                                                                false, tenant_info))) {
+        LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+      }
+      // Skip major freeze for standby tenants and thus avoid OB_MAJOR_FREEZE_NOT_ALLOW incurred by
+      // standby tenants, only when launching major freeze on more than one tenant.
+      else if (tenant_info.is_standby() && (info_cnt > 1)) {
+        LOG_INFO("skip major freeze for standby tenant", K(tenant_info));
       } else if (OB_FAIL(freeze_info_array.push_back(tmp_info_array.at(i)))) {
         LOG_WARN("fail to push back freeze info", KR(ret), K(i), "freeze_info", tmp_info_array.at(i));
       }

@@ -46,6 +46,7 @@ public:
   int delete_tenant(const char *tenant_name = "tt1");
   int get_tenant_id(uint64_t &tenant_id, const char *tenant_name = "tt1");
   int exec_write_sql_sys(const char *sql_str, int64_t &affected_rows);
+  int check_tenant_exist(bool &bool_ret, const char *tenant_name = "tt1");
 
 protected:
   virtual void SetUp();

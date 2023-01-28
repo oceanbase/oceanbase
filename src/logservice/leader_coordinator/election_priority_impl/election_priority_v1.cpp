@@ -99,29 +99,27 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
   } else {
     common::ObRole role;
     int64_t unused_pid = -1;
-    SCN min_unreplay_scn;
+    SCN max_replayed_scn;
     if (CLICK_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
       COORDINATOR_LOG_(WARN, "get_role failed");
     } else if (CLICK_FAIL(palf_handle_guard.get_max_scn(scn))) {
       COORDINATOR_LOG_(WARN, "get_max_scn failed");
     } else if (FOLLOWER == role) {
-      if (CLICK_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_scn(ls_id, min_unreplay_scn))) {
-        COORDINATOR_LOG_(WARN, "failed to get_min_unreplayed_scn");
+      if (CLICK_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_max_replayed_scn(ls_id, max_replayed_scn))) {
+        COORDINATOR_LOG_(WARN, "failed to get_max_replayed_scnn");
         ret = OB_SUCCESS;
-      } else if (!min_unreplay_scn.is_valid_and_not_min()) {
-        scn.set_min();
-      } else if (SCN::minus(min_unreplay_scn, 1) < scn) {
+      } else if (max_replayed_scn < scn) {
         // For restore case, min_unreplay_scn may be larger than max_ts.
-        scn = SCN::minus(min_unreplay_scn, 1) ;
+        scn = max_replayed_scn;
       } else {}
     } else {}
     // log_ts may fallback because palf's role may be different with apply_service.
     // So we need check it here to keep inc update semantic.
     if (scn < scn_) {
-      COORDINATOR_LOG_(TRACE, "new log_ts is smaller than current, no need update", K(role), K(min_unreplay_scn), K(scn));
+      COORDINATOR_LOG_(TRACE, "new scn is smaller than current, no need update", K(role), K(max_replayed_scn), K(scn));
       scn = scn_;
     }
-    COORDINATOR_LOG_(TRACE, "get_scn_ finished", K(role), K(min_unreplay_scn), K(scn));
+    COORDINATOR_LOG_(TRACE, "get_scn_ finished", K(role), K(max_replayed_scn), K(scn));
     if (OB_SUCC(ret) && !scn.is_valid()) {
       scn.set_min();
     }
@@ -342,6 +340,11 @@ int PriorityV1::compare_scn_(int &ret, const PriorityV1&rhs) const
     }
   }
   return compare_result;
+}
+
+bool PriorityV1::has_fatal_failure_() const
+{
+  return !fatal_failures_.empty();
 }
 
 }

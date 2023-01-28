@@ -25,7 +25,8 @@ namespace oceanbase
 {
 namespace rootserver 
 {
-class ObMajorFreezeService;
+class ObPrimaryMajorFreezeService;
+class ObRestoreMajorFreezeService;
 }
 namespace obrpc
 {
@@ -146,25 +147,29 @@ public:
 class ObTenantMajorFreezeP : public ObMajorFreezeRpcProxy::Processor<OB_TENANT_MAJOR_FREEZE>
 {
 public:
-  ObTenantMajorFreezeP() : major_freeze_service_(nullptr) {}
+  ObTenantMajorFreezeP()
+    : primary_major_freeze_service_(nullptr), restore_major_freeze_service_(nullptr) {}
   virtual ~ObTenantMajorFreezeP() {}
 
 protected:
   virtual int process() override;
 
 private:
-  rootserver::ObMajorFreezeService *major_freeze_service_;
+  rootserver::ObPrimaryMajorFreezeService *primary_major_freeze_service_;
+  rootserver::ObRestoreMajorFreezeService *restore_major_freeze_service_;
 };
 
 class ObTenantAdminMergeP : public ObTenantAdminMergeRpcProxy::Processor<OB_TENANT_ADMIN_MERGE>
 {
 public:
-  ObTenantAdminMergeP() : major_freeze_service_(nullptr) {}
+  ObTenantAdminMergeP()
+    : primary_major_freeze_service_(nullptr), restore_major_freeze_service_(nullptr) {}
   virtual ~ObTenantAdminMergeP() {}
 protected:
   virtual int process() override;
 private:
-  rootserver::ObMajorFreezeService *major_freeze_service_;
+  rootserver::ObPrimaryMajorFreezeService *primary_major_freeze_service_;
+  rootserver::ObRestoreMajorFreezeService *restore_major_freeze_service_;
 };
 
 } // namespace obrpc

@@ -142,6 +142,7 @@ ElectionPrepareRequestMsgMiddle::ElectionPrepareRequestMsgMiddle(const int64_t i
                                                                  const common::ObAddr &self_addr,
                                                                  const int64_t restart_counter,
                                                                  const int64_t ballot_number,
+                                                                 const uint64_t inner_priority_seed,
                                                                  const LogConfigVersion membership_version) :
 ElectionMsgBase(id,
                 self_addr,
@@ -150,13 +151,15 @@ ElectionMsgBase(id,
                 ElectionMsgType::PREPARE_REQUEST),
 role_(ObRole::INVALID_ROLE),
 is_buffer_valid_(false),
+inner_priority_seed_(inner_priority_seed),
 membership_version_(membership_version)
 { memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE); }
 
 ElectionPrepareRequestMsgMiddle::ElectionPrepareRequestMsgMiddle() :
 ElectionMsgBase(),
 role_(ObRole::INVALID_ROLE),
-is_buffer_valid_(false) { memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE); }
+is_buffer_valid_(false),
+inner_priority_seed_(DEFAULT_SEED) { memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE); }
 
 int ElectionPrepareRequestMsgMiddle::set(const ElectionPriority *priority,
                                    const common::ObRole role) {
@@ -182,6 +185,8 @@ const char *ElectionPrepareRequestMsgMiddle::get_priority_buffer() const { retur
 common::ObRole ElectionPrepareRequestMsgMiddle::get_role() const { return static_cast<common::ObRole>(role_); }
 
 LogConfigVersion ElectionPrepareRequestMsgMiddle::get_membership_version() const { return membership_version_; }
+
+uint64_t ElectionPrepareRequestMsgMiddle::get_inner_priority_seed() const { return inner_priority_seed_; }
 
 ElectionPrepareResponseMsgMiddle::ElectionPrepareResponseMsgMiddle() :
 ElectionMsgBase(),
@@ -251,7 +256,8 @@ ElectionMsgBase(),
 lease_started_ts_on_proposer_(0),
 lease_interval_(0),
 accepted_(false),
-is_buffer_valid_(false)
+is_buffer_valid_(false),
+inner_priority_seed_(DEFAULT_SEED)
 {
   memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE);
 }
@@ -260,6 +266,7 @@ LogConfigVersion ElectionAcceptRequestMsgMiddle::get_membership_version() const 
 
 ElectionAcceptResponseMsgMiddle::
 ElectionAcceptResponseMsgMiddle(const ObAddr &self_addr,
+                                const uint64_t inner_priority_seed,
                                 const LogConfigVersion &membership_version,
                                 const ElectionAcceptRequestMsgMiddle &request) :
 ElectionMsgBase(request.get_id(),
@@ -271,6 +278,7 @@ lease_started_ts_on_proposer_(request.get_lease_start_ts_on_proposer()),
 lease_interval_(request.get_lease_interval()),
 accepted_(false),
 is_buffer_valid_(false),
+inner_priority_seed_(inner_priority_seed),
 responsed_membership_version_(request.get_membership_version()),
 membership_version_(membership_version)
 {
@@ -319,6 +327,8 @@ LogConfigVersion ElectionAcceptResponseMsgMiddle::get_responsed_membership_versi
 LogConfigVersion ElectionAcceptResponseMsgMiddle::get_membership_version() const { return membership_version_; }
 
 ElectionMsgDebugTs ElectionAcceptResponseMsgMiddle::get_request_debug_ts() const { return request_debug_ts_; }
+
+uint64_t ElectionAcceptResponseMsgMiddle::get_inner_priority_seed() const { return inner_priority_seed_; }
 
 ElectionChangeLeaderMsgMiddle::ElectionChangeLeaderMsgMiddle() :
 ElectionMsgBase(),

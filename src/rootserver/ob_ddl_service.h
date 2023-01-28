@@ -1848,6 +1848,7 @@ private:
       const ObIArray<share::ObResourcePoolName> &pool_list,
       const share::schema::ObTenantSchema &tenant_schema,
       const share::ObTenantRole &tenant_role,
+      const share::SCN &recovery_until_scn,
       share::schema::ObSysVariableSchema &sys_variable,
       const bool create_ls_with_palf,
       const palf::PalfBaseInfo &palf_base_info,
@@ -1868,6 +1869,7 @@ private:
       const uint64_t tenant_id,
       const share::schema::ObTenantSchema &tenant_schema,
       const share::ObTenantRole &tenant_role,
+      const share::SCN &recovery_until_scn,
       common::ObIArray<share::schema::ObTableSchema> &tables,
       share::schema::ObSysVariableSchema &sys_variable,
       const common::ObIArray<common::ObConfigPairs> &init_configs);
@@ -2300,6 +2302,7 @@ public:
                         start_operation_schema_version_(OB_INVALID_VERSION),
                         start_operation_tenant_id_(OB_INVALID_TENANT_ID),
                         need_end_signal_(need_end_signal),
+                        trans_start_schema_version_(0),
                         enable_ddl_parallel_(enable_ddl_parallel),
                         enable_check_ddl_epoch_(enable_check_ddl_epoch),
                         trans_start_ddl_epoch_(OB_INVALID_VERSION)
@@ -2334,6 +2337,29 @@ public:
                        const char *buf,
                        const int64_t buf_len);
 private:
+  // generate inc schema_metas and regist multi_data_source data
+  // all schemas should contains basic info(id/name/schema_version/charset_type/collation_type)
+  // @param [in] allocator          allocator used to generate meta and serialization.
+  // @param [in] tenant_schemas     tenant_schema_array, tenant_schema should contains
+  //                                compatibility_mode, and should record drop_tenant_time and
+  //                                is_in_recyclebin if tenant is dropped.
+  // @param [in] database_schemas   database_schema_array, database_schema should contains
+  //                                tenant_id, and should record is_in_recyclebin if database is deleted
+  // @param [in] table_schemas      table_schema_array, table_schema should contains table basic info including
+  //                                tenant_id/db_id/table_type/table_mode/ etc. and also contains
+  //                                rowkey_info/column_info/lob table info(meta_tid/piece_tid)/
+  //                                index info(index_type/index_col_cnt/index_col_info) and
+  //                                could provide table_id_arr..
+  //                                ColumnSchema recorded in
+  //                                table_schema(cols/rowkey_cols/index_cols) should preovide
+  //                                rowkey_position/index_position/meta_type/accuracy/column_flag/
+  //                                is_part_key_col/cur_default_value/orig_default_value/extended_type_info/... etc.
+  // PLEASE REFER src/logservice/data_dictionary/ob_data_dict_struct.cpp FOR DETAIL.
+  int serialize_inc_schemas_(
+      ObIAllocator &allocator,
+      const ObIArray<const ObTenantSchema*> &tenant_schemas,
+      const ObIArray<const ObDatabaseSchema*> &database_schemas,
+      const ObIArray<const ObTableSchema*> &table_schemas);
   // regist multi_data_source data into trans
   int regist_multi_source_data_();
   int lock_ddl_epoch(ObISQLClient *proxy);
@@ -2349,6 +2375,11 @@ private:
   uint64_t start_operation_tenant_id_;
   //no need to set end_signal while ddl end transaction
   bool need_end_signal_;
+  // Used for fetch increment schemas generate by this DDL trans.
+  // 1. when bootstrap/create tenant, trans_start_schema_version_ is 0, won't fetch increment schema.
+  // 2. TODO(yanmu.ztl): when truncate table in 4.1, trans_start_schema_version_ maybe meaningless.
+  // 3. other situations, fetch increament schemas in (trans_start_schema_version_, ].
+  int64_t trans_start_schema_version_;
   // enable ddl parallel
   bool enable_ddl_parallel_;
 

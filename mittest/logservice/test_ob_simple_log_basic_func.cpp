@@ -47,6 +47,7 @@ public:
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 3;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
+bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 
 TEST_F(TestObSimpleLogClusterBasicFunc, submit_log)
 {
@@ -57,7 +58,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, submit_log)
   share::SCN create_scn;
   create_scn.convert_for_logservice(create_ts);
   int64_t leader_idx = 0;
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   ObTimeGuard guard("submit_log", 0);
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
   guard.click("create");
@@ -83,13 +84,13 @@ TEST_F(TestObSimpleLogClusterBasicFunc, restart_and_clear_tmp_files)
   int64_t leader_idx = 0;
   std::string logserver_dir;
   {
-    PalfHandleGuard leader;
+    PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
     guard.click("create");
-    logserver_dir = leader.palf_env_->palf_env_impl_.log_dir_;
+    logserver_dir = leader.palf_env_impl_->log_dir_;
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, leader_idx, 1 * 1024 * 1024));
     guard.click("submit_log");
-    while (leader.palf_handle_.palf_handle_impl_->get_end_lsn()
+    while (leader.palf_handle_impl_->get_end_lsn()
            < LSN(100 * 1024 * 1024ul)) {
       usleep(100 * 1000);
     }
@@ -98,8 +99,8 @@ TEST_F(TestObSimpleLogClusterBasicFunc, restart_and_clear_tmp_files)
   const std::string tmp_1_dir = base_dir + "/10000.tmp/log/";
   const std::string mkdir_tmp_1 = "mkdir -p " + tmp_1_dir;
   const std::string dir_2 = base_dir + "/10000000";
-  const std::string dir_normal_file = base_dir + "/10000000/log/1.tmp";
-  const std::string dir_normal_file1 = base_dir + "/10000000/meta/1.tmp";
+  const std::string dir_normal_file = base_dir + "/10000000/log/1";
+  const std::string dir_normal_file1 = base_dir + "/10000000/meta/";
   const std::string mkdir_2 = "mkdir -p " + dir_normal_file;
   const std::string mkdir_3 = "mkdir -p " + dir_normal_file1;
   system(mkdir_tmp_1.c_str());
@@ -121,11 +122,11 @@ TEST_F(TestObSimpleLogClusterBasicFunc, restart_and_clear_tmp_files)
       EXPECT_EQ(OB_SUCCESS,
                 common::FileDirectoryUtils::is_exists(tmp_1_dir.c_str(), result));
       EXPECT_EQ(result, false);
-      PalfHandleGuard leader1;
+      PalfHandleImplGuard leader1;
       EXPECT_EQ(OB_SUCCESS, get_leader(id, leader1, leader_idx));
       guard.click("get_leader");
       LogStorage *log_storage =
-          &leader1.palf_handle_.palf_handle_impl_->log_engine_.log_storage_;
+          &leader1.palf_handle_impl_->log_engine_.log_storage_;
       LSN lsn_origin_log_tail = log_storage->get_log_tail_guarded_by_lock_();
       EXPECT_EQ(OB_SUCCESS, submit_log(leader1, 10, leader_idx, 1 * 1024 * 1024));
       while (log_storage->log_tail_ == lsn_origin_log_tail) {
@@ -175,30 +176,31 @@ TEST_F(TestObSimpleLogClusterBasicFunc, test_locate_by_scn_coarsely)
   int ret = OB_SUCCESS;
   std::vector<LSN> lsn_array;
   std::vector<SCN> scn_array;
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   LSN result_lsn;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
   // no log
   share::SCN invalid_scn;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, leader.locate_by_scn_coarsely(invalid_scn, result_lsn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->locate_by_scn_coarsely(invalid_scn, result_lsn));
   share::SCN scn_cur;
   scn_cur.convert_for_logservice(ObTimeUtility::current_time_ns());
-  EXPECT_EQ(OB_ENTRY_NOT_EXIST, leader.locate_by_scn_coarsely(scn_cur, result_lsn));
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, leader.palf_handle_impl_->locate_by_scn_coarsely(
+                                    scn_cur, result_lsn));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 256, leader_idx, lsn_array, scn_array));
   sleep(1);
-  share::SCN scn_10;
-  scn_10.convert_for_logservice(10);
-  EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, leader.locate_by_scn_coarsely(scn_10, result_lsn));
+  SCN ref_scn;
+  ref_scn.convert_for_tx(10);
+  EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, leader.palf_handle_impl_->locate_by_scn_coarsely(ref_scn, result_lsn));
   // contains log
-  int64_t input_ts = ObTimeUtility::current_time_ns();
+  int64_t input_ts_ns = ObTimeUtility::current_time_ns();
   share::SCN input_scn;
-  input_scn.convert_for_logservice(input_ts);
-  EXPECT_EQ(OB_SUCCESS, leader.locate_by_scn_coarsely(input_scn, result_lsn));
+  input_scn.convert_for_logservice(input_ts_ns);
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->locate_by_scn_coarsely(input_scn, result_lsn));
   EXPECT_TRUE(
       check_locate_correct(lsn_array, scn_array, input_scn, result_lsn, true));
-  input_ts += 1000 * 1000 * 1000 * 1000L;
-  input_scn.convert_for_logservice(input_ts);
-  EXPECT_EQ(OB_SUCCESS, leader.locate_by_scn_coarsely(input_scn, result_lsn));
+  input_ts_ns += 1000 * 1000 * 1000 * 1000L;
+  input_scn.convert_for_logservice(input_ts_ns);
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->locate_by_scn_coarsely(input_scn, result_lsn));
   EXPECT_TRUE(
       check_locate_correct(lsn_array, scn_array, input_scn, result_lsn, true));
 
@@ -212,7 +214,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, test_locate_by_scn_coarsely)
     share::SCN this_scn;
     this_scn.convert_for_logservice(this_ts);
     guard.click();
-    EXPECT_EQ(OB_SUCCESS, leader.locate_by_scn_coarsely(this_scn, result_lsn));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->locate_by_scn_coarsely(this_scn, result_lsn));
     guard.click();
     EXPECT_TRUE(
         check_locate_correct(lsn_array, scn_array, input_scn, result_lsn, true));
@@ -229,24 +231,24 @@ TEST_F(TestObSimpleLogClusterBasicFunc, test_locate_by_lsn_coarsely)
   int ret = OB_SUCCESS;
   std::vector<LSN> lsn_array;
   std::vector<SCN> scn_array;
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   share::SCN result_scn;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
   // no log
-  EXPECT_EQ(OB_INVALID_ARGUMENT, leader.locate_by_lsn_coarsely(LSN(), result_scn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->locate_by_lsn_coarsely(LSN(), result_scn));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, leader_idx, lsn_array, scn_array));
   sleep(1);
 
   LSN input_lsn;
   input_lsn.val_ = 0;
-  EXPECT_EQ(OB_SUCCESS, leader.locate_by_lsn_coarsely(input_lsn, result_scn));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->locate_by_lsn_coarsely(input_lsn, result_scn));
   EXPECT_TRUE(check_locate_correct(lsn_array, scn_array, result_scn, input_lsn, false));
 
   EXPECT_EQ(OB_SUCCESS,
             submit_log(leader, 65, 1024 * 1024, leader_idx, lsn_array, scn_array));
 
   input_lsn.val_ = 1 * PALF_BLOCK_SIZE;
-  EXPECT_EQ(OB_SUCCESS, leader.locate_by_lsn_coarsely(input_lsn, result_scn));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->locate_by_lsn_coarsely(input_lsn, result_scn));
   EXPECT_TRUE(check_locate_correct(lsn_array, scn_array, result_scn, input_lsn, false)) ;
 
   PALF_LOG(INFO, "end test_locate_by_lsn_coarsely", K(id));
@@ -259,32 +261,32 @@ TEST_F(TestObSimpleLogClusterBasicFunc, test_switch_leader)
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "start test_switch_leader", K(id));
   int64_t leader_idx = 0;
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
 
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1024, id));
 
   // switch leader
   leader_idx = 1;
-  PalfHandleGuard new_leader1;
+  PalfHandleImplGuard new_leader1;
   EXPECT_EQ(OB_SUCCESS, switch_leader(id, leader_idx, new_leader1));
   EXPECT_EQ(OB_SUCCESS, submit_log(new_leader1, 1024, id));
 
   // switch leader
-  PalfHandleGuard new_leader2;
+  PalfHandleImplGuard new_leader2;
   leader_idx = 2;
   EXPECT_EQ(OB_SUCCESS, switch_leader(id, leader_idx, new_leader2));
   EXPECT_EQ(OB_SUCCESS, submit_log(new_leader2, 1024, id));
 
   // switch leader
-  PalfHandleGuard new_leader3;
+  PalfHandleImplGuard new_leader3;
   leader_idx = 1;
   EXPECT_EQ(OB_SUCCESS, switch_leader(id, leader_idx, new_leader3));
   // block the other two followers
   block_net(1, 0);
   block_net(1, 2);
   // leader submit new logs
-  // PalfHandleGuard new_leader4;
+  // PalfHandleImplGuard new_leader4;
   // EXPECT_EQ(OB_SUCCESS, submit_log(new_leader4, 1024, id));
   unblock_net(1, 0);
   unblock_net(1, 2);
@@ -300,14 +302,14 @@ TEST_F(TestObSimpleLogClusterBasicFunc, advance_base_lsn)
   PALF_LOG(INFO, "start advance_base_lsn", K(id));
   int64_t leader_idx = 0;
 
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_.palf_handle_impl_->log_engine_.truncate_prefix_blocks(LSN(0)));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->log_engine_.truncate_prefix_blocks(LSN(0)));
   guard.click("create");
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
   guard.click("submit");
   guard.click("get_leader");
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_.advance_base_lsn(LSN(0)));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_base_lsn(LSN(0)));
   guard.click("advance_base_lsn");
 
   PALF_LOG(INFO, "end test advance_base_lsn", K(id), K(guard));
@@ -322,7 +324,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, data_corrupted)
   PALF_LOG(INFO, "start advance_base_lsn", K(id));
   int64_t leader_idx = 0;
 
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
   guard.click("create");
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
@@ -330,7 +332,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, data_corrupted)
   guard.click("submit");
   guard.click("get_leader");
   PalfGroupBufferIterator iterator;
-  EXPECT_EQ(OB_SUCCESS, leader.seek(LSN(0), iterator));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->alloc_palf_group_buffer_iterator(LSN(0), iterator));
   LogGroupEntry entry;
   LSN lsn;
   EXPECT_EQ(OB_SUCCESS, iterator.next());
@@ -342,16 +344,16 @@ TEST_F(TestObSimpleLogClusterBasicFunc, data_corrupted)
   EXPECT_EQ(OB_SUCCESS, entry.serialize(buf, MAX_LOG_BUFFER_SIZE, pos));
   char *group_size_buf = buf + 4;
   *group_size_buf = 1;
-  LSN origin = leader.palf_handle_.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
+  LSN origin = leader.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
   share::SCN new_scn;
-  new_scn.convert_for_logservice(leader.palf_handle_.palf_handle_impl_->get_max_scn().get_val_for_logservice() + 1);
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_.palf_handle_impl_->log_engine_.
-      append_log(leader.palf_handle_.palf_handle_impl_->get_max_lsn(), write_buf, new_scn));
+  new_scn.convert_for_logservice(leader.palf_handle_impl_->get_max_scn().get_val_for_logservice() + 1);
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->log_engine_.
+      append_log(leader.palf_handle_impl_->get_max_lsn(), write_buf, new_scn));
   PalfGroupBufferIterator iterator1;
   auto get_file_end_lsn = [](){
     return LSN(LOG_MAX_LSN_VAL);
   };
-  EXPECT_EQ(OB_SUCCESS, iterator1.init(origin, &leader.palf_handle_.palf_handle_impl_->log_engine_.log_storage_, get_file_end_lsn));
+  EXPECT_EQ(OB_SUCCESS, iterator1.init(origin, get_file_end_lsn, &leader.palf_handle_impl_->log_engine_.log_storage_));
   EXPECT_EQ(OB_INVALID_DATA, iterator1.next());
   PALF_LOG(INFO, "end data_corrupted advance_base_lsn", K(id), K(guard));
 }
@@ -367,9 +369,9 @@ TEST_F(TestObSimpleLogClusterBasicFunc, limit_palf_instances)
   int64_t leader_idx = 0;
   share::SCN create_scn = share::SCN::base_scn();
 	{
-    PalfHandleGuard leader1;
-    PalfHandleGuard leader2;
-    PalfHandleGuard leader3;
+    PalfHandleImplGuard leader1;
+    PalfHandleImplGuard leader2;
+    PalfHandleImplGuard leader3;
     EXPECT_EQ(OB_SUCCESS, get_palf_env(server_idx, palf_env));
 		int64_t id3 = palf_id_ + 1;
     palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_ = 2 * MIN_DISK_SIZE_PER_PALF_INSTANCE;
@@ -387,13 +389,13 @@ TEST_F(TestObSimpleLogClusterBasicFunc, out_of_disk_space)
   int server_idx = 0;
   PalfEnv *palf_env = NULL;
   int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
   share::SCN create_scn = share::SCN::base_scn();
-  PalfHandleGuard leader;
   EXPECT_EQ(OB_SUCCESS, get_palf_env(server_idx, palf_env));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
   update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 6*31+1, id, MAX_LOG_BODY_SIZE));
-  LogStorage *log_storage = &leader.palf_handle_.palf_handle_impl_->log_engine_.log_storage_;
+  LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
   while (LSN(6*PALF_BLOCK_SIZE) > log_storage->log_tail_) {
     usleep(500);
   }
@@ -415,8 +417,8 @@ TEST_F(TestObSimpleLogClusterBasicFunc, submit_group_log)
   PALF_LOG(INFO, "start submit_group_log", K(id));
   int64_t leader_idx = 0;
 
-  PalfHandleGuard leader;
-  PalfHandleGuard leader_raw_write;
+  PalfHandleImplGuard leader;
+  PalfHandleImplGuard leader_raw_write;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_raw_write, leader_idx, leader_raw_write));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id, 1024 * 1024));
@@ -435,37 +437,37 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
   OB_LOGGER.set_log_level("INFO");
   int64_t id = ATOMIC_AAF(&palf_id_, 1);
   int64_t leader_idx = 0;
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-  leader.palf_env_->palf_env_impl_.log_io_worker_.batch_io_task_mgr_.has_batched_size_ = 0;
-  leader.palf_env_->palf_env_impl_.log_io_worker_.batch_io_task_mgr_.handle_count_ = 0;
-  std::vector<PalfHandleGuard*> palf_list;
+  leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_ = 0;
+  leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.handle_count_ = 0;
+  std::vector<PalfHandleImplGuard*> palf_list;
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   int64_t lag_follower_idx = (leader_idx + 1) % node_cnt_;
-  PalfHandleGuard &lag_follower = *palf_list[lag_follower_idx];
+  PalfHandleImplGuard &lag_follower = *palf_list[lag_follower_idx];
   block_net(leader_idx, lag_follower_idx);
   block_net(lag_follower_idx, leader_idx);
 
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10000, leader_idx, 120));
-  const LSN max_lsn = leader.palf_handle_.palf_handle_impl_->get_max_lsn();
+  const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
-  const int64_t has_batched_size = leader.palf_env_->palf_env_impl_.log_io_worker_.batch_io_task_mgr_.has_batched_size_;
-  const int64_t handle_count = leader.palf_env_->palf_env_impl_.log_io_worker_.batch_io_task_mgr_.handle_count_;
-  const int64_t log_id = leader.palf_handle_.palf_handle_impl_->sw_.get_max_log_id();
+  const int64_t has_batched_size = leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_;
+  const int64_t handle_count = leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.handle_count_;
+  const int64_t log_id = leader.palf_handle_impl_->sw_.get_max_log_id();
   PALF_LOG(ERROR, "batched_size", K(has_batched_size), K(log_id));
 
   unblock_net(leader_idx, lag_follower_idx);
   unblock_net(lag_follower_idx, leader_idx);
 
   int64_t start_ts = ObTimeUtility::current_time();
-  LSN lag_follower_max_lsn = lag_follower.palf_handle_.palf_handle_impl_->sw_.max_flushed_end_lsn_;
+  LSN lag_follower_max_lsn = lag_follower.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   while (lag_follower_max_lsn < max_lsn) {
     sleep(1);
     PALF_LOG(ERROR, "follower is lagged", K(max_lsn), K(lag_follower_max_lsn));
-    lag_follower_max_lsn = lag_follower.palf_handle_.palf_handle_impl_->sw_.max_flushed_end_lsn_;
+    lag_follower_max_lsn = lag_follower.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   }
-  const int64_t follower_has_batched_size = lag_follower.palf_env_->palf_env_impl_.log_io_worker_.batch_io_task_mgr_.has_batched_size_;
-  const int64_t follower_handle_count = lag_follower.palf_env_->palf_env_impl_.log_io_worker_.batch_io_task_mgr_.handle_count_;
+  const int64_t follower_has_batched_size = lag_follower.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_;
+  const int64_t follower_handle_count = lag_follower.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.handle_count_;
   EXPECT_EQ(OB_SUCCESS, revert_cluster_palf_handle_guard(palf_list));
 
   int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
@@ -493,22 +495,22 @@ TEST_F(TestObSimpleLogClusterBasicFunc, create_palf_via_middle_lsn)
   int64_t id = ATOMIC_AAF(&palf_id_, 1);
   int64_t leader_idx = 0;
   {
-    PalfHandleGuard leader;
+    PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, palf_base_info, leader_idx, leader));
   }
 
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
 
   {
-    PalfHandleGuard leader;
+    PalfHandleImplGuard leader;
     int64_t leader_idx;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, leader_idx, 1024*1024));
-    const LSN max_lsn = leader.palf_handle_.palf_handle_impl_->get_max_lsn();
-    const int64_t proposal_id = leader.palf_handle_.palf_handle_impl_->state_mgr_.get_proposal_id();
-    const LSN begin_lsn = leader.palf_handle_.palf_handle_impl_->log_engine_.get_begin_lsn();
+    const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
+    const int64_t proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
+    const LSN begin_lsn = leader.palf_handle_impl_->log_engine_.get_begin_lsn();
     share::SCN begin_scn;
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_.palf_handle_impl_->get_begin_scn(begin_scn));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_begin_scn(begin_scn));
     // check LogInfo
     EXPECT_GT(proposal_id, prev_log_pid);
     EXPECT_GT(begin_scn, prev_scn);
@@ -521,11 +523,11 @@ TEST_F(TestObSimpleLogClusterBasicFunc, create_palf_via_middle_lsn)
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
 
   {
-    PalfHandleGuard leader;
+    PalfHandleImplGuard leader;
     int64_t leader_idx;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, leader_idx, 1024*1024));
-    const LSN max_lsn = leader.palf_handle_.palf_handle_impl_->get_max_lsn();
+    const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
     wait_lsn_until_flushed(max_lsn, leader);
     const LSN mid_lsn(palf::PALF_BLOCK_SIZE);
     EXPECT_EQ(OB_ITER_END, read_log(leader, mid_lsn));

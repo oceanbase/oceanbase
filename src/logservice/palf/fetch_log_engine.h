@@ -27,7 +27,7 @@ class ObILogAllocator;
 }
 namespace palf
 {
-class PalfEnvImpl;
+class IPalfEnvImpl;
 class FetchLogTask
 {
 public:
@@ -84,7 +84,7 @@ public:
   FetchLogEngine();
   ~FetchLogEngine() { destroy(); }
 public:
-  int init(PalfEnvImpl *palf_env_impl, ObILogAllocator *alloc_mgr);
+  int init(IPalfEnvImpl *palf_env_impl, ObILogAllocator *alloc_mgr);
   void destroy();
   int submit_fetch_log_task(FetchLogTask *fetch_log_task);
 public:
@@ -100,7 +100,7 @@ private:
 private:
   int tg_id_;
   bool is_inited_;
-  PalfEnvImpl *palf_env_impl_;
+  IPalfEnvImpl *palf_env_impl_;
   common::ObILogAllocator *allocator_;
   DISALLOW_COPY_AND_ASSIGN(FetchLogEngine);
 };

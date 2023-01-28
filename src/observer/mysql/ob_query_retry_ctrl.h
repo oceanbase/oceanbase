@@ -286,6 +286,7 @@ private:
   static void trx_can_not_serialize_proc(ObRetryParam &v);
   static void try_lock_row_conflict_proc(ObRetryParam &v);
   static void location_error_proc(ObRetryParam &v);
+  static void nonblock_location_error_proc(ObRetryParam &v);
   static void location_error_nothing_readable_proc(ObRetryParam &v);
   static void peer_server_status_uncertain_proc(ObRetryParam &v);
   static void schema_error_proc(ObRetryParam &v);

@@ -27,11 +27,14 @@
 #include "share/ob_ls_id.h"
 #include "ob_trans_hashmap.h"
 #include "storage/tx/ob_trans_define.h"
+#include "common/ob_simple_iterator.h"
 
 namespace oceanbase
 {
 namespace transaction
 {
+
+class ObTxSchedulerStat;
 
 struct ObTransIDAndAddr { // deadlock needed
   OB_UNIS_VERSION(1);
@@ -312,6 +315,7 @@ class ObTxDesc final : public ObTransHashLink<ObTxDesc>
   friend class ObPartTransCtx;
   friend class StopTxDescFunctor;
   friend class ObTxStmtInfo;
+  friend class IterateTxSchedulerFunctor;
   friend class ObTxnFreeRouteCtx;
   typedef common::ObMaskSet2<ObTxLSEpochPair> MaskSet;
   OB_UNIS_VERSION(1);
@@ -611,6 +615,8 @@ public:
   bool need_rollback() { return state_ == State::ABORTED; }
   share::SCN get_snapshot_version() { return snapshot_version_; }
   ObITxCallback *cancel_commit_cb();
+  int get_parts_copy(ObTxPartList &copy_parts);
+  int get_savepoints_copy(ObTxSavePointList &copy_savepoints);
   // free route
 #define DEF_FREE_ROUTE_DECODE_(name)                                    \
   int encode_##name##_state(char *buf, const int64_t len, int64_t &pos); \
@@ -627,6 +633,10 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_parts_changed() { return state_change_flags_.PARTS_CHANGED_; };
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
 };
+
+// Is used to store and travserse all TxScheduler's Stat information;
+typedef common::ObSimpleIterator<ObTxSchedulerStat,
+        ObModIds::OB_TRANS_VIRTUAL_TABLE_TRANS_STAT, 16> ObTxSchedulerStatIterator;
 
 class ObTxDescMgr final
 {
@@ -649,6 +659,7 @@ public:
   int release_tx_ref(ObTxDesc *tx_desc);
   int64_t get_alloc_count() const { return map_.alloc_cnt(); }
   int64_t get_total_count() const { return map_.count(); }
+  int iterate_tx_scheduler_stat(ObTxSchedulerStatIterator &tx_scheduler_stat_iter);
 private:
   struct {
     bool inited_: 1;

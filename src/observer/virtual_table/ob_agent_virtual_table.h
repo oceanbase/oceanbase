@@ -33,7 +33,8 @@ public:
       const bool sys_tenant_base_table,
       const share::schema::ObTableSchema *index_table,
       const ObVTableScanParam &scan_param,
-      const bool only_sys_data);
+      const bool only_sys_data,
+      const lib::Worker::CompatMode &mode = lib::Worker::CompatMode::ORACLE);
 
   virtual int do_open() override;
   virtual int inner_get_next_row(common::ObNewRow *&row) override;
@@ -53,6 +54,8 @@ private:
 private:
   // 切sys前被代理的普通租户ID
   uint64_t general_tenant_id_;
+  // agent table Compat Mode
+  lib::Worker::CompatMode mode_;
   // 表明是否这张代理表只查系统租户下的数据
   bool only_sys_data_;
   DISALLOW_COPY_AND_ASSIGN(ObAgentVirtualTable);

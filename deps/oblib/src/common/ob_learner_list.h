@@ -40,6 +40,7 @@ public:
   // dangerous
   T &get_learner(const int64_t idx);
   int get_server_by_index(const int64_t idx, common::ObAddr &server) const;
+  int get_member_by_index(const int64_t idx, common::ObMember &member) const;
   int add_learner(const T &learner);
   int remove_learner(const T &learner);
   int remove_learner(const common::ObAddr &server);

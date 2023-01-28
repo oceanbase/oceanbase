@@ -18,6 +18,7 @@
 #include <string>
 #include "lib/hash/ob_array_hash_map.h"         // ObArrayHashMap
 #include "ob_simple_log_server.h"
+#include "ob_simple_arb_server.h"
 
 namespace oceanbase
 {
@@ -43,10 +44,31 @@ public:
   static int init();
   static int start();
   static int close();
-  std::vector<ObSimpleLogServer*> &get_cluster() { return cluster_; }
+  std::vector<ObISimpleLogServer*> &get_cluster() { return cluster_; }
   std::string &get_test_name() { return test_name_; }
   int64_t get_node_idx_base() { return node_idx_base_; }
   const ObMemberList &get_member_list() const {return member_list_;}
+  const ObMemberList get_arb_member_list() {
+    ObMemberList member_list = member_list_;
+    int i = 0;
+    for (auto svr : get_cluster()) {
+      if (svr->is_arb_server()) {
+        member_list.remove_server(svr->get_addr());
+      }
+      i++;
+    }
+    return member_list;
+  }
+  const ObMember get_arb_member()
+  {
+    ObAddr addr;
+    for (auto svr : get_cluster()) {
+      if (svr->is_arb_server()) {
+        addr = svr->get_addr();
+      }
+    }
+    return ObMember(addr, 1);
+  }
   const common::ObArrayHashMap<common::ObAddr, common::ObRegion> &get_member_region_map() const { return member_region_map_; }
   const ObMemberList &get_node_list() const {return node_list_;}
   int64_t get_node_cnt() const { return node_cnt_; }
@@ -59,8 +81,8 @@ protected:
   static void SetUpTestCase();
   static void TearDownTestCase();
 
-private:
-  static std::vector<ObSimpleLogServer*> cluster_;
+public:
+  static std::vector<ObISimpleLogServer*> cluster_;
   static ObMemberList member_list_;
   static ObMemberList node_list_;
   static common::ObArrayHashMap<common::ObAddr, common::ObRegion> member_region_map_;
@@ -73,6 +95,7 @@ private:
   static char sig_buf_[sizeof(ObSignalWorker) + sizeof(observer::ObSignalHandle)];
   static ObSignalWorker *sig_worker_;
   static observer::ObSignalHandle *signal_handle_;
+  static bool need_add_arb_server_;
 };
 
 } // end unittest

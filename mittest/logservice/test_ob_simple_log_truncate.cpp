@@ -56,18 +56,18 @@ public:
       if (!is_inited_) {
         ret = OB_NOT_INIT;
       } else {
-        PalfHandleGuard leader;
-        PalfHandleGuard *rebuild_palf;
+        PalfHandleImplGuard leader;
+        PalfHandleImplGuard *rebuild_palf;
         int64_t leader_idx;
         PalfBaseInfo rebuild_base_info;
-        std::vector<PalfHandleGuard*> palf_list;
+        std::vector<PalfHandleImplGuard*> palf_list;
         EXPECT_EQ(OB_SUCCESS, test_base_->get_cluster_palf_handle_guard(id, palf_list));
         rebuild_palf = palf_list[server_idx_];
         EXPECT_EQ(OB_SUCCESS, test_base_->get_leader(test_base_->palf_id_, leader, leader_idx));
-        EXPECT_EQ(OB_SUCCESS, rebuild_palf->palf_handle_.disable_sync());
-        EXPECT_EQ(OB_SUCCESS, leader.palf_handle_.get_base_info(lsn, rebuild_base_info));
-        EXPECT_EQ(OB_SUCCESS, rebuild_palf->palf_handle_.advance_base_info(rebuild_base_info, true));
-        EXPECT_EQ(OB_SUCCESS, rebuild_palf->palf_handle_.enable_sync());
+        EXPECT_EQ(OB_SUCCESS, rebuild_palf->palf_handle_impl_->disable_sync());
+        EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_base_info(lsn, rebuild_base_info));
+        EXPECT_EQ(OB_SUCCESS, rebuild_palf->palf_handle_impl_->advance_base_info(rebuild_base_info, true));
+        EXPECT_EQ(OB_SUCCESS, rebuild_palf->palf_handle_impl_->enable_sync());
         rebuild_palf = NULL;
         test_base_->revert_cluster_palf_handle_guard(palf_list);
       }
@@ -83,6 +83,7 @@ public:
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 5;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 5;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
+bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 
 TEST_F(TestObSimpleLogClusterTruncate, truncate_log)
 {
@@ -91,7 +92,7 @@ TEST_F(TestObSimpleLogClusterTruncate, truncate_log)
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "start test truncate_log", K(id));
   int64_t leader_idx = 0;
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
   const int64_t follower_1 = (leader_idx + 1) % get_member_cnt();
   const int64_t follower_2 = (leader_idx + 2) % get_member_cnt();
@@ -130,7 +131,7 @@ TEST_F(TestObSimpleLogClusterTruncate, truncate_log)
   // election 自动切主
   sleep(15);
   int64_t new_leader_idx = 0;
-  PalfHandleGuard new_leader;
+  PalfHandleImplGuard new_leader;
   EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
   unblock_net(follower_2, follower_1);
   unblock_net(follower_3, follower_1);
@@ -148,7 +149,7 @@ TEST_F(TestObSimpleLogClusterTruncate, truncate_log)
   EXPECT_EQ(OB_ITER_END, read_log(new_leader));
   sleep(10);
   int64_t wait_sync_timeout_us = 20 * 1000 * 1000;
-  std::vector<PalfHandleGuard*> palf_list;
+  std::vector<PalfHandleImplGuard*> palf_list;
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   PALF_LOG(INFO, "begin check_replica_sync", K(new_leader_idx), K(follower_1));
 

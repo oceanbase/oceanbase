@@ -159,9 +159,7 @@ public:
            const ObArchivePiece &piece,
            const LSN &start_offset,
            const LSN &end_offset,
-           const share::SCN &max_scn,
-           char *data,
-           const int64_t data_len);
+           const share::SCN &max_scn);
   bool is_valid() const;
   uint64_t get_tenant_id() const { return tenant_id_;}
   const ObLSID &get_ls_id() const { return id_; }
@@ -170,27 +168,60 @@ public:
   const LSN &get_start_lsn() const { return start_offset_; }
   const LSN &get_end_lsn() const { return end_offset_; };
   int get_buffer(char *&data, int64_t &data_len) const;
+  int get_origin_buffer(char *&buf, int64_t &buf_size) const;
   int64_t get_buf_size() const { return data_len_;}
   const share::SCN &get_max_scn() const { return max_scn_; }
   int set_buffer(char *buf, const int64_t buf_size);
   bool is_continuous_with(const ObArchiveSendTask &pre_task) const;
-  TO_STRING_KV(K_(tenant_id),
+  // @brief issue this task to a sender thread, only if its status is initial
+  // @ret_code  flase  issue failed, maybe this task is issued by other sender thread
+  //            true   issue successfully
+  bool issue_task();
+  // @brief after the task is issued to a sender thread and archived successfully, finish the task
+  // @ret_code  false  finish failed, should not happend
+  //            true   finish successfully
+  bool finish_task();
+  // @brief mark task stale forcely, cases:
+  //  1) archive is stop
+  //  2) stale archive task after ls archive task station changed
+  void mark_stale();
+  // @brief after the task is issued to a sender thread and archived failed, retire the task and wait next turn
+  // @ret_code  false  retire failed, should not happend
+  //            true   retire successfully
+  bool retire_task_with_retry();
+  bool is_task_finish() const;
+  bool is_task_stale() const;
+  int update_file(const int64_t file_id, const int64_t file_offset);
+  void get_file(int64_t &file_id, int64_t &file_offset);
+  TO_STRING_KV(K_(status),
+               K_(tenant_id),
                K_(id),
                K_(station),
                K_(piece),
                K_(start_offset),
                K_(end_offset),
                K_(max_scn),
+               K_(file_id),
+               K_(file_offset),
                K_(data),
                K_(data_len));
 private:
+  static const int8_t INITAL_STATUS = 0;
+  static const int8_t ISSUE_STATUS = 1;
+  static const int8_t FINISH_STATUS = 2;
+  static const int8_t STALE_STATUS = 3;
+
+private:
+  int8_t status_;           // low 1st bit means issued(1) or not(0), low 2nd bit means finished(1) or not(0)
   uint64_t tenant_id_;
   ObLSID id_;               // ls id
   ArchiveWorkStation station_;     // archive work station, include incarnation/dest_id/round/lease
   ObArchivePiece piece_;
   LSN start_offset_;       // 归档数据在文件起始offset
   LSN end_offset_;         // 归档数据在文件终止offset
-  share::SCN max_scn_;     // 该task包含数据最大log scn
+  share::SCN max_scn_;     // 该task包含数据最大scn
+  int64_t file_id_;
+  int64_t file_offset_;
   char *data_;             // 发送数据
   int64_t data_len_;       // 发送数据长度
 };

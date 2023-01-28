@@ -18,6 +18,7 @@
 #include "storage/ls/ob_ls_tablet_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tx/ob_tx_data_functor.h"
+#include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx/ob_tx_data_define.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_table/ob_tx_ctx_table.h"
@@ -712,6 +713,15 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
     min_end_scn = std::min(min_end_scn_from_old_tablets, min_end_scn_from_latest_tablets);
     if (!min_end_scn.is_max()) {
       recycle_scn = min_end_scn;
+      if (!MTL_IS_PRIMARY_TENANT()) {
+        SCN snapshot_version;
+        MonotonicTs unused_ts(0);
+        if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), MonotonicTs(1), NULL, snapshot_version, unused_ts))) {
+          LOG_WARN("failed to get snapshot version", K(ret), K(MTL_ID()));
+        } else {
+          recycle_scn = std::min(recycle_scn, snapshot_version);
+        }
+      }
     }
   }
 

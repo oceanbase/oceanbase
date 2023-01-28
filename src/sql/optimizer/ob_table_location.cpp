@@ -1767,8 +1767,9 @@ int ObTableLocation::get_link_table_location(const uint64_t tenant_id,
   fake_addr.set_ipv4_addr(654321, 4321);
   int64_t fake_port = 4321;
   OZ(ls_replica.init(fake_addr, common::LEADER,
-                      fake_port, REPLICA_TYPE_FULL,
-                      mock_prop, ls_restore_status));
+                     fake_port, REPLICA_TYPE_FULL,
+                     mock_prop, ls_restore_status,
+                     1 /*proposal_id*/));
   location.init(GCONF.cluster_id, tenant_id, ObLSID(ObLSID::SYS_LS_ID), now);
   OZ(location.add_replica_location(ls_replica));
   return ret;

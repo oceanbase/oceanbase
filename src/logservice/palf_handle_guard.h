@@ -148,6 +148,10 @@ public:
     return palf_handle_.get_role(role, proposal_id, unused_state);
   }
 
+  int get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pending_state)
+  {
+    return palf_handle_.get_role(role, proposal_id, is_pending_state);
+  }
   // @brief, get paxos member list of this paxos group
   // @param[out] common::ObMemberList&
   // int get_paxos_member_list(common::ObMemberList &member_list) const override final;
@@ -214,6 +218,8 @@ public:
   DELEGATE_WITH_RET(palf_handle_, set_location_cache_cb, int);
   DELEGATE_WITH_RET(palf_handle_, change_access_mode, int);
   DELEGATE_WITH_RET(palf_handle_, get_access_mode, int);
+  DELEGATE_WITH_RET(palf_handle_, flashback, int);
+  CONST_DELEGATE_WITH_RET(palf_handle_, stat, int);
 private:
   PalfHandle palf_handle_;
   PalfEnv *palf_env_;

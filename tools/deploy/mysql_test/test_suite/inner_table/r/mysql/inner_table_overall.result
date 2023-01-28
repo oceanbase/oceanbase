@@ -216,6 +216,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 412	__all_service_epoch	0	201001	1
 413	__all_spatial_reference_systems	0	201001	1
 416	__all_column_checksum_error_info	0	201001	1
+429	__all_arbitration_service	0	201001	1
+430	__all_ls_arb_replica_task	0	201001	1
+431	__all_data_dictionary_in_log	0	201001	1
+432	__all_ls_arb_replica_task_history	0	201001	1
 433	__all_rls_policy	0	201001	1
 434	__all_rls_policy_history	0	201001	1
 435	__all_rls_security_column	0	201001	1
@@ -267,6 +271,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 11026	__all_virtual_upgrade_inspection	2	201001	1
 11027	__all_virtual_trans_stat	2	201001	1
 11028	__all_virtual_trans_ctx_mgr_stat	2	201001	1
+11029	__all_virtual_trans_scheduler	2	201001	1
 11031	__all_virtual_sql_audit	2	201001	1
 11035	__all_virtual_core_all_table	2	201001	1
 11036	__all_virtual_core_column_table	2	201001	1
@@ -561,6 +566,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12338	__all_virtual_minor_freeze_info	2	201001	1
 12339	__all_virtual_show_trace	2	201001	1
 12340	__all_virtual_ha_diagnose	2	201001	1
+12341	__all_virtual_data_dictionary_in_log	2	201001	1
 12348	__all_virtual_rls_policy	2	201001	1
 12349	__all_virtual_rls_policy_history	2	201001	1
 12350	__all_virtual_rls_security_column	2	201001	1
@@ -571,10 +577,14 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12355	__all_virtual_rls_context_history	2	201001	1
 12356	__all_virtual_rls_attribute	2	201001	1
 12357	__all_virtual_rls_attribute_history	2	201001	1
+12358	__all_virtual_tenant_mysql_sys_agent	2	201001	1
 12359	__all_virtual_sql_plan	2	201001	1
 12360	__all_virtual_plan_table	2	201001	1
 12361	__all_virtual_plan_real_info	2	201001	1
 12362	__all_virtual_core_table	2	201001	1
+12364	__all_virtual_ls_arb_replica_task	2	201001	1
+12365	__all_virtual_ls_arb_replica_task_history	2	201001	1
+12366	__all_virtual_archive_dest_status	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -853,8 +863,18 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21350	CHECK_CONSTRAINTS	1	201002	1
 21351	REFERENTIAL_CONSTRAINTS	1	201002	1
 21352	TABLE_CONSTRAINTS	1	201002	1
+21353	GV$OB_TRANSACTION_SCHEDULERS	1	201001	1
+21354	V$OB_TRANSACTION_SCHEDULERS	1	201001	1
 21355	TRIGGERS	1	201002	1
 21356	PARTITIONS	1	201002	1
+21357	DBA_OB_ARBITRATION_SERVICE	1	201001	1
+21358	CDB_OB_LS_ARB_REPLICA_TASKS	1	201001	1
+21359	DBA_OB_LS_ARB_REPLICA_TASKS	1	201001	1
+21360	CDB_OB_LS_ARB_REPLICA_TASK_HISTORY	1	201001	1
+21361	DBA_OB_LS_ARB_REPLICA_TASK_HISTORY	1	201001	1
+21362	V$OB_ARCHIVE_DEST_STATUS	1	201001	1
+21363	DBA_OB_LS_LOG_ARCHIVE_PROGRESS	1	201001	1
+21364	CDB_OB_LS_LOG_ARCHIVE_PROGRESS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

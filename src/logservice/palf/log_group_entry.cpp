@@ -11,6 +11,7 @@
  */
 
 #include "log_group_entry.h"
+#include "log_entry_header.h"
 #include "lib/oblog/ob_log_module.h"      // LOG*
 #include "lib/ob_errno.h"                 // ERROR NUMBER
 #include "lib/checksum/ob_crc64.h"        // ob_crc64
@@ -134,5 +135,17 @@ DEFINE_GET_SERIALIZE_SIZE(LogGroupEntry)
   return size;
 }
 
+int LogGroupEntry::get_log_min_scn(SCN &min_scn) const
+{
+  int ret = OB_SUCCESS;
+  LogEntryHeader header;
+  int64_t pos = 0;
+  if (false == header_.is_padding_log() && OB_FAIL(header.deserialize(buf_, header_.get_data_len(), pos))) {
+    PALF_LOG(ERROR, "deserialize failed", K(ret), K(header_), K(pos));
+  } else {
+    min_scn = true == header_.is_padding_log() ? header_.get_max_scn() : header.get_scn();
+  }
+  return ret;
+}
 } // end namespace palf
 } // end namespace oceanbase

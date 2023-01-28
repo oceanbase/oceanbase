@@ -266,6 +266,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_serialization.cpp
   tx/ob_tx_log.cpp
   tx/ob_tx_log_adapter.cpp
+  tx/ob_tx_big_segment_buf.cpp
   tx/ob_tx_ls_log_writer.cpp
   tx/ob_tx_msg.cpp
   tx/ob_tx_replay_executor.cpp

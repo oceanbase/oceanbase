@@ -78,6 +78,7 @@ ob_set_subtarget(ob_rootserver common
   ob_alter_locality_finish_checker.cpp
   ob_lob_piece_builder.cpp
   ob_lob_meta_builder.cpp
+  ob_ls_recovery_stat_handler.cpp
 )
 
 ob_set_subtarget(ob_rootserver ddl_task

@@ -109,6 +109,7 @@ const int64_t MAX_ZONE_STATUS_LENGTH = 16;
 const int64_t MAX_REPLICA_STATUS_LENGTH = 64;
 const int64_t MAX_REPLICA_TYPE_LENGTH = 16;
 const int64_t MAX_DISASTER_RECOVERY_TASK_TYPE_LENGTH = 64;
+const int64_t MAX_ARB_REPLICA_TASK_TYPE_LENGTH = 32;
 const int64_t MAX_TENANT_STATUS_LENGTH = 64;
 const int64_t MAX_RESOURCE_POOL_NAME_LEN = 128;
 const int32_t MAX_REPLICA_COUNT_PER_ZONE = 5;
@@ -124,9 +125,11 @@ const int64_t MAX_PATH_SIZE = 1024;
 const int64_t MAX_DISK_ALIAS_NAME = 128;
 const int64_t MAX_DISKGROUP_NAME = 128;
 const int64_t DEFAULT_BUF_LENGTH = 4096;
+const int64_t MAX_SINGLE_MEMBER_LENGTH = (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
 const int64_t MAX_MEMBER_LIST_LENGTH = MAX_ZONE_NUM * (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
 const int64_t OB_MAX_MEMBER_NUMBER = 7;
 const int64_t OB_MAX_GLOBAL_LEARNER_NUMBER = 2000;
+const int64_t MAX_LEARNER_LIST_LENGTH = OB_MAX_GLOBAL_LEARNER_NUMBER * (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
 const int64_t OB_MAX_CHILD_MEMBER_NUMBER = 15;
 const int64_t OB_MAX_CHILD_MEMBER_NUMBER_IN_FOLLOWER = 5;
 const int64_t OB_DEFAULT_MEMBER_NUMBER = 3;
@@ -1320,6 +1323,8 @@ OB_INLINE bool is_inner_pl_object_id(const uint64_t object_id)
 const char* const OB_PRIMARY_INDEX_NAME = "PRIMARY";
 
 const int64_t OB_MAX_CONFIG_URL_LENGTH = 512;
+const int64_t OB_MAX_ARBITRATION_SERVICE_NAME_LENGTH = 256;
+const int64_t OB_MAX_ARBITRATION_SERVICE_LENGTH = 512;
 
 const int64_t OB_MIGRATE_ACTION_LENGTH = 64;
 const int64_t OB_MIGRATE_REPLICA_STATE_LENGTH = 64;
@@ -1895,6 +1900,9 @@ enum ObReplicaType
   REPLICA_TYPE_READONLY = (ASYNC_CLOG | WITH_SSSTORE | WITH_MEMSTORE), // 16
   // Incremental copy: not a member of paxos; no ssstore; memstore
   REPLICA_TYPE_MEMONLY = (ASYNC_CLOG | WITHOUT_SSSTORE | WITH_MEMSTORE), // 20
+  // TODO by yunlong: is it proper to use ASYNC_CLOG
+  // Arbitration copy: a member of paxos; no ssstore; no memstore
+  REPLICA_TYPE_ARBITRATION = (ASYNC_CLOG | WITHOUT_SSSTORE | WITHOUT_MEMSTORE), // 21
   // Encrypted log copy: encrypted; paxos member; no sstore; no memstore
   REPLICA_TYPE_ENCRYPTION_LOGONLY = (WITH_ENCRYPTION | SYNC_CLOG | WITHOUT_SSSTORE | WITHOUT_MEMSTORE), // 261
   // invalid value
@@ -2336,10 +2344,18 @@ OB_INLINE char *ob_get_tname()
   return tname.v_;
 }
 
+// There are many clusters in arbitration server, we need a field identify the different clusters.
+OB_INLINE int64_t &ob_get_cluster_id()
+{
+  RLOCAL(int64_t, cluster_id);
+  return cluster_id;
+}
+
 #define GETTID() ob_gettid()
 #define GETTNAME() ob_get_tname()
 #define GET_TENANT_ID() ob_get_tenant_id()
 #define gettid GETTID
+#define GET_CLUSTER_ID() ob_get_cluster_id()
 
 //for explain
 #define LEFT_BRACKET "("

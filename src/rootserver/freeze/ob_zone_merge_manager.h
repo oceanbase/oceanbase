@@ -69,6 +69,7 @@ public:
   virtual int try_update_global_last_merged_scn(const int64_t expected_epoch);
   virtual int update_global_merge_info_after_merge(const int64_t expected_epoch);
   virtual int try_update_zone_merge_info(const int64_t expected_epoch);
+  virtual int adjust_global_merge_info();
 
 private:
   int check_valid(const common::ObZone &zone, int64_t &idx) const;
@@ -89,6 +90,7 @@ private:
                                        const common::ObIArray<share::ObZoneMergeInfo> &ori_merge_infos,
                                        const common::ObIArray<common::ObZone> &zone_list,
                                        common::ObIArray<share::ObZoneMergeInfo> &to_insert_infos);
+  void inner_adjust_global_merge_info(const share::SCN &min_compaction_scn);
 
 protected:
   common::SpinRWLock lock_;
@@ -135,6 +137,7 @@ public:
   virtual int try_update_global_last_merged_scn(const int64_t expected_epoch);
   virtual int update_global_merge_info_after_merge(const int64_t expected_epoch);
   virtual int try_update_zone_merge_info(const int64_t expected_epoch);
+  virtual int adjust_global_merge_info();
 
 public:
   class ObZoneMergeMgrGuard

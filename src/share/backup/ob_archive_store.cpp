@@ -358,7 +358,7 @@ bool ObPieceInnerPlaceholderDesc::is_valid() const
  */
 OB_SERIALIZE_MEMBER(ObSingleLSInfoDesc::OneFile, file_id_, size_bytes_);
 
-OB_SERIALIZE_MEMBER(ObSingleLSInfoDesc, dest_id_, round_id_, piece_id_, ls_id_, start_scn_, checkpoint_scn_, min_lsn_, max_lsn_, filelist_);
+OB_SERIALIZE_MEMBER(ObSingleLSInfoDesc, dest_id_, round_id_, piece_id_, ls_id_, start_scn_, checkpoint_scn_, min_lsn_, max_lsn_, filelist_, deleted_);
 ObSingleLSInfoDesc::ObSingleLSInfoDesc()
     : ObExternArchiveDesc(ObBackupFileType::BACKUP_PIECE_SINGLE_LS_FILE_LIST_INFO, FILE_VERSION)
 {
@@ -369,6 +369,7 @@ ObSingleLSInfoDesc::ObSingleLSInfoDesc()
   checkpoint_scn_ = SCN::min_scn();
   min_lsn_ = 0;
   max_lsn_ = 0;
+  deleted_ = false;
 }
 
 bool ObSingleLSInfoDesc::is_valid() const
@@ -1072,6 +1073,26 @@ int ObArchiveStore::write_tenant_archive_piece_infos(const int64_t dest_id, cons
   } else if (OB_FAIL(write_single_file(full_path.get_ptr(), desc))) {
     LOG_WARN("failed to write piece extend info file", K(ret), K(full_path));
   }
+  return ret;
+}
+
+int ObArchiveStore::is_archive_log_file_exist(const int64_t dest_id, const int64_t round_id,
+  const int64_t piece_id, const ObLSID &ls_id, const int64_t file_id, bool &is_exist) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  ObBackupPath full_path;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+  const ObBackupDest &dest = get_backup_dest();
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (OB_FAIL(ObArchivePathUtil::get_ls_archive_file_path(dest, dest_id, round_id, piece_id, ls_id, file_id, full_path))) {
+    LOG_WARN("failed to get archive log file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(ls_id), K(file_id));
+  } else if (OB_FAIL(util.is_exist(full_path.get_ptr(), storage_info, is_exist))) {
+    LOG_WARN("failed to check archive log file exist.", K(ret), K(full_path), K(storage_info));
+  }
+
   return ret;
 }
 

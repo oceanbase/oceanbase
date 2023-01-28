@@ -11,11 +11,11 @@
  */
 
 #include "log_rpc.h"
-#include "lib/net/ob_addr.h"                          // ObAddr
+#include "lib/net/ob_addr.h"                       // ObAddr
 #include "log_rpc_proxy.h"                         // LogRpcProxyV2
 #include "log_rpc_packet.h"                        // LogRpcPaket
 #include "log_req.h"                               // LogPushReq...
-
+#include "log_define.h"                            // PALF_ENV_ID
 namespace oceanbase
 {
 using namespace common;
@@ -23,6 +23,9 @@ using namespace obrpc;
 namespace palf
 {
 LogRpc::LogRpc() : rpc_proxy_(NULL),
+                   opt_lock_(),
+                   options_(),
+                   tenant_id_(0),
                    is_inited_(false)
 {
 }
@@ -32,7 +35,15 @@ LogRpc::~LogRpc()
   destroy();
 }
 
-int LogRpc::init(const ObAddr &self, rpc::frame::ObReqTransport *transport)
+int LogRpc::init(const ObAddr &self,
+                 rpc::frame::ObReqTransport *transport)
+{
+  return init(self, PALF_ENV_ID, transport);
+}
+
+int LogRpc::init(const ObAddr &self,
+                 const int64_t tenant_id,
+                 rpc::frame::ObReqTransport *transport)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -41,7 +52,9 @@ int LogRpc::init(const ObAddr &self, rpc::frame::ObReqTransport *transport)
     PALF_LOG(ERROR, "LogRpcProxyV2 init failed", K(ret));
   } else {
     self_ = self;
+    tenant_id_ = tenant_id;
     is_inited_ = true;
+    PALF_LOG(INFO, "LogRpc init success", K(tenant_id), K(self));
   }
   return ret;
 }
@@ -54,5 +67,26 @@ void LogRpc::destroy()
     PALF_LOG(INFO, "LogRpc destroy success");
   }
 }
+
+int LogRpc::update_transport_compress_options(const PalfTransportCompressOptions &compress_opt)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(opt_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogRpc not inited");
+  } else {
+    options_ = compress_opt;
+    PALF_LOG(INFO, "update_transport_compress_options success", K(compress_opt));
+  }
+  return ret;
+}
+
+const PalfTransportCompressOptions& LogRpc::get_compress_opts() const
+{
+  ObSpinLockGuard guard(opt_lock_);
+  return options_;
+}
+
 } // end namespace palf
 } // end namespace oceanbase

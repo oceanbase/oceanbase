@@ -20,6 +20,7 @@
 #include "common/ob_range.h"
 #include "common/ob_tablet_id.h"
 #include "common/row/ob_row_util.h"
+#include "share/ob_arbitration_service_status.h" // for ObArbitrationServieStatus
 #include "share/ob_replica_info.h"
 #include "share/ob_duplicate_scope_define.h"
 #include "share/sequence/ob_sequence_option.h"
@@ -1458,6 +1459,8 @@ public:
   inline int set_comment(const common::ObString &comment) { return deep_copy_str(comment, comment_); }
   inline int set_locality(const common::ObString &locality) { return deep_copy_str(locality, locality_str_); }
   inline int set_previous_locality(const common::ObString &previous_locality) { return deep_copy_str(previous_locality, previous_locality_str_); }
+  inline void set_arbitration_service_status(const ObArbitrationServiceStatus status) { arbitration_service_status_ = status; }
+  inline int set_arbitration_service_status_from_string(const common::ObString &status) { return arbitration_service_status_.parse_from_string(status); }
   inline void set_charset_type(const common::ObCharsetType type) { charset_type_ = type; }
   inline void set_collation_type(const common::ObCollationType type) { collation_type_ = type; }
   inline void set_name_case_mode(const common::ObNameCaseMode mode) { name_case_mode_ = mode; }
@@ -1489,6 +1492,9 @@ public:
   inline const common::ObString &get_comment_str() const { return comment_; }
   inline const common::ObString &get_locality_str() const { return locality_str_; }
   inline const common::ObString &get_previous_locality_str() const { return previous_locality_str_; }
+  inline const ObArbitrationServiceStatus &get_arbitration_service_status() const { return arbitration_service_status_; }
+  inline const char* get_arbitration_service_status_str() const { return arbitration_service_status_.get_status_str(); }
+
   inline common::ObCharsetType get_charset_type() const { return charset_type_; }
   inline common::ObCollationType get_collation_type() const { return collation_type_; }
   int get_primary_zone_score(
@@ -1549,7 +1555,7 @@ public:
                K_(read_only), K_(locality_str),
                K_(zone_replica_attr_array), K_(primary_zone_array), K_(previous_locality_str),
                K_(default_tablegroup_id), K_(default_tablegroup_name), K_(compatibility_mode), K_(drop_tenant_time),
-               K_(status), K_(in_recyclebin));
+               K_(status), K_(in_recyclebin), K_(arbitration_service_status));
 private:
   uint64_t tenant_id_;
   int64_t schema_version_;
@@ -1574,6 +1580,7 @@ private:
   int64_t drop_tenant_time_;
   ObTenantStatus status_;
   bool in_recyclebin_;
+  ObArbitrationServiceStatus arbitration_service_status_;
 };
 
 inline int ObTenantSchema::set_zone_list(const common::ObIArray<common::ObString> &zone_list)

@@ -20,20 +20,20 @@ namespace oceanbase
 {
 namespace palf
 {
-class PalfEnvImpl;
+class IPalfEnvImpl;
 class LogLoopThread : public share::ObThreadPool
 {
 public:
   LogLoopThread();
   virtual ~LogLoopThread();
 public:
-  int init(PalfEnvImpl *palf_env_impl);
+  int init(IPalfEnvImpl *palf_env_impl);
   void destroy();
   void run1();
 private:
   void log_loop_();
 private:
-  PalfEnvImpl *palf_env_impl_;
+  IPalfEnvImpl *palf_env_impl_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(LogLoopThread);

@@ -25,6 +25,8 @@
 #include "share/ob_task_define.h" // ObTaskController
 #include "observer/ob_server_struct.h"
 #include "lib/hash/ob_hashset.h" // ObHashSet
+#include "rootserver/ob_rs_async_rpc_proxy.h" // ObGetLeaderLocationsProxy
+#include "share/resource_manager/ob_cgroup_ctrl.h" //CGID_DEF
 
 namespace oceanbase
 {
@@ -164,12 +166,16 @@ ObLSLocationService::ObLSLocationService()
       stopped_(false),
       lst_(NULL),
       schema_service_(NULL),
+      rs_mgr_(NULL),
+      srv_rpc_proxy_(NULL),
       inner_cache_(),
       local_async_queue_set_(this),
       remote_async_queue_set_(this),
       ls_loc_timer_(),
+      ls_loc_by_rpc_timer_(),
       dump_log_timer_(),
       ls_loc_timer_task_(*this),
+      ls_loc_by_rpc_timer_task_(*this),
       dump_cache_timer_task_(*this),
       last_cache_clear_ts_(0)
 {
@@ -181,7 +187,9 @@ ObLSLocationService::~ObLSLocationService()
 
 int ObLSLocationService::init(
     ObLSTableOperator &lst,
-    schema::ObMultiVersionSchemaService &schema_service)
+    schema::ObMultiVersionSchemaService &schema_service,
+    ObRsMgr &rs_mgr,
+    obrpc::ObSrvRpcProxy &srv_rpc_proxy)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -198,12 +206,33 @@ int ObLSLocationService::init(
     LOG_WARN("fail to init remote_async_queue_set_", KR(ret));
   } else if (OB_FAIL(ls_loc_timer_.init("AutoLSLoc"))) {
     LOG_WARN("fail to init ls_loc_timer_", KR(ret));
+  } else if (OB_FAIL(ls_loc_by_rpc_timer_.init("AutoLSLocRpc"))) {
+    LOG_WARN("fail to init ls_loc_by_rpc_timer_", KR(ret));
   } else if (OB_FAIL(dump_log_timer_.init("DumpLSLoc"))) {
     LOG_WARN("fail to init dump_log_timer_", KR(ret));
   } else {
     lst_ = &lst;
     schema_service_ = &schema_service;
+    rs_mgr_ = &rs_mgr;
+    srv_rpc_proxy_ = &srv_rpc_proxy;
     inited_ = true;
+  }
+  return ret;
+}
+
+int ObLSLocationService::check_inner_stat_() const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLSLocationService not init", KR(ret));
+  } else if (OB_ISNULL(lst_)
+             || OB_ISNULL(schema_service_)
+             || OB_ISNULL(rs_mgr_)
+             || OB_ISNULL(srv_rpc_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ptr is null", KR(ret), KP_(lst),
+             KP_(schema_service), KP_(rs_mgr), KP_(srv_rpc_proxy));
   }
   return ret;
 }
@@ -211,14 +240,18 @@ int ObLSLocationService::init(
 int ObLSLocationService::start()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObLSLocationService not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(ls_loc_timer_.schedule(
       ls_loc_timer_task_,
       RENEW_LS_LOCATION_INTERVAL_US,
       false/*repeat*/))) {
     LOG_WARN("ObLSLocationService timer schedule ls_loc_timer_task failed", KR(ret));
+  } else if (OB_FAIL(ls_loc_by_rpc_timer_.schedule(
+      ls_loc_by_rpc_timer_task_,
+      RENEW_LS_LOCATION_BY_RPC_INTERVAL_US,
+      false/*repeat*/))) {
+    LOG_WARN("ObLSLocationService timer schedule ls_loc_by_rpc_timer_task failed", KR(ret));
   } else if (OB_FAIL(dump_log_timer_.schedule(
       dump_cache_timer_task_,
       DUMP_CACHE_INTERVAL_US,
@@ -239,9 +272,8 @@ int ObLSLocationService::get(
   int ret = OB_SUCCESS;
   location.reset();
   is_cache_hit = false;
-  if(!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if(!is_valid_key(cluster_id, tenant_id, ls_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid key for get",
@@ -280,9 +312,8 @@ int ObLSLocationService::get_leader(
   bool is_cache_hit = false;
   int64_t expire_renew_time = force_renew ? INT64_MAX : 0;
   ObLSLocation location;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!is_valid_key(cluster_id, tenant_id, ls_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid key for get",
@@ -317,9 +348,8 @@ int ObLSLocationService::get_leader_with_retry_until_timeout(
   ObTimeoutCtx ctx;
   int64_t curr_abs_retry_timeout_ts = abs_retry_timeout;
   const int64_t DEFAULT_RETRY_TIMEOUT = GCONF.location_cache_refresh_sql_timeout;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(!is_valid_key(cluster_id, tenant_id, ls_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid key", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
@@ -362,9 +392,8 @@ int ObLSLocationService::nonblock_get(
 {
   int ret = OB_SUCCESS;
   location.reset();
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!is_valid_key(cluster_id, tenant_id, ls_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid key for get",
@@ -393,9 +422,8 @@ int ObLSLocationService::nonblock_get_leader(
 {
   int ret = OB_SUCCESS;
   ObLSLocation location;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!is_valid_key(cluster_id, tenant_id, ls_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid key for get",
@@ -415,9 +443,8 @@ int ObLSLocationService::nonblock_renew(
     const ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!is_valid_key(cluster_id, tenant_id, ls_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid log stream key",
@@ -435,9 +462,8 @@ int ObLSLocationService::nonblock_renew(
 int ObLSLocationService::add_update_task(const ObLSLocationUpdateTask &task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!task.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid task", KR(ret), K(task));
@@ -464,9 +490,8 @@ int ObLSLocationService::batch_process_tasks(
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
   UNUSED(stopped);
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (1 != tasks.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected task count", KR(ret), "tasks count", tasks.count());
@@ -506,6 +531,7 @@ void ObLSLocationService::stop()
   local_async_queue_set_.stop();
   remote_async_queue_set_.stop();
   ls_loc_timer_.stop();
+  ls_loc_by_rpc_timer_.stop();
   dump_log_timer_.stop();
 }
 
@@ -514,6 +540,7 @@ void ObLSLocationService::wait()
   local_async_queue_set_.wait();
   remote_async_queue_set_.wait();
   ls_loc_timer_.wait();
+  ls_loc_by_rpc_timer_.wait();
   dump_log_timer_.wait();
 }
 
@@ -521,6 +548,7 @@ int ObLSLocationService::destroy()
 {
   int ret = OB_SUCCESS;
   ls_loc_timer_.destroy();
+  ls_loc_by_rpc_timer_.destroy();
   dump_log_timer_.destroy();
   inner_cache_.destroy();
   last_cache_clear_ts_ = 0;
@@ -533,9 +561,8 @@ int ObLSLocationService::destroy()
 int ObLSLocationService::reload_config()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else {
     const int64_t thread_cnt = GCONF.location_refresh_thread_count;
     if (OB_FAIL(local_async_queue_set_.set_thread_count(thread_cnt))) {
@@ -555,12 +582,8 @@ int ObLSLocationService::build_tenant_ls_info_hash(ObTenantLsInfoHashMap &hash)
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
 
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
-  } else if (OB_ISNULL(schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lst_ or schema service is null", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
     LOG_WARN("get tenant_ids failed", KR(ret));
   } else {
@@ -599,9 +622,8 @@ int ObLSLocationService::check_and_clear_dead_cache()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (common::ObClockGenerator::getClock() - last_cache_clear_ts_ < 1800 * 1000 * 1000 /*30min*/) {
     // do nothing
   } else {
@@ -648,6 +670,7 @@ int ObLSLocationService::check_and_clear_dead_cache()
 // Attention: can not detect ls deletion
 int ObLSLocationService::renew_all_ls_locations()
 {
+  ObCurTraceId::init(GCONF.self_addr_);
   int ret = OB_SUCCESS;
   int ret_fail = OB_SUCCESS;
   ObArray<ObLSInfo> ls_infos;
@@ -655,12 +678,8 @@ int ObLSLocationService::renew_all_ls_locations()
   const bool can_erase = true;
   const int64_t renew_all_ls_loc_timeout = GCONF.location_cache_refresh_sql_timeout;
   const bool inner_table_only = false;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
-  } else if (OB_ISNULL(lst_) || OB_ISNULL(schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lst_ or schema service is null");
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
     LOG_WARN("get tenant_ids failed", KR(ret));
   } else {
@@ -722,6 +741,124 @@ int ObLSLocationService::renew_all_ls_locations()
   return ret;
 }
 
+int ObLSLocationService::renew_all_ls_locations_by_rpc()
+{
+  ObCurTraceId::init(GCONF.self_addr_);
+  int ret = OB_SUCCESS;
+  ObArray<ObAddr> dests;
+  ObArray<ObLSLeaderLocation> leaders;
+  const bool from_rpc = true;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
+    // for rpc compatibility
+  } else if (OB_FAIL(construct_rpc_dests_(dests))) {
+    LOG_WARN("fail to get rpc dests", KR(ret));
+  } else if (dests.count() <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dests count is less than 0", KR(ret));
+  } else if (OB_FAIL(detect_ls_leaders_(dests, leaders))) {
+    LOG_WARN("fail to detect ls leaders", KR(ret), K(dests));
+  } else {
+    ObLSLocation location;
+    for (int64_t i = 0; OB_SUCC(ret) && i < leaders.count(); i++) {
+      const ObLSLeaderLocation &leader = leaders.at(i);
+      location.reset();
+      if (OB_FAIL(location.init(leader.get_key().get_cluster_id(),
+                                leader.get_key().get_tenant_id(),
+                                leader.get_key().get_ls_id(),
+                                ObTimeUtility::current_time()))) {
+        LOG_WARN("fail to init location", KR(ret), K(leader));
+      } else if (OB_FAIL(location.add_replica_location(leader.get_location()))) {
+        LOG_WARN("fail to add replica", KR(ret), K(leader));
+      } else if (OB_FAIL(inner_cache_.update(from_rpc, leader.get_key(), location))) {
+        LOG_WARN("fail to update location", KR(ret), K(leader));
+      }
+    } // end for
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) { // 10s
+      FLOG_INFO("[LS_LOCATION] Get ls leaders by RPC", KR(ret), K(dests), K(leaders));
+    }
+  }
+  return ret;
+}
+
+int ObLSLocationService::construct_rpc_dests_(
+    ObIArray<ObAddr> &dests)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObAddr> rs_list;
+  ObArray<ObAddr> all_server_list;
+  const bool check_ls_service = false;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(rs_mgr_->construct_initial_server_list(check_ls_service, rs_list))) {
+    LOG_WARN("fail to get rs list", KR(ret));
+  } else if (OB_FAIL(rs_mgr_->construct_all_server_list(rs_list, all_server_list))) {
+    LOG_WARN("fail to get all server list", KR(ret));
+  } else if (OB_FAIL(dests.assign(rs_list))) {
+    LOG_WARN("fail to assign rs_list", KR(ret));
+  } else if (OB_FAIL(append(dests, all_server_list))) {
+    LOG_WARN("fail to append array", KR(ret), K(dests), K(all_server_list));
+  }
+  return ret;
+}
+
+int ObLSLocationService::detect_ls_leaders_(
+    const ObIArray<ObAddr> &dests,
+    ObArray<ObLSLeaderLocation> &leaders)
+{
+  int ret = OB_SUCCESS;
+  leaders.reset();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else {
+    ObTimeoutCtx ctx;
+    int64_t timeout = GCONF.rpc_timeout;  // default value is 2s
+    int tmp_ret = share::ObShareUtil::set_default_timeout_ctx(ctx, timeout);
+    timeout = max(timeout, ctx.get_timeout());  // at least 2s
+
+    rootserver::ObGetLeaderLocationsProxy proxy(
+        *srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_leader_locations);
+    obrpc::ObGetLeaderLocationsArg arg;
+    arg.set_addr(GCTX.self_addr());
+
+    for (int64_t i = 0; i < dests.count(); i++) { //ignore ret
+      const ObAddr &addr = dests.at(i);
+      if (OB_TMP_FAIL(proxy.call(addr, timeout, GCONF.cluster_id,
+          OB_SYS_TENANT_ID, share::OBCG_LOC_CACHE, arg))) {
+        LOG_WARN("fail to send rpc", KR(tmp_ret), K(addr), K(timeout));
+      }
+    } // end for
+
+    ObArray<int> return_ret_array;
+    if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) { // ignore ret
+      LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    } else {
+      ObAddr invalid_addr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count(); i++) {
+        int return_ret = return_ret_array.at(i);
+        const obrpc::ObGetLeaderLocationsResult *result = proxy.get_results().at(i);
+        if (OB_SUCCESS == return_ret) {
+          if (OB_NOT_NULL(result)) {
+            if (OB_FAIL(append(leaders, result->get_leader_replicas()))) {
+              LOG_WARN("fail to append array", KR(ret), KPC(result));
+            }
+          } else {
+            LOG_TRACE("result is null", K(i), K(timeout));
+          }
+        } else {
+          LOG_TRACE("fail to detect ls leader", "ret", return_ret, K(timeout),
+                    "addr", OB_ISNULL(result) ? invalid_addr : result->get_addr());
+        }
+      } // end for
+    }
+
+
+  }
+  return ret;
+}
+
 bool ObLSLocationService::is_valid_key(
     const int64_t cluster_id,
     const uint64_t tenant_id,
@@ -741,9 +878,8 @@ int ObLSLocationService::get_from_cache(
   int ret = OB_SUCCESS;
   ObLSLocationCacheKey cache_key(cluster_id, tenant_id, ls_id);
   location.reset();
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if(OB_UNLIKELY(!cache_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
@@ -774,9 +910,8 @@ int ObLSLocationService::renew_location(
   ObLSInfo ls_info;
   const bool can_erase = true;
   int64_t default_timeout = GCONF.location_cache_refresh_sql_timeout;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!is_valid_key(cluster_id, tenant_id, ls_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
@@ -827,9 +962,8 @@ int ObLSLocationService::fill_location(
   int ret = OB_SUCCESS;
   location.reset();
   const ObIArray<ObLSReplica> &replicas = ls_info.get_replicas();
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!ls_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ls_info", KR(ret), K(ls_info));
@@ -852,7 +986,8 @@ int ObLSLocationService::fill_location(
             replicas.at(i).get_sql_port(),
             replicas.at(i).get_replica_type(),
             replicas.at(i).get_property(),
-            replicas.at(i).get_restore_status()))) {
+            replicas.at(i).get_restore_status(),
+            replicas.at(i).get_proposal_id()))) {
           LOG_WARN("fail to init", KR(ret));
         } else if (OB_FAIL(location.add_replica_location(replica_location))) {
           LOG_WARN("fail to add replica locaiton", KR(ret), K(replica_location));
@@ -868,13 +1003,13 @@ int ObLSLocationService::update_cache(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
     const bool can_erase,
-    const ObLSLocation &location)
+    ObLSLocation &location)
 {
   int ret = OB_SUCCESS;
   ObLSLocationCacheKey cache_key(cluster_id, tenant_id, ls_id);
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  const bool from_rpc = false;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!cache_key.is_valid() || !location.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cache_key), K(location));
@@ -886,12 +1021,12 @@ int ObLSLocationService::update_cache(
     } else if (OB_FAIL(erase_location(cluster_id, tenant_id, ls_id))) {
       LOG_WARN("fail to erase location", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
     }
-  } else if (OB_FAIL(inner_cache_.update(cache_key, location))) {
+  } else if (OB_FAIL(inner_cache_.update(from_rpc, cache_key, location))) {
     LOG_WARN("put location to user location cache failed",
-        KR(ret), K(cache_key), K(location));
+        KR(ret), K(from_rpc), K(cache_key), K(location));
   } else {
     LOG_TRACE("renew location in inner_cache succeed",
-        KR(ret), K(cache_key), K(location));
+        KR(ret), K(from_rpc), K(cache_key), K(location));
   }
   return ret;
 }
@@ -902,9 +1037,8 @@ int ObLSLocationService::erase_location(
     const ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!is_valid_key(cluster_id, tenant_id, ls_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
@@ -929,9 +1063,8 @@ int ObLSLocationService::erase_location(
 int ObLSLocationService::schedule_ls_timer_task()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(ls_loc_timer_.schedule(
       ls_loc_timer_task_,
       RENEW_LS_LOCATION_INTERVAL_US,
@@ -941,12 +1074,25 @@ int ObLSLocationService::schedule_ls_timer_task()
   return ret;
 }
 
+int ObLSLocationService::schedule_ls_by_rpc_timer_task()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(ls_loc_by_rpc_timer_.schedule(
+      ls_loc_by_rpc_timer_task_,
+      RENEW_LS_LOCATION_BY_RPC_INTERVAL_US,
+      false/*repeat*/))) {
+    LOG_WARN("fail to schedule ls location timer task", KR(ret));
+  }
+  return ret;
+}
+
 int ObLSLocationService::schedule_dump_cache_timer_task()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(dump_log_timer_.schedule(
       dump_cache_timer_task_,
       DUMP_CACHE_INTERVAL_US,
@@ -959,11 +1105,11 @@ int ObLSLocationService::schedule_dump_cache_timer_task()
 // TODO: Performance can be optimized
 int ObLSLocationService::dump_cache()
 {
+  ObCurTraceId::init(GCONF.self_addr_);
   int ret = OB_SUCCESS;
   ObLSLocationArray ls_location_cache;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(ls_location_cache.reserve(inner_cache_.size()))) {
     LOG_WARN("fail to reserve total_cache", KR(ret), "size", inner_cache_.size());
   } else if (OB_FAIL(inner_cache_.get_all(ls_location_cache))) {

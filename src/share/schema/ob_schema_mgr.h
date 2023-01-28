@@ -75,7 +75,8 @@ public:
                K_(gmt_modified),
                K_(drop_tenant_time),
                K_(status),
-               K_(in_recyclebin));
+               K_(in_recyclebin),
+               K_(arbitration_service_status));
   virtual void reset();
   bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -114,11 +115,22 @@ public:
 
   inline void set_drop_tenant_time(const int64_t drop_tenant_time) { drop_tenant_time_ = drop_tenant_time; }
   inline int64_t get_drop_tenant_time() const { return drop_tenant_time_; }
+
+  inline void set_arbitration_service_status(const ObArbitrationServiceStatus &status) { arbitration_service_status_ = status; }
+  inline int set_arbitration_service_status(const ObString &status) { return arbitration_service_status_.parse_from_string(status); }
+  inline int set_arbitration_service_status_from_string(const common::ObString &status) { return arbitration_service_status_.parse_from_string(status); }
+  inline const ObArbitrationServiceStatus &get_arbitration_service_status() const { return arbitration_service_status_; }
+  inline const char *get_arbitration_service_status_str() const { return arbitration_service_status_.get_status_str(); }
+
   inline bool is_dropping() const { return TENANT_STATUS_DROPPING == status_; }
   inline bool is_in_recyclebin() const { return in_recyclebin_; }
   inline bool is_creating() const { return TENANT_STATUS_CREATING == status_;}
   inline bool is_restore() const { return TENANT_STATUS_RESTORE == status_;}
   inline bool is_normal() const { return TENANT_STATUS_NORMAL == status_; }
+  inline bool is_arbitration_service_enabling() const { return arbitration_service_status_.is_enabling(); }
+  inline bool is_arbitration_service_enabled() const { return arbitration_service_status_.is_enabled(); }
+  inline bool is_arbitration_service_disabling() const { return arbitration_service_status_.is_disabling(); }
+  inline bool is_arbitration_service_disabled() const { return arbitration_service_status_.is_disabled(); }
   inline void set_status(const ObTenantStatus status) { status_ = status; }
   inline ObTenantStatus get_status() const { return status_; }
   inline void set_in_recyclebin(const bool in_recyclebin) { in_recyclebin_ = in_recyclebin; }
@@ -136,6 +148,7 @@ private:
   int64_t drop_tenant_time_;
   ObTenantStatus status_;
   bool in_recyclebin_;
+  ObArbitrationServiceStatus arbitration_service_status_;
 };
 
 class ObSimpleUserSchema : public ObSchema

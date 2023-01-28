@@ -103,6 +103,7 @@ FlushMetaCbCtx::FlushMetaCbCtx()
       config_version_(),
       base_lsn_(),
       allow_vote_(true),
+      is_applied_mode_meta_(false),
       log_mode_meta_()
 {
 }
@@ -119,6 +120,7 @@ void FlushMetaCbCtx::reset()
   config_version_.reset();
   base_lsn_.reset();
   allow_vote_ = true;
+  is_applied_mode_meta_ = false;
   log_mode_meta_.reset();
 }
 
@@ -129,6 +131,7 @@ FlushMetaCbCtx &FlushMetaCbCtx::operator=(const FlushMetaCbCtx &arg)
   this->config_version_ = arg.config_version_;
   this->base_lsn_ = arg.base_lsn_;
   this->allow_vote_ = arg.allow_vote_;
+  this->is_applied_mode_meta_ = arg.is_applied_mode_meta_;
   this->log_mode_meta_ = arg.log_mode_meta_;
   return *this;
 }
@@ -153,6 +156,32 @@ void TruncatePrefixBlocksCbCtx::reset()
 TruncatePrefixBlocksCbCtx& TruncatePrefixBlocksCbCtx::operator=(const TruncatePrefixBlocksCbCtx& truncate_prefix_blocks_ctx)
 {
   lsn_ = truncate_prefix_blocks_ctx.lsn_;
+  return *this;
+}
+
+FlashbackCbCtx::FlashbackCbCtx(const SCN &flashback_scn)
+{
+  flashback_scn_ = flashback_scn;
+}
+
+FlashbackCbCtx::FlashbackCbCtx()
+{
+  reset();
+}
+
+FlashbackCbCtx::~FlashbackCbCtx()
+{
+  reset();
+}
+
+void FlashbackCbCtx::reset()
+{
+  flashback_scn_.reset();
+}
+
+FlashbackCbCtx &FlashbackCbCtx::operator=(const FlashbackCbCtx &rhf)
+{
+  flashback_scn_ = rhf.flashback_scn_;
   return *this;
 }
 } // end of logservice

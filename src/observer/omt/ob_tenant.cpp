@@ -711,10 +711,9 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
   } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_tenant_clog_dir(id_, mtl_init_ctx_->tenant_clog_dir_))) {
     LOG_ERROR("get_tenant_clog_dir failed", K(ret));
   } else {
-    mtl_init_ctx_->disk_options_.log_disk_usage_limit_size_ = meta.unit_.config_.log_disk_size();
-
-    mtl_init_ctx_->disk_options_.log_disk_utilization_threshold_ = 80;
-    mtl_init_ctx_->disk_options_.log_disk_utilization_limit_threshold_ = 95;
+    mtl_init_ctx_->palf_options_.disk_options_.log_disk_usage_limit_size_ = meta.unit_.config_.log_disk_size();
+    mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_threshold_ = 80;
+    mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_limit_threshold_ = 95;
   }
   return ret;
 }

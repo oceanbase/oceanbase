@@ -28,6 +28,20 @@ public:
   static int set_default_timeout_ctx(common::ObTimeoutCtx &ctx, const int64_t default_timeout);
   // priority to get timeout: ctx > worker > default_timeout
   static int get_abs_timeout(const int64_t default_timeout, int64_t &abs_timeout);
+  // data version must up to 4.1 with arbitration service
+  // params[in]  tenant_id, which tenant to check
+  // params[out] is_compatible, whether it is up to 4.1
+  static int check_compat_version_for_arbitration_service(
+      const uint64_t tenant_id,
+      bool &is_compatible);
+  // generate the count of arb replica of a log stream
+  // @params[in]  tenant_id, which tenant to check
+  // @params[in]  ls_id, which log stream to check
+  // @params[out] arb_replica_num, the result
+  static int generate_arb_replica_num(
+      const uint64_t tenant_id,
+      const ObLSID &ls_id,
+      int64_t &arb_replica_num);
 };
 }//end namespace share
 }//end namespace oceanbase

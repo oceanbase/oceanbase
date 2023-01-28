@@ -24,7 +24,7 @@ namespace oceanbase
 {
 namespace obrpc
 {
-
+extern int check_arb_white_list(int64_t cluster_id, bool& is_arb);
 class ObRpcSessionHandler;
 class ObRpcStreamCond;
 class ObRpcProcessorBase : public rpc::frame::ObReqProcessor
@@ -176,7 +176,6 @@ protected:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcProcessorBase);
 }; // end of class ObRpcProcessorBase
-
 } // end of namespace observer
 } // end of namespace oceanbase
 

@@ -40,7 +40,8 @@ public:
            LogEngine *log_engine,
            palf::PalfFSCbWrapper *palf_fs_cb,
            common::ObILogAllocator *alloc_mgr,
-           const PalfBaseInfo &palf_base_info)
+           const PalfBaseInfo &palf_base_info,
+           const bool is_normal_replica)
   {
     int ret = OB_SUCCESS;
     UNUSED(palf_id);
@@ -51,6 +52,7 @@ public:
     UNUSED(palf_fs_cb);
     UNUSED(alloc_mgr);
     UNUSED(palf_base_info);
+    UNUSED(is_normal_replica);
     return ret;
   }
   int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data)
@@ -84,15 +86,10 @@ public:
     UNUSED(committed_end_lsn);
     return ret;
   }
-  int get_majority_lsn(const ObMemberList &member_list,
-                      const int64_t replica_num,
-                      LSN &result_lsn) const
+  int get_server_ack_info(const common::ObAddr &server, LsnTsInfo &lsn_ts_info)
   {
-    int ret = OB_SUCCESS;
-    UNUSED(member_list);
-    UNUSED(replica_num);
-    UNUSED(result_lsn);
-    return ret;
+    UNUSEDx(server, lsn_ts_info);
+    return OB_SUCCESS;
   }
   int try_fetch_log(const FetchTriggerType &fetch_log_type,
                     const LSN prev_lsn = LSN(),
@@ -120,6 +117,11 @@ public:
   bool check_all_log_has_flushed()
   {
     return true;
+  }
+  int get_majority_match_lsn(LSN &majority_match_lsn)
+  {
+    UNUSED(majority_match_lsn);
+    return OB_SUCCESS;
   }
   // ================= log sync part begin
   int submit_log(const char *buf,
@@ -333,6 +335,13 @@ public:
     UNUSED(removed_memberlist);
     UNUSED(new_log_sync_memberlist);
     UNUSED(new_replica_num);
+    return OB_SUCCESS;
+  }
+  int get_server_ack_info(const common::ObAddr &server, LsnTsInfo &ack_info) const
+  {
+    UNUSED(server);
+    ack_info.last_ack_time_us_ = common::ObTimeUtility::current_time();
+    ack_info.lsn_ = LSN(PALF_INITIAL_LSN_VAL);
     return OB_SUCCESS;
   }
 public:

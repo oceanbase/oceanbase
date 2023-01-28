@@ -30,10 +30,13 @@ public:
   {
     INVALID_STATUS = 0,
     NORMAL_STATUS = 1,
-    SWITCHING_STATUS = 2,
-    PREPARE_FLASHBACK_STATUS = 3,
+    SWITCHING_TO_PRIMARY_STATUS = 2,
+    PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_STATUS = 3,
     FLASHBACK_STATUS = 4,
-    MAX_STATUS = 5,
+    PREPARE_SWITCHING_TO_STANDBY_STATUS = 5,
+    SWITCHING_TO_STANDBY_STATUS = 6,
+    PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS = 7,
+    MAX_STATUS = 8
   };
 public:
   ObTenantSwitchoverStatus() : value_(INVALID_STATUS) {}
@@ -63,9 +66,12 @@ public:
   bool is_##STATUS##_status() const { return TENANT_STATUS == value_; };
 
 IS_TENANT_STATUS(NORMAL_STATUS, normal) 
-IS_TENANT_STATUS(SWITCHING_STATUS, switching) 
-IS_TENANT_STATUS(PREPARE_FLASHBACK_STATUS, prepare_flashback) 
+IS_TENANT_STATUS(SWITCHING_TO_PRIMARY_STATUS, switching_to_primary)
+IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_STATUS, prepare_flashback_for_failover_to_primary)
 IS_TENANT_STATUS(FLASHBACK_STATUS, flashback) 
+IS_TENANT_STATUS(PREPARE_SWITCHING_TO_STANDBY_STATUS, prepare_switching_to_standby)
+IS_TENANT_STATUS(SWITCHING_TO_STANDBY_STATUS, switching_to_standby)
+IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS, prepare_flashback_for_switch_to_primary)
 #undef IS_TENANT_STATUS 
 
   TO_STRING_KV(K_(value));
@@ -73,10 +79,14 @@ private:
   ObTenantSwitchoverStatus::Status value_;
 };
 
+static const ObTenantSwitchoverStatus INVALID_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::INVALID_STATUS);
 static const ObTenantSwitchoverStatus NORMAL_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::NORMAL_STATUS);
-static const ObTenantSwitchoverStatus PREPARE_FLASHBACK_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::PREPARE_FLASHBACK_STATUS);
+static const ObTenantSwitchoverStatus PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_STATUS);
 static const ObTenantSwitchoverStatus FLASHBACK_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::FLASHBACK_STATUS);
-static const ObTenantSwitchoverStatus SWITCHING_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::SWITCHING_STATUS);
+static const ObTenantSwitchoverStatus SWITCHING_TO_PRIMARY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::SWITCHING_TO_PRIMARY_STATUS);
+static const ObTenantSwitchoverStatus PREP_SWITCHING_TO_STANDBY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::PREPARE_SWITCHING_TO_STANDBY_STATUS);
+static const ObTenantSwitchoverStatus SWITCHING_TO_STANDBY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::SWITCHING_TO_STANDBY_STATUS);
+static const ObTenantSwitchoverStatus PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS);
 
 }  // share
 }  // oceanbase

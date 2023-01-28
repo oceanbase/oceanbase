@@ -62,10 +62,14 @@ RPC_F(obrpc::OB_BATCH_GET_TABLET_AUTOINC_SEQ, obrpc::ObBatchGetTabletAutoincSeqA
     obrpc::ObBatchGetTabletAutoincSeqRes, ObBatchGetTabletAutoincSeqProxy);
 RPC_F(obrpc::OB_BATCH_SET_TABLET_AUTOINC_SEQ, obrpc::ObBatchSetTabletAutoincSeqArg,
     obrpc::ObBatchSetTabletAutoincSeqRes, ObBatchSetTabletAutoincSeqProxy);
+RPC_F(obrpc::OB_GET_LS_SYNC_SCN, obrpc::ObGetLSSyncScnArg, obrpc::ObGetLSSyncScnRes, ObGetLSSyncScnProxy);
 RPC_F(obrpc::OB_INIT_TENANT_CONFIG, obrpc::ObInitTenantConfigArg,
     obrpc::ObInitTenantConfigRes, ObInitTenantConfigProxy);
+RPC_F(obrpc::OB_GET_LEADER_LOCATIONS, obrpc::ObGetLeaderLocationsArg,
+      obrpc::ObGetLeaderLocationsResult, ObGetLeaderLocationsProxy);
 RPC_F(obrpc::OB_DDL_CHECK_TABLET_MERGE_STATUS, obrpc::ObDDLCheckTabletMergeStatusArg,
     obrpc::ObDDLCheckTabletMergeStatusResult, ObCheckTabletMergeStatusProxy);
+RPC_F(obrpc::OB_REFRESH_TENANT_INFO, obrpc::ObRefreshTenantInfoArg, obrpc::ObRefreshTenantInfoRes, ObRefreshTenantInfoProxy);
 }//end namespace rootserver
 }//end namespace oceanbase
 

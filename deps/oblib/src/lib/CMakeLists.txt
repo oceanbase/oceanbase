@@ -88,6 +88,7 @@ ob_set_subtarget(oblib_lib common_mixed
   encrypt/ob_encrypted_helper.cpp
   file/file_directory_utils.cpp
   file/ob_file.cpp
+  file/ob_string_util.cpp
   hash/ob_concurrent_hash_map.cpp
   hash/ob_hashutils.cpp
   hash/xxhash.c

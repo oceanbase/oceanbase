@@ -39,6 +39,7 @@ private:
   int insert_log_stat_(const logservice::ObLogStat &log_stat, common::ObNewRow *row);
   int get_log_handler_stat_(const palf::PalfStat &palf_stat, logservice::ObLogStat &log_stat);
   int member_list_to_string_(const common::ObMemberList &member_list);
+  int learner_list_to_string_(const common::GlobalLearnerList &learner_list);
 private:
   static const int64_t VARCHAR_32 = 32;
   static const int64_t VARCHAR_64 = 64;
@@ -47,6 +48,8 @@ private:
   char access_mode_str_[VARCHAR_32] = {'\0'};
   char ip_[common::OB_IP_PORT_STR_BUFF] = {'\0'};
   char member_list_buf_[MAX_MEMBER_LIST_LENGTH] = {'\0'};
+  char arbitration_member_buf_[MAX_SINGLE_MEMBER_LENGTH] = {'\0'};
+  char degraded_list_buf_[MAX_LEARNER_LIST_LENGTH] = {'\0'};
   char config_version_buf_[VARCHAR_128] = {'\0'};
   char replica_type_str_[VARCHAR_32] = {'\0'};
   omt::ObMultiTenant *omt_;

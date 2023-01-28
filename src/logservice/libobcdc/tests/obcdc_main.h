@@ -57,6 +57,7 @@ private:
   int parse_args_(int argc, char **argv);
   bool check_args_();
   int verify_record_info_(IBinlogRecord *br);
+  int parse_timezone_info_(const char *tz_fpath);
 
 private:
   bool                    inited_;

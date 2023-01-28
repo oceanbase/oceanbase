@@ -167,8 +167,23 @@ public:
   {
     return true;
   }
+  virtual int set_changing_config_with_arb()
+  {
+    is_changing_config_with_arb_ = true;
+    return OB_SUCCESS;
+  }
+  virtual int reset_changing_config_with_arb()
+  {
+    is_changing_config_with_arb_ = false;
+    return OB_SUCCESS;
+  }
+  virtual bool is_changing_config_with_arb() const
+  {
+    return is_changing_config_with_arb_;
+  }
 public:
   int64_t mock_proposal_id_;
+  bool is_changing_config_with_arb_;
 };
 
 } // end of palf

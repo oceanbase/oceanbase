@@ -27,7 +27,7 @@ public:
   ~ObLogAllDdlOperationSchemaInfo() { reset (); }
   int init();
   void reset();
-  const share::schema::ObTableSchema &get_ddl_table_schema() const { return all_ddl_operation_table_schema_; }
+  const share::schema::ObTableSchema &get_table_schema() const { return all_ddl_operation_table_schema_; }
   const ObArray<share::schema::ObColDesc> &get_cols_des_array() const { return col_des_array_; }
 
   // For test or debug

@@ -50,7 +50,7 @@ DEFINE_DESERIALIZE(ObRowkeyColumn)
   } else if (OB_FAIL(serialization::decode_vi64(
       buf, data_len, tmp_pos, reinterpret_cast<int64_t *>(&column_id_)))) {
     COMMON_LOG(WARN, "decode column_id error.", K_(column_id), K(ret));
-  } else if (OB_FAIL(type_.deserialize(buf, data_len, pos))) {
+  } else if (OB_FAIL(type_.deserialize(buf, data_len, tmp_pos))) {
     COMMON_LOG(WARN, "decode type error.", K_(type), K(ret));
   } else if (OB_FAIL(serialization::decode_vi32(
       buf, data_len, tmp_pos, reinterpret_cast<int32_t *>(&order_)))) {
@@ -71,6 +71,27 @@ DEFINE_GET_SERIALIZE_SIZE(ObRowkeyColumn)
   return len;
 }
 
+ObRowkeyColumn& ObRowkeyColumn::operator=(const ObRowkeyColumn &other)
+{
+  this->length_ = other.length_;
+  this->column_id_ = other.column_id_;
+  this->type_ = other.type_;
+  this->order_ = other.order_;
+  this->fulltext_flag_ = other.fulltext_flag_;
+  this->spatial_flag_ = other.spatial_flag_;
+  return *this;
+}
+
+bool ObRowkeyColumn::operator==(const ObRowkeyColumn &other) const
+{
+  return
+      this->length_ == other.length_ &&
+      this->column_id_ == other.column_id_ &&
+      this->type_ == other.type_ &&
+      this->order_ == other.order_ &&
+      this->fulltext_flag_ == other.fulltext_flag_ &&
+      this->spatial_flag_ == other.spatial_flag_;
+}
 
 ObRowkeyInfo::ObRowkeyInfo()
     : columns_(NULL), size_(0), capacity_(0), arena_(ObModIds::OB_SCHEMA_ROW_KEY), allocator_(&arena_)

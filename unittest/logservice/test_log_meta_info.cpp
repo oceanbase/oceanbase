@@ -85,8 +85,6 @@ TEST(TestLogMetaInfos, test_log_prepare_meta)
 TEST(TestLogMetaInfos, test_log_config_meta)
 {
   static const int64_t BUFSIZE = 1 << 21;
-  char buf[BUFSIZE];
-  LogConfigMeta log_config_meta1;
   ObAddr addr1(ObAddr::IPV4, "127.0.0.1", 4096);
   ObAddr addr2(ObAddr::IPV4, "127.0.0.1", 4097);
   ObAddr addr3(ObAddr::IPV4, "127.0.0.1", 4098);
@@ -96,7 +94,7 @@ TEST(TestLogMetaInfos, test_log_config_meta)
   ObMember learner1(addr3, 1);
   ObMember learner2(addr4, 1);
   LSN prev_lsn; prev_lsn.val_ = 1;
-  int64_t prev_log_proposal_id = INVALID_PROPOSAL_ID; prev_log_proposal_id = 1;
+  int64_t prev_log_proposal_id = 1;
   int64_t prev_config_seq = 1;
   int64_t prev_replica_num = 1;
   ObMemberList prev_member_list;
@@ -104,7 +102,7 @@ TEST(TestLogMetaInfos, test_log_config_meta)
   int64_t curr_config_seq = 1;
   int64_t curr_replica_num = 1;
   LSN curr_lsn; curr_lsn.val_ = 1;
-  int64_t curr_log_proposal_id = INVALID_PROPOSAL_ID; curr_log_proposal_id = 1;
+  int64_t curr_log_proposal_id = 1;
   ObMemberList curr_member_list;
   curr_member_list.add_member(member2);
   common::GlobalLearnerList prev_learner_list;
@@ -117,30 +115,73 @@ TEST(TestLogMetaInfos, test_log_config_meta)
   LogConfigInfo prev_config_info;
   LogConfigInfo curr_config_info;
 
+  // log barrier
+  const int64_t barrier_log_proposal_id = 3;
+  const LSN barrier_lsn = LSN(300);
+  const int64_t barrier_mode_pid = 4;
+
   // Test invalid argument
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info));
-  EXPECT_FALSE(log_config_meta1.is_valid());
+  LogConfigMeta log_config_meta;
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_config_meta.generate(curr_log_proposal_id, prev_config_info, curr_config_info,
+      barrier_log_proposal_id, barrier_lsn, barrier_mode_pid));
+  EXPECT_FALSE(log_config_meta.is_valid());
 
   EXPECT_EQ(OB_SUCCESS, prev_config_version.generate(prev_log_proposal_id, prev_config_seq));
   EXPECT_EQ(OB_SUCCESS, curr_config_version.generate(curr_log_proposal_id, curr_config_seq));
   EXPECT_EQ(OB_SUCCESS, prev_config_info.generate(prev_member_list, prev_replica_num, prev_learner_list, prev_config_version));
   EXPECT_EQ(OB_SUCCESS, curr_config_info.generate(curr_member_list, curr_replica_num, curr_learner_list, curr_config_version));
-  EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info));
-  EXPECT_TRUE(log_config_meta1.is_valid());
 
-  // Test serialzie and deserialize
-  int64_t pos = 0;
-  EXPECT_EQ(OB_SUCCESS, log_config_meta1.serialize(buf, BUFSIZE, pos));
-  EXPECT_EQ(pos, log_config_meta1.get_serialize_size());
-  pos = 0;
-  LogConfigMeta log_config_meta2;
-  EXPECT_EQ(OB_SUCCESS, log_config_meta2.deserialize(buf, BUFSIZE, pos));
-  EXPECT_TRUE(log_config_meta1.proposal_id_ == log_config_meta2.proposal_id_);
-  EXPECT_TRUE(log_config_meta1.prev_ ==
-              log_config_meta2.prev_);
-  EXPECT_TRUE(log_config_meta1.curr_ ==
-              log_config_meta2.curr_);
-  PALF_LOG(INFO, "trace", K(log_config_meta1), K(log_config_meta2));
+  // test basic serialization
+  {
+    char buf[BUFSIZE];
+    LogConfigMeta log_config_meta1;
+    EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info,
+        barrier_log_proposal_id, barrier_lsn, barrier_mode_pid));
+    EXPECT_TRUE(log_config_meta1.is_valid());
+
+    // Test serialzie and deserialize
+    int64_t pos = 0;
+    EXPECT_EQ(OB_SUCCESS, log_config_meta1.serialize(buf, BUFSIZE, pos));
+    EXPECT_EQ(pos, log_config_meta1.get_serialize_size());
+    pos = 0;
+    LogConfigMeta log_config_meta2;
+    EXPECT_EQ(OB_SUCCESS, log_config_meta2.deserialize(buf, BUFSIZE, pos));
+    EXPECT_TRUE(log_config_meta1.proposal_id_ == log_config_meta2.proposal_id_);
+    EXPECT_TRUE(log_config_meta1.prev_ ==
+                log_config_meta2.prev_);
+    EXPECT_TRUE(log_config_meta1.curr_ ==
+                log_config_meta2.curr_);
+    EXPECT_TRUE(log_config_meta1.prev_log_proposal_id_ == log_config_meta2.prev_log_proposal_id_);
+    EXPECT_TRUE(log_config_meta1.prev_lsn_ == log_config_meta2.prev_lsn_);
+    EXPECT_TRUE(log_config_meta1.prev_mode_pid_ == log_config_meta2.prev_mode_pid_);
+    PALF_LOG(INFO, "trace", K(log_config_meta1), K(log_config_meta2));
+  }
+  // test compatibility (new code deserializes old data)
+  {
+    char buf[BUFSIZE];
+    LogConfigMeta log_config_meta1;
+    EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info,
+        barrier_log_proposal_id, barrier_lsn, barrier_mode_pid));
+    EXPECT_TRUE(log_config_meta1.is_valid());
+    // assign old version
+    log_config_meta1.version_ = LogConfigMeta::LOG_CONFIG_META_VERSION;
+
+    int64_t pos = 0;
+    EXPECT_EQ(OB_SUCCESS, log_config_meta1.serialize(buf, BUFSIZE, pos));
+    EXPECT_EQ(pos, log_config_meta1.get_serialize_size());
+    pos = 0;
+    LogConfigMeta log_config_meta2;
+    EXPECT_EQ(OB_SUCCESS, log_config_meta2.deserialize(buf, BUFSIZE, pos));
+    EXPECT_TRUE(log_config_meta1.proposal_id_ == log_config_meta2.proposal_id_);
+    EXPECT_TRUE(log_config_meta1.prev_ ==
+                log_config_meta2.prev_);
+    EXPECT_TRUE(log_config_meta1.curr_ ==
+                log_config_meta2.curr_);
+    EXPECT_EQ(log_config_meta2.prev_log_proposal_id_, INVALID_PROPOSAL_ID);
+    EXPECT_FALSE(log_config_meta2.prev_lsn_.is_valid());
+    EXPECT_EQ(log_config_meta2.prev_mode_pid_, INVALID_PROPOSAL_ID);
+    PALF_LOG(INFO, "trace", K(log_config_meta1), K(log_config_meta2));
+  }
 }
 
 TEST(TestLogMetaInfos, test_log_config_info_convert)

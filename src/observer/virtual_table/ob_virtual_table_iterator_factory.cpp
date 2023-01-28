@@ -71,6 +71,7 @@
 #include "observer/virtual_table/ob_all_virtual_sys_event.h"
 #include "observer/virtual_table/ob_all_virtual_tx_stat.h"
 #include "observer/virtual_table/ob_all_virtual_tx_lock_stat.h"
+#include "observer/virtual_table/ob_all_virtual_tx_scheduler_stat.h"
 #include "observer/virtual_table/ob_all_virtual_tx_ctx_mgr_stat.h"
 #include "observer/virtual_table/ob_all_virtual_weak_read_stat.h"
 #include "observer/virtual_table/ob_tenant_virtual_statname.h"
@@ -190,6 +191,7 @@
 #include "observer/virtual_table/ob_all_virtual_schema_memory.h"
 #include "observer/virtual_table/ob_all_virtual_schema_slot.h"
 #include "rootserver/virtual_table/ob_all_virtual_ls_replica_task_plan.h"
+#include "observer/virtual_table/ob_all_virtual_archive_dest_status.h"
 #include "observer/virtual_table/ob_virtual_show_trace.h"
 #include "observer/virtual_table/ob_all_virtual_sql_plan.h"
 #include "observer/virtual_table/ob_all_virtual_plan_table.h"
@@ -847,10 +849,21 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObGVTxStat *gv_tx_stat = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObGVTxStat, gv_tx_stat))) {
               SERVER_LOG(ERROR, "ObGVTxStat construct failed", K(ret));
-            } else if (gv_tx_stat->init()) {
+            } else if (OB_FAIL(gv_tx_stat->init())) {
               SERVER_LOG(WARN, "fail to init all_virtual_trans_stat", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(gv_tx_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TRANS_SCHEDULER_TID: {
+            ObGVTxSchedulerStat *gv_tx_scheduler_stat = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObGVTxSchedulerStat, gv_tx_scheduler_stat))) {
+              SERVER_LOG(ERROR, "ObGVTxSchedulerStat construct failed", K(ret));
+            } else if (OB_FAIL(gv_tx_scheduler_stat->init())) {
+              SERVER_LOG(WARN, "fail to init all_virtual_trans_scheduler", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(gv_tx_scheduler_stat);
             }
             break;
           }
@@ -1768,6 +1781,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualLockWaitStat *lock_wait_stat = NULL;
             if (OB_SUCCESS == NEW_VIRTUAL_TABLE(ObAllVirtualLockWaitStat, lock_wait_stat)) {
               vt_iter = static_cast<ObVirtualTableIterator *>(lock_wait_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_ARCHIVE_DEST_STATUS_TID: {
+            ObVirtualArchiveDestStatus *archive_dest_status = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualArchiveDestStatus, archive_dest_status))) {
+              SERVER_LOG(ERROR, "fail to new ObVirtualArchiveDestStatus", K(ret));
+            } else if (OB_FAIL(archive_dest_status->init(GCTX.sql_proxy_))) {
+              SERVER_LOG(ERROR, "fail to init ObVirtualArchiveDestStatus", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(archive_dest_status);
             }
             break;
           }

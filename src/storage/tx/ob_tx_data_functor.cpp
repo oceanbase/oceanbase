@@ -15,8 +15,11 @@
 #include "storage/tx/ob_committer_define.h"
 #include "storage/ob_i_store.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable_context.h"
 #include "observer/ob_server_struct.h"
+#include "logservice/leader_coordinator/ob_failure_detector.h"
 
 namespace oceanbase
 {
@@ -311,6 +314,9 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
   const int64_t MAX_SLEEP_US = 1000;
   auto &acc_ctx = lock_for_read_arg_.mvcc_acc_ctx_;
   auto lock_expire_ts = acc_ctx.eval_lock_expire_ts();
+  // check lock_for_read blocked or not every 1ms * 100 = 100ms
+  int64_t retry_cnt = 0;
+  const int64_t MAX_RETRY_CNT = 100;
 
   const int32_t state = ATOMIC_LOAD(&tx_data.state_);
 
@@ -319,6 +325,7 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
     STORAGE_LOG(WARN, "lock for read functor need prepare version.", KR(ret));
   } else {
     for (int32_t i = 0; OB_ERR_SHARED_LOCK_CONFLICT == ret; i++) {
+      retry_cnt++;
       if (OB_FAIL(inner_lock_for_read(tx_data, tx_cc_ctx))) {
         if (OB_UNLIKELY(observer::SS_STOPPING == GCTX.status_) ||
             OB_UNLIKELY(observer::SS_STOPPED == GCTX.status_)) {
@@ -328,10 +335,21 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
         } else if (ObTimeUtility::current_time() + MIN(i, MAX_SLEEP_US) >= lock_expire_ts) {
           ret = OB_ERR_SHARED_LOCK_CONFLICT;
           break;
+        } else if (!MTL_IS_PRIMARY_TENANT() && OB_SUCC(check_for_standby(tx_data.tx_id_))) {
+          TRANS_LOG(INFO, "read by standby tenant success", K(tx_data), KPC(tx_cc_ctx), KPC(this));
+          break;
         } else if (i < 10) {
           PAUSE();
         } else {
           ob_usleep((i < MAX_SLEEP_US ? i : MAX_SLEEP_US));
+        }
+        if (retry_cnt == MAX_RETRY_CNT) {
+          retry_cnt = 0;
+          logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
+          if (NULL != detector && detector->is_clog_disk_has_fatal_error()) {
+            ret = OB_IO_ERROR;
+            TRANS_LOG(ERROR, "unexpected io error", K(ret), K(tx_data), KPC(tx_cc_ctx), KPC(this));
+          }
         }
       }
     }
@@ -344,6 +362,18 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
 
   TRANS_LOG(DEBUG, "lock for read", K(ret), K(tx_data), KPC(tx_cc_ctx), KPC(this));
 
+  return ret;
+}
+
+int LockForReadFunctor::check_for_standby(const transaction::ObTransID &tx_id)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObPartTransCtx *ctx = NULL;
+  if (OB_SUCC(MTL(transaction::ObTransService *)->get_tx_ctx(ls_id_, tx_id, ctx))) {
+    ret = ctx->check_for_standby(lock_for_read_arg_.mvcc_acc_ctx_.snapshot_.version_,
+                                 can_read_, trans_version_, is_determined_state_);
+    MTL(transaction::ObTransService *)->revert_tx_ctx(ctx);
+  }
   return ret;
 }
 

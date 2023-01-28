@@ -24,8 +24,6 @@ namespace rpc
 class ObRequest;
 namespace frame
 {
-// forewar declarations
-struct ObGlobalContext;
 
 // This class plays a deliver role who'll deliver each packet received
 // from the upper to responding packet queue. The deliver rules is

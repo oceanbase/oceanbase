@@ -5126,13 +5126,17 @@ int ObDDLOperator::init_tenant_env(
     const ObTenantSchema &tenant_schema,
     const ObSysVariableSchema &sys_variable,
     const share::ObTenantRole &tenant_role,
+    const SCN &recovery_until_scn,
     const common::ObIArray<common::ObConfigPairs> &init_configs,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
 
-  if (OB_FAIL(init_tenant_tablegroup(tenant_id, trans))) {
+  if (OB_UNLIKELY(!recovery_until_scn.is_valid_and_not_min())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid recovery_until_scn", KR(ret), K(recovery_until_scn));
+  } else if (OB_FAIL(init_tenant_tablegroup(tenant_id, trans))) {
     LOG_WARN("insert default tablegroup failed", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_databases(tenant_schema, sys_variable, trans))) {
     LOG_WARN("insert default databases failed,", K(tenant_id), K(ret));
@@ -5171,7 +5175,8 @@ int ObDDLOperator::init_tenant_env(
   if (OB_SUCC(ret) && is_meta_tenant(tenant_id)) {
     const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
     ObAllTenantInfo tenant_info;
-    if (OB_FAIL(tenant_info.init(user_tenant_id, tenant_role))) {
+    if (OB_FAIL(tenant_info.init(user_tenant_id, tenant_role, NORMAL_SWITCHOVER_STATUS, 0,
+                SCN::base_scn(), SCN::base_scn(), SCN::base_scn(), recovery_until_scn))) {
       LOG_WARN("failed to init tenant info", KR(ret), K(tenant_id), K(tenant_role));
     } else if (OB_FAIL(ObAllTenantInfoProxy::init_tenant_info(tenant_info, &trans))) {
       LOG_WARN("failed to init tenant info", KR(ret), K(tenant_info));

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/ob_tenant_recovery_reportor.h"
+#include "rootserver/ob_tenant_role_transition_service.h"//ObTenantRoleTransitionConstants
 #include "storage/tx_storage/ob_ls_service.h" //ObLSService
 #include "storage/tx_storage/ob_ls_map.h"//ObLSIterator
 #include "storage/ls/ob_ls.h"//ObLSGetMod
@@ -20,6 +21,7 @@
 #include "lib/profile/ob_trace_id.h"
 #include "lib/thread/threads.h"//set_run_wrapper
 #include "share/ls/ob_ls_recovery_stat_operator.h" //ObLSRecoveryStatOperator
+#include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
 #include "share/schema/ob_multi_version_schema_service.h"//is_tenant_full_schema
 #include "logservice/ob_log_service.h"//get_palf_role
 #include "share/scn.h"//SCN
@@ -120,7 +122,7 @@ void ObTenantRecoveryReportor::run2()
     LOG_WARN("not init", KR(ret));
   } else {
     ObThreadCondGuard guard(get_cond());
-    const int64_t idle_time = IDLE_TIME_US;
+    const int64_t idle_time = ObTenantRoleTransitionConstants::TENANT_INFO_REFRESH_TIME_US;
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     while (!stop_) {
       if (OB_ISNULL(GCTX.schema_service_)) {
@@ -134,15 +136,23 @@ void ObTenantRecoveryReportor::run2()
           ret = OB_SUCC(ret) ? tmp_ret : ret;
           LOG_WARN("failed to update ls recovery stat", KR(ret), KR(tmp_ret));
         }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
 
-        if (OB_SUCCESS != (tmp_ret = load_tenant_info_())) {
-          ret = OB_SUCC(ret) ? tmp_ret : ret;
-          LOG_WARN("failed to update tenant info", KR(ret), KR(tmp_ret));
-        }
-        //更新受控回放位点到replayservice
-        if (OB_SUCCESS != (tmp_ret = update_replayable_point_())) {
-          LOG_WARN("failed to update_replayable_point", KR(tmp_ret));
-        }
+      if (OB_SUCCESS != (tmp_ret = load_tenant_info())) {
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+        LOG_WARN("failed to update tenant info", KR(ret), KR(tmp_ret));
+      }
+
+      if (OB_SUCCESS != (tmp_ret = submit_tenant_refresh_schema_task_())) {
+        LOG_WARN("failed to submit_tenant_refresh_schema_task_", KR(tmp_ret));
+      }
+
+      //更新受控回放位点到replayservice
+      if (OB_SUCCESS != (tmp_ret = update_replayable_point_())) {
+        LOG_WARN("failed to update_replayable_point", KR(tmp_ret));
       }
       if (!stop_) {
         get_cond().wait_us(idle_time);
@@ -151,6 +161,57 @@ void ObTenantRecoveryReportor::run2()
   }
 }
 
+int ObTenantRecoveryReportor::submit_tenant_refresh_schema_task_()
+{
+  int ret = OB_SUCCESS;
+  ObTenantRole tenant_role = INVALID_TENANT_ROLE;
+  ObTenantSwitchoverStatus switchover_status = INVALID_SWITCHOVER_STATUS;
+  SCN sync_scn;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    SpinRLockGuard guard(lock_);
+    tenant_role = tenant_info_.get_tenant_role();
+    switchover_status = tenant_info_.get_switchover_status();
+    sync_scn  = tenant_info_.get_sync_scn();
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(GCTX.ob_service_) || OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("pointer is null", KR(ret), KP(GCTX.ob_service_), KP(GCTX.schema_service_), KP(sql_proxy_));
+  } else if (tenant_role.is_standby() && switchover_status.is_normal_status()) {
+    ObRefreshSchemaStatus schema_status;
+    ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
+    if (OB_ISNULL(schema_status_proxy)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema_status_proxy is null", KR(ret));
+    } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id_, schema_status))) {
+      LOG_WARN("fail to get schema status", KR(ret), K(tenant_id_));
+    } else if (common::OB_INVALID_TIMESTAMP == schema_status.snapshot_timestamp_) {
+      int64_t version_in_inner_table = OB_INVALID_VERSION;
+      int64_t local_schema_version = OB_INVALID_VERSION;
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_refreshed_schema_version(
+                        tenant_id_, local_schema_version))) {
+        LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(GCTX.schema_service_->get_schema_version_in_inner_table(
+                  *sql_proxy_, schema_status, version_in_inner_table))) {
+        LOG_WARN("fail to get_schema_version_in_inner_table", KR(ret), K(schema_status));
+      } else if (local_schema_version > version_in_inner_table) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("local_schema_version > version_in_inner_table", KR(ret), K_(tenant_id),
+                  K(local_schema_version), K(version_in_inner_table));
+      } else if (local_schema_version == version_in_inner_table) {
+        // do nothing
+      } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(tenant_id_, version_in_inner_table))) {
+        LOG_WARN("failed to submit_async_refresh_schema_task", KR(ret), K_(tenant_id));
+      }
+    }
+  }
+  return ret;
+}
 int ObTenantRecoveryReportor::update_ls_recovery_stat_()
 {
   int ret = OB_SUCCESS;
@@ -264,7 +325,7 @@ int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy 
 }
 
 
-int ObTenantRecoveryReportor::load_tenant_info_()
+int ObTenantRecoveryReportor::load_tenant_info()
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
@@ -319,6 +380,20 @@ int ObTenantRecoveryReportor::get_tenant_info(share::ObAllTenantInfo &tenant_inf
   return ret;
 }
 
+int ObTenantRecoveryReportor::get_tenant_readable_scn(SCN &readable_scn)
+{
+  int ret = OB_SUCCESS;
+  share::ObAllTenantInfo tenant_info;
+  if (OB_FAIL(get_tenant_info(tenant_info))) {
+    LOG_WARN("get_tenant_info failed", K(ret));
+  } else if (OB_UNLIKELY(! tenant_info.is_valid())) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tenant info not valid", K(ret), K(tenant_info));
+  } else {
+    readable_scn = tenant_info.get_standby_scn();
+  }
+  return ret;
+}
 
 int ObTenantRecoveryReportor::update_replayable_point_()
 {
@@ -408,31 +483,7 @@ int ObTenantRecoveryReportor::get_sync_point_(const share::ObLSID &id,
     LOG_WARN("failed to open palf", KR(ret), K(id));
   } else if (OB_FAIL(palf_handle_guard.get_end_scn(sync_scn))) {
     LOG_WARN("failed to get end ts", KR(ret), K(id));
-  } else if (OB_FAIL(palf_handle_guard.get_access_mode(unused_mode_version, access_mode))) {
-    LOG_WARN("failed to get access_mode", KR(ret), K(id));
-  } else if (palf::AccessMode::APPEND == access_mode) {
-  } else {
-    storage::ObLSHandle ls_handle;
-    ObLSRestoreStatus restore_status;
-    storage::ObLS *ls = NULL;
-    logservice::ObLogRestoreHandler *restore_handler = NULL;
-    if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(id, ls_handle,
-            storage::ObLSGetMod::LOG_MOD))) {
-      LOG_WARN("failed to get ls", KR(ret), K(id));
-    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("ls is NULL", K(ret), K(id), K(ls));
-    } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
-      LOG_WARN("failed to get restore status", KR(ret), K(id));
-    } else if (! restore_status.is_in_restore()) {
-    } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("restore_handler is NULL", K(ret), K(id), K(restore_handler));
-    } else if (OB_FAIL(restore_handler->get_restore_sync_scn(id, sync_scn))) {
-      LOG_WARN("get restore sync point failed", KR(ret), K(id));
-    }
-  }
-  if (FAILEDx(get_readable_scn(id, read_scn))) {
+  } else if (OB_FAIL(get_readable_scn(id, read_scn))) {
     LOG_WARN("failed to get readable scn", KR(ret), K(id));
   }
 
@@ -446,17 +497,17 @@ int ObTenantRecoveryReportor::get_readable_scn(const share::ObLSID &id, SCN &rea
   storage::ObLSHandle ls_handle;
   storage::ObLS *ls = NULL;
   ObLSVTInfo ls_info;
+  readable_scn.set_min();
   if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(id, ls_handle,
           storage::ObLSGetMod::LOG_MOD))) {
     LOG_WARN("failed to get ls", KR(ret), K(id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls is NULL", K(ret), K(id), K(ls));
-  } else if (OB_FAIL(ls->get_ls_info(ls_info))) {
-    LOG_WARN("failed to get ls info", KR(ret));
+    LOG_ERROR("ls is NULL", K(ret), K(id), K(ls_handle));
+  } else if (OB_FAIL(ls->get_max_decided_scn(readable_scn))) {
+    LOG_WARN("failed to get_max_decided_log_ts_ns", KR(ret), K(id), KPC(ls));
   } else {
-    readable_scn = (ls_info.weak_read_scn_.is_valid() && ls_info.weak_read_scn_ >= SCN::base_scn())
-        ? ls_info.weak_read_scn_ : SCN::base_scn();
+    readable_scn = (readable_scn>= SCN::base_scn()) ? readable_scn : SCN::base_scn();
   }
   return ret;
 }

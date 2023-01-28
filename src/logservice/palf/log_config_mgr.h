@@ -60,8 +60,6 @@ enum LogConfigChangeType
   REMOVE_ARB_MEMBER,
   ADD_MEMBER_AND_NUM,
   REMOVE_MEMBER_AND_NUM,
-  ADD_ARB_MEMBER_AND_NUM,
-  REMOVE_ARB_MEMBER_AND_NUM,
   ADD_LEARNER,
   REMOVE_LEARNER,
   SWITCH_LEARNER_TO_ACCEPTOR,
@@ -87,12 +85,17 @@ inline bool is_remove_log_sync_member_list(const LogConfigChangeType type)
 
 inline bool is_add_member_list(const LogConfigChangeType type)
 {
-  return is_add_log_sync_member_list(type) || ADD_ARB_MEMBER == type || ADD_ARB_MEMBER_AND_NUM == type;
+  return is_add_log_sync_member_list(type) || ADD_ARB_MEMBER == type;
 }
 
 inline bool is_remove_member_list(const LogConfigChangeType type)
 {
-  return is_remove_log_sync_member_list(type) || REMOVE_ARB_MEMBER == type || REMOVE_ARB_MEMBER_AND_NUM == type;
+  return is_remove_log_sync_member_list(type) || REMOVE_ARB_MEMBER == type;
+}
+
+inline bool is_arb_member_change_type(const LogConfigChangeType type)
+{
+  return ADD_ARB_MEMBER == type || REMOVE_ARB_MEMBER == type;
 }
 
 inline bool is_add_learner_list(const LogConfigChangeType type)
@@ -112,11 +115,10 @@ inline bool is_upgrade_or_degrade(const LogConfigChangeType type)
 
 inline bool is_use_replica_num_args(const LogConfigChangeType type)
 {
-  return ADD_MEMBER == type || REMOVE_MEMBER == type || ADD_ARB_MEMBER == type ||
-      REMOVE_ARB_MEMBER == type || CHANGE_REPLICA_NUM == type;
+  return ADD_MEMBER == type || REMOVE_MEMBER == type || CHANGE_REPLICA_NUM == type;
 }
 
-inline bool is_change_replica_num(const LogConfigChangeType type)
+inline bool is_may_change_replica_num(const LogConfigChangeType type)
 {
   return is_add_member_list(type) || is_remove_member_list(type) || CHANGE_REPLICA_NUM == type;
 }
@@ -170,8 +172,6 @@ public:
       CHECK_LOG_CONFIG_TYPE_STR(REMOVE_ARB_MEMBER);
       CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER_AND_NUM);
       CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER_AND_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_ARB_MEMBER_AND_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_ARB_MEMBER_AND_NUM);
       CHECK_LOG_CONFIG_TYPE_STR(ADD_LEARNER);
       CHECK_LOG_CONFIG_TYPE_STR(REMOVE_LEARNER);
       CHECK_LOG_CONFIG_TYPE_STR(SWITCH_LEARNER_TO_ACCEPTOR);
@@ -208,7 +208,8 @@ public:
                    LogSlidingWindow *sw,
                    LogStateMgr *state_mgr,
                    election::Election *election,
-                   LogModeMgr *mode_mgr);
+                   LogModeMgr *mode_mgr,
+                   LogReconfirm *reconfirm);
   virtual void destroy();
 
   // require caller holds WLock in PalfHandleImpl
@@ -218,7 +219,7 @@ public:
                                       LogConfigVersion &config_version);
   // require caller holds WLock in PalfHandleImpl
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
-                                      const common::ObMember &arb_replica,
+                                      const common::ObMember &arb_member,
                                       const int64_t replica_num,
                                       const int64_t proposal_id,
                                       LogConfigVersion &config_version);
@@ -230,31 +231,76 @@ public:
   virtual int64_t get_accept_proposal_id() const;
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const;
   virtual int get_degraded_learner_list(common::GlobalLearnerList &degraded_learner_list) const;
-  virtual int get_curr_member_list(common::ObMemberList &member_list) const;
-  virtual int get_paxos_log_sync_list(ObMemberList &member_list) const;
+  // @brief get the expected paxos member list without arbitraion member,
+  // including degraded members.
+  // This interface is generally used by outer modules, such as reporting replica logic.
+  // @param[in/out] ObMemberList, the output member list
+  // @param[in/out] int64_t, the output replica_num
+  // @retval
+  //    return OB_SUCCESS if success
+  //    else return other errno
+  virtual int get_curr_member_list(common::ObMemberList &member_list,
+      int64_t &replica_num) const;
+  // @brief get the paxos member list which are all alive, including arbitraion member,
+  // and excluding degraded members.
+  // This list can be used for config change/paxos prepare phase.
+  // This interface is only used by palf.
+  // @param[in/out] ObMemberList, the output member list
+  // @param[in/out] int64_t, the output replica_num
+  // @retval
+  //    return OB_SUCCESS if success
+  //    else return other errno
+  virtual int get_alive_member_list_with_arb(common::ObMemberList &member_list,
+      int64_t &replica_num) const;
+  // @brief get the paxos member list which is responsible for sync group log, excluding arbitraion member,
+  // and excluding degraded paxos members.
+  // This interface is only used by palf.
+  // @param[in/out] ObMemberList, the output member list
+  // @param[in/out] int64_t, the output replica_num
+  // @retval
+  //    return OB_SUCCESS if success
+  //    else return other errno
+  virtual int get_log_sync_member_list(common::ObMemberList &member_list,
+      int64_t &replica_num) const;
+  virtual int get_arbitration_member(common::ObMember &arb_member) const;
   virtual int get_prev_member_list(common::ObMemberList &member_list) const;
   virtual int get_children_list(LogLearnerList &children) const;
   virtual int get_config_version(LogConfigVersion &config_version) const;
+  // @brief get replica_num of expected paxos member list, excluding arbitraion member,
+  // and including degraded members.
+  // @param[in/out] int64_t, the output replica_num
+  // @retval
+  //    return OB_SUCCESS if success
+  //    else return other errno
   virtual int get_replica_num(int64_t &replica_num) const;
-  virtual int get_paxos_log_sync_replica_num(int64_t &replica_num) const;
   const common::ObAddr &get_parent() const;
-  virtual int leader_do_loop_work();
+  virtual int leader_do_loop_work(bool &need_change_config);
+  virtual int switch_state();
   // ================= Config Change =================
 
-  int check_args_and_generate_config(const int64_t curr_proposal_id,
-                                     const LogConfigChangeArgs &args,
+  int check_args_and_generate_config(const LogConfigChangeArgs &args,
+                                     const int64_t proposal_id,
+                                     const int64_t election_epoch,
                                      bool &is_already_finished,
                                      LogConfigInfo &new_config_info) const;
-  int pre_sync_config_log(const common::ObMember &server, const int64_t proposal_id);
-  bool is_leader_for_config_change(const LogConfigChangeType &type) const;
+  int pre_sync_config_log_and_mode_meta(const common::ObMember &server, const int64_t proposal_id);
+  int start_change_config(int64_t &proposal_id,
+                          int64_t &election_epoch) const;
+  int start_degrade();
+  int end_degrade();
   int is_state_changed(bool &need_rlock, bool &need_wlock) const;
-  int change_config(const LogConfigChangeArgs &args);
-  void after_config_change_timeout();
+  int change_config(const LogConfigChangeArgs &args,
+                    const int64_t proposal_id,
+                    const int64_t election_epoch,
+                    LogConfigVersion &config_version);
+  void after_config_change_timeout(const LogConfigVersion &config_version);
 
   // for reconfirm
-  virtual int confirm_start_working_log();
+  virtual int confirm_start_working_log(const int64_t proposal_id,
+                                        const int64_t election_epoch,
+                                        LogConfigVersion &config_version);
   // for PalfHandleImpl::receive_config_log
-  virtual bool can_receive_ms_log(const common::ObAddr &leader, const LogConfigMeta &meta) const;
+  virtual bool can_receive_config_log(const common::ObAddr &leader, const LogConfigMeta &meta) const;
   virtual int after_flush_config_log(const LogConfigVersion &config_version);
 
   // follower接收到成员变更日志需要进行前向校验
@@ -268,6 +314,11 @@ public:
   // broadcast leader info to global learners, only called in leader active
   virtual int submit_broadcast_leader_info(const int64_t proposal_id) const;
   virtual void reset_status();
+  int check_follower_sync_status(const LogConfigChangeArgs &args,
+                                 const ObMemberList &new_member_list,
+                                 const int64_t new_replica_num,
+                                 bool &added_member_has_new_version) const;
+  int sync_meta_for_arb_election_leader();
   // ================ Config Change ==================
   // ==================== Child ========================
   virtual int register_parent();
@@ -291,11 +342,12 @@ public:
     SpinLockGuard guard(lock_);
     int64_t pos = 0;
     J_OBJ_START();
-    J_KV(K_(palf_id), K_(self), K_(log_ms_meta), K_(prev_log_proposal_id), K_(prev_lsn),      \
-      K_(prev_mode_pid), K_(state), K_(persistent_config_version),                            \
-      K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),
-      K_(last_submit_config_log_time_us), K_(region), K_(paxos_member_region_map),
-      K_(register_time_us), K_(parent), K_(parent_keepalive_time_us),
+    J_KV(K_(palf_id), K_(self), K_(alive_paxos_memberlist), K_(alive_paxos_replica_num),         \
+      K_(log_ms_meta), K_(prev_log_proposal_id),                                                 \
+      K_(prev_lsn), K_(prev_mode_pid), K_(state), K_(persistent_config_version),                 \
+      K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),                           \
+      K_(last_submit_config_log_time_us), K_(region), K_(paxos_member_region_map),                 \
+      K_(register_time_us), K_(parent), K_(parent_keepalive_time_us),                                \
       K_(last_submit_register_req_time_us), K_(children), K_(last_submit_keepalive_time_us), KP(this));
     J_OBJ_END();
     return pos;
@@ -304,21 +356,24 @@ private:
   enum ConfigChangeState
   {
     INIT = 0,
-    CHANGING,
+    CHANGING = 1,
   };
   typedef common::ObSpinLockGuard SpinLockGuard;
   typedef common::ObFunction<bool(const LogLearner &)> LogLearnerCond;
   typedef common::ObFunction<int(const LogLearner &)> LogLearnerAction;
+  static constexpr int64_t MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION = 2 * 1000 * 1000;
 private:
   int set_initial_config_info_(const LogConfigInfo &config_info,
                                const int64_t proposal_id,
                                LogConfigVersion &init_config_version);
   bool can_memberlist_majority_(const int64_t new_member_list_len, const int64_t new_replica_num) const;
   int check_config_change_args_(const LogConfigChangeArgs &args, bool &is_already_finished) const;
+  int check_config_version_matches_state_(const LogConfigVersion &config_version) const;
   int generate_new_config_info_(const int64_t proposal_id,
                                 const LogConfigChangeArgs &args,
                                 LogConfigInfo &new_config_info) const;
-  int update_complete_config_info_(const LogConfigInfo &config_info);
+  int append_config_info_(const LogConfigInfo &config_info);
+  int apply_config_info_(const LogConfigInfo &config_info);
   int update_match_lsn_map_(const LogConfigChangeArgs &args, const LogConfigInfo &new_config_info);
   int update_election_meta_(const LogConfigInfo &info);
   int update_election_meta_(const ObMemberList &member_list,
@@ -328,13 +383,20 @@ private:
   int renew_config_change_barrier_();
   bool is_reach_majority_() const;
   bool need_resend_config_log_() const;
-  bool is_leader_for_config_change_(const LogConfigChangeType &type) const;
-  int change_config_(const LogConfigChangeArgs &args);
-  int apply_config_meta_(const int64_t curr_proposal_id,
+  bool need_recheck_init_state_() const;
+  bool is_leader_for_config_change_(const LogConfigChangeType &type,
+                                    const int64_t proposal_id,
+                                    const int64_t election_epoch) const;
+  int change_config_(const LogConfigChangeArgs &args,
+                     const int64_t proposal_id,
+                     const int64_t election_epoch,
+                     LogConfigVersion &config_version);
+  int append_config_meta_(const int64_t curr_proposal_id,
                          const LogConfigChangeArgs &args,
                          bool &is_already_finished);
   int set_resend_log_info_();
-  int submit_config_log_(const int64_t proposal_id,
+  int submit_config_log_(const common::ObMemberList &paxos_member_list,
+                         const int64_t proposal_id,
                          const int64_t prev_log_proposal_id,
                          const LSN &prev_lsn,
                          const int64_t prev_mode_pid,
@@ -345,13 +407,34 @@ private:
   bool check_need_update_memberlist_without_lock_(const LogConfigVersion &config_version) const;
   int update_election_memberlist_(const LogConfigMeta &log_ms_meta);
   // int check_ms_log_committed_(const int64_t proposal_id, const LogConfigVersion &config_version);
-  int check_ms_log_sync_state_() const;
   int try_resend_config_log_(const int64_t proposal_id);
   // broadcast leader info to global learners, only called in leader active
   int submit_broadcast_leader_info_(const int64_t proposal_id) const;
+  int get_log_barrier_(LSN &prev_log_lsn, int64_t &prev_log_proposal_id) const;
+  int check_servers_lsn_and_version_(const common::ObAddr &server,
+                                     const LogConfigVersion &config_version,
+                                     const int64_t conn_timeout_us,
+                                     const bool force_remote_check,
+                                     LSN &max_flushed_end_lsn,
+                                     bool &has_same_version) const;
+  int sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
+                                  const ObMemberList &new_member_list,
+                                  const int64_t new_replica_num,
+                                  const int64_t conn_timeout_us,
+                                  LSN &committed_end_lsn,
+                                  bool &added_member_has_new_version) const;
+  int check_follower_sync_status_(const LogConfigChangeArgs &args,
+                                  const ObMemberList &new_member_list,
+                                  const int64_t new_replica_num,
+                                  const bool is_check_log_barrier,
+                                  bool &added_member_has_new_version) const;
+  int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
+                                         const int64_t proposal_id,
+                                         const bool is_arb_replica);
+
 private:
-  // log_ms_meta_ is protected by RWLock in PalfHandleImpl,
-  // any read/write ops to log_ms_meta_ should acquire RLock/WLock in PalfHandleImpl.
+  // inner_config_meta_ is protected by RWLock in PalfHandleImpl,
+  // any read/write ops to inner_config_meta_ should acquire RLock/WLock in PalfHandleImpl.
   // ================= Config Change =================
   // ==================== Child ========================
   bool is_registering_() const;
@@ -377,20 +460,26 @@ private:
   int children_if_cond_then_action_(const LogLearnerCond &cond, const LogLearnerAction &action);
   // ==================== Parent ========================
 private:
-  // log_ms_meta_, region_ and paxos_member_region_map_ is protected by RWLock in PalfHandleImpl,
+  // inner_config_meta_, region_ and paxos_member_region_map_ is protected by RWLock in PalfHandleImpl,
   // any read/write ops should acquire RLock/WLock in PalfHandleImpl.
+  // inner_config_meta_, inner_alive_paxos_memberlist_, inner_alive_paxos_replica_num_,
+  // and inner_all_learnerlist_ take effect as long as they are accepted by the replica,
+  // they are used within LogConfigMgr
   LogConfigMeta log_ms_meta_;
-  // list of all paxos members, including arbitration replica
-  // NB: different from log_ms_meta_.curr_.log_sync_memberlist_, which don't include arbitration replica
-  common::ObMemberList paxos_memberlist_;
-  // number of all paxos members, including arbitration replica
-  // NB: different from log_ms_meta_.curr_.log_sync_replica_num_, which don't include arbitration replica
-  int64_t paxos_replica_num_;
+  // list of all alive paxos members, including arbitration member
+  common::ObMemberList alive_paxos_memberlist_;
+  // number of all alive paxos members, including arbitration member
+  int64_t alive_paxos_replica_num_;
   // list of all learners, including learners which has been degraded from acceptors
   GlobalLearnerList all_learnerlist_;
+  LogConfigMeta config_meta_;
+  common::ObMemberList applied_alive_paxos_memberlist_;
+  int64_t applied_alive_paxos_replica_num_;
+  GlobalLearnerList applied_all_learnerlist_;
+  LogConfigChangeArgs running_args_;
   common::ObRegion region_;
   LogMemberRegionMap paxos_member_region_map_;
-  // this lock protects all states related to config change, except for log_ms_meta_
+  // this lock protects all states related to config change, except for inner_config_meta_
   mutable common::ObSpinLock lock_;
   int64_t palf_id_;
   common::ObAddr self_;
@@ -407,6 +496,8 @@ private:
   LogSimpleMemberList ms_ack_list_;
   // need change_config with background thread
   bool need_change_config_bkgd_;
+  LogConfigVersion bkgd_config_version_;
+  bool is_sw_interrupted_by_degrade_;
   // In our current implement, leader won't send config change log to followers and learners
   // after config change log has committed. Considering following scenario:
   // Paxos group (A, B, C), their config version are all 1, user switches leader from A to B.
@@ -418,11 +509,16 @@ private:
   // for resend config log
   LogConfigVersion resend_config_version_;
   ResendConfigLogList resend_log_list_;
+  // the epoch of leader who is executing config changing request
+  int64_t election_leader_epoch_;
   int64_t last_broadcast_leader_info_time_us_;
   LogConfigVersion persistent_config_version_;
   mutable int64_t barrier_print_log_time_;
-  mutable int64_t last_check_state_ts_us_;
+  mutable int64_t last_check_init_state_time_us_;
   mutable int64_t check_config_print_time_;
+  mutable int64_t last_wait_barrier_time_us_;
+  mutable LSN last_wait_committed_end_lsn_;
+  int64_t last_sync_meta_for_arb_election_leader_time_us_;
   // ================= Config Change =================
   // ==================== Child ========================
   mutable common::ObSpinLock parent_lock_;
@@ -444,6 +540,7 @@ private:
   LogStateMgr *state_mgr_;
   election::Election* election_;
   LogModeMgr *mode_mgr_;
+  LogReconfirm *reconfirm_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(LogConfigMgr);
 };

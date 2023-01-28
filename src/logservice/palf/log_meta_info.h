@@ -120,8 +120,17 @@ public:
                const int64_t replica_num,
                const common::GlobalLearnerList &learnerlist,
                const LogConfigVersion &config_version);
-  int convert_to_complete_config(common::ObMemberList &all_paxos_memberlist,
-                                 int64_t &all_paxos_replica_num,
+  // @brief get the expected paxos member list without arbitraion member,
+  // including degraded paxos members.
+  // @param[in/out] ObMemberList, the output member list
+  // @param[in/out] int64_t, the output replica_num
+  // @retval
+  //    return OB_SUCCESS if success
+  //    else return other errno
+  int get_expected_paxos_memberlist(common::ObMemberList &paxos_memberlist,
+                                    int64_t &paxos_replica_num) const;
+  int convert_to_complete_config(common::ObMemberList &alive_paxos_memberlist,
+                                 int64_t &alive_paxos_replica_num,
                                  GlobalLearnerList &all_learners) const;
   // For unittest
   bool operator==(const LogConfigInfo &config_info) const;
@@ -153,20 +162,33 @@ public:
   ~LogConfigMeta();
 
 public:
+  int generate_for_default(const int64_t proposal_id,
+                           const LogConfigInfo &prev_config_info,
+                           const LogConfigInfo &curr_config_info);
   int generate(const int64_t proposal_id,
                const LogConfigInfo &prev_config_info,
-               const LogConfigInfo &curr_config_info);
+               const LogConfigInfo &curr_config_info,
+               const int64_t prev_log_proposal_id,
+               const LSN &prev_lsn,
+               const int64_t prev_mode_pid);
   bool is_valid() const;
   void reset();
   void operator=(const LogConfigMeta &log_config_meta);
-  TO_STRING_KV(K_(version), K_(proposal_id), K_(prev), K_(curr));
+  TO_STRING_KV(K_(version), K_(proposal_id), K_(prev), K_(curr), K_(prev_log_proposal_id),
+      K_(prev_lsn), K_(prev_mode_pid));
   NEED_SERIALIZE_AND_DESERIALIZE;
   int64_t version_;
+  // ====== members in VERSION 1 ========
   int64_t proposal_id_;
   LogConfigInfo prev_;
   LogConfigInfo curr_;
+  // ====== added members in VERSION 2 ========
+  int64_t prev_log_proposal_id_;
+  LSN prev_lsn_;
+  int64_t prev_mode_pid_;
 
   static constexpr int64_t LOG_CONFIG_META_VERSION = 1;
+  static constexpr int64_t LOG_CONFIG_META_VERSION_INC = 2;
 };
 
 struct LogModeMeta {

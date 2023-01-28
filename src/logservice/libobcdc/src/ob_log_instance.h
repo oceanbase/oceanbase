@@ -21,6 +21,7 @@
 #include "lib/alloc/memory_dump.h"                        // memory_meta_dump
 
 #include "ob_log_binlog_record.h"                         // ObLogBR
+#include "ob_log_fetching_mode.h"
 #include "ob_obj2str_helper.h"                            // ObObj2strHelper
 #include "ob_log_task_pool.h"                             // ObLogTransTaskPool
 #include "ob_log_entry_task_pool.h"                       // ObLogEntryTaskPool
@@ -30,8 +31,11 @@
 #include "ob_log_hbase_mode.h"                            // ObLogHbaseUtil
 #include "ob_log_mysql_proxy.h"                           // ObLogMysqlProxy
 #include "ob_log_work_mode.h"                             // WorkingMode
+#include "ob_log_meta_data_refresh_mode.h"                // RefreshMode
 #include "ob_cdc_lob_aux_meta_storager.h"                 // ObCDCLobAuxMetaStorager
 #include "ob_cdc_global_info.h"                           // ObCDCGlobalInfo
+#include "ob_log_fetcher_dispatcher.h"                    // ObLogFetcherDispatcher
+#include "ob_log_meta_data_service.h"                     // ObLogMetaDataService
 
 namespace oceanbase
 {
@@ -72,6 +76,7 @@ class IObLogTenantMgr;
 class ObLogTenantGuard;
 class IObLogTransRedoDispatcher;
 class IObLogTransMsgSorter;
+class ObLogDDLProcessor;
 
 typedef ObLogTransTaskPool<PartTransTask> PartTransTaskPool;
 
@@ -138,11 +143,13 @@ public:
   virtual int get_tenant_ids(std::vector<uint64_t> &tenant_ids);
 
 public:
-  void mark_stop_flag();
+  void mark_stop_flag(const char *stop_reason);
   void handle_error(const int err_no, const char *fmt, ...);
   void timer_routine();
   void sql_thread_routine();
   void flow_control_thread_routine();
+  int get_tenant_compat_mode(const uint64_t tenant_id,
+      lib::Worker::CompatMode &compat_mode);
 
 public:
   int32_t get_log_level() const;
@@ -150,10 +157,6 @@ public:
   void set_disable_redirect_log(const bool flag) { disable_redirect_log_ = flag; }
   static void print_version();
   int set_assign_log_dir(const char *log_dir, const int64_t log_dir_len);
-  void enable_schema_split_mode()
-  {
-    ATOMIC_STORE(&is_schema_split_mode_, true);
-  }
 
 public:
   // Backup using the interface:
@@ -180,17 +183,21 @@ public:
   // 3.  set start global trans version
   int set_start_global_trans_version(const int64_t start_global_trans_version);
 
+  // online schema is available or not.
+  OB_INLINE bool is_online_schema_not_avaliable() const
+  { return is_data_dict_refresh_mode(refresh_mode_) && is_direct_fetching_mode(fetching_mode_); }
+
 public:
   friend class ObLogGlobalContext;
 
 private:
+  void do_stop_(const char *stop_reason);
   int init_logger_();
   int dump_config_();
   int init_sys_var_for_generate_column_schema_();
   int init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb);
   int get_pid_();
   int init_self_addr_();
-  int init_schema_split_mode_(const int64_t sys_schema_version);
   int init_schema_(const int64_t start_tstamp_us, int64_t &sys_start_schema_version);
   int init_components_(const uint64_t start_tstamp_ns);
   int config_tenant_mgr_(const int64_t start_tstamp_ns, const int64_t sys_schema_version);
@@ -247,9 +254,11 @@ private:
   int query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluser_info);
   void update_cluster_version_();
   int check_ob_version_legal_(const uint64_t ob_version);
+  // 1. In Integrated fetching log mode, check observer versin <= libobcdc version
+  // 2. In Direct fetching log mode, print version
   int check_observer_version_valid_();
   int init_ob_cluster_version_();
-  int init_oblog_version_components_();
+  int init_obcdc_version_components_();
   void cal_version_components_(const uint64_t version,
                                uint32_t &major,
                                uint16_t &minor,
@@ -258,12 +267,14 @@ private:
   int query_cluster_min_observer_version_(uint64_t &min_observer_version);
   int config_data_start_schema_version_(const int64_t global_data_start_schema_version);
   int update_data_start_schema_version_on_split_mode_();
+  int set_all_tenant_compat_mode_();
 
 private:
   static ObLogInstance *instance_;
 
 private:
   bool                    inited_;
+  bool                    is_running_;
   uint32_t                oblog_major_;
   uint16_t                oblog_minor_;
   uint8_t                 oblog_major_patch_;
@@ -305,6 +316,8 @@ public:
   bool                      is_schema_split_mode_;
   std::string               drc_message_factory_binlog_record_type_;
   WorkingMode               working_mode_;
+  RefreshMode               refresh_mode_;
+  ClientFetchingMode        fetching_mode_;
   ObCDCGlobalInfo           global_info_;
 
   // compoments
@@ -334,11 +347,13 @@ public:
   IObLogFormatter           *formatter_;
   IObCDCLobDataMerger       *lob_data_merger_;
   ObCDCLobAuxMetaStorager   lob_aux_meta_storager_;
+  ObLogDDLProcessor         *ddl_processor_;
   IObLogSequencer           *sequencer_;
   IObLogPartTransParser     *part_trans_parser_;
   IObLogDmlParser           *dml_parser_;
   IObLogDdlParser           *ddl_parser_;
   IObLogSysLsTaskHandler    *sys_ls_handler_;
+  ObLogFetcherDispatcher    dispatcher_;
   IObLogFetcher             *fetcher_;
   IObLogTransStatMgr        *trans_stat_mgr_;                    // Transaction Statistics Management
   IObLogTenantMgr           *tenant_mgr_;
@@ -359,7 +374,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLogInstance);
 };
 
-#define TCTX (ObLogInstance::get_ref_instance())
+#define TCTX (libobcdc::ObLogInstance::get_ref_instance())
 
 } // namespace libobcdc
 } // namespace oceanbase

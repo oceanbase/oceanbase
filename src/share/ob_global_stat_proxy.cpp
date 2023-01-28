@@ -468,6 +468,23 @@ int ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
     const uint64_t tenant_id,
     SCN &snapshot_gc_scn)
 {
+  return inner_get_snapshot_gc_scn_(sql_client, tenant_id, snapshot_gc_scn, true);
+}
+
+int ObGlobalStatProxy::get_snapshot_gc_scn(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    SCN &snapshot_gc_scn)
+{
+  return inner_get_snapshot_gc_scn_(sql_client, tenant_id, snapshot_gc_scn, false);
+}
+
+int ObGlobalStatProxy::inner_get_snapshot_gc_scn_(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    SCN &snapshot_gc_scn,
+    const bool is_for_update)
+{
   int ret = OB_SUCCESS;
   uint64_t snapshot_gc_scn_val = 0;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
@@ -475,7 +492,7 @@ int ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
     ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt(
                 "SELECT column_value FROM %s WHERE TABLE_NAME = '__all_global_stat' AND COLUMN_NAME"
-                " = 'snapshot_gc_scn' FOR UPDATE", OB_ALL_CORE_TABLE_TNAME))) {
+                " = 'snapshot_gc_scn' %s", OB_ALL_CORE_TABLE_TNAME, (is_for_update ? "FOR UPDATE" : "")))) {
       LOG_WARN("assign sql failed", K(ret));
     } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
       LOG_WARN("execute sql failed", K(ret), K(sql));

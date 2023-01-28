@@ -284,6 +284,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tenant_parameter_stat.cpp
   virtual_table/ob_all_virtual_tx_stat.cpp
   virtual_table/ob_all_virtual_tx_lock_stat.cpp
+  virtual_table/ob_all_virtual_tx_scheduler_stat.cpp
   virtual_table/ob_all_virtual_tx_ctx_mgr_stat.cpp
   virtual_table/ob_all_virtual_tx_data_table.cpp
   virtual_table/ob_all_virtual_weak_read_stat.cpp
@@ -354,6 +355,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_virtual_sql_plan_statistics.cpp
   virtual_table/ob_virtual_table_iterator_factory.cpp
   virtual_table/ob_all_virtual_dml_stats.cpp
+  virtual_table/ob_all_virtual_archive_dest_status.cpp
   virtual_table/ob_virtual_span_info.cpp
   virtual_table/ob_virtual_show_trace.cpp
   virtual_table/ob_all_virtual_sql_plan.cpp

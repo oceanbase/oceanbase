@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "share/ob_inner_kv_table_operator.h"
 #include "share/backup/ob_archive_struct.h"
+#include "share/backup/ob_archive_mode.h"
 
 namespace oceanbase
 {
@@ -58,6 +59,13 @@ public:
 
   int init(const uint64_t tenant_id);
 
+  int get_archive_mode(
+      common::ObISQLClient &proxy, ObArchiveMode &mode) const;
+
+  int open_archive_mode(common::ObISQLClient &proxy) const;
+
+  int close_archive_mode(common::ObISQLClient &proxy) const;
+
   // lock LOG_ARCHIVE_DEST
   int lock_archive_dest(common::ObISQLClient &trans, const int64_t dest_no, bool &is_exist) const;
 
@@ -79,6 +87,9 @@ public:
     
   int get_lag_target(common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no, 
       int64_t &lag_target) const;
+
+  int get_dest_state(common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no,
+      ObLogArchiveDestState &state) const;
 
   int set_kv_item(
       common::ObISQLClient &proxy, const int64_t dest_no, const common::ObSqlString &name, 
@@ -145,6 +156,10 @@ public:
   int insert_ls_archive_progress(common::ObISQLClient &proxy, const ObLSArchivePersistInfo &info, int64_t &affected_rows) const;
   // set all ls archive piece to 'STOP'
   int set_ls_archive_stop(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t round_id,
+      const ObLSID &id, int64_t &affected_rows) const;
+  int set_ls_archive_suspend(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t round_id,
+      const ObLSID &id, int64_t &affected_rows) const;
+  int set_ls_archive_doing(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t round_id,
       const ObLSID &id, int64_t &affected_rows) const;
 
 

@@ -596,6 +596,18 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObMigrateUnitStmt, ObMigrateUnitExecutor);
         break;
       }
+      case stmt::T_ADD_ARBITRATION_SERVICE: {
+        DEFINE_EXECUTE_CMD(ObAddArbitrationServiceStmt, ObAddArbitrationServiceExecutor);
+        break;
+      }
+      case stmt::T_REMOVE_ARBITRATION_SERVICE: {
+        DEFINE_EXECUTE_CMD(ObRemoveArbitrationServiceStmt, ObRemoveArbitrationServiceExecutor);
+        break;
+      }
+      case stmt::T_REPLACE_ARBITRATION_SERVICE: {
+        DEFINE_EXECUTE_CMD(ObReplaceArbitrationServiceStmt, ObReplaceArbitrationServiceExecutor);
+        break;
+      }
       case stmt::T_UPGRADE_VIRTUAL_SCHEMA: {
         DEFINE_EXECUTE_CMD(ObUpgradeVirtualSchemaStmt, ObUpgradeVirtualSchemaExecutor);
         break;
@@ -757,6 +769,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_SWITCHOVER: {
         DEFINE_EXECUTE_CMD(ObSwitchTenantStmt, ObSwitchTenantExecutor);
+        break;
+      }
+      case stmt::T_RECOVER: {
+        DEFINE_EXECUTE_CMD(ObRecoverTenantStmt, ObRecoverTenantExecutor);
         break;
       }
       case stmt::T_SET_TABLE_COMMENT:

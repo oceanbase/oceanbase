@@ -54,6 +54,11 @@ namespace transaction
       ROLLBACK_SAVEPOINT       = 60,
       KEEPALIVE                = 61,
       KEEPALIVE_RESP           = 62,
+      /* for standby read */
+      ASK_STATE                = 63,
+      ASK_STATE_RESP           = 64,
+      COLLECT_STATE            = 65,
+      COLLECT_STATE_RESP       = 66,
       /* for txn free route  */
       TX_FREE_ROUTE_PUSH_STATE       = 80,
       TX_FREE_ROUTE_CHECK_ALIVE      = 81,
@@ -464,6 +469,63 @@ namespace transaction
       OB_UNIS_VERSION(1);
     };
 
+    struct ObAskStateMsg : public ObTxMsg
+    {
+    public:
+      ObAskStateMsg() :
+          ObTxMsg(ASK_STATE),
+          snapshot_()
+      {}
+    public:
+      share::SCN snapshot_;
+
+      bool is_valid() const;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(snapshot));
+      OB_UNIS_VERSION(1);
+    };
+
+    struct ObAskStateRespMsg : public ObTxMsg
+    {
+    public:
+      ObAskStateRespMsg() :
+          ObTxMsg(ASK_STATE_RESP),
+          state_info_array_()
+      {}
+    public:
+      ObStateInfoArray state_info_array_;
+      bool is_valid() const;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(state_info_array));
+      OB_UNIS_VERSION(1);
+    };
+
+    struct ObCollectStateMsg : public ObTxMsg
+    {
+    public:
+      ObCollectStateMsg() :
+          ObTxMsg(COLLECT_STATE),
+          snapshot_()
+      {}
+    public:
+      share::SCN snapshot_;
+      bool is_valid() const;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(snapshot));
+      OB_UNIS_VERSION(1);
+    };
+
+    struct ObCollectStateRespMsg : public ObTxMsg
+    {
+    public:
+      ObCollectStateRespMsg() :
+          ObTxMsg(COLLECT_STATE_RESP),
+          state_info_()
+      {}
+    public:
+      ObStateInfo state_info_;
+      bool is_valid() const;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(state_info));
+      OB_UNIS_VERSION(1);
+    };
+
     class ObTxMsgTypeChecker
     {
     public:
@@ -473,7 +535,7 @@ namespace transaction
             || (20 <= msg_type && 22 >= msg_type)
             || (40 <= msg_type && 49 >= msg_type)
             || (50 <= msg_type && 53 >= msg_type)
-            || (60 <= msg_type && 62 >= msg_type));
+            || (60 <= msg_type && 66 >= msg_type));
       }
 
       static bool is_2pc_msg_type(const int16_t msg_type)

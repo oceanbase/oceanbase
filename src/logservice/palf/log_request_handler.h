@@ -14,18 +14,21 @@
 #define OCEANBASE_LOGSERVICE_LOG_REQUEST_HANDLER_
 
 #include "lib/ob_errno.h"                   // OB_SUCCESS...
-#include "palf_handle_impl_guard.h"
-#include "log_req.h"                     // LogPushReq...
-#include "palf_env_impl.h"                     // PalfEnvImpl
+#include <stdint.h>
 
 namespace oceanbase
 {
+namespace common
+{
+class ObAddr;
+}
 namespace palf
 {
+class IPalfEnvImpl;
 class LogRequestHandler
 {
 public:
-  LogRequestHandler(PalfEnvImpl *palf_env_impl);
+  LogRequestHandler(IPalfEnvImpl *palf_env_impl);
   ~LogRequestHandler();
   template <typename ReqType>
   int handle_request(const int64_t palf_id,
@@ -37,7 +40,7 @@ public:
                           const ReqType &req,
                           RespType &resp);
 private:
-  PalfEnvImpl *palf_env_impl_;
+  IPalfEnvImpl *palf_env_impl_;
 };
 } // end namespace palf
 } // end namespace oceanbase

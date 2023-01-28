@@ -161,6 +161,7 @@ int ObTxNode::start() {
   if (ls_tx_ctx_mgr) {
     fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_ = ls_tx_ctx_mgr;
     fake_tx_table_.is_inited_ = true;
+    fake_tx_table_.ls_ = &fake_ls_;
     fake_tx_table_.online();
     int tx_data_table_offset = offsetof(storage::ObTxTable, tx_data_table_);
     void* ls_tx_data_table_ptr = (void*)((int64_t)&(mock_ls_.tx_table_) + tx_data_table_offset);

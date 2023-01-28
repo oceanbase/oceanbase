@@ -53,6 +53,10 @@ OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRedoReqMsg, ObTxMsg, xid_, upstream_, ap
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRedoRespMsg, ObTxMsg);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareVersionReqMsg, ObTxMsg);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareVersionRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
+OB_SERIALIZE_MEMBER_INHERIT(ObAskStateMsg, ObTxMsg, snapshot_);
+OB_SERIALIZE_MEMBER_INHERIT(ObAskStateRespMsg, ObTxMsg, state_info_array_);
+OB_SERIALIZE_MEMBER_INHERIT(ObCollectStateMsg, ObTxMsg, snapshot_);
+OB_SERIALIZE_MEMBER_INHERIT(ObCollectStateRespMsg, ObTxMsg, state_info_);
 
 OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
 {
@@ -364,6 +368,46 @@ bool Ob2pcPrepareVersionRespMsg::is_valid() const
   if (ObTxMsg::is_valid() && type_ == TX_2PC_PREPARE_VERSION_RESP
       && prepare_version_.is_valid()
       && prepare_info_array_.count() > 0) {
+    ret = true;
+  }
+  return ret;
+}
+
+bool ObAskStateMsg::is_valid() const
+{
+  bool ret = false;
+  if (ObTxMsg::is_valid() && type_ == ASK_STATE
+      && snapshot_.is_valid()) {
+    ret = true;
+  }
+  return ret;
+}
+
+bool ObAskStateRespMsg::is_valid() const
+{
+  bool ret = false;
+  if (ObTxMsg::is_valid() && type_ == ASK_STATE_RESP
+      && state_info_array_.count() > 0) {
+    ret = true;
+  }
+  return ret;
+}
+
+bool ObCollectStateMsg::is_valid() const
+{
+  bool ret = false;
+  if (ObTxMsg::is_valid() && type_ == COLLECT_STATE
+      && snapshot_.is_valid()) {
+    ret = true;
+  }
+  return ret;
+}
+
+bool ObCollectStateRespMsg::is_valid() const
+{
+  bool ret = false;
+  if (ObTxMsg::is_valid() && type_ == COLLECT_STATE_RESP
+      && state_info_.is_valid()) {
     ret = true;
   }
   return ret;

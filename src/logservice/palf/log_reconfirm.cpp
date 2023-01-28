@@ -44,6 +44,7 @@ LogReconfirm::LogReconfirm()
       majority_max_accept_pid_(INVALID_PROPOSAL_ID),
       majority_max_lsn_(),
       saved_end_lsn_(),
+      sw_config_version_(),
       sw_(NULL),
       state_mgr_(NULL),
       mm_(NULL),
@@ -54,6 +55,8 @@ LogReconfirm::LogReconfirm()
       last_fetch_log_time_us_(OB_INVALID_TIMESTAMP),
       last_record_sw_start_id_(OB_INVALID_LOG_ID),
       wait_slide_print_time_us_(OB_INVALID_TIMESTAMP),
+      wait_majority_time_us_(OB_INVALID_TIMESTAMP),
+      has_notify_fetch_(false),
       is_inited_(false)
 {}
 
@@ -102,9 +105,12 @@ void LogReconfirm::reset_state()
     majority_max_accept_pid_ = INVALID_PROPOSAL_ID;
     majority_max_lsn_.reset();
     saved_end_lsn_.reset();
+    follower_end_lsn_list_.reset();
+    sw_config_version_.reset();
     last_submit_prepare_req_time_us_ = OB_INVALID_TIMESTAMP;
     last_fetch_log_time_us_ = OB_INVALID_TIMESTAMP;
     last_record_sw_start_id_ = OB_INVALID_LOG_ID;
+    has_notify_fetch_ = false;
   }
 }
 
@@ -113,6 +119,7 @@ void LogReconfirm::destroy()
   ObLockGuard<ObSpinLock> guard(lock_);
   if (is_inited_) {
     is_inited_ = false;
+    has_notify_fetch_ = false;
     state_ = INITED;
     new_proposal_id_ = INVALID_PROPOSAL_ID;
     prepare_log_ack_list_.reset();
@@ -122,6 +129,8 @@ void LogReconfirm::destroy()
     majority_max_accept_pid_ = INVALID_PROPOSAL_ID;
     majority_max_lsn_.reset();
     saved_end_lsn_.reset();
+    follower_end_lsn_list_.destroy();
+    sw_config_version_.reset();
     sw_ = NULL;
     state_mgr_ = NULL;
     mm_ = NULL;
@@ -146,8 +155,8 @@ int LogReconfirm::init_reconfirm_()
   int64_t max_log_proposal_id = INVALID_PROPOSAL_ID;
   ObMemberList member_list;
   int64_t replica_num = 0;
-  if (OB_FAIL(mm_->get_curr_member_list(member_list))) {
-    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), K_(palf_id));
+  if (OB_FAIL(mm_->get_alive_member_list_with_arb(member_list, replica_num))) {
+    PALF_LOG(WARN, "get_alive_member_list_with_arb failed", K(ret), K_(palf_id));
   } else if (!member_list.contains(self_)) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "self is not in curr_member_list", K(ret), K_(palf_id), K(member_list), K(self_));
@@ -155,8 +164,6 @@ int LogReconfirm::init_reconfirm_()
     PALF_LOG(ERROR, "deep_copy failed", K(ret), K_(palf_id));
   } else if (OB_FAIL(curr_paxos_follower_list_.remove_server(self_))) {
     PALF_LOG(ERROR, "remove_server failed", K(ret), K_(palf_id), K_(curr_paxos_follower_list), K_(self), KP(mm_));
-  } else if (OB_FAIL(mm_->get_replica_num(replica_num))) {
-    PALF_LOG(WARN, "get_replica_num failed", K(ret), K_(palf_id));
   } else {
     majority_cnt_ = replica_num / 2 + 1;
     PALF_LOG(INFO, "init_reconfirm_ success", K(ret), K_(palf_id), K(member_list), K_(self), K_(majority_cnt), K(replica_num));
@@ -240,7 +247,8 @@ int LogReconfirm::wait_all_log_flushed_()
 int LogReconfirm::handle_prepare_response(const common::ObAddr &server,
                                           const int64_t &src_proposal_id,
                                           const int64_t &accept_proposal_id,
-                                          const LSN &last_lsn)
+                                          const LSN &last_lsn,
+                                          const LSN &committed_end_lsn)
 {
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> guard(lock_);
@@ -250,7 +258,7 @@ int LogReconfirm::handle_prepare_response(const common::ObAddr &server,
       || INVALID_PROPOSAL_ID == accept_proposal_id || !last_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid arguments", K(ret), K_(palf_id), K(server), K(src_proposal_id),
-        K(accept_proposal_id), K(last_lsn));
+        K(accept_proposal_id), K(last_lsn), K(committed_end_lsn));
     // NB: no need change 'majority_max_log_server_' after FETCH_MAX_LOG_LSN
   } else if (src_proposal_id != new_proposal_id_ || FETCH_MAX_LOG_LSN != state_) {
     ret = OB_STATE_NOT_MATCH;
@@ -283,9 +291,56 @@ int LogReconfirm::handle_prepare_response(const common::ObAddr &server,
     } else {
       // do nothing
     }
+    // record committed_end_lsn of followers
+    // Try to update its match_lsn to committed_end_lsn, because the server's committed_end_lsn
+    // is maybe larger than self(advanced by old leader).
+    // Suppose A is leader with reconfirm state, B, C are followers:
+    // max_flushed_end_lsn: A(200), B(200), C(200)
+    // committed_end_lsn:   A(100), B(200), C(200)
+    // For this case, followers' match_lsn at A will be 100, and it has no chance to be updated during reconfirm,
+    // which will lead to waiting majority sync timeout.
+    if (committed_end_lsn.is_valid()) {
+      // old version observer's resp may not have this parameter.
+      // So it may be invalid.
+      (void) update_follower_end_lsn_(server, committed_end_lsn);
+    } else {
+      PALF_LOG(INFO, "committed_end_lsn in prepare response is invalid, it may be from old version member",
+          K(ret), K_(palf_id), K(server), K(accept_proposal_id), K(last_lsn), K(committed_end_lsn));
+    }
   }
   PALF_LOG(INFO, "handle_prepare_response finished", K(ret), K_(palf_id), K(server), K(accept_proposal_id), K(last_lsn),
       K(majority_max_accept_pid_), K(majority_max_lsn_), K(prepare_log_ack_list_));
+  return ret;
+}
+
+int LogReconfirm::update_follower_end_lsn_(const common::ObAddr &server, const LSN &committed_end_lsn)
+{
+  int ret = OB_SUCCESS;
+  int64_t index = -1;
+  if (false == server.is_valid() || false == committed_end_lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (-1 != (index = ack_info_list_get_index(follower_end_lsn_list_, server))) {
+    if (follower_end_lsn_list_[index].last_flushed_end_lsn_ < committed_end_lsn) {
+      follower_end_lsn_list_[index].last_flushed_end_lsn_ = committed_end_lsn;
+    }
+  } else {
+    LogMemberAckInfo log_info(common::ObMember(server, 1), 0, committed_end_lsn);
+    follower_end_lsn_list_.push_back(log_info);
+  }
+  return ret;
+}
+
+int LogReconfirm::ack_log_with_end_lsn_()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t idx = 0; idx < follower_end_lsn_list_.count(); idx++) {
+    int tmp_ret = OB_SUCCESS;
+    const common::ObAddr &server = follower_end_lsn_list_.at(idx).member_.get_server();
+    const LSN &end_lsn = follower_end_lsn_list_.at(idx).last_flushed_end_lsn_;
+    if (OB_SUCCESS != (tmp_ret = sw_->ack_log(server, end_lsn))) {
+      PALF_LOG(WARN, "ack_log failed", K(tmp_ret), K(server), K(end_lsn));
+    }
+  }
   return ret;
 }
 
@@ -329,6 +384,58 @@ int LogReconfirm::try_fetch_log_()
       K_(majority_max_lsn), K(sw_start_id), K_(last_record_sw_start_id));
   }
   return ret;
+}
+
+bool LogReconfirm::can_receive_log() const
+{
+  // Self can receive log only in RECONFIRM_FETCH_LOG stage.
+  // Or it may receive logs with old proposal_id whose lsn is larger than majority_max_lsn.
+  // These logs are unexpected, which should be dropped and rewritten.
+  return (RECONFIRM_FETCH_LOG == state_);
+}
+
+bool LogReconfirm::can_do_degrade() const
+{
+  // degrade operation can be executed after prepare message reaches majority
+  // do not protect with lock_
+  // Arb Thread 1: hold lock_ of ConfigMgr -> can_do_degrade() -> lock_
+  // LogLoop Thread: hold lock_ -> confirm_start_working_log() -> lock_ of ConfigMgr
+  return (state_ > RECONFIRM_FETCH_LOG);
+}
+
+bool LogReconfirm::is_majority_catch_up_()
+{
+  // This step is necessary, because if we directly go to start_working stage:
+  // 1) For 2F1A case, the A member can skip prev log check and reply ack faster than F.
+  //    This will lead to an unexpected state: the other F replica lacks logs when
+  //    reconfirm finishes. If leader crashes later, the data of these logs will lost.
+  // 2) For all F replica case, start_working log need prev log check, so all followers
+  //    also need wait log sync before process. It's similar with this step.
+  bool bool_ret = false;
+  int tmp_ret = OB_SUCCESS;
+  LSN majority_match_lsn;
+  if (OB_SUCCESS != (tmp_ret = sw_->get_majority_match_lsn(majority_match_lsn))) {
+    PALF_LOG(WARN, "get_majority_match_lsn failed", K(tmp_ret), K_(palf_id));
+  } else if (!majority_match_lsn.is_valid()) {
+    PALF_LOG(ERROR, "majority_match_lsn is invalid, unexpected", K_(palf_id), K(majority_match_lsn));
+  } else if (majority_match_lsn < majority_max_lsn_) {
+    PALF_LOG(WARN, "majority_match_lsn is smaller than majority_max_lsn_, need wait", K_(palf_id),
+        K_(majority_max_lsn), K(majority_match_lsn));
+    ObMemberList lagged_list;
+    if (has_notify_fetch_) {
+      // has_notify_fetch_ is true, no need do it again
+    } else if (OB_SUCCESS != (tmp_ret = sw_->get_lagged_member_list(majority_max_lsn_, lagged_list))) {
+      PALF_LOG(WARN, "get_lagged_member_list_ failed", K(tmp_ret), K_(palf_id));
+    } else if (OB_SUCCESS != (tmp_ret = log_engine_->submit_notify_fetch_log_req(lagged_list))) {
+      PALF_LOG(WARN, "submit_notify_fetch_log_req failed", K(tmp_ret), K_(palf_id), K(lagged_list));
+    } else {
+      has_notify_fetch_ = true;
+      PALF_LOG(INFO, "notify_fetch_log success", K(tmp_ret), K_(palf_id), K_(majority_max_lsn), K(lagged_list));
+    }
+  } else {
+    bool_ret = true;
+  }
+  return bool_ret;
 }
 
 int LogReconfirm::reconfirm()
@@ -384,8 +491,13 @@ int LogReconfirm::reconfirm()
       }
       case RECONFIRM_MODE_META: {
         if (OB_SUCC(mode_mgr_->reconfirm_mode_meta())) {
-          state_ = RECONFIRM_FETCH_LOG;
-          PALF_EVENT("Reconfirm come into RECONFIRM_FETCH_LOG state", palf_id_, K(prepare_log_ack_list_));
+          if (true == mode_mgr_->need_skip_log_barrier()) {
+            state_ = RECONFIRMING;
+            PALF_EVENT("Reconfirm come into RECONFIRMING state", palf_id_, K(prepare_log_ack_list_));
+          } else {
+            state_ = RECONFIRM_FETCH_LOG;
+            PALF_EVENT("Reconfirm come into RECONFIRM_FETCH_LOG state", palf_id_, K(prepare_log_ack_list_));
+          }
         } else if (OB_EAGAIN != ret) {
           PALF_LOG(WARN, "reconfirm_mode_meta failed", K(ret), K_(palf_id));
         }
@@ -394,7 +506,16 @@ int LogReconfirm::reconfirm()
         }
       }
       case RECONFIRM_FETCH_LOG: {
-        if (majority_max_log_server_ != self_ && !is_fetch_log_finished_()) {
+        // Try to update its match_lsn to committed_end_lsn, because the server's committed_end_lsn
+        // is maybe larger than self(advanced by old leader).
+        // Suppose A is leader with reconfirm state, B, C are followers:
+        // max_flushed_end_lsn: A(200), B(200), C(200)
+        // committed_end_lsn:   A(100), B(200), C(200)
+        // For this case, followers' match_lsn at A will be 100, and it has no chance to be updated during reconfirm,
+        // which will lead to waiting majority sync timeout.
+        if (OB_FAIL(ack_log_with_end_lsn_())) {
+          PALF_LOG(WARN, "ack_log_with_end_lsn_", K(ret), K_(follower_end_lsn_list));
+        } else if (majority_max_log_server_ != self_ && !is_fetch_log_finished_()) {
           if (OB_FAIL(try_fetch_log_())) {
             PALF_LOG(WARN, "try_fetch_log_ failed", K(ret), K_(palf_id));
           }
@@ -407,21 +528,35 @@ int LogReconfirm::reconfirm()
         }
       }
       case RECONFIRMING: {
-        LSN unused_lsn;
+        LSN last_lsn;
         LSN last_end_lsn;
-        int64_t unused_pid = INVALID_PROPOSAL_ID;
+        LSN majority_match_lsn;
+        int64_t last_log_proposal_id = INVALID_PROPOSAL_ID;
+        const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
+        const bool is_cluster_already_4100 = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
+        const int64_t leader_epoch = state_mgr_->get_leader_epoch();
         if (false == sw_->check_all_log_has_flushed()) {
           PALF_LOG(WARN, "check_all_log_has_flushed failed, need wait", K_(palf_id));
-        } else if (OB_FAIL(sw_->get_max_flushed_log_info(unused_lsn, last_end_lsn, unused_pid))) {
+        // Wait majority match lsn catching up with majority_max_lsn_
+        } else if (is_cluster_already_4100  // It needs majority_catch_up_ check only when cluster_version reaches 4100.
+            && need_skip_log_barrier == false
+            && false == is_majority_catch_up_()) {
+          if (palf_reach_time_interval(1 * 1000 * 1000, wait_majority_time_us_)) {
+            PALF_LOG(INFO, "is_majority_catch_up_ return false, need wait and retry", K(ret),
+                K_(self), K_(palf_id), K_(majority_max_lsn));
+          }
+        } else if (OB_FAIL(sw_->get_max_flushed_log_info(last_lsn, last_end_lsn, last_log_proposal_id))) {
           PALF_LOG(WARN, "get_max_flushed_log_info failed", K(ret), K_(self), K_(palf_id));
-        } else if (OB_FAIL(mm_->confirm_start_working_log()) && OB_EAGAIN != ret) {
+        } else if (OB_FAIL(mm_->confirm_start_working_log(new_proposal_id_, leader_epoch, sw_config_version_))
+            && OB_EAGAIN != ret) {
           PALF_LOG(WARN, "confirm_start_working_log failed", K(ret), K_(self), K_(palf_id));
         } else {
           // 记录进入start_working阶段时的end_lsn
           saved_end_lsn_ = last_end_lsn;
           state_ = START_WORKING;
           PALF_EVENT("Reconfirm come into START_WORKING state", palf_id_, K(new_proposal_id_),
-              K(majority_max_log_server_), K(last_end_lsn));
+              K(majority_max_log_server_), K(majority_max_lsn_), K(majority_match_lsn), K(last_lsn),
+              K(last_log_proposal_id), K(last_end_lsn));
         }
         if (state_ != START_WORKING) {
           break;
@@ -430,7 +565,9 @@ int LogReconfirm::reconfirm()
       case START_WORKING: {
         LSN last_slide_lsn, committed_end_lsn;
         int64_t last_slide_log_id = OB_INVALID_LOG_ID;
-        if (OB_SUCC(mm_->confirm_start_working_log())) {
+        const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
+        const int64_t leader_epoch = state_mgr_->get_leader_epoch();
+        if (OB_SUCC(mm_->confirm_start_working_log(new_proposal_id_, leader_epoch, sw_config_version_))) {
           // check_ms_log_committed()检查若未达成多数派会尝试重发start_working log
           // 重发时依然用之前取的lsn和proposal_id，因此saved_end_lsn_也无需更新
           const LSN curr_max_lsn = sw_->get_max_lsn();

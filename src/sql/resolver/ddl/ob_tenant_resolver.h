@@ -158,6 +158,16 @@ int ObTenantResolver<T>::resolve_tenant_option(T *stmt, ParseNode *node,
         }
         break;
       }
+      case T_ENABLE_ARBITRATION_SERVICE: {
+        const bool enable_arbitration_service = option_node->children_[0]->value_ ? true : false;
+        stmt->set_enable_arbitration_service(enable_arbitration_service);
+        if (stmt->get_stmt_type() == stmt::T_MODIFY_TENANT) {
+          if (OB_FAIL(alter_option_bitset_.add_member(obrpc::ObModifyTenantArg::ENABLE_ARBITRATION_SERVICE))) {
+            SQL_LOG(WARN, "failed to add member to bitset!", K(ret));
+          }
+        }
+        break;
+      }
       case T_PRIMARY_ZONE: {
         if (option_node->children_[0]->type_ == T_DEFAULT) {
           ret = OB_OP_NOT_ALLOW;

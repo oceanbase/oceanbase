@@ -193,6 +193,10 @@ public:
   {
     return common::OB_NOT_SUPPORTED;
   }
+  virtual void set_queue_size(const int64_t qsize)
+  {
+    UNUSED(qsize);
+  }
   TGHelper *tg_helper_;
   lib::ThreadCGroup tg_cgroup_;
   TGCommonAttr attr_;
@@ -506,6 +510,12 @@ public:
       qth_->destroy();
       qth_->~MySimpleThreadPool();
       qth_ = nullptr;
+    }
+  }
+  void set_queue_size(const int64_t qsize) override
+  {
+    if (0 != qsize) {
+      task_num_limit_ = qsize;
     }
   }
 private:
@@ -951,7 +961,10 @@ public:
     return ret;
   }
   // tenant isolation
-  int create_tg_tenant(int tg_def_id, int &tg_id, lib::ThreadCGroup cgroup = lib::ThreadCGroup::FRONT_CGROUP)
+  int create_tg_tenant(int tg_def_id,
+                       int &tg_id,
+                       int64_t qsize = 0,
+                       lib::ThreadCGroup cgroup = lib::ThreadCGroup::FRONT_CGROUP)
   {
     tg_id = -1;
     int ret = common::OB_SUCCESS;
@@ -979,6 +992,7 @@ public:
         tg->tg_cgroup_ = cgroup;
         tg_helper->tg_create_cb(tg_id);
       }
+      tg->set_queue_size(qsize);
       tgs_[tg_id] = tg;
       OB_LOG(INFO, "create tg succeed",
              "tg_id", tg_id,

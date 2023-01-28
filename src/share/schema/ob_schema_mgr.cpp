@@ -71,6 +71,7 @@ ObSimpleTenantSchema &ObSimpleTenantSchema::operator =(const ObSimpleTenantSchem
     drop_tenant_time_ = other.drop_tenant_time_;
     status_ = other.status_;
     in_recyclebin_ = other.in_recyclebin_;
+    arbitration_service_status_ = other.arbitration_service_status_;
     if (OB_FAIL(deep_copy_str(other.tenant_name_, tenant_name_))) {
       LOG_WARN("Fail to deep copy tenant_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.primary_zone_, primary_zone_))) {
@@ -104,7 +105,8 @@ bool ObSimpleTenantSchema::operator ==(const ObSimpleTenantSchema &other) const
       && gmt_modified_ == other.gmt_modified_
       && drop_tenant_time_ == other.drop_tenant_time_
       && status_ == other.status_
-      && in_recyclebin_ == other.in_recyclebin_) {
+      && in_recyclebin_ == other.in_recyclebin_
+      && arbitration_service_status_ == other.arbitration_service_status_) {
     ret = true;
   }
 
@@ -127,6 +129,7 @@ void ObSimpleTenantSchema::reset()
   drop_tenant_time_ = 0;
   status_ = TENANT_STATUS_NORMAL;
   in_recyclebin_ = false;
+  arbitration_service_status_ = ObArbitrationServiceStatus::DISABLED;
 }
 
 bool ObSimpleTenantSchema::is_valid() const

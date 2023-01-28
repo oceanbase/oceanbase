@@ -14,6 +14,7 @@
 #define OCEANBASE_ARCHIVE_OB_LOG_STREAM_MGR_H_
 
 #include "lib/hash/ob_link_hashmap.h"   // ObLinkHashMap
+#include "ob_archive_define.h"
 #include "share/ob_ls_id.h"             // ObLSID
 #include "share/ob_thread_pool.h"       // ObThreadPool
 #include "common/ob_role.h"             // ObRole
@@ -58,7 +59,7 @@ typedef common::ObLinkHashMap<ObLSID, ObLSArchiveTask> LSArchiveMap;
  * */
 class ObArchiveLSMgr : public share::ObThreadPool
 {
-  static const int64_t THREAD_RUN_INTERVAL = 60 * 1000 * 1000L;
+  static const int64_t THREAD_RUN_INTERVAL = 1 * 1000 * 1000L;
   static const int64_t DEFAULT_PRINT_INTERVAL = 30 * 1000 * 1000L;
 public:
   ObArchiveLSMgr();
@@ -89,13 +90,13 @@ public:
   int authorize_ls_archive_task(const ObLSID &id, const int64_t epoch, const share::SCN &start_scn);
   void reset_task();
   int64_t get_ls_task_count() const { return ls_map_.count(); }
-  int mark_fata_error(const ObLSID &id, const ArchiveKey &key, const ObArchiveInterruptReason &reason);
+  int mark_fatal_error(const ObLSID &id, const ArchiveKey &key, const ObArchiveInterruptReason &reason);
   int print_tasks();
 
 private:
   void run1();
   void do_thread_task_();
-  void gc_stale_ls_task_(const bool is_in_doing);
+  void gc_stale_ls_task_(const ArchiveKey &key, const bool is_in_doing);
   void add_ls_task_();
   int check_ls_archive_task_valid_(const ArchiveKey &key, ObLS *ls, bool &exist);
   int add_task_(const ObLSID &id, const ArchiveKey &key, const int64_t epoch);

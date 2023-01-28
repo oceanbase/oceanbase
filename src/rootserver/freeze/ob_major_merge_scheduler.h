@@ -66,6 +66,7 @@ public:
   virtual ~ObMajorMergeScheduler() {}
 
   int init(const uint64_t tenant_id,
+           const bool is_primary_service,
            ObZoneMergeManager &zone_merge_mgr,
            ObFreezeInfoManager &freeze_info_mgr,
            share::schema::ObMultiVersionSchemaService &schema_service,
@@ -83,7 +84,8 @@ public:
   int try_update_epoch_and_reload();
 
 protected:
-  virtual int try_idle(const int64_t ori_idle_time_us, const int work_ret) override;
+  virtual int try_idle(const int64_t ori_idle_time_us,
+                       const int work_ret) override;
 
 private:
   int do_work();
@@ -105,9 +107,7 @@ private:
   int update_global_merge_info_after_merge(const int64_t expected_epoch);
 
   int do_update_freeze_service_epoch(const int64_t latest_epoch);
-
-  // sync tablet checksum data from __all_tablet_replica_checksum to __all_tablet_checksum
-  int sync_tablet_checksum();
+  bool is_primary_service() const { return is_primary_service_; }
 
   int update_all_tablets_report_scn(const uint64_t global_broadcast_scn_val);
 
@@ -118,6 +118,7 @@ private:
   static const int64_t MAJOR_MERGE_SCHEDULER_THREAD_CNT = 1;
 
   bool is_inited_;
+  bool is_primary_service_;  // identify ObMajorFreezeServiceType::SERVICE_TYPE_PRIMARY
   int64_t fail_count_;
   int64_t first_check_merge_us_;
 
@@ -130,7 +131,6 @@ private:
   ObTenantAllZoneMergeStrategy merge_strategy_;
   common::ObMySQLProxy *sql_proxy_;
   ObMajorMergeProgressChecker progress_checker_;
-  ObCrossClusterTableteChecksumValidator cross_cluster_validator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeScheduler);
 };

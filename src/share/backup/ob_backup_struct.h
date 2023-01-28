@@ -254,10 +254,10 @@ const char *const OB_STR_START_REPLAY_SCN = "start_replay_scn";
 const char *const OB_STR_PATH = "path";
 const char *const OB_STR_BACKUP_DATA_TYPE = "data_type";
 const char *const OB_STR_MAX_FILE_ID = "max_file_id";
-const char *const OB_STR_LOG_ARCHIVE_SOURCE_ID = "id";
-const char *const OB_STR_LOG_ARCHIVE_SOURCE_TYPE = "type";
-const char *const OB_STR_LOG_ARCHIVE_SOURCE_VALUE = "value";
-const char *const OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_SCN = "recovery_until_scn";
+const char *const OB_STR_LOG_RESTORE_SOURCE_ID = "id";
+const char *const OB_STR_LOG_RESTORE_SOURCE_TYPE = "type";
+const char *const OB_STR_LOG_RESTORE_SOURCE_VALUE = "value";
+const char *const OB_STR_LOG_RESTORE_SOURCE_UNTIL_SCN = "recovery_until_scn";
 const char *const OB_STR_BACKUP_SKIPPED_TYPE = "skipped_type";
 
 const char *const OB_STR_TENANT = "tenant";
@@ -364,7 +364,7 @@ const char *const OB_STR_LAG_TARGET = "lag_target";
 const char *const OB_STR_COMPRESSION = "compression";
 const char *const OB_STR_BINDING = "binding";
 const char *const OB_STR_STATE = "state";
-const char *const OB_STR_ENBALE = "enable";
+const char *const OB_STR_ENABLE = "enable";
 const char *const OB_STR_DISABLE = "disable";
 
 const char *const OB_STR_POLICY_NAME = "policy_name";
@@ -1522,11 +1522,11 @@ struct ObBackupLSTaskInfoAttr final
 
 struct ObLogArchiveDestState final
 {
+  OB_UNIS_VERSION(1);
+public:
   enum State {
-    ENBALE = 0,
-    DISABLE,
+    ENABLE = 0,
     DEFER,
-    INTERRUPT,
     MAX
   };
   ObLogArchiveDestState(): state_(State::MAX) {}
@@ -1568,10 +1568,8 @@ struct ObLogArchiveDestState final
     return s; \
   }
 
-  PROPERTY_DECLARE_STATUS(enable, State::ENBALE);
-  PROPERTY_DECLARE_STATUS(disable, State::DISABLE);
+  PROPERTY_DECLARE_STATUS(enable, State::ENABLE);
   PROPERTY_DECLARE_STATUS(defer, State::DEFER);
-  PROPERTY_DECLARE_STATUS(interrupt, State::INTERRUPT);
 
 #undef PROPERTY_DECLARE_STATUS
 
@@ -1607,6 +1605,7 @@ struct ObLogArchiveDestAtrr final
   int get_lag_target(char *buf, int64_t len) const;
 
   int gen_config_items(common::ObIArray<BackupConfigItemPair> &items) const;
+  int gen_path_config_items(common::ObIArray<BackupConfigItemPair> &items) const;
 
   int assign(const ObLogArchiveDestAtrr& that);
 

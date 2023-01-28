@@ -51,6 +51,7 @@ using oceanbase::share::ObLSID;
 class ObArchiveSender : public share::ObThreadPool, public ObArchiveWorker
 {
   static const int64_t MAX_SEND_NUM = 10;
+  static const int64_t MAX_ARCHIVE_TASK_STATUS_POP_TIMEOUT = 5 * 1000 * 1000L;
 public:
   ObArchiveSender();
   virtual ~ObArchiveSender();
@@ -70,12 +71,21 @@ public:
   int push_task_status(ObArchiveTaskStatus *task_status);
   int64_t get_send_task_status_count() const;
 
+  int modify_thread_count(const int64_t thread_count);
 private:
-  enum DestSendOperator
+  enum class DestSendOperator
   {
     SEND = 1,
     WAIT = 2,
     COMPENSATE = 3,
+  };
+
+  enum class TaskConsumeStatus
+  {
+    INVALID = 0,
+    DONE = 1,
+    STALE_TASK = 2,
+    NEED_RETRY = 3,
   };
 private:
   int submit_send_task_(ObArchiveSendTask *task);
@@ -83,9 +93,9 @@ private:
   void do_thread_task_();
 
   // 消费task status, 为日志流级别send_task队列, 目前为单线程消费单个日志流
-  int handle_task_list(void *data);
+  int get_send_task_(ObArchiveSendTask *&task, bool &exist);
 
-  int handle(const ObArchiveSendTask &task, bool &task_consume);
+  void handle(ObArchiveSendTask &task, TaskConsumeStatus &consume_status);
 
   // 1. 检查server归档状态
   bool in_normal_status_(const ArchiveKey &key) const;
@@ -108,7 +118,7 @@ private:
   // 3. 执行归档
   int archive_log_(const share::ObBackupDest &backup_dest,
       const ObArchiveSendDestArg &arg,
-      const ObArchiveSendTask &task,
+      ObArchiveSendTask &task,
       ObLSArchiveTask &ls_archive_task);
 
   // 3.1 decide archive file
@@ -137,9 +147,7 @@ private:
 
   // 3.4 fill file header
   //
-  int fill_file_header_if_needed_(const palf::LSN &lsn,
-      char *origin_data,
-      const int64_t origin_data_len,
+  int fill_file_header_if_needed_(const ObArchiveSendTask &task,
       char *&filled_data,
       int64_t &filled_data_len);
 
@@ -152,15 +160,15 @@ private:
       const int64_t data_len);
 
   // 3.6 执行归档callback
-  int update_archive_progress_(const int64_t file_id,
-      const int64_t file_offset,
-      const ObArchiveSendTask &task,
-      ObLSArchiveTask &ls_archive_task);
+  void update_archive_progress_(ObArchiveSendTask &task);
 
   // retire task status
   int try_retire_task_status_(ObArchiveTaskStatus &status);
 
-  void handle_archive_error_(const ObLSID &id,
+  // free residual send_tasks when sender destroy
+  int free_residual_task_();
+
+  void handle_archive_ret_code_(const ObLSID &id,
       const ArchiveKey &key,
       const int ret_code);
 
@@ -168,6 +176,9 @@ private:
   bool is_ignore_ret_code_(const int ret_code) const;
 
   void statistic(const ObArchiveSendTask &task, const int64_t cost_ts);
+
+  int try_free_send_task_();
+  int do_free_send_task_();
 private:
   bool                  inited_;
   uint64_t              tenant_id_;
@@ -176,7 +187,7 @@ private:
   ObArchivePersistMgr   *persist_mgr_;
   ObArchiveRoundMgr     *round_mgr_;
 
-  common::ObLightyQueue task_queue_;            // 存放PG ObArchiveSendTaskStatus的queue
+  common::ObLightyQueue task_queue_;            // 存放ObArchiveTaskStatus的queue
   common::ObCond        send_cond_;
 };
 

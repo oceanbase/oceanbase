@@ -540,46 +540,17 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr *mgr,
           // process index
           if (OB_ALL_CORE_TABLE_TID == schema_id) {
             // do-nothing
-          } else if (table_schema->is_index_table()
-                     || (table_schema->is_view_table()
-                         && !table_schema->is_materialized_view())
-                     || table_schema->is_aux_vp_table()
-                     || table_schema->is_aux_lob_table()) {
+          } else if (!need_construct_aux_infos_(*table_schema)) {
             // do-nothing
           } else if (ObSysTableChecker::is_sys_table_has_index(schema_id)) {
             if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(*table_schema))) {
               LOG_WARN("fail to fill sys indexes", KR(ret), K(tenant_id), "table_id", schema_id);
             }
           } else if (is_lazy) {
-            ObSEArray<ObAuxTableMetaInfo, 8> aux_table_metas;
-            const int64_t table_schema_version = table_schema->get_schema_version();
-            if (OB_FAIL(schema_service_->fetch_aux_tables(schema_status,
-                                                          tenant_id,
-                                                          schema_id,
-                                                          table_schema_version,
-                                                          *sql_proxy_,
-                                                          aux_table_metas))) {
-              LOG_WARN("get index failed", K(ret), K(tenant_id), K(schema_id), K(table_schema_version), K(schema_version));
-            } else {
-              FOREACH_CNT_X(tmp_aux_table_meta, aux_table_metas, OB_SUCC(ret)) {
-                const ObAuxTableMetaInfo &aux_table_meta = *tmp_aux_table_meta;
-                if (USER_INDEX == aux_table_meta.table_type_) {
-                  if (OB_FAIL(table_schema->add_simple_index_info(ObAuxTableMetaInfo(
-                                     aux_table_meta.table_id_,
-                                     aux_table_meta.table_type_,
-                                     aux_table_meta.index_type_)))) {
-                    LOG_WARN("fail to add simple_index_info", K(ret), K(tenant_id), K(aux_table_meta));
-                  }
-                } else if (AUX_LOB_META == aux_table_meta.table_type_) {
-                  table_schema->set_aux_lob_meta_tid(aux_table_meta.table_id_);
-                } else if (AUX_LOB_PIECE == aux_table_meta.table_type_) {
-                  table_schema->set_aux_lob_piece_tid(aux_table_meta.table_id_);
-                } else if (AUX_VERTIAL_PARTITION_TABLE == aux_table_meta.table_type_) {
-                  if (OB_FAIL(table_schema->add_aux_vp_tid(aux_table_meta.table_id_))) {
-                    LOG_WARN("add aux vp table id failed", K(ret), K(tenant_id), K(aux_table_meta));
-                  }
-                }
-              }
+            if (OB_FAIL(construct_aux_infos_(
+                *sql_proxy_, schema_status, tenant_id, *table_schema))) {
+              LOG_WARN("fail to construct aux infos", KR(ret),
+                       K(schema_status), K(tenant_id), KPC(table_schema));
             }
           } else {
             if (OB_FAIL(add_aux_schema_from_mgr(*mgr, *table_schema, USER_INDEX))) {

@@ -548,7 +548,10 @@ public:
     }
     return OB_SUCCESS;
   }
-  int init_and_start(const int64_t worker_number, const int64_t precision, const char *name)
+  int init_and_start(const int64_t worker_number,
+                     const int64_t precision,
+                     const char *name,
+                     const int64_t queue_size_square_of_2 = 14)
   {
     TIMEGUARD_INIT(OCCAM, 100_ms);
     int ret = OB_SUCCESS;
@@ -556,7 +559,7 @@ public:
       OCCAM_LOG(WARN, "create thread pool failed", K(ret));
     } else if (CLICK_FAIL(ob_make_shared<ObTimeWheel>(timer_shared_ptr_))) {
       OCCAM_LOG(WARN, "create time wheel failed", K(ret));
-    } else if (CLICK_FAIL(thread_pool_shared_ptr_->init(worker_number))) {
+    } else if (CLICK_FAIL(thread_pool_shared_ptr_->init(worker_number, queue_size_square_of_2))) {
       OCCAM_LOG(WARN, "init thread_pool_shared_ptr_ failed", K(ret));
     } else if (CLICK_FAIL(timer_shared_ptr_->init(precision, 1, name))) {
       OCCAM_LOG(WARN, "init timer_shared_ptr_ failed", K(ret));

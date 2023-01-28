@@ -135,7 +135,7 @@ void ObLoggerTest::run_test_async()
   OB_LOGGER.set_enable_async_log(true);
   OB_LOGGER.set_use_multi_flush(false);
   ObPLogWriterCfg log_cfg;
-  OB_LOGGER.init(log_cfg);
+  OB_LOGGER.init(log_cfg, false);
   // OB_LOGGER.set_max_file_size(64 << 20);
   thread_pool_.set_thread_count(20);
 
@@ -155,7 +155,7 @@ void ObLoggerTest::run_test_async_multi()
   OB_LOGGER.set_enable_async_log(true);
   OB_LOGGER.set_use_multi_flush(true);
   ObPLogWriterCfg log_cfg;
-  OB_LOGGER.init(log_cfg);
+  OB_LOGGER.init(log_cfg, false);
 
   // OB_LOGGER.set_max_file_size(64 << 20);
   thread_pool_.set_thread_count(20);

@@ -133,6 +133,8 @@ int iterate_tx_lock_stat(const share::ObLSID& ls_id,
 
 int iterate_all_observer_tx_stat(ObTxStatIterator &tx_stat_iter);
 
+int iterate_tx_scheduler_stat(ObTxSchedulerStatIterator &tx_scheduler_stat_iter);
+
 // for xa
 /*
  * recover transaction descriptor with tx info
@@ -152,6 +154,19 @@ int handle_sub_rollback_request(const ObTxSubRollbackMsg &msg, obrpc::ObTransRpc
 int handle_sub_rollback_response(const ObTxSubRollbackRespMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_sub_rollback_result(const ObTransID &tx_id, const int result);
 int check_scheduler_status(const share::ObLSID &ls_id);
+
+//for standby
+int check_and_fill_state_info(const ObTransID &tx_id, ObStateInfo &state_info);
+int handle_trans_ask_state(const ObAskStateMsg &msg, obrpc::ObTransRpcResult &result);
+int handle_trans_ask_state_response(const ObAskStateRespMsg &msg, obrpc::ObTransRpcResult &result);
+int handle_trans_collect_state(const ObCollectStateMsg &msg, obrpc::ObTransRpcResult &result);
+int handle_trans_collect_state_response(const ObCollectStateRespMsg &msg, obrpc::ObTransRpcResult &result);
+void build_tx_collect_state_resp_(ObCollectStateRespMsg &resp, const ObCollectStateMsg &msg);
+void build_tx_ask_state_resp_(ObAskStateRespMsg &resp, const ObAskStateMsg &msg);
+int get_tx_ctx(const share::ObLSID &ls_id,
+               const ObTransID &tx_id,
+               ObPartTransCtx *&ctx);
+int revert_tx_ctx(ObPartTransCtx *ctx);
 
 TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
@@ -195,12 +210,13 @@ int revert_tx_ctx_(ObPartTransCtx *ctx);
 int validate_snapshot_version_(const share::SCN snapshot,
                                const int64_t expire_ts,
                                ObLS &ls);
-int check_replica_readable_(const share::SCN snapshot,
+int check_replica_readable_(const share::SCN &snapshot,
                             const bool elr,
                             const ObTxReadSnapshot::SRC src,
                             const share::ObLSID &ls_id,
                             const int64_t expired_ts,
                             ObLS &ls);
+bool check_ls_readable_(ObLS &ls, const share::SCN &snapshot);
 int build_tx_commit_msg_(const ObTxDesc &tx, ObTxCommitMsg &msg);
 int abort_participants_(const ObTxDesc &tx_desc);
 int acquire_local_snapshot_(const share::ObLSID &ls_id, share::SCN &snapshot);
@@ -317,7 +333,7 @@ int get_tx_table_guard_(ObLS *ls,
 void fetch_cflict_tx_ids_from_mem_ctx_to_desc_(memtable::ObMvccAccessCtx &acc_ctx);
 int wait_follower_readable_(ObLS &ls,
                             const int64_t expire_ts,
-                            const share::SCN snapshot);
+                            const share::SCN &snapshot);
 // include tx api refacored for future
 public:
 #include "ob_tx_api.h"

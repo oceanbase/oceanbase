@@ -29,6 +29,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/ls/ob_ls_life_manager.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "rootserver/ob_tenant_recovery_reportor.h"      // ObTenantRecoveryReportor
 #include "share/ob_occam_time_guard.h"
 
 namespace oceanbase
@@ -583,39 +584,59 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
   bool ignore = true;
   SCN scn = SCN::min_scn();
   LSN lsn;
-  SCN current_gts_scn = SCN::min_scn();
+  SCN readable_scn = SCN::min_scn();
   LSGCState gc_state = INVALID_LS_GC_STATE;
   ObLSID ls_id = ls_->get_ls_id();
   SCN offline_scn;
+  bool tenant_in_archive = false;
   if (OB_FAIL(ls_->get_gc_state(gc_state))) {
     CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(ret));
   } else if (OB_FAIL(ls_->get_offline_scn(offline_scn))) {
     CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(gc_state), K(ret));
-  } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_US, current_gts_scn))) {
-    CLOG_LOG(WARN, "get_gts_ failed", K(ls_id), K(gc_state), K(current_gts_scn), K(ret));
-  } else if (current_gts_scn.convert_to_ts() < offline_scn.convert_to_ts() + LS_CLOG_ALIVE_TIMEOUT_US) {
-    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait clog remove", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn));
-  // TODO: 归档暂不支持时间戳进度
-  } else if (OB_FAIL(archive_service->get_ls_archive_progress(ls_id, lsn, force_wait, ignore))){
+  } else if (OB_FAIL(get_tenant_readable_scn_(readable_scn))) {
+    CLOG_LOG(WARN, "get_tenant_readable_scn_ failed", K(ret), K(ls_id));
+  } else if (readable_scn < offline_scn) {
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait readable_scn", K(ret), K(ls_id), K(gc_state), K(offline_scn), K(readable_scn));
+  } else if (OB_FAIL(check_if_tenant_in_archive_(tenant_in_archive))) {
+    CLOG_LOG(WARN, "check_if_tenant_in_archive_ failed", K(ret), K(ls_id), K(gc_state));
+  } else if (! tenant_in_archive) {
+    if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
+      CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
+    }
+    ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
+  } else if (OB_FAIL(archive_service->get_ls_archive_progress(ls_id, lsn, scn, force_wait, ignore))){
     CLOG_LOG(WARN, "get_ls_archive_progress failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
   } else if (ignore) {
     if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
       CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
-    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn), K(scn));
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   } else if (scn == offline_scn) {
     if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
       CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
-    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn), K(scn));
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   } else if (scn > offline_scn) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "ls_archive_progress larger than offline scn", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn), K(scn));
+    CLOG_LOG(ERROR, "ls_archive_progress larger than offline scn", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   } else {
-    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait archive", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn), K(scn));
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait archive", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   }
+}
+
+int ObGCHandler::get_tenant_readable_scn_(SCN &readable_scn)
+{
+  return MTL(rootserver::ObTenantRecoveryReportor *)->get_tenant_readable_scn(readable_scn);
+}
+
+// 由于日志流GC导致的归档日志不完整是无法被归档检查出来的异常, 因此需要保证GC与归档状态互斥;
+// 其他如clog回收/迁移复制等场景, 仅需考虑本地归档进度即可
+int ObGCHandler::check_if_tenant_in_archive_(bool &in_archive)
+{
+  return MTL(ObArchiveService*)->check_tenant_in_archive(in_archive);
 }
 
 void ObGCHandler::submit_log_(const ObGCLSLOGType log_type)
@@ -1262,7 +1283,7 @@ int ObGarbageCollector::delete_ls_status_(const ObLSID &id)
     CLOG_LOG(WARN, "sql proxy is null", KR(ret));
   } else {
     ObLSLifeAgentManager ls_agent(*sql_proxy_);
-    if (OB_FAIL(ls_agent.drop_ls(tenant_id, id))) {
+    if (OB_FAIL(ls_agent.drop_ls(tenant_id, id, share::NORMAL_SWITCHOVER_STATUS))) {
       CLOG_LOG(WARN, "ls status table delete_ls failed", K(ret), K(id), K(tenant_id));
     } else {
       // do nothing

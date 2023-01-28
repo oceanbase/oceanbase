@@ -147,6 +147,21 @@ int EventRecorder::report_decentralized_to_be_leader_event(const MemberListWithS
   #undef PRINT_WRAPPER
 }
 
+int EventRecorder::report_directly_change_leader_event(const ObAddr &dest_svr, const ObStringHolder &reason) {
+  ELECT_TIME_GUARD(500_ms);
+  #define PRINT_WRAPPER KR(ret), K(*this), K(info)
+  int ret = OB_SUCCESS;
+  char info[INFO_MAX_LEN] = {0};
+  int64_t pos = 0;
+  DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "directly change leader : %s -> %s, reason : %s", to_cstring(self_addr_), to_cstring(dest_svr), to_cstring(reason)));
+  DO_IF_SUCC(report_event_(ElectionEventType::DIRECTLY_CHANGE_LEADER, info));
+  if (CLICK_FAIL(ret)) {
+    LOG_EVENT(WARN, "report DIRECTLY_CHANGE_LEADER event failed");
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 int EventRecorder::report_prepare_change_leader_event(const ObAddr &dest_svr, const ObStringHolder &reason) {
   ELECT_TIME_GUARD(500_ms);
   #define PRINT_WRAPPER KR(ret), K(*this), K(info)

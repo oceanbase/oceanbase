@@ -137,7 +137,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   share::SCN create_scn;
   ObLSStatusInfo info;
   ObZone zone_priority("z1");
-  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str());
+  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ObZone primary_zone("z1");
   ret = info.init(tenant_id_, SYS_LS, 0, share::OB_LS_CREATING, 0, primary_zone);
@@ -146,7 +146,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
       get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(1, ls_array.count());
   SERVER_LOG(INFO, "ls status", K(ls_array));
-  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str());
+  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   create_scn.set_min();
 
@@ -154,18 +154,18 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ObLSID ls_id(1001);
   ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str());
+  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   //设置日志流offline的参数检查
   share::SCN invalid_scn;
-  ret = ls_life.set_ls_offline(tenant_id_, SYS_LS, share::OB_LS_DROPPING, invalid_scn);
+  ret = ls_life.set_ls_offline(tenant_id_, SYS_LS, share::OB_LS_DROPPING, invalid_scn, share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
-  ret = ls_life.set_ls_offline(tenant_id_, SYS_LS, share::OB_LS_NORMAL, share::SCN::min_scn());
+  ret = ls_life.set_ls_offline(tenant_id_, SYS_LS, share::OB_LS_NORMAL, share::SCN::min_scn(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
 
   //更新__all_ls_status表为空
-  ret = ls_life.set_ls_offline(tenant_id_, ls_id, share::OB_LS_DROPPING, share::SCN::min_scn());
+  ret = ls_life.set_ls_offline(tenant_id_, ls_id, share::OB_LS_DROPPING, share::SCN::min_scn(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_NEED_RETRY, ret);
 
   //更新__all_ls_status表中1001日志流的状态
@@ -182,22 +182,22 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ret = status_operator.update_ls_status(tenant_id_, ls_id, share::OB_LS_CREATING, share::OB_LS_NORMAL, share::NORMAL_SWITCHOVER_STATUS,
       get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_life.set_ls_offline(tenant_id_, ls_id, share::OB_LS_NORMAL, share::SCN::min_scn());
+  ret = ls_life.set_ls_offline(tenant_id_, ls_id, share::OB_LS_NORMAL, share::SCN::min_scn(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
 
   //更新成dropping状态，才可以set_offline
   ret = status_operator.update_ls_status(tenant_id_, ls_id, share::OB_LS_NORMAL, share::OB_LS_DROPPING, share::NORMAL_SWITCHOVER_STATUS,
       get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_life.set_ls_offline(tenant_id_, ls_id, share::OB_LS_TENANT_DROPPING, share::SCN::min_scn());
+  ret = ls_life.set_ls_offline(tenant_id_, ls_id, share::OB_LS_TENANT_DROPPING, share::SCN::min_scn(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_NEED_RETRY, ret);
   share::SCN scn;
   scn.convert_for_logservice(100);
-  ret = ls_life.set_ls_offline(tenant_id_, ls_id, share::OB_LS_DROPPING, scn);
+  ret = ls_life.set_ls_offline(tenant_id_, ls_id, share::OB_LS_DROPPING, scn, share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   //drop_ls，要等待sync等大于dropping
-  ret = ls_life.drop_ls(tenant_id_, ls_id);
+  ret = ls_life.drop_ls(tenant_id_, ls_id, share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_NEED_RETRY, ret);
   ObLSRecoveryStat recovery_stat;
   ObLSRecoveryStatOperator recovery_op;
@@ -206,7 +206,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = recovery_op.update_ls_recovery_stat(recovery_stat, get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_life.drop_ls(tenant_id_, ls_id);
+  ret = ls_life.drop_ls(tenant_id_, ls_id, share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_NEED_RETRY, ret);
   scn.convert_for_logservice(98);
   share::SCN recovery_scn;
@@ -217,14 +217,14 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ret = recovery_op.update_ls_recovery_stat(recovery_stat, get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = ls_life.drop_ls(tenant_id_, ls_id);
+  ret = ls_life.drop_ls(tenant_id_, ls_id, share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_NEED_RETRY, ret);
   scn.convert_for_logservice(100);
   ret = recovery_stat.init_only_recovery_stat(tenant_id_, ls_id, scn, recovery_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = recovery_op.update_ls_recovery_stat(recovery_stat, get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_life.drop_ls(tenant_id_, ls_id);
+  ret = ls_life.drop_ls(tenant_id_, ls_id, share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 

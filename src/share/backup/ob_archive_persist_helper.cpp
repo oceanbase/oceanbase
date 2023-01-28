@@ -15,6 +15,7 @@
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/ob_tenant_info_proxy.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/oblog/ob_log_module.h"
 #include "common/ob_smart_var.h"
@@ -115,6 +116,47 @@ int ObArchivePersistHelper::init(const uint64_t tenant_id)
   } else {
     tenant_id_ = tenant_id;
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::get_archive_mode(
+    common::ObISQLClient &proxy, ObArchiveMode &mode) const
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  const bool for_update = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &proxy, for_update, tenant_info))) {
+    LOG_WARN("failed to get tenant info", K(ret), K_(tenant_id));
+  } else {
+    mode = tenant_info.get_log_mode();
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::open_archive_mode(common::ObISQLClient &proxy) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_log_mode(tenant_id_, &proxy, NOARCHIVE_MODE, ARCHIVE_MODE))) {
+    LOG_WARN("failed to open archive mode", K(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::close_archive_mode(common::ObISQLClient &proxy) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_log_mode(tenant_id_, &proxy, ARCHIVE_MODE, NOARCHIVE_MODE))) {
+    LOG_WARN("failed to close archive mode", K(ret), K_(tenant_id));
   }
   return ret;
 }
@@ -268,6 +310,28 @@ int ObArchivePersistHelper::get_lag_target(common::ObISQLClient &proxy, const bo
     LOG_WARN("fail to set checkpoint interval", K(ret), K(value));
   } else {
     lag_target = dest_attr.lag_target_;
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::get_dest_state(
+    common::ObISQLClient &proxy,
+    const bool need_lock,
+    const int64_t dest_no,
+    ObLogArchiveDestState &state) const
+{
+  int ret = OB_SUCCESS;
+  common::ObSqlString value;
+  const common::ObString str(OB_STR_STATE);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(get_string_value(proxy, dest_no, need_lock, str, value))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to get string value", K(ret));
+    }
+  } else if (OB_FAIL(state.set_state(value.ptr()))) {
+    LOG_WARN("fail to set dest state", K(ret), K(value));
   }
   return ret;
 }
@@ -948,6 +1012,41 @@ int ObArchivePersistHelper::set_ls_archive_stop(common::ObISQLClient &proxy, con
   return ret;
 }
 
+int ObArchivePersistHelper::set_ls_archive_suspend(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t round_id,
+    const ObLSID &id, int64_t &affected_rows) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObArchiveRoundState suspend = ObArchiveRoundState::suspend();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("update %s set %s='%s' where %s=%lu and %s=%ld and %s=%ld and %s=%ld", OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
+    OB_STR_STATUS, suspend.to_status_str(), OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID, dest_id, OB_STR_ROUND_ID, round_id, OB_STR_LS_ID, id.id()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(proxy.write(get_exec_tenant_id(), sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to exec sql", K(ret), K(sql), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::set_ls_archive_doing(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t round_id,
+    const ObLSID &id, int64_t &affected_rows) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObArchiveRoundState doing = ObArchiveRoundState::doing();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("update %s set %s='%s' where %s=%lu and %s=%ld and %s=%ld and %s=%ld", OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
+    OB_STR_STATUS, doing.to_status_str(), OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID, dest_id, OB_STR_ROUND_ID, round_id, OB_STR_LS_ID, id.id()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(proxy.write(get_exec_tenant_id(), sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to exec sql", K(ret), K(sql), K_(tenant_id));
+  }
+  return ret;
+}
 
 int ObArchivePersistHelper::get_dest_round_summary(common::ObISQLClient &proxy, const int64_t dest_id,
     const int64_t round_id, const int64_t since_piece_id, ObDestRoundSummary &summary) const

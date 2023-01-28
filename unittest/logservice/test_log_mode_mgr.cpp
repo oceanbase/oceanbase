@@ -84,7 +84,7 @@ public:
     init_member_list.add_server(addr2);
     init_member_list.add_server(addr3);
     EXPECT_EQ(OB_SUCCESS, default_config_info.generate(init_member_list, 3, learner_list, init_config_version));
-    EXPECT_EQ(OB_SUCCESS, config_meta.generate(init_pid, default_config_info, default_config_info));
+    EXPECT_EQ(OB_SUCCESS, config_meta.generate(init_pid, default_config_info, default_config_info, init_pid, LSN(0), init_pid));
     mock_config_mgr_->destroy();
     mock_config_mgr_->log_ms_meta_ = config_meta;
     EXPECT_TRUE(mode_meta.is_valid());
@@ -229,12 +229,15 @@ TEST_F(TestLogModeMgr, test_receive_mode_meta)
     EXPECT_EQ(OB_SUCCESS, valid_meta.generate(2, 2, AccessMode::APPEND, share::SCN::base_scn()));
     EXPECT_TRUE(mode_mgr.can_receive_mode_meta(pid, valid_meta, has_accepted));
     EXPECT_FALSE(has_accepted);
-    EXPECT_EQ(OB_SUCCESS, mode_mgr.receive_mode_meta(addr2, 2, valid_meta));
+    EXPECT_EQ(OB_SUCCESS, mode_mgr.receive_mode_meta(addr2, 2, false, valid_meta));
     EXPECT_EQ(valid_meta.mode_version_, mode_mgr.last_submit_mode_meta_.mode_version_);
     EXPECT_GT(valid_meta.mode_version_, mode_mgr.accepted_mode_meta_.mode_version_);
     EXPECT_GT(valid_meta.mode_version_, mode_mgr.applied_mode_meta_.mode_version_);
-    EXPECT_EQ(OB_SUCCESS, mode_mgr.after_flush_mode_meta(valid_meta));
+    EXPECT_EQ(OB_SUCCESS, mode_mgr.after_flush_mode_meta(false, valid_meta));
     EXPECT_EQ(valid_meta.mode_version_, mode_mgr.accepted_mode_meta_.mode_version_);
+    // receive applied mode_meta
+    EXPECT_EQ(OB_SUCCESS, mode_mgr.after_flush_mode_meta(true, valid_meta));
+    EXPECT_EQ(valid_meta.mode_version_, mode_mgr.applied_mode_meta_.mode_version_);
   }
 }
 
@@ -362,7 +365,7 @@ TEST_F(TestLogModeMgr, test_change_access_mode)
     // should not reach majority before leader's AccessMode is flushed
     EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, share::SCN::base_scn()));
     // self is flushed
-    EXPECT_EQ(OB_SUCCESS, mode_mgr.after_flush_mode_meta(mode_mgr.last_submit_mode_meta_));
+    EXPECT_EQ(OB_SUCCESS, mode_mgr.after_flush_mode_meta(false, mode_mgr.last_submit_mode_meta_));
     EXPECT_EQ(OB_SUCCESS, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, share::SCN::base_scn()));
     EXPECT_EQ(MODE_INIT, mode_mgr.state_);
     EXPECT_EQ(2, mode_mgr.applied_mode_meta_.mode_version_);

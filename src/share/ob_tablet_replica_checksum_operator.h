@@ -105,7 +105,7 @@ class ObTabletReplicaChecksumOperator
 {
 public:
   // To get a batch of checksum_items
-  // We will get items whose compaction_scn >= @compaction_scn
+  // We will get items whose compaction_scn = @compaction_scn
   //
   // This function is specifically designed for ObTabletReplicaChecksumIterator.
   // This function would remove the last several checksum items in some cases.
@@ -117,7 +117,7 @@ public:
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
   // get a batch of checksum_items, the count = @pairs.count()
-  // @compaction_scn means items' compaction_scn >= compaction_scn
+  // @compaction_scn means items' compaction_scn = compaction_scn
   static int batch_get(
       const uint64_t tenant_id,
       const common::ObIArray<ObTabletLSPair> &pairs,
@@ -303,13 +303,6 @@ private:
       const uint64_t tenant_id,
       common::ObIArray<ObTabletLSPair> &tablet_pairs,
       bool &exist_error_status);
-
-  static int need_verify_checksum_(
-      const uint64_t tenant_id,
-      const SCN &compaction_scn,
-      bool &need_verify,
-      common::ObIArray<ObTabletLSPair> &tablet_pairs,
-      common::ObIArray<ObTabletReplicaChecksumItem> &items);
 
   static int compare_column_checksum_(
       const schema::ObTableSchema &data_table_schema,

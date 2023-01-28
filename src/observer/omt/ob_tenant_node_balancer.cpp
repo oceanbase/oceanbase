@@ -30,6 +30,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "logservice/palf/palf_options.h"
+#include "logservice/ob_server_log_block_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -114,6 +115,9 @@ void ObTenantNodeBalancer::run1()
       LOG_WARN("get cluster tenants fail", K(ret));
     } else if (OB_FAIL(OTC_MGR.refresh_tenants(tenants))) {
       LOG_WARN("fail refresh tenant config", K(tenants), K(ret));
+    }
+    if (OB_SUCCESS != (tmp_ret = GCTX.log_block_mgr_->try_resize())) {
+      LOG_WARN("ObServerLogBlockMgr try_resize failed", K(tmp_ret));
     }
 
     FLOG_INFO("refresh tenant config", K(tenants), K(ret));

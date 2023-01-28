@@ -26,12 +26,13 @@ class DagSchedulerConfig;
 class ObTenantModuleInitCtx
 {
 public:
-  ObTenantModuleInitCtx() {}
+  ObTenantModuleInitCtx() : palf_options_()
+  {}
 
   // for logservice
-  palf::PalfDiskOptions disk_options_;
-  char tenant_clog_dir_[common::MAX_PATH_SIZE] = {'\0'}; 
-  
+  palf::PalfOptions palf_options_;
+  char tenant_clog_dir_[common::MAX_PATH_SIZE] = {'\0'};
+
   // TODO init DagSchedulerConfig, which will be used to config the params in ObTenantDagScheduler
   // share::DagSchedulerConfig *scheduler_config_;
 };

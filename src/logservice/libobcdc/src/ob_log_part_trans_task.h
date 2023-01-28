@@ -24,6 +24,7 @@
 #include "storage/tx/ob_trans_define.h"             // ObTransID, ObLSLogInfoArray
 #include "storage/memtable/ob_memtable_mutator.h"   // ObMemtableMutatorRow, ObMemtableMutatorMeta
 #include "storage/blocksstable/ob_datum_row.h"      // ObRowDml
+#include "logservice/data_dictionary/ob_data_dict_storager.h"  // ObDataDictStorage
 
 #include "ob_log_trans_log.h"                       // SortedRedoLogList
 #include "ob_cdc_multi_data_source_info.h"          // MultiDataSourceNode, MultiDataSourceInfo
@@ -54,6 +55,7 @@ namespace libobcdc
 class PartTransTask;
 class ObLogBR;
 class ObLogEntryTask;
+class TableSchemaInfo;
 
 class IStmtTask : public ObLink   // Inheritance of ObLink is only used for Sequencer
 {
@@ -171,7 +173,12 @@ struct ColValue
   ColValue *get_next() { return next_; }
   void set_next(ColValue *next) { next_ = next; }
 
+  bool is_json() const { return value_.is_json(); }
+  bool is_geometry() const { return value_.is_geometry(); }
+  common::ObObjType get_obj_type() const { return value_.get_type(); }
+
   TO_STRING_KV(
+      "type", common::ob_obj_type_str(get_obj_type()),
       K_(value),
       K_(column_id),
       K_(string_value),
@@ -191,6 +198,8 @@ public:
   virtual ~MutatorRow();
 
 public:
+  common::ObIAllocator &get_allocator() { return allocator_; }
+
   // Deserialize a row
   virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
 
@@ -215,15 +224,17 @@ public:
   // If obj2str_helper is empty, do not convert obj to string
   int parse_cols(
       ObObj2strHelper *obj2str_helper = NULL,
-      const share::schema::ObSimpleTableSchemaV2 *simple_table_schema = NULL,
+      const uint64_t tenant_id = OB_INVALID_TENANT_ID,
+      const uint64_t table_id = OB_INVALID_ID,
       const TableSchemaInfo *tb_schema_info = NULL,
       const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false,
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
 
   // Parse the column data based on ObTableSchema
+  template<class CDC_INNER_TABLE_SCHEMA>
   int parse_cols(
-      const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
+      const CDC_INNER_TABLE_SCHEMA &lob_aux_table_schema_info);
 
   int get_cols(
       ColValueList **rowkey_cols,
@@ -248,7 +259,8 @@ private:
       const char *col_data,
       const int64_t col_data_size,
       ObObj2strHelper *obj2str_helper,
-      const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
       const TableSchemaInfo *tb_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool enable_output_hidden_primary_key,
@@ -258,7 +270,8 @@ private:
       ColValueList &rowkey_cols,
       const common::ObStoreRowkey &rowkey,
       ObObj2strHelper *obj2str_helper,
-      const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
       const TableSchemaInfo *tb_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool enable_output_hidden_primary_key);
@@ -275,7 +288,8 @@ private:
       const uint64_t column_id,
       const ObObj *value,
       const bool is_out_row,
-      const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
       const ColumnSchemaInfo *column_schema,
       const ObObj2strHelper *obj2str_helper,
       const ObTimeZoneInfoWrap *tz_info_wrap,
@@ -288,25 +302,28 @@ private:
       ObObjMeta &obj_meta,
       ObObj &obj);
 
-  // LobAuxMeta parse
+  // InnerTable parse
+  template<class CDC_INNER_TABLE_SCHEMA>
   int parse_columns_(
       const bool is_parse_new_col,
       const char *col_data,
       const int64_t col_data_size,
-      const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info,
+      const CDC_INNER_TABLE_SCHEMA &inner_table_schema,
       ColValueList &cols);
+  template<class TABLE_SCHEMA>
   int parse_rowkey_(
-      const share::schema::ObTableSchema &table_schema,
+      const TABLE_SCHEMA &table_schema,
       const common::ObStoreRowkey &rowkey,
       ColValueList &rowkey_cols);
   int add_column_(
       ColValueList &cols,
       const uint64_t column_id,
       const ObObj *value);
+  template<class TABLE_SCHEMA>
   int set_obj_propertie_(
       const uint64_t column_id,
       const int64_t column_idx_for_datum_row,
-      const share::schema::ObTableSchema &table_schema,
+      const TABLE_SCHEMA &table_schema,
       ObObjMeta &obj_meta,
       ObObj &obj);
 
@@ -403,19 +420,26 @@ public:
   // NOTE: you can get_cols() only if you succeed in parse_cols()
   int parse_cols(
       ObObj2strHelper *obj2str_helper = NULL,
-      const share::schema::ObSimpleTableSchemaV2 *simple_table_schema = NULL,
       const TableSchemaInfo *tb_schema_info = NULL,
       const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
-      const bool enable_output_hidden_primary_key = false)
-  {
-    return row_.parse_cols(obj2str_helper, simple_table_schema, tb_schema_info, tz_info_wrap, enable_output_hidden_primary_key);
-  }
+      const bool enable_output_hidden_primary_key = false);
 
   int parse_aux_meta_table_cols(
       const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info)
   {
     return row_.parse_cols(lob_aux_table_schema_info);
   }
+
+  // For the JSON or GIS(outrow storage)
+  // The JSON/GIS data column size is over 4K and is outrow storage, reusing the basic capabilities of LOB.
+  // So we need to call the obj2str API to get the final message format when the complete data is retrieved.
+  int parse_col(
+      const uint64_t tenant_id,
+      const uint64_t column_id,
+      const ColumnSchemaInfo &column_schema_info,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      ObObj2strHelper &obj2str_helper,
+      ColValue &cv_node);
 
   int get_cols(
       ColValueList **rowkey_cols,
@@ -431,9 +455,6 @@ public:
   ObLogEntryTask &get_redo_log_entry_task() { return log_entry_task_; }
 
   int64_t get_row_seq_no() const { return row_.seq_no_; }
-  // get row seq info for rollback to savepoint feature, use seq_no if cluster_version
-  // is greater than 320, otherwise use sql_no
-  int64_t get_row_seq_for_rollback() const;
 
   bool is_callback() const { return 1 == is_callback_; }
   void mark_callback() { is_callback_ = 1; }
@@ -456,27 +477,24 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// DDL unique ID using cluster_id + schema_version
+// DDL unique ID using tenant_id + schema_version
 class DdlStmtUniqueID
 {
 public:
-  DdlStmtUniqueID(const int64_t cluster_id, const uint64_t tenant_id, const uint64_t schema_version) :
-    cluster_id_(cluster_id), tenant_id_(tenant_id), schema_version_(schema_version) {}
+  DdlStmtUniqueID(const uint64_t tenant_id, const uint64_t schema_version) :
+    tenant_id_(tenant_id), schema_version_(schema_version) {}
   ~DdlStmtUniqueID() { reset(); }
 public:
   void reset()
   {
-    cluster_id_ = OB_INVALID_CLUSTER_ID;
     tenant_id_ = OB_INVALID_TENANT_ID;
     schema_version_ = OB_INVALID_TIMESTAMP;
   }
 
   bool is_valid() const
-  { return OB_INVALID_CLUSTER_ID != cluster_id_
-    && OB_INVALID_TENANT_ID != tenant_id_
+  { return OB_INVALID_TENANT_ID != tenant_id_
     && OB_INVALID_TIMESTAMP != schema_version_; }
 
-  int64_t get_cluster_id() const { return cluster_id_; }
   uint64_t get_schema_version() const { return schema_version_; }
   uint64_t get_tenant_id() const { return tenant_id_; }
 
@@ -484,7 +502,6 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
 private:
-  int64_t     cluster_id_;       // cluster ID
   uint64_t    tenant_id_;        // TenantId
   uint64_t    schema_version_;   // schema version
 
@@ -495,7 +512,7 @@ private:
 class DdlStmtTask : public IStmtTask
 {
 public:
-  DdlStmtTask(PartTransTask &host, MutatorRow &row, const int64_t cluster_id);
+  DdlStmtTask(PartTransTask &host, MutatorRow &row);
   virtual ~DdlStmtTask();
 
 public:
@@ -521,7 +538,6 @@ public:
   uint64_t get_op_tablegroup_id() const { return ddl_op_tablegroup_id_; }
   int64_t get_op_schema_version() const { return ddl_op_schema_version_; }
   uint64_t get_exec_tenant_id() const { return ddl_exec_tenant_id_; }
-  int64_t get_cluster_id() const { return cluster_id_; }
   int64_t get_row_seq_no() const { return row_.seq_no_; }
 
 public:
@@ -543,8 +559,7 @@ public:
       K_(ddl_op_table_id),
       K_(ddl_op_tenant_id),
       K_(ddl_op_database_id),
-      K_(ddl_op_tablegroup_id),
-      K_(cluster_id));
+      K_(ddl_op_tablegroup_id));
 
 private:
   int parse_ddl_info_(
@@ -596,9 +611,6 @@ private:
 
   // Record Executor Tenant ID
   uint64_t    ddl_exec_tenant_id_;
-
-  // record cluster ID
-  int64_t     cluster_id_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(DdlStmtTask);
@@ -1068,16 +1080,39 @@ public:
       const transaction::ObTxBufferNodeArray &mds_data_arr,
       const bool is_commit_log);
   // parse multi_data_source in multi_data_source_node_arr to multi_data_source_info
-  // currently ONLY SUPPORT LS_MEMBER_TABLE MDS node.
-  // LS_TABLE/DDL_TRANS is parsed before.
+  //
+  // 1. Support LS_MEMBER_TABLE MDS node.
+  // 2. Support Tablet
   int parse_multi_data_source_data();
+
+  // TODO Support single registration over 1.5M
+  // 1. parse multi_data_source to get the collection of changed schemas which DDL transactions affect
+  int parse_multi_data_source_data_for_ddl(
+      const char *caller);
+
   // sys_ls trans which not ddl_trans/ls_table_trans won't serve
-  // TODO：这类事务是否有可能是分布式事务？如果有可能的话，这类事务是否过滤？
+  // TODO: Could this trans is a dist_trans? Should CDC filter this trans if is a dict_trans.
   bool is_sys_ls_not_serve_trans() const
   {
     return tls_id_.is_sys_log_stream() && ! multi_data_source_info_.is_valid();
   }
   const MultiDataSourceInfo &get_multi_data_source_info() const { return multi_data_source_info_; }
+  const share::ObLSAttr &get_ls_attr() const { return multi_data_source_info_.get_ls_attr(); }
+  DictTenantArray &get_dict_tenant_array() { return multi_data_source_info_.get_dict_tenant_array(); }
+  DictDatabaseArray &get_dict_database_array() { return multi_data_source_info_.get_dict_database_array(); }
+  DictTableArray &get_dict_table_array() { return multi_data_source_info_.get_dict_table_array(); }
+  // get tenant_schema_info with MultiDataSourceInfo in DDL. get from baseline data_dict if ddl
+  // doesn't contains tenant_meta for specifed tenant, otherwise use tenant_meta in inc_data_dict.
+  // NOTICE: ONLY AVALIABLE FOR DDL_TRANS.
+  int get_tenant_schema_info_with_inc_dict(const uint64_t tenant_id, TenantSchemaInfo &tenant_schema_info);
+  // get database_schema_info with MultiDataSourceInfo in DDL. get from baseline data_dict if ddl
+  // doesn't contains database_meta for specifed database, otherwise use database_meta in inc_data_dict
+  // NOTICE: ONLY AVALIABLE FOR DDL_TRANS.
+  int get_database_schema_info_with_inc_dict(const uint64_t tenant_id, const uint64_t db_id, DBSchemaInfo &db_schema_info);
+  // get dict_table_meta with MultiDataSourceInfo in DDL. get from baseline data_dict if ddl
+  // doesn't contains table_meta for specifed table, otherwise use table_meta in inc_data_dict.
+  // NOTICE: ONLY AVALIABLE FOR DDL_TRANS.
+  int get_table_meta_with_inc_dict(const uint64_t tenant_id, const uint64_t table_id, const datadict::ObDictTableMeta *&tb_meta);
 
   TO_STRING_KV(
       "state", serve_state_,
@@ -1163,6 +1198,12 @@ private:
   int handle_unserved_trans_();
   void set_unserved_() { serve_state_ = UNSERVED; }
   bool is_data_ready() const { return ATOMIC_LOAD(&is_data_ready_); }
+
+  // MultiDataSource Transaction
+  int alloc_and_save_multi_data_source_node_(
+      const palf::LSN &lsn,
+      const transaction::ObTxBufferNode &mds_buffer_node);
+
   int parse_tablet_change_mds_(
       const MultiDataSourceNode &multi_data_source_node,
       ObCDCTabletChangeInfo &tablet_change_info);

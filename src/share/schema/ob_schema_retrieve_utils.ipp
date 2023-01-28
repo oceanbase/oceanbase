@@ -954,6 +954,8 @@ int ObSchemaRetrieveUtils::fill_tenant_schema(
   int64_t default_in_recyclebin = 0;
   ObString tenant_status_str("");
   ObString default_tenant_status_str("NORMAL");
+  ObString arbitration_service_status_str("");
+  ObString default_arbitration_service_status_str("DISABLED");
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, tenant_id, tenant_schema, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
   if (!is_deleted) {
@@ -980,6 +982,8 @@ int ObSchemaRetrieveUtils::fill_tenant_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, in_recyclebin,
         tenant_schema, int64_t, skip_null_error,
         ObSchemaService::g_ignore_column_retrieve_error_, default_in_recyclebin);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "arbitration_service_status", arbitration_service_status_str,
+        skip_null_error, true/*ignore_column_retrieve_error*/, default_arbitration_service_status_str);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(tenant_schema.set_comment(info))) {
         SHARE_SCHEMA_LOG(WARN, "set_comment failed", K(ret));
@@ -999,6 +1003,11 @@ int ObSchemaRetrieveUtils::fill_tenant_schema(
         SHARE_SCHEMA_LOG(WARN, "fail to get tenant status", K(ret), K(tenant_status_str));
       } else {
         tenant_schema.set_status(status);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tenant_schema.set_arbitration_service_status_from_string(arbitration_service_status_str))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to set arb status from string", K(ret), K(arbitration_service_status_str));
       }
     }
   }
@@ -3619,7 +3628,9 @@ int ObSchemaRetrieveUtils::fill_tenant_schema(T &result,
     ObCompatibilityMode default_compat_mode = ObCompatibilityMode::MYSQL_MODE;
     int64_t default_drop_tenant_time = OB_INVALID_TIMESTAMP;
     ObString tenant_status_str("");
+    ObString arbitration_service_status_str("");
     ObString default_tenant_status_str("NORMAL");
+    ObString default_arbitration_service_status_str("DISABLED");
     int64_t default_in_recyclebin = 0;
     common::ObTimeZoneInfoWrap tz_info_wrap;
     ret = GET_TIMESTAMP_COL_BY_NAME_IGNORE_NULL_WITH_DEFAULT_VALUE(
@@ -3639,9 +3650,11 @@ int ObSchemaRetrieveUtils::fill_tenant_schema(T &result,
         default_drop_tenant_time);
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "status", tenant_status_str,
         skip_null_error, ObSchemaService::g_ignore_column_retrieve_error_, default_tenant_status_str);
-     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, in_recyclebin,
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, in_recyclebin,
         tenant_schema, int64_t, skip_null_error, ObSchemaService::g_ignore_column_retrieve_error_,
         default_in_recyclebin);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "arbitration_service_status", arbitration_service_status_str,
+        skip_null_error, true/*ignore_column_retrieve_error*/, default_arbitration_service_status_str);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(tenant_schema.set_primary_zone(primary_zone_str))) {
       SHARE_SCHEMA_LOG(WARN, "fail to set primary zone", K(ret), K(primary_zone_str));
@@ -3656,6 +3669,11 @@ int ObSchemaRetrieveUtils::fill_tenant_schema(T &result,
         SHARE_SCHEMA_LOG(WARN, "fail to get tenant status", K(ret), K(tenant_status_str));
       } else {
         tenant_schema.set_status(status);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tenant_schema.set_arbitration_service_status_from_string(arbitration_service_status_str))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to set arb status from string", K(ret), K(arbitration_service_status_str));
       }
     }
   }

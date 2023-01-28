@@ -502,7 +502,9 @@ public:
     while (OB_NOT_NULL(cur_node))
     {
       for (int i = 0; i < cur_node->size_; i++) {
-        fprintf(fd_, "(from:%ld,to:%ld)", cur_node->undo_actions_[i].undo_from_, cur_node->undo_actions_[i].undo_to_);
+        fprintf(fd_, "(from:%s,to:%s)",
+                to_cstring(cur_node->undo_actions_[i].undo_from_),
+                to_cstring(cur_node->undo_actions_[i].undo_to_));
       }
       cur_node = cur_node->next_;
     }

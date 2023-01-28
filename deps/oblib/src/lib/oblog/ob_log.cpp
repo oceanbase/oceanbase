@@ -460,7 +460,7 @@ ObLogger::ObLogger()
     enable_wf_flag_(false), rec_old_file_flag_(false), can_print_(true),
     enable_async_log_(true), use_multi_flush_(false), stop_append_log_(false), enable_perf_mode_(false),
     last_async_flush_count_per_sec_(0), log_mem_limiter_(nullptr),
-    allocator_(nullptr), error_allocator_(nullptr), enable_log_limit_(true)
+    allocator_(nullptr), error_allocator_(nullptr), enable_log_limit_(true), is_arb_replica_(false)
 {
   id_level_map_.set_level(OB_LOG_LEVEL_ERROR);
 
@@ -649,12 +649,16 @@ int ObLogger::log_head(const char *mod_name,
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                            tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id));
     } else {
+      constexpr int cluster_id_buf_len = 8;
+      char cluster_id_buf[cluster_id_buf_len] = {'\0'};
+      (void)snprintf(cluster_id_buf, cluster_id_buf_len, "[C%lu]", GET_CLUSTER_ID());
       ret = logdata_printf(buf, buf_len, pos,
                            "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
-                           "%-5s %s%s (%s:%d) [%ld][%s][T%lu][" TRACE_ID_FORMAT_V2 "] [lt=%ld] ",
+                           "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][" TRACE_ID_FORMAT_V2 "] [lt=%ld] ",
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                            tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, function,
-                           base_file_name, line, GETTID(), GETTNAME(), GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id),
+                           base_file_name, line, GETTID(), GETTNAME(), is_arb_replica_ ? cluster_id_buf : "",
+                           GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id),
                            last_logging_cost_time_us_);
     }
   }
@@ -1315,7 +1319,8 @@ int ObLogger::add_files_to_list(void *files,
   return ret;
 }
 
-int ObLogger::init(const ObBaseLogWriterCfg &log_cfg)
+int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
+                   const bool is_arb_replica)
 {
   int ret = OB_SUCCESS;
 
@@ -1360,6 +1365,7 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg)
       } else if (OB_FAIL(ObBaseLogWriter::start())) {
         LOG_STDERR("start ObBaseLogWriter error ret=%d\n", ret);
       }
+      is_arb_replica_ = is_arb_replica;
     }
   }
 

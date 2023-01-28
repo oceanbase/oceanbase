@@ -62,7 +62,8 @@ int ObIterateVirtualTable::init(
 {
   return ObAgentTableBase::init(OB_SYS_TENANT_ID,
                                 base_table_id,
-                                index_table, scan_param);
+                                index_table,
+                                scan_param);
 }
 
 int ObIterateVirtualTable::do_open()

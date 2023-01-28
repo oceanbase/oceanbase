@@ -107,6 +107,11 @@ bool SCN::is_min() const
   return bool_ret;
 }
 
+bool SCN::is_base_scn() const
+{
+ return (SCN_VERSION == v_) && (OB_BASE_SCN_TS_NS == ts_ns_);
+}
+
 void SCN::set_base()
 {
   v_ = SCN_VERSION;

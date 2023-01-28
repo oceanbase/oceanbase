@@ -104,6 +104,7 @@ void ObTxLogCb::reset()
   cb_arg_array_.reset();
   mds_range_.reset();
   //is_callbacking_ = false;
+  first_part_scn_.invalid_scn();
 }
 
 void ObTxLogCb::reuse()
@@ -114,6 +115,7 @@ void ObTxLogCb::reuse()
   is_callbacked_ = false;
   cb_arg_array_.reset();
   mds_range_.reset();
+  first_part_scn_.invalid_scn();
 }
 
 ObTxLogType ObTxLogCb::get_last_log_type() const

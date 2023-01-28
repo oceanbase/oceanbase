@@ -64,18 +64,6 @@ public:
   //    else return other errno
   int set_initial_member_list(const common::ObMemberList &member_list,
                               const int64_t paxos_replica_num);
-  // @brief set the initial member list of paxos group which contains
-  // arbitration replica after creating palf successfully,
-  // it can only be called once
-  // @param[in] ObMemberList, the initial member list, do not include arbitration replica
-  // @param[in] ObMember, the arbitration replica
-  // @param[in] int64_t, the paxos relica num(including arbitration replica)
-  // @retval
-  //    return OB_SUCCESS if success
-  //    else return other errno
-  int set_initial_member_list(const common::ObMemberList &member_list,
-                              const common::ObMember &arb_replica,
-                              const int64_t paxos_replica_num);
   int set_region(const common::ObRegion &region);
   int set_paxos_member_region_map(const common::ObArrayHashMap<common::ObAddr, common::ObRegion> &region_map);
   //================ 文件访问相关接口 =======================
@@ -134,7 +122,7 @@ public:
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
   // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too small, log files may have been recycled
   // - others: bug
-  virtual int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn);
+  int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn);
 
   // @desc: query coarse scn by lsn, that means there is a log in disk,
   // its lsn and scn are result_lsn and result_scn, and result_lsn <= lsn.
@@ -145,17 +133,18 @@ public:
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
   // - others: bug
-  virtual int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn);
+  int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn);
 
   // 开启日志同步
-  virtual int enable_sync();
+  int enable_sync();
   // 关闭日志同步
-  virtual int disable_sync();
-  virtual bool is_sync_enabled() const;
+  int disable_sync();
+  bool is_sync_enabled() const;
   // 推进文件的可回收点
-  virtual int advance_base_lsn(const LSN &lsn);
+  int advance_base_lsn(const LSN &lsn);
   // 迁移/rebuild场景推进base_lsn
-  virtual int advance_base_info(const palf::PalfBaseInfo &palf_base_info, const bool is_rebuild);
+  int advance_base_info(const palf::PalfBaseInfo &palf_base_info, const bool is_rebuild);
+  int flashback(const int64_t mode_version, const share::SCN &flashback_scn, const int64_t timeout_us);
 
   // 返回文件中可读的最早日志的位置信息
   int get_begin_lsn(LSN &lsn) const;
@@ -169,7 +158,7 @@ public:
 
   // 返回最后一条已确认日志的下一位置
   // 在没有新的写入的场景下，返回的end_lsn不可读
-  virtual int get_end_lsn(LSN &lsn) const;
+  int get_end_lsn(LSN &lsn) const;
   int get_end_scn(share::SCN &scn) const;
   int get_max_lsn(LSN &lsn) const;
   int get_max_scn(share::SCN &scn) const;
@@ -185,6 +174,7 @@ public:
  	//
  	// @return :TODO
   int get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pending_state) const;
+  int get_palf_id(int64_t &palf_id) const;
 
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const;
@@ -205,6 +195,8 @@ public:
                          const int64_t new_replica_num,
                          const int64_t timeout_us);
 
+  int get_ack_info_array(LogMemberAckInfoList &ack_info_array,
+                         common::GlobalLearnerList &degraded_list) const;
   // @brief, add a member to paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t new_replica_num: replica number of paxos group after adding 'member'
@@ -290,66 +282,6 @@ public:
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   int switch_acceptor_to_learner(const common::ObMember &member,
                                  const int64_t timeout_us);
-
-  // @brief, add an arbitration member to paxos group
-  // @param[in] common::ObMember &member: arbitration member which will be added
-  // @param[in] const int64_t paxos_replica_num: replica number of paxos group after adding 'member'
-  // @param[in] const int64_t timeout_us: add member timeout, us
-  // @return
-  // - OB_SUCCESS: add arbitration member successfully
-  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: add arbitration member timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  // - other: bug
-  int add_arb_member(const common::ObMember &added_member,
-                     const int64_t paxos_replica_num,
-                     const int64_t timeout_us);
-
-  // @brief, remove an arbitration member from paxos group
-  // @param[in] common::ObMember &member: arbitration member which will be removed
-  // @param[in] const int64_t paxos_replica_num: replica number of paxos group after removing 'member'
-  // @param[in] const int64_t timeout_us: remove member timeout, us
-  // @return
-  // - OB_SUCCESS: remove arbitration member successfully
-  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: remove arbitration member timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  // - other: bug
-  int remove_arb_member(const common::ObMember &arb_member,
-                        const int64_t paxos_replica_num,
-                        const int64_t timeout_us);
-  // @brief, replace old arbitration member with new arbitration member, can be called in any member
-  // @param[in] const common::ObMember &added_member: arbitration member wil be added
-  // @param[in] const common::ObMember &removed_member: arbitration member will be removed
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS: replace arbitration member successfully
-  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
-  // - OB_TIMEOUT: replace arbitration member timeout
-  // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  // - other: bug
-  int replace_arb_member(const common::ObMember &added_arb_member,
-                         const common::ObMember &removed_arb_member,
-                         const int64_t timeout_us);
-  // @brief: degrade an acceptor(full replica) to learner(special read only replica) in this cluster
-  // @param[in] const common::ObMemberList &member_list: acceptors will be degraded to learner
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS
-  // - OB_INVALID_ARGUMENT: invalid argument
-  // - OB_TIMEOUT: timeout
-  // - OB_NOT_MASTER: not leader
-  int degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_us);
-
-  // @brief: upgrade a learner(special read only replica) to acceptor(full replica) in this cluster
-  // @param[in] const common::ObMemberList &learner_list: learners will be upgraded to acceptors
-  // @param[in] const int64_t timeout_us
-  // @return
-  // - OB_SUCCESS
-  // - OB_INVALID_ARGUMENT: invalid argument
-  // - OB_TIMEOUT: timeout
-  // - OB_NOT_MASTER: not leader
-  int upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_us);
   int revoke_leader(const int64_t proposal_id);
   int change_leader_to(const common::ObAddr &dst_addr);
   // @brief: change AccessMode of palf.
@@ -430,7 +362,7 @@ public:
   int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(KP(palf_handle_impl_), KP(rc_cb_), KP(fs_cb_));
 private:
-  palf::PalfHandleImpl *palf_handle_impl_;
+  palf::IPalfHandleImpl *palf_handle_impl_;
   palf::PalfRoleChangeCbNode *rc_cb_;
   palf::PalfFSCbNode *fs_cb_;
   palf::PalfRebuildCbNode *rebuild_cb_;

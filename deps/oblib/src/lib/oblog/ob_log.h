@@ -337,7 +337,8 @@ private:
 public:
   ObLogger();
   virtual ~ObLogger();
-  virtual int init(const ObBaseLogWriterCfg &log_cfg);
+  virtual int init(const ObBaseLogWriterCfg &log_cfg,
+                   const bool is_arb_replica);
   virtual void destroy();
 
 protected:
@@ -797,6 +798,7 @@ private:
     uint64_t location_hash_val_;
   } probes_[8];
   int probe_cnt_ = 0;
+  bool is_arb_replica_;
 };
 
 inline ObLogger& ObLogger::get_logger()

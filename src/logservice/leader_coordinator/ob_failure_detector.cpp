@@ -11,6 +11,7 @@
  */
 
 #include "share/ob_occam_time_guard.h"
+#include "share/io/ob_io_struct.h"
 #include "lib/ob_define.h"
 #include "lib/function/ob_function.h"
 #include "lib/string/ob_string.h"
@@ -26,6 +27,7 @@
 #include <utility>
 #include "common_define.h"
 #include "ob_leader_coordinator.h"
+#include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
@@ -39,6 +41,10 @@ using namespace common;
 
 ObFailureDetector::ObFailureDetector()
     : coordinator_(nullptr),
+      has_add_clog_hang_event_(false),
+      has_add_slog_hang_event_(false),
+      has_add_sstable_hang_event_(false),
+      has_add_clog_full_event_(false),
       lock_(common::ObLatchIds::ELECTION_LOCK)
 {}
 
@@ -58,11 +64,16 @@ int ObFailureDetector::init(ObLeaderCoordinator *coordinator)
     COORDINATOR_LOG(ERROR, "coordinator is nullptr", KR(ret), K(MTL_ID()));
   } else {
     coordinator_ = coordinator;
-    if (CLICK_FAIL(coordinator_->timer_.schedule_task_repeat(task_handle_, 1_s, [this]() {
+    if (CLICK_FAIL(coordinator_->failure_detect_timer_.schedule_task_repeat(failure_task_handle_, 100_ms, [this]() {
+      detect_failure();
+      return false;
+    }))) {
+      COORDINATOR_LOG(ERROR, "fail to schedule failure detect task", KR(ret), K(MTL_ID()));
+    } else if (CLICK_FAIL(coordinator_->recovery_detect_timer_.schedule_task_repeat(recovery_task_handle_, 1_s, [this]() {
       detect_recover();
       return false;
     }))) {
-      COORDINATOR_LOG(ERROR, "fail to schedule task", KR(ret), K(MTL_ID()));
+      COORDINATOR_LOG(ERROR, "fail to schedule recovery detect task", KR(ret), K(MTL_ID()));
     } else {
       COORDINATOR_LOG(INFO, "failure detector init success", KR(ret), K(MTL_ID()), K(lbt()));
     }
@@ -73,7 +84,12 @@ int ObFailureDetector::init(ObLeaderCoordinator *coordinator)
 void ObFailureDetector::destroy()
 {
   LC_TIME_GUARD(1_s);
-  task_handle_.stop_and_wait();
+  failure_task_handle_.stop_and_wait();
+  recovery_task_handle_.stop_and_wait();
+  has_add_clog_hang_event_ = false;
+  has_add_slog_hang_event_ = false;
+  has_add_sstable_hang_event_ = false;
+  has_add_clog_full_event_ = false;
   COORDINATOR_LOG(INFO, "failure detector destroyed", K(MTL_ID()), K(lbt()));
 }
 
@@ -110,10 +126,18 @@ void ObFailureDetector::detect_recover()
         (void) insert_event_to_table_(event_[idx], recover_detect_operation_[idx], "DETECT REVOCER");
       } else {
         if (CLICK_FAIL(temp_event_.push_back(event_[idx]))) {
-          COORDINATOR_LOG(INFO, "fail to push event to temp_event_", KR(ret), K(MTL_ID()), K(event_[idx]));
+          COORDINATOR_LOG(WARN, "fail to push event to temp_event_", KR(ret), K(MTL_ID()), K(event_[idx]));
         } else if (CLICK_FAIL(temp_recover_detect_operation_.push_back(recover_detect_operation_[idx]))) {
-          COORDINATOR_LOG(INFO, "fail to push detect operation to temp_recover_detect_operation_", KR(ret), K(MTL_ID()), K(event_[idx]));
+          temp_event_.pop_back();
+          COORDINATOR_LOG(WARN, "fail to push detect operation to temp_recover_detect_operation_", KR(ret), K(MTL_ID()), K(event_[idx]));
         }
+      }
+    } else {
+      if (CLICK_FAIL(temp_event_.push_back(event_[idx]))) {
+        COORDINATOR_LOG(WARN, "fail to push event to temp_event_", KR(ret), K(MTL_ID()), K(event_[idx]));
+      } else if (CLICK_FAIL(temp_recover_detect_operation_.push_back(recover_detect_operation_[idx]))) {
+        temp_event_.pop_back();
+        COORDINATOR_LOG(WARN, "fail to push detect operation to temp_recover_detect_operation_", KR(ret), K(MTL_ID()), K(event_[idx]));
       }
     }
   }
@@ -126,6 +150,19 @@ void ObFailureDetector::detect_recover()
       }
     }
   }
+}
+
+void ObFailureDetector::detect_failure()
+{
+  LC_TIME_GUARD(1_s);
+  // clog disk hang check
+  detect_palf_hang_failure_();
+  // slog writter hang check
+  detect_slog_writter_hang_failure_();
+  // sstable hang check
+  detect_sstable_io_failure_();
+  // clog disk full check
+  detect_palf_disk_full_();
 }
 
 int ObFailureDetector::add_failure_event(const FailureEvent &event)
@@ -247,6 +284,161 @@ int ObFailureDetector::get_specified_level_event(FailureLevel level, ObIArray<Fa
   }
   return ret;
   #undef PRINT_WRAPPER
+}
+
+bool ObFailureDetector::is_clog_disk_has_fatal_error()
+{
+  return ATOMIC_LOAD(&has_add_clog_hang_event_)
+         || ATOMIC_LOAD(&has_add_clog_full_event_);
+}
+
+bool ObFailureDetector::is_data_disk_has_fatal_error()
+{
+  return ATOMIC_LOAD(&has_add_slog_hang_event_)
+         || ATOMIC_LOAD(&has_add_sstable_hang_event_);
+}
+
+void ObFailureDetector::detect_palf_hang_failure_()
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+  bool is_clog_disk_hang = false;
+  int64_t clog_disk_last_working_time = OB_INVALID_TIMESTAMP;
+  const int64_t now = ObTimeUtility::current_time();
+  ObLogService *log_service = MTL(ObLogService*);
+  FailureEvent clog_disk_hang_event(FailureType::PROCESS_HANG, FailureModule::LOG, FailureLevel::FATAL);
+  if (OB_FAIL(clog_disk_hang_event.set_info("clog disk hang event"))) {
+    COORDINATOR_LOG(ERROR, "clog_disk_hang_event set_info failed", K(ret));
+  } else if (OB_FAIL(log_service->get_io_start_time(clog_disk_last_working_time))) {
+    COORDINATOR_LOG(WARN, "get_io_start_time failed", K(ret));
+  } else if (FALSE_IT(is_clog_disk_hang = (OB_INVALID_TIMESTAMP != clog_disk_last_working_time
+                      && now - clog_disk_last_working_time > IO_HANG_TIME_THRESHOLD_US))) {
+  } else if (false == ATOMIC_LOAD(&has_add_clog_hang_event_)) {
+    if (!is_clog_disk_hang) {
+      // log disk does not hang, skip.
+    } else if (OB_FAIL(add_failure_event(clog_disk_hang_event))) {
+      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(clog_disk_hang_event));
+    } else {
+      ATOMIC_SET(&has_add_clog_hang_event_, true);
+      COORDINATOR_LOG(WARN, "clog disk may be hang, add failure event", K(ret), K(clog_disk_hang_event),
+                        K(clog_disk_last_working_time), "hang time", now - clog_disk_last_working_time);
+    }
+  } else {
+    if (is_clog_disk_hang) {
+      // IO worker has not recoverd, cannot remove failure_event.
+    } else if (OB_FAIL(remove_failure_event(clog_disk_hang_event))) {
+      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(clog_disk_hang_event));
+    } else {
+      ATOMIC_SET(&has_add_clog_hang_event_, false);
+      COORDINATOR_LOG(INFO, "clog disk has recoverd, remove failure event", K(ret), K(clog_disk_hang_event));
+    }
+  }
+}
+
+void ObFailureDetector::detect_slog_writter_hang_failure_()
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+  bool is_slog_writter_hang = false;
+  int64_t slog_writter_last_working_time = OB_INVALID_TIMESTAMP;
+  const int64_t now = ObTimeUtility::current_time();
+  ObStorageLogger *storage_logger = MTL(ObStorageLogger*);
+  FailureEvent slog_writter_hang_event(FailureType::PROCESS_HANG, FailureModule::STORAGE, FailureLevel::FATAL);
+  if (OB_FAIL(slog_writter_hang_event.set_info("slog writter hang event"))) {
+    COORDINATOR_LOG(ERROR, "slog_writter_hang_event set_info failed", K(ret));
+  } else if (FALSE_IT(slog_writter_last_working_time = storage_logger->get_pwrite_ts())) {
+  } else if (FALSE_IT(is_slog_writter_hang = (0 != slog_writter_last_working_time
+                      && now - slog_writter_last_working_time > GCONF.data_storage_warning_tolerance_time))) {
+  } else if (false == ATOMIC_LOAD(&has_add_slog_hang_event_)) {
+    if (!is_slog_writter_hang) {
+      // slog writter is normal, skip.
+    } else if (OB_FAIL(add_failure_event(slog_writter_hang_event))) {
+      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(slog_writter_hang_event));
+    } else {
+      ATOMIC_SET(&has_add_slog_hang_event_, true);
+      COORDINATOR_LOG(WARN, "slog writter may be hang, add failure event", K(ret), K(slog_writter_hang_event),
+                        K(slog_writter_last_working_time), "hang time", now - slog_writter_last_working_time);
+    }
+  } else {
+    if (is_slog_writter_hang) {
+      // slog writter still hangs, cannot remove failure_event.
+    } else if (OB_FAIL(remove_failure_event(slog_writter_hang_event))) {
+      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(slog_writter_hang_event));
+    } else {
+      ATOMIC_SET(&has_add_slog_hang_event_, false);
+      COORDINATOR_LOG(INFO, "slog writter has recoverd, remove failure event", K(ret), K(slog_writter_hang_event));
+    }
+  }
+}
+
+void ObFailureDetector::detect_sstable_io_failure_()
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+  ObDeviceHealthStatus data_disk_status;
+  int64_t data_disk_error_start_ts = OB_INVALID_TIMESTAMP;
+  const int64_t now = ObTimeUtility::current_time();
+  FailureEvent sstable_io_hang_event(FailureType::PROCESS_HANG, FailureModule::STORAGE, FailureLevel::FATAL);
+  if (OB_FAIL(sstable_io_hang_event.set_info("sstable io hang event"))) {
+    COORDINATOR_LOG(ERROR, "sstable_io_hang_event set_info failed", K(ret));
+  } else if (OB_FAIL(OB_IO_MANAGER.get_device_health_detector().get_device_health_status(data_disk_status,
+                                                                                         data_disk_error_start_ts))) {
+    COORDINATOR_LOG(WARN, "get_device_health_status failed", K(ret));
+  } else if (false == ATOMIC_LOAD(&has_add_sstable_hang_event_)) {
+    // TODO: modify statement if new ObDeviceHealthStatus is added
+    if (ObDeviceHealthStatus::DEVICE_HEALTH_NORMAL == data_disk_status) {
+      // data disk does not hang, skip.
+    } else if (OB_FAIL(add_failure_event(sstable_io_hang_event))) {
+      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(sstable_io_hang_event));
+    } else {
+      ATOMIC_SET(&has_add_sstable_hang_event_, true);
+      COORDINATOR_LOG(WARN, "data disk may be hang, add failure event", K(ret), K(sstable_io_hang_event),
+                        K(data_disk_error_start_ts));
+    }
+  } else {
+    if (ObDeviceHealthStatus::DEVICE_HEALTH_NORMAL != data_disk_status) {
+      // data disk does not recoverd, cannot remove failure_event.
+    } else if (OB_FAIL(remove_failure_event(sstable_io_hang_event))) {
+      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(sstable_io_hang_event));
+    } else {
+      ATOMIC_SET(&has_add_sstable_hang_event_, false);
+      COORDINATOR_LOG(INFO, "data disk has recoverd, remove failure event", K(ret), K(sstable_io_hang_event));
+    }
+  }
+}
+
+void ObFailureDetector::detect_palf_disk_full_()
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+  const int64_t now = ObTimeUtility::current_time();
+  bool is_disk_enough = true;
+  ObLogService *log_service = MTL(ObLogService*);
+  FailureEvent clog_disk_full_event(FailureType::RESOURCE_NOT_ENOUGH, FailureModule::LOG, FailureLevel::FATAL);
+  if (OB_FAIL(clog_disk_full_event.set_info("clog disk full event"))) {
+    COORDINATOR_LOG(ERROR, "clog_disk_full_event set_info failed", K(ret));
+  } else if (OB_FAIL(log_service->check_disk_space_enough(is_disk_enough))) {
+    COORDINATOR_LOG(WARN, "check_disk_space_enough failed", K(ret));
+  } else if (false == ATOMIC_LOAD(&has_add_clog_full_event_)) {
+    if (is_disk_enough) {
+      // clog disk is not full, skip.
+    } else if (OB_FAIL(add_failure_event(clog_disk_full_event))) {
+      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(clog_disk_full_event));
+    } else {
+      ATOMIC_SET(&has_add_clog_full_event_, true);
+      COORDINATOR_LOG(WARN, "clog disk is full, add failure event", K(ret), K(clog_disk_full_event),
+                        K(now));
+    }
+  } else {
+    if (!is_disk_enough) {
+      // clog disk is still full, cannot remove failure_event.
+    } else if (OB_FAIL(remove_failure_event(clog_disk_full_event))) {
+      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(clog_disk_full_event));
+    } else {
+      ATOMIC_SET(&has_add_clog_full_event_, false);
+      COORDINATOR_LOG(INFO, "clog disk has left space, remove failure event", K(ret), K(clog_disk_full_event));
+    }
+  }
 }
 
 }

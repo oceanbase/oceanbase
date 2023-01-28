@@ -1162,7 +1162,7 @@ int ObDRWorker::LocalityAlignment::try_review_remove_paxos_task(
     found = false;
     int64_t new_paxos_replica_number = 0;
     if (OB_FAIL(ObDRWorker::generate_disaster_recovery_paxos_replica_number(
-            dr_ls_info_.get_member_list_cnt(),
+            dr_ls_info_,
             curr_paxos_replica_number_,
             locality_paxos_replica_number_,
             MEMBER_CHANGE_SUB,
@@ -1231,7 +1231,7 @@ int ObDRWorker::LocalityAlignment::try_review_add_replica_task(
       if (ObReplicaTypeCheck::is_paxos_replica_V2(my_task->replica_type_)) {
         int64_t new_paxos_replica_number = 0;
         if (OB_FAIL(ObDRWorker::generate_disaster_recovery_paxos_replica_number(
-                dr_ls_info_.get_member_list_cnt(),
+                dr_ls_info_,
                 curr_paxos_replica_number_,
                 locality_paxos_replica_number_,
                 MEMBER_CHANGE_ADD,
@@ -1283,7 +1283,7 @@ int ObDRWorker::LocalityAlignment::try_review_type_transform_task(
              && !ObReplicaTypeCheck::is_paxos_replica_V2(my_task->dst_replica_type_)) {
     int64_t new_paxos_replica_number = 0;
     if (OB_FAIL(ObDRWorker::generate_disaster_recovery_paxos_replica_number(
-            dr_ls_info_.get_member_list_cnt(),
+            dr_ls_info_,
             curr_paxos_replica_number_,
             locality_paxos_replica_number_,
             MEMBER_CHANGE_SUB,
@@ -1302,7 +1302,7 @@ int ObDRWorker::LocalityAlignment::try_review_type_transform_task(
              && ObReplicaTypeCheck::is_paxos_replica_V2(my_task->dst_replica_type_)) {
     int64_t new_paxos_replica_number = 0;
     if (OB_FAIL(ObDRWorker::generate_disaster_recovery_paxos_replica_number(
-            dr_ls_info_.get_member_list_cnt(),
+            dr_ls_info_,
             curr_paxos_replica_number_,
             locality_paxos_replica_number_,
             MEMBER_CHANGE_ADD,
@@ -1339,7 +1339,7 @@ int ObDRWorker::LocalityAlignment::try_review_modify_paxos_replica_number_task(
   } else {
     int64_t new_paxos_replica_number = 0;
     if (OB_FAIL(ObDRWorker::generate_disaster_recovery_paxos_replica_number(
-            dr_ls_info_.get_member_list_cnt(),
+            dr_ls_info_,
             curr_paxos_replica_number_,
             locality_paxos_replica_number_,
             MEMBER_CHANGE_NOP,
@@ -2125,6 +2125,9 @@ int ObDRWorker::check_has_leader_while_remove_replica(
   } else {
     int64_t full_replica_count = 0;
     int64_t paxos_replica_num = 0;
+    int64_t arb_replica_num = 0;
+    uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    ObLSID ls_id;
     ObReplicaType replica_type = REPLICA_TYPE_MAX;
     for (int64_t index = 0; OB_SUCC(ret) && index < replica_cnt; ++index) {
       share::ObLSReplica *ls_replica = nullptr;
@@ -2152,7 +2155,7 @@ int ObDRWorker::check_has_leader_while_remove_replica(
         // bypass
       } else {
         if (server_stat_info->get_server() == server) {
-          replica_type = ls_replica->get_replica_type(); 
+          replica_type = ls_replica->get_replica_type();
         }
         if (ObReplicaTypeCheck::is_paxos_replica_V2(ls_replica->get_replica_type())) {
           ++paxos_replica_num;
@@ -2164,6 +2167,13 @@ int ObDRWorker::check_has_leader_while_remove_replica(
     }
     if (OB_FAIL(ret)) {
       // failed
+    } else if (OB_FAIL(dr_ls_info.get_ls_id(tenant_id, ls_id))) {
+      LOG_WARN("fail to get tenant and ls id", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(ObShareUtil::generate_arb_replica_num(
+                           tenant_id,
+                           ls_id,
+                           arb_replica_num))) {
+      LOG_WARN("fail to generate arb replica number", KR(ret), K(tenant_id), K(ls_id));
     } else if (!dr_ls_info.has_leader()) {
       has_leader = false;
     } else if (!ObReplicaTypeCheck::is_paxos_replica_V2(replica_type)) {
@@ -2174,7 +2184,7 @@ int ObDRWorker::check_has_leader_while_remove_replica(
         has_leader = full_replica_count >= 2;
       }
       if (has_leader) {
-        has_leader = (paxos_replica_num - 1) >= majority(dr_ls_info.get_schema_replica_cnt());
+        has_leader = (paxos_replica_num - 1 + arb_replica_num) >= majority(dr_ls_info.get_schema_replica_cnt());
       }
     }
   }
@@ -2314,7 +2324,7 @@ int ObDRWorker::construct_extra_infos_to_build_remove_paxos_replica_task(
   bool found_new_paxos_replica_number = false;
   if (FALSE_IT(task_id.init(self_addr_))) {
   } else if (OB_FAIL(generate_disaster_recovery_paxos_replica_number(
-                         dr_ls_info.get_member_list_cnt(),
+                         dr_ls_info,
                          dr_ls_info.get_paxos_replica_number(),
                          dr_ls_info.get_schema_replica_cnt(),
                          MEMBER_CHANGE_SUB,
@@ -4027,7 +4037,7 @@ int ObDRWorker::add_display_info(const ObLSReplicaTaskDisplayInfo &display_info)
 }
 
 int ObDRWorker::generate_disaster_recovery_paxos_replica_number(
-    const int64_t member_list_cnt,
+    const DRLSInfo &dr_ls_info,
     const int64_t curr_paxos_replica_number,
     const int64_t locality_paxos_replica_number,
     const MemberChangeType member_change_type,
@@ -4036,8 +4046,11 @@ int ObDRWorker::generate_disaster_recovery_paxos_replica_number(
 {
   int ret = OB_SUCCESS;
   found = false;
-  LOG_INFO("begin to generate disaster recovery paxos replica number", K(member_list_cnt),
-           K(curr_paxos_replica_number), K(locality_paxos_replica_number),
+  int64_t member_list_cnt = dr_ls_info.get_member_list_cnt();
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  ObLSID ls_id;
+  LOG_INFO("begin to generate disaster recovery paxos replica number", K(dr_ls_info),
+           K(member_list_cnt), K(curr_paxos_replica_number), K(locality_paxos_replica_number),
            K(member_change_type), K(new_paxos_replica_number));
   if (OB_UNLIKELY(member_list_cnt <= 0
                   || curr_paxos_replica_number <= 0
@@ -4081,8 +4094,19 @@ int ObDRWorker::generate_disaster_recovery_paxos_replica_number(
       }
     }
   } else if (MEMBER_CHANGE_SUB == member_change_type) {
-    const int64_t member_list_cnt_after = member_list_cnt - 1;
-    if (curr_paxos_replica_number == locality_paxos_replica_number) {
+    int64_t member_list_cnt_after = 0;
+    int64_t arb_replica_number = 0;
+    if (OB_FAIL(dr_ls_info.get_ls_id(tenant_id, ls_id))) {
+      LOG_WARN("fail to get tenant and ls id", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(ObShareUtil::generate_arb_replica_num(
+                           tenant_id,
+                           ls_id,
+                           arb_replica_number))) {
+      LOG_WARN("fail to generate arb replica number", KR(ret), K(tenant_id), K(ls_id));
+    }
+    member_list_cnt_after = member_list_cnt - 1 + arb_replica_number;
+    if (OB_FAIL(ret)) {
+    } else if (curr_paxos_replica_number == locality_paxos_replica_number) {
       if (majority(curr_paxos_replica_number) <= member_list_cnt_after) {
         new_paxos_replica_number = curr_paxos_replica_number;
         found = true;

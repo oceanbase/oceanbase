@@ -455,6 +455,7 @@ int LogGroupEntryHeader::truncate(const char *buf,
         if (!tmp_max_scn.is_valid() || log_entry_header.get_scn() > tmp_max_scn) {
           tmp_max_scn = log_entry_header.get_scn();
         }
+        PALF_LOG(INFO, "each log in truncate", K(log_entry_header), K(buf));
       }
     }
     if (OB_SUCC(ret)) {
@@ -468,6 +469,5 @@ int LogGroupEntryHeader::truncate(const char *buf,
   PALF_LOG(INFO, "truncate finished", K(ret), K(*this));
   return ret;
 }
-
 } // end namespace palf
 } // end namespace oceanbase

@@ -93,9 +93,14 @@ void ObLSLocationMap::destroy()
   size_ = 0;
 }
 
+
+// 1. from_rpc = true, it means leader from ls_location may be merged to current location.
+// 2. from_rpc = false, it means leader from current location may be remained in ls_location.
+// when ls has no leader, location cache will remain the last leader info.
 int ObLSLocationMap::update(
+    const bool from_rpc,
     const ObLSLocationCacheKey &key,
-    const ObLSLocation &ls_location)
+    ObLSLocation &ls_location)
 {
   int ret = OB_SUCCESS;
   ObLSLocation *curr = NULL;
@@ -131,8 +136,16 @@ int ObLSLocationMap::update(
         ls_buckets_[pos] = tmp;
         ATOMIC_INC(&size_);
       }
-    } else if (OB_FAIL(curr->deep_copy(ls_location))) { // update
-      LOG_WARN("ls location deep copy error", KR(ret), K(ls_location));
+    } else if (from_rpc) {
+      if (OB_FAIL(curr->merge_leader_from(ls_location))) {
+        LOG_WARN("fail to merge leader from ls", KR(ret), KPC(curr), K(ls_location));
+      }
+    } else {
+      if (OB_FAIL(ls_location.merge_leader_from(*curr))) {
+        LOG_WARN("fail to merge leader from ls", KR(ret), K(ls_location), KPC(curr));
+      } else if (OB_FAIL(curr->deep_copy(ls_location))) {
+        LOG_WARN("ls location deep copy error", KR(ret), K(ls_location));
+      }
     }
   }
 

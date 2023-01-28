@@ -216,10 +216,15 @@ public:
   virtual int query_sql_server_list(
       const ObLogSvrBlacklist &server_blacklist,
       common::ObIArray<common::ObAddr> &sql_server_list) = 0;
+
+  // query tenant_id list
   virtual int query_tenant_id_list(common::ObIArray<uint64_t> &tenant_id_list) = 0;
+
+  // query tenant server list based tenant_id
   virtual int query_tenant_sql_server_list(
       const uint64_t tenant_id,
       common::ObIArray<common::ObAddr> &tenant_server_list) = 0;
+
   virtual int query_tenant_status(
       const uint64_t tenant_id,
       share::schema::TenantStatus &tenant_status) = 0;

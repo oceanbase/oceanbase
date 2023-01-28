@@ -84,10 +84,15 @@ enum class LogPhase
   SET_MEMBER = 7,
 };
 
+// inner priority seed define
+constexpr int64_t DEFAULT_SEED = (1ULL << 12);
+constexpr int64_t SEED_NOT_NORMOL_REPLICA_BIT = (1ULL << 48);
+
 constexpr int64_t MSG_DELAY_WARN_THRESHOLD = 200_ms;
 constexpr int64_t MAX_LEASE_TIME = 10_s;
 constexpr int64_t PRIORITY_BUFFER_SIZE = 512;
 constexpr int64_t INVALID_VALUE = -1;// 所有int64_t变量的初始默认无效值
+constexpr int64_t CACHE_EXPIRATION_TIME = 5_s;
 extern int64_t MAX_TST; // 最大单程消息延迟，暂设为750ms，在单测中会将其调低，日后可改为配置项，现阶段先用全局变量代替
 inline int64_t CALCULATE_RENEW_LEASE_INTERVAL() { return  std::min<int64_t>(0.5 * MAX_TST, 250_ms); }// 续约周期固定为消息延迟的一半，最大不超过250ms
 inline int64_t CALCULATE_TIME_WINDOW_SPAN_TS() { return  2 * MAX_TST; }// 时间窗口的长度，为两个最大单程消息延迟， 默认为2s

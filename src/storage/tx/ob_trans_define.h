@@ -1554,10 +1554,44 @@ private:
   palf::LSN offset_;
 };
 
+class ObStateInfo
+{
+public:
+  ObStateInfo() : state_(ObTxState::UNKNOWN), version_(), snapshot_version_() {}
+  ObStateInfo(const share::ObLSID &ls_id,
+              const ObTxState &state,
+              const share::SCN &version,
+              const share::SCN &snapshot_version) :
+              ls_id_(ls_id), state_(state)
+  {
+    version_ = version;
+    snapshot_version_ = snapshot_version;
+  }
+  ~ObStateInfo() {}
+  bool is_valid() const
+  {
+    return ls_id_.is_valid() && version_.is_valid() && snapshot_version_.is_valid();  }
+  void operator=(const ObStateInfo &state_info)
+  {
+    ls_id_ = state_info.ls_id_;
+    state_ = state_info.state_;
+    version_ = state_info.version_;
+    snapshot_version_ = state_info.snapshot_version_;
+  }
+  TO_STRING_KV(K_(ls_id), K_(state), K_(version), K_(snapshot_version))
+  OB_UNIS_VERSION(1);
+public:
+  share::ObLSID ls_id_;
+  ObTxState state_;
+  share::SCN version_;
+  share::SCN snapshot_version_;
+};
+
 typedef common::ObSEArray<ObElrTransInfo, 1, TransModulePageAllocator> ObElrTransInfoArray;
 typedef common::ObSEArray<int64_t, 10, TransModulePageAllocator> ObRedoLogIdArray;
 typedef common::ObSEArray<palf::LSN, 10, ModulePageAllocator> ObRedoLSNArray;
 typedef common::ObSEArray<ObLSLogInfo, 10, ModulePageAllocator> ObLSLogInfoArray;
+typedef common::ObSEArray<ObStateInfo, 1, ModulePageAllocator> ObStateInfoArray;
 
 struct CtxInfo final
 {

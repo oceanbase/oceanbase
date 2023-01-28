@@ -16,6 +16,7 @@
 #include "storage/tx/ob_tx_log.h"
 #include "logservice/ob_log_base_type.h"
 #include "../ob_admin_log_tool_executor.h"
+
 namespace oceanbase
 {
 namespace transaction
@@ -60,6 +61,7 @@ private:
   int parse_recovery_ls_service_log_();
   int parse_standby_timestamp_log_();
   int parse_gais_log_();
+  int parse_data_dict_log_();
   int parse_reserved_snapshot_log_();
   int parse_medium_log_();
 

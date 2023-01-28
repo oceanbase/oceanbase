@@ -160,9 +160,10 @@ TEST(FakeArchivePieceContext, get_piece)
   int64_t piece_id = 0;
   int64_t cur_file_id = 0;
   int64_t offset = 0;
+  bool to_newest = false;
   palf::LSN max_lsn;
   CLOG_LOG(INFO, "print get piece 1", K(lsn));
-  ret = context->get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn);
+  ret = context->get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn, to_newest);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_EQ(round_id, 2);
   EXPECT_EQ(piece_id, 1);
@@ -171,8 +172,8 @@ TEST(FakeArchivePieceContext, get_piece)
 
   lsn = LSN(23 * 64 * ONE_MB);
   CLOG_LOG(INFO, "print get piece 2", K(lsn));
-  scn.convert_for_logservice(log_ts+3);
-  ret = context->get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn);
+  scn.convert_for_logservice(log_ts + 3);
+  ret = context->get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn, to_newest);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_EQ(round_id, 2);
   EXPECT_EQ(piece_id, 4);
@@ -182,14 +183,14 @@ TEST(FakeArchivePieceContext, get_piece)
   lsn = LSN(122 * 64 * ONE_MB);
   CLOG_LOG(INFO, "print get piece 3", K(lsn));
   scn.convert_for_logservice(log_ts+20);
-  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn);
+  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn, to_newest);
   EXPECT_EQ(OB_ARCHIVE_ROUND_NOT_CONTINUOUS, ret);
 
   archive_context.reset_locate_info();
   log_ts = 1199 * ONE_SECOND;
   CLOG_LOG(INFO, "print get piece 4", K(lsn));
   scn.convert_for_logservice(log_ts);
-  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn);
+  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn, to_newest);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_EQ(round_id, 5);
   EXPECT_EQ(piece_id, 22);
@@ -201,7 +202,7 @@ TEST(FakeArchivePieceContext, get_piece)
   EXPECT_EQ(OB_SUCCESS, ret);
   lsn = lsn + 102400;
   CLOG_LOG(INFO, "print get piece 6", K(lsn));
-  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn);
+  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn, to_newest);
   EXPECT_EQ(round_id, 5);
   EXPECT_EQ(piece_id, 22);
   EXPECT_EQ(cur_file_id, 123);
@@ -210,20 +211,20 @@ TEST(FakeArchivePieceContext, get_piece)
 
   lsn = LSN(151 * 64 * ONE_MB + ONE_MB);
   CLOG_LOG(INFO, "print get piece 7", K(lsn));
-  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn);
+  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn, to_newest);
   EXPECT_EQ(OB_ITER_END, ret);
 
   // bad case, current piece hang, can not backward piece
   lsn = LSN(10 * 64 * ONE_MB);
   CLOG_LOG(INFO, "print get piece 8", K(lsn));
-  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn);
+  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn, to_newest);
   EXPECT_EQ(OB_ITER_END, ret);
 
   archive_context.reset_locate_info();
   log_ts = 1010;
   scn.convert_for_logservice(log_ts);
   CLOG_LOG(INFO, "print get piece 9", K(lsn));
-  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn);
+  ret = archive_context.get_piece(scn, lsn, dest_id, round_id, piece_id, cur_file_id, offset, max_lsn, to_newest);
   EXPECT_EQ(OB_SUCCESS, ret);
 }
 

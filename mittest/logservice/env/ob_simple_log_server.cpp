@@ -9,6 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define private public
+#include "ob_simple_log_server.h"
+#undef private
 
 #include "lib/file/file_directory_utils.h"
 #include "logservice/palf/log_define.h"
@@ -22,7 +25,6 @@
 #include "util/easy_mod_stat.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
-#include "ob_simple_log_server.h"
 #include "lib/random/ob_random.h"
 #include "common/log/ob_log_constants.h"
 #include "share/ob_io_device_helper.h"
@@ -31,6 +33,7 @@
 
 namespace oceanbase
 {
+
 namespace unittest
 {
 using namespace oceanbase;
@@ -41,6 +44,28 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace palf;
 using namespace palf::election;
+using namespace logservice;
+
+int MockNetKeepAliveAdapter::init(unittest::ObLogDeliver *log_deliver)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(log_deliver)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    log_deliver_ = log_deliver;
+  }
+  return ret;
+}
+
+bool MockNetKeepAliveAdapter::in_black_or_stopped(const common::ObAddr &server)
+{
+  return log_deliver_->need_filter_packet_by_blacklist(server);
+}
+
+bool MockNetKeepAliveAdapter::is_server_stopped(const common::ObAddr &server)
+{
+  return log_deliver_->need_filter_packet_by_blacklist(server);
+}
 
 uint32_t get_local_addr(const char *dev_name)
 {
@@ -91,25 +116,6 @@ std::string get_local_ip()
   return inet_ntoa(*(struct in_addr *)(&ip));
 }
 
-void ObLogDeliver::init_all_propocessor_()
-{
-  register_rpc_propocessor_<LogPushReqP>(LogPushReqP::PCODE);
-  register_rpc_propocessor_<LogPushRespP>(LogPushRespP::PCODE);
-  register_rpc_propocessor_<LogFetchReqP>(LogFetchReqP::PCODE);
-  register_rpc_propocessor_<LogPrepareReqP>(LogPrepareReqP::PCODE);
-  register_rpc_propocessor_<LogPrepareRespP>(LogPrepareRespP::PCODE);
-  register_rpc_propocessor_<LogChangeConfigMetaReqP>(LogChangeConfigMetaReqP::PCODE);
-  register_rpc_propocessor_<LogChangeConfigMetaRespP>(LogChangeConfigMetaRespP::PCODE);
-  register_rpc_propocessor_<LogChangeModeMetaReqP>(LogChangeModeMetaReqP::PCODE);
-  register_rpc_propocessor_<LogChangeModeMetaRespP>(LogChangeModeMetaRespP::PCODE);
-  register_rpc_propocessor_<LogGetMCStP>(LogGetMCStP::PCODE);
-  register_rpc_propocessor_<LogLearnerReqP>(LogLearnerReqP::PCODE);
-  register_rpc_propocessor_<LogRegisterParentReqP>(LogRegisterParentReqP::PCODE);
-  register_rpc_propocessor_<LogRegisterParentRespP>(LogRegisterParentRespP::PCODE);
-  register_rpc_propocessor_<LogNotifyRebuildReqP>(LogNotifyRebuildReqP::PCODE);
-  register_rpc_propocessor_<CommittedInfoP>(CommittedInfoP::PCODE);
-}
-
 int ObSimpleLogServer::simple_init(
     const std::string &cluster_name,
     const common::ObAddr &addr,
@@ -121,23 +127,30 @@ int ObSimpleLogServer::simple_init(
   SERVER_LOG(INFO, "simple_log_server simple_init start", K(node_id), K(addr_));
   tenant_base_ = OB_NEW(ObTenantBase, "TestBase", node_id);
   tenant_base_->init();
+  tenant_base_->set(&log_service_);
+  ObTenantEnv::set_tenant(tenant_base_);
+  assert(&log_service_ == MTL(logservice::ObLogService*));
   guard.click("init tenant_base");
   node_id_ = node_id;
-  ObTenantEnv::set_tenant(tenant_base_);
   if (is_bootstrap && OB_FAIL(init_memory_dump_timer_())) {
     SERVER_LOG(ERROR, "init_memory_dump_timer_ failed", K(ret), K_(node_id));
-  } else if (FALSE_IT(guard.click("init_memory_dump_timer_")) || OB_FAIL(init_network_(addr, is_bootstrap))) {
+  } else if (FALSE_IT(guard.click("init_memory_dump_timer_"))
+      || OB_FAIL(init_network_(addr, is_bootstrap))) {
     SERVER_LOG(WARN, "init_network failed", K(ret), K(addr));
   } else if (FALSE_IT(guard.click("init_network_")) || OB_FAIL(init_io_(cluster_name))) {
     SERVER_LOG(WARN, "init_io failed", K(ret), K(addr));
-  } else if (FALSE_IT(guard.click("init_io_")) || OB_FAIL(init_palf_env_())) {
-    SERVER_LOG(WARN, "init_palf_env failed", K(ret), K(addr));
+  } else if (FALSE_IT(guard.click("init_io_")) || OB_FAIL(init_log_service_())) {
+    SERVER_LOG(WARN, "init_log_service failed", K(ret), K(addr));
   } else {
-    guard.click("init_palf_env_");
-    deliver_.set_palf_env_impl(palf_env_->get_palf_env_impl());
-    SERVER_LOG(INFO, "simple_log_server simple_init success", K(node_id), K(addr), K(guard));
+    guard.click("init_log_service_");
+    SERVER_LOG(INFO, "simple_log_server init success", KPC(this), K(guard));
   }
   return ret;
+}
+
+int ObSimpleLogServer::update_disk_opts(const PalfDiskOptions &opts)
+{
+  return palf_env_->palf_env_impl_.disk_options_wrapper_.update_disk_options(opts);
 }
 
 int ObSimpleLogServer::init_memory_dump_timer_()
@@ -161,15 +174,25 @@ int ObSimpleLogServer::init_network_(const common::ObAddr &addr, const bool is_b
 {
   int ret = OB_SUCCESS;
   ObNetOptions opts;
-  opts.rpc_io_cnt_ = 1024;
+  opts.rpc_io_cnt_ = 10;
   opts.tcp_user_timeout_ = 10 * 1000 * 1000; // 10s
   addr_ = addr;
-  if (is_bootstrap && OB_FAIL(net_.init(opts))) {
+  obrpc::ObRpcNetHandler::CLUSTER_ID = 1;
+  if (is_bootstrap && OB_FAIL(net_.init(opts, 0))) {
     SERVER_LOG(ERROR, "net init fail", K(ret));
-  } else if (OB_FAIL(deliver_.init())) {
+  } else if (OB_FAIL(deliver_.init(addr, is_bootstrap))) {
     SERVER_LOG(ERROR, "deliver_ init failed", K(ret));
   } else if (is_bootstrap && OB_FAIL(net_.add_rpc_listen(addr_.get_port(), handler_, transport_))) {
+//  } else if (is_bootstrap &&(
+//             OB_FAIL(net_.set_rpc_port(addr_.get_port()))
+//             || OB_FAIL(net_.rpc_net_register(handler_, transport_))
+//             || OB_FAIL(net_.net_keepalive_register()))) {
     SERVER_LOG(ERROR, "net_ listen failed", K(ret));
+  } else if (is_bootstrap && OB_FAIL(srv_proxy_.init(transport_))) {
+    SERVER_LOG(ERROR, "init srv_proxy_ failed");
+  } else {
+    deliver_.node_id_ = node_id_;
+    SERVER_LOG(INFO, "init_network success", K(ret), K(addr_), K(node_id_), K(opts));
   }
   return ret;
 }
@@ -231,7 +254,12 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
       SERVER_LOG(INFO, "init_io_ successs", K(ret), K(guard));
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(log_block_pool_.reserve(storage_env.log_disk_size_))) {
+      log_block_pool_.get_tenants_log_disk_size_func_ = [this, &storage_env](int64_t &log_disk_size) -> int
+      {
+        log_disk_size = log_block_pool_.lower_align_(storage_env.log_disk_size_);
+        return OB_SUCCESS;
+      };
+      if (OB_FAIL(log_block_pool_.start(storage_env.log_disk_size_))) {
         LOG_ERROR("log pool start failed", KR(ret));
       }
     }
@@ -239,28 +267,27 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
   return ret;
 }
 
-int ObSimpleLogServer::init_palf_env_()
+int ObSimpleLogServer::init_log_service_()
 {
   int ret = OB_SUCCESS;
-  palf::PalfDiskOptions opts;
-  opts.log_disk_usage_limit_size_ = 10 * 1024 * 1024 * 1024ul;
-  opts.log_disk_utilization_threshold_ = 80;
-  opts.log_disk_utilization_limit_threshold_ = 95;
+  // init deps of log_service
+  palf::PalfOptions opts;
+  opts.disk_options_.log_disk_usage_limit_size_ = 10 * 1024 * 1024 * 1024ul;
+  opts.disk_options_.log_disk_utilization_threshold_ = 80;
+  opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
+  std::string clog_dir = clog_dir_ + "/tenant_1";
   allocator_ = OB_NEW(ObTenantMutilAllocator, "TestBase", node_id_);
   ObMemAttr attr(1, "SimpleLog");
-  malloc_mgr_.set_attr(attr);
-  std::string clog_dir = clog_dir_ + "/tenant_1";
-  bool result = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists(clog_dir.c_str(), result))) {
-    SERVER_LOG(ERROR, "is_exists failed", K(ret), K(clog_dir.c_str()));
-  } else if (false == result && -1 == ::mkdir(clog_dir.c_str(), 0777))  {
-    ret = convert_sys_errno();
-    SERVER_LOG(ERROR, "::mkdir failed", K(ret), K(clog_dir.c_str()));
-  } else if (OB_FAIL(PalfEnv::create_palf_env(opts, clog_dir.c_str(), addr_,
-      transport_, allocator_, &log_block_pool_, palf_env_))) {
-    SERVER_LOG(ERROR, "init init_palf_env_ fail", K(ret));
+  net_keepalive_ = MTL_NEW(MockNetKeepAliveAdapter, "SimpleLog");
+
+  if (OB_FAIL(net_keepalive_->init(&deliver_))) {
+  } else if (OB_FAIL(log_service_.init(opts, clog_dir.c_str(), addr_, allocator_, transport_, &ls_service_,
+      &location_service_, &reporter_, &log_block_pool_, &sql_proxy_, net_keepalive_))) {
+    SERVER_LOG(ERROR, "init_log_service_ fail", K(ret));
   } else {
-    SERVER_LOG(INFO, "init init_palf_env_ success", K(ret));
+    palf_env_ = log_service_.get_palf_env();
+    palf_env_->palf_env_impl_.log_rpc_.tenant_id_ = OB_SERVER_TENANT_ID;
+    SERVER_LOG(INFO, "init_log_service_ success", K(ret));
   }
   return ret;
 }
@@ -272,7 +299,11 @@ int ObSimpleLogServer::simple_start(const bool is_bootstrap = false)
     SERVER_LOG(ERROR, "net start fail", K(ret));
   } else if (OB_FAIL(deliver_.start())) {
     SERVER_LOG(ERROR, "deliver_ start failed", K(ret));
+  } else if (OB_FAIL(log_service_.arb_service_.start())) {
+    SERVER_LOG(ERROR, "arb_service start failed", K(ret));
   }
+  // do not start entire log_service_ for now, it will
+  // slow down cases running
   return ret;
 }
 
@@ -280,10 +311,10 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard guard("simple_close", 0);
-  deliver_.destroy();
+  deliver_.destroy(is_shutdown);
   guard.click("destroy");
+  log_service_.destroy();
 
-  PalfEnv::destroy_palf_env(palf_env_);
   log_block_pool_.destroy();
   guard.click("destroy_palf_env");
 
@@ -317,19 +348,38 @@ int ObSimpleLogServer::simple_restart(const std::string &cluster_name, const int
   return ret;
 }
 
-void ObLogDeliver::block_net(const ObAddr &src)
+int ObMittestBlacklist::init(const common::ObAddr &self)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(blacklist_.create(1024))) {
+    SERVER_LOG(WARN, "create blacklist_ failed", K(ret));
+  } else if (false == blacklist_.created()) {
+    SERVER_LOG(WARN, "blacklist_ created failed");
+  } else {
+    self_ = self;
+  }
+  return ret;
+}
+
+void ObMittestBlacklist::block_net(const ObAddr &src)
 {
   blacklist_.set_refactored(src);
   SERVER_LOG(INFO, "block_net", K(src), K(blacklist_));
 }
 
-void ObLogDeliver::unblock_net(const ObAddr &src)
+void ObMittestBlacklist::unblock_net(const ObAddr &src)
 {
   blacklist_.erase_refactored(src);
   SERVER_LOG(INFO, "unblock_net", K(src), K(blacklist_));
 }
 
-void ObLogDeliver::set_rpc_loss(const ObAddr &src, const int loss_rate)
+bool ObMittestBlacklist::need_filter_packet_by_blacklist(const ObAddr &addr)
+{
+  return OB_HASH_EXIST == blacklist_.exist_refactored(addr);
+}
+
+
+void ObMittestBlacklist::set_rpc_loss(const ObAddr &src, const int loss_rate)
 {
   // not thread safe
   int old_loss_rate = -1;
@@ -350,7 +400,7 @@ void ObLogDeliver::set_rpc_loss(const ObAddr &src, const int loss_rate)
   SERVER_LOG(INFO, "set_rpc_loss", K(src), K(loss_rate), K(old_loss_rate));
 }
 
-void ObLogDeliver::reset_rpc_loss(const ObAddr &src)
+void ObMittestBlacklist::reset_rpc_loss(const ObAddr &src)
 {
   // not thread safe
   int64_t idx = -1;
@@ -370,7 +420,7 @@ void ObLogDeliver::reset_rpc_loss(const ObAddr &src)
   SERVER_LOG(INFO, "reset_rpc_loss", K(src), K(idx));
 }
 
-void ObLogDeliver::get_loss_config(const ObAddr &src, bool &exist, LossConfig &loss_config)
+void ObMittestBlacklist::get_loss_config(const ObAddr &src, bool &exist, LossConfig &loss_config)
 {
   // not thread safe
   exist = false;
@@ -387,16 +437,29 @@ void ObLogDeliver::get_loss_config(const ObAddr &src, bool &exist, LossConfig &l
   SERVER_LOG(INFO, "get_loss_config", K(src), K(loss_config));
 }
 
+bool ObMittestBlacklist::need_drop_by_loss_config(const ObAddr &addr)
+{
+  bool bool_ret = false;
+  bool exist = false;
+  LossConfig loss_config;
+  get_loss_config(addr, exist, loss_config);
+  if (exist && loss_config.loss_rate_ > 0) {
+    const int64_t random_num = ObRandom::rand(1, 100);
+    bool_ret = random_num <= loss_config.loss_rate_ ? true : false;
+    if (bool_ret) {
+      SERVER_LOG(INFO, "need drop req by loss config", K(addr));
+    }
+  }
+  return bool_ret;
+}
 
-int ObLogDeliver::init()
+int ObLogDeliver::init(const common::ObAddr &self, const bool is_bootstrap)
 {
   int ret = OB_SUCCESS;
   // init_all_propocessor_();
-  if (OB_FAIL(blacklist_.create(1024))) {
-    SERVER_LOG(WARN, "create blacklist_ failed", K(ret));
-  } else if (false == blacklist_.created()) {
-    SERVER_LOG(WARN, "blacklist_ created failed");
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TEST2, tg_id_))) {
+  if (is_bootstrap && OB_FAIL(ObMittestBlacklist::init(self))) {
+    SERVER_LOG(WARN, "ObMittestBlacklist init failed", K(ret));
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TEST7, tg_id_))) {
     SERVER_LOG(WARN, "ObSimpleThreadPool::init failed", K(ret));
   } else {
     is_inited_ = true;
@@ -405,7 +468,7 @@ int ObLogDeliver::init()
   return ret;
 }
 
-void ObLogDeliver::destroy()
+void ObLogDeliver::destroy(const bool is_shutdown)
 {
   if (IS_NOT_INIT) {
     SERVER_LOG(INFO, "ObLogDeliver not init");
@@ -415,7 +478,9 @@ void ObLogDeliver::destroy()
     wait();
     is_inited_ = false;
     TG_DESTROY(tg_id_);
-    blacklist_.destroy();
+    if (is_shutdown) {
+      blacklist_.destroy();
+    }
     tg_id_ = 0;
     SERVER_LOG(INFO, "destroy ObLogDeliver");
   }
@@ -460,27 +525,6 @@ int ObLogDeliver::wait()
   return ret;
 }
 
-bool ObLogDeliver::need_filter_packet_by_blacklist(const ObAddr &addr)
-{
-  return OB_HASH_EXIST == blacklist_.exist_refactored(addr);
-}
-
-bool ObLogDeliver::need_drop_by_loss_config(const ObAddr &addr)
-{
-  bool bool_ret = false;
-  bool exist = false;
-  LossConfig loss_config;
-  get_loss_config(addr, exist, loss_config);
-  if (exist && loss_config.loss_rate_ > 0) {
-    const int64_t random_num = ObRandom::rand(1, 100);
-    bool_ret = random_num <= loss_config.loss_rate_ ? true : false;
-    if (bool_ret) {
-      SERVER_LOG(INFO, "need drop req by loss config", K(addr));
-    }
-  }
-  return bool_ret;
-}
-
 int ObLogDeliver::deliver(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
@@ -489,11 +533,15 @@ int ObLogDeliver::deliver(rpc::ObRequest &req)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    RWLock::RLockGuard guard(lock_);
     do {
-      ret = TG_PUSH_TASK(tg_id_, &req);
-      if (OB_SUCCESS != ret && OB_EAGAIN != ret) {
-        SERVER_LOG(ERROR, "deliver request failed", K(ret), K(pkt), K(req.ez_req_), KPC(palf_env_impl_));
+      RWLock::RLockGuard guard(lock_);
+      if (false == is_stopped_) {
+        ret = TG_PUSH_TASK(tg_id_, &req);
+        if (OB_SUCCESS != ret && OB_EAGAIN != ret) {
+          SERVER_LOG(ERROR, "deliver request failed", K(ret), K(pkt), K(req.ez_req_), KPC(palf_env_impl_));
+        }
+      } else {
+        break;
       }
     } while (OB_EAGAIN == ret);
   }
@@ -518,7 +566,13 @@ void ObLogDeliver::handle(void *task)
 int ObLogDeliver::handle_req_(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
+  // tenant_id of log servers are different for clear log record,
+  // so set tenant_id of RpcPacket to OB_INVALID_TENANT_ID, this
+  // will make the PALF_ENV_ID to OB_SERVER_TENANT_ID
   const ObRpcPacket &pkt = dynamic_cast<const ObRpcPacket&>(req.get_packet());
+  ObRpcPacket &modify_pkt = const_cast<ObRpcPacket&>(pkt);
+  modify_pkt.set_tenant_id(OB_SERVER_TENANT_ID);
+  SERVER_LOG(TRACE, "handle_req_ trace", K(pkt), K(node_id_));
   const ObRpcPacketCode pcode = pkt.get_pcode();
   ObFunction<bool(const ObAddr &src)> filter = [&](const ObAddr &src) -> bool {
     if (this->need_filter_packet_by_blacklist(src)) {
@@ -530,13 +584,12 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
     }
     return false;
   };
-
   switch (pkt.get_pcode()) {
     #define PROCESS(processer) \
     processer p;\
     p.init();\
     p.set_ob_request(req);\
-    p.set_palf_env_impl(palf_env_impl_, &filter);\
+    p.set_filter(&filter);  \
     p.run();      \
     break;
     case obrpc::OB_LOG_PUSH_REQ: {
@@ -597,7 +650,36 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
       PROCESS(ElectionChangeLeaderMsgP)
     }
     case obrpc::OB_LOG_GET_MC_ST: {
+      modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogGetMCStP)
+    }
+    case obrpc::OB_LOG_ARB_PROBE_MSG: {
+      modify_pkt.set_tenant_id(node_id_);
+      PROCESS(logservice::LogServerProbeP)
+    }
+    case obrpc::OB_LOG_CONFIG_CHANGE_CMD: {
+      modify_pkt.set_tenant_id(node_id_);
+      PROCESS(LogMembershipChangeP)
+    }
+    case obrpc::OB_LOG_GET_PALF_STAT: {
+      modify_pkt.set_tenant_id(node_id_);
+      PROCESS(LogGetPalfStatReqP)
+    }
+    case obrpc::OB_LOG_CHANGE_ACCESS_MODE_CMD: {
+      modify_pkt.set_tenant_id(node_id_);
+      PROCESS(LogChangeAccessModeP)
+    }
+    case obrpc::OB_LOG_FLASHBACK_CMD: {
+      modify_pkt.set_tenant_id(node_id_);
+      PROCESS(LogFlashbackMsgP)
+    }
+    case obrpc::OB_LOG_GET_LEADER_MAX_SCN: {
+      modify_pkt.set_tenant_id(node_id_);
+      PROCESS(LogGetLeaderMaxScnP)
+    }
+    case obrpc::OB_LOG_GET_STAT: {
+      modify_pkt.set_tenant_id(node_id_);
+      PROCESS(LogGetStatP)
     }
     default:
       SERVER_LOG(ERROR, "invalid req type", K(pkt.get_pcode()));

@@ -26,7 +26,7 @@ namespace unittest
 {
 // int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 // int64_t ObSimpleLogClusterTestBase::node_cnt_ = 7;
-std::vector<ObSimpleLogServer*> ObSimpleLogClusterTestBase::cluster_;
+std::vector<ObISimpleLogServer*> ObSimpleLogClusterTestBase::cluster_;
 bool ObSimpleLogClusterTestBase::is_started_ = false;
 common::ObMemberList ObSimpleLogClusterTestBase::member_list_ = ObMemberList();
 common::ObArrayHashMap<common::ObAddr, common::ObRegion> ObSimpleLogClusterTestBase::member_region_map_;
@@ -80,8 +80,16 @@ int ObSimpleLogClusterTestBase::start()
   } else if (OB_FAIL(member_region_map_.init("TestBase", OB_MAX_MEMBER_NUMBER))) {
   } else if (OB_FAIL(generate_sorted_server_list_(node_cnt_))) {
   } else {
+    // 如果需要新增arb server，将其作为memberlist最后一项
+    // TODO by runlin, 这个是暂时的解决方法，以后可以走加减成员的流程
+    const int64_t arb_idx = member_cnt_ - 1;
     for (int i = 0; OB_SUCC(ret) && i < node_cnt_; i++) {
-      auto svr = OB_NEW(ObSimpleLogServer, "TestBase");
+      ObISimpleLogServer *svr = NULL;
+      if (i == arb_idx && true == need_add_arb_server_) {
+        svr = OB_NEW(ObSimpleArbServer, "TestBase");
+      } else {
+        svr = OB_NEW(ObSimpleLogServer, "TestBase");
+      }
       common::ObAddr server;
       if (OB_FAIL(node_list_.get_server_by_index(i, server))) {
       } else if (OB_FAIL(svr->simple_init(test_name_, server, node_id++, true))) {
@@ -98,8 +106,12 @@ int ObSimpleLogClusterTestBase::start()
           SERVER_LOG(WARN, "member_region_map_.insert failed", K(ret), K(server), K_(node_list));
         }
       }
+      usleep(500);
+      SERVER_LOG(INFO, "ObSimpleLogClusterTestBase start success");
     }
-    is_started_ = true;
+    if (OB_SUCC(ret)) {
+      is_started_ = true;
+    }
     SERVER_LOG(INFO, "ObSimpleLogClusterTestBase started", K(ret), K_(member_cnt), K_(node_cnt), K_(node_list));
   }
   return ret;

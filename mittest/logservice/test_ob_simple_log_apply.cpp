@@ -97,6 +97,7 @@ public:
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 3;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
+bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 
 TEST_F(TestObSimpleLogApplyFunc, apply)
 {
@@ -106,7 +107,7 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
   ObLSID ls_id(id);
   int64_t leader_idx = 0;
   LSN basic_lsn(0);
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   MockAppendCb *cb_array[task_count];
   LSN unused_apply_end_lsn;
   bool is_apply_done = false;
@@ -120,8 +121,10 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
     cb_array[i] = new MockAppendCb();
     cb_array[i]->init(i + 1, &ls_adapter);
   }
-  ap_sv.init(leader.palf_env_, &ls_adapter);
-  ap_sv.start();
+  PalfEnv *palf_env;
+  EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
+  EXPECT_EQ(OB_SUCCESS, ap_sv.init(palf_env, &ls_adapter));
+  EXPECT_EQ(OB_SUCCESS, ap_sv.start());
   EXPECT_EQ(OB_SUCCESS, ap_sv.add_ls(ls_id));
   EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 1));
   const int64_t idx_1 = (leader_idx + 1) % get_node_cnt();
@@ -159,7 +162,7 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
     }
   } while (0);
   share::SCN min_scn;
-  EXPECT_EQ(OB_SUCCESS, ap_sv.get_min_unapplied_scn(ls_id, min_scn));
+  EXPECT_EQ(OB_SUCCESS, ap_sv.get_max_applied_scn(ls_id, min_scn));
   EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_follower(ls_id));
 
   //切主, truncate旧主日志,预期所有cb都调用on_failure
@@ -174,7 +177,7 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
   unblock_net(leader_idx, idx_1);
   unblock_net(leader_idx, idx_2);
   int64_t new_leader_idx = 0;
-  PalfHandleGuard new_leader;
+  PalfHandleImplGuard new_leader;
   EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
   EXPECT_NE(new_leader_idx, leader_idx);
   //等待membership同步
@@ -185,7 +188,7 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
   leader.reset();
   sleep(2);
   EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 3));
-  EXPECT_EQ(OB_SUCCESS, ap_sv.get_min_unapplied_scn(ls_id, min_scn));
+  EXPECT_EQ(OB_SUCCESS, ap_sv.get_max_applied_scn(ls_id, min_scn));
   EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, new_leader_idx));
   CLOG_LOG(INFO, "check switch leader", K(new_leader_idx), K(leader_idx));
   EXPECT_EQ(new_leader_idx, leader_idx);
@@ -199,7 +202,7 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
     share::SCN scn;
     for (int i = truncate_count; i < task_count; i++)
     {
-      EXPECT_EQ(OB_SUCCESS, ap_sv.get_min_unapplied_scn(ls_id, scn));
+      EXPECT_EQ(OB_SUCCESS, ap_sv.get_max_applied_scn(ls_id, scn));
       {
         int64_t ref_ts = i - truncate_count;
         share::SCN ref_scn;
@@ -214,7 +217,7 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
         EXPECT_EQ(OB_SUCCESS, apply_status->push_append_cb(cb_array[i]));
       }
       CLOG_LOG(INFO, "submit log finish", K(i), K(lsn), K(scn));
-      EXPECT_EQ(OB_SUCCESS, ap_sv.get_min_unapplied_scn(ls_id, scn));
+      EXPECT_EQ(OB_SUCCESS, ap_sv.get_max_applied_scn(ls_id, scn));
     }
   } while (0);
   CLOG_LOG(INFO, "truncate write finish", K(id));
@@ -228,8 +231,8 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
   }
   share::SCN scn;
   EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_follower(ls_id));
-  EXPECT_EQ(OB_SUCCESS, ap_sv.get_min_unapplied_scn(ls_id, scn));
-  EXPECT_EQ(scn.get_val_for_logservice() - 1, palf_end_scn.get_val_for_logservice());
+  EXPECT_EQ(OB_SUCCESS, ap_sv.get_max_applied_scn(ls_id, scn));
+  EXPECT_EQ(scn.get_val_for_logservice(), palf_end_scn.get_val_for_logservice());
   EXPECT_EQ(truncate_count, ls_adapter.failure_count_);
   EXPECT_EQ(task_count- truncate_count, ls_adapter.success_count_);
   for (int i = 0; i < task_count; i++)

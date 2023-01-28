@@ -921,7 +921,9 @@ OB_SERIALIZE_MEMBER(ObSysVarIdValue, sys_id_, value_);
 bool ObCreateTenantArg::is_valid() const
 {
   return !tenant_schema_.get_tenant_name_str().empty() && pool_list_.count() > 0
-         && (!is_restore_ || (palf_base_info_.is_valid() && compatible_version_ > 0));
+         && (!is_restore_ || (is_restore_ && palf_base_info_.is_valid()
+                              && recovery_until_scn_.is_valid_and_not_min()
+                              && compatible_version_ > 0));
 }
 
 int ObCreateTenantArg::check_valid() const
@@ -953,6 +955,7 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg &other)
     name_case_mode_ = other.name_case_mode_;
     is_restore_ = other.is_restore_;
     palf_base_info_ = other.palf_base_info_;
+    recovery_until_scn_ = other.recovery_until_scn_;
     compatible_version_ = other.compatible_version_;
   }
   return ret;
@@ -1003,6 +1006,7 @@ DEF_TO_STRING(ObCreateTenantArg)
        K_(name_case_mode),
        K_(is_restore),
        K_(palf_base_info),
+       K_(recovery_until_scn),
        K_(compatible_version));
   return pos;
 }
@@ -1015,7 +1019,8 @@ OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg),
                     name_case_mode_,
                     is_restore_,
                     palf_base_info_,
-                    compatible_version_);
+                    compatible_version_,
+                    recovery_until_scn_);
 
 bool ObCreateTenantEndArg::is_valid() const
 {
@@ -4503,6 +4508,7 @@ OB_SERIALIZE_MEMBER(ObAutoincSyncArg,
 
 OB_SERIALIZE_MEMBER(ObAdminChangeReplicaArg, force_cmd_);
 
+
 bool ObUpdateIndexStatusArg::is_allow_when_disable_ddl() const
 {
   bool bret = false;
@@ -4538,6 +4544,7 @@ OB_SERIALIZE_MEMBER(ObDumpMemtableArg, tenant_id_, ls_id_ ,tablet_id_);
 OB_SERIALIZE_MEMBER(ObDumpTxDataMemtableArg, tenant_id_, ls_id_);
 
 OB_SERIALIZE_MEMBER(ObDumpSingleTxDataArg, tenant_id_, ls_id_, tx_id_);
+
 
 int ObRootMajorFreezeArg::assign(const ObRootMajorFreezeArg &other)
 {
@@ -5225,6 +5232,19 @@ DEF_TO_STRING(ObSplitPartitionBatchArg)
   J_KV(K_(split_info));
   return pos;
 }
+
+bool ObCheckpoint::is_valid() const
+{
+  return (ls_id_.is_valid() && cur_sync_scn_.is_valid_and_not_min());
+}
+
+bool ObCheckpoint::operator==(const obrpc::ObCheckpoint &r) const
+{
+  return ls_id_ == r.ls_id_ && cur_sync_scn_ == r.cur_sync_scn_ && is_sync_to_latest_ == r.is_sync_to_latest_;
+}
+
+OB_SERIALIZE_MEMBER(ObCheckpoint, ls_id_, cur_sync_scn_, is_sync_to_latest_);
+
 OB_SERIALIZE_MEMBER(ObGetWRSArg, tenant_id_, scope_, need_filter_);
 OB_SERIALIZE_MEMBER(ObGetWRSResult, self_addr_, err_code_);
 bool ObGetWRSArg::is_valid() const
@@ -5338,6 +5358,152 @@ OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
                     if_not_grant_,
                     unit_id_);
 
+OB_SERIALIZE_MEMBER(ObGetLSSyncScnArg, tenant_id_, ls_id_, check_sync_to_latest_);
+
+bool ObGetLSSyncScnArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_
+         && ls_id_.is_valid();
+}
+int ObGetLSSyncScnArg::init(
+    const uint64_t tenant_id, const ObLSID &ls_id, const bool check_sync_to_latest)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    check_sync_to_latest_ = check_sync_to_latest;
+  }
+  return ret;
+}
+int ObGetLSSyncScnArg::assign(const ObGetLSSyncScnArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    check_sync_to_latest_ = other.check_sync_to_latest_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObGetLSSyncScnRes, tenant_id_, ls_id_, cur_sync_scn_, is_sync_to_latest_);
+
+bool ObGetLSSyncScnRes::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_
+         && ls_id_.is_valid()
+         && cur_sync_scn_.is_valid_and_not_min();
+}
+int ObGetLSSyncScnRes::init(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const share::SCN &cur_sync_scn,
+    const bool is_sync_to_latest)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || !ls_id.is_valid()
+                  || !cur_sync_scn.is_valid_and_not_min())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_sync_scn), K(is_sync_to_latest));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    cur_sync_scn_ = cur_sync_scn;
+    is_sync_to_latest_ = is_sync_to_latest;
+  }
+  return ret;
+}
+
+int ObGetLSSyncScnRes::assign(const ObGetLSSyncScnRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    cur_sync_scn_ = other.cur_sync_scn_;
+    is_sync_to_latest_ = other.is_sync_to_latest_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObRefreshTenantInfoArg, tenant_id_);
+
+bool ObRefreshTenantInfoArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_;
+}
+int ObRefreshTenantInfoArg::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+int ObRefreshTenantInfoArg::assign(const ObRefreshTenantInfoArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObRefreshTenantInfoRes, tenant_id_);
+
+bool ObRefreshTenantInfoRes::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_;
+}
+
+int ObRefreshTenantInfoRes::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+int ObRefreshTenantInfoRes::assign(const ObRefreshTenantInfoRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+int ObSwitchTenantArg::init(
+    const uint64_t exec_tenant_id,
+    const OpType op_type,
+    const ObString &tenant_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == exec_tenant_id
+                  || OpType::INVALID == op_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(exec_tenant_id), K(op_type), K(tenant_name));
+  } else {
+    exec_tenant_id_ = exec_tenant_id;
+    op_type_ = op_type;
+    tenant_name_ = tenant_name;
+  }
+  return ret;
+}
+
 int ObSwitchTenantArg::assign(const ObSwitchTenantArg &other)
 {
   int ret = OB_SUCCESS;
@@ -5351,6 +5517,42 @@ int ObSwitchTenantArg::assign(const ObSwitchTenantArg &other)
 }
 
 OB_SERIALIZE_MEMBER(ObSwitchTenantArg, exec_tenant_id_, op_type_, tenant_name_, stmt_str_);
+
+int ObRecoverTenantArg::init(
+    const uint64_t exec_tenant_id,
+    const ObString &tenant_name,
+    const RecoverType type,
+    const SCN &recovery_until_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == exec_tenant_id || !is_valid_(type, recovery_until_scn))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(exec_tenant_id), K(type), K(recovery_until_scn));
+  } else {
+    exec_tenant_id_ = exec_tenant_id;
+    tenant_name_ = tenant_name;
+    type_ = type;
+    recovery_until_scn_ = recovery_until_scn;
+  }
+  return ret;
+}
+
+int ObRecoverTenantArg::assign(const ObRecoverTenantArg &other)
+{
+  int ret = OB_SUCCESS;
+
+  exec_tenant_id_ = other.exec_tenant_id_;
+  tenant_name_ = other.tenant_name_;
+  type_ = other.type_;
+  recovery_until_scn_ = other.recovery_until_scn_;
+  stmt_str_ = other.stmt_str_;
+
+  return ret;
+}
+
+
+OB_SERIALIZE_MEMBER(ObRecoverTenantArg, exec_tenant_id_, tenant_name_, type_, recovery_until_scn_,
+                                        stmt_str_);
 
 OB_SERIALIZE_MEMBER((ObDDLNopOpreatorArg, ObDDLArg),
                      schema_operation_);
@@ -6144,6 +6346,7 @@ OB_SERIALIZE_MEMBER(ObCreateRestorePointArg,
 OB_SERIALIZE_MEMBER(ObDropRestorePointArg,
                    tenant_id_,
                    name_);
+
 OB_SERIALIZE_MEMBER(ObCheckBuildIndexTaskExistArg,
                     tenant_id_, task_id_, scheduler_id_);
 OB_SERIALIZE_MEMBER(ObLogReqLoadProxyRequest, agency_addr_seq_, principal_addr_seq_, principal_crashed_ts_);
@@ -6346,6 +6549,7 @@ DEF_TO_STRING(ObCreateLSArg)
 OB_SERIALIZE_MEMBER(ObCreateLSArg, tenant_id_, id_, replica_type_, replica_property_, tenant_info_,
 create_scn_, compat_mode_, create_ls_type_, palf_base_info_);
 
+
 bool ObSetMemberListArgV2::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
@@ -6360,6 +6564,7 @@ void ObSetMemberListArgV2::reset()
   id_.reset();
   member_list_.reset();
   paxos_replica_num_ = 0;
+  arbitration_service_.reset();
 }
 
 int ObSetMemberListArgV2::assign(const ObSetMemberListArgV2 &arg)
@@ -6370,6 +6575,8 @@ int ObSetMemberListArgV2::assign(const ObSetMemberListArgV2 &arg)
     LOG_WARN("arg is invalid", KR(ret), K(arg));
   } else if (OB_FAIL(member_list_.deep_copy(arg.member_list_))) {
     LOG_WARN("failed to assign member list", KR(ret), K(arg));
+  } else if (OB_FAIL(arbitration_service_.assign(arg.arbitration_service_))) {
+    LOG_WARN("failed to assign arbitration_service", KR(ret), K(arg));
   } else {
     tenant_id_ = arg.tenant_id_;
     id_ = arg.id_;
@@ -6377,8 +6584,10 @@ int ObSetMemberListArgV2::assign(const ObSetMemberListArgV2 &arg)
   }
   return ret;
 }
+
 int ObSetMemberListArgV2::init(const int64_t tenant_id,
-    const share::ObLSID &id, const int64_t paxos_replica_num, const ObMemberList &member_list)
+    const share::ObLSID &id, const int64_t paxos_replica_num,
+    const ObMemberList &member_list, const ObMember &arbitration_service)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -6389,6 +6598,8 @@ int ObSetMemberListArgV2::init(const int64_t tenant_id,
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id), K(member_list), K(paxos_replica_num));
   } else if (OB_FAIL(member_list_.deep_copy(member_list))) {
     LOG_WARN("failed to assign member list", KR(ret), K(member_list));
+  } else if (OB_FAIL(arbitration_service_.assign(arbitration_service))) {
+    LOG_WARN("failed to assign arbitration service", KR(ret), K(arbitration_service));
   } else {
     tenant_id_ = tenant_id;
     id_ = id;
@@ -6400,11 +6611,11 @@ int ObSetMemberListArgV2::init(const int64_t tenant_id,
 DEF_TO_STRING(ObSetMemberListArgV2)
 {
   int64_t pos = 0;
-  J_KV(K_(tenant_id), K_(id), K_(paxos_replica_num), K_(member_list));
+  J_KV(K_(tenant_id), K_(id), K_(paxos_replica_num), K_(member_list), K_(arbitration_service));
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObSetMemberListArgV2, tenant_id_, id_, member_list_, paxos_replica_num_);
+OB_SERIALIZE_MEMBER(ObSetMemberListArgV2, tenant_id_, id_, member_list_, paxos_replica_num_, arbitration_service_);
 
 bool ObGetLSAccessModeInfoArg::is_valid() const
 {
@@ -7667,6 +7878,9 @@ int ObFetchLocationResult::set_servers(
 
 OB_SERIALIZE_MEMBER(ObSyncRewriteRuleArg, tenant_id_);
 
+OB_SERIALIZE_MEMBER(ObGetLeaderLocationsArg, addr_);
+OB_SERIALIZE_MEMBER(ObGetLeaderLocationsResult, addr_, leader_replicas_);
+
 OB_SERIALIZE_MEMBER(ObInitTenantConfigArg, tenant_configs_);
 
 int ObInitTenantConfigArg::assign(const ObInitTenantConfigArg &other)
@@ -7770,7 +7984,6 @@ int ObRlsContextDDLArg::assign(const ObRlsContextDDLArg &other)
 
 OB_SERIALIZE_MEMBER((ObTryAddDepInofsForSynonymBatchArg, ObDDLArg),
                     tenant_id_, synonym_ids_);
-
 
 }//end namespace obrpc
 }//end namepsace oceanbase

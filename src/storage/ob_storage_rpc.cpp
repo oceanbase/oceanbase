@@ -1207,6 +1207,7 @@ int ObFetchLSInfoP::process()
     ObLSMetaPackage ls_meta_package;
     bool is_need_rebuild = false;
     bool is_log_sync = false;
+    const bool check_archive = true;
 
     LOG_INFO("start to fetch log stream info", K(arg_.ls_id_), K(arg_));
 
@@ -1237,7 +1238,8 @@ int ObFetchLSInfoP::process()
     } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log handler should not be NULL", K(ret), KP(log_handler), K(arg_));
-    } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_ids(result_.ls_meta_package_, result_.tablet_id_array_))) {
+    } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_ids(check_archive,
+            result_.ls_meta_package_, result_.tablet_id_array_))) {
       LOG_WARN("failed to get ls meta package and tablet ids", K(ret));
     } else if (OB_FAIL(result_.ls_meta_package_.ls_meta_.get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), K(result_));
@@ -1278,6 +1280,7 @@ int ObFetchLSMetaInfoP::process()
     ObLS *ls = nullptr;
     logservice::ObLogHandler *log_handler = nullptr;
     ObLSMetaPackage ls_meta_package;
+    const bool check_archive = true;
     LOG_INFO("start to fetch log stream info", K(arg_.ls_id_), K(arg_));
     if (!arg_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
@@ -1293,7 +1296,7 @@ int ObFetchLSMetaInfoP::process()
     } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log handler should not be NULL", K(ret), KP(log_handler), K(arg_));
-    } else if (OB_FAIL(ls->get_ls_meta_package(result_.ls_meta_package_))) {
+    } else if (OB_FAIL(ls->get_ls_meta_package(check_archive, result_.ls_meta_package_))) {
       LOG_WARN("failed to get ls meta package", K(ret), K(arg_));
     }
   }

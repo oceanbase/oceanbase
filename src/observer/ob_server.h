@@ -279,6 +279,17 @@ private:
   int set_running_mode();
   int check_server_can_start_service();
   int try_create_hidden_sys();
+  int parse_mode();
+
+  // ------------------------------- arb server start ------------------------------------
+  bool is_arbitration_mode() const;
+  int start_sig_worker_and_handle();
+  int init_server_in_arb_mode();
+  int start_server_in_arb_mode();
+  int stop_server_in_arb_mode();
+  int wait_server_in_arb_mode();
+  int destroy_server_in_arb_mode();
+  // ------------------------------- arb server end --------------------------------------
 
 public:
   volatile bool need_ctas_cleanup_; //true: ObCTASCleanUpTask should traverse all table schemas to find the one need be dropped

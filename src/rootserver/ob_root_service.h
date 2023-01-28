@@ -533,6 +533,7 @@ public:
 
   int create_restore_point(const obrpc::ObCreateRestorePointArg &arg);
   int drop_restore_point(const obrpc::ObDropRestorePointArg &arg);
+
   //for inner table monitor, purge in fixed time
   int purge_expire_recycle_objects(const obrpc::ObPurgeRecycleBinArg &arg, obrpc::Int64 &affected_rows);
   int calc_column_checksum_repsonse(const obrpc::ObCalcColumnChecksumResponseArg &arg);

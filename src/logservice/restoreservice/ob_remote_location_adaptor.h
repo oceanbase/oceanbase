@@ -24,7 +24,7 @@ class ObAddr;
 namespace share
 {
 class ObLSID;
-struct ObLogArchiveSourceItem;
+struct ObLogRestoreSourceItem;
 class ObBackupDest;
 }
 namespace storage
@@ -47,12 +47,13 @@ public:
 
 private:
   int do_update_(storage::ObLS &ls);
-  int get_source_(share::ObLogArchiveSourceItem &item);
+  int get_source_(share::ObLogRestoreSourceItem &item, bool &exist);
   int check_replica_status_(storage::ObLS &ls, bool &need_update);
-  int add_source_(const share::ObLogArchiveSourceItem &item, ObLogRestoreHandler &restore_handler);
-  int add_service_source_(const share::ObLogArchiveSourceItem &item, ObLogRestoreHandler &restore_handler);
-  int add_location_source_(const share::ObLogArchiveSourceItem &item, ObLogRestoreHandler &restore_handler);
-  int add_rawpath_source_(const share::ObLogArchiveSourceItem &item, ObLogRestoreHandler &restore_handler);
+  int clean_source_(ObLogRestoreHandler &restore_handler);
+  int add_source_(const share::ObLogRestoreSourceItem &item, ObLogRestoreHandler &restore_handler);
+  int add_service_source_(const share::ObLogRestoreSourceItem &item, ObLogRestoreHandler &restore_handler);
+  int add_location_source_(const share::ObLogRestoreSourceItem &item, ObLogRestoreHandler &restore_handler);
+  int add_rawpath_source_(const share::ObLogRestoreSourceItem &item, ObLogRestoreHandler &restore_handler);
 
 private:
   static const int64_t LOCATION_REFRESH_INTERVAL = 5 * 1000 * 1000L;

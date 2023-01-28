@@ -77,7 +77,7 @@ int ObLSArchiveTask::update_ls_task(const StartArchiveHelper &helper)
 bool ObLSArchiveTask::check_task_valid(const ArchiveWorkStation &station)
 {
   RLockGuard guard(rwlock_);
-  return is_task_stale_(station);
+  return ! is_task_stale_(station);
 }
 
 void ObLSArchiveTask::destroy()
@@ -329,6 +329,19 @@ int ObLSArchiveTask::get_archive_progress(const ArchiveWorkStation &station,
   return ret;
 }
 
+int ObLSArchiveTask::get_send_task_count(const ArchiveWorkStation &station, int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(rwlock_);
+  if (OB_UNLIKELY(station != station_)) {
+    ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
+    ARCHIVE_LOG(INFO, "stale task, just skip it", K(ret), K(station), K(station_), K(id_));
+  } else {
+    dest_.get_send_task_count(count);
+  }
+  return ret;
+}
+
 int ObLSArchiveTask::get_archive_send_arg(const ArchiveWorkStation &station, ObArchiveSendDestArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -358,6 +371,9 @@ int ObLSArchiveTask::update_archive_progress(const ArchiveWorkStation &station,
   } else if (OB_FAIL(dest_.update_archive_progress(round_start_scn_, file_id, file_offset, tuple))) {
     ARCHIVE_LOG(WARN, "update archive progress failed", K(ret),
         K(id_), K(station), K(tuple), K(file_id), K(file_offset));
+  } else {
+    ARCHIVE_LOG(INFO, "update archive progress succ", K(ret), K(id_),
+        K(station), K(tuple), K(file_id), K(file_offset));
   }
   return ret;
 }
@@ -655,6 +671,7 @@ void ObLSArchiveTask::ArchiveDest::free_fetch_log_tasks_()
 // only free task_status if it is disacarded, or will be free after all send_tasks are handled
 void ObLSArchiveTask::ArchiveDest::free_send_task_status_()
 {
+  // send_tasks only free by sender, here decrease ref of task_status and free it if ref count is zero
   if (NULL != send_task_queue_) {
     bool is_discarded = false;
     send_task_queue_->free(is_discarded);
@@ -726,7 +743,6 @@ int ObLSArchiveTask::ArchiveDest::update_archive_progress(const SCN &round_start
     archive_file_offset_ = file_offset;
     max_archived_info_ = tuple;
     piece_dir_exist_ = true;
-    ARCHIVE_LOG(TRACE, "update_archive_progress succ", KPC(this));
   }
   return ret;
 }
@@ -738,6 +754,14 @@ void ObLSArchiveTask::ArchiveDest::get_archive_progress(int64_t &file_id,
   file_id = archive_file_id_;
   file_offset = archive_file_offset_;
   tuple = max_archived_info_;
+}
+
+void ObLSArchiveTask::ArchiveDest::get_send_task_count(int64_t &count)
+{
+  count = 0;
+  if (NULL != send_task_queue_) {
+    count = send_task_queue_->count();
+  }
 }
 
 void ObLSArchiveTask::ArchiveDest::get_archive_send_arg(ObArchiveSendDestArg &arg)

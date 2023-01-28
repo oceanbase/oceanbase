@@ -32,6 +32,7 @@ public:
   ObFreezeInfoDetector();
   virtual ~ObFreezeInfoDetector() {}
   int init(const uint64_t tenant_id,
+           const bool is_primary_service,
            common::ObMySQLProxy &sql_proxy,
            ObFreezeInfoManager &freeze_info_manager,
            ObThreadIdling &major_scheduler_idling);
@@ -52,12 +53,20 @@ private:
   int try_update_zone_info(const int64_t expected_epoch);
 
   int can_start_work(bool &can_work);
+  bool is_primary_service() { return is_primary_service_; }
+  int check_tenant_is_restore(const uint64_t tenant_id, bool &is_restore);
+  int try_reload_freeze_info(const int64_t expected_epoch);
+  // adjust global_merge_info in memory to avoid useless major freezes on restore major_freeze_service
+  int try_adjust_global_merge_info();
+  int check_global_merge_info(bool &is_initial) const;
 
 private:
   static const int64_t FREEZE_INFO_DETECTOR_THREAD_CNT = 1;
   static const int64_t UPDATER_INTERVAL_US = 10 * 1000 * 1000; // 10s
 
   bool is_inited_;
+  bool is_primary_service_;  // identify ObMajorFreezeServiceType::SERVICE_TYPE_PRIMARY
+  bool is_global_merge_info_adjusted_;
   bool is_gc_scn_inited_;
   int64_t last_gc_timestamp_;
   ObFreezeInfoManager *freeze_info_mgr_;

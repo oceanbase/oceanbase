@@ -221,13 +221,8 @@ public:
   RPC_S(PR5 admin_upgrade_cmd, obrpc::OB_ADMIN_UPGRADE_CMD, (Bool));
   RPC_S(PR5 admin_rolling_upgrade_cmd, obrpc::OB_ADMIN_ROLLING_UPGRADE_CMD, (ObAdminRollingUpgradeArg));
   RPC_S(PR5 admin_clear_balance_task, obrpc::OB_ADMIN_FLUSH_BALANCE_INFO, (ObAdminClearBalanceTaskArg));
-  //RPC_S(PRD alter_cluster_attr, obrpc::OB_ALTER_CLUSTER_ATTR_DDL, (ObAlterClusterInfoArg));
   RPC_S(PRD get_tenant_schema_versions, obrpc::OB_GET_TENANT_SCHEMA_VERSIONS, (ObGetSchemaArg), obrpc::ObTenantSchemaVersions);
-  //RPC_S(PRD get_cluster_stats, obrpc::OB_GET_CLUSTER_STATS, obrpc::ObClusterTenantStats);
   // RPC_S(PRD update_freeze_schema_version, obrpc::OB_UPDATE_FREEZE_SCHEMA_VERSIONS, (Int64), obrpc::ObTenantSchemaVersions);
-  //RPC_S(PRD alter_cluster, obrpc::OB_ALTER_CLUSTER, (ObAdminClusterArg));
-  //RPC_S(PRD update_standby_cluster_info, obrpc::OB_UPDATE_STANDBY_CLUSTER_INFO, (share::ObClusterAddr));
-  //RPC_S(PR5 alter_cluster_info, obrpc::OB_ALTER_CLUSTER_INFO, (ObAlterClusterInfoArg));
 
   RPC_S(PR5 add_server, obrpc::OB_ADD_SERVER, (ObAdminServerArg));
   RPC_S(PR5 delete_server, obrpc::OB_DELETE_SERVER, (ObAdminServerArg));
@@ -268,7 +263,6 @@ public:
   RPC_S(PRD broadcast_schema, OB_BROADCAST_SCHEMA, (obrpc::ObBroadcastSchemaArg));
   //RPC_S(PR5 get_switchover_status, OB_GET_SWITCHOVER_STATUS, obrpc::ObGetSwitchoverStatusRes);
   RPC_S(PR5 check_merge_finish, OB_CHECK_MERGE_FINISH, (obrpc::ObCheckMergeFinishArg));
-  //RPC_S(PR5 check_cluster_valid_to_add, OB_CHECK_CLUSTER_VALID_TO_ADD, (obrpc::ObCheckAddStandbyArg), obrpc::ObCheckAddStandbyRes);
   RPC_S(PR5 get_recycle_schema_versions, OB_GET_RECYCLE_SCHEMA_VERSIONS, (obrpc::ObGetRecycleSchemaVersionsArg), obrpc::ObGetRecycleSchemaVersionsResult);
 
   // backup and restore
@@ -311,7 +305,6 @@ public:
 
   RPC_S(PRD recompile_all_views_batch, obrpc::OB_RECOMPILE_ALL_VIEWS_BATCH, (ObRecompileAllViewsBatchArg));
   RPC_S(PRD try_add_dep_infos_for_synonym_batch, obrpc::OB_TRY_ADD_DEP_INFOS_FOR_SYNONYM_BATCH, (ObTryAddDepInofsForSynonymBatchArg));
-
 public:
   void set_rs_mgr(share::ObRsMgr &rs_mgr)
   {

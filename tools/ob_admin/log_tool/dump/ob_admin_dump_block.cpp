@@ -77,7 +77,7 @@ int ObAdminDumpBlock::dump()
     LOG_WARN("mmap_log_file_ failed", K(ret));
   } else if (OB_FAIL(mem_storage.append(buf, PALF_BLOCK_SIZE))) {
     LOG_WARN("MemoryStorage append failed", K(ret));
-  } else if (OB_FAIL(iter.init(start_lsn, &mem_storage, get_file_size))) {
+  } else if (OB_FAIL(iter.init(start_lsn, get_file_size, &mem_storage))) {
     LOG_WARN("LogIteratorImpl init failed", K(ret), K(start_lsn), K(end_lsn));
   } else if (OB_FAIL(do_dump_(iter, block_id))) {
     LOG_WARN("ObAdminDumpIterator do_dump_ failed", K(ret), K(iter));
@@ -197,7 +197,7 @@ int ObAdminDumpMetaBlock::dump()
     LOG_WARN("mmap_log_file_ failed", K(ret));
   } else if (OB_FAIL(mem_storage.append(buf, PALF_BLOCK_SIZE))) {
     LOG_WARN("MemoryStorage append failed", K(ret));
-  } else if (OB_FAIL(iter.init(start_lsn, &mem_storage, get_file_size))) {
+  } else if (OB_FAIL(iter.init(start_lsn, get_file_size, &mem_storage))) {
     LOG_WARN("LogIteratorImpl init failed", K(ret), K(start_lsn), K(end_lsn));
   } else if (OB_FAIL(do_dump_(iter, block_id))) {
     LOG_WARN("ObAdminDumpIterator do_dump_ failed", K(ret), K(iter));

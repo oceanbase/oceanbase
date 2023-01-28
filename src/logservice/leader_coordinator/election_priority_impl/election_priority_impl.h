@@ -62,8 +62,11 @@ struct AbstractPriority
   }
   // 判断字段内容是否有效的方法，或者refresh()成功后也是true
   bool is_valid() const { return is_valid_; }
+  // fatal failure将绕过RCS在选举层面直接切主
+  bool has_fatal_failure() const { return is_valid_ && has_fatal_failure_(); }
   virtual TO_STRING_KV(K_(is_valid));
 protected:
+  virtual bool has_fatal_failure_() const = 0;
   virtual int refresh_(const share::ObLSID &ls_id) = 0;
 protected:
   bool is_valid_;
@@ -82,6 +85,7 @@ public:
   virtual int compare(const AbstractPriority &rhs, int &result, ObStringHolder &reason) const override;
   TO_STRING_KV(K_(is_valid), K_(port_number));
 protected:
+  virtual bool has_fatal_failure_() const override { return false; }
   // 刷新优先级的方法
   virtual int refresh_(const share::ObLSID &ls_id) override;
 private:
@@ -111,6 +115,7 @@ public:
 protected:
   // 刷新优先级的方法
   virtual int refresh_(const share::ObLSID &ls_id) override;
+  virtual bool has_fatal_failure_() const override;
   int get_scn_(const share::ObLSID &ls_id, share::SCN &scn);
 private:
   int compare_observer_stopped_(int &ret, const PriorityV1&) const;
@@ -159,6 +164,8 @@ public:
   virtual int compare_with(const palf::election::ElectionPriority &rhs, int &result, ObStringHolder &reason) const;
   virtual int get_size_of_impl_type() const;
   virtual void placement_new_impl(void *ptr) const;
+  // fatal failure跳过RCS直接切主
+  virtual bool has_fatal_failure() const;
   int64_t to_string(char *buf, const int64_t buf_len) const override;
 private:
   share::ObLSID ls_id_;

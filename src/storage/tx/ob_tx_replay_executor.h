@@ -90,7 +90,7 @@ private:
                  const share::ObLSID &ls_id,
                  const int64_t &tenant_id);
   int prepare_replay_(const char *buf, const int64_t &size, const int skip_pos);
-  int try_get_tx_ctx_(ObTxLogType type, int64_t tx_id, int64_t tenant_id, const share::ObLSID &ls_id);
+  int try_get_tx_ctx_(int64_t tx_id, int64_t tenant_id, const share::ObLSID &ls_id);
   int before_replay_redo_();
   void finish_replay_(const int retcode);
 

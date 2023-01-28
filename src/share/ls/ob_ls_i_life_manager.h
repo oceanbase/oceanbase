@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_LS_I_LIFE_MANAGER_H_
 
 #include "share/ob_share_util.h"
+#include "share/ob_tenant_switchover_status.h"//ObTenantSwitchoverStatus
 #include "common/ob_timeout_ctx.h"
 #include "share/config/ob_server_config.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
@@ -36,6 +37,12 @@ namespace share
 {
 class ObLSID;
 struct ObLSStatusInfo;
+/**
+ * @description:
+ *    In order to let switchover switch the accessmode of all LS correctly,
+ *    when creating, deleting, and updating LS status,
+ *    it needs to be mutually exclusive with switchover status of __all_tenant_info
+ */
 
 enum ObLSStatus
 {
@@ -67,16 +74,19 @@ public:
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
                             const SCN &create_scn,
                             const common::ObString &zone_priority,
+                            const share::ObTenantSwitchoverStatus &working_sw_status,
                             ObMySQLTransaction &trans) = 0;
   //drop ls
   virtual int drop_ls(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) = 0;
   //set ls to offline
   virtual int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const share::ObLSStatus &ls_status,
                       const SCN &drop_scn,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) = 0;
   //update ls primary zone
   virtual int update_ls_primary_zone(

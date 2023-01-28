@@ -22,6 +22,7 @@
 #include "share/ob_srv_rpc_proxy.h"//ObSrvRpcProxy
 #include "lib/mysqlclient/ob_mysql_proxy.h"//ObMySQLProxy
 #include "share/ob_share_util.h" // ObShareUtil
+#include "share/resource_manager/ob_cgroup_ctrl.h" //CGID_DEF
 
 namespace oceanbase
 {
@@ -121,12 +122,13 @@ int ObRpcLSTable::get_ls_info_(ObLSInfo &ls_info)
     ObArray<ObAddr> rs_list;
     bool need_retry = false;
     const ObLSReplica *leader = NULL;
+    const bool check_ls_service = true;
     /*
      * case 1: get rs from ObRsMgr
      * case 2: get rs_list from local configure
      * case 3: try get __all_core_table's member_list from ObLSService
      */
-    if (OB_FAIL(rs_mgr_->construct_initial_server_list(rs_list))) {
+    if (OB_FAIL(rs_mgr_->construct_initial_server_list(check_ls_service, rs_list))) {
       LOG_WARN("fail to construct initial server list", KR(ret));
     } else if (OB_FAIL(do_detect_master_rs_ls_(local_cluster_id, rs_list, ls_info))) {
       need_retry = true;
@@ -286,13 +288,14 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
         // TODO: @wanhong.wwh: need check when addr is not valid
       } else if (OB_FAIL(arg.init(addr, cluster_id))) {
         LOG_WARN("fail to init arg", KR(ret), K(addr), K(cluster_id));
-      } else if (OB_SUCCESS != (tmp_ret = proxy.call(addr, timeout, cluster_id, OB_SYS_TENANT_ID, arg))) {
+      } else if (OB_TMP_FAIL(proxy.call(addr, timeout, cluster_id,
+                 OB_SYS_TENANT_ID, share::OBCG_DETECT_RS, arg))) {
         LOG_WARN("fail to send rpc", KR(tmp_ret), K(cluster_id), K(addr), K(timeout), K(arg));
       }
     }
 
     ObArray<int> return_ret_array;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) { // ignore ret
+    if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) { // ignore ret
       LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }

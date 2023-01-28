@@ -57,7 +57,7 @@ OB_SERIALIZE_MEMBER(ObStartTransParam, access_mode_, type_, isolation_, consiste
                     cluster_version_, is_inner_trans_, read_snapshot_type_);
 OB_SERIALIZE_MEMBER(ObElrTransInfo, trans_id_, commit_version_, result_);
 OB_SERIALIZE_MEMBER(ObLSLogInfo, id_, offset_);
-
+OB_SERIALIZE_MEMBER(ObStateInfo, ls_id_, state_, version_, snapshot_version_);
 OB_SERIALIZE_MEMBER(ObTransDesc, a_);
 
 // class ObStartTransParam

@@ -113,6 +113,11 @@ public:
                            int64_t &file_offset,
                            LogFileTuple &tuple);
 
+  // get send task count in send_task_status
+  // @param[in] station, the archive work station of ls
+  // @param[out] count, the count of send_tasks in task_status
+  int get_send_task_count(const ArchiveWorkStation &station, int64_t &count);
+
   // 获取归档参数
   int get_archive_send_arg(const ArchiveWorkStation &station,
                            ObArchiveSendDestArg &arg);
@@ -163,6 +168,7 @@ private:
         int64_t &file_id, int64_t &file_offset, bool &error_exist);
     int update_archive_progress(const share::SCN &round_start_scn, const int64_t file_id, const int64_t file_offset, const LogFileTuple &tuple);
     void get_archive_progress(int64_t &file_id, int64_t &file_offset, LogFileTuple &tuple);
+    void get_send_task_count(int64_t &count);
     void get_archive_send_arg(ObArchiveSendDestArg &arg);
     void mark_error();
     void print_tasks_();

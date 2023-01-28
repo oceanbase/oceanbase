@@ -70,6 +70,7 @@ DEFINE_LOG_SUB_MOD(STANDBY)              // primary and standby cluster
 DEFINE_LOG_SUB_MOD(REASY)                 // libreasy
 DEFINE_LOG_SUB_MOD(COORDINATOR)          // leader coordinator
 DEFINE_LOG_SUB_MOD(OBTRACE)                // trace
+DEFINE_LOG_SUB_MOD(DATA_DICT)            // data_dictionary module
 DEFINE_LOG_SUB_MOD(MVCC)                 // concurrency_control
 LOG_MOD_END(ROOT)
 
@@ -415,6 +416,8 @@ LOG_MOD_END(PL)
 #define _COORDINATOR_LOG(level, _fmt_, args...) _OB_MOD_LOG(COORDINATOR, level, _fmt_, ##args)
 #define OBTRACE_LOG(level, info_string, args...) OB_MOD_LOG(OBTRACE, level, info_string, ##args)
 #define _OBTRACE_LOG(level, _fmt_, args...) _OB_MOD_LOG(OBTRACE, level, _fmt_, ##args)
+#define DDLOG(level, info_string, args...) OB_MOD_LOG(DATA_DICT, level, info_string, ##args)
+#define _DDLOG(level, _fmt_, args...) _OB_MOD_LOG(DATA_DICT, level, _fmt_, ##args)
 #define MVCC_LOG(level, info_string, args...) OB_MOD_LOG(MVCC, level, info_string, ##args)
 #define _MVCC_LOG(level, _fmt_, args...) _OB_MOD_LOG(MVCC, level, _fmt_, ##args)
 

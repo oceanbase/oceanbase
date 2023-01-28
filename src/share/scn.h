@@ -31,7 +31,7 @@ public:
   bool is_valid_and_not_min() const;
   bool is_max() const;
   bool is_min() const;
-  bool is_base_scn() const { return *this == base_scn(); }
+  bool is_base_scn() const;
   void set_invalid();
   void set_max();
   void set_min();

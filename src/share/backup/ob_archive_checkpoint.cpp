@@ -39,8 +39,9 @@ void ObDestRoundCheckpointer::Counter::reset()
   interrupted_cnt_ = 0;
   doing_cnt_ = 0;
   stopped_cnt_ = 0;
-  max_scn_ = SCN::min_scn();
-  checkpoint_scn_ = SCN::max_scn();
+  suspended_cnt_ = 0;
+  max_scn_.set_min();
+  checkpoint_scn_.set_max();
   max_active_piece_id_ = INT64_MAX;
 }
 
@@ -143,7 +144,13 @@ int ObDestRoundCheckpointer::count_(const ObDestRoundSummary &summary, ObDestRou
       counter.max_scn_ = MAX(counter.max_scn_, ls_round.checkpoint_scn_);
       counter.checkpoint_scn_ = MIN(counter.checkpoint_scn_, ls_round.checkpoint_scn_);
       counter.max_active_piece_id_ = MIN(counter.max_active_piece_id_, ls_round.max_piece_id());
-    } else {
+    } else if (ls_round.state_.is_suspend()) {
+      counter.suspended_cnt_++;
+      counter.max_scn_ = MAX(counter.max_scn_, ls_round.checkpoint_scn_);
+      counter.checkpoint_scn_ = MIN(counter.checkpoint_scn_, ls_round.checkpoint_scn_);
+      counter.max_active_piece_id_ = MIN(counter.max_active_piece_id_, ls_round.max_piece_id());
+    }
+    else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected archive state", K(ret), K(ls_round));
     }
@@ -219,13 +226,22 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error occur", K(ret), K(old_round_info), K(counter), K(new_round_info));
     }
+  } else if (old_round_info.state_.is_suspending()) {
+    if (counter.suspended_cnt_ + counter.not_start_cnt_ == actual_count) {
+      // previous state is SUSPENDING, expected next state is SUSPEND.
+      new_round_info.state_.set_suspend();
+      LOG_INFO("switch to SUSPEND state", K(old_round_info), K(counter), K(new_round_info));
+    } else if (counter.suspended_cnt_ + counter.not_start_cnt_ < actual_count) {
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error occur", K(ret), K(old_round_info), K(counter), K(new_round_info));
+    }
   } else if (old_round_info.state_.is_stopping()) {
     if (counter.stopped_cnt_ + counter.not_start_cnt_ == actual_count) {
       // previous state is STOPPING, expected next state is STOP.
       new_round_info.state_.set_stop();
       LOG_INFO("switch to STOP state", K(old_round_info), K(counter), K(new_round_info));
     } else if (counter.stopped_cnt_ + counter.not_start_cnt_ < actual_count) {
-      // wait
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error occur", K(ret), K(old_round_info), K(counter), K(new_round_info));
@@ -348,6 +364,7 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
       gen_ls_piece.max_lsn_ = ls_piece.max_lsn_;
       gen_ls_piece.input_bytes_ = ls_piece.input_bytes_;
       gen_ls_piece.output_bytes_ = ls_piece.output_bytes_;
+      gen_ls_piece.is_ls_deleted_ = ls_round.is_deleted_;
 
 
       // fill piece
@@ -390,7 +407,7 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
 
 bool ObDestRoundCheckpointer::can_do_checkpoint_(const ObTenantArchiveRoundAttr &round_info) const
 {
-  return round_info.state_.is_beginning() || round_info.state_.is_doing() || round_info.state_.is_stopping();
+  return round_info.state_.is_beginning() || round_info.state_.is_doing() || round_info.state_.is_stopping() || round_info.state_.is_suspending();
 }
 
 int ObDestRoundCheckpointer::fill_generated_pieces_(const Result &result, common::ObIArray<ObTenantArchivePieceAttr> &pieces) const

@@ -18,7 +18,6 @@
 #include "lib/signal/ob_signal_worker.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/function/ob_function.h"           // ObFunction
-#include "logservice/palf/log_block_pool_interface.h"
 #include "observer/ob_signal_handle.h"
 #include "lib/utility/ob_defer.h"
 #include "rpc/frame/ob_req_deliver.h"
@@ -26,12 +25,13 @@
 #include "rpc/frame/ob_net_easy.h"
 #include "rpc/obrpc/ob_rpc_handler.h"
 #include "rpc/frame/ob_req_transport.h"
+#include "logservice/logrpc/ob_log_rpc_processor.h"
 #include "logservice/palf/log_rpc_macros.h"
 #include "logservice/palf/log_rpc_processor.h"
-#include "logservice/palf/palf_env_impl.h"
 #include "logservice/palf/palf_env.h"
-#include "logservice/ob_log_service.h"
-#include "logservice/palf/palf_handle_impl.h"
+#include "logservice/ob_arbitration_service.h"
+#include "mock_ob_locality_manager.h"
+#include "mock_ob_meta_reporter.h"
 #include "lib/net/ob_addr.h"
 #include "share/ob_rpc_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
@@ -44,11 +44,17 @@
 #include "share/ob_local_device.h"
 #include "share/ob_occam_timer.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "logservice/ob_net_keepalive_adapter.h"
 #include <memory>
 #include <map>
 
 namespace oceanbase
 {
+namespace unittest
+{
+class ObLogDeliver;
+}
+
 namespace unittest
 {
 using namespace oceanbase;
@@ -59,6 +65,17 @@ using namespace oceanbase::common;
 using namespace oceanbase::palf;
 using namespace oceanbase::share;
 
+class MockNetKeepAliveAdapter : public logservice::IObNetKeepAliveAdapter
+{
+public:
+  MockNetKeepAliveAdapter() : log_deliver_(NULL) {}
+  ~MockNetKeepAliveAdapter() { log_deliver_ = NULL; }
+  int init(unittest::ObLogDeliver *log_deliver);
+  bool in_black_or_stopped(const common::ObAddr &server) override final;
+  bool is_server_stopped(const common::ObAddr &server) override final;
+private:
+  unittest::ObLogDeliver *log_deliver_;
+};
 uint32_t get_local_addr(const char *dev_name);
 std::string get_local_ip();
 
@@ -75,27 +92,42 @@ struct LossConfig
   TO_STRING_KV(K_(src), K_(loss_rate));
 };
 
-class ObLogDeliver : public rpc::frame::ObReqDeliver, public lib::TGTaskHandler
+class ObMittestBlacklist {
+public:
+  int init(const common::ObAddr &self);
+  void block_net(const ObAddr &src);
+  void unblock_net(const ObAddr &src);
+  bool need_filter_packet_by_blacklist(const ObAddr &address);
+	void set_need_drop_packet(const bool need_drop_packet) { need_drop_packet_ = need_drop_packet; }
+  void set_rpc_loss(const ObAddr &src, const int loss_rate);
+  void reset_rpc_loss(const ObAddr &src);
+  bool need_drop_by_loss_config(const ObAddr &addr);
+  void get_loss_config(const ObAddr &src, bool &exist, LossConfig &loss_config);
+  TO_STRING_KV(K_(blacklist), K_(rpc_loss_config));
+protected:
+  hash::ObHashSet<ObAddr> blacklist_;
+	bool need_drop_packet_;
+  common::ObSEArray<LossConfig, 4> rpc_loss_config_;
+  common::ObAddr self_;
+};
+
+class ObLogDeliver : public rpc::frame::ObReqDeliver, public lib::TGTaskHandler, public ObMittestBlacklist
 {
 public:
-	ObLogDeliver() : rpc::frame::ObReqDeliver(), palf_env_impl_(NULL), tg_id_(0), blacklist_(), rpc_loss_config_(), is_stopped_(true) {}
-  ~ObLogDeliver() { destroy(); }
-  int init();
-  void destroy();
+	ObLogDeliver()
+      : rpc::frame::ObReqDeliver(),
+        palf_env_impl_(NULL),
+        tg_id_(0),
+        is_stopped_(true) {}
+  ~ObLogDeliver() { destroy(true); }
+  int init() override final {return OB_SUCCESS;}
+  int init(const common::ObAddr &self, const bool is_bootstrap);
+  void destroy(const bool is_shutdown);
   int deliver(rpc::ObRequest &req);
   int start();
   void stop();
   int wait();
   void handle(void *task);
-	void set_palf_env_impl(PalfEnvImpl *palf_env_impl) { palf_env_impl_ = palf_env_impl; }
-	void set_need_drop_packet(const bool need_drop_packet) { need_drop_packet_ = need_drop_packet; }
-  void block_net(const ObAddr &src);
-  void unblock_net(const ObAddr &src);
-  void set_rpc_loss(const ObAddr &src, const int loss_rate);
-  void reset_rpc_loss(const ObAddr &src);
-  bool need_filter_packet_by_blacklist(const ObAddr &address);
-  bool need_drop_by_loss_config(const ObAddr &addr);
-  void get_loss_config(const ObAddr &src, bool &exist, LossConfig &loss_config);
 
 private:
   void init_all_propocessor_();
@@ -123,13 +155,44 @@ private:
   bool is_inited_;
 	PalfEnvImpl *palf_env_impl_;
   int tg_id_;
-	bool need_drop_packet_;
-  hash::ObHashSet<ObAddr> blacklist_;
-  common::ObSEArray<LossConfig, 4> rpc_loss_config_;
   bool is_stopped_;
+  int64_t node_id_;
 };
 
-class ObSimpleLogServer
+class ObISimpleLogServer
+{
+public:
+  ObISimpleLogServer() {}
+  virtual ~ObISimpleLogServer() {}
+  virtual bool is_valid() const = 0;
+  virtual IPalfEnvImpl *get_palf_env() = 0;
+  virtual void revert_palf_env(IPalfEnvImpl *palf_env) = 0;
+  virtual const std::string& get_clog_dir() const = 0;
+  virtual common::ObAddr get_addr() const = 0;
+  virtual ObTenantBase *get_tenant_base() const = 0;
+  virtual logservice::ObLogFlashbackService *get_flashback_service() = 0;
+	virtual void set_need_drop_packet(const bool need_drop_packet) = 0;
+  virtual void block_net(const ObAddr &src) = 0;
+  virtual void unblock_net(const ObAddr &src) = 0;
+  virtual void set_rpc_loss(const ObAddr &src, const int loss_rate) = 0;
+  virtual void reset_rpc_loss(const ObAddr &src) = 0;
+  virtual int simple_init(const std::string &cluster_name,
+                          const common::ObAddr &addr,
+                          const int64_t node_id,
+                          const bool is_bootstrap) = 0;
+  virtual int simple_start(const bool is_bootstrap) = 0;
+  virtual int simple_close(const bool is_shutdown) = 0;
+  virtual int simple_restart(const std::string &cluster_name, const int64_t node_idx) = 0;
+  virtual ILogBlockPool *get_block_pool() = 0;
+  virtual ObILogAllocator *get_allocator() = 0;
+  virtual int update_disk_opts(const PalfDiskOptions &opts) = 0;
+  virtual int get_palf_env(PalfEnv *&palf_env) = 0;
+  virtual bool is_arb_server() const {return false;};
+  virtual int64_t get_node_id() = 0;
+  DECLARE_PURE_VIRTUAL_TO_STRING;
+};
+
+class ObSimpleLogServer : public ObISimpleLogServer
 {
 public:
   ObSimpleLogServer()
@@ -146,28 +209,51 @@ public:
       ob_delete(io_device_);
     }
   }
-  bool is_valid() {return NULL != palf_env_;}
   int simple_init(const std::string &cluster_name,
                   const common::ObAddr &addr,
                   const int64_t node_id,
-                  const bool is_bootstrap);
-  int simple_start(const bool is_bootstrap);
-  int simple_close(const bool is_shutdown);
-  int simple_restart(const std::string &cluster_name, const int64_t node_idx);
-  PalfEnv *get_palf_env() { return palf_env_; }
-  const std::string& get_clog_dir() const { return clog_dir_; }
-  common::ObAddr get_addr() const { return addr_; }
+                  const bool is_bootstrap) override final;
+  int simple_start(const bool is_bootstrap) override final;
+  int simple_close(const bool is_shutdown) override final;
+  int simple_restart(const std::string &cluster_name, const int64_t node_idx) override final;
+public:
+  int64_t get_node_id() {return node_id_;}
+  ILogBlockPool *get_block_pool() override final
+  {return &log_block_pool_;};
+  ObILogAllocator *get_allocator() override final
+  { return allocator_; }
+  virtual int update_disk_opts(const PalfDiskOptions &opts) override final;
+  virtual int get_palf_env(PalfEnv *&palf_env)
+  { palf_env = palf_env_; return OB_SUCCESS;}
+  virtual void revert_palf_env(IPalfEnvImpl *palf_env) { UNUSED(palf_env); }
+  bool is_valid() const override final {return NULL != palf_env_;}
+  IPalfEnvImpl *get_palf_env() override final
+  { return palf_env_->get_palf_env_impl(); }
+  const std::string& get_clog_dir() const override final
+  { return clog_dir_; }
+  common::ObAddr get_addr() const override final
+  { return addr_; }
+  ObTenantBase *get_tenant_base() const override final
+  { return tenant_base_; }
+  logservice::ObLogFlashbackService *get_flashback_service() override final
+  { return log_service_.get_flashback_service(); }
 	// Nowdat, not support drop packet from specificed address
-	void set_need_drop_packet(const bool need_drop_packet) { deliver_.set_need_drop_packet(need_drop_packet);}
-  void block_net(const ObAddr &src) { deliver_.block_net(src); }
-  void unblock_net(const ObAddr &src) { deliver_.unblock_net(src); }
-  void set_rpc_loss(const ObAddr &src, const int loss_rate) { deliver_.set_rpc_loss(src, loss_rate); }
-  void reset_rpc_loss(const ObAddr &src) { deliver_.reset_rpc_loss(src); }
+	void set_need_drop_packet(const bool need_drop_packet) override final
+  { deliver_.set_need_drop_packet(need_drop_packet);}
+  void block_net(const ObAddr &src) override final
+  { deliver_.block_net(src); }
+  void unblock_net(const ObAddr &src) override final
+  { deliver_.unblock_net(src); }
+  void set_rpc_loss(const ObAddr &src, const int loss_rate) override final
+  { deliver_.set_rpc_loss(src, loss_rate); }
+  void reset_rpc_loss(const ObAddr &src) override final
+  { deliver_.reset_rpc_loss(src); }
   TO_STRING_KV(K_(node_id), K_(addr), KP(palf_env_));
+
 protected:
   int init_io_(const std::string &cluster_name);
   int init_network_(const common::ObAddr &addr, const bool is_bootstrap);
-  int init_palf_env_();
+  int init_log_service_();
   int init_memory_dump_timer_();
 
 private:
@@ -176,12 +262,9 @@ private:
   rpc::frame::ObNetEasy net_;
   obrpc::ObRpcHandler handler_;
   ObLogDeliver deliver_;
-  rpc::frame::ObReqTransport *transport_;
   ObRandom rand_;
-  logservice::ObServerLogBlockMgr log_block_pool_;
   PalfEnv *palf_env_;
   ObTenantBase *tenant_base_;
-  ObTenantMutilAllocator *allocator_;
   ObMalloc malloc_mgr_;
   ObLocalDevice *io_device_;
   static const int64_t MAX_IOD_OPT_CNT = 5;
@@ -190,6 +273,16 @@ private:
   std::string clog_dir_;
   ObOccamTimer timer_;
   ObOccamTimerTaskRAIIHandle timer_handle_;
+  logservice::ObLogService log_service_;
+  ObTenantMutilAllocator *allocator_;
+  rpc::frame::ObReqTransport *transport_;
+  ObLSService ls_service_;
+  ObLocationService location_service_;
+  MockMetaReporter reporter_;
+  logservice::ObServerLogBlockMgr log_block_pool_;
+  common::ObMySQLProxy sql_proxy_;
+  MockNetKeepAliveAdapter *net_keepalive_;
+  ObSrvRpcProxy srv_proxy_;
 };
 
 } // end unittest

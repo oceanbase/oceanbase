@@ -28,6 +28,7 @@ namespace oceanbase
 using namespace common;
 using namespace share;
 using namespace obrpc;
+using namespace share::schema;
 namespace rootserver
 {
 ObDailyMajorFreezeLauncher::ObDailyMajorFreezeLauncher()

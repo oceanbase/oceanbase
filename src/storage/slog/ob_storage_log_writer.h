@@ -51,8 +51,7 @@ public:
 
   int delete_log_file(const int64_t file_id);
   int get_using_disk_space(int64_t &using_space) const;
-  OB_INLINE bool is_ok() const { return ATOMIC_LOAD(&is_ok_); }
-  OB_INLINE void set_ok(const bool ok) { ATOMIC_STORE(&is_ok_, ok); }
+  inline int64_t get_pwrite_ts() const { return file_handler_.get_pwrite_ts(); }
 
   int start_log(const common::ObLogCursor &start_cursor);
 
@@ -143,10 +142,6 @@ private:
 
   ObStorageLogNopLog nop_log_;
   ObStorageLogParam nop_data_param_;
-
-  // indicate whether slog writer is ok for outside checking
-  bool is_ok_;
-  int64_t write_failed_times_;
 
   common::ObLogFileHandler file_handler_;
   ObStorageLogWriteBuffer batch_write_buf_;

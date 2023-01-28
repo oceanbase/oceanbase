@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX PALF
 
 #include "log_io_worker.h"
 #include <time.h>                             // timespce
@@ -29,6 +30,10 @@ LogIOWorker::LogIOWorker()
     : log_io_worker_num_(-1),
       cb_thread_pool_tg_id_(-1),
       palf_env_impl_(NULL),
+      do_task_used_ts_(0),
+      do_task_count_(0),
+      print_log_interval_(OB_INVALID_TIMESTAMP),
+      last_working_time_(OB_INVALID_TIMESTAMP),
       is_inited_(false)
 {
 }
@@ -41,7 +46,7 @@ LogIOWorker::~LogIOWorker()
 int LogIOWorker::init(const LogIOWorkerConfig &config,
                       int cb_thread_pool_tg_id,
                       ObIAllocator *allocator,
-                      PalfEnvImpl *palf_env_impl)
+                      IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -52,7 +57,7 @@ int LogIOWorker::init(const LogIOWorkerConfig &config,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid argument!!!", K(ret), K(config), K(cb_thread_pool_tg_id), KP(allocator),
         KP(palf_env_impl));
-  } else if (OB_FAIL(queue_.init(config.io_queue_capcity_, "IOWorkerLQ", MTL_ID()))) {
+  } else if (OB_FAIL(queue_.init(config.io_queue_capcity_, "IOWorkerLQ", PALF_ENV_ID))) {
     PALF_LOG(ERROR, "io task queue init failed", K(ret), K(config));
   } else if (OB_FAIL(batch_io_task_mgr_.init(config.batch_width_,
                                              config.batch_depth_,
@@ -77,13 +82,17 @@ void LogIOWorker::destroy()
 {
   (void)stop();
   (void)wait();
+  if (palf_env_impl_ != NULL) {
+    ObILogAllocator *allocator = palf_env_impl_->get_log_allocator();
+    PALF_LOG(INFO, "LogIOWorker destroy success", KPC(this), KPC(allocator));
+  }
   is_inited_ = false;
+  last_working_time_ = OB_INVALID_TIMESTAMP;
   cb_thread_pool_tg_id_ = -1;
   palf_env_impl_ = NULL;
   log_io_worker_num_ = -1;
   queue_.destroy();
   batch_io_task_mgr_.destroy();
-  PALF_LOG(INFO, "LogIOWorker destroy success");
 }
 
 int LogIOWorker::submit_io_task(LogIOTask *io_task)
@@ -93,9 +102,10 @@ int LogIOWorker::submit_io_task(LogIOTask *io_task)
     ret = OB_NOT_INIT;
   } else if (OB_ISNULL(io_task)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(queue_.push(io_task))) {
+	} else if (OB_FAIL(queue_.push(io_task))) {
     PALF_LOG(WARN, "fail to push io task into queue", K(ret), KPC(io_task));
   } else {
+    PALF_LOG(TRACE, "submit_io_task success", KPC(io_task));
   }
   return ret;
 }
@@ -109,6 +119,7 @@ void LogIOWorker::run1()
 int LogIOWorker::handle_io_task_(LogIOTask *io_task)
 {
   int ret = OB_SUCCESS;
+	int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(io_task->do_task(cb_thread_pool_tg_id_, palf_env_impl_))) {
     PALF_LOG(WARN, "LogIOTask do_task falied", K(ret));
   } else {
@@ -117,6 +128,16 @@ int LogIOWorker::handle_io_task_(LogIOTask *io_task)
   if (OB_FAIL(ret)) {
     io_task->free_this(palf_env_impl_);
   }
+	int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+	do_task_used_ts_ += cost_ts;
+	do_task_count_ ++;
+	if (palf_reach_time_interval(5 * 1000 * 1000, print_log_interval_)) {
+		PALF_EVENT("io statistics", 0, K_(do_task_used_ts), K_(do_task_count),
+				"average_cost_ts", do_task_used_ts_ / do_task_count_,
+				"io_queue_size", queue_.size());
+		do_task_count_ = 0;
+		do_task_used_ts_ = 0;
+	};
   return ret;
 }
 
@@ -129,17 +150,24 @@ int LogIOWorker::run_loop_()
 
     void *task = NULL;
     if (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
+      ATOMIC_STORE(&last_working_time_, common::ObTimeUtility::fast_current_time());
       ret = reduce_io_task_(task);
+      ATOMIC_STORE(&last_working_time_, OB_INVALID_TIMESTAMP);
     }
   }
 
   // After IOWorker has stopped, need clear queue_.
   if (true == has_set_stop()) {
     void *task = NULL;
+    ObILogAllocator *allocator = palf_env_impl_->get_log_allocator();
+    CLOG_LOG(INFO, "before LogIOWorker destory", KPC(this), KPC(allocator));
     while (OB_SUCC(queue_.pop(task))) {
       LogIOTask *io_task = reinterpret_cast<LogIOTask *>(task);
+      ATOMIC_STORE(&last_working_time_, common::ObTimeUtility::fast_current_time());
       (void)handle_io_task_(io_task);
+      ATOMIC_STORE(&last_working_time_, OB_INVALID_TIMESTAMP);
     }
+    CLOG_LOG(INFO, "after LogIOWorker destory", KPC(this), KPC(allocator));
   }
   return ret;
 }
@@ -201,6 +229,7 @@ int LogIOWorker::reduce_io_task_(void *task)
   }
 
   if (false == last_io_task_has_been_reduced && OB_NOT_NULL(io_task)) {
+    io_task = reinterpret_cast<LogIOFlushLogTask *>(io_task);
     ret = handle_io_task_(io_task);
   }
   PALF_LOG(TRACE, "reduce_io_task_ finished", K(ret), K(tmp_ret), KPC(this));
@@ -226,7 +255,8 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::init(int64_t batch_width,
     PALF_LOG(ERROR, "batch_io_task_array_ init failed", K(ret));
   } else {
     for (int i = 0; i < batch_width  && OB_SUCC(ret); i++) {
-      char *ptr = reinterpret_cast<char*>(allocator->alloc(sizeof(BatchLogIOFlushLogTask)));
+      //char *ptr = reinterpret_cast<char*>(allocator->alloc(sizeof(BatchLogIOFlushLogTask)));
+      char *ptr = reinterpret_cast<char*>(mtl_malloc(sizeof(BatchLogIOFlushLogTask)));
       BatchLogIOFlushLogTask *io_task = NULL;
       if (NULL == ptr) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -276,7 +306,7 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::insert(LogIOFlushLogTask *io_task)
   return ret;
 }
 
-int LogIOWorker::BatchLogIOFlushLogTaskMgr::handle(const int64_t tg_id, PalfEnvImpl *palf_env_impl)
+int LogIOWorker::BatchLogIOFlushLogTaskMgr::handle(const int64_t tg_id, IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
   const int64_t count = batch_io_task_array_.count() - usable_count_;

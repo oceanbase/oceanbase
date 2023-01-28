@@ -38,6 +38,7 @@
 #include "rootserver/freeze/ob_major_freeze_helper.h" //ObMajorFreezeHelper
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
 #include "rpc/obmysql/ob_sql_sock_session.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -514,94 +515,116 @@ int ObAdminServerExecutor::execute(ObExecContext &ctx, ObAdminServerStmt &stmt)
       } else if (ObAdminServerArg::STOP == stmt.get_op()
                  || ObAdminServerArg::FORCE_STOP == stmt.get_op()) {
         // check whether all leaders are switched out
-        ObMySQLProxy *sql_proxy = ctx.get_sql_proxy();
-        const int64_t idx = 0;
-        const int64_t retry_interval_us = 1000l * 1000l; // 1s
-        ObSqlString sql;
-        if (OB_FAIL(sql.assign_fmt(
-            "SELECT CAST(COUNT(*) AS SIGNED) FROM %s "
-            "WHERE role = 'LEADER' and (svr_ip, svr_port) IN (",
-            share::OB_CDB_OB_LS_LOCATIONS_TNAME))) {
-          LOG_WARN("assign_fmt failed", K(ret));
-        } else {
-          const int64_t size = arg.servers_.size();
-          for (int64_t idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
-            const ObAddr &server = arg.servers_[idx];
-            char svr_ip[MAX_IP_ADDR_LENGTH] = "\0";
-            if (!server.is_valid()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("addr is not vaild", K(ret), K(server));
-            } else if (!server.ip_to_string(svr_ip, sizeof(svr_ip))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("format ip str failed", K(ret), K(server));
-            } else {
-              // server-zone mapping has been checked in rootservice
-              if (idx == (size - 1)) {
-                if (OB_FAIL(sql.append_fmt(
-                        "('%s','%d'))", svr_ip, server.get_port()))) {
-                  LOG_WARN("append_fmt failed", K(ret));
-                }
-              } else {
-                if (OB_FAIL(sql.append_fmt(
-                        "('%s','%d'), ", svr_ip, server.get_port()))) {
-                  LOG_WARN("append_fmt failed", K(ret));
-                }
-              }
-            }
-          }
-        }
-        bool stop = false;
-        while (OB_SUCC(ret) && !stop) {
-          SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-            sqlclient::ObMySQLResult *result = NULL;
-            const int64_t rpc_timeout = THIS_WORKER.get_timeout_remain();
-            obrpc::Bool can_stop(true /* default value */);
-            int64_t leader_cnt = 0;
-            if (0 > THIS_WORKER.get_timeout_remain()) {
-              ret = OB_WAIT_LEADER_SWITCH_TIMEOUT;
-              LOG_WARN("wait switching out leaders from all servers timeout", K(ret));
-            } else if (OB_FAIL(THIS_WORKER.check_status())) {
-              LOG_WARN("ctx check status failed", K(ret));
-            }
-
-            if (OB_FAIL(ret)) {
-            } else if (!can_stop) {
-            } else if (OB_FAIL(sql_proxy->read(res, sql.ptr()))) {
-              if (OB_RS_SHUTDOWN == ret || OB_RS_NOT_MASTER == ret) {
-                // switching rs, sleep and retry
-                ret = OB_SUCCESS;
-              } else {
-                LOG_WARN("execute sql failed", K(ret), K(sql));
-              }
-            } else if (OB_ISNULL(result = res.get_result())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get result failed", K(ret));
-            } else if (OB_FAIL(result->next())) {
-              if (OB_ITER_END == ret) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("result is empty", K(ret));
-              } else {
-                LOG_WARN("get next result failed", K(ret));
-              }
-            } else if (OB_FAIL(result->get_int(idx, leader_cnt))) {
-              if (OB_ERR_NULL_VALUE == ret) {
-                // __all_virtual_server_stat is not ready, sleep and retry
-                ret = OB_SUCCESS;
-              } else {
-                LOG_WARN("get sum failed", K(ret));
-              }
-            } else if (0 == leader_cnt) {
-              stop = true;
-            } else {
-              LOG_INFO("waiting switching leaders out", K(ret), "left count", leader_cnt);
-              ob_usleep(retry_interval_us);
-            }
-          }
+        if (OB_FAIL(wait_leader_switch_out_(*(ctx.get_sql_proxy()), arg.servers_))) {
+          LOG_WARN("fail to wait leader switch out", KR(ret), K(arg));
         }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected op", "type", static_cast<int64_t>(stmt.get_op()));
+    }
+  }
+  return ret;
+}
+
+int ObAdminServerExecutor::wait_leader_switch_out_(
+    ObISQLClient &sql_proxy,
+    const obrpc::ObServerList &svr_list)
+{
+  int ret = OB_SUCCESS;
+  const int64_t idx = 0;
+  const int64_t retry_interval_us = 1000l * 1000l; // 1s
+  ObSqlString sql;
+  bool stop = false;
+  if (OB_UNLIKELY(0 >= svr_list.size())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(svr_list));
+  } else if (OB_FAIL(construct_wait_leader_switch_sql_(svr_list, sql))) {
+    LOG_WARN("fail to construct wait leader switch sql", KR(ret), K(svr_list));
+  }
+
+  while (OB_SUCC(ret) && !stop) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      int64_t leader_cnt = 0;
+      if (0 > THIS_WORKER.get_timeout_remain()) {
+        ret = OB_WAIT_LEADER_SWITCH_TIMEOUT;
+        LOG_WARN("wait switching out leaders from all servers timeout", KR(ret));
+      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("ctx check status failed", KR(ret));
+      } else if (OB_FAIL(sql_proxy.read(res, sql.ptr()))) {
+        if (OB_RS_SHUTDOWN == ret || OB_RS_NOT_MASTER == ret) {
+          // switching rs, sleep and retry
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("execute sql failed", KR(ret), K(sql));
+        }
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get result failed", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is empty", KR(ret));
+        } else {
+          LOG_WARN("get next result failed", KR(ret));
+        }
+      } else if (OB_FAIL(result->get_int(idx, leader_cnt))) {
+        if (OB_ERR_NULL_VALUE == ret) {
+          // __all_virtual_server_stat is not ready, sleep and retry
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("get sum failed", KR(ret));
+        }
+      } else if (0 == leader_cnt) {
+        stop = true;
+      } else {
+        LOG_INFO("waiting switching leaders out", KR(ret), "left count", leader_cnt);
+        ob_usleep(retry_interval_us);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminServerExecutor::construct_wait_leader_switch_sql_(
+    const obrpc::ObServerList &svr_list,
+    ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 >= svr_list.size())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(svr_list));
+  } else if (OB_FAIL(sql.assign_fmt(
+                         "SELECT CAST(COUNT(*) AS SIGNED) FROM %s "
+                         "WHERE role = 'LEADER' and (svr_ip, svr_port) IN (",
+                         share::OB_CDB_OB_LS_LOCATIONS_TNAME))) {
+    LOG_WARN("assign_fmt failed", KR(ret));
+  } else {
+    const int64_t size = svr_list.size();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
+      const ObAddr &server = svr_list[idx];
+      char svr_ip[MAX_IP_ADDR_LENGTH] = "\0";
+      if (!server.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("addr is not vaild", KR(ret), K(server));
+      } else if (!server.ip_to_string(svr_ip, sizeof(svr_ip))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("format ip str failed", KR(ret), K(server));
+      } else {
+        // server-zone mapping has been checked in rootservice
+        if (idx == (size - 1)) {
+          if (OB_FAIL(sql.append_fmt(
+                  "('%s','%d'))", svr_ip, server.get_port()))) {
+            LOG_WARN("append_fmt failed", KR(ret));
+          }
+        } else {
+          if (OB_FAIL(sql.append_fmt(
+                  "('%s','%d'), ", svr_ip, server.get_port()))) {
+            LOG_WARN("append_fmt failed", KR(ret));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -1002,6 +1025,36 @@ int ObMigrateUnitExecutor::execute(ObExecContext &ctx, ObMigrateUnitStmt &stmt)
 		LOG_WARN("migrate unit rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
 	}
 	return ret;
+}
+
+int ObAddArbitrationServiceExecutor::execute(ObExecContext &ctx, ObAddArbitrationServiceStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(ctx, stmt);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support in CE Version", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "add arbitration service in CE version");
+  return ret;
+}
+
+int ObRemoveArbitrationServiceExecutor::execute(ObExecContext &ctx, ObRemoveArbitrationServiceStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(ctx, stmt);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support in CE Version", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "remove arbitration service in CE version");
+  return ret;
+}
+
+int ObReplaceArbitrationServiceExecutor::execute(ObExecContext &ctx, ObReplaceArbitrationServiceStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(ctx, stmt);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support in CE Version", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace arbitration service in CE version");
+  return ret;
 }
 
 int ObClearLocationCacheExecutor::execute(ObExecContext &ctx, ObClearLocationCacheStmt &stmt)
@@ -1672,15 +1725,7 @@ int ObSwitchTenantExecutor::execute(ObExecContext &ctx, ObSwitchTenantStmt &stmt
 {
   int ret = OB_SUCCESS;
   ObString first_stmt;
-  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
-  obrpc::ObCommonRpcProxy *common_rpc = NULL;
-  if (OB_ISNULL(task_exec_ctx)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("get task executor context failed");
-  } else if (OB_ISNULL(common_rpc = task_exec_ctx->get_common_rpc())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
-  } else if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt", KR(ret), K(stmt));
   } else {
     ObSwitchTenantArg &arg = stmt.get_arg();
@@ -1690,6 +1735,25 @@ int ObSwitchTenantExecutor::execute(ObExecContext &ctx, ObSwitchTenantStmt &stmt
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.switch_tenant(arg))) {
       LOG_WARN("failed to switch_tenant", KR(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTenantExecutor::execute(ObExecContext &ctx, ObRecoverTenantStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObString first_stmt;
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+    LOG_WARN("fail to get first stmt", KR(ret), K(stmt));
+  } else {
+    ObRecoverTenantArg &arg = stmt.get_rpc_arg();
+    arg.set_stmt_str(first_stmt);
+
+    // TODO support specify ALL and tenant list
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.recover_tenant(arg))) {
+      LOG_WARN("failed to recover_tenant", KR(ret), K(arg));
     }
   }
   return ret;

@@ -55,8 +55,8 @@ public:
   int get_role(common::ObRole &role, int64_t &epoch) const override final
   {
     int ret = OB_SUCCESS;
-    UNUSED(role);
-    UNUSED(epoch);
+    role = role_;
+    epoch = leader_epoch_;
     return ret;
   }
   // 如果自己是leader，那么拿到的就是准确的leader，如果自己不是leader，那么拿到lease的owner
@@ -122,6 +122,7 @@ public:
   common::ObAddr self_;
   common::ObAddr leader_;
   int64_t leader_epoch_;
+  common::ObRole role_;
 };
 } // end of election
 } // end of palf

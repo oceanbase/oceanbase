@@ -22,14 +22,19 @@
 #include "lib/time/ob_time_utility.h"        // ObTimeUtility
 #include "lib/utility/ob_macro_utils.h"
 #include "logservice/ob_log_service.h"       // ObLogService
+#include "logservice/palf/log_group_entry.h"
 #include "logservice/palf/palf_env.h"        // PalfEnv
+#include "logservice/palf/palf_iterator.h"
 #include "logservice/replayservice/ob_log_replay_service.h"
+#include "ob_log_archive_piece_mgr.h"        // ObLogArchivePieceContext
+#include "ob_fetch_log_task.h"               // ObFetchLogTask
 #include "ob_log_restore_rpc_define.h"       // RPC Request
 #include "ob_remote_log_source.h"            // ObRemoteLogParent
 #include "ob_remote_log_source_allocator.h"  // ObResSrcAlloctor
 #include "ob_log_restore_define.h"           // ObRemoteFetchContext
 #include "share/ob_define.h"
-#include "share/restore/ob_log_archive_source.h"
+#include "share/ob_errno.h"
+#include "share/restore/ob_log_restore_source.h"
 
 namespace oceanbase
 {
@@ -40,8 +45,7 @@ using namespace oceanbase::share;
 ObLogRestoreHandler::ObLogRestoreHandler() :
   parent_(NULL),
   context_(),
-  is_in_stop_state_(true),
-  is_inited_(false)
+  restore_context_()
 {}
 
 ObLogRestoreHandler::~ObLogRestoreHandler()
@@ -125,6 +129,11 @@ void ObLogRestoreHandler::switch_role(const common::ObRole &role, const int64_t 
   }
 }
 
+int ObLogRestoreHandler::get_role(common::ObRole &role, int64_t &proposal_id) const
+{
+  return ObLogHandlerBase::get_role(role, proposal_id);
+}
+
 bool ObLogRestoreHandler::is_valid() const
 {
   return true == is_inited_
@@ -157,13 +166,6 @@ int ObLogRestoreHandler::get_max_restore_scn(SCN &scn) const
   return ret;
 }
 
-int ObLogRestoreHandler::add_source(share::DirArray &array, const SCN &end_scn)
-{
-  UNUSED(array);
-  UNUSED(end_scn);
-  return OB_NOT_SUPPORTED;;
-}
-
 int ObLogRestoreHandler::add_source(logservice::DirArray &array, const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
@@ -179,7 +181,7 @@ int ObLogRestoreHandler::add_source(logservice::DirArray &array, const SCN &end_
   } else if (OB_UNLIKELY(array.empty() || !end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), K(array), K(end_scn), KPC(this));
-  } else if (FALSE_IT(alloc_source(share::ObLogArchiveSourceType::RAWPATH))) {
+  } else if (FALSE_IT(alloc_source(share::ObLogRestoreSourceType::RAWPATH))) {
   } else if (NULL == parent_) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -205,7 +207,7 @@ int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, const SCN &end_sc
   } else if (OB_UNLIKELY(! dest.is_valid() || !end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
      CLOG_LOG(WARN, "invalid argument", K(ret), K(end_scn), K(dest), KPC(this));
-  } else if (FALSE_IT(alloc_source(share::ObLogArchiveSourceType::LOCATION))) {
+  } else if (FALSE_IT(alloc_source(share::ObLogRestoreSourceType::LOCATION))) {
   } else if (NULL == parent_) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -219,7 +221,7 @@ int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, const SCN &end_sc
   return ret;
 }
 
-int  ObLogRestoreHandler::add_source(const common::ObAddr &addr, const SCN &end_scn)
+int ObLogRestoreHandler::add_source(const common::ObAddr &addr, const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
@@ -231,7 +233,7 @@ int  ObLogRestoreHandler::add_source(const common::ObAddr &addr, const SCN &end_
   } else if (OB_UNLIKELY(!addr.is_valid() || !end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), K(end_scn), K(addr), KPC(this));
-  } else if (FALSE_IT(alloc_source(ObLogArchiveSourceType::SERVICE))) {
+  } else if (FALSE_IT(alloc_source(ObLogRestoreSourceType::SERVICE))) {
   } else if (NULL == parent_) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -246,42 +248,77 @@ int  ObLogRestoreHandler::add_source(const common::ObAddr &addr, const SCN &end_
   return ret;
 }
 
-int ObLogRestoreHandler::raw_write(const palf::LSN &lsn,
+int ObLogRestoreHandler::clean_source()
+{
+  int ret = OB_SUCCESS;
+  WLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), KPC(this));
+  } else if (NULL == parent_) {
+    // just skip
+  } else {
+    CLOG_LOG(INFO, "log_restore_source is empty, clean source", KPC(parent_));
+    ObResSrcAlloctor::free(parent_);
+    parent_ = NULL;
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
+                                   const palf::LSN &lsn,
+                                   const SCN &scn,
                                    const char *buf,
                                    const int64_t buf_size)
 {
   int ret = OB_SUCCESS;
   int64_t wait_times = 0;
-  const bool need_nonblock = false;
+  const bool need_nonblock = true;
   palf::PalfAppendOptions opts;
   opts.need_nonblock = need_nonblock;
   opts.need_check_proposal_id = true;
-  while (true) {
+  while (wait_times < MAX_RAW_WRITE_RETRY_TIMES) {
     do {
-      RLockGuard guard(lock_);
+      ret = OB_SUCCESS;
+      WLockGuard guard(lock_);
       if (IS_NOT_INIT) {
         ret = OB_NOT_INIT;
       } else if (is_in_stop_state_) {
         ret = OB_IN_STOP_STATE;
       } else if (LEADER != role_) {
         ret = OB_NOT_MASTER;
-      } else if (OB_UNLIKELY(!lsn.is_valid() || NULL == buf || 0 >= buf_size)) {
+      } else if (OB_UNLIKELY(!lsn.is_valid()
+            || NULL == buf
+            || 0 >= buf_size
+            || 0 >= proposal_id)) {
         ret = OB_INVALID_ARGUMENT;
+        CLOG_LOG(WARN, "invalid argument", K(ret), K(proposal_id), K(lsn), K(buf), K(buf_size));
+      } else if (proposal_id != proposal_id_) {
+        CLOG_LOG(INFO, "stale task, just skip", K(proposal_id), K(proposal_id_), K(lsn), K(id_));
+      } else if (NULL == parent_ || parent_->to_end()) {
+        ret = OB_RESTORE_LOG_TO_END;
+        CLOG_LOG(INFO, "submit log to end, just skip", K(ret), K(lsn), KPC(this));
       } else {
         opts.proposal_id = proposal_id_;
         ret = palf_handle_.raw_write(opts, lsn, buf, buf_size);
+        if (OB_SUCC(ret)) {
+          context_.max_fetch_lsn_ = lsn + buf_size;
+          context_.max_fetch_scn_ = scn;
+          context_.last_fetch_ts_ = ObTimeUtility::fast_current_time();
+          parent_->set_to_end(scn);
+        }
       }
     } while (0);
 
     if (OB_EAGAIN == ret) {
-      static const int64_t MAX_SLEEP_US = 100;
       ++wait_times;
       int64_t sleep_us = wait_times * 10;
-      if (sleep_us > MAX_SLEEP_US) {
-        sleep_us = MAX_SLEEP_US;
+      if (sleep_us > MAX_RETRY_SLEEP_US) {
+        sleep_us = MAX_RETRY_SLEEP_US;
       }
       ob_usleep(sleep_us);
     } else {
+      // other ret code, end loop
       break;
     }
   }
@@ -315,42 +352,35 @@ int ObLogRestoreHandler::schedule(const int64_t id,
     ret = OB_INVALID_ARGUMENT;
   } else if (id != id_ || proposal_id != proposal_id_) {
     // stale task
-  } else if (OB_UNLIKELY(context_.issued_)) {
-    ret = OB_ERR_UNEXPECTED;
   } else {
     scheduled = true;
-    context_.issued_ = true;
     context_.max_submit_lsn_ = lsn;
+    context_.issue_task_num_++;
   }
   return ret;
 }
 
-int ObLogRestoreHandler::update_fetch_log_progress(const int64_t id,
-    const int64_t proposal_id,
-    const LSN &max_fetch_lsn,
-    const SCN &max_submit_scn,
-    const bool is_finished,
-    const bool is_to_end,
-    bool &is_stale)
+int ObLogRestoreHandler::try_retire_task(ObFetchLogTask &task, bool &done)
 {
+  done = false;
   int ret = OB_SUCCESS;
-  is_stale = false;
   WLockGuard guard(lock_);
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (! is_strong_leader(role_)) {
-    is_stale = true;
-    CLOG_LOG(INFO, "ls not leader, stale task, just skip it", K(id), K(role_));
-  } else if (OB_UNLIKELY(id != id_ || proposal_id != proposal_id_)) {
-    is_stale = true;
-    context_.issued_ = false;
-    CLOG_LOG(INFO, "stale task, just skip it", K(id), K(proposal_id), KPC(this));
-  } else {
-    context_.issued_ = ! is_finished && ! is_to_end;
-    context_.max_fetch_lsn_ = max_fetch_lsn;
-    context_.last_fetch_ts_ = ObTimeUtility::current_time();
-    parent_->set_to_end(is_to_end, max_submit_scn);
+  if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(task));
+  } else if (! is_strong_leader(role_) || NULL == parent_) {
+    done = true;
+    CLOG_LOG(INFO, "ls not leader, stale task, just skip it", K(task), K(role_));
+  } else if (OB_UNLIKELY(task.id_.id() != id_ || task.proposal_id_ != proposal_id_)) {
+    done = true;
+    CLOG_LOG(INFO, "stale task, just skip it", K(task), KPC(this));
+  } else if (context_.max_fetch_lsn_ >= task.end_lsn_ || parent_->to_end()) {
+    done = true;
+  } else if (context_.max_fetch_lsn_ >= task.start_lsn_) {
+    task.cur_lsn_ = context_.max_fetch_lsn_;
+  }
+  if (done) {
+    context_.issue_task_num_--;
   }
   return ret;
 }
@@ -369,13 +399,13 @@ int ObLogRestoreHandler::need_schedule(bool &need_schedule,
   } else if (OB_SUCCESS != context_.error_context_.ret_code_) {
     // error exist, no need schedule
   } else {
-    need_schedule = is_strong_leader(role_) && ! context_.issued_ && ! parent_->to_end();
+    need_schedule = is_strong_leader(role_) && ! parent_->to_end();
     proposal_id = proposal_id_;
     context = context_;
   }
   if (! need_schedule) {
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
-      CLOG_LOG(INFO, "restore not schedule", KPC(this));
+      CLOG_LOG(INFO, "restore not schedule", KPC(this), KPC(parent_));
     }
   }
   return ret;
@@ -438,7 +468,7 @@ int ObLogRestoreHandler::update_location_info(ObRemoteLogParent *source)
   return ret;
 }
 
-void ObLogRestoreHandler::alloc_source(const ObLogArchiveSourceType &type)
+void ObLogRestoreHandler::alloc_source(const ObLogRestoreSourceType &type)
 {
   if (parent_ != NULL && parent_->get_source_type() != type) {
     ObResSrcAlloctor::free(parent_);
@@ -450,47 +480,184 @@ void ObLogRestoreHandler::alloc_source(const ObLogArchiveSourceType &type)
   }
 }
 
-int ObLogRestoreHandler::get_restore_sync_scn(const share::ObLSID &id, SCN &scn)
+int ObLogRestoreHandler::check_restore_done(const SCN &recovery_end_scn, bool &done)
 {
   int ret = OB_SUCCESS;
-  UNUSED(id);
-  SCN upper_limit_scn;
-  RLockGuard guard(lock_);
-  if (OB_ISNULL(parent_)) {
-    ret = OB_EAGAIN;
-  } else {
-    parent_->get_upper_limit_scn(upper_limit_scn);
-    scn = scn > upper_limit_scn ? scn : upper_limit_scn;
+  palf::PalfGroupBufferIterator iter;
+  SCN end_scn;
+  palf::LogGroupEntry entry;
+  SCN entry_scn;
+  palf::LSN end_lsn;
+  int64_t id = 0;
+  done = false;
+  {
+    RLockGuard guard(lock_);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), KPC(this));
+    } else if (OB_UNLIKELY(!recovery_end_scn.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      CLOG_LOG(WARN, "invalid argument", K(ret), K(recovery_end_scn));
+    } else if (! is_strong_leader(role_)) {
+      ret = OB_NOT_MASTER;
+    } else if (restore_context_.seek_done_) {
+      end_lsn = restore_context_.lsn_;
+    } else if (OB_FAIL(palf_handle_.get_end_scn(end_scn))) {
+      CLOG_LOG(WARN, "get end scn failed", K(ret), K_(id));
+    } else if (end_scn < recovery_end_scn) {
+      ret = OB_EAGAIN;
+      CLOG_LOG(WARN, "log restore not finish", K(ret), K_(id), K(end_scn), K(recovery_end_scn));
+    } else if (OB_FAIL(palf_handle_.seek(recovery_end_scn, iter))) {
+      CLOG_LOG(WARN, "palf seek failed", K(ret), K_(id));
+    } else if (OB_FAIL(iter.next())) {
+      CLOG_LOG(WARN, "next entry failed", K(ret));
+    } else if (OB_FAIL(iter.get_entry(entry, end_lsn))) {
+      CLOG_LOG(WARN, "gen entry failed", K(ret), K_(id), K(iter));
+    } else if (entry.get_scn() == recovery_end_scn) {
+      // if the max log scn equals to recovery_end_scn, the max log should be replayed
+      // otherwise the max log should not be replayed
+      end_lsn = end_lsn + entry.get_serialize_size();
+    }
+    id = ATOMIC_LOAD(&id_);
+  }
+
+  // update restore context
+  {
+    WLockGuard guard(lock_);
+    if (OB_SUCC(ret) && ! restore_context_.seek_done_) {
+      restore_context_.lsn_ = end_lsn;
+      restore_context_.seek_done_ = true;
+      CLOG_LOG(INFO, "update restore context", K(id), K_(restore_context));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->is_replay_done(
+            ObLSID(id), end_lsn, done))) {
+      CLOG_LOG(WARN, "is_replay_done failed", K(ret), K(id), K(end_lsn));
+    } else if (! done) {
+      ret = OB_EAGAIN;
+      CLOG_LOG(WARN, "log restore finish, and log replay not finish",
+          K(ret), K(id), K(end_lsn), K(end_scn), K(recovery_end_scn));
+    } else {
+      CLOG_LOG(TRACE, "check restore done succ", K(ret), K(id));
+    }
   }
   return ret;
 }
 
-int ObLogRestoreHandler::check_restore_done(bool &done)
+bool ObLogRestoreHandler::check_restore_to_newest()
 {
   int ret = OB_SUCCESS;
+  bool bret = false;
+  ObRemoteSourceGuard guard;
+  ObRemoteLogParent *source = NULL;
+  ObLogArchivePieceContext *piece_context = NULL;
+  share::ObBackupDest *dest = NULL;
   SCN end_scn;
-  SCN replay_scn;
-  done = false;
-  RLockGuard guard(lock_);
+  {
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), KPC(this));
+    } else if (! is_strong_leader(role_)) {
+      ret = OB_NOT_MASTER;
+      CLOG_LOG(WARN, "not leader", K(ret), KPC(this));
+    } else if (FALSE_IT(deep_copy_source(guard))) {
+    } else if (OB_ISNULL(source = guard.get_source())
+        || !share::is_location_log_source_type(source->get_source_type())) {
+      ret = OB_EAGAIN;
+      CLOG_LOG(WARN, "invalid source", K(ret), KPC(this), KPC(source));
+    } else if (! source->is_valid()) {
+      ret = OB_EAGAIN;
+      CLOG_LOG(WARN, "source is invalid", K(ret), KPC(this), KPC(source));
+    } else {
+      ObRemoteLocationParent *location_source = dynamic_cast<ObRemoteLocationParent *>(source);
+      location_source->get(dest, piece_context, end_scn);
+    }
+  }
+
+  if (OB_SUCC(ret) && NULL != piece_context) {
+    palf::LSN archive_lsn;
+    SCN archive_scn;
+    SCN scn;
+    if (OB_FAIL(palf_handle_.get_end_scn(scn))) {
+      CLOG_LOG(WARN, "get end scn failed", K(ret), K(id_));
+    } else if (OB_FAIL(piece_context->get_max_archive_log(archive_lsn, archive_scn))) {
+      CLOG_LOG(WARN, "get max archive log failed", K(ret), K(id_));
+    } else {
+      if (archive_scn == scn) {
+        bret = true;
+        CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(bret), K(archive_scn), K(scn));
+      } else if (archive_scn < scn) {
+        bret = true;
+        CLOG_LOG(INFO, "archive_scn smaller than palf end_scn, check_restore_to_newest succ",
+            K(id_), K(bret), K(archive_scn), K(scn));
+      } else {
+        CLOG_LOG(INFO, "archive_scn bigger than palf end_scn, restore log not finish",
+            K(id_), K(bret), K(archive_scn), K(scn));
+      }
+    }
+  }
+  return bret;
+}
+
+int ObLogRestoreHandler::submit_sorted_task(ObFetchLogTask &task)
+{
+  WLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), KPC(this));
   } else if (! is_strong_leader(role_)) {
     ret = OB_NOT_MASTER;
-  } else if (OB_ISNULL(parent_)) {
-    ret = OB_EAGAIN;
-    CLOG_LOG(WARN, "parent is NULL, need wait", K(ret));
-  } else if (! parent_->to_end()) {
-    ret = OB_EAGAIN;
-    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
-      CLOG_LOG(WARN, "log not restore to end, need wait", K(ret), KPC(this));
-    }
-  } else if (FALSE_IT(parent_->get_end_scn(end_scn))) {
-  } else if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_scn(ObLSID(id_), replay_scn))) {
-    CLOG_LOG(WARN, "get min unreplay log ts failed", K(ret), KPC(this));
-  } else if (replay_scn > end_scn) {
-    done = true;
-    CLOG_LOG(INFO, "check restore done succ", KPC(this));
+    CLOG_LOG(WARN, "restore_handler not master", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(! task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(task));
+  } else if (OB_UNLIKELY(task.iter_.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "task iterator is empty", K(ret), K(task));
+  } else if (OB_FAIL(context_.submit_array_.push_back(&task))) {
+    CLOG_LOG(WARN, "push back failed", K(ret), K(task));
+  } else {
+    std::sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::get_next_sorted_task(ObFetchLogTask *&task)
+{
+  int ret = OB_SUCCESS;
+  palf::LSN max_lsn;
+  ObFetchLogTask *first = NULL;
+  task = NULL;
+  WLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (! is_strong_leader(role_)) {
+    ret = OB_NOT_MASTER;
+  } else if (NULL != parent_ && parent_->to_end()) {
+    // if restore to end, free all cached tasks
+    ret = context_.reset_sorted_tasks();
+  } else if (context_.submit_array_.empty()) {
+    // sorted_array is empty, do nothing
+  } else if (FALSE_IT(first = context_.submit_array_.at(0))) {
+    // get the first one
+  } else if (OB_FAIL(palf_handle_.get_max_lsn(max_lsn))) {
+    CLOG_LOG(WARN, "get max lsn failed", K(ret), K_(id));
+  } else if (max_lsn < first->start_lsn_) {
+    // check the first task if is in turn, skip it if not
+    CLOG_LOG(TRACE, "task not in turn", KPC(first), K(max_lsn));
+  } else if (context_.submit_array_.count() == 1) {
+    // only one task in array, just pop it
+    context_.submit_array_.pop_back();
+    task = first;
+  } else {
+    // more than one task, replace first and end, and sort again
+    ObFetchLogTask *tmp_task = NULL;
+    context_.submit_array_.pop_back(tmp_task);
+    context_.submit_array_.at(0) = tmp_task;
+    std::sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
+    task = first;
   }
   return ret;
 }

@@ -43,6 +43,8 @@ struct ObArchiveRoundState
     INTERRUPTED,
     STOPPING,
     STOP,
+    SUSPENDING,
+    SUSPEND,
     MAX_STATUS
   };
 
@@ -89,6 +91,8 @@ struct ObArchiveRoundState
   PROPERTY_DECLARE_STATUS(stopping, Status::STOPPING);
   PROPERTY_DECLARE_STATUS(stop, Status::STOP);
   PROPERTY_DECLARE_STATUS(interrupted, Status::INTERRUPTED);
+  PROPERTY_DECLARE_STATUS(suspending, Status::SUSPENDING);
+  PROPERTY_DECLARE_STATUS(suspend, Status::SUSPEND);
 
 #undef PROPERTY_DECLARE_STATUS
 
@@ -890,6 +894,33 @@ struct ObDestRoundSummary
   TO_STRING_KV(K_(tenant_id), K_(dest_id), K_(round_id), K_(ls_round_list));
 };
 
+struct ObArchiveLSMetaType final
+{
+  // NB: the enum type is not only the type of ls meta, but also will be its subdir,
+  // so pay attention to give the type an appropriate name while the length of its name
+  // 'SMALLER' than then MAX_TYPE_LEN
+  static const int64_t MAX_TYPE_LEN = 100;
+  enum class Type : int64_t
+  {
+    INVALID_TYPE = 0,
+    // add task type here
+    SCHEMA_META = 1,
+    MAX_TYPE,
+  };
+
+  Type type_;
+  ObArchiveLSMetaType() : type_(Type::INVALID_TYPE) {}
+  explicit ObArchiveLSMetaType(const Type type) : type_(type) {}
+
+  bool is_valid() const;
+  uint64_t hash() const { return static_cast<uint64_t>(type_); }
+  int compare(const ObArchiveLSMetaType &other) const;
+  bool operator==(const ObArchiveLSMetaType &other) const { return 0 == compare(other); }
+  bool operator!=(const ObArchiveLSMetaType &other) const { return !operator==(other); }
+  const char *get_type_str() const;
+
+  TO_STRING_KV("type", get_type_str());
+};
 }
 }
 

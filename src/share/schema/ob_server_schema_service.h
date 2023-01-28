@@ -47,7 +47,7 @@ namespace oceanbase
 namespace common
 {
 class ObInnerTableBackupGuard;
-class ObMySQLTransaction;
+class ObMySQLTransactionaction;
 class ObMySQLProxy;
 class ObCommonConfig;
 class ObKVCacheHandle;
@@ -794,6 +794,13 @@ public:
 
     void reset();
     int create(int64_t bucket_size);
+
+    bool need_fetch_schemas_for_data_dict() const {
+      return new_tenant_keys_.size() > 0
+             || alter_tenant_keys_.size() > 0
+             || new_table_keys_.size() > 0
+             || new_database_keys_.size() > 0;
+    }
   };
 
   struct AllSimpleIncrementSchema
@@ -868,6 +875,18 @@ public:
 
   int set_timeout_ctx(common::ObTimeoutCtx &ctx);
 
+  // Fetch increments schemas in DDL trans. This interface won't return the following increment schemas:
+  // 1. schema which is dropped in DDL trans.
+  // 2. changed inner tables.
+  int get_increment_schemas_for_data_dict(
+      common::ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const int64_t start_version,
+      common::ObIAllocator &allocator,
+      common::ObIArray<const ObTenantSchema *> &tenant_schemas,
+      common::ObIArray<const ObDatabaseSchema *> &database_schemas,
+      common::ObIArray<const ObTableSchema *> &table_schemas);
+
 protected:
   bool check_inner_stat() const;
   int check_stop() const;
@@ -886,6 +905,12 @@ protected:
 
   int destroy_schema_struct(uint64_t tenant_id);
 
+  bool need_construct_aux_infos_(const ObTableSchema &table_schema);
+  int construct_aux_infos_(
+      common::ObISQLClient &sql_client,
+      const share::schema::ObRefreshSchemaStatus &schema_status,
+      const uint64_t tenant_id,
+      ObTableSchema &table_schema);
 private:
   virtual int destroy();
 
@@ -1140,6 +1165,35 @@ protected:
                            AllSchemaKeys &schema_keys,
                            const bool new_flag);
 
+  /*-- data dict related --*/
+  int get_increment_schema_keys_for_data_dict_(
+      const ObSchemaService::SchemaOperationSetWithAlloc &schema_operations,
+      AllSchemaKeys &schema_keys);
+  int fetch_increment_schemas_for_data_dict_(
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const AllSchemaKeys &schema_keys,
+      common::ObIArray<const ObTenantSchema *> &tenant_schemas,
+      common::ObIArray<const ObDatabaseSchema *> &database_schemas,
+      common::ObIArray<const ObTableSchema *> &table_schemas);
+  int fetch_increment_tenant_schemas_for_data_dict_(
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const AllSchemaKeys &schema_keys,
+      common::ObIArray<const ObTenantSchema *> &tenant_schemas);
+  int fetch_increment_database_schemas_for_data_dict_(
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const AllSchemaKeys &schema_keys,
+      common::ObIArray<const ObDatabaseSchema *> &database_schemas);
+  int fetch_increment_table_schemas_for_data_dict_(
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const AllSchemaKeys &schema_keys,
+      common::ObIArray<const ObTableSchema *> &table_schemas);
 protected:
   // core table count
   const static int64_t MIN_TABLE_COUNT = 1;

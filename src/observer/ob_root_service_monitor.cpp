@@ -198,6 +198,7 @@ int ObRootServiceMonitor::try_start_root_service()
   const int64_t cluster_id = GCONF.cluster_id;
   bool need_to_wait = false;
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
+  const bool check_ls_service = true;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     FLOG_WARN("ObRootServiceMonitor is not inited", KR(ret));
@@ -207,7 +208,7 @@ int ObRootServiceMonitor::try_start_root_service()
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     FLOG_WARN("GCTX.srv_rpc_proxy_ is null", KR(ret));
-  } else if (OB_FAIL(rs_mgr_.construct_initial_server_list(rs_list))) {
+  } else if (OB_FAIL(rs_mgr_.construct_initial_server_list(check_ls_service, rs_list))) {
     FLOG_WARN("fail to construct initial server list", KR(ret));
   } else if (rs_list.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;

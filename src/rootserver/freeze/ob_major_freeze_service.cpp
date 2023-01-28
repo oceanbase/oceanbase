@@ -104,8 +104,17 @@ int ObMajorFreezeService::alloc_tenant_major_freeze()
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   int64_t len = sizeof(ObTenantMajorFreeze);
+  bool is_primary_service = true;
+  ObMajorFreezeServiceType service_type = get_service_type();
+  if ((service_type <= ObMajorFreezeServiceType::SERVICE_TYPE_INVALID)
+      || (service_type >= ObMajorFreezeServiceType::SERVICE_TYPE_MAX)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected major freeze service type", KR(ret), K(service_type), K_(tenant_id));
+  } else {
+    is_primary_service = (ObMajorFreezeServiceType::SERVICE_TYPE_PRIMARY == service_type) ? true : false;
+  }
 
-  if (OB_FAIL(check_inner_stat())) {
+  if (FAILEDx(check_inner_stat())) {
     LOG_WARN("fail to check_inner_stat", KR(ret));
   } else if (OB_NOT_NULL(tenant_major_freeze_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -115,19 +124,20 @@ int ObMajorFreezeService::alloc_tenant_major_freeze()
     LOG_WARN("fail to alloc memory", KR(ret), K_(tenant_id), K(len));
   } else if (FALSE_IT(tenant_major_freeze_ = new(buf) ObTenantMajorFreeze())) {
     // impossible
-  } else if (OB_FAIL(tenant_major_freeze_->init(tenant_id_, *GCTX.sql_proxy_, *GCTX.config_,
-             *GCTX.schema_service_, ObAllServerTracer::get_instance()))) {
-    LOG_WARN("fail to init tenant_majro_freeze", K_(tenant_id), KR(ret));
+  } else if (OB_FAIL(tenant_major_freeze_->init(tenant_id_, is_primary_service, *GCTX.sql_proxy_,
+             *GCTX.config_, *GCTX.schema_service_, ObAllServerTracer::get_instance()))) {
+    LOG_WARN("fail to init tenant_major_freeze", K_(tenant_id), KR(ret), K(is_primary_service));
   } else if (OB_FAIL(tenant_major_freeze_->start())) {
-    LOG_WARN("fail to start tenant_majro_freeze", KR(ret));
+    LOG_WARN("fail to start tenant_major_freeze", K_(tenant_id), KR(ret), K(is_primary_service));
   }
   
   if (OB_SUCC(ret)) {
-    LOG_INFO("succ to alloc tenant_major_freeze", K_(tenant_id), KP_(tenant_major_freeze));
+    LOG_INFO("succ to alloc tenant_major_freeze", K_(tenant_id), KP_(tenant_major_freeze),
+             K(is_primary_service));
   } else {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(delete_tenant_major_freeze())) {
-      LOG_WARN("fail to delete tenant major freeze", KR(tmp_ret), K_(tenant_id));
+      LOG_WARN("fail to delete tenant major freeze", KR(tmp_ret), K_(tenant_id), K(is_primary_service));
     }
     buf = nullptr;
   }
@@ -283,13 +293,56 @@ void ObMajorFreezeService::destroy()
   LOG_INFO("major_freeze_service finish to destroy", K_(tenant_id));
 }
 
-int ObMajorFreezeService::mtl_init(ObMajorFreezeService *&service)
+bool ObMajorFreezeService::is_paused() const
+{
+  bool is_paused = true;
+  if (OB_NOT_NULL(tenant_major_freeze_)) {
+    is_paused = tenant_major_freeze_->is_paused();
+  }
+  // if tenant_major_freeze_ is null, treat it as paused
+  return is_paused;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+ObPrimaryMajorFreezeService::ObPrimaryMajorFreezeService() : ObMajorFreezeService()
+{}
+
+ObPrimaryMajorFreezeService::~ObPrimaryMajorFreezeService()
+{}
+
+int ObPrimaryMajorFreezeService::mtl_init(ObPrimaryMajorFreezeService *&service)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(service->init(MTL_ID()))) {
-    LOG_WARN("fail to init major freeze service", KR(ret)); 
+    LOG_WARN("fail to init primary major freeze service", KR(ret));
   }
   return ret;
+}
+
+ObMajorFreezeServiceType ObPrimaryMajorFreezeService::get_service_type() const
+{
+  return ObMajorFreezeServiceType::SERVICE_TYPE_PRIMARY;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+ObRestoreMajorFreezeService::ObRestoreMajorFreezeService() : ObMajorFreezeService()
+{}
+
+ObRestoreMajorFreezeService::~ObRestoreMajorFreezeService()
+{}
+
+int ObRestoreMajorFreezeService::mtl_init(ObRestoreMajorFreezeService *&service)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(service->init(MTL_ID()))) {
+    LOG_WARN("fail to init restore major freeze service", KR(ret));
+  }
+  return ret;
+}
+
+ObMajorFreezeServiceType ObRestoreMajorFreezeService::get_service_type() const
+{
+  return ObMajorFreezeServiceType::SERVICE_TYPE_RESTORE;
 }
 
 } // end namespace rootserver

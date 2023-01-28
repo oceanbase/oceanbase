@@ -28,7 +28,7 @@
 #include "share/restore/ob_physical_restore_info.h"//ObPhysicalRestoreInfo
 #include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
 #include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
-#include "share/restore/ob_log_archive_source_mgr.h"
+#include "share/restore/ob_log_restore_source_mgr.h"
 #include "share/ls/ob_ls_recovery_stat_operator.h"//ObLSRecoveryStatOperator
 #include "logservice/palf/log_define.h"//scn
 #include "share/scn.h"
@@ -102,6 +102,8 @@ int ObRestoreService::init(
         KP(rpc_proxy), KP(srv_rpc_proxy), KP(lst_operator));
   } else if (OB_FAIL(ObTenantThreadHelper::create("REST_SER", lib::TGDefIDs::SimpleLSService, *this))) {
     LOG_WARN("failed to create thread", KR(ret));
+  } else if (OB_FAIL(ObTenantThreadHelper::start())) {
+    LOG_WARN("fail to start thread", KR(ret));
   } else if (OB_FAIL(upgrade_processors_.init(
                      ObBaseUpgradeProcessor::UPGRADE_MODE_PHYSICAL_RESTORE,
                      *sql_proxy, *srv_rpc_proxy, *rpc_proxy, *schema_service, *this))) {
@@ -358,6 +360,7 @@ int ObRestoreService::fill_create_tenant_arg(
      arg.tenant_schema_.set_compatibility_mode(mode);
      arg.if_not_exist_ = false;
      arg.is_restore_ = true;
+     arg.recovery_until_scn_ = job.get_restore_scn();
      //TODO(chongrong.th): should change to tenant's data version
      arg.compatible_version_ = job.get_source_cluster_version();
      if (OB_FAIL(assign_pool_list(pool_list.ptr(), arg.pool_list_))) {
@@ -574,6 +577,7 @@ int ObRestoreService::post_check(const ObPhysicalRestoreJob &job_info)
   ObSchemaGetterGuard schema_guard;
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_POST_CHECK);
   ObAllTenantInfo all_tenant_info; 
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
 
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -595,7 +599,8 @@ int ObRestoreService::post_check(const ObPhysicalRestoreJob &job_info)
       LOG_WARN("tenant sync scn not equal to restore scn, need wait", KR(ret), K(all_tenant_info), K(job_info));
     } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
             tenant_id_, sql_proxy_, all_tenant_info.get_switchover_epoch(),
-            share::STANDBY_TENANT_ROLE, share::NORMAL_SWITCHOVER_STATUS, new_switch_ts))) {
+            share::STANDBY_TENANT_ROLE, all_tenant_info.get_switchover_status(),
+            share::NORMAL_SWITCHOVER_STATUS, new_switch_ts))) {
       LOG_WARN("failed to update tenant role", KR(ret), K(tenant_id_), K(all_tenant_info));
     }
   }
@@ -958,7 +963,7 @@ int ObRestoreService::restore_init_ls(const share::ObPhysicalRestoreJob &job_inf
     const int64_t backup_path_count = backup_set_path_array.count();
     const ObString &backup_set_path = backup_set_path_array.at(backup_path_count - 1).ptr();
     share::ObBackupDataLSAttrDesc backup_ls_attr;
-    ObLogArchiveSourceMgr archive_source_mgr;
+    ObLogRestoreSourceMgr restore_source_mgr;
     share::ObBackupDataStore store;
     if (OB_FAIL(store.init(backup_set_path.ptr()))) {
       LOG_WARN("fail to ini backup extern mgr", K(ret));
@@ -986,11 +991,11 @@ int ObRestoreService::restore_init_ls(const share::ObPhysicalRestoreJob &job_inf
       LOG_WARN("failed to wait all ls created", KR(ret), KPC(tenant_schema));
     } else if (OB_FAIL(finish_create_ls_(*tenant_schema, backup_ls_attr.ls_attr_array_))) {
       LOG_WARN("failed to finish create ls", KR(ret), KPC(tenant_schema));
-    } else if (OB_FAIL(archive_source_mgr.init(tenant_id_, sql_proxy_))) {
-      LOG_WARN("failed to init archive_source_mgr", KR(ret));
+    } else if (OB_FAIL(restore_source_mgr.init(tenant_id_, sql_proxy_))) {
+      LOG_WARN("failed to init restore_source_mgr", KR(ret));
     } else if (1 == log_path_array.count() 
-      && OB_FAIL(archive_source_mgr.add_location_source(job_info.get_restore_scn(), log_path_array.at(0).str()))) {
-      LOG_WARN("failed to add archive source", KR(ret), K(job_info), K(log_path_array));
+      && OB_FAIL(restore_source_mgr.add_location_source(job_info.get_restore_scn(), log_path_array.at(0).str()))) {
+      LOG_WARN("failed to add log restore source", KR(ret), K(job_info), K(log_path_array));
     }
   }
   if (OB_SUCC(ret)) {

@@ -21,6 +21,8 @@
 #include "logservice/ob_garbage_collector.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_service.h"
+#include "logservice/archiveservice/ob_archive_service.h"
+#include "logservice/data_dictionary/ob_data_dict_service.h"
 #include "storage/tx/ob_trans_service.h"
 #include "observer/report/ob_i_meta_report.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
@@ -62,6 +64,7 @@ ObLS::ObLS()
     ls_freezer_(this),
     ls_sync_tablet_seq_handler_(),
     ls_ddl_log_handler_(),
+    ls_recovery_stat_handler_(),
     is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
     is_stopped_(false),
@@ -159,6 +162,8 @@ int ObLS::init(const share::ObLSID &ls_id,
       LOG_WARN("failed to init reserved snapshot clog handler", K(ret), K(ls_id));
     } else if (OB_FAIL(medium_compaction_clog_handler_.init(this))) {
       LOG_WARN("failed to init medium compaction clog handler", K(ret), K(ls_id));
+    } else if (OB_FAIL(ls_recovery_stat_handler_.init(tenant_id, this))) {
+      LOG_WARN("ls_recovery_stat_handler_ init failed", KR(ret));
     } else {
       REGISTER_TO_LOGSERVICE(logservice::TRANS_SERVICE_LOG_BASE_TYPE, &ls_tx_svr_);
       REGISTER_TO_LOGSERVICE(logservice::STORAGE_SCHEMA_LOG_BASE_TYPE, &ls_tablet_svr_);
@@ -178,9 +183,13 @@ int ObLS::init(const share::ObLSID &ls_id,
           REGISTER_TO_LOGSERVICE(logservice::DAS_ID_LOG_BASE_TYPE, MTL(sql::ObDASIDService *));
         }
         LOG_INFO("register id service success");
+      }
 
-        REGISTER_TO_LOGSERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, MTL(rootserver::ObMajorFreezeService *));
-        LOG_INFO("register major freeze service complete", KR(ret));
+      if (OB_SUCC(ret) && (ls_id == MAJOR_FREEZE_LS)) {
+        REGISTER_TO_LOGSERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, MTL(rootserver::ObPrimaryMajorFreezeService *));
+        LOG_INFO("register primary major freeze service complete", KR(ret));
+        REGISTER_TO_RESTORESERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, MTL(rootserver::ObRestoreMajorFreezeService *));
+        LOG_INFO("register restore major freeze service complete", KR(ret));
       }
 
       if (ls_id == GAIS_LS && OB_SUCC(ret)) {
@@ -194,6 +203,8 @@ int ObLS::init(const share::ObLSID &ls_id,
       }
 
       if (OB_SUCC(ret) && is_user_tenant(tenant_id) && ls_id.is_sys_ls()) {
+        // only user tenant need dump datadict
+        REGISTER_TO_LOGSERVICE(logservice::DATA_DICT_LOG_BASE_TYPE, MTL(datadict::ObDataDictService *));
         //only user table need recovery
         REGISTER_TO_RESTORESERVICE(logservice::RECOVERY_LS_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObRecoveryLSService *));
         LOG_INFO("recovery ls manager registre to restoreservice success");
@@ -203,6 +214,8 @@ int ObLS::init(const share::ObLSID &ls_id,
         //sys and meta tenant
         REGISTER_TO_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObRestoreService *));
       }
+
+
       if (OB_SUCC(ret)) {             // don't delete it
         election_priority_.set_ls_id(ls_id);
         is_inited_ = true;
@@ -607,9 +620,12 @@ void ObLS::destroy()
     } else {
       UNREGISTER_FROM_LOGSERVICE(logservice::DAS_ID_LOG_BASE_TYPE, MTL(sql::ObDASIDService *));
     }
-
-    rootserver::ObMajorFreezeService *major_freeze_service = MTL(rootserver::ObMajorFreezeService *);
-    UNREGISTER_FROM_LOGSERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, major_freeze_service);
+  }
+  if (ls_meta_.ls_id_ == MAJOR_FREEZE_LS) {
+    rootserver::ObRestoreMajorFreezeService *restore_major_freeze_service = MTL(rootserver::ObRestoreMajorFreezeService *);
+    UNREGISTER_FROM_RESTORESERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, restore_major_freeze_service);
+    rootserver::ObPrimaryMajorFreezeService *primary_major_freeze_service = MTL(rootserver::ObPrimaryMajorFreezeService *);
+    UNREGISTER_FROM_LOGSERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, primary_major_freeze_service);
   }
   if (ls_meta_.ls_id_ == GAIS_LS && OB_SUCC(ret)) {
     UNREGISTER_FROM_LOGSERVICE(logservice::GAIS_LOG_BASE_TYPE, MTL(share::ObGlobalAutoIncService *));
@@ -621,6 +637,7 @@ void ObLS::destroy()
   }
 
   if (OB_SUCC(ret) && is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
+    UNREGISTER_FROM_LOGSERVICE(logservice::DATA_DICT_LOG_BASE_TYPE, MTL(datadict::ObDataDictService *));
     rootserver::ObRecoveryLSService* ls_service = MTL(rootserver::ObRecoveryLSService*);
     UNREGISTER_FROM_RESTORESERVICE(logservice::RECOVERY_LS_SERVICE_LOG_BASE_TYPE, ls_service);
   }
@@ -628,7 +645,6 @@ void ObLS::destroy()
     rootserver::ObRestoreService * restore_service = MTL(rootserver::ObRestoreService*);
     UNREGISTER_FROM_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, restore_service);
   }
-
   tx_table_.destroy();
   lock_table_.destroy();
   ls_tablet_svr_.destroy();
@@ -658,6 +674,7 @@ void ObLS::destroy()
   reserved_snapshot_mgr_.destroy();
   reserved_snapshot_clog_handler_.reset();
   medium_compaction_clog_handler_.reset();
+  ls_recovery_stat_handler_.reset();
   rs_reporter_ = nullptr;
   is_inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
@@ -846,18 +863,45 @@ int ObLS::enable_for_restore()
   return ret;
 }
 
-int ObLS::get_ls_meta_package(ObLSMetaPackage &meta_package)
+int ObLS::get_ls_meta_package(const bool check_archive, ObLSMetaPackage &meta_package)
 {
   int ret = OB_SUCCESS;
+  palf::LSN begin_lsn;
+  palf::LSN archive_lsn;
+  SCN unused_archive_scn;
+  bool archive_force = false;
+  bool archive_ignore = false;
+  const ObLSID &id = get_ls_id();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
   } else {
     meta_package.ls_meta_ = ls_meta_;
     palf::LSN curr_lsn = meta_package.ls_meta_.get_clog_base_lsn();
-    if (OB_FAIL(log_handler_.get_palf_base_info(curr_lsn,
-                                                meta_package.palf_meta_))) {
-      LOG_WARN("get palf base info failed", K(ret), K(curr_lsn));
+    if (! check_archive) {
+      LOG_TRACE("no need check archive", K(id), K(check_archive));
+    } else if (OB_FAIL(MTL(archive::ObArchiveService*)->get_ls_archive_progress(
+            id, archive_lsn, unused_archive_scn, archive_force, archive_ignore))) {
+      LOG_WARN("get ls archive progress failed", K(ret), K(id));
+    } else if (archive_ignore) {
+      LOG_TRACE("just ignore archive", K(id), K(archive_ignore));
+    } else if (archive_lsn >= curr_lsn) {
+      LOG_TRACE("archive_lsn not smaller than curr_lsn", K(id), K(archive_lsn), K(curr_lsn));
+    } else if (OB_FAIL(log_handler_.get_begin_lsn(begin_lsn))) {
+      LOG_WARN("get begin lsn failed", K(ret), K(id));
+    } else if (begin_lsn > archive_lsn) {
+      if (archive_force) {
+        ret = OB_FILE_RECYCLED;
+        LOG_WARN("archive in mandatory mode and log recycled", K(ret));
+      } else {
+        curr_lsn = std::min(archive_lsn, curr_lsn);
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(log_handler_.get_palf_base_info(curr_lsn,
+                                            meta_package.palf_meta_))) {
+      LOG_WARN("get palf base info failed", K(ret), K(id), K(curr_lsn),
+          K(archive_force), K(archive_ignore), K(archive_lsn), K_(ls_meta));
     }
   }
   return ret;
@@ -1178,7 +1222,7 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
   const ObTabletMapKey key(ls_meta_.ls_id_, tablet_id);
   const SCN tablet_change_checkpoint_scn = ls_meta_.get_tablet_change_checkpoint_scn();
   ObTabletHandle tablet_handle;
-  SCN min_scn;
+  SCN max_scn;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1191,24 +1235,24 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
       LOG_WARN("failed to get tablet", K(ret), K(key));
     } else if (scn <= tablet_change_checkpoint_scn) {
       LOG_WARN("tablet already gc", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
-    } else if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_scn(ls_meta_.ls_id_, min_scn))) {
-      LOG_WARN("failed to get_min_unreplayed_scn", KR(ret), K_(ls_meta), K(scn), K(tablet_id));
+    } else if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_max_replayed_scn(ls_meta_.ls_id_, max_scn))) {
+      LOG_WARN("failed to get_max_replayed_scn", KR(ret), K_(ls_meta), K(scn), K(tablet_id));
     }
     // double check for this scenario:
     // 1. get_tablet return OB_TABLET_NOT_EXIST
     // 2. create tablet
-    // 3. get_min_unreplayed_scn > scn
+    // 3. get_max_replayed_scn > scn
     else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
       if (OB_TABLET_NOT_EXIST != ret) {
         LOG_WARN("failed to get tablet", K(ret), K(key));
-      } else if (!min_scn.is_valid()) {
+      } else if (!max_scn.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("min_scn is invalid", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
-      } else if (scn > min_scn) {
+        LOG_WARN("max_scn is invalid", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
+      } else if (scn > SCN::scn_inc(max_scn)) {
         ret = OB_EAGAIN;
-        LOG_INFO("tablet does not exist, but need retry", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(min_scn));
+        LOG_INFO("tablet does not exist, but need retry", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(max_scn));
       } else {
-        LOG_INFO("tablet already gc, but scn is more than min scn", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(min_scn));
+        LOG_INFO("tablet already gc, but scn is more than tablet_change_checkpoint_scn", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(max_scn));
       }
     }
   }
@@ -1336,7 +1380,9 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn)
   return checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
 }
 
-int ObLS::get_ls_meta_package_and_tablet_ids(ObLSMetaPackage &meta_package, common::ObIArray<common::ObTabletID> &tablet_ids)
+int ObLS::get_ls_meta_package_and_tablet_ids(const bool check_archive,
+    ObLSMetaPackage &meta_package,
+    common::ObIArray<common::ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKLOGMETA;
@@ -1350,7 +1396,7 @@ int ObLS::get_ls_meta_package_and_tablet_ids(ObLSMetaPackage &meta_package, comm
   } else if (OB_UNLIKELY(is_stopped_)) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(get_ls_meta_package(meta_package))) {
+  } else if (OB_FAIL(get_ls_meta_package(check_archive, meta_package))) {
     LOG_WARN("failed to get ls meta package", K(ret), K_(ls_meta));
   } else if (OB_FAIL(ls_tablet_svr_.build_tablet_iter(iter))) {
     LOG_WARN("failed to build tablet iter", K(ret), K_(ls_meta));

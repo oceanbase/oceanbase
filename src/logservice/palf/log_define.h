@@ -34,6 +34,8 @@ class SCN;
 }
 namespace palf
 {
+#define PALF_ENV_ID (OB_INVALID_TENANT_ID == MTL_ID() ? OB_SERVER_TENANT_ID : MTL_ID())
+#define FLASHBACK_SUFFIX ".flashback"
 #define TMP_SUFFIX ".tmp"
 
 #define PALF_EVENT(info_string, palf_id, args...) FLOG_INFO("[PALF_EVENT] "info_string, "palf_id", palf_id, args)
@@ -62,7 +64,8 @@ const int64_t PALF_META_BLOCK_SIZE = PALF_PHY_BLOCK_SIZE - MAX_INFO_BLOCK_SIZE; 
 constexpr offset_t MAX_LOG_BUFFER_SIZE = MAX_LOG_BODY_SIZE + MAX_LOG_HEADER_SIZE;
 
 constexpr offset_t LOG_DIO_ALIGN_SIZE = 4 * 1024;
-constexpr offset_t LOG_DIO_ALIGNED_BUF_SIZE = MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE;
+constexpr offset_t LOG_DIO_ALIGNED_BUF_SIZE_REDO = MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE;
+constexpr offset_t LOG_DIO_ALIGNED_BUF_SIZE_META = MAX_META_ENTRY_SIZE + LOG_DIO_ALIGN_SIZE;
 constexpr block_id_t LOG_MAX_BLOCK_ID = UINT64_MAX/PALF_BLOCK_SIZE - 1;
 constexpr block_id_t LOG_INVALID_BLOCK_ID = LOG_MAX_BLOCK_ID + 1;
 typedef common::ObFixedArray<share::SCN, ObIAllocator> SCNArray;
@@ -93,6 +96,9 @@ const int64_t PALF_PARENT_KEEPALIVE_INTERVAL_US = 1 * 1000 * 1000L;          // 
 const int64_t PALF_CHILD_RESEND_REGISTER_INTERVAL_US = 4 * 1000 * 1000L;     // 4000ms
 const int64_t PALF_CHECK_PARENT_CHILD_INTERVAL_US = 1 * 1000 * 1000;                // 1000ms
 const int64_t PALF_DUMP_DEBUG_INFO_INTERVAL_US = 10 * 1000 * 1000;                  // 10s
+const int64_t PALF_UPDATE_CACHED_STAT_INTERVAL_US = 500 * 1000;                     // 500 ms
+const int64_t PALF_SYNC_RPC_TIMEOUT_US = 500 * 1000;                                // 500 ms
+const int64_t PALF_LOG_SYNC_DELAY_THRESHOLD_US = 3 * 1000 * 1000L;                  // 3 s
 constexpr int64_t INVALID_PROPOSAL_ID = INT64_MAX;
 constexpr int64_t PALF_INITIAL_PROPOSAL_ID = 0;
 
@@ -157,7 +163,7 @@ enum LogReplicaType
 {
   INVALID_REPLICA = 0,
   NORMAL_REPLICA,           // full replica
-  ARBIRTATION_REPLICA,      // arbitration replica
+  ARBITRATION_REPLICA,      // arbitration replica
 };
 
 inline const char *replica_type_2_str(const LogReplicaType state)
@@ -166,7 +172,7 @@ inline const char *replica_type_2_str(const LogReplicaType state)
   switch(state)
   {
     CHECK_REPLICA_TYPE_STR(NORMAL_REPLICA);
-    CHECK_REPLICA_TYPE_STR(ARBIRTATION_REPLICA);
+    CHECK_REPLICA_TYPE_STR(ARBITRATION_REPLICA);
     default:
       return "InvalidReplicaType";
   }
@@ -179,8 +185,8 @@ inline int log_replica_type_to_string(const LogReplicaType replica_type, char *s
   int ret = OB_SUCCESS;
   if (LogReplicaType::NORMAL_REPLICA == replica_type) {
     strncpy(str_buf_, "NORMAL_REPLICA", str_len);
-  } else if (LogReplicaType::ARBIRTATION_REPLICA == replica_type) {
-    strncpy(str_buf_, "ARBIRTATION_REPLICA", str_len);
+  } else if (LogReplicaType::ARBITRATION_REPLICA == replica_type) {
+    strncpy(str_buf_, "ARBITRATION_REPLICA", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
@@ -204,6 +210,25 @@ inline bool is_tmp_block(const char *block_name)
     bool_ret = true;
   }
   return bool_ret;
+}
+
+inline bool is_flashback_block(const char *block_name)
+{
+  bool bool_ret = false;
+  if (NULL != block_name && NULL != strstr(block_name, FLASHBACK_SUFFIX)) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
+inline int convert_to_flashback_block(const char *log_dir,
+                                      const block_id_t  block_id,
+                                      char *buf,
+                                      const int64_t buf_len)
+{
+  int64_t pos = 0;
+  return databuff_printf(buf, buf_len, pos, "%s/%lu%s", log_dir,
+          block_id, FLASHBACK_SUFFIX);
 }
 
 inline int convert_to_tmp_block(const char *log_dir,
@@ -285,19 +310,44 @@ int block_id_to_tmp_string(const block_id_t block_id,
                            char *str,
                            const int64_t str_len);
 
+int block_id_to_flashback_string(const block_id_t block_id,
+																 char *str,
+																 const int64_t str_len);
+
 int convert_sys_errno();
 
-class GetBlockIdRangeFunctor : public ObBaseDirFunctor
+bool is_number(const char *);
+
+class GetBlockCountFunctor : public ObBaseDirFunctor
 {
 public:
-  GetBlockIdRangeFunctor(const char *dir)
+  GetBlockCountFunctor(const char *dir)
+    : dir_(dir), count_(0)
+  {
+  }
+  virtual ~GetBlockCountFunctor() = default;
+
+  int func(const dirent *entry) override final;
+	int64_t get_block_count() {return count_;}
+private:
+  const char *dir_;
+	int64_t count_;
+
+  DISALLOW_COPY_AND_ASSIGN(GetBlockCountFunctor);
+};
+
+class TrimLogDirectoryFunctor : public ObBaseDirFunctor
+{
+public:
+  TrimLogDirectoryFunctor(const char *dir)
     : dir_(dir),
       min_block_id_(LOG_INVALID_BLOCK_ID),
       max_block_id_(LOG_INVALID_BLOCK_ID)
   {
   }
-  virtual ~GetBlockIdRangeFunctor() = default;
+  virtual ~TrimLogDirectoryFunctor() = default;
 
+	int rename_flashback_to_normal(const char *file_name);
   int func(const dirent *entry) override final;
   block_id_t get_min_block_id() const { return min_block_id_; }
   block_id_t get_max_block_id() const { return max_block_id_; }
@@ -306,7 +356,7 @@ private:
   block_id_t min_block_id_;
   block_id_t max_block_id_;
 
-  DISALLOW_COPY_AND_ASSIGN(GetBlockIdRangeFunctor);
+  DISALLOW_COPY_AND_ASSIGN(TrimLogDirectoryFunctor);
 };
 int reuse_block_at(const int fd, const char *block_path);
 } // end namespace palf

@@ -17,6 +17,7 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/ob_running_mode.h"
 #include "share/rc/ob_tenant_base.h"
+#include "logservice/leader_coordinator/ob_failure_detector.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -701,12 +702,17 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   handle.reset();
   ObIORequest *req = nullptr;
   const int64_t callback_size = nullptr == info.callback_ ? 0 : info.callback_->size();
+  logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
+  } else if (NULL != detector &&
+             detector->is_data_disk_has_fatal_error()) { // also consider slog writer hung
+    ret = OB_DISK_CORRUPTED;
+    LOG_WARN("data disk has fatal error", K(ret));
   } else if (OB_FAIL(alloc_io_request(io_allocator_, callback_size, req))) {
     LOG_WARN("alloc io request failed", K(ret), KP(req));
   } else if (FALSE_IT(req->tenant_io_mgr_.hold(this))) {

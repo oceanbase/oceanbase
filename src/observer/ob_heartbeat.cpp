@@ -176,6 +176,15 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
       }
     }
 
+    // update server status if needed
+    if (RSS_INVALID != lease_response.rs_server_status_) {
+      if (GCTX.rs_server_status_ != lease_response.rs_server_status_) {
+        LOG_INFO("receive new server status recorded in rs",
+                 "old_status", GCTX.rs_server_status_,
+                 "new_status", lease_response.rs_server_status_);
+        GCTX.rs_server_status_ = lease_response.rs_server_status_;
+      }
+    }
     // even try reload schema failed, we should continue do following things
     int schema_ret = schema_updater_.try_reload_schema(lease_response.refresh_schema_info_);
 

@@ -260,8 +260,8 @@ parse_short_opt(const int c, const char *value, ObServerOptions &opts)
 
   case 'm':
     // set mode
-    MPRINT("server mode: %s", value);
-    opts.mode_ = value;
+    MPRINT("server startup mode: %s", value);
+    opts.startup_mode_ = value;
     break;
 
   case 'f':

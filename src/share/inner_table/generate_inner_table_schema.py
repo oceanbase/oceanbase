@@ -91,6 +91,7 @@ all_ora_mapping_virtual_tables = []
 real_table_virtual_table_names = []
 cluster_private_tables = []
 all_only_sys_table_name = {}
+mysql_compat_agent_tables = {}
 column_collation = 'CS_TYPE_INVALID'
 # virtual tables only accessible by sys tenant or sys views.
 restrict_access_virtual_tables = []
@@ -1093,6 +1094,34 @@ def gen_sys_agent_virtual_table_def(table_id, keywords):
   all_agent_virtual_tables.append(new_keywords)
   return new_keywords
 
+def __gen_mysql_vt(table_id, keywords, table_name_suffix):
+  if keywords.has_key('in_tenant_space') and keywords['in_tenant_space']:
+    raise Exception("base table should not in_tenant_space")
+  elif 'SYSTEM_TABLE' != keywords['table_type']:
+    raise Exception("unsupported table type", keywords['table_type'])
+  new_keywords = copy.deepcopy(keywords)
+  new_keywords["table_type"] = 'VIRTUAL_TABLE'
+  new_keywords["in_tenant_space"] = True
+  new_keywords["table_id"] = table_id
+  new_keywords["database_id"] = "OB_SYS_DATABASE_ID"
+  name = keywords["table_name"]
+  if name.startswith("__all_"):
+    new_keywords["table_name"] = name.replace("__all_", "__all_virtual_") + table_name_suffix
+  if is_sys_table(keywords['table_id']):
+    new_keywords['index_using_type'] = 'USING_BTREE'
+
+  new_keywords["base_def_keywords"] = keywords
+  return new_keywords
+
+def gen_mysql_sys_agent_virtual_table_def(table_id, keywords):
+  global all_agent_virtual_tables
+  new_keywords = __gen_mysql_vt(table_id, keywords, "_mysql_sys_agent")
+  new_keywords["partition_expr"] = []
+  new_keywords["partition_columns"] = []
+  mysql_compat_agent_tables[keywords["table_name"]] = True
+  all_agent_virtual_tables.append(new_keywords)
+  return new_keywords
+
 def gen_agent_virtual_table_def(table_id, keywords):
   global all_agent_virtual_tables
   new_keywords = __gen_oracle_vt_base_on_mysql(table_id, keywords, "_AGENT")
@@ -1246,7 +1275,11 @@ def generate_virtual_agent_misc_data(f):
     base_kw = kw['base_def_keywords']
     base_tid = table_name2tid(base_kw['table_name'])
     in_tenant_space = base_kw.has_key('in_tenant_space') and base_kw['in_tenant_space']
-    only_sys = all_only_sys_table_name.has_key(base_kw['table_name']) and all_only_sys_table_name[base_kw['table_name']]
+    only_sys = all_only_sys_table_name.has_key(base_kw['table_name']) and all_only_sys_table_name[base_kw['table_name']] and "OB_SYS_DATABASE_ID" != kw['database_id']
+    mysql_compat_agent_table_name = base_kw['table_name']
+    mysql_compat_agent = (mysql_compat_agent_tables.has_key(mysql_compat_agent_table_name)
+                          and mysql_compat_agent_tables[mysql_compat_agent_table_name]
+                          and "OB_SYS_DATABASE_ID" == kw['database_id'])
     iter_init += """
     case %s: {
       ObAgentVirtualTable *agent_iter = NULL;
@@ -1255,7 +1288,7 @@ def generate_virtual_agent_misc_data(f):
       const bool only_sys_data = %s;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAgentVirtualTable, agent_iter))) {
         SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
-      } else if (OB_FAIL(agent_iter->init(base_tid, sys_tenant_base_table, index_schema, params, only_sys_data))) {
+      } else if (OB_FAIL(agent_iter->init(base_tid, sys_tenant_base_table, index_schema, params, only_sys_data%s))) {
         SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
         agent_iter->~ObAgentVirtualTable();
         allocator.free(agent_iter);
@@ -1264,7 +1297,8 @@ def generate_virtual_agent_misc_data(f):
        vt_iter = agent_iter;
       }
       break;
-    }\n""" % (tid, base_tid, in_tenant_space and 'false' or 'true', only_sys and 'true' or 'false')
+    }\n""" % (tid, base_tid, in_tenant_space and 'false' or 'true', only_sys and 'true' or 'false',
+              ', Worker::CompatMode::MYSQL' if mysql_compat_agent else '')
 
   iter_init += '  END_CREATE_VT_ITER_SWITCH_LAMBDA\n'
   f.write('\n\n#ifdef AGENT_VIRTUAL_TABLE_CREATE_ITER\n' + iter_init + '\n#endif // AGENT_VIRTUAL_TABLE_CREATE_ITER\n\n')
@@ -1872,6 +1906,7 @@ def start_generate_cpp(cpp_file_name):
 #include "share/schema/ob_schema_macro_define.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_table_schema.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {

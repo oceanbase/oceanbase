@@ -16,11 +16,41 @@
 
 #include "lib/time/ob_time_utility.h"
 #include "share/ob_define.h"
+#include "rootserver/freeze/ob_major_freeze_service.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
+
+int ObMajorFreezeUtil::get_major_freeze_service(
+    ObPrimaryMajorFreezeService *primary_major_freeze_service,
+    ObRestoreMajorFreezeService *restore_major_freeze_service,
+    ObMajorFreezeService *&major_freeze_service,
+    bool &is_primary_service)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(primary_major_freeze_service) || OB_ISNULL(restore_major_freeze_service)) {
+    ret = OB_INVALID_ARGUMENT;
+    RS_LOG(ERROR, "primary or restore major_freeze_service is nullptr", KR(ret),
+           KP(primary_major_freeze_service), KP(restore_major_freeze_service));
+  } else {
+    bool is_primary_service_paused = primary_major_freeze_service->is_paused();
+    bool is_restore_service_paused = restore_major_freeze_service->is_paused();
+    if (0 == (is_primary_service_paused ^ is_restore_service_paused)) {
+      ret = OB_ERR_UNEXPECTED;
+      RS_LOG(ERROR, "both primary and restore major_freeze_service are paused or not paused",
+             KR(ret), K(is_primary_service_paused), K(is_restore_service_paused));
+    } else if (!is_primary_service_paused) {
+      major_freeze_service = primary_major_freeze_service;
+      is_primary_service = true;
+    } else if (!is_restore_service_paused) {
+      major_freeze_service = restore_major_freeze_service;
+      is_primary_service = false;
+    }
+  }
+  return ret;
+}
 
 ObFreezeTimeGuard::ObFreezeTimeGuard(
   const char *file,

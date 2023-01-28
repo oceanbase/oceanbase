@@ -16,6 +16,7 @@
 #include "share/scn.h"
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
+#include "env/ob_simple_log_server.h"
 #undef private
 
 const std::string TEST_NAME = "access_mode";
@@ -39,6 +40,7 @@ public:
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 4;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
+bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 
 // 1. basic change_access_mode
 // 2. change_access_mode(block a follower), then switch this follower to leader
@@ -56,34 +58,35 @@ TEST_F(TestObSimpleLogClusterAccessMode, basic_change_access_mode)
   int64_t ref_ts_ns = common::ObTimeUtility::current_time_ns() + 1800 * 1000L * 1000L * 1000L;
   share::SCN ref_scn;
   ref_scn.convert_for_logservice(ref_ts_ns);
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000 * 1000L; // 10s
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
   AccessMode curr_access_mode;
   int64_t mode_version, curr_proposal_id;
   ObRole unused_role;
-  EXPECT_EQ(OB_SUCCESS, leader.get_access_mode(mode_version, curr_access_mode));
+  bool state;
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
   EXPECT_EQ(AccessMode::APPEND, curr_access_mode);
   // test can not submit log in MODE_PREPARE
-  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_.palf_handle_impl_->mode_mgr_.change_access_mode(mode_version, palf::AccessMode::RAW_WRITE, share::SCN::min_scn()));
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->mode_mgr_.change_access_mode(mode_version, palf::AccessMode::RAW_WRITE, share::SCN::min_scn()));
   // cannot submit_log in prepare state
   EXPECT_EQ(OB_NOT_MASTER, submit_log(leader, 1, id));
   int tmp_ret = OB_EAGAIN;
   while(OB_EAGAIN == tmp_ret) {
-    tmp_ret = leader.palf_handle_.palf_handle_impl_->mode_mgr_.change_access_mode(mode_version, palf::AccessMode::RAW_WRITE, share::SCN::min_scn());
+    tmp_ret = leader.palf_handle_impl_->mode_mgr_.change_access_mode(mode_version, palf::AccessMode::RAW_WRITE, share::SCN::min_scn());
     usleep(10 * 1000);
   }
-  EXPECT_EQ(OB_SUCCESS, leader.get_access_mode(mode_version, curr_access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
   EXPECT_EQ(AccessMode::RAW_WRITE, curr_access_mode);
 
-  EXPECT_EQ(OB_SUCCESS, leader.get_role(unused_role, curr_proposal_id));
-  EXPECT_EQ(OB_SUCCESS, leader.change_access_mode(curr_proposal_id, mode_version, palf::AccessMode::FLASHBACK, share::SCN::min_scn()));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, palf::AccessMode::FLASHBACK, share::SCN::min_scn()));
   EXPECT_EQ(OB_NOT_MASTER, submit_log(leader, 1, id));
   // base_ts: 0.5 hour later
-  EXPECT_EQ(OB_SUCCESS, leader.get_access_mode(mode_version, curr_access_mode));
-  EXPECT_EQ(OB_SUCCESS, leader.get_role(unused_role, curr_proposal_id));
-  EXPECT_EQ(OB_SUCCESS, leader.change_access_mode(curr_proposal_id, mode_version, AccessMode::APPEND, ref_scn));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::APPEND, ref_scn));
   std::vector<LSN> lsn_array;
   std::vector<SCN> scn_arrary;
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 50, id, lsn_array, scn_arrary));
@@ -94,16 +97,16 @@ TEST_F(TestObSimpleLogClusterAccessMode, basic_change_access_mode)
   // 40 minutes later
   ref_ts_ns = common::ObTimeUtility::current_time_ns() + 2400L * 1000L * 1000L * 1000L;
   ref_scn.convert_for_logservice(ref_ts_ns);
-  EXPECT_EQ(OB_SUCCESS, leader.get_access_mode(mode_version, curr_access_mode));
-  EXPECT_EQ(OB_SUCCESS, leader.get_role(unused_role, curr_proposal_id));
-  // can not APPEND -> APPEND
-  EXPECT_EQ(OB_STATE_NOT_MATCH, leader.change_access_mode(curr_proposal_id, mode_version, AccessMode::APPEND, ref_scn));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
+  // APPEND -> APPEND
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::APPEND, ref_scn));
   // can not APPEND -> FLASHBACK
-  EXPECT_EQ(OB_STATE_NOT_MATCH, leader.change_access_mode(curr_proposal_id, mode_version, AccessMode::FLASHBACK, ref_scn));
-  EXPECT_EQ(OB_SUCCESS, leader.change_access_mode(curr_proposal_id, mode_version, AccessMode::RAW_WRITE, ref_scn));
-  EXPECT_EQ(OB_SUCCESS, leader.get_access_mode(mode_version, curr_access_mode));
-  EXPECT_EQ(OB_SUCCESS, leader.get_role(unused_role, curr_proposal_id));
-  EXPECT_EQ(OB_SUCCESS, leader.change_access_mode(curr_proposal_id, mode_version, AccessMode::APPEND, ref_scn));
+  EXPECT_EQ(OB_STATE_NOT_MATCH, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::FLASHBACK, ref_scn));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::RAW_WRITE, ref_scn));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::APPEND, ref_scn));
   lsn_array.clear();
   scn_arrary.clear();
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 50, id, lsn_array, scn_arrary));
@@ -121,37 +124,38 @@ TEST_F(TestObSimpleLogClusterAccessMode, switch_leader1)
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "begin test switch_leader1", K(id));
 	int64_t leader_idx = 0;
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
+  bool state;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
   AccessMode curr_access_mode;
   int64_t mode_version, curr_proposal_id;
   ObRole unused_role;
-  EXPECT_EQ(OB_SUCCESS, leader.get_access_mode(mode_version, curr_access_mode));
-  EXPECT_EQ(OB_SUCCESS, leader.get_role(unused_role, curr_proposal_id));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
   EXPECT_EQ(AccessMode::APPEND, curr_access_mode);
   const int64_t follower1_idx = (leader_idx+1)%3;
   const int64_t follower2_idx = (leader_idx+2)%3;
   block_net(leader_idx, follower1_idx);
 
-  EXPECT_EQ(OB_SUCCESS, leader.change_access_mode(curr_proposal_id, mode_version, palf::AccessMode::RAW_WRITE, share::SCN::min_scn()));
-  EXPECT_EQ(OB_SUCCESS, leader.get_role(unused_role, curr_proposal_id));
-  EXPECT_EQ(OB_SUCCESS, leader.get_access_mode(mode_version, curr_access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, palf::AccessMode::RAW_WRITE, share::SCN::min_scn()));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
   EXPECT_EQ(curr_proposal_id, mode_version);
   block_net(leader_idx, follower2_idx);
   sleep(10);
   // a follower will be leader
   while (true) {
-    PalfHandleGuard new_leader;
+    PalfHandleImplGuard new_leader;
     int64_t new_leader_idx;
     int64_t mode_version_after_reconfirm = -1;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
     if (new_leader_idx != leader_idx) {
-      EXPECT_EQ(OB_SUCCESS, new_leader.get_access_mode(mode_version_after_reconfirm, curr_access_mode));
+      EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->get_access_mode(mode_version_after_reconfirm, curr_access_mode));
       EXPECT_EQ(AccessMode::RAW_WRITE, curr_access_mode);
       // mode_version won't be changed after reconfirming
       EXPECT_EQ(mode_version_after_reconfirm, mode_version);
-      EXPECT_EQ(OB_SUCCESS, new_leader.get_role(unused_role, curr_proposal_id));
+      EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
       EXPECT_GT(curr_proposal_id, mode_version_after_reconfirm);
       break;
     } else {
@@ -166,14 +170,15 @@ TEST_F(TestObSimpleLogClusterAccessMode, switch_leader1)
 TEST_F(TestObSimpleLogClusterAccessMode, add_member)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "add_member");
+  OB_LOGGER.set_log_level("INFO");
   MockLocCB loc_cb;
   int ret = OB_SUCCESS;
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "begin test add_member", K(id));
   {
 	  int64_t leader_idx = 0;
-    PalfHandleGuard leader;
-    std::vector<PalfHandleGuard*> palf_list;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
     const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000 * 1000L; // 10s
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
@@ -186,16 +191,17 @@ TEST_F(TestObSimpleLogClusterAccessMode, add_member)
     region_map.insert(get_cluster()[0]->get_addr(), default_region);
     region_map.insert(get_cluster()[1]->get_addr(), ObRegion("SHANGHAI"));
     region_map.insert(get_cluster()[2]->get_addr(), ObRegion("TIANJIN"));
-    EXPECT_EQ(OB_SUCCESS, leader.set_paxos_member_region_map(region_map));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_paxos_member_region_map(region_map));
     EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
-    palf_list[1]->set_region(ObRegion("SHANGHAI"));
-    palf_list[2]->set_region(ObRegion("TIANJIN"));
+    palf_list[1]->palf_handle_impl_->set_region(ObRegion("SHANGHAI"));
+    palf_list[2]->palf_handle_impl_->set_region(ObRegion("TIANJIN"));
 
     AccessMode curr_access_mode;
     int64_t mode_version, curr_proposal_id;
     ObRole unused_role;
-    EXPECT_EQ(OB_SUCCESS, leader.get_access_mode(mode_version, curr_access_mode));
-    EXPECT_EQ(OB_SUCCESS, leader.get_role(unused_role, curr_proposal_id));
+    bool unused_is_pending_state = false;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, unused_is_pending_state));
     EXPECT_EQ(AccessMode::APPEND, curr_access_mode);
     const int64_t follower1_idx = (leader_idx+1)%3;
     const int64_t follower2_idx = (leader_idx+2)%3;
@@ -203,21 +209,21 @@ TEST_F(TestObSimpleLogClusterAccessMode, add_member)
     // election membership version reaches majority
     sleep(1);
 
-    EXPECT_EQ(OB_SUCCESS, leader.change_access_mode(curr_proposal_id, mode_version, palf::AccessMode::RAW_WRITE, share::SCN::min_scn()));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, palf::AccessMode::RAW_WRITE, share::SCN::min_scn()));
     unblock_net(leader_idx, follower1_idx);
     block_net(leader_idx, follower2_idx);
 
     // new_leader需要在delete_paxos_group()之前析构，否则palf_handle引用计数无法清零
-    PalfHandleGuard new_leader;
+    PalfHandleImplGuard new_leader;
     int64_t new_leader_idx;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
     loc_cb.leader_ = get_cluster()[new_leader_idx]->get_addr();
     PALF_LOG(INFO, "set leader for loc_cb", "leader", get_cluster()[new_leader_idx]->get_addr());
-    EXPECT_EQ(OB_SUCCESS, palf_list[3]->set_location_cache_cb(&loc_cb));
+    EXPECT_EQ(OB_SUCCESS, palf_list[3]->palf_handle_impl_->set_location_cache_cb(&loc_cb));
 
-    EXPECT_EQ(OB_SUCCESS, leader.add_learner(ObMember(get_cluster()[3]->addr_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(get_cluster()[3]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT));
     sleep(2);
-    EXPECT_EQ(OB_SUCCESS, leader.switch_learner_to_acceptor(ObMember(get_cluster()[3]->addr_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(ObMember(get_cluster()[3]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT));
     unblock_net(leader_idx, follower2_idx);
     revert_cluster_palf_handle_guard(palf_list);
   }
@@ -232,7 +238,7 @@ TEST_F(TestObSimpleLogClusterAccessMode, prev_log_slide)
 	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "begin test prev_log_slide", K(id));
 	int64_t leader_idx = 0;
-  PalfHandleGuard leader;
+  PalfHandleImplGuard leader;
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000 * 1000L; // 10s
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
@@ -240,36 +246,40 @@ TEST_F(TestObSimpleLogClusterAccessMode, prev_log_slide)
   // inc current proposal_id
   int64_t curr_pid = 0;
   ObRole role;
-  std::vector<PalfHandleGuard*> palf_list;
+  bool state;
+  std::vector<PalfHandleImplGuard*> palf_list;
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
-  EXPECT_EQ(OB_SUCCESS, leader.get_role(role, curr_pid));
-  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_.palf_handle_impl_->mode_mgr_.switch_state_(AccessMode::RAW_WRITE, share::SCN::min_scn(), false));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(role, curr_pid, state));
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->mode_mgr_.switch_state_(AccessMode::RAW_WRITE, share::SCN::min_scn(), false));
   // can not submit_log, config_change in prepare state
-  EXPECT_FALSE(leader.palf_handle_.palf_handle_impl_->mode_mgr_.can_append());
-  LogConfigChangeArgs args(ObMember(get_cluster()[3]->addr_, 1), 0, ADD_LEARNER);
+  EXPECT_FALSE(leader.palf_handle_impl_->mode_mgr_.can_append());
+  LogConfigChangeArgs args(ObMember(get_cluster()[3]->get_addr(), 1), 0, ADD_LEARNER);
   EXPECT_EQ(OB_NOT_MASTER, submit_log(leader, 1, id));
-  const LogConfigMeta config_meta = leader.palf_handle_.palf_handle_impl_->config_mgr_.log_ms_meta_;
-  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_.palf_handle_impl_->config_mgr_.change_config(args));
-  const LogConfigMeta new_config_meta = leader.palf_handle_.palf_handle_impl_->config_mgr_.log_ms_meta_;
+  const LogConfigMeta config_meta = leader.palf_handle_impl_->config_mgr_.log_ms_meta_;
+  LogConfigVersion config_version;
+  const int64_t proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
+  const int64_t leader_epoch = leader.palf_handle_impl_->state_mgr_.get_leader_epoch();
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, leader_epoch, config_version));
+  const LogConfigMeta new_config_meta = leader.palf_handle_impl_->config_mgr_.log_ms_meta_;
   EXPECT_EQ(config_meta.curr_.config_version_, new_config_meta.curr_.config_version_);
   // wait prepare req reaches majority
   sleep(1);
   // switch to accept state
-  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_.palf_handle_impl_->mode_mgr_.switch_state_(AccessMode::RAW_WRITE, share::SCN::min_scn(), false));
-  EXPECT_TRUE(leader.palf_handle_.palf_handle_impl_->mode_mgr_.can_append());
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->mode_mgr_.switch_state_(AccessMode::RAW_WRITE, share::SCN::min_scn(), false));
+  EXPECT_TRUE(leader.palf_handle_impl_->mode_mgr_.can_append());
   int64_t new_pid = 0;
-  EXPECT_EQ(OB_SUCCESS, leader.get_role(role, new_pid));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(role, new_pid, state));
   EXPECT_EQ(curr_pid + 1, new_pid);
-  EXPECT_EQ(curr_pid + 1, palf_list[1]->palf_handle_.palf_handle_impl_->state_mgr_.get_proposal_id());
-  EXPECT_EQ(curr_pid + 1, palf_list[2]->palf_handle_.palf_handle_impl_->state_mgr_.get_proposal_id());
+  EXPECT_EQ(curr_pid + 1, palf_list[1]->palf_handle_impl_->state_mgr_.get_proposal_id());
+  EXPECT_EQ(curr_pid + 1, palf_list[2]->palf_handle_impl_->state_mgr_.get_proposal_id());
   //  apply config_change barrier with older log proposal_id
-  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_.palf_handle_impl_->config_mgr_.change_config(args));
+  EXPECT_EQ(OB_EAGAIN, leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, leader_epoch, config_version));
 
   // submit log with new proposal_id and wait for sliding out in follower
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
   while (true) {
-    if (palf_list[1]->palf_handle_.palf_handle_impl_->sw_.last_slide_log_pid_ == new_pid &&
-        palf_list[2]->palf_handle_.palf_handle_impl_->sw_.last_slide_log_pid_ == new_pid) {
+    if (palf_list[1]->palf_handle_impl_->sw_.last_slide_log_pid_ == new_pid &&
+        palf_list[2]->palf_handle_impl_->sw_.last_slide_log_pid_ == new_pid) {
       break;
     } else {
       EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id));
@@ -280,7 +290,7 @@ TEST_F(TestObSimpleLogClusterAccessMode, prev_log_slide)
   revert_cluster_palf_handle_guard(palf_list);
   // continue add_learner, prev log must have slided
   while(true) {
-    if (OB_SUCC(leader.palf_handle_.palf_handle_impl_->config_mgr_.change_config(args))) {
+    if (OB_SUCC(leader.palf_handle_impl_->config_mgr_.change_config(args, proposal_id, leader_epoch, config_version))) {
       break;
     } else {
       usleep(100 * 1000);

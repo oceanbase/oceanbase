@@ -58,12 +58,12 @@ namespace oceanbase
 {
 namespace libobcdc
 {
-class ObLogConfig : public common::ObInitConfigContainer
+class ObLogConfig : public common::ObBaseConfig
 {
   typedef std::map<std::string, std::string> ConfigMap;
 
 public:
-  ObLogConfig() : inited_(false), common_config_(), config_file_buf1_(NULL), config_file_buf2_(NULL)
+  ObLogConfig() : inited_(false), common_config_()
   {
   }
 
@@ -74,19 +74,10 @@ public:
   static ObLogConfig &get_instance();
 
 public:
-  int check_all();
   void print() const;
-  int load_from_buffer(const char *config_str,
-      const int64_t config_str_len,
-      const int64_t version = 0,
-      const bool check_name = false);
-  int load_from_file(const char *config_file,
-      const int64_t version = 0,
-      const bool check_name = false);
   int load_from_map(const ConfigMap& configs,
       const int64_t version = 0,
       const bool check_name = false);
-  int dump2file(const char *file) const;
 
   common::ObCommonConfig &get_common_config() { return common_config_; }
 
@@ -142,7 +133,7 @@ public:
   DEF_INT(part_trans_task_prealloc_page_count, OB_CLUSTER_PARAMETER, "20000", "[1,]",
       "part trans task prealloc page count");
   // Log_level=INFO in the startup scenario, and then optimize the schema to WARN afterwards
-  DEF_STR(init_log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;SHARE.SCHEMA:INFO", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
+  DEF_STR(init_log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:INFO", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
   DEF_STR(log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
   // root server info for oblog, seperated by `;` between multi rootserver, a root server info format as `ip:rpc_port:sql_port`
   DEF_STR(rootserver_list, OB_CLUSTER_PARAMETER, "|", "OB RootServer list");
@@ -151,7 +142,8 @@ public:
   DEF_STR(cluster_password, OB_CLUSTER_PARAMETER, "", "OB login password");
   DEF_STR(cluster_db_name, OB_CLUSTER_PARAMETER, "oceanbase", "OB login database name");
   DEF_STR(config_fpath, OB_CLUSTER_PARAMETER, DEFAULT_CONFIG_FPATN, "configuration file path");
-  DEF_STR(timezone, OB_CLUSTER_PARAMETER, DEFAULT_TIMEZONE_INFO, "timezone info");
+  DEF_STR(timezone, OB_CLUSTER_PARAMETER, DEFAULT_TIMEZONE, "timezone");
+  DEF_STR(timezone_info_fpath, OB_CLUSTER_PARAMETER, DEFAULT_TIMEZONE_INFO_FPATH, "timezone file path");
   // tenant_name.db_name.table_name
   DEF_STR(tb_white_list, OB_CLUSTER_PARAMETER, "*.*.*", "tb-select white list");
   DEF_STR(tb_black_list, OB_CLUSTER_PARAMETER, "|", "tb-select black list");
@@ -235,6 +227,16 @@ public:
   // 1. storage: transaction data is stored, can support large transactions
   // 2. memory: transaction data is not stored, it means better performance, but may can not support large transactions
   DEF_STR(working_mode, OB_CLUSTER_PARAMETER, "storage", "libocdc working mode");
+  // libobcdc support multiple meta_data_refresh_mode, default is data_dict
+  // 1. data_dict: through the log of meta data
+  // 2. online: through the schema service
+  DEF_STR(meta_data_refresh_mode, OB_CLUSTER_PARAMETER, "online", "meta data refresh mode");
+  // fetching log mode of libobcdc
+  // 1. integrated: integrated fetch mode, fetch log from observer, don't perceive archivelog
+  // 2. direct: direct fetch mode, direct fetch log from archive, need to perceive the destination of archivelog.
+  DEF_STR(fetching_log_mode, OB_CLUSTER_PARAMETER, "integrated", "libobcdc fetching mode");
+  // the destination of archive log.
+  DEF_STR(archive_dest, OB_CLUSTER_PARAMETER, "|", "the location of archive log");
   T_DEF_INT_INFT(rocksdb_write_buffer_size, OB_CLUSTER_PARAMETER, 64, 16, "write buffer size[M]");
 
   T_DEF_INT_INFT(io_thread_num, OB_CLUSTER_PARAMETER, 4, 1, "io thread number");
@@ -242,7 +244,7 @@ public:
   T_DEF_INT(dead_pool_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "dead pool thread num");
   T_DEF_INT(stream_worker_thread_num, OB_CLUSTER_PARAMETER, 8, 1, 64, "stream worker thread num");
   T_DEF_INT(start_lsn_locator_thread_num, OB_CLUSTER_PARAMETER, 4, 1, 32, "start lsn locator thread num");
-  T_DEF_INT_INFT(start_lsn_locator_locate_count, OB_CLUSTER_PARAMETER, 3, 1, "start lsn locator locate count");
+  T_DEF_INT_INFT(start_lsn_locator_locate_count, OB_CLUSTER_PARAMETER, 1, 1, "start lsn locator locate count");
   // Whether to skip the starting lsn positioning result consistency check, i.e. whether there is a positioning log bias scenario
   T_DEF_BOOL(skip_start_lsn_locator_result_consistent_check, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   T_DEF_INT_INFT(svr_stream_cached_count, OB_CLUSTER_PARAMETER, 16, 1, "cached svr stream object count");
@@ -396,6 +398,12 @@ public:
   // Test mode, used only in obtest and other test tool scenarios
   T_DEF_BOOL(test_mode_on, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
+  // if force fetch archive is on, cdc service will seek archive for all rpc request unconditionally
+  T_DEF_BOOL(test_mode_force_fetch_archive, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
+  // enable test_mode_switch_fetch_mode to test whether cdc service can fetch log correctly when switching fetch mode
+  T_DEF_BOOL(test_mode_switch_fetch_mode, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
+
   // Whether check tenant status for each schema request with tenant_id under test mode, default disabled
   T_DEF_BOOL(test_mode_force_check_tenant_status, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
@@ -522,16 +530,8 @@ public:
 #undef OB_CLUSTER_PARAMETER
 
 private:
-  static const int64_t OBLOG_MAX_CONFIG_LENGTH = 5 * 1024 * 1024;  // 5M
-
-private:
   bool                  inited_;
   ObLogFakeCommonConfig common_config_;
-
-  // for load_from_file
-  char                  *config_file_buf1_;
-  // for load_from_buffer
-  char                  *config_file_buf2_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogConfig);

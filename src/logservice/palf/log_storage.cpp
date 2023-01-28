@@ -35,7 +35,7 @@ LogStorage::LogStorage() :
     logical_block_size_(0),
     tail_info_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     delete_block_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
-    switch_next_block_cb_(),
+    update_manifest_cb_(),
     is_inited_(false)
 {}
 
@@ -46,7 +46,8 @@ LogStorage::~LogStorage()
 
 int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_lsn,
                      const int64_t palf_id, const int64_t logical_block_size,
-                     const SwitchNextBlockCallback &switch_next_block_cb,
+                     const int64_t align_size, const int64_t align_buf_size,
+                     const UpdateManifestCallback &update_manifest_cb,
                      ILogBlockPool *log_block_pool)
 {
   int ret = OB_SUCCESS;
@@ -57,7 +58,9 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                               base_lsn,
                               palf_id,
                               logical_block_size,
-                              switch_next_block_cb,
+                              align_size,
+                              align_buf_size,
+                              update_manifest_cb,
                               log_block_pool))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
   } else {
@@ -100,6 +103,7 @@ void LogStorage::destroy()
   block_mgr_.destroy();
   log_reader_.destroy();
   log_tail_.reset();
+  readable_log_tail_.reset();
   log_block_header_.reset();
   curr_block_writable_size_ = 0;
   need_append_block_header_ = false;
@@ -310,9 +314,9 @@ int LogStorage::inner_truncate_(const LSN &lsn)
   const block_id_t lsn_block_id = lsn_2_block(lsn, logical_block_size_);
   const block_id_t log_tail_block_id = lsn_2_block(log_tail_, logical_block_size_);
   const block_id_t expected_next_block_id = lsn_block_id + 1;
-  if (lsn_block_id != log_tail_block_id && OB_FAIL(switch_next_block_cb_(expected_next_block_id))) {
+  if (lsn_block_id != log_tail_block_id && OB_FAIL(update_manifest_cb_(expected_next_block_id))) {
     PALF_LOG(WARN,
-             "inner_truncat_ switch_next_block_cb_ failed",
+             "inner_truncat_ update_manifest_cb_ failed",
              K(ret),
              K(expected_next_block_id),
              KPC(this));
@@ -320,12 +324,7 @@ int LogStorage::inner_truncate_(const LSN &lsn)
                                          get_phy_offset_(lsn)))) {
     PALF_LOG(WARN, "block_mgr_ truncate success", K(ret), K(lsn), KPC(this));
   } else {
-    offset_t logical_offset = lsn_2_offset(lsn, logical_block_size_);
-    (void)truncate_block_header_(lsn);
-    curr_block_writable_size_ = logical_block_size_ - logical_offset;
-    need_append_block_header_ =
-        (curr_block_writable_size_ == logical_block_size_) ? true : false;
-    log_tail_ = lsn;
+    reset_log_tail_for_last_block_(lsn, true);
     PALF_LOG(INFO, "inner_truncate_ success", K(ret), K(lsn), KPC(this));
   }
   return ret;
@@ -378,16 +377,65 @@ int LogStorage::truncate_prefix_blocks(const LSN &lsn)
   if (OB_SUCC(ret) && block_id > max_block_id) {
     PALF_LOG(WARN, "need reset log_tail", K(ret), K(block_id),
              KPC(this));
-    ObSpinLockGuard guard(tail_info_lock_);
-    log_tail_ = lsn;
-    log_block_header_.reset();
-    curr_block_writable_size_ = 0;
-    need_append_block_header_ = true;
-    block_mgr_.reset(block_id);
+		reset_log_tail_for_last_block_(lsn, false);
+    block_mgr_.reset(lsn_2_block(lsn, logical_block_size_));
   }
   PALF_EVENT("LogStorage truncate_prefix_blocks finihsed", palf_id_, K(ret), KPC(this),
              K(lsn), K(block_id), K(min_block_id), K(max_block_id),
              K(truncate_end_block_id));
+  return ret;
+}
+
+// step1. create tmp block.
+// step2. update manifest.
+// step3. reset log tail.
+int LogStorage::begin_flashback(const LSN &start_lsn_of_block)
+{
+  int ret = OB_SUCCESS;
+  const block_id_t tmp_block_id = lsn_2_block(start_lsn_of_block, logical_block_size_);
+  // create block with 'tmp_block_id.tmp', and swap it with 'curr_writable_handler_' in 'block_mgr_'
+  if (start_lsn_of_block >= log_tail_) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid argument", K(ret), KPC(this), K(start_lsn_of_block));
+  } else if (OB_FAIL(block_mgr_.create_tmp_block_handler(tmp_block_id))) {
+    PALF_LOG(ERROR, "LogBlockMgr create_tmp_block_handler failed", K(ret), KPC(this), K(start_lsn_of_block));
+  } else {
+    const LSN origin_log_tail = log_tail_;
+    // make tmp block be writeable, set log_tail_ to start_lsn_of_block.
+    reset_log_tail_for_last_block_(start_lsn_of_block, true);
+    ObSpinLockGuard guard(tail_info_lock_);
+    // In process of flashback, each block after start_lsn_of_block is still readable.
+    readable_log_tail_ = origin_log_tail;
+    PALF_EVENT("[BEGIN STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+  }
+  return ret;
+}
+
+// step1: delete each block after start_lsn_of_block
+// step2: rename tmp block to normal
+// step2: set readable_log_tail_ to log_tail_, make each block after start_lsn_of_block is not
+// readable.
+int LogStorage::end_flashback(const LSN &start_lsn_of_block)
+{
+  int ret = OB_SUCCESS;
+  const block_id_t block_id = lsn_2_block(start_lsn_of_block, logical_block_size_);
+  // update manifest
+  const block_id_t log_tail_block_id = lsn_2_block(log_tail_, logical_block_size_);
+  const block_id_t expected_next_block_id = log_tail_block_id + 1;
+  if (OB_FAIL(update_manifest_cb_(expected_next_block_id))) {
+    PALF_LOG(WARN, "update_manifest_cb_ failed", K(ret), KPC(this), K(block_id),
+				K(expected_next_block_id), K(start_lsn_of_block));
+	} else if (OB_FAIL(block_mgr_.delete_block_from_back_to_front_until(block_id))) {
+    PALF_LOG(ERROR, "delete_block_from_back_to_front_until failed", K(ret),
+				KPC(this), K(start_lsn_of_block));
+  } else if (OB_FAIL(block_mgr_.rename_tmp_block_handler_to_normal(block_id))) {
+    PALF_LOG(ERROR, "LogBlockMgr rename_tmp_block_handler_to_normal failed", K(ret), KPC(this),
+        K(start_lsn_of_block));
+  } else {
+		ObSpinLockGuard guard(tail_info_lock_);
+    readable_log_tail_ = log_tail_;
+    PALF_EVENT("[END STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+  }
   return ret;
 }
 
@@ -510,7 +558,9 @@ int LogStorage::do_init_(const char *base_dir,
                          const LSN &base_lsn,
                          const int64_t palf_id,
                          const int64_t logical_block_size,
-                         const SwitchNextBlockCallback &switch_next_block_cb,
+                         const int64_t align_size,
+                         const int64_t align_buf_size,
+                         const UpdateManifestCallback &update_manifest_cb,
                          ILogBlockPool *log_block_pool)
 {
   int ret = OB_SUCCESS;
@@ -522,19 +572,21 @@ int LogStorage::do_init_(const char *base_dir,
     PALF_LOG(ERROR, "LogStorage snprintf failed", K(ret), K(tmp_ret));
   } else if (OB_FAIL(block_mgr_.init(log_dir,
                                      lsn_2_block(base_lsn, logical_block_size),
+                                     align_size,
+                                     align_buf_size,
                                      logical_block_size + MAX_INFO_BLOCK_SIZE,
                                      log_block_pool))) {
     PALF_LOG(ERROR, "LogBlockMgr init failed", K(ret), K(log_dir));
   } else if (OB_FAIL(log_reader_.init(log_dir, logical_block_size + MAX_INFO_BLOCK_SIZE))) {
     PALF_LOG(ERROR, "LogReader init failed", K(ret), K(log_dir));
   } else {
-    log_tail_ = base_lsn;
+    log_tail_ = readable_log_tail_ = base_lsn;
     log_block_header_.reset();
-    curr_block_writable_size_ = logical_block_size_;
+    curr_block_writable_size_ = 0;
     need_append_block_header_ = true;
     palf_id_ = palf_id;
     logical_block_size_ = logical_block_size;
-    switch_next_block_cb_ = switch_next_block_cb;
+    update_manifest_cb_ = update_manifest_cb;
     is_inited_ = true;
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
@@ -553,7 +605,7 @@ bool LogStorage::check_read_out_of_lower_bound_(const block_id_t &block_id) cons
       && OB_ENTRY_NOT_EXIST != ret) {
     PALF_LOG(WARN, "get_block_id_range failed", K(ret), K(min_block_id), K(max_block_id));
   } else {
-    bool_ret = (min_block_id > block_id || OB_ENTRY_NOT_EXIST == ret);
+    bool_ret = (min_block_id > block_id || max_block_id < block_id || OB_ENTRY_NOT_EXIST == ret);
     PALF_LOG(TRACE, "curr block id range", K(min_block_id), K(max_block_id));
   }
   return bool_ret;
@@ -568,8 +620,8 @@ int LogStorage::inner_switch_block_()
   const block_id_t expected_next_block_id = block_id + 1;
   if (OB_FAIL(block_mgr_.switch_next_block(block_id))) {
     PALF_LOG(ERROR, "switch_next_block failed", K(ret));
-  } else if (OB_FAIL(switch_next_block_cb_(expected_next_block_id))) {
-    PALF_LOG(WARN, "SwitchNextBlockCallback failed", K(ret), KPC(this), K(block_id));
+  } else if (OB_FAIL(update_manifest_cb_(expected_next_block_id))) {
+    PALF_LOG(WARN, "update_manifest_cb_ failed", K(ret), KPC(this), K(block_id));
   } else {
     PALF_LOG(INFO, "inner_switch_block_ success", K(ret), K(log_block_header_),
              K(block_id));
@@ -617,7 +669,7 @@ int LogStorage::update_block_header_(const block_id_t block_id,
     PALF_LOG(ERROR, "serialize info block failed", K(ret));
   } else if (OB_FAIL(block_mgr_.pwrite(block_id, 0, block_header_seria_buf,
                                        MAX_INFO_BLOCK_SIZE))) {
-    PALF_LOG(ERROR, "write info block failed", K(ret), K(block_id), K(pos));
+    PALF_LOG(ERROR, "write info block failed", K(ret), K(block_id), KPC(this));
   } else {
     PALF_LOG(INFO, "append_block_header_ success", K(ret), K(block_id),
              K(log_block_header_));
@@ -641,12 +693,30 @@ void LogStorage::update_log_tail_guarded_by_lock_(const int64_t log_size)
 {
   ObSpinLockGuard guard(tail_info_lock_);
   log_tail_ = log_tail_ + log_size;
+  // NB: In the process of flashback, 'readable_log_tail_' is the back of last block
+  // 'log_tail_' is the front of last block.
+  if (readable_log_tail_ < log_tail_) {
+    readable_log_tail_ = log_tail_;
+  }
+}
+
+void LogStorage::update_log_tail_guarded_by_lock_(const LSN &lsn)
+{
+  ObSpinLockGuard guard(tail_info_lock_);
+  log_tail_ = lsn;
+  readable_log_tail_ = log_tail_;
 }
 
 const LSN &LogStorage::get_log_tail_guarded_by_lock_() const
 {
   ObSpinLockGuard guard(tail_info_lock_);
   return log_tail_;
+}
+
+const LSN &LogStorage::get_readable_log_tail_guarded_by_lock_() const
+{
+  ObSpinLockGuard guard(tail_info_lock_);
+  return readable_log_tail_;
 }
 
 offset_t LogStorage::get_phy_offset_(const LSN &lsn) const
@@ -667,7 +737,7 @@ int LogStorage::read_block_header_(const block_id_t block_id,
   // 'log_tail' and 'block_header' are snapshot, we can read valid data even if the block
   // is deleted. NB: we need ensure that the lsn_2_block('log_tail') is smaller than or
   // equal to 'max_block_id'.
-  LSN log_tail = get_log_tail_guarded_by_lock_();
+  LSN log_tail = get_readable_log_tail_guarded_by_lock_();
   block_id_t max_block_id = lsn_2_block(log_tail, logical_block_size_);
   bool last_block_has_data = (0 == lsn_2_offset(log_tail, logical_block_size_) ? false : true);
   if (block_id > max_block_id || (block_id == max_block_id && false == last_block_has_data)) {
@@ -727,10 +797,8 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
                              int64_t &out_read_size)
 {
   int ret = OB_SUCCESS;
-  // Nowdays, no need to get_log_tail_guarded_by_lock_
-  // const LSN &log_tail = get_log_tail_guarded_by_lock_();
   // NB: don't support read data from diffent file.
-  const LSN log_tail = get_log_tail_guarded_by_lock_();
+  const LSN log_tail = get_readable_log_tail_guarded_by_lock_();
   const block_id_t read_block_id = lsn_2_block(read_lsn, logical_block_size_);
   const LSN curr_block_end_lsn = LSN((read_block_id + 1) * logical_block_size_);
   const LSN &max_readable_lsn = MIN(log_tail, curr_block_end_lsn);
@@ -773,5 +841,14 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
   return ret;
 }
 
+void LogStorage::reset_log_tail_for_last_block_(const LSN &lsn, bool last_block_exist)
+{
+  ObSpinLockGuard guard(tail_info_lock_);
+  offset_t logical_offset = lsn_2_offset(lsn, logical_block_size_);
+  (void)truncate_block_header_(lsn);
+  curr_block_writable_size_ = (true == last_block_exist) ? logical_block_size_ - logical_offset : 0;
+  need_append_block_header_ = (curr_block_writable_size_ == logical_block_size_) ? true : false;
+  log_tail_ = readable_log_tail_ = lsn;
+}
 } // end namespace palf
 } // end namespace oceanbase

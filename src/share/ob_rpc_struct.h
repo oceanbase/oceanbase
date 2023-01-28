@@ -62,10 +62,11 @@
 #include "logservice/palf/palf_options.h"//access mode
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "logservice/palf/log_define.h"//INVALID_PROPOSAL_ID
-#include "share/scn.h"//SCN
 #include "share/location_cache/ob_vtable_location_service.h" // share::ObVtableLocationType
+//#include "share/ls/ob_ls_i_life_manager.h"
 #include "share/config/ob_config.h" // ObConfigArray
 #include "logservice/palf/log_meta_info.h"//LogConfigVersion
+#include "share/scn.h"//SCN
 
 namespace oceanbase
 {
@@ -498,8 +499,8 @@ struct ObCreateTenantArg : public ObDDLArg
 public:
   ObCreateTenantArg()
     : ObDDLArg(), tenant_schema_(), pool_list_(), if_not_exist_(false),
-      sys_var_list_(), name_case_mode_(common::OB_NAME_CASE_INVALID),
-      is_restore_(false), palf_base_info_(), compatible_version_(0) {}
+      sys_var_list_(), name_case_mode_(common::OB_NAME_CASE_INVALID), is_restore_(false),
+      palf_base_info_(), compatible_version_(0), recovery_until_scn_(share::SCN::min_scn()) {}
   virtual ~ObCreateTenantArg() {};
   bool is_valid() const;
   int check_valid() const;
@@ -524,6 +525,7 @@ public:
   palf::PalfBaseInfo palf_base_info_;
   //for restore tenant, from backuped meta file
   uint64_t compatible_version_;
+  share::SCN recovery_until_scn_;
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg
@@ -560,6 +562,7 @@ public:
        FORCE_LOCALITY,
        PROGRESSIVE_MERGE_NUM,
        ENABLE_EXTENDED_ROWID,
+       ENABLE_ARBITRATION_SERVICE,
        MAX_OPTION,
   };
   ObModifyTenantArg() : ObDDLArg()
@@ -2828,12 +2831,14 @@ private:
   ObAddr addr_;//for async rpc, dests and results not one-by-one mapping
 };
 
+
 struct ObSetMemberListArgV2
 {
   OB_UNIS_VERSION(1);
 public:
   ObSetMemberListArgV2() : tenant_id_(OB_INVALID_TENANT_ID), id_(),
-                           member_list_(), paxos_replica_num_(0){}
+                           member_list_(), paxos_replica_num_(0),
+                           arbitration_service_() {}
   ~ObSetMemberListArgV2() {}
   bool is_valid() const;
   void reset();
@@ -2841,7 +2846,8 @@ public:
   int init(const int64_t tenant_id,
            const share::ObLSID &id,
            const int64_t paxos_replica_num,
-           const ObMemberList &member_list);
+           const ObMemberList &member_list,
+           const ObMember &arbitration_service);
   DECLARE_TO_STRING;
   const ObMemberList& get_member_list() const
   {
@@ -2855,6 +2861,10 @@ public:
   {
     return id_;
   }
+  const ObMember& get_arbitration_service() const
+  {
+    return arbitration_service_;
+  }
   int64_t get_paxos_replica_num() const
   {
     return paxos_replica_num_;
@@ -2864,6 +2874,7 @@ private:
   share::ObLSID id_;
   ObMemberList member_list_;
   int64_t paxos_replica_num_;
+  ObMember arbitration_service_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetMemberListArgV2);
 };
@@ -5022,6 +5033,7 @@ public:
   common::ObAddr destination_;
 };
 
+
 struct ObCheckpointSlogArg
 {
   OB_UNIS_VERSION(1);
@@ -6096,25 +6108,183 @@ public:
   common::ObClusterRole cluster_role_;
 };
 
+struct ObGetLSSyncScnArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetLSSyncScnArg(): tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), check_sync_to_latest_(false) {}
+  ~ObGetLSSyncScnArg() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool check_sync_to_latest);
+  int assign(const ObGetLSSyncScnArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(check_sync_to_latest));
+
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  share::ObLSID get_ls_id() const
+  {
+    return ls_id_;
+  }
+
+  bool check_sync_to_latest() const
+  {
+    return check_sync_to_latest_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGetLSSyncScnArg);
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  bool check_sync_to_latest_;
+};
+
+struct ObGetLSSyncScnRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetLSSyncScnRes(): tenant_id_(OB_INVALID_TENANT_ID),
+                       ls_id_(),
+                       cur_sync_scn_(share::SCN::min_scn()),
+                       is_sync_to_latest_(false) {}
+  ~ObGetLSSyncScnRes() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_sync_scn, const bool is_sync_to_latest);
+  int assign(const ObGetLSSyncScnRes &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_sync_scn), K_(is_sync_to_latest));
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  share::ObLSID get_ls_id() const
+  {
+    return ls_id_;
+  }
+  share::SCN get_cur_sync_scn() const
+  {
+    return cur_sync_scn_;
+  }
+  bool is_sync_to_latest() const
+  {
+    return is_sync_to_latest_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGetLSSyncScnRes);
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  share::SCN cur_sync_scn_;
+  bool is_sync_to_latest_;
+};
+
+struct ObRefreshTenantInfoArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRefreshTenantInfoArg(): tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObRefreshTenantInfoArg() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id);
+  int assign(const ObRefreshTenantInfoArg &other);
+  TO_STRING_KV(K_(tenant_id));
+
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRefreshTenantInfoArg);
+private:
+  uint64_t tenant_id_;
+};
+
+struct ObRefreshTenantInfoRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRefreshTenantInfoRes(): tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObRefreshTenantInfoRes() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id);
+  int assign(const ObRefreshTenantInfoRes &other);
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRefreshTenantInfoRes);
+private:
+  uint64_t tenant_id_;
+};
+
+struct ObCheckpoint
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckpoint():
+    ls_id_(),
+    cur_sync_scn_(share::SCN::min_scn()),
+    is_sync_to_latest_(false) {}
+  explicit ObCheckpoint(const int64_t id, const share::SCN &cur_sync_scn, const bool is_sync_to_latest):
+    ls_id_(id),
+    cur_sync_scn_(cur_sync_scn),
+    is_sync_to_latest_(is_sync_to_latest) {}
+
+  explicit ObCheckpoint(const share::ObLSID id, const share::SCN &cur_sync_scn, const bool is_sync_to_latest):
+    ls_id_(id),
+    cur_sync_scn_(cur_sync_scn),
+    is_sync_to_latest_(is_sync_to_latest) {}
+
+  bool is_valid() const;
+  bool operator==(const obrpc::ObCheckpoint &r) const;
+  share::ObLSID get_ls_id() const
+  {
+    return ls_id_;
+  }
+  share::SCN get_cur_sync_scn() const
+  {
+    return cur_sync_scn_;
+  }
+  bool is_sync_to_latest() const
+  {
+    return is_sync_to_latest_;
+  }
+
+  TO_STRING_KV(K_(ls_id), K_(cur_sync_scn), K_(is_sync_to_latest));
+
+  share::ObLSID ls_id_;
+  share::SCN cur_sync_scn_;
+  bool is_sync_to_latest_;
+};
+
 struct ObSwitchTenantArg
 {
   OB_UNIS_VERSION(1);
 public:
   enum OpType
   {
-    INVALID_TYPE = -1,
+    INVALID = -1,
     FAILOVER_TO_PRIMARY = 0,
+    SWITCH_TO_STANDBY = 1,
+    SWITCH_TO_PRIMARY = 2,
   };
   ObSwitchTenantArg() : exec_tenant_id_(OB_INVALID_TENANT_ID),
-                        op_type_(INVALID_TYPE),
+                        op_type_(INVALID),
                         tenant_name_(),
                         stmt_str_() {}
   ~ObSwitchTenantArg() {}
+  int init(
+    const uint64_t exec_tenant_id,
+    const OpType op_type,
+    const ObString &tenant_name);
   bool is_valid() const {
     return OB_INVALID_TENANT_ID != exec_tenant_id_
-           && INVALID_TYPE != op_type_;
+           && INVALID != op_type_;
   }
   int assign(const ObSwitchTenantArg &other);
+  void set_stmt_str(const ObString &stmt_str) { stmt_str_ = stmt_str; }
 
   TO_STRING_KV(K_(exec_tenant_id), K_(op_type), K_(stmt_str), K_(tenant_name));
 
@@ -6122,6 +6292,12 @@ public:
   {
     const char *cstr = "invalid";
     switch (op_type_) {
+      case SWITCH_TO_STANDBY:
+        cstr = "switchover to physical standby";
+        break;
+      case SWITCH_TO_PRIMARY:
+        cstr = "switchover to primary";
+        break;
       case FAILOVER_TO_PRIMARY:
         cstr = "failover to primary";
         break;
@@ -6137,11 +6313,67 @@ private:\
 public:\
   variable_type get_##variable_name() const \
   { return variable_name##_;} \
-  void set_##variable_name(const variable_type &variable_name) { variable_name##_ = variable_name; }
 
   Property_declare_var(uint64_t, exec_tenant_id)
   Property_declare_var(OpType, op_type)
   Property_declare_var(ObString, tenant_name)
+  Property_declare_var(ObString, stmt_str)
+#undef Property_declare_var
+};
+
+struct ObRecoverTenantArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum RecoverType
+  {
+    INVALID = -1,
+    UNTIL = 0,
+    CANCEL = 1
+  };
+  ObRecoverTenantArg() : exec_tenant_id_(OB_INVALID_TENANT_ID),
+                         tenant_name_(),
+                         type_(RecoverType::INVALID),
+                         recovery_until_scn_(share::SCN::min_scn()),
+                         stmt_str_() {}
+  ~ObRecoverTenantArg() {}
+  int init(
+    const uint64_t exec_tenant_id,
+    const ObString &tenant_name,
+    const RecoverType type,
+    const share::SCN &recovery_until_scn);
+  bool is_valid() const {
+    return OB_INVALID_TENANT_ID != exec_tenant_id_
+           && is_valid_(type_, recovery_until_scn_);
+  }
+  int assign(const ObRecoverTenantArg &other);
+  void set_stmt_str(const ObString &stmt_str) { stmt_str_ = stmt_str; }
+
+  TO_STRING_KV(K_(exec_tenant_id), K_(tenant_name), K_(type), K_(recovery_until_scn), K_(stmt_str));
+
+private:
+  bool is_valid_(const RecoverType type, const share::SCN &recovery_until_scn) const {
+    return ((RecoverType::UNTIL == type && recovery_until_scn.is_valid_and_not_min())
+               || (RecoverType::CANCEL == type && recovery_until_scn.is_min()));
+  }
+
+#define Property_declare_var(variable_type, variable_name)\
+private:\
+  variable_type variable_name##_;\
+public:\
+  variable_type get_##variable_name() const \
+  { return variable_name##_;} \
+
+  Property_declare_var(uint64_t, exec_tenant_id)
+  Property_declare_var(ObString, tenant_name)
+  Property_declare_var(RecoverType, type)
+  Property_declare_var(share::SCN, recovery_until_scn)
+  /**
+   * @description: recovery_until_scn
+   *  UNTIL UNLIMITED          : SCN::max_scn()
+   *  UNTIL specified TIME/SCN : valid scn
+   *  CANCEL                   : min_scn()
+   */
   Property_declare_var(ObString, stmt_str)
 #undef Property_declare_var
 };
@@ -8428,6 +8660,7 @@ private:
   common::ObSArray<common::ObAddr> servers_;
 };
 
+
 struct ObSyncRewriteRuleArg
 {
   OB_UNIS_VERSION(1);
@@ -8444,6 +8677,64 @@ public:
   TO_STRING_KV(K_(tenant_id));
 
   uint64_t tenant_id_;
+};
+
+struct ObGetLeaderLocationsArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetLeaderLocationsArg() : addr_() {}
+  ~ObGetLeaderLocationsArg() {}
+  bool is_valid() const { return addr_.is_valid(); }
+  void reset() { addr_.reset(); }
+  int assign(const ObGetLeaderLocationsArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    addr_ = other.addr_;
+    return ret;
+  }
+  void set_addr(const common::ObAddr &addr) { addr_ = addr; }
+  TO_STRING_KV(K_(addr));
+private:
+  common::ObAddr addr_;
+};
+
+struct ObGetLeaderLocationsResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetLeaderLocationsResult() : addr_(), leader_replicas_() {}
+  ~ObGetLeaderLocationsResult() {}
+  bool is_valid() const { return addr_.is_valid(); }
+  void reset()
+  {
+    addr_.reset();
+    leader_replicas_.reset();
+  }
+  int assign(const ObGetLeaderLocationsResult &other)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(leader_replicas_.assign(other.leader_replicas_))) {
+      SHARE_LOG(WARN, "fail to assign leader replicas", KR(ret));
+    } else {
+      addr_ = other.addr_;
+    }
+    return ret;
+  }
+  const ObAddr &get_addr() const { return addr_; }
+  const common::ObIArray<share::ObLSLeaderLocation> &get_leader_replicas() const
+  {
+    return leader_replicas_;
+  }
+  void set_addr(const common::ObAddr &addr) { addr_ = addr; }
+  int add_leader_replica(const share::ObLSLeaderLocation &replica)
+  {
+    return leader_replicas_.push_back(replica);
+  }
+  TO_STRING_KV(K_(addr), K_(leader_replicas));
+private:
+  common::ObAddr addr_;
+  common::ObSArray<share::ObLSLeaderLocation> leader_replicas_;
 };
 
 struct ObInitTenantConfigArg

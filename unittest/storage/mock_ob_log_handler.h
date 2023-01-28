@@ -213,6 +213,12 @@ public:
     return OB_SUCCESS;
   }
 
+  int get_begin_lsn(LSN &lsn) const
+  {
+    UNUSED(lsn);
+    return OB_SUCCESS;
+  }
+
   int get_end_lsn(LSN &lsn) const
   {
     UNUSED(lsn);
@@ -322,29 +328,26 @@ public:
     UNUSED(timeout_us);
     return ret;
   }
-  int add_arb_member(const common::ObMember &added_member, const int64_t paxos_replica_num, const int64_t timeout_us)
+  int add_arbitration_member(const common::ObMember &added_member, const int64_t timeout_us)
   {
-    UNUSEDx(added_member, paxos_replica_num, timeout_us);
+    UNUSEDx(added_member, timeout_us);
     return OB_SUCCESS;
   }
-  int remove_arb_member(const common::ObMember &removed_member, const int64_t paxos_replica_num, const int64_t timeout_us)
+  int remove_arbitration_member(const common::ObMember &removed_member, const int64_t timeout_us)
   {
-    UNUSEDx(removed_member, paxos_replica_num, timeout_us);
+    UNUSEDx(removed_member, timeout_us);
     return OB_SUCCESS;
   }
-  int replace_arb_member(const common::ObMember &added_member, const common::ObMember &removed_member, const int64_t timeout_us)
+  int degrade_acceptor_to_learner(const palf::LogMemberAckInfoList &degrade_servers,
+                                  const int64_t timeout_us)
   {
-    UNUSEDx(added_member, removed_member, timeout_us);
+    UNUSEDx(degrade_servers, timeout_us);
     return OB_SUCCESS;
   }
-  int degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_us)
+  int upgrade_learner_to_acceptor(const palf::LogMemberAckInfoList &upgrade_servers,
+                                  const int64_t timeout_us)
   {
-    UNUSEDx(member_list, timeout_us);
-    return OB_SUCCESS;
-  }
-  int upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_us)
-  {
-    UNUSEDx(learner_list, timeout_us);
+    UNUSEDx(upgrade_servers, timeout_us);
     return OB_SUCCESS;
   }
   int is_valid_member(const common::ObAddr &addr, bool &is_valid) const

@@ -424,6 +424,12 @@ int ObTxDataSingleRowGetter::get_next_row(ObTxData &tx_data)
     } else {
       tx_data_buffers_.reset();
       ret = get_next_row_(sstables, tx_data);
+      if (OB_TIMEOUT == ret || OB_DISK_CORRUPTED == ret) {
+        ret = OB_EAGAIN;
+        STORAGE_LOG(WARN,
+                    "modify ret code from OB_TIMEOUT or OB_DISK_CORRUPTED to OB_EAGAIN",
+                    KR(ret));
+      }
     }
   }
   return ret;

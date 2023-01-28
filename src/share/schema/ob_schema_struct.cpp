@@ -1559,6 +1559,7 @@ ObTenantSchema& ObTenantSchema::operator =(const ObTenantSchema &src_schema)
     set_drop_tenant_time(src_schema.drop_tenant_time_);
     set_status(src_schema.status_);
     set_in_recyclebin(src_schema.in_recyclebin_);
+    set_arbitration_service_status(src_schema.arbitration_service_status_);
     if (OB_FAIL(set_tenant_name(src_schema.tenant_name_))) {
       LOG_WARN("set_tenant_name failed", K(ret));
     } else if (OB_FAIL(set_zone_list(src_schema.zone_list_))) {
@@ -1615,6 +1616,7 @@ void ObTenantSchema::reset()
   drop_tenant_time_ = OB_INVALID_TIMESTAMP;
   status_ = TENANT_STATUS_NORMAL;
   in_recyclebin_ = false;
+  arbitration_service_status_ = ObArbitrationServiceStatus::DISABLED;
   reset_physical_location_info();
   ObSchema::reset();
 }
@@ -1983,14 +1985,16 @@ OB_DEF_SERIALIZE(ObTenantSchema)
               compatibility_mode_,
               drop_tenant_time_,
               status_,
-              in_recyclebin_);
+              in_recyclebin_,
+              arbitration_service_status_);
 
   LOG_INFO("serialize schema",
            K_(tenant_id), K_(schema_version), K_(tenant_name),
            K_(primary_zone), K_(locked), K_(comment),
            K_(charset_type), K_(collation_type), K_(name_case_mode),
            K_(locality_str), K_(primary_zone_array), K_(default_tablegroup_id),
-           K_(default_tablegroup_name), K_(drop_tenant_time), K_(in_recyclebin), K(ret));
+           K_(default_tablegroup_name), K_(drop_tenant_time), K_(in_recyclebin),
+           K_(arbitration_service_status), K(ret));
   return ret;
 }
 
@@ -2011,7 +2015,8 @@ OB_DEF_DESERIALIZE(ObTenantSchema)
               compatibility_mode_,
               drop_tenant_time_,
               status_,
-              in_recyclebin_);
+              in_recyclebin_,
+              arbitration_service_status_);
 
   if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
@@ -2065,7 +2070,7 @@ OB_DEF_SERIALIZE_SIZE(ObTenantSchema)
               primary_zone_, locked_, comment_, charset_type_, collation_type_, name_case_mode_,
               read_only_, locality_str_, previous_locality_str_,
               default_tablegroup_id_, default_tablegroup_name_,
-              compatibility_mode_, drop_tenant_time_, status_, in_recyclebin_);
+              compatibility_mode_, drop_tenant_time_, status_, in_recyclebin_, arbitration_service_status_);
   len += get_string_array_serialize_size(zone_list_);
   return len;
 }

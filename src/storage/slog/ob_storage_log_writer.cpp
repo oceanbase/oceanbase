@@ -45,9 +45,7 @@ ObStorageLogWriter::ObStorageLogWriter()
     file_size_(0),  write_offset_(0), cursor_(),
     retry_write_policy_(ObLogRetryWritePolicy::INVALID_RETRY_WRITE),
     log_write_policy_(ObLogWritePolicy::INVALID_WRITE), nop_log_(),
-    nop_data_param_(), is_ok_(false), write_failed_times_(0),
-    file_handler_(), batch_write_buf_(),
-    slog_write_runner_()
+    nop_data_param_(), file_handler_(), batch_write_buf_(), slog_write_runner_()
 {
 }
 
@@ -74,7 +72,6 @@ int ObStorageLogWriter::init(
   int64_t buf_size = max_log_size + ObLogConstants::LOG_FILE_ALIGN_SIZE;
   write_align_size_ = ObLogConstants::LOG_FILE_ALIGN_SIZE;
   file_size_ = log_file_size;
-  write_failed_times_ = 0;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -102,7 +99,6 @@ int ObStorageLogWriter::init(
   } else if (OB_SERVER_TENANT_ID != tenant_id && OB_FAIL(slog_write_runner_.init(this))) {
     STORAGE_REDO_LOG(WARN, "Fail to init slog write runner.", K(ret));
   } else {
-    set_ok(true);
     is_inited_ = true;
     STORAGE_REDO_LOG(INFO, "Successfully init slog writer", K(ret), KP(log_dir),
           K(log_file_size), K(max_log_size), K(log_file_spec));
@@ -148,8 +144,6 @@ void ObStorageLogWriter::destroy()
   file_size_ = 0;
   write_offset_ = 0;
   cursor_.reset();
-  set_ok(false);
-  write_failed_times_ = 0;
   file_handler_.destroy();
   ObBaseLogWriter::destroy();
   nop_log_.destroy();
@@ -511,15 +505,6 @@ int ObStorageLogWriter::write_logs(
     const int64_t duration = ObTimeUtility::fast_current_time() - start_ts;
     if (duration > TIME_THRESHOLD) {
       STORAGE_REDO_LOG(INFO, "Slow write", K(duration), K(write_len));
-    }
-    if (--write_failed_times_ <= 0) {
-      write_failed_times_ = 0;
-      set_ok(true);
-    }
-  } else {
-    if (++write_failed_times_ >= 10) {
-      write_failed_times_ = 10;
-      set_ok(false);
     }
   }
 

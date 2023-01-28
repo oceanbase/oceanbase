@@ -199,6 +199,24 @@ void ObLSLocationTimerTask::runTimerTask()
   }
 }
 
+ObLSLocationByRpcTimerTask::ObLSLocationByRpcTimerTask(
+    ObLSLocationService &ls_loc_service)
+    : ls_loc_service_(ls_loc_service)
+{
+}
+
+void ObLSLocationByRpcTimerTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_loc_service_.renew_all_ls_locations_by_rpc())) {
+    LOG_WARN("fail to renew_all_ls_location by rpc", KR(ret));
+  }
+  // ignore ret
+  if (OB_FAIL(ls_loc_service_.schedule_ls_by_rpc_timer_task())) {
+    LOG_WARN("fail to schedule ls location by rpc timer task", KR(ret));
+  }
+}
+
 ObDumpLSLocationCacheTimerTask::ObDumpLSLocationCacheTimerTask(
     ObLSLocationService &ls_loc_service)
     : ls_loc_service_(ls_loc_service)

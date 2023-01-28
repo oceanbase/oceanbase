@@ -51,6 +51,7 @@ public:
   int set_locality(const common::ObString &locality);
   void set_primary_zone(const common::ObString &zone);
   void set_charset_type(const common::ObCharsetType type);
+  void set_enable_arbitration_service(const bool enable_arbitration_service);
   void set_collation_type(const common::ObCollationType type);
   inline void set_read_only(const bool read_only)
   {

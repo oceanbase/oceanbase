@@ -202,7 +202,8 @@ public:
     INITIAL = 0,
     COMPACTED,
     CAN_SKIP_VERIFYING, // already compacted and can skip verification
-    VERIFIED,
+    INDEX_CKM_VERIFIED, // already verified index checksum
+    VERIFIED, // already verified all kinds of checksum
     TB_STATUS_MAX
   };
 
@@ -228,6 +229,8 @@ public:
   bool is_compacted() const { return Status::COMPACTED == status_; }
   void set_can_skip_verifying() { status_ = Status::CAN_SKIP_VERIFYING; }
   bool can_skip_verifying() const { return Status::CAN_SKIP_VERIFYING == status_; }
+  void set_index_ckm_verified() { status_ = Status::INDEX_CKM_VERIFIED; }
+  bool is_index_ckm_verified() const { return Status::INDEX_CKM_VERIFIED == status_; }
   void set_verified() { status_ = Status::VERIFIED; }
   bool is_verified() const { return Status::VERIFIED == status_; }
   bool finish_compaction() const { return (is_compacted() ||  can_skip_verifying()); }

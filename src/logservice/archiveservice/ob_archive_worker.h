@@ -24,8 +24,6 @@ public:
   virtual ~ObArchiveWorker() {}
 
   virtual int push_task_status(ObArchiveTaskStatus *task_status) = 0;
-
-  virtual int handle_task_list(void *data) = 0;
 };
 }
 }

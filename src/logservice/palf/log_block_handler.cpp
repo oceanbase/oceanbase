@@ -46,7 +46,10 @@ LogDIOAlignedBuf::~LogDIOAlignedBuf()
 int LogDIOAlignedBuf::init(uint32_t align_size, uint32_t aligned_buf_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(aligned_data_buf_ = reinterpret_cast<char *>(
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    PALF_LOG(ERROR,"LogDIOAlignedBuf has initted", K(ret), KPC(this));
+  } else if (OB_ISNULL(aligned_data_buf_ = reinterpret_cast<char *>(
       mtl_malloc_align(align_size, aligned_buf_size, "LogDIOAligned")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -126,11 +129,6 @@ void LogDIOAlignedBuf::reset_buf()
   memset(aligned_data_buf_, 0, aligned_buf_size_);
 }
 
-char *LogDIOAlignedBuf::get_aligned_data_buf()
-{
-  return aligned_data_buf_;
-}
-
 void LogDIOAlignedBuf::align_buf_()
 {
   if (0 == (buf_write_offset_ % align_size_)) {
@@ -162,21 +160,25 @@ LogBlockHandler::~LogBlockHandler()
 }
 
 int LogBlockHandler::init(const int dir_fd,
-                          const int64_t log_block_size)
+                          const int64_t log_block_size,
+                          const int64_t align_size,
+                          const int64_t align_buf_size)
 {
   int ret = OB_SUCCESS;
-  if (-1 == dir_fd
-      || (0 != (log_block_size & (LOG_DIO_ALIGN_SIZE - 1)))) {
+  if (IS_INIT) {
+		ret = OB_INIT_TWICE;
+	} else if (-1 == dir_fd
+      || (0 != (log_block_size & (align_size - 1)))) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid argument", K(ret), K(log_block_size));
-  } else if (OB_FAIL(dio_aligned_buf_.init(LOG_DIO_ALIGN_SIZE,
-          LOG_DIO_ALIGNED_BUF_SIZE))) {
+  } else if (OB_FAIL(dio_aligned_buf_.init(align_size,
+          align_buf_size))) {
     PALF_LOG(ERROR, "init dio_aligned_buf_ failed", K(ret));
   } else {
     dir_fd_ = dir_fd;
     log_block_size_ = log_block_size;
     is_inited_ = true;
-    PALF_LOG(INFO, "LogBlockHandler init success", K(ret), K(log_block_size_));
+    PALF_LOG(INFO, "LogBlockHandler init success", K(ret), K(log_block_size_), K(align_size), K(align_buf_size));
   }
   return ret;
 }
@@ -321,7 +323,7 @@ int LogBlockHandler::inner_truncate_(const offset_t offset)
   //     meanwhile, the second phase will guarantee that the data after offset is inited as zero.
   //     fallocate support deallocate block,
   //
-  //     refer to the man 2 fallocate:
+  //     refer to the man 0 fallocate:
   //     If the block previously was larger than this size, the extra data is lost. If the block previously
   //     was shorter, it is extended, and the extended part reads as null bytes ('\0').
   //

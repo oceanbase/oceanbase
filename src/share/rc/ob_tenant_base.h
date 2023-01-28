@@ -97,6 +97,10 @@ namespace coordinator
   class ObLeaderCoordinator;
 }
 }
+namespace datadict
+{
+  class ObDataDictService;
+}
 namespace archive
 {
   class ObArchiveService;
@@ -112,11 +116,13 @@ namespace memtable
 }
 namespace rootserver
 {
-  class ObMajorFreezeService;
+  class ObPrimaryMajorFreezeService;
+  class ObRestoreMajorFreezeService;
   class ObTenantRecoveryReportor;
   class ObPrimaryLSService;
   class ObRestoreService;
   class ObRecoveryLSService;
+  class ObArbitrationService;
 }
 namespace observer
 {
@@ -156,6 +162,7 @@ namespace detector
   class ObDeadLockDetectorMgr;
 }
 
+#define ArbMTLMember
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
 // 实例的初始化和销毁逻辑由MTL_BIND接口指定。
@@ -178,7 +185,8 @@ namespace detector
       memtable::ObLockWaitMgr*,                      \
       logservice::ObGarbageCollector*,               \
       transaction::tablelock::ObTableLockService*,   \
-      rootserver::ObMajorFreezeService*,             \
+      rootserver::ObPrimaryMajorFreezeService*,      \
+      rootserver::ObRestoreMajorFreezeService*,      \
       observer::ObTenantMetaChecker*,                \
       storage::ObStorageHAHandlerService*,           \
       rootserver::ObTenantRecoveryReportor*,         \
@@ -217,6 +225,8 @@ namespace detector
       storage::ObTenantFreezeInfoMgr*,               \
       transaction::ObTxLoopWorker *,                 \
       storage::ObAccessService*,                     \
+      datadict::ObDataDictService*,                  \
+      ArbMTLMember                                   \
       observer::ObTableLoadService*,                 \
       concurrency_control::ObMultiVersionGarbageCollector*, \
       sql::ObUDRMgr*,                        \
@@ -585,21 +595,21 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
     return ob_free(ptr);
   }
 
-  inline void *mtl_malloc_align(int64_t nbyte, int64_t alignment, const common::ObMemAttr & attr = default_memattr)
+  inline void *mtl_malloc_align(int64_t alignment, int64_t nbyte, const common::ObMemAttr & attr = default_memattr)
   {
     common::ObMemAttr inner_attr = attr;
     if (OB_SERVER_TENANT_ID == inner_attr.tenant_id_ &&
         nullptr != MTL_CTX()) {
       inner_attr.tenant_id_ = MTL_ID();
     }
-    return ob_malloc_align(nbyte, alignment, inner_attr);
+    return ob_malloc_align(alignment, nbyte, inner_attr);
   }
 
-  inline void *mtl_malloc_align(int64_t nbyte, int64_t alignment, const lib::ObLabel &label)
+  inline void *mtl_malloc_align(int64_t alignment , int64_t byte, const lib::ObLabel &label)
   {
     common::ObMemAttr attr;
     attr.label_ = label;
-    return mtl_malloc_align(nbyte, alignment, attr);
+    return mtl_malloc_align(alignment, byte, attr);
   }
 
   inline void mtl_free_align(void *ptr)

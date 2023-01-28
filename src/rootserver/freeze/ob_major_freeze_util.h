@@ -19,6 +19,18 @@ namespace oceanbase
 {
 namespace rootserver
 {
+class ObPrimaryMajorFreezeService;
+class ObRestoreMajorFreezeService;
+class ObMajorFreezeService;
+
+class ObMajorFreezeUtil
+{
+public:
+  static int get_major_freeze_service(ObPrimaryMajorFreezeService *primary_major_freeze_service,
+                                      ObRestoreMajorFreezeService *restore_major_freeze_service,
+                                      ObMajorFreezeService *&major_freeze_service,
+                                      bool &is_primary_service);
+};
 
 #define FREEZE_TIME_GUARD \
   rootserver::ObFreezeTimeGuard freeze_time_guard(__FILE__, __LINE__, __FUNCTION__, "[RS] ")

@@ -29,7 +29,7 @@ int MockTxLogAdapter::init(ObITxLogParam *param)
   // NULL pointer will core in unittest
   MockTxLogParam *mock_param = static_cast<MockTxLogParam *>(param);
   submit_config_ = *mock_param;
-  max_allocated_log_ts = 0;
+  max_allocated_log_ts_ = 0;
   // max_success_log_ts = 0;
   mock_log_file_.clear();
   waiting_cbs_.clear();
@@ -103,7 +103,7 @@ void MockTxLogAdapter::handle(void *task)
 
 int MockTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
-                                 const share::SCN base_ts,
+                                 const share::SCN &base_ts,
                                  ObTxBaseLogCb *cb,
                                  const bool need_nonblock)
 {
@@ -117,10 +117,10 @@ int MockTxLogAdapter::submit_log(const char *buf,
     {
       ObSpinLockGuard file_guard(log_file_lock_);
       std::string log_buf(buf, size);
-      if (base_ts.get_val_for_gts() > max_allocated_log_ts) {
-        max_allocated_log_ts = base_ts.get_val_for_gts();
+      if (base_ts.get_val_for_gts() > max_allocated_log_ts_) {
+        max_allocated_log_ts_ = base_ts.get_val_for_gts();
       }
-      ts = ++max_allocated_log_ts;
+      ts = ++max_allocated_log_ts_;
       scn.convert_for_gts(ts);
       lsn = palf::LSN(++lsn_);
       cb->set_log_ts(scn);

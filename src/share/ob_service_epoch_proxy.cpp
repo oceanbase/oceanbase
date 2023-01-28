@@ -30,7 +30,8 @@ namespace share
 int ObServiceEpochProxy::init_service_epoch(
     ObISQLClient &sql_proxy,
     const int64_t tenant_id,
-    const int64_t freeze_service_epoch)
+    const int64_t freeze_service_epoch,
+    const int64_t arbitration_service_epoch)
 {
   int ret = OB_SUCCESS;
   if (is_user_tenant(tenant_id)) {
@@ -39,11 +40,23 @@ int ObServiceEpochProxy::init_service_epoch(
   // sys/meta tenant initialized freeze_service_epoch
   } else if (OB_FAIL(insert_service_epoch(sql_proxy, tenant_id, FREEZE_SERVICE_EPOCH, freeze_service_epoch))) {
     LOG_WARN("fail to init freeze_service_epoch", KR(ret), K(tenant_id), K(freeze_service_epoch));
+  } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
+                         sql_proxy,
+                         tenant_id,
+                         ARBITRATION_SERVICE_EPOCH,
+                         arbitration_service_epoch))) {
+    LOG_WARN("fail to init arb service epoch", KR(ret), K(tenant_id), K(arbitration_service_epoch));
   } else if (is_meta_tenant(tenant_id)) {
     // user tenant initialized freeze_service_epoch
     const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
     if (OB_FAIL(insert_service_epoch(sql_proxy, user_tenant_id, FREEZE_SERVICE_EPOCH, freeze_service_epoch))) {
       LOG_WARN("fail to init freeze_service_epoch", KR(ret), K(user_tenant_id), K(freeze_service_epoch));
+    } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
+                           sql_proxy,
+                           user_tenant_id,
+                           ARBITRATION_SERVICE_EPOCH,
+                           arbitration_service_epoch))) {
+      LOG_WARN("fail to init arb service epoch", KR(ret), K(user_tenant_id), K(arbitration_service_epoch));
     }
   }
   return ret;

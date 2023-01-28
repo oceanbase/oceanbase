@@ -80,6 +80,7 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
   } else {
     ObLSMeta ls_meta;
     int64_t i = 0;
+    const bool check_archive = false;
     const int64_t start_ts = ObTimeUtility::current_time();
     do {
       const int64_t cur_ts = ObTimeUtility::current_time();
@@ -3496,12 +3497,13 @@ int ObLSBackupMetaTask::get_backup_meta_ctx_(const uint64_t tenant_id, const sha
   tablet_id_list.reset();
   storage::ObLSHandle ls_handle;
   storage::ObLS *ls = NULL;
+  const bool check_archive = false;
   if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream not exist", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_ids(ls_meta_info.ls_meta_package_, tablet_id_list))) {
+  } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_ids(check_archive, ls_meta_info.ls_meta_package_, tablet_id_list))) {
     LOG_WARN("failed to get ls meta package", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(ls_meta_info.ls_meta_package_.ls_meta_.check_valid_for_backup())) {
     LOG_WARN("failed to check valid for backup", K(ret), K(ls_meta_info));
@@ -3783,6 +3785,7 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
   int ret = OB_SUCCESS;
   int64_t rebuild_seq = 0;
   SCN backup_clog_checkpoint_scn;
+  const bool check_archive = false;
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
@@ -3830,6 +3833,7 @@ int ObLSBackupPrepareTask::fetch_cur_ls_rebuild_seq_(int64_t &rebuild_seq)
   storage::ObLS *ls = NULL;
   const uint64_t tenant_id = param_.tenant_id_;
   const share::ObLSID &ls_id = param_.ls_id_;
+  const bool check_archive = true;
   MTL_SWITCH(tenant_id) {
     ObLSMeta cur_ls_meta;
     if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {

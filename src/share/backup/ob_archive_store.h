@@ -287,12 +287,15 @@ public:
   uint64_t min_lsn_;
   uint64_t max_lsn_;
   ObSArray<OneFile> filelist_;
+  bool deleted_; // mark log stream deleted.
 
   ObSingleLSInfoDesc();
 
   bool is_valid() const override;
 
-  INHERIT_TO_STRING_KV("ObExternArchiveDesc", ObExternArchiveDesc, K_(dest_id), K_(round_id), K_(piece_id), K_(ls_id), K_(checkpoint_scn), K_(min_lsn), K_(max_lsn), K_(filelist));
+  INHERIT_TO_STRING_KV("ObExternArchiveDesc", ObExternArchiveDesc, K_(dest_id),
+    K_(round_id), K_(piece_id), K_(ls_id), K_(checkpoint_scn), K_(min_lsn),
+    K_(max_lsn), K_(filelist), K_(deleted));
 };
 
 
@@ -379,6 +382,9 @@ public:
   int is_tenant_archive_piece_infos_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const;
   int read_tenant_archive_piece_infos(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, ObTenantArchivePieceInfosDesc &desc) const;
   int write_tenant_archive_piece_infos(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObTenantArchivePieceInfosDesc &desc) const;
+
+  // oss://archive/d[dest_id]r[round_id]p[piece_id]/[ls_id]/[file_id]
+  int is_archive_log_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, const int64_t file_id, bool &is_exist) const;
 
   int get_all_round_ids(const int64_t dest_id, ObIArray<int64_t> &roundid_array);
   // If end file not exist, set checkpoint_scn in ObRoundEndDesc to 0.

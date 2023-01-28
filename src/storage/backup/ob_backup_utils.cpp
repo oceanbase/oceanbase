@@ -335,6 +335,7 @@ int ObBackupUtils::check_ls_valid_for_backup(const uint64_t tenant_id, const sha
   ObLSHandle handle;
   int64_t cur_rebuild_seq = 0;
   ObLSMeta ls_meta;
+  const bool check_archive = false;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));

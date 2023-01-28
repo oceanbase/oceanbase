@@ -163,7 +163,7 @@ private:
   };
 
   static int generate_disaster_recovery_paxos_replica_number(
-      const int64_t member_list_cnt,
+      const DRLSInfo &dr_ls_info,
       const int64_t curr_paxos_replica_number,
       const int64_t locality_paxos_replica_number,
       const MemberChangeType member_change_type,
@@ -717,6 +717,7 @@ private:
       const common::ObAddr &server,
       DRLSInfo &dr_ls_info,
       bool &has_leader);
+
 private:
 
   int check_task_already_exist(

@@ -36,6 +36,11 @@ namespace common
 class ObString;
 }
 
+namespace datadict
+{
+class ObDictTableMeta;
+}
+
 namespace libobcdc
 {
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -60,7 +65,7 @@ public:
   virtual void mark_stop_flag() = 0;
   virtual int push(IStmtTask *task, volatile bool &stop_flag) = 0;
   virtual int push_single_task(IStmtTask *task, volatile bool &stop_flag) = 0;
-  virtual int get_task_count(int64_t &br_count, int64_t &log_entry_task_count) = 0;
+  virtual int get_task_count(int64_t &br_count, int64_t &log_entry_task_count, int64_t &stmt_in_lob_merger_count) = 0;
 };
 
 
@@ -75,6 +80,7 @@ class IObLogErrHandler;
 class ObObj2strHelper;
 class IObLogBRPool;
 class ObLogSchemaGuard;
+class ObDictTenantInfoGuard;
 
 typedef common::ObMQThread<IObLogFormatter::MAX_FORMATTER_NUM, IObLogFormatter> FormatterThread;
 
@@ -90,8 +96,10 @@ public:
   void mark_stop_flag() { FormatterThread::mark_stop_flag(); }
   int push(IStmtTask *task, volatile bool &stop_flag);
   int push_single_task(IStmtTask *task, volatile bool &stop_flag);
-  int get_task_count(int64_t &br_count,
-      int64_t &log_entry_task_count);
+  int get_task_count(
+      int64_t &br_count,
+      int64_t &log_entry_task_count,
+      int64_t &stmt_in_lob_merger_count);
   int handle(void *data, const int64_t thread_index, volatile bool &stop_flag);
 
 public:
@@ -128,6 +136,10 @@ private:
 
     void reset();
     int init(const int64_t column_num, const bool contain_old_column);
+
+    TO_STRING_KV(
+        K_(column_num),
+        K_(contain_old_column));
   };
 
 private:
@@ -135,16 +147,61 @@ private:
   static const int64_t DATA_OP_TIMEOUT = 1 * 1000 * 1000;
   static const int64_t PRINT_LOG_INTERVAL = 10 * 1000 * 1000;
 
-  void handle_non_full_columns_(DmlStmtTask &dml_stmt_task,
-      const TableSchemaType &table_schema);
+  int handle_dml_stmt_(
+      DmlStmtTask &dml_stmt_task,
+      RowValue *row_value,
+      bool &cur_stmt_need_callback,
+      volatile bool &stop_flag);
+
+  int handle_dml_stmt_with_online_schema_(
+      DmlStmtTask &dml_stmt_task,
+      RowValue &row_value,
+      ObLogBR &br,
+      bool &cur_stmt_need_callback,
+      volatile bool &stop_flag);
+
+  int handle_dml_stmt_with_dict_schema_(
+      DmlStmtTask &dml_stmt_task,
+      RowValue &row_value,
+      ObLogBR &br,
+      bool &cur_stmt_need_callback,
+      volatile bool &stop_flag);
+
+  template<class TABLE_SCHEMA>
+  int check_table_need_ignore_(
+      const TABLE_SCHEMA *table_schema,
+      DmlStmtTask &dml_stmt_task,
+      bool &need_ignore);
+
+  template<class TABLE_SCHEMA>
+  int format_row_(
+      const TABLE_SCHEMA &table_schema,
+      RowValue &row_value,
+      DmlStmtTask &dml_stmt_task,
+      ObLogBR &br,
+      bool &cur_stmt_need_callback,
+      volatile bool &stop_flag);
+
+  template<class TABLE_SCHEMA>
+  void handle_non_full_columns_(
+      DmlStmtTask &dml_stmt_task,
+      const TABLE_SCHEMA &table_schema);
   int init_row_value_array_(const int64_t row_value_num);
   void destroy_row_value_array_();
-  int set_meta_info_(
+  int set_meta_info_with_online_schema_(
       const uint64_t tenant_id,
       const int64_t global_schema_version,
-      const TableSchemaType *&simple_table_schema,
+      const TableSchemaType *simple_table_schema,
       const DBSchemaInfo &db_schema_info,
       ObLogSchemaGuard &schema_guard,
+      ObLogBR *br,
+      volatile bool &stop_flag);
+
+  int set_meta_info_with_data_dict_(
+      const uint64_t tenant_id,
+      const int64_t global_schema_version,
+      datadict::ObDictTableMeta *simple_table_schema,
+      const DBSchemaInfo &db_schema_info,
       ObLogBR *br,
       volatile bool &stop_flag);
   // 1. For LOB column(data is out of row storage), the actual data is consist of LobAuxMeta data.
@@ -153,11 +210,12 @@ private:
   //    The purpose is avoid deadlocks in Formatter due to concurrent processing and non-blocking.
   //
   // @param [out] cur_stmt_need_callback  true means need callback processing again.
+  template<class TABLE_SCHEMA>
   int build_row_value_(
       const uint64_t tenant_id,
       RowValue *rv,
       DmlStmtTask *stmt_task,
-      const TableSchemaType *simple_table_schema,
+      const TABLE_SCHEMA *simple_table_schema,
       int64_t &new_column_cnt,
       bool &cur_stmt_need_callback,
       volatile bool &stop_flag);
@@ -168,28 +226,35 @@ private:
       ObLobDataOutRowCtxList *new_lob_ctx_cols,
       bool &cur_stmt_need_callback,
       volatile bool &stop_flag);
+  template<class TABLE_SCHEMA>
   int fill_normal_cols_(
+      DmlStmtTask &stmt_task,
       RowValue *rv,
       ColValueList &cv_list,
       ObLobDataOutRowCtxList &ob_ctx_cols,
-      const TableSchemaType *simple_table_schema,
+      const TABLE_SCHEMA *simple_table_schema,
       const TableSchemaInfo &tb_schema_info,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool is_new_value);
-  int fill_rowkey_cols_(RowValue *rv,
+  template<class TABLE_SCHEMA>
+  int fill_rowkey_cols_(
+      RowValue *rv,
       ColValueList &rowkey_cols,
-      const TableSchemaType *simple_table_schema,
+      const TABLE_SCHEMA *simple_table_schema,
       const TableSchemaInfo &tb_schema_info);
+  template<class TABLE_SCHEMA>
   int build_binlog_record_(
       ObLogBR *br,
       RowValue *rv,
       const int64_t new_column_cnt,
       const blocksstable::ObDmlFlag &dml_flag,
-      const TableSchemaType *simple_table_schema);
+      const TABLE_SCHEMA *simple_table_schema);
   // HBase mode put
   // 1. hbase table
   // 2. update type
   // 3. new value all columns, old value empty
-  int is_hbase_mode_put_(const uint64_t table_id,
+  int is_hbase_mode_put_(
+      const uint64_t table_id,
       const blocksstable::ObDmlFlag &dml_flag,
       const int64_t column_number,
       const int64_t new_column_cnt,
@@ -202,12 +267,14 @@ private:
   int format_dml_delete_(IBinlogRecord *binlog_record, const RowValue *row_value);
   int format_dml_insert_(IBinlogRecord *binlog_record, const RowValue *row_value);
   int format_dml_update_(IBinlogRecord *binlog_record, const RowValue *row_value);
-  int fill_orig_default_value_(RowValue *rv,
-      const TableSchemaType *simple_table_schema,
+  template<class TABLE_SCHEMA>
+  int fill_orig_default_value_(
+      RowValue *rv,
+      const TABLE_SCHEMA *simple_table_schema,
       const TableSchemaInfo &tb_schema_info,
       common::ObIAllocator &allocator);
 
-  int get_schema_(IObLogSchemaGetter *schema_getter,
+  int get_schema_with_online_schema_(
       const int64_t version,
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -215,6 +282,22 @@ private:
       ObLogSchemaGuard &schema_guard,
       const TableSchemaType *&table_schema,
       DBSchemaInfo &db_schema_info);
+
+  int get_schema_with_data_dict_(
+      const int64_t version,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      volatile bool &stop_flag,
+      ObDictTenantInfoGuard &dict_tenant_info_guard,
+      datadict::ObDictTableMeta *&table_schema,
+      DBSchemaInfo &db_schema_info);
+
+  int get_tenant_compat_mode_with_data_dict_(
+      const uint64_t tenant_id,
+      ObDictTenantInfoGuard &dict_tenant_info_guard,
+      lib::Worker::CompatMode &compat_mode,
+      volatile bool &stop_flag);
+
   int finish_format_(PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
       volatile bool &stop_flag);
@@ -259,6 +342,7 @@ private:
   bool                       skip_hbase_mode_put_column_count_not_consistency_;
   bool                       enable_output_hidden_primary_key_;
   int64_t                    log_entry_task_count_;
+  int64_t                    stmt_in_lob_merger_count_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogFormatter);

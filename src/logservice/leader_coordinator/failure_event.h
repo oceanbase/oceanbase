@@ -39,6 +39,7 @@ enum class FailureModule
   TENANT = 1,
   LOG = 2,
   TRANSACTION = 3,
+  STORAGE = 4,
 };
 
 enum class FailureLevel
@@ -83,6 +84,9 @@ inline const char *obj_to_cstring(FailureModule module)
       break;
     case FailureModule::TRANSACTION:
       ret = "TRANSACTION";
+      break;
+    case FailureModule::STORAGE:
+      ret = "STORAGE";
       break;
     default:
       break;

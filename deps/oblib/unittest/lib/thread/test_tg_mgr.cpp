@@ -195,7 +195,7 @@ TEST(TG, thread_pool)
 
 TEST(TG, reentrant_thread_pool)
 {
-  int tg_id = TGDefIDs::TEST7;
+  int tg_id = TGDefIDs::TEST8;
   MyRunnable runnable;
   // start
   ASSERT_EQ(OB_SUCCESS, TG_SET_RUNNABLE(tg_id, runnable));

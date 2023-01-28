@@ -14,6 +14,7 @@
 
 #include "ob_log_restore_service.h"
 #include "lib/ob_errno.h"
+#include "lib/ob_define.h"                    // is_user_tenant
 #include "lib/utility/ob_macro_utils.h"       // K*
 #include "share/ob_ls_id.h"                   // ObLSID
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService
@@ -37,6 +38,8 @@ ObLogRestoreService::ObLogRestoreService() :
   fetch_log_impl_(),
   fetch_log_worker_(),
   error_reporter_(),
+  allocator_(),
+  scheduler_(),
   cond_()
 {}
 
@@ -62,10 +65,14 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     LOG_WARN("location_adaptor_ init failed", K(ret));
   } else if (OB_FAIL(fetch_log_impl_.init(MTL_ID(), ls_svr, log_service, &fetch_log_worker_))) {
     LOG_WARN("fetch_log_impl_ init failed", K(ret));
-  } else if (OB_FAIL(fetch_log_worker_.init(MTL_ID(), this, ls_svr))) {
+  } else if (OB_FAIL(fetch_log_worker_.init(MTL_ID(), &allocator_, this, ls_svr))) {
     LOG_WARN("fetch_log_worker_ init failed", K(ret));
   } else if (OB_FAIL(error_reporter_.init(MTL_ID(), ls_svr))) {
     LOG_WARN("error_reporter_ init failed", K(ret));
+  } else if (OB_FAIL(allocator_.init(MTL_ID()))) {
+    LOG_WARN("allocator_ init failed", K(ret));
+  } else if (OB_FAIL(scheduler_.init(MTL_ID(), &allocator_, &fetch_log_worker_))) {
+    LOG_WARN("scheduler_ init failed", K(ret));
   } else {
     ls_svr_ = ls_svr;
     inited_ = true;
@@ -83,6 +90,9 @@ void ObLogRestoreService::destroy()
   location_adaptor_.destroy();
   fetch_log_impl_.destroy();
   error_reporter_.destroy();
+  proxy_.destroy();
+  allocator_.destroy();
+  scheduler_.destroy();
   ls_svr_ = NULL;
 }
 
@@ -147,11 +157,15 @@ void ObLogRestoreService::run1()
 
 void ObLogRestoreService::do_thread_task_()
 {
-  update_upstream_();
+  if (is_user_tenant(MTL_ID())) {
+    update_upstream_();
 
-  schedule_fetch_log_();
+    schedule_fetch_log_();
 
-  report_error_();
+    schedule_resource_();
+
+    report_error_();
+  }
 }
 
 void ObLogRestoreService::update_upstream_()
@@ -162,6 +176,11 @@ void ObLogRestoreService::update_upstream_()
 void ObLogRestoreService::schedule_fetch_log_()
 {
   (void)fetch_log_impl_.do_schedule();
+}
+
+void ObLogRestoreService::schedule_resource_()
+{
+  (void)scheduler_.schedule();
 }
 
 void ObLogRestoreService::report_error_()

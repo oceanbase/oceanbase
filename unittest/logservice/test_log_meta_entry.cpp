@@ -73,7 +73,8 @@ TEST(TestLogMetaEntry, test_log_meta_entry)
   EXPECT_EQ(OB_SUCCESS, curr_config_version.generate(curr_log_proposal_id, curr_config_seq));
   EXPECT_EQ(OB_SUCCESS, prev_config_info.generate(prev_member_list, prev_replica_num, prev_learner_list, prev_config_version));
   EXPECT_EQ(OB_SUCCESS, curr_config_info.generate(curr_member_list, curr_replica_num, prev_learner_list, curr_config_version));
-  EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info));
+  EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info,
+      curr_log_proposal_id, LSN(0), curr_log_proposal_id));
 
   // Snapshot meta
   LogSnapshotMeta log_snapshot_meta1;

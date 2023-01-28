@@ -60,6 +60,8 @@ public:
   int resume_leader();
   int switch_to_leader();
   int64_t get_limited_id() const { return limited_id_; }
+  static SCN get_sts_start_scn(const SCN &max_sys_ls_scn)
+  { return SCN::plus(max_sys_ls_scn, 2 * TIMESTAMP_PREALLOCATED_RANGE); };
 private:
   ObGtsResponseRpc rpc_;
   int handle_local_request_(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);

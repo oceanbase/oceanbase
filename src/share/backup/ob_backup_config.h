@@ -54,6 +54,7 @@ public:
     LOG_ARCHIVE_DEST_STATE_7 = 16,
     LOG_ARCHIVE_DEST_8 = 17,
     LOG_ARCHIVE_DEST_STATE_8 = 18,
+    LOG_RESTORE_SOURCE = 19,
     MAX_CONFIG_NAME
   };
   static const char *const type_str[Type::MAX_CONFIG_NAME];
@@ -176,8 +177,9 @@ public:
   virtual int parse_from(const common::ObSqlString &value) override;
   virtual int update_inner_config_table(common::ObISQLClient &trans) override;
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
-private:
-  int do_parse_sub_config_(const common::ObString &config_str);
+  TO_STRING_KV(K_(dest_no), K_(archive_dest), K_(backup_dest), K_(is_empty));
+protected:
+  virtual int do_parse_sub_config_(const common::ObString &config_str);
   int do_parse_log_archive_dest_(const common::ObString &dest_type_str, const common::ObString &url);
   int do_parse_piece_switch_interval_(const common::ObString &name, const common::ObString &value);
   int do_parse_lag_target_(const common::ObString &name, const common::ObString &value);
@@ -203,6 +205,22 @@ public:
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveDestStateConfigParser);
+};
+
+class ObLogArchiveRestoreSourceConfigParser : public ObLogArchiveDestConfigParser
+{
+public:
+  ObLogArchiveRestoreSourceConfigParser(const ObBackupConfigType::Type &type, const uint64_t tenant_id, const int64_t dest_no)
+    : ObLogArchiveDestConfigParser(type, tenant_id, dest_no) {}
+  virtual ~ObLogArchiveRestoreSourceConfigParser() {}
+  virtual int update_inner_config_table(common::ObISQLClient &trans) override;
+  virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
+
+protected:
+  virtual int do_parse_sub_config_(const common::ObString &config_str) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObLogArchiveRestoreSourceConfigParser);
 };
 
 }

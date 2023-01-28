@@ -6381,6 +6381,42 @@ static const _error _error_OB_PACKET_STATUS_UNKNOWN = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry.",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry."
 };
+static const _error _error_OB_ARBITRATION_SERVICE_NOT_EXIST = {
+      .error_name            = "OB_ARBITRATION_SERVICE_NOT_EXIST",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "arbitration service does not exist",
+      .str_user_error        = "arbitration service does not exist",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4747, arbitration service does not exist",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4747, arbitration service does not exist"
+};
+static const _error _error_OB_ARBITRATION_SERVICE_ALREADY_EXIST = {
+      .error_name            = "OB_ARBITRATION_SERVICE_ALREADY_EXIST",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "arbitration service already exist",
+      .str_user_error        = "arbitration service already exist",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4748, arbitration service already exist",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4748, arbitration service already exist"
+};
+static const _error _error_OB_WAIT_DEGRATION_TIMEOUT = {
+      .error_name            = "OB_WAIT_DEGRATION_TIMEOUT",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "wait degration finished timeout",
+      .str_user_error        = "wait degration finished timeout",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4751, wait degration finished timeout",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4751, wait degration finished timeout"
+};
 static const _error _error_OB_ERR_PARSER_INIT = {
       .error_name            = "OB_ERR_PARSER_INIT",
       .error_cause           = "Internal Error",
@@ -24606,6 +24642,9 @@ struct ObStrErrorInit
     _errors[-OB_FROZEN_INFO_ALREADY_EXIST] = &_error_OB_FROZEN_INFO_ALREADY_EXIST;
     _errors[-OB_DELETE_SERVER_NOT_ALLOWED] = &_error_OB_DELETE_SERVER_NOT_ALLOWED;
     _errors[-OB_PACKET_STATUS_UNKNOWN] = &_error_OB_PACKET_STATUS_UNKNOWN;
+    _errors[-OB_ARBITRATION_SERVICE_NOT_EXIST] = &_error_OB_ARBITRATION_SERVICE_NOT_EXIST;
+    _errors[-OB_ARBITRATION_SERVICE_ALREADY_EXIST] = &_error_OB_ARBITRATION_SERVICE_ALREADY_EXIST;
+    _errors[-OB_WAIT_DEGRATION_TIMEOUT] = &_error_OB_WAIT_DEGRATION_TIMEOUT;
     _errors[-OB_ERR_PARSER_INIT] = &_error_OB_ERR_PARSER_INIT;
     _errors[-OB_ERR_PARSE_SQL] = &_error_OB_ERR_PARSE_SQL;
     _errors[-OB_ERR_RESOLVE_SQL] = &_error_OB_ERR_RESOLVE_SQL;

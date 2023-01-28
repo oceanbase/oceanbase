@@ -1014,6 +1014,7 @@ static const NonReservedKeyword Oracle_non_reserved_keywords[] =
   {"suspend", SUSPEND},
   {"swaps", SWAPS},
   {"switches", SWITCHES},
+  {"switchover", SWITCHOVER},
   {"sysbackup", SYSBACKUP},
   {"sysdba", SYSDBA},
   {"syskm", SYSKM},

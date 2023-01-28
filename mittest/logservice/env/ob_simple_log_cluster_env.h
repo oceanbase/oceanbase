@@ -48,6 +48,7 @@ class MockLSAdapter;
   } \
   ::oceanbase::common::g_redirect_handler = true; \
   oceanbase::palf::election::GLOBAL_INIT_ELECTION_MODULE(); \
+  oceanbase::common::ObClockGenerator::init();\
   sleep(15); \
   const std::string rm_base_dir_cmd = "rm -rf " + TEST_NAME; \
   const std::string rm_log_cmd = "rm -f ./" + TEST_NAME + "*log*"; \
@@ -60,7 +61,7 @@ class MockLSAdapter;
   const std::string rs_log_file_name = TEST_NAME+"/"+TEST_NAME + ".rs.log"; \
   OB_LOGGER.set_file_name(log_file_name.c_str(), true, false, rs_log_file_name.c_str(), \
       ele_log_file_name.c_str(), NULL); \
-  OB_LOGGER.set_log_level("INFO"); \
+  OB_LOGGER.set_log_level("DEBUG"); \
   OB_LOGGER.set_enable_log_limit(false); \
   OB_LOGGER.set_enable_async_log(false); \
   SERVER_LOG(INFO, "begin unittest"); \
@@ -71,6 +72,36 @@ int generate_data(char *&buf, int buf_len, int &real_data_size, const int wanted
 int generate_specifice_size_data(char *&buf, int buf_len, int wanted_data_size);
 int generate_blob_data(char *&buf, int buf_len, int &wanted_data_size);
 
+struct PalfHandleImplGuard
+{
+  PalfHandleImplGuard();
+  ~PalfHandleImplGuard();
+  bool is_valid() const;
+  PalfHandleImpl *get_palf_handle_impl() const { return palf_handle_impl_; }
+  void reset();
+  TO_STRING_KV(K_(palf_id), KP_(palf_handle_impl), KP_(palf_env_impl));
+
+  int64_t  palf_id_;
+  PalfHandleImpl *palf_handle_impl_;
+  PalfEnvImpl *palf_env_impl_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(PalfHandleImplGuard);
+};
+struct PalfHandleLiteGuard
+{
+  PalfHandleLiteGuard();
+  ~PalfHandleLiteGuard();
+  bool is_valid() const;
+  palflite::PalfHandleLite *get_palf_handle_impl() const { return palf_handle_lite_; }
+  void reset();
+  TO_STRING_KV(K_(palf_id), KP_(palf_handle_lite), KP_(palf_env_lite));
+
+  int64_t palf_id_;
+  palflite::PalfHandleLite *palf_handle_lite_;
+  palflite::PalfEnvLite *palf_env_lite_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(PalfHandleLiteGuard);
+};
 class MockLocCB : public palf::PalfLocationCacheCb
 {
 public:
@@ -100,67 +131,78 @@ public:
   virtual ~ObSimpleLogClusterTestEnv();
   virtual void SetUp();
   virtual void TearDown();
-  int create_paxos_group(const int64_t id, int64_t &leader_idx, PalfHandleGuard &leader);
-  int create_paxos_group(const int64_t id, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleGuard &leader);
-  int create_paxos_group(const int64_t id, const share::SCN &create_scn, int64_t &leader_idx, PalfHandleGuard &leader);
-  int create_paxos_group(const int64_t id, const LSN &lsn, int64_t &leader_idx, PalfHandleGuard &leader);
-  int create_paxos_group(const int64_t id, const PalfBaseInfo &info, int64_t &leader_idx, PalfHandleGuard &leader);
-  int create_paxos_group(const int64_t id, const PalfBaseInfo &info, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleGuard &leader);
-  int update_server_log_disk_size(const int64_t new_size);
+  int create_paxos_group(const int64_t id, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group(const int64_t id, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group(const int64_t id, const share::SCN &create_scn, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group(const int64_t id, const LSN &lsn, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group(const int64_t id, const PalfBaseInfo &info, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group(const int64_t id, const PalfBaseInfo &info, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group_with_arb(const int64_t id, int64_t &arb_replica_idx, int64_t &leader_idx, PalfHandleImplGuard &leader);
   virtual int delete_paxos_group(const int64_t id);
   virtual int update_disk_options(const int64_t server_id, const int64_t log_block_number);
   virtual int restart_paxos_groups();
   virtual int restart_server(const int64_t server_id);
   virtual int remove_dir();
-  virtual int get_leader(const int64_t id, PalfHandleGuard &leader, int64_t &leader_idx);
-  virtual int get_cluster_palf_handle_guard(const int64_t palf_id, std::vector<PalfHandleGuard*> &palf_list);
-  virtual int revert_cluster_palf_handle_guard(std::vector<PalfHandleGuard*> &palf_list);
-  virtual int get_palf_handle_guard(const std::vector<PalfHandleGuard*> &palf_list, const common::ObAddr &server, PalfHandleGuard &palf_handle);
-  virtual int switch_leader(const int64_t id, const int64_t new_leader_idx, PalfHandleGuard &leader);
+  virtual int get_log_pool(const int64_t leader_idx, logservice::ObServerLogBlockMgr *&pool);
+  virtual int get_leader(const int64_t id, PalfHandleImplGuard &leader, int64_t &leader_idx);
+  virtual int get_cluster_palf_handle_guard(const int64_t palf_id, std::vector<PalfHandleImplGuard*> &palf_list);
+  virtual int get_arb_member_guard(const int64_t palf_id, PalfHandleLiteGuard &guard);
+  virtual int revert_cluster_palf_handle_guard(std::vector<PalfHandleImplGuard*> &palf_list);
+  virtual int get_palf_handle_guard(const std::vector<PalfHandleImplGuard*> &palf_list, const common::ObAddr &server, PalfHandleImplGuard &palf_handle);
+  virtual int switch_leader(const int64_t id, const int64_t new_leader_idx, PalfHandleImplGuard &leader);
   virtual void set_need_drop_packet(const int64_t id, const bool need_drop_packet);
-  virtual int check_replica_sync(const int64_t id, PalfHandleGuard *pf1, PalfHandleGuard *pf2, const int64_t timeout_us);
+  virtual int check_replica_sync(const int64_t id, PalfHandleImplGuard *pf1, PalfHandleImplGuard *pf2, const int64_t timeout_us);
   // Bidirectional network isolation
+  virtual void block_all_net(const int64_t id);
+  virtual void unblock_all_net(const int64_t id);
   virtual void block_net(const int64_t id1, const int64_t id2, const bool is_single_direction = false);
   virtual void unblock_net(const int64_t id1, const int64_t id2);
   virtual void set_rpc_loss(const int64_t id1, const int64_t id2, const int loss_rate);
   virtual void reset_rpc_loss(const int64_t id1, const int64_t id2);
-  virtual int submit_log(PalfHandleGuard &leader, int count, int id);
-  virtual int submit_log(PalfHandleGuard &leader, int count, int id, int data_len);
-  virtual int submit_log(PalfHandleGuard &leader, int count, int id, std::vector<LSN> &lsn_array, std::vector<SCN> &scn_array); virtual int submit_log(PalfHandleGuard &leader, int count, int data_len, int id, std::vector<LSN> &lsn_array, std::vector<SCN> &scn_array);
-  virtual int submit_log_impl(PalfHandleGuard &leader,
+  virtual int submit_log(PalfHandleImplGuard &leader, int count, int id);
+  virtual int submit_log(PalfHandleImplGuard &leader, int count, int id, int data_len);
+  virtual int submit_log(PalfHandleImplGuard &leader, int count, int id, std::vector<LSN> &lsn_array, std::vector<SCN> &scn_array);
+  virtual int submit_log(PalfHandleImplGuard &leader, int count, int data_len, int id, std::vector<LSN> &lsn_array, std::vector<SCN> &scn_array);
+  virtual int submit_log_impl(PalfHandleImplGuard &leader,
                               const int64_t count,
                               const int64_t id,
                               const int64_t wanted_data_size,
                               std::vector<LSN> &lsn_array,
                               std::vector<SCN> &scn_array);
-  virtual int submit_log_impl(PalfHandleGuard &leader,
+  virtual int submit_log_impl(PalfHandleImplGuard &leader,
                               const int64_t count,
                               const int64_t id,
                               const int64_t wanted_data_size,
                               const share::SCN &ref_scn,
                               std::vector<LSN> &lsn_array,
                               std::vector<SCN> &scn_array);
-  virtual int submit_log(PalfHandleGuard &leader,
+  virtual int submit_log(PalfHandleImplGuard &leader,
                          LSN &lsn,
                          share::SCN &scn);
-  virtual int submit_log(PalfHandleGuard &leader,
+  virtual int submit_log(PalfHandleImplGuard &leader,
                          const share::SCN &ref_scn,
                          LSN &lsn,
                          share::SCN &scn);
-  virtual int change_access_mode_to_raw_write(PalfHandleGuard &leader);
-  virtual int raw_write(PalfHandleGuard &leader,
+  virtual int change_access_mode_to_raw_write(PalfHandleImplGuard &leader);
+  virtual int change_access_mode_to_append(PalfHandleImplGuard &leader);
+  virtual int raw_write(PalfHandleImplGuard &leader,
                         const LSN lsn,
                         const char *buf,
                         const int64_t buf_len);
-  virtual int read_log(PalfHandleGuard &leader);
-  virtual int read_log(PalfHandleGuard &leader, const LSN &lsn);
-  virtual int read_group_log(PalfHandleGuard &leader, LSN lsn);
-  virtual int read_and_submit_group_log(PalfHandleGuard &leader, PalfHandleGuard &leader_raw_write);
-  virtual int read_log_from_memory(PalfHandleGuard &leader);
+  virtual int read_log(PalfHandleImplGuard &leader);
+  virtual int read_log(PalfHandleImplGuard &leader, const LSN &lsn);
+  virtual int read_group_log(PalfHandleImplGuard &leader, LSN lsn);
+  virtual int read_and_submit_group_log(PalfHandleImplGuard &leader, PalfHandleImplGuard &leader_raw_write, const LSN &start_lsn = LSN(0));
+  virtual int read_log_from_memory(PalfHandleImplGuard &leader);
   virtual int advance_base_info(const int64_t id, const PalfBaseInfo &base_info);
   virtual int get_palf_env(const int64_t server_idx, PalfEnv *&palf_env);
-  virtual int wait_until_has_committed(PalfHandleGuard &leader, const LSN &lsn);
-  virtual int wait_lsn_until_flushed(const LSN &lsn, PalfHandleGuard &guard);
+  virtual int wait_until_has_committed(PalfHandleImplGuard &leader, const LSN &lsn);
+  virtual int wait_lsn_until_flushed(const LSN &lsn, PalfHandleImplGuard &guard);
+  virtual void wait_all_replcias_log_sync(const int64_t palf_id);
+  int get_middle_scn(const int64_t log_num, PalfHandleImplGuard &leader, share::SCN &mid_scn, LogEntryHeader &log_entry_header);
+  void switch_append_to_raw_write(PalfHandleImplGuard &leader, int64_t &mode_version);
+  void switch_append_to_flashback(PalfHandleImplGuard &leader, int64_t &mode_version);
+  void switch_flashback_to_append(PalfHandleImplGuard &leader, int64_t &mode_version);
 public:
   static int64_t palf_id_;
 private:

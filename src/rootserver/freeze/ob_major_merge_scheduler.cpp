@@ -70,14 +70,15 @@ int64_t ObMajorMergeIdling::get_idle_interval_us()
 ///////////////////////////////////////////////////////////////////////////////
 
 ObMajorMergeScheduler::ObMajorMergeScheduler()
-  : ObFreezeReentrantThread(), is_inited_(false), fail_count_(0), idling_(stop_),
-    zone_merge_mgr_(nullptr), freeze_info_mgr_(nullptr), config_(nullptr),
-    merge_strategy_(), progress_checker_(), cross_cluster_validator_()
+  : ObFreezeReentrantThread(), is_inited_(false), is_primary_service_(true), fail_count_(0),
+    first_check_merge_us_(0), idling_(stop_), zone_merge_mgr_(nullptr), freeze_info_mgr_(nullptr),
+    config_(nullptr), merge_strategy_(), progress_checker_()
 {
 }
 
 int ObMajorMergeScheduler::init(
     const uint64_t tenant_id,
+    const bool is_primary_service,
     ObZoneMergeManager &zone_merge_mgr,
     ObFreezeInfoManager &freeze_info_mgr,
     share::schema::ObMultiVersionSchemaService &schema_service,
@@ -97,13 +98,12 @@ int ObMajorMergeScheduler::init(
   } else if (OB_FAIL(progress_checker_.init(tenant_id, sql_proxy, schema_service,
           zone_merge_mgr, *GCTX.lst_operator_, server_trace))) {
     LOG_WARN("fail to init progress_checker", KR(ret));
-  } else if (OB_FAIL(cross_cluster_validator_.init(tenant_id, sql_proxy, zone_merge_mgr))) {
-    LOG_WARN("fail to init cross cluster validator", KR(ret), K(tenant_id));
   } else if (OB_FAIL(idling_.init(tenant_id))) {
     LOG_WARN("fail to init idling", KR(ret), K(tenant_id));
   } else {
     tenant_id_ = tenant_id;
     first_check_merge_us_ = 0;
+    is_primary_service_ = is_primary_service;
     zone_merge_mgr_ = &zone_merge_mgr;
     freeze_info_mgr_ = &freeze_info_mgr;
     config_ = &config;
@@ -191,12 +191,14 @@ int ObMajorMergeScheduler::try_idle(
 
   if (is_paused()) {
     while (OB_SUCC(ret) && is_paused() && !stop_) {
-      LOG_INFO("major_merge_scheduler is paused", K_(tenant_id), K(idle_time_us));
+      LOG_INFO("major_merge_scheduler is paused", K_(tenant_id), K(idle_time_us),
+               "epoch", get_epoch());
       if (OB_FAIL(idling_.idle(idle_time_us))) {
         LOG_WARN("fail to idle", KR(ret));
       }
     }
-    LOG_INFO("major_merge_scheduler is not paused", K_(tenant_id), K(idle_time_us));
+    LOG_INFO("major_merge_scheduler is not paused", K_(tenant_id), K(idle_time_us),
+             "epoch", get_epoch());
   } else if (OB_FAIL(idling_.idle(idle_time_us))) {
     LOG_WARN("fail to idle", KR(ret), K(idle_time_us));
   }
@@ -211,11 +213,15 @@ int ObMajorMergeScheduler::do_work()
   HEAP_VARS_2((ObZoneMergeInfoArray, info_array), (ObGlobalMergeInfo, global_info)) {
     const int64_t curr_round_epoch = get_epoch();
     if (IS_NOT_INIT) {
-	    ret = OB_NOT_INIT;
-	    LOG_WARN("not init", KR(ret), K_(tenant_id));
-    } else if (OB_FAIL(zone_merge_mgr_->try_reload())) {
-      LOG_WARN("fail to try reload", KR(ret), K_(tenant_id));
-    } else if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", KR(ret), K_(tenant_id));
+    } else {
+      FREEZE_TIME_GUARD;
+      if (OB_FAIL(zone_merge_mgr_->try_reload())) {
+        LOG_WARN("fail to try reload", KR(ret), K_(tenant_id));
+      }
+    }
+    if (FAILEDx(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
       LOG_WARN("fail to get merge info", KR(ret), K_(tenant_id));
     } else {
       bool need_merge = true;
@@ -268,6 +274,8 @@ int ObMajorMergeScheduler::do_before_major_merge(const int64_t expected_epoch)
   } else if (OB_FAIL(ObColumnChecksumErrorOperator::delete_column_checksum_err_info(
       *sql_proxy_, tenant_id_, global_broadcast_scn))) {
     LOG_WARN("fail to delete column checksum error info", KR(ret), K(global_broadcast_scn));
+  } else {
+    progress_checker_.set_major_merge_start_time(ObTimeUtility::current_time());
   }
   return ret;
 }
@@ -462,8 +470,10 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
                             "global_broadcast_scn", global_broadcast_scn.get_val_for_inner_table_field(),
                             "service_addr", GCONF.self_addr_);
     }
-  } else if (OB_FAIL(progress_checker_.check_verification(stop_, global_broadcast_scn, expected_epoch))) {
-    LOG_WARN("fail to check verification", KR(ret), K_(tenant_id), K(global_broadcast_scn));
+  } else if (OB_FAIL(progress_checker_.check_verification(stop_, is_primary_service_,
+                                                          global_broadcast_scn, expected_epoch))) {
+    LOG_WARN("fail to check verification", KR(ret), K_(tenant_id), K(global_broadcast_scn),
+             K(expected_epoch));
     int64_t time_interval = 10L * 60 * 1000 * 1000;  // record every 10 minutes
     // only record OB_CHECKSUM_ERROR, and thus avoid confusing DBA
     if (TC_REACH_TIME_INTERVAL(time_interval) && (OB_CHECKSUM_ERROR == ret)) {
@@ -608,8 +618,7 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
 
     // 3. execute final operations after all merged
     if (OB_SUCC(ret) && all_merged) {
-      // MERGE_STATUS: change to IDLE
-      if (OB_FAIL(try_update_global_merged_scn(expected_epoch))) {
+      if (OB_FAIL(try_update_global_merged_scn(expected_epoch))) {  // MERGE_STATUS: change to IDLE
         LOG_WARN("fail to update global_merged_scn", KR(ret), K_(tenant_id), K(expected_epoch));
       }
     }
@@ -638,9 +647,6 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
       LOG_WARN("fail to get zone info", KR(ret));
     } else if (global_info.is_merge_error()) {
       LOG_WARN("should not update global merged scn, cuz is_merge_error is true", K(global_info));
-    } else if (FALSE_IT(global_broadcast_scn_val = global_info.global_broadcast_scn_.get_scn_val())) {
-    } else if (OB_FAIL(update_all_tablets_report_scn(global_broadcast_scn_val))) {
-      LOG_WARN("fail to update all tablets report_scn", KR(ret), K(expected_epoch), K(global_broadcast_scn_val));
     } else {
       if (global_info.last_merged_scn() != global_info.global_broadcast_scn()) {
         bool merged = true;
@@ -650,7 +656,15 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
           }
         }
         if (merged) {
-          if (OB_FAIL(zone_merge_mgr_->try_update_global_last_merged_scn(expected_epoch))) {
+          if (OB_FAIL(progress_checker_.handle_table_with_first_tablet_in_sys_ls(stop_,
+                        global_info.global_broadcast_scn(), expected_epoch))) {
+            LOG_WARN("fail to handle table with first tablet in sys ls", KR(ret), K_(tenant_id),
+                     "global_broadcast_scn", global_info.global_broadcast_scn(), K(expected_epoch));
+          } else if (FALSE_IT(global_broadcast_scn_val = global_info.global_broadcast_scn_.get_scn_val())) {
+          } else if (OB_FAIL(update_all_tablets_report_scn(global_broadcast_scn_val))) {
+            LOG_WARN("fail to update all tablets report_scn", KR(ret), K(expected_epoch),
+                     K(global_broadcast_scn_val));
+          } else if (OB_FAIL(zone_merge_mgr_->try_update_global_last_merged_scn(expected_epoch))) {
             LOG_WARN("try update global last_merged_scn failed", KR(ret), K(expected_epoch));
           } else {
             ROOTSERVICE_EVENT_ADD("daily_merge", "global_merged", K_(tenant_id),
@@ -659,19 +673,6 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObMajorMergeScheduler::sync_tablet_checksum()
-{
-  int ret = OB_SUCCESS;
-  if (PRIMARY_CLUSTER == ObClusterInfoGetter::get_cluster_role_v2()) {
-    if (OB_FAIL(cross_cluster_validator_.write_tablet_checksum_item())) {
-      LOG_WARN("fail to sync tablet", KR(ret), K_(tenant_id));
-    }
-  } else {
-    LOG_INFO("no need to sync tablet checksum in non-primary cluster", K_(tenant_id));
   }
   return ret;
 }
@@ -695,7 +696,7 @@ int ObMajorMergeScheduler::try_update_epoch_and_reload()
   lib::ObMutexGuard guard(epoch_update_lock_);
   int64_t latest_epoch = -1;
   ObRole role = ObRole::INVALID_ROLE;
-  if (OB_FAIL(obtain_proposal_id_from_ls(latest_epoch, role))) {
+  if (OB_FAIL(obtain_proposal_id_from_ls(is_primary_service_, latest_epoch, role))) {
     LOG_WARN("fail to obtain latest epoch", KR(ret));
   } else if (ObRole::LEADER == role) {
     if (latest_epoch > get_epoch()) {

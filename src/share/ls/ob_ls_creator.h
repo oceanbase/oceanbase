@@ -113,7 +113,9 @@ public:
       const common::ObIArray<share::ObUnit> &unit_array);
   bool is_valid();
 private:
- int do_create_ls_(const ObLSAddr &addr, const share::ObLSStatusInfo &info,
+ int do_create_ls_(const ObLSAddr &addr,
+                   ObMember &arbitration_service,
+                   const share::ObLSStatusInfo &info,
                    const int64_t paxos_replica_num,
                    const SCN &create_scn,
                    const common::ObCompatibilityMode &compat_mode,
@@ -121,6 +123,7 @@ private:
                    const bool create_with_palf,
                    const palf::PalfBaseInfo &palf_base_info);
  int process_after_has_member_list_(const common::ObMemberList &member_list,
+                                    const common::ObMember &arbitration_service,
                                     const int64_t paxos_replica_num);
  int create_ls_(const ObILSAddr &addr, const int64_t paxos_replica_num,
                 const share::ObAllTenantInfo &tenant_info,
@@ -128,8 +131,10 @@ private:
                 const common::ObCompatibilityMode &compat_mode,
                 const bool create_with_palf,
                 const palf::PalfBaseInfo &palf_base_info,
-                common::ObMemberList &member_list);
+                common::ObMemberList &member_list,
+                common::ObMember &arbitration_service);
  int set_member_list_(const common::ObMemberList &member_list,
+                      const common::ObMember &arbitration_service,
                       const int64_t paxos_replica_num);
  int persist_ls_member_list_(const common::ObMemberList &member_list);
 

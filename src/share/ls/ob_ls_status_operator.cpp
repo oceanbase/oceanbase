@@ -140,6 +140,11 @@ bool ls_is_create_abort_status(const ObLSStatus &status)
   return OB_LS_CREATE_ABORT == status;
 }
 
+bool ls_need_create_abort_status(const ObLSStatus &status)
+{
+  return OB_LS_CREATING == status || OB_LS_CREATED == status;
+}
+
 bool ls_is_pre_tenant_dropping_status(const ObLSStatus &status)
 {
   return OB_LS_PRE_TENANT_DROPPING == status;
@@ -242,13 +247,22 @@ const char* ObLSStatusOperator::ls_status_to_str(const ObLSStatus &status)
 int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
                                       const SCN &current_tenant_scn,
                                       const common::ObString &zone_priority,
+                                      const share::ObTenantSwitchoverStatus &working_sw_status,
                                       ObMySQLTransaction &trans)
 {
   UNUSEDx(current_tenant_scn, zone_priority);
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_info.is_valid())) {
+  ObAllTenantInfo tenant_info;
+  if (OB_UNLIKELY(!ls_info.is_valid()
+                  || !working_sw_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid_argument", KR(ret), K(ls_info));
+    LOG_WARN("invalid_argument", KR(ret), K(ls_info), K(working_sw_status));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                  ls_info.tenant_id_, &trans, true, tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(ls_info));
+  } else if (working_sw_status != tenant_info.get_switchover_status()) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("tenant not in specified switchover status", K(ls_info), K(working_sw_status), K(tenant_info));
   } else {
     common::ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("INSERT into %s (tenant_id, ls_id, status, "
@@ -268,12 +282,21 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
 
 int ObLSStatusOperator::drop_ls(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id)) {
+  ObAllTenantInfo tenant_info;
+  if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id
+                  || !working_sw_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid_argument", KR(ret), K(ls_id), K(tenant_id));
+    LOG_WARN("invalid_argument", KR(ret), K(ls_id), K(tenant_id), K(working_sw_status));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                     tenant_id, &trans, true, tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
+  } else if (working_sw_status != tenant_info.get_switchover_status()) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("tenant not in specified switchover status", K(tenant_id), K(working_sw_status), K(tenant_info));
   } else {
     common::ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("DELETE from %s where ls_id = %ld and tenant_id = %lu",
@@ -290,6 +313,7 @@ int ObLSStatusOperator::set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
                       const SCN &drop_scn,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans)
 {
   UNUSEDx(drop_scn);
@@ -298,7 +322,7 @@ int ObLSStatusOperator::set_ls_offline(const uint64_t &tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid_argument", KR(ret), K(ls_id), K(tenant_id));
   } else if (OB_FAIL(update_ls_status(tenant_id, ls_id,
-          ls_status, OB_LS_WAIT_OFFLINE, share::NORMAL_SWITCHOVER_STATUS, trans))) {
+          ls_status, OB_LS_WAIT_OFFLINE, working_sw_status, trans))) {
     LOG_WARN("failed to update ls status", KR(ret), K(tenant_id), K(ls_id), K(ls_status));
   }
   return ret;
@@ -336,7 +360,8 @@ int ObLSStatusOperator::update_ls_primary_zone(
 int ObLSStatusOperator::update_ls_status(
     const uint64_t tenant_id,
     const ObLSID &id, const ObLSStatus &old_status,
-    const ObLSStatus &new_status, const ObTenantSwitchoverStatus &switch_status,
+    const ObLSStatus &new_status,
+    const ObTenantSwitchoverStatus &switch_status,
     ObISQLClient &client)
 {
   int ret = OB_SUCCESS;
@@ -361,8 +386,8 @@ int ObLSStatusOperator::update_ls_status(
       LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
     } else if (switch_status != tenant_info.get_switchover_status()) {
       ret = OB_NEED_RETRY;
-      LOG_WARN("tenant not expect switchover status", KR(ret), K(tenant_info), K(switch_status));
-    } else if (OB_FAIL(update_ls_status_in_trans(tenant_id, id, old_status, new_status, trans))) {
+      LOG_WARN("tenant not expect switchover status", KR(ret), K(tenant_info));
+    } else if (OB_FAIL(update_ls_status_in_trans_(tenant_id, id, old_status, new_status, trans))) {
       LOG_WARN("failed to update ls status in trans", KR(ret), K(tenant_id), K(id), K(old_status), K(new_status));
     }
     if (trans.is_started()) {
@@ -376,7 +401,7 @@ int ObLSStatusOperator::update_ls_status(
   return ret;
 }
 
-int ObLSStatusOperator::update_ls_status_in_trans(
+int ObLSStatusOperator::update_ls_status_in_trans_(
     const uint64_t tenant_id,
     const ObLSID &id, const ObLSStatus &old_status,
     const ObLSStatus &new_status,
@@ -459,6 +484,43 @@ int ObLSStatusOperator::get_all_ls_status_by_order(
       LOG_WARN("failed to assign sql", KR(ret), K(sql), K(tenant_id));
     } else if (OB_FAIL(exec_read(tenant_id, sql, client, this, ls_array))) {
       LOG_WARN("failed to exec read", KR(ret), K(tenant_id), K(sql));
+    }
+  }
+  return ret;
+}
+
+int ObLSStatusOperator::get_all_ls_status_by_order_for_switch_tenant(
+    const uint64_t tenant_id,
+    const bool ignore_need_create_abort,
+    ObLSStatusInfoIArray &ls_array,
+    ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  ls_array.reset();
+  ObLSStatusInfoArray ori_ls_array;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_id is not valid", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_all_ls_status_by_order(tenant_id, ori_ls_array, client))) {
+    LOG_WARN("failed to get_all_ls_status_by_order", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ori_ls_array.count(); ++i) {
+      const ObLSStatusInfo &info = ori_ls_array.at(i);
+      if (ls_is_pre_tenant_dropping_status(info.get_status()) || ls_is_tenant_dropping_status(info.get_status())) {
+        ret = OB_TENANT_HAS_BEEN_DROPPED;
+        LOG_WARN("tenant has been dropped", KR(ret), K(info));
+      } else if (ls_need_create_abort_status(info.get_status())) {
+        if (ignore_need_create_abort) {
+          LOG_INFO("ignore ls", KR(ret), K(info));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected ls status", KR(ret), K(info));
+        }
+      } else if (ls_is_create_abort_status(info.get_status())) {
+        LOG_INFO("ignore ls", KR(ret), K(info));
+      } else if (OB_FAIL(ls_array.push_back(info))) {
+        LOG_WARN("failed to push_back", KR(ret), K(info), K(ls_array));
+      }
     }
   }
   return ret;
@@ -1041,6 +1103,7 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
   ObSchemaGetterGuard schema_guard;
   const ObTenantSchema *tenant_schema = NULL;
   int64_t paxos_replica_num = OB_INVALID_COUNT;
+  int64_t arb_replica_num = 0;
 
   if (OB_UNLIKELY(!ls_log_stat_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1081,14 +1144,22 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
       valid_servers))) {
     LOG_WARN("fail to generate valid member_list", KR(ret),
         K(to_stop_servers), K(leader), K(ls_log_stat_info));
-  } else if (valid_servers.count() < rootserver::majority(leader.get_paxos_replica_num())) {
+  } else if (2 == paxos_replica_num
+             && OB_FAIL(ObShareUtil::generate_arb_replica_num(
+                          ls_log_stat_info.get_tenant_id(),
+                          ls_log_stat_info.get_ls_id(),
+                          arb_replica_num))) {
+    // special case: support stop 1F in 2F1A
+    need_retry = true;
+    LOG_WARN("fail to generate arb replica num", KR(ret), KPC(tenant_schema), K(ls_log_stat_info));
+  } else if (valid_servers.count() + arb_replica_num < rootserver::majority(leader.get_paxos_replica_num())) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("ls doesn't have enough valid paxos member when checking ls_log_stat_info",
-        KR(ret), K(ls_log_stat_info), K(leader), K(to_stop_servers), K(valid_servers));
+        KR(ret), K(ls_log_stat_info), K(leader), K(to_stop_servers), K(valid_servers), K(arb_replica_num));
     (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) has no enough valid paxos member after %s, %s",
         ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), print_str, print_str);
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
-  } else if (OB_FAIL(ls_log_stat_info.check_has_majority(valid_servers, is_passed))) {
+  } else if (OB_FAIL(ls_log_stat_info.check_has_majority(valid_servers, arb_replica_num, is_passed))) {
     LOG_WARN("fail to check has majority", KR(ret), K(ls_log_stat_info));
   } else if (!is_passed) {
     need_retry = true; // Query returned data does not match valid_servers
@@ -1100,9 +1171,10 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
   } else if (skip_log_sync_check) {
     // skip check_log_in_sync
-  } else if (OB_FAIL(ls_log_stat_info.check_log_sync(valid_servers, is_passed))) {
+  } else if (OB_FAIL(ls_log_stat_info.check_log_sync(valid_servers, arb_replica_num, is_passed))) {
     LOG_WARN("fail to check log in sync", KR(ret), K(ls_log_stat_info));
   } else if (!is_passed) {
+    need_retry = true;
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("log not sync when checking ls_log_stat_info",
         KR(ret), K(ls_log_stat_info), K(leader), K(to_stop_servers), K(valid_servers));
@@ -1225,6 +1297,53 @@ int ObLSStatusOperator::check_all_ls_has_leader(
     LOG_INFO("finish to check_all_ls_has_leader",
         KR(ret), K(print_str), K(has_ls_without_leader), K(sql));
   }
+  return ret;
+}
+
+int ObLSStatusOperator::create_abort_ls_in_switch_tenant(
+    const uint64_t tenant_id,
+    const share::ObTenantSwitchoverStatus &status,
+    const int64_t switchover_epoch,
+    ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  common::ObSqlString sql;
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !status.is_valid() || OB_INVALID_VERSION == switchover_epoch)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(status), K(switchover_epoch));
+  } else {
+    ObMySQLTransaction trans;
+    share::ObLSStatusInfoArray status_info_array;
+    ObLSStatusOperator status_op;
+    ObAllTenantInfo tenant_info;
+    const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
+    if (OB_FAIL(trans.start(&client, exec_tenant_id))) {
+      LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
+    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true, tenant_info))) {
+      LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(switchover_epoch != tenant_info.get_switchover_epoch()
+                           || status != tenant_info.get_switchover_status())) {
+      ret = OB_NEED_RETRY;
+      LOG_WARN("switchover may concurrency, need retry", KR(ret), K(switchover_epoch), K(status), K(tenant_info));
+    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s set status = '%s',init_member_list = '', b_init_member_list = ''"
+                               " where tenant_id = %lu and status in ('%s', '%s')",
+                               OB_ALL_LS_STATUS_TNAME,
+                               ls_status_to_str(share::OB_LS_CREATE_ABORT),
+                               tenant_id, ls_status_to_str(OB_LS_CREATED), ls_status_to_str(OB_LS_CREATING)))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_FAIL(exec_write(tenant_id, sql, this, trans, true))) {
+      LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(sql));
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+  LOG_INFO("finish create abort ls", KR(ret), K(tenant_id), K(sql));
+
   return ret;
 }
 

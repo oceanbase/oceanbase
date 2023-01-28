@@ -900,7 +900,7 @@ OB_NOINLINE int ObDASLocationRouter::get_vt_ls_location(uint64_t table_id,
       LOG_WARN("get server by tablet id failed", K(ret));
     } else if (OB_FAIL(ls_replica.init(server, common::LEADER,
                        GCONF.mysql_port, REPLICA_TYPE_FULL, mock_prop,
-                       restore_status))) {
+                       restore_status, 1 /*proposal_id*/))) {
       LOG_WARN("init ls replica failed", K(ret));
     } else if (OB_FAIL(location.add_replica_location(ls_replica))) {
       LOG_WARN("add replica location failed", K(ret));

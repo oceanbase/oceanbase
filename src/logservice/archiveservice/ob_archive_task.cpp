@@ -11,7 +11,10 @@
  */
 
 #include "ob_archive_task.h"
+#include "lib/atomic/ob_atomic.h"
 #include "lib/ob_define.h"
+#include "lib/ob_errno.h"
+#include "lib/utility/ob_macro_utils.h"
 #include "ob_archive_define.h"
 #include <cstdint>
 
@@ -153,6 +156,7 @@ bool ObArchiveLogFetchTask::is_continuous_with(const LSN &lsn) const
 }
 
 ObArchiveSendTask::ObArchiveSendTask() :
+  status_(INITAL_STATUS),
   tenant_id_(OB_INVALID_TENANT_ID),
   id_(),
   station_(),
@@ -160,6 +164,8 @@ ObArchiveSendTask::ObArchiveSendTask() :
   start_offset_(),
   end_offset_(),
   max_scn_(),
+  file_id_(OB_INVALID_ARCHIVE_FILE_ID),
+  file_offset_(OB_INVALID_ARCHIVE_FILE_OFFSET),
   data_(NULL),
   data_len_(0)
 {}
@@ -183,9 +189,7 @@ int ObArchiveSendTask::init(const uint64_t tenant_id,
                             const ObArchivePiece &piece,
                             const LSN &start_offset,
                             const LSN &end_offset,
-                            const SCN &max_scn,
-                            char *buf,
-                            const int64_t buf_size)
+                            const SCN &max_scn)
 
 {
   int ret = OB_SUCCESS;
@@ -195,12 +199,10 @@ int ObArchiveSendTask::init(const uint64_t tenant_id,
         || !piece.is_valid()
         || !start_offset.is_valid()
         || end_offset < start_offset
-        || !max_scn.is_valid()
-        || NULL == buf
-        || 0 >= buf_size)) {
+        || !max_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(id), K(station), K(piece), K(start_offset),
-        K(end_offset), K(max_scn), K(buf), K(buf_size));
+    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(id), K(station), K(piece),
+        K(start_offset), K(end_offset), K(max_scn));
   } else {
     tenant_id_ = tenant_id;
     id_ = id;
@@ -209,8 +211,6 @@ int ObArchiveSendTask::init(const uint64_t tenant_id,
     start_offset_ = start_offset;
     end_offset_ = end_offset;
     max_scn_ = max_scn;
-    MEMCPY(data_, buf, buf_size);
-    data_len_ = buf_size;
   }
   return ret;
 }
@@ -232,6 +232,13 @@ int ObArchiveSendTask::get_buffer(char *&data, int64_t &data_len) const
 {
   data = data_;
   data_len = data_len_;
+  return OB_SUCCESS;
+}
+
+int ObArchiveSendTask::get_origin_buffer(char *&buf, int64_t &buf_size) const
+{
+  buf = data_ - ARCHIVE_FILE_HEADER_SIZE;
+  buf_size = data_len_ + ARCHIVE_FILE_HEADER_SIZE;
   return OB_SUCCESS;
 }
 
@@ -261,6 +268,80 @@ bool ObArchiveSendTask::is_continuous_with(const ObArchiveSendTask &pre_task) co
     bret = false;
   }
   return bret;
+}
+
+bool ObArchiveSendTask::issue_task()
+{
+  bool bret = true;
+  int8_t old_flag = ATOMIC_LOAD(&status_);
+  const int8_t new_flag = ISSUE_STATUS;
+  if (old_flag != INITAL_STATUS) {
+    bret = false;
+  } else if (!ATOMIC_BCAS(&status_, old_flag, new_flag)) {
+    bret = false;
+  }
+  return bret;
+}
+
+bool ObArchiveSendTask::finish_task()
+{
+  bool bret = true;
+  int8_t old_flag = ATOMIC_LOAD(&status_);
+  const int8_t new_flag = FINISH_STATUS;
+  if (old_flag != ISSUE_STATUS) {
+    bret = false;
+  } else if (!ATOMIC_BCAS(&status_, old_flag, new_flag)) {
+    bret = false;
+  }
+  return bret;
+}
+
+bool ObArchiveSendTask::retire_task_with_retry()
+{
+  bool bret = true;
+  int8_t old_flag = ATOMIC_LOAD(&status_);
+  const int8_t new_flag = INITAL_STATUS;
+  if (old_flag != ISSUE_STATUS) {
+    bret = false;
+  } else if (!ATOMIC_BCAS(&status_, old_flag, new_flag)) {
+    bret = false;
+  }
+  return bret;
+}
+
+void ObArchiveSendTask::mark_stale()
+{
+  ATOMIC_STORE(&status_, STALE_STATUS);
+}
+
+bool ObArchiveSendTask::is_task_finish() const
+{
+  return FINISH_STATUS == ATOMIC_LOAD(&status_);
+}
+
+bool ObArchiveSendTask::is_task_stale() const
+{
+  return STALE_STATUS == ATOMIC_LOAD(&status_);
+}
+
+int ObArchiveSendTask::update_file(const int64_t file_id, const int64_t file_offset)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ARCHIVE_FILE_ID == file_id
+        || OB_INVALID_ARCHIVE_FILE_OFFSET == file_offset)) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(file_id), K(file_offset), KPC(this));
+  } else {
+    file_id_ = file_id;
+    file_offset_ = file_offset;
+  }
+  return ret;
+}
+
+void ObArchiveSendTask::get_file(int64_t &file_id, int64_t &file_offset)
+{
+  file_id = file_id_;
+  file_offset = file_offset_;
 }
 
 } // namespace archive

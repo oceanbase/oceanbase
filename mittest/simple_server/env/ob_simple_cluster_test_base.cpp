@@ -258,7 +258,7 @@ int ObSimpleClusterTestBase::delete_tenant(const char *tenant_name)
 {
   ObSqlString sql;
   common::ObMySQLProxy &sql_proxy = cluster_->get_sql_proxy();
-  sql.assign_fmt("drop tenant %s", tenant_name);
+  sql.assign_fmt("drop tenant %s force", tenant_name);
 
   int64_t affected_rows = 0;
   return sql_proxy.write(sql.ptr(), affected_rows);
@@ -294,6 +294,36 @@ int ObSimpleClusterTestBase::exec_write_sql_sys(const char *sql_str, int64_t &af
   ObSqlString sql;
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   return sql_proxy.write(sql_str, affected_rows);
+}
+
+int ObSimpleClusterTestBase::check_tenant_exist(bool &bool_ret, const char *tenant_name)
+{
+  int ret = OB_SUCCESS;
+  bool_ret = true;
+  uint64_t tenant_id;
+  if (OB_FAIL(get_tenant_id(tenant_id, tenant_name))) {
+    SERVER_LOG(WARN, "get_tenant_id failed", K(ret));
+  } else {
+    ObSqlString sql;
+    common::ObMySQLProxy &sql_proxy = cluster_->get_sql_proxy();
+    sql.assign_fmt("select tenant_id from oceanbase.gv$ob_units where tenant_id= '%" PRIu64"' ", tenant_id);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(sql_proxy.read(res, sql.ptr()))) {
+        SERVER_LOG(WARN, "get gv$ob_units", K(ret));
+      } else {
+        sqlclient::ObMySQLResult *result = res.get_result();
+        if (result != nullptr && OB_SUCC(result->next())) {
+          bool_ret = true;
+        } else if (result == nullptr) {
+          bool_ret = false;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "get_tenant_id", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 } // end unittest

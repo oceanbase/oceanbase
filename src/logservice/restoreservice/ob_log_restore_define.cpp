@@ -16,6 +16,7 @@
 #include "lib/ob_errno.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "logservice/palf/log_define.h"
 #include <cstdint>
 
 namespace oceanbase
@@ -35,13 +36,10 @@ ObLogRestoreErrorContext &ObLogRestoreErrorContext::operator=(const ObLogRestore
   return *this;
 }
 
-void ObRemoteFetchContext::reset()
+void ObRestoreLogContext::reset()
 {
-  issued_ = false;
-  last_fetch_ts_ = OB_INVALID_TIMESTAMP;
-  max_submit_lsn_.reset();
-  max_fetch_lsn_.reset();
-  error_context_.reset();
+  seek_done_ = false;
+  lsn_ = palf::LSN(palf::LOG_INVALID_LSN_VAL);
 }
 
 } // namespace logservice

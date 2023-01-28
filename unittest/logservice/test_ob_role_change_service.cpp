@@ -151,6 +151,11 @@ public:
     new_proposal_id_++;
     return OB_SUCCESS;
   }
+  virtual int get_begin_lsn(palf::LSN &begin_lsn) const
+  {
+    begin_lsn = LSN(1, 0);
+    return OB_SUCCESS;
+  }
   virtual int get_end_lsn(palf::LSN &end_lsn) const
   {
     end_lsn = LSN(1, 0);

@@ -683,7 +683,8 @@ int ObAllVirtualProxySchema::fill_tenant_servers_(
         sql_port,
         replica_type,
         property,
-        restore_status))) {
+        restore_status,
+        0 /*proposal_id*/))) {
       LOG_WARN("fail to init replica location", KR(ret), K(server), K(sql_port), K(replica_type));
     } else if (OB_FAIL(tenant_server.set_location(replica_location))) {
       LOG_WARN("fail to init tenant_server", KR(ret), K(replica_location));

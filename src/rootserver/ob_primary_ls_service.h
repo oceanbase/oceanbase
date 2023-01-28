@@ -141,7 +141,9 @@ public:
   //some ls not in __all_ls, but in __all_ls_status 
   //it need delete by gc, no need process it anymore.
   //check the ls status, and delete no need ls
-  int process_ls_status_missmatch();
+  int process_ls_status_missmatch(
+      const bool lock_sys_ls,
+      const share::ObTenantSwitchoverStatus &working_sw_status);
   
   // need create or delete new ls group
   int check_ls_group_match_unitnum();
@@ -161,7 +163,7 @@ public:
   int get_ls_status_info(const share::ObLSID &id, share::ObLSStatusInfo &info,
                          int64_t &info_index) const;
   //process dropping tenant, set status to tenant_dropping in __all_ls
-  int drop_tenant();
+  int drop_tenant(const share::ObTenantSwitchoverStatus &working_sw_status);
   //for recovery tenant, create new ls according to ls_id and ls_group_id
   int create_new_ls_for_recovery(const share::ObLSID &ls_id,
                                     const uint64_t ls_group_id,
@@ -189,15 +191,14 @@ public:
   static int try_update_ls_primary_zone_(const share::ObLSPrimaryZoneInfo &primary_zone_info,
                                   const common::ObZone &new_primary_zone,
                                   const common::ObSqlString &zone_priority);
-
-
-private:
-  int construct_ls_status_machine_(
+  static int construct_ls_status_machine_(
       const share::ObLSStatusInfoIArray &statua_info_array,
       const share::ObLSAttrIArray &ls_array,
       common::ObIArray<ObLSStatusMachineParameter> &status_machine_array);
-  int fix_ls_status_(const ObLSStatusMachineParameter &status_machine);
 
+private:
+  int fix_ls_status_(const ObLSStatusMachineParameter &status_machine,
+                     const share::ObTenantSwitchoverStatus &working_sw_status);
   // get from __all_ls_status and __all_ls
   int gather_all_ls_info_();
 
@@ -217,20 +218,26 @@ private:
   // get the primary zone not in ls group
   int get_next_primary_zone_(const bool is_recovery, const ObLSGroupInfo &group_info,
       ObZone &primary_zone);
-  int create_new_ls_(const share::ObLSStatusInfo &ls_info);
+  int create_new_ls_(const share::ObLSStatusInfo &ls_info,
+                     const share::ObTenantSwitchoverStatus &working_sw_status);
 
   // drop ls group info
   int try_drop_ls_of_deleting_unit_group_(const ObUnitGroupInfo &info);
-  int drop_ls_(const share::ObLSStatusInfo &ls_info);
-  int do_drop_ls_(const share::ObLSStatusInfo &ls_info);
-  int do_tenant_drop_ls_(const share::ObLSStatusInfo &ls_info);
+  int drop_ls_(const share::ObLSStatusInfo &ls_info,
+               const share::ObTenantSwitchoverStatus &working_sw_status);
+  int do_drop_ls_(const share::ObLSStatusInfo &ls_info,
+                  const share::ObTenantSwitchoverStatus &working_sw_status);
+  int do_tenant_drop_ls_(const share::ObLSStatusInfo &ls_info,
+                         const share::ObTenantSwitchoverStatus &working_sw_status);
   int do_create_ls_(const share::ObLSStatusInfo &info, const share::SCN &create_scn);
-  int sys_ls_tenant_drop_(const share::ObLSStatusInfo &info);
+  int sys_ls_tenant_drop_(const share::ObLSStatusInfo &info,
+                          const share::ObTenantSwitchoverStatus &working_sw_status);
   int check_sys_ls_can_offline_(bool &can_offline);
   int check_ls_empty_(const share::ObLSStatusInfo &info, bool &empty);
   int check_ls_can_offline_by_rpc_(const share::ObLSStatusInfo &info,
       bool &can_offline);
-  int process_ls_status_after_created_(const share::ObLSStatusInfo &info);
+  int process_ls_status_after_created_(const share::ObLSStatusInfo &info,
+                                       const share::ObTenantSwitchoverStatus &working_sw_status);
 
 private:
   static int set_ls_to_primary_zone(const common::ObIArray<common::ObZone> &primary_zone_array,
@@ -266,7 +273,7 @@ class ObTenantThreadHelper : public lib::TGRunnable,
   public logservice::ObIRoleChangeSubHandler
 {
 public:
-  ObTenantThreadHelper() : tg_id_(-1), thread_cond_(), is_created_(false), thread_name_("") {}
+  ObTenantThreadHelper() : tg_id_(-1), thread_cond_(), is_created_(false), is_first_time_to_start_(true), thread_name_("") {}
   virtual ~ObTenantThreadHelper() {}
   virtual void do_work() = 0;
   virtual void run1() override;
@@ -295,6 +302,7 @@ protected:
 private:
   common::ObThreadCond thread_cond_;
   bool is_created_;
+  bool is_first_time_to_start_;
   const char* thread_name_;
 };
 

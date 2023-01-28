@@ -241,10 +241,11 @@ int ObSimpleArchive::check_archive_progress(const uint64_t tenant_id, const bool
     EXPECT_EQ(true, nullptr != ls);
     while (true) {
       palf::LSN lsn(0);
+      SCN scn;
       bool force_wait = false;
       bool ignore = false;
       ObArchivePersistValue *value = nullptr;
-      ret = MTL(archive::ObArchiveService*)->get_ls_archive_progress(ls->get_ls_id(), lsn, force_wait, ignore);
+      ret = MTL(archive::ObArchiveService*)->get_ls_archive_progress(ls->get_ls_id(), lsn, scn, force_wait, ignore);
       EXPECT_EQ(OB_SUCCESS, ret);
       ret = MTL(archive::ObArchiveService*)->persist_mgr_.map_.get(ls->get_ls_id(), value);
       EXPECT_EQ(OB_SUCCESS, ret);

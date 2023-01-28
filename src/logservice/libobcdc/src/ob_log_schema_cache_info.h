@@ -16,13 +16,17 @@
 #define OCEANBASE_LIBOBCDC_SCHEMA_CACHE_INFO_H__
 
 #include "share/ob_errno.h"                               // OB_SUCCESS
-#include "share/schema/ob_table_schema.h"                 // ObTableSchema, ColumnIdxHashArray
+#include "share/schema/ob_table_schema.h"                 // ColumnIdxHashArray
 #include "common/object/ob_object.h"                      // ObObjMeta
 #include "common/ob_accuracy.h"                           // ObAccuracy
 #include "lib/container/ob_array_helper.h"
 
 namespace oceanbase
 {
+namespace datadict
+{
+class ObDictTableMeta;
+}
 namespace libobcdc
 {
 class ObObj2strHelper;
@@ -52,10 +56,11 @@ public:
 public:
   // Common column initialization interface
   // allocator is used to allocate memory for orig_default_value_str, consistent with release_mem
+  template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
   int init(
       const uint64_t column_id,
-      const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObColumnSchemaV2 &column_table_schema,
+      const TABLE_SCHEMA &table_schema,
+      const COLUMN_SCHEMA &column_table_schema,
       const int16_t column_stored_idx,
       const bool is_usr_column,
       const int16_t usr_column_idx,
@@ -120,18 +125,20 @@ public:
       K_(is_rowkey));
 
 private:
+  template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
   int get_column_ori_default_value_(
-      const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObColumnSchemaV2 &column_table_schema,
+      const TABLE_SCHEMA &table_schema,
+      const COLUMN_SCHEMA &column_table_schema,
       const int16_t column_idx,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       ObObj2strHelper &obj2str_helper,
       common::ObIAllocator &allocator,
       common::ObString *&str);
 
+  template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
   int init_extended_type_info_(
-      const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObColumnSchemaV2 &column_table_schema,
+      const TABLE_SCHEMA &table_schema,
+      const COLUMN_SCHEMA &column_table_schema,
       const int16_t column_idx,
       common::ObIAllocator &allocator);
 
@@ -163,8 +170,12 @@ class ObLogRowkeyInfo
 public:
   ObLogRowkeyInfo();
   ~ObLogRowkeyInfo();
-  int init(common::ObIAllocator &allocator,
-      const int64_t size);
+  int init(
+      common::ObIAllocator &allocator,
+      const share::schema::ObTableSchema &table_schema);
+  int init(
+      common::ObIAllocator &allocator,
+      const datadict::ObDictTableMeta &table_schema);
   void destroy();
   // Before destructuring, you need to call release_mem to release the memory of the silent column_id_array.
   void release_mem(common::ObIAllocator &allocator);
@@ -186,6 +197,10 @@ public:
 
 public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
+private:
+  int do_init_(
+      common::ObIAllocator &allocator,
+      const int64_t size);
 
 private:
   int64_t              size_;
@@ -222,7 +237,8 @@ public:
   virtual ~TableSchemaInfo();
 
 public:
-  int init(const share::schema::ObTableSchema *table_schema);
+  template<class TABLE_SCHEMA>
+  int init(const TABLE_SCHEMA *table_schema);
   void destroy();
 
   common::ObIAllocator &get_allocator() { return allocator_; }
@@ -249,9 +265,10 @@ public:
   inline const ColumnSchemaInfo *get_column_schema_array() const { return column_schema_array_; }
 
   // init column schema info
+  template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
   int init_column_schema_info(
-      const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObColumnSchemaV2 &column_table_schema,
+      const TABLE_SCHEMA &table_schema,
+      const COLUMN_SCHEMA &column_table_schema,
       const int16_t column_stored_idx,
       const bool is_usr_column,
       const int16_t usr_column_idx,
@@ -289,7 +306,8 @@ public:
       K_(column_schema_array_cnt));
 
 private:
-  int init_rowkey_info_(const share::schema::ObTableSchema *table_schema);
+  template<class TABLE_SCHEMA>
+  int init_rowkey_info_(const TABLE_SCHEMA *table_schema);
   int init_user_column_idx_array_(const int64_t cnt);
   void destroy_user_column_idx_array_();
   int init_column_schema_array_(const int64_t cnt);

@@ -81,6 +81,7 @@ int ElectionImpl::init_and_start(const int64_t id,
                                  common::ObOccamTimer *election_timer,
                                  ElectionMsgSender *msg_handler,
                                  const common::ObAddr &self_addr,
+                                 const uint64_t inner_priority_seed,/*smaller value has higher priority*/
                                  const int64_t restart_counter,
                                  const ObFunction<int(const int64_t, const ObAddr &)> &prepare_change_leader_cb,
                                  const ObFunction<void(ElectionImpl *, common::ObRole, common::ObRole, RoleChangeReason)> &role_change_cb)
@@ -104,6 +105,7 @@ int ElectionImpl::init_and_start(const int64_t id,
     id_ = id;
     msg_handler_ = msg_handler;
     self_addr_ = self_addr;
+    inner_priority_seed_ = inner_priority_seed;
     if (CLICK_FAIL(proposer_.start())) {
       LOG_INIT(ERROR, "proposer start failed");
     } else if (CLICK_FAIL(acceptor_.start())) {
@@ -233,13 +235,17 @@ int ElectionImpl::handle_message(const ElectionAcceptRequestMsg &msg)
 {
   const_cast<ElectionAcceptRequestMsg &>(msg).set_process_ts();
   ELECT_TIME_GUARD(500_ms);
-  #define PRINT_WRAPPER KR(ret), K(*this), K(msg), K(us_to_expired)
+  #define PRINT_WRAPPER KR(ret), K(msg), K(us_to_expired)
   int ret = common::OB_SUCCESS;
   int64_t us_to_expired = 0;
   {
     LockGuard lock_guard(lock_);
     msg_counter_.add_received_count(msg);
     CHECK_ELECTION_INIT_AND_START();
+    if (msg.get_ballot_number() > proposer_.ballot_number_) {
+      proposer_.advance_ballot_number_and_reset_related_states_(msg.get_ballot_number(),
+                                                                "receive bigger accept request");
+    }
     acceptor_.on_accept_request(msg, &us_to_expired);
   }
   if (OB_LIKELY(us_to_expired > 0)) {

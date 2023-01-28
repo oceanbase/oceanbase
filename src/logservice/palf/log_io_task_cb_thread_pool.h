@@ -19,7 +19,7 @@ namespace oceanbase
 {
 namespace palf
 {
-class PalfEnvImpl;
+class IPalfEnvImpl;
 class LogIOTaskCbThreadPool : public lib::TGTaskHandler
 {
 public:
@@ -27,7 +27,8 @@ public:
   ~LogIOTaskCbThreadPool();
 
 public:
-  int init(PalfEnvImpl *palf_env_impl);
+  int init(const int64_t log_io_cb_num,
+           IPalfEnvImpl *palf_env_impl);
   int start();
   int stop();
   int wait();
@@ -45,7 +46,7 @@ private:
 
 private:
   int tg_id_;
-  PalfEnvImpl *palf_env_impl_;
+  IPalfEnvImpl *palf_env_impl_;
   bool is_inited_;
 };
 } // end namespace palf

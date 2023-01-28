@@ -172,7 +172,7 @@ public:
   int unregister_file_size_cb();
   void close_palf_handle();
   //最大连续回调位点
-  int get_min_unapplied_scn(share::SCN &scn);
+  int get_max_applied_scn(share::SCN &scn);
   int stat(LSApplyStat &stat) const;
   int handle_drop_cb();
   int diagnose(ApplyDiagnoseInfo &diagnose_info);
@@ -281,7 +281,7 @@ public:
                     palf::LSN &end_lsn);
   int switch_to_leader(const share::ObLSID &id, const int64_t proposal_id);
   int switch_to_follower(const share::ObLSID &id);
-  int get_min_unapplied_scn(const share::ObLSID &id, share::SCN &scn);
+  int get_max_applied_scn(const share::ObLSID &id, share::SCN &scn);
   int push_task(ObApplyServiceTask *task);
   int wait_append_sync(const share::ObLSID &ls_id);
   int stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func);

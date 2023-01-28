@@ -23,6 +23,7 @@
 #include "share/ob_tenant_info_proxy.h"//tenant switchover status
 #include "share/ls/ob_ls_info.h" //ObLSReplica::MemberList
 #include "share/ls/ob_ls_log_stat_info.h" //ObLSLogStatInfo
+#include "share/ls/ob_ls_recovery_stat_operator.h"  //ObLSRecoveryStat
 
 namespace oceanbase
 {
@@ -64,6 +65,7 @@ bool ls_is_dropping_status(const ObLSStatus &status);
 bool ls_is_wait_offline_status(const ObLSStatus &status);
 bool is_valid_status_in_ls(const ObLSStatus &status);
 bool ls_is_create_abort_status(const ObLSStatus &status);
+bool ls_need_create_abort_status(const ObLSStatus &status);
 bool ls_is_pre_tenant_dropping_status(const ObLSStatus &status);
 struct ObLSStatusInfo
 {
@@ -105,9 +107,18 @@ struct ObLSStatusInfo
   {
     return ls_is_create_abort_status(status_);
   }
+  bool ls_need_create_abort() const
+  {
+    return ls_need_create_abort_status(status_);
+  }
   bool ls_is_pre_tenant_dropping() const
   {
     return ls_is_pre_tenant_dropping_status(status_);
+  }
+
+  ObLSStatus get_status() const
+  {
+    return status_;
   }
 
   int assign(const ObLSStatusInfo &other);
@@ -173,7 +184,6 @@ struct ObLSPrimaryZoneInfo
   {
     return zone_priority_;
   }
-
   int assign(const ObLSPrimaryZoneInfo &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_group_id), K_(ls_id), K_(primary_zone), K_(zone_priority));
 private:
@@ -206,18 +216,22 @@ public:
    * @param[in] ls_info: ls info
    * @param[in] create_ls_scn: ls's create scn
    * @param[in] zone_priority: for __all_ls_election_reference_info
+   * @param[in] working_sw_status only support working on specified switchover status
    * @param[in] trans:*/
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
                             const SCN &current_tenant_scn,
                             const common::ObString &zone_priority,
+                            const share::ObTenantSwitchoverStatus &working_sw_status,
                             ObMySQLTransaction &trans) override;
   /*
    * description: override of ObLSLifeIAgent
    * @param[in] tenant_id
    * @param[in] ls_id
+   * @param[in] working_sw_status only support working on specified switchover status
    * @param[in] trans:*/
   virtual int drop_ls(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) override;
   /*
    * description: for primary cluster set ls to wait offline from tenant_dropping or dropping status 
@@ -225,12 +239,14 @@ public:
    * @param[in] ls_id: need delete ls
    * @param[in] ls_status: tenant_dropping or dropping status 
    * @param[in] drop_scn: there is no user data after drop_scn except offline
+   * @param[in] working_sw_status only support working on specified switchover status
    * @param[in] trans
    * */
   virtual int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
                       const SCN &drop_scn,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) override;
   /*
    * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 
@@ -253,24 +269,13 @@ public:
    * @param[in] ls_id
    * @param[in] old_status
    * @param[in] new_status
-   * @param[in] tenant_switchover_status
+   * @param[in] working_sw_status only support working on specified switchover status
    * @param[in] client: sql client or trans*/
   int update_ls_status(const uint64_t tenant_id, const ObLSID &id,
                        const ObLSStatus &old_status,
                        const ObLSStatus &new_status, 
-                       const share::ObTenantSwitchoverStatus &switch_status,
+                       const ObTenantSwitchoverStatus &working_sw_status,
                        ObISQLClient &client);
- /*
-   * description: update ls's status 
-   * @param[in] tenant_id
-   * @param[in] ls_id
-   * @param[in] old_status
-   * @param[in] new_status
-   * @param[in] trans*/
-  int update_ls_status_in_trans(const uint64_t tenant_id, const ObLSID &id,
-                       const ObLSStatus &old_status,
-                       const ObLSStatus &new_status, 
-                       ObMySQLTransaction &trans);
 
   /*
    * description: update ls init member list while first create ls
@@ -282,6 +287,31 @@ public:
                               const ObMemberList &member_list,
                               ObISQLClient &client);
   int get_all_ls_status_by_order(const uint64_t tenant_id,
+                                 ObLSStatusInfoIArray &ls_array,
+                                 ObISQLClient &client);
+  /**
+   * @description:
+   *    get ls list from all_ls_status order by tenant_id, ls_id for switchover tenant
+   *    if ls status is OB_LS_TENANT_DROPPING or OB_LS_PRE_TENANT_DROPPING
+   *       return OB_TENANT_HAS_BEEN_DROPPED
+   *
+   *    if ls status is OB_LS_CREATING or OB_LS_CREATED
+   *       if (ignore_need_create_abort)
+   *          ignore ls
+   *       else
+   *          return OB_ERR_UNEXPECTED
+   *
+   *    if ls status is OB_LS_CREATE_ABORT
+   *       ignore ls
+   *
+   * @param[in] tenant_id
+   * @param[in] ignore_need_create_abort
+   * @param[out] ls_array returned ls list
+   * @param[in] client
+   * @return return code
+   */
+  int get_all_ls_status_by_order_for_switch_tenant(const uint64_t tenant_id,
+                                 const bool ignore_need_create_abort,
                                  ObLSStatusInfoIArray &ls_array,
                                  ObISQLClient &client);
   int get_ls_init_member_list(const uint64_t tenant_id, const ObLSID &id,
@@ -299,6 +329,20 @@ public:
   int get_tenant_primary_zone_info_array(const uint64_t tenant_id,
                                          ObLSPrimaryZoneInfoIArray &primary_zone_info_array,
                                          ObISQLClient &client);
+
+  /**
+   * @description:
+   *    set ls status to create abort which is in OB_LS_CREATED, OB_LS_CREATING
+   *    to avoid concurrent, only do this when status specified does not change
+   * @param[in] tenant_id
+   * @param[in] status
+   * @param[in] client
+   */
+  int create_abort_ls_in_switch_tenant(
+      const uint64_t tenant_id,
+      const share::ObTenantSwitchoverStatus &status,
+      const int64_t switchover_epoch,
+      ObISQLClient &client);
 
   ////////////////////////////////////////////////////////////////////////////////
   // Get all ls paxos from __all_virtual_ls_status and __all_virtual_log_stat except 
@@ -423,6 +467,21 @@ private:
       const common::ObIArray<ObAddr> &to_stop_servers,
       common::ObIArray<ObAddr> &valid_servers);
   int construct_ls_leader_info_sql_(common::ObSqlString &sql);
+
+ /*
+   * description: update ls's status, can not do this when switchover tenant role
+   * @param[in] tenant_id
+   * @param[in] ls_id
+   * @param[in] old_status
+   * @param[in] new_status
+   * @param[in] trans*/
+  int update_ls_status_in_trans_(
+      const uint64_t tenant_id,
+      const ObLSID &id,
+      const ObLSStatus &old_status,
+      const ObLSStatus &new_status,
+      ObMySQLTransaction &trans);
+
 private:
   const int64_t MAX_ERROR_LOG_PRINT_SIZE = 1024;
 };

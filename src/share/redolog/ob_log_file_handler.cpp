@@ -11,16 +11,17 @@
  */
 
 #define USING_LOG_PREFIX COMMON
+#include "common/ob_clock_generator.h"
+#include "lib/allocator/ob_malloc.h"
+#include "lib/oblog/ob_log.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "share/config/ob_server_config.h"
-#include "share/redolog/ob_log_file_handler.h"
 #include "share/io/ob_io_manager.h"
 #include "share/io/ob_io_struct.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/utility/ob_tracepoint.h"
+#include "share/redolog/ob_log_file_handler.h"
+#include "share/redolog/ob_log_file_reader.h"
 #include "share/redolog/ob_log_open_callback.h"
 #include "share/redolog/ob_log_write_callback.h"
-#include "share/redolog/ob_log_file_reader.h"
 
 namespace oceanbase
 {
@@ -48,8 +49,8 @@ ObLogFileHandler::ObLogFileHandler()
     io_fd_(),
     file_group_(),
     file_size_(0),
-    is_disk_warning_(false),
-    tenant_id_(OB_INVALID_TENANT_ID)
+    tenant_id_(OB_INVALID_TENANT_ID),
+    pwrite_ts_(0)
 {
 }
 
@@ -74,7 +75,7 @@ int ObLogFileHandler::init(
     tenant_id_ = tenant_id;
     log_dir_ = log_dir;
     file_size_ = file_size;
-    is_disk_warning_ = false;
+    pwrite_ts_ = 0;
   }
 
   if (OB_FAIL(ret)) {
@@ -102,8 +103,8 @@ void ObLogFileHandler::destroy()
   io_fd_.reset();
   file_group_.destroy();
   file_size_ = 0;
-  is_disk_warning_ = false;
   is_inited_ = false;
+  pwrite_ts_ = 0;
   LOG_DEBUG("log file handler destroyed");
 }
 
@@ -392,6 +393,8 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
   } else {
     int64_t retry_cnt = 0;
     int64_t write_size = 0;
+    const int64_t start_ts = ObClockGenerator::getClock();
+    ATOMIC_STORE(&pwrite_ts_, start_ts);
     do {
       if (OB_FAIL(THE_IO_DEVICE->pwrite(io_fd_, offset, size, buf, write_size))) {
         retry_cnt ++;
@@ -402,6 +405,7 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
         }
       }
     } while (OB_FAIL(ret));
+    ATOMIC_STORE(&pwrite_ts_, 0);
   }
 
   return ret;

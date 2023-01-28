@@ -75,7 +75,9 @@ private:
  //get log iterator by start_scn
  int seek_log_iterator_(const share::SCN &syn_scn,
                         palf::PalfBufferIterator &iterator);
- int process_ls_log_(const share::SCN &start_scn,palf::PalfBufferIterator &iterator);
+ int process_ls_log_(const ObAllTenantInfo &tenant_info,
+                     share::SCN &start_scn,
+                     palf::PalfBufferIterator &iterator);
  int process_upgrade_log_(const transaction::ObTxBufferNode &node);
  int process_gc_log_(logservice::ObGCLSLog &gc_log,
                      const share::SCN &syn_scn);
@@ -92,9 +94,7 @@ private:
  //wait other ls is larger than sycn ts
  int check_valid_to_operator_ls_(const share::ObLSAttr &ls_attr,
                                  const share::SCN &syn_scn);
- int check_can_do_recovery_();
- //check restore finish and update sync scn to recovery_unitl_scn
- int update_sys_ls_restore_finish_();
+ int check_can_do_recovery_(const ObAllTenantInfo &tenant_info);
  //readable scn need report
  int report_sys_ls_recovery_stat_(const share::SCN &sync_scn);
  void try_tenant_upgrade_end_();

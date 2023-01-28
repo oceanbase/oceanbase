@@ -27,6 +27,7 @@ public:
   virtual ~LogChecksum() {}
 public:
   int init(const int64_t id, const int64_t accum_checksum);
+  void destroy();
   virtual int acquire_accum_checksum(const int64_t data_checksum,
                                      int64_t &accum_checksum);
   virtual int verify_accum_checksum(const int64_t data_checksum,

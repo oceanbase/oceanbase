@@ -1712,7 +1712,8 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_BACKUP_DATABASE != basic_stmt->get_stmt_type() && 
              stmt::T_BACKUP_MANAGE != basic_stmt->get_stmt_type() &&
              stmt::T_BACKUP_CLEAN != basic_stmt->get_stmt_type() &&
-             stmt::T_DELETE_POLICY != basic_stmt->get_stmt_type()) {
+             stmt::T_DELETE_POLICY != basic_stmt->get_stmt_type() &&
+             stmt::T_RECOVER != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation",
              K(ret), "stmt type", basic_stmt->get_stmt_type());

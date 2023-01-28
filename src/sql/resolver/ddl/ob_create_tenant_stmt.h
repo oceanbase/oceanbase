@@ -42,6 +42,7 @@ public:
   void set_if_not_exist(const bool is_exist);
   void set_charset_type(const common::ObCharsetType type);
   void set_collation_type(const common::ObCollationType type);
+  void set_enable_arbitration_service(const bool enable_arbitration_service);
   void set_read_only(const bool read_only)
   {
     create_tenant_arg_.tenant_schema_.set_read_only(read_only);

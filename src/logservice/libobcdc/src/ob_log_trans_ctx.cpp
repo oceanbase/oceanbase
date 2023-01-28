@@ -500,6 +500,8 @@ int TransCtx::add_ready_participant_(
       } else if (OB_FAIL(part_trans_task.parse_multi_data_source_data())) {
         // parse multi_data_source_data for served part_trans_task.
         LOG_ERROR("parse_multi_data_source_data failed", KR(ret), K(part_trans_task));
+      } else if (OB_FAIL(part_trans_task.parse_multi_data_source_data_for_ddl("Sequencer"))) {
+        LOG_ERROR("parse_multi_data_source_data_for_ddl failed", KR(ret), K(part_trans_task));
       }
       // If the partition transaction is in the participant list, add it to the READY list
       else {

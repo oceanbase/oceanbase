@@ -29,9 +29,14 @@ using namespace oceanbase::share;
 using namespace oceanbase::common::sqlclient;
 using namespace oceanbase::share::schema;
 
-ObCompatModeGetter::ObCompatModeGetter() : id_mode_map_(), sql_proxy_(NULL), is_inited_(false)
+ObCompatModeGetter::ObCompatModeGetter() :
+  id_mode_map_(),
+  sql_proxy_(NULL),
+  is_inited_(false),
+  is_obcdc_direct_fetching_archive_log_mode_(false)
 {
 }
+
 ObCompatModeGetter::~ObCompatModeGetter()
 {
   destroy();
@@ -134,6 +139,7 @@ int ObCompatModeGetter::check_is_oracle_mode_with_table_id(
 int ObCompatModeGetter::init(common::ObMySQLProxy *proxy)
 {
   int ret = OB_SUCCESS;
+
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
   } else if (OB_FAIL(id_mode_map_.create(bucket_num,
@@ -142,8 +148,28 @@ int ObCompatModeGetter::init(common::ObMySQLProxy *proxy)
     LOG_WARN("create hash table failed", K(ret));
   } else {
     sql_proxy_ = proxy;
+    is_obcdc_direct_fetching_archive_log_mode_ = false;
     is_inited_ = true;
   }
+
+  return ret;
+}
+
+int ObCompatModeGetter::init_for_obcdc()
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+  } else if (OB_FAIL(id_mode_map_.create(bucket_num,
+        ObModIds::OB_HASH_BUCKET_TENANT_COMPAT_MODE,
+        ObModIds::OB_HASH_NODE_TENANT_COMPAT_MODE))) {
+    LOG_WARN("create hash table failed", K(ret));
+  } else {
+    is_obcdc_direct_fetching_archive_log_mode_ = true;
+    is_inited_ = true;
+  }
+
   return ret;
 }
 
@@ -158,6 +184,7 @@ int ObCompatModeGetter::get_tenant_compat_mode(const uint64_t tenant_id, lib::Wo
 {
   int ret = OB_SUCCESS;
   ObCompatibilityMode tmp_mode = ObCompatibilityMode::MYSQL_MODE;
+
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", K(ret), K(tenant_id), K(lbt()));
@@ -168,46 +195,51 @@ int ObCompatModeGetter::get_tenant_compat_mode(const uint64_t tenant_id, lib::Wo
   } else if (is_meta_tenant(tenant_id)) {
     mode = lib::Worker::CompatMode::MYSQL;
   } else if (OB_HASH_NOT_EXIST == (ret = id_mode_map_.get_refactored(tenant_id, mode))) {
-    bool is_exist = false;
-    int overwrite = 1;
+    if (is_obcdc_direct_fetching_archive_log_mode_) {
+      // do nothing, return OB_HASH_NOT_EXIST
+    } else {
+      bool is_exist = false;
+      int overwrite = 1;
 
-    if (! ObSchemaService::g_liboblog_mode_) {
-      //先从本地tenant信息里拿
-      if (OB_FAIL(GCTX.omt_->get_compat_mode(tenant_id, mode))) {
-        if (ret != OB_TENANT_NOT_IN_SERVER) {
-          LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
+      if (! ObSchemaService::g_liboblog_mode_) {
+        //先从本地tenant信息里拿
+        if (OB_FAIL(GCTX.omt_->get_compat_mode(tenant_id, mode))) {
+          if (ret != OB_TENANT_NOT_IN_SERVER) {
+            LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
+          } else {
+            ret = OB_SUCCESS;
+          }
         } else {
-          ret = OB_SUCCESS;
+          is_exist = true;
+          ret = id_mode_map_.set_refactored(tenant_id, mode, overwrite);
         }
       } else {
-        is_exist = true;
-        ret = id_mode_map_.set_refactored(tenant_id, mode, overwrite);
+        ret = OB_SUCCESS;
       }
-    } else {
-      ret = OB_SUCCESS;
-    }
 
-    //如果本地拿不到，再去schema里拿
-    if (OB_SUCC(ret) && !is_exist) {
-      if (OB_ISNULL(sql_proxy_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sql_proxy is null", K(ret), K(lbt()));
-      } else if (OB_FAIL(ObSchemaServiceSQLImpl::fetch_tenant_compat_mode(*sql_proxy_, tenant_id, tmp_mode))) {
-        LOG_WARN("failed to fetch tenant compat mode", K(ret), K(tenant_id), K(lbt()));
-      } else {
-        if (tmp_mode == ObCompatibilityMode::MYSQL_MODE) {
-          mode = lib::Worker::CompatMode::MYSQL;
-          ret = id_mode_map_.set_refactored(tenant_id, mode, overwrite);
-        } else if (tmp_mode == ObCompatibilityMode::ORACLE_MODE) {
-          mode = lib::Worker::CompatMode::ORACLE;
-          ret = id_mode_map_.set_refactored(tenant_id, mode, overwrite);
-        } else {
+      //如果本地拿不到，再去schema里拿
+      if (OB_SUCC(ret) && !is_exist) {
+        if (OB_ISNULL(sql_proxy_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected compat mode", K(tmp_mode), K(ret), K(lbt()));
+          LOG_WARN("sql_proxy is null", K(ret), K(lbt()));
+        } else if (OB_FAIL(ObSchemaServiceSQLImpl::fetch_tenant_compat_mode(*sql_proxy_, tenant_id, tmp_mode))) {
+          LOG_WARN("failed to fetch tenant compat mode", K(ret), K(tenant_id), K(lbt()));
+        } else {
+          if (tmp_mode == ObCompatibilityMode::MYSQL_MODE) {
+            mode = lib::Worker::CompatMode::MYSQL;
+            ret = id_mode_map_.set_refactored(tenant_id, mode, overwrite);
+          } else if (tmp_mode == ObCompatibilityMode::ORACLE_MODE) {
+            mode = lib::Worker::CompatMode::ORACLE;
+            ret = id_mode_map_.set_refactored(tenant_id, mode, overwrite);
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected compat mode", K(tmp_mode), K(ret), K(lbt()));
+          }
         }
       }
     }
   }
+
   return ret;
 }
 

@@ -89,20 +89,40 @@ public:
    */
   void detect_recover();
   /**
+   * @description: detect whether failure has occured
+   * @param {*}
+   * @return {*}
+   */
+  void detect_failure();
+  /**
    * @description: 定期探测与租户下的其他副本的网络连接是否正常
    * @param {*}
    * @return {*}
    * @Date: 2022-01-04 21:12:16
    */
   void detect_connection_status();
+  bool is_clog_disk_has_fatal_error();
+  bool is_data_disk_has_fatal_error();
 private:
   int insert_event_to_table_(const FailureEvent &event, const ObFunction<bool()> &recover_operation, ObString info);
+  void detect_palf_hang_failure_();
+  void detect_slog_writter_hang_failure_();
+  void detect_sstable_io_failure_();
+  void detect_palf_disk_full_();
 private:
+  // default time threshold for clog disk io hang detection is 5s
+  // TODO: this value should be a configuration
+  static const int64_t IO_HANG_TIME_THRESHOLD_US = 5 * 1000 * 1000;
   common::ObArray<FailureEvent> event_;
   common::ObArray<ObFunction<bool()>> recover_detect_operation_;
   common::ObArray<common::ObAddr> tenant_server_list_;
-  common::ObOccamTimerTaskRAIIHandle task_handle_;
+  common::ObOccamTimerTaskRAIIHandle failure_task_handle_;
+  common::ObOccamTimerTaskRAIIHandle recovery_task_handle_;
   ObLeaderCoordinator *coordinator_;
+  bool has_add_clog_hang_event_;
+  bool has_add_slog_hang_event_;
+  bool has_add_sstable_hang_event_;
+  bool has_add_clog_full_event_;
   ObSpinLock lock_;
 };
 

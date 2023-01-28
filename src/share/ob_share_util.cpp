@@ -16,6 +16,7 @@
 #include "lib/worker.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/oblog/ob_log_module.h"
+#include "share/ob_cluster_version.h" // for GET_MIN_DATA_VERSION
 namespace oceanbase
 {
 using namespace common;
@@ -62,6 +63,52 @@ int ObShareUtil::get_abs_timeout(const int64_t default_timeout, int64_t &abs_tim
     LOG_WARN("fail to set default timeout ctx", KR(ret), K(default_timeout));
   } else {
     abs_timeout = ctx.get_abs_timeout();
+  }
+  return ret;
+}
+
+int ObShareUtil::check_compat_version_for_arbitration_service(
+    const uint64_t tenant_id,
+    bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
+  is_compatible = false;
+  uint64_t data_version = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret));
+  } else if (DATA_VERSION_4_1_0_0 > data_version) {
+    is_compatible = false;
+  } else if (!is_sys_tenant(tenant_id)
+             && OB_FAIL(GET_MIN_DATA_VERSION(gen_user_tenant_id(tenant_id), data_version))) {
+    LOG_WARN("fail to get user tenant data version", KR(ret), "tenant_id", gen_user_tenant_id(tenant_id));
+  } else if (!is_sys_tenant(tenant_id) && DATA_VERSION_4_1_0_0 > data_version) {
+    is_compatible = false;
+  } else if (!is_sys_tenant(tenant_id)
+             && OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), data_version))) {
+     LOG_WARN("fail to get meta tenant data version", KR(ret), "tenant_id", gen_meta_tenant_id(tenant_id));
+  } else if (!is_sys_tenant(tenant_id) && DATA_VERSION_4_1_0_0 > data_version) {
+    is_compatible = false;
+  } else {
+    is_compatible = true;
+  }
+  return ret;
+}
+
+int ObShareUtil::generate_arb_replica_num(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    int64_t &arb_replica_num)
+{
+  int ret = OB_SUCCESS;
+  arb_replica_num = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || !ls_id.is_valid()
+                  || !ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
   }
   return ret;
 }

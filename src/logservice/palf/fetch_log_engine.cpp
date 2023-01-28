@@ -17,6 +17,7 @@
 #include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "share/ob_thread_mgr.h"
 #include "share/ob_ls_id.h"
+#include "palf_env_impl.h"
 
 namespace oceanbase
 {
@@ -81,7 +82,7 @@ FetchLogEngine::FetchLogEngine()
 {}
 
 
-int FetchLogEngine::init(PalfEnvImpl *palf_env_impl,
+int FetchLogEngine::init(IPalfEnvImpl *palf_env_impl,
                          common::ObILogAllocator *alloc_mgr)
 {
   int ret = OB_SUCCESS;
@@ -203,7 +204,7 @@ void FetchLogEngine::handle(void *task)
     } else {
       palf_id = fetch_log_task->get_id();
       PALF_LOG(INFO, "handle fetch_log_task", KPC(fetch_log_task));
-      PalfHandleImplGuard guard;
+      IPalfHandleImplGuard guard;
       if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           PALF_LOG(ERROR, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));

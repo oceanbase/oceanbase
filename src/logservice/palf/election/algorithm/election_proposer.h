@@ -16,11 +16,13 @@
 #include "lib/atomic/ob_atomic.h"
 #include "lib/container/ob_array.h"
 #include "lib/net/ob_addr.h"
+#include "lib/string/ob_string.h"
 #include "logservice/palf/election/interface/election.h"
 #include "logservice/palf/election/interface/election_msg_handler.h"
 #include "logservice/palf/election/utils/election_common_define.h"
 #include "logservice/palf/election/utils/election_utils.h"
 #include "logservice/palf/election/message/election_message.h"
+#include "ob_clock_generator.h"
 
 namespace oceanbase
 {
@@ -105,6 +107,7 @@ private:
   int reschedule_or_register_prepare_task_after_(const int64_t delay_us);
   int register_renew_lease_task_();
   bool is_self_in_memberlist_() const;
+  int prepare_change_leader_to_(const ObAddr &dest_addr, const ObStringHolder &reason);
 private:
   // 抽象该数据结构以达成以下目的:
   // lease与epoch是关联的变量值，需要原子的被外界获取以用于区分leader切换的ABA场景（更严格的讲，为保证正确性，外界至少要读取到一个lease值以及一个不会比该lease值更旧的epoch值）
@@ -213,6 +216,28 @@ private:
   int64_t last_dump_proposer_info_ts_;
   int64_t last_dump_election_msg_count_state_ts_;
   int64_t record_lease_interval_;// 用于感知lease是否发生了变化
+  struct HighestPriorityMsgCache {
+    HighestPriorityMsgCache() : cached_ts_(INVALID_VALUE) {}
+    void set(const ElectionAcceptResponseMsg &rhs, const ObStringHolder &reason) {
+      cached_msg_ = rhs;
+      (void) cached_reason_.assign(reason);
+      cached_ts_ = ObClockGenerator::getRealClock();
+    }
+    void check_expired() {
+      if (cached_ts_ != INVALID_VALUE && ObClockGenerator::getRealClock() - cached_ts_ > CACHE_EXPIRATION_TIME) {
+        reset();
+      }
+    }
+    void reset() {
+      cached_ts_ = INVALID_VALUE;
+      cached_msg_.reset();
+      cached_reason_.reset();
+    }
+    TO_STRING_KV(K_(cached_msg), K_(cached_reason), KTIME_(cached_ts));
+    ElectionAcceptResponseMsg cached_msg_;// 在Leader上缓存优先级最高的副本的响应，在第二次收到该响应时触发切主，避免多次切主
+    ObStringHolder cached_reason_;
+    int64_t cached_ts_;// 缓存消息的时间点，缓存的消息具有时效性，需要在缓存失效前完成与优先级最高副本的第二次交互，超时清空
+  } highest_priority_cache_;
 };
 
 }// namespace election

@@ -1210,6 +1210,73 @@ private:
   share::SCN min_start_scn_;
 };
 
+class IterateTxSchedulerFunctor
+{
+public:
+  explicit IterateTxSchedulerFunctor(ObTxSchedulerStatIterator &tx_scheduler_stat_iter)
+   : tx_scheduler_stat_iter_(tx_scheduler_stat_iter) {}
+  bool operator()(ObTxDesc *tx_desc)
+  {
+    int tmp_ret = common::OB_SUCCESS;
+    bool bool_ret = false;
+    ObTransID tx_id;
+
+    if (OB_ISNULL(tx_desc)) {
+      tmp_ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument tx_desc", KP(tx_desc));
+    } else {
+      tx_id = tx_desc->tx_id_;
+      if (!tx_id.is_valid()) {
+        tmp_ret = OB_INVALID_ARGUMENT;
+        TRANS_LOG(WARN, "invalid argument tx_id", K(tx_id), KP(tx_desc));
+      }
+    }
+
+    if (OB_SUCCESS == tmp_ret) {
+      ObTxSchedulerStat tx_scheduler_stat;
+      ObTxPartList copy_parts;
+      ObTxSavePointList copy_savepoints;
+      if (OB_TMP_FAIL(tx_desc->get_parts_copy(copy_parts))) {
+        TRANS_LOG(WARN, "ObTxSchedulerStat get participants copy error", K(tmp_ret));
+      } else if (OB_TMP_FAIL(tx_desc->get_savepoints_copy(copy_savepoints))) {
+        TRANS_LOG(WARN, "ObTxSchedulerStat get savepoints copy error", K(tmp_ret));
+      } else if (OB_TMP_FAIL(tx_scheduler_stat.init(tx_desc->tenant_id_,
+                                                    tx_desc->addr_,
+                                                    tx_desc->sess_id_,
+                                                    tx_desc->tx_id_,
+                                                    (int64_t)tx_desc->state_,
+                                                    tx_desc->cluster_id_,
+                                                    tx_desc->xid_,
+                                                    tx_desc->coord_id_,
+                                                    copy_parts,
+                                                    tx_desc->isolation_,
+                                                    tx_desc->snapshot_version_.get_val_for_tx(true),
+                                                    tx_desc->access_mode_,
+                                                    tx_desc->op_sn_,
+                                                    tx_desc->flags_.v_,
+                                                    tx_desc->active_ts_,
+                                                    tx_desc->expire_ts_,
+                                                    tx_desc->timeout_us_,
+                                                    copy_savepoints,
+                                                    tx_desc->abort_cause_,
+                                                    tx_desc->can_elr_))) {
+        TRANS_LOG(WARN, "ObTxSchedulerStat init error", K(tmp_ret), KPC(tx_desc));
+      } else if (OB_TMP_FAIL(tx_scheduler_stat_iter_.push(tx_scheduler_stat))) {
+        TRANS_LOG(WARN, "ObTxSchedulerStatIterator push trans scheduler error", K(tmp_ret));
+      } else {
+        // do nothing
+      }
+    }
+
+    if (OB_SUCCESS == tmp_ret) {
+      bool_ret = true;
+    }
+    return bool_ret;
+  }
+private:
+  ObTxSchedulerStatIterator &tx_scheduler_stat_iter_;
+};
+
 } // transaction
 } // oceanbase
 

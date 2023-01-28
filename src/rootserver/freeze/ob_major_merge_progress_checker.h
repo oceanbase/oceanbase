@@ -63,12 +63,20 @@ public:
                            share::ObAllZoneMergeProgress &all_progress);
 
   int check_verification(const volatile bool &stop,
+                         const bool is_primary_service,
                          const share::SCN &global_broadcast_scn,
                          const int64_t expected_epoch);
 
   // @exist_uncompacted means not all table finished compaction
   // @exist_unverified means not all table finished verification
   int check_table_status(bool &exist_uncompacted, bool &exist_unverified);
+
+  // write tablet checksum and update report_scn of the table which contains first tablet of sys ls
+  int handle_table_with_first_tablet_in_sys_ls(const volatile bool &stop,
+                                               const share::SCN &global_broadcast_scn,
+                                               const int64_t expected_epoch);
+
+  void set_major_merge_start_time(const int64_t major_merge_start_us);
 
 private:
   int check_tablet(const share::ObTabletInfo &tablet_info,
@@ -105,11 +113,13 @@ private:
   share::ObLSTableOperator *lst_operator_;
   share::ObIServerTrace *server_trace_;
   // record each tablet compaction status: INITIAL/COMPACTED/FINISHED
-  hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> tablet_compaction_map_;
+  common::hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> tablet_compaction_map_;
   int64_t table_count_;
   // record each table compaction/verify status
-  hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> table_compaction_map_; // <table_id, conpaction_info>
+  common::hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> table_compaction_map_; // <table_id, conpaction_info>
+  ObTabletChecksumValidator tablet_validator_;
   ObIndexChecksumValidator index_validator_;
+  ObCrossClusterTableteChecksumValidator cross_cluster_validator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeProgressChecker);
 };
