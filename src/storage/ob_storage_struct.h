@@ -310,7 +310,8 @@ struct ObUpdateTableStoreParam
     const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
     const bool need_check_sstable = false,
     const bool allow_duplicate_sstable = false,
-    const compaction::ObMediumCompactionInfoList *medium_info_list = nullptr);
+    const compaction::ObMediumCompactionInfoList *medium_info_list = nullptr,
+    const ObMergeType merge_type = MERGE_TYPE_MAX);
 
   ObUpdateTableStoreParam( // for ddl merge task only
     const ObTableHandleV2 &table_handle,
@@ -327,7 +328,7 @@ struct ObUpdateTableStoreParam
                K_(keep_old_ddl_sstable), K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
                K_(need_check_sstable), K_(ddl_checkpoint_scn), K_(ddl_start_scn), K_(ddl_snapshot_version),
                K_(ddl_execution_id), K_(ddl_cluster_version), K_(allow_duplicate_sstable), K_(tx_data), K_(binding_info), K_(auto_inc_seq),
-               KPC_(medium_info_list));
+               KPC_(medium_info_list), "merge_type", merge_type_to_str(merge_type_));
 
   ObTableHandleV2 table_handle_;
   int64_t snapshot_version_;
@@ -352,6 +353,7 @@ struct ObUpdateTableStoreParam
   share::ObTabletAutoincSeq auto_inc_seq_;
 
   const compaction::ObMediumCompactionInfoList *medium_info_list_;
+  ObMergeType merge_type_; // set merge_type only when update tablet in compaction
 };
 
 struct ObBatchUpdateTableStoreParam final

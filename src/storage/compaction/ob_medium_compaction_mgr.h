@@ -95,7 +95,7 @@ public:
       const ObMediumCompactionInfoList *old_list,
       const ObMediumCompactionInfoList *dump_list = nullptr,
       const int64_t finish_medium_scn = 0,
-      const bool update_in_major_type_merge = false);
+      const ObMergeType merge_type = MERGE_TYPE_MAX);
 
   int init_after_check_finish(
       ObIAllocator &allocator,
@@ -124,7 +124,10 @@ public:
   {
     return (ObMediumCompactionInfo::ObCompactionType)last_compaction_type_;
   }
-  int64_t get_schedule_scn(const int64_t major_compaction_scn) const;
+  void get_schedule_scn(
+    const int64_t major_compaction_scn,
+    int64_t &schedule_scn,
+    ObMediumCompactionInfo::ObCompactionType &compaction_type) const;
 
   int get_specified_scn_info(
       const int64_t snapshot,
@@ -165,17 +168,11 @@ private:
   }
   OB_INLINE int append_list_with_deep_copy(
       const int64_t finish_scn,
-      const bool update_in_major_type_merge,
       const ObMediumCompactionInfoList &input_list)
   {
     int ret = OB_SUCCESS;
     DLIST_FOREACH_X(input_info, input_list.medium_info_list_, OB_SUCC(ret)) {
       const ObMediumCompactionInfo *medium_info = static_cast<const ObMediumCompactionInfo *>(input_info);
-      if (update_in_major_type_merge
-          && medium_info->medium_snapshot_ == finish_scn) {
-        last_compaction_type_ = medium_info->compaction_type_;
-        wait_check_medium_scn_ = finish_scn;
-      }
       if (medium_info->medium_snapshot_ > finish_scn) {
         ret = inner_deep_copy_node(*medium_info);
       }

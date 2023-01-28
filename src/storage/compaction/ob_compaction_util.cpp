@@ -21,14 +21,15 @@ const char * ObMergeTypeStr[] = {
     "MAJOR_MERGE",
     "MEDIUM_MERGE",
     "DDL_KV_MERGE",
-    "BACKFILL_TX_MERGE"
+    "BACKFILL_TX_MERGE",
+    "EMPTY_MERGE_TYPE"
 };
 
 const char *merge_type_to_str(const ObMergeType &merge_type)
 {
-  STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX) == ARRAYSIZEOF(ObMergeTypeStr), "merge type str len is mismatch");
+  STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX + 1) == ARRAYSIZEOF(ObMergeTypeStr), "merge type str len is mismatch");
   const char *str = "";
-  if (merge_type >= MERGE_TYPE_MAX || merge_type <= INVALID_MERGE_TYPE) {
+  if (merge_type > MERGE_TYPE_MAX || merge_type <= INVALID_MERGE_TYPE) {
     str = "invalid_merge_type";
   } else {
     str = ObMergeTypeStr[merge_type];

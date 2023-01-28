@@ -93,6 +93,7 @@ public:
   int gene_parallel_info(
       ObIAllocator &allocator,
       common::ObArrayArray<ObStoreRange> &paral_range);
+  static inline bool is_valid_compaction_type(const ObCompactionType type) { return MEDIUM_COMPACTION <= type && type < COMPACTION_TYPE_MAX; }
   static inline bool is_medium_compaction(const ObCompactionType type) { return MEDIUM_COMPACTION == type; }
   static inline bool is_major_compaction(const ObCompactionType type) { return MAJOR_COMPACTION == type; }
   inline bool is_major_compaction() const { return is_major_compaction((ObCompactionType)compaction_type_); }

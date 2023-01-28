@@ -1098,18 +1098,12 @@ int ObTabletMergeFinishTask::get_merged_sstable(ObTabletMergeCtx &ctx, ObSSTable
 int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  const ObStorageSchema *update_storage_schema = ctx.schema_ctx_.storage_schema_;
   ObTablet *old_tablet = ctx.tablet_handle_.get_obj();
   const ObMergeType merge_type = ctx.param_.merge_type_;
 
   if (OB_UNLIKELY(!ctx.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error of merge ctx", K(ctx));
-  } else if (is_major_merge_type(merge_type)
-      && update_storage_schema->schema_version_ > old_tablet->get_storage_schema().schema_version_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema in major can't have larger schema version than tablet", K(ret),
-        KPC(update_storage_schema), K(old_tablet->get_storage_schema()));
   } else if (is_mini_merge(merge_type) && !ctx.param_.tablet_id_.is_special_merge_tablet()) {
     // if only one medium compaction info need store, just use ObUpdateTableStoreParam
     // OR need to read from inner table to decide what need to keep after release memtable
@@ -1130,7 +1124,8 @@ int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
                                   clog_checkpoint_scn,
                                   is_minor_merge(ctx.param_.merge_type_)/*need_check_sstable*/,
                                   false/*allow_duplicate_sstable*/,
-                                  &ctx.merge_list_);
+                                  &ctx.merge_list_,
+                                  ctx.param_.get_merge_type());
     ObTablet *old_tablet = ctx.tablet_handle_.get_obj();
     ObTabletHandle new_tablet_handle;
     if (ctx.param_.tablet_id_.is_special_merge_tablet()) {

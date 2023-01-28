@@ -363,29 +363,30 @@ int ObMediumCompactionInfoList::init(common::ObIAllocator &allocator,
     const ObMediumCompactionInfoList *old_list,
     const ObMediumCompactionInfoList *dump_list,
     const int64_t finish_medium_scn/*= 0*/,
-    const bool update_in_major_type_merge/*= false*/)
+    const ObMergeType merge_type/*= MERGE_TYPE_MAX*/)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else if (FALSE_IT(allocator_ = &allocator)) {
-  } else if (nullptr != old_list && OB_FAIL(append_list_with_deep_copy(finish_medium_scn, update_in_major_type_merge, *old_list))) {
+  } else if (nullptr != old_list && OB_FAIL(append_list_with_deep_copy(finish_medium_scn, *old_list))) {
     LOG_WARN("failed to deep copy list", K(ret), K(old_list));
-  } else if (nullptr != dump_list && OB_FAIL(append_list_with_deep_copy(finish_medium_scn, update_in_major_type_merge, *dump_list))) {
+  } else if (nullptr != dump_list && OB_FAIL(append_list_with_deep_copy(finish_medium_scn, *dump_list))) {
     LOG_WARN("failed to deep copy list", K(ret), K(dump_list));
-  } else {
-    // if update_in_major_type_merge = true, will update wait_check_medium_scn in delete_medium_compaction_info
-    if (!update_in_major_type_merge && nullptr != old_list) {
-      last_compaction_type_ = old_list->last_compaction_type_;
-      wait_check_medium_scn_ = old_list->get_wait_check_medium_scn();
-    }
+  } else if (is_major_merge_type(merge_type)) { // update list after major_type_merge
+    last_compaction_type_ = is_major_merge(merge_type) ? ObMediumCompactionInfo::MAJOR_COMPACTION : ObMediumCompactionInfo::MEDIUM_COMPACTION;
+    wait_check_medium_scn_ = finish_medium_scn;
+  } else if (OB_NOT_NULL(old_list)) { // update list with old_list
+    last_compaction_type_ = old_list->last_compaction_type_;
+    wait_check_medium_scn_ = old_list->get_wait_check_medium_scn();
   }
   if (OB_SUCC(ret)) {
     compat_ = MEDIUM_LIST_VERSION;
     is_inited_ = true;
     if (medium_info_list_.get_size() > 0 || wait_check_medium_scn_ > 0) {
-      LOG_INFO("success to init list", K(ret), KPC(this), KPC(old_list));
+      LOG_INFO("success to init list", K(ret), KPC(this), KPC(old_list), K(finish_medium_scn),
+        "merge_type", merge_type_to_str(merge_type));
     }
   } else if (OB_UNLIKELY(!is_inited_)) {
     reset();
@@ -406,7 +407,7 @@ int ObMediumCompactionInfoList::init_after_check_finish(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(old_list));
   } else if (FALSE_IT(allocator_ = &allocator)) {
-  } else if (OB_FAIL(append_list_with_deep_copy(wait_check_medium_scn_, false, old_list))) {
+  } else if (OB_FAIL(append_list_with_deep_copy(wait_check_medium_scn_, old_list))) {
     LOG_WARN("failed to deep copy list", K(ret), K(wait_check_medium_scn_));
   } else {
     last_compaction_type_ = old_list.last_compaction_type_;
@@ -420,7 +421,6 @@ int ObMediumCompactionInfoList::init_after_check_finish(
   }
   return ret;
 }
-
 
 void ObMediumCompactionInfoList::reset_list()
 {
@@ -487,18 +487,22 @@ int ObMediumCompactionInfoList::get_specified_scn_info(
   return ret;
 }
 
-int64_t ObMediumCompactionInfoList::get_schedule_scn(const int64_t major_compaction_scn) const
+void ObMediumCompactionInfoList::get_schedule_scn(
+  const int64_t major_compaction_scn,
+  int64_t &schedule_scn,
+  ObMediumCompactionInfo::ObCompactionType &compaction_type) const
 {
-  int64_t ret_scn = 0;
+  schedule_scn = 0;
+  compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
   if (size() > 0) {
     const ObMediumCompactionInfo *first_medium_info = get_first_medium_info();
     if (first_medium_info->is_medium_compaction()
         || (first_medium_info->is_major_compaction() && major_compaction_scn >= first_medium_info->medium_snapshot_)) {
       // for standby cluster, receive several medium info, only schedule what scheduler have received
-      ret_scn = first_medium_info->medium_snapshot_;
+      schedule_scn = first_medium_info->medium_snapshot_;
+      compaction_type = (ObMediumCompactionInfo::ObCompactionType)first_medium_info->compaction_type_;
     }
   }
-  return ret_scn;
 }
 
 int ObMediumCompactionInfoList::inner_deep_copy_node(

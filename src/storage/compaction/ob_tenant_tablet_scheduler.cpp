@@ -982,19 +982,12 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
         if (could_major_merge && OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
             ls,
             *tablet,
-            major_frozen_scn))) {
+            major_frozen_scn,
+            true/*schedule_with_memtable*/))) {
           if (OB_EAGAIN != ret) {
             LOG_WARN("failed to schedule medium", K(tmp_ret), K(ls_id), K(tablet_id));
           }
         }
-
-        // get info from memtable to check have received new medium info
-        if (OB_TMP_FAIL(func.freeze_memtable_to_get_medium_info())) {
-          if (OB_TABLE_NOT_EXIST != tmp_ret) {
-            LOG_WARN("failed to freeze memtable", K(tmp_ret), K(ls_id), K(tablet_id));
-          }
-        }
-
         ls_merge_finish &= tablet_merge_finish;
       }
     } // end of while

@@ -35,11 +35,16 @@ public:
   static int schedule_tablet_medium_merge(
       ObLS &ls,
       ObTablet &tablet,
-      const int64_t major_frozen_scn = 0);
+      const int64_t major_frozen_scn = 0,
+      const bool schedule_with_memtable = false);
   static int get_latest_storage_schema_from_memtable(
     ObIAllocator &allocator,
     const ObIArray<ObITable *> &memtables,
     ObStorageSchema &storage_schema);
+  static int get_medium_info_list_from_memtable(
+      ObIAllocator &allocator,
+      const ObIArray<ObITable *> &memtables,
+      ObMediumCompactionInfoList &medium_list);
   static int get_palf_role(const share::ObLSID &ls_id, ObRole &role);
 
   int schedule_next_medium_for_leader(const int64_t major_snapshot);
@@ -49,8 +54,6 @@ public:
       const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE);
 
   int check_medium_finish();
-
-  int freeze_memtable_to_get_medium_info();
 
   TO_STRING_KV("ls_id", ls_.get_ls_id(), "tablet_id", tablet_.get_tablet_meta().tablet_id_);
 protected:
@@ -98,12 +101,17 @@ protected:
       ObLS &ls,
       ObTablet &tablet,
       const int64_t schedule_scn,
-      bool &need_merge);
+      const ObMediumCompactionInfo::ObCompactionType compaction_type);
   int schedule_next_medium_primary_cluster(const int64_t major_snapshot);
 
   int get_table_schema_to_merge(const int64_t schema_version, ObMediumCompactionInfo &medium_info);
 
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
+  static int get_schedule_medium_from_memtable(
+    ObTablet &tablet,
+    const int64_t major_frozen_snapshot,
+    int64_t &schedule_medium_scn,
+    ObMediumCompactionInfo::ObCompactionType &compaction_type);
   static int get_table_id(
       ObMultiVersionSchemaService &schema_service,
       const ObTabletID &tablet_id,

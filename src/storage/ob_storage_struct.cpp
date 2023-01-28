@@ -233,7 +233,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     tx_data_(),
     binding_info_(),
     auto_inc_seq_(),
-    medium_info_list_(nullptr)
+    medium_info_list_(nullptr),
+    merge_type_(MERGE_TYPE_MAX)
 {
   clog_checkpoint_scn_.set_min();
 }
@@ -248,7 +249,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const SCN clog_checkpoint_scn,
     const bool need_check_sstable,
     const bool allow_duplicate_sstable,
-    const compaction::ObMediumCompactionInfoList *medium_info_list)
+    const compaction::ObMediumCompactionInfoList *medium_info_list,
+    const ObMergeType merge_type)
   : table_handle_(table_handle),
     snapshot_version_(snapshot_version),
     clog_checkpoint_scn_(),
@@ -268,7 +270,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     tx_data_(),
     binding_info_(),
     auto_inc_seq_(),
-    medium_info_list_(medium_info_list)
+    medium_info_list_(medium_info_list),
+    merge_type_(merge_type)
 {
   clog_checkpoint_scn_ = clog_checkpoint_scn;
 }
@@ -301,7 +304,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     tx_data_(),
     binding_info_(),
     auto_inc_seq_(),
-    medium_info_list_(nullptr)
+    medium_info_list_(nullptr),
+    merge_type_(MERGE_TYPE_MAX)
 {
   clog_checkpoint_scn_.set_min();
 }

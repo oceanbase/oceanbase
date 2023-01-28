@@ -243,7 +243,7 @@ int ObTablet::init(
       param.medium_info_list_,
       // delete all medium before latest finish major snapshot
       nullptr != last_major ? last_major->get_snapshot_version() : 0,
-      update_in_major_type_merge))) {
+      param.merge_type_))) {
     LOG_WARN("failed to init medium info list", K(ret));
   } else if (OB_FAIL(build_read_info(*allocator_))) {
     LOG_WARN("failed to build read info", K(ret));

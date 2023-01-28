@@ -167,7 +167,11 @@ struct ObTabletMergeCtx
 
   int inner_init_for_mini(bool &skip_rest_operation);
   int inner_init_for_medium();
-  int init_get_medium_compaction_info(const int64_t medium_snapshot, const ObMediumCompactionInfo *&medium_info);
+  int init_get_medium_compaction_info(const int64_t medium_snapshot, ObGetMergeTablesResult &result);
+  int get_specified_medium_compaction_info_from_memtable(
+    ObIAllocator &allocator,
+    const int64_t medium_snapshot,
+    ObMediumCompactionInfo &info);
   int get_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle, const bool get_schema_on_memtable = true);
