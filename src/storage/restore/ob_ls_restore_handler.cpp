@@ -1337,7 +1337,14 @@ int ObILSRestoreState::check_restore_concurrency_limit_()
   int ret = OB_SUCCESS;
   const ObDagNetType::ObDagNetTypeEnum restore_type = ObDagNetType::DAG_NET_TYPE_RESTORE;
   ObTenantDagScheduler *scheduler = nullptr;
-  const int64_t restore_concurrency = GCONF.restore_concurrency;
+  int64_t restore_concurrency = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    restore_concurrency = tenant_config->ha_high_thread_score;
+  }
+  if (0 == restore_concurrency) {
+    restore_concurrency = OB_DEFAULT_RESTORE_CONCURRENCY;
+  }
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1352,7 +1359,6 @@ int ObILSRestoreState::check_restore_concurrency_limit_()
     const int64_t restore_dag_net_count = scheduler->get_dag_net_count(restore_type);
 
     if (restore_dag_net_count > restore_concurrency) {
-      //TODO(yanfeng) Here need same value with ObLSRestoreHandler to control limit in 4.1.
       ret = OB_REACH_SERVER_DATA_COPY_IN_CONCURRENCY_LIMIT;
       LOG_WARN("ls restore reach limit", K(ret), K(restore_concurrency), K(restore_dag_net_count));
     }

@@ -7863,6 +7863,15 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   int64_t job_id = OB_INVALID_ID;
   int64_t refreshed_schema_version = OB_INVALID_VERSION;
   ObSchemaGetterGuard schema_guard;
+  int64_t restore_concurrency = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    restore_concurrency = tenant_config->ha_high_thread_score;
+  }
+  if (0 == restore_concurrency) {
+    restore_concurrency = OB_DEFAULT_RESTORE_CONCURRENCY;
+  }
+
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -7875,7 +7884,7 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
              "in upgrade mode is not allowed", KR(ret));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW,
                    "restore tenant while in standby cluster or in upgrade mode");
-  } else if (0 == GCONF.restore_concurrency) {
+  } else if (0 == restore_concurrency) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore tenant when restore_concurrency is 0 not allowed", KR(ret));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore tenant when restore_concurrency is 0");

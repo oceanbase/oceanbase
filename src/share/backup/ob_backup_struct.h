@@ -93,6 +93,7 @@ const int64_t OB_BACKUP_INVALID_JOB_ID = 0;
 const int64_t OB_ARCHIVE_INVALID_ROUND_ID = 0;
 const int64_t OB_INVALID_DEST_ID = -1;
 const int64_t OB_MAX_BACKUP_QUERY_TIMEOUT = 60 * 1000 * 1000; // 60s
+const int64_t OB_DEFAULT_RESTORE_CONCURRENCY = 8;
 
   // TODO add tenant BACKUP_META_TIMEOUT parameters in 4.1
 static const int64_t OB_MAX_BACKUP_META_TIMEOUT = 30 * 60 * 1000 * 1000; // 30 min

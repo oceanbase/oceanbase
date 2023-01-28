@@ -161,7 +161,6 @@ rdma_io_thread_count
 recyclebin_object_expire_time
 redundancy_level
 resource_hard_limit
-restore_concurrency
 rootservice_async_task_queue_size
 rootservice_async_task_thread_count
 rootservice_list
