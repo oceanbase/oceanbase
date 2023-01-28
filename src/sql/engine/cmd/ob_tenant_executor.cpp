@@ -66,6 +66,17 @@ int ObCreateTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStmt &stmt
     const_cast<obrpc::ObCreateTenantArg&>(create_tenant_arg).ddl_stmt_str_ = first_stmt;
   }
   if (OB_FAIL(ret)) {
+  } else if (create_tenant_arg.tenant_schema_.get_arbitration_service_status() != ObArbitrationServiceStatus(ObArbitrationServiceStatus::DISABLED)) {
+    bool is_compatible = false;
+    if (OB_FAIL(ObShareUtil::check_compat_version_for_arbitration_service(OB_SYS_TENANT_ID, is_compatible))) {
+      LOG_WARN("fail to check sys tenant compat version", KR(ret));
+    } else if (!is_compatible) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("sys tenant data version is below 4.1, tenant with arbitration service not allow", KR(ret));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "sys tenant data version is below 4.1, with arbitration service");
+    }
+  }
+  if (OB_FAIL(ret)){
   } else if (OB_FAIL(check_sys_var_options(ctx,
                                     stmt.get_sys_var_nodes(),
                                     stmt.get_create_tenant_arg().tenant_schema_,
@@ -600,10 +611,22 @@ int ObModifyTenantExecutor::execute(ObExecContext &ctx, ObModifyTenantStmt &stmt
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const obrpc::ObModifyTenantArg &modify_tenant_arg = stmt.get_modify_tenant_arg();
   ObString first_stmt;
+  ObSchemaGetterGuard schema_guard;
+  const ObTenantSchema *tenant_schema = nullptr;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     const_cast<obrpc::ObModifyTenantArg&>(modify_tenant_arg).ddl_stmt_str_ = first_stmt;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(
+                         modify_tenant_arg.tenant_schema_.get_tenant_name_str(), tenant_schema))) {
+    LOG_WARN("fail to get tenant info", K(ret));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, tenant schema must not be NULL", K(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (-1 != stmt.get_progressive_merge_num()) {
@@ -618,37 +641,26 @@ int ObModifyTenantExecutor::execute(ObExecContext &ctx, ObModifyTenantStmt &stmt
       } else if (OB_FAIL(modify_progressive_merge_num_for_all_tenants(ctx, stmt.get_progressive_merge_num()))) {
         LOG_WARN("modify_progressive_merge_num_for_tables failed", K(ret));
       }
-    } else {
-      ObSchemaGetterGuard schema_guard;
-      const ObTenantSchema *tenant_schema = nullptr;
-      if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-        LOG_WARN("fail to get tenant schema guard", K(ret));
-      } else if (OB_FAIL(schema_guard.get_tenant_info(
-          modify_tenant_arg.tenant_schema_.get_tenant_name_str(), tenant_schema))) {
-        LOG_WARN("fail to get tenant info", K(ret));
-      } else if (OB_ISNULL(tenant_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, tenant schema must not be NULL", K(ret));
      } else if (OB_FAIL(modify_progressive_merge_num_for_tenant(ctx, tenant_schema->get_tenant_id(), stmt.get_progressive_merge_num()))) {
-        LOG_WARN("fail to modify progressive merge num for tenant", K(ret), "tenant_id", tenant_schema->get_tenant_id());
-      }
-    }
+       LOG_WARN("fail to modify progressive merge num for tenant", K(ret), "tenant_id", tenant_schema->get_tenant_id());
+     }
   } else if (stmt.get_modify_tenant_arg().alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::ENABLE_EXTENDED_ROWID)) {
-    ObSchemaGetterGuard schema_guard;
-    const ObTenantSchema *tenant_schema = nullptr;
-    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-      LOG_WARN("fail to get tenant schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_tenant_info(
-        modify_tenant_arg.tenant_schema_.get_tenant_name_str(), tenant_schema))) {
-      LOG_WARN("fail to get tenant info", K(ret));
-    } else if (OB_ISNULL(tenant_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error unexpected, tenant schema must not be NULL", K(ret));
-    } else if (OB_FAIL(enable_extended_rowid_for_tenant_tables(ctx, tenant_schema->get_tenant_id()))) {
+    if (OB_FAIL(enable_extended_rowid_for_tenant_tables(ctx, tenant_schema->get_tenant_id()))) {
       LOG_WARN("fail to enable extended rowid for tenant tables", K(ret), "tenant_id", tenant_schema->get_tenant_id());
     }
   } else {
-    if (OB_FAIL(check_sys_var_options(ctx,
+    if (stmt.get_modify_tenant_arg().alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::ENABLE_ARBITRATION_SERVICE)) {
+      bool is_compatible = false;
+      if (OB_FAIL(ObShareUtil::check_compat_version_for_arbitration_service(tenant_schema->get_tenant_id(), is_compatible))) {
+        LOG_WARN("fail to check sys tenant compat version", KR(ret), KPC(tenant_schema));
+      } else if (!is_compatible) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("user tenant data version is below 4.1, tenant with arbitration service not allow", KR(ret), KPC(tenant_schema));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user tenant data version is below 4.1, with arbitration service");
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_sys_var_options(ctx,
             stmt.get_sys_var_nodes(),
             stmt.get_modify_tenant_arg().tenant_schema_,
             stmt.get_modify_tenant_arg().sys_var_list_))) {

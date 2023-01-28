@@ -5150,6 +5150,12 @@ def_table_schema(
 # 420 : __all_column_group_history
 # 421 : __all_column_group_mapping
 # 422 : __all_column_group_mapping_history
+# 423 : __all_transfer_task
+# 424 : __all_transfer_task_history
+# 425 : __all_balance_task
+# 426 : __all_balance_task_history
+# 427 : __all_ls_balance_job
+# 428 : __all_ls_balance_job_history
 
 def_table_schema(
     owner = 'jingyu.cr',
@@ -5236,17 +5242,6 @@ def_table_schema(
     ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
   ],
 )
-# 423 : __all_transfer_task
-# 424 : __all_transfer_task_history
-# 425 : __all_balance_task
-# 426 : __all_balance_task_history
-# 427 : __all_ls_balance_job
-# 428 : __all_ls_balance_job_history
-
-# 430 : __all_arbitration_service_replica_task
-# 431 : __all_meta_dictionary_location;
-
-# 432 : __all_arbitration_service_replica_task_history
 
 all_rls_policy_def = dict(
   owner = 'sean.yyj',
@@ -11302,8 +11297,6 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12358', all_def_keywords['__all_tenant']))
 
-# 12358: __all_virtual_tenant_mysql_sys_agent
-
 def_table_schema(
   owner = 'zhenling.zzg',
   tablegroup_id = 'OB_INVALID_ID',
@@ -11488,11 +11481,6 @@ def_table_schema(
     ('comment', 'varchar:262144')
   ],
 )
-# 12364: __all_virtual_ls_arb_replica_task
-# 12365: __all_virtual_ls_arb_replica_task_history
-
-
-# 12366: __all_virtual_archive_dest_status
 
 # 12367: __all_virtual_kv_hotkey_stat
 # 12368: __all_virtual_backup_transferring_tablets
@@ -11767,23 +11755,16 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15282', all_def_keywords['__all_tenant'])))
 
-# 15282: ALL_VIRTUAL_TENANT_SYS_AGENT
 # 15283: __all_virtual_tenant_info_agent
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15284', all_def_keywords['__all_virtual_sql_plan'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15285', all_def_keywords['__all_virtual_plan_table']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15286', all_def_keywords['__all_virtual_plan_real_info'])))
-
-# 15287: __all_virtual_trans_scheduler
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15287', all_def_keywords['__all_virtual_trans_scheduler'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15288', all_def_keywords['__all_virtual_ls_arb_replica_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15289', all_def_keywords['__all_virtual_ls_arb_replica_task_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290', all_def_keywords['__all_virtual_archive_dest_status'])))
 
-# 15288: __all_virtual_ls_arb_replica_task
-# 15289: __all_virtual_ls_arb_replica_task_history
-
-# 15290: __all_virtual_archive_dest_status
 # 15291: __all_virtual_backup_transferring_tablets
 
 ################################################################################
@@ -25772,15 +25753,6 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 21357: DBA_OB_ARBITRATION_SERVICE
-# 21358: CDB_OB_LS_ARB_REPLICA_TASKS
-# 21359: DBA_OB_LS_ARB_REPLICA_TASKS
-# 21360: CDB_OB_LS_ARB_REPLICA_TASK_HISTORY
-# 21361: DBA_OB_LS_ARB_REPLICA_TASK_HISTORY
-
-# 21362: V$OB_ARCHIVE_DEST_STATUS
-# 21363: DBA_OB_LS_LOG_ARCHIVE_PROGRESS
-# 21364: CDB_OB_LS_LOG_ARCHIVE_PROGRESS
 # 21365: DBA_OB_LS_LOG_RESTORE_STAT
 # 21366: CDB_OB_LS_LOG_RESTORE_STAT
 
@@ -42473,7 +42445,6 @@ LEFT JOIN SYS.ALL_VIRTUAL_TENANT_INFO B
 WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
 )
-# 25208: DBA_OB_TENANTS
 
 def_table_schema(
   owner = 'sean.yyj',
@@ -43041,8 +43012,6 @@ def_table_schema(
     TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
 )
-# 25221: DBA_OB_LS_ARB_REPLICA_TASKS
-# 25222: DBA_OB_LS_ARB_REPLICA_TASK_HISTORY
 #### End Data Dictionary View
 ################################################################################
 
@@ -48483,8 +48452,6 @@ def_table_schema(
   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
-# 28176:  V$OB_ARCHIVE_DEST_STATUS
-# 28177:  DBA_OB_LS_LOG_ARCHIVE_PROGRESS
 # 28178:  DBA_OB_LS_LOG_RESTORE_STAT
 
 
