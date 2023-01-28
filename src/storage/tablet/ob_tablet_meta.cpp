@@ -548,6 +548,7 @@ int ObTabletMeta::deserialize(
     LOG_WARN("failed to deserialize tablet meta's length", K(ret), K(len), K(new_pos));
   } else if (TABLET_META_VERSION == version_) {
     int8_t compat_mode = -1;
+    ddl_execution_id_ = 0;
     if (OB_UNLIKELY(length_ > len - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("buffer's length is not enough", K(ret), K(length_), K(len - new_pos));
@@ -929,6 +930,7 @@ int ObMigrationTabletParam::deserialize_old(const char *buf, const int64_t len, 
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
   int8_t compat_mode = -1;
+  ddl_execution_id_ = 0;
 
   if (OB_FAIL(ls_id_.deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize ls id", K(ret), K(len), K(new_pos));
@@ -993,6 +995,7 @@ int ObMigrationTabletParam::deserialize(const char *buf, const int64_t len, int6
   int64_t new_pos = pos;
   int8_t compat_mode = -1;
   int64_t length = 0;
+  ddl_execution_id_ = 0;
 
   if (OB_ISNULL(buf)
       || OB_UNLIKELY(len <= 0)
