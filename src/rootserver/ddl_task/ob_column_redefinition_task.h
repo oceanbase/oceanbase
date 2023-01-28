@@ -49,6 +49,8 @@ public:
     const ObDDLTaskInfo &addition_info) override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual bool support_longops_monitoring() const { return true; }
+  virtual void flt_set_task_span_tag() const override;
+  virtual void flt_set_status_span_tag() const override;
 private:
   int wait_data_complement(const share::ObDDLTaskStatus next_task_status);
   int send_build_single_replica_request();

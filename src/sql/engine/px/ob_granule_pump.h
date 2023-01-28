@@ -32,6 +32,11 @@ class ObTableModifySpec;
 class ObGranulePumpArgs
 {
 public:
+  enum PruningStatus{
+    READY_PRUNING = 0,
+    FINISH_PRUNING = 1
+  };
+public:
   class ObGranulePumpOpInfo
   {
     public:
@@ -54,7 +59,11 @@ public:
   };
 public :
   ObGranulePumpArgs() : ctx_(NULL), op_info_(),
-      tablet_arrays_(), partitions_info_(), parallelism_(0),
+      tablet_arrays_(), run_time_pruning_flags_(),
+      cur_tablet_idx_(0), finish_pruning_tablet_idx_(0),
+      sharing_iter_end_(false),
+      pruning_status_(READY_PRUNING),
+      partitions_info_(), parallelism_(0),
       tablet_size_(0), gi_attri_flag_(0) {}
   virtual ~ObGranulePumpArgs() { reset(); };
 
@@ -63,22 +72,26 @@ public :
                K(tablet_size_),
                K(gi_attri_flag_))
 
-  bool partition_filter() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_USE_PARTITION_FILTER); }
-  bool pwj_gi() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_PARTITION_WISE); }
-  bool affinitize() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_AFFINITIZE); }
-  bool access_all() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_ACCESS_ALL); }
-  bool with_param_down() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_NLJ_PARAM_DOWN); }
-  bool asc_order() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_ASC_ORDER); }
-  bool desc_order() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_DESC_ORDER); }
-  bool force_partition_granule() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_FORCE_PARTITION_GRANULE); }
-
+  bool need_partition_granule();
+  bool is_finish_pruning() { return pruning_status_ == FINISH_PRUNING; }
+  void set_finish_pruning() { pruning_status_ = FINISH_PRUNING; }
   void reset() {
     op_info_.reset();
     tablet_arrays_.reset();
+    run_time_pruning_flags_.reset();
   }
+
+
   ObExecContext *ctx_;
   ObGranulePumpOpInfo op_info_;
   common::ObArray<DASTabletLocArray> tablet_arrays_;
+  //-----for runtime filter pruning granule
+  common::ObArray<bool> run_time_pruning_flags_;
+  int64_t cur_tablet_idx_;
+  int64_t finish_pruning_tablet_idx_;
+  bool sharing_iter_end_;
+  PruningStatus pruning_status_;
+  //-----end
   common::ObArray<ObPxTabletInfo> partitions_info_;
   int64_t parallelism_;
   int64_t tablet_size_;
@@ -314,12 +327,13 @@ private:
   enum ObGranuleSplitterType
   {
     GIT_UNINITIALIZED,
+
     /**
      *           [Hash Join]
      *                |
      *        ----------------
      *        |              |
-     *        EX(PKEY)      GI (GIT_PARIAL_PARTITION_WISE_WITH_AFFINITY)
+     *        EX(PKEY)      GI (GIT_AFFINITY)
      *        |              |
      *        GI            TSC2
      *        |
@@ -340,7 +354,8 @@ private:
      * |       PX PARTITION ITERATOR     |          |
      * |        TABLE SCAN               |B         |
      */
-    GIT_PARTIAL_PARTITION_WISE_WITH_AFFINITY,
+    GIT_AFFINITY,
+
     /**
      *        [Nested Loop Join]
      *                |
@@ -366,6 +381,7 @@ private:
      * |        TABLE SCAN                    |B         |
      */
     GIT_ACCESS_ALL,
+
     /**
      *                GI (GIT_PARTITION_WISE)
      *                |
@@ -385,16 +401,18 @@ private:
      * |        TABLE SCAN               |B         |
      */
     GIT_FULL_PARTITION_WISE,
-    /**
+
+    /* consist of full/partial partition wise affinity
+     *
      *                      [Hash Join]
      *                           |
      *                ---------------------
      *                |                   |
-     *           [Hash Join]              GI(GIT_FULL_PARTITION_WISE_WITH_AFFINITY)
+     *           [Hash Join]              GI(partial partition wise with affinity)
      *                |                   |
      *        ----------------            TSC3
      *        |              |
-     *        EX(PKEY)      GI (GIT_FULL_PARTITION_WISE_WITH_AFFINITY)
+     *        EX(PKEY)      GI(partial partition wise with affinity)
      *        |              |
      *        GI            TSC2
      *        |
@@ -415,8 +433,21 @@ private:
      * |        TABLE GET                |B         |
      * |      PX PARTITION ITERATOR      |          |
      * |       TABLE GET                 |A         |
-    */
-    GIT_FULL_PARTITION_WISE_WITH_AFFINITY,
+
+     *
+     *                      [Hash Join]
+     *                           |
+     *                ---------------------
+     *                |                   |
+     *             EX(PKEY)              GI(full partition wise with affinity)
+     *                |                   |
+     *               TSC             [Hash Join]
+     *                                    |
+     *                             ----------------
+     *                             |              |
+     *                            TSC2           TSC3
+     */
+    GIT_PARTITION_WISE_WITH_AFFINITY,
     /*
      * This is the most commonly used GI
      *
@@ -487,7 +518,7 @@ public:
   DECLARE_TO_STRING;
 public:
 
-  int regenerate_gi_task(bool is_new_eng);
+  int regenerate_gi_task();
 
   int reset_gi_task();
 
@@ -498,6 +529,8 @@ public:
   int set_pruning_table_location(common::ObIArray<ObTableLocation> &table_locations)
   { return pruning_table_locations_.assign(table_locations); }
   common::ObIArray<ObTableLocation> *get_pruning_table_location() { return &pruning_table_locations_; }
+  int get_first_tsc_range_cnt(int64_t &cnt);
+  const GITaskArrayMap &get_task_array_map() const { return gi_task_array_map_; }
 private:
   int fetch_granule_by_worker_id(const ObGITaskSet *&task_set,
                                  int64_t &pos,
@@ -509,7 +542,7 @@ private:
                                      uint64_t tsc_op_id);
 
   int fetch_pw_granule_by_worker_id(ObIArray<ObGranuleTaskInfo> &infos,
-                                    const ObIArray<const ObTableScanSpec *> &tscs,
+                                    const ObIArray<int64_t> &op_ids,
                                     int64_t thread_id);
 
   int fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo> &infos,

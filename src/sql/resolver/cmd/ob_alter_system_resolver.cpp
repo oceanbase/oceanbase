@@ -710,6 +710,7 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
     } else if (stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_LIB_CACHE) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support lib cache's cache evict by namespace", K(stmt->flush_cache_arg_.cache_type_), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "only support lib cache's cache evict by namespace, other type");
     } else {
       if (OB_UNLIKELY(NULL == namespace_node->children_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -746,9 +747,11 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
     } else if (stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PLAN) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support plan cache's fine-grained cache evict", K(stmt->flush_cache_arg_.cache_type_), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "only support plan cache's fine-grained cache evict, other type");
     } else if (lib::is_oracle_mode()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported plan cache's fine-grained cache evict in oracle mode", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "plan cache's fine-grained cache evict in oracle mode is");
     } else if (OB_ISNULL(sql_id_node->children_)
                || OB_ISNULL(sql_id_node->children_[0])
                || T_SQL_ID != sql_id_node->type_) {
@@ -788,7 +791,7 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
         // and not needs to specify db_name
       } else {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported flush cache in database level", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "flushing cache in database level at coarse flushing");
       }
     } else if (NULL == db_node) { // db list is empty
       // empty db list means clear all db's in fine-grained cache evict
@@ -2546,6 +2549,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
             if (T_TABLE_LIST == node->type_) {
       // TODO table list restore not support, fix this 4.1
               ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "table list restore is");
               // store database_name/table_name with case sensitive.
               // compare database_name/table_name with tenant's name_case_mode.
               lib::CompatModeGuard g(lib::Worker::CompatMode::ORACLE);
@@ -4156,6 +4160,7 @@ int ObBackupSetDecryptionResolver::resolve(const ParseNode &parse_tree)
     if (tenant_id != OB_SYS_TENANT_ID) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only sys tenant can set decryption", K(ret), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-sys tenant set decryption is");
     }
   }
 
@@ -4253,6 +4258,7 @@ int ObAddRestoreSourceResolver::resolve(const ParseNode &parse_tree)
     if (tenant_id != OB_SYS_TENANT_ID) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only sys tenant can set add restore source", K(ret), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-sys tenant set add restore source is");
     } else if (OB_ISNULL(stmt = create_stmt<ObAddRestoreSourceStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("failed to create ObAddRestoreSourceStmt", K(ret));

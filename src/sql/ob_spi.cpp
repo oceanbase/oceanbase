@@ -1713,6 +1713,32 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::spi_check_autonomous_trans(pl::ObPLExecCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  pl::ObPLContext *pl_context = NULL;
+  OV (OB_NOT_NULL(ctx));
+  OV (OB_NOT_NULL(ctx->allocator_));
+  OV (OB_NOT_NULL(ctx->exec_ctx_));
+  OV (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
+  CK (OB_NOT_NULL(session_info = ctx->exec_ctx_->get_my_session()));
+  CK (OB_NOT_NULL(pl_context = ctx->exec_ctx_->get_pl_stack_ctx()));
+
+  if (OB_SUCC(ret) && pl_context->is_autonomous()) {
+    if (session_info->is_in_transaction() && session_info->has_inner_dml_write()) {
+      ret = OB_ERR_AUTONOMOUS_TRANSACTION_ROLLBACK;
+      LOG_WARN("active autonomous transaction detected", K(ret));
+    }
+    if (OB_SUCC(ret) || OB_ERR_AUTONOMOUS_TRANSACTION_ROLLBACK == ret) {
+      int end_trans_ret = pl_context->end_autonomous(*ctx->exec_ctx_, *session_info);
+      ret = OB_SUCCESS == ret ? end_trans_ret : ret;
+      pl_context->clear_autonomous();
+    }
+  }
+  return ret;
+}
+
 int ObSPIService::spi_query(ObPLExecCtx *ctx,
                             const char *sql,
                             int64_t type,

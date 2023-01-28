@@ -265,7 +265,8 @@ all_table_def = dict(
       ('b_transition_point', 'varchar:OB_MAX_B_HIGH_BOUND_VAL_LENGTH', 'true'),
       ('interval_range', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH', 'true'),
       ('b_interval_range', 'varchar:OB_MAX_B_HIGH_BOUND_VAL_LENGTH', 'true'),
-      ('object_status', 'int', 'false', '1')
+      ('object_status', 'int', 'false', '1'),
+      ('table_flags', 'int', 'false', '0')
     ],
 )
 
@@ -2232,6 +2233,10 @@ all_trigger_def = dict(
     ('package_exec_env', 'varchar:OB_MAX_PROC_ENV_LENGTH', 'true'),
     ('sql_mode', 'int', 'false'),
     ('trigger_priv_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
+    ('order_type', 'int', 'false'),
+    ('ref_trg_db_name', 'varchar:OB_MAX_TRIGGER_NAME_LENGTH', 'true'),
+    ('ref_trg_name', 'varchar:OB_MAX_TRIGGER_NAME_LENGTH', 'true'),
+    ('action_order', 'int', 'false'),
   ],
 )
 
@@ -5155,16 +5160,123 @@ def_table_schema(
 
 # 432 : __all_arbitration_service_replica_task_history
 
-# 433 : __all_tenant_rls_policy
-# 434 : __all_tenant_rls_policy_history
-# 435 : __all_tenant_rls_security_column
-# 436 : __all_tenant_rls_security_column_history
-# 437 : __all_tenant_rls_group
-# 438 : __all_tenant_rls_group_history
-# 439 : __all_tenant_rls_context
-# 440 : __all_tenant_rls_context_history
-# 441 : __all_tenant_rls_attribute
-# 442 : __all_tenant_rls_attribute_history
+all_rls_policy_def = dict(
+  owner = 'sean.yyj',
+  table_name = '__all_rls_policy',
+  table_id = '433',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('rls_policy_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+
+  normal_columns = [
+    ('policy_name', 'varchar:OB_MAX_COLUMN_NAME_LENGTH'),
+    ('table_id', 'int'),
+    ('rls_group_id', 'int'),
+    ('stmt_type', 'int'),
+    ('check_opt', 'bool', 'false', 'false'),
+    ('enable_flag', 'bool', 'false', 'true'),
+    ('policy_function_schema', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
+    ('policy_package_name', 'varchar:OB_MAX_PACKAGE_NAME_LENGTH'),
+    ('policy_function_name', 'varchar:OB_MAX_PACKAGE_NAME_LENGTH'),
+  ],
+)
+
+def_table_schema(**all_rls_policy_def)
+def_table_schema(**gen_history_table_def(434, all_rls_policy_def))
+
+all_rls_column_def = dict(
+  owner = 'sean.yyj',
+  table_name = '__all_rls_security_column',
+  table_id = '435',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('rls_policy_id', 'int'),
+    ('column_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+
+  normal_columns = [],
+)
+
+def_table_schema(**all_rls_column_def)
+def_table_schema(**gen_history_table_def(436, all_rls_column_def))
+
+all_rls_group_def = dict(
+  owner = 'sean.yyj',
+  table_name = '__all_rls_group',
+  table_id = '437',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('rls_group_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+
+  normal_columns = [
+    ('policy_group_name', 'varchar:OB_MAX_COLUMN_NAME_LENGTH'),
+    ('table_id', 'int'),
+  ],
+)
+
+def_table_schema(**all_rls_group_def)
+def_table_schema(**gen_history_table_def(438, all_rls_group_def))
+
+all_rls_context_def = dict(
+  owner = 'sean.yyj',
+  table_name = '__all_rls_context',
+  table_id = '439',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('rls_context_id', 'int'),
+  ],
+
+  in_tenant_space = True,
+  is_cluster_private = False,
+
+  normal_columns = [
+    ('table_id', 'int'),
+    ('context_name', 'varchar:OB_MAX_COLUMN_NAME_LENGTH'),
+    ('attribute', 'varchar:OB_MAX_COLUMN_NAME_LENGTH'),
+  ],
+)
+
+def_table_schema(**all_rls_context_def)
+def_table_schema(**gen_history_table_def(440, all_rls_context_def))
+
+all_rls_attribute_def = dict(
+  owner = 'sean.yyj',
+  table_name = '__all_rls_attribute',
+  table_id = '441',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('rls_policy_id', 'int'),
+    ('rls_attribute_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+
+  normal_columns = [
+    ('context_name', 'varchar:OB_MAX_COLUMN_NAME_LENGTH'),
+    ('attribute', 'varchar:OB_MAX_COLUMN_NAME_LENGTH'),
+  ],
+)
+
+def_table_schema(**all_rls_attribute_def)
+def_table_schema(**gen_history_table_def(442, all_rls_attribute_def))
 
 def_table_schema(
   owner = 'luofan.zp',
@@ -5813,6 +5925,8 @@ def_table_schema(
       ('is_batched_multi_stmt', 'bool'),
       ('object_status', 'int'),
       ('rule_name', 'varchar:256'),
+      ('is_in_pc', 'bool'),
+      ('erase_time', 'timestamp')
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -6515,19 +6629,32 @@ def_table_schema(
 # table_id = 11040: __all_virtual_partition_replay_status not used on 4.0
 
 def_table_schema(
-  owner = 'xiaoyi.xy',
-  table_name     = '__all_virtual_trace_log',
+  owner = 'guoyun.lgy',
+  table_name     = '__all_virtual_trace_span_info',
   table_id       = '11042',
   table_type = 'VIRTUAL_TABLE',
   gm_columns = [],
-  rowkey_columns = [],
+  rowkey_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('request_id', 'int')
+  ],
   in_tenant_space = True,
 
   normal_columns = [
-  ('title', 'varchar:256'),
-  ('key_value', 'varchar:1024'),
-  ('time', 'varchar:10'),
+    ('trace_id', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('span_id', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('parent_span_id', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('span_name', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('ref_type', 'varchar:OB_MAX_REF_TYPE_LENGTH'),
+    ('start_ts', 'int'),
+    ('end_ts', 'int'),
+    ('tags', 'longtext'),
+    ('logs', 'longtext'),
   ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
 )
 
 def_table_schema(
@@ -8718,26 +8845,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-def_table_schema(
-    owner = 'longzhong.wlz',
-    table_name    = '__all_virtual_dtl_first_cached_buffer',
-    table_id      = '12125',
-    table_type = 'VIRTUAL_TABLE',
-    gm_columns = [],
-    rowkey_columns = [
-      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
-      ('svr_port', 'int'),
-    ],
-    normal_columns = [
-      ('tenant_id', 'int'),
-      ('channel_id', 'int'),
-      ('calced_val', 'int'),
-      ('buffer_pool_id', 'int'),
-      ('timeout_ts', 'timestamp'),
-    ],
-  partition_columns = ['svr_ip', 'svr_port'],
-  vtable_route_policy = 'distributed',
-)
+## table_id 12125 was used by a discarded table, do not reuse again
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12126',
@@ -10918,6 +11026,36 @@ def_table_schema(
 
 # 12339: __all_virtual_show_trace
 def_table_schema(
+  owner = 'guoyun.lgy',
+  table_name     = '__all_virtual_show_trace',
+  table_id       = '12339',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('trace_id', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('request_id', 'int'),
+    ('rec_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('rec_svr_port', 'int'),
+    ('span_id', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('parent_span_id', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('span_name', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('ref_type', 'varchar:OB_MAX_REF_TYPE_LENGTH'),
+    ('start_ts', 'timestamp'),
+    ('end_ts', 'timestamp'),
+    ('elapse', 'int'),
+    ('tags', 'longtext'),
+    ('logs', 'longtext'),
+  ],
+)
+
+def_table_schema(
   owner = 'keqing.llt',
   table_name = '__all_virtual_ha_diagnose',
   table_id = '12340',
@@ -10965,21 +11103,204 @@ def_table_schema(
 # 12346: __all_virtual_balance_task
 # 12347: __all_virtual_balance_task_history
 
-# 12348: __all_virtual_tenant_rls_policy
-# 12349: __all_virtual_tenant_rls_policy_history
-# 12350: __all_virtual_tenant_rls_security_column
-# 12351: __all_virtual_tenant_rls_security_column_history
-# 12352: __all_virtual_tenant_rls_group
-# 12353: __all_virtual_tenant_rls_group_history
-# 12354: __all_virtual_tenant_rls_context
-# 12355: __all_virtual_tenant_rls_context_history
-# 12356: __all_virtual_tenant_rls_attribute
-# 12357: __all_virtual_tenant_rls_attribute_history
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12348',
+  table_name = '__all_virtual_rls_policy',
+  keywords = all_def_keywords['__all_rls_policy']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12349',
+  table_name = '__all_virtual_rls_policy_history',
+  keywords = all_def_keywords['__all_rls_policy_history']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12350',
+  table_name = '__all_virtual_rls_security_column',
+  keywords = all_def_keywords['__all_rls_security_column']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12351',
+  table_name = '__all_virtual_rls_security_column_history',
+  keywords = all_def_keywords['__all_rls_security_column_history']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12352',
+  table_name = '__all_virtual_rls_group',
+  keywords = all_def_keywords['__all_rls_group']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12353',
+  table_name = '__all_virtual_rls_group_history',
+  keywords = all_def_keywords['__all_rls_group_history']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12354',
+  table_name = '__all_virtual_rls_context',
+  keywords = all_def_keywords['__all_rls_context']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12355',
+  table_name = '__all_virtual_rls_context_history',
+  keywords = all_def_keywords['__all_rls_context_history']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12356',
+  table_name = '__all_virtual_rls_attribute',
+  keywords = all_def_keywords['__all_rls_attribute']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12357',
+  table_name = '__all_virtual_rls_attribute_history',
+  keywords = all_def_keywords['__all_rls_attribute_history']))
+
 # 12358: __all_virtual_tenant_mysql_sys_agent
 
-# 12359: __all_virtual_sql_plan
-# 12360: __all_virtual_plan_table
-# 12361: __all_virtual_plan_real_info
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id = 'OB_INVALID_ID',
+  table_name    = '__all_virtual_sql_plan',
+  table_id      = 12359,
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('plan_item_id', 'int'),
+  ],
+  normal_columns = [
+    ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+    ('db_id', 'int'),
+    ('plan_id', 'int'),
+    ('plan_hash', 'uint'),
+    ('gmt_create', 'timestamp'),
+
+    ('operation', 'varchar:255'),
+    ('options', 'varchar:255'),
+    ('object_node', 'varchar:40'),
+    ('object#', 'int'),
+    ('object_owner', 'varchar:128'),
+    ('object_name', 'varchar:128'),
+    ('object_alias', 'varchar:261'),
+    ('object_type', 'varchar:20'),
+    ('optimzier', 'varchar:4000'),
+
+    ('id', 'int'),
+    ('parent_id', 'int'),
+    ('depth', 'int'),
+    ('position', 'int'),
+    ('search_columns', 'int'),
+    ('cost', 'bigint'),
+    ('cardinality', 'bigint'),
+    ('bytes', 'bigint'),
+    ('rowset', 'int'),
+
+    ('other_tag', 'varchar:4000'),
+    ('partition_start', 'varchar:4000'),
+    ('partition_stop', 'varchar:4000'),
+    ('partition_id', 'int'),
+    ('other', 'varchar:4000'),
+    ('distribution', 'varchar:64'),
+    ('cpu_cost', 'bigint'),
+    ('io_cost', 'bigint'),
+    ('temp_space', 'bigint'),
+    ('access_predicates', 'varchar:4000'),
+    ('filter_predicates', 'varchar:4000'),
+    ('startup_predicates', 'varchar:4000'),
+    ('projection', 'varchar:4000'),
+    ('special_predicates', 'varchar:4000'),
+    ('time', 'int'),
+    ('qblock_name','varchar:128'),
+    ('remarks', 'varchar:4000'),
+    ('other_xml', 'varchar:4000')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed'
+)
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id = 'OB_INVALID_ID',
+  table_name    = '__all_virtual_plan_table',
+  table_id      = 12360,
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('statement_id', 'varchar:30'),
+    ('plan_id', 'int'),
+    ('timestamp', 'timestamp'),
+    ('remarks', 'varchar:4000'),
+
+    ('operation', 'varchar:255'),
+    ('options', 'varchar:255'),
+    ('object_node', 'varchar:40'),
+    ('object_owner', 'varchar:128'),
+    ('object_name', 'varchar:128'),
+    ('object_alias', 'varchar:261'),
+    ('object_instance', 'int'),
+    ('object_type', 'varchar:20'),
+    ('optimzier', 'varchar:4000'),
+    ('search_columns', 'int'),
+
+    ('id', 'int'),
+    ('parent_id', 'int'),
+    ('depth', 'int'),
+    ('position', 'int'),
+    ('cost', 'bigint'),
+    ('cardinality', 'bigint'),
+    ('bytes', 'bigint'),
+    ('rowset', 'int'),
+
+    ('other_tag', 'varchar:4000'),
+    ('partition_start', 'varchar:4000'),
+    ('partition_stop', 'varchar:4000'),
+    ('partition_id', 'int'),
+    ('other', 'varchar:4000'),
+    ('distribution', 'varchar:64'),
+    ('cpu_cost', 'bigint'),
+    ('io_cost', 'bigint'),
+    ('temp_space', 'bigint'),
+    ('access_predicates', 'varchar:4000'),
+    ('filter_predicates', 'varchar:4000'),
+    ('startup_predicates', 'varchar:4000'),
+    ('projection', 'varchar:4000'),
+    ('special_predicates', 'varchar:4000'),
+    ('time', 'int'),
+    ('qblock_name','varchar:128'),
+    ('other_xml', 'varchar:4000')
+  ]
+)
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id = 'OB_INVALID_ID',
+  table_name    = '__all_virtual_plan_real_info',
+  table_id      = 12361,
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('plan_item_id', 'int'),
+  ],
+  normal_columns = [
+    ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+    ('plan_id', 'int'),
+    ('plan_hash', 'uint'),
+    ('id', 'int'),
+    ('real_cost', 'bigint'),
+    ('real_cardinality', 'bigint'),
+    ('cpu_cost', 'bigint'),
+    ('io_cost', 'bigint')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed'
+)
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12362',
@@ -11034,7 +11355,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15049', all_def_keyword
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15050', all_def_keywords['__tenant_virtual_show_create_tablegroup']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15051', all_def_keywords['__tenant_virtual_privilege_grant']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15052', all_def_keywords['__tenant_virtual_table_column']))
-def_table_schema(**gen_oracle_mapping_virtual_table_def('15053', all_def_keywords['__all_virtual_trace_log']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15053', all_def_keywords['__all_virtual_trace_span_info']))
 
 def_table_schema(**gen_agent_virtual_table_def('15054',all_def_keywords['__tenant_virtual_concurrent_limit_sql']))
 
@@ -11256,20 +11577,21 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15270', all_def_ke
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15272', all_def_keywords['__all_virtual_ls_replica_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15273', all_def_keywords['__all_virtual_ls_replica_task_plan'])))
 # 15274: __all_virtual_show_trace
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15274', all_def_keywords['__all_virtual_show_trace']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_keywords['__all_database_privilege']))
-# 15276: all_virtual_tenant_rls_policy_real_agent
-# 15277: all_virtual_tenant_rls_security_column_real_agent
-# 15278: all_virtual_tenant_rls_group_real_agent
-# 15279: all_virtual_tenant_rls_context_real_agent
-# 15280: all_virtual_tenant_rls_attribute_real_agent
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15276', all_def_keywords['__all_rls_policy'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15277', all_def_keywords['__all_rls_security_column'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15278', all_def_keywords['__all_rls_group'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15279', all_def_keywords['__all_rls_context'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15280', all_def_keywords['__all_rls_attribute'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
 
 # 15282: ALL_VIRTUAL_TENANT_SYS_AGENT
 # 15283: __all_virtual_tenant_info_agent
 
-# 15284: __all_virtual_sql_plan
-# 15285: __all_virtual_plan_table
-# 15286: __all_virtual_plan_real_info
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15284', all_def_keywords['__all_virtual_sql_plan'])))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15285', all_def_keywords['__all_virtual_plan_table']))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15286', all_def_keywords['__all_virtual_plan_real_info'])))
 
 # 15287: __all_virtual_trans_scheduler
 
@@ -11322,7 +11644,7 @@ def_table_schema(
     TABLE_SCAN,EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID,
     TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
     IS_BATCHED_MULTI_STMT, RULE_NAME
-    FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0
+    FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND is_in_pc=true
 """.replace("\n", " "),
 
 
@@ -23897,10 +24219,171 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21341: GV$OB_SQL_PLAN
-# 21342: V$OB_SQL_PLAN
-# 21343: GV$OB_PLAN_REAL_INFO
-# 21344: V$OB_PLAN_REAL_INFO
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'GV$OB_SQL_PLAN',
+  table_id        = '21341',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+                        SVR_IP,
+                        SVR_PORT,
+                        PLAN_ID,
+                        SQL_ID,
+                        DB_ID,
+                        PLAN_HASH,
+                        GMT_CREATE,
+                        OPERATION,
+                        OPTIONS,
+                        OBJECT_NODE,
+                        `OBJECT#`,
+                        OBJECT_OWNER,
+                        OBJECT_NAME,
+                        OBJECT_ALIAS,
+                        OBJECT_TYPE,
+                        OPTIMZIER,
+                        ID,
+                        PARENT_ID,
+                        DEPTH,
+                        POSITION,
+                        SEARCH_COLUMNS,
+                        COST,
+                        CARDINALITY,
+                        BYTES,
+                        ROWSET,
+                        OTHER_TAG,
+                        PARTITION_START,
+                        PARTITION_STOP,
+                        PARTITION_ID,
+                        OTHER,
+                        DISTRIBUTION,
+                        CPU_COST,
+                        IO_COST,
+                        TEMP_SPACE,
+                        ACCESS_PREDICATES,
+                        FILTER_PREDICATES,
+                        STARTUP_PREDICATES,
+                        PROJECTION,
+                        SPECIAL_PREDICATES,
+                        `TIME`,
+                        QBLOCK_NAME,
+                        REMARKS,
+                        OTHER_XML
+                    FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN
+                    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id  = 'OB_INVALID_ID',
+  table_name     = 'V$OB_SQL_PLAN',
+  table_id       = '21342',
+  gm_columns     = [],
+  normal_columns = [],
+  rowkey_columns = [],
+  table_type     = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+                      SQL_ID,
+                      DB_ID,
+                      PLAN_HASH,
+                      PLAN_ID,
+                      GMT_CREATE,
+                      OPERATION,
+                      OPTIONS,
+                      OBJECT_NODE,
+                      `OBJECT#`,
+                      OBJECT_OWNER,
+                      OBJECT_NAME,
+                      OBJECT_ALIAS,
+                      OBJECT_TYPE,
+                      OPTIMZIER,
+                      ID,
+                      PARENT_ID,
+                      DEPTH,
+                      POSITION,
+                      SEARCH_COLUMNS,
+                      COST,
+                      CARDINALITY,
+                      BYTES,
+                      ROWSET,
+                      OTHER_TAG,
+                      PARTITION_START,
+                      PARTITION_STOP,
+                      PARTITION_ID,
+                      OTHER,
+                      DISTRIBUTION,
+                      CPU_COST,
+                      IO_COST,
+                      TEMP_SPACE,
+                      ACCESS_PREDICATES,
+                      FILTER_PREDICATES,
+                      STARTUP_PREDICATES,
+                      PROJECTION,
+                      SPECIAL_PREDICATES,
+                      `TIME`,
+                      QBLOCK_NAME,
+                      REMARKS,
+                      OTHER_XML
+    FROM OCEANBASE.GV$OB_SQL_PLAN
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'GV$OB_PLAN_REAL_INFO',
+  table_id        = '21343',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+                        SVR_IP,
+                        SVR_PORT,
+                        PLAN_ID,
+                        SQL_ID,
+                        PLAN_HASH,
+                        ID,
+                        REAL_COST,
+                        REAL_CARDINALITY,
+                        CPU_COST,
+                        IO_COST
+                    FROM OCEANBASE.__ALL_VIRTUAL_PLAN_REAL_INFO
+                    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  tablegroup_id  = 'OB_INVALID_ID',
+  table_name     = 'V$OB_PLAN_REAL_INFO',
+  table_id       = '21344',
+  gm_columns     = [],
+  normal_columns = [],
+  rowkey_columns = [],
+  table_type     = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+                        SQL_ID,
+                        PLAN_ID,
+                        PLAN_HASH,
+                        ID,
+                        REAL_COST,
+                        REAL_CARDINALITY,
+                        CPU_COST,
+                        IO_COST
+    FROM OCEANBASE.GV$OB_PLAN_REAL_INFO
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
 
 def_table_schema(
     owner = 'yanmu.ztl',
@@ -41365,18 +41848,513 @@ def_table_schema(
 
 # 25208: DBA_OB_TENANTS
 
-# 25209: DBA_POLICIES
-# 25210: ALL_POLICIES
-# 25211: USER_POLICIES
-# 25212: DBA_POLICY_GROUPS
-# 25213: ALL_POLICY_GROUPS
-# 25214: USER_POLICY_GROUPS
-# 25215: DBA_POLICY_CONTEXTS
-# 25216: ALL_POLICY_CONTEXTS
-# 25217: USER_POLICY_CONTEXTS
-# 25218: DBA_SEC_RELEVANT_COLS
-# 25219: ALL_SEC_RELEVANT_COLS
-# 25220: USER_SEC_RELEVANT_COLS
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'DBA_POLICIES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25209',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,
+      CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,
+      CAST(P.POLICY_FUNCTION_SCHEMA AS VARCHAR2(128)) AS PF_OWNER,
+      CAST(P.POLICY_PACKAGE_NAME AS VARCHAR2(128)) AS PACKAGE,
+      CAST(P.POLICY_FUNCTION_NAME AS VARCHAR2(128)) AS FUNCTION,
+      CAST(DECODE(BITAND(P.STMT_TYPE,1), 0, 'NO', 'YES') AS VARCHAR2(3)) AS SEL,
+      CAST(DECODE(BITAND(P.STMT_TYPE,2), 0, 'NO', 'YES') AS VARCHAR2(3)) AS INS,
+      CAST(DECODE(BITAND(P.STMT_TYPE,4), 0, 'NO', 'YES') AS VARCHAR2(3)) AS UPD,
+      CAST(DECODE(BITAND(P.STMT_TYPE,8), 0, 'NO', 'YES') AS VARCHAR2(3)) AS DEL,
+      CAST(DECODE(BITAND(P.STMT_TYPE,2048), 0, 'NO', 'YES') AS VARCHAR2(3)) AS IDX,
+      CAST(DECODE(P.CHECK_OPT, 0, 'NO', 'YES') AS VARCHAR2(3)) AS CHK_OPTION,
+      CAST(DECODE(P.ENABLE_FLAG, 0, 'NO', 'YES') AS VARCHAR2(3)) AS ENABLE,
+      CAST(DECODE(BITAND(P.STMT_TYPE,16), 0, 'NO', 'YES') AS VARCHAR2(3)) AS STATIC_POLICY,
+      CAST(CASE BITAND(P.STMT_TYPE,16+64+128+256+8192+16384+32768+524288)
+        WHEN 16 THEN 'STATIC'
+        WHEN 64 THEN 'SHARED_STATIC'
+        WHEN 128 THEN 'CONTEXT_SENSITIVE'
+        WHEN 256 THEN 'SHARED_CONTEXT_SENSITIVE'
+        WHEN 8192 THEN 'XDS1'
+        WHEN 16384 THEN 'XDS2'
+        WHEN 32768 THEN 'XDS3'
+        WHEN 524288 THEN 'OLS'
+        ELSE 'DYNAMIC' END AS VARCHAR2(24)) AS POLICY_TYPE,
+      CAST(DECODE(BITAND(P.STMT_TYPE,512), 512, 'YES', 'NO') AS VARCHAR2(3)) AS LONG_PREDICATE,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P
+      LEFT JOIN
+        SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G
+        ON P.TENANT_ID = G.TENANT_ID
+        AND P.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND P.RLS_GROUP_ID = G.RLS_GROUP_ID
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON P.TENANT_ID = T.TENANT_ID
+        AND P.TABLE_ID = T.TABLE_ID
+      JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON P.TENANT_ID = DB.TENANT_ID
+        AND T.DATABASE_ID = DB.DATABASE_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'ALL_POLICIES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25210',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,
+      CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,
+      CAST(P.POLICY_FUNCTION_SCHEMA AS VARCHAR2(128)) AS PF_OWNER,
+      CAST(P.POLICY_PACKAGE_NAME AS VARCHAR2(128)) AS PACKAGE,
+      CAST(P.POLICY_FUNCTION_NAME AS VARCHAR2(128)) AS FUNCTION,
+      CAST(DECODE(BITAND(P.STMT_TYPE,1), 0, 'NO', 'YES') AS VARCHAR2(3)) AS SEL,
+      CAST(DECODE(BITAND(P.STMT_TYPE,2), 0, 'NO', 'YES') AS VARCHAR2(3)) AS INS,
+      CAST(DECODE(BITAND(P.STMT_TYPE,4), 0, 'NO', 'YES') AS VARCHAR2(3)) AS UPD,
+      CAST(DECODE(BITAND(P.STMT_TYPE,8), 0, 'NO', 'YES') AS VARCHAR2(3)) AS DEL,
+      CAST(DECODE(BITAND(P.STMT_TYPE,2048), 0, 'NO', 'YES') AS VARCHAR2(3)) AS IDX,
+      CAST(DECODE(P.CHECK_OPT, 0, 'NO', 'YES') AS VARCHAR2(3)) AS CHK_OPTION,
+      CAST(DECODE(P.ENABLE_FLAG, 0, 'NO', 'YES') AS VARCHAR2(3)) AS ENABLE,
+      CAST(DECODE(BITAND(P.STMT_TYPE,16), 0, 'NO', 'YES') AS VARCHAR2(3)) AS STATIC_POLICY,
+      CAST(CASE BITAND(P.STMT_TYPE,16+64+128+256+8192+16384+32768+524288)
+        WHEN 16 THEN 'STATIC'
+        WHEN 64 THEN 'SHARED_STATIC'
+        WHEN 128 THEN 'CONTEXT_SENSITIVE'
+        WHEN 256 THEN 'SHARED_CONTEXT_SENSITIVE'
+        WHEN 8192 THEN 'XDS1'
+        WHEN 16384 THEN 'XDS2'
+        WHEN 32768 THEN 'XDS3'
+        WHEN 524288 THEN 'OLS'
+        ELSE 'DYNAMIC' END AS VARCHAR2(24)) AS POLICY_TYPE,
+      CAST(DECODE(BITAND(P.STMT_TYPE,512), 512, 'YES', 'NO') AS VARCHAR2(3)) AS LONG_PREDICATE,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P
+      LEFT JOIN
+        SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G
+        ON P.TENANT_ID = G.TENANT_ID
+        AND P.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND P.RLS_GROUP_ID = G.RLS_GROUP_ID
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON P.TENANT_ID = T.TENANT_ID
+        AND P.TABLE_ID = T.TABLE_ID
+        AND (T.DATABASE_ID = USERENV('SCHEMAID')
+          OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)
+      JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON P.TENANT_ID = DB.TENANT_ID
+        AND T.DATABASE_ID = DB.DATABASE_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'USER_POLICIES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25211',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,
+      CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,
+      CAST(P.POLICY_FUNCTION_SCHEMA AS VARCHAR2(128)) AS PF_OWNER,
+      CAST(P.POLICY_PACKAGE_NAME AS VARCHAR2(128)) AS PACKAGE,
+      CAST(P.POLICY_FUNCTION_NAME AS VARCHAR2(128)) AS FUNCTION,
+      CAST(DECODE(BITAND(P.STMT_TYPE,1), 0, 'NO', 'YES') AS VARCHAR2(3)) AS SEL,
+      CAST(DECODE(BITAND(P.STMT_TYPE,2), 0, 'NO', 'YES') AS VARCHAR2(3)) AS INS,
+      CAST(DECODE(BITAND(P.STMT_TYPE,4), 0, 'NO', 'YES') AS VARCHAR2(3)) AS UPD,
+      CAST(DECODE(BITAND(P.STMT_TYPE,8), 0, 'NO', 'YES') AS VARCHAR2(3)) AS DEL,
+      CAST(DECODE(BITAND(P.STMT_TYPE,2048), 0, 'NO', 'YES') AS VARCHAR2(3)) AS IDX,
+      CAST(DECODE(P.CHECK_OPT, 0, 'NO', 'YES') AS VARCHAR2(3)) AS CHK_OPTION,
+      CAST(DECODE(P.ENABLE_FLAG, 0, 'NO', 'YES') AS VARCHAR2(3)) AS ENABLE,
+      CAST(DECODE(BITAND(P.STMT_TYPE,16), 0, 'NO', 'YES') AS VARCHAR2(3)) AS STATIC_POLICY,
+      CAST(CASE BITAND(P.STMT_TYPE,16+64+128+256+8192+16384+32768+524288)
+        WHEN 16 THEN 'STATIC'
+        WHEN 64 THEN 'SHARED_STATIC'
+        WHEN 128 THEN 'CONTEXT_SENSITIVE'
+        WHEN 256 THEN 'SHARED_CONTEXT_SENSITIVE'
+        WHEN 8192 THEN 'XDS1'
+        WHEN 16384 THEN 'XDS2'
+        WHEN 32768 THEN 'XDS3'
+        WHEN 524288 THEN 'OLS'
+        ELSE 'DYNAMIC' END AS VARCHAR2(24)) AS POLICY_TYPE,
+      CAST(DECODE(BITAND(P.STMT_TYPE,512), 512, 'YES', 'NO') AS VARCHAR2(3)) AS LONG_PREDICATE,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P
+      LEFT JOIN
+        SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G
+        ON P.TENANT_ID = G.TENANT_ID
+        AND P.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND P.RLS_GROUP_ID = G.RLS_GROUP_ID
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON P.TENANT_ID = T.TENANT_ID
+        AND P.TABLE_ID = T.TABLE_ID
+        AND T.DATABASE_ID = USERENV('SCHEMAID')
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'DBA_POLICY_GROUPS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25212',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(G.POLICY_GROUP_NAME AS VARCHAR2(128)) AS POLICY_GROUP,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON G.TENANT_ID = T.TENANT_ID
+        AND G.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND G.TABLE_ID = T.TABLE_ID
+      JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON G.TENANT_ID = DB.TENANT_ID
+        AND T.DATABASE_ID = DB.DATABASE_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'ALL_POLICY_GROUPS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25213',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(G.POLICY_GROUP_NAME AS VARCHAR2(128)) AS POLICY_GROUP,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON G.TENANT_ID = T.TENANT_ID
+        AND G.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND G.TABLE_ID = T.TABLE_ID
+        AND (T.DATABASE_ID = USERENV('SCHEMAID')
+          OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)
+      JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON G.TENANT_ID = DB.TENANT_ID
+        AND T.DATABASE_ID = DB.DATABASE_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'USER_POLICY_GROUPS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25214',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(G.POLICY_GROUP_NAME AS VARCHAR2(128)) AS POLICY_GROUP,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON G.TENANT_ID = T.TENANT_ID
+        AND G.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND G.TABLE_ID = T.TABLE_ID
+        AND T.DATABASE_ID = USERENV('SCHEMAID')
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'DBA_POLICY_CONTEXTS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25215',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(C.CONTEXT_NAME AS VARCHAR2(128)) AS NAMESPACE,
+      CAST(C.ATTRIBUTE AS VARCHAR2(128)) AS ATTRIBUTE,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT C
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON C.TENANT_ID = T.TENANT_ID
+        AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND C.TABLE_ID = T.TABLE_ID
+      JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON C.TENANT_ID = DB.TENANT_ID
+        AND T.DATABASE_ID = DB.DATABASE_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'ALL_POLICY_CONTEXTS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25216',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(C.CONTEXT_NAME AS VARCHAR2(128)) AS NAMESPACE,
+      CAST(C.ATTRIBUTE AS VARCHAR2(128)) AS ATTRIBUTE,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT C
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON C.TENANT_ID = T.TENANT_ID
+        AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND C.TABLE_ID = T.TABLE_ID
+        AND (T.DATABASE_ID = USERENV('SCHEMAID')
+          OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)
+      JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON C.TENANT_ID = DB.TENANT_ID
+        AND T.DATABASE_ID = DB.DATABASE_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'USER_POLICY_CONTEXTS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25217',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(C.CONTEXT_NAME AS VARCHAR2(128)) AS NAMESPACE,
+      CAST(C.ATTRIBUTE AS VARCHAR2(128)) AS ATTRIBUTE,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT C
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON C.TENANT_ID = T.TENANT_ID
+        AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND C.TABLE_ID = T.TABLE_ID
+        AND T.DATABASE_ID = USERENV('SCHEMAID')
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'DBA_SEC_RELEVANT_COLS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25218',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,
+      CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,
+      CAST(C.COLUMN_NAME AS VARCHAR2(128)) AS SEC_REL_COLUMN,
+      CAST(DECODE(BITAND(P.STMT_TYPE,4096), 0, 'NONE', 'ALL_ROWS') AS VARCHAR2(8)) AS COLUMN_OPTION,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_SECURITY_COLUMN_REAL_AGENT SC
+      JOIN
+        SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P
+        ON SC.TENANT_ID = P.TENANT_ID
+        AND SC.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND SC.RLS_POLICY_ID = P.RLS_POLICY_ID
+      LEFT JOIN
+        SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G
+        ON SC.TENANT_ID = G.TENANT_ID
+        AND P.RLS_GROUP_ID = G.RLS_GROUP_ID
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON SC.TENANT_ID = T.TENANT_ID
+        AND P.TABLE_ID = T.TABLE_ID
+      JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON SC.TENANT_ID = DB.TENANT_ID
+        AND T.DATABASE_ID = DB.DATABASE_ID
+      JOIN
+        SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C
+        ON SC.TENANT_ID = C.TENANT_ID
+        AND P.TABLE_ID = C.TABLE_ID
+        AND SC.COLUMN_ID = C.COLUMN_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'ALL_SEC_RELEVANT_COLS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25219',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,
+      CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,
+      CAST(C.COLUMN_NAME AS VARCHAR2(128)) AS SEC_REL_COLUMN,
+      CAST(DECODE(BITAND(P.STMT_TYPE,4096), 0, 'NONE', 'ALL_ROWS') AS VARCHAR2(8)) AS COLUMN_OPTION,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_SECURITY_COLUMN_REAL_AGENT SC
+      JOIN
+        SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P
+        ON SC.TENANT_ID = P.TENANT_ID
+        AND SC.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND SC.RLS_POLICY_ID = P.RLS_POLICY_ID
+      LEFT JOIN
+        SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G
+        ON SC.TENANT_ID = G.TENANT_ID
+        AND P.RLS_GROUP_ID = G.RLS_GROUP_ID
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON SC.TENANT_ID = T.TENANT_ID
+        AND P.TABLE_ID = T.TABLE_ID
+        AND (T.DATABASE_ID = USERENV('SCHEMAID')
+          OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)
+      JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON SC.TENANT_ID = DB.TENANT_ID
+        AND T.DATABASE_ID = DB.DATABASE_ID
+      JOIN
+        SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C
+        ON SC.TENANT_ID = C.TENANT_ID
+        AND P.TABLE_ID = C.TABLE_ID
+        AND SC.COLUMN_ID = C.COLUMN_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'USER_SEC_RELEVANT_COLS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25220',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,
+      CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,
+      CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,
+      CAST(C.COLUMN_NAME AS VARCHAR2(128)) AS SEC_REL_COLUMN,
+      CAST(DECODE(BITAND(P.STMT_TYPE,4096), 0, 'NONE', 'ALL_ROWS') AS VARCHAR2(8)) AS COLUMN_OPTION,
+      CAST('NO' AS VARCHAR2(3)) AS COMMON,
+      CAST('NO' AS VARCHAR2(3)) AS INHERITED
+    FROM
+        SYS.ALL_VIRTUAL_RLS_SECURITY_COLUMN_REAL_AGENT SC
+      JOIN
+        SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P
+        ON SC.TENANT_ID = P.TENANT_ID
+        AND SC.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND SC.RLS_POLICY_ID = P.RLS_POLICY_ID
+      LEFT JOIN
+        SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G
+        ON SC.TENANT_ID = G.TENANT_ID
+        AND P.RLS_GROUP_ID = G.RLS_GROUP_ID
+      JOIN
+        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        ON SC.TENANT_ID = T.TENANT_ID
+        AND P.TABLE_ID = T.TABLE_ID
+        AND T.DATABASE_ID = USERENV('SCHEMAID')
+      JOIN
+        SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C
+        ON SC.TENANT_ID = C.TENANT_ID
+        AND P.TABLE_ID = C.TABLE_ID
+        AND SC.COLUMN_ID = C.COLUMN_ID
+""".replace("\n", " ")
+)
 
 # 25221: DBA_OB_LS_ARB_REPLICA_TASKS
 # 25222: DBA_OB_LS_ARB_REPLICA_TASK_HISTORY
@@ -41658,7 +42636,7 @@ def_table_schema(
       OBJECT_TYPE AS OBJECT_TYPE,
       PL_SCHEMA_ID AS PL_SCHEMA_ID,
       IS_BATCHED_MULTI_STMT AS IS_BATCHED_MULTI_STMT
-      FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0
+      FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND IS_IN_PC='1'
 """.replace("\n", " ")
 )
 
@@ -46382,9 +47360,88 @@ FROM (
 
 # 28153: GV$OB_TENANTS
 # 28154: V$OB_TENANTS
-# 28155: ALL_TRIGGER_ORDERING
-# 28156: DBA_TRIGGER_ORDERING
-# 28157: USER_TRIGGER_ORDERING
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='ALL_TRIGGER_ORDERING',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28155',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition="""
+  SELECT CAST(DB1.DATABASE_NAME AS VARCHAR2(128)) AS TRIGGER_OWNER,
+         CAST(TRG.TRIGGER_NAME AS VARCHAR2(128)) AS TRIGGER_NAME,
+         CAST(TRG.REF_TRG_DB_NAME AS VARCHAR2(128)) AS REFERENCED_TRIGGER_OWNER,
+         CAST(TRG.REF_TRG_NAME AS VARCHAR2(128)) AS REFERENCED_TRIGGER_NAME,
+         CAST(DECODE(TRG.ORDER_TYPE,
+                     1, 'FOLLOWS',
+                     2, 'PRECEDES') AS VARCHAR2(8)) AS ORDERING_TYPE
+  FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
+       INNER JOIN
+       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB1
+       ON TRG.DATABASE_ID = DB1.DATABASE_ID
+           AND TRG.TENANT_ID = EFFECTIVE_TENANT_ID()
+           AND DB1.TENANT_ID = EFFECTIVE_TENANT_ID()
+           AND (TRG.DATABASE_ID = USERENV('SCHEMAID')
+               OR USER_CAN_ACCESS_OBJ(1, abs(nvl(TRG.BASE_OBJECT_ID,0)), TRG.DATABASE_ID) = 1)
+  WHERE TRG.ORDER_TYPE > 0 AND TRG.ACTION_ORDER > 1 AND TRG.DATABASE_ID != 201004
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='DBA_TRIGGER_ORDERING',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28156',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition="""
+  SELECT CAST(DB1.DATABASE_NAME AS VARCHAR2(128)) AS TRIGGER_OWNER,
+         CAST(TRG.TRIGGER_NAME AS VARCHAR2(128)) AS TRIGGER_NAME,
+         CAST(TRG.REF_TRG_DB_NAME AS VARCHAR2(128)) AS REFERENCED_TRIGGER_OWNER,
+         CAST(TRG.REF_TRG_NAME AS VARCHAR2(128)) AS REFERENCED_TRIGGER_NAME,
+         CAST(DECODE(TRG.ORDER_TYPE,
+                     1, 'FOLLOWS',
+                     2, 'PRECEDES') AS VARCHAR2(8)) AS ORDERING_TYPE
+  FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
+       INNER JOIN
+       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB1
+       ON TRG.DATABASE_ID = DB1.DATABASE_ID
+           AND TRG.TENANT_ID = EFFECTIVE_TENANT_ID()
+           AND DB1.TENANT_ID = EFFECTIVE_TENANT_ID()
+  WHERE TRG.ORDER_TYPE > 0 AND TRG.ACTION_ORDER > 1 AND TRG.DATABASE_ID != 201004
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'webber.wb',
+  table_name='USER_TRIGGER_ORDERING',
+  database_id='OB_ORA_SYS_DATABASE_ID',
+  table_id='28157',
+  table_type='SYSTEM_VIEW',
+  rowkey_columns=[],
+  normal_columns=[],
+  gm_columns=[],
+  in_tenant_space=True,
+  view_definition="""
+  SELECT CAST(TRG.TRIGGER_NAME AS VARCHAR2(128)) AS TRIGGER_NAME,
+         CAST(TRG.REF_TRG_DB_NAME AS VARCHAR2(128)) AS REFERENCED_TRIGGER_OWNER,
+         CAST(TRG.REF_TRG_NAME AS VARCHAR2(128)) AS REFERENCED_TRIGGER_NAME,
+         CAST(DECODE(TRG.ORDER_TYPE,
+                     1, 'FOLLOWS',
+                     2, 'PRECEDES') AS VARCHAR2(8)) AS ORDERING_TYPE
+  FROM (SELECT * FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT
+        WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND ORDER_TYPE > 0 AND ACTION_ORDER > 1)TRG
+  WHERE TRG.DATABASE_ID = USERENV('SCHEMAID')
+""".replace("\n", " ")
+)
+
 # 28158: DBA_OB_SWITCHOVER_CHECKPOINTS
 
 # 28159: GV$OB_TRANSACTION_SCHEDULERS
@@ -46421,10 +47478,176 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-# 28172: GV$OB_SQL_PLAN
-# 28173: V$OB_SQL_PLAN
-# 28174: GV$OB_PLAN_REAL_INFO
-# 28175: V$OB_PLAN_REAL_INFO
+def_table_schema(
+  owner = 'zhenling.zzg',
+  table_name      = 'GV$OB_SQL_PLAN',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28172',
+  table_type = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+                        SVR_IP,
+                        SVR_PORT,
+                        DB_ID,
+                        SQL_ID,
+                        PLAN_HASH,
+                        PLAN_ID,
+                        GMT_CREATE,
+                        OPERATION,
+                        OPTIONS,
+                        OBJECT_NODE,
+                        "OBJECT#",
+                        OBJECT_OWNER,
+                        OBJECT_NAME,
+                        OBJECT_ALIAS,
+                        OBJECT_TYPE,
+                        OPTIMZIER,
+                        ID,
+                        PARENT_ID,
+                        DEPTH,
+                        POSITION,
+                        SEARCH_COLUMNS,
+                        COST,
+                        CARDINALITY,
+                        BYTES,
+                        ROWSET,
+                        OTHER_TAG,
+                        PARTITION_START,
+                        PARTITION_STOP,
+                        PARTITION_ID,
+                        OTHER,
+                        DISTRIBUTION,
+                        CPU_COST,
+                        IO_COST,
+                        TEMP_SPACE,
+                        ACCESS_PREDICATES,
+                        FILTER_PREDICATES,
+                        STARTUP_PREDICATES,
+                        PROJECTION,
+                        SPECIAL_PREDICATES,
+                        "TIME",
+                        QBLOCK_NAME,
+                        REMARKS,
+                        OTHER_XML
+                    FROM SYS.ALL_VIRTUAL_SQL_PLAN
+                    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  table_name     = 'V$OB_SQL_PLAN',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28173',
+  table_type = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+                      DB_ID,
+                      SQL_ID,
+                      PLAN_HASH,
+                      PLAN_ID,
+                      GMT_CREATE,
+                      OPERATION,
+                      OPTIONS,
+                      OBJECT_NODE,
+                      "OBJECT#",
+                      OBJECT_OWNER,
+                      OBJECT_NAME,
+                      OBJECT_ALIAS,
+                      OBJECT_TYPE,
+                      OPTIMZIER,
+                      ID,
+                      PARENT_ID,
+                      DEPTH,
+                      POSITION,
+                      SEARCH_COLUMNS,
+                      COST,
+                      CARDINALITY,
+                      BYTES,
+                      ROWSET,
+                      OTHER_TAG,
+                      PARTITION_START,
+                      PARTITION_STOP,
+                      PARTITION_ID,
+                      OTHER,
+                      DISTRIBUTION,
+                      CPU_COST,
+                      IO_COST,
+                      TEMP_SPACE,
+                      ACCESS_PREDICATES,
+                      FILTER_PREDICATES,
+                      STARTUP_PREDICATES,
+                      PROJECTION,
+                      SPECIAL_PREDICATES,
+                      "TIME",
+                      QBLOCK_NAME,
+                      REMARKS,
+                      OTHER_XML
+    FROM SYS.GV$OB_SQL_PLAN
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  table_name      = 'GV$OB_PLAN_REAL_INFO',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28174',
+  table_type = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+                        SVR_IP,
+                        SVR_PORT,
+                        SQL_ID,
+                        PLAN_HASH,
+                        PLAN_ID,
+                        ID,
+                        REAL_COST,
+                        REAL_CARDINALITY,
+                        CPU_COST,
+                        IO_COST
+                    FROM SYS.ALL_VIRTUAL_PLAN_REAL_INFO
+                    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  table_name     = 'V$OB_PLAN_REAL_INFO',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28175',
+  table_type = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+                      SQL_ID,
+                        PLAN_HASH,
+                        PLAN_ID,
+                        ID,
+                        REAL_COST,
+                        REAL_CARDINALITY,
+                        CPU_COST,
+                        IO_COST
+    FROM SYS.GV$OB_PLAN_REAL_INFO
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
 
 
 # 28176:  V$OB_ARCHIVE_DEST_STATUS
@@ -47141,10 +48364,58 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_database_privilege'])
 
-# 101082: idx_rls_policy_table_id
-# 101083: idx_rls_policy_group_id
-# 101084: idx_rls_policy_his_table_id
-# 101085: idx_rls_group_table_id
-# 101086: idx_rls_group_his_table_id
-# 101087: idx_rls_policy_table_id
-# 101088: idx_rls_context_his_table_id
+def_sys_index_table(
+  index_name = 'idx_rls_policy_table_id',
+  index_table_id = 101082,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rls_policy'])
+
+def_sys_index_table(
+  index_name = 'idx_rls_policy_group_id',
+  index_table_id = 101083,
+  index_columns = ['rls_group_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rls_policy'])
+
+def_sys_index_table(
+  index_name = 'idx_rls_policy_his_table_id',
+  index_table_id = 101084,
+  index_columns = ['table_id', 'rls_policy_id', 'schema_version'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rls_policy_history'])
+
+def_sys_index_table(
+  index_name = 'idx_rls_group_table_id',
+  index_table_id = 101085,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rls_group'])
+
+def_sys_index_table(
+  index_name = 'idx_rls_group_his_table_id',
+  index_table_id = 101086,
+  index_columns = ['table_id', 'rls_group_id', 'schema_version'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rls_group_history'])
+
+def_sys_index_table(
+  index_name = 'idx_rls_context_table_id',
+  index_table_id = 101087,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rls_context'])
+
+def_sys_index_table(
+  index_name = 'idx_rls_context_his_table_id',
+  index_table_id = 101088,
+  index_columns = ['table_id', 'rls_context_id', 'schema_version'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rls_context_history'])

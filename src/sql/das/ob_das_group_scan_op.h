@@ -22,9 +22,7 @@ class ObGroupLookupOp : public ObLocalIndexLookupOp
 {
 public:
   ObGroupLookupOp() : ObLocalIndexLookupOp(ObNewRowIterator::IterType::ObGroupLookupOp),
-                      group_iter_(),
-                      index_group_cnt_(1),
-                      lookup_group_cnt_(1)
+                      group_iter_()
   {
     lookup_iter_ = &group_iter_;
   }
@@ -35,10 +33,10 @@ public:
     index_group_cnt_ = 1;
     lookup_group_cnt_ = 1;
   }
-  virtual int64_t get_index_group_cnt() override  { return index_group_cnt_; }
+  virtual int64_t get_index_group_cnt() const override  { return index_group_cnt_; }
   virtual void set_index_group_cnt(int64_t group_cnt_) override {index_group_cnt_ = group_cnt_;}
   virtual void inc_index_group_cnt() override { ++index_group_cnt_; }
-  virtual int64_t get_lookup_group_cnt() override  { return lookup_group_cnt_; }
+  virtual int64_t get_lookup_group_cnt() const  override  { return lookup_group_cnt_; }
   virtual void inc_lookup_group_cnt() override { ++lookup_group_cnt_; }
   virtual int switch_rowkey_scan_group() override
   {
@@ -58,8 +56,6 @@ public:
   virtual int set_lookup_scan_group(int64_t group_id) override;
 public:
   ObGroupScanIter group_iter_;
-  int64_t index_group_cnt_;  // number of groups fetched from index table
-  int64_t lookup_group_cnt_; // number of groups fetched from lookup table
 };
 
 class ObDASGroupScanOp : public ObDASScanOp

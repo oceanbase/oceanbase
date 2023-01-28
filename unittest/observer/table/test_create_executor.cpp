@@ -393,7 +393,7 @@ TEST_F(TestCreateExecutor, refresh_exprs_frame)
   ObTableCtx fake_ctx(allocator_);
   ObExprFrameInfo fake_expr_info(allocator_);
   ObTableEntity entity;
-  ObStaticEngineCG cg;
+  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
   // prepare data
   ObObj obj;
   obj.set_int(1234);

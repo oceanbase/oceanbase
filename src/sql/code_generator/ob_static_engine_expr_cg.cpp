@@ -267,27 +267,7 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       rt_expr->obj_datum_map_ = ObDatum::get_obj_datum_map_type(result_meta.get_type());
     }
     if (T_REF_COLUMN == raw_expr->get_expr_type()) {
-      const ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(raw_expr);
-      // generated column's arg_cnt = 1, used to store dependant expr's rt_expr
-      if (need_flatten_gen_col_// temp expr not need flatten gen col
-          && col_expr->is_generated_column()) {
-        rt_expr->arg_cnt_ = 1;
-        ObExpr **buf = static_cast<ObExpr **>(allocator_.alloc(sizeof(ObExpr *)));
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc memory", K(ret));
-        } else {
-          memset(buf, 0, sizeof(ObExpr *));
-          rt_expr->args_ = buf;
-          if (OB_ISNULL(get_rt_expr(*col_expr->get_dependant_expr()))) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("expr is null", K(ret));
-          } else {
-            rt_expr->args_[0] = get_rt_expr(*col_expr->get_dependant_expr());
-            rt_expr->eval_func_ = ObExprUtil::eval_generated_column;
-          }
-        }
-      }
+      // do nothing.
     } else {
       // init arg_cnt_
       rt_expr->arg_cnt_ = raw_expr->get_param_count();
@@ -1477,12 +1457,16 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
                                                  const RowDesc &row_desc,
                                                  ObIAllocator &allocator,
                                                  ObSQLSessionInfo *session,
+                                                 ObSchemaGetterGuard *schema_guard,
                                                  ObTempExpr *&temp_expr)
 {
   int ret = OB_SUCCESS;
   temp_expr = NULL;
   ObRawExprUniqueSet flattened_raw_exprs(true);
   char *buf = static_cast<char *>(allocator.alloc(sizeof(ObTempExpr)));
+  if (NULL == schema_guard) {
+    schema_guard = &session->get_cached_schema_guard_info().get_schema_guard();
+  }
   CK(OB_NOT_NULL(buf));
   CK(OB_NOT_NULL(expr));
   if (OB_SUCC(ret)) {
@@ -1490,7 +1474,7 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
     temp_expr = new(buf)ObTempExpr(allocator);
     ObStaticEngineExprCG expr_cg(allocator,
                                  session,
-                                 &session->get_cached_schema_guard_info().get_schema_guard(),
+                                 schema_guard,
                                  0,
                                  0);
     expr_cg.set_rt_question_mark_eval(true);

@@ -39,7 +39,9 @@ ObNestedLoopJoinOp::ObNestedLoopJoinOp(ObExecContext &exec_ctx,
     batch_mem_ctx_(NULL), stored_rows_(NULL), left_brs_(NULL), left_matched_(NULL),
     need_switch_iter_(false), iter_end_(false), op_max_batch_size_(0),
     max_group_size_(OB_MAX_BULK_JOIN_ROWS),
-    group_join_buffer_()
+    group_join_buffer_(),
+    match_left_batch_end_(false), match_right_batch_end_(false), l_idx_(0),
+    no_match_row_found_(true), need_output_row_(false), left_expr_extend_size_(0)
 {
   state_operation_func_[JS_JOIN_END] = &ObNestedLoopJoinOp::join_end_operate;
   state_function_func_[JS_JOIN_END][FT_ITER_GOING] = NULL;
@@ -81,23 +83,6 @@ int ObNestedLoopJoinOp::inner_open()
       } else if (OB_ISNULL(batch_mem_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null memory entity returned", K(ret));
-      } else if (OB_FAIL(right_store_.init(mem_limit, tenant_id, ObCtxIds::WORK_AREA,
-              common::ObModIds::OB_SQL_NLJ_CACHE, true, sizeof(int64_t)))) {
-        LOG_WARN("init row store failed", K(ret));
-      } else if (OB_FAIL(right_store_.alloc_dir_id())) {
-        LOG_WARN("failed to alloc dir id", K(ret));
-      } else {
-        right_store_.set_allocator(batch_mem_ctx_->get_malloc_allocator());
-        right_store_.set_io_event_observer(&io_event_observer_);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      stored_rows_ = static_cast<ObChunkDatumStore::StoredRow **>(batch_mem_ctx_
-                     ->get_arena_allocator().alloc(
-                       sizeof(ObChunkDatumStore::StoredRow *) * MY_SPEC.max_batch_size_));
-      if (OB_ISNULL(stored_rows_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -112,12 +97,7 @@ int ObNestedLoopJoinOp::inner_open()
       }
     }
     if (OB_SUCC(ret)) {
-      // if join type is left semi or anti join, we don't have to get batch from right_store_ when output.
-      // That means datums of exprs in right output_ won't be overwrited.
-      if (!IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_)
-          && OB_FAIL(brs_holder_.init(right_->get_spec().output_, eval_ctx_))) {
-        LOG_WARN("fail to init brs_holder_", K(ret));
-      } else if (OB_FAIL(left_batch_.init(&(left_->get_spec().output_),
+      if (OB_FAIL(left_batch_.init(&(left_->get_spec().output_),
                                    &(batch_mem_ctx_->get_arena_allocator()),
                                    MY_SPEC.max_batch_size_))) {
         LOG_WARN("fail to init batch", K(ret));
@@ -258,6 +238,12 @@ void ObNestedLoopJoinOp::reset_buf_state()
   iter_end_ = false;
   left_batch_.saved_size_ = 0;
   last_save_batch_.saved_size_ = 0;
+  match_left_batch_end_ = false;
+  match_right_batch_end_ = false;
+  l_idx_ = 0;
+  no_match_row_found_ = true;
+  need_output_row_ = false;
+  left_expr_extend_size_ = 0;
 }
 
 int ObNestedLoopJoinOp::fill_cur_row_rescan_param()
@@ -400,7 +386,7 @@ int ObNestedLoopJoinOp::rescan_right_operator()
         LOG_WARN("rescan right failed", K(ret));
       }
     } else {
-      brs_holder_.reset();
+      /*do nothing*/
     }
   }
   return ret;
@@ -514,7 +500,6 @@ int ObNestedLoopJoinOp::group_read_left_operate()
         LOG_WARN("fail to fill cur row rescan param", K(ret));
       } else if (MY_SPEC.enable_px_batch_rescan_) {
         OZ(right_->rescan());
-        OX(brs_holder_.reset());
       }
       if (OB_SUCC(ret)) {
         left_row_joined_ = false;
@@ -805,161 +790,123 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
   return ret;
 }
 
-int ObNestedLoopJoinOp::process_left_batch()
+
+
+int ObNestedLoopJoinOp::rescan_right_op()
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
-  for (int64_t l_idx = 0; OB_SUCC(ret) && l_idx < left_brs_->size_; l_idx++) {
-    // Note:
-    // Overwrite batch_size in the beginning of the loop as eval_ctx_.batch_size
-    // would be modified when processing right child.
-    // Adding seperated guards for left/right children can also solve the problem,
-    // we don't choose that way due to performance reason.
-    batch_info_guard.set_batch_size(left_brs_->size_);
-    if (!MY_SPEC.group_rescan_ && !MY_SPEC.enable_px_batch_rescan_) {
-      batch_info_guard.set_batch_idx(l_idx);
-      if (left_brs_->skip_->exist(l_idx)) { continue; }
-      if (OB_FAIL(rescan_params_batch_one(l_idx))) {
-        LOG_WARN("fail to rescan params", K(ret));
-      }
-    } else if (MY_SPEC.group_rescan_ && !MY_SPEC.enable_px_batch_rescan_) {
-      if (OB_FAIL(group_join_buffer_.rescan_right())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_ERR_UNEXPECTED;
-        }
-        LOG_WARN("rescan right failed", KR(ret));
-      } else if (OB_FAIL(group_join_buffer_.fill_cur_row_group_param())) {
-        LOG_WARN("fill group param failed", KR(ret));
-      }
-    } else if (MY_SPEC.enable_px_batch_rescan_) {
-      // NOTE: left batch is ALWAYS continous, NO need to check skip for
-      // left_brs under px batch rescan
-      batch_info_guard.set_batch_idx(l_idx);
-      if (OB_FAIL(fill_cur_row_rescan_param())) {
-        LOG_WARN("fail to fill cur row rescan param", K(ret));
-      } else if (OB_FAIL(right_->rescan())) {
-        LOG_WARN("failed to rescan right", K(ret));
-      } else {
-        brs_holder_.reset();
-      }
+  // Note:
+  // Overwrite batch_size in the beginning of the loop as eval_ctx_.batch_size
+  // would be modified when processing right child.
+  // Adding seperated guards for left/right children can also solve the problem,
+  // we don't choose that way due to performance reason.
+  batch_info_guard.set_batch_size(left_brs_->size_);
+  if (!MY_SPEC.group_rescan_ && !MY_SPEC.enable_px_batch_rescan_) {
+    batch_info_guard.set_batch_idx(l_idx_);
+    if (OB_FAIL(rescan_params_batch_one(l_idx_))) {
+      LOG_WARN("fail to rescan params", K(ret));
     }
-    int64_t stored_rows_count = 0;
-    bool match_right_batch_end = false;
-    bool no_match_row_found = true;
-    LOG_DEBUG("ObNestedLoopJoinOp::process_left_batch: after rescan", K(l_idx),
-            K(batch_rescan_ctl_.param_version_), K(batch_rescan_ctl_.cur_idx_));
-    while (OB_SUCC(ret) && !match_right_batch_end) {
-      // get and calc right batch from right child until right operator reach end
-      if (OB_FAIL(calc_right_batch_matched_result(l_idx, match_right_batch_end,
-                                                  batch_info_guard))) {
-        LOG_WARN("fail to get right batch", K(ret));
-      } else {
-        if (IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_)) {
-          // do nothing
-        } else if (OB_FAIL(right_store_.add_batch(right_->get_spec().output_,
-                                           eval_ctx_, *brs_.skip_,
-                                           brs_.size_,
-                                           stored_rows_count,
-                                           stored_rows_))) {
-          LOG_WARN("fail to add rows", K(ret));
-        } else if (stored_rows_count > 0) {
-          no_match_row_found = false;
-          for (int64_t i = 0; i < stored_rows_count; i++) {
-            *(reinterpret_cast<int64_t *>(stored_rows_[i]->get_extra_payload())) = l_idx;
-          }
-        }
-      }
-      reset_batchrows();
-    } // while right batch end
-
-    if (MY_SPEC.enable_px_batch_rescan_) {
-      batch_rescan_ctl_.cur_idx_++;
-    }
-    // outer join: generate a blank row for LEFT OUTER JOIN
-    // Note: optimizer guarantee there is NO RIGHT/FULL OUTER JOIN for NLJ
-    if (OB_SUCC(ret) && no_match_row_found && need_left_join()) {
-      brs_.size_ = 1;
-      ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
-      guard.set_batch_idx(0);
-      blank_row_batch_one(right_->get_spec().output_);
-      // Note: no need to call brs_.skip_->unset(0) as brs_.skip_->reset()
-      // already unset that row
-      if (OB_FAIL(right_store_.add_batch(right_->get_spec().output_, eval_ctx_,
-                                         *brs_.skip_, brs_.size_,
-                                         stored_rows_count, stored_rows_))) {
-        LOG_WARN("fail to add rows", K(ret));
-      } else if (stored_rows_count != 1) {
-        LOG_WARN("failed to generate a blank row");
+  } else if (MY_SPEC.group_rescan_ && !MY_SPEC.enable_px_batch_rescan_) {
+    if (OB_FAIL(group_join_buffer_.rescan_right())) {
+      if (OB_ITER_END == ret) {
         ret = OB_ERR_UNEXPECTED;
-      } else {
-        for (int64_t i = 0; i < stored_rows_count; i++) {
-          *(reinterpret_cast<int64_t *>(stored_rows_[i]->get_extra_payload())) = l_idx;
-          LOG_DEBUG("left out join: generated a blank row", K(l_idx));
-        }
       }
-      reset_batchrows();
+      LOG_WARN("rescan right failed", KR(ret));
+    } else if (OB_FAIL(group_join_buffer_.fill_cur_row_group_param())) {
+      LOG_WARN("fill group param failed", KR(ret));
     }
-  } // for end
-  clear_evaluated_flag();
-
+  } else if (MY_SPEC.enable_px_batch_rescan_) {
+    // NOTE: left batch is ALWAYS continous, NO need to check skip for
+    // left_brs under px batch rescan
+    batch_info_guard.set_batch_idx(l_idx_);
+    if (OB_FAIL(fill_cur_row_rescan_param())) {
+      LOG_WARN("fail to fill cur row rescan param", K(ret));
+    } else if (OB_FAIL(right_->rescan())) {
+      LOG_WARN("failed to rescan right", K(ret));
+    } else {
+      // do nothing
+    }
+  }
   return ret;
 }
 
-int ObNestedLoopJoinOp::calc_right_batch_matched_result(
-    int64_t l_idx, bool &match_right_batch_end,
-    ObEvalCtx::BatchInfoScopeGuard &batch_info_guard)
+int ObNestedLoopJoinOp::process_right_batch()
 {
   int ret = OB_SUCCESS;
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
+  batch_info_guard.set_batch_size(left_brs_->size_);
+  reset_batchrows();
   const ObBatchRows *right_brs = &right_->get_brs();
   const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
   clear_evaluated_flag();
-  if (!IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_) &&
-      OB_FAIL(restore_right_child_exprs())) {
-    LOG_WARN("restore expr datums failed", K(ret));
-  } else if (OB_FAIL(right_->get_next_batch(op_max_batch_size_, right_brs))) {
+  if (OB_FAIL(right_->get_next_batch(op_max_batch_size_, right_brs))) {
     LOG_WARN("fail to get next right batch", K(ret), K(MY_SPEC));
   } else if (0 == right_brs->size_ && right_brs->end_) {
-    match_right_batch_end = true;
+    match_right_batch_end_ = true;
   } else {
+    if (MY_SPEC.enable_px_batch_rescan_) {
+      last_save_batch_.extend_save(eval_ctx_, right_brs->size_);
+    } else if (!MY_SPEC.group_rescan_) {
+      left_batch_.extend_save(eval_ctx_, right_brs->size_);
+    }
+    left_expr_extend(right_brs->size_);
     if (0 == conds.count()) {
       brs_.skip_->deep_copy(*right_brs->skip_, right_brs->size_);
     } else {
-      if (MY_SPEC.enable_px_batch_rescan_) {
-        last_save_batch_.extend_save(eval_ctx_, right_brs->size_);
-      } else if (!MY_SPEC.group_rescan_) {
-        left_batch_.extend_save(eval_ctx_, right_brs->size_);
-      }
       batch_info_guard.set_batch_size(right_brs->size_);
       bool is_match = false;
-      for (int64_t r_idx = 0; OB_SUCC(ret) && r_idx < right_brs->size_; r_idx ++) {
+      for (int64_t r_idx = 0; OB_SUCC(ret) && r_idx < right_brs->size_; r_idx++) {
         batch_info_guard.set_batch_idx(r_idx);
         if (right_brs->skip_->exist(r_idx)) {
           brs_.skip_->set(r_idx);
-        } else if (OB_FAIL(calc_other_conds_with_update_left_expr(
-                       is_match, left_batch_, l_idx))) {
+        } else if (OB_FAIL(calc_other_conds(is_match))) {
           LOG_WARN("calc_other_conds failed", K(ret), K(r_idx),
                    K(right_brs->size_));
         } else if (!is_match) {
           brs_.skip_->set(r_idx);
         } else { /*do nothing*/
         }
-        LOG_DEBUG("cal_other_conds finished ", K(is_match), K(l_idx), K(r_idx));
+        LOG_DEBUG("cal_other_conds finished ", K(is_match), K(l_idx_), K(r_idx));
       } // for conds end
     }
 
     if (OB_SUCC(ret)) {
       brs_.size_ = right_brs->size_;
+      int64_t skip_cnt = brs_.skip_->accumulate_bit_cnt(right_brs->size_);
       if (IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_)) {
-        int64_t skip_cnt = brs_.skip_->accumulate_bit_cnt(right_brs->size_);
         if (right_brs->size_ - skip_cnt > 0) {
-          left_matched_->set(l_idx);
-          match_right_batch_end = true;
+          left_matched_->set(l_idx_);
+          match_right_batch_end_ = true;
+        }
+      } else {
+        if (right_brs->size_ - skip_cnt > 0) {
+          need_output_row_ = true;
+          no_match_row_found_ = false;
         }
       }
-      match_right_batch_end = match_right_batch_end || right_brs->end_;
+      match_right_batch_end_ = match_right_batch_end_ || right_brs->end_;
+    }
+  }
+  // outer join
+  if (OB_SUCC(ret)) {
+    if (match_right_batch_end_ && no_match_row_found_ && need_left_join()) {
+      need_output_row_ = true;
     }
   }
 
+  return ret;
+}
+// Expand left row full column
+int ObNestedLoopJoinOp::left_expr_extend(int32_t size)
+{
+  int ret = OB_SUCCESS;
+  for (int32_t r_idx = left_expr_extend_size_; OB_SUCC(ret) && r_idx < size; r_idx++) {
+    left_batch_.to_exprs(eval_ctx_, l_idx_, r_idx);
+  }
+  if (left_expr_extend_size_ < size) {
+    left_expr_extend_size_ = size;
+  }
   return ret;
 }
 
@@ -967,6 +914,7 @@ int ObNestedLoopJoinOp::output()
 {
   int ret = OB_SUCCESS;
   if (IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_)) {
+    reset_batchrows();
     if (LEFT_SEMI_JOIN == MY_SPEC.join_type_) {
       brs_.skip_->bit_calculate(*left_batch_.skip_, *left_matched_, left_batch_.size_,
                                 [](const uint64_t l, const uint64_t r) { return (l | (~r)); });
@@ -981,37 +929,55 @@ int ObNestedLoopJoinOp::output()
     brs_.size_ = left_batch_.size_;
     left_matched_->reset(left_batch_.size_);
   } else {
+    // do nothing.
+  }
+  // outer join: generate a blank row for LEFT OUTER JOIN
+  // Note: optimizer guarantee there is NO RIGHT/FULL OUTER JOIN for NLJ
+  if (OB_SUCC(ret) && match_right_batch_end_ && no_match_row_found_ && need_left_join()) {
     reset_batchrows();
-    if (right_store_iter_.is_valid() && right_store_iter_.has_next()) {
-      int64_t read_rows = 0;
-      if (OB_FAIL(right_store_iter_.get_next_batch(right_->get_spec().output_, eval_ctx_,
-                              op_max_batch_size_, read_rows,
-                              const_cast<const ObChunkDatumStore::StoredRow **>(stored_rows_)))) {
-        if (OB_ITER_END == ret) {
-          OB_ASSERT(read_rows == 0);
-          // do nothing
-        } else {
-          LOG_WARN("fail to get next batch", K(ret));
-        }
-      } else {
-        if (MY_SPEC.enable_px_batch_rescan_) {
-          last_save_batch_.extend_save(eval_ctx_, read_rows);
-        } else if (!MY_SPEC.group_rescan_) {
-          left_batch_.extend_save(eval_ctx_, read_rows);
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < read_rows; i++) {
-          int64_t left_batch_idx = *(reinterpret_cast<int64_t *>(
-                                     stored_rows_[i]->get_extra_payload()));
-          left_batch_.to_exprs(eval_ctx_, left_batch_idx, i);
-        }
-      }
-      brs_.size_ = read_rows;
-    } else {
-      ret = OB_ITER_END;
+    brs_.size_ = 1;
+    ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+    guard.set_batch_idx(0);
+    blank_row_batch_one(right_->get_spec().output_);
+    if (MY_SPEC.enable_px_batch_rescan_) {
+      last_save_batch_.extend_save(eval_ctx_, 1);
+    } else if (!MY_SPEC.group_rescan_) {
+      left_batch_.extend_save(eval_ctx_, 1);
     }
+    left_batch_.to_exprs(eval_ctx_, l_idx_, 0);
   }
 
   return ret;
+}
+
+void ObNestedLoopJoinOp::reset_left_batch_state()
+{
+  match_left_batch_end_ = false;
+  l_idx_ = 0;
+}
+
+void ObNestedLoopJoinOp::reset_right_batch_state()
+{
+  match_right_batch_end_ = false;
+  l_idx_++;
+  no_match_row_found_ = true;
+  left_expr_extend_size_ = 0;
+  if (MY_SPEC.enable_px_batch_rescan_) {
+    batch_rescan_ctl_.cur_idx_++;
+  }
+}
+
+void ObNestedLoopJoinOp::skip_l_idx()
+{
+  if (!MY_SPEC.group_rescan_ && !MY_SPEC.enable_px_batch_rescan_) {
+    while (l_idx_ >= 0 && l_idx_ < left_brs_->size_) {
+      if (left_brs_->skip_->exist(l_idx_)) {
+        l_idx_++;
+      } else {
+        break;
+      }
+    }
+  }
 }
 
 int ObNestedLoopJoinOp::inner_get_next_batch(const int64_t max_row_cnt)
@@ -1035,39 +1001,65 @@ int ObNestedLoopJoinOp::inner_get_next_batch(const int64_t max_row_cnt)
           LOG_WARN("fail to get left batch", K(ret));
         }
       } else {
-        batch_state_ = JS_PROCESS;
+        batch_state_ = JS_RESCAN_RIGHT_OP;
       }
     }
-    if (JS_PROCESS == batch_state_) {
-      right_store_iter_.reset();
-      right_store_.reset();
-      if (OB_FAIL(process_left_batch())) {
-        LOG_WARN("fail to process", K(ret));
+    if (OB_SUCC(ret) && JS_RESCAN_RIGHT_OP == batch_state_) {
+      skip_l_idx();
+      if (l_idx_ >= left_brs_->size_) {
+        match_left_batch_end_ = true;
+      }
+      if (!match_left_batch_end_ && OB_FAIL(rescan_right_op())) {
+        LOG_WARN("fail to rescan right op", K(ret));
       } else {
-        if (OB_FAIL(right_store_.finish_add_row(false))) {
-          LOG_WARN("failed to finish add row to row store", K(ret));
-        } else if (OB_FAIL(right_store_.begin(right_store_iter_))) {
-          LOG_WARN("failed to begin iterator for chunk row store", K(ret));
-        } else {
+        if (match_left_batch_end_ && IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_)) {
           batch_state_ = JS_OUTPUT;
-          if (!IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_)
-              && OB_FAIL(backup_right_child_exprs())) {
-            LOG_WARN("backup expr datums failed", K(ret));
+          reset_left_batch_state();
+        } else if (match_left_batch_end_) {
+          batch_state_ = JS_FILL_LEFT;
+          reset_left_batch_state();
+        } else {
+          batch_state_ = JS_PROCESS_RIGHT_BATCH;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && JS_PROCESS_RIGHT_BATCH == batch_state_) {
+      if (OB_FAIL(process_right_batch())) {
+        LOG_WARN("fail to process right batch", K(ret));
+      } else {
+        if (IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_)) {
+          if (match_right_batch_end_) {
+            batch_state_ = JS_RESCAN_RIGHT_OP;
+            reset_right_batch_state();
+          } else  {
+            batch_state_ = JS_PROCESS_RIGHT_BATCH;
+          }
+        } else {
+          if (need_output_row_) {
+            batch_state_ = JS_OUTPUT;
+            need_output_row_ = false;
+          } else {
+            if (match_right_batch_end_) {
+              batch_state_ = JS_RESCAN_RIGHT_OP;
+              reset_right_batch_state();
+            } else {
+              batch_state_ = JS_PROCESS_RIGHT_BATCH;
+            }
           }
         }
       }
     }
-    if (JS_OUTPUT == batch_state_) {
+    if (OB_SUCC(ret) && JS_OUTPUT == batch_state_) {
       if (OB_FAIL(output())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          batch_state_ = JS_FILL_LEFT;
-        } else {
-          LOG_WARN("fail to output", K(ret));
-        }
+        LOG_WARN("fail to output", K(ret));
       } else {
         if (IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_)) {
           batch_state_ = JS_FILL_LEFT;
+        } else if (match_right_batch_end_) {
+          batch_state_ = JS_RESCAN_RIGHT_OP;
+          reset_right_batch_state();
+        } else {
+          batch_state_ = JS_PROCESS_RIGHT_BATCH;
         }
         break;
       }
@@ -1081,32 +1073,15 @@ int ObNestedLoopJoinOp::inner_get_next_batch(const int64_t max_row_cnt)
 }
 
 
-// update datums from left child expr before calc other conditions
-int ObNestedLoopJoinOp::calc_other_conds_with_update_left_expr(bool &is_match,
-                               ObBatchRowDatums &left_batch,
-                               const int64_t l_idx)
+//calc other conditions
+int ObNestedLoopJoinOp::calc_other_conds(bool &is_match)
 {
   int ret = OB_SUCCESS;
   is_match = true;
   const ObIArray<ObExpr *> &conds = MY_SPEC.other_join_conds_;
-  const auto &left_output = left_->get_spec().output_;
   ObDatum *cmp_res = NULL;
   ARRAY_FOREACH(conds, i) {
     auto cond = conds.at(i);
-    // update datums from condition args when it is from left child
-    const ObIArray<int> &left_expr_ids =
-        MY_SPEC.left_expr_ids_in_other_cond_.at(i);
-    for (auto j = 0; j < left_expr_ids.count();
-         j++) {
-      auto left_output_expr_id =
-          left_expr_ids.at(j);
-      auto &datum = left_output.at(left_output_expr_id)
-                        ->locate_datum_for_write(eval_ctx_);
-      datum = left_batch.get_datum(
-          // always fetch datum 0 if expr is NOT batch result
-          left_output.at(left_output_expr_id)->is_batch_result() ? l_idx : 0,
-          left_output_expr_id);
-    }
     if (OB_FAIL(conds.at(i)->eval(eval_ctx_, cmp_res))) {
       LOG_WARN("fail to calc other join condition", K(ret), K(*conds.at(i)));
     } else if (cmp_res->is_null() || 0 == cmp_res->get_int()) {

@@ -15,6 +15,7 @@
 #include "lib/utility/serialization.h"
 #include "lib/ob_define.h"
 #include "lib/worker.h"
+#include "common/ob_common_utility.h"
 
 namespace oceanbase
 {
@@ -2608,7 +2609,8 @@ inline bool ObCharset::is_argument_valid(const ObCharsetInfo *cs, const char *st
         OB_ISNULL(cs) ||
         OB_ISNULL(cs->cset)) {
       is_arg_valid = false;
-      BACKTRACE(ERROR, true, "invalid argument. charset info = %p, str = %p, str_len = %ld", cs, str, str_len);
+      const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
+      BACKTRACE(ERROR, true, "invalid argument. charset info = %p, str = %p, str_len = %ld, extra_info=(%s)", cs, str, str_len, (NULL == extra_info) ? NULL : to_cstring(*extra_info));
     }
   }
   return is_arg_valid;

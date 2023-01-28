@@ -66,12 +66,11 @@ int ObLogGranuleIterator::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogGranuleIterator::print_my_plan_annotation(char *buf,
-                                             int64_t &buf_len,
-                                             int64_t &pos,
-                                             ExplainType type)
+int ObLogGranuleIterator::get_plan_item_info(PlanText &plan_text,
+                                             ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
+  bool has_first = false;
   static const int64_t FLAG_NEED_PRINT_COUNT = 8;
   static const int32_t MAX_GI_FLAG_NAME_LENGTH = 30;
   static const char gi_flag_name[FLAG_NEED_PRINT_COUNT][MAX_GI_FLAG_NAME_LENGTH] =
@@ -82,31 +81,34 @@ int ObLogGranuleIterator::print_my_plan_annotation(char *buf,
       { affinitize(), pwj_gi(), access_all(), with_param_down(),
         force_partition_granule(), slave_mapping_granule(),
         desc_order(), asc_order() };
-
-  if (OB_SUCC(ret) && (EXPLAIN_EXTENDED == type || EXPLAIN_EXTENDED_NOADDR == type)) {
-    bool has_first = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < FLAG_NEED_PRINT_COUNT; ++i) {
-      if (!gi_flag[i]) {
-        continue;
-      }
-      if (OB_FAIL(BUF_PRINTF(", "))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      }
-      if (!has_first) {
-        if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF("\n      "))) {
-          LOG_WARN("BUF_PRINTF fails", K(ret));
-        }
-        has_first = true;
-      }
-      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF("%.*s", MAX_GI_FLAG_NAME_LENGTH, gi_flag_name[i]))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      }
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  }
+  BEGIN_BUF_PRINT;
+  for (int64_t i = 0; OB_SUCC(ret) && i < FLAG_NEED_PRINT_COUNT; ++i) {
+    if (!gi_flag[i]) {
+      continue;
+    } else if (has_first && OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("%.*s",
+                                  MAX_GI_FLAG_NAME_LENGTH,
+                                  gi_flag_name[i]))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else {
+      has_first = true;
     }
-    if (has_first) {
-      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF("."))) {
-        LOG_WARN("BUF_PRINTF fails", K(ret));
-      }
+  }
+  END_BUF_PRINT(plan_item.special_predicates_,
+                plan_item.special_predicates_len_);
+  if (OB_SUCC(ret) &&
+      get_join_filter_info().is_inited_ &&
+      OB_INVALID_ID != get_join_filter_info().filter_id_) {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(BUF_PRINTF(":BF%04ld", get_join_filter_info().filter_id_))) {
+      LOG_WARN("failed to print str", K(ret));
     }
+    END_BUF_PRINT(plan_item.object_alias_,
+                  plan_item.object_alias_len_);
   }
   return ret;
 }
@@ -177,7 +179,7 @@ int ObLogGranuleIterator::is_partition_gi(bool &partition_granule) const
   } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR__PX_MIN_GRANULES_PER_SLAVE, hash_partition_scan_hold))) {
     LOG_WARN("failed to get sys variable px min granule per slave", K(ret));
   } else {
-    partition_granule = ObGranuleUtil::partition_task_mode(gi_attri_flag_)
+    partition_granule = ObGranuleUtil::is_partition_granule_flag(gi_attri_flag_)
         || ObGranuleUtil::is_partition_granule(partition_count_, parallel_, partition_scan_hold, hash_partition_scan_hold, hash_part_);
   }
   return ret;

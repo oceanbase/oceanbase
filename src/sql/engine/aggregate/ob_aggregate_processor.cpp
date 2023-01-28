@@ -880,7 +880,7 @@ int ObAggregateProcessor::collect(const int64_t group_id/*= 0*/,
   int ret = OB_SUCCESS;
   GroupRow *group_row = NULL;
   if (OB_FAIL(group_rows_.at(group_id, group_row))) {
-    LOG_WARN("failed to get group_row", K(group_id), K(ret));
+    LOG_WARN("failed to get group_row", K(group_id), K(group_rows_.count()), K(ret));
   } else if (OB_FAIL(collect_group_row(group_row, group_id, diff_expr, max_group_cnt))) {
     LOG_WARN("failed to collect group row", K(ret));
   }
@@ -1206,7 +1206,7 @@ int ObAggregateProcessor::collect_result_batch(const ObIArray<ObExpr *> &group_e
     group_row = group_rows_.at(start_group_idx + loop_idx);
     // need to skip const value
     if (OB_NOT_NULL(group_row->groupby_store_row_) &&
-        OB_FAIL(group_row->groupby_store_row_->to_expr_skip_const(group_exprs, eval_ctx_))) {
+        OB_FAIL(group_row->groupby_store_row_->to_expr(group_exprs, eval_ctx_))) {
       LOG_WARN("failed to convert store row to expr", K(ret));
     } else if (ROLLUP_DISTRIBUTOR == rollup_status_) {
       if (OB_ISNULL(rollup_id_expr_)) {
@@ -4095,24 +4095,16 @@ int ObAggregateProcessor::number_accumulator(
   int ret = OB_SUCCESS;
   ObNumber res;
   ObNumber sum;
-  uint32_t counter1 = 0;
-  uint32_t counter2 = 0;
-  uint32_t counter3 = 0;
-  uint32_t counter4 = 0;
-  uint32_t sum_desc1 = 0;
-  uint32_t sum_desc2 = 0;
-  uint32_t sum_desc3 = 0;
-  uint64_t sum_frag_val = 0;
-  uint64_t sum_int_val = 0;
-
+  uint32_t normal_sum_path_counter = 0;
+  uint32_t fast_sum_path_counter = 0;
+  int64_t sum_frag_val = 0;
+  int64_t sum_int_val = 0;
   // TODO zuojiao.hzj: add new number accumulator to avoid memory allocate
   char buf_ori_result[ObNumber::MAX_CALC_BYTE_LEN];
   ObDataBuffer allocator_ori_result(buf_ori_result, ObNumber::MAX_CALC_BYTE_LEN);
   ObNumber ori_result;
   bool may_overflow = false;
   bool ori_result_copied = false;
-  // TODO qubin.qb: support negtive number, which range from
-  //  -[1, 999999999].[000000001, 999999999]
   uint16_t i = 0; // row num in a batch
   for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
     i = selector.get_batch_index(it);
@@ -4126,16 +4118,23 @@ int ObAggregateProcessor::number_accumulator(
     } else if (src_num.d_.is_2d_positive_decimal()) {
       sum_frag_val += src_num.get_digits()[1];
       sum_int_val += src_num.get_digits()[0];
-      sum_desc1 = NUM_DESC_2DIGITS_POSITIVE_DECIMAL;
-      counter1++;
+      ++fast_sum_path_counter;
     } else if (src_num.d_.is_1d_positive_fragment()) {
       sum_frag_val += src_num.get_digits()[0];
-      sum_desc2 = NUM_DESC_1DIGIT_POSITIVE_FRAGMENT;
-      counter2++;
+      ++fast_sum_path_counter;
     } else if (src_num.d_.is_1d_positive_integer()) {
       sum_int_val += src_num.get_digits()[0];
-      sum_desc3 = NUM_DESC_1DIGIT_POSITIVE_INTEGER;
-      counter3++;
+      ++fast_sum_path_counter;
+    } else if (src_num.d_.is_2d_negative_decimal()) {
+      sum_frag_val -= src_num.get_digits()[1];
+      sum_int_val -= src_num.get_digits()[0];
+      ++fast_sum_path_counter;
+    } else if (src_num.d_.is_1d_negative_fragment()) {
+      sum_frag_val -= src_num.get_digits()[0];
+      ++fast_sum_path_counter;
+    } else if (src_num.d_.is_1d_negative_integer()) {
+      sum_int_val -= src_num.get_digits()[0];
+      ++fast_sum_path_counter;
     } else {
       if (OB_UNLIKELY(!ori_result_copied)) {
         // copy result to ori_result to fall back
@@ -4146,24 +4145,23 @@ int ObAggregateProcessor::number_accumulator(
           ori_result_copied = true;
         }
       }
-      if (OB_UNLIKELY(src_num.fast_sum_agg_may_overflow() &&
-                      (counter1 > 0 || counter2 > 0 || counter3 > 0))) {
+      if (OB_UNLIKELY(src_num.fast_sum_agg_may_overflow() && fast_sum_path_counter > 0)) {
         may_overflow = true;
         LOG_DEBUG("number accumulator may overflow, fall back to normal path",
                   K(src_num), K(sum_int_val), K(sum_frag_val));
         break;
-      } else {
-        // normal path
-        ObDataBuffer &allocator = (counter4 % 2 == 0) ? allocator1 : allocator2;
+      } else { // normal path
+        ObDataBuffer &allocator = (normal_sum_path_counter % 2 == 0) ? allocator1 : allocator2;
         allocator.free();
         ret = result.add_v3(src_num, res, allocator, true, true);
         result = res;
-        counter4++;
+        ++normal_sum_path_counter;
       }
     }
   }
   if (OB_UNLIKELY(may_overflow)) {
-    counter4 = 0;
+    fast_sum_path_counter = 0;
+    normal_sum_path_counter = 0;
     result = ori_result;
     for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
       i = selector.get_batch_index(it);
@@ -4174,11 +4172,11 @@ int ObAggregateProcessor::number_accumulator(
       if (OB_UNLIKELY(src_num.is_zero())) {
         // do nothing
       } else {
-        ObDataBuffer &allocator = (counter4 % 2 == 0) ? allocator1 : allocator2;
+        ObDataBuffer &allocator = (normal_sum_path_counter % 2 == 0) ? allocator1 : allocator2;
         allocator.free();
         ret = result.add_v3(src_num, res, allocator, true, true);
         result = res;
-        counter4++;
+        normal_sum_path_counter++;
       }
     }
     if (OB_SUCC(ret)) {
@@ -4186,63 +4184,83 @@ int ObAggregateProcessor::number_accumulator(
     }
   } else if (OB_SUCC(ret) && !all_skip) {
     // construct sum result into number format
-    if (counter2 > 0 && counter3 > 0) {
-      sum.d_.desc_ = NUM_DESC_2DIGITS_POSITIVE_DECIMAL;
-    } else {
-      sum.d_.desc_ = std::max(sum_desc1, std::max(sum_desc2, sum_desc3));
+    const int64_t base = ObNumber::BASE;
+    int64_t carry = 0;
+    if (abs(sum_frag_val) >= base) {
+      sum_int_val += sum_frag_val / base; // eg : (-21) / 10 = -2
+      sum_frag_val = sum_frag_val % base; // eg : (-21) % 10 = -1
     }
-    uint64_t carry = 0;
-    if (sum.d_.is_2d_positive_decimal() || sum.d_.is_1d_positive_integer()) {
-      // pattern1 a.b or a
-      if (sum_frag_val >= ObNumber::BASE) {
-        carry = sum_frag_val / ObNumber::BASE;
-        sum_frag_val = sum_frag_val % ObNumber::BASE;
-        sum.d_.len_ -= (sum_frag_val == 0);
-      }
-      sum_int_val += carry;
-      if (sum_int_val >= ObNumber::BASE) {
-        carry = sum_int_val / ObNumber::BASE;
-        sum_int_val = sum_int_val % ObNumber::BASE;
-        ++(sum.d_.exp_);
-        sum.d_.len_ = sum.d_.len_ + 1 - (sum_int_val == 0 && sum_frag_val == 0);
-        // performance critical: set the tailing digits even they are 0, no
-        // overflow risk
+    if (sum_int_val > 0 && sum_frag_val < 0) {
+      sum_int_val -= 1;
+      sum_frag_val += base;
+    } else if (sum_int_val < 0 && sum_frag_val > 0) {
+      sum_int_val += 1;
+      sum_frag_val -= base;
+    }
+    if (abs(sum_int_val) >= base) {
+      carry = sum_int_val / base; // eg : (-21) / 10 = -2
+      sum_int_val = sum_int_val % base; // eg : (-21) % 10 = -1
+    }
+    if (0 == carry && 0 == sum_int_val && 0 == sum_frag_val) { // sum is zero
+      sum.set_zero();
+    } else if (carry >= 0 && sum_int_val >= 0 && sum_frag_val >= 0) { // sum is positive
+      sum.d_.desc_ = NUM_DESC_2DIGITS_POSITIVE_DECIMAL;
+      sum.d_.len_ -= (0 == sum_frag_val);
+      if (carry > 0) {
+        ++sum.d_.exp_;
+        ++sum.d_.len_;
+        sum.d_.len_ -= (sum_int_val == 0 && sum_frag_val == 0);
+        // performance critical: set the tailing digits even they are 0, no overflow risk
         sum_digits[0] = static_cast<uint32_t>(carry);
         sum_digits[1] = static_cast<uint32_t>(sum_int_val);
         sum_digits[2] = static_cast<uint32_t>(sum_frag_val);
-      } else {
-        // performance critical: set the tailing digits even they are 0, no
-        // overflow risk
-        sum_digits[0] = static_cast<uint32_t>(sum_int_val);
-        sum_digits[1] = static_cast<uint32_t>(sum_frag_val);
+      } else { // 0 == carry
+        if (0 == sum_int_val) {
+          --sum.d_.exp_;
+          --sum.d_.len_;
+          sum_digits[0] = static_cast<uint32_t>(sum_frag_val);
+        } else {
+          sum_digits[0] = static_cast<uint32_t>(sum_int_val);
+          sum_digits[1] = static_cast<uint32_t>(sum_frag_val);
+        }
       }
-    } else if (sum.d_.is_1d_positive_fragment()) {
-      if (sum_frag_val >= ObNumber::BASE) {
-        carry = sum_frag_val / ObNumber::BASE;
-        sum_frag_val = sum_frag_val % ObNumber::BASE;
-        sum_int_val += carry;
-        sum.d_.len_ = sum.d_.len_ + 1 - (sum_frag_val == 0);
-        ++(sum.d_.exp_);
-        // performance critical: set the tailing digits even they are 0, no
-        // overflow risk
-        sum_digits[0] = static_cast<uint32_t>(sum_int_val);
-        sum_digits[1] = static_cast<uint32_t>(sum_frag_val);
-      } else {
-        sum_digits[0] = static_cast<uint32_t>(sum_frag_val);
+    } else { // sum is negative
+      sum.d_.desc_ = NUM_DESC_2DIGITS_NEGATIVE_DECIMAL;
+      sum.d_.len_ -= (0 == sum_frag_val);
+      // get abs of carry/sum_int_val/sum_frag_val
+      carry = -carry;
+      sum_int_val = -sum_int_val;
+      sum_frag_val = -sum_frag_val;
+      if (carry > 0) {
+        --sum.d_.exp_; // notice here : different from postive
+        ++sum.d_.len_;
+        sum.d_.len_ -= (sum_int_val == 0 && sum_frag_val == 0);
+        // performance critical: set the tailing digits even they are 0, no overflow risk
+        sum_digits[0] = static_cast<uint32_t>(carry);
+        sum_digits[1] = static_cast<uint32_t>(sum_int_val);
+        sum_digits[2] = static_cast<uint32_t>(sum_frag_val);
+      } else { // 0 == carry
+        if (0 == sum_int_val) {
+          ++sum.d_.exp_; // notice here : different from postive
+          --sum.d_.len_;
+          sum_digits[0] = static_cast<uint32_t>(sum_frag_val);
+        } else {
+          sum_digits[0] = static_cast<uint32_t>(sum_int_val);
+          sum_digits[1] = static_cast<uint32_t>(sum_frag_val);
+        }
       }
     }
     sum.assign(sum.d_.desc_, sum_digits);
-
-    if (counter4 == 0 && result.is_zero()) {
+    if (normal_sum_path_counter == 0 && result.is_zero()) {
       // all aggr result is filled in sum, just return sum
       if (sum.d_.len_ == 0) {
         result.set_zero();
       } else {
         result.assign(sum.d_.desc_, sum_digits);
       }
-    } else {
-      // merge sum into aggr result
-      ObDataBuffer &allocator = (counter4 % 2 == 0) ? allocator1 : allocator2;
+    } else if (sum.d_.len_ == 0) { // do nothing
+    } else { // merge sum into aggr result
+      ObDataBuffer &allocator = (normal_sum_path_counter % 2 == 0) ? allocator1 : allocator2;
       allocator.free();
       if (OB_FAIL(result.add_v3(sum, res, allocator, true, true))) {
         LOG_WARN("number_accumulator sum error", K(ret), K(sum), K(result));
@@ -4252,8 +4270,8 @@ int ObAggregateProcessor::number_accumulator(
     }
   }
 
-  LOG_DEBUG("number_accumulator done ", K(result), K(ret), K(counter1),
-            K(counter2), K(counter3), K(counter4));
+  LOG_DEBUG("number_accumulator done", K(ret), K(result),
+            K(normal_sum_path_counter), K(fast_sum_path_counter));
   return ret;
 }
 
@@ -6286,7 +6304,7 @@ int ObAggregateProcessor::single_row_agg(GroupRow &group_row, ObEvalCtx &eval_ct
     } else if (OB_FAIL(collect_group_row(&group_row))) {
       LOG_WARN("failed to collect group by row", K(ret));
     }
-  } else if (OB_FAIL(fast_single_row_agg(eval_ctx))) {
+  } else if (OB_FAIL(fast_single_row_agg(eval_ctx, aggr_infos_))) {
     LOG_WARN("failed to fill result", K(ret));
   }
   return ret;
@@ -6323,14 +6341,11 @@ int ObAggregateProcessor::single_row_agg_batch(GroupRow **group_row, ObEvalCtx &
   return ret;
 }
 
-int ObAggregateProcessor::fast_single_row_agg(ObEvalCtx &eval_ctx)
+int ObAggregateProcessor::fast_single_row_agg(
+    ObEvalCtx &eval_ctx, ObAggrInfo &aggr_info)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < aggr_infos_.count(); ++i) {
-    ObAggrInfo &aggr_info = aggr_infos_.at(i);
-    if (aggr_info.is_implicit_first_aggr()) {
-      continue;
-    }
+  if (!aggr_info.is_implicit_first_aggr()) {
     for (int64_t j = 0; OB_SUCC(ret) && j < aggr_info.param_exprs_.count(); ++j) {
       ObDatum *tmp_res = nullptr;
       if (OB_FAIL(aggr_info.param_exprs_.at(j)->eval(eval_ctx, tmp_res))) {
@@ -6339,10 +6354,10 @@ int ObAggregateProcessor::fast_single_row_agg(ObEvalCtx &eval_ctx)
     }
     if (OB_SUCC(ret)) {
       const ObItemType aggr_fun = aggr_info.get_expr_type();
+      ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx);
       switch (aggr_fun) {
         case T_FUN_COUNT: {
           bool has_null = false;
-          ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx);
           for (int64_t j = 0; !has_null && j < aggr_info.param_exprs_.count(); ++j) {
             has_null = aggr_info.param_exprs_.at(j)->locate_expr_datum(eval_ctx).is_null();
           }
@@ -6354,7 +6369,6 @@ int ObAggregateProcessor::fast_single_row_agg(ObEvalCtx &eval_ctx)
           break;
         }
         case T_FUN_SUM: {
-          ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx);
           const ObObjTypeClass tc = ob_obj_type_class(aggr_info.get_first_child_type());
           if ((ObIntTC == tc || ObUIntTC == tc) && !aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).is_null()) {
             ObNumStackAllocator<2> tmp_alloc;
@@ -6374,9 +6388,11 @@ int ObAggregateProcessor::fast_single_row_agg(ObEvalCtx &eval_ctx)
           }
           break;
         }
+        case T_FUN_SYS_BIT_AND:
+        case T_FUN_SYS_BIT_OR:
+        case T_FUN_SYS_BIT_XOR:
         case T_FUN_MAX:
         case T_FUN_MIN: {
-          ObDatum &result = aggr_info.expr_->locate_expr_datum(eval_ctx);
           result.set_datum(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx));
           break;
         }
@@ -6385,6 +6401,19 @@ int ObAggregateProcessor::fast_single_row_agg(ObEvalCtx &eval_ctx)
           LOG_WARN("unknown aggr function type", K(ret), K(aggr_fun), K(*aggr_info.expr_));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::fast_single_row_agg(ObEvalCtx &eval_ctx, ObIArray<ObAggrInfo> &aggr_infos)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < aggr_infos.count(); ++i) {
+    ObAggrInfo &aggr_info = aggr_infos.at(i);
+    if (OB_FAIL(fast_single_row_agg(eval_ctx, aggr_info))) {
+      LOG_WARN("unknown aggr function type", K(ret),
+               K(aggr_info.get_expr_type()), K(*aggr_info.expr_));
     }
   }
   return ret;

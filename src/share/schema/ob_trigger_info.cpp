@@ -49,7 +49,11 @@ OB_SERIALIZE_MEMBER((ObTriggerInfo, ObSimpleTriggerSchema),
                     package_spec_info_,
                     package_body_info_,
                     sql_mode_,
-                    priv_user_);
+                    priv_user_,
+                    order_type_,
+                    ref_trg_db_name_,
+                    ref_trg_name_,
+                    action_order_);
 
 ObTriggerInfo &ObTriggerInfo::operator =(const ObTriggerInfo &other)
 {
@@ -94,6 +98,10 @@ void ObTriggerInfo::reset()
   package_body_info_.reset();
   reset_string(priv_user_);
   sql_mode_ = 0;
+  order_type_ = OT_INVALID;
+  reset_string(ref_trg_db_name_);
+  reset_string(ref_trg_name_);
+  action_order_ = 0;
   ObSimpleTriggerSchema::reset();
 }
 
@@ -151,7 +159,11 @@ int ObTriggerInfo::deep_copy(const ObTriggerInfo &other)
   OX (set_package_comp_flag(other.get_package_comp_flag()));
   OZ (set_package_exec_env(other.get_package_exec_env()));
   OX (set_sql_mode(other.get_sql_mode()));
-  OX (set_trigger_priv_user(other.get_trigger_priv_user()));
+  OZ (set_trigger_priv_user(other.get_trigger_priv_user()));
+  OX (set_order_type(other.get_order_type()));
+  OZ (set_ref_trg_db_name(other.get_ref_trg_db_name()));
+  OZ (set_ref_trg_name(other.get_ref_trg_name()));
+  OX (set_action_order(other.get_action_order()));
   return ret;
 }
 
@@ -168,7 +180,9 @@ int64_t ObTriggerInfo::get_convert_size() const
                          trigger_body_.length() + 1 +
                          priv_user_.length() + 1 +
                          package_spec_info_.get_convert_size() +
-                         package_body_info_.get_convert_size();
+                         package_body_info_.get_convert_size() +
+                         ref_trg_db_name_.length() + 1 +
+                         ref_trg_name_.length();
   convert_size -= (sizeof(ObSimpleTriggerSchema) + sizeof(ObPackageInfo) * 2);
   return convert_size;
 }
@@ -377,8 +391,8 @@ int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
       OV (OB_NOT_NULL(trigger_define_node = trigger_source_node->children_[1]));
       if (OB_FAIL(ret)) {
       } else {
-        OV (3 == trigger_define_node->num_child_);
-        OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[2]));
+        OV (4 == trigger_define_node->num_child_);
+        OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[3]));
       }
       OZ (schema_guard.get_simple_table_schema(tenant_id, trigger_info->get_base_object_id(), table_schema));
       CK (OB_NOT_NULL(table_schema));
@@ -988,6 +1002,20 @@ int ObTriggerInfo::gen_procedure_source(const common::ObString &base_object_data
   return ret;
 }
 
+bool ObTriggerInfo::ActionOrderComparator::operator()(const ObTriggerInfo *left, const ObTriggerInfo *right)
+{
+  bool bool_ret = false;
+  if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
+    // ignore
+  } else if (OB_UNLIKELY(NULL == left) || OB_UNLIKELY(NULL == right)) {
+    ret_ = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret_), KP(left), KP(right));
+  } else {
+    bool_ret = (left->get_action_order() < right->get_action_order());
+  }
+  return bool_ret;
+}
+
 
 // for rebuild trigger body due to rename table
 int ObTriggerInfo::replace_table_name_in_body(ObTriggerInfo &trigger_info,
@@ -1025,12 +1053,12 @@ int ObTriggerInfo::replace_table_name_in_body(ObTriggerInfo &trigger_info,
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (is_oracle_mode) {
-    OV (4 == trg_def_node->num_child_);
+    OV (5 == trg_def_node->num_child_);
     OV (OB_NOT_NULL(dml_event_node = trg_def_node->children_[0]));
     OV (3 == dml_event_node->num_child_);
     OV (OB_NOT_NULL(base_schema_node = dml_event_node->children_[2]));
   } else {
-    OV (3 == trg_def_node->num_child_);
+    OV (4 == trg_def_node->num_child_);
     OV (OB_NOT_NULL(base_schema_node = trg_def_node->children_[1]));
   }
   OV (2 == base_schema_node->num_child_);

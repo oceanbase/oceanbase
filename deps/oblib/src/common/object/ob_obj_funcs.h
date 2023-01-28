@@ -2017,8 +2017,7 @@ template <>
       ret = databuff_printf(buffer, length, pos, "%s", N_UPPERCASE_CUR_TIMESTAMP);
       break;
     default:
-      _OB_LOG(WARN, "ext %ld should not be print as sql", obj.get_ext());
-      ret = OB_INVALID_ARGUMENT;
+      ret = databuff_printf(buffer, length, pos, "%s", "Extend Obj");
       break;
   }
   return ret;

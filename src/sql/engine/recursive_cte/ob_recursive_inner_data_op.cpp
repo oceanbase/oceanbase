@@ -28,6 +28,8 @@ int ObRecursiveInnerDataOp::init(const ObExpr *search_expr, const ObExpr *cycle_
   cycle_expr_ = cycle_expr;
   if (OB_FAIL(dfs_pump_.init())) {
     LOG_WARN("Failed to init depth first search pump", K(ret));
+  } else if (OB_FAIL(ctx_.get_my_session()->get_sys_variable(share::SYS_VAR_CTE_MAX_RECURSION_DEPTH, max_recursion_depth_))) {
+    LOG_WARN("Get sys variable error", K(ret));
   }
   return ret;
 }
@@ -388,7 +390,9 @@ int ObRecursiveInnerDataOp::get_next_row()
       LOG_WARN("Format output row failed", K(ret));
     } else { }
   } else if (RecursiveUnionState::R_UNION_READ_LEFT == state_) {
-    if (OB_FAIL(try_get_left_rows())) {
+    if (is_mysql_mode() && OB_FAIL(check_recursive_depth())) {
+      LOG_WARN("Recursive query abort", K(ret));
+    } else if (OB_FAIL(try_get_left_rows())) {
       if (ret != OB_ITER_END) {
         LOG_WARN("Get left rows failed", K(ret));
       } else {
@@ -398,7 +402,9 @@ int ObRecursiveInnerDataOp::get_next_row()
       state_ = R_UNION_READ_RIGHT;
     }
   } else if (RecursiveUnionState::R_UNION_READ_RIGHT == state_) {
-    if (OB_FAIL(try_get_right_rows())) {
+    if (is_mysql_mode() && OB_FAIL(check_recursive_depth())) {
+      LOG_WARN("Recursive query abort", K(ret));
+    } else if (OB_FAIL(try_get_right_rows())) {
       if (ret != OB_ITER_END) {
         LOG_WARN("Get right rows failed", K(ret));
       } else {
@@ -432,7 +438,9 @@ int ObRecursiveInnerDataOp::get_next_batch(const int64_t max_row_cnt,
       LOG_WARN("Format output row failed", K(ret));
     }// else { } do nothing
   } else if (RecursiveUnionState::R_UNION_READ_LEFT == state_) {
-    if (OB_FAIL(try_get_left_rows(true))) {
+    if (is_mysql_mode() && OB_FAIL(check_recursive_depth())) {
+      LOG_WARN("Recursive query abort", K(ret));
+    } else if (OB_FAIL(try_get_left_rows(true))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("Get left rows failed", K(ret));
       } else {
@@ -442,7 +450,9 @@ int ObRecursiveInnerDataOp::get_next_batch(const int64_t max_row_cnt,
       state_ = R_UNION_READ_RIGHT;
     }
   } else if (RecursiveUnionState::R_UNION_READ_RIGHT == state_) {
-    if (OB_FAIL(try_get_right_rows(true))) {
+    if (is_mysql_mode() && OB_FAIL(check_recursive_depth())) {
+      LOG_WARN("Recursive query abort", K(ret));
+    } else if (OB_FAIL(try_get_right_rows(true))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("Get right rows failed", K(ret));
       } else {
@@ -544,6 +554,23 @@ int ObRecursiveInnerDataOp::assign_to_cur_row(ObChunkDatumStore::StoredRow *stor
       if (OB_FAIL(stored_row->to_expr(output_union_exprs_, eval_ctx_))) {
         LOG_WARN("stored row to exprs failed", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObRecursiveInnerDataOp::check_recursive_depth() {
+  int ret = OB_SUCCESS;
+  ObSearchMethodOp *pump = NULL;
+  if (OB_ISNULL(pump = get_search_method_bump())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    uint64_t level = pump->get_last_node_level();
+    if (level != UINT64_MAX && level > max_recursion_depth_) {
+      ret = OB_ERR_CTE_MAX_RECURSION_DEPTH;
+      LOG_USER_ERROR(OB_ERR_CTE_MAX_RECURSION_DEPTH, level);
+      LOG_WARN("Recursive query aborted after too many iterations.", K(ret), K(level));
     }
   }
   return ret;

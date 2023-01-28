@@ -15,9 +15,15 @@
 
 #include "common/object/ob_obj_type.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "pl/ob_pl_type.h"
 
 namespace oceanbase
 {
+namespace pl
+{
+class ObPLCollection;
+class ObCollectionType;
+}
 namespace sql
 {
 
@@ -77,7 +83,7 @@ static const int32_t CAST_STRING_DEFUALT_LENGTH[50] = {
 
 static_assert(common::ObMaxType + 1 == sizeof(CAST_STRING_DEFUALT_LENGTH) / sizeof(int32_t),
   "Please keep the length of CAST_STRING_DEFUALT_LENGTH must equal to the number of types");
-
+extern int cast_eval_arg_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
 class ObExprCast: public ObFuncExprOperator
 {
   OB_UNIS_VERSION_V(1);
@@ -86,6 +92,31 @@ public:
   ObExprCast();
   explicit  ObExprCast(common::ObIAllocator &alloc);
   virtual ~ObExprCast() {};
+
+  struct CastMultisetExtraInfo : public ObIExprExtraInfo
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    CastMultisetExtraInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
+        : ObIExprExtraInfo(alloc, type),
+        pl_type_(pl::ObPLType::PL_INVALID_TYPE),
+        not_null_(false),
+        elem_type_(),
+        capacity_(common::OB_INVALID_SIZE),
+        udt_id_(common::OB_INVALID_ID)
+    {
+    }
+    virtual ~CastMultisetExtraInfo() { }
+    virtual int deep_copy(common::ObIAllocator &allocator,
+                        const ObExprOperatorType type,
+                        ObIExprExtraInfo *&copied_info) const override;
+
+    pl::ObPLType pl_type_;
+    bool not_null_;
+    common::ObDataType elem_type_;
+    int64_t capacity_;
+    uint64_t udt_id_;
+  };
 
   virtual int calc_result_type2(ObExprResType &type,
                                 ObExprResType &type1,
@@ -98,6 +129,10 @@ public:
 
   // extra_serialize_ == 1 : is implicit cast
   void set_implicit_cast(bool v) { extra_serialize_ =  v ? 1 : 0; }
+
+  static int eval_cast_multiset(const sql::ObExpr &expr,
+                                sql::ObEvalCtx &ctx,
+                                sql::ObDatum &res_datum);
 private:
   int get_cast_type(const ObExprResType param_type2,
                     const ObCastMode cast_mode,
@@ -112,6 +147,31 @@ private:
                           const common::ObObjType expect_type,
                           const common::ObCollationType expect_cs_type,
                           const bool is_explicit_cast) const;
+
+  int cg_cast_multiset(ObExprCGCtx &op_cg_ctx,
+                       const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const;
+  static int get_subquery_iter(const sql::ObExpr &expr,
+                               sql::ObEvalCtx &ctx,
+                               ObExpr **&subquery_row,
+                               ObEvalCtx *&subquery_ctx,
+                               ObSubQueryIterator *&iter);
+  static int fill_element(const sql::ObExpr &expr,
+                          ObEvalCtx &ctx,
+                          sql::ObDatum &res_datum,
+                          pl::ObPLCollection *coll,
+                          pl::ObPLINS *ns,
+                          const pl::ObCollectionType *collection_type,
+                          ObExpr **subquery_row,
+                          ObEvalCtx *subquery_ctx,
+                          ObSubQueryIterator *subquery_iter);
+  static int construct_collection(const sql::ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  sql::ObDatum &res_datum,
+                                  ObExpr **subquery_row,
+                                  ObEvalCtx *subquery_ctx,
+                                  ObSubQueryIterator *subquery_iter);
+
 private:
   int get_cast_string_len(ObExprResType &type1,
                           ObExprResType &type2,

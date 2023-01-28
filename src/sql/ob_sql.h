@@ -60,6 +60,7 @@ class ObSPIService;
 class ObIVirtualTableIteratorFactory;
 struct ObSqlCtx;
 class ObResultSet;
+class ObLogPlan;
 
 class ObPlanBaseKeyGuard
 {
@@ -372,6 +373,15 @@ private:
                              const PlanCacheMode mode = PC_INVALID_MODE,
                              ParseResult *outline_parse_result = NULL);
 
+  int generate_plan(ParseResult &parse_result,
+                    ObPlanCacheCtx *pc_ctx,
+                    ObSqlCtx &sql_ctx,
+                    ObResultSet &result,
+                    const PlanCacheMode mode,
+                    ObStmt *basic_stmt,
+                    ObStmtNeedPrivs &stmt_need_privs,
+                    ObStmtOraNeedPrivs &stmt_ora_need_privs);
+
   //generate physical_plan
   static int code_generate(ObSqlCtx &sql_ctx,
                            ObResultSet &result,
@@ -381,6 +391,9 @@ private:
                            common::ObIArray<ObAuditUnit> &audit_units,
                            ObLogPlan *logical_plan,
                            ObPhysicalPlan *&phy_plan);
+
+  int prepare_outline_for_phy_plan(ObLogPlan *logical_plan,
+                                   ObPhysicalPlan *phy_plan);
 
   int sanity_check(ObSqlCtx &context);
 

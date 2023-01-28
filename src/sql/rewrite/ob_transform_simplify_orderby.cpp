@@ -58,6 +58,10 @@ int ObTransformSimplifyOrderby::transform_one_stmt(common::ObIArray<ObParentDMLS
     LOG_WARN("failed to remove order by duplicates", K(ret));
   } else {
     trans_happened = (subquery_happened || view_happened || remove_duplicates || set_happened);
+    OPT_TRACE("remove order by for subquery:", subquery_happened);
+    OPT_TRACE("remove order by for view:", view_happened);
+    OPT_TRACE("remove order by duplicates:", remove_duplicates);
+    OPT_TRACE("remove order by for set stmt:", set_happened);
   }
   if (OB_SUCC(ret) && trans_happened) {
     if (OB_FAIL(add_transform_hint(*stmt))) {

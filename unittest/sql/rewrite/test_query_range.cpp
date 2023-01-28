@@ -291,6 +291,13 @@ protected:
   void get_query_range(const char *expr, const char *&json_expr);
   void get_query_range_filter(const char *sql_expr, const char *&json_expr, char *buf, int64_t &pos, const int64_t cols_num);
   void get_query_range_collation(const char *expr, const char *&json_expr, char *buf, int64_t &pos);
+  inline bool is_min_to_max_range(const ObQueryRangeArray &ranges)
+  {
+    return 1 == ranges.count() &&
+           NULL != ranges.at(0) &&
+           ranges.at(0)->start_key_.is_min_row() &&
+           ranges.at(0)->end_key_.is_max_row();
+  }
 };
 
 ObQueryRangeTest::ObQueryRangeTest()
@@ -530,7 +537,7 @@ void ObQueryRangeTest::get_query_range(const char *sql_expr, const char *&json_e
   } else {
     databuff_printf(buf, BUF_LEN, pos, "query range need to deep copy\n");
   }
-  OK(query_range.is_min_to_max_range(flag, NULL));
+  flag = is_min_to_max_range(ranges);
   if (flag) {
     databuff_printf(buf, BUF_LEN, pos, "is min_to_max_range\n");
   } else {
@@ -586,7 +593,7 @@ void ObQueryRangeTest::get_query_range_filter(const char *sql_expr, const char *
     OK(query_range.get_tablet_ranges(allocator, exec_ctx_, ranges, get_methods, NULL));
   }
 
-  OK(query_range.is_min_to_max_range(flag, NULL));
+  flag = is_min_to_max_range(ranges);
   if (flag) {
     databuff_printf(buf, BUF_LEN, pos, "is min_to_max_range\n");
   } else {
@@ -636,8 +643,7 @@ void ObQueryRangeTest::get_query_range_collation(const char *sql_expr, const cha
       OK(query_range.preliminary_extract_query_range(range_columns, expr, dtc_params, &exec_ctx_));
       OK(query_range.final_extract_query_range(exec_ctx_, NULL));
       OK(query_range.get_tablet_ranges(ranges, get_methods, dtc_params));
-      bool flag = false;
-      OK(query_range.is_min_to_max_range(flag, NULL));
+      bool flag = is_min_to_max_range(ranges);
       if (flag) {
         databuff_printf(buf, BUF_LEN, pos, "is min_to_max_range\n");
       } else {

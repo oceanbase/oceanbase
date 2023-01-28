@@ -106,12 +106,13 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   const ObString &tab_name = stmt.get_table_name();
   const char sep_char = is_oracle_mode? '"': '`';
   ObSelectStmt *select_stmt = stmt.get_sub_select();
+  ObObjPrintParams obj_print_params(select_stmt->get_query_ctx()->get_timezone_info());
+  obj_print_params.print_origin_stmt_ = true;
   ObSelectStmtPrinter select_stmt_printer(buf, buf_len, &pos1, select_stmt,
                                           schema_guard,
-                                          select_stmt->get_query_ctx()->get_timezone_info(),
+                                          obj_print_params,
                                           param_store,
-                                          NULL, // column_list is null here
-                                          is_set_subquery);
+                                          true);
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed");
@@ -1832,8 +1833,10 @@ int ObFlashBackTableToScnExecutor::execute(ObExecContext &ctx, ObFlashBackTableT
   obrpc::ObFlashBackTableToScnArg &arg = stmt.flashback_table_to_scn_arg_;
   RowDesc row_desc;
   ObTempExpr *temp_expr = NULL;
+  CK(OB_NOT_NULL(ctx.get_sql_ctx()));
   OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(stmt.get_time_expr(),
-     row_desc, ctx.get_allocator(), ctx.get_my_session(), temp_expr));
+     row_desc, ctx.get_allocator(), ctx.get_my_session(),
+     ctx.get_sql_ctx()->schema_guard_, temp_expr));
   CK(OB_NOT_NULL(temp_expr));
   if (OB_SUCC(ret)) {
     ObNewRow empty_row;

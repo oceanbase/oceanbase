@@ -50,6 +50,8 @@ ObPxOrderedCoordOp::ObPxOrderedCoordOp(ObExecContext &exec_ctx, const ObOpSpec &
     sample_piece_msg_proc_(exec_ctx, msg_proc_),
     rollup_key_piece_msg_proc_(exec_ctx, msg_proc_),
     rd_wf_piece_msg_proc_(exec_ctx, msg_proc_),
+    init_channel_piece_msg_proc_(exec_ctx, msg_proc_),
+    reporting_wf_piece_msg_proc_(exec_ctx, msg_proc_),
     opt_stats_gather_piece_msg_proc_(exec_ctx, msg_proc_),
     readers_(NULL),
     receive_order_(),
@@ -111,6 +113,8 @@ int ObPxOrderedCoordOp::setup_loop_proc()
       .register_processor(sample_piece_msg_proc_)
       .register_processor(rollup_key_piece_msg_proc_)
       .register_processor(rd_wf_piece_msg_proc_)
+      .register_processor(init_channel_piece_msg_proc_)
+      .register_processor(reporting_wf_piece_msg_proc_)
       .register_processor(opt_stats_gather_piece_msg_proc_)
       .register_interrupt_processor(interrupt_proc_);
   return ret;
@@ -206,6 +210,8 @@ int ObPxOrderedCoordOp::inner_get_next_row()
         case ObDtlMsgType::DH_DYNAMIC_SAMPLE_PIECE_MSG:
         case ObDtlMsgType::DH_ROLLUP_KEY_PIECE_MSG:
         case ObDtlMsgType::DH_RANGE_DIST_WF_PIECE_MSG:
+        case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
+        case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
         case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
           // 这几种消息都在 process 回调函数里处理了
           break;

@@ -116,7 +116,8 @@ class OptSelectivityCtx
   }
 
   void init_join_ctx(const ObJoinType join_type, const ObRelIds *left_rel_ids,
-                     const ObRelIds *right_rel_ids, const double rc1, const double rc2)
+                     const ObRelIds *right_rel_ids, const double rc1, const double rc2,
+                     const EqualSets *equal_sets = NULL)
   {
     join_type_ = join_type;
     left_rel_ids_ = left_rel_ids;
@@ -124,7 +125,10 @@ class OptSelectivityCtx
     row_count_1_ = rc1;
     row_count_2_ = rc2;
     current_rows_ = -1.0;
+    equal_sets_ = equal_sets;
   }
+
+  void clear_equal_sets() { equal_sets_ = NULL; }
 
   TO_STRING_KV(KP_(stmt), KP_(equal_sets), K_(join_type), KP_(left_rel_ids), KP_(right_rel_ids),
                K_(row_count_1), K_(row_count_2), K_(current_rows));
@@ -209,6 +213,7 @@ public:
     ref_table_id_(OB_INVALID_ID),
     rows_(0),
     stat_type_(0),
+    last_analyzed_(0),
     all_used_parts_(),
     pk_ids_(),
     column_metas_()
@@ -234,6 +239,8 @@ public:
   void set_ref_table_id(const uint64_t &ref_table_id) { ref_table_id_ = ref_table_id; }
   double get_rows() const { return rows_; }
   void set_rows(const double rows) { rows_ = rows; }
+  int64_t get_version() const { return last_analyzed_; }
+  void set_version(const int64_t version) { last_analyzed_ = version; }
   const common::ObIArray<int64_t>& get_all_used_parts() const { return all_used_parts_; }
   common::ObIArray<int64_t> &get_all_used_parts() { return all_used_parts_; }
   const common::ObIArray<uint64_t>& get_pkey_ids() const { return pk_ids_; }
@@ -251,6 +258,7 @@ private:
   /// 0 for default stat
   /// 1 for optimizer-gathered stat
   int64_t stat_type_;
+  int64_t last_analyzed_;
 
   ObSEArray<int64_t, 64, common::ModulePageAllocator, true> all_used_parts_;
   ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> pk_ids_;
@@ -269,7 +277,8 @@ public:
                                const int64_t rows,
                                common::ObIArray<int64_t> &all_used_part_id,
                                common::ObIArray<uint64_t> &column_ids,
-                               const int64_t stat_type);
+                               const int64_t stat_type,
+                               int64_t last_analyzed);
 
   int add_set_child_stmt_meta_info(const ObDMLStmt *parent_stmt,
                                    const ObSelectStmt *child_stmt,
@@ -683,6 +692,12 @@ private:
                                     const ObRawExpr &expr,
                                     double *ndv_ptr,
                                     double *not_null_sel_ptr);
+  static int get_column_ndv_and_nns_by_equal_set(const OptTableMetas &table_metas,
+                                                 const OptSelectivityCtx &ctx,
+                                                 const ObRawExpr *&expr,
+                                                 double &ndv,
+                                                 double &not_null_sel);
+
   
   static int get_column_min_max(const OptTableMetas &table_metas,
                                 const OptSelectivityCtx &ctx,
@@ -785,6 +800,16 @@ private:
                                         const OptSelectivityCtx &ctx,
                                         const common::ObIArray<ObRawExpr*> &column_exprs,
                                         common::ObIArray<ObRawExpr*> &filtered_exprs);
+  static int filter_one_column_by_equal_set(const OptTableMetas &table_metas,
+                                            const OptSelectivityCtx &ctx,
+                                            const ObRawExpr *column_exprs,
+                                            const ObRawExpr *&filtered_exprs);
+  static int get_min_ndv_by_equal_set(const OptTableMetas &table_metas,
+                                      const OptSelectivityCtx &ctx,
+                                      const ObRawExpr *col_expr,
+                                      bool &find,
+                                      ObRawExpr *&expr,
+                                      double &ndv);
 
   /**
   * 判断多列连接是否只涉及到两个表

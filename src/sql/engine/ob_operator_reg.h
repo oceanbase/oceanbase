@@ -247,12 +247,6 @@ class ObValuesSpec;
 class ObValuesOp;
 REGISTER_OPERATOR(ObLogValues, PHY_VALUES, ObValuesSpec, ObValuesOp, NOINPUT);
 
-class ObLogTableLookup;
-class ObTableLookupSpec;
-class ObTableLookupOp;
-REGISTER_OPERATOR(ObLogTableLookup, PHY_TABLE_LOOKUP, ObTableLookupSpec,
-                  ObTableLookupOp, NOINPUT, VECTORIZED_OP);
-
 class ObLogTableScan;
 class ObTableScanOpInput;
 class ObTableScanSpec;
@@ -430,8 +424,9 @@ REGISTER_OPERATOR(ObLogGroupBy, PHY_HASH_GROUP_BY, ObHashGroupBySpec,
 class ObLogWindowFunction;
 class ObWindowFunctionSpec;
 class ObWindowFunctionOp;
+class ObWindowFunctionOpInput;
 REGISTER_OPERATOR(ObLogWindowFunction, PHY_WINDOW_FUNCTION, ObWindowFunctionSpec,
-                  ObWindowFunctionOp, NOINPUT, VECTORIZED_OP);
+                  ObWindowFunctionOp, ObWindowFunctionOpInput, VECTORIZED_OP);
 
 class ObLogJoin;
 class ObMergeJoinSpec;

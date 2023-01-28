@@ -70,6 +70,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_set_variable));
   jit::ObLLVMHelper::add_symbol(ObString("spi_query"),
                                 (void*)(sql::ObSPIService::spi_query));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_check_autonomous_trans"),
+                                (void*)(sql::ObSPIService::spi_check_autonomous_trans));
   jit::ObLLVMHelper::add_symbol(ObString("spi_execute"),
                                 (void*)(sql::ObSPIService::spi_execute));
   jit::ObLLVMHelper::add_symbol(ObString("spi_execute_immediate"),
@@ -477,15 +479,11 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
   
   OX (is_autonomous_ = is_autonomous);
   OX (is_function_or_trigger_ = is_function_or_trigger);
-
-  if (is_autonomous_) {
-    ObTransID last_trans_id;
-    (void) record_tx_id_before_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
-    OZ (session_info.begin_autonomous_session(saved_session_));
-    OX (saved_has_implicit_savepoint_ = session_info.has_pl_implicit_savepoint());
-    OX (session_info.clear_pl_implicit_savepoint());
-    OZ (ObSqlTransControl::explicit_start_trans(ctx, false));
-    (void) register_after_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
+  if (is_function_or_trigger && lib::is_mysql_mode()) {
+    last_insert_id_ = session_info.get_local_last_insert_id();
+    const ObString stash_savepoint_name("PL stash savepoint");
+    OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
+    OX (has_stash_savepoint_ = true);
   }
   OZ (session_info.get_pl_block_timeout(pl_block_timeout));
   if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
@@ -579,11 +577,17 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       OX (session_info.set_autocommit(false));
     }
   }
-  if (is_function_or_trigger && lib::is_mysql_mode()) {
-    last_insert_id_ = session_info.get_local_last_insert_id();
-    const ObString stash_savepoint_name("PL stash savepoint");
-    OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
-    OX (has_stash_savepoint_ = true);
+  if (is_autonomous_) {
+    has_inner_dml_write_ = session_info.has_inner_dml_write();
+    session_info.set_has_inner_dml_write(false);
+
+    ObTransID last_trans_id;
+    (void) record_tx_id_before_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
+    OZ (session_info.begin_autonomous_session(saved_session_));
+    OX (saved_has_implicit_savepoint_ = session_info.has_pl_implicit_savepoint());
+    OX (session_info.clear_pl_implicit_savepoint());
+    OZ (ObSqlTransControl::explicit_start_trans(ctx, false));
+    (void) register_after_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
   }
   OX (session_info_ = &session_info);
   return ret;
@@ -711,7 +715,7 @@ void ObPLContext::destory(
           }
         }
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
-      } else if (reset_autocommit_ && !in_nested_sql_ctrl() &&
+      } else if (!is_autonomous_ && reset_autocommit_ && !in_nested_sql_ctrl() &&
                 (lib::is_oracle_mode() || (lib::is_mysql_mode() && is_function_or_trigger_))) {
                 /* 非dml出发点的udf, 如set @a= f1(), 需要在udf内部提交 */
         //如果当前事务是xa事务,则不提交当前事务,只设置ac=true.否则提交当前事务
@@ -739,10 +743,6 @@ void ObPLContext::destory(
         }
       }
 
-      // 无论如何都还原autocommit值
-      if (reset_autocommit_) {
-        session_info.set_autocommit(true);
-      }
 
       // 清理serially package
       int tmp_ret = OB_SUCCESS;
@@ -785,19 +785,36 @@ void ObPLContext::destory(
   }
 
   if (is_autonomous_) {
-    int end_trans_ret =
-      session_info.is_in_transaction() ? implicit_end_trans(session_info, ctx, true) : OB_SUCCESS;
-    int switch_trans_ret = session_info.end_autonomous_session(saved_session_);
-    if (OB_SUCCESS != end_trans_ret) {
-      LOG_WARN("failed to rollback trans", K(end_trans_ret));
-      ret = end_trans_ret;
-    }
-    if (OB_SUCCESS != switch_trans_ret) {
-      LOG_WARN("failed to switch trans", K(switch_trans_ret));
-      ret = switch_trans_ret;
-    }
-    session_info.set_has_pl_implicit_savepoint(saved_has_implicit_savepoint_);
+    int end_trans_ret = end_autonomous(ctx, session_info);
+    ret = OB_SUCCESS == ret ? end_trans_ret : ret;
   }
+  if (is_top_stack_) {
+    // 无论如何都还原autocommit值
+    if (reset_autocommit_) {
+      session_info.set_autocommit(true);
+    }
+  }
+}
+
+int ObPLContext::end_autonomous(ObExecContext &ctx, sql::ObSQLSessionInfo &session_info)
+{
+  int ret = OB_SUCCESS;
+
+  int end_trans_ret =
+      session_info.is_in_transaction() ? implicit_end_trans(session_info, ctx, true) : OB_SUCCESS;
+  int switch_trans_ret = session_info.end_autonomous_session(saved_session_);
+  if (OB_SUCCESS != end_trans_ret) {
+    LOG_WARN("failed to rollback trans", K(end_trans_ret));
+    ret = end_trans_ret;
+  }
+  if (OB_SUCCESS != switch_trans_ret) {
+    LOG_WARN("failed to switch trans", K(switch_trans_ret));
+    ret = switch_trans_ret;
+  }
+  session_info.set_has_pl_implicit_savepoint(saved_has_implicit_savepoint_);
+  session_info.set_has_inner_dml_write(has_inner_dml_write_);
+
+  return ret;
 }
 
 bool ObPLContext::in_autonomous() const

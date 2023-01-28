@@ -714,6 +714,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"seed", SEED},
   {"sensitive", SENSITIVE},
   {"sequence", SEQUENCE},
+  {"sequences", SEQUENCES},
   {"serial", SERIAL},
   {"serializable", SERIALIZABLE},
   {"server", SERVER},

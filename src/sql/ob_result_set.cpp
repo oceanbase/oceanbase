@@ -143,6 +143,7 @@ int ObResultSet::open()
   int ret = OB_SUCCESS;
   my_session_.set_process_query_time(ObTimeUtility::current_time());
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
+  FLTSpanGuard(open);
   if (lib::is_oracle_mode() &&
       get_exec_context().get_nested_level() >= OB_MAX_RECURSIVE_SQL_LEVELS) {
     ret = OB_ERR_RECURSIVE_SQL_LEVELS_EXCEEDED;
@@ -194,7 +195,6 @@ int ObResultSet::execute()
 int ObResultSet::open_result()
 {
   int ret = OB_SUCCESS;
-  FLTSpanGuard(open);
   ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
   if (NULL != physical_plan_) {
     if (OB_ISNULL(exec_result_)) {
@@ -705,6 +705,9 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
       ret = pret;
     } else if (OB_SUCCESS != sret) {
       ret = sret;
+    }
+    if (OB_SUCC(ret)) {
+      physical_plan_->set_record_plan_info(false);
     }
   } else {
     ret = OB_ERR_UNEXPECTED;

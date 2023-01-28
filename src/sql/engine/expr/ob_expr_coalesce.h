@@ -30,6 +30,8 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const;
   virtual int cg_expr(ObExprCGCtx &expr_ct_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
+  static int calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                      const ObBitVector &skip, const int64_t batch_size);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCoalesce);
 };

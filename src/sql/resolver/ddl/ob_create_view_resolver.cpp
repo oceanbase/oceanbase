@@ -523,13 +523,11 @@ int ObCreateViewResolver::stmt_print(const ObSelectStmt *stmt,
     do {
       pos = 0;
       ObObjPrintParams obj_print_params(params_.query_ctx_->get_timezone_info());
-      obj_print_params.is_show_create_view_ = true;
+      obj_print_params.print_origin_stmt_ = true;
       ObSelectStmtPrinter stmt_printer(buf, buf_len, &pos, stmt,
                                       params_.schema_checker_->get_schema_guard(),
-                                      params_.query_ctx_->get_timezone_info(),
-                                      column_list,
-                                      is_set_subquery);
-      stmt_printer.set_print_params(obj_print_params);
+                                      obj_print_params, true);
+      stmt_printer.set_column_list(column_list);
       if (OB_FAIL(stmt_printer.do_print())) {
         if (OB_SIZE_OVERFLOW == ret && buf_len < OB_MAX_PACKET_LENGTH) {
           buf_len = std::min(buf_len * 2, OB_MAX_PACKET_LENGTH);

@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SQL_RESOLVER_DML_OB_DELETE_RESOLVER_H_
 #define OCEANBASE_SQL_RESOLVER_DML_OB_DELETE_RESOLVER_H_
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
+#include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/dml/ob_delete_stmt.h"
 namespace oceanbase
 {
@@ -22,14 +23,15 @@ class ObDeleteResolver : public ObDelUpdResolver
 {
 public:
 // delete
-  static const int64_t TABLE = 0;       /* table_node */
-  static const int64_t WHERE = 1;            /* where */
-  static const int64_t ORDER_BY = 2;       /* orderby */
-  static const int64_t LIMIT = 3;            /* limit */
-  static const int64_t WHEN = 4;              /* when */
-  static const int64_t HINT = 5;              /* hint */
-  static const int64_t RETURNING = 6;       /* returning */
-  static const int64_t ERRORLOGGING = 7;     /* ERROR LOGGING*/
+  static const int64_t WITH_MYSQL = 0;   /* with clause in mysql mode*/
+  static const int64_t TABLE = 1;       /* table_node */
+  static const int64_t WHERE = 2;            /* where */
+  static const int64_t ORDER_BY = 3;       /* orderby */
+  static const int64_t LIMIT = 4;            /* limit */
+  static const int64_t WHEN = 5;              /* when */
+  static const int64_t HINT = 6;              /* hint */
+  static const int64_t RETURNING = 7;       /* returning */
+  static const int64_t ERRORLOGGING = 8;     /* ERROR LOGGING*/
 
 public:
   explicit ObDeleteResolver(ObResolverParams &params);

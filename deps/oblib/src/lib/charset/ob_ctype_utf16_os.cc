@@ -1162,7 +1162,7 @@ static ObCollationHandler ob_collation_utf16_bin_handler =
   ob_strnncollsp_utf16_bin,
   ob_strnxfrm_unicode_full_bin,
   ob_strnxfrmlen_unicode_full_bin,
-  ob_strnxfrm_unicode_full_bin_varlen,
+  NULL,
   ob_like_range_generic,
   ob_wildcmp_utf16_bin,
   NULL,
@@ -1179,7 +1179,7 @@ static ObCollationHandler ob_collation_utf16_general_ci_handler =
   ob_strnncollsp_utf16,
   ob_strnxfrm_unicode,
   ob_strnxfrmlen_simple,
-  ob_strnxfrm_unicode_varlen,
+  NULL,/*ob_strnxfrm_unicode_varlen_utf16,*/
   ob_like_range_generic,
   ob_wildcmp_utf16_ci,
   NULL,

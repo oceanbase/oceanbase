@@ -40,6 +40,30 @@ int ObPLCodeGenerateVisitor::generate(const ObPLStmt &s)
   return ret;
 }
 
+int ObPLCodeGenerator::generate_check_autonomos(const ObPLStmt &s)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == get_current().get_v()) {
+    // 控制流已断, 后面的语句不再处理
+  } else if (lib::is_oracle_mode()) {
+    OZ (get_helper().set_insert_point(get_current()));
+    if(OB_SUCC(ret)) {
+      ObSEArray<ObLLVMValue, 1> args;
+      if (OB_FAIL(args.push_back(get_vars().at(CTX_IDX)))) { //PL的执行环境
+        LOG_WARN("push_back error", K(ret));
+      } else {
+        ObLLVMValue ret_err;
+        if (OB_FAIL(get_helper().create_call(ObString("spi_check_autonomous_trans"), get_spi_service().spi_check_autonomous_trans_, args, ret_err))) {
+          LOG_WARN("failed to create call", K(ret));
+        } else if (OB_FAIL(check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
+          LOG_WARN("failed to check success", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLCodeGenerateVisitor::visit(const ObPLStmtBlock &s)
 {
   int ret = OB_SUCCESS;
@@ -67,6 +91,18 @@ int ObPLCodeGenerateVisitor::visit(const ObPLStmtBlock &s)
       } else if (OB_FAIL(SMART_CALL(generate(*stmt)))) {
         LOG_WARN("failed to generate", K(i), K(ret));
       } else { /*do nothing*/ }
+    }
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && s.get_stmts().count() > 0 &&
+        !generator_.get_ast().is_function()) { // function check logic is in returnstmt cg stage
+      ObPLStmt *stmt = s.get_stmts().at(s.get_stmts().count() - 1);
+      if ((0 == s.get_level() && NULL != s.get_block() && NULL == s.get_block()->get_block()) ||
+          (1 == s.get_level() && NULL != s.get_block() && NULL != s.get_block()->get_block() &&
+          NULL == s.get_block()->get_block()->get_block())) {
+        if (PL_RETURN != stmt->get_type() &&
+                  s.get_is_autonomous()) {
+          OZ (generator_.generate_check_autonomos(*stmt));
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       if (s.has_eh()) { //如果有eh，跳到eh的exit分支
@@ -1413,6 +1449,13 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
       ObLLVMValue result;
       ObLLVMValue p_result;
       OZ (generator_.generate_expr(s.get_ret(), s, OB_INVALID_INDEX, p_result_obj));
+      if (OB_SUCC(ret) && lib::is_oracle_mode()) { // check logic need before store function ret value
+        if (generator_.get_ast().is_autonomous() &&
+            s.get_level() <= 1 &&
+            OB_FAIL(generator_.generate_check_autonomos(s))) {
+          LOG_WARN("failed to generate_check_autonomos", K(ret));
+        }
+      }
       if (OB_SUCC(ret) && generator_.get_ast().get_ret_type().is_composite_type()) {
         //return NULL as UDT means returning a uninitialized UDT object
         ObLLVMBasicBlock null_branch;
@@ -1559,7 +1602,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
       }
       ObLLVMValue ret_value;
       ObLLVMBasicBlock null_block;
-      if (OB_FAIL(generator_.get_helper().create_load(ObString("load_ret"), generator_.get_vars().at(generator_.RET_IDX), ret_value))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(generator_.get_helper().create_load(ObString("load_ret"), generator_.get_vars().at(generator_.RET_IDX), ret_value))) {
         LOG_WARN("failed to create_load", K(ret));
       } else if (OB_FAIL(generator_.get_helper().create_ret(ret_value))) {
         LOG_WARN("failed to create_ret", K(ret));
@@ -3849,6 +3893,13 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_process_resignal"), ft, spi_service_.spi_process_resignal_error_));
   }
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(pl_exec_context_pointer_type));
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_check_autonomous_trans"), ft, spi_service_.spi_check_autonomous_trans_));
+  }
+
   return ret;
 }
 

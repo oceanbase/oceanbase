@@ -105,8 +105,8 @@ private:
 class ObDDLRedefinitionTask : public ObDDLTask
 {
 public:
-  ObDDLRedefinitionTask(): 
-    ObDDLTask(share::DDL_INVALID), lock_(), wait_trans_ctx_(), sync_tablet_autoinc_seq_ctx_(),
+  explicit ObDDLRedefinitionTask(const share::ObDDLType task_type):
+    ObDDLTask(task_type), lock_(), wait_trans_ctx_(), sync_tablet_autoinc_seq_ctx_(),
     build_replica_request_time_(0), complete_sstable_job_ret_code_(INT64_MAX), alter_table_arg_(),
     dependent_task_result_map_(), snapshot_held_(false), has_synced_autoincrement_(false),
     has_synced_stats_info_(false), update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0),
@@ -126,6 +126,9 @@ public:
   virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
+  virtual void flt_set_task_span_tag() const = 0;
+  virtual void flt_set_status_span_tag() const = 0;
+  virtual int cleanup_impl() override;
 protected:
   int prepare(const share::ObDDLTaskStatus next_task_status);
   int lock_table(const share::ObDDLTaskStatus next_task_status);
@@ -145,7 +148,6 @@ protected:
   int success();
   int hold_snapshot(const int64_t snapshot_version);
   int release_snapshot(const int64_t snapshot_version);
-  int cleanup();
   int add_constraint_ddl_task(const int64_t constraint_id);
   int add_fk_ddl_task(const int64_t fk_id);
   int sync_auto_increment_position();
@@ -205,6 +207,7 @@ protected:
     int64_t ret_code_;
     int64_t task_id_;
   };
+  static const int64_t OB_REDEFINITION_TASK_VERSION = 1L;
   static const int64_t MAX_DEPEND_OBJECT_COUNT = 100L;
   static const int64_t RETRY_INTERVAL = 1 * 1000 * 1000; // 1s
   static const int64_t RETRY_LIMIT = 100;   

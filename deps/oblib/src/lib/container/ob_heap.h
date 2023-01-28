@@ -195,8 +195,8 @@ int ObBinaryHeap<T, CompareFunctor, LOCAL_ARRAY_SIZE>::upheap(int64_t index)
     index = parent;
   }
 
+  array_.at(index) = tmp;
   if (OB_SUCC(cmp_.get_error_code())) {
-    array_.at(index) = tmp;
     record_index(index);
     reset_root_cmp_cache();
   }
@@ -229,6 +229,7 @@ int ObBinaryHeap<T, CompareFunctor, LOCAL_ARRAY_SIZE>::downheap(int64_t index)
     index = picked_child;
   }
 
+  array_.at(index) = tmp;
   if (OB_SUCC(cmp_.get_error_code())) {
     if (index == get_root()) {
       // We did not change anything in the tree except for the value
@@ -240,7 +241,6 @@ int ObBinaryHeap<T, CompareFunctor, LOCAL_ARRAY_SIZE>::downheap(int64_t index)
       // the tree changed, reset cache
       reset_root_cmp_cache();
     }
-    array_.at(index) = tmp;
     record_index(index);
   }
   return ret;

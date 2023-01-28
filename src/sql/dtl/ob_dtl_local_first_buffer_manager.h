@@ -52,7 +52,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDtlCacheBufferInfo);
 };
 
-// dtl buffer info 管理
 class ObDtlBufferInfoManager
 {
 public:

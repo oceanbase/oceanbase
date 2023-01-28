@@ -41,6 +41,7 @@ public:
   inline uint8_t get_field_count() const { return field_count_; }
   inline uint16_t get_warning_count() const { return warning_count_; }
   inline ObServerStatusFlags  get_server_status() const { return server_status_; }
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_EOF; }
   virtual int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(OMPKEOF);

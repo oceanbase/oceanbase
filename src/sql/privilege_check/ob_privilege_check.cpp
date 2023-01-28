@@ -105,7 +105,6 @@ int no_priv_needed(
 int expr_has_col_in_tab(
     const ObRawExpr *expr,
     const ObRelIds &rel_ids,
-    const int32_t expr_level,
     bool& exists)
 {
   int ret = OB_SUCCESS;
@@ -119,13 +118,12 @@ int expr_has_col_in_tab(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else if (expr->is_column_ref_expr()) {
-    if (rel_ids.is_superset(expr->get_relation_ids())
-        && expr_level == expr->get_expr_level()) {
+    if (rel_ids.is_superset(expr->get_relation_ids())) {
       exists = true;
     }
   } else if (expr->has_flag(CNT_COLUMN)) {
     for (int64_t i = 0; OB_SUCC(ret) && !exists && i < expr->get_param_count(); ++i) {
-      OZ (expr_has_col_in_tab(expr->get_param_expr(i), rel_ids, expr_level, exists));
+      OZ (expr_has_col_in_tab(expr->get_param_expr(i), rel_ids, exists));
     }
   }
   return ret;
@@ -156,7 +154,7 @@ int add_nec_sel_priv_in_dml(
     }
     for (int i = 0; OB_SUCC(ret) && (!exists) && i < dml_stmt->get_condition_size(); i++) {
       const ObRawExpr *raw_expr = dml_stmt->get_condition_expr(i);
-      OZ (expr_has_col_in_tab(raw_expr, table_ids, 0, exists));
+      OZ (expr_has_col_in_tab(raw_expr, table_ids, exists));
     }
     if (OB_SUCC(ret) && exists) {
       OZ (ObPrivPacker::append_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_SELECT, packed_privs));

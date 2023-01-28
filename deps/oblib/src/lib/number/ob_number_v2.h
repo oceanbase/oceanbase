@@ -453,9 +453,9 @@ public:
     if (!is_zero()) {
       const int32_t exp_val = get_decode_exp(d_);
       if (exp_val >= 0) {
-        ret_len += std::max(exp_val + 1, static_cast<int32_t>(d_.len_)) * MAX_STORE_LEN;
+        ret_len += std::max(exp_val + 1, static_cast<int32_t>(d_.len_)) * DIGIT_LEN;
       } else {
-        ret_len += (0 - exp_val + static_cast<int32_t>(d_.len_)) * MAX_STORE_LEN;
+        ret_len += (0 - exp_val + static_cast<int32_t>(d_.len_)) * DIGIT_LEN;
       }
     }
     return ret_len;

@@ -24,7 +24,6 @@ namespace sql
 class ObInsertAllStmtPrinter : public ObDMLStmtPrinter {
 
 public:
-  ObInsertAllStmtPrinter() {}
   ObInsertAllStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObInsertAllStmt *stmt,
                          ObSchemaGetterGuard *schema_guard,
                          common::ObObjPrintParams print_params) :
@@ -41,7 +40,6 @@ private:
   int print_multi_value(const ObInsertAllStmt *insert_stmt);
   int print_basic_multi_insert(const ObInsertAllStmt *insert_stmt);
   int print_multi_conditions_insert(const ObInsertAllStmt *insert_stmt);
-  int print_subquery(const ObInsertAllStmt *insert_stmt);
   int print_into_table_values(const ObInsertAllStmt *insert_stmt,
                               const ObInsertAllTableInfo& table_info);
 

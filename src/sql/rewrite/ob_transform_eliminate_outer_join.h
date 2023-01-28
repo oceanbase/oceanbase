@@ -148,6 +148,17 @@ private:
                                                   bool &can_eliminate);
 
   /**
+   * @brief can_be_eliminated_with_null_side_column_in_aggr
+   * when the column on the null side of the outer join appears in the aggregate function of scalar group by, eliminate outer join
+   * select count(B.c2) as xx from t1 A, t2 B where A.c1 = B.c2(+);
+   *   =>
+   * select count(B.c2) as xx from t1 A, t2 B where A.c1 = B.c2;
+   */
+  int can_be_eliminated_with_null_side_column_in_aggr(ObDMLStmt *stmt,
+                                                      JoinedTable *joined_table,
+                                                      bool &can_eliminate);
+
+  /**
    * @brief all_columns_is_not_null
    * col_exprs中所有的列是否都非空
    */
@@ -186,6 +197,16 @@ private:
   int get_extra_condition_from_parent(ObIArray<ObParentDMLStmt> &parent_stmts,
                                       ObDMLStmt *&stmt,
                                       ObIArray<ObRawExpr *> &conditions);
+
+  /**
+   * @brief check_expr_ref_column_all_in_aggr
+   * check column reference only in aggr
+   * such as:
+   *   count(a + b + 1) => true
+   *   count(a + 1) + b => false
+   */
+  int check_expr_ref_column_all_in_aggr(const ObRawExpr *expr, bool &is_in);
+
 };
 }//namespace sql
 }//namespace oceanbase

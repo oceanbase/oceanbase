@@ -82,10 +82,9 @@ public:
 
   int get_exists_style_exprs(ObIArray<ObRawExpr*> &subquery_exprs);
 
-  int inner_replace_generated_agg_expr(
+  virtual int inner_replace_op_exprs(
       const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs) override;
 
-  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
   // 从子节点中抽取估算代价相关的信息，存入children_cost_info中
   int get_children_cost_info(double &first_child_refine_card, common::ObIArray<ObBasicCostInfo> &children_cost_info);
   void set_update_set(bool update_set)
@@ -111,6 +110,15 @@ public:
   int allocate_startup_expr_post() override;
 
   int allocate_subquery_id();
+
+  int replace_nested_subquery_exprs(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs);
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+
+  virtual int compute_equal_set() override;
+
+  int get_equal_set_conditions(ObIArray<ObRawExpr*> &equal_conds);
 
   common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
 

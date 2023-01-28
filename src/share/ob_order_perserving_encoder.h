@@ -49,6 +49,7 @@ public:
   bool is_nullable_;
   bool is_null_first_;
   bool is_memcmp_;
+  bool is_valid_uni_;
   ObObjType type_;
   ObSorEncMode enc_mod_;
 
@@ -59,6 +60,7 @@ public:
       is_nullable_(false),
       is_null_first_(false),
       is_memcmp_(false),
+      is_valid_uni_(true),
       type_(ObObjType::ObNullType),
       enc_mod_(ObSorEncMode::OB_INVALID_MODE)
   {}
@@ -66,6 +68,7 @@ public:
   TO_STRING_KV(K_(cs_type),
                K_(is_var_len),
                K_(is_memcmp),
+               K_(is_valid_uni),
                K_(type),
                K_(is_asc),
                K_(is_nullable),
@@ -113,6 +116,7 @@ public:
   static int encode_from_timestamp(ObOTimestampData val, unsigned char *to, int64_t &to_len);
 
   static int encode_from_interval_ds(ObIntervalDSValue val, unsigned char *to, int64_t &to_len);
+  static int encode_tails(unsigned char *to, int64_t max_buf_len, int64_t &to_len, bool is_mem, common::ObCollationType cs,  bool with_empty_str);
   inline static bool can_encode_sortkey(common::ObObjType type, common::ObCollationType cs)
   {
     return (type == ObTinyIntType || type == ObSmallIntType || type == ObDateType
@@ -129,7 +133,9 @@ public:
            || type == ObCharType)
            && (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY || cs == CS_TYPE_UTF8MB4_BIN
               || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN || cs == CS_TYPE_UTF8MB4_GENERAL_CI
-              || cs == CS_TYPE_GBK_CHINESE_CI || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
+              || cs == CS_TYPE_GBK_CHINESE_CI
+              // utf 16 will be open later
+              //|| cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
               || cs == CS_TYPE_GB18030_CHINESE_CI);
   }
 

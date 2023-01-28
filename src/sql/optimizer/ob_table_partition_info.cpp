@@ -240,19 +240,9 @@ int ObTablePartitionInfo::get_location_type(const common::ObAddr &server, ObTabl
 int ObTablePartitionInfo::get_all_servers(ObIArray<common::ObAddr> &servers) const
 {
 	int ret = OB_SUCCESS;
-  const ObCandiTabletLocIArray &phy_part_loc_info_list =
-      candi_table_loc_.get_phy_part_loc_info_list();
-  FOREACH_CNT_X(it, phy_part_loc_info_list, OB_SUCC(ret)) {
-    share::ObLSReplicaLocation replica_location;
-    if (OB_FAIL((*it).get_selected_replica(replica_location))) {
-      LOG_WARN("fail to get selected replica", K(*it));
-    } else if (!replica_location.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("replica location is invalid", K(ret), K(replica_location));
-    } else if (OB_FAIL(add_var_to_array_no_dup(servers, replica_location.get_server()))) {
-      LOG_WARN("failed to push back server", K(ret));
-    }
-  }
+  if (OB_FAIL(candi_table_loc_.get_all_servers(servers))) {
+    LOG_WARN("failed to get all servers", K(ret));
+  } else { /* do nothing */ }
   return ret;
 }
 

@@ -633,12 +633,15 @@ struct ObObjPrintParams
     uint32_t print_flags_;
     struct {
       uint32_t need_cast_expr_:1;
-      uint32_t is_show_create_view_:1;
+      uint32_t print_origin_stmt_:1;
       uint32_t use_memcpy_:1;
       uint32_t skip_escape_:1;
       uint32_t beginning_space_:1;
       uint32_t binary_string_print_hex_:1;
-      uint32_t reserved_:26;
+      uint32_t print_with_cte_:1;
+      uint32_t force_print_cte_:1;
+      uint32_t need_print_converter_:1;
+      uint32_t reserved_:23;
     };
   };
 };
@@ -1424,7 +1427,7 @@ struct ObDefaultHash : public ObjHashBase
 
 struct ObMurmurHash : public ObjHashBase
 {
-  static uint64_t hash(const void *data, uint64_t len, uint64_t seed)
+  OB_INLINE static uint64_t hash(const void *data, uint64_t len, uint64_t seed)
   {
     return murmurhash64A(data, static_cast<int32_t>(len), seed);
   }

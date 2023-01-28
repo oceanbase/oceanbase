@@ -24,6 +24,7 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
+#include "sql/resolver/dml/ob_stmt_expr_visitor.h"
 
 namespace oceanbase
 {
@@ -31,6 +32,8 @@ namespace sql
 {
 class ObStmtResolver;
 class ObDMLStmt;
+class ObStmtExprVisitor;
+class ObStmtExprGetter;
 
 struct TransposeItem
 {
@@ -197,7 +200,8 @@ struct TableItem
                (NULL == view_base_item_ ? OB_INVALID_ID : view_base_item_->table_id_),
                K_(dblink_id), K_(dblink_name), K_(link_database_name),
                K_(ddl_schema_version), K_(ddl_table_id),
-               K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type));
+               K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
+               KPC_(function_table_expr));
 
   enum TableType
   {
@@ -245,6 +249,7 @@ struct TableItem
   bool is_function_table() const { return FUNCTION_TABLE == type_; }
   bool is_json_table() const { return JSON_TABLE == type_; }
   bool is_link_table() const { return !dblink_name_.empty(); }
+  bool is_synonym() const { return !synonym_name_.empty(); }
   bool is_oracle_all_or_user_sys_view() const
   {
     return (is_ora_sys_view_table(ref_id_) && (table_name_.prefix_match("USER_") || table_name_.prefix_match("ALL_")));
@@ -559,13 +564,6 @@ public:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> semi_conditions_;
 };
 
-enum EQUAL_SET_SCOPE {
-  SCOPE_WHERE     = 1 << 0,
-  SCOPE_HAVING    = 1 << 1,
-  SCOPE_MAX       = 1 << 2,
-  SCOPE_ALL       = SCOPE_MAX - 1
-};
-
 /// In fact, ObStmt is ObDMLStmt.
 class ObDMLStmt : public ObStmt
 {
@@ -660,7 +658,10 @@ public:
     return OB_SUCCESS;
   }
 
-  virtual int copy_and_replace_stmt_expr(ObRawExprCopier &copier);
+  bool is_hierarchical_query() const;
+
+  int replace_relation_exprs(const common::ObIArray<ObRawExpr *> &other_exprs,
+                             const common::ObIArray<ObRawExpr *> &new_exprs);
 
   /**
    * @brief replace_inner_stmt_expr
@@ -677,9 +678,15 @@ public:
    * @param new_exprs
    * @return
    */
-  virtual int replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                                      const common::ObIArray<ObRawExpr*> &new_exprs);
-  bool is_hierarchical_query() const;
+  int replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
+                              const common::ObIArray<ObRawExpr*> &new_exprs);
+
+  int copy_and_replace_stmt_expr(ObRawExprCopier &copier);
+
+  virtual int iterate_stmt_expr(ObStmtExprVisitor &vistor);
+
+  int iterate_joined_table_expr(JoinedTable *joined_table,
+                                ObStmtExprVisitor &visitor) const;
 
   int update_stmt_table_id(const ObDMLStmt &other);
   int set_table_item_qb_name();
@@ -695,7 +702,6 @@ public:
                                     const ObIArray<uint32_t> &src_hash_val,
                                     int64_t sub_num);
   int get_stmt_by_stmt_id(int64_t stmt_id, ObDMLStmt *&stmt);
-  int adjust_subquery_stmt_parent(const ObDMLStmt *old_parent, ObDMLStmt *new_parent);
 
   int64_t get_from_item_size() const { return from_items_.count(); }
   void clear_from_items() { from_items_.reset(); }
@@ -713,7 +719,7 @@ public:
     return ret;
   }
   int remove_from_item(ObIArray<TableItem*> &tables);
-  int remove_from_item(uint64_t tid);
+  int remove_from_item(uint64_t tid, bool *remove_happened = NULL);
   int remove_joined_table_item(const ObIArray<JoinedTable*> &tables);
   int remove_joined_table_item(const JoinedTable *joined_table);
 
@@ -791,20 +797,23 @@ public:
   inline common::ObIArray<OrderItem> &get_order_items() { return order_items_; }
   int get_order_exprs(common::ObIArray<ObRawExpr*> &order_exprs) const;
   //提取该stmt中所有表达式的relation id
-  int pull_all_expr_relation_id_and_levels();
+  int pull_all_expr_relation_id();
   int formalize_stmt(ObSQLSessionInfo *session_info);
   int formalize_relation_exprs(ObSQLSessionInfo *session_info);
   int adjust_subquery_exec_params(ObSQLSessionInfo *session_info);
   int remove_const_exec_param(ObDMLStmt *stmt, ObSQLSessionInfo *session_info, bool &is_happened);
   int do_remove_const_exec_param(ObRawExpr *&expr, bool &is_happened);
   int formalize_stmt_expr_reference();
-  int set_sharable_expr_reference(ObRawExpr &expr);
+  int formalize_child_stmt_expr_reference();
+  int set_sharable_expr_reference(ObRawExpr &expr, bool is_under_depend_expr);
   int check_pseudo_column_valid();
   int get_ora_rowscn_column(const uint64_t table_id, ObPseudoColumnRawExpr *&ora_rowscn);
   virtual int remove_useless_sharable_expr();
+  virtual int remove_useless_exec_param();
   virtual int clear_sharable_expr_reference();
   virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
   virtual int get_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
+  int generated_column_depend_column_is_referred(ObRawExpr *expr, bool &has_no_dep);
   int is_referred_by_partitioning_expr(const ObRawExpr *expr,
                                        bool &is_referred);
   int64_t get_table_size() const { return table_items_.count(); }
@@ -870,11 +879,15 @@ public:
   TableItem *get_table_item(int64_t index) { return table_items_.at(index); }
   int remove_table_item(const TableItem *ti);
   int remove_table_item(const ObIArray<TableItem *> &table_items);
+  int remove_table_info(const TableItem *table);
+  int remove_table_info(const ObIArray<TableItem *> &table_items);
   TableItem *get_table_item(const FromItem item);
   const TableItem *get_table_item(const FromItem item) const;
   int get_table_item_idx(const TableItem *child_table, int64_t &idx) const;
   int get_table_item_idx(const uint64_t table_id, int64_t &idx) const;
 
+  int relids_to_table_items(const ObRelIds &table_set, ObIArray<TableItem*> &tables) const;
+  int relids_to_table_items(const ObSqlBitSet<> &table_set, ObIArray<TableItem*> &tables) const;
   int relids_to_table_ids(const ObSqlBitSet<> &table_set, ObIArray<uint64_t> &table_ids) const;
   int get_table_rel_ids(const TableItem &target, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObSqlBitSet<> &table_set) const;
@@ -910,8 +923,6 @@ public:
   ObRawExpr *get_condition_expr(int64_t index) { return condition_exprs_.at(index); }
   common::ObIArray<ObRawExpr*> &get_condition_exprs() { return condition_exprs_; }
   const common::ObIArray<ObRawExpr*> &get_condition_exprs() const { return condition_exprs_; }
-  common::ObIArray<ObRawExpr*> &get_deduced_exprs() { return deduced_exprs_; }
-  const common::ObIArray<ObRawExpr*> &get_deduced_exprs() const { return deduced_exprs_; }
   common::ObIArray<ObRawExpr *> &get_pseudo_column_like_exprs()
   { return pseudo_column_like_exprs_; }
   const common::ObIArray<ObRawExpr *> &get_pseudo_column_like_exprs() const
@@ -940,8 +951,6 @@ public:
   void set_has_part_key_sequence(const bool v) { has_part_key_sequence_ = v; }
   int add_condition_expr(ObRawExpr *expr) { return condition_exprs_.push_back(expr); }
   int add_condition_exprs(const common::ObIArray<ObRawExpr*> &exprs) { return append(condition_exprs_, exprs); }
-  int add_deduced_expr(ObRawExpr *expr) { return deduced_exprs_.push_back(expr); }
-  int add_deduced_exprs(const common::ObIArray<ObRawExpr*> &exprs) { return append(deduced_exprs_, exprs); }
   //move from ObStmt
   //user var
   bool is_contains_assignment() const {return is_contains_assignment_;}
@@ -965,10 +974,6 @@ public:
   inline bool get_affected_last_insert_id() const { return affected_last_insert_id_; }
   inline bool get_affected_last_insert_id() { return affected_last_insert_id_; }
   int add_autoinc_param(share::AutoincParam &autoinc_param) { return autoinc_params_.push_back(autoinc_param); }
-  inline void set_parent_namespace_stmt(ObDMLStmt *parent_namespace_stmt) { parent_namespace_stmt_ = parent_namespace_stmt; }
-  inline ObDMLStmt *get_parent_namespace_stmt() const { return parent_namespace_stmt_; }
-  inline void set_current_level(int32_t current_level) { current_level_ = current_level; }
-  inline int32_t get_current_level() const { return current_level_; }
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);
   virtual int get_child_stmt_size(int64_t &child_size) const;
   int64_t get_subquery_expr_size() const { return subquery_exprs_.count(); }
@@ -976,10 +981,6 @@ public:
   virtual int set_child_stmt(const int64_t child_num, ObSelectStmt* child_stmt);
   common::ObIArray<ObQueryRefRawExpr*> &get_subquery_exprs() { return subquery_exprs_; }
   const common::ObIArray<ObQueryRefRawExpr*> &get_subquery_exprs() const { return subquery_exprs_; }
-  int add_onetime_expr(ObExecParamRawExpr *expr) { return onetime_exprs_.push_back(expr); }
-  common::ObIArray<ObExecParamRawExpr*> &get_onetime_exprs() { return onetime_exprs_; }
-  const common::ObIArray<ObExecParamRawExpr*> &get_onetime_exprs() const { return onetime_exprs_; }
-  bool is_root_stmt() const { return NULL == parent_namespace_stmt_; }
   bool is_set_stmt() const;
   virtual bool has_link_table() const;
   //该函数用于获取该stmt中所有跟语义相关的表达式的根节点
@@ -996,24 +997,21 @@ public:
   //避免做一些重复的分析，消耗的内存和时间更少
 
   int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs,
-                         int32_t ignore_scope = 0) const;
+                         ObStmtExprGetter &visitor) const;
   //如果希望修改指针的指向，需要使用下面的接口；ignore_scope表示不需要拿的relation
   int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs,
-                         int32_t ignore_scope = 0);
+                         ObStmtExprGetter &visitor);
+  int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs) const;
+  int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs);
+
   //this func is used for enum_set_wrapper to get exprs which need to be handled
   int get_relation_exprs_for_enum_set_wrapper(common::ObIArray<ObRawExpr*> &rel_array);
-  //用来替换掉stmt中所有引用到from expr的地方，从from替换到to expr
-  //查找空间只在stmt直接引用到的expr，不会递归到expr内部中
-  //this function replace by replace_inner_stmt_expr
-  int replace_expr_in_stmt(ObRawExpr *from, ObRawExpr *to);
-  const TableItem *get_table_item_in_all_namespace(uint64_t table_id) const;
   ColumnItem *get_column_item_by_id(uint64_t table_id, uint64_t column_id) const;
   const ColumnItem *get_column_item_by_base_id(uint64_t table_id, uint64_t base_column_id) const;
   ObColumnRefRawExpr *get_column_expr_by_id(uint64_t table_id, uint64_t column_id) const;
   int get_column_exprs(uint64_t table_id, ObIArray<ObColumnRefRawExpr *> &table_cols) const;
   int get_column_exprs(uint64_t table_id, ObIArray<ObRawExpr*> &table_cols) const;
 
-  virtual int inner_get_share_exprs(ObIArray<ObRawExpr *> &share_exprs) const;
   int find_var_assign_in_query_ctx(bool &is_found) const;
   int check_user_vars_has_var_assign(bool &has_var_assign) const;
   int has_ref_assign_user_var(bool &has_ref_user_var, bool need_check_child = true) const;
@@ -1022,17 +1020,6 @@ public:
   int check_has_var_assign_rec(bool &has_var_assign, bool &is_var_assign_only_in_root, bool is_root) const;
 
   int get_temp_table_ids(ObIArray<uint64_t> &temp_table_ids);
-  virtual int refill_global_index_dml_info(ObRawExprFactory &expr_factory)
-  {
-    UNUSED(expr_factory);
-    return common::OB_SUCCESS;
-  }
-
-  virtual int expand_exprs(const ObSQLSessionInfo &session)
-  {
-    UNUSED(session);
-    return common::OB_SUCCESS;
-  }
 
   common::ObIArray<CheckConstraintItem> &get_check_constraint_items() {
     return check_constraint_items_; }
@@ -1059,7 +1046,6 @@ public:
                N_SUBQUERY_EXPRS, subquery_exprs_,
                N_USER_VARS, user_var_exprs_);
 
-  int get_join_condition_expr(JoinedTable &join_table, RelExprCheckerBase &expr_checker) const;
   int check_if_contain_inner_table(bool &is_contain_inner_table) const;
   int check_if_contain_select_for_update(bool &is_contain_select_for_update) const;
   int check_if_table_exists(uint64_t table_id, bool &is_existed) const;
@@ -1096,10 +1082,10 @@ public:
   int get_stmt_equal_sets(EqualSets &equal_sets,
                           ObIAllocator &allocator,
                           const bool is_strict,
-                          const int check_scope) const;
+                          const bool check_having = false) const;
   virtual int get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
-                                      const bool is_strict,
-                                      const int check_scope) const;
+                                       const bool is_strict,
+                                       const bool check_having = false) const;
   int get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions,
                                  bool outer_semi_only = false) const;
   static int extract_equal_condition_from_joined_table(const TableItem *table,
@@ -1129,17 +1115,17 @@ public:
   int get_stmt_rowid_exprs(ObIArray<ObRawExpr *> &rowid_exprs);
   int check_and_get_same_rowid_expr(const ObRawExpr *expr, ObRawExpr *&same_rowid_expr);
 
+  int add_cte_definition(TableItem * table_item) { return cte_definitions_.push_back(table_item); }
+  int get_cte_definition_size() const { return cte_definitions_.count(); }
+  common::ObIArray<TableItem *>& get_cte_definitions() { return cte_definitions_; }
+  const common::ObIArray<TableItem *>& get_cte_definitions() const { return cte_definitions_; }
+
+  int check_has_subquery_in_function_table(bool &has_subquery_in_function_table) const;
+
 protected:
-  int replace_expr_in_joined_table(JoinedTable &joined_table, ObRawExpr *from, ObRawExpr *to);
   int create_table_item(TableItem *&table_item);
   //获取到stmt中所有查询相关的表达式(由查询语句中指定的属性生成的表达式)的root expr
 
-  virtual int inner_get_relation_exprs(RelExprCheckerBase &expr_checker);
-  //获取stmt中enum_set_wrapper 需要处理的的root expr
-  virtual int inner_get_relation_exprs_for_wrapper(RelExprChecker &expr_checker)
-  {
-    return inner_get_relation_exprs(expr_checker);
-  }
 protected:
   int deep_copy_join_tables(ObIAllocator &allocator,
                             ObIRawExprCopier &expr_copier,
@@ -1147,8 +1133,6 @@ protected:
   int construct_join_table(const ObDMLStmt &other,
                            const JoinedTable &other_joined_table,
                            JoinedTable &joined_table);
-  int extract_column_expr(const common::ObIArray<ColumnItem> &column_items,
-                          common::ObIArray<ObColumnRefRawExpr*> &column_exprs) const;
   int update_table_item_id_for_joined_table(const ObDMLStmt &other_stmt,
                                             const JoinedTable &other,
                                             JoinedTable &current);
@@ -1156,10 +1140,6 @@ protected:
                            const TableItem &old_item,
                            const bool has_bit_index,
                            TableItem &new_item);
-
-  int replace_expr_for_joined_table(const common::ObIArray<ObRawExpr *> &other_exprs,
-                                    const common::ObIArray<ObRawExpr *> &new_exprs,
-                                    JoinedTable &joined_tables);
 
 protected:
   /**
@@ -1209,29 +1189,21 @@ protected:
   common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> table_items_;
   common::ObSEArray<ColumnItem, 16, common::ModulePageAllocator, true> column_items_;
   common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> condition_exprs_;
-  common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> deduced_exprs_; //for deducing generated exprs
   // 存放共享的类伪列表达式, 我们认为除了一般的伪列表达式ObPseudoColumnRawExpr, rownum和sequence也属于伪列
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> pseudo_column_like_exprs_;
   // it is only used to record the table_id--bit_index map
   // although it is a little weird, but it is high-performance than ObHashMap
   common::ObRowDesc tables_hash_;
-  //parent_namespace_stmt_的作用是访问到影响该层的上层stmt的属性
-  //对于from子查询来说，from子查询和from子句中其它的table item是同一个层级，所以from子查询不能看到本层查询的其它表属性
-  //例如：select c1 from t1, (select c1 from t2 where t1.c1=t2.c1) tt 这样的查询来说,
-  //虽然select c1 from t2 where t1.c1=t2.c1是select c1 from t1, tt的一个子查询
-  //但是select c1 from t2 where ...这个视图和t1是同一个table 层级的，所以子查询的parent_namespace_stmt不是t1所在的stmt
-  //对于select c1 from t2 where t1.c1=t2.c1这个子查询来说，应该看不到t1这个table item，所以这条语句是错误的
-  //对于其它子查询，from table的属性已经确定了，所以其它子查询的parent_namespace_stmt_就是其直接parent stmt
-  //例如：select c1 from t1 where c1 in (select c1 from t2 where t1.c1=t2.c1)这个子查询而言，
-  //select c2 from t2 where t1.c1=t2.c1能够看到上层查询t1的属性，所以这条语句是正确的
-  ObDMLStmt *parent_namespace_stmt_;
-  int32_t current_level_;
   common::ObSEArray<ObQueryRefRawExpr*, 4, common::ModulePageAllocator, true> subquery_exprs_;
-  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> onetime_exprs_;
   const TransposeItem *transpose_item_;
 
   common::ObSEArray<ObUserVarIdentRawExpr *, 4, common::ModulePageAllocator, true> user_var_exprs_;
   common::ObSEArray<CheckConstraintItem, 8, common::ModulePageAllocator, true> check_constraint_items_;
+  /*
+    keep all cte table defined in current level. Only used for print stmt.
+    Needn't maintain it after resolver.
+  */
+  common::ObSEArray<TableItem*, 2, common::ModulePageAllocator, true> cte_definitions_;
 };
 
 template <typename T>

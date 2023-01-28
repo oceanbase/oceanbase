@@ -72,6 +72,15 @@ public:
     return rows;
   }
 
+  static int to_expr(const ObChunkDatumStore::StoredRow *srow,
+                     const ObIArray<ObExpr*> &exprs,
+                     ObEvalCtx &eval_ctx);
+
+  static void attach_rows(const common::ObIArray<ObExpr*> &exprs,
+                         ObEvalCtx &eval_ctx,
+                         const ObChunkDatumStore::StoredRow **srows,
+                         const int64_t read_rows);
+
   // get row interface for PX_CHUNK_ROW
   int get_next_row(common::ObNewRow &row);
 

@@ -130,6 +130,9 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       plan_cache_manager_(NULL),
       with_tenant_ctx_(NULL),
       request_manager_(NULL),
+      flt_span_mgr_(NULL),
+      sql_plan_manager_(NULL),
+      plan_table_manager_(NULL),
       plan_cache_(NULL),
       ps_cache_(NULL),
       found_rows_(1),
@@ -232,6 +235,14 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
   }
   return ret;
 }
+
+void ObSQLSessionInfo::destroy_session_plan_mgr()
+{
+  if (NULL != plan_table_manager_) {
+    ObSqlPlanMgr::mtl_destroy(plan_table_manager_);
+  }
+}
+
 //for test
 int ObSQLSessionInfo::test_init(uint32_t version, uint32_t sessid, uint64_t proxy_sessid,
     common::ObIAllocator *bucket_allocator)
@@ -269,6 +280,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     config_provider_ = NULL;
     plan_cache_manager_ = NULL;
     request_manager_ = NULL;
+    flt_span_mgr_ = NULL;
     if (NULL != with_tenant_ctx_) {
       with_tenant_ctx_->~ObTenantSpaceFetcher();
       with_tenant_ctx_ = NULL;
@@ -337,6 +349,9 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     auto_flush_trace_ = false;
     coninfo_set_by_sess_ = false;
     is_ob20_protocol_ = false;
+    optimizer_tracer_.reset();
+    sql_plan_manager_ = NULL;
+    destroy_session_plan_mgr();
   }
   expect_group_id_ = OB_INVALID_ID;
   group_id_not_expected_ = false;
@@ -435,6 +450,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     reset_all_package_state();
 
     reset(skip_sys_var);
+    destroy_session_plan_mgr();
     is_inited_ = false;
   }
 }
@@ -814,6 +830,70 @@ ObMySQLRequestManager* ObSQLSessionInfo::get_request_manager()
   }
 
   return request_manager_;
+}
+
+sql::ObFLTSpanMgr* ObSQLSessionInfo::get_flt_span_manager()
+{
+  int ret = OB_SUCCESS;
+  if (NULL == flt_span_mgr_) {
+    uint64_t t_id = get_priv_tenant_id();
+    with_tenant_ctx_ = new(tenant_buff_) share::ObTenantSpaceFetcher(t_id);
+    if (OB_FAIL(with_tenant_ctx_->get_ret())) {
+      if (OB_TENANT_NOT_IN_SERVER == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        SERVER_LOG(WARN, "failed to switch tenant context", K(t_id), K(ret));
+      }
+    } else if (NULL == with_tenant_ctx_){
+      flt_span_mgr_ = NULL;
+    } else {
+      ObTenantBase* tenant = with_tenant_ctx_->entity().get_tenant();
+      if (NULL == tenant) {
+        flt_span_mgr_ = NULL;
+      } else {
+        flt_span_mgr_ = tenant->get<sql::ObFLTSpanMgr*>();
+      }
+    }
+  }
+  return flt_span_mgr_;
+}
+
+ObSqlPlanMgr* ObSQLSessionInfo::get_sql_plan_manager()
+{
+  int ret = OB_SUCCESS;
+  if (NULL == sql_plan_manager_) {
+    uint64_t t_id = get_priv_tenant_id();
+    with_tenant_ctx_ = new(tenant_buff_) share::ObTenantSpaceFetcher(t_id);
+    if (OB_FAIL(with_tenant_ctx_->get_ret())) {
+      if (OB_TENANT_NOT_IN_SERVER == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        SERVER_LOG(WARN, "failed to switch tenant context", K(t_id), K(ret));
+      }
+    } else if (NULL == with_tenant_ctx_){
+      sql_plan_manager_ = NULL;
+    } else {
+      ObTenantBase* tenant = with_tenant_ctx_->entity().get_tenant();
+      if (NULL == tenant) {
+        sql_plan_manager_ = NULL;
+      } else {
+        sql_plan_manager_ = tenant->get<ObSqlPlanMgr*>();
+      }
+    }
+  }
+  return sql_plan_manager_;
+}
+
+ObSqlPlanMgr* ObSQLSessionInfo::get_plan_table_manager()
+{
+  int ret = OB_SUCCESS;
+  if (NULL == plan_table_manager_) {
+    if (OB_FAIL(ObSqlPlanMgr::init_plan_manager(get_effective_tenant_id(),
+                                                plan_table_manager_))) {
+      LOG_WARN("failed to init plan manager", K(ret));
+    }
+  }
+  return plan_table_manager_;
 }
 
 void ObSQLSessionInfo::set_show_warnings_buf(int error_code)
@@ -2343,6 +2423,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       }
       // 6. enable extended SQL syntax in the MySQL mode
       enable_sql_extension_ = tenant_config->enable_sql_extension;
+      px_join_skew_handling_ = tenant_config->_px_join_skew_handling;
+      px_join_skew_minfreq_ = tenant_config->_px_join_skew_minfreq;
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
     }
@@ -2565,6 +2647,50 @@ int ObSQLSessionInfo::get_mem_ctx_alloc(common::ObIAllocator *&alloc)
     alloc = &mem_context_->get_malloc_allocator();
   }
   return ret;
+}
+
+int ObSysVarEncoder::serialize(ObSQLSessionInfo &sess, char *buf,
+                                const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSysVarClassType, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_var_delta_ids;
+  if (OB_FAIL(sess.get_sync_sys_vars(sys_var_delta_ids))) {
+    LOG_WARN("failed to calc need serialize vars", K(ret));
+  } else if (OB_FAIL(sess.serialize_sync_sys_vars(sys_var_delta_ids, buf, length, pos))) {
+    LOG_WARN("failed to serialize sys var delta", K(ret), K(sys_var_delta_ids.count()),
+                                      KPHEX(buf+pos, length-pos), K(length-pos), K(pos));
+  } else {
+    LOG_DEBUG("success serialize sys var delta", K(ret), K(sys_var_delta_ids.count()), K(pos));
+  }
+  return ret;
+}
+
+int ObSysVarEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf,
+                                  const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t deserialize_sys_var_count = 0;
+  if (OB_FAIL(sess.deserialize_sync_sys_vars(deserialize_sys_var_count, buf, length, pos))) {
+    LOG_WARN("failed to deserialize sys var delta", K(ret), K(deserialize_sys_var_count),
+                                    KPHEX(buf+pos, length-pos), K(length-pos), K(pos));
+  } else {
+    LOG_DEBUG("success deserialize sys var delta", K(ret), K(deserialize_sys_var_count));
+  }
+  return ret;
+}
+
+int64_t ObSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess) const {
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  ObSEArray<ObSysVarClassType, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_var_delta_ids;
+  if (OB_FAIL(sess.get_sync_sys_vars(sys_var_delta_ids))) {
+    LOG_WARN("failed to calc need serialize vars", K(ret));
+  } else if (OB_FAIL(sess.get_sync_sys_vars_size(sys_var_delta_ids, len))) {
+    LOG_WARN("failed to serialize size sys var delta", K(ret));
+  } else {
+    LOG_DEBUG("success serialize size sys var delta", K(ret), K(sys_var_delta_ids.count()), K(len));
+  }
+  return len;
 }
 
 int ObAppInfoEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)

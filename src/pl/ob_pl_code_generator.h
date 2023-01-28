@@ -99,6 +99,7 @@ public:
     jit::ObLLVMFunction spi_check_composite_not_null_;
     jit::ObLLVMFunction spi_update_location_;
     jit::ObLLVMFunction spi_process_resignal_error_;
+    jit::ObLLVMFunction spi_check_autonomous_trans_;
   };
 
   struct EHStack
@@ -617,6 +618,7 @@ public:
                           jit::ObLLVMValue &size,
                           jit::ObLLVMValue &ptr);
   int generate_elem_desc(const ObElemDesc &obj, jit::ObLLVMValue &result);
+  int generate_check_autonomos(const ObPLStmt &s);
   int generate_spi_package_calc(uint64_t package_id,
                                 int64_t expr_idx,
                                 const ObPLStmt &s,

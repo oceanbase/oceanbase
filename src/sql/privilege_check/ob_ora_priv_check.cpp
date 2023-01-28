@@ -1469,13 +1469,13 @@ int ObOraSysChecker::check_owner_or_p1(
           tenant_id, user_id, database_name, p1);
 
 /* check 一种sys priv，命名来自于create pub synonym */
-#define DEFINE_PUB_CHECK_CMD(p1)           \
-      OZ (check_p1(guard,         \
-                   tenant_id,     \
-                   user_id,       \
-                   p1,            \
-                   role_id_array),           \
-          tenant_id, user_id, p1);
+#define DEFINE_PUB_CHECK_CMD(p1)                          \
+      OZX1 (check_p1(guard,                               \
+                     tenant_id,                           \
+                     user_id,                             \
+                     p1,                                  \
+                     role_id_array),                      \
+            OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1);
 
 /* check 两种sys priv，命名来自于purge table/index/recyclebin */
 #define DEFINE_PURGE_CHECK_CMD(p1, p2)           \

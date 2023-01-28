@@ -306,7 +306,7 @@ int ObTableInsertUpOp::do_insert_up_cache()
     if (OB_ISNULL(insert_row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get insert row is null", K(ret));
-    } else if (OB_FAIL(insert_row->to_expr_skip_const(MY_SPEC.all_saved_exprs_, eval_ctx_))) {
+    } else if (OB_FAIL(insert_row->to_expr(MY_SPEC.all_saved_exprs_, eval_ctx_))) {
       LOG_WARN("flush to expr failed", K(ret), KPC(insert_row));
     } else if (OB_FAIL(conflict_checker_.check_duplicate_rowkey(insert_row,
                                                                 constraint_values,
@@ -345,10 +345,10 @@ int ObTableInsertUpOp::do_insert_up_cache()
       ObChunkDatumStore::StoredRow *upd_new_row = NULL;
       const ObChunkDatumStore::StoredRow *upd_old_row = constraint_values.at(0).current_datum_row_;
       clear_evaluated_flag();
-      if (OB_FAIL(insert_row->to_expr_skip_const(MY_SPEC.all_saved_exprs_, eval_ctx_))) {
+      if (OB_FAIL(insert_row->to_expr(MY_SPEC.all_saved_exprs_, eval_ctx_))) {
         LOG_WARN("insert_row to expr failed", K(ret), KPC(insert_row),
                  "exprs", get_primary_table_insert_row());
-      } else if (OB_FAIL(upd_old_row->to_expr_skip_const(get_primary_table_upd_old_row(), eval_ctx_))) {
+      } else if (OB_FAIL(upd_old_row->to_expr(get_primary_table_upd_old_row(), eval_ctx_))) {
         LOG_WARN("upd_old_row to expr failed", K(ret), KPC(upd_old_row),
                  "exprs", get_primary_table_upd_old_row());
       } else if (ins_ctdef.is_primary_index_
@@ -945,7 +945,7 @@ int ObTableInsertUpOp::get_next_conflict_rowkey(DASTaskIter &task_iter)
     } else if (OB_ISNULL(stored_row = ssr.get_store_row())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("stored row is null", K(ret));
-    } else if (OB_FAIL(stored_row->to_expr_skip_const(
+    } else if (OB_FAIL(stored_row->to_expr(
             conflict_checker_.checker_ctdef_.data_table_rowkey_expr_,
             conflict_checker_.eval_ctx_))) {
       if (OB_ITER_END != ret) {
@@ -1049,12 +1049,12 @@ int ObTableInsertUpOp::do_update(const ObConflictValue &constraint_value)
       // base_line 和 curr_row 都存在
       OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
       OZ(delete_upd_old_row_to_das());
-      OZ(constraint_value.current_datum_row_->to_expr_skip_const(get_primary_table_upd_new_row(), eval_ctx_));
+      OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_upd_new_row(), eval_ctx_));
       OZ(insert_upd_new_row_to_das());
     } else if (NULL == constraint_value.baseline_datum_row_ &&
                NULL != constraint_value.current_datum_row_) {
       // base_line不存在 但是 curr_row 存在，说明curr_row是从其他行update来的
-      OZ(constraint_value.current_datum_row_->to_expr_skip_const(get_primary_table_upd_new_row(), eval_ctx_));
+      OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_upd_new_row(), eval_ctx_));
       OZ(insert_upd_new_row_to_das());
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1100,7 +1100,7 @@ int ObTableInsertUpOp::do_insert(const ObConflictValue &constraint_value)
     // delete + insert
     OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
     OZ(delete_upd_old_row_to_das());
-    OZ(constraint_value.current_datum_row_->to_expr_skip_const(get_primary_table_insert_row(), eval_ctx_));
+    OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_insert_row(), eval_ctx_));
     OZ(insert_row_to_das());
   } else if (NULL != constraint_value.baseline_datum_row_ &&
              NULL == constraint_value.current_datum_row_) {
@@ -1110,7 +1110,7 @@ int ObTableInsertUpOp::do_insert(const ObConflictValue &constraint_value)
   } else if (NULL == constraint_value.baseline_datum_row_ &&
              NULL != constraint_value.current_datum_row_) {
     // only insert
-    OZ(constraint_value.current_datum_row_->to_expr_skip_const(get_primary_table_insert_row(), eval_ctx_));
+    OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_insert_row(), eval_ctx_));
     OZ(insert_row_to_das());
   }
   return ret;

@@ -28,6 +28,7 @@ class Path;
 class JoinPath;
 class ObLogGroupBy;
 class ObLogSet;
+class ObLogWindowFunction;
 struct MergeKeyInfo;
 struct IndexDMLInfo;
 
@@ -154,8 +155,8 @@ private:
                               const ObIArray<ObRawExpr*> &having_exprs,
                               const bool is_from_povit,
                               GroupingOpHelper &groupby_helper,
-                              ObLogicalOperator *&top,
-                              bool &is_plan_valid,
+                              CandidatePlan &candidate_plan,
+                              ObIArray<CandidatePlan> &candidate_plans,
                               bool can_ignore_merge = false);
 
   int generate_merge_group_sort_keys(ObLogicalOperator *top,
@@ -221,6 +222,12 @@ private:
 
   int check_if_union_all_match_partition_wise(const ObIArray<ObLogicalOperator*> &child_ops,
                                               bool &is_partition_wise);
+
+  int check_if_union_all_match_set_partition_wise(const ObIArray<ObLogicalOperator*> &child_ops,
+                                                  bool &is_match_set_pw);
+
+  int check_if_union_all_match_extended_partition_wise(const ObIArray<ObLogicalOperator*> &child_ops,
+                                                       bool &is_match_ext_pw);
 
   int get_largest_sharding_child(const ObIArray<ObLogicalOperator*> &child_ops,
                                  const int64_t candi_pos,
@@ -380,12 +387,21 @@ private:
   bool is_set_partition_wise_valid(const ObLogicalOperator &left_plan,
                                    const ObLogicalOperator &right_plan);
 
+  bool is_set_repart_valid(const ObLogicalOperator &left_plan,
+                           const ObLogicalOperator &right_plan,
+                           const DistAlgo dist_algo);
+
   int check_if_set_match_repart(const EqualSets &equal_sets,
                                 const ObIArray<ObRawExpr *> &src_join_keys,
                                 const ObIArray<ObRawExpr *> &target_join_keys,
                                 const ObLogicalOperator &target_child,
                                 bool &is_match_repart);
 
+  int check_if_set_match_rehash(const EqualSets &equal_sets,
+                                const ObIArray<ObRawExpr *> &src_join_keys,
+                                const ObIArray<ObRawExpr *> &target_join_keys,
+                                const ObLogicalOperator &target_child,
+                                bool &is_match_single_side_hash);
   /**
    * @brief generate_subquery_plan
    * generate sub query plan
@@ -394,7 +410,8 @@ private:
   int generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
                                   ObSelectLogPlan *&sub_plan,
                                   ObIArray<ObRawExpr*> &pushdown_filters,
-                                  const uint64_t child_offset);
+                                  const uint64_t child_offset,
+                                  const bool is_set_distinct);
 
   /**
    *  @brief  GENERATE the PLAN tree FOR PLAIN SELECT stmt
@@ -442,6 +459,7 @@ private:
   int candi_allocate_window_function();
 
   int generate_window_functions_plan(const ObIArray<ObWinFunRawExpr*> &winfunc_exprs,
+                                     ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
                                      common::ObIArray<CandidatePlan> &total_plans,
                                      CandidatePlan &orig_candidate_plan);
 
@@ -450,6 +468,19 @@ private:
                                   ObIArray<OrderItem> &current_sort_keys,
                                   ObIArray<ObWinFunRawExpr*> &current_exprs,
                                   ObIArray<OrderItem> &next_sort_keys);
+
+  int prepare_for_split_winfuncs(
+      const ObLogicalOperator *top,
+      const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
+      const ObIArray<OrderItem> &sort_keys,
+      ObIArray<double> &sort_key_ndvs,
+      ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes);
+
+  int check_winfunc_pushdown(
+      const ObLogicalOperator *top, const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
+      const WinDistAlgo method, const ObIArray<double> &sort_key_ndvs,
+      const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
+      bool &is_pushdown, ObIArray<bool> &pushdown_info);
 
   // Split adjusted window function (`adjusted_winfunc_exprs()` called) into groups such that each
   // group hash same distribute method.
@@ -461,11 +492,13 @@ private:
   // @param stmt_func_idx  window function operator of current stmt
   // @param[out] split split result which stores the %window_exprs array end positions
   // @param[out] methods window distribute method for each split array
+  // @param[out] pushdown_supported_array to record if each split array can support pushdown
   int split_winfuncs_by_dist_method(const ObLogicalOperator *top,
                                     const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
                                     const common::ObIArray<ObWinFunRawExpr *> &remaining_exprs,
-                                    const ObIArray<OrderItem> &sort_keys,
                                     const int64_t stmt_func_idx,
+                                    const ObIArray<double> &sort_key_ndvs,
+                                    const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
                                     common::ObIArray<int64_t> &split,
                                     common::ObIArray<WinDistAlgo> &methods);
 
@@ -508,13 +541,19 @@ private:
   int create_merge_window_function_plan(ObLogicalOperator *&top,
                                         const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
                                         const ObIArray<OrderItem> &sort_keys,
-                                        WinDistAlgo dist_method);
+                                        WinDistAlgo dist_method,
+                                        const bool is_pushdown,
+                                        ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
+                                        const ObIArray<bool> &pushdown_info);
 
   int create_hash_window_function_plan(ObLogicalOperator *&top,
                                        ObIArray<ObWinFunRawExpr*> &adjusted_winfunc_exprs,
                                        const ObIArray<OrderItem> &sort_keys,
                                        ObIArray<ObRawExpr*> &partition_exprs,
-                                       const int64_t part_cnt);
+                                       const int64_t part_cnt,
+                                       const bool is_pushdown,
+                                       ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
+                                       const ObIArray<bool> &pushdown_info);
 
   int adjust_window_functions(const ObLogicalOperator *top,
                               const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
@@ -526,15 +565,25 @@ private:
   int check_wf_range_dist_supported(ObWinFunRawExpr *win_expr,
                                     bool &supported);
 
+  int check_wf_pushdown_supported(ObWinFunRawExpr *win_expr, bool &supported);
+
+  // partition_exprs for push_down window_function op is the exprs of the smallest partition
+  int get_pushdown_window_function_partition_exprs(
+      const ObIArray<ObWinFunRawExpr *> &win_exprs,
+      ObIArray<ObRawExpr*> &partition_exprs);
+
   int get_window_function_partition_exprs(const ObIArray<ObWinFunRawExpr *> &win_exprs,
                                           ObIArray<ObRawExpr*> &partition_exprs);
 
   int allocate_window_function_as_top(const ObIArray<ObWinFunRawExpr *> &win_exprs,
                                       const bool match_parallel,
                                       const bool is_partition_wise,
+                                      const int32_t role_type,
                                       const ObIArray<OrderItem> &range_dist_keys,
                                       const int64_t range_dist_pby_prefix,
-                                      ObLogicalOperator *&top);
+                                      ObLogicalOperator *&top,
+                                      ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
+                                      const ObIArray<bool> &pushdown_info);
 
   int candi_allocate_late_materialization();
 
@@ -553,13 +602,6 @@ private:
                               uint64_t table_id,
                               TableItem *project_table_item,
                               ObIArray<uint64_t> &index_columns);
-
-  int project_generate_column(ObIRawExprCopier &expr_copier,
-                              ObSelectStmt *stmt,
-                              uint64_t table_id,
-                              TableItem *project_table_item,
-                              ObIArray<uint64_t> &index_columns,
-                              ObColumnRefRawExpr* expr);
 
   int adjust_late_materialization_stmt_structure(ObSelectStmt *stmt,
                                                  ObLogTableScan *index_scan,
@@ -600,6 +642,20 @@ private:
   int allocate_unpivot_as_top(ObLogicalOperator *&old_top);
 
   int init_selectivity_metas_for_set(ObSelectLogPlan *sub_plan, const uint64_t child_offset);
+
+  int inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                    const ObIArray<ObRawExpr*> &group_by_exprs,
+                                    const ObIArray<ObOrderDirection> &group_directions,
+                                    const ObIArray<ObRawExpr*> &rollup_exprs,
+                                    const ObIArray<ObOrderDirection> &rollup_directions,
+                                    const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                    const ObIArray<ObRawExpr*> &having_exprs,
+                                    const bool is_from_povit,
+                                    GroupingOpHelper &groupby_helper,
+                                    ObLogicalOperator *&top,
+                                    bool &is_plan_valid,
+                                    bool can_ignore_merge = false,
+                                    bool use_part_sort = false);
 
   DISALLOW_COPY_AND_ASSIGN(ObSelectLogPlan);
 };

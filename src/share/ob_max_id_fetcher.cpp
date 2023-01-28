@@ -77,6 +77,9 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_directory_id", "max used directory id"},
   { "ob_max_used_context_id", "max used context id" },
   { "ob_max_used_partition_id", "max used partition_id" },
+  { "ob_max_used_rls_policy_id", "max used ddl rls policy id"},
+  { "ob_max_used_rls_group_id", "max used ddl rls group id"},
+  { "ob_max_used_rls_context_id", "max used ddl rls context id"},
 };
 
 lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
@@ -138,7 +141,10 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_DBLINK_ID_TYPE:
     case OB_MAX_USED_DIRECTORY_ID_TYPE:
     case OB_MAX_USED_CONTEXT_ID_TYPE:
-    case OB_MAX_USED_PARTITION_ID_TYPE: {
+    case OB_MAX_USED_PARTITION_ID_TYPE:
+    case OB_MAX_USED_RLS_POLICY_ID_TYPE:
+    case OB_MAX_USED_RLS_GROUP_ID_TYPE:
+    case OB_MAX_USED_RLS_CONTEXT_ID_TYPE: {
       dst = OB_MAX_USED_OBJECT_ID_TYPE;
       break;
     }

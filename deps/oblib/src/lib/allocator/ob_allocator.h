@@ -104,6 +104,7 @@ public:
     return *this;
   }
   const ObIAllocator *get_alloc() const { return alloc_;}
+  ObIAllocator *get_alloc() { return alloc_;}
   static uint32_t alloc_offset_bits()
   {
 DISABLE_WARNING_GCC_PUSH

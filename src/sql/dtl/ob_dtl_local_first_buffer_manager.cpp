@@ -358,11 +358,9 @@ ObDtlLocalFirstBufferCacheManager::~ObDtlLocalFirstBufferCacheManager()
 int ObDtlLocalFirstBufferCacheManager::init()
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(tenant_id_, ObModIds::OB_SQL_DTL);
   if (OB_FAIL(allocator_.init(
                 lib::ObMallocAllocator::get_instance(),
-                OB_MALLOC_NORMAL_BLOCK_SIZE,
-                attr))) {
+                OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("failed to init allocator", K(ret));
   } else {
     allocator_.set_label(ObModIds::OB_SQL_DTL);

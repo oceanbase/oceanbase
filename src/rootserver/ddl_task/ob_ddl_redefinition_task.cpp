@@ -226,7 +226,7 @@ int ObDDLRedefinitionTask::prepare(const ObDDLTaskStatus next_task_status)
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
   }
   // overwrite ret
-  if (OB_FAIL(switch_status(next_task_status, ret))) {
+  if (OB_FAIL(switch_status(next_task_status, true, ret))) {
     LOG_WARN("fail to switch status", K(ret));
   }
   return ret;
@@ -291,7 +291,7 @@ int ObDDLRedefinitionTask::lock_table(const ObDDLTaskStatus next_task_status)
     new_status = next_task_status;
   }
   if (new_status == next_task_status || OB_FAIL(ret)) {
-    if (OB_FAIL(switch_status(new_status, ret))) {
+    if (OB_FAIL(switch_status(new_status, true, ret))) {
       LOG_WARN("fail to switch task status", K(ret));
     }
   }
@@ -329,7 +329,7 @@ int ObDDLRedefinitionTask::check_table_empty(const ObDDLTaskStatus next_task_sta
   }
 
   if (OB_FAIL(ret) || is_check_replica_end || !need_check_table_empty) {
-    if (OB_FAIL(switch_status(next_task_status, ret))) {
+    if (OB_FAIL(switch_status(next_task_status, true, ret))) {
       LOG_WARN("fail to switch status", K(ret));
     }
   }
@@ -1188,14 +1188,14 @@ int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status
   }
 
   if (OB_FAIL(ret) || is_update_autoinc_end) {
-    if (OB_FAIL(switch_status(next_task_status, ret))) {
+    if (OB_FAIL(switch_status(next_task_status, true, ret))) {
       LOG_WARN("fail to switch status", K(ret));
     }
   }
   return ret;
 }
 
-int ObDDLRedefinitionTask::cleanup()
+int ObDDLRedefinitionTask::cleanup_impl()
 {
   int ret = OB_SUCCESS;
   ObString unused_str;
@@ -1320,6 +1320,11 @@ int ObDDLRedefinitionTask::serialize_params_to_message(char *buf, const int64_t 
     LOG_WARN("serialize table arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, cluster_version_);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ddl_tracing_.serialize(buf, buf_len, pos))) {
+        LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -1339,6 +1344,11 @@ int ObDDLRedefinitionTask::deserlize_params_from_message(const char *buf, const 
     LOG_WARN("deep copy table arg failed", K(ret));
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, parallelism_, cluster_version_);
+    if (OB_SUCC(ret) && pos < data_len) {
+      if (OB_FAIL(ddl_tracing_.deserialize(buf, data_len, pos))) {
+        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -1346,7 +1356,8 @@ int ObDDLRedefinitionTask::deserlize_params_from_message(const char *buf, const 
 int64_t ObDDLRedefinitionTask::get_serialize_param_size() const
 {
   return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_)
-         + serialization::encoded_length_i64(parallelism_) + serialization::encoded_length_i64(cluster_version_);
+         + serialization::encoded_length_i64(parallelism_) + serialization::encoded_length_i64(cluster_version_)
+         + ddl_tracing_.get_serialize_size();
 }
 
 int ObDDLRedefinitionTask::check_health()
@@ -1386,7 +1397,7 @@ int ObDDLRedefinitionTask::check_health()
     if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
-      switch_status(new_status, ret);
+      switch_status(new_status, false, ret);
       LOG_WARN("switch status to build_failed", K(ret), K(old_status), K(new_status));
     }
   }

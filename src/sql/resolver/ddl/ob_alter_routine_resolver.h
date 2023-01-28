@@ -51,6 +51,8 @@ protected:
     obrpc::ObCreateRoutineArg &crt_routine_arg,
     const share::schema::ObRoutineInfo &routine_info,
     bool need_recreate, const ParseNode *source_tree);
+  int resolve_clause_list(const ParseNode *node,
+                          obrpc::ObCreateRoutineArg &crt_routine_arg);
 
 private:
   ObCreateRoutineResolver *crt_resolver_;

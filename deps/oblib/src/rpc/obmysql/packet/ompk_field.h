@@ -27,6 +27,7 @@ class OMPKField
 public:
   explicit OMPKField(ObMySQLField &field);
   virtual ~OMPKField() { }
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_FIELD; }
 
   virtual int serialize(char *buffer, int64_t len, int64_t &pos) const;
 private:

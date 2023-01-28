@@ -158,7 +158,9 @@ public:
               ignore_vtable_error_(false),
               access_table_location_keys_(),
               access_table_location_indexes_(),
-              server_not_alive_(false)
+              server_not_alive_(false),
+              adjoining_root_dfo_(false),
+              is_single_tsc_leaf_dfo_(false)
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -256,20 +258,25 @@ public:
   { transmit_use_interm_result_ = flag; }
   void set_recieve_use_interm_result(bool flag)
   { recieve_use_interm_result_ = flag; }
-  bool transmit_use_interm_result() { return transmit_use_interm_result_; }
-  bool recieve_use_interm_result() { return recieve_use_interm_result_; }
+  bool transmit_use_interm_result() const { return transmit_use_interm_result_; }
+  bool recieve_use_interm_result() const { return recieve_use_interm_result_; }
   int add_serial_recieve_channel(const ObPxReceiveDataChannelMsg &channel);
   int set_rescan_batch_params(ObBatchRescanParams &params) { return rescan_batch_params_.assign(params); }
   ObBatchRescanParams &get_rescan_batch_params() { return rescan_batch_params_; }
   common::ObIArray<ObTableLocation> &get_pruning_table_locations()
   { return partition_pruning_table_locations_; }
-
+  void set_adjoining_root_dfo(bool flag)
+  { adjoining_root_dfo_ = flag; }
+  bool adjoining_root_dfo() const { return adjoining_root_dfo_; }
+  void set_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
+  bool is_single_tsc_leaf_dfo() { return is_single_tsc_leaf_dfo_; }
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
                K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
                K_(thread_inited), K_(thread_finish), K_(px_int_id),
                K_(is_fulltree), K_(is_rpc_worker), K_(transmit_use_interm_result),
-               K_(recieve_use_interm_result), K(temp_table_ctx_), K_(server_not_alive));
+               K_(recieve_use_interm_result), K(temp_table_ctx_), K_(server_not_alive),
+               K_(adjoining_root_dfo), K_(is_single_tsc_leaf_dfo));
 private:
   uint64_t execution_id_;
   uint64_t qc_id_;
@@ -323,6 +330,11 @@ private:
   ObSEArray<ObSqcTableLocationKey, 2> access_table_location_keys_;
   ObSEArray<ObSqcTableLocationIndex, 2> access_table_location_indexes_;
   bool server_not_alive_;
+  /*used for init channel msg, indicate a transmit
+  op is adjoining coodinator, that need not wait that msg*/
+  bool adjoining_root_dfo_;
+  //for auto scale
+  bool is_single_tsc_leaf_dfo_;
 };
 
 class ObDfo
@@ -376,7 +388,8 @@ public:
     use_filter_ch_map_(),
     total_task_cnt_(0),
     ignore_vtable_error_(false),
-    pkey_table_loc_id_(0)
+    pkey_table_loc_id_(0),
+    tsc_op_cnt_(0)
   {
   }
 
@@ -546,6 +559,9 @@ public:
   bool is_ignore_vtable_error() { return ignore_vtable_error_; }
   void set_pkey_table_loc_id(int64_t id) { pkey_table_loc_id_ = id; }
   int64_t get_pkey_table_loc_id() { return pkey_table_loc_id_; };
+  void inc_tsc_op_cnt() { tsc_op_cnt_++; }
+  bool is_leaf_dfo() { return child_dfos_.empty(); }
+  bool is_single_tsc_leaf_dfo() { return is_leaf_dfo() && 1 == tsc_op_cnt_; }
   TO_STRING_KV(K_(execution_id),
                K_(dfo_id),
                K_(is_active),
@@ -568,7 +584,8 @@ public:
                K_(dist_method),
                K_(px_bloom_filter_mode),
                K_(px_bf_id),
-               K_(pkey_table_loc_id));
+               K_(pkey_table_loc_id),
+               K_(tsc_op_cnt));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDfo);
@@ -636,6 +653,7 @@ private:
   int64_t total_task_cnt_;      // the task total count of dfo start worker
   bool ignore_vtable_error_;
   int64_t pkey_table_loc_id_; // record pkey table loc id for child dfo
+  int64_t tsc_op_cnt_;
 };
 
 

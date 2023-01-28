@@ -15,6 +15,7 @@
 
 #include "lib/container/ob_array.h"
 #include "lib/thread/ob_async_task_queue.h"
+#include "lib/trace/ob_trace.h"
 #include "share/ob_ddl_task_executor.h"
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
@@ -151,6 +152,13 @@ public:
       const int64_t task_id,
       const ObString &message);
 
+  static int update_status_and_message(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int64_t task_status,
+      ObString &message);
+
   static int delete_record(
       common::ObMySQLProxy &proxy,
       const uint64_t tenant_id,
@@ -279,6 +287,66 @@ private:
   common::ObArray<int64_t> snapshot_array_;
 };
 
+class ObDDLTask;
+
+struct ObDDLTracing final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDDLTracing() = delete;
+  explicit ObDDLTracing(const ObDDLTask *ddl_task)
+    : trace_ctx_(), task_span_id_(), status_span_id_(), parent_task_span_id_(),
+      task_start_ts_(0), status_start_ts_(0), parent_task_span_(nullptr),
+      task_span_(nullptr), status_span_(nullptr), task_(ddl_task),
+      is_status_span_begin_(false), is_status_span_end_(false), is_task_span_flushed_(false)
+  {}
+  bool is_valid() const
+  {
+    return task_span_id_.low_ != 0 && task_span_id_.high_ != 0 &&
+           status_span_id_.low_ != 0 && status_span_id_.high_ != 0 &&
+           parent_task_span_id_.low_ != 0 && parent_task_span_id_.high_ != 0 &&
+           task_start_ts_ != 0 && status_start_ts_ != 0;
+  }
+  void open();
+  void open_for_recovery();
+  void restore_span_hierarchy();
+  void release_span_hierarchy();
+  void end_status_span();
+  void close();
+
+private:
+  void init_span_id(trace::ObSpanCtx *span);
+  void init_task_span();
+  void init_status_span();
+  trace::ObSpanCtx* begin_task_span();
+  void end_task_span();
+  trace::ObSpanCtx* begin_status_span(const share::ObDDLTaskStatus status);
+  trace::ObSpanCtx* restore_parent_task_span();
+  trace::ObSpanCtx* restore_task_span();
+  trace::ObSpanCtx* restore_status_span();
+  void record_trace_ctx();
+  void record_parent_task_span(trace::ObSpanCtx *span);
+  void record_task_span(trace::ObSpanCtx *span);
+  void record_status_span(trace::ObSpanCtx *span);
+
+private:
+  // members that will be serialized to ddl task record
+  trace::FltTransCtx trace_ctx_;
+  trace::UUID task_span_id_;      // build index task, drop index task etc
+  trace::UUID status_span_id_;    // status: prepare, succ etc
+  trace::UUID parent_task_span_id_;
+  int64_t task_start_ts_;
+  int64_t status_start_ts_;
+  // members that will not be serialized
+  trace::ObSpanCtx *parent_task_span_;
+  trace::ObSpanCtx *task_span_;
+  trace::ObSpanCtx *status_span_;
+  const ObDDLTask *task_;
+  bool is_status_span_begin_;
+  bool is_status_span_end_;
+  bool is_task_span_flushed_;
+};
+
 struct ObDDLTaskStatInfo final
 {
 public:
@@ -301,7 +369,7 @@ class ObDDLTask : public common::ObDLinkBase<ObDDLTask>
 {
 public:
   explicit ObDDLTask(const share::ObDDLType task_type)
-    : is_inited_(false), need_retry_(true), is_running_(false),
+    : ddl_tracing_(this), is_inited_(false), need_retry_(true), is_running_(false),
       task_type_(task_type), trace_id_(), tenant_id_(0), object_id_(0), schema_version_(0),
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
@@ -343,7 +411,7 @@ public:
   const ObString &get_ddl_stmt_str() const { return ddl_stmt_str_; }
   int set_ddl_stmt_str(const ObString &ddl_stmt_str);
   int convert_to_record(ObDDLTaskRecord &task_record, common::ObIAllocator &allocator);
-  int switch_status(share::ObDDLTaskStatus new_status, const int ret_code);
+  int switch_status(share::ObDDLTaskStatus new_status, const bool enable_flt, const int ret_code);
   int refresh_status();
   int refresh_schema_version();
   int remove_task_record();
@@ -365,6 +433,12 @@ public:
   bool is_replica_build_need_retry(const int ret_code);
   int push_execution_id();
   virtual bool support_longops_monitoring() const { return false; }
+  int cleanup();
+  virtual int cleanup_impl() = 0;
+  virtual void flt_set_task_span_tag() const = 0;
+  virtual void flt_set_status_span_tag() const = 0;
+  int update_task_record_status_and_msg(common::ObISQLClient &proxy, const share::ObDDLTaskStatus real_new_status);
+
   #ifdef ERRSIM
   int check_errsim_error();
   #endif
@@ -407,6 +481,7 @@ protected:
   int init_ddl_task_monitor_info(const ObTableSchema *target_schema);
 protected:
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
+  ObDDLTracing ddl_tracing_;
   bool is_inited_;
   bool need_retry_;
   bool is_running_;

@@ -123,6 +123,7 @@ public:
   bool all_task_success();
   int64_t get_rpc_level() { return rpc_level_; }
   void set_rpc_level(int64_t level) { rpc_level_ = level; }
+  int thread_count_auto_scaling(int64_t &reserved_px_thread_count);
   TO_STRING_KV(K_(tenant_id), K_(reserved_px_thread_count), KP_(notifier),
       K_(exec_ctx), K_(des_phy_plan), K_(sqc_init_args), KP_(sub_coord), K_(rpc_level));
 

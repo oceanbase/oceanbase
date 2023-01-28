@@ -35,25 +35,24 @@ using namespace pl;
 namespace sql
 {
 
-int ObTableAssignment::expand_expr(const ObIArray<ObAssignment> &assigns, ObRawExpr *&expr)
+int ObTableAssignment::expand_expr(ObRawExprFactory &expr_factory,
+                                   const ObIArray<ObAssignment> &assigns,
+                                   ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  if (NULL == expr) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (!expr->has_flag(CNT_COLUMN)) {
-    /*do nothing*/
-  } else if (expr->has_flag(IS_VALUES)) {
-    //nothing to do
-  } else if (expr->has_flag(IS_COLUMN)) {
-    if (OB_FAIL(replace_assigment_expr(assigns, expr))) {
-      LOG_WARN("fail to replace assigment expr", K(ret), K(expr));
+  ObRawExprCopier copier(expr_factory);
+  for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); ++i) {
+    if (OB_FAIL(copier.add_replaced_expr(assigns.at(i).column_expr_,
+                                         assigns.at(i).expr_))) {
+      LOG_WARN("failed to add replace expr", K(ret));
     }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
-      if (OB_FAIL(SMART_CALL(ObTableAssignment::expand_expr(assigns, expr->get_param_expr(i))))) {
-        LOG_WARN("fail to postorder_spread", K(ret), K(expr->get_param_expr(i)));
-      }
+  }
+  if (OB_SUCC(ret)) {
+    ObRawExpr *new_expr = NULL;
+    if (OB_FAIL(copier.copy_on_replace(expr, new_expr))) {
+      LOG_WARN("failed to do copy on replace", K(ret));
+    } else {
+      expr = new_expr;
     }
   }
   return ret;
@@ -707,19 +706,33 @@ int ObDelUpdResolver::add_assignment(common::ObIArray<ObTableAssignment> &assign
     //But in Oracle, its behavior is same with standard SQL
     //set original col1 to col1 and col2
     //For generated column, when cascaded column is updated, the generated column will be updated with new column
-    if (OB_FAIL(ObTableAssignment::expand_expr(table_assign->assignments_, assign.expr_))) {
-      LOG_WARN("expand generated column expr failed", K(ret));
+    ObRawExprCopier copier(*params_.expr_factory_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_assign->assignments_.count(); ++i) {
+      if (OB_FAIL(copier.add_replaced_expr(table_assign->assignments_.at(i).column_expr_,
+                                           table_assign->assignments_.at(i).expr_))) {
+        LOG_WARN("failed to add replaced expr", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_stmt()->get_subquery_expr_size(); ++i) {
+      if (OB_FAIL(copier.add_skipped_expr(get_stmt()->get_subquery_exprs().at(i), false))) {
+        LOG_WARN("failed to add skipped expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(copier.copy_on_replace(assign.expr_, assign.expr_))) {
+      LOG_WARN("failed to copy on replace expr", K(ret));
     }
   }
   bool found = false;
-  if (get_stmt()->get_query_ctx()->is_prepare_stmt()) {
-    // do nothing
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !found && i < table_assign->assignments_.count(); ++i) {
-      if (assign.column_expr_ == table_assign->assignments_.at(i).column_expr_) {
-        table_assign->assignments_.at(i) = assign;
-        table_assign->assignments_.at(i).is_duplicated_ = true; //this column was updated repeatedly
-        found = true;
+  if (OB_SUCC(ret)) {
+    if (get_stmt()->get_query_ctx()->is_prepare_stmt()) {
+      // do nothing
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && !found && i < table_assign->assignments_.count(); ++i) {
+        if (assign.column_expr_ == table_assign->assignments_.at(i).column_expr_) {
+          table_assign->assignments_.at(i) = assign;
+          table_assign->assignments_.at(i).is_duplicated_ = true; //this column was updated repeatedly
+          found = true;
+        }
       }
     }
   }
@@ -1134,9 +1147,7 @@ int ObDelUpdResolver::resolve_error_logging(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
   const ParseNode *table_name_node = NULL;
-  const ParseNode *simple_expression_node = NULL;
   const ParseNode *reject_node = NULL;
-  uint64_t database_id = OB_INVALID_ID;
   const ObTableSchema *table_schema = NULL;
   ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
   CK (OB_NOT_NULL(del_upd_stmt));
@@ -1404,6 +1415,7 @@ int ObDelUpdResolver::resolve_returning(const ParseNode *parse_tree)
 
     if (OB_SUCC(ret)) {
       current_scope_ = T_FIELD_LIST_SCOPE;
+      expr_resv_ctx_.set_new_scope();
       const ParseNode *returning_exprs = parse_tree->children_[0];
       const ParseNode *returning_intos = parse_tree->children_[1];
       uint64_t base_table_id = OB_INVALID_ID;
@@ -1468,6 +1480,7 @@ int ObDelUpdResolver::resolve_returning(const ParseNode *parse_tree)
           LOG_WARN("check returning validity failed", K(ret));
         }
       }
+      expr_resv_ctx_.revert_scope();
     }
   }
   return ret;
@@ -3687,8 +3700,6 @@ int ObDelUpdResolver::add_select_list_for_set_stmt(ObSelectStmt &select_stmt)
       } else if (OB_ISNULL(new_select_item.expr_) || OB_UNLIKELY(!new_select_item.expr_->is_set_op_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null or is not set op expr", "set op", PC(new_select_item.expr_));
-      } else {
-        new_select_item.expr_->set_expr_level(child_stmt->get_current_level());
       }
     }
   }
@@ -4089,6 +4100,8 @@ int ObDelUpdResolver::replace_column_ref_for_check_constraint(ObInsertTableInfo&
   if (OB_ISNULL(expr) || OB_ISNULL(params_.expr_factory_)) {
     LOG_WARN("invalid argument", K(expr));
     ret = OB_INVALID_ARGUMENT;
+  } else if (ObRawExprUtils::find_expr(table_info.column_conv_exprs_, expr)) {
+    // do nothing
   } else if (expr->get_param_count() > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
       if (OB_FAIL(SMART_CALL(replace_column_ref_for_check_constraint(table_info,

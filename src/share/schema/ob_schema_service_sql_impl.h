@@ -41,6 +41,7 @@
 #include "share/schema/ob_dblink_sql_service.h"
 #include "share/schema/ob_directory_sql_service.h"
 #include "share/schema/ob_context_sql_service.h"
+#include "share/schema/ob_rls_sql_service.h"
 
 namespace oceanbase
 {
@@ -117,6 +118,7 @@ public:
   GET_DDL_SQL_SERVICE_FUNC(DbLink, dblink)
   GET_DDL_SQL_SERVICE_FUNC(Directory, directory)
   GET_DDL_SQL_SERVICE_FUNC(Context, context)
+  GET_DDL_SQL_SERVICE_FUNC(Rls, rls)
 
   /* sequence_id related */
   virtual int init_sequence_id(const int64_t rootservice_epoch);
@@ -206,6 +208,9 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(directory, ObDirectorySchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(context, ObContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(rls_context, ObRlsContextSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -277,6 +282,9 @@ public:
   virtual int fetch_new_extended_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &tablet_id, const uint64_t size);
   virtual int fetch_new_tablet_ids(const ObTableSchema &table_schema, uint64_t &tablet_id, const uint64_t size);
   virtual int fetch_new_context_id(const uint64_t tenant_id, uint64_t &new_context_id);
+  virtual int fetch_new_rls_policy_id(const uint64_t tenant_id, uint64_t &new_rls_policy_id);
+  virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id);
+  virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id);
 
 //  virtual int insert_sys_param(const ObSysParam &sys_param,
 //                               common::ObISQLClient *sql_client);
@@ -330,6 +338,9 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(directory, ObDirectorySchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(context, ObContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
 
   //batch will split big query into batch query, each time MAX_IN_QUERY_PER_TIME
   //get_batch_xxx_schema will call fetch_all_xxx_schema
@@ -406,6 +417,10 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(directory, ObDirectorySchema);
   FETCH_SCHEMAS_FUNC_DECLARE(context, ObContextSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
+
   int fetch_mock_fk_parent_table_column_info(
       const ObRefreshSchemaStatus &schema_status,
       const uint64_t tenant_id,
@@ -795,6 +810,21 @@ private:
                          common::ObISQLClient &sql_client,
                          ObTableSchema &table_schema);
 
+  int fetch_rls_object_list(const ObRefreshSchemaStatus &schema_status,
+                            const uint64_t tenant_id,
+                            const uint64_t table_id,
+                            const int64_t schema_version,
+                            common::ObISQLClient &sql_client,
+                            ObTableSchema &table_schema);
+
+  int fetch_rls_columns(const ObRefreshSchemaStatus &schema_status,
+                        const int64_t schema_version,
+                        const uint64_t tenant_id,
+                        common::ObISQLClient &sql_client,
+                        common::ObArray<ObRlsPolicySchema *> &rls_policy_array,
+                        const uint64_t *table_ids,
+                        const int64_t table_ids_size);
+
   // whether we can see the expected version or not
   // @return OB_SCHEMA_EAGAIN when not readable
   virtual int can_read_schema_version(const ObRefreshSchemaStatus &schema_status, int64_t expected_version) override;
@@ -942,6 +972,7 @@ private:
   ObDbLinkSqlService dblink_service_;
   ObDirectorySqlService directory_service_;
   ObContextSqlService context_service_;
+  ObRlsSqlService rls_service_;
 
   ObClusterSchemaStatus cluster_schema_status_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> gen_schema_version_map_;

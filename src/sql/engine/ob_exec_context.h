@@ -397,7 +397,7 @@ public:
   void set_px_sqc_id(const int64_t sqc_id) { px_sqc_id_ = sqc_id; }
   int64_t get_px_sqc_id() const { return px_sqc_id_; }
 
-  ObJoinFilterDataCtx &get_bf_ctx() { return bf_ctx_; }
+  common::ObIArray<ObJoinFilterDataCtx> &get_bloom_filter_ctx_array() { return bloom_filter_ctx_array_; }
 
   char **get_frames() const { return frames_; }
   void set_frames(char **frames) { frames_ = frames; }
@@ -569,8 +569,8 @@ protected:
   int64_t px_task_id_;
   int64_t px_sqc_id_;
 
-  //bloom filter ctx
-  ObJoinFilterDataCtx bf_ctx_;
+  //bloom filter ctx array
+  common::ObArray<ObJoinFilterDataCtx> bloom_filter_ctx_array_;
 
   // data frames and count
   char **frames_;

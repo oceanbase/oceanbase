@@ -56,6 +56,18 @@ private:
   static common::ObLatch lock_;
 };
 
+class UuidCommon {
+public:
+  static int uuid2bin(char *result, bool &is_valid, const char *src, int64_t len);
+  static int bin2uuid(char *result, const uchar *src);
+private:
+  static int read_section(char *res, bool &is_valid, const char *src, int64_t len);
+public:
+  static constexpr common::ObLength bytes_per_section[] = {4, 2, 2, 2, 6};
+  //aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+  static const common::ObLength LENGTH_UUID = 36;
+  static const common::ObLength BYTE_LENGTH = 16;
+};
 
 class ObExprUuid : public ObFuncExprOperator
 {
@@ -77,8 +89,6 @@ public:
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
-  //aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-  static const common::ObLength LENGTH_UUID = 36;//chars not bytes
 protected:
   static int calc(unsigned char *scratch);
 private:
@@ -94,7 +104,7 @@ inline int ObExprUuid::calc_result_type0(ObExprResType &type,
   type.set_varchar();
   type.set_collation_level(common::CS_LEVEL_IMPLICIT);
   type.set_collation_type(common::ObCharset::get_default_collation(common::ObCharset::get_default_charset()));
-  type.set_length(ObExprUuid::LENGTH_UUID);
+  type.set_length(UuidCommon::LENGTH_UUID);
   return common::OB_SUCCESS;
 }
 
@@ -129,6 +139,73 @@ inline int ObExprSysGuid::calc_result_type0(
   return common::OB_SUCCESS;
 }
 
+class ObExprUuid2bin : public ObFuncExprOperator
+{
+public:
+  explicit ObExprUuid2bin(common::ObIAllocator &alloc);
+  virtual ~ObExprUuid2bin();
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t type_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int uuid2bin(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int uuid2bin_batch(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprUuid2bin);
+};
+
+class ObExprIsUuid : public ObFuncExprOperator
+{
+public:
+  explicit ObExprIsUuid(common::ObIAllocator &alloc);
+  virtual ~ObExprIsUuid();
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int is_uuid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int is_uuid_batch(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprIsUuid);
+};
+
+inline int ObExprIsUuid::calc_result_type1(ObExprResType &type,
+                                    ObExprResType &type1,
+                                    common::ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(type_ctx);
+  type.set_tinyint();
+  type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
+  type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  type1.set_calc_type(common::ObVarcharType);
+  type1.set_calc_collation_type(type1.get_collation_type());
+  type1.set_calc_collation_level(type1.get_collation_level());
+  return ret;
+}
+
+class ObExprBin2uuid : public ObFuncExprOperator
+{
+public:
+  explicit ObExprBin2uuid(common::ObIAllocator &alloc);
+  virtual ~ObExprBin2uuid();
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t type_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int bin2uuid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int bin2uuid_batch(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprBin2uuid);
+};
 }
 }
 

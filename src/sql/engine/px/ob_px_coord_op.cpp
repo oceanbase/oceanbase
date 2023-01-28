@@ -42,6 +42,7 @@
 #include "sql/dtl/ob_dtl_utils.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_op.h"
+#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 
 namespace oceanbase
 {
@@ -663,6 +664,8 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     ObDynamicSamplePieceMsgP sample_piece_msg_proc(ctx_, terminate_msg_proc);
     ObRollupKeyPieceMsgP rollup_key_piece_msg_proc(ctx_, terminate_msg_proc);
     ObRDWFPieceMsgP rd_wf_piece_msg_proc(ctx_, terminate_msg_proc);
+    ObInitChannelPieceMsgP init_channel_piece_msg_proc(ctx_, terminate_msg_proc);
+    ObReportingWFPieceMsgP reporting_wf_piece_msg_proc(ctx_, terminate_msg_proc);
     ObPxQcInterruptedP interrupt_proc(ctx_, terminate_msg_proc);
     ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc(ctx_, terminate_msg_proc);
 
@@ -678,6 +681,8 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       .register_processor(sample_piece_msg_proc)
       .register_processor(rollup_key_piece_msg_proc)
       .register_processor(rd_wf_piece_msg_proc)
+      .register_processor(init_channel_piece_msg_proc)
+      .register_processor(reporting_wf_piece_msg_proc)
       .register_processor(opt_stats_gather_piece_msg_proc);
     loop.ignore_interrupt();
 
@@ -737,6 +742,8 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
           case ObDtlMsgType::DH_DYNAMIC_SAMPLE_PIECE_MSG:
           case ObDtlMsgType::DH_ROLLUP_KEY_PIECE_MSG:
           case ObDtlMsgType::DH_RANGE_DIST_WF_PIECE_MSG:
+          case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
+          case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
           case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
             break;
           default:
@@ -839,7 +846,11 @@ int ObPxCoordOp::receive_channel_root_dfo(
   ObExecContext &ctx, ObDfo &parent_dfo, ObPxTaskChSets &parent_ch_sets)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(task_ch_set_.assign(parent_ch_sets.at(0)))) {
+  uint64_t min_cluster_version = 0;
+  CK (OB_NOT_NULL(ctx.get_physical_plan_ctx()) && OB_NOT_NULL(ctx.get_physical_plan_ctx()->get_phy_plan()));
+  OX (min_cluster_version = ctx.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(task_ch_set_.assign(parent_ch_sets.at(0)))) {
     LOG_WARN("fail assign data", K(ret));
   } else if (OB_FAIL(init_dfc(parent_dfo, nullptr))) {
     LOG_WARN("Failed to init dfc", K(ret));
@@ -869,6 +880,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_is_px_channel(true);
         ch->set_operator_owner();
         ch->set_thread_id(thread_id);
+        ch->set_enable_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());
@@ -904,7 +916,11 @@ int ObPxCoordOp::receive_channel_root_dfo(
 {
   int ret = OB_SUCCESS;
   ObPxTaskChSets tmp_ch_sets;
-  if (OB_FAIL(ObPxChProviderUtil::inner_get_data_ch(
+  uint64_t min_cluster_version = 0;
+  CK (OB_NOT_NULL(ctx.get_physical_plan_ctx()) && OB_NOT_NULL(ctx.get_physical_plan_ctx()->get_phy_plan()));
+  OX (min_cluster_version = ctx.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObPxChProviderUtil::inner_get_data_ch(
       tmp_ch_sets, ch_info, 0, 0, task_ch_set_, false))) {
     LOG_WARN("fail get data ch set", K(ret));
   } else if (OB_FAIL(init_dfc(parent_dfo, &ch_info))) {
@@ -935,6 +951,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_thread_id(thread_id);
         ch->set_audit(enable_audit);
         ch->set_is_px_channel(true);
+        ch->set_enable_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());

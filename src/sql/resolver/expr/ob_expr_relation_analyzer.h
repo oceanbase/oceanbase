@@ -19,22 +19,13 @@ namespace oceanbase
 namespace sql
 {
 class ObRawExpr;
-class ObDMLStmt;
-class ObQueryRefRawExpr;
-class ObExecParamRawExpr;
 class ObExprRelationAnalyzer
 {
 public:
   explicit ObExprRelationAnalyzer();
-  int pull_expr_relation_id_and_levels(ObRawExpr *expr, int32_t cur_stmt_level);
+  int pull_expr_relation_id(ObRawExpr *expr);
 private:
-  int init_expr_info(ObRawExpr &expr);
-  int visit_expr(ObRawExpr &expr, int32_t stmt_level);
-  int visit_stmt(ObDMLStmt *stmt);
-  int visit_query_ref(ObQueryRefRawExpr &query_ref);
-private:
-  // auto_free = false, only used in function stack
-  common::ObSEArray<ObQueryRefRawExpr *, common::OB_MAX_SUBQUERY_LAYER_NUM> query_exprs_;
+  int visit_expr(ObRawExpr &expr);
 };
 }  // namespace sql
 }  // namespace oceanbase

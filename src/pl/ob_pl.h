@@ -921,6 +921,7 @@ public:
     reset_autocommit_ = false;
     has_stash_savepoint_ = false;
     has_implicit_savepoint_ = false;
+    has_inner_dml_write_ = false;
     is_top_stack_ = false;
     exception_handler_illegal_ = false;
     need_reset_exec_env_ = false;
@@ -962,6 +963,7 @@ public:
 
   inline bool is_exception_handler_illegal() const { return exception_handler_illegal_; }
   inline void set_exception_handler_illegal() { exception_handler_illegal_ = true; }
+  inline void set_reset_autocommit() { reset_autocommit_ = true; }
   inline bool get_reset_autocommit() const { return reset_autocommit_; }
 
   static int valid_execute_context(sql::ObExecContext &ctx);
@@ -1034,7 +1036,9 @@ public:
   inline uint64_t get_database_id() const { return database_id_; }
   inline bool is_function_or_trigger() const { return is_function_or_trigger_; }
   bool is_autonomous() const { return is_autonomous_; }
+  void clear_autonomous() { is_autonomous_ = false; }
   bool in_autonomous() const;
+  int end_autonomous(ObExecContext &ctx, sql::ObSQLSessionInfo &session_info);
   bool in_nested_sql_ctrl() const
   { return ObStmt::is_dml_stmt(my_exec_ctx_->get_sql_ctx()->stmt_type_) && !in_autonomous(); }
   pl::ObPLContext *get_parent_stack_ctx() { return parent_stack_ctx_; }
@@ -1061,6 +1065,7 @@ private:
   bool reset_autocommit_;
   bool has_stash_savepoint_;
   bool has_implicit_savepoint_;
+  bool has_inner_dml_write_;
   bool is_top_stack_;
   bool is_autonomous_;
   sql::ObBasicSessionInfo::TransSavedValue saved_session_;

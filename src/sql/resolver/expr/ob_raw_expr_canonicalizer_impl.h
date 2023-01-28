@@ -30,10 +30,9 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprCanonicalizerImpl);
   // function members
-  typedef int (ObRawExprCanonicalizerImpl::* process_action)(ObRawExpr *&expr);
-  int process_children(ObRawExpr *&expr, process_action trave_action);
   int push_not(ObRawExpr *&expr);
   int do_push_not(ObRawExpr *&expr);
+  int remove_duplicate_conds(ObRawExpr *&expr);
   int pull_parallel_expr(ObRawExpr *&expr);
   int pull_and_factor(ObRawExpr *&expr);
   int pull_similar_expr(ObRawExpr *&expr);

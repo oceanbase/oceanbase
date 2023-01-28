@@ -1360,6 +1360,32 @@ public:
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
   bool has_lob_column() const;
+  inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
+  inline void del_table_flag(uint64_t flag) { table_flags_ &= ~flag; }
+  inline void add_or_del_table_flag(uint64_t flag, bool is_add)
+  {
+    if (is_add) {
+      add_table_flag(flag);
+    } else {
+      del_table_flag(flag);
+    }
+  }
+  inline bool has_table_flag(uint64_t flag) const { return table_flags_ & flag; }
+  inline void set_table_flags(uint64_t flags) { table_flags_ = flags; }
+  inline uint64_t get_table_flags() const { return table_flags_; }
+  inline const common::ObIArray<uint64_t> &get_rls_policy_ids() const { return rls_policy_ids_; }
+  inline common::ObIArray<uint64_t> &get_rls_policy_ids() { return rls_policy_ids_; }
+  inline const common::ObIArray<uint64_t> &get_rls_group_ids() const { return rls_group_ids_; }
+  inline common::ObIArray<uint64_t> &get_rls_group_ids() { return rls_group_ids_; }
+  inline const common::ObIArray<uint64_t> &get_rls_context_ids() const { return rls_context_ids_; }
+  inline common::ObIArray<uint64_t> &get_rls_context_ids() { return rls_context_ids_; }
+  int assign_rls_objects(const ObTableSchema &other);
+  inline void reset_rls_objecs()
+  {
+    rls_policy_ids_.reset();
+    rls_group_ids_.reset();
+    rls_context_ids_.reset();
+  }
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -1515,6 +1541,13 @@ protected:
   uint64_t aux_lob_piece_tid_;
 
   common::ObSArray<uint64_t> depend_mock_fk_parent_table_ids_;
+
+  uint64_t table_flags_;
+
+  // rls
+  common::ObSArray<uint64_t> rls_policy_ids_;
+  common::ObSArray<uint64_t> rls_group_ids_;
+  common::ObSArray<uint64_t> rls_context_ids_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

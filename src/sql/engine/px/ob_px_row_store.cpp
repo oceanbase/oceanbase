@@ -309,6 +309,22 @@ int ObReceiveRowReader::get_next_row(common::ObNewRow &row)
   return ret;
 }
 
+int ObReceiveRowReader::to_expr(const ObChunkDatumStore::StoredRow *srow,
+                                const ObIArray<ObExpr*> &exprs,
+                                ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(srow) || (srow->cnt_ != exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    for (uint32_t i = 0; i < srow->cnt_; ++i) {
+      exprs.at(i)->locate_expr_datum(eval_ctx) = srow->cells()[i];
+      exprs.at(i)->set_evaluated_projected(eval_ctx);
+    }
+  }
+  return ret;
+}
+
 int ObReceiveRowReader::get_next_row(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
@@ -321,10 +337,36 @@ int ObReceiveRowReader::get_next_row(const ObIArray<ObExpr*> &exprs, ObEvalCtx &
     if (NULL == srow) {
       ret = OB_ITER_END;
     } else {
-      ret = srow->to_expr(exprs, eval_ctx);
+      ret = to_expr(srow, exprs, eval_ctx);
     }
   }
   return ret;
+}
+
+void ObReceiveRowReader::attach_rows(const common::ObIArray<ObExpr*> &exprs,
+                                     ObEvalCtx &eval_ctx,
+                                     const ObChunkDatumStore::StoredRow **srows,
+                                     const int64_t read_rows)
+{
+  if (OB_ISNULL(srows)) {
+    // do nothing
+  } else {
+    for (int64_t col_idx = 0; col_idx < exprs.count(); col_idx++) {
+      ObExpr *e = exprs.at(col_idx);
+      ObDatum *datums = e->locate_batch_datums(eval_ctx);
+      if (!e->is_batch_result()) {
+        datums[0] = srows[0]->cells()[col_idx];
+      } else {
+        for (int64_t i = 0; i < read_rows; i++) {
+          datums[i] = srows[i]->cells()[col_idx];
+        }
+      }
+      e->set_evaluated_projected(eval_ctx);
+      ObEvalInfo &info = e->get_eval_info(eval_ctx);
+      info.notnull_ = false;
+      info.point_to_frame_ = false;
+    }
+  }
 }
 
 int ObReceiveRowReader::get_next_batch(const ObIArray<ObExpr*> &exprs,
@@ -352,7 +394,7 @@ int ObReceiveRowReader::get_next_batch(const ObIArray<ObExpr*> &exprs,
       ret = OB_ITER_END;
     } else {
       LOG_DEBUG("read rows", K(read_rows), KP(this));
-      Store::Iterator::attach_rows(exprs, eval_ctx, srows, read_rows);
+      attach_rows(exprs, eval_ctx, srows, read_rows);
     }
   }
   return ret;

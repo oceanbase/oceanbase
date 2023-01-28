@@ -27,7 +27,7 @@ class ObTransformTempTable : public ObTransformRule
 {
 public:
   explicit ObTransformTempTable(ObTransformerCtx *ctx)
-  : ObTransformRule(ctx, TransMethod::PRE_ORDER, T_MATERIALIZE),
+  : ObTransformRule(ctx, TransMethod::ROOT_ONLY, T_MATERIALIZE),
     allocator_("TempTable"),
     trans_param_(NULL) {}
 
@@ -150,6 +150,18 @@ public:
                        QueryRelation relation);
 
   int remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts);
+
+  int get_non_correlated_subquery(ObDMLStmt *stmt,
+                                  const uint64_t recursive_level,
+                                  hash::ObHashMap<uint64_t, uint64_t> &param_level,
+                                  ObIArray<ObSelectStmt *> &non_correlated_stmts,
+                                  uint64_t &min_param_level);
+
+  int check_exec_param_level(const ObRawExpr *expr,
+                             const hash::ObHashMap<uint64_t, uint64_t> &param_level,
+                             uint64_t &min_param_level);
+
+  int is_non_correlated(ObSelectStmt *stmt, bool &is_correlated);
 
   int classify_stmts(ObIArray<ObSelectStmt*> &stmts,
                      ObIArray<StmtClassifyHelper> &stmt_groups);

@@ -91,7 +91,7 @@ int ObRawExprDeduceType::visit(ObQueryRefRawExpr &expr)
   int ret = OB_SUCCESS;
   if (expr.is_cursor()) {
     expr.set_data_type(ObExtendType);
-  } else if ((1 == expr.get_output_column()) && !expr.is_set()) {
+  } else if (((1 == expr.get_output_column()) && (!expr.is_set() || expr.is_multiset()))) {
     expr.set_result_type(expr.get_column_types().at(0));
     if (ob_is_enumset_tc(expr.get_data_type())) {
       const ObSelectStmt *ref_stmt = expr.get_ref_stmt();
@@ -2127,7 +2127,9 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
       if (OB_ISNULL(param_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(param_expr));
-      } else if (!expr.is_calc_part_expr() && get_expr_output_column(*param_expr) != 1) {
+      } else if (!expr.is_calc_part_expr() &&
+                 !param_expr->is_multiset_expr() &&
+                 get_expr_output_column(*param_expr) != 1) {
         //函数的每个参数的值都应该是标量，包括子查询的结果作为参数,不能是row or table
         ret = OB_ERR_INVALID_COLUMN_NUM;
         LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, (int64_t)1);
@@ -3025,8 +3027,12 @@ int ObRawExprDeduceType::add_implicit_cast(ObOpRawExpr &parent,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("child_ptr raw expr is NULL", K(ret));
       } else {
-        if (skip_cast_expr(parent, child_idx) ||
-            skip_cast_json_expr(child_ptr, input_types.at(idx), parent.get_expr_type())) {
+        if (OB_UNLIKELY(idx >= input_types.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected idx", K(ret), K(idx), K(input_types.count()), K(parent));
+        } else if (skip_cast_expr(parent, child_idx) ||
+            skip_cast_json_expr(child_ptr, input_types.at(idx), parent.get_expr_type()) ||
+            child_ptr->is_multiset_expr()) {
           idx += 1;
           // do nothing
         } else if (T_OP_ROW == child_ptr->get_expr_type()) {
@@ -3040,13 +3046,15 @@ int ObRawExprDeduceType::add_implicit_cast(ObOpRawExpr &parent,
           }
           CK(idx + ele_cnt <= input_types.count());
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(add_implicit_cast_for_op_row(parent,
+          } else if (OB_FAIL(add_implicit_cast_for_op_row(
                       child_ptr,
                       ObExprTypeArrayHelper(
                         ele_cnt,
                         const_cast<ObExprResType *>(&input_types.at(idx)), ele_cnt),
                       cast_mode))) {
             LOG_WARN("add_implicit_cast_for_op_row failed", K(ret));
+          } else {
+            parent.get_param_expr(child_idx) = child_ptr;
           }
           idx += ele_cnt;
         } else if (((T_REF_QUERY == child_ptr->get_expr_type()
@@ -3231,17 +3239,20 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
 }
 
 int ObRawExprDeduceType::add_implicit_cast_for_op_row(
-    ObOpRawExpr &parent, ObRawExpr *child_ptr,
+    ObRawExpr *&child_ptr,
     const common::ObIArray<ObExprResType> &input_types,
     const ObCastMode &cast_mode)
 {
-  UNUSED(parent);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(child_ptr)
      || OB_UNLIKELY(T_OP_ROW != child_ptr->get_expr_type())
      || OB_ISNULL(child_ptr->get_param_expr(0))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("child_ptr is NULL", K(ret), K(child_ptr));
+  } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory_,
+                                                     child_ptr,
+                                                     child_ptr))) {
+    LOG_WARN("failed to copy expr node", K(ret));
   } else if (T_OP_ROW == child_ptr->get_param_expr(0)->get_expr_type()){
     // (1, 1) in ((1, 2), (3, 4))
     // row_dimension = 2, input_types = 6
@@ -3253,7 +3264,7 @@ int ObRawExprDeduceType::add_implicit_cast_for_op_row(
       if (OB_ISNULL(cur_parent->get_param_expr(i))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null param expr", K(ret));
-      } else if (OB_FAIL(add_implicit_cast_for_op_row(*cur_parent, cur_parent->get_param_expr(i),
+      } else if (OB_FAIL(add_implicit_cast_for_op_row(cur_parent->get_param_expr(i),
                    ObArrayHelper<ObExprResType>(ele_row_dim,
                                    const_cast<ObExprResType *>(&input_types.at(i * ele_row_dim)),
                                  ele_row_dim),
@@ -3264,7 +3275,7 @@ int ObRawExprDeduceType::add_implicit_cast_for_op_row(
   } else {
     const int64_t row_dim = child_ptr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < row_dim; i++) {
-      ObOpRawExpr *child_op_expr = dynamic_cast<ObOpRawExpr *>(child_ptr);
+      ObOpRawExpr *child_op_expr = static_cast<ObOpRawExpr *>(child_ptr);
       if (OB_ISNULL(child_op_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null pointer", K(ret), K(child_op_expr));

@@ -106,16 +106,23 @@ private:
                               PWJTabletIdMap &pwj_map,
                               bool &is_same) const;
   /**
-   * @brief Check if pwj constraints are satisfied
+   * @brief Check if strict pwj constraints are satisfied
    *
    */
-  int64_t check_pwj_cons(const ObPlanCacheCtx &pc_ctx,
-                         const ObPlanPwjConstraint &pwj_cons,
-                         const common::ObIArray<ObCandiTableLoc> &phy_tbl_infos,
-                         ObIArray<PwjTable> &pwj_tables,
-                         ObPwjComparer &pwj_comparer,
-                         PWJTabletIdMap &pwj_map,
-                         bool &is_same) const;
+  int check_strict_pwj_cons(const ObPlanCacheCtx &pc_ctx,
+                            const ObPlanPwjConstraint &pwj_cons,
+                            const ObIArray<ObCandiTableLoc> &phy_tbl_infos,
+                            ObStrictPwjComparer &pwj_comparer,
+                            PWJTabletIdMap &pwj_map,
+                            bool &is_same) const;
+  /**
+   * @brief Check if non-strict pwj constraints are satisfied
+   *
+   */
+  int check_non_strict_pwj_cons(const ObPlanPwjConstraint &pwj_cons,
+                                const ObIArray<ObCandiTableLoc> &phy_tbl_infos,
+                                ObNonStrictPwjComparer &pwj_comparer,
+                                bool &is_same) const;
   /**
    * @brief Check table partition location
    *

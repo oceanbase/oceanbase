@@ -24,7 +24,6 @@ public:
   ObLogForUpdate(ObLogPlan &plan);
   virtual ~ObLogForUpdate() {}
   virtual const char *get_name() const;
-  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   inline void set_lock_rownum(ObRawExpr *lock_rownum) { lock_rownum_ = lock_rownum; }
   inline ObRawExpr* get_lock_rownum() { return lock_rownum_; }
@@ -49,7 +48,10 @@ public:
   void set_is_multi_part_dml(bool is_multi_part_dml) { is_multi_part_dml_ = is_multi_part_dml; }
   bool is_gi_above() const { return gi_charged_; }
   void set_gi_above(bool gi_above) { gi_charged_ = gi_above; }
-  int copy_part_expr_pre(CopyPartExprCtx &ctx) override;
+  virtual int inner_replace_op_exprs(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs) override;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 protected:
   int generate_multi_part_partition_id_expr();
   int get_for_update_dependant_exprs(ObIArray<ObRawExpr*> &dep_exprs);
@@ -60,7 +62,6 @@ private:
   int64_t wait_ts_;
   ObRawExpr *lock_rownum_; // only used for skip locked
   ObSEArray<IndexDMLInfo*, 1, common::ModulePageAllocator, true> index_dml_info_;
-
   DISALLOW_COPY_AND_ASSIGN(ObLogForUpdate);
 };
 } // end of namespace sql

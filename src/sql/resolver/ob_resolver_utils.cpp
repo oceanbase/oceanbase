@@ -1872,6 +1872,7 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_HELP);
       SET_STMT_TYPE(T_SHOW_RECYCLEBIN);
       SET_STMT_TYPE(T_SHOW_TENANT);
+      SET_STMT_TYPE(T_SHOW_SEQUENCES);
       SET_STMT_TYPE(T_CREATE_SAVEPOINT);
       SET_STMT_TYPE(T_RELEASE_SAVEPOINT);
       SET_STMT_TYPE(T_ROLLBACK_SAVEPOINT);
@@ -4361,24 +4362,7 @@ int ObResolverUtils::resolve_generated_column_info(const ObString &expr_str,
         LOG_WARN("invalid node children for fun_sys node", K(ret));
       } else {
         ObString func_name(node->children_[0]->str_len_, node->children_[0]->str_value_);
-        if (0 == func_name.case_compare("bin")) {
-          type = ObExprOperatorFactory::get_type_by_name("conv");
-        } else if (0 == func_name.case_compare("oct")) {
-          type = ObExprOperatorFactory::get_type_by_name("conv");
-        } else if (0 == func_name.case_compare("lcase")) {
-          type = ObExprOperatorFactory::get_type_by_name("lower");
-        } else if (0 == func_name.case_compare("ucase")) {
-          type = ObExprOperatorFactory::get_type_by_name("upper");
-          // don't alias "power" to "pow" in oracle mode
-        } else if (!lib::is_oracle_mode() && 0 == func_name.case_compare("power")) {
-          type = ObExprOperatorFactory::get_type_by_name("pow");
-        } else if (0 == func_name.case_compare("ws")) {
-          type = ObExprOperatorFactory::get_type_by_name("word_segment");
-        } else if (0 == func_name.case_compare("inet_ntoa")) {
-          type = ObExprOperatorFactory::get_type_by_name("int2ip");
-        } else {
-          type = ObExprOperatorFactory::get_type_by_name(func_name);
-        }
+        type = ObExprOperatorFactory::get_type_by_name(func_name);
         if (OB_UNLIKELY(T_INVALID == (type))) {
           ret = OB_ERR_FUNCTION_UNKNOWN;
           LOG_WARN("function not exist", K(func_name), K(ret));
@@ -6488,10 +6472,8 @@ int ObResolverUtils::check_select_item_subquery(ObSelectStmt &stmt,
               ref_update_table = true;
             }
           }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(ObTransformUtils::is_ref_outer_block_relation(
-              ref_stmt, ref_stmt->get_current_level(), has_dependent_subquery))) {
-            LOG_WARN("check subquery ref outer relation failed", K(ret));
+          if (OB_SUCC(ret)) {
+            has_dependent_subquery = (*expr)->has_exec_param();
           }
         }
       }

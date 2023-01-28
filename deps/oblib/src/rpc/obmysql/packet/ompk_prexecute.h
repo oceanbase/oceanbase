@@ -61,6 +61,7 @@ public:
   inline void set_extend_flag(ObServerExtendFlag flag) { extend_flag_ = flag; }
 
   inline void set_has_result_set(int8_t has_result) { has_result_set_ = has_result; }
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_PREXEC; }
 
 private:
   ObServerExtendFlag extend_flag_;

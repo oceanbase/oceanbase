@@ -83,7 +83,7 @@ OB_DEF_SERIALIZE(ObTask)
         buf, buf_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
       LOG_WARN("failed to serialize rt expr", K(ret));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(
-                buf, buf_len, pos, *root_spec_, false /**is full tree*/))) {
+                buf, buf_len, pos, *root_spec_, false /**is full tree*/, runner_svr_))) {
       LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
         buf, buf_len, pos, *root_spec_, exec_ctx_->get_kit_store(), false/*is full tree*/))) {
@@ -214,7 +214,7 @@ OB_DEF_SERIALIZE(ObMiniTask)
     OB_UNIS_ENCODE(has_extend_root_spec);
     if (OB_SUCC(ret) && has_extend_root_spec) {
       if (OB_FAIL(ObPxTreeSerializer::serialize_tree(
-                  buf, buf_len, pos, *extend_root_spec_ , false /**is full tree*/))) {
+                  buf, buf_len, pos, *extend_root_spec_ , false /**is full tree*/, runner_svr_))) {
         LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
       } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
           buf, buf_len, pos, *extend_root_spec_, exec_ctx_->get_kit_store(), false/*is full tree*/))) {

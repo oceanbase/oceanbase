@@ -45,6 +45,7 @@ public:
 
   virtual int serialize(char *buffer, int64_t len, int64_t &pos) const;
   virtual int64_t get_serialize_size() const;
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_PIECE; }
 
   inline void set_piece_mode(int8_t  piece_mode) { piece_mode_ = piece_mode; }
   inline void set_data(common::ObString &data) { data_ = data; }

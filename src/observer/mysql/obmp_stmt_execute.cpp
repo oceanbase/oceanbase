@@ -1556,7 +1556,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
 {
   int ret = OB_SUCCESS;
   bool need_response_error = true;
-  bool use_sess_trace = false;
 
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
   setup_wb(session);
@@ -1564,7 +1563,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
 
   //============================ 注意这些变量的生命周期 ================================
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
-  if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session, use_sess_trace))) {
+  if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
     if (enable_trace_log) {
@@ -1661,7 +1660,8 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
   }
 
   //对于tracelog的处理, 不影响正常逻辑, 错误码无须赋值给ret, 清空WARNING BUFFER
-  do_after_process(session, use_sess_trace, ctx_, async_resp_used);
+  do_after_process(session, ctx_, async_resp_used);
+  record_flt_trace(session);
 
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
     send_error_packet(ret, NULL);
@@ -1743,7 +1743,7 @@ int ObMPStmtExecute::process()
                 && OB_FAIL(ObMPUtils::sync_session_info(session,
                               pkt.get_extra_info().get_sync_sess_info()))) {
       LOG_WARN("fail to update sess info", K(ret));
-    } else if (OB_FAIL(ObMPUtils::init_flt_info(pkt.get_extra_info(), session,
+    } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                             conn->proxy_cap_flags_.is_full_link_trace_support()))) {
       LOG_WARN("failed to init flt extra info", K(ret));
     } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
@@ -2791,8 +2791,6 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
     if (OB_SUCC(ret)) {
       if (OB_FAIL(update_last_pkt_pos())) {
         LOG_WARN("failed to update last packet pos", K(ret));
-      } else if (OB_FAIL(response_packet(eofp, &session))) {
-        LOG_WARN("response packet fail", K(ret));
       } else {
         // do nothing
       }
@@ -2805,8 +2803,12 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
         ok_param.affected_rows_ = 0;
         ok_param.is_partition_hit_ = session.partition_hit().get_bool();
         ok_param.has_more_result_ = false;
-        if (OB_FAIL(send_ok_packet(session, ok_param))) {
+        if (OB_FAIL(send_ok_packet(session, ok_param, &eofp))) {
           LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
+        }
+      } else {
+        if (OB_FAIL(response_packet(eofp, &session))) {
+          LOG_WARN("response packet fail", K(ret));
         }
       }
     }

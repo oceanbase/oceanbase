@@ -25,6 +25,7 @@
 #include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
+#include "sql/engine/table/ob_index_lookup_op_impl.h"
 namespace oceanbase
 {
 namespace common
@@ -37,6 +38,7 @@ namespace sql
 
 class ObTableScanOp;
 class ObDASScanOp;
+class ObGlobalIndexLookupOpImpl;
 
 struct FlashBackItem
 {
@@ -115,7 +117,9 @@ public:
       lookup_ctdef_(nullptr),
       lookup_loc_meta_(nullptr),
       das_dppr_tbl_(nullptr),
-      allocator_(allocator)
+      allocator_(allocator),
+      calc_part_id_expr_(NULL),
+      global_index_rowkey_exprs_(allocator)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
@@ -135,7 +139,9 @@ public:
                K_(scan_ctdef),
                KPC_(lookup_ctdef),
                KPC_(lookup_loc_meta),
-               KPC_(das_dppr_tbl));
+               KPC_(das_dppr_tbl),
+               KPC_(calc_part_id_expr),
+               K_(global_index_rowkey_exprs));
   //the query range of index scan/table scan
   ObQueryRange pre_query_range_;
   FlashBackItem flashback_item_;
@@ -158,6 +164,10 @@ public:
   //used for dynamic partition pruning
   ObTableLocation *das_dppr_tbl_;
   common::ObIAllocator &allocator_;
+  // Begin for Global Index Lookup
+  ObExpr *calc_part_id_expr_;
+  ExprFixedArray global_index_rowkey_exprs_;
+  // end for Global Index Lookup
 };
 
 struct ObTableScanRtDef
@@ -224,6 +234,7 @@ public:
   common::ObTableID get_ref_table_id() const { return ref_table_id_; }
   bool should_scan_index() const { return tsc_ctdef_.scan_ctdef_.ref_table_id_ != ref_table_id_; }
   bool is_index_back() const { return tsc_ctdef_.lookup_ctdef_ != nullptr; }
+  bool is_global_index_back() const { return is_index_back() && is_index_global_; }
   /*
    * the range from optimizer must change id to storage scan key id.
    * If the optimizer desired to use index idx to access table A, the origin
@@ -347,7 +358,7 @@ public:
 class ObTableScanOp : public ObOperator
 {
   friend class ObDASScanOp;
-  friend class ObTableLookupOp;
+  friend class ObGlobalIndexLookupOpImpl;
 public:
   static constexpr int64_t CHECK_STATUS_ROWS_INTERVAL =  1 << 13;
 
@@ -462,7 +473,12 @@ protected:
                                eval_ctx_, pd_expr_spec.max_batch_size_);
     }
   }
-
+private:
+  const ObTableScanSpec& get_tsc_spec() {return MY_SPEC;}
+  const ObTableScanCtDef& get_tsc_ctdef() {return MY_SPEC.tsc_ctdef_;}
+  int inner_get_next_row_for_tsc();
+  int inner_get_next_batch_for_tsc(const int64_t max_row_cnt);
+  int inner_rescan_for_tsc();
 protected:
   ObDASRef das_ref_;
   DASOpResultIter scan_result_;
@@ -496,7 +512,70 @@ protected:
   // for equal_query_range opt end
   int64_t group_size_;
   int64_t max_group_size_;
+  ObGlobalIndexLookupOpImpl *global_index_lookup_op_;
   ObSpatialIndexCache spat_index_;
+ };
+
+class ObGlobalIndexLookupOpImpl : public ObIndexLookupOpImpl
+{
+public:
+  ObGlobalIndexLookupOpImpl(ObTableScanOp *table_scan_op);
+  int open();
+  int close();
+  int rescan();
+  void destroy();
+  ObBatchRows& get_brs() {return brs_;}
+private:
+  OB_INLINE ObExpr* get_calc_part_id_expr() { return table_scan_op_->get_tsc_ctdef().calc_part_id_expr_; }
+  OB_INLINE ObDASTableLocMeta* get_loc_meta() { return table_scan_op_->get_tsc_ctdef().lookup_loc_meta_; }
+  OB_INLINE const ObDASScanCtDef* get_lookup_ctdef() { return table_scan_op_->get_tsc_ctdef().lookup_ctdef_; }
+  OB_INLINE bool get_batch_rescan() const { return table_scan_op_->get_tsc_spec().batch_scan_flag_; }
+public:
+  virtual void do_clear_evaluated_flag() override { table_scan_op_->clear_evaluated_flag(); }
+  virtual int get_next_row_from_index_table() override;
+  virtual int process_data_table_rowkey() override;
+  virtual int process_data_table_rowkeys(const int64_t size, const ObBitVector *skip) override;
+  virtual bool is_group_scan() const override {return true;}
+  virtual int init_group_range(int64_t cur_group_idx, int64_t group_size) override;
+  virtual int do_index_lookup() override;
+  virtual int get_next_row_from_data_table() override;
+  virtual int get_next_rows_from_data_table(int64_t &count, int64_t capacity) override;
+  virtual int process_next_index_batch_for_row() override;
+  virtual int process_next_index_batch_for_rows(int64_t &count) override;
+  virtual bool need_next_index_batch() const override;
+  virtual int check_lookup_row_cnt() override;
+  virtual int do_index_table_scan_for_rows(const int64_t max_row_cnt,
+                                           const int64_t start_group_idx,
+                                           const int64_t default_row_batch_cnt) override;
+  virtual void update_state_in_output_rows_state(int64_t &count) override;
+  virtual void update_states_in_finish_state() override;
+  virtual void update_states_after_finish_state() override {brs_.end_ = true;}
+
+  // The following function distinguishes between the global index back and the local index back.
+  // For Local index, it will return 0
+  // For Global index, it will return the property
+  virtual int64_t get_index_group_cnt() const override {return index_group_cnt_;}
+  virtual int64_t get_lookup_group_cnt() const override {return lookup_group_cnt_;}
+  virtual void inc_index_group_cnt() override {index_group_cnt_++;}
+  virtual void inc_lookup_group_cnt() override {lookup_group_cnt_++;}
+  virtual ObEvalCtx & get_eval_ctx() override {return table_scan_op_->get_eval_ctx();}
+  virtual const ExprFixedArray & get_output_expr() override {return table_scan_op_->get_tsc_ctdef().get_das_output_exprs(); }
+
+  void reset_for_rescan();
+  int build_data_table_range(common::ObNewRange &lookup_range);
+  int switch_lookup_result_iter();
+  bool has_das_scan_op(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op);
+  int get_next_data_table_rows(int64_t &count, const int64_t capacity);
+  int reset_brs();
+private:
+  ObTableScanOp *table_scan_op_;
+
+  ObDASRef das_ref_;
+  DASOpResultIter lookup_result_;
+  ObBatchRows brs_;
+  lib::MemoryContext lookup_memctx_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGlobalIndexLookupOpImpl);
 };
 } // end namespace sql
 } // end namespace oceanbase

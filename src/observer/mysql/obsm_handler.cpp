@@ -29,8 +29,13 @@ namespace oceanbase
 {
 using namespace rpc;
 using namespace common;
+using namespace name;
 namespace observer
 {
+bool enable_proto_dia()
+{
+  return GCONF._enable_protocol_diagnose;
+}
 
 ObSMHandler::ObSMHandler(rpc::frame::ObReqDeliver &deliver, ObGlobalContext &gctx)
     : ObMySQLHandler(deliver), gctx_(gctx)
@@ -143,6 +148,10 @@ int ObSMHandler::on_disconnect(easy_connection_t *c)
     eret = EASY_ERROR;
     LOG_ERROR("conn is null", K(eret));
   } else {
+    // get reason for disconnect.
+    sql::ObDisconnectState dis_state;
+    // get trace_id for disconnect.
+    ObCurTraceId::TraceId trace_id;
     //set session shadow
     if (conn->is_sess_alloc_
         && !conn->is_sess_free_
@@ -157,12 +166,23 @@ int ObSMHandler::on_disconnect(easy_connection_t *c)
         LOG_WARN("session info is NULL", K(tmp_ret), K(conn->sessid_),
                  "proxy_sessid", conn->proxy_sessid_);
       } else {
+        // tcp disconnect
+        if (EASY_CONN_CLOSE_BY_PEER == c->status) {
+          if(sql::DIS_INIT == sess_info->get_disconnect_state()) {
+            sess_info->set_disconnect_state(sql::CLIENT_FORCE_DISCONNECT);
+          }
+        }
         sess_info->set_session_state(sql::SESSION_KILLED);
         sess_info->set_shadow(true);
+        dis_state = sess_info->get_disconnect_state();
+        trace_id = sess_info->get_current_trace_id();
       }
     }
+    share::ObTaskController::get().allow_next_syslog();
     LOG_INFO("kill and revert session", K(conn->sessid_),
-        "proxy_sessid", conn->proxy_sessid_, "server_id", GCTX.server_id_, K(tmp_ret), K(eret));
+        "proxy_sessid", conn->proxy_sessid_, "server_id", GCTX.server_id_,
+        K(tmp_ret), K(eret), K(dis_state), K(trace_id),
+        K(conn->get_cs_protocol_type()), K(conn->pkt_rec_wrapper_));
   }
   return eret;
 }

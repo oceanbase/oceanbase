@@ -17,6 +17,7 @@
 #include "common/object/ob_obj_funcs.h"
 #include "sql/engine/ob_serializable_function.h"
 #include "sql/engine/ob_bit_vector.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase {
 using namespace sql;
@@ -242,6 +243,10 @@ struct DatumHashCalculator : public DefHashMethod<T>
   {
     return ObjHashCalculator<type, T, ObDatum>::calc_hash_value(datum, seed);
   }
+  static uint64_t calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed)
+  {
+    return T::hash(datum.ptr_, datum.len_, seed);
+  }
 };
 
 #define DEF_DATUM_TIMESTAMP_HASH_FUNCS(OBJTYPE, TYPE, DESC, VTYPE)              \
@@ -254,30 +259,78 @@ struct DatumHashCalculator : public DefHashMethod<T>
       uint64_t v = T::hash(&tmp_data.time_us_, static_cast<int32_t>(sizeof(int64_t)), seed);  \
       return T::hash(&tmp_data.time_ctx_.DESC, static_cast<int32_t>(sizeof(VTYPE)), v);       \
     }                                                                                         \
+    static uint64_t calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed)             \
+    {                                                                                         \
+      return T::hash(datum.ptr_, datum.len_, seed);                                           \
+    }                                                                                         \
   };
 
 DEF_DATUM_TIMESTAMP_HASH_FUNCS(ObTimestampTZType, otimestamp_tz, desc_, uint32_t);
 DEF_DATUM_TIMESTAMP_HASH_FUNCS(ObTimestampLTZType, otimestamp_tiny, time_desc_, uint16_t);
 DEF_DATUM_TIMESTAMP_HASH_FUNCS(ObTimestampNanoType, otimestamp_tiny, time_desc_, uint16_t);
 
+// template specialization to deal with real type and json type
+// calc_datum_hash_v2 will fallback to calc_datum_hash
+#define DEF_DATUM_SPECIAL_HASH_FUNCS(OBJTYPE)                                               \
+  template <typename T>                                                                     \
+  struct DatumHashCalculator<OBJTYPE, T> : public DefHashMethod<T>                          \
+  {                                                                                         \
+    static uint64_t calc_datum_hash(const ObDatum &datum, const uint64_t seed)              \
+    {                                                                                       \
+      return ObjHashCalculator<OBJTYPE, T, ObDatum>::calc_hash_value(datum, seed);          \
+    }                                                                                       \
+    static uint64_t calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed) {         \
+      uint64_t v = 0;                                                                       \
+      if (datum.is_null()) {                                                                \
+        v = seed;                                                                           \
+      } else {                                                                              \
+        v = calc_datum_hash(datum, seed);                                                   \
+      }                                                                                     \
+      return v;                                                                             \
+    }                                                                                       \
+  };
+
+DEF_DATUM_SPECIAL_HASH_FUNCS(ObFloatType);
+DEF_DATUM_SPECIAL_HASH_FUNCS(ObUFloatType);
+DEF_DATUM_SPECIAL_HASH_FUNCS(ObDoubleType);
+DEF_DATUM_SPECIAL_HASH_FUNCS(ObUDoubleType);
+DEF_DATUM_SPECIAL_HASH_FUNCS(ObJsonType);
+
 OB_INLINE static uint64_t datum_varchar_hash(const ObDatum &datum,
-                                            const ObCollationType cs_type,
-                                            const bool calc_end_space,
-                                            const uint64_t seed,
-                                            hash_algo algo)
+                                             const ObCollationType cs_type,
+                                             const bool calc_end_space,
+                                             const uint64_t seed,
+                                             hash_algo algo)
 {
-  return ObCharset::hash(cs_type, datum.get_string().ptr(), datum.get_string().length(), seed,
-                          calc_end_space, algo);
+  return ObCharset::hash(cs_type, datum.ptr_, datum.len_, seed, calc_end_space, algo);
 }
 
 OB_INLINE static uint64_t datum_lob_locator_hash(const ObDatum &datum,
-                                            const ObCollationType cs_type,
-                                            const uint64_t seed,
-                                            hash_algo algo)
+                                                 const ObCollationType cs_type,
+                                                 const uint64_t seed,
+                                                 hash_algo algo)
 {
   const ObLobLocator &lob_locator = datum.get_lob_locator();
   return ObCharset::hash(cs_type, lob_locator.get_payload_ptr(), lob_locator.payload_size_,
-                        seed, algo);
+                         seed, algo);
+}
+
+template <bool calc_end_space, typename T>
+static uint64_t datum_varchar_hash_utf8mb4_bin(
+       const char* str_ptr, const int32_t str_len, uint64_t seed)
+{
+  uint64_t ret = 0;
+  if (calc_end_space) {
+    ret = T::hash((void*)str_ptr, str_len, seed);
+  } else {
+    const uchar *key = reinterpret_cast<const uchar *>(str_ptr);
+    const uchar *pos = key;
+    int length = str_len;
+    key = skip_trailing_space(key, str_len, 0);
+    length = (int)(key - pos);
+    ret = T::hash((void*)pos, length, seed);
+  }
+  return ret;
 }
 
 template <ObCollationType cs_type, bool calc_end_space, typename T, bool is_lob_locator>
@@ -285,17 +338,60 @@ struct DatumStrHashCalculator : public DefHashMethod<T>
 {
   static uint64_t calc_datum_hash(const ObDatum &datum, const uint64_t seed)
   {
-    return datum_varchar_hash(datum, cs_type, calc_end_space, seed,
-                              T::is_varchar_hash ? T::hash : NULL);
+    return datum_varchar_hash(
+           datum, cs_type, calc_end_space, seed, T::is_varchar_hash ? T::hash : NULL);
+  }
+  static uint64_t calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed)
+  {
+    return datum_varchar_hash(
+           datum, cs_type, calc_end_space, seed, T::is_varchar_hash ? T::hash : NULL);
   }
 };
 
 template <ObCollationType cs_type, bool calc_end_space, typename T>
-struct DatumStrHashCalculator<cs_type, calc_end_space, T, true> : public DefHashMethod<T>
+struct DatumStrHashCalculator<cs_type, calc_end_space, T, true /* is_lob_locator */>
+       : public DefHashMethod<T>
 {
   static uint64_t calc_datum_hash(const ObDatum &datum, const uint64_t seed)
   {
     return datum_lob_locator_hash(datum, cs_type, seed, T::is_varchar_hash ? T::hash : NULL);
+  }
+  static uint64_t calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed)
+  {
+    return datum_lob_locator_hash(datum, cs_type, seed, T::is_varchar_hash ? T::hash : NULL);
+  }
+};
+
+template <bool calc_end_space, typename T>
+struct DatumStrHashCalculator<CS_TYPE_UTF8MB4_BIN, calc_end_space, T, false /* is_lob_locator */>
+       : public DefHashMethod<T>
+{
+  static uint64_t calc_datum_hash(const ObDatum &datum, const uint64_t seed)
+  {
+    return datum_varchar_hash(
+           datum, CS_TYPE_UTF8MB4_BIN, calc_end_space, seed, T::is_varchar_hash ? T::hash : NULL);
+  }
+  static uint64_t calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed)
+  {
+
+    return datum_varchar_hash_utf8mb4_bin<calc_end_space, T>(datum.ptr_, datum.len_, seed);
+  }
+};
+
+template <bool calc_end_space, typename T>
+struct DatumStrHashCalculator<CS_TYPE_UTF8MB4_BIN, calc_end_space, T, true /* is_lob_locator */>
+       : public DefHashMethod<T>
+{
+  static uint64_t calc_datum_hash(const ObDatum &datum, const uint64_t seed)
+  {
+    return datum_lob_locator_hash(
+           datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL);
+  }
+  static uint64_t calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed)
+  {
+    const ObLobLocator &lob_locator = datum.get_lob_locator();
+    return datum_varchar_hash_utf8mb4_bin<calc_end_space, T>(
+           lob_locator.get_payload_ptr(), lob_locator.payload_size_, seed);
   }
 };
 
@@ -309,6 +405,17 @@ struct DatumFixedDoubleHashCalculator : public DefHashMethod<T>
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t length = ob_fcvt(d_val, static_cast<int>(SCALE), sizeof(buf) - 1, buf, NULL);
     return T::hash(buf, static_cast<int32_t>(length), seed);
+  }
+
+  static uint64_t calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed)
+  {
+    uint64_t v = 0;
+    if (datum.is_null()) {
+      v = seed;
+    } else {
+      v = calc_datum_hash(datum, seed);
+    }
+    return v;
   }
 };
 
@@ -339,6 +446,11 @@ struct DefHashFunc
       v = DatumHashFunc::calc_datum_hash(datum, seed);
     }
     return v;
+  }
+
+  OB_INLINE static uint64_t hash_v2(const ObDatum &datum, const uint64_t seed)
+  {
+    return DatumHashFunc::calc_datum_hash_v2(datum, seed);
   }
 
   template <typename DATUM_VEC, typename SEED_VEC>
@@ -372,6 +484,41 @@ struct DefHashFunc
                     VectorIter<const uint64_t, true>(seeds));
     } else {
       do_hash_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
+                    VectorIter<const uint64_t, false>(seeds));
+    }
+  }
+
+  template <typename DATUM_VEC, typename SEED_VEC>
+  static void do_hash_v2_batch(uint64_t *hash_values,
+                         const DATUM_VEC &datum_vec,
+                         const ObBitVector &skip,
+                         const int64_t size,
+                         const SEED_VEC &seed_vec)
+  {
+    ObBitVector::flip_foreach(skip, size,
+      [&](int64_t idx) __attribute__((always_inline)) { hash_values[idx] = hash_v2(datum_vec[idx], seed_vec[idx]); return OB_SUCCESS; }
+    );
+  }
+
+  static void hash_v2_batch(uint64_t *hash_values,
+                         ObDatum *datums,
+                         const bool is_batch_datum,
+                         const ObBitVector &skip,
+                         const int64_t size,
+                         const uint64_t *seeds,
+                         const bool is_batch_seed)
+  {
+    if (is_batch_datum && !is_batch_seed) {
+      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
+                    VectorIter<const uint64_t, false>(seeds));
+    } else if (is_batch_datum && is_batch_seed) {
+      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
+                    VectorIter<const uint64_t, true>(seeds));
+    } else if (!is_batch_datum && is_batch_seed) {
+      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
+                    VectorIter<const uint64_t, true>(seeds));
+    } else {
+      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
                     VectorIter<const uint64_t, false>(seeds));
     }
   }
@@ -418,6 +565,8 @@ struct InitBasicFuncArray
     basic_funcs[X].null_last_cmp_ = TypeDef::defined_
         ? &TypeCmp<0>::cmp
         : TCDef::defined_ ? &TCCmp<0>::cmp : NULL;
+    basic_funcs[X].murmur_hash_v2_ = Hash<ObMurmurHash>::hash_v2;
+    basic_funcs[X].murmur_hash_v2_batch_ = Hash<ObMurmurHash>::hash_v2_batch;
   }
 };
 
@@ -451,6 +600,8 @@ struct InitBasicStrFuncArray
       basic_funcs[X][Y][0].wy_hash_batch_ = Hash<ObWyHash, false>::hash_batch;
       basic_funcs[X][Y][0].null_first_cmp_ = Def::defined_ ? &StrCmp<1>::cmp : NULL;
       basic_funcs[X][Y][0].null_last_cmp_ = Def::defined_ ? &StrCmp<0>::cmp : NULL;
+      basic_funcs[X][Y][0].murmur_hash_v2_ = Hash<ObMurmurHash, false>::hash_v2;
+      basic_funcs[X][Y][0].murmur_hash_v2_batch_ = Hash<ObMurmurHash, false>::hash_v2_batch;
 
       basic_funcs[X][Y][1].default_hash_ = Hash<ObDefaultHash, true>::hash;
       basic_funcs[X][Y][1].default_hash_batch_ = Hash<ObDefaultHash, true>::hash_batch;
@@ -462,6 +613,8 @@ struct InitBasicStrFuncArray
       basic_funcs[X][Y][1].wy_hash_batch_ = Hash<ObWyHash, true>::hash_batch;
       basic_funcs[X][Y][1].null_first_cmp_ = NULL;  // cmp lob locator not support
       basic_funcs[X][Y][1].null_last_cmp_ = NULL;
+      basic_funcs[X][Y][1].murmur_hash_v2_ = Hash<ObMurmurHash, true>::hash_v2;
+      basic_funcs[X][Y][1].murmur_hash_v2_batch_ = Hash<ObMurmurHash, true>::hash_v2_batch;
     }
   }
 };
@@ -485,6 +638,8 @@ struct InitFixedDoubleBasicFuncArray
     basic_funcs[X].wy_hash_batch_ = Hash<ObWyHash>::hash_batch;
     basic_funcs[X].null_first_cmp_ = ObNullSafeFixedDoubleCmp<static_cast<ObScale>(X), true>::cmp;
     basic_funcs[X].null_last_cmp_ = ObNullSafeFixedDoubleCmp<static_cast<ObScale>(X), false>::cmp;
+    basic_funcs[X].murmur_hash_v2_ = Hash<ObMurmurHash>::hash_v2;
+    basic_funcs[X].murmur_hash_v2_batch_ = Hash<ObMurmurHash>::hash_v2_batch;
   }
 };
 
@@ -569,6 +724,7 @@ struct ExprBasicFuncSerPart1
     funcs_[3] = reinterpret_cast<void *>(funcs.wy_hash_);
     funcs_[4] = reinterpret_cast<void *>(funcs.null_first_cmp_);
     funcs_[5] = reinterpret_cast<void *>(funcs.null_last_cmp_);
+
   }
 
   void *funcs_[6];
@@ -582,9 +738,8 @@ struct ExprBasicFuncSerPart2
     funcs_[1] = reinterpret_cast<void *>(funcs.murmur_hash_batch_);
     funcs_[2] = reinterpret_cast<void *>(funcs.xx_hash_batch_);
     funcs_[3] = reinterpret_cast<void *>(funcs.wy_hash_batch_);
-    // reserved
-    // funcs_[4]
-    // funcs_[5]
+    funcs_[4] = reinterpret_cast<void *>(funcs.murmur_hash_v2_);
+    funcs_[5] = reinterpret_cast<void *>(funcs.murmur_hash_v2_batch_);
   }
 };
 
@@ -615,8 +770,8 @@ bool split_basic_func_for_ser(void)
 }
 bool g_split_basic_func_for_ser = split_basic_func_for_ser();
 
-static_assert(sizeof(sql::ObExprBasicFuncs) == 10 * sizeof(void *)
-              && ObMaxType * 10 == sizeof(EXPR_BASIC_FUNCS) / sizeof(void *),
+static_assert(sizeof(sql::ObExprBasicFuncs) == 12 * sizeof(void *)
+              && ObMaxType * 12 == sizeof(EXPR_BASIC_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_BASIC_PART1,
                    EXPR_BASIC_FUNCS_PART1,
@@ -626,7 +781,7 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_BASIC_PART2,
                    EXPR_BASIC_FUNCS_PART2,
                    sizeof(EXPR_BASIC_FUNCS_PART2) / sizeof(void *));
 
-static_assert(CS_TYPE_MAX * 2 * 2 * 10 == sizeof(EXPR_BASIC_STR_FUNCS) / sizeof(void *),
+static_assert(CS_TYPE_MAX * 2 * 2 * 12 == sizeof(EXPR_BASIC_STR_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_STR_BASIC_PART1,
                    EXPR_BASIC_STR_FUNCS_PART1,
@@ -635,7 +790,7 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_STR_BASIC_PART2,
                    EXPR_BASIC_STR_FUNCS_PART2,
                    sizeof(EXPR_BASIC_STR_FUNCS_PART2) / sizeof(void *));
 
-static_assert(OB_NOT_FIXED_SCALE * 10 == sizeof(FIXED_DOUBLE_BASIC_FUNCS) / sizeof(void *),
+static_assert(OB_NOT_FIXED_SCALE * 12 == sizeof(FIXED_DOUBLE_BASIC_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_BASIC_PART1,
                    EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART1,

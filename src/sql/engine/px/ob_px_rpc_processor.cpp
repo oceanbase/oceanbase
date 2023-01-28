@@ -81,13 +81,15 @@ int ObInitSqcP::process()
     LOG_WARN("Failed to init sqc env", K(ret));
   } else if (OB_FAIL(sqc_handler->pre_acquire_px_worker(result_.reserved_thread_count_))) {
     LOG_WARN("Failed to pre acquire px worker", K(ret));
+  } else if (OB_FAIL(pre_setup_op_input(*sqc_handler))) {
+    LOG_WARN("pre setup op input failed", K(ret));
+  } else if (OB_FAIL(sqc_handler->thread_count_auto_scaling(result_.reserved_thread_count_))) {
+    LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
   } else if (result_.reserved_thread_count_ <= 0) {
     ret = OB_ERR_INSUFFICIENT_PX_WORKER;
     LOG_WARN("Worker thread res not enough", K_(result));
   } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
     LOG_WARN("Failed to link qc sqc channel", K(ret));
-  } else if (OB_FAIL(pre_setup_op_input(*sqc_handler))) {
-    LOG_WARN("pre setup op input failed", K(ret));
   } else {
     /*do nothing*/
   }
@@ -124,8 +126,16 @@ int ObInitSqcP::pre_setup_op_input(ObPxSqcHandler &sqc_handler)
   ObPxSubCoord &sub_coord = sqc_handler.get_sub_coord();
   ObExecContext *ctx = sqc_handler.get_sqc_init_arg().exec_ctx_;
   ObOpSpec *root = sqc_handler.get_sqc_init_arg().op_spec_root_;
-  if (OB_FAIL(sub_coord.init_px_bloom_filter_advance(ctx, root))) {
-    LOG_WARN("init px bloom filter advance failed", K(ret));
+  ObPxSqcMeta &sqc = sqc_handler.get_sqc_init_arg().sqc_;
+  sub_coord.set_is_single_tsc_leaf_dfo(sqc.is_single_tsc_leaf_dfo());
+  CK(OB_NOT_NULL(ctx) && OB_NOT_NULL(root));
+  if (sqc.is_single_tsc_leaf_dfo() &&
+      OB_FAIL(sub_coord.rebuild_sqc_access_table_locations())) {
+    LOG_WARN("fail to rebuild sqc access location", K(ret));
+  } else if (OB_FAIL(sub_coord.pre_setup_op_input(*ctx, *root, sub_coord.get_sqc_ctx(),
+      sqc.get_access_table_locations(),
+      sqc.get_access_table_location_keys()))) {
+    LOG_WARN("pre_setup_op_input failed", K(ret));
   }
   return ret;
 }

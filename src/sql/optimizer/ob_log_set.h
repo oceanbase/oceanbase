@@ -49,7 +49,7 @@ public:
   const char *get_name() const;
   inline void assign_set_distinct(const bool is_distinct) { is_distinct_ = is_distinct; }
   inline void set_recursive_union(bool is_recursive_union) { is_recursive_union_ = is_recursive_union; }
-  inline void set_is_breadth_search(bool is_breadth_search) { is_breadth_search_ = is_breadth_search;}
+  inline void set_is_breadth_search(bool is_breadth_search) { is_breadth_search_ = is_breadth_search; }
   inline bool is_recursive_union() { return is_recursive_union_; }
   inline bool is_breadth_search() { return is_breadth_search_; }
   inline bool is_set_distinct() const { return is_distinct_; }
@@ -109,11 +109,11 @@ public:
   inline SetAlgo get_algo() const { return set_algo_; }
   inline void set_algo_type(const SetAlgo type) { set_algo_ = type; }
   inline void set_distributed_algo(const DistAlgo set_dist_algo) { set_dist_algo_ = set_dist_algo; }
+  inline DistAlgo get_distributed_algo() { return set_dist_algo_; }
   int estimate_row_count(double &rows);
   int allocate_startup_expr_post() override;
-  virtual int print_outline(planText &plan) override;
-  int print_used_hint(planText &plan_text);
-  int print_outline_data(planText &plan_text);
+  virtual int print_outline_data(PlanText &plan_text) override;
+  virtual int print_used_hint(PlanText &plan_text) override;
   int get_used_pq_set_hint(const ObPQSetHint *&used_hint);
   int construct_pq_set_hint(ObPQSetHint &hint);
 private:

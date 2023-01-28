@@ -54,3 +54,18 @@ int ObLogStatCollector::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   }
   return ret;
 }
+
+int ObLogStatCollector::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys_.count(); i++) {
+    if (OB_ISNULL(sort_keys_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(replace_expr_action(to_replace_exprs, sort_keys_.at(i).expr_))) {
+      LOG_WARN("failed to replace sort key expr", K(ret));
+    }
+  }
+  return ret;
+}

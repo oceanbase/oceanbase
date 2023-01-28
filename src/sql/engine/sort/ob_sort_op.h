@@ -61,8 +61,6 @@ public:
 class ObSortOp : public ObOperator
 {
 public:
-  static const int64_t TOPN_LIMIT_COUNT = 30000;
-public:
   ObSortOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
 
   virtual int inner_open() override;
@@ -91,11 +89,6 @@ private:
     return sort_component_next(prefix_sort_impl_);
   }
 
-  int topn_sort_next()
-  {
-    return sort_component_next(topn_sort_);
-  }
-
   template <typename T>
   int sort_component_next_batch(T &component, const int64_t max_cnt)
   {
@@ -115,11 +108,6 @@ private:
     return sort_component_next_batch(sort_impl_, max_cnt);
   }
 
-  int topn_sort_next_batch(const int64_t max_cnt)
-  {
-    return sort_component_next_batch(topn_sort_, max_cnt);
-  }
-
   int prefix_sort_impl_next_batch(const int64_t max_cnt)
   {
     return sort_component_next_batch(prefix_sort_impl_, max_cnt);
@@ -131,10 +119,17 @@ private:
   int process_sort_batch();
   int scan_all_then_sort();
   int scan_all_then_sort_batch();
+  int init_prefix_sort(int64_t tenant_id,
+                       int64_t row_count,
+                       bool is_batch,
+                       int64_t topn_cnt = INT64_MAX);
+  int init_sort(int64_t tenant_id,
+                int64_t row_count,
+                bool is_batch,
+                int64_t topn_cnt = INT64_MAX);
 private:
   ObSortOpImpl sort_impl_;
   ObPrefixSortImpl prefix_sort_impl_;
-  ObInMemoryTopnSortImpl topn_sort_;
   int (ObSortOp::*read_func_)();
   int (ObSortOp::*read_batch_func_)(const int64_t max_cnt);
   int64_t sort_row_count_;

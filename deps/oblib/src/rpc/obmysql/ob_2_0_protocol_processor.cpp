@@ -346,13 +346,17 @@ int Ob20ProtocolProcessor::decode_new_extra_info(const Ob20ProtocolHeader &hdr,
 int Ob20ProtocolProcessor::do_splice(ObSMConnection& conn, ObICSMemPool& pool, void*& pkt, bool& need_decode_more)
 {
   INIT_SUCC(ret);
-  if (OB_FAIL(process_ob20_packet(conn.proto20_pkt_context_, conn.mysql_pkt_context_, pool, pkt, need_decode_more))) {
+  if (OB_FAIL(process_ob20_packet(conn.proto20_pkt_context_, conn.mysql_pkt_context_,
+                                    conn.pkt_rec_wrapper_, pool, pkt, need_decode_more))) {
     LOG_ERROR("fail to process_ob20_packet", K(ret));
   }
   return ret;
 }
 
-inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& context, ObMysqlPktContext &mysql_pkt_context, ObICSMemPool& pool,
+inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& context,
+                                                      ObMysqlPktContext &mysql_pkt_context,
+                                                      obmysql::ObPacketRecordWrapper &pkt_rec_wrapper,
+                                                      ObICSMemPool& pool,
                                                       void *&ipacket, bool &need_decode_more)
 {
   INIT_SUCC(ret);
@@ -382,6 +386,9 @@ inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& conte
   if (OB_SUCC(ret)) {
     uint32_t mysql_data_size = pkt20->get_mysql_packet_len();
     char *mysql_data_start = const_cast<char *>(pkt20->get_cdata());
+    if (pkt_rec_wrapper.enable_proto_dia()) {
+      pkt_rec_wrapper.record_recieve_mysql_pkt_fragment(mysql_data_size);
+    }
     if (mysql_data_size == 0) {
       // waitting for a not empty packet
       need_decode_more = true;
@@ -413,6 +420,9 @@ inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& conte
         // set again for sending response
         context.proto20_last_pkt_seq_ = pkt20->get_seq();
         context.proto20_last_request_id_ = pkt20->get_request_id();
+        if (pkt_rec_wrapper.enable_proto_dia()) {
+          pkt_rec_wrapper.record_recieve_obp20_packet(*pkt20, *input_packet);
+        }
       }
     }
   }

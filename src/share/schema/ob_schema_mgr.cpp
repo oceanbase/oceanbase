@@ -499,7 +499,10 @@ ObSchemaMgr::ObSchemaMgr()
       dblink_mgr_(allocator_),
       directory_mgr_(allocator_),
       context_mgr_(allocator_),
-      mock_fk_parent_table_mgr_(allocator_)
+      mock_fk_parent_table_mgr_(allocator_),
+      rls_policy_mgr_(allocator_),
+      rls_group_mgr_(allocator_),
+      rls_context_mgr_(allocator_)
 {
 }
 
@@ -548,7 +551,10 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       dblink_mgr_(allocator_),
       directory_mgr_(allocator_),
       context_mgr_(allocator_),
-      mock_fk_parent_table_mgr_(allocator_)
+      mock_fk_parent_table_mgr_(allocator_),
+      rls_policy_mgr_(allocator_),
+      rls_group_mgr_(allocator_),
+      rls_context_mgr_(allocator_)
 {
 }
 
@@ -613,6 +619,12 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init dblink mgr failed", K(ret));
   } else if (OB_FAIL(directory_mgr_.init())) {
     LOG_WARN("init directory mgr failed", K(ret));
+  } else if (OB_FAIL(rls_policy_mgr_.init())) {
+    LOG_WARN("init rls_policy mgr failed", K(ret));
+  } else if (OB_FAIL(rls_group_mgr_.init())) {
+    LOG_WARN("init rls_group mgr failed", K(ret));
+  } else if (OB_FAIL(rls_context_mgr_.init())) {
+    LOG_WARN("init rls_context mgr failed", K(ret));
   } else if (OB_FAIL(hidden_table_name_map_.init())) {
     LOG_WARN("init hidden table name map failed", K(ret));
   } else if (OB_FAIL(context_mgr_.init())) {
@@ -676,6 +688,9 @@ void ObSchemaMgr::reset()
     tablespace_mgr_.reset();
     dblink_mgr_.reset();
     directory_mgr_.reset();
+    rls_policy_mgr_.reset();
+    rls_group_mgr_.reset();
+    rls_context_mgr_.reset();
     tenant_id_ = OB_INVALID_TENANT_ID;
     hidden_table_name_map_.clear();
     context_mgr_.reset();
@@ -780,6 +795,12 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign context mgr failed", K(ret));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.assign(other.mock_fk_parent_table_mgr_))) {
         LOG_WARN("assign mock_fk_parent_table_mgr_ failed", K(ret));
+      } else if (OB_FAIL(rls_policy_mgr_.assign(other.rls_policy_mgr_))) {
+        LOG_WARN("assign rls_policy mgr failed", K(ret));
+      } else if (OB_FAIL(rls_group_mgr_.assign(other.rls_group_mgr_))) {
+        LOG_WARN("assign rls_group mgr failed", K(ret));
+      } else if (OB_FAIL(rls_context_mgr_.assign(other.rls_context_mgr_))) {
+        LOG_WARN("assign rls_context mgr failed", K(ret));
       }
     }
   }
@@ -866,6 +887,12 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy context mgr failed", K(ret));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.deep_copy(other.mock_fk_parent_table_mgr_))) {
         LOG_WARN("deep copy mock_fk_parent_table_mgr_ failed", K(ret));
+      } else if (OB_FAIL(rls_policy_mgr_.deep_copy(other.rls_policy_mgr_))) {
+        LOG_WARN("deep copy rls_policy mgr failed", K(ret));
+      } else if (OB_FAIL(rls_group_mgr_.deep_copy(other.rls_group_mgr_))) {
+        LOG_WARN("deep copy rls_group mgr failed", K(ret));
+      } else if (OB_FAIL(rls_context_mgr_.deep_copy(other.rls_context_mgr_))) {
+        LOG_WARN("deep copy rls_context mgr failed", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -4084,6 +4111,12 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         LOG_WARN("del context in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del mock_fk_parent_table in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(rls_policy_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del rls_policy in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(rls_group_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del rls_group in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(rls_context_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del rls_context in tenant failed", K(ret), K(tenant_id));
       }
     }
   }
@@ -4124,6 +4157,9 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
     int64_t directory_schema_count = 0;
     int64_t context_schema_count = 0;
     int64_t mock_fk_parent_table_schema_count = 0;
+    int64_t rls_policy_schema_count = 0;
+    int64_t rls_group_schema_count = 0;
+    int64_t rls_context_schema_count = 0;
     if (OB_FAIL(outline_mgr_.get_outline_schema_count(outline_schema_count))) {
       LOG_WARN("get_outline_schema_count failed", K(ret));
     } else if (OB_FAIL(routine_mgr_.get_routine_schema_count(routine_schema_count))) {
@@ -4168,6 +4204,12 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get context schema count failed", K(ret));
     } else if (OB_FAIL(mock_fk_parent_table_mgr_.get_mock_fk_parent_table_schema_count(mock_fk_parent_table_schema_count))) {
       LOG_WARN("get context schema count failed", K(ret));
+    } else if (OB_FAIL(rls_policy_mgr_.get_schema_count(rls_policy_schema_count))) {
+      LOG_WARN("get rls_policy schema count failed", K(ret));
+    } else if (OB_FAIL(rls_group_mgr_.get_schema_count(rls_group_schema_count))) {
+      LOG_WARN("get rls_group schema count failed", K(ret));
+    } else if (OB_FAIL(rls_context_mgr_.get_schema_count(rls_context_schema_count))) {
+      LOG_WARN("get rls_context schema count failed", K(ret));
     } else {
       schema_count += (outline_schema_count + routine_schema_count + priv_schema_count
                        + synonym_schema_count + package_schema_count
@@ -4181,6 +4223,9 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
                        + audit_schema_count
                        + dblink_schema_count
                        + directory_schema_count
+                       + rls_policy_schema_count
+                       + rls_group_schema_count
+                       + rls_context_schema_count
                        + sys_variable_schema_count
                        + context_schema_count
                        + mock_fk_parent_table_schema_count
@@ -4935,6 +4980,12 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(directory_mgr_.get_schema_statistics(schema_info))) {
     LOG_WARN("fail to get directory statistics", K(ret));
+  } else if (OB_FAIL(rls_policy_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get rls_policy statistics", K(ret));
+  } else if (OB_FAIL(rls_group_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get rls_group statistics", K(ret));
+  } else if (OB_FAIL(rls_context_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get rls_context statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(context_mgr_.get_schema_statistics(schema_info))) {

@@ -143,18 +143,8 @@ int ObOptEstUtils::extract_simple_cond_filters(ObRawExpr &qual,
 
 bool ObOptEstUtils::is_calculable_expr(const ObRawExpr &expr, const int64_t param_count)
 {
-  bool can_get = true;
-  if (expr.is_const_raw_expr()) {
-    const ObObj &value = static_cast<const ObConstRawExpr&>(expr).get_value();
-    if (value.is_unknown()) {
-      if (value.get_unknown() < 0 || value.get_unknown() >= param_count) {
-        can_get = false;
-      }
-    }
-  } else if (!expr.is_static_const_expr()) {
-    can_get = false;
-  } else { }//do nothing
-  return can_get;
+  UNUSED(param_count);
+  return expr.is_static_const_expr();
 }
 
 int ObOptEstUtils::get_expr_value(const ParamStore *params,

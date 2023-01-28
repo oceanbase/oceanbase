@@ -529,7 +529,8 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                                      int64_t *avg_len,
                                      int64_t *avg_part_size,
                                      int64_t *macro_block_count,
-                                     int64_t *micro_block_count)
+                                     int64_t *micro_block_count,
+                                     int64_t *last_analyzed)
 {
   int ret = OB_SUCCESS;
   ObOptTableStat::Key key(tenant_id, table_ref_id, part_id);
@@ -543,6 +544,7 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                   avg_part_size);
     assign_value(opt_stat.get_macro_block_num(), macro_block_count);
     assign_value(opt_stat.get_micro_block_num(), micro_block_count);
+    assign_value(opt_stat.get_last_analyzed(), last_analyzed);
   }
   return ret;
 }
@@ -554,10 +556,12 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                                      int64_t *row_count,
                                      int64_t *avg_len,
                                      int64_t *avg_part_size,
-                                     int64_t *micro_block_count)
+                                     int64_t *micro_block_count,
+                                     int64_t *last_analyzed)
 {
   int ret = OB_SUCCESS;
   ObGlobalTableStat global_tstat;
+  int64_t tmp_last_analyzed = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); ++i) {
     int64_t tmp_row_count = 0;
     int64_t tmp_row_len = 0;
@@ -566,7 +570,7 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
     int64_t tmp_micro_block_count = 0;
     if (OB_FAIL(get_table_stat(tenant_id, tab_ref_id, part_ids.at(i), part_cnt,
                                &tmp_row_count, &tmp_row_len, &tmp_data_size, &tmp_macro_block_count,
-                               &tmp_micro_block_count))) {
+                               &tmp_micro_block_count, &tmp_last_analyzed))) {
       LOG_WARN("failed to get table stat", K(ret));
     } else {
       global_tstat.add(tmp_row_count, tmp_row_len,
@@ -578,6 +582,7 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
     assign_value(global_tstat.get_avg_row_size(), avg_len);
     assign_value(global_tstat.get_avg_data_size(), avg_part_size);
     assign_value(global_tstat.get_micro_block_count(), micro_block_count);
+    assign_value(tmp_last_analyzed, last_analyzed);
   }
   return ret;
 }

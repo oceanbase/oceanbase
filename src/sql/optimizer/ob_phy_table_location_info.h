@@ -151,7 +151,7 @@ public:
                                          common::ObAddr &same_server,
                                          const common::ObAddr &local_server);
   int all_select_fixed_server(const common::ObAddr &fixed_server);
-
+  int get_all_servers(common::ObIArray<common::ObAddr> &servers) const;
   bool is_duplicate_table() const { return ObDuplicateType::NOT_DUPLICATE != duplicate_type_; }
   bool is_duplicate_table_not_in_dml() const { return ObDuplicateType::DUPLICATE == duplicate_type_; }
   void set_duplicate_type(ObDuplicateType v) { duplicate_type_ = v; }

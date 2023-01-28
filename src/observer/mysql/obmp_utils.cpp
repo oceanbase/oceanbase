@@ -18,7 +18,7 @@
 #include "lib/utility/ob_proto_trans_util.h"
 #include "observer/mysql/obmp_utils.h"
 #include "rpc/obmysql/ob_2_0_protocol_utils.h"
-#include "sql/monitor/full_link_trace/ob_flt_control_info_mgr.h"
+#include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 
 namespace oceanbase
 {
@@ -44,6 +44,14 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
   if (session.is_sys_var_changed()) {
     const ObIArray<sql::ObBasicSessionInfo::ChangedVar> &sys_var = session.get_changed_sys_var();
     LOG_DEBUG("sys var changed", K(session.get_tenant_name()), K(sys_var.count()));
+    // if sys_var change, set SESSION_SYNC_SYS_VAR type's encoder->is_changed_ = true
+    // for turn on serialize sys delta vars.
+    ObSessInfoEncoder* encoder = NULL;
+    if (OB_FAIL(session.get_sess_encoder(SESSION_SYNC_SYS_VAR, encoder))) {
+      LOG_WARN("failed to get session encoder", K(ret));
+    } else {
+      encoder->is_changed_ = true;
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < sys_var.count(); ++i) {
       sql::ObBasicSessionInfo::ChangedVar change_var = sys_var.at(i);
       ObObj new_val;
@@ -330,354 +338,6 @@ int ObMPUtils::add_client_reroute_info(OMPKOK &okp,
   return ret;
 }
 
-int ObMPUtils::init_flt_info(Ob20ExtraInfo extra_info,
-                             sql::ObSQLSessionInfo &session,
-                             bool is_client_support_flt)
-{
-  int ret = OB_SUCCESS;
-  if (extra_info.exist_full_link_trace()) {
-    OZ(process_flt_extra_info(extra_info.get_full_link_trace().ptr(),
-                              extra_info.get_full_link_trace().length(),
-                              session));
-    extra_info.get_full_link_trace().reset();
-  }
-
-  if (session.get_control_info().is_valid()){
-    OZ(init_flt_log_framework(session, is_client_support_flt));
-  } else {
-    FLT_SET_TRACE_LEVEL(0);
-    FLT_SET_AUTO_FLUSH(false);
-    session.set_auto_flush_trace(false);
-    session.set_trace_enable(false);
-  }
-
-  return ret;
-}
-
-int ObMPUtils::append_flt_extra_info(common::ObIAllocator &allocator,
-                                     ObIArray<obmysql::ObObjKV> *extra_info,
-                                     ObIArray<obmysql::Obp20Encoder*> *extra_info_ecds,
-                                     sql::ObSQLSessionInfo &sess,
-                                     bool is_new_extra_info)
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int size = 0;
-  FLTQueryInfo query_info;
-
-  // reserver memory for control info
-  // if sys config in control info and sys parameter has modified, resend this control info.
-  if (sess.get_control_info().is_valid_sys_config()
-        && !((sess.get_control_info().print_sample_pct_ == ((double)(sess.get_tenant_print_sample_ppm()))/1000000)
-        && (sess.get_control_info().slow_query_thres_ == GCONF.trace_log_slow_query_watermark))) {
-    sess.set_send_control_info(false);
-  }
-
-  if (!sess.is_send_control_info()) {
-    size += sess.get_control_info().get_serialize_size();
-  }
-
-  // reserver memmory for query info
-  if (sess.is_trace_enable()) {
-    query_info.query_start_time_ = sess.get_query_start_time();
-    query_info.query_end_time_ = ::oceanbase::common::ObTimeUtility::current_time();
-    size += query_info.get_serialize_size();
-  }
-
-  if (size == 0){
-    // has not flt extra info, do nothing
-  } else if (OB_UNLIKELY(size < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Invalid buffer length", K(ret), K(size));
-  } else if (NULL == (buf = static_cast<char *>(allocator.alloc(size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("fail to alloc mem", K(size), K(ret));
-  } else {
-    int64_t pos = 0;
-    // assamble control info
-    if (!sess.is_send_control_info()) {
-      FLTControlInfo con = sess.get_control_info();
-      if (!con.is_valid()) {
-        con.reset();
-      }
-      con.print_sample_pct_ = ((double)(sess.get_tenant_print_sample_ppm()))/1000000;
-      con.slow_query_thres_ = GCONF.trace_log_slow_query_watermark;
-
-      sess.set_flt_control_info(con);
-
-      if (OB_FAIL(con.serialize(buf, size, pos))) {
-        LOG_WARN("failed to serialize control info", K(pos), K(size));
-      } else {
-        sess.set_send_control_info(true);
-      }
-    }
-
-    // assamble query info
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (sess.is_trace_enable()) {
-      if (OB_FAIL(query_info.serialize(buf, size, pos))) {
-        LOG_WARN("failed to serialize query info", K(pos), K(size));
-      } else {
-        sess.set_trace_enable(false);
-      }
-    }
-  }
-
-  // set session info to extra info
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (size == 0) {
-    // nothing to write, do nothing
-  } else if (is_new_extra_info) {
-    Obp20FullTrcEncoder* full_trc_ecd = NULL;
-    void* ecd_buf = NULL;
-    if (OB_ISNULL(ecd_buf = allocator.alloc(sizeof(Obp20FullTrcEncoder)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory.", K(ret));
-    } else {
-      full_trc_ecd = new(ecd_buf)Obp20FullTrcEncoder();
-      full_trc_ecd->full_trc_.assign(buf, size);
-      if (OB_FAIL(extra_info_ecds->push_back(full_trc_ecd))) {
-        LOG_WARN("failed to add extra info kv", K(full_trc_ecd), K(ret));
-      }
-    }
-  } else {
-    ObObjKV kv;
-    common::ObObj key;
-    common::ObObj value;
-    ObString key_str = "full_trc";
-    key.set_varchar(key_str);
-    value.set_varchar(ObString(size, buf));
-    kv.key_ = key;
-    kv.value_ = value;
-    if (OB_FAIL(extra_info->push_back(kv))) {
-      LOG_WARN("failed to add extra info kv", K(kv), K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObMPUtils::process_flt_extra_info(const char *buf,
-                  const int64_t len, sql::ObSQLSessionInfo &sess)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-
-  LOG_TRACE("recieve flt extra info", KP(buf), K(len), KPHEX(buf, len));
-
-  while (OB_SUCC(ret) && pos < len) {
-    FullLinkTraceExtraInfoType extra_type;
-    int32_t v_len = 0;
-    LOG_TRACE("process single flt extra info", KP(buf), K(pos), K(len), KPHEX(buf+pos, len-pos));
-    if (OB_FAIL(FLTExtraInfo::resolve_type_and_len(buf, len, pos, extra_type, v_len))) {
-      LOG_WARN("failed to resolve type and len", K(len), K(pos));
-    } else if (pos+v_len > len) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("buf size overflow", K(ret), K(pos), K(v_len), K(len));
-    } else {
-      switch (extra_type) {
-        // for drv types:
-        case FLT_TYPE_DRV_LOG: {
-          FLTDrvSpan drv_span;
-          if (OB_FAIL(drv_span.deserialize(buf, pos+v_len, pos))) {
-            LOG_WARN("failed to deserialize full link trace extra info",
-                                      KP(buf), K(ret), K(pos), K(v_len));
-          } else {
-            _OBTRACE_LOG(INFO, "%s", drv_span.span_info_.ptr());
-          }
-          break;
-        }
-
-        // for proxy types: 
-
-        // for public types:
-        case FLT_TYPE_APP_INFO: {
-          // do nothing
-          FLTAppInfo app_info;
-          FLTControlInfo con;
-          ObFLTControlInfoManager mgr(sess.get_effective_tenant_id());
-          if (OB_FAIL(app_info.deserialize(buf, pos+v_len, pos))) {
-            LOG_WARN("failed to deserialize full link trace extra info",
-                                      KP(buf), K(ret), K(pos), K(v_len));
-          } else if (OB_FAIL(mgr.init())) {
-            LOG_WARN("failed to init full link trace info manager", K(ret));
-          } else {
-            if (app_info.trace_client_info_.empty()) {
-              // do nothing
-            } else if (OB_FAIL(sess.get_app_info_encoder()
-                          .set_client_info(&sess, app_info.trace_client_info_))) {
-              LOG_WARN("failed to set client info name", K(ret));
-            }
-
-            if (OB_FAIL(ret)) {
-              // do nothing
-            } else if (OB_FAIL(init_app_info(sess, app_info))) {
-              LOG_WARN("failed  to init app info from session", K(ret));
-            } else if (OB_FAIL(mgr.find_appropriate_con_info(sess))) {
-              LOG_WARN("failed to find appropriate control info", K(ret));
-            } else {
-              // do nothing
-            }
-          }
-          break;
-        }
-        case FLT_TYPE_QUERY_INFO: {
-          // this extra info is written by server, and driver/proxy cannot send this to server;
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("invalid extra_type", K(extra_type), K(ret));
-          break;
-        }
-        case FLT_TYPE_CONTROL_INFO: {
-          // this extra info is written by server, and driver/proxy cannot send this to server;
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("invalid extra_type", K(extra_type), K(ret));
-          break;
-        }
-        case FLT_TYPE_SPAN_INFO: {
-          FLTSpanInfo span_info;
-          if (OB_FAIL(span_info.deserialize(buf, pos+v_len, pos))) {
-            LOG_WARN("failed to deserialize full link trace extra info",
-                                      KP(buf), K(ret), K(pos), K(v_len));
-          } else if (span_info.trace_enable_) {
-            if (OB_FAIL(sess.set_flt_trace_id(span_info.trace_id_))) {
-              LOG_WARN("failed to set trace id", K(ret));
-            } else if (OB_FAIL(sess.set_flt_span_id(span_info.span_id_))) {
-              LOG_WARN("failed to set span id", K(ret));
-            } else {
-              sess.set_trace_enable(span_info.trace_enable_);
-              sess.set_auto_flush_trace(span_info.force_print_);
-            }
-          }
-          break;
-        }
-        default: {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("invalid extra_type", K(extra_type), K(ret));
-          break;
-        }
-      } // switch ends
-    }
-  } // while ends
-
-  return ret;
-}
-
-int ObMPUtils::init_flt_log_framework(sql::ObSQLSessionInfo &sess, bool is_client_support_flt)
-{
-  // initialize log framework
-  int ret = OB_SUCCESS;
-  FLT_RESET_SPAN();
-  if (sess.is_server_status_in_transaction()) {
-    // in the trans, do nothing
-  } else {
-    // reset trace_enable and flush trace in transcation granularity
-    // init flush trace and trace enable
-    if (!is_client_support_flt) {
-      // reset log config
-      sess.set_trace_enable(false);
-      sess.set_auto_flush_trace(false);
-
-      FLTControlInfo con = sess.get_control_info();
-      if (con.is_valid()) {
-        // init trace enable
-        con.print_sample_pct_ = ((double)(sess.get_tenant_print_sample_ppm()))/1000000;
-        ObRandom r;
-        double rand_num = 1.0 * (r.rand(0, RAND_MAX)/RAND_MAX);
-        if (rand_num < con.sample_pct_) {
-          sess.set_trace_enable(true);
-        } else {
-          sess.set_trace_enable(false);
-        }
-
-        // init flush trace
-        if (con.rp_ == FLTControlInfo::RecordPolicy::RP_ALL) {
-          if (sess.is_trace_enable()) {
-            sess.set_auto_flush_trace(true);
-          } else {
-            sess.set_auto_flush_trace(false);
-          }
-        } else if (con.rp_ == FLTControlInfo::RecordPolicy::RP_ONLY_SLOW_QUERY) {
-          // do nothing, slow query will must flush
-        } else if (con.rp_ == FLTControlInfo::RecordPolicy::RP_SAMPLE_AND_SLOW_QUERY) {
-          double rand_num2 = 1.0 * (r.rand(0, RAND_MAX)/RAND_MAX);
-          if (rand_num2 < con.print_sample_pct_) {
-            sess.set_auto_flush_trace(true);
-          } else {
-            sess.set_auto_flush_trace(false);
-          }
-        }
-      } else {
-        // invalid control info, do nothing
-      }
-    } else {
-      //set by client
-    }
-  }
-
-    // init log frame
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (!sess.get_control_info().is_valid() || !sess.is_trace_enable()) {
-      FLT_SET_TRACE_LEVEL(0);
-      FLT_SET_AUTO_FLUSH(false);
-      sess.set_auto_flush_trace(false);
-      sess.set_trace_enable(false);
-    } else if (is_client_support_flt) {
-      trace::UUID tid, sid;
-      int64_t pos = 0;
-      ObString span_id;
-      ObString trace_id;
-      sess.get_flt_span_id(span_id);
-      sess.get_flt_trace_id(trace_id);
-      if (span_id.empty() || trace_id.empty()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid span_id or trace_id", K(span_id), K(trace_id), K(ret));
-      } else {
-        tid.deserialize(trace_id.ptr(), trace_id.length(), pos);
-        pos = 0;
-        sid.deserialize(span_id.ptr(), span_id.length(), pos);
-        OBTRACE->init(tid, sid);
-        FLT_SET_TRACE_LEVEL(sess.get_control_info().level_);
-        FLT_SET_AUTO_FLUSH(sess.is_auto_flush_trace());
-      }
-    } else {
-      // update trace_id in transaction granularity
-      if (!sess.get_in_transaction()) {
-        // begin new trace
-        FLT_BEGIN_TRACE();
-      }
-      FLT_SET_TRACE_LEVEL(sess.get_control_info().level_);
-      FLT_SET_AUTO_FLUSH(sess.is_auto_flush_trace());
-    }
-
-    LOG_TRACE("flt init log", K(sess.is_trace_enable()),
-                K(sess.is_auto_flush_trace()), K(sess.get_control_info()));
-  return ret;
-}
-
-int ObMPUtils::init_app_info(sql::ObSQLSessionInfo &sess, FLTAppInfo &app_info)
-{
-  int ret = OB_SUCCESS;
-
-  if (!app_info.trace_module_.empty() &&
-              OB_FAIL(sess.get_app_info_encoder().
-                set_module_name(&sess, app_info.trace_module_))) {
-    LOG_WARN("failed to set mod name", K(ret));
-  } else if (!app_info.trace_action_.empty() &&
-              OB_FAIL(sess.get_app_info_encoder().
-                set_action_name(&sess, app_info.trace_action_))) {
-    LOG_WARN("failed to set action name", K(ret));
-  } else if (!app_info.trace_client_identifier_.empty() &&
-              OB_FAIL(sess.set_client_id(app_info.trace_client_identifier_))) {
-    LOG_WARN("failed to set client id", K(ret));
-  } else {
-    // do nothing
-  }
-
-  return ret;
-}
-
 int ObMPUtils::add_cap_flag(OMPKOK &okp, sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
@@ -817,6 +477,39 @@ int ObMPUtils::add_session_info_on_connect(OMPKOK &okp, sql::ObSQLSessionInfo &s
       }
     }
   }
+
+  return ret;
+}
+
+// response _min_cluster_version on connect,
+// design doc: https://yuque.antfin.com/ob/sql/ellssc7bdef7hy8c?singleDoc#
+int ObMPUtils::add_min_cluster_version(OMPKOK &okp, sql::ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  const char *MIN_CLUSTER_VERSION_KEY = "_min_cluster_version";
+  ObStringKV str_kv;
+  str_kv.key_ = ObString::make_string(MIN_CLUSTER_VERSION_KEY);
+  char version_buf[OB_CLUSTER_VERSION_LENGTH];
+  int64_t pos = 0;
+  ObObj version;
+  if (OB_INVALID_INDEX == (pos = ObClusterVersion::print_version_str(
+          version_buf, OB_CLUSTER_VERSION_LENGTH, GET_MIN_CLUSTER_VERSION()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get min cluster version", K(ret));
+  } else if (FALSE_IT(version.set_varchar(version_buf, pos))) {
+    // do nothing
+  } else if (OB_FAIL(get_user_sql_literal(session.get_allocator(),
+                                          version,
+                                          str_kv.value_,
+                                          session.create_obj_print_params()))) {
+    LOG_WARN("fail to get user sql literal", K(version), K(ret));
+  } else if (OB_FAIL(okp.add_user_var(str_kv))) {
+    LOG_WARN("fail to add user var", K(str_kv), K(ret));
+  } else {
+    LOG_TRACE("succ to add _min_cluster_version user var on connect", K(ret), K(str_kv),
+              "sessid", session.get_sessid(), "proxy_sessid", session.get_proxy_sessid());
+  }
+
   return ret;
 }
 

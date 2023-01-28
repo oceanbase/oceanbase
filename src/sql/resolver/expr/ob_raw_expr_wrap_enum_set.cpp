@@ -40,7 +40,6 @@ int ObRawExprWrapEnumSet::wrap_enum_set(ObDMLStmt &stmt)
   } else if (stmt.is_insert_stmt()) {
     ObInsertStmt &insert_stmt = static_cast<ObInsertStmt &>(stmt);
 
-    current_level_ = insert_stmt.get_current_level();
     if (insert_stmt.value_from_select()) {
       if (OB_FAIL(wrap_sub_select(insert_stmt))) {
         LOG_WARN("failed to wrap value_vector", K(ret));
@@ -86,7 +85,6 @@ int ObRawExprWrapEnumSet::wrap_sub_select(ObInsertStmt &stmt)
         LOG_WARN("failed to get obj type from convert expr", K(ret));
       } else if (OB_FAIL(wrap_type_to_str_if_necessary(conv_expr->get_param_expr(4),
                                                        static_cast<ObObjType>(const_value),
-                                                       stmt.get_current_level(),
                                                        is_same_need,
                                                        wrapped_expr))) {
         LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
@@ -129,7 +127,7 @@ int ObRawExprWrapEnumSet::wrap_value_vector(ObInsertStmt &stmt)
         int64_t index = i % desc_count;
         ObSysFunRawExpr *new_expr = NULL;
         if (OB_FAIL(wrap_type_to_str_if_necessary(value_expr, stmt.get_values_desc().at(index)->get_data_type(),
-                                                  stmt.get_current_level(), is_same_need, new_expr))) {
+                                                  is_same_need, new_expr))) {
           LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
         } else if (NULL != new_expr) {
           value_expr = new_expr;
@@ -153,7 +151,7 @@ int ObRawExprWrapEnumSet::wrap_target_list(ObSelectStmt &select_stmt)
     } else if (ob_is_enumset_tc(target_expr->get_data_type())) {
       ObSysFunRawExpr *new_expr = NULL;
       if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, target_expr,
-                                                          select_stmt.get_current_level(), new_expr,
+                                                          new_expr,
                                                           my_session_, is_type_to_str))) {
         LOG_WARN("failed to create_type_to_string_expr", K(i), K(target_expr), K(ret));
       } else if (OB_ISNULL(new_expr)) {
@@ -172,7 +170,6 @@ int ObRawExprWrapEnumSet::analyze_all_expr(ObDMLStmt &stmt)
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> relation_exprs;
   ObArray<ObSelectStmt*> child_stmts;
-  current_level_ = stmt.get_current_level();
   cur_stmt_ = &stmt;
   if (OB_FAIL(stmt.get_relation_exprs_for_enum_set_wrapper(relation_exprs))) {
     LOG_WARN("get relation exprs failed", K(ret));
@@ -322,7 +319,6 @@ int ObRawExprWrapEnumSet::visit(ObOpRawExpr &expr)
             OZ(visit_query_ref_expr(*query_ref_expr, calc_type, is_same_need));
           } else if (OB_FAIL(wrap_type_to_str_if_necessary(param_expr,
                                                            calc_type,
-                                                           get_current_level(),
                                                            is_same_need,
                                                            new_expr))) {
             LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
@@ -351,7 +347,7 @@ int ObRawExprWrapEnumSet::visit_left_expr(ObOpRawExpr &expr, int64_t row_dimensi
     int64_t idx = 0;
     ObSysFunRawExpr *wrapped_expr = NULL;
     if (OB_FAIL(check_and_wrap_left(*left_expr, idx, cmp_types, row_dimension,
-                                    get_current_level(), wrapped_expr))) {
+                                     wrapped_expr))) {
       LOG_WARN("failed to check_and_wrap_left", K(ret));
     } else if (NULL != wrapped_expr) {
       if (OB_FAIL(expr.replace_param_expr(0, wrapped_expr))) {
@@ -367,7 +363,7 @@ int ObRawExprWrapEnumSet::visit_left_expr(ObOpRawExpr &expr, int64_t row_dimensi
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param expr is NULL", K(i), K(ret));
       } else if (OB_FAIL(check_and_wrap_left(*param_expr, i, cmp_types, row_dimension,
-                                             get_current_level(), wrapped_expr))) {
+                                             wrapped_expr))) {
         LOG_WARN("failed to check_and_wrap_left", K(ret));
       } else if (NULL != wrapped_expr) {
         if (OB_FAIL(left_op_expr->replace_param_expr(i, wrapped_expr))) {
@@ -397,7 +393,7 @@ int ObRawExprWrapEnumSet::visit_left_expr(ObOpRawExpr &expr, int64_t row_dimensi
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr of select item is NULL", K(left_expr), K(ret));
           } else if (OB_FAIL(check_and_wrap_left(*target_expr, i, cmp_types, row_dimension,
-                                                 get_current_level() + 1, wrapped_expr))) {
+                                                 wrapped_expr))) {
             LOG_WARN("failed to check_and_wrap_left", K(ret));
           } else if (NULL != wrapped_expr) {
             ref_stmt->get_select_item(i).expr_ = wrapped_expr;
@@ -416,7 +412,6 @@ int ObRawExprWrapEnumSet::visit_left_expr(ObOpRawExpr &expr, int64_t row_dimensi
 int ObRawExprWrapEnumSet::check_and_wrap_left(ObRawExpr &expr, int64_t idx,
                                               const ObIArray<ObExprCalcType> &cmp_types,
                                               int64_t row_dimension,
-                                              int32_t expr_level,
                                               ObSysFunRawExpr *&wrapped_expr) const
 {
   int ret = OB_SUCCESS;
@@ -445,7 +440,7 @@ int ObRawExprWrapEnumSet::check_and_wrap_left(ObRawExpr &expr, int64_t idx,
 
     if (OB_SUCC(ret) && need_varchar) {
       const bool is_type_to_str = !need_numberic;
-      if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, &expr, expr_level,
+      if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, &expr,
                                                           wrapped_expr, my_session_, is_type_to_str))) {
         LOG_WARN("failed to create_type_to_string_expr",K(expr), K(ret));
       }
@@ -481,7 +476,7 @@ int ObRawExprWrapEnumSet::visit_right_expr(ObRawExpr &right_expr, int64_t row_di
         ObRawExpr *param_expr = right_op_expr.get_param_expr(i);
         ObObjType calc_type = cmp_types.at(i).get_type();
         ObSysFunRawExpr *wrapped_expr = NULL;
-        if (OB_FAIL(wrap_type_to_str_if_necessary(param_expr, calc_type, get_current_level(), is_same_need,  wrapped_expr))) {
+        if (OB_FAIL(wrap_type_to_str_if_necessary(param_expr, calc_type, is_same_need,  wrapped_expr))) {
           LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
         } else if ((NULL != wrapped_expr) && OB_FAIL(right_op_expr.replace_param_expr(i, wrapped_expr))) {
           LOG_WARN("replace param expr failed", K(i), K(ret));
@@ -508,7 +503,7 @@ int ObRawExprWrapEnumSet::visit_right_expr(ObRawExpr &right_expr, int64_t row_di
               ObObjType calc_type = cmp_types.at(i * row_dimension + j).get_type();
               ObSysFunRawExpr *wrapped_expr = NULL;
               if (OB_FAIL(wrap_type_to_str_if_necessary(inner_param_expr, calc_type,
-                                                        get_current_level(), is_same_need, wrapped_expr))) {
+                                                        is_same_need, wrapped_expr))) {
                 LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
               } else if ((NULL != wrapped_expr) && OB_FAIL(param_op_expr->replace_param_expr(i, wrapped_expr))) {
                 LOG_WARN("replace param expr failed", K(ret));
@@ -557,7 +552,7 @@ int ObRawExprWrapEnumSet::visit_right_expr(ObRawExpr &right_expr, int64_t row_di
             ObSysFunRawExpr *wrapped_expr = NULL;
             ObObjType calc_type = cmp_types.at(0).get_type();
             if (OB_FAIL(wrap_type_to_str_if_necessary(target_expr, calc_type,
-                                        get_current_level() + 1, is_same_need, wrapped_expr))) {
+                                        is_same_need, wrapped_expr))) {
               LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
             } else if (NULL != wrapped_expr) {
               ref_stmt->get_select_item(0).expr_ = wrapped_expr;
@@ -569,7 +564,7 @@ int ObRawExprWrapEnumSet::visit_right_expr(ObRawExpr &right_expr, int64_t row_di
           ObObjType calc_type = cmp_types.at(i).get_type();
           ObSysFunRawExpr *wrapped_expr = NULL;
           if (OB_FAIL(wrap_type_to_str_if_necessary(inner_param_expr, calc_type,
-                                            get_current_level(), is_same_need, wrapped_expr))) {
+                                            is_same_need, wrapped_expr))) {
             LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
           } else if ((NULL != wrapped_expr)
                       && OB_FAIL(right_op_expr.replace_param_expr(i, wrapped_expr))) {
@@ -599,7 +594,7 @@ int ObRawExprWrapEnumSet::visit_right_expr(ObRawExpr &right_expr, int64_t row_di
         ObSysFunRawExpr *wrapped_expr = NULL;
         ObObjType calc_type = cmp_types.at(i).get_type();
         if (OB_FAIL(wrap_type_to_str_if_necessary(target_expr, calc_type,
-                                                  get_current_level() + 1, is_same_need, wrapped_expr))) {
+                                                  is_same_need, wrapped_expr))) {
           LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
         } else if (NULL != wrapped_expr) {
           ref_stmt->get_select_item(i).expr_ = wrapped_expr;
@@ -616,7 +611,6 @@ int ObRawExprWrapEnumSet::visit_right_expr(ObRawExpr &right_expr, int64_t row_di
 
 int ObRawExprWrapEnumSet::wrap_type_to_str_if_necessary(ObRawExpr *expr,
                                                         ObObjType dest_type,
-                                                        int32_t expr_level,
                                                         bool is_same_need,
                                                         ObSysFunRawExpr *&wrapped_expr)
 {
@@ -631,7 +625,7 @@ int ObRawExprWrapEnumSet::wrap_type_to_str_if_necessary(ObRawExpr *expr,
                                                          is_same_need, need_wrap))) {
     LOG_WARN("failed to check_need_wrap_to_string", K(ret));
   } else if (need_wrap && OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, expr,
-      expr_level, wrapped_expr, my_session_, is_type_to_str))) {
+      wrapped_expr, my_session_, is_type_to_str))) {
     LOG_WARN("failed to create_type_to_string_expr", KPC(expr), K(is_type_to_str), K(ret));
   } else {
     LOG_DEBUG("finish wrap_type_to_str_if_necessary", K(ret), K(need_wrap), K(dest_type), KPC(expr),
@@ -666,7 +660,7 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr &expr)
           wrapped_expr = NULL;
           ObRawExpr *when_expr = expr.get_when_param_expr(i);
           bool need_wrap = false;
-          if (OB_FAIL(wrap_type_to_str_if_necessary(when_expr, calc_type, get_current_level(),
+          if (OB_FAIL(wrap_type_to_str_if_necessary(when_expr, calc_type,
                                                     is_same_need, wrapped_expr))) {
             LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
           } else if (NULL != wrapped_expr && OB_FAIL(expr.replace_when_param_expr(i, wrapped_expr))){
@@ -682,7 +676,7 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr &expr)
         if (OB_SUCC(ret) && ob_is_enumset_tc(arg_type) && need_varchar) {
           const bool is_type_to_str = !need_numberic;
           wrapped_expr = NULL;
-          if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, arg_param_expr, get_current_level(),
+          if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, arg_param_expr,
                                                               wrapped_expr, my_session_, is_type_to_str))) {
             LOG_WARN("failed to create_type_to_string_expr", K(ret));
           } else if (OB_ISNULL(wrapped_expr)) {
@@ -699,7 +693,7 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr &expr)
       for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_when_expr_size(); i++) {
         wrapped_expr = NULL;
         ObRawExpr *when_expr = expr.get_when_param_expr(i);
-        if (OB_FAIL(wrap_type_to_str_if_necessary(when_expr, calc_type, get_current_level(),
+        if (OB_FAIL(wrap_type_to_str_if_necessary(when_expr, calc_type,
                                                   is_same_need, wrapped_expr))) {
           LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
         } else if (NULL != wrapped_expr && OB_FAIL(expr.replace_when_param_expr(i, wrapped_expr))){
@@ -712,7 +706,7 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr &expr)
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_then_expr_size(); i++) {
       ObRawExpr *then_expr = expr.get_then_param_expr(i);
       wrapped_expr = NULL;
-      if (OB_FAIL(wrap_type_to_str_if_necessary(then_expr, result_type, get_current_level(),
+      if (OB_FAIL(wrap_type_to_str_if_necessary(then_expr, result_type,
                                                 is_same_need, wrapped_expr))) {
         LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
       } else if (NULL != wrapped_expr && OB_FAIL(expr.replace_then_param_expr(i, wrapped_expr))){
@@ -723,7 +717,7 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr &expr)
     if (OB_SUCC(ret) && expr.get_default_param_expr() != NULL) {
       ObRawExpr *default_expr = expr.get_default_param_expr();
       wrapped_expr = NULL;
-      if (OB_FAIL(wrap_type_to_str_if_necessary(default_expr, result_type, get_current_level(),
+      if (OB_FAIL(wrap_type_to_str_if_necessary(default_expr, result_type,
                                                 is_same_need, wrapped_expr))) {
         LOG_WARN("failed to wrap_type_to_str_if_necessary", K(ret));
       } else if (NULL != wrapped_expr) {
@@ -756,7 +750,7 @@ int ObRawExprWrapEnumSet::visit(ObAggFunRawExpr &expr)
         //here is special
         ObObjType calc_type = expr.get_data_type();
         ObSysFunRawExpr *wrapped_expr = NULL;
-        if (OB_FAIL(wrap_type_to_str_if_necessary(real_param_expr, calc_type, get_current_level(),
+        if (OB_FAIL(wrap_type_to_str_if_necessary(real_param_expr, calc_type,
                                                   is_same_need, wrapped_expr))) {
           LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
         } else if ((NULL != wrapped_expr) && OB_FAIL(expr.replace_real_param_expr(i, wrapped_expr))) {
@@ -817,7 +811,7 @@ int ObRawExprWrapEnumSet::visit(ObSysFunRawExpr &expr)
           ObObjType calc_type = expr.get_input_types().at(i).get_calc_type();
           ObSysFunRawExpr *wrapped_expr = NULL;
           // Enumset warp to string in CAST expr will be handled here.
-          if (OB_FAIL(wrap_type_to_str_if_necessary(param_expr, calc_type, get_current_level(),
+          if (OB_FAIL(wrap_type_to_str_if_necessary(param_expr, calc_type,
                                                     is_same_need, wrapped_expr))) {
             LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(expr), K(ret));
           } else if ((NULL != wrapped_expr) && OB_FAIL(expr.replace_param_expr(i, wrapped_expr))) {
@@ -880,7 +874,7 @@ int ObRawExprWrapEnumSet::wrap_nullif_expr(ObSysFunRawExpr &expr)
         const bool is_type_to_str = ObVarcharType == calc_type;
         ObSysFunRawExpr *wrapped_expr = NULL;
         if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_,
-                                                            left_param, get_current_level(),
+                                                            left_param,
                                                             wrapped_expr,
                                                             my_session_,
                                                             is_type_to_str))) {
@@ -894,7 +888,7 @@ int ObRawExprWrapEnumSet::wrap_nullif_expr(ObSysFunRawExpr &expr)
         ObObjType calc_type = expr.get_input_types().at(1).get_calc_type();
         ObSysFunRawExpr *wrapped_expr = NULL;
         const bool is_same_need = false;
-        if (OB_FAIL(wrap_type_to_str_if_necessary(right_param, calc_type, get_current_level(),
+        if (OB_FAIL(wrap_type_to_str_if_necessary(right_param, calc_type,
                                                   is_same_need, wrapped_expr))) {
           LOG_WARN("failed to wrap_type_to_str_if_necessary", K(ret));
         } else if ((NULL != wrapped_expr) && OB_FAIL(expr.replace_param_expr(1, wrapped_expr))) {
@@ -930,7 +924,7 @@ int ObRawExprWrapEnumSet::visit_query_ref_expr(ObQueryRefRawExpr &expr,
       ObRawExpr *enumset_expr = ref_stmt->get_select_item(0).expr_;
       ObSysFunRawExpr *new_expr = NULL;
       if (OB_FAIL(wrap_type_to_str_if_necessary(enumset_expr, dest_type,
-                                                get_current_level(), is_same_need, new_expr))) {
+                                                is_same_need, new_expr))) {
         LOG_WARN("failed to wrap_type_to_str_if_necessary", K(ret));
       } else if (NULL != new_expr) {
         // replace with new wrapped expr

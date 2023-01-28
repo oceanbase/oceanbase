@@ -37,14 +37,6 @@ public:
 
   static int eval_regexp_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
-  static int calc(common::ObString &ret_str, const common::ObString &text,
-                  const common::ObString &pattern, const common::ObString &replacement_string,
-                  int64_t position, int64_t occurrence, const common::ObCollationType cs_type,
-                  const common::ObString &match_param,
-                  int null_argument_idx, bool reusable,
-                  ObExprRegexContext *regexp_ptr, common::ObExprStringBuf &string_buf,
-                  common::ObIAllocator &exec_ctx_alloc);
-private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpReplace);
 };
 }

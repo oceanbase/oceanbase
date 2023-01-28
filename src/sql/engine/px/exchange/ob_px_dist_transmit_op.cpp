@@ -29,7 +29,7 @@ namespace sql
 OB_SERIALIZE_MEMBER((ObPxDistTransmitOpInput, ObPxTransmitOpInput));
 
 OB_SERIALIZE_MEMBER((ObPxDistTransmitSpec, ObPxTransmitSpec), dist_exprs_,
-    dist_hash_funcs_, sort_cmp_funs_, sort_collations_, calc_tablet_id_expr_);
+    dist_hash_funcs_, sort_cmp_funs_, sort_collations_, calc_tablet_id_expr_, popular_values_hash_);
 
 int ObPxDistTransmitOp::inner_open()
 {
@@ -186,6 +186,18 @@ int ObPxDistTransmitOp::do_transmit()
         }
         break;
       }
+      case ObPQDistributeMethod::HYBRID_HASH_BROADCAST: {
+        if (OB_FAIL(do_hybrid_hash_broadcast_dist())) {
+          LOG_WARN("do broadcast distribution failed",  K(ret));
+        }
+        break;
+      }
+      case ObPQDistributeMethod::HYBRID_HASH_RANDOM: {
+        if (OB_FAIL(do_hybrid_hash_random_dist())) {
+          LOG_WARN("do broadcast distribution failed",  K(ret));
+        }
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "this transmit distribution method");
@@ -204,11 +216,20 @@ int ObPxDistTransmitOp::do_hash_dist()
                                              task_channels_.count(),
                                              &MY_SPEC.dist_exprs_,
                                              &MY_SPEC.dist_hash_funcs_);
-    if (MY_SPEC.is_rollup_hybrid_) {
+    if (MY_SPEC.is_rollup_hybrid_ || MY_SPEC.is_wf_hybrid_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status: is_rollup_hybrid is true", K(ret));
+      LOG_WARN("unexpected status: is_rollup_hybrid or MY_SPEC.is_wf_hybrid_ is true",
+               K(ret), K(MY_SPEC.is_rollup_hybrid_), K(MY_SPEC.is_wf_hybrid_));
     } else if (OB_FAIL(send_rows(slice_id_calc))) {
-       LOG_WARN("row distribution failed", K(ret));
+      LOG_WARN("row distribution failed", K(ret));
+    }
+  } else if (MY_SPEC.is_wf_hybrid_) {
+    ObWfHybridDistSliceIdCalc wf_hybrid_slice_id_calc(
+        ctx_.get_allocator(), task_channels_.count(),
+        MY_SPEC.null_row_dist_method_,
+        &MY_SPEC.dist_exprs_, &MY_SPEC.dist_hash_funcs_);
+    if (OB_FAIL(send_rows(wf_hybrid_slice_id_calc))) {
+      LOG_WARN("row wf hybrid distribution failed", K(ret));
     }
   } else {
     ObHashSliceIdCalc slice_id_calc(
@@ -286,6 +307,34 @@ int ObPxDistTransmitOp::do_broadcast_dist()
       LOG_WARN("row distribution failed", K(ret));
     }
   } else if (OB_FAIL(broadcast_rows(slice_id_calc))) {
+    LOG_WARN("row distribution failed", K(ret));
+  }
+  return ret;
+}
+
+int ObPxDistTransmitOp::do_hybrid_hash_random_dist()
+{
+  int ret = OB_SUCCESS;
+  ObHybridHashRandomSliceIdCalc slice_id_calc(
+      ctx_.get_allocator(), task_channels_.count(),
+      MY_SPEC.null_row_dist_method_,
+      &MY_SPEC.dist_exprs_, &MY_SPEC.dist_hash_funcs_,
+      &MY_SPEC.popular_values_hash_);
+  if (OB_FAIL(send_rows(slice_id_calc))) {
+    LOG_WARN("row distribution failed", K(ret));
+  }
+  return ret;
+}
+
+int ObPxDistTransmitOp::do_hybrid_hash_broadcast_dist()
+{
+  int ret = OB_SUCCESS;
+  ObHybridHashBroadcastSliceIdCalc slice_id_calc(
+      ctx_.get_allocator(), task_channels_.count(),
+      MY_SPEC.null_row_dist_method_,
+      &MY_SPEC.dist_exprs_, &MY_SPEC.dist_hash_funcs_,
+      &MY_SPEC.popular_values_hash_);
+  if (OB_FAIL(send_rows(slice_id_calc))) {
     LOG_WARN("row distribution failed", K(ret));
   }
   return ret;
@@ -459,7 +508,8 @@ int ObPxDistTransmitOp::build_row_sample_piece_msg(int64_t expected_range_count,
   int ret = OB_SUCCESS;
   ObPxSQCProxy &proxy = ctx_.get_sqc_handler()->get_sqc_proxy();
   piece_msg.expect_range_count_ = expected_range_count;
-  piece_msg.dfo_id_ = proxy.get_dfo_id();
+  piece_msg.source_dfo_id_ = proxy.get_dfo_id();
+  piece_msg.target_dfo_id_ = proxy.get_dfo_id();
   piece_msg.op_id_ = MY_SPEC.id_;;
 
   int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
@@ -505,7 +555,9 @@ int ObPxDistTransmitOp::build_row_sample_piece_msg(int64_t expected_range_count,
 int ObPxDistTransmitSpec::register_to_datahub(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
-  if (ObPQDistributeMethod::RANGE == dist_method_) {
+  if (OB_FAIL(ObPxTransmitSpec::register_to_datahub(ctx))) {
+    LOG_WARN("failed to register init channel msg", K(ret));
+  } else if (ObPQDistributeMethod::RANGE == dist_method_) {
     if (OB_ISNULL(ctx.get_sqc_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null unexpected", K(ret));
@@ -517,7 +569,7 @@ int ObPxDistTransmitSpec::register_to_datahub(ObExecContext &ctx) const
         ObDynamicSampleWholeMsg::WholeMsgProvider *provider =
           new (buf)ObDynamicSampleWholeMsg::WholeMsgProvider();
         ObSqcCtx &sqc_ctx = ctx.get_sqc_handler()->get_sqc_ctx();
-        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(id_, *provider))) {
+        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(id_, dtl::DH_DYNAMIC_SAMPLE_WHOLE_MSG, *provider))) {
           LOG_WARN("fail add whole msg provider", K(ret));
         } else {
           char *chunk_buf = (char *)ctx.get_allocator().alloc(sizeof(ObChunkDatumStore));

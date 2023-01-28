@@ -2529,6 +2529,10 @@ int ObTableSqlService::gen_table_dml(
                                  sub_part_option.get_part_num() : 0;
     if (OB_FAIL(check_table_options(table))) {
       LOG_WARN("fail to check table option", K(ret), K(table));
+    } else if (data_version < DATA_VERSION_4_1_0_0 && 0 != table.get_table_flags()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("table flags is not suppported when tenant's data version is below 4.1.0.0", KR(ret),
+               K(table));
     } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                                exec_tenant_id, table.get_tenant_id())))
         || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -2612,6 +2616,8 @@ int ObTableSqlService::gen_table_dml(
         || (OB_FAIL(dml.add_column("tablet_id", table.get_tablet_id().id())))
         || ((data_version >= DATA_VERSION_4_1_0_0 || update_object_status_ignore_version)
             && OB_FAIL(dml.add_column("object_status", static_cast<int64_t> (table.get_object_status()))))
+        || (data_version >= DATA_VERSION_4_1_0_0
+            && OB_FAIL(dml.add_column("table_flags", table.get_table_flags())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -2649,6 +2655,10 @@ int ObTableSqlService::gen_table_options_dml(
 
     if (OB_FAIL(check_table_options(table))) {
       LOG_WARN("fail to check table option", K(ret), K(table));
+    } else if (data_version < DATA_VERSION_4_1_0_0 && 0 != table.get_table_flags()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("table flags is not suppported when tenant's data version is below 4.1.0.0", KR(ret),
+               K(table));
     } else if (data_version < DATA_VERSION_4_1_0_0 && OB_UNLIKELY(table.view_column_filled())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("option is not support before 4.1", K(ret), K(table));
@@ -2704,6 +2714,8 @@ int ObTableSqlService::gen_table_options_dml(
                                       exec_tenant_id, table.get_define_user_id())))
         || (table.is_interval_part() && OB_FAIL(add_transition_point_val(dml, table)))
         || (table.is_interval_part() && OB_FAIL(add_interval_range_val(dml, table)))
+        || (data_version >= DATA_VERSION_4_1_0_0
+            && OB_FAIL(dml.add_column("table_flags", table.get_table_flags())))
         || (OB_FAIL(dml.add_column("tablet_id", table.get_tablet_id().id())))
         ) {
       LOG_WARN("add column failed", K(ret));
@@ -2730,7 +2742,11 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
   if (OB_FAIL(check_ddl_allowed(new_table_schema))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(new_table_schema));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-    LOG_WARN("failed to get data version", K(ret));
+    LOG_WARN("fail to get min data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_1_0_0 && 0 != new_table_schema.get_table_flags()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table flags is not suppported when tenant's data version is below 4.1.0.0", KR(ret),
+             K(new_table_schema));
   } else if (data_version < DATA_VERSION_4_1_0_0
              && OB_UNLIKELY((!update_object_status_ignore_version && ObObjectStatus::VALID != new_table_schema.get_object_status())
                             || new_table_schema.view_column_filled())) {
@@ -2758,6 +2774,8 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
       || (new_table_schema.is_range_part() && OB_FAIL(add_transition_point_val(dml, new_table_schema)))
       || (new_table_schema.is_range_part() && OB_FAIL(add_interval_range_val(dml, new_table_schema)))
       || (OB_FAIL(dml.add_column("part_func_type", part_option.get_part_func_type())))
+      || (data_version >= DATA_VERSION_4_1_0_0
+          && OB_FAIL(dml.add_column("table_flags", new_table_schema.get_table_flags())))
       || OB_FAIL(dml.add_column("auto_increment", share::ObRealUInt64(new_table_schema.get_auto_increment())))
       || OB_FAIL(dml.add_column("tablet_id", new_table_schema.get_tablet_id().id()))
       || OB_FAIL(dml.add_column("data_table_id", new_table_schema.get_data_table_id()))
@@ -2817,8 +2835,15 @@ int ObTableSqlService::gen_partition_option_dml(const ObTableSchema &table, ObDM
   const int64_t sub_part_num = PARTITION_LEVEL_TWO == table.get_part_level()
                                && table.has_sub_part_template_def() ?
                                sub_part_option.get_part_num() : 0;
+  uint64_t data_version = 0;
   if (OB_FAIL(check_ddl_allowed(table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(table));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(table.get_tenant_id(), data_version))) {
+    LOG_WARN("fail to get min data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_1_0_0 && 0 != table.get_table_flags()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table flags is not suppported when tenant's data version is below 4.1.0.0", KR(ret),
+             K(table));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, tenant_id)))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -2839,6 +2864,8 @@ int ObTableSqlService::gen_partition_option_dml(const ObTableSchema &table, ObDM
       || OB_FAIL(dml.add_gmt_create())
       || (table.is_interval_part() && OB_FAIL(add_transition_point_val(dml, table)))
       || (table.is_interval_part() && OB_FAIL(add_interval_range_val(dml, table)))
+      || (data_version >= DATA_VERSION_4_1_0_0
+          && OB_FAIL(dml.add_column("table_flags", table.get_table_flags())))
       || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("add column failed", K(ret));
   }

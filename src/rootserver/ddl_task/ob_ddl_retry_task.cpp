@@ -187,6 +187,7 @@ int ObDDLRetryTask::init(const uint64_t tenant_id,
     task_status_ = static_cast<ObDDLTaskStatus>(task_status);
     is_schema_change_done_ = false;
     is_inited_ = true;
+    ddl_tracing_.open();
   }
   return ret;
 }
@@ -224,6 +225,9 @@ int ObDDLRetryTask::init(const ObDDLTaskRecord &task_record)
     LOG_WARN("init compat mode failed", K(ret));
   } else {
     is_inited_ = true;
+
+    // set up span during recover task
+    ddl_tracing_.open_for_recovery();
   }
   return ret;
 }
@@ -235,7 +239,7 @@ int ObDDLRetryTask::prepare(const ObDDLTaskStatus next_task_status)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   }
-  if (OB_FAIL(switch_status(next_task_status, ret))) {
+  if (OB_FAIL(switch_status(next_task_status, true, ret))) {
     LOG_WARN("fail to switch status", K(ret));
   }
   return ret;
@@ -411,7 +415,7 @@ int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
     }
   }
   if (new_status == next_task_status || OB_FAIL(ret)) {
-    if (OB_FAIL(switch_status(new_status, ret))) {
+    if (OB_FAIL(switch_status(new_status, true, ret))) {
       LOG_WARN("fail to switch task status", K(ret));
     }
   }
@@ -473,14 +477,14 @@ int ObDDLRetryTask::wait_alter_table(const ObDDLTaskStatus new_status)
   }
 
   if (OB_FAIL(ret) || finish) {
-    if (OB_FAIL(switch_status(new_status, ret))) {
+    if (OB_FAIL(switch_status(new_status, true, ret))) {
       LOG_WARN("fail to switch task status", K(ret));
     }
   }
   return ret;
 }
 
-int ObDDLRetryTask::cleanup()
+int ObDDLRetryTask::cleanup_impl()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -547,6 +551,7 @@ int ObDDLRetryTask::process()
   } else if (!need_retry()) {
     // task finish, do nothing.
   } else {
+    ddl_tracing_.restore_span_hierarchy();
     switch(task_status_) {
       case ObDDLTaskStatus::PREPARE: {
         if (OB_FAIL(prepare(ObDDLTaskStatus::DROP_SCHEMA))) {
@@ -584,6 +589,7 @@ int ObDDLRetryTask::process()
         break;
       }
     }
+    ddl_tracing_.release_span_hierarchy();
   }
   return ret;
 }
@@ -603,6 +609,8 @@ int ObDDLRetryTask::serialize_params_to_message(char *buf, const int64_t buf_siz
     LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
   } else if (OB_FAIL(ddl_arg_->serialize(buf, buf_size, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
+  } else if (OB_FAIL(ddl_tracing_.serialize(buf, buf_size, pos))) {
+    LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
   }
   return ret;
 }
@@ -647,6 +655,13 @@ int ObDDLRetryTask::deserlize_params_from_message(const char *buf, const int64_t
       LOG_WARN("deep copy table arg failed", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    if (pos < buf_size) {
+      if (OB_FAIL(ddl_tracing_.deserialize(buf, buf_size, pos))) {
+        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -656,6 +671,7 @@ int64_t ObDDLRetryTask::get_serialize_param_size() const
   if (OB_NOT_NULL(ddl_arg_)) {
     serialize_param_size += ddl_arg_->get_serialize_size();
   }
+  serialize_param_size += ddl_tracing_.get_serialize_size();
   return serialize_param_size;
 }
 
@@ -679,4 +695,34 @@ int ObDDLRetryTask::update_task_status_wait_child_task_finish(
     LOG_WARN("update task status failed", K(ret));
   }
   return ret;
+}
+
+void ObDDLRetryTask::flt_set_task_span_tag() const
+{
+  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_, ddl_data_table_id, object_id_);
+}
+
+void ObDDLRetryTask::flt_set_status_span_tag() const
+{
+  switch (task_status_) {
+  case ObDDLTaskStatus::PREPARE: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::DROP_SCHEMA: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::FAIL: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::SUCCESS: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  default: {
+    break;
+  }
+  }
 }

@@ -29,6 +29,7 @@ ob_set_subtarget(ob_sql common
   ob_sql_trans_control.cpp
   ob_sql_utils.cpp
   ob_update_stmt_printer.cpp
+  ob_optimizer_trace_impl.cpp
 )
 
 ob_set_subtarget(ob_sql common_mixed
@@ -301,6 +302,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_effective_tenant_id.cpp
   engine/expr/ob_expr_elt.cpp
   engine/expr/ob_expr_empty_lob.cpp
+  engine/expr/ob_expr_encrypt.cpp
   engine/expr/ob_expr_equal.cpp
   engine/expr/ob_expr_estimate_ndv.cpp
   engine/expr/ob_expr_eval_functions.cpp
@@ -336,6 +338,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_hex.cpp
   engine/expr/ob_expr_hextoraw.cpp
   engine/expr/ob_expr_host_ip.cpp
+  engine/expr/ob_expr_icu_version.cpp
   engine/expr/ob_expr_ifnull.cpp
   engine/expr/ob_expr_in.cpp
   engine/expr/ob_expr_inet.cpp
@@ -414,6 +417,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_mul.cpp
   engine/expr/ob_expr_multiset.cpp
   engine/expr/ob_expr_mysql_port.cpp
+  engine/expr/ob_expr_name_const.cpp
   engine/expr/ob_expr_neg.cpp
   engine/expr/ob_expr_nlssort.cpp
   engine/expr/ob_expr_not.cpp
@@ -575,6 +579,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_timestamp_to_scn.cpp
   engine/expr/ob_expr_scn_to_timestamp.cpp
   engine/expr/ob_expr_errno.cpp
+  engine/expr/ob_expr_format_bytes.cpp
+  engine/expr/ob_expr_format_pico_time.cpp
   engine/expr/ob_geo_expr_utils.cpp
   engine/expr/ob_expr_spatial_cellid.cpp
   engine/expr/ob_expr_spatial_mbr.cpp
@@ -686,6 +692,8 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/datahub/components/ob_dh_sample.cpp
   engine/px/datahub/components/ob_dh_winbuf.cpp
   engine/px/datahub/components/ob_dh_range_dist_wf.cpp
+  engine/px/datahub/components/ob_dh_init_channel.cpp
+  engine/px/datahub/components/ob_dh_second_stage_reporting_wf.cpp
   engine/px/datahub/components/ob_dh_opt_stats_gather.cpp
 )
 
@@ -705,10 +713,10 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_block_sample_scan_op.cpp
   engine/table/ob_link_scan_op.cpp
   engine/table/ob_row_sample_scan_op.cpp
-  engine/table/ob_table_lookup_op.cpp
   engine/table/ob_table_partition_ranges.cpp
   engine/table/ob_table_row_store_op.cpp
   engine/table/ob_table_scan_op.cpp
+  engine/table/ob_index_lookup_op_impl.cpp
   engine/table/ob_table_scan_with_index_back_op.cpp
 )
 
@@ -760,8 +768,13 @@ ob_set_subtarget(ob_sql monitor
   monitor/ob_phy_operator_stats.cpp
   monitor/ob_phy_plan_monitor_info.cpp
   monitor/ob_security_audit_utils_os.cpp
-  monitor/full_link_trace/ob_flt_control_info_mgr.cpp
-  monitor/full_link_trace/ob_flt_extra_info.cpp
+  monitor/flt/ob_flt_control_info_mgr.cpp
+  monitor/flt/ob_flt_extra_info.cpp
+  monitor/flt/ob_flt_span_mgr.cpp
+  monitor/flt/ob_flt_utils.cpp
+  monitor/ob_sql_plan_manager.cpp
+  monitor/ob_sql_plan.cpp
+  monitor/ob_plan_real_info_manager.cpp
 )
 
 ob_set_subtarget(ob_sql optimizer
@@ -806,7 +819,6 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_sort.cpp
   optimizer/ob_log_subplan_filter.cpp
   optimizer/ob_log_subplan_scan.cpp
-  optimizer/ob_log_table_lookup.cpp
   optimizer/ob_log_table_scan.cpp
   optimizer/ob_log_temp_table_access.cpp
   optimizer/ob_log_temp_table_insert.cpp
@@ -1051,6 +1063,7 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_select_stmt.cpp
   resolver/dml/ob_sequence_namespace_checker.cpp
   resolver/dml/ob_sql_hint.cpp
+  resolver/dml/ob_stmt_expr_visitor.cpp
   resolver/dml/ob_hint.cpp
   resolver/dml/ob_standard_group_checker.cpp
   resolver/dml/ob_update_resolver.cpp
@@ -1074,6 +1087,7 @@ ob_set_subtarget(ob_sql resolver_expr
   resolver/expr/ob_raw_expr_resolver_impl.cpp
   resolver/expr/ob_raw_expr_util.cpp
   resolver/expr/ob_raw_expr_wrap_enum_set.cpp
+  resolver/expr/ob_shared_expr_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_prepare
@@ -1104,7 +1118,6 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_left_join_to_anti.cpp
   rewrite/ob_transform_or_expansion.cpp
   rewrite/ob_transform_join_limit_pushdown.cpp
-  rewrite/ob_transform_post_process.cpp
   rewrite/ob_transform_pre_process.cpp
   rewrite/ob_transform_predicate_move_around.cpp
   rewrite/ob_transform_project_pruning.cpp

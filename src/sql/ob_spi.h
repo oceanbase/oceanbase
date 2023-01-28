@@ -350,6 +350,7 @@ public:
                        const bool *exprs_not_null_flag = NULL,
                        const int64_t *pl_integer_ranges = NULL,
                        bool is_bulk = false);
+  static int spi_check_autonomous_trans(pl::ObPLExecCtx *ctx);
   static int spi_prepare(common::ObIAllocator &allocator,
                          ObSQLSessionInfo &session,
                          ObMySQLProxy &sql_proxy,

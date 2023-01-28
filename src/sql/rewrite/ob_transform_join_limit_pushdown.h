@@ -181,6 +181,7 @@ private:
   int build_lazy_left_join(ObDMLStmt *stmt, LimitPushDownHelper &helper);
 
   int add_order_by_limit_for_view(ObSelectStmt *generated_view,
+                                  TableItem &view,
                                   ObSelectStmt *upper_stmt,
                                   ObIArray<OrderItem> &order_items,
                                   bool pushdown_offset);

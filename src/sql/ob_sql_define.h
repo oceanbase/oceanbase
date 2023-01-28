@@ -362,7 +362,9 @@ struct ObPQDistributeMethod
     DEF(PARTITION_RANDOM,) \
     DEF(RANGE,)\
     DEF(PARTITION_RANGE,)\
-    DEF(LOCAL,) // represents pull to local
+    DEF(HYBRID_HASH_BROADCAST,) /* aka PX SEND HYBRID HASH */ \
+    DEF(HYBRID_HASH_RANDOM,) /* aka PX SEND HYBRID HASH */ \
+    DEF(LOCAL,) /* represents pull to local */
 
 DECLARE_ENUM(Type, type, PQ_DIST_METHOD_DEF, static);
 
@@ -607,6 +609,7 @@ struct ObWinfuncOptimizationOpt
   union {
     struct {
       uint64_t disable_range_distribution_:1;
+      uint64_t disable_reporting_wf_pushdown_:1;
       // add more options here.
     };
     uint64_t v_;

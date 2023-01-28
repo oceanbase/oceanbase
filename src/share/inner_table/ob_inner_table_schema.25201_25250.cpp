@@ -324,6 +324,606 @@ int ObInnerTableSchema::dba_ob_database_privilege_ora_schema(ObTableSchema &tabl
   return ret;
 }
 
+int ObInnerTableSchema::dba_policies_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_POLICIES_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_POLICIES_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,       CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,       CAST(P.POLICY_FUNCTION_SCHEMA AS VARCHAR2(128)) AS PF_OWNER,       CAST(P.POLICY_PACKAGE_NAME AS VARCHAR2(128)) AS PACKAGE,       CAST(P.POLICY_FUNCTION_NAME AS VARCHAR2(128)) AS FUNCTION,       CAST(DECODE(BITAND(P.STMT_TYPE,1), 0, 'NO', 'YES') AS VARCHAR2(3)) AS SEL,       CAST(DECODE(BITAND(P.STMT_TYPE,2), 0, 'NO', 'YES') AS VARCHAR2(3)) AS INS,       CAST(DECODE(BITAND(P.STMT_TYPE,4), 0, 'NO', 'YES') AS VARCHAR2(3)) AS UPD,       CAST(DECODE(BITAND(P.STMT_TYPE,8), 0, 'NO', 'YES') AS VARCHAR2(3)) AS DEL,       CAST(DECODE(BITAND(P.STMT_TYPE,2048), 0, 'NO', 'YES') AS VARCHAR2(3)) AS IDX,       CAST(DECODE(P.CHECK_OPT, 0, 'NO', 'YES') AS VARCHAR2(3)) AS CHK_OPTION,       CAST(DECODE(P.ENABLE_FLAG, 0, 'NO', 'YES') AS VARCHAR2(3)) AS ENABLE,       CAST(DECODE(BITAND(P.STMT_TYPE,16), 0, 'NO', 'YES') AS VARCHAR2(3)) AS STATIC_POLICY,       CAST(CASE BITAND(P.STMT_TYPE,16+64+128+256+8192+16384+32768+524288)         WHEN 16 THEN 'STATIC'         WHEN 64 THEN 'SHARED_STATIC'         WHEN 128 THEN 'CONTEXT_SENSITIVE'         WHEN 256 THEN 'SHARED_CONTEXT_SENSITIVE'         WHEN 8192 THEN 'XDS1'         WHEN 16384 THEN 'XDS2'         WHEN 32768 THEN 'XDS3'         WHEN 524288 THEN 'OLS'         ELSE 'DYNAMIC' END AS VARCHAR2(24)) AS POLICY_TYPE,       CAST(DECODE(BITAND(P.STMT_TYPE,512), 512, 'YES', 'NO') AS VARCHAR2(3)) AS LONG_PREDICATE,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P       LEFT JOIN         SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G         ON P.TENANT_ID = G.TENANT_ID         AND P.TENANT_ID = EFFECTIVE_TENANT_ID()         AND P.RLS_GROUP_ID = G.RLS_GROUP_ID       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON P.TENANT_ID = T.TENANT_ID         AND P.TABLE_ID = T.TABLE_ID       JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON P.TENANT_ID = DB.TENANT_ID         AND T.DATABASE_ID = DB.DATABASE_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::all_policies_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_ALL_POLICIES_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_POLICIES_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,       CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,       CAST(P.POLICY_FUNCTION_SCHEMA AS VARCHAR2(128)) AS PF_OWNER,       CAST(P.POLICY_PACKAGE_NAME AS VARCHAR2(128)) AS PACKAGE,       CAST(P.POLICY_FUNCTION_NAME AS VARCHAR2(128)) AS FUNCTION,       CAST(DECODE(BITAND(P.STMT_TYPE,1), 0, 'NO', 'YES') AS VARCHAR2(3)) AS SEL,       CAST(DECODE(BITAND(P.STMT_TYPE,2), 0, 'NO', 'YES') AS VARCHAR2(3)) AS INS,       CAST(DECODE(BITAND(P.STMT_TYPE,4), 0, 'NO', 'YES') AS VARCHAR2(3)) AS UPD,       CAST(DECODE(BITAND(P.STMT_TYPE,8), 0, 'NO', 'YES') AS VARCHAR2(3)) AS DEL,       CAST(DECODE(BITAND(P.STMT_TYPE,2048), 0, 'NO', 'YES') AS VARCHAR2(3)) AS IDX,       CAST(DECODE(P.CHECK_OPT, 0, 'NO', 'YES') AS VARCHAR2(3)) AS CHK_OPTION,       CAST(DECODE(P.ENABLE_FLAG, 0, 'NO', 'YES') AS VARCHAR2(3)) AS ENABLE,       CAST(DECODE(BITAND(P.STMT_TYPE,16), 0, 'NO', 'YES') AS VARCHAR2(3)) AS STATIC_POLICY,       CAST(CASE BITAND(P.STMT_TYPE,16+64+128+256+8192+16384+32768+524288)         WHEN 16 THEN 'STATIC'         WHEN 64 THEN 'SHARED_STATIC'         WHEN 128 THEN 'CONTEXT_SENSITIVE'         WHEN 256 THEN 'SHARED_CONTEXT_SENSITIVE'         WHEN 8192 THEN 'XDS1'         WHEN 16384 THEN 'XDS2'         WHEN 32768 THEN 'XDS3'         WHEN 524288 THEN 'OLS'         ELSE 'DYNAMIC' END AS VARCHAR2(24)) AS POLICY_TYPE,       CAST(DECODE(BITAND(P.STMT_TYPE,512), 512, 'YES', 'NO') AS VARCHAR2(3)) AS LONG_PREDICATE,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P       LEFT JOIN         SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G         ON P.TENANT_ID = G.TENANT_ID         AND P.TENANT_ID = EFFECTIVE_TENANT_ID()         AND P.RLS_GROUP_ID = G.RLS_GROUP_ID       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON P.TENANT_ID = T.TENANT_ID         AND P.TABLE_ID = T.TABLE_ID         AND (T.DATABASE_ID = USERENV('SCHEMAID')           OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)       JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON P.TENANT_ID = DB.TENANT_ID         AND T.DATABASE_ID = DB.DATABASE_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_policies_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_POLICIES_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_POLICIES_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,       CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,       CAST(P.POLICY_FUNCTION_SCHEMA AS VARCHAR2(128)) AS PF_OWNER,       CAST(P.POLICY_PACKAGE_NAME AS VARCHAR2(128)) AS PACKAGE,       CAST(P.POLICY_FUNCTION_NAME AS VARCHAR2(128)) AS FUNCTION,       CAST(DECODE(BITAND(P.STMT_TYPE,1), 0, 'NO', 'YES') AS VARCHAR2(3)) AS SEL,       CAST(DECODE(BITAND(P.STMT_TYPE,2), 0, 'NO', 'YES') AS VARCHAR2(3)) AS INS,       CAST(DECODE(BITAND(P.STMT_TYPE,4), 0, 'NO', 'YES') AS VARCHAR2(3)) AS UPD,       CAST(DECODE(BITAND(P.STMT_TYPE,8), 0, 'NO', 'YES') AS VARCHAR2(3)) AS DEL,       CAST(DECODE(BITAND(P.STMT_TYPE,2048), 0, 'NO', 'YES') AS VARCHAR2(3)) AS IDX,       CAST(DECODE(P.CHECK_OPT, 0, 'NO', 'YES') AS VARCHAR2(3)) AS CHK_OPTION,       CAST(DECODE(P.ENABLE_FLAG, 0, 'NO', 'YES') AS VARCHAR2(3)) AS ENABLE,       CAST(DECODE(BITAND(P.STMT_TYPE,16), 0, 'NO', 'YES') AS VARCHAR2(3)) AS STATIC_POLICY,       CAST(CASE BITAND(P.STMT_TYPE,16+64+128+256+8192+16384+32768+524288)         WHEN 16 THEN 'STATIC'         WHEN 64 THEN 'SHARED_STATIC'         WHEN 128 THEN 'CONTEXT_SENSITIVE'         WHEN 256 THEN 'SHARED_CONTEXT_SENSITIVE'         WHEN 8192 THEN 'XDS1'         WHEN 16384 THEN 'XDS2'         WHEN 32768 THEN 'XDS3'         WHEN 524288 THEN 'OLS'         ELSE 'DYNAMIC' END AS VARCHAR2(24)) AS POLICY_TYPE,       CAST(DECODE(BITAND(P.STMT_TYPE,512), 512, 'YES', 'NO') AS VARCHAR2(3)) AS LONG_PREDICATE,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P       LEFT JOIN         SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G         ON P.TENANT_ID = G.TENANT_ID         AND P.TENANT_ID = EFFECTIVE_TENANT_ID()         AND P.RLS_GROUP_ID = G.RLS_GROUP_ID       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON P.TENANT_ID = T.TENANT_ID         AND P.TABLE_ID = T.TABLE_ID         AND T.DATABASE_ID = USERENV('SCHEMAID') )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_policy_groups_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_POLICY_GROUPS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_POLICY_GROUPS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(G.POLICY_GROUP_NAME AS VARCHAR2(128)) AS POLICY_GROUP,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON G.TENANT_ID = T.TENANT_ID         AND G.TENANT_ID = EFFECTIVE_TENANT_ID()         AND G.TABLE_ID = T.TABLE_ID       JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON G.TENANT_ID = DB.TENANT_ID         AND T.DATABASE_ID = DB.DATABASE_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::all_policy_groups_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_ALL_POLICY_GROUPS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_POLICY_GROUPS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(G.POLICY_GROUP_NAME AS VARCHAR2(128)) AS POLICY_GROUP,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON G.TENANT_ID = T.TENANT_ID         AND G.TENANT_ID = EFFECTIVE_TENANT_ID()         AND G.TABLE_ID = T.TABLE_ID         AND (T.DATABASE_ID = USERENV('SCHEMAID')           OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)       JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON G.TENANT_ID = DB.TENANT_ID         AND T.DATABASE_ID = DB.DATABASE_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_policy_groups_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_POLICY_GROUPS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_POLICY_GROUPS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(G.POLICY_GROUP_NAME AS VARCHAR2(128)) AS POLICY_GROUP,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON G.TENANT_ID = T.TENANT_ID         AND G.TENANT_ID = EFFECTIVE_TENANT_ID()         AND G.TABLE_ID = T.TABLE_ID         AND T.DATABASE_ID = USERENV('SCHEMAID') )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_policy_contexts_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_POLICY_CONTEXTS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_POLICY_CONTEXTS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(C.CONTEXT_NAME AS VARCHAR2(128)) AS NAMESPACE,       CAST(C.ATTRIBUTE AS VARCHAR2(128)) AS ATTRIBUTE,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT C       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON C.TENANT_ID = T.TENANT_ID         AND C.TENANT_ID = EFFECTIVE_TENANT_ID()         AND C.TABLE_ID = T.TABLE_ID       JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON C.TENANT_ID = DB.TENANT_ID         AND T.DATABASE_ID = DB.DATABASE_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::all_policy_contexts_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_ALL_POLICY_CONTEXTS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_POLICY_CONTEXTS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(C.CONTEXT_NAME AS VARCHAR2(128)) AS NAMESPACE,       CAST(C.ATTRIBUTE AS VARCHAR2(128)) AS ATTRIBUTE,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT C       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON C.TENANT_ID = T.TENANT_ID         AND C.TENANT_ID = EFFECTIVE_TENANT_ID()         AND C.TABLE_ID = T.TABLE_ID         AND (T.DATABASE_ID = USERENV('SCHEMAID')           OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)       JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON C.TENANT_ID = DB.TENANT_ID         AND T.DATABASE_ID = DB.DATABASE_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_policy_contexts_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_POLICY_CONTEXTS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_POLICY_CONTEXTS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(C.CONTEXT_NAME AS VARCHAR2(128)) AS NAMESPACE,       CAST(C.ATTRIBUTE AS VARCHAR2(128)) AS ATTRIBUTE,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT C       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON C.TENANT_ID = T.TENANT_ID         AND C.TENANT_ID = EFFECTIVE_TENANT_ID()         AND C.TABLE_ID = T.TABLE_ID         AND T.DATABASE_ID = USERENV('SCHEMAID') )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_sec_relevant_cols_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_SEC_RELEVANT_COLS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_SEC_RELEVANT_COLS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,       CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,       CAST(C.COLUMN_NAME AS VARCHAR2(128)) AS SEC_REL_COLUMN,       CAST(DECODE(BITAND(P.STMT_TYPE,4096), 0, 'NONE', 'ALL_ROWS') AS VARCHAR2(8)) AS COLUMN_OPTION,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_SECURITY_COLUMN_REAL_AGENT SC       JOIN         SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P         ON SC.TENANT_ID = P.TENANT_ID         AND SC.TENANT_ID = EFFECTIVE_TENANT_ID()         AND SC.RLS_POLICY_ID = P.RLS_POLICY_ID       LEFT JOIN         SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G         ON SC.TENANT_ID = G.TENANT_ID         AND P.RLS_GROUP_ID = G.RLS_GROUP_ID       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON SC.TENANT_ID = T.TENANT_ID         AND P.TABLE_ID = T.TABLE_ID       JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON SC.TENANT_ID = DB.TENANT_ID         AND T.DATABASE_ID = DB.DATABASE_ID       JOIN         SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C         ON SC.TENANT_ID = C.TENANT_ID         AND P.TABLE_ID = C.TABLE_ID         AND SC.COLUMN_ID = C.COLUMN_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::all_sec_relevant_cols_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_ALL_SEC_RELEVANT_COLS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_SEC_RELEVANT_COLS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OBJECT_OWNER,       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,       CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,       CAST(C.COLUMN_NAME AS VARCHAR2(128)) AS SEC_REL_COLUMN,       CAST(DECODE(BITAND(P.STMT_TYPE,4096), 0, 'NONE', 'ALL_ROWS') AS VARCHAR2(8)) AS COLUMN_OPTION,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_SECURITY_COLUMN_REAL_AGENT SC       JOIN         SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P         ON SC.TENANT_ID = P.TENANT_ID         AND SC.TENANT_ID = EFFECTIVE_TENANT_ID()         AND SC.RLS_POLICY_ID = P.RLS_POLICY_ID       LEFT JOIN         SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G         ON SC.TENANT_ID = G.TENANT_ID         AND P.RLS_GROUP_ID = G.RLS_GROUP_ID       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON SC.TENANT_ID = T.TENANT_ID         AND P.TABLE_ID = T.TABLE_ID         AND (T.DATABASE_ID = USERENV('SCHEMAID')           OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)       JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON SC.TENANT_ID = DB.TENANT_ID         AND T.DATABASE_ID = DB.DATABASE_ID       JOIN         SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C         ON SC.TENANT_ID = C.TENANT_ID         AND P.TABLE_ID = C.TABLE_ID         AND SC.COLUMN_ID = C.COLUMN_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_sec_relevant_cols_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_SEC_RELEVANT_COLS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_SEC_RELEVANT_COLS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(T.TABLE_NAME AS VARCHAR2(128)) AS OBJECT_NAME,       CAST(NVL(G.POLICY_GROUP_NAME, 'SYS_DEFAULT') AS VARCHAR2(128)) AS POLICY_GROUP,       CAST(P.POLICY_NAME AS VARCHAR2(128)) AS POLICY_NAME,       CAST(C.COLUMN_NAME AS VARCHAR2(128)) AS SEC_REL_COLUMN,       CAST(DECODE(BITAND(P.STMT_TYPE,4096), 0, 'NONE', 'ALL_ROWS') AS VARCHAR2(8)) AS COLUMN_OPTION,       CAST('NO' AS VARCHAR2(3)) AS COMMON,       CAST('NO' AS VARCHAR2(3)) AS INHERITED     FROM         SYS.ALL_VIRTUAL_RLS_SECURITY_COLUMN_REAL_AGENT SC       JOIN         SYS.ALL_VIRTUAL_RLS_POLICY_REAL_AGENT P         ON SC.TENANT_ID = P.TENANT_ID         AND SC.TENANT_ID = EFFECTIVE_TENANT_ID()         AND SC.RLS_POLICY_ID = P.RLS_POLICY_ID       LEFT JOIN         SYS.ALL_VIRTUAL_RLS_GROUP_REAL_AGENT G         ON SC.TENANT_ID = G.TENANT_ID         AND P.RLS_GROUP_ID = G.RLS_GROUP_ID       JOIN         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         ON SC.TENANT_ID = T.TENANT_ID         AND P.TABLE_ID = T.TABLE_ID         AND T.DATABASE_ID = USERENV('SCHEMAID')       JOIN         SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C         ON SC.TENANT_ID = C.TENANT_ID         AND P.TABLE_ID = C.TABLE_ID         AND SC.COLUMN_ID = C.COLUMN_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

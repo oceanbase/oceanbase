@@ -110,17 +110,15 @@ select substr(3.14159, 2, 3) from dual;
 +-----------------------+
 explain select substr(3.14159, '2', '3') from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([substr(cast(3.14159, VARCHAR(1048576)), cast('2', BIGINT(-1, 0)), cast('3', BIGINT(-1, 0)))]), filter(nil)
       values({substr(cast(3.14159, VARCHAR(1048576)), cast('2', BIGINT(-1, 0)), cast('3', BIGINT(-1, 0)))})
-
 select substr(3.14159, '2', '2.1') from dual;
 +-----------------------------+
 | substr(3.14159, '2', '2.1') |

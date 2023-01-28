@@ -4415,13 +4415,15 @@ int ObCreateRoutineArg::assign(const ObCreateRoutineArg &other)
   } else {
     db_name_ = other.db_name_;
     is_or_replace_ = other.is_or_replace_;
+    is_need_alter_ = other.is_need_alter_;
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER((ObCreateRoutineArg, ObDDLArg),
                     routine_info_, db_name_,
-                    is_or_replace_, error_info_, dependency_infos_);
+                    is_or_replace_, is_need_alter_,
+                    error_info_, dependency_infos_);
 
 bool ObDropRoutineArg::is_valid() const
 {
@@ -4769,7 +4771,8 @@ OB_SERIALIZE_MEMBER((ObSequenceDDLArg, ObDDLArg),
                     stmt_type_,
                     option_bitset_,
                     seq_schema_,
-                    database_name_);
+                    database_name_,
+                    ignore_exists_error_);
 
 OB_SERIALIZE_MEMBER((ObTablespaceDDLArg, ObDDLArg), schema_, type_);
 DEF_TO_STRING(ObTablespaceDDLArg)
@@ -7320,8 +7323,52 @@ int ObTryAddDepInofsForSynonymBatchArg::assign(const ObTryAddDepInofsForSynonymB
   return ret;
 }
 
+OB_SERIALIZE_MEMBER((ObRlsPolicyDDLArg, ObDDLArg), schema_, ddl_type_, option_bitset_);
+int ObRlsPolicyDDLArg::assign(const ObRlsPolicyDDLArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(schema_.assign(other.schema_))) {
+    LOG_WARN("fail to assign rls policy schema", KR(ret));
+  } else {
+    ddl_type_ = other.ddl_type_;
+    option_bitset_ = other.option_bitset_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObRlsGroupDDLArg, ObDDLArg), schema_, ddl_type_);
+int ObRlsGroupDDLArg::assign(const ObRlsGroupDDLArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(schema_.assign(other.schema_))) {
+    LOG_WARN("fail to assign rls group schema", KR(ret));
+  } else {
+    ddl_type_ = other.ddl_type_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObRlsContextDDLArg, ObDDLArg), schema_, ddl_type_);
+int ObRlsContextDDLArg::assign(const ObRlsContextDDLArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(schema_.assign(other.schema_))) {
+    LOG_WARN("fail to assign rls context schema", KR(ret));
+  } else {
+    ddl_type_ = other.ddl_type_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObTryAddDepInofsForSynonymBatchArg, ObDDLArg),
                     tenant_id_, synonym_ids_);
+
 
 }//end namespace obrpc
 }//end namepsace oceanbase

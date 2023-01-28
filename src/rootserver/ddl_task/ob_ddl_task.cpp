@@ -42,6 +42,8 @@
 #include "storage/tx/ob_ts_mgr.h"
 #include "observer/ob_server_struct.h"
 
+const bool OB_DDL_TASK_ENABLE_TRACING = false;
+
 namespace oceanbase
 {
 using namespace common;
@@ -103,6 +105,487 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
     parent_task_id_(parent_task_id), type_(type), src_table_schema_(src_table_schema), dest_table_schema_(dest_table_schema),
     ddl_arg_(ddl_arg), allocator_(allocator)
 {
+}
+
+void ObDDLTracing::open()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  init_task_span();
+  init_status_span();
+  }
+}
+
+void ObDDLTracing::open_for_recovery()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  restore_span_hierarchy();
+  record_status_span(status_span_);
+  release_span_hierarchy();
+  }
+}
+
+// flush last status span & task span
+void ObDDLTracing::close()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  int ret = OB_SUCCESS;
+  // TODO hanxuan fix MTL_SWITCH
+  MTL_SWITCH(OB_SYS_TENANT_ID) {
+    end_status_span();
+    // flush task span
+    end_task_span();
+  }
+  }
+}
+
+void ObDDLTracing::init_span_id(trace::ObSpanCtx *span)
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  if (OB_NOT_NULL(span) && span->span_id_.high_ == 0) {
+    span->span_id_.low_ = trace::UUID::gen_rand();
+    span->span_id_.high_ = span->start_ts_;
+  }
+  }
+}
+
+trace::ObSpanCtx* ObDDLTracing::restore_parent_task_span()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  trace::ObSpanCtx *span = nullptr;
+  if (!OBTRACE->get_trace_id().is_inited()) {
+    LOG_WARN("trace id not inited!!!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+  } else {
+    // no need to specify start_ts, this is dummy parent, only span id is used by its child
+    span = FLT_RESTORE_DDL_SPAN(ddl_table_redefinition, parent_task_span_id_, 0 /*start_ts*/);
+  }
+  if (OB_ISNULL(span)) {
+    LOG_WARN("restore parent task span return nullptr");
+  }
+  return span;
+  } else {
+    return nullptr;
+  }
+}
+
+void ObDDLTracing::init_task_span()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  trace::ObSpanCtx *span = begin_task_span();
+  record_trace_ctx();
+  record_parent_task_span(span);
+  record_task_span(span);
+  FLT_RELEASE_DDL_SPAN(span);
+  }
+}
+
+trace::ObSpanCtx* ObDDLTracing::begin_task_span()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  const share::ObDDLType task_type = task_->get_task_type();
+  trace::ObSpanCtx *span = nullptr;
+  if (!OBTRACE->get_trace_id().is_inited()) {
+    LOG_WARN("trace id not inited!!!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+  } else {
+    switch (task_type) {
+      case DDL_CREATE_INDEX:
+        span = FLT_BEGIN_SPAN(ddl_build_index);
+        break;
+      case DDL_DROP_INDEX:
+        span = FLT_BEGIN_SPAN(ddl_drop_index);
+        break;
+      case DDL_MODIFY_COLUMN:
+      case DDL_ADD_PRIMARY_KEY:
+      case DDL_ALTER_PRIMARY_KEY:
+      case DDL_ALTER_PARTITION_BY:
+      case DDL_CONVERT_TO_CHARACTER:
+      case DDL_TABLE_REDEFINITION:
+        span = FLT_BEGIN_SPAN(ddl_table_redefinition);
+        break;
+      case DDL_DROP_PRIMARY_KEY:
+        span = FLT_BEGIN_SPAN(ddl_drop_primary_key);
+        break;
+      case DDL_CHECK_CONSTRAINT:
+      case DDL_FOREIGN_KEY_CONSTRAINT:
+      case DDL_ADD_NOT_NULL_COLUMN:
+        span = FLT_BEGIN_SPAN(ddl_constraint);
+        break;
+      case DDL_DROP_COLUMN:
+      case DDL_ADD_COLUMN_OFFLINE:
+      case DDL_COLUMN_REDEFINITION:
+        span = FLT_BEGIN_SPAN(ddl_column_redefinition);
+        break;
+      case DDL_MODIFY_AUTO_INCREMENT:
+        span = FLT_BEGIN_SPAN(ddl_modify_autoinc);
+        break;
+      case DDL_DROP_DATABASE:
+      case DDL_DROP_TABLE:
+      case DDL_TRUNCATE_TABLE:
+      case DDL_DROP_PARTITION:
+      case DDL_DROP_SUB_PARTITION:
+      case DDL_TRUNCATE_PARTITION:
+      case DDL_TRUNCATE_SUB_PARTITION:
+        span = FLT_BEGIN_SPAN(ddl_retry_task);
+        break;
+      default:
+        span = nullptr;
+        LOG_WARN("begin task span return nullptr", K(task_type));
+        break;
+    }
+  }
+  if (OB_NOT_NULL(span)) {
+    init_span_id(span);
+    is_task_span_flushed_ = false;
+  }
+  return span;
+  } else {
+    return nullptr;
+  }
+}
+
+void ObDDLTracing::end_task_span()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  if (!is_task_span_flushed_) {
+    int ret = OB_SUCCESS;
+    FLT_RESTORE_DDL_TRACE_CTX(trace_ctx_);
+    FLT_SET_AUTO_FLUSH(true);
+    task_->flt_set_task_span_tag();
+    // TODO hanxuan fix MTL_SWITCH
+    MTL_SWITCH(OB_SYS_TENANT_ID) {
+      FLT_END_SPAN(task_span_);
+    }
+    is_task_span_flushed_ = true;
+  }
+  }
+}
+trace::ObSpanCtx* ObDDLTracing::restore_task_span()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  const share::ObDDLType task_type = task_->get_task_type();
+  trace::ObSpanCtx *span = nullptr;
+  if (!OBTRACE->get_trace_id().is_inited()) {
+    LOG_WARN("trace id not inited!!!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+  } else {
+    switch (task_type) {
+      case DDL_CREATE_INDEX:
+        span = FLT_RESTORE_DDL_SPAN(ddl_build_index, task_span_id_, task_start_ts_);
+        break;
+      case DDL_DROP_INDEX:
+        span = FLT_RESTORE_DDL_SPAN(ddl_drop_index, task_span_id_, task_start_ts_);
+        break;
+      case DDL_MODIFY_COLUMN:
+      case DDL_ADD_PRIMARY_KEY:
+      case DDL_ALTER_PRIMARY_KEY:
+      case DDL_ALTER_PARTITION_BY:
+      case DDL_CONVERT_TO_CHARACTER:
+      case DDL_TABLE_REDEFINITION:
+        span = FLT_RESTORE_DDL_SPAN(ddl_table_redefinition, task_span_id_, task_start_ts_);
+        break;
+      case DDL_DROP_PRIMARY_KEY:
+        span = FLT_RESTORE_DDL_SPAN(ddl_drop_primary_key, task_span_id_, task_start_ts_);
+        break;
+      case DDL_CHECK_CONSTRAINT:
+      case DDL_FOREIGN_KEY_CONSTRAINT:
+      case DDL_ADD_NOT_NULL_COLUMN:
+        span = FLT_RESTORE_DDL_SPAN(ddl_constraint, task_span_id_, task_start_ts_);
+        break;
+      case DDL_DROP_COLUMN:
+      case DDL_ADD_COLUMN_OFFLINE:
+      case DDL_COLUMN_REDEFINITION:
+        span = FLT_RESTORE_DDL_SPAN(ddl_column_redefinition, task_span_id_, task_start_ts_);
+        break;
+      case DDL_MODIFY_AUTO_INCREMENT:
+        span = FLT_RESTORE_DDL_SPAN(ddl_modify_autoinc, task_span_id_, task_start_ts_);
+        break;
+      case DDL_DROP_DATABASE:
+      case DDL_DROP_TABLE:
+      case DDL_TRUNCATE_TABLE:
+      case DDL_DROP_PARTITION:
+      case DDL_DROP_SUB_PARTITION:
+      case DDL_TRUNCATE_PARTITION:
+      case DDL_TRUNCATE_SUB_PARTITION:
+        span = FLT_RESTORE_DDL_SPAN(ddl_retry_task, task_span_id_, task_start_ts_);
+        break;
+      default:
+        span = nullptr;
+        LOG_WARN("restore task span return nullptr");
+        break;
+    }
+  }
+  return span;
+  } else {
+    return nullptr;
+  }
+}
+
+void ObDDLTracing::init_status_span()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  const share::ObDDLTaskStatus status = static_cast<share::ObDDLTaskStatus>(task_->get_task_status());
+  trace::ObSpanCtx *span = begin_status_span(status);
+  record_status_span(span);
+  FLT_RELEASE_DDL_SPAN(span);
+  }
+}
+
+trace::ObSpanCtx* ObDDLTracing::begin_status_span(const share::ObDDLTaskStatus status)
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  trace::ObSpanCtx* span = nullptr;
+  if (!OBTRACE->get_trace_id().is_inited()) {
+    LOG_WARN("trace id not inited!!! check if init_task_span() is invoked!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+  } else {
+    switch (status) {
+      case ObDDLTaskStatus::PREPARE:
+        span = FLT_BEGIN_SPAN(ddl_prepare);
+        break;
+      case ObDDLTaskStatus::LOCK_TABLE:
+        span = FLT_BEGIN_SPAN(ddl_lock_table);
+        break;
+      case ObDDLTaskStatus::WAIT_TRANS_END:
+      case ObDDLTaskStatus::WAIT_TRANS_END_FOR_WRITE_ONLY:
+      case ObDDLTaskStatus::WAIT_TRANS_END_FOR_UNUSABLE:
+        span = FLT_BEGIN_SPAN(ddl_wait_trans_end);
+        break;
+      case ObDDLTaskStatus::REDEFINITION:
+        span = FLT_BEGIN_SPAN(ddl_redefinition);
+        break;
+      case ObDDLTaskStatus::VALIDATE_CHECKSUM:
+        span = FLT_BEGIN_SPAN(ddl_validate_checksum);
+        break;
+      case ObDDLTaskStatus::COPY_TABLE_DEPENDENT_OBJECTS:
+        span = FLT_BEGIN_SPAN(ddl_copy_table_dependent_objects);
+        break;
+      case ObDDLTaskStatus::TAKE_EFFECT:
+        span = FLT_BEGIN_SPAN(ddl_take_effect);
+        break;
+      case ObDDLTaskStatus::CHECK_CONSTRAINT_VALID:
+        span = FLT_BEGIN_SPAN(ddl_check_constraint_valid);
+        break;
+      case ObDDLTaskStatus::SET_CONSTRAINT_VALIDATE:
+        span = FLT_BEGIN_SPAN(ddl_set_constraint_valid);
+        break;
+      case ObDDLTaskStatus::MODIFY_AUTOINC:
+        span = FLT_BEGIN_SPAN(ddl_modify_autoinc);
+        break;
+      case ObDDLTaskStatus::SET_WRITE_ONLY:
+        span = FLT_BEGIN_SPAN(ddl_set_write_only);
+        break;
+      case ObDDLTaskStatus::SET_UNUSABLE:
+        span = FLT_BEGIN_SPAN(ddl_set_unusable);
+        break;
+      case ObDDLTaskStatus::DROP_SCHEMA:
+        span = FLT_BEGIN_SPAN(ddl_drop_schema);
+        break;
+      case ObDDLTaskStatus::CHECK_TABLE_EMPTY:
+        span = FLT_BEGIN_SPAN(ddl_check_table_empty);
+        break;
+      case ObDDLTaskStatus::FAIL:
+        span = FLT_BEGIN_SPAN(ddl_failure_cleanup);
+        break;
+      case ObDDLTaskStatus::SUCCESS:
+        span = FLT_BEGIN_SPAN(ddl_success);
+        break;
+      default:
+        span = nullptr;
+        LOG_WARN("begin status span return nullptr", K(status));
+        break;
+    }
+    if (OB_NOT_NULL(span)) {
+      init_span_id(span);
+      is_status_span_begin_ = true;
+      is_status_span_end_ = false;
+    }
+  }
+  return span;
+  } else {
+    return nullptr;
+  }
+}
+
+void ObDDLTracing::end_status_span()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  if (!is_status_span_end_) {
+    int ret = OB_SUCCESS;
+    FLT_RESTORE_DDL_TRACE_CTX(trace_ctx_);
+    FLT_SET_AUTO_FLUSH(true);
+    task_->flt_set_status_span_tag();
+    // TODO hanxuan fix MTL_SWITCH
+    MTL_SWITCH(OB_SYS_TENANT_ID) {
+      FLT_END_SPAN(status_span_);
+    }
+    is_status_span_end_ = true;
+    is_status_span_begin_ = false;
+  }
+  }
+}
+
+trace::ObSpanCtx* ObDDLTracing::restore_status_span()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  const int64_t task_status = task_->get_task_status();
+  trace::ObSpanCtx* span = nullptr;
+  if (!OBTRACE->get_trace_id().is_inited()) {
+    LOG_WARN("trace id not inited!!! check if init_task_span() is invoked!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+  } else {
+    switch (task_status) {
+      case ObDDLTaskStatus::PREPARE:
+        span = FLT_RESTORE_DDL_SPAN(ddl_prepare, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::LOCK_TABLE:
+        span = FLT_RESTORE_DDL_SPAN(ddl_lock_table, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::WAIT_TRANS_END:
+      case ObDDLTaskStatus::WAIT_TRANS_END_FOR_WRITE_ONLY:
+      case ObDDLTaskStatus::WAIT_TRANS_END_FOR_UNUSABLE:
+        span = FLT_RESTORE_DDL_SPAN(ddl_wait_trans_end, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::REDEFINITION:
+        span = FLT_RESTORE_DDL_SPAN(ddl_redefinition, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::VALIDATE_CHECKSUM:
+        span = FLT_RESTORE_DDL_SPAN(ddl_validate_checksum, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::COPY_TABLE_DEPENDENT_OBJECTS:
+        span = FLT_RESTORE_DDL_SPAN(ddl_copy_table_dependent_objects, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::TAKE_EFFECT:
+        span = FLT_RESTORE_DDL_SPAN(ddl_take_effect, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::CHECK_CONSTRAINT_VALID:
+        span = FLT_RESTORE_DDL_SPAN(ddl_check_constraint_valid, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::SET_CONSTRAINT_VALIDATE:
+        span = FLT_RESTORE_DDL_SPAN(ddl_set_constraint_valid, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::MODIFY_AUTOINC:
+        span = FLT_RESTORE_DDL_SPAN(ddl_modify_autoinc, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::SET_WRITE_ONLY:
+        span = FLT_RESTORE_DDL_SPAN(ddl_set_write_only, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::SET_UNUSABLE:
+        span = FLT_RESTORE_DDL_SPAN(ddl_set_unusable, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::DROP_SCHEMA:
+        span = FLT_RESTORE_DDL_SPAN(ddl_drop_schema, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::CHECK_TABLE_EMPTY:
+        span = FLT_RESTORE_DDL_SPAN(ddl_check_table_empty, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::FAIL:
+        span = FLT_RESTORE_DDL_SPAN(ddl_failure_cleanup, status_span_id_, status_start_ts_);
+        break;
+      case ObDDLTaskStatus::SUCCESS:
+        span = FLT_RESTORE_DDL_SPAN(ddl_success, status_span_id_, status_start_ts_);
+        break;
+      default:
+        span = nullptr;
+        LOG_WARN("restore status span return nullptr");
+        break;
+    }
+  }
+  return span;
+  } else {
+    return nullptr;
+  }
+}
+
+void ObDDLTracing::restore_span_hierarchy()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  FLT_RESTORE_DDL_TRACE_CTX(trace_ctx_);
+  parent_task_span_ = restore_parent_task_span();
+  task_span_ = restore_task_span();
+  if (is_status_span_begin_) {
+    status_span_ = restore_status_span();
+  } else {
+    const int64_t task_status = task_->get_task_status();
+    status_span_ = begin_status_span((ObDDLTaskStatus)task_status);
+    record_status_span(status_span_);
+  }
+  }
+}
+
+void ObDDLTracing::release_span_hierarchy()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  if (!is_status_span_end_) {
+    FLT_RELEASE_DDL_SPAN(status_span_);
+  }
+  if (!is_task_span_flushed_) {
+    FLT_RELEASE_DDL_SPAN(task_span_);
+  }
+  FLT_RELEASE_DDL_SPAN(parent_task_span_);
+  }
+}
+
+void ObDDLTracing::record_trace_ctx()
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  trace_ctx_.trace_id_ = OBTRACE->get_trace_id();
+  trace_ctx_.span_id_ = OBTRACE->get_root_span_id();
+  trace_ctx_.policy_ = OBTRACE->get_policy();
+  }
+}
+
+void ObDDLTracing::record_parent_task_span(trace::ObSpanCtx *span)
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  if (OB_ISNULL(span)) {
+    // do nothing
+  } else if (OB_ISNULL(span->source_span_)) {
+    parent_task_span_id_ = OBTRACE->get_root_span_id();
+  } else {
+    trace::ObSpanCtx* parent_task_span = span->source_span_;
+    init_span_id(parent_task_span);
+    parent_task_span_id_ = parent_task_span->span_id_;
+  }
+  }
+}
+
+void ObDDLTracing::record_task_span(trace::ObSpanCtx *span)
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  if (OB_ISNULL(span)) {
+    // do nothing
+  } else {
+    task_span_id_ = span->span_id_;
+    task_start_ts_ = span->start_ts_;
+  }
+  }
+}
+
+void ObDDLTracing::record_status_span(trace::ObSpanCtx *span)
+{
+  if (OB_DDL_TASK_ENABLE_TRACING) {
+  if (OB_ISNULL(span)) {
+    // do nothing
+  } else {
+    status_span_id_ = span->span_id_;
+    status_start_ts_ = span->start_ts_;
+  }
+  }
+}
+
+OB_SERIALIZE_MEMBER(ObDDLTracing,
+                    trace_ctx_,
+                    task_span_id_,
+                    status_span_id_,
+                    task_start_ts_,
+                    status_start_ts_,
+                    parent_task_span_id_);
+
+int ObDDLTask::cleanup()
+{
+  int ret = cleanup_impl();
+  if (OB_SUCC(ret)) {
+    // flush span
+    need_retry_ = false;
+    ddl_tracing_.close();
+  }
+  return ret;
 }
 
 ObDDLTaskStatInfo::ObDDLTaskStatInfo()
@@ -305,7 +788,31 @@ int ObDDLTask::convert_to_record(
   return ret;
 }
 
-int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
+int ObDDLTask::update_task_record_status_and_msg(common::ObISQLClient &proxy, const ObDDLTaskStatus real_new_status)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  int64_t pos = 0;
+  ObString msg;
+  const int64_t serialize_param_size = get_serialize_param_size();
+  ObArenaAllocator allocator(lib::ObLabel("DDLTask"));
+  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(serialize_param_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret), K(serialize_param_size));
+  } else if (OB_FAIL(serialize_params_to_message(buf, serialize_param_size, pos))) {
+    LOG_WARN("serialize params to message failed", K(ret));
+  } else {
+    msg.assign(buf, serialize_param_size);
+    if (OB_FAIL(ObDDLTaskRecordOperator::update_status_and_message(
+            proxy, tenant_id_, task_id_, static_cast<int64_t>(real_new_status), msg))) {
+      ret = OB_EAGAIN;
+      LOG_WARN("update task message (child span id & ts) failed", K(ret), K(task_id_));
+    }
+  }
+  return ret;
+}
+
+int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const bool enable_flt, const int ret_code)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -353,13 +860,20 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
       real_new_status = SUCCESS;
     } else if (old_status == new_status) {
       // do nothing
-    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(
-            trans, tenant_id_, task_id_, static_cast<int64_t>(real_new_status)))) {
-      LOG_WARN("update task status failed", K(ret), K(task_id_), K(new_status));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code(trans, tenant_id_, task_id_, ret_code_))) {
-        LOG_WARN("failed to update ret code", K(ret));
+    } else {
+      if (OB_DDL_TASK_ENABLE_TRACING && enable_flt) {
+        ddl_tracing_.end_status_span();
+        if (OB_SUCC(ret)) {
+          ret = update_task_record_status_and_msg(trans, real_new_status);
+        }
+      } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(
+              trans, tenant_id_, task_id_, static_cast<int64_t>(real_new_status)))) {
+        LOG_WARN("update task status failed", K(ret), K(task_id_), K(new_status));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code(trans, tenant_id_, task_id_, ret_code_))) {
+          LOG_WARN("failed to update ret code", K(ret));
+        }
       }
     }
 
@@ -385,7 +899,7 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
 int ObDDLTask::refresh_status()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(switch_status(task_status_, OB_SUCCESS))) {
+  if (OB_FAIL(switch_status(task_status_, false, OB_SUCCESS))) {
     LOG_WARN("refresh status failed", K(ret));
   }
   return ret;
@@ -565,7 +1079,7 @@ int ObDDLTask::wait_trans_end(
 
   // overwrite ret
   if (new_status == next_task_status || OB_FAIL(ret)) {
-    if (OB_FAIL(switch_status(new_status, ret))) {
+    if (OB_FAIL(switch_status(new_status, true, ret))) {
       LOG_WARN("fail to switch task status", K(ret));
     }
   }
@@ -1871,6 +2385,34 @@ int ObDDLTaskRecordOperator::update_message(
     LOG_WARN("assign sql string failed", K(ret), K(message_string));
   } else if (OB_FAIL(proxy.write(tenant_id, sql_string.ptr(), affected_rows))) {
     LOG_WARN("update message of ddl task record failed", K(ret), K(sql_string), K(message_string));
+  } else if (OB_UNLIKELY(affected_rows < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+  }
+  return ret;
+}
+
+int ObDDLTaskRecordOperator::update_status_and_message(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int64_t task_status,
+      ObString &message)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_string;
+  ObSqlString message_string;
+  int64_t affected_rows = 0;
+  if (OB_UNLIKELY(task_id <= 0 || tenant_id <= 0 || task_status <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id), K(tenant_id), K(task_status));
+  } else if (OB_FAIL(to_hex_str(message, message_string))) {
+    LOG_WARN("append hex escaped string failed", K(ret));
+  } else if (OB_FAIL(sql_string.assign_fmt(" UPDATE %s SET status = %ld, message = \"%.*s\"  WHERE task_id = %lu",
+          OB_ALL_DDL_TASK_STATUS_TNAME, task_status, static_cast<int>(message_string.length()), message_string.ptr(), task_id))) {
+    LOG_WARN("assign sql string failed", K(ret), K(task_status), K(task_id));
+  } else if (OB_FAIL(proxy.write(tenant_id, sql_string.ptr(), affected_rows))) {
+    LOG_WARN("update status of ddl task record failed", K(ret), K(sql_string));
   } else if (OB_UNLIKELY(affected_rows < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));

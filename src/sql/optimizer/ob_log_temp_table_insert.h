@@ -33,6 +33,9 @@ public:
   inline void set_temp_table_id(uint64_t temp_table_id) { temp_table_id_ = temp_table_id; }
   uint64_t get_temp_table_id() const { return temp_table_id_; }
   inline common::ObString &get_table_name() { return temp_table_name_; }
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTempTableInsert);
   uint64_t temp_table_id_;

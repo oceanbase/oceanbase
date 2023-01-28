@@ -43,7 +43,8 @@
 #include "sql/ob_sql_trans_util.h"
 #include "share/partition_table/ob_partition_location.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/monitor/full_link_trace/ob_flt_extra_info.h"
+#include "sql/monitor/flt/ob_flt_extra_info.h"
+#include "sql/monitor/flt/ob_flt_utils.h"
 
 namespace oceanbase
 {
@@ -110,6 +111,15 @@ struct ObSessionNLSParams //oracle nls parameters
 class ObExecContext;
 class ObSysVarInPC;
 class ObBasicSessionInfo;
+
+enum ObDisconnectState
+{
+  DIS_INIT,                 // INIT
+  NORMAL_QUIT,              // QUIT.
+  NORMAL_KILL_SESSION,      // KILL SESSION.
+  SERVER_FORCE_DISCONNECT,  // force_disconnect.
+  CLIENT_FORCE_DISCONNECT,  // TCP disconnect.
+};
 
 enum ObSQLSessionState
 {
@@ -638,6 +648,8 @@ public:
   int get_secure_file_priv(common::ObString &v) const;
   int get_sql_safe_updates(bool &v) const;
   int get_sql_notes(bool &sql_notes) const;
+  int get_regexp_stack_limit(int64_t &v) const;
+  int get_regexp_time_limit(int64_t &v) const;
   int update_timezone_info();
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_wrap_.get_time_zone_info(); }
   const common::ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }
@@ -728,8 +740,14 @@ public:
     thread_data_.last_active_time_ = ::oceanbase::common::ObTimeUtility::current_time();
   }
   int64_t get_last_active_time() const { return thread_data_.last_active_time_; }
+  void set_disconnect_state(ObDisconnectState dis_state)
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.dis_state_ = dis_state;
+  }
   int set_session_state(ObSQLSessionState state);
   int check_session_status();
+  ObDisconnectState get_disconnect_state() const { return thread_data_.dis_state_;}
   ObSQLSessionState get_session_state() const { return thread_data_.state_;}
   const char *get_session_state_str()const;
   void set_mysql_cmd(obmysql::ObMySQLCmd mysql_cmd)
@@ -898,7 +916,6 @@ public:
   int clean_all_sys_vars();
   SysVarIncInfo sys_var_inc_info_;
 
-
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   void set_cur_sql_id(char *sql_id);
   int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
@@ -908,6 +925,13 @@ public:
   void get_flt_trace_id(ObString &trace_id) const;
   int set_flt_span_id(ObString span_id);
   int set_flt_trace_id(ObString trace_id);
+  const ObString &get_last_flt_trace_id() const;
+  int set_last_flt_trace_id(const common::ObString &trace_id);
+  bool is_row_traceformat() const { return flt_vars_.row_traceformat_; }
+  void set_is_row_traceformat(bool v) { flt_vars_.row_traceformat_ = v; }
+  bool is_query_trc_granuality() const { return sys_vars_cache_.get_ob_enable_trace_log()?
+                                            true:flt_vars_.trc_granuality_ == ObTraceGranularity::QUERY_LEVEL; }
+  void set_trc_granuality(ObTraceGranularity trc_gra) { flt_vars_.trc_granuality_ = trc_gra; }
   // @pre 系统变量存在的情况下
   // @synopsis 根据变量名，取得这个变量的类型
   // @param var_name
@@ -917,10 +941,9 @@ public:
   // 以下helper函数是为了方便查看某系统变量的值
   int if_aggr_pushdown_allowed(bool &aggr_pushdown_allowed) const;
   int is_transformation_enabled(bool &transformation_enabled) const;
-  int is_use_trace_log(bool &use_trace_log) const
+  bool is_use_trace_log() const
   {
-    use_trace_log = sys_vars_cache_.get_ob_enable_trace_log();
-    return OB_SUCCESS;
+    return sys_vars_cache_.get_ob_enable_trace_log();
   }
   int is_use_transmission_checksum(bool &use_transmission_checksum) const;
   int is_select_index_enabled(bool &select_index_enabled) const;
@@ -972,9 +995,7 @@ public:
   inline ObObjPrintParams create_obj_print_params() const
   {
     ObObjPrintParams res(get_timezone_info(), get_local_collation_connection());
-    if (stmt::T_SHOW_CREATE_VIEW == stmt_type_) {
-      res.is_show_create_view_ = true;
-    }
+    res.print_origin_stmt_ = true;
     return res;
   }
 
@@ -1155,6 +1176,7 @@ public:
     return sys_vars_cache_.get_cursor_sharing_mode() == ObCursorSharingMode::EXACT_MODE;
   }
 
+
   const ObString &get_app_trace_id() const { return app_trace_id_; }
   void set_app_trace_id(common::ObString trace_id) {
     app_trace_id_.assign_ptr(trace_id.ptr(), trace_id.length());
@@ -1166,6 +1188,13 @@ public:
   int get_auto_increment_cache_size(int64_t &auto_increment_cache_size);
   void set_curr_trans_last_stmt_end_time(int64_t t) { curr_trans_last_stmt_end_time_ = t; }
   int64_t get_curr_trans_last_stmt_end_time() const { return curr_trans_last_stmt_end_time_; }
+
+  // for SESSION_SYNC_SYS_VAR serialize and deserialize.
+  int serialize_sync_sys_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, char *buf, const int64_t &buf_len, int64_t &pos);
+  int deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count, const char *buf, const int64_t &data_len, int64_t &pos);
+  int get_sync_sys_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids) const;
+  int get_sync_sys_vars_size(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, int64_t &len) const;
+  bool is_sync_sys_var(share::ObSysVarClassType sys_var_id) const;
 
   // nested session and sql execute for foreign key.
   bool is_nested_session() const { return nested_count_ > 0; }
@@ -1351,6 +1380,7 @@ protected:
                          cur_query_len_(0),
                          cur_statement_id_(0),
                          last_active_time_(0),
+                         dis_state_(DIS_INIT),
                          state_(SESSION_SLEEP),
                          is_interactive_(false),
                          sock_desc_(),
@@ -1385,6 +1415,7 @@ protected:
       cur_query_len_ = 0;
       cur_statement_id_ = 0;
       last_active_time_ = 0;
+      dis_state_ = DIS_INIT;
       state_ = SESSION_SLEEP;
       is_interactive_ = false;
       sock_desc_.clear_sql_session_info();
@@ -1418,6 +1449,7 @@ protected:
     volatile int64_t cur_query_len_;
     uint64_t cur_statement_id_;
     int64_t last_active_time_;
+    ObDisconnectState dis_state_;
     ObSQLSessionState state_;
     bool is_interactive_;
     rpc::ObSqlSockDesc sock_desc_;
@@ -1943,9 +1975,7 @@ private:
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t plan_id_; // for ASH sampling, get current SQL's sql_id & plan_id
 
-  char flt_trace_id_[common::OB_MAX_UUID_LENGTH + 1];
-  char flt_span_id_[common::OB_MAX_UUID_LENGTH + 1];
-
+  ObFLTVars flt_vars_;
   //=======================ObProxy && OCJ related============================
   obmysql::ObMySQLCapabilityFlags capability_;
   obmysql::ObProxyCapabilityFlags proxy_capability_;

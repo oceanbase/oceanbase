@@ -216,19 +216,24 @@ int ObVirtualTableIterator::convert_key_ranges()
     common::ObArray<const ObColumnSchemaV2*> key_cols;
     if (OB_FAIL(get_key_cols(key_cols))) {
       LOG_WARN("failed to get key types", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges_.count(); ++i) {
+    } else if (key_cols.empty() && 1 == key_ranges_.count() && key_ranges_.at(0).is_whole_range()) {
       ObNewRange new_range;
-      new_range.table_id_ = key_ranges_.at(i).table_id_;
-      new_range.border_flag_ = key_ranges_.at(i).border_flag_;
-      if (OB_FAIL(convert_key(key_ranges_.at(i).start_key_, new_range.start_key_, key_cols))) {
-        LOG_WARN("fail to convert start key", K(ret), K(allocator_));
-      } else if (OB_FAIL(convert_key(key_ranges_.at(i).end_key_, new_range.end_key_, key_cols))) {
-        LOG_WARN("fail to convert end key", K(ret), K(allocator_));
-      } else if (OB_FAIL(tmp_range.push_back(new_range))) {
-        LOG_WARN("fail to push back new range", K(ret), K(allocator_));
-      }
-    }//end for
+      new_range.table_id_ = key_ranges_.at(0).table_id_;
+      new_range.set_whole_range();
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges_.count(); ++i) {
+        ObNewRange new_range;
+        new_range.table_id_ = key_ranges_.at(i).table_id_;
+        new_range.border_flag_ = key_ranges_.at(i).border_flag_;
+        if (OB_FAIL(convert_key(key_ranges_.at(i).start_key_, new_range.start_key_, key_cols))) {
+          LOG_WARN("fail to convert start key", K(ret), K(allocator_));
+        } else if (OB_FAIL(convert_key(key_ranges_.at(i).end_key_, new_range.end_key_, key_cols))) {
+          LOG_WARN("fail to convert end key", K(ret), K(allocator_));
+        } else if (OB_FAIL(tmp_range.push_back(new_range))) {
+          LOG_WARN("fail to push back new range", K(ret), K(allocator_));
+        }
+      }//end for
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(saved_key_ranges_.assign(key_ranges_))) {
         LOG_WARN("fail to assign new range", K(ret), K(allocator_));

@@ -129,6 +129,7 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join_rec(ObDMLStmt *s
         LOG_WARN("failed to transform joined table to anti join", K(ret));
       }
     }
+    OPT_TRACE("try transform left join to anti join:", joined_table);
     if (OB_SUCC(ret) && OB_FAIL(transform_left_join_to_anti_join(stmt,
                                                                  joined_table,
                                                                  trans_tables,
@@ -164,6 +165,7 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
     LOG_WARN("failed to check hint valid", K(ret));
   } else if (!is_valid) {
     // do nothing
+    OPT_TRACE("hint disable transform");
   } else if (OB_FAIL(check_can_be_trans(stmt,
                                         stmt->get_condition_exprs(),
                                         joined_table,
@@ -173,8 +175,12 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
     LOG_WARN("failed to extract column conditions", K(ret));
   } else if (!is_valid) {
     // do nothing
+    OPT_TRACE("can not transform");
   } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
     LOG_WARN("failed to add param not null constraints", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(),
+                                                  target_exprs))) {
+    LOG_WARN("failed to remove condition exprs", K(ret));
   } else if (OB_FAIL(construct_trans_table_list(stmt, right_table, trans_tables))) {
     LOG_WARN("failed to construct transformed table list", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), target_exprs))) {
@@ -293,17 +299,13 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
     ObSEArray<ObRawExprPointer, 16> relation_exprs;
     ObSEArray<ObRawExpr *, 4> from_exprs;
     ObSEArray<ObRawExpr *, 4> to_exprs;
-    if (OB_FAIL(stmt->get_relation_exprs(relation_exprs, 
-                                         RelExprCheckerBase::EXTRA_OUTPUT_SCOPE))) { 
-      // bad hack, just used to skip dependent expr
+    if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
       LOG_WARN("failed to get relation exprs", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); ++i) {
       const ColumnItem *col_item = NULL;
       ObRawExpr *from_expr = NULL;
       ObRawExpr *to_expr = NULL;
-      ObSysFunRawExpr *cast_expr = NULL;
-      ObCastMode cm;
       if (OB_ISNULL(col_item = stmt->get_column_item(i)) ||
           OB_ISNULL(from_expr = col_item->expr_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -313,21 +315,13 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
       } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_,
                                                          to_expr))) {
         LOG_WARN("failed to build null expr", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
-                                                           0,    /* result_flag */
-                                                           ctx_->session_info_, cm))) {
-        LOG_WARN("fail to get default cast mode", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
-                                                          to_expr,
-                                                          from_expr->get_result_type(),
-                                                          cast_expr, ctx_->session_info_,
-                                                          false, cm | CM_TO_COLUMN_CS_LEVEL))) {
-        LOG_WARN("failed to cast expr", K(ret), K(*from_expr), K(*to_expr));
-      } else if (OB_ISNULL(to_expr = cast_expr)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace(*ctx_->expr_factory_,
+                                                                from_expr, to_expr,
+                                                                ctx_->session_info_))) {
+        LOG_WARN("failed to add cast for replace", K(ret));
+      } else if (OB_ISNULL(to_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null cast expr", K(ret));
-      } else if (OB_FAIL(to_expr->add_flag(IS_INNER_ADDED_EXPR))) {
-        LOG_WARN("failed to add inner expr flag", K(ret));
       } else if (OB_FAIL(from_exprs.push_back(from_expr))) {
         LOG_WARN("failed to push back from expr", K(ret));
       } else if (OB_FAIL(to_exprs.push_back(to_expr))) {
@@ -552,9 +546,11 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
         JoinedTable *right_joined_table = static_cast<JoinedTable *>(right_table);
         if (is_contain(right_joined_table->single_table_ids_, table_info->table_id_)) {
           is_table_valid = false;
+          OPT_TRACE("right table is dml targe table");
         }
       } else if (table_info->table_id_ == right_table->table_id_) {
         is_table_valid = false;
+        OPT_TRACE("right table is dml target table");
       }
     }
   }

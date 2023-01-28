@@ -108,6 +108,21 @@ using namespace oceanbase::common;
     LOG_WARN("session is NULL", K(ret));                        \
   } else
 
+#define INT32_MAX_DIGITS_LEN   10
+static const int64_t power_of_10[INT32_MAX_DIGITS_LEN] = {
+  1L,
+  10L,
+  100L,
+  1000L,
+  10000L,
+  100000L,
+  1000000L,
+  10000000L,
+  100000000L,
+  1000000000L,
+//2147483647
+};
+
 static OB_INLINE int get_cast_ret(const ObCastMode &cast_mode, int ret, int &warning)
 {
   // compatibility for old ob
@@ -961,7 +976,10 @@ static OB_INLINE int common_string_time(const ObExpr &expr,
   int64_t out_val = 0;
   ObScale res_scale; // useless
   ObScale time_scale = expr.datum_meta_.scale_;
-  if (CAST_FAIL(ObTimeConverter::str_to_time(in_str, out_val, &res_scale, time_scale))) {
+  // support sqlmode TIME_TRUNCATE_FRACTIONAL
+  const ObCastMode cast_mode = expr.extra_;
+  bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
+  if (CAST_FAIL(ObTimeConverter::str_to_time(in_str, out_val, &res_scale, time_scale, need_truncate))) {
     LOG_WARN("str_to_time failed", K(ret), K(in_str));
   } else {
     SET_RES_TIME(out_val);
@@ -1072,8 +1090,11 @@ static OB_INLINE int common_string_datetime(const ObExpr &expr,
   int64_t out_val = 0;
   GET_SESSION()
   {
+    const ObCastMode cast_mode = expr.extra_;
+    bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
     ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(),
-                              ObTimestampType == expr.datum_meta_.type_);
+                              ObTimestampType == expr.datum_meta_.type_,
+                              need_truncate);
     if (lib::is_oracle_mode()) {
       if (OB_FAIL(common_get_nls_format(session, expr.datum_meta_.type_,
                                         CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
@@ -7624,10 +7645,17 @@ int time_scale_check(const ObCastMode &cast_mode,
   UNUSED(warning);
   ObScale scale = accuracy.get_scale();
   int64_t value = in_datum.get_int();
+  // First, judge whether it is inserted or updated(CM_IS_COLUMN_CONVERT), and then judge whether the current sqlmode is truncate(CM_IS_TIME_TRUNCATE_FRACTIONAL)
+  bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
   if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
     LOG_WARN("check usec scale fail.", K(ret), K(value));
   } else if (OB_LIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
-    ObTimeConverter::round_datetime(scale, value);
+    if(need_truncate) {
+      value /= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+      value *= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+    } else {
+      ObTimeConverter::round_datetime(scale, value);
+    }
     res_datum.set_time(value);
   } else {
     res_datum.set_datum(in_datum);
@@ -7687,6 +7715,8 @@ int datetime_scale_check(const ObCastMode &cast_mode,
   UNUSED(type);
   UNUSED(warning);
   ObScale scale = accuracy.get_scale();
+  // First, judge whether it is inserted or updated(CM_IS_COLUMN_CONVERT), and then judge whether the current sqlmode is truncate(CM_IS_TIME_TRUNCATE_FRACTIONAL)
+  bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
   if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
     ret = OB_ERR_TOO_BIG_PRECISION;
     LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST",
@@ -7697,7 +7727,12 @@ int datetime_scale_check(const ObCastMode &cast_mode,
       LOG_WARN("check zero scale fail.", K(ret), K(value), K(scale));
     } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
       int64_t value = in_datum.get_int();
-      ObTimeConverter::round_datetime(scale, value);
+      if(need_truncate) {
+        value /= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+        value *= power_of_10[MAX_SCALE_FOR_TEMPORAL - scale];
+      } else {
+        ObTimeConverter::round_datetime(scale, value);
+      }
       if (ObTimeConverter::is_valid_datetime(value)) {
         res_datum.set_datetime(value);
       } else {

@@ -104,7 +104,8 @@ public:
                      int64_t *avg_len = NULL,
                      int64_t *avg_part_size = NULL,
                      int64_t *macro_block_count = NULL,
-                     int64_t *micro_block_count = NULL);
+                     int64_t *micro_block_count = NULL,
+                     int64_t *last_analyzed = NULL);
 
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t tab_ref_id,
@@ -113,7 +114,8 @@ public:
                      int64_t *row_count = NULL,
                      int64_t *avg_len = NULL,
                      int64_t *avg_part_size = NULL,
-                     int64_t *micro_block_count = NULL);
+                     int64_t *micro_block_count = NULL,
+                     int64_t *last_analyzed = NULL);
 
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t table_id,

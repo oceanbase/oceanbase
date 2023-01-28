@@ -66,30 +66,6 @@ int ObMergeStmt::assign(const ObMergeStmt &other)
   return ret;
 }
 
-int ObMergeStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(table_info_.get_relation_exprs(expr_checker))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  } else if (OB_FAIL(ObDelUpdStmt::inner_get_relation_exprs(expr_checker))) {
-    LOG_WARN("failed to inner get relation expr", K(ret));
-  } else { /*do nothing*/ }
-  return ret;
-}
-
-int ObMergeStmt::replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                                         const common::ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDelUpdStmt::replace_inner_stmt_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else if (OB_FAIL(table_info_.replace_exprs(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else { /*do nothing*/ }
-
-  return ret;
-}
-
 int ObMergeStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
 {
   is_modified = (table_info_.ref_table_id_ == ref_table_id);

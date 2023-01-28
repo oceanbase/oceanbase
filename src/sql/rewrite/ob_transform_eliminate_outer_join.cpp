@@ -64,7 +64,7 @@ int ObTransformEliminateOuterJoin::eliminate_outer_join(ObIArray<ObParentDMLStmt
     LOG_WARN("stmt should not be null", K(ret));
   } else if (stmt->get_joined_tables().empty()) {
     /*do nothing*/
-  } else if (OB_FAIL(stmt->get_equal_set_conditions(conditions, true, SCOPE_WHERE))) {
+  } else if (OB_FAIL(stmt->get_equal_set_conditions(conditions, true))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
   } else if (OB_FAIL(get_extra_condition_from_parent(parent_stmts, stmt, conditions))) {
     LOG_WARN("failed to get null reject select", K(ret));
@@ -120,6 +120,7 @@ int ObTransformEliminateOuterJoin::recursive_eliminate_outer_join_in_table_item(
                                                 is_my_joined_table_type))) {
     LOG_WARN("check joined table type failed", K(ret));
   } else if (is_my_joined_table_type) {
+    OPT_TRACE("try to eliminate joined table:", cur_table_item);
     //子表无法从stmt中查找，只能通过指针转换得到joined_table
     process_join = static_cast<JoinedTable*>(cur_table_item);
     bool is_happened = false;
@@ -359,8 +360,15 @@ int ObTransformEliminateOuterJoin::can_be_eliminated(ObDMLStmt *stmt,
     /*do nothing*/
   } else if (OB_FAIL(can_be_eliminated_with_foreign_primary_join(stmt, joined_table, conditions, can_eliminate))) {
     LOG_WARN("failed to test eliminated condition with foreign primary join", K(ret));
+  } else if (can_eliminate) {
+    /*do nothing*/
+  } else if (OB_FAIL(can_be_eliminated_with_null_side_column_in_aggr(stmt, joined_table, can_eliminate))) {
+    LOG_WARN("failed to test eliminated condition with aggr null column", K(ret));
   } else {
     /*do nothing*/
+  }
+  if (OB_SUCC(ret)) {
+    OPT_TRACE("joined table will be eliminated:", can_eliminate);
   }
   return ret;
 }
@@ -380,6 +388,7 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_null_reject(ObDMLStmt 
     LOG_WARN("params have null", K(ret), K(stmt), K(joined_table));
   } else if (INNER_JOIN == joined_table->joined_type_) {
     has_null_reject = true;
+    OPT_TRACE("inner join will be eliminated");
   } else if (OB_ISNULL(right_table = joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("right table is null", K(ret));
@@ -399,7 +408,12 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_null_reject(ObDMLStmt 
                                                                   col_exprs,
                                                                   has_null_reject))) {
       LOG_WARN("failed to check whether the condition is null rejection", K(ret));
-    } else { /* do nothing */ }
+    } else if (has_null_reject) {
+      OPT_TRACE("joined table eliminated by", condition);
+    }
+  }
+  if (!has_null_reject) {
+    OPT_TRACE("there is no null reject condition, joined table will not be eliminated");
   }
   return ret;
 }
@@ -427,6 +441,7 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_foreign_primary_join(O
     LOG_WARN("params have null", K(ret), K(stmt), K(joined_table));
   } else if (INNER_JOIN == joined_table->joined_type_) {
     can_eliminate = true;
+    OPT_TRACE("inner join will be eliminated");
   } else if (!joined_table->left_table_->is_basic_table() || !joined_table->right_table_->is_basic_table()) {
     /*do nothing*/
   } else if (OB_FAIL(is_simple_join_condition(joined_table->join_conditions_,
@@ -436,6 +451,7 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_foreign_primary_join(O
     LOG_WARN("check is simple join condition failed", K(ret));
   } else if (!is_simple_condition) {
     /*on condition不是简单的列相等连接，不能消除，do nothing*/
+    OPT_TRACE("on condition is not simply join condition");
   } else if (OB_FAIL(stmt->get_table_rel_ids(*(joined_table->left_table_),left_table_ids))) {
     LOG_WARN("failed to get left table rel ids", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*(joined_table->right_table_), right_table_ids))) {
@@ -462,15 +478,18 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_foreign_primary_join(O
     LOG_WARN("failed to check foreign primary join", K(ret));
   } else if (!is_foreign_primary_join || is_first_table_parent) {
     /*不是主外键连接，或者外键表不是左表，不能消除，do nothing*/
+    OPT_TRACE("not foreign primary join");
   } else if (OB_FAIL(ObTransformUtils::is_foreign_key_rely(ctx_->session_info_,
                                                             foreign_key_info,
                                                             is_foreign_rely))) {
     LOG_WARN("can not get foreign key info", K(ret));
   } else if (!is_foreign_rely) {
     /*非可靠主外键关系，不能消除，do nothing*/
+    OPT_TRACE("foreign key is not rely");
   } else if (OB_UNLIKELY(!joined_table->right_table_->access_all_part())) {
     /*右表有partition hint，不可消除*/
     /*TODO zhenling.zzg 之后可以完善对于父表、子表均有partition hint的情况*/
+    OPT_TRACE("right table has parition hint");
   } else if (OB_FAIL(is_all_columns_not_null(stmt, left_col_exprs, conditions,
                                              is_all_foreign_columns_not_null))) {
     LOG_WARN("check foreign columns is not null failed", K(ret));
@@ -478,9 +497,11 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_foreign_primary_join(O
     can_eliminate = true;
   } else {
     can_eliminate = false;
+    OPT_TRACE("foreign key has null columns");
   }
   return ret;
 }
+
 
 int ObTransformEliminateOuterJoin::is_all_columns_not_null(ObDMLStmt *stmt,
                                                           const ObIArray<const ObRawExpr *> &col_exprs,
@@ -672,6 +693,93 @@ int ObTransformEliminateOuterJoin::get_extra_condition_from_parent(ObIArray<ObPa
         } else if (has_null_reject && OB_FAIL(conditions.push_back(select_expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformEliminateOuterJoin::can_be_eliminated_with_null_side_column_in_aggr(ObDMLStmt *stmt,
+                                                                                   JoinedTable *joined_table,
+                                                                                   bool &can_eliminate)
+{
+  int ret= OB_SUCCESS;
+  ObSelectStmt* select_stmt = NULL;
+  can_eliminate = false;
+  ObSqlBitSet<> right_table_ids;
+  TableItem* right_table = NULL;
+  ObSEArray<const ObRawExpr *, 8> right_col_exprs;
+
+  if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) || OB_ISNULL(ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("params have null", K(ret), K(stmt), K(joined_table));
+  } else if (!stmt->is_select_stmt()) {
+    /*do nothing*/
+  } else if (OB_FALSE_IT(select_stmt = static_cast<ObSelectStmt*>(stmt))) {
+    /*do nothing*/
+  } else if (!select_stmt->is_scala_group_by()) {
+    /*do nothing*/
+  } else if (!joined_table->is_left_join()) {
+    /*do nothing*/
+  } else if (OB_ISNULL(right_table = joined_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get right join item failed", K(ret));
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*right_table, right_table_ids))) {
+    LOG_WARN("failed to get right table relation ids", K(ret));
+  } else {
+    can_eliminate = true;
+
+    if (!is_only_full_group_by_on(ctx_->session_info_->get_sql_mode())) {
+      for (int64_t i = 0; OB_SUCC(ret) && can_eliminate && i < select_stmt->get_select_item_size(); ++i) {
+        if (OB_FAIL(check_expr_ref_column_all_in_aggr(select_stmt->get_select_item(i).expr_, can_eliminate))) {
+          LOG_WARN("check expr ref column all in aggr failed", K(ret));
+        }
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && can_eliminate && i < select_stmt->get_aggr_item_size(); ++i) {
+      ObAggFunRawExpr *aggr_expr = select_stmt->get_aggr_item(i);
+      right_col_exprs.reuse();
+
+      if (OB_ISNULL(aggr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (aggr_expr->get_expr_type() != T_FUN_COUNT &&
+                 aggr_expr->get_expr_type() != T_FUN_MIN &&
+                 aggr_expr->get_expr_type() != T_FUN_MAX &&
+                 aggr_expr->get_expr_type() != T_FUN_SUM) {
+        can_eliminate = false;
+      } else if (!aggr_expr->has_flag(CNT_COLUMN)) {
+        can_eliminate = false;
+      } else if (OB_FAIL(extract_columns(aggr_expr, right_table_ids, right_col_exprs))) {
+        LOG_WARN("failed to extract columns", K(ret));
+      } else {
+        for (int64_t param_index = 0; OB_SUCC(ret) && can_eliminate && param_index < aggr_expr->get_real_param_count(); param_index++) {
+          if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(aggr_expr->get_real_param_exprs().at(param_index), right_col_exprs, can_eliminate))) {
+            LOG_WARN("failed to call is_null_propagate_expr", K(ret));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTransformEliminateOuterJoin::check_expr_ref_column_all_in_aggr(const ObRawExpr *expr, bool &is_in) {
+  int ret = OB_SUCCESS;
+  is_in = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->is_column_ref_expr()) {
+    is_in = false;
+  } else if (expr->is_aggr_expr()) {
+    // do nothing
+  } else if (expr->has_flag(CNT_COLUMN)) {
+    for (int64_t i = 0; OB_SUCC(ret) && is_in && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_expr_ref_column_all_in_aggr(expr->get_param_expr(i), is_in)))) {
+        LOG_WARN("failed to check expr ref column all in aggr", K(ret));
       }
     }
   }

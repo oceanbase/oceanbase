@@ -145,8 +145,8 @@ int ObDmlCgService::generate_lock_ctdef(ObLogForUpdate &op,
   if (OB_ISNULL(lock_ctdef = lock_ctdef_allocator.alloc())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate lock ctdef failed", K(ret));
-  } else if (OB_FAIL(convert_old_row_exprs(index_dml_info.column_exprs_, old_row))) {
-    LOG_WARN("convert lock old row exprs failed", K(ret), K(index_dml_info.column_exprs_));
+  } else if (OB_FAIL(old_row.assign(index_dml_info.column_old_values_exprs_))) {
+    LOG_WARN("fail to assign lock old row", K(ret));
   } else if (OB_FAIL(generate_dml_base_ctdef(op,
                                              index_dml_info,
                                              *lock_ctdef,
@@ -273,9 +273,8 @@ int ObDmlCgService::generate_delete_ctdef(ObLogDelUpd &op,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 64> old_row;
   ObSEArray<ObRawExpr*, 64> new_row;
-  LOG_TRACE("begin to generate delete ctdef", K(index_dml_info));
-  if (OB_FAIL(convert_old_row_exprs(index_dml_info.column_exprs_, old_row))) {
-    LOG_WARN("convert delete old row exprs failed", K(ret), K(index_dml_info.column_exprs_));
+  if (OB_FAIL(old_row.assign(index_dml_info.column_old_values_exprs_))) {
+    LOG_WARN("fail to assign delete old row", K(ret));
   } else if (OB_FAIL(generate_dml_base_ctdef(op, index_dml_info,
                                              del_ctdef,
                                              ObTriggerEvents::get_delete_event(),
@@ -355,8 +354,8 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
   const ObAssignments &assigns = index_dml_info.assignments_;
   bool gen_expand_ctdef = false;
   LOG_TRACE("begin to generate update ctdef", K(index_dml_info));
-  if (OB_FAIL(convert_old_row_exprs(index_dml_info.column_exprs_, old_row))) {
-    LOG_WARN("convert update old row exprs failed", K(ret), K(index_dml_info.column_exprs_));
+  if (OB_FAIL(old_row.assign(index_dml_info.column_old_values_exprs_))) {
+    LOG_WARN("fail to assign update old row", K(ret));
   } else if (OB_FAIL(new_row.assign(old_row))) {
     LOG_WARN("assign new row failed", K(ret));
   } else if (OB_FAIL(append(full_row, old_row))) {
@@ -521,6 +520,33 @@ int ObDmlCgService::get_table_rowkey_exprs(const IndexDMLInfo &index_dml_info,
   return ret;
 }
 
+// for virtual generated column.
+int ObDmlCgService::adjust_unique_key_exprs(ObIArray<ObRawExpr*> &unique_key_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRawExpr*> tmp_exprs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < unique_key_exprs.count(); ++i) {
+    ObRawExpr *expr = unique_key_exprs.at(i);
+    if (expr->is_column_ref_expr() &&
+      static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column()) {
+      // do nothing.
+      ObRawExpr *tmp_expr = static_cast<ObColumnRefRawExpr *>(expr)->get_dependant_expr();
+      if (OB_FAIL(add_var_to_array_no_dup(tmp_exprs, tmp_expr))) {
+        LOG_WARN("failed to add param expr", K(ret));
+      }
+    } else {
+      if (OB_FAIL(add_var_to_array_no_dup(tmp_exprs, expr))) {
+        LOG_WARN("failed to add param expr", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(unique_key_exprs.assign(tmp_exprs))) {
+    LOG_WARN("failed to remove generated column exprs", K(ret));
+  }
+  return ret;
+}
+
 int ObDmlCgService::get_table_unique_key_exprs(ObLogDelUpd &op,
                                                const IndexDMLInfo &index_dml_info,
                                                ObIArray<ObRawExpr*> &unique_key_exprs)
@@ -534,6 +560,8 @@ int ObDmlCgService::get_table_unique_key_exprs(ObLogDelUpd &op,
   } else if (is_heap_table) {
     if (OB_FAIL(get_heap_table_part_exprs(op, index_dml_info, unique_key_exprs))) {
       LOG_WARN("get heap table part exprs failed", K(ret), K(index_dml_info));
+    } else if (OB_FAIL(adjust_unique_key_exprs(unique_key_exprs))){
+      LOG_WARN("fail to adjust unique key exprs", K(ret));
     }
   }
 
@@ -732,7 +760,7 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
     ObExpr *rt_part_id_expr = NULL;
     ObSEArray<ObRawExpr *, 4> constraint_dep_exprs;
     ObSEArray<ObRawExpr *, 4> constraint_raw_exprs;
-    if (OB_ISNULL(part_id_expr_for_lookup = index_dml_info.old_part_id_expr_)) {
+    if (OB_ISNULL(part_id_expr_for_lookup = index_dml_info.lookup_part_id_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("part_id_expr for lookup is null", K(ret), K(index_dml_info));
     } else if (OB_FAIL(cg_.generate_calc_part_id_expr(*part_id_expr_for_lookup, nullptr, rt_part_id_expr))) {
@@ -793,7 +821,10 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
       if (OB_ISNULL(col_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("col_expr is null", K(ret));
-      } else if (is_shadow_column(col_expr->get_column_id())) {
+      } else if (is_shadow_column(col_expr->get_column_id())
+          || col_expr->is_virtual_generated_column()) {
+        LOG_DEBUG("constraint exprs", K(is_shadow_column(col_expr->get_column_id())),
+                  K(col_expr->is_virtual_generated_column()));
         // for shadow_pk
         ObRawExpr *spk_expr = col_expr->get_dependant_expr();
         if (OB_ISNULL(spk_expr)) {
@@ -865,8 +896,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
   } else if (OB_FAIL(schema_guard->get_schema_guard()->get_schema_version(
       TABLE_SCHEMA, tenant_id, ref_table_id, scan_ctdef.schema_version_))) {
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K(ref_table_id));
-  } else if (OB_FAIL(convert_old_row_exprs(index_dml_info.column_exprs_, access_exprs))) {
-    LOG_WARN("convert old row exprs failed", K(ret));
+  } else if (FALSE_IT(access_exprs.assign(index_dml_info.column_old_values_exprs_))) {
+    // do nothing
   } else if (OB_FAIL(cg_.generate_rt_exprs(access_exprs,
                                            scan_ctdef.pd_expr_spec_.access_exprs_))) {
     LOG_WARN("fail to generate rt exprs ", K(ret));
@@ -1736,17 +1767,33 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
         LOG_WARN("failed to get trigger info", K(ret), K(tenant_id));
       } else if (OB_ISNULL(trigger_info)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("trigger info is null", K(ret));
+        LOG_WARN("trigger info is null", K(tenant_id), K(trigger_id), K(ret));
       } else if (trigger_info->is_enable()) {
         // if disable trigger, use the previous plan cache, whether trigger is enable ???
         need_fire = trigger_info->has_event(dml_event);
-        if (need_fire && !is_instead_of && op_type == PHY_UPDATE) {
+        if (OB_SUCC(ret) && need_fire && !trigger_info->get_ref_trg_name().empty()) {
+          const ObTriggerInfo *ref_trigger_info = NULL;
+          uint64_t ref_db_id = OB_INVALID_ID;
+          OZ (schema_guard->get_database_id(tenant_id, trigger_info->get_ref_trg_db_name(), ref_db_id));
+          OZ (schema_guard->get_trigger_info(tenant_id, ref_db_id, trigger_info->get_ref_trg_name(),
+                                             ref_trigger_info));
+          if (OB_SUCC(ret) && NULL == ref_trigger_info) {
+            ret = OB_ERR_TRIGGER_NOT_EXIST;
+            LOG_WARN("ref_trigger_info is NULL", K(trigger_info->get_ref_trg_db_name()),
+                     K(trigger_info->get_ref_trg_name()), K(ret));
+            if (lib::is_oracle_mode()) {
+              LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trigger_info->get_ref_trg_name().length(),
+                                    trigger_info->get_ref_trg_name().ptr());
+            }
+          }
+        }
+        if (OB_SUCC(ret) && need_fire && !is_instead_of && op_type == PHY_UPDATE) {
           OZ (need_fire_update_event(*table_schema, trigger_info->get_update_columns(),
                                     static_cast<ObLogUpdate &>(log_op), *session,
                                     log_plan->get_optimizer_context().get_allocator(),
                                     need_fire));
         }
-        if (need_fire) {
+        if (OB_SUCC(ret) && need_fire) {
           OZ (trigger_infos.push_back(trigger_info));
         }
         OX (LOG_DEBUG("TRIGGER", K(trigger_info->get_trigger_name()), K(need_fire), K(is_instead_of)));
@@ -1761,6 +1808,12 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
         expectd_col_cnt = dml_stmt->get_instead_of_trigger_column_count();
       }
       trig_ctdef.tg_event_ = dml_event;
+      ObTriggerInfo::ActionOrderComparator action_order_com;
+      std::sort(trigger_infos.begin(), trigger_infos.end(), action_order_com);
+      if (OB_FAIL(action_order_com.get_ret())) {
+        ret = common::OB_ERR_UNEXPECTED;
+        LOG_WARN("sort error", K(ret));
+      }
       OZ (trig_ctdef.trig_col_info_.init(expectd_col_cnt));
       OZ (trig_ctdef.tg_args_.init(trigger_infos.count()));
       for (int64_t i = 0; OB_SUCC(ret) && i < trigger_infos.count(); i++) {

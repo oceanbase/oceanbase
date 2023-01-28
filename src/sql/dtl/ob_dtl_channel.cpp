@@ -47,6 +47,7 @@ ObDtlChannel::ObDtlChannel(uint64_t id, const common::ObAddr &peer)
       compressor_type_(common::ObCompressorType::NONE_COMPRESSOR),
       owner_mod_(DTLChannelOwner::INVALID_OWNER),
       thread_id_(0),
+      enable_channel_sync_(false),
       prev_link_(nullptr),
       next_link_(nullptr)
 {

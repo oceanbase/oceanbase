@@ -56,7 +56,6 @@ private:
   int clear_info(ObRawExpr &expr);
   int pull_info(ObRawExpr &expr);
   int add_const(ObRawExpr &expr);
-  bool not_calculable_expr(const ObRawExpr &expr);
 
   ObItemType get_subquery_comparison_type(ObItemType cmp_type) const;
   // data members

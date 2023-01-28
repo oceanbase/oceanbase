@@ -106,6 +106,9 @@ public:
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
   virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
+  virtual void flt_set_task_span_tag() const override;
+  virtual void flt_set_status_span_tag() const override;
+  virtual int cleanup_impl() override;
 private:
   int hold_snapshot(const int64_t snapshot_version);
   int release_snapshot(const int64_t snapshot_version);
@@ -120,7 +123,6 @@ private:
   int set_constraint_validated();
   int set_new_not_null_column_validate();
   int remove_task_record();
-  int cleanup();
   int report_error_code();
   int report_check_constraint_error_code();
   int report_foreign_key_constraint_error_code();

@@ -136,7 +136,6 @@ class ObSQLSessionMgr;
 class ObSQLSessionInfo;
 class ObIVirtualTableIteratorFactory;
 class ObRawExpr;
-class planText;
 class ObSQLSessionInfo;
 
 class ObSelectStmt;
@@ -489,6 +488,7 @@ public:
   common::ObIArray<ObPCParamEqualInfo> *all_equal_param_constraints_;
   common::ObDList<ObPreCalcExprConstraint> *all_pre_calc_constraints_;
   common::ObIArray<ObExprConstraint> *all_expr_constraints_;
+  common::ObIArray<ObPCPrivInfo> *all_priv_constraints_;
   bool is_ddl_from_primary_;//备集群从主库同步过来需要处理的ddl sql语句
   const sql::ObStmt *cur_stmt_;
   const ObPhysicalPlan *cur_plan_;
@@ -635,6 +635,7 @@ public:
   common::ObSArray<ObPCParamEqualInfo, common::ModulePageAllocator, true> all_equal_param_constraints_;
   common::ObDList<ObPreCalcExprConstraint> all_pre_calc_constraints_;
   common::ObSArray<ObExprConstraint, common::ModulePageAllocator, true> all_expr_constraints_;
+  common::ObSArray<ObPCPrivInfo, common::ModulePageAllocator, true> all_priv_constraints_;
   common::ObSArray<ObUserVarIdentRawExpr *, common::ModulePageAllocator, true> all_user_variable_;
   common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> calculable_expr_results_;
   bool has_udf_;

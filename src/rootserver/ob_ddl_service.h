@@ -904,6 +904,12 @@ public:
   int drop_directory(const obrpc::ObDropDirectoryArg &arg, const ObString *ddl_stmt_str);
   //----End of functions for directory object----
 
+  //----Functions for managing row level security----
+  int handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg);
+  int handle_rls_group_ddl(const obrpc::ObRlsGroupDDLArg &arg);
+  int handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg);
+  //----End of functions for managing row level security----
+
   // refresh local schema busy wait
   virtual int refresh_schema(const uint64_t tenant_id);
   // notify other servers to refresh schema (call switch_schema  rpc)
@@ -946,6 +952,11 @@ public:
                                         share::schema::ObTableSchema &new_table_schema,
                                         ObDDLOperator &ddl_operator,
                                         ObMySQLTransaction &trans);
+  int adjust_trigger_action_order(share::schema::ObSchemaGetterGuard &schema_guard,
+                                  ObDDLSQLTransaction &trans,
+                                  ObDDLOperator &ddl_operator,
+                                  ObTriggerInfo &trigger_info,
+                                  bool is_create_trigger);
 
   // only push schema version, and publish schema
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);
@@ -961,6 +972,10 @@ public:
   int delete_constraint_update_new_table(
       const AlterTableSchema &alter_table_schema,
       ObTableSchema &new_table_schema);
+  int update_new_table_rls_flag(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const common::ObIArray<int64_t> &drop_cols_id_arr,
+      ObTableSchema &table_schema);
   int drop_column_update_new_table(
       const ObTableSchema &origin_table_schema,
       ObTableSchema &new_table_schema,
@@ -1304,6 +1319,12 @@ private:
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &hidden_table_schema);
   int rebuild_hidden_table_priv(
+      const share::schema::ObTableSchema &orig_table_schema,
+      const share::schema::ObTableSchema &hidden_table_schema,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans);
+  int rebuild_hidden_table_rls_objects(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       share::schema::ObSchemaGetterGuard &schema_guard,

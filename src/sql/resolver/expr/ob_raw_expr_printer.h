@@ -76,6 +76,19 @@ class ObRawExprPrinter
     }                                 \
   } while (0)                          \
 
+#define PRINT_QUOT                    \
+  do {                                \
+    if (lib::is_oracle_mode()) {      \
+      DATA_PRINTF("\"");              \
+    } else {                          \
+      DATA_PRINTF("`");               \
+    }                                 \
+  } while (0);
+
+#define PRINT_QUOT_WITH_SPACE \
+  DATA_PRINTF(" ");           \
+  PRINT_QUOT;
+
 // cast函数在parse阶段用到这两个宏, 但定义在sql_parse_tab.c中
 // cast函数功能不完善，beta之前不会修改, 先定义在这里
 // TODO@nijia.nj
@@ -107,6 +120,7 @@ private:
   int print(ObSetOpRawExpr *expr);
   int print(ObAggFunRawExpr *expr);
   int print(ObSysFunRawExpr *expr);
+  int print_translate(ObSysFunRawExpr *expr);
   int print(ObUDFRawExpr *expr);
   int print(ObWinFunRawExpr *expr);
   int print(ObPseudoColumnRawExpr *expr);

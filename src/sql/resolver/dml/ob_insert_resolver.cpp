@@ -667,7 +667,6 @@ int ObInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr *column_re
       value_desc->set_column_flags(column_ref->get_column_flags());
       value_desc->set_dependant_expr(const_cast<ObRawExpr *>(column_ref->get_dependant_expr()));
       value_desc->set_ref_id(stmt->get_insert_table_info().table_id_, column_ref->get_column_id());
-      value_desc->set_expr_level(current_level_);
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
       if (ob_is_enumset_tc(column_ref->get_result_type().get_type ())
           && OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {

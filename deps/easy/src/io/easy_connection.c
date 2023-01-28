@@ -1610,6 +1610,7 @@ void easy_connection_on_readable(struct ev_loop *loop, ev_io *w, int revents)
                         easy_error_log("Failed to do response on client, conn(%p).", c);
                     }
                 }
+                c->status = EASY_CONN_CLOSE_BY_PEER;
             } else {
                 c->conn_has_error = 1;
                 easy_info_log("Failed to read from connection(%p), n(%d).", c, n);

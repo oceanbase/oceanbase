@@ -920,6 +920,45 @@ public:
                                       common::ObIArray<const ObDirectorySchema *> &directory_schemas);
   // directory function end
 
+  // rls function begin
+  int get_rls_policy_schema_by_name(const uint64_t tenant_id,
+                                    const uint64_t table_id,
+                                    const uint64_t rls_group_id,
+                                    const common::ObString &name,
+                                    const ObRlsPolicySchema *&schema);
+  int get_rls_policy_schema_by_id(const uint64_t tenant_id,
+                                  const uint64_t rls_policy_id,
+                                  const ObRlsPolicySchema *&schema);
+  int get_rls_policy_schemas_in_group(const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      const uint64_t rls_group_id,
+                                      common::ObIArray<const ObRlsPolicySchema *> &schemas);
+  int get_rls_policy_schemas_in_table(const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      common::ObIArray<const ObRlsPolicySchema *> &schemas);
+  int get_rls_group_schema_by_name(const uint64_t tenant_id,
+                                   const uint64_t table_id,
+                                   const common::ObString &name,
+                                   const ObRlsGroupSchema *&schema);
+  int get_rls_group_schema_by_id(const uint64_t tenant_id,
+                                 const uint64_t rls_group_id,
+                                 const ObRlsGroupSchema *&schema);
+  int get_rls_group_schemas_in_table(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     common::ObIArray<const ObRlsGroupSchema *> &schemas);
+  int get_rls_context_schema_by_name(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const common::ObString &name,
+                                     const common::ObString &attribute,
+                                     const ObRlsContextSchema *&schema);
+  int get_rls_context_schema_by_id(const uint64_t tenant_id,
+                                   const uint64_t rls_context_id,
+                                   const ObRlsContextSchema *&schema);
+  int get_rls_context_schemas_in_table(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       common::ObIArray<const ObRlsContextSchema *> &schemas);
+  // rls function end
+
   int check_user_exist(const uint64_t tenant_id,
                        const common::ObString &user_name,
                        const common::ObString &host_name,

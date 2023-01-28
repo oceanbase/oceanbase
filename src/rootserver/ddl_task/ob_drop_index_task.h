@@ -40,13 +40,15 @@ public:
   virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, KP_(root_service));
+  virtual void flt_set_task_span_tag() const override;
+  virtual void flt_set_status_span_tag() const override;
+  virtual int cleanup_impl() override;
 private:
   int check_switch_succ();
 
   int prepare(const share::ObDDLTaskStatus new_status);
   int set_write_only(const share::ObDDLTaskStatus new_status);
   int set_unusable(const share::ObDDLTaskStatus new_status);
-  int cleanup();
   int update_index_status(const share::schema::ObIndexStatus new_status);
   int drop_index_impl();
   int drop_index(const share::ObDDLTaskStatus new_status);

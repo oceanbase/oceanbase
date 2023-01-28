@@ -296,8 +296,7 @@ int OB_INLINE ObExprOperator::cast_operand_type(common::ObObj &res_obj,
           cast_ctx,
           res_obj,
           tmp_obj))) {
-        LOG_WARN("fail to convert type", K(ret),
-            K(res_type.get_calc_type()), K(res_obj));
+        LOG_WARN("fail to convert type", K(ret), K(res_type.get_calc_type()));
       } else {
         res_obj = tmp_obj;
       }

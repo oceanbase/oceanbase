@@ -73,7 +73,7 @@ int ObMPStmtClose::process()
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session->get_sessid());
     LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_sessid()));
-    if (OB_FAIL(ObMPUtils::init_flt_info(pkt.get_extra_info(), *session,
+    if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), *session,
                      get_conn()->proxy_cap_flags_.is_full_link_trace_support()))) {
       LOG_WARN("failed to init flt extra info", K(ret));
     }

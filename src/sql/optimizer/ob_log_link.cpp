@@ -81,19 +81,25 @@ int ObLogLink::print_link_stmt(char *buf, int64_t buf_len)
   return ret;
 }
 
-int ObLogLink::print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type)
+int ObLogLink::get_plan_item_info(PlanText &plan_text,
+                                  ObSqlPlanItem &plan_item)
 {
-  UNUSED(type);
   int ret = OB_SUCCESS;
-  int64_t len = 0;
-  if (type != EXPLAIN_BASIC && OB_FAIL(BUF_PRINTF(", dblink_id=%lu,", get_dblink_id()))) {
-    LOG_WARN("BUF_PRINTF failed", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      link_stmt="))) {
-    LOG_WARN("BUF_PRINTF failed", K(ret));
-  } else if (OB_FAIL(print_link_stmt(buf + pos, buf_len - pos))) {
-    LOG_WARN("failed to print link stmt", K(ret));
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
   } else {
-    pos += stmt_fmt_len_;
+    BEGIN_BUF_PRINT;
+    if (false && OB_FAIL(BUF_PRINTF(",dblink_id=%lu,", get_dblink_id()))) { // explain basic will print dlbink id, dblink id will change every time when case run
+      LOG_WARN("BUF_PRINTF failed", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("link_stmt="))) {
+      LOG_WARN("BUF_PRINTF failed", K(ret));
+    } else if (OB_FAIL(print_link_stmt(buf + pos, buf_len - pos))) {
+      LOG_WARN("failed to print link stmt", K(ret));
+    } else {
+      pos += stmt_fmt_len_;
+    }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }

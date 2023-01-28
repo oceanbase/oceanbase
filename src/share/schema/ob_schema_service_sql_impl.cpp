@@ -118,6 +118,14 @@
 #define FETCH_ALL_TENANT_CONTEXT_HISTORY_SQL              COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_TENANT_MOCK_FK_PARENT_TABLE_HISTORY_SQL COMMON_SQL_WITH_TENANT
 
+#define FETCH_ALL_RLS_POLICY_HISTORY_SQL                  COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_RLS_GROUP_HISTORY_SQL                   COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_RLS_CONTEXT_HISTORY_SQL                 COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_RLS_SEC_COLUMN_HISTORY_SQL              COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_CASCADE_OBJECT_ID_HISTORY_SQL "SELECT %s object_id, is_deleted FROM %s " \
+    "WHERE tenant_id = %lu AND %s = %lu AND schema_version <= %lu " \
+    "ORDER BY object_id desc, schema_version desc"
+
 // foreign key begin
 #define FETCH_ALL_FOREIGN_KEY_SQL \
   "SELECT * FROM %s WHERE tenant_id = %lu"
@@ -254,6 +262,7 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       dblink_service_(*this),
       directory_service_(*this),
       context_service_(*this),
+      rls_service_(*this),
       cluster_schema_status_(ObClusterSchemaStatus::NORMAL_STATUS),
       gen_schema_version_map_(),
       schema_service_(NULL)
@@ -1221,6 +1230,9 @@ GET_ALL_SCHEMA_FUNC_DEFINE(audit, ObSAuditSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(sys_priv, ObSysPriv);
 GET_ALL_SCHEMA_FUNC_DEFINE(obj_priv, ObObjPriv);
 GET_ALL_SCHEMA_FUNC_DEFINE(directory, ObDirectorySchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(rls_policy, ObRlsPolicySchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(rls_group, ObRlsGroupSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(rls_context, ObRlsContextSchema);
 
 int ObSchemaServiceSQLImpl::get_all_db_privs(ObISQLClient &client,
     const ObRefreshSchemaStatus &schema_status,
@@ -2608,6 +2620,9 @@ FETCH_NEW_SCHEMA_ID(DIRECTORY, directory);
 // FETCH_NEW_SCHEMA_ID(PRIMARY_KEY_TABLE_TABLET, primary_key_table_tablet);
 FETCH_NEW_SCHEMA_ID(CONTEXT, context);
 FETCH_NEW_SCHEMA_ID(SYS_PL_OBJECT, sys_pl_object);
+FETCH_NEW_SCHEMA_ID(RLS_POLICY, rls_policy);
+FETCH_NEW_SCHEMA_ID(RLS_GROUP, rls_group);
+FETCH_NEW_SCHEMA_ID(RLS_CONTEXT, rls_context);
 
 #undef FETCH_NEW_SCHEMA_ID
 
@@ -2940,6 +2955,9 @@ GET_BATCH_SCHEMAS_FUNC_DEFINE(dblink, ObDbLinkSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(directory, ObDirectorySchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(context, ObContextSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(rls_policy, ObRlsPolicySchema);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(rls_group, ObRlsGroupSchema);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(rls_context, ObRlsContextSchema);
 
 int ObSchemaServiceSQLImpl::sql_append_pure_ids(
     const ObRefreshSchemaStatus &schema_status,
@@ -4475,6 +4493,8 @@ FETCH_SCHEMAS_FUNC_DEFINE(dblink, ObDbLinkSchema, OB_ALL_DBLINK_HISTORY_TNAME);
 FETCH_SCHEMAS_FUNC_DEFINE(directory, ObDirectorySchema, OB_ALL_TENANT_DIRECTORY_HISTORY_TNAME);
 FETCH_SCHEMAS_FUNC_DEFINE(context, ObContextSchema, OB_ALL_CONTEXT_HISTORY_TNAME);
 FETCH_SCHEMAS_FUNC_DEFINE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema, OB_ALL_MOCK_FK_PARENT_TABLE_HISTORY_TNAME);
+FETCH_SCHEMAS_FUNC_DEFINE(rls_group, ObRlsGroupSchema, OB_ALL_RLS_GROUP_HISTORY_TNAME);
+FETCH_SCHEMAS_FUNC_DEFINE(rls_context, ObRlsContextSchema, OB_ALL_RLS_CONTEXT_HISTORY_TNAME);
 
 int ObSchemaServiceSQLImpl::fetch_all_mock_fk_parent_table_info(
       const ObRefreshSchemaStatus &schema_status,
@@ -4880,6 +4900,205 @@ int ObSchemaServiceSQLImpl::fetch_udfs(
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::fetch_rls_policys(
+    ObISQLClient &sql_client,
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObIArray<ObRlsPolicySchema> &schema_array,
+    const SchemaKey *schema_keys,
+    const int64_t schema_key_size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t orig_cnt = schema_array.count();
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_RLS_POLICY_HISTORY_SQL,
+                               OB_ALL_RLS_POLICY_HISTORY_TNAME,
+                               fill_extract_tenant_id(schema_status, tenant_id)))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (NULL != schema_keys && schema_key_size > 0) {
+      if (OB_FAIL(sql.append_fmt(" AND rls_policy_id in"))) {
+        LOG_WARN("append failed", K(ret));
+      } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(rls_policy, schema_keys, schema_key_size, sql))) {
+        LOG_WARN("sql append rls_policy id failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, rls_policy_id desc,\
+                               schema_version desc"))) {
+        LOG_WARN("sql append failed", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_rls_policy_schema(tenant_id, *result,
+                                                                           schema_array))) {
+        LOG_WARN("failed to retrieve rls_policy schema", K(ret));
+      } else {
+        LOG_TRACE("finish fetch schema", K(sql.string()), K(tenant_id), K(schema_array));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObArray<uint64_t> policy_ids;
+    ObArray<ObRlsPolicySchema *> policies;
+    for (int64_t i = orig_cnt; OB_SUCC(ret) && i < schema_array.count(); ++i) {
+      if (OB_FAIL(policy_ids.push_back(schema_array.at(i).get_rls_policy_id()))) {
+        LOG_WARN("failed to push back rls policy id", K(ret));
+      } else if (OB_FAIL(policies.push_back(&schema_array.at(i)))) {
+        LOG_WARN("failed to push back rls policy ptr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && policy_ids.count() > 0 ) {
+      if (OB_FAIL(fetch_rls_columns(schema_status, schema_version, tenant_id, sql_client,
+                                    policies, &policy_ids.at(0), policy_ids.count()))) {
+        LOG_WARN("failed to fetch rls column schemas", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fetch_rls_object_list(const ObRefreshSchemaStatus &schema_status,
+                                                  const uint64_t tenant_id,
+                                                  const uint64_t table_id,
+                                                  const int64_t schema_version,
+                                                  ObISQLClient &sql_client,
+                                                  ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+  DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+  const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      if (OB_FAIL(sql.append_fmt(FETCH_ALL_CASCADE_OBJECT_ID_HISTORY_SQL,
+                                 "rls_policy_id",
+                                 OB_ALL_RLS_POLICY_HISTORY_TNAME,
+                                 fill_extract_tenant_id(schema_status, tenant_id),
+                                 "table_id",
+                                 fill_extract_schema_id(schema_status, table_id),
+                                 schema_version))) {
+        LOG_WARN("failed to append sql", K(table_id), K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(sql), K(ret));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get result", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_object_list(tenant_id, *result,
+                                                table_schema.get_rls_policy_ids()))) {
+        LOG_WARN("failed to retrieve rls policy ids", K(ret));
+      } else {
+        LOG_TRACE("RLS_POLICY", K(table_schema.get_rls_policy_ids()));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      if (OB_FAIL(sql.append_fmt(FETCH_ALL_CASCADE_OBJECT_ID_HISTORY_SQL,
+                                 "rls_group_id",
+                                 OB_ALL_RLS_GROUP_HISTORY_TNAME,
+                                 fill_extract_tenant_id(schema_status, tenant_id),
+                                 "table_id",
+                                 fill_extract_schema_id(schema_status, table_id),
+                                 schema_version))) {
+        LOG_WARN("failed to append sql", K(table_id), K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(sql), K(ret));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get result", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_object_list(tenant_id, *result,
+                                                table_schema.get_rls_group_ids()))) {
+        LOG_WARN("failed to retrieve rls group ids", K(ret));
+      } else {
+        LOG_TRACE("RLS_GROUP", K(table_schema.get_rls_group_ids()));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      if (OB_FAIL(sql.append_fmt(FETCH_ALL_CASCADE_OBJECT_ID_HISTORY_SQL,
+                                 "rls_context_id",
+                                 OB_ALL_RLS_CONTEXT_HISTORY_TNAME,
+                                 fill_extract_tenant_id(schema_status, tenant_id),
+                                 "table_id",
+                                 fill_extract_schema_id(schema_status, table_id),
+                                 schema_version))) {
+        LOG_WARN("failed to append sql", K(table_id), K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(sql), K(ret));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get result", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_object_list(tenant_id, *result,
+                                                table_schema.get_rls_context_ids()))) {
+        LOG_WARN("failed to retrieve rls context ids", K(ret));
+      } else {
+        LOG_TRACE("RLS_CONTEXT", K(table_schema.get_rls_context_ids()));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fetch_rls_columns(const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObISQLClient &sql_client,
+    ObArray<ObRlsPolicySchema *> &rls_policy_array,
+    const uint64_t *policy_ids,
+    const int64_t policy_ids_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(policy_ids) && policy_ids_size > 0) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+      const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql.append_fmt(FETCH_ALL_RLS_SEC_COLUMN_HISTORY_SQL,
+                                 OB_ALL_RLS_SECURITY_COLUMN_HISTORY_TNAME,
+                                 fill_extract_tenant_id(schema_status, tenant_id)))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql.append_fmt(" AND rls_policy_id in"))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql_append_pure_ids(schema_status, policy_ids, policy_ids_size, sql))) {
+        LOG_WARN("append rls_policy ids failed", K(ret));
+      } else if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, rls_policy_id, column_id desc,\
+                                      schema_version desc"))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_rls_column_schema(tenant_id, *result,
+                                                                           rls_policy_array))) {
+        LOG_WARN("failed to retrieve rls_column schema", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 /*
   new schema_cache related
 */
@@ -4992,6 +5211,12 @@ int ObSchemaServiceSQLImpl::get_not_core_table_schema(
                  "table_name", table_schema->get_table_name());
         ret = OB_SUCCESS;
       }
+    }
+  }
+  if (OB_SUCC(ret) && table_schema->has_table_flag(CASCADE_RLS_OBJECT_FLAG)) {
+    if (OB_FAIL(fetch_rls_object_list(schema_status, tenant_id, table_id,
+                                             schema_version, sql_client, *table_schema))) {
+      LOG_WARN("Failed to fetch rls object list", K(ret));
     }
   }
   return ret;

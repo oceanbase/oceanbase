@@ -702,14 +702,14 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
             } else if (lib::is_oracle_mode()
                 && (value.is_negative_number()
                     || (value.is_zero_number() && '-' == raw_param->str_value_[0]))) { // -0 is also counted as negative
-              ret = OB_NOT_SUPPORTED;
+              ret = OB_ERR_UNEXPECTED;
               LOG_DEBUG("param must be positive", K(ret), K(i), K(value));
               pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
             } else if (lib::is_mysql_mode()
                        && value.is_integer_type()
                        && (value.get_int() < 0
                            || (0 == value.get_int() && '-' == raw_param->str_value_[0]))) {
-              ret = OB_NOT_SUPPORTED;
+              ret = OB_ERR_UNEXPECTED;
               LOG_DEBUG("param must be positive", K(ret), K(i), K(value));
               pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
             } else {

@@ -868,6 +868,20 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       }
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::IS_IN_PC: {
+      common::hash::ObHashMap<ObCacheObjID, ObILibCacheObject*> &co_map = const_cast<ObPlanCache *>(&plan_cache)->get_cache_obj_mgr().get_cache_obj_map();
+
+      if (NULL != co_map.get(cache_obj->get_object_id())) {
+        cells[i].set_bool(true);
+      } else {
+        cells[i].set_bool(false);
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::ERASE_TIME: {
+      cells[i].set_timestamp(cache_obj->get_logical_del_time());
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN,

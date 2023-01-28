@@ -300,11 +300,12 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
       raw_expr.get_extra(), str_values_))) {
     LOG_WARN("fail to init_enum_set_info", K(ret), K(type_), K(str_values_));
   } else {
+    ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(rt_expr.extra_info_);
     if (op_cg_ctx.session_->is_ignore_stmt()) {
-      ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(rt_expr.extra_info_);
       enumset_info->cast_mode_ = enumset_info->cast_mode_ | CM_WARN_ON_FAIL
                                 | CM_CHARSET_CONVERT_IGNORE_ERR;
     }
+    enumset_info->cast_mode_ |= CM_COLUMN_CONVERT;
     rt_expr.eval_func_ = column_convert;
   }
   return ret;

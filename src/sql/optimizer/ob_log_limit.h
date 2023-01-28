@@ -67,10 +67,6 @@ namespace sql
                                double &re_estimate_card, 
                                double &op_cost);
     int check_output_dep_specific(ObRawExprCheckDep &checker);
-    virtual int print_my_plan_annotation(char *buf,
-                                         int64_t &buf_len,
-                                         int64_t &pos,
-                                         ExplainType type);
     void set_fetch_with_ties(bool is_fetch_with_ties)
     {
       is_fetch_with_ties_ = is_fetch_with_ties;
@@ -79,6 +75,10 @@ namespace sql
     {
       return is_fetch_with_ties_;
     }
+    virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+    virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
   private:
     bool is_calc_found_rows_;
     bool is_top_limit_;

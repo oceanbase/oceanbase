@@ -307,6 +307,9 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         } else {
           --current_level_;
           handler_analyzer_.reset_notfound_and_warning(current_level_);
+          if (lib::is_oracle_mode() && current_level_ <= 1 && func.is_autonomous()) {
+            block->set_is_autonomous();
+          }
           stmt = block;
         }
       }
@@ -592,9 +595,19 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
   LOG_USER_ERROR(OB_NOT_SUPPORTED, get_type_name(parse_tree->type_));
 
       case T_SF_ALTER:
-      case T_SF_DROP:
+      case T_SF_DROP: {
+        ret = OB_ERR_SP_NO_DROP_SP;
+        LOG_WARN("DDL SQL is not allowed in stored function", K(ret));
+        LOG_USER_ERROR(OB_ERR_SP_NO_DROP_SP, "FUNCTION");
+      }
+        break;
       case T_SP_ALTER:
-      case T_SP_DROP:
+      case T_SP_DROP: {
+        ret = OB_ERR_SP_NO_DROP_SP;
+        LOG_WARN("DDL SQL is not allowed in stored function", K(ret));
+        LOG_USER_ERROR(OB_ERR_SP_NO_DROP_SP, "PROCEDURE");
+      }
+        break;
       case T_TG_ALTER:
       case T_TG_DROP:
       case T_TG_CREATE: {
@@ -688,6 +701,15 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
 
       if (OB_SUCC(ret) && NULL != stmt) {
+        ObPLStmtBlock *pl_stmt_block = static_cast<ObPLStmtBlock *>(stmt);
+        if (PL_BLOCK == stmt->get_type() && pl_stmt_block != NULL && pl_stmt_block->get_is_autonomous()) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < pl_stmt_block->get_stmts().count(); ++i) {
+            ObPLStmt *sub_stmt = pl_stmt_block->get_stmts().at(i);
+            if (PL_BLOCK == sub_stmt->get_type()) {
+              static_cast<ObPLStmtBlock *>(sub_stmt)->clear_aotonomous();
+            }
+          }
+        }
         stmt->set_level(current_level_);
         stmt->set_location(parse_tree->stmt_loc_.first_line_, parse_tree->stmt_loc_.first_column_);
         int64_t lbls_cnt = labels.count();
@@ -4382,7 +4404,8 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_HELP:
     case stmt::T_SHOW_RECYCLEBIN:
     case stmt::T_SHOW_RESTORE_PREVIEW:
-    case stmt::T_SHOW_TENANT: {
+    case stmt::T_SHOW_TENANT:
+    case stmt::T_SHOW_SEQUENCES: {
       if (0 == prepare_result.into_exprs_.count()) {
         if (func.is_function() || in_tg) {
           ret = OB_ER_SP_NO_RETSET;
@@ -7739,7 +7762,7 @@ int ObPLResolver::is_static_relation_expr(const ObRawExpr *expr, bool &is_static
             || T_OP_IS_NOT == expr->get_expr_type()) {
     const ObRawExpr *child = NULL;
     const ObConstRawExpr *con_expr = NULL;
-    CK (3 == expr->get_param_count());
+    CK (2 == expr->get_param_count());
     CK (OB_NOT_NULL(child = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(0))));
     CK (OB_NOT_NULL(con_expr = static_cast<const ObConstRawExpr *>
                     (ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(1)))));

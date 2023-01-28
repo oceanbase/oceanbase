@@ -15,7 +15,6 @@
 
 #include "lib/ob_define.h"
 #include "lib/utility/utility.h"
-#include "lib/regex/ob_regex.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "common/ob_string_buf.h"
 

@@ -15,6 +15,7 @@
 #include "lib/container/ob_se_array.h"
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/ob_optimizer_trace_impl.h"
 namespace oceanbase
 {
 namespace common
@@ -134,6 +135,7 @@ enum TransMethod
 {
   POST_ORDER = 0,
   PRE_ORDER = 1,
+  ROOT_ONLY = 2,
   MAX_TRANSFORMATION_METHOD
 };
 
@@ -382,11 +384,19 @@ private:
   int transform_post_order(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                            const int64_t current_level,
                            ObDMLStmt *&stmt);
+  // root-only transformation
+  int transform_root_only(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                          const int64_t current_level,
+                          ObDMLStmt *&stmt);
 
   // transform non_set children statements
   int transform_children(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                          const int64_t current_level,
                          ObDMLStmt *&stmt);
+  // transform temp table for root stmt
+  int transform_temp_tables(ObIArray<ObParentDMLStmt> &parent_stmts,
+                            const int64_t current_level,
+                            ObDMLStmt *&stmt);
   int adjust_transformed_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                               ObDMLStmt *stmt,
                               ObDMLStmt *&orgin_stmt,
@@ -413,9 +423,6 @@ private:
   virtual int is_expected_plan(ObLogPlan *plan,
                                void *check_ctx,
                                bool& is_valid);
-
-  bool is_view_stmt(const ObIArray<ObParentDMLStmt> &parents,
-                    const ObDMLStmt &stmt);
 
   bool skip_move_trans_loc() const
   {

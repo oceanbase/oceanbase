@@ -376,6 +376,11 @@
 #include "sql/engine/expr/ob_expr_st_contains.h"
 #include "sql/engine/expr/ob_expr_st_within.h"
 #include "sql/engine/expr/ob_expr_priv_st_asewkb.h"
+#include "sql/engine/expr/ob_expr_name_const.h"
+#include "sql/engine/expr/ob_expr_format_bytes.h"
+#include "sql/engine/expr/ob_expr_format_pico_time.h"
+#include "sql/engine/expr/ob_expr_encrypt.h"
+#include "sql/engine/expr/ob_expr_icu_version.h"
 #include "sql/engine/expr/ob_expr_sql_mode_convert.h"
 
 using namespace oceanbase::common;
@@ -479,11 +484,16 @@ char *ObExprOperatorFactory::str_toupper(char *buff)
 ObExprOperatorType ObExprOperatorFactory::get_type_by_name(const ObString &name)
 {
   ObExprOperatorType type = T_INVALID;
+  ObString real_func_name;
+  get_function_alias_name(name, real_func_name);
+  if (real_func_name.empty()) {
+    real_func_name.assign_ptr(name.ptr(), name.length());
+  }
   if (lib::is_oracle_mode()) {
     char name_buf[OB_MAX_FUNC_EXPR_LENGTH];
     ObString func_name(N_ORA_DECODE);
-    if (name.case_compare("decode") != 0) {
-      func_name.assign_ptr(name.ptr(), name.length());
+    if (real_func_name.case_compare("decode") != 0) {
+      func_name.assign_ptr(real_func_name.ptr(), real_func_name.length());
     }
     for (uint32_t i = 0; i < ARRAYSIZEOF(NAME_TYPES_ORCL); i++) {
       if (NAME_TYPES_ORCL[i].type_ <= T_MIN_OP || NAME_TYPES_ORCL[i].type_ >= T_MAX_OP) {
@@ -505,8 +515,8 @@ ObExprOperatorType ObExprOperatorFactory::get_type_by_name(const ObString &name)
       if (NAME_TYPES[i].type_ <= T_MIN_OP || NAME_TYPES[i].type_ >= T_MAX_OP) {
         break;
       }
-      if (static_cast<int32_t>(strlen(NAME_TYPES[i].name_)) == name.length()
-          && strncasecmp(NAME_TYPES[i].name_, name.ptr(), name.length()) == 0) {
+      if (static_cast<int32_t>(strlen(NAME_TYPES[i].name_)) == real_func_name.length()
+          && strncasecmp(NAME_TYPES[i].name_, real_func_name.ptr(), real_func_name.length()) == 0) {
         type = NAME_TYPES[i].type_;
         break;
       }
@@ -518,11 +528,16 @@ ObExprOperatorType ObExprOperatorFactory::get_type_by_name(const ObString &name)
 void ObExprOperatorFactory::get_internal_info_by_name(const ObString &name, bool &exist, bool &is_internal)
 {
   exist = false;
+  ObString real_func_name;
+  get_function_alias_name(name, real_func_name);
+  if (real_func_name.empty()) {
+    real_func_name.assign_ptr(name.ptr(), name.length());
+  }
   if (lib::is_oracle_mode()) {
     char name_buf[OB_MAX_FUNC_EXPR_LENGTH];
     ObString func_name(N_ORA_DECODE);
-    if (name.case_compare("decode") != 0) {
-      func_name.assign_ptr(name.ptr(), name.length());
+    if (real_func_name.case_compare("decode") != 0) {
+      func_name.assign_ptr(real_func_name.ptr(), real_func_name.length());
     }
     for (uint32_t i = 0; i < ARRAYSIZEOF(NAME_TYPES_ORCL); i++) {
       if (NAME_TYPES_ORCL[i].type_ <= T_MIN_OP || NAME_TYPES_ORCL[i].type_ >= T_MAX_OP) {
@@ -545,8 +560,8 @@ void ObExprOperatorFactory::get_internal_info_by_name(const ObString &name, bool
       if (NAME_TYPES[i].type_ <= T_MIN_OP || NAME_TYPES[i].type_ >= T_MAX_OP) {
         break;
       }
-      if (static_cast<int32_t>(strlen(NAME_TYPES[i].name_)) == name.length()
-          && strncasecmp(NAME_TYPES[i].name_, name.ptr(), name.length()) == 0) {
+      if (static_cast<int32_t>(strlen(NAME_TYPES[i].name_)) == real_func_name.length()
+          && strncasecmp(NAME_TYPES[i].name_, real_func_name.ptr(), real_func_name.length()) == 0) {
         exist = true;
         is_internal = NAME_TYPES[i].is_internal_;
         break;
@@ -941,8 +956,20 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSTDistanceSphere);
     REG_OP(ObExprSTContains);
     REG_OP(ObExprSTWithin);
-  }();
+    REG_OP(ObExprFormatBytes);
+    REG_OP(ObExprFormatPicoTime);
+    REG_OP(ObExprUuid2bin);
+    REG_OP(ObExprIsUuid);
+    REG_OP(ObExprBin2uuid);
+    REG_OP(ObExprNameConst);
     REG_OP(ObExprDayName);
+    REG_OP(ObExprDesDecrypt);
+    REG_OP(ObExprDesEncrypt);
+    REG_OP(ObExprEncrypt);
+    REG_OP(ObExprEncode);
+    REG_OP(ObExprDecode);
+    REG_OP(ObExprICUVersion);
+  }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);
@@ -1326,6 +1353,47 @@ int ObExprOperatorFactory::alloc(common::ObIAllocator &alloc, ObExprOperator *&e
   }
   return ret;
 }
+
+
+void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name, ObString &alias_name) {
+  if (is_mysql_mode()) {
+    //for synonyms in mysql mode
+    if (0 == origin_name.case_compare("bin")) {
+      // bin(N) is equivalent to CONV(N,10,2)
+      alias_name = ObString::make_string(N_CONV);
+    } else if (0 == origin_name.case_compare("oct")) {
+      // oct(N) is equivalent to CONV(N,10,8)
+      alias_name = ObString::make_string(N_CONV);
+    } else if (0 == origin_name.case_compare("lcase")) {
+      // lcase is synonym for lower
+      alias_name = ObString::make_string(N_LOWER);
+    } else if (0 == origin_name.case_compare("ucase")) {
+      // ucase is synonym for upper
+      alias_name = ObString::make_string(N_UPPER);
+    } else if (!lib::is_oracle_mode() && 0 == origin_name.case_compare("power")) {
+      // don't alias "power" to "pow" in oracle mode, because oracle has no
+      // "pow" function.
+      alias_name = ObString::make_string(N_POW);
+    } else if (0 == origin_name.case_compare("ws")) {
+      // ws is synonym for word_segment
+      alias_name = ObString::make_string(N_WORD_SEGMENT);
+    } else if (0 == origin_name.case_compare("inet_ntoa")) {
+      // inet_ntoa is synonym for int2ip
+      alias_name = ObString::make_string(N_INT2IP);
+    } else if (0 == origin_name.case_compare("octet_length")) {
+      // octet_length is synonym for length
+      alias_name = ObString::make_string(N_LENGTH);
+    } else if (0 == origin_name.case_compare("character_length")) {
+      // character_length is synonym for char_length
+      alias_name = ObString::make_string(N_CHAR_LENGTH);
+    } else {
+      //do nothing
+    }
+  } else {
+    //for synonyms in oracle mode
+  }
+}
+
 } //end sql
 } //end oceanbase 
 

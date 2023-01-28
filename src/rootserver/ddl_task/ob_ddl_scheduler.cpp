@@ -801,25 +801,26 @@ int ObDDLScheduler::create_modify_autoinc_task(
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  ObModifyAutoincTask modify_autoinc_task;
-  int64_t task_id = 0;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id
-                         || schema_version <= 0 || nullptr == arg || !arg->is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(schema_version), K(arg));
-  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), task_id))) {
-    LOG_WARN("fetch new task id failed", K(ret));
-  } else if (OB_FAIL(modify_autoinc_task.init(tenant_id, task_id, table_id, schema_version, *arg))) {
-    LOG_WARN("init global index task failed", K(ret), K(table_id), K(arg));
-  } else if (OB_FAIL(modify_autoinc_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
-    LOG_WARN("set trace id failed", K(ret));
-  } else if (OB_FAIL(insert_task_record(proxy, modify_autoinc_task, allocator, task_record))) {
-    LOG_WARN("fail to insert task record", K(ret));
+  SMART_VAR(ObModifyAutoincTask, modify_autoinc_task) {
+    int64_t task_id = 0;
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", K(ret));
+    } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id
+                          || schema_version <= 0 || nullptr == arg || !arg->is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(schema_version), K(arg));
+    } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), task_id))) {
+      LOG_WARN("fetch new task id failed", K(ret));
+    } else if (OB_FAIL(modify_autoinc_task.init(tenant_id, task_id, table_id, schema_version, *arg))) {
+      LOG_WARN("init global index task failed", K(ret), K(table_id), K(arg));
+    } else if (OB_FAIL(modify_autoinc_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
+      LOG_WARN("set trace id failed", K(ret));
+    } else if (OB_FAIL(insert_task_record(proxy, modify_autoinc_task, allocator, task_record))) {
+      LOG_WARN("fail to insert task record", K(ret));
+    }
+    LOG_INFO("ddl_scheduler create modify autoinc task finished", K(ret), K(modify_autoinc_task));
   }
-  LOG_INFO("ddl_scheduler create modify autoinc task finished", K(ret), K(modify_autoinc_task));
   return ret;
 }
 

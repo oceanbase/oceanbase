@@ -85,9 +85,9 @@ private:
                       ObRawExpr *param,
                       bool &is_valid,
                       int64_t &value);
-  int transform_const_minmax_aggr(ObDMLStmt *stmt, bool &trans_happened);
+  int transform_const_aggr(ObDMLStmt *stmt, bool &trans_happened);
   int is_valid_const_aggregate(ObSelectStmt *stmt, bool &is_valid);
-  int is_min_max_const(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
+  int is_const_aggr(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
   int prune_group_by_rollup(ObIArray<ObParentDMLStmt> &parent_stmts,
                             ObDMLStmt *stmt,
                             bool &trans_happened);
@@ -108,6 +108,11 @@ private:
   int do_prune_rollup(ObSelectStmt *stmt, const int64_t pruned_expr_idx);
   int get_valid_having_exprs_contain_aggr(const ObIArray<ObRawExpr *> &having_exprs,
                                           ObIArray<ObRawExpr *> &vaild_having_exprs);
+  int convert_group_by_to_distinct(ObDMLStmt *stmt, bool &trans_happened);
+  int check_can_convert_to_distinct(ObSelectStmt *stmt, bool &can_convert);
+  int expr_calculable_by_exprs(const ObRawExpr *src_expr,
+                                   const ObIArray<ObRawExpr*> &dst_exprs,
+                                   bool &is_calculable);
 };
 
 }

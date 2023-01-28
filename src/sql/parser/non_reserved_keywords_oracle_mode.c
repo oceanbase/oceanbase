@@ -744,6 +744,7 @@ static const NonReservedKeyword Oracle_non_reserved_keywords[] =
   {"multilinestring", MULTILINESTRING},
   {"multipoint", MULTIPOINT},
   {"multipolygon", MULTIPOLYGON},
+  {"multiset", MULTISET},
   {"mutex", MUTEX},
   {"mysql_errno", MYSQL_ERRNO},
   {"name", NAME},

@@ -98,44 +98,16 @@ int ObDmlTableInfo::deep_copy(ObIRawExprCopier &expr_copier, const ObDmlTableInf
   return ret;
 }
 
-int ObDmlTableInfo::get_relation_exprs(RelExprCheckerBase &expr_checker)
+int ObDmlTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(expr_checker.add_exprs(check_constraint_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(view_check_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
-      if (OB_ISNULL(column_exprs_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(expr_checker.add_expr(reinterpret_cast<ObRawExpr*&>(column_exprs_.at(i))))) {
-        LOG_WARN("failed to add expr", K(ret));
-      } else { /*do nothing*/ }
-    }
+  if (OB_FAIL(visitor.visit(check_constraint_exprs_, SCOPE_DML_CONSTRAINT))) {
+    LOG_WARN("failed to visit check constraint exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(view_check_exprs_, SCOPE_DML_CONSTRAINT))) {
+    LOG_WARN("failed to visit view check constraint exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(column_exprs_, SCOPE_DML_COLUMN))) {
+    LOG_WARN("failed to visit dml column exprs", K(ret));
   }
-  return ret;
-}
-
-int ObDmlTableInfo::replace_exprs(const ObIArray<ObRawExpr*> &other_exprs,
-                                  const ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                              new_exprs,
-                                              column_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     check_constraint_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     view_check_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else { /*do nothing*/ }
-
   return ret;
 }
 
@@ -168,47 +140,18 @@ int ObUpdateTableInfo::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
-int ObUpdateTableInfo::get_relation_exprs(RelExprCheckerBase &expr_checker)
+int ObUpdateTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDmlTableInfo::get_relation_exprs(expr_checker))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); i++) {
-      ObAssignment &assign = assignments_.at(i);
-      if (OB_ISNULL(assign.column_expr_) || OB_ISNULL(assign.expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(expr_checker.add_expr(assign.expr_)) ||
-                 OB_FAIL(expr_checker.add_expr(reinterpret_cast<ObRawExpr*&>(assign.column_expr_)))) {
-        LOG_WARN("failed to add expr", K(ret));
-      } else { /*do nothing*/ }
-    }
+  if (OB_FAIL(ObDmlTableInfo::iterate_stmt_expr(visitor))) {
+    LOG_WARN("failed to iterate stmt expr", K(ret));
   }
-  return ret;
-}
-
-int ObUpdateTableInfo::replace_exprs(const ObIArray<ObRawExpr*> &other_exprs,
-                                   const ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDmlTableInfo::replace_exprs(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); i++) {
-      ObAssignment &assign = assignments_.at(i);
-      if (OB_ISNULL(assign.column_expr_) || OB_ISNULL(assign.expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
-                                                        new_exprs,
-                                                        reinterpret_cast<ObRawExpr*&>(assign.column_expr_)))) {
-        LOG_WARN("failed to replace expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
-                                                        new_exprs,
-                                                        assign.expr_))) {
-        LOG_WARN("failed to replace expr", K(ret));
-      } else { /*do nothing*/ }
+  for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); ++i) {
+    ObAssignment &assign = assignments_.at(i);
+    if (OB_FAIL(visitor.visit(assign.column_expr_, SCOPE_DML_COLUMN))) {
+      LOG_WARN("failed to visit assign column expr", K(ret));
+    } else if (OB_FAIL(visitor.visit(assign.expr_, SCOPE_DML_VALUE))) {
+      LOG_WARN("failed to visit assign new value", K(ret));
     }
   }
   return ret;
@@ -263,107 +206,49 @@ int ObInsertTableInfo::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
-int ObInsertTableInfo::get_relation_exprs(RelExprCheckerBase &expr_checker)
+int ObInsertTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDmlTableInfo::get_relation_exprs(expr_checker))) {
-    LOG_WARN("failed to get dml exprs", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(column_conv_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret), K(column_exprs_), K(column_conv_exprs_));
-  } else {
-    int64_t value_desc_cnt = values_desc_.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < value_desc_cnt; i++) {
-      if (OB_ISNULL(values_desc_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(expr_checker.add_expr(reinterpret_cast<ObRawExpr*&>(values_desc_.at(i))))) {
-        LOG_WARN("failed to add expr", K(ret));
-      } else { /*do nothing*/ }
-    }
-    // add insert value expr related to part key
-    for (int64_t i = 0; OB_SUCC(ret) && i < value_desc_cnt; i++) {
-      if (OB_ISNULL(values_desc_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (values_desc_.at(i)->is_table_part_key_column()) {
-        for (int64_t j = i; OB_SUCC(ret) && j < values_vector_.count(); j += value_desc_cnt) {
-          if (OB_FAIL(expr_checker.add_expr(values_vector_.at(j)))) {
-            LOG_WARN("add expr to expr checker failed", K(ret), K(i), K(j));
-          }
+  int64_t value_desc_cnt = values_desc_.count();
+  if (OB_FAIL(ObDmlTableInfo::iterate_stmt_expr(visitor))) {
+    LOG_WARN("failed to iterate dml table info", K(ret));
+  } else if (OB_FAIL(visitor.visit(values_desc_, SCOPE_INSERT_DESC))) {
+    LOG_WARN("failed to iterate valeus desc exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(column_conv_exprs_, SCOPE_DML_VALUE))) {
+    LOG_WARN("failed to iterate column conv exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(part_generated_col_dep_cols_, SCOPE_DICT_FIELDS))) {
+    LOG_WARN("failed to iterate part generated col dep cols", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < value_desc_cnt; ++i) {
+    const ObColumnRefRawExpr *col_expr = values_desc_.at(i);
+    if (OB_ISNULL(col_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column expr is null", K(ret));
+    } else if (col_expr->is_table_part_key_column()) {
+      for (int64_t j = i; OB_SUCC(ret) && j < values_vector_.count(); j += value_desc_cnt) {
+        if (OB_FAIL(visitor.visit(values_vector_.at(j), SCOPE_INSERT_VECTOR))) {
+          LOG_WARN("add expr to expr checker failed", K(ret), K(i), K(j));
         }
       }
     }
-    // !value_from_select() && !subquery_exprs_.empty()
-    for (int64_t i = 0; OB_SUCC(ret) && i < values_vector_.count(); i++) {
-      if (OB_ISNULL(values_vector_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if ((values_vector_.at(i)->has_flag(CNT_SUB_QUERY) ||
-                  values_vector_.at(i)->has_flag(CNT_ONETIME)) &&
-                OB_FAIL(expr_checker.add_expr(values_vector_.at(i)))) {
-        LOG_WARN("failed to add expr to expr checker", K(ret));
-      } else { /*do nothing*/ }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_generated_col_dep_cols_.count(); i++) {
-      if (OB_ISNULL(part_generated_col_dep_cols_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(expr_checker.add_expr(
-              reinterpret_cast<ObRawExpr*&>(part_generated_col_dep_cols_.at(i))))) {
-        LOG_WARN("failed to add expr", K(ret));
-      } else { /*do nothing*/ }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); i++) {
-      ObAssignment &assign = assignments_.at(i);
-      if (OB_ISNULL(assign.column_expr_) || OB_ISNULL(assign.expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(expr_checker.add_expr(assign.expr_)) ||
-                 OB_FAIL(expr_checker.add_expr(reinterpret_cast<ObRawExpr*&>(assign.column_expr_)))) {
-        LOG_WARN("failed to add expr", K(ret));
-      } else { /*do nothing*/ }
-    }
   }
-  return ret;
-}
-
-int ObInsertTableInfo::replace_exprs(const ObIArray<ObRawExpr*> &other_exprs,
-                                     const ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDmlTableInfo::replace_exprs(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     values_desc_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     values_vector_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     column_conv_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     part_generated_col_dep_cols_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); i++) {
-      ObAssignment &assign = assignments_.at(i);
-      if (OB_ISNULL(assign.column_expr_) || OB_ISNULL(assign.expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
-                                                        new_exprs,
-                                                        reinterpret_cast<ObRawExpr*&>(assign.column_expr_)))) {
-        LOG_WARN("failed to replace expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
-                                                        new_exprs,
-                                                        assign.expr_))) {
-        LOG_WARN("failed to replace expr", K(ret));
-      } else { /*do nothing*/ }
+  // !value_from_select() && !subquery_exprs_.empty()
+  for (int64_t i = 0; OB_SUCC(ret) && i < values_vector_.count(); ++i) {
+    if (OB_ISNULL(values_vector_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if ((values_vector_.at(i)->has_flag(CNT_SUB_QUERY) ||
+                values_vector_.at(i)->has_flag(CNT_ONETIME)) &&
+               OB_FAIL(visitor.visit(values_vector_.at(i), SCOPE_INSERT_VECTOR))) {
+      LOG_WARN("failed to add expr to expr checker", K(ret));
+    } else { /*do nothing*/ }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); ++i) {
+    ObAssignment &assign = assignments_.at(i);
+    if (OB_FAIL(visitor.visit(assign.column_expr_, SCOPE_DML_COLUMN))) {
+      LOG_WARN("failed to visit assign column expr", K(ret));
+    } else if (OB_FAIL(visitor.visit(assign.expr_, SCOPE_DML_VALUE))) {
+      LOG_WARN("failed to visit assign new value", K(ret));
     }
   }
   return ret;
@@ -410,48 +295,20 @@ int ObMergeTableInfo::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
-int ObMergeTableInfo::get_relation_exprs(RelExprCheckerBase &expr_checker)
+int ObMergeTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObInsertTableInfo::get_relation_exprs(expr_checker))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(match_condition_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(insert_condition_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(update_condition_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(delete_condition_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else { /*do nothing*/ }
-
-  return ret;
-}
-
-int ObMergeTableInfo::replace_exprs(const ObIArray<ObRawExpr*> &other_exprs,
-                                    const ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObInsertTableInfo::replace_exprs(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     match_condition_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     insert_condition_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     update_condition_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     delete_condition_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else { /*do nothing*/ }
-
+  if (OB_FAIL(ObInsertTableInfo::iterate_stmt_expr(visitor))) {
+    LOG_WARN("failed to iterate stmt expr", K(ret));
+  } else if (OB_FAIL(visitor.visit(match_condition_exprs_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit match condition exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(update_condition_exprs_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit update condition exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(insert_condition_exprs_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit insert condition exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(delete_condition_exprs_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit delete condition exprs", K(ret));
+  }
   return ret;
 }
 
@@ -482,30 +339,14 @@ int ObInsertAllTableInfo::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
-int ObInsertAllTableInfo::get_relation_exprs(RelExprCheckerBase &expr_checker)
+int ObInsertAllTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObInsertTableInfo::get_relation_exprs(expr_checker))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(when_cond_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else { /*do nothing*/ }
-
-  return ret;
-}
-
-int ObInsertAllTableInfo::replace_exprs(const ObIArray<ObRawExpr*> &other_exprs,
-                                        const ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObInsertTableInfo::replace_exprs(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     when_cond_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else { /*do nothing*/ }
-
+  if (OB_FAIL(ObInsertTableInfo::iterate_stmt_expr(visitor))) {
+    LOG_WARN("failed to iterate stmt expr", K(ret));
+  } else if (OB_FAIL(visitor.visit(when_cond_exprs_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to iterate stmt expr", K(ret));
+  }
   return ret;
 }
 
@@ -617,64 +458,47 @@ int64_t ObDelUpdStmt::get_instead_of_trigger_column_count() const
   return 0;
 }
 
-int ObDelUpdStmt::replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                                          const common::ObIArray<ObRawExpr*> &new_exprs)
+int ObDelUpdStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDMLStmt::replace_inner_stmt_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     returning_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     returning_into_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     returning_agg_items_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
-                                                    new_exprs,
-                                                    ab_stmt_id_expr_))) {
-    LOG_WARN("replace ab_stmt_id_expr_ failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     error_log_info_.error_log_exprs_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     sharding_conditions_))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  } else { /*do nothing*/ }
-  return ret;
-}
-
-int ObDelUpdStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(expr_checker.add_exprs(returning_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(returning_into_exprs_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else if (OB_FAIL(expr_checker.add_exprs(sharding_conditions_))) {
-    LOG_WARN("failed to add exprs", K(ret));
-  } else if (NULL != ab_stmt_id_expr_ &&
-             OB_FAIL(expr_checker.add_expr(ab_stmt_id_expr_))) {
-    LOG_WARN("failed to add expr", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < error_log_info_.error_log_exprs_.count(); i++) {
-      if (OB_ISNULL(error_log_info_.error_log_exprs_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(expr_checker.add_expr(reinterpret_cast<ObRawExpr*&>(error_log_info_.error_log_exprs_.at(i))))) {
-        LOG_WARN("failed to add expr", K(ret));
-      } else { /*do nothing*/ }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDMLStmt::inner_get_relation_exprs(expr_checker))) {
-        LOG_WARN("get delup stmt relation exprs failed", K(ret));
+  ObSEArray<ObDmlTableInfo *, 4> dml_table_infos;
+  if (OB_FAIL(ObDMLStmt::iterate_stmt_expr(visitor))) {
+    LOG_WARN("failed to visit DMLStmt expr", K(ret));
+  } else if (OB_FAIL(visitor.visit(returning_exprs_, SCOPE_RETURNING))) {
+    LOG_WARN("failed to visit returning exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(returning_into_exprs_, SCOPE_RETURNING))) {
+    LOG_WARN("failed to visit returning into exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(returning_agg_items_, SCOPE_DICT_FIELDS))) {
+    LOG_WARN("failed to visit returning agg items", K(ret));
+  } else if (ab_stmt_id_expr_ != NULL &&
+             OB_FAIL(visitor.visit(ab_stmt_id_expr_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit ab stmt id expr", K(ret));
+  } else if (OB_FAIL(visitor.visit(error_log_info_.error_log_exprs_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit errlog exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(sharding_conditions_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit sharding conditions", K(ret));
+  } else if (OB_FAIL(get_dml_table_infos(dml_table_infos))) {
+    LOG_WARN("failed to get dml table infos", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < dml_table_infos.count(); ++i) {
+    if (OB_ISNULL(dml_table_infos.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dml table info is null", K(ret));
+    } else if (OB_FAIL(dml_table_infos.at(i)->iterate_stmt_expr(visitor))) {
+      LOG_WARN("failed to itearte dml table infos", K(ret));
+    } else if (dml_table_infos.at(i)->table_id_ != OB_INVALID_ID &&
+               dml_table_infos.at(i)->table_id_ != dml_table_infos.at(i)->loc_table_id_) {
+      // handle updatable view in a speical way
+      for (int64_t j = 0; OB_SUCC(ret) && j < part_expr_items_.count(); ++j) {
+        if (part_expr_items_.at(j).table_id_ == dml_table_infos.at(i)->loc_table_id_) {
+          if (OB_FAIL(visitor.visit(part_expr_items_.at(j).part_expr_,
+                                    SCOPE_DMLINFOS))) {
+            LOG_WARN("failed to visit part expr items", K(ret));
+          } else if (OB_FAIL(visitor.visit(part_expr_items_.at(j).subpart_expr_,
+                                           SCOPE_DMLINFOS))) {
+            LOG_WARN("failed to visit subpart exprs", K(ret));
+          }
+        }
       }
     }
   }
@@ -807,6 +631,26 @@ int ObDelUpdStmt::remove_table_item_dml_info(const TableItem* table)
 {
   int ret = OB_ERR_UNEXPECTED;
   LOG_WARN("can not remove all dml table", K(ret));
+  return ret;
+}
+
+int ObDelUpdStmt::has_dml_table_info(const uint64_t table_id, bool &has) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObDmlTableInfo *, 2> table_infos;
+  has = false;
+  if (OB_FAIL(get_dml_table_infos(table_infos))) {
+    LOG_WARN("failed to get dml table infos", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_infos.count(); ++i) {
+    if (OB_ISNULL(table_infos.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table info is null", K(ret));
+    } else if (table_infos.at(i)->table_id_ == table_id) {
+      has = true;
+      break;
+    }
+  }
   return ret;
 }
 

@@ -234,13 +234,12 @@ int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id,
   ObArenaAllocator alloc;
   ObObj obj_val;
   int64_t mem_pct = 0;
-  const char* conf_name = "ob_sql_audit_percentage";
   if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(tenant_id,
                                                           alloc,
                                                           ObDataTypeCastParams(),
-                                                          ObString(conf_name),
+                                                          ObString(OB_SV_SQL_AUDIT_PERCENTAGE),
                                                           obj_val))) {
-    LOG_WARN("failed to get global sys variable", K(ret), K(tenant_id), K(conf_name), K(obj_val));
+    LOG_WARN("failed to get global sys variable", K(ret), K(tenant_id), K(OB_SV_SQL_AUDIT_PERCENTAGE), K(obj_val));
   } else if (OB_FAIL(obj_val.get_int(mem_pct))) {
     LOG_WARN("failed to get int", K(ret), K(obj_val));
   } else if (mem_pct < 0 || mem_pct > 100) {

@@ -45,6 +45,9 @@ public:
         common::ObMySQLTransaction &trans,
         const uint64_t tenant_id,
         const int64_t task_id);
+  virtual void flt_set_task_span_tag() const override;
+  virtual void flt_set_status_span_tag() const override;
+  virtual int cleanup_impl() override;
 private:
   int check_health();
   int prepare(const share::ObDDLTaskStatus next_task_status);
@@ -52,7 +55,6 @@ private:
   int wait_alter_table(const share::ObDDLTaskStatus next_task_status);
   int succ();
   int fail();
-  int cleanup();
   int deep_copy_ddl_arg(common::ObIAllocator &allocator, const share::ObDDLType &ddl_type, const obrpc::ObDDLArg *source_arg);
   int init_compat_mode(const share::ObDDLType &ddl_type, const obrpc::ObDDLArg *source_arg);
   int get_forward_user_message(const obrpc::ObRpcResultCode &rcode);

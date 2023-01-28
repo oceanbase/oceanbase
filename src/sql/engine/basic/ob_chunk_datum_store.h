@@ -95,9 +95,7 @@ public:
       char *buf, const int64_t size, const int64_t row_size, const uint32_t row_extend_size);
     template <bool fill_invariable_res_buf = false>
     int to_expr(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx) const;
-    int to_expr_skip_const(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx) const;
     int to_expr(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx, int64_t count) const;
-
     inline common::ObDatum *cells() { return reinterpret_cast<common::ObDatum *>(payload_); }
     inline const common::ObDatum *cells() const
         { return reinterpret_cast<const common::ObDatum *>(payload_); }
@@ -772,24 +770,20 @@ public:
     int get_next_row(common::ObDatum **datums);
     int get_next_row(const StoredRow *&sr);
     template <bool fill_invariable_res_buf = false>
-    int get_next_row_skip_const(ObEvalCtx &ctx, const common::ObIArray<ObExpr*> &exprs);
+    int get_next_row(ObEvalCtx &ctx, const common::ObIArray<ObExpr*> &exprs);
 
     // read next batch rows
     // return OB_ITER_END and set %read_rows to zero for iterate end.
     int get_next_batch(const StoredRow **rows, const int64_t max_rows, int64_t &read_rows);
-    int get_next_batch(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
-                       const int64_t max_rows, int64_t &read_rows, const StoredRow **rows = NULL);
     template <bool fill_invariable_res_buf = false>
-    int get_next_batch_skip_const(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
-                                  const int64_t max_rows, int64_t &read_rows,
-                                  const StoredRow **rows = NULL);
-
+    int get_next_batch(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
+                       const int64_t max_rows, int64_t &read_rows,
+                       const StoredRow **rows = NULL);
 
     // attach read store rows to expressions
     template <bool fill_invariable_res_buf = false>
     static void attach_rows(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
-                            const StoredRow **srows, const int64_t read_rows,
-                            bool skip_const = false);
+                            const StoredRow **srows, const int64_t read_rows);
 
     int convert_to_row(const StoredRow *sr, const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx)
     { return row_it_.convert_to_row(sr, exprs, ctx); }
@@ -1162,26 +1156,30 @@ int ObChunkDatumStore::StoredRow::to_expr(
   } else {
     for (uint32_t i = 0; i < cnt_; ++i) {
       ObExpr *expr = exprs.at(i);
-      const ObDatum &src = cells()[i];
-      if (OB_UNLIKELY(fill_invariable_res_buf && !exprs.at(i)->is_variable_res_buf())) {
-        ObDatum &dst = expr->locate_datum_for_write(ctx);
-        dst.pack_ = src.pack_;
-        MEMCPY(const_cast<char *>(dst.ptr_), src.ptr_, src.len_);
+      if (expr->is_const_expr()) {
+        continue;
       } else {
-        ObDatum &dst = expr->locate_expr_datum(ctx);
-        dst = src;
+        const ObDatum &src = cells()[i];
+        if (OB_UNLIKELY(fill_invariable_res_buf && !expr->is_variable_res_buf())) {
+          ObDatum &dst = expr->locate_datum_for_write(ctx);
+          dst.pack_ = src.pack_;
+          MEMCPY(const_cast<char *>(dst.ptr_), src.ptr_, src.len_);
+        } else {
+          ObDatum &dst = expr->locate_expr_datum(ctx);
+          dst = src;
+        }
+        expr->set_evaluated_projected(ctx);
+        SQL_ENG_LOG(DEBUG, "succ to_expr", K(cnt_), K(exprs.count()),
+                  KPC(exprs.at(i)), K(cells()[i]), K(lbt()));
       }
-      expr->set_evaluated_projected(ctx);
-      SQL_ENG_LOG(DEBUG, "succ to_expr", K(cnt_), K(exprs.count()),
-                KPC(exprs.at(i)), K(cells()[i]), K(lbt()));
     }
   }
   return ret;
 }
 
 template <bool fill_invariable_res_buf>
-int ObChunkDatumStore::Iterator::get_next_row_skip_const(ObEvalCtx &ctx,
-                                       const common::ObIArray<ObExpr*> &exprs)
+int ObChunkDatumStore::Iterator::get_next_row(
+    ObEvalCtx &ctx, const common::ObIArray<ObExpr*> &exprs)
 {
   int ret = OB_SUCCESS;
   const ObChunkDatumStore::StoredRow *sr = NULL;
@@ -1225,14 +1223,13 @@ int ObChunkDatumStore::Iterator::get_next_row_skip_const(ObEvalCtx &ctx,
 }
 
 template <bool fill_invariable_res_buf>
-int ObChunkDatumStore::Iterator::get_next_batch_skip_const(
+int ObChunkDatumStore::Iterator::get_next_batch(
     const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
     const int64_t max_rows, int64_t &read_rows, const StoredRow **rows)
 {
   int ret = OB_SUCCESS;
   int64_t max_batch_size = ctx.max_batch_size_;
   const StoredRow **srows = rows;
-  bool skip_const = true;
   if (NULL == rows) {
     if (!chunk_it_.is_valid()) {
       ret = OB_NOT_INIT;
@@ -1255,7 +1252,7 @@ int ObChunkDatumStore::Iterator::get_next_batch_skip_const(
       read_rows = 0;
     }
   } else {
-    attach_rows<fill_invariable_res_buf>(exprs, ctx, srows, read_rows, skip_const);
+    attach_rows<fill_invariable_res_buf>(exprs, ctx, srows, read_rows);
   }
 
   return ret;
@@ -1264,13 +1261,13 @@ int ObChunkDatumStore::Iterator::get_next_batch_skip_const(
 template <bool fill_invariable_res_buf>
 void ObChunkDatumStore::Iterator::attach_rows(
     const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
-    const StoredRow **srows, const int64_t read_rows, bool skip_const)
+    const StoredRow **srows, const int64_t read_rows)
 {
   // FIXME bin.lb: change to row style?
   if (NULL != srows) {
     for (int64_t col_idx = 0; col_idx < exprs.count(); col_idx++) {
       ObExpr *e = exprs.at(col_idx);
-      if (skip_const && e->is_const_expr()) {
+      if (e->is_const_expr()) {
         continue;
       }
       if (OB_LIKELY(!fill_invariable_res_buf || e->is_variable_res_buf())) {

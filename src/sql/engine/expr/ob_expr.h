@@ -296,6 +296,26 @@ struct ObExprBasicFuncs
 
   ObExprCmpFuncType null_first_cmp_;
   ObExprCmpFuncType null_last_cmp_;
+
+  /* murmur_hash_v2_ is more efficient than murmur_hash_
+     If there is no problem of compatibility, use hash_v2_ is a better choice
+
+     For example, if we calc hash of NUMBER,
+
+      murmur_hash_ calcs like that :
+          if (datum.is_null()) {
+            const int null_type = ObNullType;
+            v = murmurhash64A(&null_type, sizeof(null_type), seed);
+          } else {
+            uint64_t tmp_v = murmurhash64A(datum.get_number_desc().se_, 1, seed);
+            v = murmurhash64A(datum.get_number_digits(), static_cast<uint64_t>(sizeof(uint32_t)* datum.get_number_desc().len_), tmp_v);
+          }
+
+      murmur_hash_v2_ calc like that :
+          v =  murmurhash64A(datum.ptr_, datum.len_, seed);
+  */
+  ObExprHashFuncType murmur_hash_v2_;
+  ObBatchDatumHashFunc murmur_hash_v2_batch_;
 };
 
 

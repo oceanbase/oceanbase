@@ -556,25 +556,6 @@ int ObExprUtil::deep_copy_str(const ObString &src, ObString &out, ObIAllocator &
   return ret;
 }
 
-int ObExprUtil::eval_generated_column(const ObExpr &rt_expr,
-                                      ObEvalCtx &eval_ctx,
-                                      ObDatum &expr_datum)
-{
-  int ret = OB_SUCCESS;
-  ObDatum *param_datum = NULL;
-  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_) ||
-      OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0])) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret));
-  } else if (OB_FAIL(rt_expr.args_[0]->eval(eval_ctx, param_datum))) {
-    LOG_WARN("failed to eval", K(ret));
-  } else {
-    expr_datum.set_datum(*param_datum);
-    LOG_DEBUG("generated column evaluated", K(*param_datum));
-  }
-  return ret;
-}
-
 int ObExprUtil::eval_stack_overflow_check(const ObExpr &expr,
                                           ObEvalCtx &ctx,
                                           ObDatum &)

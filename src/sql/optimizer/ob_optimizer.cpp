@@ -21,6 +21,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "common/ob_smart_call.h"
+#include "sql/ob_optimizer_trace_impl.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -45,12 +46,6 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
     LOG_WARN("invalid arguments", K(ret), K(query_ctx), K(session), K(target_stmt), K(task_exec_ctx));
   } else if (OB_FAIL(init_env_info(*target_stmt))) {
     LOG_WARN("failed to init px info", K(ret));
-  } else if (OB_FAIL(target_stmt->expand_exprs(*session))) {
-    LOG_WARN("fail to expand_exprs", K(ret));
-  } else if (OB_FAIL(target_stmt->refill_global_index_dml_info(ctx_.get_expr_factory()))) {
-    //@todo: during the optimizer phase, we should not change dml stmt !!!
-    //this code need to be removed from optimizer
-    LOG_WARN("fail to fill index dml info column conv exprs", K(ret));
   } else if (OB_FAIL(generate_plan_for_temp_table(*target_stmt))) {
     LOG_WARN("failed to generate plan for temp table", K(ret));
   } else if (OB_ISNULL(plan = ctx_.get_log_plan_factory().create(ctx_, stmt))) {
@@ -144,6 +139,10 @@ int ObOptimizer::generate_plan_for_temp_table(ObDMLStmt &stmt)
       } else if (OB_FALSE_IT(temp_plan->set_temp_table_info(temp_table_info))) {
       } else if (OB_FAIL(temp_plan->init_plan_info())) {
         LOG_WARN("failed to init equal sets", K(ret));
+      } else {
+        OPT_TRACE_TITLE("begin generate plan for temp table ", temp_table_info->table_name_);
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(temp_plan->generate_raw_plan())) {
         LOG_WARN("Failed to generate temp_plan for sub_stmt", K(ret));
       } else if (OB_FAIL(temp_plan->get_candidate_plans().get_best_plan(temp_op))) {
@@ -153,6 +152,7 @@ int ObOptimizer::generate_plan_for_temp_table(ObDMLStmt &stmt)
         LOG_WARN("get unexpected null", K(ret));
       } else {
         temp_table_info->table_plan_ = temp_op;
+        OPT_TRACE_TITLE("end generate plan for temp table ", temp_table_info->table_name_);
       }
     }
   }
@@ -695,6 +695,17 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   } else {
     ctx_.set_cost_model_type(ObOptEstCost::NORMAL_MODEL);
   }
+
+  // check if stmt has subquery in function table
+  if (OB_SUCC(ret)){
+    bool has_subquery_in_function_table = false;
+    if (OB_FAIL(stmt.check_has_subquery_in_function_table(has_subquery_in_function_table))) {
+      LOG_WARN("failed to check stmt has function table", K(ret));
+    } else {
+      ctx_.set_has_subquery_in_function_table(has_subquery_in_function_table);
+    }
+  }
+
   LOG_TRACE("succeed to init optimization env", K(ctx_.use_pdml()), K(ctx_.get_parallel()));
   return ret;
 }
@@ -923,26 +934,24 @@ int ObOptimizer::add_column_usage_arg(const ObDMLStmt &stmt,
                                       int64_t flag)
 {
   int ret = OB_SUCCESS;
-  if (column_expr.get_expr_level() == stmt.get_current_level()){
-    const TableItem *table = stmt.get_table_item_by_id(column_expr.get_table_id());
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected NULL", K(ret), K(column_expr), K(table), K(stmt.get_table_items()));
-    } else if (table->is_basic_table()) {
-      bool find = false;
-      for (int64_t i = 0; i < ctx_.get_column_usage_infos().count(); ++i) {
-        if (ctx_.get_column_usage_infos().at(i).table_id_ == table->ref_id_ &&
-            ctx_.get_column_usage_infos().at(i).column_id_ == column_expr.get_column_id()) {
-          ctx_.get_column_usage_infos().at(i).flags_ |= flag;
-        }
+  const TableItem *table = stmt.get_table_item_by_id(column_expr.get_table_id());
+  if (OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", K(ret), K(column_expr), K(table), K(stmt.get_table_items()));
+  } else if (table->is_basic_table()) {
+    bool find = false;
+    for (int64_t i = 0; i < ctx_.get_column_usage_infos().count(); ++i) {
+      if (ctx_.get_column_usage_infos().at(i).table_id_ == table->ref_id_ &&
+          ctx_.get_column_usage_infos().at(i).column_id_ == column_expr.get_column_id()) {
+        ctx_.get_column_usage_infos().at(i).flags_ |= flag;
       }
-      if (!find) {
-        ColumnUsageArg col_arg;
-        col_arg.table_id_ = table->ref_id_;
-        col_arg.column_id_ = column_expr.get_column_id();
-        col_arg.flags_ = flag;
-        ret = ctx_.get_column_usage_infos().push_back(col_arg);
-      }
+    }
+    if (!find) {
+      ColumnUsageArg col_arg;
+      col_arg.table_id_ = table->ref_id_;
+      col_arg.column_id_ = column_expr.get_column_id();
+      col_arg.flags_ = flag;
+      ret = ctx_.get_column_usage_infos().push_back(col_arg);
     }
   }
   return ret;

@@ -44,8 +44,6 @@ public:
                             ObRawExprCopier &expr_copier,
                             const ObDMLStmt &other) override;
   int assign(const ObUpdateStmt &other);
-  virtual int replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                                      const common::ObIArray<ObRawExpr*> &new_exprs) override;
   virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const override;
   common::ObIArray<ObUpdateTableInfo*> &get_update_table_info() { return table_info_; }
   const common::ObIArray<ObUpdateTableInfo*> &get_update_table_info() const { return table_info_; }
@@ -53,7 +51,6 @@ public:
   int get_vector_assign_values(ObQueryRefRawExpr *query_ref,
                                ObIArray<ObRawExpr *> &assign_values) const;
 
-  // virtual int expand_exprs(const ObSQLSessionInfo &session);
   virtual uint64_t get_trigger_events() const override
   {
     return ObDmlEventType::DE_UPDATING;
@@ -79,8 +76,7 @@ public:
       N_OFFSET, limit_offset_expr_,
       N_STMT_HINT, stmt_hint_,
       N_QUERY_CTX, query_ctx_);
-protected:
-  virtual int inner_get_relation_exprs(RelExprCheckerBase &expr_checker);
+
 private:
   common::ObSEArray<ObUpdateTableInfo*, 2, common::ModulePageAllocator, true> table_info_;
 };

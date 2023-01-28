@@ -17,6 +17,7 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "common/ob_smart_call.h"
+#include "sql/monitor/ob_sql_plan.h"
 
 namespace oceanbase
 {
@@ -631,12 +632,12 @@ int ObQueryHint::recover_qb_names(const ObIArray<int64_t> &qb_name_counts, int64
   return ret;
 }
 
-int ObQueryHint::print_qb_name_hints(planText &plan_text) const
+int ObQueryHint::print_qb_name_hints(PlanText &plan_text) const
 {
   int ret = OB_SUCCESS;
-  char *buf = plan_text.buf;
-  int64_t &buf_len = plan_text.buf_len;
-  int64_t &pos = plan_text.pos;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt_id_map_.count(); ++i) {
     if (stmt_id_map_.at(i).is_from_hint_) {
       const ObIArray<ObString> &qb_names = stmt_id_map_.at(i).qb_names_;
@@ -655,7 +656,7 @@ int ObQueryHint::print_qb_name_hints(planText &plan_text) const
 // Used for stmt printer
 // If outline_stmt_id_ is invalid stmt id and has_outline_data(), do not print hint.
 //  This may happened for outline data from SPM.
-int ObQueryHint::print_stmt_hint(planText &plan_text, const ObDMLStmt &stmt) const
+int ObQueryHint::print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt, const bool is_root_stmt) const
 {
   int ret = OB_SUCCESS;
   const int64_t stmt_id = stmt.get_stmt_id();
@@ -669,7 +670,7 @@ int ObQueryHint::print_stmt_hint(planText &plan_text, const ObDMLStmt &stmt) con
   } else if (!has_outline_data()) {
     // Not outline data, print current stmt hint here.
     // If stmt is the first stmt can add hint, print global hint and hint with qb name.
-    const bool is_first_stmt = stmt.is_root_stmt();
+    const bool is_first_stmt = is_root_stmt;
     if (is_first_stmt && OB_FAIL(get_global_hint().print_global_hint(plan_text))) {
       LOG_WARN("failed to print global hint", K(ret));
     } else if (OB_FAIL(stmt.get_stmt_hint().print_stmt_hint(plan_text))) {
@@ -692,12 +693,12 @@ int ObQueryHint::print_stmt_hint(planText &plan_text, const ObDMLStmt &stmt) con
 }
 
 // used for stmt printer
-int ObQueryHint::print_outline_data(planText &plan_text) const
+int ObQueryHint::print_outline_data(PlanText &plan_text) const
 {
   int ret = OB_SUCCESS;
-  char *buf = plan_text.buf;
-  int64_t &buf_len = plan_text.buf_len;
-  int64_t &pos = plan_text.pos;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
   bool is_oneline = plan_text.is_oneline_;
   if (OB_UNLIKELY(1 < stmt_id_hints_.count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -731,7 +732,7 @@ int ObQueryHint::print_outline_data(planText &plan_text) const
   return ret;
 }
 
-int ObQueryHint::print_qb_name_hint(planText &plan_text, int64_t stmt_id) const
+int ObQueryHint::print_qb_name_hint(PlanText &plan_text, int64_t stmt_id) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(stmt_id < 0 || stmt_id >= stmt_id_map_.count())) {
@@ -739,9 +740,9 @@ int ObQueryHint::print_qb_name_hint(planText &plan_text, int64_t stmt_id) const
     LOG_WARN("unexpected stmt id", K(ret), K(stmt_id), K(stmt_id_map_.count()));
   } else if (stmt_id_map_.at(stmt_id).is_from_hint_) {
     const ObIArray<ObString> &qb_names = stmt_id_map_.at(stmt_id).qb_names_;
-    char *buf = plan_text.buf;
-    int64_t &buf_len = plan_text.buf_len;
-    int64_t &pos = plan_text.pos;
+    char *buf = plan_text.buf_;
+    int64_t &buf_len = plan_text.buf_len_;
+    int64_t &pos = plan_text.pos_;
     if (OB_UNLIKELY(qb_names.empty() || qb_names.at(0).empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected qb name hint", K(ret), K(stmt_id), K(stmt_id_map_.at(stmt_id)));
@@ -753,17 +754,14 @@ int ObQueryHint::print_qb_name_hint(planText &plan_text, int64_t stmt_id) const
   return ret;
 }
 
-int ObQueryHint::print_transform_hints(planText &plan_text) const
+int ObQueryHint::print_transform_hints(PlanText &plan_text) const
 {
   int ret = OB_SUCCESS;
   const ObIArray<const ObHint*> *hints = NULL;
-  if (OUTLINE_DATA == plan_text.outline_type_) {
-    hints = &outline_trans_hints_;
-  } else if (USED_HINT == plan_text.outline_type_) {
+  if (plan_text.is_used_hint_) {
     hints = &used_trans_hints_;
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected outline type", K(ret), K(plan_text.outline_type_));
+    hints = &outline_trans_hints_;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < hints->count(); ++i) {
     if (OB_ISNULL(hints->at(i))) {
@@ -960,12 +958,12 @@ void QbNames::reset()
   qb_names_.reset();
 }
 
-int QbNames::print_qb_names(planText &plan_text) const
+int QbNames::print_qb_names(PlanText &plan_text) const
 {
   int ret = OB_SUCCESS;
-  char *buf = plan_text.buf;
-  int64_t &buf_len = plan_text.buf_len;
-  int64_t &pos = plan_text.pos;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
   int64_t idx = is_from_hint_ ? 1 : 0;
   if (OB_UNLIKELY(qb_names_.empty())) {
     ObString stmt_type = ObResolverUtils::get_stmt_type_string(stmt_type_);
@@ -1011,7 +1009,7 @@ int ObHints::assign(const ObHints &other)
   return ret;
 }
 
-int ObHints::print_hints(planText &plan_text, bool ignore_trans_hint /* default false */ ) const
+int ObHints::print_hints(PlanText &plan_text, bool ignore_trans_hint /* default false */ ) const
 {
   int ret = OB_SUCCESS;
   const ObHint *hint = NULL;
@@ -1064,7 +1062,7 @@ DEF_TO_STRING(ObStmtHint)
   return pos;
 }
 
-int ObStmtHint::print_stmt_hint(planText &plan_text) const
+int ObStmtHint::print_stmt_hint(PlanText &plan_text) const
 {
   int ret = OB_SUCCESS;
   const ObHint *hint = NULL;
@@ -1855,6 +1853,26 @@ int ObLogPlanHint::check_use_join_filter(uint64_t filter_table_id,
   return ret;
 }
 
+int ObLogPlanHint::get_pushdown_join_filter_hints(uint64_t filter_table_id,
+                                                  const ObRelIds &left_tables,
+                                                  bool config_disable,
+                                                  JoinFilterPushdownHintInfo& info) const
+{
+  int ret = OB_SUCCESS;
+  const LogTableHint *log_table_hint = get_log_table_hint(filter_table_id);
+  info.filter_table_id_ = filter_table_id;
+  info.config_disable_ = config_disable;
+  if (NULL == log_table_hint) {
+  } else if(OB_FAIL(log_table_hint->get_join_filter_hints(left_tables, false,
+                                                          info.join_filter_hints_))) {
+    LOG_WARN("failed to get join filter hints", K(ret));
+  } else if (OB_FAIL(log_table_hint->get_join_filter_hints(left_tables, true,
+                                                          info.part_join_filter_hints_))) {
+    LOG_WARN("failed to get join filter hints", K(ret));
+  }
+  return ret;
+}
+
 const LogJoinHint *ObLogPlanHint::get_join_hint(const ObRelIds &join_tables) const
 {
   const LogJoinHint *log_join_hint = NULL;
@@ -2368,6 +2386,33 @@ int LogTableHint::get_join_filter_hint(const ObRelIds &left_tables,
   return ret;
 }
 
+int LogTableHint::get_join_filter_hints(const ObRelIds &left_tables,
+                                        bool part_join_filter,
+                                        ObIArray<const ObJoinFilterHint*> &hints) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(left_tables.is_empty()) ||
+      OB_UNLIKELY(left_tables_.count() != join_filter_hints_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(left_tables), K(left_tables_), K(join_filter_hints_));
+  } else {
+    const ObJoinFilterHint *cur_hint = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < left_tables_.count(); ++i) {
+      if (OB_ISNULL(cur_hint = join_filter_hints_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (cur_hint->is_part_join_filter_hint() != part_join_filter) {
+        /* do nothing */
+      } else if (!left_tables.equal(left_tables_.at(i))) {
+        /* do nothing */
+      } else if (OB_FAIL(hints.push_back(cur_hint))) {
+        LOG_WARN("failed to push back hints", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int LogTableHint::add_join_filter_hint(const ObDMLStmt &stmt,
                                        const ObQueryHint &query_hint,
                                        const ObJoinFilterHint &hint)
@@ -2391,7 +2436,9 @@ int LogTableHint::add_join_filter_hint(const ObDMLStmt &stmt,
         LOG_WARN("unexpected params", K(ret), K(join_filter_hints_.at(i)));
       } else if (join_filter_hints_.at(i)->get_hint_type() == hint.get_hint_type()
                  && has_left_tables == join_filter_hints_.at(i)->has_left_tables()
-                 && left_tables.equal(left_tables_.at(i))) {
+                 && left_tables.equal(left_tables_.at(i))
+                 && join_filter_hints_.at(i)->get_pushdown_filter_table().equal(
+                                              hint.get_pushdown_filter_table())) {
         added = true;
         if (hint.is_disable_hint()) {
           join_filter_hints_.at(i) = &hint;
@@ -2430,6 +2477,53 @@ int LogTableHint::allowed_skip_scan(const uint64_t index_id, bool &allowed) cons
         find = true;
       }
     }
+  }
+  return ret;
+}
+
+int JoinFilterPushdownHintInfo::check_use_join_filter(const ObDMLStmt &stmt,
+                                                      const ObQueryHint &query_hint,
+                                                      uint64_t filter_table_id,
+                                                      bool part_join_filter,
+                                                      bool &can_use,
+                                                      const ObJoinFilterHint *&force_hint) const
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<const ObJoinFilterHint*> &join_filters = part_join_filter ? part_join_filter_hints_ :
+                                                                             join_filter_hints_;
+  const TableItem* table_item;
+  ObString qb_name;
+  const ObJoinFilterHint* current_hint = NULL;
+  bool found = false;
+  if (OB_ISNULL(table_item = stmt.get_table_item_by_id(filter_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get filter table from stmt", K(ret));
+  } else if(OB_FAIL(stmt.get_qb_name(qb_name))) {
+    LOG_WARN("failed to get qb name", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !found && i < join_filters.count(); ++i) {
+    const ObJoinFilterHint *hint;
+    if (OB_ISNULL(hint = join_filters.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (0 != hint->get_pushdown_filter_table().qb_name_.case_compare(qb_name)) {
+    } else if (hint->get_pushdown_filter_table().is_match_table_item(query_hint.cs_type_, *table_item)) {
+      current_hint = hint;
+      if (hint->is_disable_hint()) {
+        found = true;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (NULL != current_hint) {
+    can_use = current_hint->is_enable_hint();
+    force_hint = can_use ? current_hint : NULL;
+  } else if (query_hint.has_outline_data()) {
+    can_use = false;
+    force_hint = NULL;
+  } else {
+    can_use = !config_disable_;
+    force_hint = NULL;
   }
   return ret;
 }

@@ -30,7 +30,7 @@
 #include "sql/resolver/ob_stmt_type.h"
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
-
+#include "sql/monitor/flt/ob_flt_span_mgr.h"
 namespace oceanbase
 {
 namespace sql
@@ -342,6 +342,12 @@ public:
                                    const bool ret_error = false);
   static void set_insert_update_scope(common::ObCastMode &cast_mode);
   static bool is_insert_update_scope(common::ObCastMode &cast_mode);
+  static common::ObCollationLevel transform_cs_level(const common::ObCollationLevel cs_level);
+  static int set_cs_level_cast_mode(const common::ObCollationLevel cs_level,
+                                    common::ObCastMode &cast_mode);
+  static int get_cs_level_from_cast_mode(const common::ObCastMode cast_mode,
+                                         const common::ObCollationLevel default_level,
+                                         common::ObCollationLevel &cs_level);
   static int  get_outline_key(common::ObIAllocator &allocator,
                               const ObSQLSessionInfo *session,
                               const common::ObString &query_sql,
@@ -524,7 +530,6 @@ public:
                               const common::ObString &identifier_name);
   static bool is_one_part_table_can_skip_part_calc(const share::schema::ObTableSchema &schema);
 
-  static bool check_can_encode_sortkey(const common::ObIArray<OrderItem> &order_keys);
   static int create_encode_sortkey_expr(ObRawExprFactory &expr_factory,
                                         ObExecContext* exec_ctx,
                                         const common::ObIArray<OrderItem> &order_keys,
@@ -605,41 +610,14 @@ public:
 class RelExprCheckerBase
 {
 public:
-  const static int32_t FIELD_LIST_SCOPE;
-  const static int32_t WHERE_SCOPE;
-  const static int32_t GROUP_SCOPE;
-  const static int32_t HAVING_SCOPE;
-  /* const static int32_t INSERT_SCOPE; */
-  /* const static int32_t UPDATE_SCOPE; */
-  /* const static int32_t AGG_SCOPE; */
-  /* const static int32_t VARIABLE_SCOPE; */
-  /* const static int32_t WHEN_SCOPE; */
-  const static int32_t ORDER_SCOPE;
-  //  const static int32_t EXPIRE_SCOPE;
-  //  const static int32_t PARTITION_SCOPE;
-  const static int32_t FROM_SCOPE;
-  const static int32_t LIMIT_SCOPE;
-  //  const static int32_t PARTITION_RANGE_SCOPE;
-  //  const static int32_t INTO_SCOPE;
-  const static int32_t START_WITH_SCOPE;
-  const static int32_t CONNECT_BY_SCOPE;
-  const static int32_t JOIN_CONDITION_SCOPE;
-  const static int32_t EXTRA_OUTPUT_SCOPE;
-
-public:
   RelExprCheckerBase()
-      : duplicated_checker_(), ignore_scope_(0)
-  {
-  }
-  RelExprCheckerBase(int32_t ignore_scope)
-      : duplicated_checker_(), ignore_scope_(ignore_scope)
+      : duplicated_checker_()
   {
   }
   virtual ~RelExprCheckerBase()
   {
     duplicated_checker_.destroy();
   }
-  bool is_ignore(int32_t ignore_scope) {return ignore_scope & ignore_scope_; }
   virtual int init(int64_t bucket_num = CHECKER_BUCKET_NUM);
   virtual int add_expr(ObRawExpr *&expr) = 0;
   int add_exprs(common::ObIArray<ObRawExpr*> &exprs);
@@ -647,7 +625,6 @@ public:
 protected:
   static const int64_t CHECKER_BUCKET_NUM = 1000;
   common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> duplicated_checker_;
-  int32_t ignore_scope_;
 };
 
 
@@ -659,10 +636,6 @@ public:
   {
   }
 
-  RelExprChecker(common::ObIArray<ObRawExpr*> &rel_array, int32_t ignore_scope)
-      : RelExprCheckerBase(ignore_scope), rel_array_(rel_array)
-  {
-  }
   virtual ~RelExprChecker() {}
   int add_expr(ObRawExpr *&expr);
 private:
@@ -673,7 +646,6 @@ class FastRelExprChecker : public RelExprCheckerBase
 {
 public:
   FastRelExprChecker(common::ObIArray<ObRawExpr *> &rel_array);
-  FastRelExprChecker(common::ObIArray<ObRawExpr *> &rel_array, int32_t ignore_scope);
   virtual ~FastRelExprChecker();
   int add_expr(ObRawExpr *&expr);
   int dedup();
@@ -689,10 +661,6 @@ public:
       : RelExprCheckerBase(), rel_array_(rel_array), expr_id_map_()
   {
   }
-  RelExprPointerChecker(common::ObIArray<ObRawExprPointer> &rel_array, int32_t ignore_scope)
-      : RelExprCheckerBase(ignore_scope), rel_array_(rel_array), expr_id_map_()
-  {
-  }
   virtual ~RelExprPointerChecker() {}
   virtual int init(int64_t bucket_num = CHECKER_BUCKET_NUM) override;
   int add_expr(ObRawExpr *&expr);
@@ -706,10 +674,6 @@ class AllExprPointerCollector : public RelExprCheckerBase
 public:
   AllExprPointerCollector(common::ObIArray<ObRawExpr**> &rel_array)
       : RelExprCheckerBase(), rel_array_(rel_array)
-  {
-  }
-  AllExprPointerCollector(common::ObIArray<ObRawExpr**> &rel_array, int32_t ignore_scope)
-      : RelExprCheckerBase(ignore_scope), rel_array_(rel_array)
   {
   }
   virtual ~AllExprPointerCollector() {}
@@ -1032,6 +996,7 @@ enum PreCalcExprExpectResult {
   PRE_CALC_RESULT_NOT_NULL,
   PRE_CALC_RESULT_TRUE,
   PRE_CALC_RESULT_FALSE,
+  PRE_CALC_RESULT_NO_WILDCARD,
   PRE_CALC_ERROR,
   PRE_CALC_PRECISE,
   PRE_CALC_NOT_PRECISE,

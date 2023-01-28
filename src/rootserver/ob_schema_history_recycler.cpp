@@ -942,6 +942,17 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
       ret = OB_SUCCESS;
     }
 
+    // --------------------------- rls ---------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, rls_policy, OB_ALL_RLS_POLICY_HISTORY_TNAME,
+                         rls_policy_id);
+    RECYCLE_SECOND_SCHEMA(rls_sec_column, OB_ALL_RLS_SECURITY_COLUMN_HISTORY_TNAME,
+                          rls_policy_id, column_id);
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, rls_group, OB_ALL_RLS_GROUP_HISTORY_TNAME,
+                         rls_group_id);
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, rls_context, OB_ALL_RLS_CONTEXT_HISTORY_TNAME,
+                         rls_context_id);
+    ret = OB_SUCCESS; // overwrite ret
+
 #undef RECYCLE_FIRST_SCHEMA
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     ROOTSERVICE_EVENT_ADD("schema_recycler", "batch_recycle_by_tenant",

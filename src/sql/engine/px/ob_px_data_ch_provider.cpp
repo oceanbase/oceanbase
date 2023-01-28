@@ -24,9 +24,6 @@ using namespace oceanbase::sql::dtl;
 int ObPxTransmitChProvider::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(msg_ready_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
-    LOG_WARN("fail init cond", K(ret));
-  }
   return ret;
 }
 
@@ -51,8 +48,11 @@ int ObPxTransmitChProvider::get_data_ch_nonblock(
   return ret;
 }
 
-int ObPxTransmitChProvider::get_data_ch(
-  const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts, ObPxTaskChSet &ch_set, ObDtlChTotalInfo **ch_info)
+int ObPxTransmitChProvider::get_data_ch(const int64_t sqc_id,
+                                        const int64_t task_id,
+                                        int64_t timeout_ts,
+                                        ObPxTaskChSet &ch_set,
+                                        ObDtlChTotalInfo **ch_info)
 {
   int ret = OB_SUCCESS;
   ret = wait_msg(timeout_ts);
@@ -180,11 +180,11 @@ int ObPxTransmitChProvider::wait_msg(int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
   int64_t wait_count = 0;
-  ObThreadCondGuard guard(msg_ready_cond_);
   while (!msg_set_) {
     if (!msg_set_) {
+      ObThreadCondGuard guard(msg_ready_cond_);
       // wait 1 ms or notified.
-      msg_ready_cond_.wait_us(1000);
+      int tmp_ret = msg_ready_cond_.wait_us(1000);
 
       wait_count++;
       // trace log each 100ms
@@ -197,6 +197,10 @@ int ObPxTransmitChProvider::wait_msg(int64_t timeout_ts)
         ObInterruptCode code = GET_INTERRUPT_CODE();
         ret = code.code_;
         LOG_WARN("transmit channel provider wait msg loop is interrupted", K(code), K(ret));
+        break;
+      } else if (OB_SUCCESS == tmp_ret && !msg_set_) { // wake up by leader, retry
+        ret = OB_EAGAIN;
+        LOG_TRACE("wake up by leader, retry");
         break;
       }
     } else {
@@ -228,9 +232,7 @@ int ObPxTransmitChProvider::add_msg(const ObPxTransmitDataChannelMsg &msg)
 int ObPxReceiveChProvider::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(msg_ready_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
-    LOG_WARN("fail init cond", K(ret));
-  } else if (OB_FAIL(reserve_msg_set_array_size(MSG_SET_DEFAULT_SIZE))) {
+  if (OB_FAIL(reserve_msg_set_array_size(MSG_SET_DEFAULT_SIZE))) {
     LOG_WARN("fail to reserve msg set array", K(ret));
   }
   return ret;
@@ -374,9 +376,10 @@ int ObPxReceiveChProvider::wait_msg(int64_t child_dfo_id, int64_t timeout_ts)
   }
   if (OB_SUCC(ret)) {
     while (!msg_set_[child_dfo_id]) {
+      int tmp_ret = OB_SUCCESS;
       msg_ready_cond_.lock();
       if (!msg_set_[child_dfo_id]) {
-        msg_ready_cond_.wait_us(1 * 1000); /* 1 ms */
+        tmp_ret = msg_ready_cond_.wait_us(1 * 1000); /* 1 ms */
       }
       msg_ready_cond_.unlock();
       if (!msg_set_[child_dfo_id]) {
@@ -392,6 +395,10 @@ int ObPxReceiveChProvider::wait_msg(int64_t child_dfo_id, int64_t timeout_ts)
           ret = code.code_;
           LOG_WARN("receive channel provider wait msg loop is interrupted",
                    K(child_dfo_id), K(wait_count), K(code), K(ret));
+          break;
+        } else if (OB_SUCCESS == tmp_ret) {
+          ret = OB_EAGAIN;
+          LOG_TRACE("follower is wake up by leader, retry");
           break;
         }
       }
@@ -460,9 +467,6 @@ int ObPxBloomfilterChProvider::get_data_ch_nonblock(
 int ObPxBloomfilterChProvider::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(msg_ready_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
-    LOG_WARN("fail init cond", K(ret));
-  }
   return ret;
 }
 

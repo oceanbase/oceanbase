@@ -19,6 +19,7 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/dtl/ob_dtl_fc_server.h"
 #include "ob_dtl_interm_result_manager.h"
+#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 using namespace oceanbase::common;
 
 namespace oceanbase {
@@ -67,16 +68,21 @@ int ObDtlSendMessageP::process_msg(ObDtlRpcDataResponse &response, ObDtlSendArgs
         tmp_ret = OB_SUCCESS;
       }
     } else if (arg.buffer_.is_data_msg() && 1 == arg.buffer_.seq_no()) {
-      ObDtlLinkedBuffer *buf = &arg.buffer_;
-      if (OB_FAIL(DTL.get_dfc_server().cache(arg.buffer_.tenant_id(), arg.chid_, buf))) {
-        LOG_WARN("get DTL channel fail", KP(arg.chid_), K(ret),
-          K(tmp_ret), K(arg.buffer_.tenant_id()), K(arg.buffer_.seq_no()));
+      if (!ObInitChannelPieceMsgCtx::enable_dh_channel_sync(arg.buffer_.enable_channel_sync())) {
+        ObDtlLinkedBuffer *buf = &arg.buffer_;
+        if (OB_FAIL(DTL.get_dfc_server().cache(arg.buffer_.tenant_id(), arg.chid_, buf))) {
+          LOG_WARN("get DTL channel fail", KP(arg.chid_), K(ret),
+            K(tmp_ret), K(arg.buffer_.tenant_id()), K(arg.buffer_.seq_no()));
+        } else {
+          // return block after cache first msg
+          // 如果有且仅有1行，则不block
+          response.is_block_ = !arg.buffer_.is_eof();
+          LOG_TRACE("first msg blocked", K(response.is_block_), KP(arg.chid_), K(ret),
+            K(arg.buffer_.tenant_id()), K(arg.buffer_.seq_no()));
+        }
       } else {
-        // return block after cache first msg
-        // 如果有且仅有1行，则不block
-        response.is_block_ = !arg.buffer_.is_eof();
-        LOG_TRACE("first msg blocked", K(response.is_block_), KP(arg.chid_), K(ret),
-          K(arg.buffer_.tenant_id()), K(arg.buffer_.seq_no()));
+        ret = tmp_ret;
+        LOG_WARN("failed to get channel", K(ret));
       }
     } else {
       // 太多的get channel fail，用trace

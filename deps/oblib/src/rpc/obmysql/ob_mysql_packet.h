@@ -91,6 +91,23 @@ enum ObMySQLCmd
   COM_MAX_NUM
 };
 
+enum class ObMySQLPacketType
+{
+  INVALID_PKT = 0,
+  PKT_MYSQL,     // 1 -> mysql packet;
+  PKT_OKP,       // 2 -> okp;
+  PKT_ERR,       // 3 -> error packet;
+  PKT_EOF,       // 4 -> eof packet;
+  PKT_ROW,       // 5 -> row packet;
+  PKT_FIELD,     // 6 -> field packet;
+  PKT_PIECE,     // 7 -> piece packet;
+  PKT_STR,       // 8 -> string packet;
+  PKT_PREPARE,   // 9 -> prepare packet;
+  PKT_RESHEAD,   // 10 -> result header packet
+  PKT_PREXEC,    // 11 -> prepare execute packet;
+  PKT_END        // 12 -> end of packet type
+};
+
 union ObServerStatusFlags
 {
   ObServerStatusFlags() : flags_(0) {}
@@ -411,7 +428,9 @@ public:
   virtual int64_t get_serialize_size() const;
   int encode(char *buffer, int64_t length, int64_t &pos, int64_t &pkt_count) const;
   int encode(char *buffer, int64_t length, int64_t &pos);
+  int get_pkt_len() { return hdr_.len_; }
   virtual int decode() { return common::OB_NOT_SUPPORTED; }
+  virtual ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::INVALID_PKT; }
 
   virtual void reset()
   {

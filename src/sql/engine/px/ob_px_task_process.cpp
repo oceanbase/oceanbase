@@ -30,6 +30,7 @@
 #include "sql/engine/basic/ob_temp_table_insert_op.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/engine/join/ob_hash_join_op.h"
+#include "sql/engine/window_function/ob_window_function_op.h"
 #include "sql/engine/px/ob_px_basic_info.h"
 #include "sql/engine/pdml/static/ob_px_multi_part_modify_op.h"
 #include "sql/engine/join/ob_join_filter_op.h"
@@ -271,7 +272,7 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
           get_sqc_init_arg().sqc_.get_rescan_batch_params(), i))) {
           LOG_WARN("fail to fill batch info", K(ret));
         } else if (OB_FAIL(arg_.get_sqc_handler()->get_sub_coord().
-          get_sqc_ctx().gi_pump_.regenerate_gi_task(true))) {
+          get_sqc_ctx().gi_pump_.regenerate_gi_task())) {
           LOG_WARN("fail to generate gi task array", K(ret));
         }
       }
@@ -543,12 +544,12 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
       if (OB_ISNULL(input)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
-      } else if (gi->pwj_gi() && on_set_tscs_) {
+      } else if (ObGranuleUtil::pwj_gi(gi->gi_attri_flag_) && on_set_tscs_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the partition-wise join's subplan contain a gi operator", K(*gi), K(ret));
       } else {
         input->set_worker_id(task_id_);
-        if (gi->pwj_gi()) {
+        if (ObGranuleUtil::pwj_gi(gi->gi_attri_flag_)) {
           pw_gi_spec_ = gi;
           on_set_tscs_ = true;
         }
@@ -633,7 +634,7 @@ int ObPxTaskProcess::OpPreparation::reset(ObOpSpec &op)
   int ret = OB_SUCCESS;
   if (PHY_GRANULE_ITERATOR == op.type_) {
     ObGranuleIteratorSpec *gi = static_cast<ObGranuleIteratorSpec *>(&op);
-    if (gi->pwj_gi()) {
+    if ((ObGranuleUtil::pwj_gi(gi->gi_attri_flag_))) {
       if (pw_gi_spec_ == nullptr || !on_set_tscs_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid state", K(pw_gi_spec_), K(on_set_tscs_));
@@ -681,6 +682,23 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
       } else if (hj_spec.is_shared_ht_ && OB_SUCCESS != ret_) {
+        input->set_error_code(ret_);
+        LOG_TRACE("debug post apply info", K(ret_));
+      } else {
+        LOG_TRACE("debug post apply info", K(ret_));
+      }
+    }
+  } else if (PHY_WINDOW_FUNCTION == op.type_) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObWindowFunctionSpec &wf_spec = static_cast<ObWindowFunctionSpec&>(op);
+      ObWindowFunctionOpInput *input = static_cast<ObWindowFunctionOpInput*>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else if (wf_spec.is_participator() && OB_SUCCESS != ret_) {
         input->set_error_code(ret_);
         LOG_TRACE("debug post apply info", K(ret_));
       } else {

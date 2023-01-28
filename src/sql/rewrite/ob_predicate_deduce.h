@@ -44,6 +44,11 @@ public:
                                    ObIArray<ObRawExpr *> &target_exprs,
                                    ObIArray<ObRawExpr *> &aggr_bound_preds);
 
+  static bool find_equal_expr(const ObIArray<ObRawExpr *> &exprs,
+                              const ObRawExpr *target,
+                              int64_t *idx = NULL,
+                              ObExprParamCheckContext *context = NULL);
+
   static int check_deduce_validity(ObRawExpr *expr, bool &is_valid);
 
   static inline bool is_simple_condition(const ObItemType type)

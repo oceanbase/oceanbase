@@ -199,12 +199,24 @@ private:
   int extract_child_conditions(ObDMLStmt *stmt,
                                TableItem *source_table,
                                ObIArray<ObRawExpr *> &join_conditions,
-                               ObSqlBitSet<8, int64_t> &right_rel_ids);
+                               ObSqlBitSet<> &right_rel_ids);
 
   int adjust_relation_exprs(const ObSqlBitSet<8, int64_t> &right_rel_ids,
                             const ObIArray<ObRawExpr *> &join_conditions,
                             ObIArray<ObRawExpr *> &relation_exprs,
                             bool &is_valid);
+
+  int compute_table_expr_ref_count(const ObSqlBitSet<> &rel_ids,
+                                   const ObIArray<ObRawExpr *> &exprs,
+                                   int64_t &total_ref_count);
+
+  int compute_table_expr_ref_count(const ObSqlBitSet<> &rel_ids,
+                                   const ObIArray<ObRawExprPointer> &exprs,
+                                   int64_t &total_ref_count);
+
+  int compute_table_expr_ref_count(const ObSqlBitSet<> &rel_ids,
+                                   const ObRawExpr* exprs,
+                                   int64_t &total_ref_count);
 
   int extract_equal_join_columns(const ObIArray<ObRawExpr *> &join_conds,
                                  const TableItem *source_table,
@@ -251,7 +263,7 @@ private:
                                            TableItem *&table_item,
                                            const bool is_non_sens_dul_vals,
                                            ObIArray<uint64_t> &removed_ids,
-                                           ObIArray<ObRawExpr *> &relation_exprs,
+                                           ObIArray<ObRawExprPointer> &relation_exprs,
                                            bool &trans_happen,
                                            ObIArray<ObSEArray<TableItem *, 4>> &trans_tables);
 
@@ -335,7 +347,7 @@ private:
   int check_transform_validity_outer_join(ObDMLStmt *stmt,
                                           JoinedTable *joined_table,
                                           const bool is_non_sens_dul_vals,
-                                          ObIArray<ObRawExpr *> &relation_exprs,
+                                          ObIArray<ObRawExprPointer> &relation_exprs,
                                           bool &is_valid);
 
   int check_has_semi_join_conditions(ObDMLStmt *stmt,

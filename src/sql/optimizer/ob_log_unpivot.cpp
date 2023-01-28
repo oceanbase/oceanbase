@@ -97,28 +97,40 @@ int ObLogUnpivot::allocate_expr_post(ObAllocExprContext &ctx)
   return ret;
 }
 
-int ObLogUnpivot::print_my_plan_annotation(char *buf,
-                                           int64_t &buf_len,
-                                           int64_t &pos,
-                                           ExplainType type)
+int ObLogUnpivot::get_plan_item_info(PlanText &plan_text,
+                                     ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  // print access
-  if (OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("unpivot(%s,%ld,%ld,%ld), ",
-      unpivot_info_.is_include_null_ ? "include" : "exclude",
-      unpivot_info_.old_column_count_,
-      unpivot_info_.for_column_count_,
-      unpivot_info_.unpivot_column_count_))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else { /* Do nothing */ }
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(BUF_PRINTF("unpivot(%s,%ld,%ld,%ld), ",
+        unpivot_info_.is_include_null_ ? "include" : "exclude",
+        unpivot_info_.old_column_count_,
+        unpivot_info_.for_column_count_,
+        unpivot_info_.unpivot_column_count_))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else { /* Do nothing */ }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
+  }
   if (OB_SUCC(ret)) {
+    BEGIN_BUF_PRINT;
     const ObIArray<ObRawExpr*> &access = get_access_exprs();
     EXPLAIN_PRINT_EXPRS(access, type);
-  } else { /* Do nothing */ }
+    END_BUF_PRINT(plan_item.access_predicates_,
+                  plan_item.access_predicates_len_);
+  }
+  if (OB_SUCC(ret)) {
+    ObString &name = get_subquery_name();
+    BUF_PRINT_OB_STR(name.ptr(),
+                     name.length(),
+                     plan_item.object_alias_,
+                     plan_item.object_alias_len_);
+  }
   return ret;
 }
 
@@ -164,17 +176,12 @@ int ObLogUnpivot::compute_sharding_info()
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObJoinOrder::convert_subplan_scan_sharding_info(get_plan()->get_allocator(),
-                                                                  get_plan()->get_optimizer_context(),
-                                                                  child->get_output_equal_sets(),
+      if (OB_FAIL(ObJoinOrder::convert_subplan_scan_sharding_info(*get_plan(),
+                                                                  *child,
                                                                   subquery_id_,
-                                                                  *parent_stmt,
-                                                                  *child_stmt,
-                                                                  strong_sharding,
-                                                                  weak_sharding,
                                                                   strong_sharding_,
                                                                   weak_sharding_))) {
-        LOG_WARN("failed to convert unpovit sharding info", K(ret));
+        LOG_WARN("failed to convert subplan scan sharding info", K(ret));
       } else {
         LOG_TRACE("succeed to convert unpovit scan sharding info", K(ret));
       }
@@ -301,7 +308,6 @@ int ObLogUnpivot::compute_fd_item_set()
     if (0 == unpivot_info.old_column_count_ || child_fd_item_set.empty()) {
       //do nothing
     } else {
-      const int32_t stmt_level = get_stmt()->get_current_level();
       ObSEArray<ObRawExpr *, 1> value_exprs;
       for (int64_t i = 0;  OB_SUCC(ret) && i < child_fd_item_set.count(); i++) {
         ObRawExpr *expr = NULL;
@@ -316,7 +322,7 @@ int ObLogUnpivot::compute_fd_item_set()
               if (OB_FAIL(value_exprs.push_back(expr))) {
                 LOG_WARN("failed to push back expr", K(ret));
               } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_table_fd_item(fd_item,
-                  true, value_exprs, stmt_level, get_table_set()))) {
+                  true, value_exprs, get_table_set()))) {
                 LOG_WARN("failed to create fd item", K(ret));
               } else if (NULL == fd_item_set) {
                 if (OB_FAIL(my_plan_->get_fd_item_factory().create_fd_item_set(fd_item_set))) {

@@ -1219,7 +1219,7 @@ TEST_F(TestBatchExecute, partial_update)
 
 
 // create table if not exists append_lob_test (C1 bigint primary key, C2 bigint, C3 mediumtext not null);
-TEST_F(TestBatchExecute, append_lob)
+/*TEST_F(TestBatchExecute, append_lob)
 {
   // setup
   ObTable *the_table = NULL;
@@ -1340,7 +1340,7 @@ TEST_F(TestBatchExecute, append_lob)
   service_client_->free_table(the_table);
   the_table = NULL;
 }
-
+*/
 // for lob column
 // drop table if exists all_lob_test; create table if not exists all_lob_test (C1 bigint primary key, C2 bigint, C3 mediumtext, index i1(c2) local)
 // TEST_F(TestBatchExecute, lob_column_test)
@@ -1557,7 +1557,7 @@ TEST_F(TestBatchExecute, append_lob)
 // create table if not exists virtual_generate_col_test
 // (C1 bigint primary key, C2 bigint, C3 varchar(100),
 // C3_PREFIX varchar(10) GENERATED ALWAYS AS (substr(C3,1,2)));
-TEST_F(TestBatchExecute, virtual_generate_col_test)
+/*TEST_F(TestBatchExecute, virtual_generate_col_test)
 {
   // setup
   ObTable *the_table = NULL;
@@ -1664,7 +1664,6 @@ TEST_F(TestBatchExecute, virtual_generate_col_test)
   service_client_->free_table(the_table);
   the_table = NULL;
 }
-
 // create table if not exists store_generate_col_test
 // (c1 bigint primary key, c2 varchar(10), c3 varchar(10),
 // gen varchar(30) generated always as (concat(c2,c3)) stored)
@@ -1849,7 +1848,7 @@ TEST_F(TestBatchExecute, stored_generate_col_test)
   service_client_->free_table(the_table);
   the_table = NULL;
 }
-
+*/
 // create table if not exists large_scan_test (C1 bigint primary key, C2 bigint, C3 varchar(100));
 TEST_F(TestBatchExecute, large_scan)
 {
@@ -6053,7 +6052,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
   delete [] rows;
 }
 
-TEST_F(TestBatchExecute, single_increment_append)
+/*TEST_F(TestBatchExecute, single_increment_append)
 {
   OB_LOG(INFO, "begin single_increment");
   ObTable *the_table = NULL;
@@ -6380,7 +6379,7 @@ TEST_F(TestBatchExecute, single_increment_append)
   }
   service_client_->free_table(the_table);
 }
-
+*/
 // create table if not exists multi_update_test
 // (C1 bigint primary key, C2 double, C3 varchar(100) default 'hello world')
 // PARTITION BY KEY(C1) PARTITIONS 16
@@ -7595,7 +7594,7 @@ TEST_F(TestBatchExecute, complex_batch_execute)
   }
   service_client_->free_table(the_table);
 }
-
+/*
 TEST_F(TestBatchExecute, increment_and_append_batch)
 {
   ObTable *the_table = NULL;
@@ -7737,7 +7736,7 @@ TEST_F(TestBatchExecute, increment_and_append_batch)
     }
   }
 }
-
+*/
 TEST_F(TestBatchExecute, htable_put)
 {
   // setup

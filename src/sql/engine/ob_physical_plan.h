@@ -183,6 +183,7 @@ public:
   int assign_worker_map(common::hash::ObHashMap<ObAddr, int64_t> &worker_map,
                         const common::hash::ObHashMap<ObAddr, int64_t> &c);
   const char* get_sql_id() const { return stat_.sql_id_.ptr(); }
+  const ObString& get_sql_id_string() const { return stat_.sql_id_; }
   uint32_t get_next_phy_operator_id() { return next_phy_operator_id_++; }
   uint32_t get_next_phy_operator_id() const { return next_phy_operator_id_; }
   void set_next_phy_operator_id(uint32_t next_operator_id)
@@ -335,6 +336,8 @@ public:
   inline int64_t get_ddl_execution_id() const { return ddl_execution_id_; }
   inline void set_ddl_task_id(const int64_t ddl_task_id) { ddl_task_id_ = ddl_task_id; }
   inline int64_t get_ddl_task_id() const { return ddl_task_id_; }
+  void set_record_plan_info(bool v) { need_record_plan_info_ = v; }
+  bool need_record_plan_info() const { return need_record_plan_info_; }
   const common::ObString &get_rule_name() const { return stat_.rule_name_; }
   inline void set_is_rewrite_sql(bool v) { stat_.is_rewrite_sql_ = v; }
   inline bool is_rewrite_sql() const { return stat_.is_rewrite_sql_; }
@@ -439,6 +442,13 @@ public:
   bool has_instead_of_trigger() const { return has_instead_of_trigger_; }
   virtual int update_cache_obj_stat(ObILibCacheCtx &ctx);
   void calc_whether_need_trans();
+  inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
+  inline void set_min_cluster_version(uint64_t curr_cluster_version)
+  {
+    if (curr_cluster_version > min_cluster_version_) {
+      min_cluster_version_ = curr_cluster_version;
+    }
+  }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -600,6 +610,8 @@ public:
   //parallel encoding of output_expr in advance to speed up packet response
   bool is_packed_;
   bool has_instead_of_trigger_; // mask if has instead of trigger on view
+  uint64_t min_cluster_version_; // record min cluster version in code gen
+  bool need_record_plan_info_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

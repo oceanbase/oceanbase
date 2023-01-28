@@ -77,8 +77,13 @@
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/udr/ob_udr_analyzer.h"
 #include "common/ob_smart_call.h"
+#include "sql/ob_optimizer_trace_impl.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "sql/ob_optimizer_trace_impl.h"
+#include "sql/monitor/ob_sql_plan_manager.h"
+#include "sql/monitor/ob_sql_plan.h"
+#include "sql/optimizer/ob_explain_log_plan.h"
 
 namespace oceanbase
 {
@@ -1443,8 +1448,9 @@ int ObSql::handle_pl_execute(const ObString &sql,
   }
 
 
-  if (session.get_in_transaction()) {
-    if (ObStmt::is_dml_write_stmt(result.get_stmt_type())) {
+  if (OB_SUCC(ret) && session.get_in_transaction()) {
+    if (ObStmt::is_dml_write_stmt(result.get_stmt_type()) ||
+        ObStmt::is_savepoint_stmt(result.get_stmt_type())) {
       session.set_has_inner_dml_write(true);
     }
   }
@@ -2060,6 +2066,8 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
   int ret = OB_SUCCESS;
   //trim the sql first, let 'select c1 from t' and '  select c1 from t' and hit the same plan_cache
   const ObString &trimed_stmt = remote_sql_info.remote_sql_;
+  FLTSpanGuard(remote_compile);
+  FLT_SET_TAG(sql_text, trimed_stmt);
 
   ObIAllocator &allocator = THIS_WORKER.get_sql_arena_allocator();
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
@@ -2580,6 +2588,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       context.all_equal_param_constraints_ = &(resolver_ctx.query_ctx_->all_equal_param_constraints_);
       context.all_pre_calc_constraints_ = &(resolver_ctx.query_ctx_->all_pre_calc_constraints_);
       context.all_expr_constraints_ = &(resolver_ctx.query_ctx_->all_expr_constraints_);
+      context.all_priv_constraints_ = &(resolver_ctx.query_ctx_->all_priv_constraints_);
       context.cur_stmt_ = stmt;
       context.res_map_rule_id_ = resolver_ctx.query_ctx_->res_map_rule_id_;
       context.res_map_rule_param_idx_ = resolver_ctx.query_ctx_->res_map_rule_param_idx_;
@@ -2714,10 +2723,8 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   ObIAllocator &allocator = result.get_mem_pool();
   ObStmtNeedPrivs stmt_need_privs;
   ObStmtOraNeedPrivs stmt_ora_need_privs;
-  const uint64_t tenant_id = result.get_session().get_effective_tenant_id();
   stmt_need_privs.need_privs_.set_allocator(&allocator);
   stmt_ora_need_privs.need_privs_.set_allocator(&allocator);
-  uint64_t aggregate_setting = 0;
   // TODO: @linlin.xll remove ori_bl_key after eval_udf use identical sql ctx.
   ObPlanBaseKeyGuard guard(sql_ctx.spm_ctx_.bl_key_);
   _LOG_DEBUG("start to generate physical plan for query.(query = %.*s)",
@@ -2745,7 +2752,8 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   } else if (OB_FAIL(ObPrivilegeCheck::check_password_expired(sql_ctx,
                                                               basic_stmt->get_stmt_type()))) {
     LOG_WARN("Falied to check password expired", K(ret));
-  } else if (sql_ctx.multi_stmt_item_.is_batched_multi_stmt() && NULL != pc_ctx &&
+  } else if (sql_ctx.multi_stmt_item_.is_batched_multi_stmt() &&
+             NULL != pc_ctx &&
              OB_FAIL(check_batched_multi_stmt_after_resolver(*pc_ctx,
                                                              *basic_stmt,
                                                              is_valid))) {
@@ -2753,184 +2761,34 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   } else if (!is_valid) {
     ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
     LOG_WARN("batched multi_stmt needs rollback", K(ret));
-  } else { /*do nothing*/ }
-
-  if (OB_SUCC(ret)) {
-    if (basic_stmt->is_dml_stmt()
-        || basic_stmt->is_explain_stmt()
-        || basic_stmt->is_help_stmt()) {
-      ObPhysicalPlanCtx *pctx = result.get_exec_context().get_physical_plan_ctx();
-      bool allow_audit = false;
-      ObArray<ObAuditUnit> audit_units;
-      if (OB_ISNULL(pctx) || OB_ISNULL(result.get_exec_context().get_expr_factory())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Physical plan ctx should not be NULL", K(ret));
-      } else if (OB_ISNULL(result.get_exec_context().get_stmt_factory()->get_query_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("query ctx is null", K(ret));
-      } else if (OB_FAIL(fill_result_set(result, &sql_ctx, mode, *basic_stmt))) {
-        LOG_WARN("Failed to fill result set", K(ret));
-      } else if (OB_FAIL(sql_ctx.session_info_->get_sys_variable(share::SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS,
-                                                          aggregate_setting))) {
-        LOG_WARN("failed to get aggregate setting", K(ret));
-      } else {
-        ObDMLStmt *stmt = static_cast<ObDMLStmt*>(basic_stmt);
-        SQL_LOG(DEBUG, "stmt", "stmt", *stmt);
-        SQL_LOG(DEBUG, "stmt success", "query", SJ(*stmt));
-        const ObGlobalHint &global_hint = stmt->get_query_ctx()->get_global_hint();
-        sql_ctx.session_info_->set_early_lock_release(global_hint.enable_lock_early_release_);
-        ObOptimizerContext optctx(sql_ctx.session_info_,
-                                  &result.get_exec_context(),
-                                  &result.get_exec_context().get_stmt_factory()->get_query_ctx()->sql_schema_guard_,
-                                  opt_stat_mgr_,
-                                  allocator,
-                                  &pctx->get_param_store(),
-                                  self_addr_,
-                                  GCTX.srv_rpc_proxy_,
-                                  global_hint,
-                                  *result.get_exec_context().get_expr_factory(),
-                                  stmt,
-                                  result.is_ps_protocol(),
-                                  result.get_exec_context().get_stmt_factory()->get_query_ctx());
-        optctx.set_aggregation_optimization_settings(aggregate_setting);
-        pctx->set_field_array(result.get_field_columns());
-        pctx->set_is_ps_protocol(result.is_ps_protocol());
-        bool is_restore = false;
-        uint64_t effective_tid = result.get_session().get_effective_tenant_id();
-        if (OB_FAIL(ret)) {
-        } else if (OB_ISNULL(sql_ctx.schema_guard_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("schema guard is null", K(ret));
-        } else if (OB_FAIL(sql_ctx.schema_guard_->check_tenant_is_restore(
-                           effective_tid, is_restore))) {
-          LOG_WARN("fail to check if tenant is restore", K(ret), K(effective_tid));
-        } else if (is_restore) {
-          // 为避免物理恢复阶段系统表恢复过程中，SQL依赖需要恢复的统计信息表，
-          // 对恢复中租户，仅需获取缺省统计信息即可
-          optctx.set_use_default_stat();
-        }
-        ObOptimizer optimizer(optctx);
-        bool use_jit = false;
-        bool turn_on_jit = sql_ctx.need_late_compile_;
-        // if (OB_FAIL(ret)) {
-        // } else if (OB_FAIL(need_use_jit(turn_on_jit,
-        //                                 query_hint.use_jit_policy_,
-        //                                 *sql_ctx.session_info_,
-        //                                 use_jit))) {
-        //   use_jit = false;
-        //   LOG_WARN("failed to check for needing jitted expr", K(ret));
-        // } else {
-        //   // do nothing
-        // }
-
-        ObLogPlan *logical_plan = NULL;
-        ObPhysicalPlan *phy_plan = NULL;
-
-        // 内部session切租户时资源处理分离不彻底
-        // 当用户请求发送到一个没有对应租户资源的server上时，plan 内存算在了普通租户上，
-        // 但是计划挂在了sys租户的plan cache下面，导致plan_cache_stat表数据统计异常，
-        // 出现疑似内存泄漏实际上却没有泄漏的情况。这里处理为直接从plan cache
-        // 中取tenant id，这样计划分配的资源就算在了plan cache所对应的租户上
-        if (OB_NOT_NULL(result.get_session().get_plan_cache())) {
-          effective_tid = result.get_session().get_plan_cache()->get_tenant_id();
-        }
-
-        ObCacheObjGuard& guard = result.get_cache_obj_guard();
-        guard.init(PLAN_GEN_HANDLE);
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(ObCacheObjectFactory::alloc(guard,
-                                                       ObLibCacheNameSpace::NS_CRSR,
-                                                       effective_tid))) {
-          LOG_WARN("fail to alloc phy_plan", K(ret));
-        } else if (FALSE_IT(phy_plan = static_cast<ObPhysicalPlan*>(guard.get_cache_obj()))) {
-          // do nothing
-        } else if (OB_UNLIKELY(NULL == phy_plan)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("Failed to alloc physical plan from tc factory", K(ret));
-        } else {
-          // update is_use_jit flag
-          phy_plan->stat_.is_use_jit_ = use_jit;
-          phy_plan->stat_.enable_early_lock_release_ = sql_ctx.session_info_->get_early_lock_release();
-          // if phy_plan's tenant id, which refers the tenant who create this plan,
-          // not equal to current effective_tid, plan cache must be invalid
-          // and we shouldn't add this plan to plan cache.
-          if (NULL != pc_ctx) {
-            pc_ctx->should_add_plan_ = (effective_tid==phy_plan->get_tenant_id());
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          phy_plan->set_fetch_cur_time(stmt->get_fetch_cur_time());
-          phy_plan->set_stmt_type(stmt->get_stmt_type());
-          phy_plan->set_literal_stmt_type(stmt->get_query_ctx()->get_literal_stmt_type());
-          if (phy_plan->get_fetch_cur_time() && !pctx->has_cur_time()) {
-            pctx->set_cur_time(ObTimeUtility::current_time(), *(sql_ctx.session_info_));
-          }
-          pctx->set_last_trace_id(sql_ctx.session_info_->get_last_trace_id());
-        }
-
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(transform_stmt(&stmt->get_query_ctx()->sql_schema_guard_,
-                                          opt_stat_mgr_,
-                                          &self_addr_,
-                                          phy_plan,
-                                          result.get_exec_context(),
-                                          stmt))) { //rewrite stmt
-          LOG_WARN("Failed to transform stmt", K(ret));
-        } else if (OB_FALSE_IT(optctx.set_root_stmt(stmt))) {
-        } else if (OB_FAIL(optimize_stmt(optimizer, *(sql_ctx.session_info_),
-                                         *stmt, logical_plan))) { //gen logical plan
-          LOG_WARN("Failed to optimizer stmt", K(ret));
-        } else if (OB_FAIL(create_expr_constraints(*stmt->get_query_ctx(),
-                                                   result.get_exec_context()))){
-          LOG_WARN("Failed to create expr constraints", K(ret));
-        } else if (OB_ISNULL(logical_plan)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid null logical plan", K(ret), K(logical_plan));
-        } else if (OB_FAIL(code_generate(sql_ctx, result, stmt,
-                                         stmt_need_privs, stmt_ora_need_privs,
-                                         audit_units,
-                                         logical_plan, phy_plan))) { //gen phy plan
-          LOG_WARN("Failed to generate phy plan", K(ret));
-        }
-
-        // memory debug for sql work arena
-        if (OB_UNLIKELY(result.get_mem_pool().total() > SQL_MEM_SIZE_LIMIT)) {
-          int64_t total_mem_used = result.get_mem_pool().total();
-          LOG_INFO("[SQL MEM USAGE] use too much memory", K(total_mem_used),
-                    K(ObString(parse_result.input_sql_len_, parse_result.input_sql_)));
-        }
-
-        if (OB_FAIL(ret)) {
-        } else if (OB_ISNULL(stmt->get_query_ctx())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("query ctx is null", K(ret));
-        } else if (stmt::T_SELECT == stmt->get_stmt_type() &&
-                   stmt::T_SHOW_PARAMETERS == stmt->get_query_ctx()->get_literal_stmt_type()) {
-          ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt);
-          pctx->set_tenant_id(select_stmt->get_tenant_id());
-          pctx->set_show_seed(select_stmt->get_show_seed());
-          result.get_exec_context().reference_my_plan(phy_plan);
-        } else {
-          result.get_exec_context().reference_my_plan(phy_plan);
-        }
-      }
-    } else if (stmt::T_EXECUTE == basic_stmt->get_stmt_type()) {
-      if (OB_FAIL(handle_text_execute(basic_stmt, sql_ctx, result))) {
-        LOG_WARN("handle_text_execute failed", K(ret));
-      }
+  } else if (basic_stmt->is_dml_stmt()
+            || basic_stmt->is_explain_stmt()
+            || basic_stmt->is_help_stmt()) {
+    if (OB_FAIL(generate_plan(parse_result,
+                              pc_ctx,
+                              sql_ctx,
+                              result,
+                              mode,
+                              basic_stmt,
+                              stmt_need_privs,
+                              stmt_ora_need_privs))) {
+      LOG_WARN("failed to generate plan", K(ret));
+    }
+  } else if (stmt::T_EXECUTE == basic_stmt->get_stmt_type()) {
+    if (OB_FAIL(handle_text_execute(basic_stmt, sql_ctx, result))) {
+      LOG_WARN("handle_text_execute failed", K(ret));
+    }
+  } else {
+    ObICmd *cmd = dynamic_cast<ObICmd*>(basic_stmt);
+    if (OB_UNLIKELY(NULL == cmd)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail cast basic stmt to cmd", K(ret));
     } else {
-      ObICmd *cmd = dynamic_cast<ObICmd*>(basic_stmt);
-      if (OB_UNLIKELY(NULL == cmd)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail cast basic stmt to cmd", K(ret));
-      } else {
-        result.set_cmd(cmd);
-        result.get_session().set_cur_sql_id(sql_ctx.sql_id_);
-        if (!is_begin_commit_stmt
-          && OB_FAIL(fill_result_set(result, &sql_ctx, mode, *basic_stmt))) {
-          LOG_WARN("Failed to fill result set", K(ret));
-        }
+      result.set_cmd(cmd);
+      result.get_session().set_cur_sql_id(sql_ctx.sql_id_);
+      if (!is_begin_commit_stmt
+        && OB_FAIL(fill_result_set(result, &sql_ctx, mode, *basic_stmt))) {
+        LOG_WARN("Failed to fill result set", K(ret));
       }
     }
   }
@@ -2939,6 +2797,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
     int tmp_ret = ret;
     ObDMLStmt *stmt = static_cast<ObDMLStmt*>(basic_stmt);
     uint64_t data_version = 0;
+    const uint64_t tenant_id = result.get_session().get_effective_tenant_id();
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
       LOG_WARN("failed to get data version", K(ret));
     } else if (data_version < DATA_VERSION_4_1_0_0 && stmt->get_ref_obj_table()->is_inited()) {
@@ -2949,6 +2808,233 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
     }
     if (OB_SUCC(ret)) {
       ret = tmp_ret;
+    }
+  }
+  return ret;
+}
+
+int ObSql::generate_plan(ParseResult &parse_result,
+                        ObPlanCacheCtx *pc_ctx,
+                        ObSqlCtx &sql_ctx,
+                        ObResultSet &result,
+                        const PlanCacheMode mode,
+                        ObStmt *basic_stmt,
+                        ObStmtNeedPrivs &stmt_need_privs,
+                        ObStmtOraNeedPrivs &stmt_ora_need_privs)
+{
+  int ret = OB_SUCCESS;
+  uint64_t aggregate_setting = 0;
+  ObPhysicalPlanCtx *pctx = result.get_exec_context().get_physical_plan_ctx();
+  bool allow_audit = false;
+  ObArray<ObAuditUnit> audit_units;
+  if (OB_ISNULL(pctx) || OB_ISNULL(basic_stmt) ||
+      OB_ISNULL(result.get_exec_context().get_expr_factory())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Physical plan ctx should not be NULL", K(ret));
+  } else if (OB_ISNULL(result.get_exec_context().get_stmt_factory()->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query ctx is null", K(ret));
+  } else if (OB_FAIL(fill_result_set(result, &sql_ctx, mode, *basic_stmt))) {
+    LOG_WARN("Failed to fill result set", K(ret));
+  } else if (OB_FAIL(sql_ctx.session_info_->get_sys_variable(
+                      share::SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS,
+                      aggregate_setting))) {
+    LOG_WARN("failed to get aggregate setting", K(ret));
+  } else {
+    ObDMLStmt *stmt = static_cast<ObDMLStmt*>(basic_stmt);
+    SQL_LOG(DEBUG, "stmt", "stmt", *stmt);
+    SQL_LOG(DEBUG, "stmt success", "query", SJ(*stmt));
+    const ObGlobalHint &global_hint = stmt->get_query_ctx()->get_global_hint();
+    sql_ctx.session_info_->set_early_lock_release(global_hint.enable_lock_early_release_);
+    ObOptimizerContext optctx(sql_ctx.session_info_,
+                              &result.get_exec_context(),
+                              &result.get_exec_context().get_stmt_factory()->get_query_ctx()->sql_schema_guard_,
+                              opt_stat_mgr_,
+                              result.get_mem_pool(),
+                              &pctx->get_param_store(),
+                              self_addr_,
+                              GCTX.srv_rpc_proxy_,
+                              global_hint,
+                              *result.get_exec_context().get_expr_factory(),
+                              stmt,
+                              result.is_ps_protocol(),
+                              result.get_exec_context().get_stmt_factory()->get_query_ctx());
+    optctx.set_aggregation_optimization_settings(aggregate_setting);
+    pctx->set_field_array(result.get_field_columns());
+    pctx->set_is_ps_protocol(result.is_ps_protocol());
+    bool is_restore = false;
+    uint64_t effective_tid = result.get_session().get_effective_tenant_id();
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(sql_ctx.schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_FAIL(sql_ctx.schema_guard_->check_tenant_is_restore(
+                        effective_tid, is_restore))) {
+      LOG_WARN("fail to check if tenant is restore", K(ret), K(effective_tid));
+    } else if (is_restore) {
+      // 为避免物理恢复阶段系统表恢复过程中，SQL依赖需要恢复的统计信息表，
+      // 对恢复中租户，仅需获取缺省统计信息即可
+      optctx.set_use_default_stat();
+    }
+    ObOptimizer optimizer(optctx);
+    bool use_jit = false;
+    bool turn_on_jit = sql_ctx.need_late_compile_;
+    // if (OB_FAIL(ret)) {
+    // } else if (OB_FAIL(need_use_jit(turn_on_jit,
+    //                                 query_hint.use_jit_policy_,
+    //                                 *sql_ctx.session_info_,
+    //                                 use_jit))) {
+    //   use_jit = false;
+    //   LOG_WARN("failed to check for needing jitted expr", K(ret));
+    // } else {
+    //   // do nothing
+    // }
+
+    ObLogPlan *logical_plan = NULL;
+    ObPhysicalPlan *phy_plan = NULL;
+
+    // 内部session切租户时资源处理分离不彻底
+    // 当用户请求发送到一个没有对应租户资源的server上时，plan 内存算在了普通租户上，
+    // 但是计划挂在了sys租户的plan cache下面，导致plan_cache_stat表数据统计异常，
+    // 出现疑似内存泄漏实际上却没有泄漏的情况。这里处理为直接从plan cache
+    // 中取tenant id，这样计划分配的资源就算在了plan cache所对应的租户上
+    if (OB_NOT_NULL(result.get_session().get_plan_cache())) {
+      effective_tid = result.get_session().get_plan_cache()->get_tenant_id();
+    }
+
+    ObCacheObjGuard& guard = result.get_cache_obj_guard();
+    guard.init(PLAN_GEN_HANDLE);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObCacheObjectFactory::alloc(guard,
+                                                    ObLibCacheNameSpace::NS_CRSR,
+                                                    effective_tid))) {
+      LOG_WARN("fail to alloc phy_plan", K(ret));
+    } else if (FALSE_IT(phy_plan = static_cast<ObPhysicalPlan*>(guard.get_cache_obj()))) {
+      // do nothing
+    } else if (OB_UNLIKELY(NULL == phy_plan)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Failed to alloc physical plan from tc factory", K(ret));
+    } else {
+      // update is_use_jit flag
+      phy_plan->stat_.is_use_jit_ = use_jit;
+      phy_plan->stat_.enable_early_lock_release_ = sql_ctx.session_info_->get_early_lock_release();
+      // if phy_plan's tenant id, which refers the tenant who create this plan,
+      // not equal to current effective_tid, plan cache must be invalid
+      // and we shouldn't add this plan to plan cache.
+      if (NULL != pc_ctx) {
+        pc_ctx->should_add_plan_ = (effective_tid==phy_plan->get_tenant_id());
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      phy_plan->set_fetch_cur_time(stmt->get_fetch_cur_time());
+      phy_plan->set_stmt_type(stmt->get_stmt_type());
+      phy_plan->set_literal_stmt_type(stmt->get_query_ctx()->get_literal_stmt_type());
+      if (phy_plan->get_fetch_cur_time() && !pctx->has_cur_time()) {
+        pctx->set_cur_time(ObTimeUtility::current_time(), *(sql_ctx.session_info_));
+      }
+      pctx->set_last_trace_id(sql_ctx.session_info_->get_last_trace_id());
+    }
+
+    ObSQLSessionInfo *session_info = result.get_exec_context().get_my_session();
+    BEGIN_OPT_TRACE(session_info, ObString(strlen(sql_ctx.sql_id_), sql_ctx.sql_id_));
+    OPT_TRACE_ENV;
+    OPT_TRACE_SESSION_INFO;
+    OPT_TRACE_PARAMETERS;
+    OPT_TRACE_TITLE("CURRENT SQL TEXT");
+    OPT_TRACE("sql_id =", ObString(strlen(sql_ctx.sql_id_), sql_ctx.sql_id_));
+    OPT_TRACE(ObString(parse_result.input_sql_len_, parse_result.input_sql_));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(transform_stmt(&stmt->get_query_ctx()->sql_schema_guard_,
+                                      opt_stat_mgr_,
+                                      &self_addr_,
+                                      phy_plan,
+                                      result.get_exec_context(),
+                                      stmt))) { //rewrite stmt
+      LOG_WARN("Failed to transform stmt", K(ret));
+    } else if (OB_FALSE_IT(optctx.set_root_stmt(stmt))) {
+    } else if (OB_FAIL(optimize_stmt(optimizer, *(sql_ctx.session_info_),
+                                      *stmt, logical_plan))) { //gen logical plan
+      LOG_WARN("Failed to optimizer stmt", K(ret));
+    } else if (OB_FAIL(create_expr_constraints(*stmt->get_query_ctx(),
+                                                result.get_exec_context()))){
+      LOG_WARN("Failed to create expr constraints", K(ret));
+    } else if (OB_ISNULL(logical_plan)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null logical plan", K(ret), K(logical_plan));
+    } else if (OB_FAIL(code_generate(sql_ctx, result, stmt,
+                                     stmt_need_privs,
+                                     stmt_ora_need_privs,
+                                     audit_units,
+                                     logical_plan, phy_plan))) { //gen phy plan
+      LOG_WARN("Failed to genenrate phy plan", K(ret));
+    } else if (OB_FAIL(prepare_outline_for_phy_plan(logical_plan,
+                                                    phy_plan))) {
+      LOG_WARN("failed to prepare outline for phy plan", K(ret));
+    }
+    END_OPT_TRACE(session_info);
+    if (OB_SUCC(ret) && session_info->is_user_session()) {
+      ObSqlPlan sql_plan(result.get_mem_pool());
+      sql_plan.set_session_info(session_info);
+      ObString sql_id(strlen(sql_ctx.sql_id_), sql_ctx.sql_id_);
+      if (!stmt->is_explain_stmt() && !stmt->is_help_stmt()) {
+        if (OB_FAIL(sql_plan.store_sql_plan(logical_plan,
+                                phy_plan->get_plan_id(),
+                                phy_plan->get_plan_hash_value(),
+                                sql_id))) {
+          LOG_WARN("failed to store sql plan", K(ret));
+        } else {
+          phy_plan->set_record_plan_info(true);
+        }
+      }
+    }
+
+    // memory debug for sql work arena
+    if (OB_UNLIKELY(result.get_mem_pool().total() > SQL_MEM_SIZE_LIMIT)) {
+      int64_t total_mem_used = result.get_mem_pool().total();
+      LOG_INFO("[SQL MEM USAGE] use too much memory", K(total_mem_used),
+                K(ObString(parse_result.input_sql_len_, parse_result.input_sql_)));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(stmt->get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("query ctx is null", K(ret));
+    } else if (stmt::T_SELECT == stmt->get_stmt_type() &&
+                stmt::T_SHOW_PARAMETERS == stmt->get_query_ctx()->get_literal_stmt_type()) {
+      ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt);
+      pctx->set_tenant_id(select_stmt->get_tenant_id());
+      pctx->set_show_seed(select_stmt->get_show_seed());
+      result.get_exec_context().reference_my_plan(phy_plan);
+    } else {
+      result.get_exec_context().reference_my_plan(phy_plan);
+    }
+  }
+  return ret;
+}
+
+int ObSql::prepare_outline_for_phy_plan(ObLogPlan *logical_plan,
+                                        ObPhysicalPlan *phy_plan)
+{
+  int ret = OB_SUCCESS;
+  void *tmp_ptr = NULL;
+  char *buf = NULL;
+
+  if (OB_ISNULL(logical_plan) || OB_ISNULL(phy_plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get log plan", K(ret), K(logical_plan));
+  } else if (OB_UNLIKELY(NULL == (tmp_ptr = phy_plan->get_allocator().alloc(OB_MAX_SQL_LENGTH)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("fail to alloc memory", K(ret));
+  } else if (FALSE_IT(buf = static_cast<char *>(tmp_ptr))) {
+  } else {
+    PlanText plan_text;
+    plan_text.buf_ = buf;
+    plan_text.buf_len_ = OB_MAX_SQL_LENGTH;
+    if (OB_FAIL(ObSqlPlan::get_plan_outline_info_one_line(plan_text, logical_plan))) {
+      LOG_WARN("failed to get plan outline info", K(ret));
+    } else {
+      phy_plan->stat_.outline_data_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(plan_text.pos_));
     }
   }
   return ret;
@@ -3073,6 +3159,7 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
   }
 
   NG_TRACE(transform_begin);
+  OPT_TRACE_TITLE("START TRANSFORM");
   if (OB_SUCC(ret) && transform_stmt->is_valid_transform_stmt()) {
     ObTransformerImpl transformer(&trans_ctx);
     if (OB_FAIL(transformer.transform(transform_stmt))) {
@@ -3099,6 +3186,11 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
     }
   }
 
+  if (OB_SUCC(ret)) {
+    OPT_TRACE("after transform, sql is\n", transform_stmt);
+    OPT_TRACE_TIME_USED;
+    OPT_TRACE_MEM_USED;
+  }
   transformer_mem_usage = exec_ctx.get_allocator().total() - last_mem_usage;
   LOG_DEBUG("SQL MEM USAGE", K(transformer_mem_usage), K(last_mem_usage));
   return ret;
@@ -3115,13 +3207,20 @@ int ObSql::optimize_stmt(
   logical_plan = NULL;
   LOG_TRACE("stmt to generate plan", K(stmt));
   NG_TRACE(optimize_begin);
+  OPT_TRACE_TITLE("START GENERATE PLAN");
   if (OB_FAIL(optimizer.optimize(stmt, logical_plan))) {
     LOG_WARN("Failed to optimize logical plan", K(ret));
     // do nothing(plan will be destructed in result set)
   } else if (OB_FAIL(optimizer.update_column_usage_infos())) {
     LOG_WARN("failed to update column usage infos", K(ret));
+  } else if (OB_ISNULL(logical_plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null log plan", K(ret));
   } else {
     LOG_TRACE("logical plan", KPC(logical_plan));
+    OPT_TRACE_TIME_USED;
+    OPT_TRACE_MEM_USED;
+    OPT_TRACE(logical_plan);
   }
 
   return ret;

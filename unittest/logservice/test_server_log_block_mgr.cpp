@@ -16,7 +16,6 @@
 #include "lib/ob_abort.h"
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
-#include "lib/regex/ob_regex.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_utility.h"

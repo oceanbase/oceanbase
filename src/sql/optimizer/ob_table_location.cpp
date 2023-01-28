@@ -58,13 +58,14 @@ static int get_part_id_by_mod(const int64_t calc_result, const int64_t part_num,
   return ret;
 }
 
-static bool is_all_ranges_empty(const ObQueryRangeArray &query_array, bool &is_empty)
+static int is_all_ranges_empty(const ObQueryRangeArray &query_array, bool &is_empty)
 {
   int ret = OB_SUCCESS;
   is_empty = true;
-  for (int i = 0; is_empty && OB_SUCCESS == ret && i < query_array.count(); i++) {
-    if (NULL == query_array.at(i)) {
+  for (int i = 0; is_empty && OB_SUCC(ret) && i < query_array.count(); i++) {
+    if (OB_ISNULL(query_array.at(i))) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
     } else if (!query_array.at(i)->empty()) {
       is_empty = false;
     }
@@ -143,7 +144,7 @@ int ObTableLocation::PartProjector::init_part_projector(ObExecContext *exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> part_columns;
-  if (OB_ISNULL(exec_ctx)) {
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(part_expr, part_columns))) {
@@ -176,6 +177,7 @@ int ObTableLocation::PartProjector::init_part_projector(ObExecContext *exec_ctx,
           OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(col_ref->get_dependant_expr(),
                                                           row_desc, exec_ctx->get_allocator(),
                                                           exec_ctx->get_my_session(),
+                                                          exec_ctx->get_sql_ctx()->schema_guard_,
                                                           se_virtual_col));
           CK(OB_NOT_NULL(se_virtual_col));
           OZ(se_virtual_column_exprs_.push_back(se_virtual_col));
@@ -982,7 +984,9 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
       ObTempExpr *se_temp_expr = NULL;
       OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(part_raw_expr, loc_row_desc,
                                                       exec_ctx.get_allocator(),
-                                                      exec_ctx.get_my_session(), se_temp_expr));
+                                                      exec_ctx.get_my_session(),
+                                                      schema_guard.get_schema_guard(),
+                                                      se_temp_expr));
       CK(OB_NOT_NULL(se_temp_expr));
       OX(se_part_expr_ = se_temp_expr);
     }
@@ -1030,7 +1034,9 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
       ObTempExpr *se_temp_expr = NULL;
       OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(subpart_raw_expr, loc_row_desc,
                                                       exec_ctx.get_allocator(),
-                                                      exec_ctx.get_my_session(), se_temp_expr));
+                                                      exec_ctx.get_my_session(),
+                                                      schema_guard.get_schema_guard(),
+                                                      se_temp_expr));
       CK(OB_NOT_NULL(se_temp_expr));
       OX(se_subpart_expr_ = se_temp_expr);
     }
@@ -2093,6 +2099,7 @@ int ObTableLocation::add_se_value_expr(const ObRawExpr *value_expr,
   ValueItemExpr vie;
   CK(OB_NOT_NULL(value_expr));
   CK(OB_NOT_NULL(exec_ctx));
+  CK(OB_NOT_NULL(exec_ctx->get_sql_ctx()));
   if (OB_FAIL(ret)) {
   } else if (IS_DATATYPE_OR_QUESTIONMARK_OP(value_expr->get_expr_type())) { // is const
     const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(value_expr);
@@ -2108,7 +2115,9 @@ int ObTableLocation::add_se_value_expr(const ObRawExpr *value_expr,
     ObTempExpr *se_temp_expr = NULL;
     OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(value_expr, value_row_desc,
                                                     exec_ctx->get_allocator(),
-                                                    exec_ctx->get_my_session(), se_temp_expr));
+                                                    exec_ctx->get_my_session(),
+                                                    exec_ctx->get_sql_ctx()->schema_guard_,
+                                                    se_temp_expr));
     CK(OB_NOT_NULL(se_temp_expr));
     OX(vie.expr_ = se_temp_expr);
   }
@@ -2537,7 +2546,8 @@ int ObTableLocation::extract_value_item_expr(ObExecContext *exec_ctx,
                                              ValueItemExpr &vie)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr) || OB_ISNULL(dst_expr) || OB_ISNULL(exec_ctx)) {
+  if (OB_ISNULL(expr) || OB_ISNULL(dst_expr) || OB_ISNULL(exec_ctx) ||
+      OB_ISNULL(exec_ctx->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(expr), K(exec_ctx));
   } else if (expr->is_const_or_param_expr()) {
@@ -2560,6 +2570,7 @@ int ObTableLocation::extract_value_item_expr(ObExecContext *exec_ctx,
                                                              row_desc,
                                                              exec_ctx->get_allocator(),
                                                              exec_ctx->get_my_session(),
+                                                             exec_ctx->get_sql_ctx()->schema_guard_,
                                                              temp_expr))) {
       LOG_WARN("failed to generate expr with row desc", K(ret));
     } else {
@@ -2682,7 +2693,7 @@ int ObTableLocation::get_partition_column_info(const ObDMLStmt &stmt,
     if (gen_cols.count() > 0) {
       if (partition_columns.count() > 1) {
         gen_cols.reset();
-      } else if (OB_ISNULL(exec_ctx)) {
+      } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_sql_ctx())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", KP(exec_ctx), K(ret));
       } else {
@@ -2690,6 +2701,7 @@ int ObTableLocation::get_partition_column_info(const ObDMLStmt &stmt,
                                                          gen_row_desc,
                                                          exec_ctx->get_allocator(),
                                                          exec_ctx->get_my_session(),
+                                                         exec_ctx->get_sql_ctx()->schema_guard_,
                                                          gen_col_temp_expr));
       }
     }
@@ -2700,6 +2712,7 @@ int ObTableLocation::get_partition_column_info(const ObDMLStmt &stmt,
                                                row_desc,
                                                exec_ctx->get_allocator(),
                                                exec_ctx->get_my_session(),
+                                               exec_ctx->get_sql_ctx()->schema_guard_,
                                                part_temp_expr));
     }
 
@@ -3104,7 +3117,7 @@ int ObTableLocation::calc_query_range_partition_ids(ObExecContext &exec_ctx,
     if (OB_FAIL(calc_node->pre_query_range_.get_tablet_ranges(allocator, exec_ctx, query_ranges,
                                                               is_all_single_value_ranges, dtc_params))) {
       LOG_WARN("get tablet ranges failed", K(ret));
-    } else if (query_ranges.count() == 0) {
+    } else if (OB_UNLIKELY(query_ranges.count() == 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Query ranges' count should not be 0",
                "query range count", query_ranges.count(), K(ret));

@@ -184,6 +184,7 @@ int ObTransformCountToExists::check_trans_valid(ObDMLStmt *stmt, ObRawExpr *expr
              trans_param.trans_type_ == TRANS_INVALID) {
     // do nothing
   } else {
+    OPT_TRACE("try", expr);
     ObQueryRefRawExpr *tmp_subquery_expr = static_cast<ObQueryRefRawExpr *>(subquery_param);
     ObSelectStmt *tmp_subquery = NULL;
     ObRawExpr *sel_expr = NULL;
@@ -198,6 +199,7 @@ int ObTransformCountToExists::check_trans_valid(ObDMLStmt *stmt, ObRawExpr *expr
     } else if (tmp_subquery_expr->get_ref_count() > 1 ||
                tmp_subquery->has_having() || !tmp_subquery->is_scala_group_by()) {
       // only scalar group by subquery without having and referred by once can be transformed
+      OPT_TRACE("only scalar group by subquery without having and referred by once can be transformed");
     } else if (OB_FAIL(check_sel_expr_valid(sel_expr,
                                             trans_param.count_param_,
                                             is_sel_expr_valid))) {
@@ -233,6 +235,9 @@ int ObTransformCountToExists::check_hint_valid(ObDMLStmt &stmt, ObSelectStmt &su
     LOG_WARN("failed to get qb name", K(ret));
   } else {
     is_valid = hint->enable_count_to_exists(subquery_qb_name);
+    if (!is_valid) {
+      OPT_TRACE("hint disable transform");
+    }
     LOG_TRACE("succeed to check count_to_exists hint valid", K(is_valid),
                                                              K(subquery_qb_name), K(*hint));
   }
@@ -330,6 +335,9 @@ int ObTransformCountToExists::check_sel_expr_valid(ObRawExpr *select_expr,
       count_param = param;
     }
   }
+  if (OB_SUCC(ret) && !is_sel_expr_valid) {
+    OPT_TRACE("select expr is not valid", select_expr);
+  }
   return ret;
 }
 int ObTransformCountToExists::check_value_zero(ObRawExpr *expr,
@@ -370,6 +378,9 @@ int ObTransformCountToExists::check_value_zero(ObRawExpr *expr,
       need_add_constraint = expr->is_static_const_expr();
       is_valid = true;
     }
+  }
+  if (OB_SUCC(ret) && !is_valid) {
+    OPT_TRACE("const expr is not zero", expr);
   }
   return ret;
 }

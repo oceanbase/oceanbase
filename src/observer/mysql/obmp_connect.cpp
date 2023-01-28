@@ -120,7 +120,6 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
 {
   int ret = OB_SUCCESS;
   const ObString &sql = multi_stmt_item.get_sql();
-  bool use_session_trace = false;
   ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
   ObSchemaGetterGuard schema_guard;
@@ -128,7 +127,7 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
   observer::ObReqTimeGuard req_timeinfo_guard;
   ObSqlCtx ctx;
   ctx.exec_type_ = MpQuery;
-  if (OB_FAIL(init_process_var(ctx, multi_stmt_item, session, use_session_trace))) {
+  if (OB_FAIL(init_process_var(ctx, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
                                   session.get_effective_tenant_id(), schema_guard))) {
@@ -171,7 +170,7 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
 
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
     int tmp_ret = OB_SUCCESS;
-    tmp_ret = do_after_process(session, use_session_trace, ctx, false); // 不是异步回包
+    tmp_ret = do_after_process(session, ctx, false); // 不是异步回包
     UNUSED(tmp_ret);
   }
   return ret;

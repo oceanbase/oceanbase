@@ -245,6 +245,7 @@ public:
   {
   public:
     virtual int apply(ObExecContext &ctx, ObOpSpec &input) = 0;
+    //TODO. For compatibilty now, to be remove on 4.2
     virtual int reset(ObOpSpec &input) = 0;
   };
 public:
@@ -278,6 +279,7 @@ public:
                             int64_t &pos,
                             ObOpSpec &root,
                             bool is_fulltree,
+                            const common::ObAddr &run_svr,
                             ObPhyOpSeriCtx *seri_ctx = NULL);
   static int deserialize_tree(const char *buf,
                               int64_t data_len,

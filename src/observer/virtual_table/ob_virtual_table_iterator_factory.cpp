@@ -87,7 +87,7 @@
 #include "observer/virtual_table/ob_all_virtual_memory_info.h"
 #include "observer/virtual_table/ob_all_virtual_raid_stat.h"
 #include "observer/virtual_table/ob_virtual_obrpc_send_stat.h"
-#include "observer/virtual_table/ob_virtual_trace_log.h"
+#include "observer/virtual_table/ob_virtual_span_info.h"
 #include "observer/virtual_table/ob_all_virtual_proxy_schema.h"
 #include "observer/virtual_table/ob_virtual_proxy_server_stat.h"
 #include "observer/virtual_table/ob_virtual_proxy_sys_variable.h"
@@ -190,6 +190,10 @@
 #include "observer/virtual_table/ob_all_virtual_schema_memory.h"
 #include "observer/virtual_table/ob_all_virtual_schema_slot.h"
 #include "rootserver/virtual_table/ob_all_virtual_ls_replica_task_plan.h"
+#include "observer/virtual_table/ob_virtual_show_trace.h"
+#include "observer/virtual_table/ob_all_virtual_sql_plan.h"
+#include "observer/virtual_table/ob_all_virtual_plan_table.h"
+#include "observer/virtual_table/ob_all_virtual_plan_real_info.h"
 
 namespace oceanbase
 {
@@ -1309,14 +1313,27 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_ALL_VIRTUAL_TRACE_LOG_TID:
+          case OB_ALL_VIRTUAL_TRACE_SPAN_INFO_TID:
           {
-            ObVirtualTraceLog *trace = NULL;
-            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualTraceLog,
+            ObVirtualSpanInfo *trace = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualSpanInfo,
                                           trace))) {
               SERVER_LOG(WARN, "fail to create virtual table", K(ret));
             } else {
+              trace->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(trace);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SHOW_TRACE_TID:
+          {
+            ObVirtualShowTrace *show_trace = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualShowTrace,
+                                          show_trace))) {
+              SERVER_LOG(WARN, "fail to create virtual table", K(ret));
+            } else {
+              show_trace->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(show_trace);
             }
             break;
           }
@@ -1831,13 +1848,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_ALL_VIRTUAL_DTL_FIRST_CACHED_BUFFER_TID: {
-            ObAllVirtualDtlFirstCachedBuffer *dtl_first_buffer = nullptr;
-            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualDtlFirstCachedBuffer, dtl_first_buffer))) {
-              vt_iter = static_cast<ObVirtualTableIterator *>(dtl_first_buffer);
-            }
-            break;
-          }
           case OB_ALL_VIRTUAL_PX_WORKER_STAT_TID: {
             ObAllPxWorkerStatTable *px_worker_stat = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllPxWorkerStatTable, px_worker_stat))) {
@@ -2247,6 +2257,33 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "failed to init ObAllVirtualDMmlStats", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(dml_stats_result_monitor);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SQL_PLAN_TID: {
+            ObAllVirtualSqlPlan *sql_plan_table = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSqlPlan, sql_plan_table))) {
+              sql_plan_table->set_allocator(&allocator);
+              sql_plan_table->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(sql_plan_table);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_PLAN_TABLE_TID: {
+            ObAllVirtualPlanTable *plan_table = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualPlanTable, plan_table))) {
+              plan_table->set_allocator(&allocator);
+              plan_table->set_plan_table_mgr(session->get_plan_table_manager());;
+              vt_iter = static_cast<ObVirtualTableIterator *>(plan_table);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_PLAN_REAL_INFO_TID: {
+            ObAllVirtualPlanRealInfo *plan_real_info = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualPlanRealInfo, plan_real_info))) {
+              plan_real_info->set_allocator(&allocator);
+              plan_real_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(plan_real_info);
             }
             break;
           }

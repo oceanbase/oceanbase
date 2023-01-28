@@ -47,7 +47,6 @@ public:
   // set expr skip
   virtual bool skip_child(ObRawExpr &expr) { return skip_expr_ == &expr; }
 
-  int check_select_stmt(const ObSelectStmt *ref_stmt);
   int check_any_value(const ObRawExpr *expr, const ObColumnRefRawExpr * undefined_column);
   bool is_pass_after_check();
 private:

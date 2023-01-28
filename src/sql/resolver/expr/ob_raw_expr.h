@@ -522,6 +522,48 @@ public:
     return del_members(other);
   }
 
+  template<int64_t M, typename FlagType2, bool auto_free2>
+  int intersect_members(const ObSqlBitSet<M, FlagType2, auto_free2> &other)
+  {
+    int ret = common::OB_SUCCESS;
+    if (!is_valid()) {
+      ret = common::OB_NOT_INIT;
+      SQL_RESV_LOG(WARN, "not inited", K(ret));
+    } else {
+      for (int64_t i = 0; i < desc_.len_; i++) {
+        bit_set_word_array_[i] &= (other.get_bitset_word(i));
+      }
+    }
+    return ret;
+  }
+
+  int reserve_first() {
+    int ret = common::OB_SUCCESS;
+    if (!is_valid()) {
+      ret = OB_NOT_INIT;
+      SQL_RESV_LOG(WARN, "not inited", K(ret));
+    } else {
+      bool find = false;
+      int64_t num = 0;
+      for (int64_t i = 0; i < desc_.len_; i++) {
+        BitSetWord& word = bit_set_word_array_[i];
+        if (word == 0) {
+          // do nothing
+        } else if (find) {
+          word &= 0;
+        } else {
+          for (int64_t j = 0; !find && j < PER_BITSETWORD_BITS; j ++) {
+            if (word & ((BitSetWord) 1 << j)) {
+              word &= ((BitSetWord) 1 << j);
+              find = true;
+            }
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
   template <int64_t M, typename FlagType2, bool auto_free2>
   bool is_subset(const ObSqlBitSet<M, FlagType2, auto_free2> &other) const
   {
@@ -1548,10 +1590,8 @@ public:
        magic_num_(0x13572468),
        info_(),
        rel_ids_(),
-       expr_levels_(),
        inner_alloc_(NULL),
        expr_factory_(NULL),
-       expr_level_(-1),
        is_explicited_reference_(false),
        ref_count_(0),
        is_for_generated_column_(false),
@@ -1569,10 +1609,8 @@ public:
        magic_num_(0x13572468),
        info_(),
        rel_ids_(),
-       expr_levels_(),
        inner_alloc_(&alloc),
        expr_factory_(NULL),
-       expr_level_(-1),
        is_explicited_reference_(false),
        ref_count_(0),
        is_for_generated_column_(false),
@@ -1609,7 +1647,9 @@ public:
   inline bool is_generalized_column() const
   {
     return is_column_ref_expr() || is_query_ref_expr() || is_aggr_expr() || is_set_op_expr()
-          || is_win_func_expr() || has_flag(IS_ROWNUM) || has_flag(IS_PSEUDO_COLUMN);
+          || is_win_func_expr() || has_flag(IS_ROWNUM) || has_flag(IS_PSEUDO_COLUMN)
+          || has_flag(IS_SEQ_EXPR) || has_flag(IS_SYS_CONNECT_BY_PATH)
+          || has_flag(IS_CONNECT_BY_ROOT) || has_flag(IS_OP_PSEUDO_COLUMN);
   }
 
   // The expr result is vectorized, the batch result is the same if not vectorized result e.g:
@@ -1648,15 +1688,10 @@ public:
   const ObExprInfo &get_expr_info() const;
   ObExprInfo &get_expr_info();
 
-  void set_relation_ids(const ObRelIds &rel_ids);
   int add_relation_id(int64_t rel_idx);
   int add_relation_ids(const ObRelIds &rel_ids);
   ObRelIds &get_relation_ids();
   const ObRelIds &get_relation_ids() const;
-
-  int add_expr_levels(const ObExprLevels &expr_levels) { return expr_levels_.add_members(expr_levels); }
-  ObExprLevels &get_expr_levels() { return expr_levels_; }
-  const ObExprLevels &get_expr_levels() const { return expr_levels_; }
 
   // implemented base on get_param_count() and get_param_expr() interface,
   // children are visited in get_param_expr() return order.
@@ -1679,14 +1714,15 @@ public:
   inline bool is_rand_func_expr() const { return has_flag(IS_RAND_FUNC); }
   inline bool is_obj_access_expr() const { return T_OBJ_ACCESS_REF == get_expr_type(); }
   inline bool is_assoc_index_expr() const { return T_FUN_PL_ASSOCIATIVE_INDEX == get_expr_type(); }
+  bool is_not_calculable_expr() const;
+  bool cnt_not_calculable_expr() const;
+  int is_const_inherit_expr(bool &is_const_inherit, const bool param_need_replace = false) const;
   int is_non_pure_sys_func_expr(bool &is_non_pure) const;
   bool is_specified_pseudocolumn_expr() const;
   void set_alias_column_name(const common::ObString &alias_name) { alias_column_name_ = alias_name; }
   const common::ObString &get_alias_column_name() const { return alias_column_name_; }
   int set_expr_name(const common::ObString &expr_name);
   const common::ObString &get_expr_name() const { return expr_name_; }
-  inline void set_expr_level(int32_t expr_level) { expr_level_ = expr_level; }
-  inline int32_t get_expr_level() const { return expr_level_; }
   inline uint64_t hash(uint64_t seed) const
   {
     seed = common::do_hash(type_, seed);
@@ -1708,7 +1744,7 @@ public:
 
   // post-processing for expressions
   int formalize(const ObSQLSessionInfo *my_session);
-  int pull_relation_id_and_levels(int32_t cur_stmt_level);
+  int pull_relation_id();
   int extract_info();
   int deduce_type(const ObSQLSessionInfo *my_session = NULL);
   inline ObExprInfo &get_flags() { return info_; }
@@ -1757,6 +1793,7 @@ public:
   void set_partition_id_calc_type(PartitionIdCalcType calc_type) {
     partition_id_calc_type_ = calc_type; }
   bool is_json_expr() const;
+  bool is_multiset_expr() const;
   PartitionIdCalcType get_partition_id_calc_type() const { return partition_id_calc_type_; }
   void set_may_add_interval_part(MayAddIntervalPart flag) {
     may_add_interval_part_ = flag;
@@ -1767,8 +1804,6 @@ public:
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
                        N_REL_ID, rel_ids_,
-                       K_(expr_level),
-                       K_(expr_levels),
                        K_(enum_set_values),
                        K_(is_explicited_reference),
                        K_(ref_count),
@@ -1792,12 +1827,9 @@ protected:
 protected:
   ObExprInfo  info_;    // flags
   ObRelIds    rel_ids_;  // related table idx
-  //means the raw expr contain which level variables(column, aggregate expr, set expr or subquery expr)
-  ObExprLevels expr_levels_;
   common::ObIAllocator *inner_alloc_;
   ObRawExprFactory *expr_factory_;
   common::ObString alias_column_name_;
-  int32_t expr_level_;
   common::ObSEArray<common::ObString, 1, common::ModulePageAllocator, true> enum_set_values_;//string_map
   //在mysql中表达式都有自己的自己名字，例如，cast('1' as unsigned)，这个
   //表达式解析出来这一整串会作为这个表达式的名字。
@@ -1830,10 +1862,6 @@ inline void ObRawExpr::set_allocator(ObIAllocator &alloc)
 inline void ObRawExpr::unset_result_flag(uint32_t result_flag)
 {
   result_type_.unset_result_flag(result_flag);
-}
-inline void ObRawExpr::set_relation_ids(const ObRelIds &rel_ids)
-{
-  rel_ids_ = rel_ids;
 }
 
 inline int ObRawExpr::add_relation_id(int64_t rel_idx)
@@ -2041,6 +2069,9 @@ private:
 };
 
 ////////////////////////////////////////////////////////////////
+/// \brief The ObVarRawExpr class
+///  designed for deducing calc type
+///  only used by nullif, least, greatest, from_unixtime
 class ObVarRawExpr :
     public ObTerminalRawExpr,
     public jit::expr::ObVarExpr
@@ -2174,7 +2205,8 @@ public:
       output_column_(0),
       is_set_(false),
       is_cursor_(false),
-      has_nl_param_(false)
+      has_nl_param_(false),
+      is_multiset_(false)
   {
     //匿名union对象的初始化只能放到函数体里面，不然会报多次初始化同一个对象的编译错误
     ref_stmt_ = NULL;
@@ -2187,7 +2219,8 @@ public:
       output_column_(0),
       is_set_(false),
       is_cursor_(false),
-      has_nl_param_(false)
+      has_nl_param_(false),
+      is_multiset_(false)
   {
     //匿名union对象的初始化只能放到函数体里面，不然会报多次初始化同一个对象的编译错误
     ref_stmt_ = NULL;
@@ -2199,7 +2232,8 @@ public:
       output_column_(0),
       is_set_(false),
       is_cursor_(false),
-      has_nl_param_(false)
+      has_nl_param_(false),
+      is_multiset_(false)
   {
     //匿名union对象的初始化只能放到函数体里面，不然会报多次初始化同一个对象的编译错误
     ref_stmt_ = NULL;
@@ -2222,7 +2256,6 @@ public:
   ObExecParamRawExpr *get_exec_param(int64_t index);
   const ObIArray<ObExecParamRawExpr *> &get_exec_params() const { return exec_params_; }
   ObIArray<ObExecParamRawExpr *> &get_exec_params() { return exec_params_; }
-  ObRawExpr *get_ref_expr(int64_t index);
 
   int64_t get_ref_id() const;
   void set_ref_id(int64_t id);
@@ -2243,6 +2276,8 @@ public:
   bool is_cursor() const { return is_cursor_; }
   void set_has_nl_param(bool has_nl_param) { has_nl_param_ = has_nl_param; }
   bool has_nl_param() const { return has_nl_param_; }
+  void set_is_multiset(bool is_multiset) { is_multiset_ = is_multiset; }
+  bool is_multiset() const {return is_multiset_; }
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;
@@ -2258,11 +2293,10 @@ public:
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
                                             N_ID, ref_id_,
-                                            K_(expr_level),
-                                            K_(expr_levels),
                                             K_(output_column),
                                             K_(is_set),
                                             K_(is_cursor),
+                                            K_(is_multiset),
                                             K_(column_types),
                                             K_(enum_set_values),
                                             N_CHILDREN, exec_params_);
@@ -2279,6 +2313,7 @@ private:
   // an exec param in the subquery may not belong to the query_ref_expr
   // it may be a nlparam of a nest loop join
   bool has_nl_param_;
+  bool is_multiset_;
   //子查询的输出列类型
   common::ObSEArray<ObExprResType, 64, common::ModulePageAllocator, true> column_types_;
   common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> exec_params_;
@@ -2486,8 +2521,6 @@ public:
                        K_(synonym_name),
                        K_(synonym_db_name),
                        K_(column_name),
-                       K_(expr_level),
-                       K_(expr_levels),
                        K_(column_flags),
                        K_(enum_set_values),
                        K_(is_lob_column),
@@ -2589,8 +2622,6 @@ public:
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
                        N_REL_ID, rel_ids_,
-                       K_(expr_level),
-                       K_(expr_levels),
                        K_(idx));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetOpRawExpr);
@@ -2768,7 +2799,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_levels),
                                             N_CHILDREN, exprs_);
 protected:
   common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> exprs_;
@@ -2926,7 +2956,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_levels),
                                             N_ARG_CASE, arg_expr_,
                                             N_DEFAULT, default_expr_,
                                             N_WHEN, when_exprs_,
@@ -3187,8 +3216,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_level),
-                                            K_(expr_levels),
                                             N_CHILDREN, real_param_exprs_,
                                             N_DISTINCT, distinct_,
                                             N_ORDER_BY, order_items_,
@@ -3330,7 +3357,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_levels),
                                             N_FUNC, func_name_,
                                             N_CHILDREN, exprs_,
                                             K_(enum_set_values));
@@ -3439,7 +3465,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_levels),
                                             N_FUNC, get_func_name(),
                                             N_CHILDREN, exprs_);
 private:
@@ -3489,6 +3514,7 @@ public:
   }
 
   int set_access_names(const common::ObIArray<ObObjAccessIdent> &access_idents);
+  int add_access_name(const common::ObString &access_name) { return access_names_.push_back(access_name); }
   const common::ObIArray<ObString>& get_access_names() const { return access_names_; }
 
   int assign(const ObRawExpr &other) override;
@@ -3500,7 +3526,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_levels),
                                             N_FUNC, get_func_name(),
                                             N_CHILDREN, exprs_);
 private:
@@ -3737,7 +3762,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_levels),
                                             N_DATABASE, get_database_name(),
                                             K_(package_name),
                                             N_FUNC, get_func_name(),
@@ -3812,8 +3836,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_level),
-                                            K_(expr_levels),
                                             K_(pl_integer_type),
                                             K_(pl_integer_range_.range),
                                             N_CHILDREN, exprs_);
@@ -3840,8 +3862,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_level),
-                                            K_(expr_levels),
                                             K_(cursor_info),
                                             N_CHILDREN, exprs_);
 private:
@@ -3866,8 +3886,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_level),
-                                            K_(expr_levels),
                                             K_(is_sqlcode),
                                             N_CHILDREN, exprs_);
 private:
@@ -3949,8 +3967,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_level),
-                                            K_(expr_levels),
                                             K_(for_write),
                                             N_CHILDREN, exprs_,
                                             K_(out_of_range_set_err),
@@ -4293,8 +4309,6 @@ public:
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
-                                            K_(expr_level),
-                                            K_(expr_levels),
                                             K_(func_type),
                                             K_(is_distinct),
                                             K_(func_params),
@@ -4557,9 +4571,10 @@ public:
   ObRawExprPointer();
 
   virtual ~ObRawExprPointer();
-  int get(ObRawExpr *&expr);
+  int get(ObRawExpr *&expr) const;
   int set(ObRawExpr *expr);
   int add_ref(ObRawExpr **expr);
+  int64_t ref_count() const { return expr_group_.count(); }
   int assign(const ObRawExprPointer &other);
   TO_STRING_KV("", "");
 private:

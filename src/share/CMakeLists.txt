@@ -356,6 +356,8 @@ ob_set_subtarget(ob_share schema
   schema/ob_priv_sql_service.cpp
   schema/ob_profile_mgr.cpp
   schema/ob_profile_sql_service.cpp
+  schema/ob_rls_mgr.cpp
+  schema/ob_rls_sql_service.cpp
   schema/ob_routine_info.cpp
   schema/ob_routine_mgr.cpp
   schema/ob_routine_sql_service.cpp

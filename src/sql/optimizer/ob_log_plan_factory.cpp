@@ -132,9 +132,7 @@ void ObLogPlanFactory::destroy()
 {
   DLIST_FOREACH_NORET(node, plan_store_.get_obj_list()) {
     if (node != NULL && node->get_obj() != NULL) {
-      node->get_obj()->~ObLogPlan();
-      node->get_obj() = NULL;
+      node->get_obj()->destory();
     }
   }
-  plan_store_.destroy();
 }

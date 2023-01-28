@@ -365,6 +365,12 @@ void ObServerSchemaService::AllSchemaKeys::reset()
   del_context_keys_.clear();
   new_mock_fk_parent_table_keys_.clear();
   del_mock_fk_parent_table_keys_.clear();
+  new_rls_policy_keys_.clear();
+  del_rls_policy_keys_.clear();
+  new_rls_group_keys_.clear();
+  del_rls_group_keys_.clear();
+  new_rls_context_keys_.clear();
+  del_rls_context_keys_.clear();
 }
 
 int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
@@ -499,6 +505,18 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
     LOG_WARN("failed to create new_mock_fk_parent_table_keys_ hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_mock_fk_parent_table_keys_.create(bucket_size))) {
     LOG_WARN("failed to create del_mock_fk_parent_table_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_rls_policy_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_rls_policy_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_rls_policy_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_rls_policy_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_rls_group_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_rls_group_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_rls_group_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_rls_group_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_rls_context_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_rls_context_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_rls_context_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_rls_context_keys hashset", K(bucket_size), K(ret));
   }
   return ret;
 }
@@ -615,6 +633,15 @@ int ObServerSchemaService::del_tenant_operation(
   } else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_mock_fk_parent_table_keys_ : schema_keys.del_mock_fk_parent_table_keys_))) {
     LOG_WARN("fail to del mock_fk_parent_table operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_rls_policy_keys_ : schema_keys.del_rls_policy_keys_))) {
+    LOG_WARN("fail to del rls_policy operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_rls_group_keys_ : schema_keys.del_rls_group_keys_))) {
+    LOG_WARN("fail to del rls_group operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_rls_context_keys_ : schema_keys.del_rls_context_keys_))) {
+    LOG_WARN("fail to del rls_context operation", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -3444,6 +3471,255 @@ int ObServerSchemaService::get_increment_directory_keys_reversely(
   return ret;
 }
 
+int ObServerSchemaService::get_increment_rls_policy_keys(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_RLS_POLICY_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_RLS_POLICY_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), K(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t rls_policy_id = schema_operation.rls_policy_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.rls_policy_id_ = rls_policy_id;
+    schema_key.schema_version_ = schema_version;
+    if (schema_operation.op_type_ == OB_DDL_DROP_RLS_POLICY) {
+      hash_ret = schema_keys.new_rls_policy_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped rls_policy id", K(hash_ret), K(ret));
+      } else {
+        const ObRlsPolicySchema *schema = NULL;
+        if (OB_FAIL(schema_mgr.rls_policy_mgr_.get_schema_by_id(rls_policy_id, schema))) {
+          LOG_WARN("failed to get rls_policy schema", K(rls_policy_id), K(ret));
+        } else if (NULL != schema) {
+          hash_ret = schema_keys.del_rls_policy_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del rls_policy id", K(hash_ret), K(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_rls_policy_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new rls_policy id", K(hash_ret), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_rls_policy_keys_reversely(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_RLS_POLICY_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_RLS_POLICY_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t rls_policy_id = schema_operation.rls_policy_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.rls_policy_id_ = rls_policy_id;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_CREATE_RLS_POLICY == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObRlsPolicySchema *rls_policy_schema = NULL;
+    if (OB_FAIL(schema_mgr.rls_policy_mgr_.get_schema_by_id(rls_policy_id, rls_policy_schema))) {
+      LOG_WARN("get rls_policy schema failed", K(rls_policy_id), KR(ret));
+    } else if (NULL != rls_policy_schema) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_rls_policy_keys_,
+          schema_keys.new_rls_policy_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_rls_group_keys(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_RLS_GROUP_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_RLS_GROUP_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), K(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t rls_group_id = schema_operation.rls_group_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.rls_group_id_ = rls_group_id;
+    schema_key.schema_version_ = schema_version;
+    if (schema_operation.op_type_ == OB_DDL_DROP_RLS_GROUP) {
+      hash_ret = schema_keys.new_rls_group_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped rls_group id", K(hash_ret), K(ret));
+      } else {
+        const ObRlsGroupSchema *schema = NULL;
+        if (OB_FAIL(schema_mgr.rls_group_mgr_.get_schema_by_id(rls_group_id, schema))) {
+          LOG_WARN("failed to get rls_group schema", K(rls_group_id), K(ret));
+        } else if (NULL != schema) {
+          hash_ret = schema_keys.del_rls_group_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del rls_group id", K(hash_ret), K(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_rls_group_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new rls_group id", K(hash_ret), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_rls_group_keys_reversely(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_RLS_GROUP_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_RLS_GROUP_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t rls_group_id = schema_operation.rls_group_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.rls_group_id_ = rls_group_id;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_CREATE_RLS_GROUP == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObRlsGroupSchema *rls_group_schema = NULL;
+    if (OB_FAIL(schema_mgr.rls_group_mgr_.get_schema_by_id(rls_group_id, rls_group_schema))) {
+      LOG_WARN("get rls_group schema failed", K(rls_group_id), KR(ret));
+    } else if (NULL != rls_group_schema) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_rls_group_keys_,
+          schema_keys.new_rls_group_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_rls_context_keys(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_RLS_CONTEXT_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_RLS_CONTEXT_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), K(ret));
+  } else {
+    uint64_t tenant_id = schema_operation.tenant_id_;
+    uint64_t rls_context_id = schema_operation.rls_context_id_;
+    int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.rls_context_id_ = rls_context_id;
+    schema_key.schema_version_ = schema_version;
+    if (schema_operation.op_type_ == OB_DDL_DROP_RLS_CONTEXT) {
+      hash_ret = schema_keys.new_rls_context_keys_.erase_refactored(schema_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to del dropped rls_context id", K(hash_ret), K(ret));
+      } else {
+        const ObRlsContextSchema *schema = NULL;
+        if (OB_FAIL(schema_mgr.rls_context_mgr_.get_schema_by_id(rls_context_id, schema))) {
+          LOG_WARN("failed to get rls_context schema", K(rls_context_id), K(ret));
+        } else if (NULL != schema) {
+          hash_ret = schema_keys.del_rls_context_keys_.set_refactored_1(schema_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add del rls_context id", K(hash_ret), K(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_rls_context_keys_.set_refactored_1(schema_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add new rls_context id", K(hash_ret), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_rls_context_keys_reversely(
+    const ObSchemaMgr &schema_mgr,
+    const ObSchemaOperation &schema_operation,
+    AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_RLS_CONTEXT_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_RLS_CONTEXT_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t rls_context_id = schema_operation.rls_context_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.rls_context_id_ = rls_context_id;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_CREATE_RLS_CONTEXT == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObRlsContextSchema *rls_context_schema = NULL;
+    if (OB_FAIL(schema_mgr.rls_context_mgr_.get_schema_by_id(rls_context_id, rls_context_schema))) {
+      LOG_WARN("get rls_context schema failed", K(rls_context_id), KR(ret));
+    } else if (NULL != rls_context_schema) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_rls_context_keys_,
+          schema_keys.new_rls_context_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 // Currently only the full tenant schema of the system tenant is cached
 int ObServerSchemaService::add_tenant_schemas_to_cache(const TenantKeys &tenant_keys,
                                                        ObISQLClient &sql_client)
@@ -3587,6 +3863,9 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(directory, ObDirectorySchema, DirectoryKeys);
   GET_BATCH_SCHEMAS(context, ObContextSchema, ContextKeys);
   GET_BATCH_SCHEMAS(mock_fk_parent_table, ObSimpleMockFKParentTableSchema, MockFKParentTableKeys);
+  GET_BATCH_SCHEMAS(rls_policy, ObRlsPolicySchema, RlsPolicyKeys);
+  GET_BATCH_SCHEMAS(rls_group, ObRlsGroupSchema, RlsGroupKeys);
+  GET_BATCH_SCHEMAS(rls_context, ObRlsContextSchema, RlsContextKeys);
 
   // After the schema is split, ordinary tenants do not refresh the tenant schema and system table schema
   const uint64_t tenant_id = schema_status.tenant_id_;
@@ -3720,6 +3999,15 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
   } else if (OB_FAIL(apply_mock_fk_parent_table_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.mock_fk_parent_table_mgr_))) {
     LOG_WARN("fail to apply mock_fk_parent_table schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_rls_policy_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.rls_policy_mgr_))) {
+    LOG_WARN("fail to apply rls_policy schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_rls_group_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.rls_group_mgr_))) {
+    LOG_WARN("fail to apply rls_group schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_rls_context_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.rls_context_mgr_))) {
+    LOG_WARN("fail to apply rls_context schema to cache", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -3875,6 +4163,9 @@ APPLY_SCHEMA_TO_CACHE_IMPL(ObDbLinkMgr, dblink, ObDbLinkSchema, DbLinkKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObDirectoryMgr, directory, ObDirectorySchema, DirectoryKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObContextMgr, context, ObContextSchema, ContextKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObMockFKParentTableMgr, mock_fk_parent_table, ObSimpleMockFKParentTableSchema, MockFKParentTableKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsPolicyMgr, rls_policy, ObRlsPolicySchema, RlsPolicyKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsGroupMgr, rls_group, ObRlsGroupSchema, RlsGroupKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObRlsContextMgr, rls_context, ObRlsContextSchema, RlsContextKeys);
 
 int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
                                              const ObRefreshSchemaStatus &schema_status,
@@ -4304,6 +4595,21 @@ int ObServerSchemaService::replay_log(
           if (OB_FAIL(get_increment_mock_fk_parent_table_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment mock_fk_parent_table id", K(ret));
           }
+        } else if (schema_operation.op_type_ > OB_DDL_RLS_POLICY_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_RLS_POLICY_OPERATION_END) {
+          if (OB_FAIL(get_increment_rls_policy_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment rls_policy id", K(ret));
+          }
+        } else if (schema_operation.op_type_ > OB_DDL_RLS_GROUP_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_RLS_GROUP_OPERATION_END) {
+          if (OB_FAIL(get_increment_rls_group_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment rls_group id", K(ret));
+          }
+        } else if (schema_operation.op_type_ > OB_DDL_RLS_CONTEXT_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_RLS_CONTEXT_OPERATION_END) {
+          if (OB_FAIL(get_increment_rls_context_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment rls_context id", K(ret));
+          }
         }
       }
     }
@@ -4481,6 +4787,21 @@ int ObServerSchemaService::replay_log_reversely(
                  && schema_operation.op_type_ < OB_DDL_MOCK_FK_PARENT_TABLE_OPERATION_END) {
         if (OB_FAIL(get_increment_mock_fk_parent_table_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment mock_fk_parent_table keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_RLS_POLICY_OPERATION_BEGIN &&
+                 schema_operation.op_type_ < OB_DDL_RLS_POLICY_OPERATION_END) {
+        if (OB_FAIL(get_increment_rls_policy_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment rls_policy keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_RLS_GROUP_OPERATION_BEGIN &&
+                 schema_operation.op_type_ < OB_DDL_RLS_GROUP_OPERATION_END) {
+        if (OB_FAIL(get_increment_rls_group_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment rls_group keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_RLS_CONTEXT_OPERATION_BEGIN &&
+                 schema_operation.op_type_ < OB_DDL_RLS_CONTEXT_OPERATION_END) {
+        if (OB_FAIL(get_increment_rls_context_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment rls_context keys reversely", KR(ret));
         }
       } else {
         // ingore other operaton.
@@ -5382,6 +5703,9 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       ObArray<ObDirectorySchema> simple_directories;
       ObArray<ObContextSchema> simple_contexts;
       ObArray<ObSimpleMockFKParentTableSchema> simple_mock_fk_parent_tables;
+      ObArray<ObRlsPolicySchema> simple_rls_policys;
+      ObArray<ObRlsGroupSchema> simple_rls_groups;
+      ObArray<ObRlsContextSchema> simple_rls_contexts;
 
       if (OB_FAIL(schema_service_->get_sys_variable(sql_client, schema_status, tenant_id,
           schema_version, simple_sys_variable))) {
@@ -5470,6 +5794,44 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       } else if (OB_FAIL(schema_service_->get_all_mock_fk_parent_tables(
           sql_client, schema_status, schema_version, tenant_id, simple_mock_fk_parent_tables))) {
         LOG_WARN("get all mock_fk_parent_tables schema failed", K(ret), K(schema_version), K(tenant_id));
+      } else {
+      }
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_RLS_POLICY_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_RLS_SECURITY_COLUMN_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_rls_policys(
+            sql_client, schema_status, schema_version, tenant_id, simple_rls_policys))) {
+          LOG_WARN("get all rls_policy schema failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_RLS_GROUP_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_rls_groups(
+            sql_client, schema_status, schema_version, tenant_id, simple_rls_groups))) {
+          LOG_WARN("get all rls_group schema failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_RLS_CONTEXT_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_rls_contexts(
+            sql_client, schema_status, schema_version, tenant_id, simple_rls_contexts))) {
+          LOG_WARN("get all rls_context schema failed", K(ret), K(schema_version), K(tenant_id));
+        }
       }
 
       // add simple schema for cache
@@ -5536,6 +5898,12 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       } else if (OB_FAIL(schema_mgr_for_cache->mock_fk_parent_table_mgr_.add_mock_fk_parent_tables(
                          simple_mock_fk_parent_tables))) {
         LOG_WARN("add mock_fk_parent_tables failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->rls_policy_mgr_.add_rls_policys(simple_rls_policys))) {
+        LOG_WARN("add rls_policys failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->rls_group_mgr_.add_rls_groups(simple_rls_groups))) {
+        LOG_WARN("add rls_groups failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->rls_context_mgr_.add_rls_contexts(simple_rls_contexts))) {
+        LOG_WARN("add rls_contexts failed", K(ret));
       }
 
       LOG_INFO("add schemas for tenant finish",
@@ -5565,7 +5933,11 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
                K(tenant_id), K(schema_version), K(schema_status),
                "sys_privs", sys_privs.count(),
                "dblinks", simple_dblinks.count(),
-               "directories", simple_directories.count());
+               "directories", simple_directories.count(),
+               "rls_policys", simple_rls_policys.count(),
+               "rls_groups", simple_rls_groups.count(),
+               "rls_contexts", simple_rls_contexts.count()
+              );
     }
 
     if (OB_SUCC(ret)) {

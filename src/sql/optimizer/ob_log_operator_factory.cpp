@@ -39,7 +39,6 @@
 #include "ob_log_sequence.h"
 #include "ob_log_merge.h"
 #include "ob_log_granule_iterator.h"
-#include "ob_log_table_lookup.h"
 #include "ob_log_monitoring_dump.h"
 #include "ob_log_unpivot.h"
 #include "ob_log_link.h"
@@ -243,13 +242,6 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     if (NULL != ptr) {
       ret_op = new (ptr) ObLogGranuleIterator(plan);
     } else { /* do nothing */}
-    break;
-  }
-  case LOG_TABLE_LOOKUP: {
-    ptr = allocator_.alloc(sizeof(ObLogTableLookup));
-    if (NULL != ptr) {
-      ret_op = new (ptr) ObLogTableLookup(plan);
-    } else { /* do nothing */ }
     break;
   }
   case LOG_JOIN_FILTER: {

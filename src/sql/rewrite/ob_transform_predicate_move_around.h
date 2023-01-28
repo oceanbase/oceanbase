@@ -269,7 +269,6 @@ private:
                         ObIArray<ObRawExpr *> &new_conds);
 
   int extract_generalized_column(ObRawExpr *expr,
-                                 const int32_t expr_level,
                                  ObIArray<ObRawExpr *> &output);
 
   int acquire_transform_params(ObDMLStmt *stmt, ObIArray<ObRawExpr *> *&preds);
@@ -278,7 +277,7 @@ private:
                              ObIArray<int64_t> &sel_items,
                              ObIArray<ObRawExpr *> &columns);
 
-  int create_equal_exprs_for_insert(ObDelUpdStmt *del_upd_stmt, bool &is_happened);
+  int create_equal_exprs_for_insert(ObDelUpdStmt *del_upd_stmt,  bool &is_happened);
 
   int print_debug_info(const char *str, ObDMLStmt *stmt, ObIArray<ObRawExpr *> &preds);
 
@@ -292,6 +291,32 @@ private:
   int check_enable_no_pred_deduce(ObDMLStmt &stmt, bool &enable_no_pred_deduce);
 
   int get_stmt_to_trans(ObDMLStmt *stmt, ObIArray<ObDMLStmt *> &stmt_to_trans);
+
+  int pullup_predicates_from_set_stmt(ObDMLStmt *stmt, ObIArray<int64_t> &sel_ids, ObIArray<ObRawExpr *> &output_pullup_preds);
+
+  int generate_pullup_predicates_for_subquery(ObDMLStmt &stmt, ObIArray<ObRawExpr *> &pullup_preds);
+
+  int choose_and_rename_predicates_for_subquery(ObQueryRefRawExpr *subquery,
+                                     ObIArray<ObRawExpr *> &preds,
+                                     ObIArray<ObRawExpr *> &renamed_preds);
+
+  int generate_basic_table_pullup_preds(ObDMLStmt *stmt, ObIArray<ObRawExpr *> &preds);
+
+  int update_current_property(ObDMLStmt &stmt,
+                              ObIArray<ObRawExpr *> &exprs,
+                              ObIArray<ObRawExpr *> &push_down_exprs);
+
+  int get_exprs_cnt_exec(ObIArray<ObRawExpr *> &pullup_preds,
+                          ObIArray<ObRawExpr *> &conds);
+
+  int update_subquery_pullup_preds(ObIArray<ObQueryRefRawExpr *> &subquery_exprs,
+                                  ObIArray<ObRawExpr *> &current_exprs_can_push);
+
+  int remove_simple_op_null_condition(ObSelectStmt &stmt, ObIArray<ObRawExpr *> &pullup_preds);
+
+  int is_column_expr_null(ObDMLStmt *stmt, const ObColumnRefRawExpr *expr, bool &is_null, ObIArray<ObRawExpr *> &constraints);
+
+  int extract_filter_column_exprs_for_insert(ObDelUpdStmt &del_upd_stmt, ObIArray<ObRawExpr *> &columns);
 
 private:
   typedef ObSEArray<ObRawExpr *, 4> PullupPreds;

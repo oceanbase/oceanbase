@@ -118,7 +118,9 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     ddl_execution_id_(-1),
     ddl_task_id_(0),
     is_packed_(false),
-    has_instead_of_trigger_(false)
+    has_instead_of_trigger_(false),
+    min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
+    need_record_plan_info_(false)
 {
 }
 
@@ -202,6 +204,7 @@ void ObPhysicalPlan::reset()
   has_instead_of_trigger_ = false;
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
+  need_record_plan_info_ = false;
 }
 
 void ObPhysicalPlan::destroy()
@@ -228,6 +231,7 @@ int ObPhysicalPlan::copy_common_info(ObPhysicalPlan &src)
   set_literal_stmt_type(src.get_literal_stmt_type());
   //copy plan_id/hint/privs
   object_id_ = src.object_id_;
+  min_cluster_version_ = src.min_cluster_version_;
   if (OB_FAIL(set_phy_plan_hint(src.get_phy_plan_hint()))) {
     LOG_WARN("Failed to copy query hint", K(ret));
   } else if (OB_FAIL(set_stmt_need_privs(src.get_stmt_need_privs()))) {
@@ -743,7 +747,9 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_plain_insert_,
                     ddl_execution_id_,
                     ddl_task_id_,
-                    stat_.plan_id_);
+                    stat_.plan_id_,
+                    min_cluster_version_,
+                    need_record_plan_info_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

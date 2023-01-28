@@ -359,8 +359,12 @@ int ObVariableSetExecutor::calc_subquery_expr_value(ObExecContext &ctx,
       ObCharsetType client_cs_type = CHARSET_INVALID;
       ObSqlString tmp_expr_subquery;
       ObSqlString expr_subquery;
+      ObObjPrintParams print_params(session_info->get_timezone_info());
+      print_params.print_with_cte_ = true;
+      print_params.force_print_cte_ = true;
+      print_params.need_print_converter_ = false;
       ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH,
-                                    &pos, ctx.get_sql_ctx()->schema_guard_, session_info->get_timezone_info());
+                                    &pos, ctx.get_sql_ctx()->schema_guard_, print_params);
       if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
         LOG_WARN("print expr definition failed", K(ret));
       } else if (OB_FAIL(tmp_expr_subquery.assign_fmt("select %.*s from dual",

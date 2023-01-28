@@ -393,7 +393,7 @@ int ObTimeConverter::str_to_datetime(const ObString &str, const ObTimeConvertCtx
   if (cvrt_ctx.is_timestamp_) {
     local_date_sql_mode.allow_invalid_dates_ = false;
   }
-  if (OB_FAIL(str_to_ob_time_with_date(str, ob_time, scale, false, local_date_sql_mode))) {
+  if (OB_FAIL(str_to_ob_time_with_date(str, ob_time, scale, false, local_date_sql_mode, cvrt_ctx.need_truncate_))) {
     LOG_WARN("failed to convert string to datetime", K(ret));
   } else if (!cvrt_ctx.is_timestamp_ && ob_time.is_tz_name_valid_) {
     //only enable time zone data type can has tz name and tz addr
@@ -792,11 +792,12 @@ int ObTimeConverter::str_to_date(const ObString &str, int32_t &value,
   return ret;
 }
 
-int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *scale, const ObScale &time_scale)
+int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *scale,
+                                 const ObScale &time_scale, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_TIME);
-  if (OB_FAIL(str_to_ob_time_without_date(str, ob_time, scale))) {
+  if (OB_FAIL(str_to_ob_time_without_date(str, ob_time, scale, need_truncate))) {
     LOG_WARN("failed to convert string to time", K(ret), K(str));
     if (OB_ERR_TRUNCATED_WRONG_VALUE == ret) {
       value = ob_time_to_time(ob_time);
@@ -1819,7 +1820,7 @@ int ObTimeConverter::get_time_zone(const ObTimeDelims *delims, ObTime &ob_time, 
   return ret;
 }
 
-int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &ob_time)
+int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &ob_time, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0) || OB_ISNULL(digits)) {
@@ -1909,7 +1910,7 @@ int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *d
         //if HAS_TYPE_ORACLE, digits[DT_USEC] store nanosecond in fact
         const int64_t max_precision = (HAS_TYPE_ORACLE(ob_time.mode_) ? OB_MAX_TIMESTAMP_TZ_PRECISION: OB_MAX_DATETIME_PRECISION);
         const bool use_strict_check = HAS_TYPE_ORACLE(ob_time.mode_);
-        if (OB_FAIL(apply_usecond_delim_rule(delims[DT_SEC], digits[DT_USEC], max_precision, use_strict_check))) {
+        if (OB_FAIL(apply_usecond_delim_rule(delims[DT_SEC], digits[DT_USEC], max_precision, use_strict_check, need_truncate))) {
           LOG_WARN("failed to apply rule", K(use_strict_check), K(ret));
         } else if (!(DT_TYPE_DATE & ob_time.mode_) && (DT_TYPE_TIME & ob_time.mode_)) {
           if (OB_FAIL(apply_datetime_for_time_rule(ob_time, digits, delims))) {
@@ -1931,7 +1932,8 @@ int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *d
 //dayofmonth函数需要容忍月、日为0的错误
 int ObTimeConverter::str_to_ob_time_with_date(
     const ObString &str, ObTime &ob_time, int16_t *scale,
-    const bool is_dayofmonth, const ObDateSqlMode date_sql_mode)
+    const bool is_dayofmonth, const ObDateSqlMode date_sql_mode,
+    const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0)) {
@@ -1939,7 +1941,7 @@ int ObTimeConverter::str_to_ob_time_with_date(
     LOG_WARN("datetime string is invalid", K(ret), K(str));
   } else {
     ObTimeDigits digits[DATETIME_PART_CNT];
-    if (OB_FAIL(str_to_digit_with_date(str, digits, ob_time))) {
+    if (OB_FAIL(str_to_digit_with_date(str, digits, ob_time, need_truncate))) {
       LOG_WARN("failed to get digits", K(ret), K(str));
     } else if (OB_FAIL(validate_datetime(ob_time, is_dayofmonth, date_sql_mode))) {
       // OK, it seems like a valid format, now we need check its value.
@@ -1983,7 +1985,7 @@ int ObTimeConverter::str_is_date_format(const ObString &str, bool &date_flag)
   return ret;
 }
 
-int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob_time, int16_t *scale)
+int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob_time, int16_t *scale, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0)) {
@@ -2090,7 +2092,7 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
             // 7 is used for rounding to 6 digits.
             if (OB_FAIL(get_datetime_digits(pos, end, 7, digits))) {
               LOG_WARN("failed to get digits from datetime string", K(ret));
-            } else if (OB_FAIL(normalize_usecond_round(digits, OB_MAX_DATETIME_PRECISION))) {
+            } else if (OB_FAIL(normalize_usecond(digits, OB_MAX_DATETIME_PRECISION, false, need_truncate))) {
               LOG_WARN("failed to round usecond", K(ret));
             } else {
               ob_time.parts_[DT_USEC] = digits.value_;    // usecond.
@@ -5583,8 +5585,8 @@ OB_INLINE bool ObTimeConverter::is_negative(const char *&str, const char *end)
   return ret;
 }
 
-OB_INLINE int ObTimeConverter::normalize_usecond_round(ObTimeDigits &digits, const int64_t max_precision,
-    const bool use_strict_check/*false*/)
+OB_INLINE int ObTimeConverter::normalize_usecond(ObTimeDigits &digits, const int64_t max_precision,
+    const bool use_strict_check/*false*/, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(digits.value_ < 0)
@@ -5605,7 +5607,7 @@ OB_INLINE int ObTimeConverter::normalize_usecond_round(ObTimeDigits &digits, con
       } else {
         // .1234567 will round to 123457.
         digits.value_ /= static_cast<int32_t>(power_of_10[digits.len_ - max_precision]);
-        if (digits.ptr_[max_precision] >= '5') {
+        if (!need_truncate && digits.ptr_[max_precision] >= '5') {
           ++digits.value_;
         }
       }
@@ -5668,11 +5670,11 @@ OB_INLINE void ObTimeConverter::apply_date_year2_rule(int64_t &year)
 }
 
 OB_INLINE int ObTimeConverter::apply_usecond_delim_rule(ObTimeDelims &second, ObTimeDigits &usecond,
-    const int64_t max_precision, const bool use_strict_check)
+    const int64_t max_precision, const bool use_strict_check, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (is_single_dot(second) && usecond.value_ > 0) {
-    ret = normalize_usecond_round(usecond, max_precision, use_strict_check);
+    ret = normalize_usecond(usecond, max_precision, use_strict_check, need_truncate);
   } else {
     usecond.value_ = 0;
   }

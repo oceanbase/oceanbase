@@ -123,8 +123,9 @@ public:
    */
   template <typename OP>
   static OB_INLINE int foreach(const ObBitVector &skip, int64_t size, OP op);
-private:
+public:
   OB_INLINE static int64_t popcount64(uint64_t v);
+private:
   template <bool IS_FLIP, typename OP>
   static OB_INLINE int inner_foreach(const ObBitVector &skip, int64_t size, OP op);
 public:

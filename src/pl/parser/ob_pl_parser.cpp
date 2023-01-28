@@ -405,17 +405,17 @@ int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
       if (trg_info->is_simple_dml_type() || trg_info->is_instead_dml_type()) {
         OV (T_TG_SIMPLE_DML == trigger_source_node->children_[1]->type_
             || T_TG_INSTEAD_DML == trigger_source_node->children_[1]->type_);
-        CK (4 == trigger_source_node->children_[1]->num_child_);
-        CK (OB_NOT_NULL(trigger_source_node->children_[1]->children_[3])); // simple/instead trigger body
+        CK (5 == trigger_source_node->children_[1]->num_child_);
+        CK (OB_NOT_NULL(trigger_source_node->children_[1]->children_[4])); // simple/instead trigger body
 
         CK (5 == pkg_body->num_child_); // 5 routines predefined in trigger_package
 
-        if (OB_SUCC(ret) && NULL != trigger_source_node->children_[1]->children_[2]) {
+        if (OB_SUCC(ret) && NULL != trigger_source_node->children_[1]->children_[3]) {
           // replace routine `calc_when` with trigger's `when_condition`
           // opt_when_condition
-          OV (T_TG_WHEN_CONDITION == trigger_source_node->children_[1]->children_[2]->type_);
-          OV (1 == trigger_source_node->children_[1]->children_[2]->num_child_);
-          OV (OB_NOT_NULL(trigger_source_node->children_[1]->children_[2]->children_[0])); // bool expr
+          OV (T_TG_WHEN_CONDITION == trigger_source_node->children_[1]->children_[3]->type_);
+          OV (1 == trigger_source_node->children_[1]->children_[3]->num_child_);
+          OV (OB_NOT_NULL(trigger_source_node->children_[1]->children_[3]->children_[0])); // bool expr
 
           OV (OB_NOT_NULL(pkg_body->children_[0]->children_[1])); // T_SP_BLOCK_CONTENT
           OV (1 == pkg_body->children_[0]->children_[1]->num_child_);
@@ -429,9 +429,9 @@ int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
           OV (OB_NOT_NULL(pkg_body->children_[0]->children_[1]->children_[0]->children_[0]->children_[0])); // bool expr
 
           OV (pkg_body->children_[0]->children_[1]->children_[0]->children_[0]->children_[0]->type_
-              == trigger_source_node->children_[1]->children_[2]->children_[0]->type_);
+              == trigger_source_node->children_[1]->children_[3]->children_[0]->type_);
           OX (pkg_body->children_[0]->children_[1]->children_[0]->children_[0]->children_[0]
-              = trigger_source_node->children_[1]->children_[2]->children_[0]);
+              = trigger_source_node->children_[1]->children_[3]->children_[0]);
         }
 
         if (OB_SUCC(ret)) {
@@ -451,27 +451,27 @@ int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
           CK (T_SP_BLOCK_CONTENT == pkg_body->children_[proc_pos]->children_[1]->type_);
 
           if (OB_FAIL(ret)) {
-          } else if (T_SP_BLOCK_CONTENT == trigger_source_node->children_[1]->children_[3]->type_) {
-            pkg_body->children_[proc_pos]->children_[1] = trigger_source_node->children_[1]->children_[3];
-          } else if (T_SP_LABELED_BLOCK == trigger_source_node->children_[1]->children_[3]->type_) {
+          } else if (T_SP_BLOCK_CONTENT == trigger_source_node->children_[1]->children_[4]->type_) {
+            pkg_body->children_[proc_pos]->children_[1] = trigger_source_node->children_[1]->children_[4];
+          } else if (T_SP_LABELED_BLOCK == trigger_source_node->children_[1]->children_[4]->type_) {
             pkg_body->children_[proc_pos]->children_[1] =
-              trigger_source_node->children_[1]->children_[3]->children_[1];
+              trigger_source_node->children_[1]->children_[4]->children_[1];
           }
         }
       } else if (trg_info->is_compound_dml_type()) {
         ObStmtNodeTree *trg_com_body = NULL;
         OV (T_TG_COMPOUND_DML == trigger_source_node->children_[1]->type_);
-        OV (4 == trigger_source_node->children_[1]->num_child_);
-        OV (OB_NOT_NULL(trg_com_body = trigger_source_node->children_[1]->children_[3])); // compoud trigger body
+        OV (5 == trigger_source_node->children_[1]->num_child_);
+        OV (OB_NOT_NULL(trg_com_body = trigger_source_node->children_[1]->children_[4])); // compoud trigger body
         OV (T_TG_COMPOUND_BODY == trg_com_body->type_ && 3 == trg_com_body->num_child_);
         OV (OB_NOT_NULL(trg_com_body->children_[1]));// timing_point_section_list
         OV (T_TG_TIMPING_POINT_SECTION_LIST == trg_com_body->children_[1]->type_);
 
-        if (OB_SUCC(ret) && NULL != trigger_source_node->children_[1]->children_[2]) {
+        if (OB_SUCC(ret) && NULL != trigger_source_node->children_[1]->children_[3]) {
           // replace `calc_when` routine with trigger's `when_condition`
           // opt_when_condition
-          OV (T_TG_WHEN_CONDITION == trigger_source_node->children_[1]->children_[2]->type_);
-          OV (OB_NOT_NULL(trigger_source_node->children_[1]->children_[2]->children_[0])); // bool expr
+          OV (T_TG_WHEN_CONDITION == trigger_source_node->children_[1]->children_[3]->type_);
+          OV (OB_NOT_NULL(trigger_source_node->children_[1]->children_[3]->children_[0])); // bool expr
 
           OV (OB_NOT_NULL(pkg_body->children_[0]) && 2 == pkg_body->children_[0]->num_child_); // T_SUB_FUNC_DEF
           
@@ -487,9 +487,9 @@ int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
           OV (OB_NOT_NULL(pkg_body->children_[0]->children_[1]->children_[0]->children_[0]->children_[0])); // bool expr
 
           OV (pkg_body->children_[0]->children_[1]->children_[0]->children_[0]->children_[0]->type_
-              == trigger_source_node->children_[1]->children_[2]->children_[0]->type_);
+              == trigger_source_node->children_[1]->children_[3]->children_[0]->type_);
           OX (pkg_body->children_[0]->children_[1]->children_[0]->children_[0]->children_[0]
-              = trigger_source_node->children_[1]->children_[2]->children_[0]);
+              = trigger_source_node->children_[1]->children_[3]->children_[0]);
         }
 
         if (OB_SUCC(ret) && NULL != trg_com_body->children_[0]) {

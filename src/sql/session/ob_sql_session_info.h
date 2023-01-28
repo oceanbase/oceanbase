@@ -40,7 +40,10 @@
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/rc/ob_context.h"
-#include "sql/monitor/full_link_trace/ob_flt_extra_info.h"
+#include "sql/monitor/flt/ob_flt_extra_info.h"
+#include "sql/ob_optimizer_trace_impl.h"
+#include "sql/monitor/flt/ob_flt_span_mgr.h"
+#include "sql/monitor/ob_sql_plan_manager.h"
 
 namespace oceanbase
 {
@@ -78,6 +81,7 @@ class ObPsSessionInfo;
 class ObPsStmtInfo;
 class ObStmt;
 class ObSQLSessionInfo;
+class ObSqlPlanMgr;
 
 class SessionInfoKey
 {
@@ -192,12 +196,12 @@ private:
 };
 
 enum SessionSyncInfoType {
-  //SESSION_SYNC_SYS_VAR,   // for system variables
   //SESSION_SYNC_USER_VAR,  // for user variables
   SESSION_SYNC_APPLICATION_INFO, // for application info
   SESSION_SYNC_APPLICATION_CONTEXT, // for app ctx
   SESSION_SYNC_CLIENT_ID, // for client identifier
   SESSION_SYNC_CONTROL_INFO, // for full trace link control info
+  SESSION_SYNC_SYS_VAR,   // for system variables
   SESSION_SYNC_MAX_TYPE,
 };
 
@@ -211,15 +215,14 @@ public:
   bool is_changed_;
 };
 
-//class ObSysVarEncoder : public ObSessInfoEncoder {
-//public:
-//  ObSysVarEncoder():ObSessInfoEncoder() {}
-//  ~ObSysVarEncoder() {}
-//  int serialize(ObBasicSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
-//  int deserialize(ObBasicSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
-//  int64_t get_serialize_size(ObBasicSessionInfo& sess) const;
-//  // implements of other variables need to monitor
-//};
+class ObSysVarEncoder : public ObSessInfoEncoder {
+public:
+  ObSysVarEncoder():ObSessInfoEncoder() {}
+  ~ObSysVarEncoder() {}
+  int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
+  int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
+  int64_t get_serialize_size(ObSQLSessionInfo& sess) const;
+};
 
 class ObAppInfoEncoder : public ObSessInfoEncoder {
 public:
@@ -464,6 +467,8 @@ public:
                                  enable_sql_extension_(false),
                                  saved_tenant_info_(0),
                                  enable_bloom_filter_(true),
+                                 px_join_skew_handling_(true),
+                                 px_join_skew_minfreq_(30),
                                  at_type_(ObAuditTrailType::NONE),
                                  sort_area_size_(128*1024*1024),
                                  print_sample_ppm_(0),
@@ -480,6 +485,8 @@ public:
     ObAuditTrailType get_at_type() const { return at_type_; }
     int64_t get_sort_area_size() const { return ATOMIC_LOAD(&sort_area_size_); }
     int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
+    bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
+    int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -487,6 +494,8 @@ public:
     bool enable_sql_extension_;
     uint64_t saved_tenant_info_;
     bool enable_bloom_filter_;
+    bool px_join_skew_handling_;
+    int64_t px_join_skew_minfreq_;
     ObAuditTrailType at_type_;
     int64_t sort_area_size_;
     // for record sys config print_sample_ppm
@@ -518,6 +527,7 @@ public:
            const ObTZInfoMap *tz_info = NULL,
            int64_t sess_create_time = 0,
            uint64_t tenant_id = OB_INVALID_TENANT_ID);
+  void destroy_session_plan_mgr();
   //for test
   int test_init(uint32_t version, uint32_t sessid, uint64_t proxy_sessid,
            common::ObIAllocator *bucket_allocator);
@@ -544,6 +554,9 @@ public:
   ObPsCache *get_ps_cache();
   ObPlanCacheManager *get_plan_cache_manager() { return plan_cache_manager_; }
   obmysql::ObMySQLRequestManager *get_request_manager();
+  sql::ObFLTSpanMgr *get_flt_span_manager();
+  ObSqlPlanMgr *get_sql_plan_manager();
+  ObSqlPlanMgr *get_plan_table_manager();
   void set_user_priv_set(const ObPrivSet priv_set) { user_priv_set_ = priv_set; }
   void set_db_priv_set(const ObPrivSet priv_set) { db_priv_set_ = priv_set; }
   void set_show_warnings_buf(int error_code);
@@ -845,7 +858,7 @@ public:
   void set_trace_enable(bool trace_enable) { trace_enable_ = trace_enable; }
   bool is_auto_flush_trace() {return auto_flush_trace_;}
   void set_auto_flush_trace(bool auto_flush_trace) { auto_flush_trace_ = auto_flush_trace; }
-  //ObSysVarEncoder& get_sys_var_encoder() { return sys_var_encoder_; }
+  ObSysVarEncoder& get_sys_var_encoder() { return sys_var_encoder_; }
   //ObUserVarEncoder& get_usr_var_encoder() { return usr_var_encoder_; }
   ObAppInfoEncoder& get_app_info_encoder() { return app_info_encoder_; }
   ObAppCtxInfoEncoder &get_app_ctx_encoder() { return app_ctx_info_encoder_; }
@@ -907,6 +920,17 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_bloom_filter();
   }
+  int64_t get_px_join_skew_minfreq()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_px_join_skew_minfreq();
+  }
+  bool get_px_join_skew_handling()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_px_join_skew_handling();
+  }
+
   bool is_enable_sql_extension()
   {
     cached_tenant_config_info_.refresh();
@@ -951,6 +975,7 @@ public:
   int on_user_connect(share::schema::ObSessionPrivInfo &priv_info, const ObUserInfo *user_info);
   int on_user_disconnect();
   virtual void reset_tx_variable();
+  ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
 public:
   bool has_tx_level_temp_table() const {
     return tx_level_temp_table_;
@@ -995,6 +1020,9 @@ private:
   char tenant_buff_[sizeof(share::ObTenantSpaceFetcher)];
   share::ObTenantSpaceFetcher* with_tenant_ctx_;
   obmysql::ObMySQLRequestManager *request_manager_;
+  sql::ObFLTSpanMgr *flt_span_mgr_;
+  ObSqlPlanMgr *sql_plan_manager_;
+  ObSqlPlanMgr *plan_table_manager_;
   ObPlanCache *plan_cache_;
   ObPsCache *ps_cache_;
   //记录select stmt中scan出来的结果集行数，供设置sql_calc_found_row时，found_row()使用；
@@ -1117,14 +1145,14 @@ private:
   bool coninfo_set_by_sess_ = false;
 
   ObSessInfoEncoder* sess_encoders_[SESSION_SYNC_MAX_TYPE] = {
-                            //&sys_var_encoder_
                             //&usr_var_encoder_,
                             &app_info_encoder_,
                             &app_ctx_info_encoder_,
                             &client_id_info_encoder_,
-                            &control_info_encoder_
+                            &control_info_encoder_,
+                            &sys_var_encoder_
                             };
-  //ObSysVarEncoder sys_var_encoder_;
+  ObSysVarEncoder sys_var_encoder_;
   //ObUserVarEncoder usr_var_encoder_;
   ObAppInfoEncoder app_info_encoder_;
   ObAppCtxInfoEncoder app_ctx_info_encoder_;
@@ -1138,6 +1166,7 @@ private:
   // When try packet retry failed, set this flag true and retry at current thread.
   // This situation is unexpected and will report a warning to user.
   bool group_id_not_expected_;
+  ObOptimizerTraceImpl optimizer_tracer_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

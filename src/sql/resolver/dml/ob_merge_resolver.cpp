@@ -572,19 +572,26 @@ int ObMergeResolver::resolve_update_clause(const ParseNode *update_node)
     } else {
       // 新引擎下，全部替换为update后的值，这样就不需要在计算delete condition时候，强制将expr的值弄成新值
       ObMergeTableInfo& merge_info = merge_stmt->get_merge_table_info();
+      ObRawExprCopier copier(*params_.expr_factory_);
       if (OB_INVALID_ID == merge_info.table_id_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid table assignment", K(merge_info.table_id_));
       } else {
-        for (uint64_t i = 0;
-            OB_SUCC(ret) && i < merge_stmt->get_delete_condition_exprs().count(); ++i) {
-          if (OB_FAIL(ObTableAssignment::expand_expr(merge_info.assignments_,
-                                          merge_stmt->get_delete_condition_exprs().at(i)))) {
-            LOG_WARN("expand generated column expr failed", K(ret));
+        for (int64_t i = 0; OB_SUCC(ret) && i < merge_info.assignments_.count(); ++i) {
+          if (OB_FAIL(copier.add_replaced_expr(merge_info.assignments_.at(i).column_expr_,
+                                               merge_info.assignments_.at(i).expr_))) {
+            LOG_WARN("failed to add replaced expr", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(copier.add_skipped_expr(merge_stmt->get_subquery_exprs(), false))) {
+            LOG_WARN("failed to add uncopy exprs", K(ret));
+          } else if (OB_FAIL(copier.copy_on_replace(merge_stmt->get_delete_condition_exprs(),
+                                                    merge_stmt->get_delete_condition_exprs()))) {
+            LOG_WARN("failed to copy on replace delete conditions", K(ret));
           }
         }
       }
-      
     }
     current_scope_ = T_NONE_SCOPE;
     column_namespace_checker_.disable_check_unique();

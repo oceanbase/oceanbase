@@ -251,18 +251,9 @@ int ObDfoSchedulerBasic::dispatch_bf_channel_info(ObExecContext &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("phy plan ctx NULL", K(ret));
   } else if (parent.is_root_dfo()) {
-    if (ctx.get_bf_ctx().filter_ready_) {
-      ObPxBloomFilterChInfo &ch_set_info = ctx.get_bf_ctx().ch_set_info_;
-      ctx.get_bf_ctx().ch_set_.reset();
-      if (OB_FAIL(ObDtlChannelUtil::get_receive_bf_dtl_channel_set(
-          0, ch_set_info, ctx.get_bf_ctx().ch_set_))) {
-        LOG_WARN("failed to get receive dtl channel set", K(ret));
-      } else if (OB_FAIL(ObPxMsgProc::mark_rpc_filter(ctx))) {
-        LOG_WARN("fail to send rpc bloom filter", K(ret));
-      }
-    } else {
-      LOG_ERROR("unexpected status: filter ready must be true", K(ctx.get_bf_ctx().filter_ready_));
-    }
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support root dfo send bloom filter", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "root dfo send bloom filter");
   } else {
     // send to dfo with receive operator
     ObArray<ObPxSqcMeta *> sqcs;
@@ -534,6 +525,9 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
         if ((NULL != dfo.parent() && !dfo.parent()->is_root_dfo()) ||
           coord_info_.enable_px_batch_rescan()) {
           sqc.set_transmit_use_interm_result(true);
+        }
+        if (NULL != dfo.parent() && dfo.parent()->is_root_dfo()) {
+          sqc.set_adjoining_root_dfo(true);
         }
         if (dfo.has_child_dfo()) {
           sqc.set_recieve_use_interm_result(true);
@@ -1118,6 +1112,15 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
       LOG_WARN("session is NULL", K(ret));
     }
   }
+  if (OB_SUCC(ret) && nullptr != dfo.parent() && dfo.parent()->is_root_dfo()) {
+    ARRAY_FOREACH(sqcs, idx) {
+      ObPxSqcMeta &sqc = *sqcs.at(idx);
+      sqc.set_adjoining_root_dfo(true);
+    }
+  }
+  // 分发 sqc 可能需要重试，
+  // 分发 sqc 的 rpc 成功，但 sqc 上无法分配最小个数的 worker 线程，`dispatch_sqc`内部进行重试，
+  // 如果多次重试（达到超时时间）都无法成功，不需要再重试整个DFO（因为已经超时）
   ObPxSqcAsyncProxy proxy(coord_info_.rpc_proxy_, dfo, exec_ctx, phy_plan_ctx, session, phy_plan, sqcs);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(proxy.launch_all_rpc_request())) {
@@ -1169,8 +1172,8 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
         pkt.rc_ = resp.rc_;
         pkt.task_count_ = resp.reserved_thread_count_;
         if (resp.reserved_thread_count_ < sqc.get_max_task_count()) {
-          LOG_INFO("SQC do not have enough thread, Downgraded thread allocation",
-                   K(resp), K(sqc));
+          LOG_TRACE("SQC don`t have enough thread or thread auto scaling, Downgraded thread allocation",
+              K(resp), K(sqc));
         }
         if (OB_FAIL(pkt.tablets_info_.assign(resp.partitions_info_))) {
           LOG_WARN("Failed to assign partition info", K(ret));

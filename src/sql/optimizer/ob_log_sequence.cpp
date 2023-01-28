@@ -36,16 +36,6 @@ int ObLogSequence::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogSequence::print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(buf);
-  UNUSED(buf_len);
-  UNUSED(pos);
-  UNUSED(type);
-  return ret;
-}
-
 int ObLogSequence::est_cost()
 {
   int ret = OB_SUCCESS;

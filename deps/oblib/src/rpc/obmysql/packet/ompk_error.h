@@ -44,6 +44,7 @@ public:
   inline common::ObString get_sql_state() const { return sqlstate_; }
   inline common::ObString get_message() const { return message_; }
   virtual int64_t to_string(char *buf, const int64_t buf_len) const;
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_ERR; }
 
 private:
 

@@ -679,7 +679,10 @@ public:
   inline ObIArray<ObAggrInfo> &get_aggr_infos() { return aggr_infos_; }
   int single_row_agg(GroupRow &group_row, ObEvalCtx &eval_ctx);
   int single_row_agg_batch(GroupRow **group_rows, ObEvalCtx &eval_ctx, const int64_t batch_size, const ObBitVector *skip);
-  int fast_single_row_agg(ObEvalCtx &eval_ctx);
+  // deal with a single aggr info
+  int fast_single_row_agg(ObEvalCtx &eval_ctx, ObAggrInfo &aggr_info);
+  // deal with all aggr infos
+  int fast_single_row_agg(ObEvalCtx &eval_ctx, ObIArray<ObAggrInfo> &aggr_infos);
   int fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const int64_t batch_size, const ObBitVector *skip);
   inline void set_support_fast_single_row_agg(const bool flag) { support_fast_single_row_agg_ = flag; }
   static int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size);

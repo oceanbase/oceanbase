@@ -17,6 +17,7 @@
 #include "ob_operator_factory.h"
 #include "sql/engine/ob_exec_context.h"
 #include "common/ob_smart_call.h"
+#include "sql/monitor/ob_plan_real_info_manager.h"
 
 namespace oceanbase
 {
@@ -897,6 +898,14 @@ int ObOperator::submit_op_monitor_node()
         IGNORE_RETURN list->submit_node(op_monitor_info_);
         LOG_DEBUG("debug monitor", K(spec_.id_));
       }
+    }
+    ObPlanRealInfoMgr *plan_info = MTL(ObPlanRealInfoMgr*);
+    if (plan_info && spec_.plan_ && spec_.plan_->need_record_plan_info()) {
+      IGNORE_RETURN plan_info->handle_plan_info(spec_.id_,
+                                                spec_.plan_->get_sql_id_string(),
+                                                spec_.plan_->get_plan_id(),
+                                                spec_.plan_->get_plan_hash_value(),
+                                                op_monitor_info_);
     }
   }
   IGNORE_RETURN try_deregister_rt_monitor_node();

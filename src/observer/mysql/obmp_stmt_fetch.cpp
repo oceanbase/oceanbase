@@ -578,8 +578,6 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
             LOG_WARN("failed to alloc easy buf", K(ret));
           } else if (!has_ok_packet() && OB_FAIL(update_last_pkt_pos())) {
             LOG_WARN("failed to update last packet pos", K(ret));
-          } else if (OB_FAIL(response_packet(eofp, &session))) {
-            LOG_WARN("response packet fail", K(ret));
           } else if (last_row && !cursor.is_scrollable() 
                               && !cursor.is_streaming()
                               && cursor.is_ps_cursor()
@@ -609,8 +607,12 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
             }
             ok_param.is_partition_hit_ = session.partition_hit().get_bool();
             ok_param.has_more_result_ = false;
-            if (OB_FAIL(send_ok_packet(session, ok_param))) {
+            if (OB_FAIL(send_ok_packet(session, ok_param, &eofp))) {
               LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
+            }
+          } else {
+            if (OB_FAIL(response_packet(eofp, &session))) {
+              LOG_WARN("response packet fail", K(ret));
             }
           }
         }
@@ -632,43 +634,38 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
 int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  bool use_sess_trace = false;
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
   setup_wb(session);
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
-  if (OB_FAIL(session.is_use_trace_log(use_sess_trace))) {
-    LOG_WARN("check usr trace log failed.", K(ret));
+  const bool enable_trace_log = lib::is_trace_log_enabled();
+  if (enable_trace_log) {
+    //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
+    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
+  }
+  // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,
+  // observer will force refresh schema if local_schema_version < last_schema_version;
+  if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
+                                       session.get_effective_tenant_id()))) {
+    LOG_WARN("failed to check_and_refresh_schema", K(ret));
   } else {
-    const bool enable_trace_log = lib::is_trace_log_enabled();
-    if (enable_trace_log) {
-      //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
-      ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-    }
-    // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,
-    // observer will force refresh schema if local_schema_version < last_schema_version;
-    if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
-                                         session.get_effective_tenant_id()))) {
-      LOG_WARN("failed to check_and_refresh_schema", K(ret));
+    //每次执行不同sql都需要更新
+    if (OB_FAIL(update_transmission_checksum_flag(session))) {
+      LOG_WARN("update transmisson checksum flag failed", K(ret));
     } else {
-      //每次执行不同sql都需要更新
-      if (OB_FAIL(update_transmission_checksum_flag(session))) {
-        LOG_WARN("update transmisson checksum flag failed", K(ret));
-      } else {
-        // do the real work
-        ret = do_process(session);
-      }
+      // do the real work
+      ret = do_process(session);
     }
-    if (enable_trace_log) {
-      ObThreadLogLevelUtils::clear();
-    }
-    const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
-    if (debug_sync_timeout > 0) {
-      // ignore thread local debug sync actions to session actions failed
-      int tmp_ret = OB_SUCCESS;
-      tmp_ret = GDS.collect_result_actions(session.get_debug_sync_actions());
-      if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-        LOG_WARN("set thread local debug sync actions to session actions failed", K(tmp_ret));
-      }
+  }
+  if (enable_trace_log) {
+    ObThreadLogLevelUtils::clear();
+  }
+  const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
+  if (debug_sync_timeout > 0) {
+    // ignore thread local debug sync actions to session actions failed
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = GDS.collect_result_actions(session.get_debug_sync_actions());
+    if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+      LOG_WARN("set thread local debug sync actions to session actions failed", K(tmp_ret));
     }
   }
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
@@ -683,7 +680,7 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session)
       ObSqlCtx *sql_ctx
           = cursor->get_cursor_handler()->get_result_set()->get_exec_context().get_sql_ctx();
       if (NULL != sql_ctx) {
-        tmp_ret = do_after_process(session, use_sess_trace, *sql_ctx, false/*no asyn response*/);
+        tmp_ret = do_after_process(session, *sql_ctx, false/*no asyn response*/);
       }
     }
   }

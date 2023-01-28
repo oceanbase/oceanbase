@@ -128,7 +128,8 @@ Coercibility Meaning Example
 2 Implicit collation Column value, stored routine parameter or local variable
 3 System constant such as USER() and VERSION() return value, or system variable
 4 Coercible Literal string
-5 Ignorable NULL or an expression derived from NULL
+5 Numeric or temporal value
+6 Ignorable NULL or an expression derived from NULL
 
 for reasons why, please refer to
 https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html

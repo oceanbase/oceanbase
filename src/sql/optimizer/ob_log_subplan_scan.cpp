@@ -80,22 +80,27 @@ int ObLogSubPlanScan::allocate_expr_post(ObAllocExprContext &ctx)
   return ret;
 }
 
-int ObLogSubPlanScan::print_my_plan_annotation(char *buf,
-                                               int64_t &buf_len,
-                                               int64_t &pos,
-                                               ExplainType type)
+int ObLogSubPlanScan::get_plan_item_info(PlanText &plan_text,
+                                         ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
   // print access
-  if (OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else { /* Do nothing */ }
-  const ObIArray<ObRawExpr*> &access = get_access_exprs();
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    const ObIArray<ObRawExpr*> &access = get_access_exprs();
     EXPLAIN_PRINT_EXPRS(access, type);
-  } else { /* Do nothing */ }
+    END_BUF_PRINT(plan_item.access_predicates_,
+                  plan_item.access_predicates_len_);
+  }
+  if (OB_SUCC(ret)) {
+    const ObString &name = get_subquery_name();
+    BUF_PRINT_OB_STR(name.ptr(),
+                     name.length(),
+                     plan_item.object_alias_,
+                     plan_item.object_alias_len_);
+  }
   return ret;
 }
 

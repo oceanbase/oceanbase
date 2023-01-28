@@ -24,47 +24,60 @@ using namespace sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-int ObLogUpdate::print_my_plan_annotation(char *buf,
-                                          int64_t &buf_len,
-                                          int64_t &pos,
-                                          ExplainType type)
+int ObLogUpdate::get_plan_item_info(PlanText &plan_text,
+                                    ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  ObLogDelUpd::print_my_plan_annotation(buf, buf_len, pos, type);
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(BUF_PRINTF(",\n      "))) {
+  if (OB_FAIL(ObLogDelUpd::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(print_table_infos(ObString::make_string("table_columns"),
+                                  buf,
+                                  buf_len,
+                                  pos,
+                                  type))) {
+      LOG_WARN("failed to print table infos", K(ret));
+    } else if (need_barrier()) {
+      ret = BUF_PRINTF(", ");
+      ret = BUF_PRINTF("with_barrier");
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(BUF_PRINTF(",\n      "))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("update("))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else { /* Do nothing */ }
-  } else { /* Do nothing */ }
-  bool has_assign = false;
-  for (int64_t k = 0; OB_SUCC(ret) && k < get_index_dml_infos().count(); ++k) {
-    const IndexDMLInfo *info = get_index_dml_infos().at(k);
-    if (OB_ISNULL(info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("info is null", K(ret));
-    } else if (!info->is_primary_index_ && !is_pdml()) {
-      continue;
-    } else {
-      const int64_t N = info->assignments_.count();
-      for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-        OZ(BUF_PRINTF("["));
-        CK(OB_NOT_NULL(info->assignments_.at(i).column_expr_));
-        OZ(info->assignments_.at(i).column_expr_->get_name(buf, buf_len, pos, type));
-        OZ(BUF_PRINTF("="));
-        CK(OB_NOT_NULL(info->assignments_.at(i).expr_));
-        OZ(info->assignments_.at(i).expr_->get_name(buf, buf_len, pos, type));
-        OZ(BUF_PRINTF("]"));
-        OZ(BUF_PRINTF(", "));
-        has_assign = true;
+    bool has_assign = false;
+    for (int64_t k = 0; OB_SUCC(ret) && k < get_index_dml_infos().count(); ++k) {
+      const IndexDMLInfo *info = get_index_dml_infos().at(k);
+      if (OB_ISNULL(info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("info is null", K(ret));
+      } else if (!info->is_primary_index_ && !is_pdml()) {
+        continue;
+      } else {
+        const int64_t N = info->assignments_.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+          OZ(BUF_PRINTF("["));
+          CK(OB_NOT_NULL(info->assignments_.at(i).column_expr_));
+          OZ(info->assignments_.at(i).column_expr_->get_name(buf, buf_len, pos, type));
+          OZ(BUF_PRINTF("="));
+          CK(OB_NOT_NULL(info->assignments_.at(i).expr_));
+          OZ(info->assignments_.at(i).expr_->get_name(buf, buf_len, pos, type));
+          OZ(BUF_PRINTF("]"));
+          OZ(BUF_PRINTF(", "));
+          has_assign = true;
+        }
       }
     }
+    if (OB_SUCC(ret) && has_assign) {
+      pos = pos - 2;
+    }
+    OZ(BUF_PRINTF(")"));
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item. special_predicates_len_);
   }
-  if (OB_SUCC(ret) && has_assign) {
-    pos = pos - 2;
-  }
-  OZ(BUF_PRINTF(")"));
   return ret;
 }
 
@@ -205,27 +218,6 @@ int ObLogUpdate::generate_multi_part_partition_id_expr()
     } else if (OB_FAIL(generate_update_new_calc_partid_expr(*get_index_dml_infos().at(i)))) {
       LOG_WARN("failed to generate new calc partid expr", K(ret));
     } else { /*do nothing*/ }
-  }
-  return ret;
-}
-
-int ObLogUpdate::inner_replace_generated_agg_expr(const common::ObIArray<std::pair<ObRawExpr *, 
-                                                  ObRawExpr *> > &to_replace_exprs)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < get_index_dml_infos().count(); ++i) {
-    IndexDMLInfo *dml_info = NULL;
-    if (OB_ISNULL(dml_info = get_index_dml_infos().at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("index dml info is null", K(ret), K(dml_info));
-    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, dml_info->column_convert_exprs_))) {
-      LOG_WARN("failed to replace exprs", K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < dml_info->assignments_.count(); ++j) {
-      if (OB_FAIL(replace_expr_action(to_replace_exprs, dml_info->assignments_.at(j).expr_))) {
-        LOG_WARN("failed to replace exprs", K(ret));
-      }
-    }
   }
   return ret;
 }

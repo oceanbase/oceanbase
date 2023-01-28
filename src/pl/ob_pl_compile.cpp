@@ -584,6 +584,35 @@ int ObPLCompiler::analyze_package(const ObString &source,
       OZ (schema_guard_.get_trigger_info(session_info_.get_effective_tenant_id(), trg_id, trg_info));
       CK (OB_NOT_NULL(trg_info));
     }
+    if (OB_SUCC(ret) && is_for_trigger && PL_PACKAGE_SPEC == package_ast.get_package_type()) {
+      const uint64_t trg_id = ObTriggerInfo::get_package_trigger_id(package_ast.get_id());
+      const ObTriggerInfo *trg_info = NULL;
+      const uint64_t tenant_id = session_info_.get_effective_tenant_id();
+      OZ (schema_guard_.get_trigger_info(tenant_id, trg_id, trg_info));
+      OV (OB_NOT_NULL(trg_info), OB_ERR_UNEXPECTED, trg_id);
+      if (OB_SUCC(ret) && !trg_info->get_ref_trg_db_name().empty() && lib::is_oracle_mode()) {
+        uint64_t ref_db_id = OB_INVALID_ID;
+        const ObTriggerInfo *ref_trg_info = NULL;
+        OV (!trg_info->get_ref_trg_db_name().empty());
+        OZ (schema_guard_.get_database_id(tenant_id, trg_info->get_ref_trg_db_name(), ref_db_id));
+        OZ (schema_guard_.get_trigger_info(tenant_id, ref_db_id, trg_info->get_ref_trg_name(), ref_trg_info));
+        if (OB_SUCC(ret) && NULL == ref_trg_info) {
+          ret = OB_ERR_TRIGGER_NOT_EXIST;
+          LOG_WARN("ref_trg_info is NULL", K(trg_info->get_ref_trg_db_name()), K(trg_info->get_ref_trg_name()), K(ret));
+          if (lib::is_oracle_mode()) {
+            LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trg_info->get_ref_trg_name().length(),
+                                  trg_info->get_ref_trg_name().ptr());
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObSchemaObjVersion obj_version;
+          obj_version.object_id_ = ref_trg_info->get_trigger_id();
+          obj_version.object_type_ = DEPENDENCY_TRIGGER;
+          obj_version.version_ = ref_trg_info->get_schema_version();
+          OZ (package_ast.add_dependency_object(obj_version));
+        }
+      }
+    }
     OZ (parser.parse_package(source, parse_tree, session_info_.get_dtc_params(), 
                              &schema_guard_, is_for_trigger, trg_info));
     OZ (resolver.init(package_ast));

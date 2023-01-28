@@ -2226,6 +2226,7 @@ typedef enum ObContextType {
     || ((op) == T_FUN_SYS_JSON_EXISTS) \
     || ((op) == T_BOOL) \
     || ((op) == T_OP_XOR) \
+    || ((op) == T_FUN_SYS_IS_UUID) \
     || ((op) == T_FUN_SYS_ST_CONTAINS) \
     || ((op) == T_FUN_SYS_ST_WITHIN) \
     || ((op) == T_FUN_SYS_ST_DWITHIN) \
@@ -2341,6 +2342,12 @@ inline ObItemType get_opposite_compare_type(ObItemType src_type)
       break;
     case T_OP_GE:
       ret_type = T_OP_LE;
+      break;
+    case T_OP_EXISTS:
+      ret_type = T_OP_NOT_EXISTS;
+      break;
+    case T_OP_NOT_EXISTS:
+      ret_type = T_OP_EXISTS;
       break;
     default:
       ret_type = src_type;

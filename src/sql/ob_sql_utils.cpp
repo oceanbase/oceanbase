@@ -694,9 +694,20 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
     } else if (OB_FAIL(phy_plan_ctx.init_datum_param_store())) {
       LOG_WARN("failed to init datum param store", K(ret));
     } else {
+      ObSchemaGetterGuard *schema_guard = NULL;
+      if (NULL != out_ctx) {
+        if (OB_ISNULL(out_ctx->get_sql_ctx())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get nul sql ctx", K(ret));
+        } else {
+          schema_guard = out_ctx->get_sql_ctx()->schema_guard_;
+        }
+      } else {
+        schema_guard = &session->get_cached_schema_guard_info().get_schema_guard();
+      }
       SMART_VARS_2((ObExecContext, exec_ctx, tmp_allocator),
                    (ObStaticEngineExprCG, expr_cg, tmp_allocator,
-                    session, &session->get_cached_schema_guard_info().get_schema_guard(),
+                    session, schema_guard,
                     phy_plan_ctx.get_original_param_cnt(),
                     phy_plan_ctx.get_datum_param_store().count())) {
         LinkExecCtxGuard link_guard(*session, exec_ctx);
@@ -872,7 +883,7 @@ int ObSQLUtils::make_generated_expression_from_str(const common::ObString &expr_
 
     if (OB_SUCC(ret)) {
       OZ (ObStaticEngineExprCG::gen_expr_with_row_desc(expr, row_desc, allocator,
-                                                       &session, temp_expr));
+                                                       &session, &guard, temp_expr));
       CK (OB_NOT_NULL(temp_expr));
     }
   }
@@ -1491,7 +1502,8 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SET_CHARSET == type  //read only not restrict it
                || T_SHOW_RECYCLEBIN == type
                || T_SHOW_TENANT == type
-               || T_SHOW_RESTORE_PREVIEW == type) {
+               || T_SHOW_RESTORE_PREVIEW == type
+               || T_SHOW_SEQUENCES == type) {
       ret = true;
     }
   }
@@ -1579,6 +1591,9 @@ int ObSQLUtils::get_default_cast_mode(const stmt::StmtType &stmt_type,
     if (is_no_zero_date(session->get_sql_mode())) {
       cast_mode |= CM_NO_ZERO_DATE;
     }
+    if (is_time_truncate_fractional(session->get_sql_mode())) {
+      cast_mode |= CM_TIME_TRUNCATE_FRACTIONAL;
+    }
   }
   return ret;
 }
@@ -1626,6 +1641,9 @@ int ObSQLUtils::get_default_cast_mode(const ObSQLSessionInfo *session, ObCastMod
     if (is_no_zero_date(session->get_sql_mode())) {
       cast_mode |= CM_NO_ZERO_DATE;
     }
+    if (is_time_truncate_fractional(session->get_sql_mode())) {
+      cast_mode |= CM_TIME_TRUNCATE_FRACTIONAL;
+    }
   }
   return ret;
 }
@@ -1664,6 +1682,9 @@ int ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
       if (is_no_zero_date(session->get_sql_mode())) {
         cast_mode |= CM_NO_ZERO_DATE;
       }
+      if (is_time_truncate_fractional(session->get_sql_mode())) {
+        cast_mode |= CM_TIME_TRUNCATE_FRACTIONAL;
+      }
     }
     cast_mode |= CM_FORMAT_NUMBER_WITH_LIMIT;
     LOG_DEBUG("in get_default_cast_mode", K(ret), K(is_explicit_cast),
@@ -1672,6 +1693,45 @@ int ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
   return ret;
 }
 
+ObCollationLevel ObSQLUtils::transform_cs_level(const ObCollationLevel cs_level)
+{
+  // CS_LEVEL_INVALID is not defined as 0, transform the input cs level to make the default 0
+  // representing CS_LEVEL_INVALID
+  ObCollationLevel tmp_cs_level = cs_level;
+  if (CS_LEVEL_EXPLICIT == cs_level) {
+    tmp_cs_level = CS_LEVEL_INVALID;
+  } else if (CS_LEVEL_INVALID == cs_level) {
+    tmp_cs_level = CS_LEVEL_EXPLICIT;
+  }
+  return tmp_cs_level;
+}
+
+int ObSQLUtils::set_cs_level_cast_mode(const ObCollationLevel cs_level, ObCastMode &cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObCollationLevel tmp_cs_level = transform_cs_level(cs_level);
+  CM_SET_CS_LEVEL(cast_mode, tmp_cs_level);
+  return ret;
+}
+
+int ObSQLUtils::get_cs_level_from_cast_mode(const ObCastMode cast_mode,
+                                            const ObCollationLevel default_level,
+                                            ObCollationLevel &cs_level)
+{
+  int ret = OB_SUCCESS;
+  if (CM_IS_EXPLICIT_CAST(cast_mode)) {
+    cs_level = CS_LEVEL_IMPLICIT;
+  } else {
+    ObCollationLevel tmp_cs_level = static_cast<ObCollationLevel>(CM_GET_CS_LEVEL(cast_mode));
+    tmp_cs_level = transform_cs_level(tmp_cs_level);
+    if (CS_LEVEL_INVALID == tmp_cs_level) {
+      cs_level = default_level;
+    } else {
+      cs_level = tmp_cs_level;
+    }
+  }
+  return ret;
+}
 
 int ObSQLUtils::check_well_formed_str(const ObString &src_str,
                                       const ObCollationType cs_type,
@@ -2039,9 +2099,9 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   int64_t pos = 0;
   switch (stmt->get_stmt_type()) {
   case stmt::T_SELECT: {
-    bool is_set_subquery = false;
     ObSelectStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObSelectStmt*>(stmt),
-                                schema_guard, print_params, NULL, is_set_subquery);
+                                schema_guard, print_params);
+    printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print select stmt", K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2050,9 +2110,9 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   }
     break;
   case stmt::T_INSERT_ALL: {
-    ObInsertAllStmtPrinter printer(buf, buf_len, &pos,
-                                   static_cast<const ObInsertAllStmt*>(stmt),
+    ObInsertAllStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertAllStmt*>(stmt),
                                    schema_guard, print_params);
+    printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print insert stmt", K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2060,25 +2120,22 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
     } else { /*do nothing*/ }
   }
     break;
+  case stmt::T_REPLACE:
   case stmt::T_INSERT: {
-    ObInsertStmtPrinter printer(buf, buf_len, &pos,
-                                static_cast<const ObInsertStmt*>(stmt),
+    ObInsertStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertStmt*>(stmt),
                                 schema_guard, print_params);
+    printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print insert stmt", K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
       LOG_WARN("fail to deep copy insert stmt string", K(ret));
     } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_REPLACE: {
-
   }
     break;
   case stmt::T_DELETE: {
-    ObDeleteStmtPrinter printer(buf, buf_len, &pos,
-                                static_cast<const ObDeleteStmt*>(stmt),
+    ObDeleteStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObDeleteStmt*>(stmt),
                                 schema_guard, print_params);
+    printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print delete stmt", K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2087,9 +2144,9 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   }
     break;
   case stmt::T_UPDATE: {
-    ObUpdateStmtPrinter printer(buf, buf_len, &pos,
-                                static_cast<const ObUpdateStmt*>(stmt),
+    ObUpdateStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObUpdateStmt*>(stmt),
                                 schema_guard, print_params);
+    printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print update stmt", K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2098,9 +2155,9 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   }
     break;
   case stmt::T_MERGE: {
-    ObMergeStmtPrinter printer(buf, buf_len, &pos,
-                                static_cast<const ObMergeStmt*>(stmt),
-                                schema_guard, print_params);
+    ObMergeStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObMergeStmt*>(stmt),
+                               schema_guard, print_params);
+    printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("failed to print merge stmt", K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2167,29 +2224,6 @@ bool ObSQLUtils::is_same_type(const ObObjMeta &meta1,
       && accuracy1 == accuracy2;
 }
 
-const int32_t RelExprCheckerBase::FIELD_LIST_SCOPE = 1<<1;
-const int32_t RelExprCheckerBase::WHERE_SCOPE = 1<<2;
-//const int32_t RelExprCheckerBase::ON_SCOPE = 1<<3;
-const int32_t RelExprCheckerBase::GROUP_SCOPE = 1<<4;
-const int32_t RelExprCheckerBase::HAVING_SCOPE = 1<<5;
-// const int32_t RelExprCheckerBase::INSERT_SCOPE = 1<<6;
-// const int32_t RelExprCheckerBase::UPDATE_SCOPE = 1<<7;
-// const int32_t RelExprCheckerBase::AGG_SCOPE = 1<<8;
-// const int32_t RelExprCheckerBase::VARIABLE_SCOPE = 1<<9;
-// const int32_t RelExprCheckerBase::WHEN_SCOPE = 1<<10;
-const int32_t RelExprCheckerBase::ORDER_SCOPE = 1<<11;
-// const int32_t RelExprCheckerBase::EXPIRE_SCOPE = 1<<12;
-// const int32_t RelExprCheckerBase::PARTITION_SCOPE = 1<<13;
-const int32_t RelExprCheckerBase::FROM_SCOPE = 1<<14;
-const int32_t RelExprCheckerBase::LIMIT_SCOPE = 1<<15;
-// const int32_t RelExprCheckerBase::PARTITION_RANGE_SCOPE = 1<<16;
-// const int32_t RelExprCheckerBase::INTO_SCOPE = 1<<17;
-const int32_t RelExprCheckerBase::START_WITH_SCOPE = 1<<18;
-const int32_t RelExprCheckerBase::CONNECT_BY_SCOPE = 1<<19;
-const int32_t RelExprCheckerBase::JOIN_CONDITION_SCOPE = 1<<20;
-const int32_t RelExprCheckerBase::EXTRA_OUTPUT_SCOPE = 1<<21;
-
-
 int RelExprCheckerBase::init(int64_t bucket_num)
 {
   return duplicated_checker_.create(bucket_num);
@@ -2227,11 +2261,6 @@ FastRelExprChecker::FastRelExprChecker(common::ObIArray<ObRawExpr *> &rel_array)
   : RelExprCheckerBase(), rel_array_(rel_array), init_size_(rel_array.count())
 {
 
-}
-
-FastRelExprChecker::FastRelExprChecker(common::ObIArray<ObRawExpr *> &rel_array, int32_t ignore_scope)
-  : RelExprCheckerBase(ignore_scope), rel_array_(rel_array), init_size_(rel_array.count())
-{
 }
 
 FastRelExprChecker::~FastRelExprChecker()
@@ -2315,14 +2344,6 @@ bool check_stack_overflow_c()
   return is_overflow;
 }
 
-/*
- * duplicated with
- * int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
- *                                     const ParamsIArray &params,
- *                                     ObQueryRangeArray &ranges,
- *                                     bool &all_single_value_ranges,
- *                                     const common::ObTimeZoneInfo *tz_info) const
- */
 int ObSQLUtils::extract_pre_query_range(const ObQueryRange &pre_query_range,
                                         ObIAllocator &allocator,
                                         ObExecContext &exec_ctx,
@@ -2428,16 +2449,16 @@ int ObSQLUtils::extract_equal_pre_query_range(const ObQueryRange &pre_query_rang
   const ObIArray<ObQueryRange::ObEqualOff>& equal_offs = pre_query_range.get_raw_equal_offs();
   for (int64_t i = 0; OB_SUCC(ret) && i < equal_offs.count(); ++i) {
     int64_t param_idx = equal_offs.at(i).param_idx_;
-    if (equal_offs.at(i).pos_off_ < 0 || equal_offs.at(i).pos_off_ >= column_count) {
+    if (OB_UNLIKELY(equal_offs.at(i).pos_off_ < 0 || equal_offs.at(i).pos_off_ >= column_count)) {
       ret = OB_ERROR_OUT_OF_RANGE;
-      LOG_WARN("out of key range");
+      LOG_WARN("out of key range", K(ret));
     } else if (equal_offs.at(i).only_pos_) {
       int64_t range_pos = equal_offs.at(i).pos_off_;
       *(start + range_pos) = equal_offs.at(i).pos_value_;
       *(end + range_pos) = equal_offs.at(i).pos_value_;
-    } else if (param_idx < 0 || param_idx >= param_store.count()) {
+    } else if (OB_UNLIKELY(param_idx < 0 || param_idx >= param_store.count())) {
       ret = OB_ERROR_OUT_OF_RANGE;
-      LOG_WARN("out of param store");
+      LOG_WARN("out of param store", K(ret));
     } else if (param_store.at(param_idx).is_null()) {
       include_null = true;
     } else {
@@ -3999,6 +4020,7 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
   return ret;
 }
 
+
 bool ObSQLUtils::is_oracle_empty_string(const ObObjParam &param)
 {
   return (param.is_null() && (ObCharType == param.get_param_meta().get_type()
@@ -4016,19 +4038,6 @@ bool ObSQLUtils::is_one_part_table_can_skip_part_calc(const ObTableSchema &schem
     can_skip = false;
   }
   return can_skip;
-}
-
-bool ObSQLUtils::check_can_encode_sortkey(const common::ObIArray<OrderItem> &order_keys)
-{
-  bool can_sort_opt = true;
-  for (int64_t i = 0; can_sort_opt && i < order_keys.count(); i++) {
-    if (!ObOrderPerservingEncoder::can_encode_sortkey(
-                          order_keys.at(i).expr_->get_data_type(),
-                          order_keys.at(i).expr_->get_collation_type())) {
-        can_sort_opt = false;
-    } else { /* do nothing */ }
-  }
-  return can_sort_opt;
 }
 
 int ObSQLUtils::create_encode_sortkey_expr(
@@ -4204,6 +4213,18 @@ int ObPreCalcExprConstraint::check_is_match(const ObObjParam &obj_param, bool &i
       }
       break;
     }
+    case PRE_CALC_RESULT_NO_WILDCARD: {
+      ObString pattern_val = obj_param.get_string();
+      if (obj_param.is_lob()) {
+        is_match = false;
+      } else if (!pattern_val.empty()) {
+        is_match = OB_ISNULL(pattern_val.find('%')) &&
+                  OB_ISNULL(pattern_val.find('_'));
+      } else {
+        is_match = true;
+      }
+    }
+    break;
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expect res type", K_(expect_result), K(ret));

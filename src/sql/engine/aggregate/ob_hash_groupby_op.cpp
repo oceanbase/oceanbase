@@ -695,8 +695,8 @@ int ObHashGroupByOp::init_distinct_info(bool is_part)
                             expr->datum_meta_.cs_type_,
                             expr->datum_meta_.scale_,
                             lib::is_oracle_mode());
-      hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_;
-      hash_func.batch_hash_func_ = expr->basic_funcs_->murmur_hash_batch_;
+      hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_v2_;
+      hash_func.batch_hash_func_ = expr->basic_funcs_->murmur_hash_v2_batch_;
       if (OB_FAIL(hash_funcs_.push_back(hash_func))) {
         LOG_WARN("failed to push back hash function", K(ret));
       } else if (OB_FAIL(cmp_funcs_.push_back(cmp_func))) {
@@ -1229,7 +1229,7 @@ int ObHashGroupByOp::calc_groupby_exprs_hash(ObIArray<ObExpr*> &groupby_exprs,
       } else if (OB_FAIL(expr->eval(eval_ctx_, result))) {
         LOG_WARN("eval failed", K(ret));
       } else {
-        ObExprHashFuncType hash_func = expr->basic_funcs_->murmur_hash_;
+        ObExprHashFuncType hash_func = expr->basic_funcs_->murmur_hash_v2_;
         hash_value = hash_func(*result, hash_value);
       }
     }
@@ -1813,7 +1813,7 @@ void ObHashGroupByOp::calc_groupby_exprs_hash_batch(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: groupby exprs is null", K(ret));
       } else {
-        ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_batch_;
+        ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_v2_batch_;
         const bool is_batch_seed = (i > 0);
         hash_func(base_hash_vals_,
                   expr->locate_batch_datums(eval_ctx_), expr->is_batch_result(),
@@ -1836,7 +1836,7 @@ void ObHashGroupByOp::calc_groupby_exprs_hash_batch(
     ObExpr *expr = groupby_exprs.at(i);
     if (OB_ISNULL(expr)) {
     } else {
-      ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_batch_;
+      ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_v2_batch_;
       const bool is_batch_seed = (i > 0);
       hash_func(hash_vals_,
                 expr->locate_batch_datums(eval_ctx_), expr->is_batch_result(),

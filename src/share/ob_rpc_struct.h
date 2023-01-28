@@ -642,7 +642,8 @@ public:
       stmt_type_(common::OB_INVALID_ID),
       option_bitset_(),
       seq_schema_(),
-      database_name_()
+      database_name_(),
+      ignore_exists_error_(false)
   {}
   bool is_valid() const
   {
@@ -697,12 +698,19 @@ public:
   {
     return option_bitset_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(seq_schema), K_(database_name));
+  bool ignore_exists_error() const {
+    return ignore_exists_error_;
+  }
+  void set_ignore_exists_error(bool ignore_error) {
+    ignore_exists_error_ = ignore_error;
+  }
+  TO_STRING_KV(K_(stmt_type), K_(seq_schema), K_(database_name), K_(ignore_exists_error));
 public:
   int64_t stmt_type_;
   common::ObBitSet<> option_bitset_;
   share::schema::ObSequenceSchema seq_schema_;
   common::ObString database_name_;
+  bool ignore_exists_error_; // if exsit for drop sequence, if not exist for create sequence.
 };
 
 struct ObAddSysVarArg : public ObDDLArg
@@ -5310,19 +5318,21 @@ struct ObCreateRoutineArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCreateRoutineArg(): routine_info_(), db_name_(), is_or_replace_(false), error_info_() {}
+  ObCreateRoutineArg(): routine_info_(), db_name_(), is_or_replace_(false), is_need_alter_(false), error_info_() {}
   virtual ~ObCreateRoutineArg() {}
   bool is_valid() const;
   int assign(const ObCreateRoutineArg &other);
   TO_STRING_KV(K_(routine_info),
                K_(db_name),
                K_(is_or_replace),
+               K_(is_need_alter),
                K_(error_info),
                K_(dependency_infos));
 
   share::schema::ObRoutineInfo routine_info_;
   common::ObString db_name_;
   bool is_or_replace_;
+  bool is_need_alter_; // used in mysql mode
   share::schema::ObErrorInfo error_info_;
   common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
 };
@@ -8168,6 +8178,46 @@ public:
   TO_STRING_KV(K_(ret));
 private:
   int ret_;
+};
+
+struct ObRlsPolicyDDLArg : ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum AlterOption {
+    ENABLE = 1,
+    ADD_ATTRIBUTE,
+    REMOVE_ATTRIBUTE,
+    MAX_OPTION = 100
+  };
+  ObRlsPolicyDDLArg() : ObDDLArg(), schema_(), ddl_type_(), option_bitset_() {}
+  int assign(const ObRlsPolicyDDLArg &other);
+  TO_STRING_KV(K_(schema), K_(ddl_type), K_(option_bitset));
+  share::schema::ObRlsPolicySchema schema_;
+  share::schema::ObSchemaOperationType ddl_type_;
+  common::ObBitSet<> option_bitset_;
+};
+
+struct ObRlsGroupDDLArg : ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRlsGroupDDLArg() : ObDDLArg(), schema_(), ddl_type_() {}
+  int assign(const ObRlsGroupDDLArg &other);
+  TO_STRING_KV(K_(schema), K_(ddl_type));
+  share::schema::ObRlsGroupSchema schema_;
+  share::schema::ObSchemaOperationType ddl_type_;
+};
+
+struct ObRlsContextDDLArg : ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRlsContextDDLArg() : ObDDLArg(), schema_(), ddl_type_() {}
+  int assign(const ObRlsContextDDLArg &other);
+  TO_STRING_KV(K_(schema), K_(ddl_type));
+  share::schema::ObRlsContextSchema schema_;
+  share::schema::ObSchemaOperationType ddl_type_;
 };
 
 struct ObRecompileAllViewsBatchArg: public ObDDLArg

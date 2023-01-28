@@ -27,8 +27,9 @@ class ObPxDatahubDataProvider
 public:
   virtual int get_msg_nonblock(const dtl::ObDtlMsg *&msg, int64_t timeout_ts) = 0;
   virtual void reset() {}
-  TO_STRING_KV(K_(op_id));
+  TO_STRING_KV(K_(op_id), K_(msg_type));
   uint64_t op_id_; // 注册本 provider 的算子 id，用于 provder 数组里寻址对应 provider
+  dtl::ObDtlMsgType msg_type_;
 };
 
 template <typename T>
@@ -37,7 +38,7 @@ class ObWholeMsgProvider : public ObPxDatahubDataProvider
 public:
   ObWholeMsgProvider() : msg_set_(false) {}
   virtual ~ObWholeMsgProvider() = default;
-  virtual void reset() override { msg_.reset(); }
+  virtual void reset() override { msg_.reset(); msg_set_ = false; }
   int get_msg_nonblock(const dtl::ObDtlMsg *&msg, int64_t timeout_ts)
   {
     int ret = OB_SUCCESS;
@@ -59,6 +60,10 @@ public:
       msg_set_ = true;
     }
     return ret;
+  }
+  bool msg_set()
+  {
+    return msg_set_;
   }
   TO_STRING_KV(K_(msg_set), K_(msg));
 private:

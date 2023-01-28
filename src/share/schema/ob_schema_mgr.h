@@ -39,6 +39,7 @@
 #include "share/schema/ob_directory_mgr.h"
 #include "share/schema/ob_context_mgr.h"
 #include "share/schema/ob_mock_fk_parent_table_mgr.h"
+#include "share/schema/ob_rls_mgr.h"
 
 namespace oceanbase
 {
@@ -705,6 +706,23 @@ public:
       const uint64_t tenant_id,
       const ObKeystoreSchema *&keystore_schema) const;
 
+  // todo add some getter on demand
+  // int get_rls_policy_schema(const uint64_t schema_id,
+  //                          const ObRlsPolicySchema *&schema) const
+  // {
+  //   return rls_policy_mgr_.get_rls_policy_schema_by_id(schema_id, schema);
+  // }
+  // int get_rls_group_schema(const uint64_t schema_id,
+  //                          const ObRlsGroupSchema *&schema) const
+  // {
+  //   return rls_group_mgr_.get_rls_group_schema_by_id(schema_id, schema);
+  // }
+  // int get_rls_context_schema(const uint64_t schema_id,
+  //                          const ObRlsContextSchema *&schema) const
+  // {
+  //   return rls_context_mgr_.get_rls_context_schema_by_id(schema_id, schema);
+  // }
+
   // other
   int get_tenant_schemas(common::ObIArray<const ObSimpleTenantSchema *> &tenant_schemas) const;
    int get_tenant_ids(common::ObIArray<uint64_t> &tenant_ids) const;
@@ -893,6 +911,9 @@ private:
   ObDirectoryMgr directory_mgr_;
   ObContextMgr context_mgr_;
   ObMockFKParentTableMgr mock_fk_parent_table_mgr_;
+  ObRlsPolicyMgr rls_policy_mgr_;
+  ObRlsGroupMgr rls_group_mgr_;
+  ObRlsContextMgr rls_context_mgr_;
 };
 
 }//end of namespace schema

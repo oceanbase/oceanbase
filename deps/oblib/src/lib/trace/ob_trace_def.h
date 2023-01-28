@@ -40,6 +40,8 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
       FLT_DEF_SPAN(close, "close plan")
     FLT_DEF_SPAN(cmd_execute, "command execute")
       FLT_DEF_SPAN(cmd_open, "command open")
+    FLT_DEF_SPAN(remote_execute, "remote execute")
+    FLT_DEF_SPAN(remote_compile, "compile for remote sql")
   // **** for sql end ****
 
   // **** for pl ****
@@ -83,6 +85,48 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
   FLT_DEF_SPAN(close_das_task, "close das task")
   FLT_DEF_SPAN(fetch_das_extra_result, "fetch das extra result")
     FLT_DEF_SPAN(fetch_das_result_process, "fetch das result process")
+
+  // for ddl task
+  FLT_DEF_SPAN(ddl_prepare, "prepare phase of ddl task")
+  FLT_DEF_SPAN(ddl_failure_cleanup, "cleanup phase of ddl task failure")
+  FLT_DEF_SPAN(ddl_success, "success check of ddl task")
+  FLT_DEF_SPAN(ddl_wait_trans_end, "wait for all previous transaction finish")
+  FLT_DEF_SPAN(ddl_lock_table, "lock table")
+  FLT_DEF_SPAN(ddl_redefinition, "redefinition phase of ddl task")
+  FLT_DEF_SPAN(ddl_copy_table_dependent_objects, "copy table dependent object")
+  FLT_DEF_SPAN(ddl_modify_autoinc, "modify autoincrease column")
+  FLT_DEF_SPAN(ddl_take_effect, "index take effect")
+  FLT_DEF_SPAN(ddl_check_table_empty, "check table empty")
+
+  // build index task
+  FLT_DEF_SPAN(ddl_build_index, "ddl build index task")
+  FLT_DEF_SPAN(ddl_validate_checksum, "ddl task verify checksum")
+
+  // drop index task
+  FLT_DEF_SPAN(ddl_drop_index, "ddl drop index task")
+  FLT_DEF_SPAN(ddl_set_write_only, "set index to write only mode")
+  FLT_DEF_SPAN(ddl_set_unusable, "set index to unusable state")
+  FLT_DEF_SPAN(ddl_drop_schema, "drop index schema")
+
+  // drop primary key task
+  FLT_DEF_SPAN(ddl_drop_primary_key, "ddl drop primary key task")
+
+  // table redefinition task
+  FLT_DEF_SPAN(ddl_table_redefinition, "ddl table redefinition task")
+
+  // column redefinition task
+  FLT_DEF_SPAN(ddl_column_redefinition, "ddl column redefinition task")
+
+  // ddl constraint task
+  FLT_DEF_SPAN(ddl_constraint, "ddl constraint task")
+  FLT_DEF_SPAN(ddl_check_constraint_valid, "check constraint valid")
+  FLT_DEF_SPAN(ddl_set_constraint_valid, "set constraint valid")
+
+  // ddl modify autoinc
+  FLT_DEF_SPAN(ddl_modify_autoinc_task, "ddl modify autoincrease column task")
+
+  // ddl retry task
+  FLT_DEF_SPAN(ddl_retry_task, "ddl_ retry task")
 
 #endif // __HIGH_LEVEL_SPAN
 
@@ -156,6 +200,19 @@ FLT_DEF_TAG(bloomfilter_cache_hits, "bloomfilter cache hit count")
 FLT_DEF_TAG(index_block_cache_hits, "index block cache hit count")
 FLT_DEF_TAG(sstable_read_cnt, "sstable count involved in the scan")
 FLT_DEF_TAG(rescan_read_cnt, "table scan iterator rescan count")
+
+// ddl task
+FLT_DEF_TAG(ddl_task_id, "ddl task id")
+FLT_DEF_TAG(ddl_parent_task_id, "ddl parent task id")
+FLT_DEF_TAG(ddl_data_table_id, "data table id")
+FLT_DEF_TAG(ddl_index_table_id, "index table id")
+FLT_DEF_TAG(ddl_snapshot_version, "snapshot version")
+FLT_DEF_TAG(ddl_schema_version, "schema version")
+FLT_DEF_TAG(ddl_is_unique_index, "is unique index")
+FLT_DEF_TAG(ddl_is_global_index, "is global index")
+FLT_DEF_TAG(ddl_need_verify, "need verify")
+FLT_DEF_TAG(ddl_check_unique_snapshot, "check unique snapshot")
+FLT_DEF_TAG(ddl_ret_code, "return value")
 
 // debug
 FLT_DEF_TAG(span_back_trace, "full link tracing debug")

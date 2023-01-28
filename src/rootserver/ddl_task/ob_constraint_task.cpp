@@ -519,6 +519,7 @@ int ObConstraintTask::init(
     task_version_ = OB_CONSTRAINT_TASK_VERSION;
     is_table_hidden_ = table_schema->is_user_hidden_table();
     is_inited_ = true;
+    ddl_tracing_.open();
   }
   return ret;
 }
@@ -565,6 +566,9 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
     is_table_hidden_ = table_schema->is_user_hidden_table();
     ret_code_ = task_record.ret_code_;
     is_inited_ = true;
+
+    // set up span during recover task
+    ddl_tracing_.open_for_recovery();
   }
   return ret;
 }
@@ -693,7 +697,7 @@ int ObConstraintTask::wait_trans_end()
     }
   }
 
-  if (OB_FAIL(switch_status(new_status, ret))) {
+  if (OB_FAIL(switch_status(new_status, true, ret))) {
     LOG_WARN("switch status failed", K(ret));
   }
   return ret;
@@ -730,7 +734,7 @@ int ObConstraintTask::validate_constraint_valid()
     }
   }
   if (OB_FAIL(ret) || CHECK_CONSTRAINT_VALID != state) {
-    if (OB_FAIL(switch_status(state, ret))) {
+    if (OB_FAIL(switch_status(state, true, ret))) {
       LOG_WARN("switch status failed", K(ret));
     }
   }
@@ -808,7 +812,7 @@ int ObConstraintTask::check_replica_end(bool &is_end)
   return ret;
 }
 
-int ObConstraintTask::cleanup()
+int ObConstraintTask::cleanup_impl()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1663,7 +1667,7 @@ int ObConstraintTask::set_constraint_validated()
     }
   }
   DEBUG_SYNC(CONSTRAINT_SET_VALID);
-  if (OB_FAIL(switch_status(ObDDLTaskStatus::SUCCESS, ret))) {
+  if (OB_FAIL(switch_status(ObDDLTaskStatus::SUCCESS, true, ret))) {
     LOG_WARN("switch status failed", K(ret));
   }
   return ret;
@@ -1678,6 +1682,7 @@ int ObConstraintTask::process()
   } else if (OB_FAIL(check_health())) {
     LOG_WARN("check health failed", K(ret));
   } else {
+    ddl_tracing_.restore_span_hierarchy();
     switch (task_status_) {
       case ObDDLTaskStatus::WAIT_TRANS_END:
         if (OB_FAIL(wait_trans_end())) {
@@ -1708,6 +1713,7 @@ int ObConstraintTask::process()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, task status is not valid", K(ret), K(ret), K(task_status_));
     }
+    ddl_tracing_.release_span_hierarchy();
   }
   return ret;
 }
@@ -1753,7 +1759,7 @@ int ObConstraintTask::check_health()
     if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
-      switch_status(new_status, ret);
+      switch_status(new_status, false, ret);
       LOG_WARN("switch status to build_failed", K(ret), K(old_status), K(new_status));
     }
   }
@@ -1774,6 +1780,8 @@ int ObConstraintTask::serialize_params_to_message(char *buf, const int64_t buf_l
     LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
+  } else if (OB_FAIL(ddl_tracing_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
   }
   return ret;
 }
@@ -1791,11 +1799,55 @@ int ObConstraintTask::deserlize_params_from_message(const char *buf, const int64
     LOG_WARN("serialize table failed", K(ret));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
+  } else {
+    if (pos < data_len) {
+      if (OB_FAIL(ddl_tracing_.deserialize(buf, data_len, pos))) {
+        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
+      }
+    }
   }
   return ret;
 }
 
 int64_t ObConstraintTask::get_serialize_param_size() const
 {
-  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_);
+  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_)
+    + ddl_tracing_.get_serialize_size();
+}
+
+void ObConstraintTask::flt_set_task_span_tag() const
+{
+  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,
+              ddl_data_table_id, object_id_, ddl_schema_version, schema_version_,
+              ddl_snapshot_version, snapshot_version_);
+}
+
+void ObConstraintTask::flt_set_status_span_tag() const
+{
+  switch (task_status_) {
+  case ObDDLTaskStatus::WAIT_TRANS_END: {
+    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_schema_version, schema_version_,
+                ddl_snapshot_version, snapshot_version_, ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::CHECK_CONSTRAINT_VALID: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::SET_CONSTRAINT_VALIDATE: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::FAIL: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::SUCCESS: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  default: {
+    break;
+  }
+  }
 }

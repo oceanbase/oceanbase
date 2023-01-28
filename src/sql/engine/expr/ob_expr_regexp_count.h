@@ -35,19 +35,6 @@ public:
   virtual bool need_rt_ctx() const override { return true; }
 
   static int eval_regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-
-  static int get_regexp_flags(const common::ObCollationType calc_cs_type,
-                              const common::ObString &match_param,
-                              int &flags,
-                              int &multi_flag);
-private:
-  static int calc(int64_t &ret_count, const common::ObString &text,
-                  const common::ObString &pattern, int64_t position,
-                  const common::ObCollationType calc_cs_type,
-                  const common::ObString &match_param, int64_t subexpr, bool has_null_argument,
-                  bool reusable, ObExprRegexContext *regexp_ptr,
-                  common::ObExprStringBuf &string_buf,
-                  common::ObIAllocator &exec_ctx_alloc);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpCount);
 };

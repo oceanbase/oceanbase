@@ -134,12 +134,12 @@ group_concat(distinct c2, c3 order by 2 desc, 1 asc)
 abc,abc,a1b3,a2b3,a3b2
 select group_concat(c2, c3) from t1 group by c5;
 group_concat(c2, c3)
-a2b3,a1b3,a3b2
+a2b3,a3b2,a1b3
 abc,abc
 select group_concat(distinct c2, c3) from t1 group by c5;
 group_concat(distinct c2, c3)
-abc,abc
 a1b3,a2b3,a3b2
+abc,abc
 select group_concat(c2, c3 order by c1) from t1 group by c5;
 group_concat(c2, c3 order by c1)
 a2b3,a1b3,a3b2
@@ -170,16 +170,16 @@ a1b3,a2b3,a3b2
 abc,abc
 select min(c2), max(c3), count(*), count(c1), avg(c4), group_concat(distinct c2, c3 order by 2 desc, 1 asc) from t1 group by c5;
 min(c2)	max(c3)	count(*)	count(c1)	avg(c4)	group_concat(distinct c2, c3 order by 2 desc, 1 asc)
-a	c	2	2	21.5000	abc,abc
 a1	b3	3	3	24.3333	a1b3,a2b3,a3b2
+a	c	2	2	21.5000	abc,abc
 select group_concat(c3, c4 order by c4 desc) from t1 group by c5;
 group_concat(c3, c4 order by c4 desc)
 b225,b324,b324
 c22,bc21
 select group_concat(distinct c3, c4 order by c4 desc) from t1 group by c5;
 group_concat(distinct c3, c4 order by c4 desc)
-c22,bc21
 b225,b324
+c22,bc21
 select group_concat(c4 order by 1 desc) from t1 group by c5;
 group_concat(c4 order by 1 desc)
 22,21
@@ -194,16 +194,16 @@ group_concat(distinct c4 order by c4 desc separator 'AAA')
 25AAA24
 select group_concat(distinct c4 order by 1 desc separator '#') from t1 group by c5;
 group_concat(distinct c4 order by 1 desc separator '#')
-22#21
 25#24
+22#21
 select group_concat(distinct c2, c3 order by c3 asc, c2 desc separator '%%') from t1 group by c5;
 group_concat(distinct c2, c3 order by c3 asc, c2 desc separator '%%')
-abc%%abc
 a3b2%%a2b3%%a1b3
+abc%%abc
 select group_concat(c2, c3 order by c4 desc separator '*') from t1 group by c5;
 group_concat(c2, c3 order by c4 desc separator '*')
-abc*abc
 a3b2*a2b3*a1b3
+abc*abc
 select group_concat(c2 separator '\\') from t1;
 group_concat(c2 separator '\\')
 a\ab\a2\a1\a3
@@ -226,7 +226,7 @@ select group_concat(c2) from t2 group by c4;
 group_concat(c2)
 
 NULL
-d1,d2,d4
+d1,d4,d2
 d5
 select @@group_concat_max_len;
 @@group_concat_max_len
@@ -244,7 +244,7 @@ select group_concat(c2) from t2 group by c4;
 group_concat(c2)
 
 NULL
-d1,d2,d
+d1,d4,d
 d5
 Warnings:
 Warning	1260	Row 3 was cut by GROUP_CONCAT()
@@ -284,7 +284,7 @@ select group_concat(c2) from t2 group by c4;
 group_concat(c2)
 
 NULL
-d1,d2,d4
+d1,d4,d2
 d5
 select group_concat(c2, c3) from t2 group by c4;
 group_concat(c2, c3)
@@ -360,15 +360,15 @@ insert into t1 (c1, c2, c3) values (2, 3, 2);
 insert into t1 (c1, c2, c3) values (2, 3, 3);
 select c2, avg(distinct c3) from t1 group by c2;
 c2	avg(distinct c3)
-1	1.5000
 2	2.5000
+1	1.5000
 3	2.5000
 select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2;
 c1	c2	group_concat(distinct c3 order by c3 desc)
 1	1	1
-1	2	3,2
-2	1	2
 2	3	3,2
+2	1	2
+1	2	3,2
 select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2 with rollup;
 c1	c2	group_concat(distinct c3 order by c3 desc)
 1	1	1

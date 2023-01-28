@@ -25,7 +25,7 @@ namespace sql
 class ObMergeStmtPrinter : public ObDMLStmtPrinter
 {
 public:
-  ObMergeStmtPrinter() {}
+  ObMergeStmtPrinter()=delete;
   ObMergeStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObMergeStmt *stmt,
                      ObSchemaGetterGuard *schema_guard,
                      common::ObObjPrintParams print_params) :

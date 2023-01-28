@@ -30,10 +30,7 @@ int ObInsertAllStmtPrinter::do_print()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited!", K(ret));
-  } else if (OB_ISNULL(stmt_)) {
+  if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else {
@@ -67,20 +64,29 @@ int ObInsertAllStmtPrinter::print()
 int ObInsertAllStmtPrinter::print_multi_insert_stmt()
 {
   int ret = OB_SUCCESS;
+  const ObInsertAllStmt *insert_stmt = static_cast<const ObInsertAllStmt*>(stmt_);
   if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL", K(ret));
   } else if (OB_UNLIKELY(!stmt_->is_insert_all_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Not a valid insert stmt", K(stmt_->get_stmt_type()), K(ret));
-  } else {
-    const ObInsertAllStmt *insert_stmt = static_cast<const ObInsertAllStmt*>(stmt_);
-    if (OB_FAIL(print_multi_insert(insert_stmt))) {
-      LOG_WARN("fail to print select", K(ret), K(*stmt_));
-    } else if (OB_FAIL(print_multi_value(insert_stmt))) {
-      LOG_WARN("fail to print into", K(ret), K(*stmt_));
-    } else if (OB_FAIL(print_subquery(insert_stmt))) {
-      LOG_WARN("fail to print into", K(ret), K(*stmt_));
+  } else if ((print_params_.force_print_cte_ || print_params_.print_with_cte_) &&
+             OB_FAIL(print_cte_define())) {
+    LOG_WARN("failed to print cte", K(ret));
+  } else if (OB_FAIL(print_multi_insert(insert_stmt))) {
+    LOG_WARN("fail to print select", K(ret), K(*stmt_));
+  } else if (OB_FAIL(print_multi_value(insert_stmt))) {
+    LOG_WARN("fail to print into", K(ret), K(*stmt_));
+  } else if (insert_stmt->get_table_size() > 0) {
+    const TableItem *table_item = insert_stmt->get_table_item(insert_stmt->get_table_size() - 1);
+    const ObSelectStmt* sub_select_stmt = NULL;
+    if (OB_ISNULL(table_item) || OB_UNLIKELY(!table_item->is_generated_table()) ||
+        OB_ISNULL(sub_select_stmt = table_item->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sub select stmt is null", K(ret), K(table_item), K(sub_select_stmt));
+    } else if (OB_FAIL(print_inline_view(sub_select_stmt, false, true))) {
+      LOG_WARN("failed to print subquery");
     } else {
       LOG_DEBUG("print multi insert stmt complete");
       // do-nothing
@@ -195,32 +201,6 @@ int ObInsertAllStmtPrinter::print_multi_conditions_insert(const ObInsertAllStmt 
   return ret;
 }
 
-int ObInsertAllStmtPrinter::print_subquery(const ObInsertAllStmt *insert_stmt)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(insert_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("insert_stmt is NULL", K(ret), K(insert_stmt));
-  } else {
-    const TableItem *table_item = insert_stmt->get_table_item(insert_stmt->get_table_size() - 1);
-    const ObSelectStmt* sub_select_stmt = NULL;
-    if (OB_ISNULL(table_item) || OB_UNLIKELY(!table_item->is_generated_table()) ||
-        OB_ISNULL(sub_select_stmt = table_item->ref_query_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sub select stmt is null", K(ret), K(table_item), K(sub_select_stmt));
-    } else {
-      ObSelectStmtPrinter printer(buf_, buf_len_, pos_,
-                                  static_cast<const ObSelectStmt*>(sub_select_stmt),
-                                  schema_guard_,
-                                  print_params_, NULL, false, false, true);
-      if (OB_FAIL(printer.do_print())) {
-        LOG_WARN("failed to print sub select printer", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObInsertAllStmtPrinter::print_into_table_values(const ObInsertAllStmt *insert_stmt,
                                                     const ObInsertAllTableInfo& table_info)
 {
@@ -231,7 +211,7 @@ int ObInsertAllStmtPrinter::print_into_table_values(const ObInsertAllStmt *inser
       OB_ISNULL(table_item = insert_stmt->get_table_item_by_id(table_info.table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid table item", K(table_info), K(ret));
-  } else if (OB_FAIL(print_table(table_item, false, true))) {
+  } else if (OB_FAIL(print_table(table_item, true))) {
     LOG_WARN("failed to print table", K(*table_item), K(ret));
   } else {
     //print columns
@@ -242,7 +222,9 @@ int ObInsertAllStmtPrinter::print_into_table_values(const ObInsertAllStmt *inser
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column is NULL", K(ret));
       } else {
-        DATA_PRINTF(" \"%.*s\"", LEN_AND_PTR(column->get_column_name()));
+        PRINT_QUOT;
+        DATA_PRINTF("%.*s", LEN_AND_PTR(column->get_column_name()));
+        PRINT_QUOT;
         DATA_PRINTF(",");
       }
     }

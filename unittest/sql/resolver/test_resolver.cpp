@@ -93,6 +93,7 @@ bool TestResolver::is_show_sql(const ParseNode &node) const
     case T_SHOW_SERVER_STATUS:
     case T_SHOW_WARNINGS:
     case T_SHOW_RESTORE_PREVIEW:
+    case T_SHOW_SEQUENCES:
     case T_SHOW_GRANTS:{
       ret = true;
       break;
@@ -587,7 +588,7 @@ void TestResolver::do_stmt_tostring_test() {
     memset(buffer, '\0', OB_MAX_SQL_LENGTH);
     int64_t pos = 0;
     ObSelectStmtPrinter stmt_printer(buffer, OB_MAX_SQL_LENGTH, &pos,
-       static_cast<ObSelectStmt*>(stmt), ObObjPrintParams(), NULL, false);
+       static_cast<ObSelectStmt*>(stmt), ObObjPrintParams());
     stmt_printer.do_print();
     buffer[pos] = '\0';
     of_tmp << "***************   Case "<< ++case_id << "   ***************" << std::endl;

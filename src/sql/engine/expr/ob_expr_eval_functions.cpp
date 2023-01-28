@@ -302,6 +302,13 @@
 #include "ob_expr_st_contains.h"
 #include "ob_expr_st_within.h"
 #include "ob_expr_priv_st_asewkb.h"
+#include "ob_expr_name_const.h"
+#include "ob_expr_format_bytes.h"
+#include "ob_expr_format_pico_time.h"
+#include "ob_expr_encrypt.h"
+#include "ob_expr_coalesce.h"
+#include "ob_expr_cast.h"
+#include "ob_expr_icu_version.h"
 #include "ob_expr_sql_mode_convert.h"
 
 namespace oceanbase
@@ -738,7 +745,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprTzOffset::eval_tz_offset,                                     /* 349 */
   ObExprOrahash::eval_orahash,                                        /* 350 */
   ObExprGetUserVar::eval_get_user_var,                                /* 351 */
-  ObExprUtil::eval_generated_column,                                  /* 352 */
+  NULL, //ObExprUtil::eval_generated_column,                          /* 352 */
   NULL, //ObExprCalcPartitionBase::calc_opt_route_hash_one            /* 353 */
   calc_convert_expr,                                                  /* 354 */
   ObExprSetToStr::calc_to_str_expr,                                   /* 355 */
@@ -959,6 +966,20 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprJsonArray::eval_ora_json_array,                               /* 566 */
   ObExprJsonObject::eval_ora_json_object,                             /* 567 */
   ObExprTreat::eval_treat,                                            /* 568 */
+  ObExprUuid2bin::uuid2bin,                                           /* 569 */
+  ObExprIsUuid::is_uuid,                                              /* 570 */
+  ObExprBin2uuid::bin2uuid,                                           /* 571 */
+  ObExprNameConst::eval_name_const,                                   /* 572 */
+  ObExprFormatBytes::eval_format_bytes,                               /* 573 */
+  ObExprFormatPicoTime::eval_format_pico_time,                        /* 574 */
+  ObExprDesEncrypt::eval_des_encrypt_with_key,                        /* 575 */
+  ObExprDesEncrypt::eval_des_encrypt_with_default,                    /* 576 */
+  ObExprDesDecrypt::eval_des_decrypt,                                 /* 577 */
+  ObExprEncrypt::eval_encrypt,                                        /* 578 */
+  ObExprEncode::eval_encode,                                          /* 579 */
+  ObExprDecode::eval_decode,                                          /* 580 */
+  ObExprICUVersion::eval_version,                                     /* 581 */
+  ObExprCast::eval_cast_multiset,                                     /* 582 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1059,7 +1080,20 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprInstrb::calc_instrb_expr_batch,                               /* 94 */
   ObExprNaNvl::eval_nanvl_batch,                                      /* 95 */
   ObExprNvlUtil::calc_nvl_expr_batch,                                 /* 96 */
-  ObExprNvl2Oracle::calc_nvl2_oracle_expr_batch                       /* 97 */
+  ObExprNvl2Oracle::calc_nvl2_oracle_expr_batch,                      /* 97 */
+  ObExprUuid2bin::uuid2bin_batch,                                     /* 98 */
+  ObExprIsUuid::is_uuid_batch,                                        /* 99 */
+  ObExprBin2uuid::bin2uuid_batch,                                     /* 100 */
+  ObExprFormatBytes::eval_format_bytes_batch,                         /* 101 */
+  ObExprFormatPicoTime::eval_format_pico_time_batch,                  /* 102 */
+  ObExprDesEncrypt::eval_des_encrypt_batch_with_default,              /* 103 */
+  ObExprDesEncrypt::eval_des_encrypt_batch_with_key,                  /* 104 */
+  ObExprDesDecrypt::eval_des_decrypt_batch,                           /* 105 */
+  ObExprEncrypt::eval_encrypt_batch,                                  /* 106 */
+  ObExprEncode::eval_encode_batch,                                    /* 107 */
+  ObExprDecode::eval_decode_batch,                                    /* 108 */
+  ObExprCoalesce::calc_batch_coalesce_expr,                           /* 109 */
+  ObExprIsNot::calc_batch_is_not_null                                 /* 110 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

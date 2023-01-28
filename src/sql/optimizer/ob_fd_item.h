@@ -40,17 +40,14 @@ class ObFdItem
 {
 public:
   ObFdItem(const bool is_unique = false,
-           ObRawExprSet *parent_exprs = NULL,
-           const int32_t stmt_level = -1) :
-      parent_exprs_(parent_exprs), is_unique_(is_unique), stmt_level_(stmt_level) {}
+           ObRawExprSet *parent_exprs = NULL) :
+      parent_exprs_(parent_exprs), is_unique_(is_unique) {}
   virtual ~ObFdItem() {}
 
   inline ObRawExprSet *get_parent_exprs() const { return parent_exprs_; }
   inline void set_parent_exprs(ObRawExprSet *parent_exprs) { parent_exprs_ = parent_exprs; }
   inline bool is_unique() const { return is_unique_; }
   inline void set_is_unique(const bool is_unique) { is_unique_ = is_unique; }
-  inline int32_t get_stmt_level() const { return stmt_level_; }
-  inline void set_stmt_level(const int32_t stmt_level) { stmt_level_ = stmt_level; }
   virtual inline FdLevel get_level() const { return INVALID_LEVEL; }
   virtual inline bool is_table_fd_item() const { return false; }
   virtual inline bool is_expr_fd_item() const { return false; }
@@ -71,12 +68,11 @@ public:
                            const int64_t pos_start,
                            ObBitSet<> &exprs_set);
 
-  VIRTUAL_TO_STRING_KV(K_(parent_exprs), K_(is_unique), K_(stmt_level));
+  VIRTUAL_TO_STRING_KV(K_(parent_exprs), K_(is_unique));
 protected:
   ObRawExprSet *parent_exprs_;
   // 表示parent exprs在当前logical operator/join order中是否是unique的，主要用来加速一些判断
   bool is_unique_;
-  int32_t stmt_level_;
 };
 
 typedef common::ObSEArray<ObFdItem *, 8, common::ModulePageAllocator, true> ObFdItemSet;
@@ -85,8 +81,8 @@ class ObTableFdItem : public ObFdItem
 {
 public:
   ObTableFdItem() : ObFdItem(), child_tables_() {}
-  ObTableFdItem(const bool is_unique, ObRawExprSet *parent_exprs, const int32_t stmt_level) :
-      ObFdItem(is_unique, parent_exprs, stmt_level), child_tables_() {}
+  ObTableFdItem(const bool is_unique, ObRawExprSet *parent_exprs) :
+      ObFdItem(is_unique, parent_exprs), child_tables_() {}
   virtual ~ObTableFdItem() {}
 
   virtual int assign(const ObTableFdItem &other);
@@ -99,7 +95,7 @@ public:
   virtual FdLevel get_level() const override;
   virtual bool is_table_fd_item() const override;
 
-  VIRTUAL_TO_STRING_KV(K_(parent_exprs), K_(is_unique), K_(stmt_level), K_(child_tables));
+  VIRTUAL_TO_STRING_KV(K_(parent_exprs), K_(is_unique), K_(child_tables));
 protected:
   ObRelIds child_tables_;
 };
@@ -110,8 +106,8 @@ class ObExprFdItem : public ObFdItem
 {
 public:
   ObExprFdItem() : ObFdItem(), inner_alloc_("ExprFdItem"), child_exprs_(&inner_alloc_) {}
-  ObExprFdItem(const bool is_unique, ObRawExprSet *parent_exprs, const int32_t stmt_level)
-    : ObFdItem(is_unique, parent_exprs, stmt_level), inner_alloc_("ExprFdItem"),
+  ObExprFdItem(const bool is_unique, ObRawExprSet *parent_exprs)
+    : ObFdItem(is_unique, parent_exprs), inner_alloc_("ExprFdItem"),
       child_exprs_(&inner_alloc_) {}
   virtual ~ObExprFdItem() {}
 
@@ -125,7 +121,7 @@ public:
   virtual FdLevel get_level() const override;
   virtual bool is_expr_fd_item() const override;
 
-  VIRTUAL_TO_STRING_KV(K_(parent_exprs), K_(is_unique), K_(stmt_level), K_(child_exprs));
+  VIRTUAL_TO_STRING_KV(K_(parent_exprs), K_(is_unique), K_(child_exprs));
 protected:
   common::ModulePageAllocator inner_alloc_;
   ObRawExprSet child_exprs_;
@@ -149,13 +145,11 @@ public:
 
   int create_table_fd_item(ObTableFdItem *&fd_item,
                            const bool is_unique,
-                           ObRawExprSet *parent_exprs,
-                           const int32_t stmt_level);
+                           ObRawExprSet *parent_exprs);
 
   int create_table_fd_item(ObTableFdItem *&fd_item,
                            const bool is_unique,
                            const ObIArray<ObRawExpr *> &parent_exprs,
-                           const int32_t stmt_level,
                            const ObRelIds &table_set);
 
   int create_table_fd_item(ObTableFdItem *&fd_item,
@@ -163,13 +157,11 @@ public:
 
   int create_expr_fd_item(ObExprFdItem *&fd_item,
                           const bool is_unique,
-                          ObRawExprSet *parent_exprs,
-                          const int32_t stmt_level);
+                          ObRawExprSet *parent_exprs);
 
   int create_expr_fd_item(ObExprFdItem *&fd_item,
                           const bool is_unique,
                           const ObIArray<ObRawExpr *> &parent_exprs,
-                          const int32_t stmt_level,
                           const ObIArray<ObRawExpr *> &child_exprs);
 
   int create_expr_fd_item(ObExprFdItem *&fd_item,

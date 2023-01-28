@@ -29,8 +29,8 @@ class ObLogPlan;
 
 struct PwjTable {
   PwjTable()
-    : ref_table_id_(OB_INVALID_ID),
-      phy_table_loc_info_(NULL),
+    : phy_table_loc_info_(NULL),
+      server_list_(),
       part_level_(share::schema::PARTITION_LEVEL_ZERO),
       part_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
       subpart_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
@@ -47,14 +47,16 @@ struct PwjTable {
   int init(const ObShardingInfo &info);
   int init(const share::schema::ObTableSchema &table_schema,
            const ObCandiTableLoc &phy_tbl_info);
+  int init(const ObIArray<ObAddr> &server_list);
 
-  TO_STRING_KV(K_(ref_table_id), K_(part_level), K_(part_type), K_(subpart_type),
+  TO_STRING_KV(K_(part_level), K_(part_type), K_(subpart_type),
                K_(part_number),
                K_(is_partition_single), K_(is_subpartition_single),
-               K_(all_partition_indexes), K_(all_subpartition_indexes));
+               K_(all_partition_indexes), K_(all_subpartition_indexes),
+               K_(server_list));
 
-  uint64_t ref_table_id_;
   const ObCandiTableLoc *phy_table_loc_info_;
+  ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
   // 分区级别
   share::schema::ObPartitionLevel part_level_;
   // 一级分区类型
@@ -96,16 +98,20 @@ typedef common::hash::ObHashMap<uint64_t, const ObCandiTabletLoc *,
 class ObPwjComparer
 {
 public:
-  ObPwjComparer(bool is_strict);
-  virtual ~ObPwjComparer();
+  ObPwjComparer(bool is_strict)
+    : is_strict_(is_strict), pwj_tables_() {};
+  virtual ~ObPwjComparer() {};
+  virtual void reset();
 
-  void reset();
+  inline bool get_is_strict() { return is_strict_; }
+
+  inline common::ObIArray<PwjTable> &get_pwj_tables() { return pwj_tables_; }
 
   /**
    * 向ObPwjComparer中添加一个PwjTable，会以第一个添加的PwjTable为基准与后续添加的PwjTable进行比较
-   * 并生成partition_id(物理分区id)的映射。
+   * 其中严格比较会生成tablet_id的映射。
    */
-  int add_table(PwjTable &table, bool &is_match_pwj);
+  virtual int add_table(PwjTable &table, bool &is_match_pwj);
 
   /**
    * 从phy_table_locaton_info中提取以下分区相关的信息
@@ -131,12 +137,64 @@ public:
                                            bool &is_subpartition_single);
 
   /**
-   * 从所有(sub)part_index中按照升序取出用到的(sub)part_index
-   * 例如 all_partition_indexes = [0,0,3,3,1] 可以得到 used_partition_indexes = [0,1,3]
+   * 检查l_partition和r_partition的定义是否相等
    */
-  int get_used_partition_indexes(const int64_t part_count,
-                                 const ObIArray<int64_t> &all_partition_indexes,
-                                 ObIArray<int64_t> &used_partition_indexes);
+  static int is_partition_equal(const share::schema::ObPartition *l_partition,
+                                const share::schema::ObPartition *r_partition,
+                                const bool is_range_partition,
+                                bool &is_equal);
+
+  /**
+   * 检查l_subpartition和r_subpartition的定义是否相等
+   */
+  static int is_subpartition_equal(const share::schema::ObSubPartition *l_subpartition,
+                                   const share::schema::ObSubPartition *r_subpartition,
+                                   const bool is_range_partition,
+                                   bool &is_equal);
+
+  static int is_row_equal(const ObRowkey &first_row,
+                          const ObRowkey &second_row,
+                          bool &is_equal);
+
+  static int is_list_partition_equal(const share::schema::ObBasePartition *first_partition,
+                                     const share::schema::ObBasePartition *second_partition,
+                                     bool &is_equal);
+
+  static int is_row_equal(const common::ObNewRow &first_row,
+                          const common::ObNewRow &second_row,
+                          bool &is_equal);
+
+  static int is_obj_equal(const common::ObObj &first_obj,
+                          const common::ObObj &second_obj,
+                          bool &is_equal);
+
+  TO_STRING_KV(K_(is_strict), K_(pwj_tables));
+
+protected:
+  // 是否以严格模式检查partition wise join
+  // 严格模式要求两个基表的分区逻辑上和物理上都相等
+  // 非严格模式要求两个基表的数据分布节点相同
+  bool is_strict_;
+  // 保存一组pwj约束涉及到的基表信息
+  common::ObSEArray<PwjTable, 4, common::ModulePageAllocator, true> pwj_tables_;
+  static const int64_t MIN_ID_LOCATION_BUCKET_NUMBER;
+  static const int64_t DEFAULT_ID_ID_BUCKET_NUMBER;
+  DISALLOW_COPY_AND_ASSIGN(ObPwjComparer);
+};
+
+class ObStrictPwjComparer : public ObPwjComparer
+{
+public:
+  ObStrictPwjComparer();
+  virtual ~ObStrictPwjComparer();
+  virtual void reset() override;
+  inline common::ObIArray<TabletIdArray> &get_tablet_id_group() { return tablet_id_group_;}
+
+  /**
+   * 向ObPwjComparer中添加一个PwjTable，会以第一个添加的PwjTable为基准与后续添加的PwjTable进行严格比较
+   * 并生成tablet_id的映射。
+   */
+  virtual int add_table(PwjTable &table, bool &is_match_pwj) override;
 
   /**
    * 检查l_table和r_table的分区是否逻辑上相等，并计算出逻辑上相等的partition_id(物理分区id)的映射
@@ -151,6 +209,14 @@ public:
   int is_first_partition_logically_equal(const PwjTable &l_table,
                                          const PwjTable &r_table,
                                          bool &is_equal);
+
+  /**
+   * 从所有(sub)part_index中按照升序取出用到的(sub)part_index
+   * 例如 all_partition_indexes = [0,0,3,3,1] 可以得到 used_partition_indexes = [0,1,3]
+   */
+  int get_used_partition_indexes(const int64_t part_count,
+                                 const ObIArray<int64_t> &all_partition_indexes,
+                                 ObIArray<int64_t> &used_partition_indexes);
 
   /**
    * 检查l_table和r_table的二级分区是否逻辑上相等
@@ -193,97 +259,52 @@ public:
 
   bool is_same_part_type(const ObPartitionFuncType part_type1,
                          const ObPartitionFuncType part_type2);
+
   /**
    * 检查一级range分区是否逻辑上相等, 要求:
    * 1. 左右表对应分区的上界相同
    */
-  static int check_range_partition_equal(share::schema::ObPartition **left_partition_array,
-                                         share::schema::ObPartition **right_partition_array,
-                                         const ObIArray<int64_t> &left_indexes,
-                                         const ObIArray<int64_t> &right_indexes,
-                                         ObIArray<std::pair<uint64_t,uint64_t> > &part_tablet_id_map,
-                                         ObIArray<std::pair<int64_t,int64_t> > &part_index_map,
-                                         bool &is_equal);
+  int check_range_partition_equal(share::schema::ObPartition **left_partition_array,
+                                  share::schema::ObPartition **right_partition_array,
+                                  const ObIArray<int64_t> &left_indexes,
+                                  const ObIArray<int64_t> &right_indexes,
+                                  ObIArray<std::pair<uint64_t,uint64_t> > &part_tablet_id_map,
+                                  ObIArray<std::pair<int64_t,int64_t> > &part_index_map,
+                                  bool &is_equal);
 
   /**
    * 检查二级range分区是否逻辑上相等, 要求:
    * 1. 左右表对应分区的上界相同
    */
-  static int check_range_subpartition_equal(share::schema::ObSubPartition **left_subpartition_array,
-                                            share::schema::ObSubPartition **right_subpartition_array,
-                                            const ObIArray<int64_t> &left_indexes,
-                                            const ObIArray<int64_t> &right_indexes,
-                                            ObIArray<std::pair<uint64_t,uint64_t> > &subpart_tablet_id_map,
-                                            bool &is_equal);
+  int check_range_subpartition_equal(share::schema::ObSubPartition **left_subpartition_array,
+                                     share::schema::ObSubPartition **right_subpartition_array,
+                                     const ObIArray<int64_t> &left_indexes,
+                                     const ObIArray<int64_t> &right_indexes,
+                                     ObIArray<std::pair<uint64_t,uint64_t> > &subpart_tablet_id_map,
+                                     bool &is_equal);
 
   /**
    * 检查一级list分区是否逻辑上相等, 要求:
    * 1. 左表的每一个分区能在右表找到边界相同的分区
    */
-  static int check_list_partition_equal(share::schema::ObPartition **left_partition_array,
-                                        share::schema::ObPartition **right_partition_array,
-                                        const ObIArray<int64_t> &left_indexes,
-                                        const ObIArray<int64_t> &right_indexes,
-                                        ObIArray<std::pair<uint64_t,uint64_t> > &part_tablet_id_map,
-                                        ObIArray<std::pair<int64_t,int64_t> > &part_index_map,
-                                        bool &is_equal);
+  int check_list_partition_equal(share::schema::ObPartition **left_partition_array,
+                                 share::schema::ObPartition **right_partition_array,
+                                 const ObIArray<int64_t> &left_indexes,
+                                 const ObIArray<int64_t> &right_indexes,
+                                 ObIArray<std::pair<uint64_t,uint64_t> > &part_tablet_id_map,
+                                 ObIArray<std::pair<int64_t,int64_t> > &part_index_map,
+                                 bool &is_equal);
 
   /**
    * 检查二级list分区是否逻辑上相等, 要求:
    * 1. 左表的每一个分区能在右表找到边界相同的分区
    */
-  static int check_list_subpartition_equal(share::schema::ObSubPartition **left_subpartition_array,
-                                           share::schema::ObSubPartition **right_subpartition_array,
-                                           const ObIArray<int64_t> &left_indexes,
-                                           const ObIArray<int64_t> &right_indexes,
-                                           ObIArray<std::pair<uint64_t,uint64_t> > &subpart_tablet_id_map,
-                                           bool &is_equal);
-
-  /**
-   * 检查l_partition和r_partition的定义是否相等
-   */
-  static int is_partition_equal(const share::schema::ObPartition *l_partition,
-                                const share::schema::ObPartition *r_partition,
-                                const bool is_range_partition,
-                                bool &is_equal);
-
-  /**
-   * 检查l_subpartition和r_subpartition的定义是否相等
-   */
-  static int is_subpartition_equal(const share::schema::ObSubPartition *l_subpartition,
-                                   const share::schema::ObSubPartition *r_subpartition,
-                                   const bool is_range_partition,
-                                   bool &is_equal);
-
-  static int is_row_equal(const ObRowkey &first_row,
-                          const ObRowkey &second_row,
-                          bool &is_equal);
-
-  static int is_list_partition_equal(const share::schema::ObBasePartition *first_partition,
-                                     const share::schema::ObBasePartition *second_partition,
-                                     bool &is_equal);
-
-  static int is_row_equal(const common::ObNewRow &first_row,
-                          const common::ObNewRow &second_row,
-                          bool &is_equal);
-
-  static int is_obj_equal(const common::ObObj &first_obj,
-                          const common::ObObj &second_obj,
-                          bool &is_equal);
-
-  /**
-   * 检查两表是否满足partition wise join的要求
-   */
-  int check_if_match_partition_wise(const PwjTable &l_table,
-                                    const PwjTable &r_table,
-                                    bool &is_partition_wise);
-
-  /**
-   * 检查左表的每一个分区是否都有一个物理位置相同的右表分区与之对应
-   */
-  int is_simple_physically_equal_partitioned(const PwjTable &l_table,
-                                             const PwjTable &r_table,
-                                             bool &is_physical_equal);
+  int check_list_subpartition_equal(share::schema::ObSubPartition **left_subpartition_array,
+                                    share::schema::ObSubPartition **right_subpartition_array,
+                                    const ObIArray<int64_t> &left_indexes,
+                                    const ObIArray<int64_t> &right_indexes,
+                                    ObIArray<std::pair<uint64_t,uint64_t> > &subpart_tablet_id_map,
+                                    bool &is_equal);
 
   /**
    * 根据phy_part_map_中的partition_id(物理分区id)的映射关系，检查两表对应的分区是否物理位置相同
@@ -291,14 +312,6 @@ public:
   int is_physically_equal_partitioned(const PwjTable &l_table,
                                       const PwjTable &r_table,
                                       bool &is_physical_equal);
-
-  /**
-   * 检查right_locations中分区id等于partition_id的分区是否和left_location的物理位置相同
-   */
-  static int check_replica_location_match(const ObCandiTabletLoc &left_location,
-                                          const ObCandiTabletLocIArray &right_locations,
-                                          const int64_t partition_id,
-                                          bool &is_physical_equal);
 
   /**
    * 获取part_index(一级逻辑分区在part_array中的偏移)对应分区的part_id(一级逻辑分区id)
@@ -314,18 +327,7 @@ public:
                              const int64_t &part_index,
                              uint64_t &sub_part_tablet_id);
 
-  inline common::ObIArray<PwjTable> &get_pwj_tables() { return pwj_tables_; }
-  inline common::ObIArray<TabletIdArray> &get_tablet_id_group() { return tablet_id_group_;}
-
-  TO_STRING_KV(K_(is_strict), K_(pwj_tables), K_(tablet_id_group));
-
 private:
-  // 是否以严格模式检查partition wise join
-  // 严格模式要求两个基表的分区逻辑上和物理上都相等
-  // 非严格模式要求两个基表的分区物理上相等
-  bool is_strict_;
-  // 保存一组pwj约束涉及到的基表信息
-  common::ObSEArray<PwjTable, 4, common::ModulePageAllocator, true> pwj_tables_;
   // 保存基表part_id(一级逻辑分区id)的映射关系
   common::ObSEArray<std::pair<uint64_t, uint64_t>, 8, common::ModulePageAllocator, true> part_tablet_id_map_;
   // 保存基表part_index(一级逻辑分区在part_array中的偏移)的映射关系
@@ -334,16 +336,33 @@ private:
   common::ObSEArray<std::pair<uint64_t, uint64_t>, 8, common::ModulePageAllocator, true> subpart_tablet_id_map_;
   // 保存基表partition_id(物理分区id)的映射关系
   TabletIdIdMap phy_part_map_;
-  // 保存一组pwj约束中基表的partition_id(物理分区id)的映射关系
+  // 保存一组pwj约束中基表的tablet_id的映射关系
   // 例如 pwj约束中包括[t1,t2,t3],
-  //      t1,t2 的partition_id映射关系是 [0,1,2] <-> [1,2,0]
-  //      t2,t3 的partition_id映射关系是 [0,1,2] <-> [2,1,0]
-  // partition_id_group_ = [[0,1,2], [1,2,0], [1,0,2]]
+  //      t1,t2 的tablet_id映射关系是 [0,1,2] <-> [1,2,0]
+  //      t2,t3 的tablet_id映射关系是 [0,1,2] <-> [2,1,0]
+  // tablet_id_group_ = [[0,1,2], [1,2,0], [1,0,2]]
   common::ObSEArray<TabletIdArray, 4, common::ModulePageAllocator, true> tablet_id_group_;
+  DISALLOW_COPY_AND_ASSIGN(ObStrictPwjComparer);
+};
 
-  static const int64_t MIN_ID_LOCATION_BUCKET_NUMBER;
-  static const int64_t DEFAULT_ID_ID_BUCKET_NUMBER;
-  DISALLOW_COPY_AND_ASSIGN(ObPwjComparer);
+class ObNonStrictPwjComparer : public ObPwjComparer
+{
+public:
+  ObNonStrictPwjComparer()
+    : ObPwjComparer(false) {};
+  virtual ~ObNonStrictPwjComparer() {};
+  /**
+   * 向ObPwjComparer中添加一个PwjTable，会以第一个添加的PwjTable为基准与后续添加的PwjTable进行非严格比较
+   */
+  virtual int add_table(PwjTable &table, bool &is_match_nonstrict_pw) override;
+  /**
+   * check left table and right table have at least one partition on corresponding server
+   */
+  int is_match_non_strict_partition_wise(PwjTable &l_table,
+                                         PwjTable &r_table,
+                                         bool &is_match_nonstrict_pw);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNonStrictPwjComparer);
 };
 }
 }

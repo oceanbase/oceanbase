@@ -55,7 +55,7 @@ int ObExprHash::calc_hash_value_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     if (OB_FAIL(expr.args_[i]->eval(ctx, datum))) {
       LOG_WARN("failed to eval datum", K(ret));
     } else {
-      ObExprHashFuncType hash_func = expr.args_[i]->basic_funcs_->murmur_hash_;
+      ObExprHashFuncType hash_func = expr.args_[i]->basic_funcs_->murmur_hash_v2_;
       hash_value = hash_func(*datum, hash_value);
     }
   }
@@ -79,7 +79,7 @@ int ObExprHash::calc_hash_value_expr_batch(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to locate batch datums", K(ret));
       } else {
-        ObBatchDatumHashFunc hash_func = expr.args_[i]->basic_funcs_->murmur_hash_batch_;
+        ObBatchDatumHashFunc hash_func = expr.args_[i]->basic_funcs_->murmur_hash_v2_batch_;
         hash_func(batch_hash_vals, datums, expr.args_[i]->is_batch_result(), skip, batch_size,
                   i > 0 ? batch_hash_vals: &hash_seed, i > 0);
       }

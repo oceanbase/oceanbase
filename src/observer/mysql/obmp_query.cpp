@@ -98,6 +98,7 @@ int ObMPQuery::process()
     return ret;
   }
   #endif
+
   int tmp_ret = OB_SUCCESS;
   ObSQLSessionInfo *sess = NULL;
   uint32_t sessid = 0;
@@ -144,6 +145,7 @@ int ObMPQuery::process()
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     int64_t val = 0;
     const bool check_throttle = !is_root_user(sess->get_user_id());
+
     if (check_throttle &&
         !sess->is_inner() &&
         sess->get_raw_audit_record().try_cnt_ == 0 &&
@@ -203,7 +205,7 @@ int ObMPQuery::process()
                  && OB_FAIL(ObMPUtils::sync_session_info(session,
                               pkt.get_extra_info().get_sync_sess_info()))) {
         LOG_WARN("fail to update sess info", K(ret));
-      } else if (OB_FAIL(ObMPUtils::init_flt_info(pkt.get_extra_info(), session,
+      } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                               conn->proxy_cap_flags_.is_full_link_trace_support()))) {
         LOG_WARN("failed to update flt extra info", K(ret));
       } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
@@ -216,6 +218,7 @@ int ObMPQuery::process()
                     module_name, session.get_module_name(),
                     action_name, session.get_action_name(),
                     sess_id, session.get_sessid());
+
         THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
         retry_ctrl_.set_tenant_global_schema_version(tenant_version);
         retry_ctrl_.set_sys_global_schema_version(sys_version);
@@ -379,10 +382,8 @@ int ObMPQuery::process()
     // THIS_WORKER.need_retry()是指是否扔回队列重试，包括大查询被扔回队列的情况。
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
-    if (!session.get_in_transaction()) {
-        // transcation ends, end trace
-        FLT_END_TRACE();
-    }
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = record_flt_trace(session);
   }
 
   if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
@@ -492,7 +493,6 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   int ret = OB_SUCCESS;
   FLTSpanGuard(mpquery_single_stmt);
   bool need_response_error = true;
-  bool use_sess_trace = false;
   const bool enable_trace_log = lib::is_trace_log_enabled();
   session.get_raw_audit_record().request_memory_used_ = 0;
   observer::ObProcessMallocCallback pmcb(0,
@@ -506,7 +506,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
 
   //============================ 注意这些变量的生命周期 ================================
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
-  if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session, use_sess_trace))) {
+  if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
     if (enable_trace_log) {
@@ -576,7 +576,8 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
   //清空WARNING BUFFER
-  tmp_ret = do_after_process(session, use_sess_trace, ctx_, async_resp_used);
+  tmp_ret = do_after_process(session, ctx_, async_resp_used);
+
   // 设置上一条语句的结束时间，由于这里只用于实现事务内部的语句之间的执行超时，
   // 因此，首先，需要判断是否处于事务执行的过程中。然后对于事务提交的时候的异步回包,
   // 也不需要在这里设置结束时间，因为这已经相当于事务的最后一条语句了。
@@ -593,7 +594,6 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
     send_error_packet(ret, NULL);
   }
   ctx_.reset();
-  UNUSED(tmp_ret);
   return ret;
 }
 
@@ -1166,6 +1166,7 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly)
     case stmt::T_SHOW_GRANTS:
     case stmt::T_SHOW_QUERY_RESPONSE_TIME:
     case stmt::T_SHOW_RECYCLEBIN:
+    case stmt::T_SHOW_SEQUENCES:
     case stmt::T_HELP:
     case stmt::T_USE_DATABASE:
     case stmt::T_SET_NAMES: //read only not restrict it

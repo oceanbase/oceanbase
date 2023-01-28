@@ -42,7 +42,7 @@ uint64_t ObConnectByOpPump::ObHashColumn::inner_hash() const
           || OB_ISNULL(expr->basic_funcs_)) {
       } else {
         datum = &row_->cells()[i];
-        result = expr->basic_funcs_->murmur_hash_(*datum, result);
+        result = expr->basic_funcs_->murmur_hash_v2_(*datum, result);
       }
     }
   }
@@ -613,7 +613,7 @@ int ObConnectByOpPump::calc_hash_value(const ObArray<ObExpr *> &hash_exprs, uint
     } else if (OB_FAIL(hash_expr->eval(*eval_ctx_, datum))) {
       LOG_WARN("calc left expr value failed", K(ret));
     } else {
-      hash_value = hash_expr->basic_funcs_->murmur_hash_(*datum, hash_value);
+      hash_value = hash_expr->basic_funcs_->murmur_hash_v2_(*datum, hash_value);
       LOG_DEBUG("calc hash value", KPC(datum), K(hash_value), K(hash_expr), KPC(hash_expr));
     }
   }

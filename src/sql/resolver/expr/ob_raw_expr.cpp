@@ -207,7 +207,7 @@ bool ObRawExpr::has_specified_pseudocolumn() const
 
 bool ObRawExpr::is_vectorize_result() const
 {
-  // subset of ObRawExprInfoExtractor::not_calculable_expr
+  // subset of ObRawExpr::cnt_not_calculable_expr
   // TODO bin.lb: more sophisticate
   bool not_pre_calc = has_generalized_column()
       || has_flag(CNT_STATE_FUNC)
@@ -245,10 +245,8 @@ int ObRawExpr::assign(const ObRawExpr &other)
       result_type_ = other.result_type_;
       info_ = other.info_;
       rel_ids_ = other.rel_ids_;
-      expr_levels_ = other.expr_levels_;
       alias_column_name_ = other.alias_column_name_;
       expr_name_= other.expr_name_;
-      expr_level_ = other.expr_level_;
       ref_count_ = other.ref_count_;
       is_explicited_reference_ = other.is_explicited_reference_;
       is_for_generated_column_ = other.is_for_generated_column_;
@@ -322,7 +320,6 @@ void ObRawExpr::reset()
   info_.reset();
   rel_ids_.reset();
   set_data_type(ObMaxType);
-  expr_level_ = -1;
   ref_count_ = 0;
   is_explicited_reference_ = false;
   is_for_generated_column_ = false;
@@ -409,12 +406,12 @@ int ObRawExpr::formalize(const ObSQLSessionInfo *session_info)
   return ret;
 }
 
-int ObRawExpr::pull_relation_id_and_levels(int32_t cur_stmt_level)
+int ObRawExpr::pull_relation_id()
 {
   int ret = OB_SUCCESS;
   ObExprRelationAnalyzer expr_relation_analyzer;
-  if (OB_FAIL(expr_relation_analyzer.pull_expr_relation_id_and_levels(this, cur_stmt_level))) {
-    LOG_WARN("pull expr failed", K(cur_stmt_level), K(ret));
+  if (OB_FAIL(expr_relation_analyzer.pull_expr_relation_id(this))) {
+    LOG_WARN("pull expr failed", K(ret));
   }
   return ret;
 }
@@ -649,11 +646,107 @@ bool ObRawExpr::is_json_expr() const
   return (T_FUN_SYS_JSON_OBJECT <= get_expr_type() && get_expr_type() <= T_FUN_JSON_OBJECTAGG) ? true : false;
 }
 
+bool ObRawExpr::is_multiset_expr() const
+{
+  return is_query_ref_expr() && static_cast<const ObQueryRefRawExpr *>(this)->is_multiset();
+}
+
 int ObRawExpr::set_enum_set_values(const common::ObIArray<common::ObString> &values)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(enum_set_values_.assign(values))) {
     LOG_WARN("failed to assign array", K(ret));
+  }
+  return ret;
+}
+
+bool ObRawExpr::is_not_calculable_expr() const
+{
+  return is_generalized_column()
+         || has_flag(IS_STATE_FUNC)
+         || has_flag(IS_USER_VARIABLE)
+         || has_flag(IS_ALIAS)
+         || has_flag(IS_VALUES)
+         || has_flag(IS_SEQ_EXPR)
+         || has_flag(IS_SYS_CONNECT_BY_PATH)
+         || has_flag(IS_RAND_FUNC)
+         || has_flag(IS_SO_UDF_EXPR)
+         || has_flag(IS_PRIOR)
+         || has_flag(IS_VOLATILE_CONST)
+         || has_flag(IS_ASSIGN_EXPR);
+}
+
+bool ObRawExpr::cnt_not_calculable_expr() const
+{
+  // NOTE: When adding rules here, please check whether ObRawExpr::is_vectorize_result()
+  // need add the same rules.
+  return has_generalized_column()
+         || has_flag(CNT_STATE_FUNC)
+         || has_flag(CNT_USER_VARIABLE)
+         || has_flag(CNT_ALIAS)
+         || has_flag(CNT_VALUES)
+         || has_flag(CNT_SEQ_EXPR)
+         || has_flag(CNT_SYS_CONNECT_BY_PATH)
+         || has_flag(CNT_RAND_FUNC)
+         || has_flag(CNT_SO_UDF)
+         || has_flag(CNT_PRIOR)
+         || has_flag(CNT_VOLATILE_CONST)
+         || has_flag(CNT_ASSIGN_EXPR);
+}
+
+/**
+ * @brief check whether an expr is const when all of its param exprs are const expr.
+ * param_need_replace is true when called in ObOptimizerUtil::is_const_expr_recursively
+ * e.g.:
+ *  1 + exists (select 1 > t1) will be const expr after replacing the T_OP_EXISTS with onetime expr,
+ *  we need to treat the expr as const expr without replacement when generate logical plan.
+ *  The param_need_replace flag only disables the shortcut of cnt_not_calculable_expr(),
+ *  the param expr remains non-const if it can not be replaced into exec param
+ */
+int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
+                                     const bool param_need_replace /*=false*/) const
+{
+  int ret = OB_SUCCESS;
+  is_const_inherit = true;
+  if (T_FUN_SYS_RAND == type_
+      || T_FUN_SYS_UUID == type_
+      || T_FUN_SYS_UUID_SHORT == type_
+      || T_FUN_SYS_SEQ_NEXTVAL == type_
+      || T_FUN_SYS_AUTOINC_NEXTVAL == type_
+      || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == type_
+      || T_FUN_SYS_ROWNUM == type_
+      || T_FUN_SYS_ROWKEY_TO_ROWID == type_
+      || T_OP_CONNECT_BY_ROOT == type_
+      || T_FUN_SYS_CONNECT_BY_PATH == type_
+      || T_FUN_SYS_GUID == type_
+      || T_FUN_SYS_STMT_ID == type_
+      || T_FUN_SYS_SLEEP == type_
+      || T_OP_PRIOR == type_
+      || T_OP_ASSIGN == type_
+      || T_OP_GET_USER_VAR == type_
+      || T_FUN_NORMAL_UDF == type_
+      || T_FUN_SYS_REMOVE_CONST == type_
+      || T_FUN_SYS_WRAPPER_INNER == type_
+      || T_FUN_SYS_LAST_INSERT_ID == type_
+      || T_FUN_SYS_TO_BLOB == type_
+      || (T_FUN_SYS_SYSDATE == type_ && lib::is_mysql_mode())
+      || (param_need_replace ? is_not_calculable_expr() : cnt_not_calculable_expr())
+      || (T_FUN_UDF == type_
+          && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())) {
+     is_const_inherit = false;
+  }
+  if (is_const_inherit && T_OP_GET_USER_VAR == type_) {
+    if (get_param_count() != 1 || OB_ISNULL(get_param_expr(0)) ||
+        get_param_expr(0)->type_ != T_USER_VARIABLE_IDENTIFIER) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected expr", K(ret));
+    } else {
+      const ObUserVarIdentRawExpr *var_expr =
+          static_cast<const ObUserVarIdentRawExpr*>(get_param_expr(0));
+      if (var_expr->get_is_contain_assign() || var_expr->get_query_has_udf()) {
+        is_const_inherit = false;
+      }
+    }
   }
   return ret;
 }
@@ -927,8 +1020,11 @@ int ObConstRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t 
     }
   } else if (get_value().is_unknown()) { //为explain特殊处理QuestionMark为？，其他地方打印成$IntNum
     if (EXPLAIN_DBLINK_STMT != type) {
-      if (OB_FAIL(get_value().print_plain_str_literal(buf, buf_len, pos))) {
-        LOG_WARN("fail to print_sql_literal", K(get_value()), K(ret));
+      // if (OB_FAIL(get_value().print_plain_str_literal(buf, buf_len, pos))) {
+      //   LOG_WARN("fail to print_sql_literal", K(get_value()), K(ret));
+      // }
+      if (OB_FAIL(BUF_PRINTF(":%ld", get_value().get_unknown()))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
     } else {
       if (OB_FAIL(ObLinkStmtParam::write(buf, buf_len, pos, get_value().get_unknown()))) {
@@ -938,6 +1034,10 @@ int ObConstRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t 
   } else {
     if (OB_FAIL(get_value().print_sql_literal(buf, buf_len, pos))) {
       LOG_WARN("fail to print_sql_literal", K(get_value()), K(ret));
+      if (OB_ERR_NULL_VALUE == ret) {
+        //ignore mull time zone info
+        ret = OB_SUCCESS;
+      }
     }
   }
   return ret;
@@ -1131,6 +1231,7 @@ int ObQueryRefRawExpr::assign(const ObRawExpr &other)
         is_set_ = tmp.is_set_;
         is_cursor_ = tmp.is_cursor_;
         has_nl_param_ = tmp.has_nl_param_;
+        is_multiset_ = tmp.is_multiset_;
         column_types_ = tmp.column_types_;
       }
     }
@@ -1254,7 +1355,8 @@ bool ObQueryRefRawExpr::inner_same_as(
     } else {
       // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
       bool_ret = (get_ref_id() == u_expr.get_ref_id() &&
-                  ref_stmt_ == u_expr.ref_stmt_);
+                  ref_stmt_ == u_expr.ref_stmt_ &&
+                  is_multiset_ == is_multiset_);
     }
   }
   return bool_ret;
@@ -1286,7 +1388,11 @@ int ObQueryRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64
     } else if (OB_FAIL(BUF_PRINTF("SQ(%.*s)", qb_name.length(), qb_name.ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
+  } else if (is_multiset() && OB_FAIL(BUF_PRINTF("multiset("))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
   } else if (OB_FAIL(BUF_PRINTF("subquery(%lu)", ref_id_))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (is_multiset() && OB_FAIL(BUF_PRINTF(")"))) {
     LOG_WARN("fail to BUF_PRINTF", K(ret));
   } else if (EXPLAIN_EXTENDED == type) {
     if (OB_FAIL(BUF_PRINTF("("))) {
@@ -1459,7 +1565,6 @@ int ObColumnRefRawExpr::assign(const ObRawExpr &other)
       database_name_ = tmp.database_name_;
       table_name_ = tmp.table_name_;
       column_name_ = tmp.column_name_;
-      expr_level_ = tmp.expr_level_;
       column_flags_ = tmp.column_flags_;
       dependant_expr_ = tmp.dependant_expr_;
       is_unpivot_mocked_column_ = tmp.is_unpivot_mocked_column_;
@@ -1730,9 +1835,7 @@ bool ObAliasRefRawExpr::inner_same_as(const ObRawExpr &expr,
     LOG_WARN("ref_expr_ is null");
   } else if (expr.get_expr_type() == get_expr_type()) {
     const ObAliasRefRawExpr &alias_ref = static_cast<const ObAliasRefRawExpr&>(expr);
-    if (alias_ref.get_expr_level() == get_expr_level()) {
-      bret = (alias_ref.get_ref_expr() == get_ref_expr());
-    }
+    bret = (alias_ref.get_ref_expr() == get_ref_expr());
   }
   return bret;
 }
@@ -2003,9 +2106,11 @@ bool ObOpRawExpr::inner_same_as(
 
   cmp_type = REGULAR_CMP;
 
-  if (T_OP_EQ == get_expr_type()
-      || T_OP_NSEQ == get_expr_type()
-      || T_OP_NE == get_expr_type()) {
+  if (get_expr_type() == T_OP_ASSIGN) {
+    need_cmp = false;
+  } else if (T_OP_EQ == get_expr_type()
+             || T_OP_NSEQ == get_expr_type()
+             || T_OP_NE == get_expr_type()) {
     if (expr.get_expr_type() == get_expr_type()) {
       cmp_type = BOTH_CMP;
     } else {
@@ -2148,9 +2253,7 @@ int ObOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &po
     if (OB_FAIL(get_subquery_comparison_name(symbol, buf, buf_len, pos, type))) {
       LOG_WARN("get subquery comparison name failed", K(ret));
     }
-  } else if ((!symbol.empty() && 2 == get_param_count()) ||
-             (EXPLAIN_DBLINK_STMT == type &&
-              (T_OP_IS == get_expr_type() || T_OP_IS_NOT == get_expr_type()))) {
+  } else if ((!symbol.empty() && 2 == get_param_count())) {
     if (OB_ISNULL(get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("first param expr is NULL", K(ret));
@@ -3471,8 +3574,10 @@ bool ObSysFunRawExpr::inner_same_as(
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
-  } else if (T_FUN_SYS_RAND == get_expr_type()
-             || T_FUN_SYS_GUID == get_expr_type()) {
+  } else if (T_FUN_SYS_RAND == get_expr_type() ||
+             T_FUN_SYS_GUID == get_expr_type() ||
+             T_OP_GET_USER_VAR == get_expr_type() ||
+             T_OP_GET_SYS_VAR == get_expr_type()) {
   } else if (get_expr_class() == expr.get_expr_class()) {
     //for EXPR_UDF and EXPR_SYS_FUNC
     const ObSysFunRawExpr *s_expr = static_cast<const ObSysFunRawExpr *>(&expr);
@@ -3516,6 +3621,13 @@ bool ObSysFunRawExpr::inner_same_as(
               || T_FUN_SYS_UTC_TIMESTAMP == get_expr_type()
               || T_FUN_SYS_UTC_TIME == get_expr_type())) {
         bool_ret = result_type_.get_scale() == s_expr->get_result_type().get_scale();
+      }
+      if ((T_FUN_SYS == get_expr_type() ||
+           T_FUN_SYS_CALC_TABLET_ID == get_expr_type() ||
+           T_FUN_SYS_CALC_PARTITION_ID == get_expr_type() ||
+           T_FUN_SYS_CALC_PARTITION_TABLET_ID == get_expr_type()) &&
+          get_extra() != expr.get_extra()) { // for calc_partition_id
+        bool_ret = false;
       }
     }
   } else if (expr.is_op_expr() && T_OP_CNN == expr.get_expr_type()) {
@@ -5299,7 +5411,8 @@ bool ObPseudoColumnRawExpr::inner_same_as(const ObRawExpr &expr,
                                           ObExprEqualCheckContext *check_context/* = NULL*/) const
 {
   UNUSED(check_context);
-  return type_ == expr.get_expr_type();
+  return type_ == expr.get_expr_type() &&
+         table_id_ == static_cast<const ObPseudoColumnRawExpr&>(expr).get_table_id();
 }
 
 int ObPseudoColumnRawExpr::do_visit(ObRawExprVisitor &visitor)
@@ -5467,7 +5580,7 @@ ObRawExprPointer::ObRawExprPointer() : expr_group_() {
 ObRawExprPointer::~ObRawExprPointer() {
 }
 
-int ObRawExprPointer::get(ObRawExpr *&expr)
+int ObRawExprPointer::get(ObRawExpr *&expr) const
 {
   int ret = OB_SUCCESS;
   if (expr_group_.count() <= 0

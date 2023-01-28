@@ -104,6 +104,12 @@ inline bool is_only_full_group_by_on(ObSQLMode mode)
 {
   return (SMO_ONLY_FULL_GROUP_BY & mode) || lib::is_oracle_mode();
 }
+
+inline bool is_time_truncate_fractional(ObSQLMode mode)
+{
+  return (SMO_TIME_TRUNCATE_FRACTIONAL & mode);
+}
+
 }
 }
 

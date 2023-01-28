@@ -93,6 +93,7 @@ int ObUpdateLogPlan::generate_raw_plan()
     bool need_limit = true;
     ObSEArray<OrderItem, 4> order_items;
     LOG_TRACE("start to allocate operators for ", "sql", optimizer_context_.get_query_ctx()->get_sql_stmt());
+    OPT_TRACE("generate plan for ", get_stmt());
     // step. generate access paths
     if (OB_FAIL(generate_plan_tree())) {
       LOG_WARN("failed to generate plan tree for plain select", K(ret));
@@ -270,6 +271,9 @@ int ObUpdateLogPlan::candi_allocate_update()
   ObSEArray<CandidatePlan, 8> update_plans;
   const bool force_no_multi_part = get_log_plan_hint().no_use_distributed_dml();
   const bool force_multi_part = get_log_plan_hint().use_distributed_dml();
+  OPT_TRACE("start generate normal update plan");
+  OPT_TRACE("force no multi part:", force_no_multi_part);
+  OPT_TRACE("force multi part:", force_multi_part);
   if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_))) {
     LOG_WARN("failed to check table rowkey distinct", K(ret));
   } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_,
@@ -387,6 +391,7 @@ int ObUpdateLogPlan::candi_allocate_pdml_update()
 {
   int ret = OB_SUCCESS;
   const ObUpdateStmt *update_stmt = NULL;
+  OPT_TRACE("start generate pdml update plan");
   if (OB_ISNULL(update_stmt = get_stmt()) ||
       OB_UNLIKELY(1 != update_stmt->get_update_table_info().count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -625,7 +630,8 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
                                                   table_dml_info->ck_cst_exprs_.at(i),
                                                   table_dml_info->ck_cst_exprs_.at(i)))) {
         LOG_WARN("failed to copy schema expr", K(ret));
-      } else if (OB_FAIL(ObTableAssignment::expand_expr(update_info.assignments_,
+      } else if (OB_FAIL(ObTableAssignment::expand_expr(optimizer_context_.get_expr_factory(),
+                                                        update_info.assignments_,
                                                         table_dml_info->ck_cst_exprs_.at(i)))) {
         LOG_WARN("failed to create expanded expr", K(ret));
       }

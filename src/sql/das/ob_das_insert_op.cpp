@@ -393,7 +393,7 @@ int ObDASInsertResult::get_next_row(ObNewRow *&row)
   int ret = OB_SUCCESS;
   ObNewRow *result_row = NULL;
   if (OB_FAIL(result_newrow_iter_.get_next_row(result_row))) {
-    if (ret != OB_ITER_END) {
+    if (OB_ITER_END != ret) {
       LOG_WARN("get next row from result iter failed", K(ret));
     }
   } else {

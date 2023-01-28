@@ -21,10 +21,6 @@ namespace oceanbase
 namespace sql
 {
 
-typedef common::ObSEArray<ObColumnRefRawExpr *, 16, common::ModulePageAllocator, true> ColRawExprArray;
-typedef common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> RawExprArray;
-class ObSelectStmt;
-
 class ObInsertStmt : public ObDelUpdStmt
 {
 public:
@@ -34,8 +30,6 @@ public:
                             ObRawExprCopier &expr_copier,
                             const ObDMLStmt &other) override;
   int assign(const ObInsertStmt &other);
-  virtual int replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                                      const common::ObIArray<ObRawExpr*> &new_exprs) override;
   virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const override;
   ObInsertTableInfo &get_insert_table_info() { return table_info_; }
   const ObInsertTableInfo &get_insert_table_info() const { return table_info_; }
@@ -100,8 +94,6 @@ public:
   }
   virtual int64_t get_instead_of_trigger_column_count() const override;
   DECLARE_VIRTUAL_TO_STRING;
-protected:
-  virtual int inner_get_relation_exprs(RelExprCheckerBase &expr_checker);
 private:
   bool is_all_const_values_;
   ObInsertTableInfo table_info_;

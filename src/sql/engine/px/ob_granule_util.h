@@ -187,13 +187,55 @@ public:
                                    bool hash_part);
 
   static bool gi_has_attri(uint64_t bit_map, uint64_t attri) { return 0 != (bit_map & attri); }
-  static bool partition_task_mode(uint64_t gi_attri_flag) {
-    return ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_PARTITION_WISE)
-    || ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_AFFINITIZE)
-    || ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_ACCESS_ALL)
-    || ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_NLJ_PARAM_DOWN)
-    || ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_FORCE_PARTITION_GRANULE);
+
+  static bool is_partition_task_mode(uint64_t gi_attri_flag)
+  {
+    return affinitize(gi_attri_flag) || pwj_gi(gi_attri_flag) ||
+           access_all(gi_attri_flag) || with_param_down(gi_attri_flag);
   }
+  static bool is_partition_granule_flag(uint64_t gi_attri_flag)
+  {
+    return is_partition_task_mode(gi_attri_flag) ||
+           ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_FORCE_PARTITION_GRANULE);
+  }
+  static bool partition_filter(uint64_t gi_attri_flag)
+  {
+    return gi_has_attri(gi_attri_flag, GI_USE_PARTITION_FILTER);
+  }
+  static bool pwj_gi(uint64_t gi_attri_flag)
+  {
+    return gi_has_attri(gi_attri_flag, GI_PARTITION_WISE);
+  }
+  static bool affinitize(uint64_t gi_attri_flag)
+  {
+    return gi_has_attri(gi_attri_flag, GI_AFFINITIZE);
+  }
+  static bool access_all(uint64_t gi_attri_flag)
+  {
+    return gi_has_attri(gi_attri_flag, GI_ACCESS_ALL);
+  }
+  static bool with_param_down(uint64_t gi_attri_flag)
+  {
+    return gi_has_attri(gi_attri_flag, GI_NLJ_PARAM_DOWN);
+  }
+  static bool asc_order(uint64_t gi_attri_flag)
+  {
+    return gi_has_attri(gi_attri_flag, GI_ASC_ORDER);
+  }
+  static bool desc_order(uint64_t gi_attri_flag)
+  {
+    return gi_has_attri(gi_attri_flag, GI_DESC_ORDER);
+  }
+  static bool force_partition_granule(uint64_t gi_attri_flag)
+  {
+    return gi_has_attri(gi_attri_flag, GI_FORCE_PARTITION_GRANULE);
+  }
+  static bool enable_partition_pruning(uint64_t gi_attri_flag)
+  {
+    return gi_has_attri(gi_attri_flag, GI_ENABLE_PARTITION_PRUNING);
+  }
+
+
   static int remove_empty_range(const common::ObIArray<common::ObNewRange> &in_ranges,
                                 common::ObIArray<common::ObNewRange> &ranges,
                                 bool &only_empty_range);

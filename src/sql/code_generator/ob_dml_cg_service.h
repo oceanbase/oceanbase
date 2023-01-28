@@ -95,6 +95,8 @@ public:
   int get_heap_table_part_exprs(const ObLogicalOperator &op,
                                 const IndexDMLInfo &index_dml_info,
                                 ObIArray<ObRawExpr*> &part_key_exprs);
+
+  int adjust_unique_key_exprs(ObIArray<ObRawExpr*> &unique_key_exprs);
   int get_table_rowkey_exprs(const IndexDMLInfo &index_dml_info,
                              ObIArray<ObRawExpr*> &rowkey_exprs);
 

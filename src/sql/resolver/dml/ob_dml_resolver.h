@@ -19,6 +19,7 @@
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
 
 namespace oceanbase
 {
@@ -27,6 +28,7 @@ namespace sql
 class ObEqualAnalysis;
 class ObChildStmtResolver;
 class ObDelUpdStmt;
+class ObSelectResolver;
 
 static const char *err_log_default_columns_[] = { "ORA_ERR_NUMBER$", "ORA_ERR_MESG$", "ORA_ERR_ROWID$", "ORA_ERR_OPTYP$", "ORA_ERR_TAG$" };
 static char *str_to_lower(char *pszBuf, int64_t length);
@@ -80,6 +82,86 @@ struct ObDmlJtColDef
 
 class ObDMLResolver : public ObStmtResolver
 {
+  class ObCteResolverCtx
+  {
+    friend class ObSelectResolver;
+    friend class ObDMLResolver;
+  public:
+    ObCteResolverCtx():
+      left_select_stmt_(NULL),
+      left_select_stmt_parse_node_(NULL),
+      opt_col_alias_parse_node_(NULL),
+      is_with_clause_resolver_(false),
+      current_cte_table_name_(""),
+      is_recursive_cte_(false),
+      is_cte_subquery_(false),
+      cte_resolve_level_(0),
+      cte_branch_count_(0),
+      is_set_left_resolver_(false),
+      is_set_all_(true)
+    {
+
+    }
+    virtual ~ObCteResolverCtx()
+    {
+
+    }
+    inline void set_is_with_resolver(bool is_with_resolver) { is_with_clause_resolver_ = is_with_resolver; }
+    inline void set_current_cte_table_name(const ObString& table_name) { current_cte_table_name_ = table_name; }
+    inline bool is_with_resolver() const { return is_with_clause_resolver_; }
+    inline void set_recursive(bool recursive) { is_recursive_cte_ = recursive; }
+    inline void set_in_subquery() { is_cte_subquery_ = true; }
+    inline bool is_in_subquery() { return cte_resolve_level_ >=2; }
+    inline void reset_subquery_level() { cte_resolve_level_ = 0; }
+    inline bool is_recursive() const { return is_recursive_cte_; }
+    inline void set_left_select_stmt(ObSelectStmt* left_stmt) { left_select_stmt_ = left_stmt; }
+    inline void set_left_parse_node(const ParseNode* node) { left_select_stmt_parse_node_ = node; }
+    inline void set_set_all(bool all) { is_set_all_ = all; }
+    inline bool invalid_recursive_union() { return  (nullptr != left_select_stmt_ && !is_set_all_); }
+    inline bool more_than_two_branch() { return cte_branch_count_ >= 2; }
+    inline void reset_branch_count() { cte_branch_count_ = 0; }
+    inline void set_recursive_left_branch() { is_set_left_resolver_ = true; cte_branch_count_ ++; }
+    inline void set_recursive_right_branch(ObSelectStmt* left_stmt, const ParseNode* node, bool all) {
+      is_set_left_resolver_ = false;
+      cte_branch_count_ ++;
+      left_select_stmt_ = left_stmt;
+      left_select_stmt_parse_node_ = node;
+      is_set_all_ = all;
+    }
+    int assign(ObCteResolverCtx &cte_ctx) {
+      left_select_stmt_ = cte_ctx.left_select_stmt_;
+      left_select_stmt_parse_node_ = cte_ctx.left_select_stmt_parse_node_;
+      opt_col_alias_parse_node_ = cte_ctx.opt_col_alias_parse_node_;
+      is_with_clause_resolver_ = cte_ctx.is_with_clause_resolver_;
+      current_cte_table_name_ = cte_ctx.current_cte_table_name_;
+      is_recursive_cte_ = cte_ctx.is_recursive_cte_;
+      is_cte_subquery_ = cte_ctx.is_cte_subquery_;
+      cte_resolve_level_ = cte_ctx.cte_resolve_level_;
+      cte_branch_count_ = cte_ctx.cte_branch_count_;
+      is_set_left_resolver_ = cte_ctx.is_set_left_resolver_;
+      is_set_all_ = cte_ctx.is_set_all_;
+      return cte_col_names_.assign(cte_ctx.cte_col_names_);
+    }
+    TO_STRING_KV(K_(is_with_clause_resolver),
+                 K_(current_cte_table_name),
+                 K_(is_recursive_cte),
+                 K_(is_cte_subquery),
+                 K_(cte_resolve_level),
+                 K_(cte_col_names));
+  private:
+    ObSelectStmt* left_select_stmt_;
+    const ParseNode* left_select_stmt_parse_node_;
+    const ParseNode* opt_col_alias_parse_node_;
+    bool is_with_clause_resolver_;
+    ObString current_cte_table_name_;
+    bool is_recursive_cte_;
+    bool is_cte_subquery_;
+    int64_t cte_resolve_level_;
+    int64_t cte_branch_count_;
+    common::ObArray<ObString> cte_col_names_;
+    bool is_set_left_resolver_;
+    bool is_set_all_;
+  };
 public:
   explicit ObDMLResolver(ObResolverParams &params);
   virtual ~ObDMLResolver();
@@ -167,11 +249,6 @@ public:
       SQL_RESV_LOG(ERROR, "stmt_ is null");
     } else if (OB_FAIL(stmt->set_table_bit_index(common::OB_INVALID_ID))) {
       SQL_RESV_LOG(ERROR, "add invalid id to table index desc failed", K(ret));
-    } else {
-      stmt->set_current_level(current_level_);
-      if (parent_namespace_resolver_ != NULL) {
-        stmt->set_parent_namespace_stmt(parent_namespace_resolver_->get_stmt());
-      }
     }
     return ret;
   }
@@ -492,12 +569,13 @@ protected:
   /*
    *
    */
-  int resolve_is_expr(ObRawExpr *&expr);
+  int resolve_is_expr(ObRawExpr *&expr, bool &replace_happened);
   int check_equal_conditions_for_resource_group(const ObIArray<ObRawExpr*> &filters);
   int recursive_check_equal_condition(const ObRawExpr &expr);
   int check_column_with_res_mapping_rule(const ObColumnRefRawExpr *col_expr,
                                          const ObConstRawExpr *const_expr);
   int resolve_autoincrement_column_is_null(ObRawExpr *&expr);
+  int resolve_not_null_date_column_is_null(ObRawExpr *&expr, const ObExprResType* col_type);
   int resolve_partition_expr(const ParseNode &part_expr_node, ObRawExpr *&expr, common::ObIArray<ObQualifiedName> &columns);
 
   void report_user_error_msg(int &ret, const ObRawExpr *root_expr, const ObQualifiedName &q_name) const;
@@ -507,7 +585,7 @@ protected:
                                                 ObStmtScope scope,
                                                 bool need_padding);
   int try_add_padding_expr_for_column_conv(const ColumnItem *column, ObRawExpr *&expr);
-  int resolve_generated_column_expr_temp(TableItem *table_item, const share::schema::ObTableSchema &table_schema);
+  int resolve_generated_column_expr_temp(TableItem *table_item);
   int find_generated_column_expr(ObRawExpr *&expr, bool &is_found);
   int deduce_generated_exprs(common::ObIArray<ObRawExpr*> &exprs);
   int resolve_external_name(ObQualifiedName &q_name,
@@ -595,7 +673,23 @@ protected:
 
   // for cte
   int add_cte_table_to_children(ObChildStmtResolver& child_resolver);
+  int add_parent_cte_table_to_children(ObChildStmtResolver& child_resolver);
   void set_non_record(bool record) { with_clause_without_record_ = record; };
+  int check_CTE_name_exist(const ObString &var_name, bool &dup_name);
+  int check_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
+  int set_cte_ctx(ObCteResolverCtx &cte_ctx, bool copy_col_name = true, bool in_subquery = false);
+  int add_cte_table_item(TableItem *table_item,  bool &dup_name);
+  int get_opt_alias_colnames_for_recursive_cte(ObIArray<ObString>& columns, const ParseNode *parse_tree);
+  int init_cte_resolver(ObSelectResolver &select_resolver, const ParseNode *opt_col_node, ObString& table_name);
+  int add_fake_schema(ObSelectStmt* left_stmt);
+  int resolve_basic_table_without_cte(const ParseNode &parse_tree, TableItem *&table_item);
+  int resolve_basic_table_with_cte(const ParseNode &parse_tree, TableItem *&table_item);
+  int resolve_cte_table(const ParseNode &parse_tree, const TableItem *CTE_table_item, TableItem *&table_item);
+  int resolve_recursive_cte_table(const ParseNode &parse_tree, TableItem *&table_item);
+  int resolve_with_clause_opt_alias_colnames(const ParseNode *parse_tree, TableItem *&table_item);
+  int set_parent_cte();
+  int resolve_with_clause_subquery(const ParseNode &parse_tree, TableItem *&table_item);
+  int resolve_with_clause(const ParseNode *node, bool same_level = false);
 
   int check_oracle_outer_join_condition(const ObRawExpr *expr);
   int check_oracle_outer_join_in_or_validity(const ObRawExpr * expr,
@@ -709,8 +803,7 @@ private:
 
   int convert_udf_to_agg_expr(ObRawExpr *&expr,
                               ObRawExpr *parent_expr,
-                              ObExprResolveContext &ctx,
-                              bool need_check_nested = false);
+                              ObExprResolveContext &ctx);
 
   int reset_calc_part_id_param_exprs(ObRawExpr *&expr, ObIArray<ObQualifiedName> &columns);
 
@@ -771,6 +864,7 @@ private:
                              int64_t &table_id,
                              int64_t &ref_id);
   int resolve_pq_distribute_window_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+  int check_cast_multiset(const ObRawExpr *expr, const ObRawExpr *parent_expr = NULL);
   //////////end of functions for sql hint/////////////
 protected:
   struct GenColumnExprInfo {
@@ -830,6 +924,11 @@ protected:
   common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> parent_cte_tables_;
   //store cte tables of current level
   common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> current_cte_tables_;
+
+  ObSharedExprResolver expr_resv_ctx_;
+  /*these member is only for with clause*/
+  ObCteResolverCtx cte_ctx_;
+
   //store json table column info
   common::ObSEArray<ObDmlJtColDef *, 1, common::ModulePageAllocator, true> json_table_infos_;
 protected:

@@ -433,6 +433,7 @@ int ObDtlBasicChannel::attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_b
     if (is_first_buffer_cached) {
       set_first_buffer();
     }
+    linked_buffer = nullptr;
     IGNORE_RETURN recv_sem_.signal();
     if (msg_watcher_ != nullptr) {
       msg_watcher_->notify(*this);
@@ -511,17 +512,21 @@ int ObDtlBasicChannel::get_processed_buffer(int64_t timeout)
   bool has_first_buffer = false;
   if (OB_LIKELY(nullptr == process_buffer_)) {
     // process first msg, it's maybe cached by dfc server
-    // 这里假设只有两种情况：
-    // 1）要么在fc server的buffer_list中
-    // 2）要么first msg在recv_list_中
+    // This assumes there are only two cases:
+     // 1) Either in the buffer_list of the fc server
+     // 2) Either first msg is in recv_list_
     if (got_from_dtl_cache_ &&
         nullptr != msg_watcher_ && OB_FAIL(msg_watcher_->has_first_buffer(id_, has_first_buffer))) {
       LOG_WARN("failed to get first buffer", K(ret));
     } else if (has_first_buffer) {
       bool need_processed_first_msg = got_from_dtl_cache_ && belong_to_receive_data();
       if (need_processed_first_msg && recv_list_.is_empty()) {
-        // 理论上，只要这次拿过，下次就不需要再从dtl buffer cache中查看是否有数据，因为后续rpc收到数据一定可以get_channel到数据
-        // 当第一次拿过程中，如果rpc正好在处理dtl buffer，这个时候，可能会下一次轮训还没有处理完，所以只要这次判断pins==1即可认为下次不需要再从buffer cache拿了
+        // Theoretically, as long as you take it this time, you don't need to check whether there is data
+        // from the dtl buffer cache next time, because the subsequent rpc will definitely be able to get_channel
+        // to get the data when it receives the data
+        // When taking the process for the first time, if the rpc is just processing the dtl buffer,
+        // at this time, the next round of training may not be processed, so as long as the pins==1 is judged this time,
+        // it can be considered that the buffer is not needed next time. cache took it
         ObDfcServer &dfc_server = DTL.get_dfc_server();
         if (OB_UNLIKELY(OB_INVALID_ID == dfc_idx_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -723,20 +728,6 @@ int ObDtlBasicChannel::flush(bool force_flush, bool wait_resp)
     }
   }
   if (OB_SUCC(ret)) {
-    if (send_failed_buffer_ != nullptr) {
-      LOG_TRACE("send message failed", K(id_), K_(peer), K(ret));
-      if (OB_FAIL(send_message(send_failed_buffer_))) {
-        LOG_WARN("send message failed", K_(peer), K(ret), K(send_failed_buffer_));
-      } else if (nullptr != send_failed_buffer_) {
-        free_buf(send_failed_buffer_);
-        send_failed_buffer_ = nullptr;
-      }
-      if (OB_SUCC(ret)) {
-        inc_send_buffer_cnt();
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
     do {
       // reset return code every turn.
       ret = OB_SUCCESS;
@@ -745,7 +736,9 @@ int ObDtlBasicChannel::flush(bool force_flush, bool wait_resp)
         auto buffer = static_cast<ObDtlLinkedBuffer *>(link);
         if (OB_FAIL(send_message(buffer))) {
           LOG_WARN("send message failed", K_(peer), K(ret), K(buffer));
-          send_failed_buffer_ = buffer;
+          if (nullptr != buffer) {
+            free_buf(buffer);
+          }
         } else if (nullptr != buffer) {
           free_buf(buffer);
         }
@@ -953,10 +946,6 @@ void ObDtlBasicChannel::clean_broadcast_buffer()
     done = true;
     process_buffer_ = nullptr;
   }
-  if (nullptr != send_failed_buffer_ && send_failed_buffer_->is_bcast()) {
-    done = true;
-    send_failed_buffer_ = nullptr;
-  }
   if (!done) {
     ObLink *link = nullptr;
     if (OB_SUCC(recv_list_.top(link))) {
@@ -983,6 +972,7 @@ int ObDtlBasicChannel::push_back_send_list()
     write_buffer_->tenant_id() = tenant_id_;
     if (write_buffer_->is_data_msg()) {
       write_buffer_->set_use_interm_result(use_interm_result_);
+      write_buffer_->set_enable_channel_sync(enable_channel_sync_);
       if (OB_FAIL(write_buffer_->push_batch_id(batch_id_, msg_writer_->rows()))) {
         LOG_WARN("push batch id failed", K(ret));
       }
@@ -1144,6 +1134,7 @@ int ObDtlBasicChannel::send_buffer(ObDtlLinkedBuffer *&buffer)
     buffer->tenant_id() = tenant_id_;
     if (buffer->is_data_msg()) {
       buffer->set_use_interm_result(use_interm_result_);
+      buffer->set_enable_channel_sync(enable_channel_sync_);
       if (buffer->is_batch_info_valid() && OB_ISNULL(msg_writer_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("msg_writer_ is null", K(ret));

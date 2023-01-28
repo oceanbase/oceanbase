@@ -28,7 +28,6 @@ public:
   ObLogLink(ObLogPlan &plan);
   virtual ~ObLogLink() {}
   virtual int est_cost() override;
-  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
 
   virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
 
@@ -36,6 +35,8 @@ public:
   inline const char *get_stmt_fmt_buf() const { return stmt_fmt_buf_; }
   inline int32_t get_stmt_fmt_len() const { return stmt_fmt_len_; }
   int gen_link_stmt_param_infos();
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 private:
   int print_link_stmt(char *buf, int64_t buf_len);
 private:

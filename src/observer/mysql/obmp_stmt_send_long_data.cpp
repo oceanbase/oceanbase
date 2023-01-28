@@ -198,7 +198,6 @@ int ObMPStmtSendLongData::process_send_long_data_stmt(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   bool need_response_error = true;
-  bool use_sess_trace = false;
   int64_t tenant_version = 0;
   int64_t sys_version = 0;
   setup_wb(session);
@@ -217,7 +216,7 @@ int ObMPStmtSendLongData::process_send_long_data_stmt(ObSQLSessionInfo &session)
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
   //清空WARNING BUFFER
-  tmp_ret = do_after_process(session, use_sess_trace, ctx_, false);
+  tmp_ret = do_after_process(session, ctx_, false);
   UNUSED(tmp_ret);
   return ret;
 }

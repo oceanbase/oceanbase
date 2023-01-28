@@ -424,6 +424,7 @@ int ObRemoteBaseExecuteP<T>::execute_remote_plan(ObExecContext &exec_ctx,
   ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
   ObOperator *se_op = nullptr; // static engine operator
   exec_ctx.set_use_temp_expr_ctx_cache(true);
+  FLTSpanGuard(remote_execute);
   if (OB_ISNULL(plan_ctx) || OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("op is NULL", K(ret), K(plan_ctx), K(session));

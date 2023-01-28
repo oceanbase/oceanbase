@@ -1231,7 +1231,7 @@ int ObExprInOrNotIn::eval_in_with_row(const ObExpr &expr,
                 //设置ObDatum的hash函数
                 if (OB_SUCC(ret)) {
                   in_ctx->hash_func_buff_[j] =
-                           (void *)(RIGHT_ROW_ELE(i, j)->basic_funcs_->murmur_hash_);
+                           (void *)(RIGHT_ROW_ELE(i, j)->basic_funcs_->murmur_hash_v2_);
                 }
               }
             } else {
@@ -1755,7 +1755,7 @@ int ObExprInOrNotIn::build_right_hash_without_row(const int64_t in_id,
             }
             if (OB_SUCC(ret)) {
               in_ctx->hash_func_buff_[0] = (void *)
-                              (expr.args_[1]->args_[i]->basic_funcs_->murmur_hash_);
+                              (expr.args_[1]->args_[i]->basic_funcs_->murmur_hash_v2_);
             }
           }
           Row<ObDatum> tmp_row;

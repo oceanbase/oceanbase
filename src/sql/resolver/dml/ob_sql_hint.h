@@ -26,14 +26,14 @@ namespace sql
 class ObDMLStmt;
 class ObSelectStmt;
 class ObSQLSessionInfo;
-class planText;
+struct PlanText;
 struct TableItem;
 
 struct ObHints
 {
   ObHints () : stmt_id_(OB_INVALID_STMT_ID) {}
   int assign(const ObHints &other);
-  int print_hints(planText &plan_text, bool ignore_trans_hint = false) const;
+  int print_hints(PlanText &plan_text, bool ignore_trans_hint = false) const;
 
   TO_STRING_KV(K_(stmt_id), K_(qb_name), K_(hints));
 
@@ -50,7 +50,7 @@ struct QbNames {
                parent_name_(),
                qb_names_() {}
   void reset();
-  int print_qb_names(planText &plan_text) const;
+  int print_qb_names(PlanText &plan_text) const;
   TO_STRING_KV(K_(stmt_type), K_(is_set_stmt),
                 K_(is_from_hint), K_(parent_name),
                 K_(qb_names));
@@ -137,11 +137,11 @@ struct ObQueryHint {
                                                      || global_hint_.has_hint_exclude_concurrent(); }
 
   // print hint
-  int print_stmt_hint(planText &plan_text, const ObDMLStmt &stmt) const;
-  int print_outline_data(planText &plan_text) const;
-  int print_qb_name_hints(planText &plan_text) const;
-  int print_qb_name_hint(planText &plan_text, int64_t stmt_id) const;
-  int print_transform_hints(planText &plan_text) const;
+  int print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt, const bool is_root_stmt) const;
+  int print_outline_data(PlanText &plan_text) const;
+  int print_qb_name_hints(PlanText &plan_text) const;
+  int print_qb_name_hint(PlanText &plan_text, int64_t stmt_id) const;
+  int print_transform_hints(PlanText &plan_text) const;
   inline static const char *get_outline_indent(bool is_oneline)
   { //6 space, align with 'Outputs & filters'
     return is_oneline ? " " : "\n      ";
@@ -205,7 +205,7 @@ struct ObStmtHint
   int init_stmt_hint(const ObDMLStmt &stmt,
                      const ObQueryHint &query_hint,
                      bool use_stmt_id_hints);
-  int print_stmt_hint(planText &plan_text) const;
+  int print_stmt_hint(PlanText &plan_text) const;
   const ObHint *get_normal_hint(ObItemType hint_type, int64_t *idx = NULL) const;
   ObHint *get_normal_hint(ObItemType hint_type, int64_t *idx = NULL);
   void set_query_hint(const ObQueryHint *query_hint) { query_hint_ = query_hint; }
@@ -294,6 +294,9 @@ struct LogTableHint
   int get_join_filter_hint(const ObRelIds &left_tables,
                            bool part_join_filter,
                            const ObJoinFilterHint *&hint) const;
+  int get_join_filter_hints(const ObRelIds &left_tables,
+                            bool part_join_filter,
+                            ObIArray<const ObJoinFilterHint*> &hints) const;
   int add_join_filter_hint(const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
                            const ObJoinFilterHint &hint);
@@ -320,6 +323,24 @@ struct LeadingInfo {
   ObRelIds table_set_;
   ObRelIds left_table_set_;
   ObRelIds right_table_set_;
+};
+
+struct JoinFilterPushdownHintInfo
+{
+  int check_use_join_filter(const ObDMLStmt &stmt,
+                            const ObQueryHint &query_hint,
+                            uint64_t filter_table_id,
+                            bool part_join_filter,
+                            bool &can_use,
+                            const ObJoinFilterHint *&force_hint) const;
+  TO_STRING_KV(K_(filter_table_id),
+                 K_(join_filter_hints),
+                 K_(part_join_filter_hints));
+
+  uint64_t filter_table_id_;
+  bool config_disable_;
+  common::ObSEArray<const ObJoinFilterHint*, 4, common::ModulePageAllocator, true> join_filter_hints_;
+  common::ObSEArray<const ObJoinFilterHint*, 4, common::ModulePageAllocator, true> part_join_filter_hints_;
 };
 
 struct LogLeadingHint
@@ -393,6 +414,10 @@ struct ObLogPlanHint
                             bool config_disable,
                             bool &can_use,
                             const ObJoinFilterHint *&force_hint) const;
+  int get_pushdown_join_filter_hints(uint64_t filter_table_id,
+                                     const ObRelIds &left_tables,
+                                     bool config_disable,
+                                     JoinFilterPushdownHintInfo& info) const;
   int check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const;
   int check_use_skip_scan(uint64_t table_id,  uint64_t index_id,
                           bool &force_skip_scan,

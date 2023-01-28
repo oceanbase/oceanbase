@@ -220,13 +220,14 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
   } else if (OB_FAIL(stmt->check_if_contain_select_for_update(has_for_update))) {
     LOG_WARN("failed to check if contain for update", K(ret));
   } else if (has_for_update) {
-    // do nothing
+    OPT_TRACE("stmt contain for update, can not transform");
   } else if (OB_FAIL(stmt->check_if_contain_inner_table(contain_inner_table))) {
     LOG_WARN("failed to check if contain inner table", K(ret));
   } else if (OB_FAIL(ObTransformUtils::check_can_set_stmt_unique(stmt, has_unique_keys))) {
     LOG_WARN("failed to check stmt has unique keys", K(ret));
   } else if (!has_unique_keys) {
     //如果当前stmt不能生成唯一键，do nothing
+    OPT_TRACE("stmt can not generate unique keys, can not transform");
   } else {
     is_valid = true;
   }
@@ -297,6 +298,7 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
     ObSelectStmt *sub_stmt = NULL;
     ObString dummy_str;
     const ObViewMergeHint *myhint = NULL;
+    OPT_TRACE("try", table);
     if (OB_ISNULL(sub_stmt = table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid generated table item", K(ret), K(*table));
@@ -304,17 +306,22 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       LOG_WARN("check hint failed", K(ret));
     } else if (!hint_valid) {
       is_valid = false;
+      OPT_TRACE("hint reject transform");
     } else if (OB_FALSE_IT(myhint = static_cast<const ObViewMergeHint*>(sub_stmt->get_stmt_hint().get_normal_hint(T_MERGE_HINT)))) {
     } else if (ignore_tables.has_member(stmt->get_table_bit_index(table->table_id_))) {
       // skip the generated table
+      OPT_TRACE("ignore this table");
     } else if (contain_inner_table && (NULL == myhint || myhint->enable_no_group_by_pull_up())) {
       // do not rewrite inner table stmt with a cost-based rule
+      OPT_TRACE("stmt contain inner table, can not transform");
     } else if (OB_FAIL(is_valid_group_stmt(sub_stmt, is_valid_group))) {
       LOG_WARN("failed to check is valid group stmt", K(ret));
     } else if (!is_valid_group) {
       // do nothing
+      OPT_TRACE("not a valid group stmt");
     } else if (helper.need_check_having_ && sub_stmt->get_having_expr_size() > 0) {
       //do nothing
+      OPT_TRACE("view can not have having exprs");
     } else if (OB_FALSE_IT(helper.table_id_ = table->table_id_)) {
     } else if (OB_FAIL(check_null_propagate(stmt, sub_stmt, helper, can_pullup))) {
       LOG_WARN("failed to check null propagate select expr", K(ret));
@@ -325,6 +332,7 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       //stmt不能包含rand函数 https://work.aone.alibaba-inc.com/issue/35875561
     } else if (!(can_pullup = !has_rand)) {
       // do nothing
+      OPT_TRACE("view has rand expr, can not transform");
     } else if (OB_FALSE_IT(helper.need_merge_ = (NULL != myhint 
                           && myhint->enable_group_by_pull_up(ctx_->src_qb_name_)))) {
     } else if (OB_FAIL(valid_views.push_back(helper))) {
@@ -758,34 +766,25 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
   }
   if (OB_SUCC(ret)) {
     ObRawExprCopier copier(*ctx_->expr_factory_);
-    ObArray<ObRawExpr *> uncopy_list;
     //拉出select aggr items, group by exprs、aggr items、having exprs
     if (OB_FAIL(copier.add_replaced_expr(view_columns, stmt_columns))) {
       LOG_WARN("failed to add replaced expr", K(ret));
-    } else if (OB_FAIL(append(uncopy_list, subquery->get_subquery_exprs()))) {
-      LOG_WARN("failed to append uncopy list", K(ret));
+    } else if (OB_FAIL(copier.add_skipped_expr(subquery->get_subquery_exprs(), false))) {
+      LOG_WARN("failed to add direct replace exprs", K(ret));
     } else if (OB_FAIL(copier.copy_on_replace(subquery->get_group_exprs(),
-                                              subquery->get_group_exprs(),
-                                              NULL,
-                                              &uncopy_list))) {
+                                              subquery->get_group_exprs()))) {
       LOG_WARN("failed to copy on replace group exprs", K(ret));
     } else if (OB_FAIL(copier.copy_on_replace(subquery->get_aggr_items(),
-                                              subquery->get_aggr_items(),
-                                              NULL,
-                                              &uncopy_list))) {
+                                              subquery->get_aggr_items()))) {
       LOG_WARN("failed to copy on replace aggr items", K(ret));
     } else if (OB_FAIL(copier.copy_on_replace(subquery->get_having_exprs(),
-                                              subquery->get_having_exprs(),
-                                              NULL,
-                                              &uncopy_list))) {
+                                              subquery->get_having_exprs()))) {
       LOG_WARN("failed to copy on replace having exprs", K(ret));
     } else if (OB_FAIL(copier.copy_on_replace(aggr_select, 
-                                              aggr_select,
-                                              NULL,
-                                              &uncopy_list))) {
+                                              aggr_select))) {
       LOG_WARN("failed to copy on replace aggr select", K(ret));
-    } else if (OB_FAIL(stmt->replace_inner_stmt_expr(aggr_column, aggr_select))) {
-      LOG_WARN("failed to replace inner stmt exprs", K(ret));
+    } else if (OB_FAIL(stmt->replace_relation_exprs(aggr_column, aggr_select))) {
+      LOG_WARN("failed to replace inner stmt expr", K(ret));
     } else if (OB_FAIL(append(stmt->get_group_exprs(), subquery->get_group_exprs()))) {
       LOG_WARN("failed to append group exprs", K(ret));
     } else if (OB_FAIL(append(stmt->get_aggr_items(), subquery->get_aggr_items()))) {
@@ -806,8 +805,6 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
         LOG_WARN("failed to adjust subquery list", K(ret));
       } else if (OB_FAIL(stmt->adjust_subquery_list())) {
         LOG_WARN("failed to adjust subquery list", K(ret));
-      } else if (OB_FAIL(stmt->adjust_subquery_stmt_parent(subquery, stmt))) {
-        LOG_WARN("failed to adjust sbuquery stmt parent", K(ret));
       } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
       } else {
@@ -1118,6 +1115,9 @@ int ObTransformGroupByPullup::need_transform(const common::ObIArray<ObParentDMLS
       } else {
         need_trans = query_hint->is_valid_outline_transform(ctx_->trans_list_loc_,
                                                   get_hint(table->ref_query_->get_stmt_hint()));
+        if (!need_trans) {
+          OPT_TRACE("outline reject transform");
+        }
         LOG_DEBUG("need trans pullup0", K(need_trans));
       }
     }

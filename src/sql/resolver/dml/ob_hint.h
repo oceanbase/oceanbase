@@ -22,7 +22,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class planText;
+struct PlanText;
 struct TableItem;
 
 enum ObHintMergePolicy
@@ -73,7 +73,7 @@ struct ObOptimizerStatisticsGatheringHint
 
   uint64_t flags_;
   TO_STRING_KV(K_(flags));
-  int print_osg_hint(planText &plan_text) const;
+  int print_osg_hint(PlanText &plan_text) const;
 };
 
 struct ObOptParamHint
@@ -87,6 +87,8 @@ struct ObOptParamHint
     DEF(ROWSETS_MAX_ROWS,)                \
     DEF(DDL_EXECUTION_ID,)                \
     DEF(DDL_TASK_ID,)                     \
+    DEF(ENABLE_NEWSORT,)                  \
+    DEF(USE_PART_SORT_MGB,)               \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -97,10 +99,12 @@ struct ObOptParamHint
   int add_opt_param_hint(const OptParamType param_type, const ObObj &val);
   int get_opt_param(const OptParamType param_type, ObObj &val) const;
   int has_enable_opt_param(const OptParamType param_type, bool &enabled) const;
-  int print_opt_param_hint(planText &plan_text) const;
+  int print_opt_param_hint(PlanText &plan_text) const;
+  int get_bool_opt_param(const OptParamType param_type, bool &val, bool& is_exists) const;
   // if the corresponding opt_param is specified, the `val` will be overwritten
   int get_bool_opt_param(const OptParamType param_type, bool &val) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
+  int has_opt_param(const OptParamType param_type, bool &has_hint) const;
   bool empty() const { return param_types_.empty();  }
   void reset();
   TO_STRING_KV(K_(param_types), K_(param_vals));
@@ -141,8 +145,8 @@ struct ObGlobalHint {
   void merge_osg_hint(int8_t flag);
 
   bool has_hint_exclude_concurrent() const;
-  int print_global_hint(planText &plan_text) const;
-  int print_monitoring_hints(planText &plan_text) const;
+  int print_global_hint(PlanText &plan_text) const;
+  int print_monitoring_hints(PlanText &plan_text) const;
 
   ObPDMLOption get_pdml_option() const { return pdml_option_; }
   ObParamOption get_param_option() const { return param_option_; }
@@ -279,13 +283,15 @@ struct ObTableInHint
   static bool is_match_table_items(ObCollationType cs_type,
                                   const ObIArray<ObTableInHint> &tables,
                                   ObIArray<TableItem *> &table_items);
-  int print_table_in_hint(planText &plan_text, bool ignore_qb_name = false) const;
-  static int print_join_tables_in_hint(planText &plan_text,
+  int print_table_in_hint(PlanText &plan_text, bool ignore_qb_name = false) const;
+  static int print_join_tables_in_hint(PlanText &plan_text,
                                        const ObIArray<ObTableInHint> &tables,
                                        bool ignore_qb_name = false);
 
   void reset() { qb_name_.reset(); db_name_.reset(); table_name_.reset(); }
   void set_table(const TableItem& table);
+
+  bool equal(const ObTableInHint& other) const;
 
   DECLARE_TO_STRING;
 
@@ -298,7 +304,7 @@ struct ObLeadingTable {
   ObLeadingTable() : table_(NULL), left_table_(NULL), right_table_(NULL) {}
   void reset() { table_ = NULL; left_table_ = NULL; right_table_ = NULL; }
   int assign(const ObLeadingTable &other);
-  int print_leading_table(planText &plan_text) const;
+  int print_leading_table(PlanText &plan_text) const;
   bool is_single_table() const { return NULL != table_ && NULL == left_table_ && NULL == right_table_; }
   bool is_join_table() const { return NULL == table_ && NULL != left_table_ && NULL != right_table_; }
   bool is_valid() const { return is_single_table() || is_join_table(); }
@@ -363,13 +369,13 @@ public:
   void set_hint_class(HintClass hint_class) { hint_class_ = hint_class; }
   bool is_enable_hint() const { return is_enable_hint_; }
   bool is_disable_hint() const { return !is_enable_hint_; }
-  int print_hint(planText &plan_text) const;
+  int print_hint(PlanText &plan_text) const;
   virtual int merge_hint(const ObHint *cur_hint,
                          const ObHint *other,
                          ObHintMergePolicy policy,
                          ObIArray<ObItemType> &conflict_hints,
                          const ObHint *&final_hint) const;
-  virtual int print_hint_desc(planText &plan_text) const;
+  virtual int print_hint_desc(PlanText &plan_text) const;
   // hint contain table need override this function
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) { return OB_SUCCESS; }
   int create_push_down_hint(ObIAllocator *allocator,
@@ -451,7 +457,7 @@ public:
   const ObString &get_parent_qb_name() const { return parent_qb_name_; }
   void set_parent_qb_name(const ObString &qb_name) { return parent_qb_name_.assign_ptr(qb_name.ptr(), qb_name.length()); }
   void set_is_used_query_push_down(bool is_true) { is_query_push_down_ = is_true; }
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual bool is_explicit() const override { return !parent_qb_name_.empty(); }
   bool enable_no_view_merge() const { return is_disable_hint(); }
   bool enable_no_query_push_down() const { return is_disable_hint(); }
@@ -484,7 +490,7 @@ public:
   int assign(const ObOrExpandHint &other);
   virtual ~ObOrExpandHint() {}
 
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual bool is_explicit() const override { return !expand_cond_.empty(); }
   void set_expand_condition(const char *bytes, int32_t length) { expand_cond_.assign_ptr(bytes, length); }
   int set_expand_condition(ObIAllocator &allocator, const ObRawExpr &expr)
@@ -508,7 +514,7 @@ public:
   }
   int assign(const ObCountToExistsHint &other);
   virtual ~ObCountToExistsHint() {}
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   common::ObIArray<ObString> & get_qb_name_list() { return qb_name_list_; }
   const common::ObIArray<ObString> & get_qb_name_list() const { return qb_name_list_; }
   bool enable_count_to_exists(const ObString &qb_name) const;
@@ -535,7 +541,7 @@ public:
   int assign(const ObLeftToAntiHint &other);
   virtual ~ObLeftToAntiHint() {}
 
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override;
   common::ObIArray<single_or_joined_table> & get_tb_name_list() { return table_list_; }
   const common::ObIArray<single_or_joined_table> & get_tb_name_list() const { return table_list_; }
@@ -562,7 +568,7 @@ public:
   int assign(const ObEliminateJoinHint &other);
   virtual ~ObEliminateJoinHint() {}
 
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override;
   common::ObIArray<single_or_joined_table> & get_tb_name_list() { return table_list_; }
   const common::ObIArray<single_or_joined_table> & get_tb_name_list() const { return table_list_; }
@@ -590,7 +596,7 @@ public:
   int assign(const ObGroupByPlacementHint &other);
   virtual ~ObGroupByPlacementHint() {}
 
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override;
   common::ObIArray<single_or_joined_table> & get_tb_name_list() { return table_list_; }
   const common::ObIArray<single_or_joined_table> & get_tb_name_list() const { return table_list_; }
@@ -614,7 +620,7 @@ public:
   }
   int assign(const ObWinMagicHint &other);
   virtual ~ObWinMagicHint() {}
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override;
   common::ObIArray<ObTableInHint> &get_tb_name_list() { return table_list_; }
   const common::ObIArray<ObTableInHint> &get_tb_name_list() const { return table_list_; }
@@ -650,7 +656,7 @@ public:
   int assign(const ObMaterializeHint &other);
   virtual ~ObMaterializeHint() {}
 
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   ObIArray<QbNameList> &get_qb_name_list() { return qb_name_list_; }
   bool has_qb_name_list() const { return !qb_name_list_.empty(); }
   int add_qb_name_list(const QbNameList& qb_names);
@@ -677,7 +683,7 @@ class ObSemiToInnerHint : public ObTransHint
   int assign(const ObSemiToInnerHint &other);
   virtual ~ObSemiToInnerHint() {}
 
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return add_tables(tables_, all_tables); }
   virtual bool is_explicit() const override { return !tables_.empty(); }
   ObIArray<ObTableInHint> &get_tables() { return tables_; }
@@ -703,7 +709,7 @@ class ObCoalesceSqHint : public ObTransHint
   int assign(const ObCoalesceSqHint &other);
   virtual ~ObCoalesceSqHint() {}
 
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   ObIArray<QbNameList> &get_qb_name_list() { return qb_name_list_; }
   int add_qb_name_list(const QbNameList& qb_names);
   int get_qb_name_list(const ObString& qb_name, QbNameList &qb_names) const;
@@ -731,7 +737,7 @@ public:
   static const ObString PRIMARY_KEY;
 
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   ObTableInHint &get_table() { return table_; }
   const ObTableInHint &get_table() const { return table_; }
   ObString &get_index_name() { return index_name_; }
@@ -757,7 +763,7 @@ public:
   int assign(const ObTableParallelHint &other);
   virtual ~ObTableParallelHint() {}
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   ObTableInHint &get_table() { return table_; }
   const ObTableInHint &get_table() const { return table_; }
   int64_t get_parallel() const { return parallel_; }
@@ -781,7 +787,7 @@ public:
   int assign(const ObJoinHint &other);
   virtual ~ObJoinHint() {}
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return add_tables(tables_, all_tables); }
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   bool is_match_local_algo(JoinAlgo join_algo) const;
   const char *get_dist_algo_str() const { return get_dist_algo_str(dist_algo_); }
   static const char *get_dist_algo_str(DistAlgo dist_algo);
@@ -810,20 +816,24 @@ public:
   int assign(const ObJoinFilterHint &other);
   virtual ~ObJoinFilterHint() {}
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override;
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
 
   ObTableInHint &get_filter_table() { return filter_table_; }
   const ObTableInHint &get_filter_table() const { return filter_table_; }
+  ObTableInHint &get_pushdown_filter_table() { return pushdown_filter_table_; }
+  const ObTableInHint &get_pushdown_filter_table() const { return pushdown_filter_table_; }
   ObIArray<ObTableInHint> &get_left_tables() { return left_tables_; }
   const ObIArray<ObTableInHint> &get_left_tables() const { return left_tables_; }
   bool is_part_join_filter_hint() const { return T_PX_PART_JOIN_FILTER == hint_type_; }
   bool has_left_tables() const { return !left_tables_.empty(); }
+  bool has_pushdown_filter_table() const { return !pushdown_filter_table_.table_name_.empty(); }
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(filter_table), K_(left_tables));
 
 private:
   ObTableInHint filter_table_;
   common::ObSEArray<ObTableInHint, 1, common::ModulePageAllocator, true> left_tables_;
+  ObTableInHint pushdown_filter_table_;
 };
 
 class ObPQSetHint : public ObOptHint
@@ -838,7 +848,7 @@ class ObPQSetHint : public ObOptHint
   }
   int assign(const ObPQSetHint &other);
   virtual ~ObPQSetHint() {}
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   static bool is_valid_dist_methods(const ObIArray<ObItemType> &dist_methods);
   static DistAlgo get_dist_algo(const ObIArray<ObItemType> &dist_methods,
                                 int64_t &random_none_idx);
@@ -868,7 +878,7 @@ public:
   virtual ~ObJoinOrderHint() {}
   bool is_ordered_hint() const { return is_disable_hint(); }
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return table_.get_all_table_in_leading_table(all_tables); }
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
   virtual int merge_hint(const ObHint *cur_hint,
                          const ObHint *other,
                          ObHintMergePolicy policy,
@@ -893,7 +903,7 @@ public:
   const ObIArray<WinDistAlgo> &get_algos() const { return algos_; }
   static const char* get_dist_algo_str(WinDistAlgo dist_algo);
 
-  virtual int print_hint_desc(planText &plan_text) const override;
+  virtual int print_hint_desc(PlanText &plan_text) const override;
 
   INHERIT_TO_STRING_KV("hint", ObHint, K_(algos));
 private:

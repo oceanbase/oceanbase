@@ -46,16 +46,19 @@ int ObLogErrLog::est_cost()
   return ret;
 }
 
-int ObLogErrLog::print_my_plan_annotation(char *buf,
-                                         int64_t &buf_len,
-                                         int64_t &pos,
-                                         ExplainType type)
+int ObLogErrLog::get_plan_item_info(PlanText &plan_text,
+                                    ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  UNUSED(buf);
-  UNUSED(buf_len);
-  UNUSED(pos);
-  UNUSED(type);
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get base plan item info", K(ret));
+  } else {
+    ObString &name = get_err_log_define().err_log_table_name_;
+    BUF_PRINT_OB_STR(name.ptr(),
+                     name.length(),
+                     plan_item.object_alias_,
+                     plan_item.object_alias_len_);
+  }
   return ret;
 }
 
@@ -140,5 +143,16 @@ int ObLogErrLog::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to get op exprs", K(ret));
   } else { /*do nothing*/ }
 
+  return ret;
+}
+
+int ObLogErrLog::inner_replace_op_exprs(
+        const ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+      get_err_log_define().err_log_value_exprs_))) {
+    LOG_WARN("failed to replace err log value exprs", K(ret));
+  }
   return ret;
 }

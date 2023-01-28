@@ -58,7 +58,7 @@ int ObOptimizerStatsGatheringSpec::register_to_datahub(ObExecContext &ctx) const
         ObOptStatsGatherWholeMsg::WholeMsgProvider *provider =
           new (buf)ObOptStatsGatherWholeMsg::WholeMsgProvider();
         ObSqcCtx &sqc_ctx = ctx.get_sqc_handler()->get_sqc_ctx();
-        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), *provider))) {
+        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), dtl::DH_OPT_STATS_GATHER_WHOLE_MSG, *provider))) {
           LOG_WARN("fail add whole msg provider", K(ret));
         }
       }
@@ -259,7 +259,7 @@ int ObOptimizerStatsGatheringOp::send_stats()
   } else if (OB_FAIL(build_piece_msg(piece_msg_, handler->get_sqc_proxy()))) {
     LOG_WARN("failed to build piece msg", K(ret));
   } else if (OB_FAIL(handler->get_sqc_proxy().get_dh_msg(
-                MY_SPEC.id_, piece_msg_, whole_msg,
+                MY_SPEC.id_, dtl::DH_OPT_STATS_GATHER_WHOLE_MSG, piece_msg_, whole_msg,
                 ctx_.get_physical_plan_ctx()->get_timeout_timestamp(), true, false))) {
     LOG_WARN("get msg failed", K(ret), K(MY_SPEC.id_), K(piece_msg_));
   } else {
@@ -276,7 +276,8 @@ int ObOptimizerStatsGatheringOp::build_piece_msg(ObOptStatsGatherPieceMsg &piece
   int ret = OB_SUCCESS;
   piece.op_id_ = MY_SPEC.id_;
   piece.thread_id_ = GETTID();
-  piece.dfo_id_ = proxy.get_dfo_id();
+  piece.source_dfo_id_ = proxy.get_dfo_id();
+  piece.target_dfo_id_ =  proxy.get_dfo_id();
   piece.target_osg_id_ = MY_SPEC.target_osg_id_;
   if (OB_FAIL(get_tab_stats(piece.table_stats_))) {
     LOG_WARN("fail to get table stats", K(ret));

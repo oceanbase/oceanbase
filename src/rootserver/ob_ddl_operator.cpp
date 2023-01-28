@@ -4244,6 +4244,8 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
     LOG_WARN("fail cleanup auto inc global cache", K(ret));
   } else if (OB_FAIL(drop_sequence_in_drop_table(table_schema, trans, schema_guard))) {
     LOG_WARN("drop sequence in drop table fail", K(ret));
+  } else if (OB_FAIL(drop_rls_object_in_drop_table(table_schema, trans, schema_guard))) {
+    LOG_WARN("fail to drop rls object in drop table", K(ret));
   } else if (OB_FAIL(schema_service_impl->get_table_sql_service().drop_table(
                      table_schema,
                      new_schema_version,
@@ -5478,7 +5480,8 @@ int ObDDLOperator::build_raw_priv_info_inner_user(
       if (i != PRIV_ID_EXEMPT_RED_PLY
           && i != PRIV_ID_SYSDBA
           && i != PRIV_ID_SYSOPER
-          && i != PRIV_ID_SYSBACKUP) {
+          && i != PRIV_ID_SYSBACKUP
+          && i != PRIV_ID_EXEMPT_ACCESS_POLICY) {
         OZ (raw_priv_array.push_back(i));
       }
     }
@@ -8687,7 +8690,8 @@ int ObDDLOperator::drop_trigger(const ObTriggerInfo &trigger_info,
 
 int ObDDLOperator::alter_trigger(ObTriggerInfo &trigger_info,
                                  ObMySQLTransaction &trans,
-                                 const ObString *ddl_stmt_str)
+                                 const ObString *ddl_stmt_str,
+                                 bool is_update_table_schema_version)
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
@@ -8700,7 +8704,7 @@ int ObDDLOperator::alter_trigger(ObTriggerInfo &trigger_info,
   OZ (schema_service->get_trigger_sql_service().alter_trigger(trigger_info, new_schema_version,
                                                               trans, ddl_stmt_str),
       trigger_info.get_trigger_name());
-  if (OB_SUCC(ret) && !trigger_info.is_system_type()) {
+  if (OB_SUCC(ret) && !trigger_info.is_system_type() && is_update_table_schema_version) {
       uint64_t base_table_id = trigger_info.get_base_object_id();
       OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
           trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
@@ -10771,6 +10775,350 @@ int ObDDLOperator::drop_directory(const ObString &ddl_str,
   return ret;
 }
 //----End of functions for directory object----
+
+//----Functions for rls object----
+int ObDDLOperator::create_rls_policy(ObRlsPolicySchema &schema,
+                                     ObMySQLTransaction &trans,
+                                     const ObString &ddl_stmt_str,
+                                     bool is_update_table_schema,
+                                     const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = schema.get_tenant_id();
+  uint64_t new_rls_policy_id = OB_INVALID_ID;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service->fetch_new_rls_policy_id(tenant_id, new_rls_policy_id))) {
+    LOG_WARN("failed to fetch new_rls_policy_id", K(tenant_id), K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else {
+    schema.set_rls_policy_id(new_rls_policy_id);
+    if (OB_FAIL(schema.set_ids_cascade())) {
+      LOG_WARN("fail to set_ids_cascade", K(schema), K(ret));
+    } else if (OB_FAIL(schema_service->get_rls_sql_service().apply_new_schema(
+        schema, new_schema_version, trans, OB_DDL_CREATE_RLS_POLICY, ddl_stmt_str))) {
+      LOG_WARN("fail to create rls policy", K(schema), K(ret));
+    } else if (!is_update_table_schema) {
+      // do nothing
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (OB_FAIL(update_rls_table_schema(*table_schema, OB_DDL_CREATE_RLS_POLICY, trans))) {
+      LOG_WARN("fail to update table schema", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::drop_rls_policy(const ObRlsPolicySchema &schema,
+                                   ObMySQLTransaction &trans,
+                                   const ObString &ddl_stmt_str,
+                                   bool is_update_table_schema,
+                                   const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_rls_sql_service().apply_new_schema(
+      schema, new_schema_version, trans, OB_DDL_DROP_RLS_POLICY, ddl_stmt_str))) {
+    LOG_WARN("fail to drop rls policy", K(schema), K(ret));
+  } else if (!is_update_table_schema) {
+    // do nothing
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else if (OB_FAIL(update_rls_table_schema(*table_schema, OB_DDL_DROP_RLS_POLICY, trans))) {
+    LOG_WARN("fail to update table schema", KR(ret));
+  }
+  return ret;
+}
+
+int ObDDLOperator::alter_rls_policy(const ObRlsPolicySchema &schema,
+                                    ObMySQLTransaction &trans,
+                                    const ObString &ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_rls_sql_service().apply_new_schema(
+      schema, new_schema_version, trans, OB_DDL_ALTER_RLS_POLICY, ddl_stmt_str))) {
+    LOG_WARN("fail to alter rls policy", K(schema), K(ret));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().update_data_table_schema_version(
+      trans, tenant_id, schema.get_table_id(), false/*in offline ddl white list*/))) {
+    LOG_WARN("fail to update table schema", KR(ret));
+  }
+  return ret;
+}
+
+int ObDDLOperator::create_rls_group(ObRlsGroupSchema &schema,
+                                    ObMySQLTransaction &trans,
+                                    const ObString &ddl_stmt_str,
+                                    bool is_update_table_schema,
+                                    const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = schema.get_tenant_id();
+  uint64_t new_rls_group_id = OB_INVALID_ID;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service->fetch_new_rls_group_id(tenant_id, new_rls_group_id))) {
+    LOG_WARN("failed to fetch new_rls_group_id", K(tenant_id), K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else {
+    schema.set_rls_group_id(new_rls_group_id);
+    if (OB_FAIL(schema_service->get_rls_sql_service().apply_new_schema(
+        schema, new_schema_version, trans, OB_DDL_CREATE_RLS_GROUP, ddl_stmt_str))) {
+      LOG_WARN("fail to create rls group", K(schema), K(ret));
+    } else if (!is_update_table_schema) {
+      // do nothing
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (OB_FAIL(update_rls_table_schema(*table_schema, OB_DDL_CREATE_RLS_GROUP, trans))) {
+      LOG_WARN("fail to update table schema", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::drop_rls_group(const ObRlsGroupSchema &schema,
+                                  ObMySQLTransaction &trans,
+                                  const ObString &ddl_stmt_str,
+                                  bool is_update_table_schema,
+                                  const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_rls_sql_service().apply_new_schema(
+      schema, new_schema_version, trans, OB_DDL_DROP_RLS_GROUP, ddl_stmt_str))) {
+    LOG_WARN("fail to drop rls group", K(schema), K(ret));
+  } else if (!is_update_table_schema) {
+    // do nothing
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else if (OB_FAIL(update_rls_table_schema(*table_schema, OB_DDL_DROP_RLS_GROUP, trans))) {
+    LOG_WARN("fail to update table schema", KR(ret));
+  }
+  return ret;
+}
+
+int ObDDLOperator::create_rls_context(ObRlsContextSchema &schema,
+                                      ObMySQLTransaction &trans,
+                                      const ObString &ddl_stmt_str,
+                                      bool is_update_table_schema,
+                                      const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = schema.get_tenant_id();
+  uint64_t new_rls_context_id = OB_INVALID_ID;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service->fetch_new_rls_context_id(tenant_id, new_rls_context_id))) {
+    LOG_WARN("failed to fetch new_rls_context_id", K(tenant_id), K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else {
+    schema.set_rls_context_id(new_rls_context_id);
+    if (OB_FAIL(schema_service->get_rls_sql_service().apply_new_schema(
+        schema, new_schema_version, trans, OB_DDL_CREATE_RLS_CONTEXT, ddl_stmt_str))) {
+      LOG_WARN("fail to create rls context", K(schema), K(ret));
+    } else if (!is_update_table_schema) {
+      // do nothing
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (OB_FAIL(update_rls_table_schema(*table_schema, OB_DDL_CREATE_RLS_CONTEXT, trans))) {
+      LOG_WARN("fail to update table schema", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::drop_rls_context(const ObRlsContextSchema &schema,
+                                    ObMySQLTransaction &trans,
+                                    const ObString &ddl_stmt_str,
+                                    bool is_update_table_schema,
+                                    const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_rls_sql_service().apply_new_schema(
+      schema, new_schema_version, trans, OB_DDL_DROP_RLS_CONTEXT, ddl_stmt_str))) {
+    LOG_WARN("fail to drop rls context", K(schema), K(ret));
+  } else if (!is_update_table_schema) {
+    // do nothing
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else if (OB_FAIL(update_rls_table_schema(*table_schema, OB_DDL_DROP_RLS_CONTEXT, trans))) {
+    LOG_WARN("fail to update table schema", KR(ret));
+  }
+  return ret;
+}
+
+int ObDDLOperator::drop_rls_sec_column(const ObRlsPolicySchema &schema,
+                                       const ObRlsSecColumnSchema &column_schema,
+                                       ObMySQLTransaction &trans,
+                                       const ObString &ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_rls_sql_service().drop_rls_sec_column(
+      schema, column_schema, new_schema_version, trans, ddl_stmt_str))) {
+    LOG_WARN("fail to drop rls policy", K(schema), K(ret));
+  }
+  return ret;
+}
+
+int ObDDLOperator::update_rls_table_schema(const ObTableSchema &table_schema,
+                                           const ObSchemaOperationType ddl_type,
+                                           ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  bool need_add_flag = false;
+  bool need_del_flag = false;
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service must not null", K(ret));
+  } else {
+    switch(ddl_type) {
+    case OB_DDL_CREATE_RLS_POLICY:
+    case OB_DDL_CREATE_RLS_GROUP:
+    case OB_DDL_CREATE_RLS_CONTEXT:
+      if (!table_schema.has_table_flag(CASCADE_RLS_OBJECT_FLAG)) {
+        need_add_flag = true;
+      }
+      break;
+    case OB_DDL_DROP_RLS_POLICY:
+      if (!table_schema.get_rls_group_ids().empty() ||
+          !table_schema.get_rls_context_ids().empty()) {
+        // do nothing
+      } else if (1 == table_schema.get_rls_policy_ids().count()) {
+        need_del_flag = true;
+      }
+      break;
+    case OB_DDL_DROP_RLS_GROUP:
+      if (!table_schema.get_rls_policy_ids().empty() ||
+          !table_schema.get_rls_context_ids().empty()) {
+        // do nothing
+      } else if (1 == table_schema.get_rls_group_ids().count()) {
+        need_del_flag = true;
+      }
+      break;
+    case OB_DDL_DROP_RLS_CONTEXT:
+      if (!table_schema.get_rls_policy_ids().empty() ||
+          !table_schema.get_rls_group_ids().empty()) {
+        // do nothing
+      } else if (1 == table_schema.get_rls_context_ids().count()) {
+        need_del_flag = true;
+      }
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unknown ddl type", KR(ret), K(ddl_type));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(need_add_flag && need_del_flag)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpeted statue", KR(ret), K(ddl_type), K(table_schema));
+  } else if (need_add_flag || need_del_flag) {
+    share::schema::ObTableSchema new_table_schema;
+    if (OB_FAIL(new_table_schema.assign(table_schema))) {
+      LOG_WARN("failed to assign schema", K(ret));
+    } else if (FALSE_IT(new_table_schema.add_or_del_table_flag(CASCADE_RLS_OBJECT_FLAG,
+                                                               need_add_flag))) {
+    } else if (OB_FAIL(update_table_attribute(new_table_schema, trans, OB_DDL_ALTER_TABLE))) {
+      LOG_WARN("failed to update table attribute", K(ret));
+    }
+  } else {
+    if (OB_FAIL(schema_service->get_table_sql_service().update_data_table_schema_version(
+            trans, table_schema.get_tenant_id(), table_schema.get_table_id(), false))) {
+      LOG_WARN("fail to update table schema", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::drop_rls_object_in_drop_table(const ObTableSchema &table_schema,
+                                                 ObMySQLTransaction &trans,
+                                                 ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = table_schema.get_tenant_id();
+  uint64_t table_id = table_schema.get_table_id();
+  ObString empty_str;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_rls_policy_ids().count(); ++i) {
+    const ObRlsPolicySchema *policy_schema = NULL;
+    uint64_t policy_id = table_schema.get_rls_policy_ids().at(i);
+    OZ (schema_guard.get_rls_policy_schema_by_id(tenant_id, policy_id, policy_schema));
+    CK (OB_NOT_NULL(policy_schema));
+    OZ (drop_rls_policy(*policy_schema, trans, empty_str, false, NULL));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_rls_group_ids().count(); ++i) {
+    const ObRlsGroupSchema *group_schema = NULL;
+    uint64_t group_id = table_schema.get_rls_group_ids().at(i);
+    OZ (schema_guard.get_rls_group_schema_by_id(tenant_id, group_id, group_schema));
+    CK (OB_NOT_NULL(group_schema));
+    OZ (drop_rls_group(*group_schema, trans, empty_str, false, NULL));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_rls_context_ids().count(); ++i) {
+    const ObRlsContextSchema *context_schema = NULL;
+    uint64_t context_id = table_schema.get_rls_context_ids().at(i);
+    OZ (schema_guard.get_rls_context_schema_by_id(tenant_id, context_id, context_schema));
+    CK (OB_NOT_NULL(context_schema));
+    OZ (drop_rls_context(*context_schema, trans, empty_str, false, NULL));
+  }
+  return ret;
+}
+
+//----End of functions for rls object----
 
 int ObDDLOperator::init_tenant_profile(int64_t tenant_id,
                                         const share::schema::ObSysVariableSchema &sys_variable,

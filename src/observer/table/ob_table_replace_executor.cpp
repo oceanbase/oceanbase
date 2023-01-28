@@ -247,7 +247,7 @@ int ObTableApiReplaceExecutor::get_next_conflict_rowkey(DASTaskIter &task_iter)
     } else if (OB_ISNULL(stored_row = ssr.get_store_row())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("stored row is null", K(ret));
-    } else if (OB_FAIL(stored_row->to_expr_skip_const(
+    } else if (OB_FAIL(stored_row->to_expr(
           conflict_checker_.checker_ctdef_.data_table_rowkey_expr_,
           conflict_checker_.eval_ctx_))) {
       if (OB_ITER_END != ret) {

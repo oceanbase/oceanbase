@@ -110,7 +110,6 @@ int ObLogTopk::est_cost()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel degree", K(ret)); 
   } else if (OB_FAIL(ObTransformUtils::get_limit_value(topk_limit_count_,
-                                                       get_stmt(),
                                                        get_plan()->get_optimizer_context().get_params(),
                                                        get_plan()->get_optimizer_context().get_exec_ctx(),
                                                        &get_plan()->get_optimizer_context().get_allocator(),
@@ -119,7 +118,6 @@ int ObLogTopk::est_cost()
     LOG_WARN("get limit count num error", K(ret));
   } else if (!is_null_value &&
              OB_FAIL(ObTransformUtils::get_limit_value(topk_limit_offset_,
-                                                       get_stmt(),
                                                        get_plan()->get_optimizer_context().get_params(),
                                                        get_plan()->get_optimizer_context().get_exec_ctx(),
                                                        &get_plan()->get_optimizer_context().get_allocator(),
@@ -142,11 +140,17 @@ int ObLogTopk::est_cost()
   return ret;
 }
 
-int ObLogTopk::print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type)
+int ObLogTopk::get_plan_item_info(PlanText &plan_text,
+                                  ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(BUF_PRINTF(", minimum_row_count:%ld top_precision:%ld ",
-                         minimum_row_count_, topk_precision_))) {
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  }
+  BEGIN_BUF_PRINT;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(BUF_PRINTF("minimum_row_count:%ld top_precision:%ld ",
+                                minimum_row_count_, topk_precision_))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   } else {
     ObRawExpr *limit = topk_limit_count_;
@@ -154,6 +158,8 @@ int ObLogTopk::print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &po
     EXPLAIN_PRINT_EXPR(limit, type);
     BUF_PRINTF(", ");
     EXPLAIN_PRINT_EXPR(offset, type);
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }

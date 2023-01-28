@@ -213,7 +213,7 @@ int ObMPStmtPrepare::process()
                && OB_FAIL(ObMPUtils::sync_session_info(session,
                                 pkt.get_extra_info().get_sync_sess_info()))) {
       LOG_WARN("fail to update sess info", K(ret));
-    } else if (OB_FAIL(ObMPUtils::init_flt_info(pkt.get_extra_info(), session,
+    } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                             conn->proxy_cap_flags_.is_full_link_trace_support()))) {
       LOG_WARN("failed to init flt extra info", K(ret));
     } else {
@@ -280,13 +280,12 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
 {
   int ret = OB_SUCCESS;
   bool need_response_error = true;
-  bool use_sess_trace = false;
   int64_t tenant_version = 0;
   int64_t sys_version = 0;
   setup_wb(session);
 
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
-  if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session, use_sess_trace))) {
+  if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var faield.", K(ret), K(multi_stmt_item));
   } else {
     const bool enable_trace_log = lib::is_trace_log_enabled();
@@ -339,7 +338,8 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
   //清空WARNING BUFFER
-  tmp_ret = do_after_process(session, use_sess_trace, ctx_, async_resp_used);
+  tmp_ret = do_after_process(session, ctx_, async_resp_used);
+  tmp_ret = record_flt_trace(session);
   // need_response_error这个变量保证仅在
   // do { do_process } while(retry) 之前出错才会
   // 走到send_error_packet逻辑
@@ -573,11 +573,6 @@ int ObMPStmtPrepare::response_result(
     LOG_WARN("send param packet failed", K(ret));
   } else if (OB_FAIL(send_column_packet(session, result))) {
     LOG_WARN("send column packet failed", K(ret));
-  } else if (need_send_extra_ok_packet()) {
-    ObOKPParam ok_param;
-    if (OB_FAIL(send_ok_packet(session, ok_param))) {
-      LOG_WARN("fail to send ok packet", K(ret));
-    }
   }
   return ret;
 }
@@ -586,18 +581,33 @@ int ObMPStmtPrepare::send_prepare_packet(const ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
   OMPKPrepare prepare_packet;
-  prepare_packet.set_statement_id(static_cast<uint32_t>(result.get_statement_id()));
-  prepare_packet.set_column_num(static_cast<uint16_t>(result.get_field_cnt()));
-  prepare_packet.set_warning_count(static_cast<uint16_t>(result.get_warning_count()));
-  if (OB_ISNULL(result.get_param_fields())) {
+  const ParamsFieldIArray *params = result.get_param_fields();
+  const ColumnsFieldIArray *columns = result.get_field_columns();
+  if (OB_ISNULL(params) || OB_ISNULL(columns)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(result.get_param_fields()));
+    LOG_WARN("invalid argument", K(ret), K(columns), K(params));
   } else {
-    prepare_packet.set_param_num(
-      static_cast<uint16_t>(result.get_param_fields()->count()));
+    prepare_packet.set_statement_id(static_cast<uint32_t>(result.get_statement_id()));
+    prepare_packet.set_column_num(static_cast<uint16_t>(result.get_field_cnt()));
+    prepare_packet.set_warning_count(static_cast<uint16_t>(result.get_warning_count()));
+    if (OB_ISNULL(result.get_param_fields())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(result.get_param_fields()));
+    } else {
+      prepare_packet.set_param_num(
+        static_cast<uint16_t>(result.get_param_fields()->count()));
+    }
   }
+
   if (OB_SUCC(ret) && OB_FAIL(response_packet(prepare_packet, const_cast<ObSQLSessionInfo *>(&result.get_session())))) {
     LOG_WARN("response packet failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && need_send_extra_ok_packet() && columns->count() == 0 && params->count() == 0) {
+    ObOKPParam ok_param;
+    if (OB_FAIL(send_ok_packet(*(const_cast<ObSQLSessionInfo *>(&result.get_session())), ok_param))) {
+      LOG_WARN("fail to send ok packet", K(ret));
+    }
   }
   return ret;
 }
@@ -628,8 +638,17 @@ int ObMPStmtPrepare::send_column_packet(const ObSQLSessionInfo &session,
     if (OB_SUCC(ret)) {
       if (OB_FAIL(packet_sender_.update_last_pkt_pos())) {
         LOG_WARN("failed to update last packet pos", K(ret));
-      } else if (OB_FAIL(send_eof_packet(session, result))) {
-        LOG_WARN("send eof field failed", K(ret));
+      } else {
+        if (need_send_extra_ok_packet()) {
+          ObOKPParam ok_param;
+          if (OB_FAIL(send_eof_packet(session, result, &ok_param))) {
+            LOG_WARN("send eof field failed", K(ret));
+          }
+        } else {
+          if (OB_FAIL(send_eof_packet(session, result))) {
+            LOG_WARN("send eof field failed", K(ret));
+          }
+        }
       }
     }
   }
@@ -641,9 +660,10 @@ int ObMPStmtPrepare::send_param_packet(const ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   const ParamsFieldIArray *params = result.get_param_fields();
-  if (OB_ISNULL(params)) {
+  const ColumnsFieldIArray *columns = result.get_field_columns();
+  if (OB_ISNULL(params) || OB_ISNULL(columns)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(params));
+    LOG_WARN("invalid argument", K(ret), K(columns), K(params));
   } else if (params->count() > 0) {
     ObMySQLField field;
     ret = result.next_param(field);
@@ -660,8 +680,15 @@ int ObMPStmtPrepare::send_param_packet(const ObSQLSessionInfo &session,
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(send_eof_packet(session, result))) {
-        LOG_WARN("send eof field failed", K(ret));
+      if (need_send_extra_ok_packet() && columns->count() == 0) {
+        ObOKPParam ok_param;
+        if (OB_FAIL(send_eof_packet(session, result, &ok_param))) {
+          LOG_WARN("send eof field failed", K(ret));
+        }
+      } else {
+        if (OB_FAIL(send_eof_packet(session, result))) {
+          LOG_WARN("send eof field failed", K(ret));
+        }
       }
     }
   }

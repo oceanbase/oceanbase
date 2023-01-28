@@ -296,8 +296,16 @@ public:
   //----Definitions for sync rewrite rules----
   RPC_S(PR5 admin_sync_rewrite_rules, obrpc::OB_ADMIN_SYNC_REWRITE_RULES, (ObSyncRewriteRuleArg));
   //----End of Definitions for sync rewrite rules----
+
+  //----Definitions for managing row level security----
+  RPC_S(PRD handle_rls_policy_ddl, obrpc::OB_HANDLE_RLS_POLICY_DDL, (ObRlsPolicyDDLArg));
+  RPC_S(PRD handle_rls_group_ddl, obrpc::OB_HANDLE_RLS_GROUP_DDL, (ObRlsGroupDDLArg));
+  RPC_S(PRD handle_rls_context_ddl, obrpc::OB_HANDLE_RLS_CONTEXT_DDL, (ObRlsContextDDLArg));
+  //----End of definitions for managing row level security----
+
   RPC_S(PRD recompile_all_views_batch, obrpc::OB_RECOMPILE_ALL_VIEWS_BATCH, (ObRecompileAllViewsBatchArg));
   RPC_S(PRD try_add_dep_infos_for_synonym_batch, obrpc::OB_TRY_ADD_DEP_INFOS_FOR_SYNONYM_BATCH, (ObTryAddDepInofsForSynonymBatchArg));
+
 public:
   void set_rs_mgr(share::ObRsMgr &rs_mgr)
   {

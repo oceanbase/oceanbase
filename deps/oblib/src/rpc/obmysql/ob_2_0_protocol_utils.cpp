@@ -98,7 +98,11 @@ int ObProto20Utils::do_packet_encode(ObProtoEncodeParam &param) {
       ObEasyBuffer easy_buffer(*param.ez_buf_);
 
       //SET_OB_LOG_TRACE_MODE();    // prevent printing log
+      int32_t old_len = param.seri_size_;
       ret = param.pkt_->encode(easy_buffer.last(), easy_buffer.write_avail_size(), param.seri_size_);
+      if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+        param.conn_->pkt_rec_wrapper_.record_send_mysql_pkt(*param.pkt_, param.seri_size_ - old_len);
+      }
       //if (((OB_SIZE_OVERFLOW != ret) && (OB_BUF_NOT_ENOUGH != ret) && (common::OB_SUCCESS != ret))
       //     || ((IS_LOG_ENABLED(INFO) && (OB_LOG_NEED_TO_PRINT(DEBUG))))) {
       //  PRINT_OB_LOG_TRACE_BUF(INFO);
@@ -138,6 +142,9 @@ inline int ObProto20Utils::do_proto20_packet_encode(ObProtoEncodeParam &param)
     switch (proto20_context.next_step_) {
       case START_TO_FILL_STEP: {
         proto20_context.next_step_ = RESERVE_HEADER_STEP;
+        if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+          param.conn_->pkt_rec_wrapper_.begin_seal_obp20_pkt();
+        }
         break;
       }
       case RESERVE_HEADER_STEP: {
@@ -465,6 +472,9 @@ inline int ObProto20Utils::fill_proto20_payload(ObProtoEncodeParam &param, bool 
         easy_buffer.write(seri_size);
         param.is_pkt_encoded_ = true;
         // noting break, wait to encode next one
+        if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+          param.conn_->pkt_rec_wrapper_.record_send_mysql_pkt(*param.pkt_, seri_size);
+        }
         need_break = true;
       } else if (split_count > 1) {
         if (OB_FAIL(param.save_large_packet(easy_buffer.last(), seri_size))) {
@@ -476,6 +486,10 @@ inline int ObProto20Utils::fill_proto20_payload(ObProtoEncodeParam &param, bool 
             easy_buffer.write(ObProtoEncodeParam::PROTO20_SPLIT_LEN);
             if (OB_FAIL(param.add_pos(ObProtoEncodeParam::PROTO20_SPLIT_LEN))) {
               LOG_ERROR("fail to add pos", K(ObProtoEncodeParam::PROTO20_SPLIT_LEN), K(ret));
+            }
+            if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+              param.conn_->pkt_rec_wrapper_.record_send_mysql_pkt(*param.pkt_,
+                                                ObProtoEncodeParam::PROTO20_SPLIT_LEN);
             }
           }
           proto20_context.next_step_ = FILL_TAILER_STEP;
@@ -559,12 +573,9 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
   uint16_t header_checksum = 0;
   int64_t pos = 0;
   char *start = easy_buffer.begin();
-  observer::ObSMConnection *conn = NULL;
   if (OB_ISNULL(param.req_)) {
     LOG_ERROR("request is null");
-  } else if (FALSE_IT(conn = reinterpret_cast<observer::ObSMConnection *>(
-    SQL_REQ_OP.get_sql_session(param.req_)))) {
-  } else if (FALSE_IT(packet_seq = conn->proto20_pkt_context_.proto20_last_pkt_seq_ + 1)) {
+  } else if (FALSE_IT(packet_seq = param.conn_->proto20_pkt_context_.proto20_last_pkt_seq_ + 1)) {
   } else if (OB_UNLIKELY(compress_len > OB_MYSQL_MAX_PAYLOAD_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid compress_len", K(compress_len), K(OB_MYSQL_MAX_PAYLOAD_LENGTH), K(ret));
@@ -591,8 +602,12 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
   } else if (OB_FAIL(ObMySQLUtil::store_int2(start, proto20_context.header_len_, reserved, pos))) {
     LOG_ERROR("fail to store int2", K(ret));
   } else {
-    ++conn->proto20_pkt_context_.proto20_last_pkt_seq_;
+    ++param.conn_->proto20_pkt_context_.proto20_last_pkt_seq_;
     // calc header checksum
+    if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+      param.conn_->pkt_rec_wrapper_.end_seal_obp20_pkt((uint32_t)(payload_len), flag, packet_seq, 0,
+                                      request_id, compress_len, compress_seq);
+    }
     if (!proto20_context.is_checksum_off_) {
       header_checksum = ob_crc16(0, reinterpret_cast<uint8_t *>(start), pos);
     }

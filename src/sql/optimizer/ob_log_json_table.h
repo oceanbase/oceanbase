@@ -49,12 +49,8 @@ public:
   inline void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
 
   common::ObIArray<ObJtColBaseInfo*>& get_origin_cols_def() { return all_cols_def_; }
-
-private:
-  virtual int print_my_plan_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type);
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 private:
   uint64_t table_id_;
   ObRawExpr* value_expr_;

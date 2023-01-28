@@ -852,7 +852,7 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
   ObSEArray<ObRawExpr*, 64> new_row;
   ObSEArray<ObRawExpr*, 64> full_row;
   ObSEArray<ObRawExpr*, 8> assign_exprs;
-  ObStaticEngineCG cg;
+  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
 
   if (OB_FAIL(old_row.assign(ctx.get_old_row_exprs()))) {
     LOG_WARN("fail to assign old row expr", K(ret));
@@ -1222,7 +1222,7 @@ int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
                                             ObDASScanCtDef &tsc_ctdef)
 {
   int ret = OB_SUCCESS;
-  ObStaticEngineCG cg;
+  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
   const ObIArray<ObRawExpr *> &all_exprs = ctx.is_for_insertup() ?
         ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
   ObSEArray<ObRawExpr*, 16> access_exprs;
@@ -1367,7 +1367,7 @@ int ObTableDmlCgService::generate_constraint_ctdefs(ObTableCtx &ctx,
   ObDMLCtDefAllocator<ObRowkeyCstCtdef> cst_ctdef_allocator(allocator);
   ObSEArray<ObUniqueConstraintInfo, 2> cst_infos;
   ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
-  ObStaticEngineCG cg;
+  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
 
   if (OB_FAIL(generate_constraint_infos(ctx, cst_infos))) {
     LOG_WARN("fail to generate constraint infos", K(ret), K(ctx));
@@ -1414,7 +1414,7 @@ int ObTableDmlCgService::generate_conflict_checker_ctdef(ObTableCtx &ctx,
       ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
   ObSEArray<ObRawExpr*, 16> table_column_exprs;
   ObSEArray<ObRawExpr*, 8> rowkey_exprs;
-  ObStaticEngineCG cg;
+  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
 
   if (OB_FAIL(get_rowkey_exprs(ctx, rowkey_exprs))) {
     LOG_WARN("fail to get table rowkey exprs", K(ret), K(ctx));
@@ -1461,7 +1461,7 @@ int ObTableDmlCgService::generate_lock_ctdef(ObTableCtx &ctx,
                                              ObTableLockCtDef &lock_ctdef)
 {
   int ret = OB_SUCCESS;
-  ObStaticEngineCG cg;
+  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
   ObArray<ObRawExpr*> old_row;
 
   if (OB_FAIL(old_row.assign(ctx.get_all_exprs().get_expr_array()))) {
@@ -1511,7 +1511,7 @@ int ObTableDmlCgService::generate_base_ctdef(ObTableCtx &ctx,
                                              ObIArray<ObRawExpr*> &new_row)
 {
   int ret = OB_SUCCESS;
-  ObStaticEngineCG cg;
+  ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
   const ObIArray<ObRawExpr *> &exprs = (ctx.is_for_update() || ctx.is_for_insertup()) ?
       ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
 
@@ -2190,7 +2190,7 @@ int ObTableSpecCgService::generate_spec(ObIAllocator &alloc,
     LOG_WARN("fail to generate insert up ctdef", K(ret));
   } else {
     const ObIArray<ObRawExpr *> &exprs = ctx.get_old_row_exprs();
-    ObStaticEngineCG cg;
+    ObStaticEngineCG cg(CLUSTER_CURRENT_VERSION);
     if (ObTableDmlCgService::generate_conflict_checker_ctdef(ctx,
                                                              alloc,
                                                              spec.get_conflict_checker_ctdef())) {

@@ -293,7 +293,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
           LOG_WARN("const expr is null");
         } else {
           ObObj val;
-          ObObjType data_type = static_cast<ObObjType>(node->int16_values_[0]);
+          ObObjType data_type = static_cast<ObObjType>(node->int16_values_[OB_NODE_CAST_TYPE_IDX]);
           if (ob_is_string_tc(data_type)) {
             int32_t len = node->int32_values_[1];
             if (lib::is_oracle_mode()) {
@@ -650,7 +650,6 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_FUN_GROUP_ID: {
         if (lib::is_oracle_mode()) {
           ObAggFunRawExpr *agg_expr = NULL;
-          bool is_in_nested_aggr = false;
           if (OB_ISNULL(ctx_.aggr_exprs_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("aggr exprs is null", K(ret));
@@ -663,13 +662,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
             LOG_WARN("store aggr expr failed", K(ret));
           } else {
             bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
-            AggNestedCheckerGuard agg_guard(ctx_);
             if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
               LOG_WARN("failed to add member", K(ret));
-            } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
-              LOG_WARN("failed to check agg nested.", K(ret));
-            } else {
-              agg_expr->set_in_nested_aggr(is_in_nested_aggr);
             }
           }
           expr = agg_expr;
@@ -959,7 +953,10 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
                 if(get_udf_param_syntax_err()) {
                   // do nothing
                 } else {
-                  ret = OB_ERR_FUNCTION_UNKNOWN;
+                  ObString func_name(node->children_[0]->str_len_, node->children_[0]->str_value_);
+                  ret = OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT;
+                  LOG_USER_ERROR(OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT,
+                                func_name.length(), func_name.ptr());
                 }
               }
             }
@@ -2355,9 +2352,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
     LOG_WARN("fail to create raw expr", K(ret));
   } else if (OB_ISNULL(c_expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("const expr is null");
+    LOG_WARN("const expr is null", K(ret), K(c_expr));
   } else {
-    if (true == node.is_date_unit_) {
+    if (node.is_date_unit_) {
       c_expr->set_is_date_unit();
     }
     c_expr->set_value(val);
@@ -3121,10 +3118,7 @@ int ObRawExprResolverImpl::convert_any_or_all_expr(ObRawExpr *&expr,
   }
   return ret;
 }
-//t_op_is本应该是两个参数的，这里的第三个参数，是用标记一种特殊情况的
-////特殊情况：如果是date或者datetime列且被声明为not null, 则可以通过类似这样的语句
-////select * from t1 where c1 is null 找到 '0000-00-00'如此的值。
-////所以这里使用第三个参数来标记是不是这种特殊情况，如果是，在计算后缀的时候对其进行特殊处理。
+
 int ObRawExprResolverImpl::process_is_or_is_not_node(const ParseNode *node, ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
@@ -3162,24 +3156,13 @@ int ObRawExprResolverImpl::process_is_or_is_not_node(const ParseNode *node, ObRa
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, b_expr))) {
       LOG_WARN("create ObOpRawExpr failed", K(ret));
-    } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_BOOL, c_expr))) {
-      LOG_WARN("create ObConstRawExpr failed", K(ret));
-    } else if (OB_ISNULL(b_expr) || OB_ISNULL(c_expr)) {
+    } else if (OB_ISNULL(b_expr) ) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", KP(b_expr), KP(c_expr));
+    } else if (OB_FAIL(b_expr->set_param_exprs(sub_expr1, sub_expr2))) {
+      LOG_WARN("failed to add param expr", K(ret));
     } else {
-      // http://k3.alibaba-inc.com/issue/6641086
-      // mysql特殊处理date/datetime类型的全0值。如果列类型为not null，那么，全0的列值使的is null为true
-      ObObjParam val;
-      val.set_bool(false);
-      val.set_param_meta();
-      c_expr->set_param(val);
-      c_expr->set_value(val);
-      if (OB_FAIL(b_expr->set_param_exprs(sub_expr1, sub_expr2, c_expr))) {
-        LOG_WARN("failed to add param expr", K(ret));
-      } else {
-        expr = b_expr;
-      }
+      expr = b_expr;
     }
   }
   return ret;
@@ -3763,8 +3746,12 @@ int ObRawExprResolverImpl::process_sub_query_node(const ParseNode *node, ObRawEx
              || OB_ISNULL(ctx_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", KP(expr), KP(ctx_.session_info_), K(ret));
+  } else if (node->is_multiset_ && ctx_.current_scope_ == T_PL_SCOPE) {
+    ret = OB_ERR_INVALID_SUBQUERY_USE;
+    LOG_WARN("subquery not allowed in this context", K(ret));
   } else {
     sub_query_expr->set_cursor(1 == node->value_);
+    sub_query_expr->set_is_multiset(node->is_multiset_);
 
     ObSubQueryInfo sq_info;
     sq_info.sub_query_ = node;
@@ -3777,43 +3764,11 @@ int ObRawExprResolverImpl::process_sub_query_node(const ParseNode *node, ObRawEx
   return ret;
 }
 
-int ObRawExprResolverImpl::AggNestedCheckerGuard::check_agg_nested(
-    bool &is_in_nested_aggr)
-{
-  int ret = OB_SUCCESS;
-  void *tmp_ptr = ctx_.local_allocator_.alloc(sizeof(ObExprResolveContext::ObAggResolveLinkNode));
-  if (NULL == tmp_ptr) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else {
-    is_in_nested_aggr = false;
-    ObExprResolveContext::ObAggResolveLinkNode *agg =
-      new (tmp_ptr) ObExprResolveContext::ObAggResolveLinkNode;
-    agg->is_win_agg_ = ctx_.is_win_agg_;
-    ctx_.is_win_agg_ = false;
-    ctx_.agg_resolve_link_.add_last(agg);
-    ObExprResolveContext::ObAggResolveLinkNode *prev_agg =
-      static_cast<ObExprResolveContext::ObAggResolveLinkNode *>(agg->get_prev());
-    if (OB_UNLIKELY(ctx_.agg_resolve_link_.get_header() != prev_agg
-                    && !prev_agg->is_win_agg_)) {
-      if (ctx_.agg_resolve_link_.get_header() == prev_agg->get_prev() &&
-          is_oracle_mode()) {
-        is_in_nested_aggr = true;
-      } else {
-        ret = OB_ERR_INVALID_GROUP_FUNC_USE;
-        LOG_WARN("invalid scope for agg function");
-      }
-    } else { /*do nothing.*/ }
-  }
-
-  return ret;
-}
-
 int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *sub_expr = NULL;
   ObAggFunRawExpr *agg_expr = NULL;
-  bool is_in_nested_aggr = false;
   if (OB_ISNULL(ctx_.aggr_exprs_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("aggr exprs is null", K(ret));
@@ -3831,11 +3786,8 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
     LOG_WARN("invalid node children", K(node->num_child_));
   } else {
     bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
-    AggNestedCheckerGuard agg_guard(ctx_);
     if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
       LOG_WARN("failed to add member", K(ret));
-    } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
-      LOG_WARN("failed to check agg nested.", K(ret));
     } else if (T_FUN_COUNT == node->type_ && 1 == node->num_child_) {
       if (OB_UNLIKELY(T_STAR != node->children_[0]->type_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -4109,17 +4061,6 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
       }
     }
   }
-  // set the expr in nested agg.
-  /* 这里给包含在一个agg中的agg打上is_in_nested_aggr标志，由于含有嵌套聚合的stmt
-    * 改写成两层的stmt，例如select sum(b), max(sum(b)) from t1 group by a;语句中，需要标志sum(b)
-    * 是内层是外层，主要用在之后的几处：
-    * 1. group by checker的时候，在检查内层sum(b)的时候跳过不做检查
-    * 2. 在后续第一层和第二层stmt生成时需要将agg item分类，这里打上flag后不需判断，内层判断复杂
-    * 3. having表达式中需要检查是否含有agg。这里打上标志之后不需要再判断
-    */
-  if (OB_SUCC(ret) && is_in_nested_aggr) {
-    static_cast<ObAggFunRawExpr *>(expr)->set_in_nested_aggr(true);
-  } else { /*do nothing.*/ }
   OZ(param_not_row_check(expr));
   return ret;
 }
@@ -4128,7 +4069,6 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
 {
   int ret = OB_SUCCESS;
   ObAggFunRawExpr *agg_expr = NULL;
-  bool is_in_nested_aggr = false;
   if (OB_ISNULL(ctx_.aggr_exprs_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("aggr_exprs_ is null");
@@ -4145,14 +4085,8 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
   } else {
     bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
     ParseNode *expr_list_node = node->children_[1];
-    AggNestedCheckerGuard agg_guard(ctx_);
     if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
       LOG_WARN("failed to add member", K(ret));
-    } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
-      LOG_WARN("failed to check agg nested.", K(ret));
-    } else if (lib::is_mysql_mode() && is_in_nested_aggr) {
-      ret = OB_ERR_INVALID_GROUP_FUNC_USE;
-      LOG_WARN("invalid scope for agg function");
     } else if (OB_ISNULL(expr_list_node) || OB_UNLIKELY(T_EXPR_LIST != expr_list_node->type_)
     || OB_ISNULL(expr_list_node->children_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -4243,9 +4177,6 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
       }
     }
   }
-  if (OB_SUCC(ret) && is_in_nested_aggr) {
-    static_cast<ObAggFunRawExpr *>(expr)->set_in_nested_aggr(true);
-  } else { /*do nothing.*/ }
   OZ(param_not_row_check(expr));
   return ret;
 }
@@ -4256,7 +4187,6 @@ int ObRawExprResolverImpl::process_keep_aggr_node(const ParseNode *node, ObRawEx
   ObAggFunRawExpr *agg_expr = NULL;
   bool keep_is_last = false;
   ObRawExpr *sub_expr = NULL;
-  bool is_in_nested_aggr = false;
 
   if (OB_ISNULL(ctx_.aggr_exprs_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4276,11 +4206,8 @@ int ObRawExprResolverImpl::process_keep_aggr_node(const ParseNode *node, ObRawEx
     LOG_WARN("inalid group concat node", K(ret), K(node->children_));
   } else {
     bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
-    AggNestedCheckerGuard agg_guard(ctx_);
     if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
       LOG_WARN("failed to add member", K(ret));
-    } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
-      LOG_WARN("failed to check agg nested.", K(ret));
     } else if (NULL != node->children_[0] && T_DISTINCT == node->children_[0]->type_) {
       ret = OB_DISTINCT_NOT_ALLOWED;
       LOG_WARN("distinct not allowed in aggr", K(ret));
@@ -4339,9 +4266,6 @@ int ObRawExprResolverImpl::process_keep_aggr_node(const ParseNode *node, ObRawEx
       }
     }
   }
-  if (OB_SUCC(ret) && is_in_nested_aggr) {
-    static_cast<ObAggFunRawExpr *>(expr)->set_in_nested_aggr(true);
-  } else { /*do nothing.*/ }
   OZ(param_not_row_check(expr));
   return ret;
 }
@@ -4738,7 +4662,6 @@ int ObRawExprResolverImpl::process_fun_interval_node(const ParseNode *node, ObRa
 int ObRawExprResolverImpl::process_isnull_node(const ParseNode *node, ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  ObOpRawExpr *op_expr = NULL;
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(node));
@@ -4749,37 +4672,15 @@ int ObRawExprResolverImpl::process_isnull_node(const ParseNode *node, ObRawExpr 
       || OB_ISNULL(node->children_[1]->children_[0])) {
     ret = OB_ERR_PARSER_SYNTAX;
     LOG_WARN("invalid node children for isnull function", K(ret), K(node));
-  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_IS, op_expr))) {
-    LOG_WARN("create ObOpRawExpr failed", K(ret));
-  } else if (OB_ISNULL(op_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("op_expr is null");
   } else {
     ObRawExpr *obj_expr = NULL;
-    ObConstRawExpr *null_expr = NULL;
-    ObConstRawExpr *flag_expr = NULL;
     if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1]->children_[0], obj_expr)))) {
       LOG_WARN("resolve child faield", K(ret));
-    } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_NULL, null_expr))) {
-      LOG_WARN("create ObOpRawExpr failed", K(ret));
-    } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_BOOL, flag_expr))) {
-      LOG_WARN("create ObOpRawExpr failed", K(ret));
-    } else {
-      ObObjParam null_val;
-      null_val.set_null();
-      null_val.set_param_meta();
-      null_expr->set_param(null_val);
-      null_expr->set_value(null_val);
-      ObObjParam flag_val;
-      flag_val.set_bool(false);
-      flag_val.set_param_meta();
-      flag_expr->set_param(flag_val);
-      flag_expr->set_value(flag_val);
-      if (OB_FAIL(op_expr->set_param_exprs(obj_expr, null_expr, flag_expr))) {
-        LOG_WARN("failed to add param expr", K(ret));
-      } else {
-        expr = op_expr;
-      }
+    } else if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(ctx_.expr_factory_,
+                                                              obj_expr,
+                                                              false/*is_not_null*/,
+                                                              expr))) {
+      LOG_WARN("create is null expr failed", K(ret));
     }
   }
   return ret;
@@ -5879,24 +5780,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
   // 如果先解析参数列表, 则可能会将错误的column ref加入ctx_.columns_, 外部解析UDF的时候会重复加入导致解析错误
   if (OB_SUCC(ret)) {
     ObExprOperatorType type;
-    if (0 == func_name.case_compare("bin")) {  // 处理一些sysfunc的别名
-      type = ObExprOperatorFactory::get_type_by_name("conv");
-    } else if (0 == func_name.case_compare("oct")) {
-      type = ObExprOperatorFactory::get_type_by_name("conv");
-    } else if (0 == func_name.case_compare("lcase")) {
-      type = ObExprOperatorFactory::get_type_by_name("lower");
-    } else if (0 == func_name.case_compare("ucase")) {
-      type = ObExprOperatorFactory::get_type_by_name("upper");
-      // don't alias "power" to "pow" in oracle mode
-    } else if (!lib::is_oracle_mode() && 0 == func_name.case_compare("power")) {
-      type = ObExprOperatorFactory::get_type_by_name("pow");
-    } else if (0 == func_name.case_compare("ws")) {
-      type = ObExprOperatorFactory::get_type_by_name("word_segment");
-    } else if (0 == func_name.case_compare("inet_ntoa")) {
-      type = ObExprOperatorFactory::get_type_by_name("int2ip");
-    } else {
-      type = ObExprOperatorFactory::get_type_by_name(func_name);
-    }
+    type = ObExprOperatorFactory::get_type_by_name(func_name);
     if (OB_UNLIKELY(T_INVALID == (type))) {
       ret = OB_ERR_FUNCTION_UNKNOWN;
     }
@@ -5912,6 +5796,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
       } else {
         ObRawExpr *para_expr = NULL;
         int32_t num = node->children_[1]->num_child_;
+        int current_columns_count = ctx_.columns_->count();
         for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
           if (OB_ISNULL(node->children_[1]->children_[i])) {
             ret = OB_ERR_PARSER_SYNTAX;
@@ -5939,6 +5824,27 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
           }
           if (ret == OB_SUCCESS) {
             ret = temp_ret;
+          }
+        }
+
+        const ObExprOperatorType expr_type = ObExprOperatorFactory::get_type_by_name(func_name);
+        if (OB_SUCC(ret) && T_FUN_SYS_NAME_CONST == expr_type && current_columns_count != ctx_.columns_->count()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_NAME_CONST);
+          LOG_WARN("params of name_const contain column references", K(ret));
+        } else if ((T_FUN_SYS_UUID2BIN == expr_type ||
+                    T_FUN_SYS_BIN2UUID == expr_type) &&
+                    func_expr->get_param_count() == 2) {
+          //add bool expr for the second param
+          ObRawExpr *param_expr = func_expr->get_param_expr(1);
+          ObRawExpr *new_param_expr = NULL;
+          if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_expr, new_param_expr, ctx_.expr_factory_))) {
+            LOG_WARN("create_bool_expr failed", K(ret));
+          } else if (OB_ISNULL(new_param_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("new param_expr is NULL", K(ret));
+          } else {
+            func_expr->replace_param_expr(1, new_param_expr);
           }
         }
       }
@@ -6248,6 +6154,9 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
         || T_FUN_TOP_FRE_HIST == func_type
         || T_FUN_PL_AGG_UDF == func_type
         || T_FUN_HYBRID_HIST == func_type
+        || T_FUN_SYS_BIT_AND == func_type
+        || T_FUN_SYS_BIT_OR == func_type
+        || T_FUN_SYS_BIT_XOR == func_type
         || T_FUN_JSON_ARRAYAGG == func_type
         || T_FUN_JSON_OBJECTAGG == func_type) {
       ctx_.is_win_agg_ = true;
@@ -7267,16 +7176,9 @@ int ObRawExprResolverImpl::process_agg_udf_node(const ParseNode *node,
 {
   int ret = OB_SUCCESS;
   ObAggFunRawExpr *agg_expr = nullptr;
-  AggNestedCheckerGuard agg_guard(ctx_);
-  bool is_in_nested_aggr = false;
   bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
   if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
     LOG_WARN("failed to add member", K(ret));
-  } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
-    LOG_WARN("failed to check agg nested.", K(ret));
-  } else if (is_in_nested_aggr) {
-    ret = OB_ERR_INVALID_GROUP_FUNC_USE;
-    LOG_WARN("invalid scope for agg function");
   } else if (OB_ISNULL(ctx_.aggr_exprs_) || OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("aggr exprs or node is null", K(ret), K(node));

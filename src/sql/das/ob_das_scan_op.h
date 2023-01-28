@@ -15,6 +15,7 @@
 #include "sql/das/ob_das_task.h"
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/table/ob_index_lookup_op_impl.h"
 namespace oceanbase
 {
 namespace sql
@@ -232,20 +233,12 @@ private:
   ObDASExtraData *extra_result_;
   bool need_check_output_datum_;
 };
-
-class ObLocalIndexLookupOp : public common::ObNewRowIterator
+class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl
 {
-protected:
-  enum LookupState : int32_t
-  {
-    INDEX_SCAN,
-    DO_LOOKUP,
-    OUTPUT_ROWS,
-    FINISHED
-  };
 public:
   ObLocalIndexLookupOp()
     : ObNewRowIterator(ObNewRowIterator::IterType::ObLocalIndexLookupIterator),
+      ObIndexLookupOpImpl(LOCAL_INDEX, 1000 /*default_batch_row_count */),
       lookup_ctdef_(nullptr),
       lookup_rtdef_(nullptr),
       index_ctdef_(nullptr),
@@ -257,13 +250,12 @@ public:
       tablet_id_(),
       ls_id_(),
       scan_param_(),
-      lookup_rowkey_cnt_(0),
-      lookup_row_cnt_(0),
       lookup_memctx_(),
       status_(0)
   {}
   ObLocalIndexLookupOp(const ObNewRowIterator::IterType iter_type)
     : ObNewRowIterator(iter_type),
+      ObIndexLookupOpImpl(LOCAL_INDEX, 1000 /*default_batch_row_count */),
       lookup_ctdef_(nullptr),
       lookup_rtdef_(nullptr),
       index_ctdef_(nullptr),
@@ -275,8 +267,6 @@ public:
       tablet_id_(),
       ls_id_(),
       scan_param_(),
-      lookup_rowkey_cnt_(0),
-      lookup_row_cnt_(0),
       lookup_memctx_(),
       status_(0)
   {}
@@ -294,24 +284,41 @@ public:
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   virtual void reset() override { }
 
+  virtual void do_clear_evaluated_flag() override {index_rtdef_->p_pd_expr_op_->clear_evaluated_flag();}
+  virtual int get_next_row_from_index_table() override;
+  virtual int process_data_table_rowkey() override;
+  virtual int process_data_table_rowkeys(const int64_t size, const ObBitVector *skip) override;
+  virtual bool is_group_scan() const override { return is_group_scan_; }
+  virtual int init_group_range(int64_t cur_group_idx, int64_t group_size) override { return common::OB_NOT_IMPLEMENT; }
+  virtual int do_index_lookup() override;
+  virtual int get_next_row_from_data_table() override;
+  virtual int get_next_rows_from_data_table(int64_t &count, int64_t capacity) override;
+  virtual int process_next_index_batch_for_row() override;
+  virtual int process_next_index_batch_for_rows(int64_t &count) override;
+  virtual bool need_next_index_batch() const override;
+  virtual int check_lookup_row_cnt() override;
+  virtual int do_index_table_scan_for_rows(const int64_t max_row_cnt,
+                                           const int64_t start_group_idx,
+                                           const int64_t default_row_batch_cnt) override;
+  virtual void update_state_in_output_rows_state(int64_t &count) override;
+  virtual void update_states_in_finish_state() override;
+  virtual void update_states_after_finish_state() override {}
+  virtual ObEvalCtx & get_eval_ctx() override {return *(lookup_rtdef_->eval_ctx_);}
+  virtual const ExprFixedArray & get_output_expr() override {return  lookup_ctdef_->pd_expr_spec_.access_exprs_; }
   // for lookup group scan
-  virtual int64_t get_index_group_cnt() { return 0; }
-  virtual int64_t get_lookup_group_cnt() { return 0; }
+  virtual int64_t get_index_group_cnt() const override { return 0; }
+  virtual int64_t get_lookup_group_cnt() const override { return 0; }
   virtual void set_index_group_cnt(int64_t group_cnt_) { UNUSED(group_cnt_); /*do nothing*/ }
   virtual void inc_index_group_cnt() { /*do nothing*/ }
   virtual void inc_lookup_group_cnt() { /*do nothing*/ }
-  virtual int init_group_range(int64_t cur_group_idx, int64_t group_size)
-  { return common::OB_NOT_IMPLEMENT; }
-  virtual bool need_next_index_batch() const;
   virtual int switch_rowkey_scan_group() { return common::OB_NOT_IMPLEMENT; }
   virtual int set_rowkey_scan_group(int64_t group_id) { UNUSED(group_id); return common::OB_NOT_IMPLEMENT; }
   virtual int switch_lookup_scan_group() { return common::OB_NOT_IMPLEMENT; }
   virtual int set_lookup_scan_group(int64_t group_id) { UNUSED(group_id); return common::OB_NOT_IMPLEMENT; }
   virtual ObNewRowIterator *&get_lookup_storage_iter() { return lookup_iter_; }
   virtual ObNewRowIterator *get_lookup_iter() { return lookup_iter_; }
-  int check_lookup_row_cnt();
+  virtual int switch_index_table_and_rowkey_group_id() override;
   void set_is_group_scan(bool v) { is_group_scan_ = v; }
-  bool is_group_scan() { return is_group_scan_; }
   // for lookup group scan end
 
   void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
@@ -321,7 +328,6 @@ public:
   int reuse_iter();
   virtual int reset_lookup_state(bool need_switch_param);
   int revert_iter();
-  int do_index_lookup();
   VIRTUAL_TO_STRING_KV(KPC_(lookup_ctdef),
                        KPC_(lookup_rtdef),
                        KPC_(tx_desc),
@@ -332,11 +338,7 @@ public:
                        K_(index_end));
 private:
   int init_scan_param();
-  int process_data_table_rowkey();
-  int process_data_table_rowkeys(int64_t batch_count);
   common::ObITabletScan &get_tsc_service();
-private:
-  const static int64_t DEFAULT_BATCH_ROW_COUNT = 1000;
 protected:
   const ObDASScanCtDef *lookup_ctdef_; //lookup ctdef
   ObDASScanRtDef *lookup_rtdef_; //lookup rtdef
@@ -375,14 +377,10 @@ protected:
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   storage::ObTableScanParam scan_param_;
-  int64_t lookup_rowkey_cnt_;
-  int32_t lookup_row_cnt_;
   lib::MemoryContext lookup_memctx_;
   union {
     uint32_t status_;
     struct {
-      uint32_t state_             : 8; // index lookup state
-      uint32_t index_end_         : 1; // if index reach iterator end
       uint32_t is_group_scan_     : 1;
       //add status here
     };

@@ -66,6 +66,9 @@ public:
   {
     arg_.set_is_system_generated();
   }
+  void set_ignore_exists_error(bool ignore_error) {
+    arg_.set_ignore_exists_error(ignore_error);
+  }
   share::ObSequenceOption &option() { return arg_.option(); }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return arg_; }
   obrpc::ObSequenceDDLArg &get_arg() { return arg_; }

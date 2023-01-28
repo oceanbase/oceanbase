@@ -373,6 +373,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     LOG_WARN("the first phy_op must be a coord op", K(ret));
   } else if (phy_op->is_table_scan() && NULL != parent_dfo) {
     parent_dfo->set_scan(true);
+    parent_dfo->inc_tsc_op_cnt();
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
     parent_dfo->set_dml_op(true);

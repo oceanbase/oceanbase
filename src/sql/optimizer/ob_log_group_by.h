@@ -82,7 +82,6 @@ public:
   {}
 
   //const char* get_name() const;
-  virtual int32_t get_explain_name_length() const;
   virtual int get_explain_name_internal(char *buf,
                                         const int64_t buf_len,
                                         int64_t &pos);
@@ -198,23 +197,20 @@ public:
   { return ObRollupStatus::ROLLUP_COLLECTOR == rollup_adaptive_info_.rollup_status_; }
   inline void set_force_push_down(bool force_push_down)
   { force_push_down_ = force_push_down; }
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), K_(distinct_card),
       K_(is_push_down));
 private:
-  virtual int print_my_plan_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type);
-  virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs);
+  virtual int inner_replace_op_exprs(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs) override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
   int create_fd_item_from_select_list(ObFdItemSet *fd_item_set);
   virtual int compute_one_row_info() override;
-  virtual int print_outline(planText &plan);
-  int print_used_hint(planText &plan_text);
-  int print_outline_data(planText &plan_text);
+  virtual int print_outline_data(PlanText &plan_text) override;
+  virtual int print_used_hint(PlanText &plan_text) override;
 private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> group_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> rollup_exprs_;

@@ -31,13 +31,9 @@ public:
   int inner_est_cost(double child_card, double &op_cost);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual const char *get_name() const override;
-  int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs) override;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 private:
-  virtual int print_my_plan_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type);
   virtual int generate_rowid_expr_for_trigger() override;
   virtual int generate_multi_part_partition_id_expr() override;
 private:

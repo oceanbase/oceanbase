@@ -34,8 +34,7 @@ enum QueryRelation
   QUERY_EQUAL,
   QUERY_UNCOMPARABLE
 };
-
-struct ObStmtMapInfo {
+ struct ObStmtMapInfo {
   common::ObSEArray<common::ObSEArray<int64_t, 4>, 4> view_select_item_map_;
   common::ObSEArray<ObPCParamEqualInfo, 4> equal_param_map_;
   common::ObSEArray<int64_t, 4> table_map_;

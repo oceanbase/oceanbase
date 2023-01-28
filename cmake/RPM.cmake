@@ -241,7 +241,6 @@ install(FILES
   deps/oblib/src/lib/queue/ob_fixed_queue.h
   deps/oblib/src/lib/queue/ob_link.h
   deps/oblib/src/lib/random/ob_random.h
-  deps/oblib/src/lib/regex/ob_regex.h
   deps/oblib/src/lib/resource/achunk_mgr.h
   deps/oblib/src/lib/resource/ob_cache_washer.h
   deps/oblib/src/lib/resource/ob_resource_mgr.h

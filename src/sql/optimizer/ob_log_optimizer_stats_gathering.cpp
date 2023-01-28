@@ -152,8 +152,8 @@ int ObLogOptimizerStatsGathering::get_target_osg_id(uint64_t &target_id)
   return ret;
 }
 
-int ObLogOptimizerStatsGathering::inner_replace_generated_agg_expr(const common::ObIArray<std::pair<ObRawExpr *,
-                                                                   ObRawExpr *> > &to_replace_exprs)
+int ObLogOptimizerStatsGathering::inner_replace_op_exprs(const common::ObIArray<std::pair<ObRawExpr *,
+                                                         ObRawExpr *> > &to_replace_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(replace_exprs_action(to_replace_exprs, col_conv_exprs_))) {

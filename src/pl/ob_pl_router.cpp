@@ -85,6 +85,7 @@ int ObPLRouter::check_error_in_resolve(int code)
     case OB_ERR_SET_USAGE:
     case OB_ERR_COLUMN_SPEC:
     case OB_ERR_TRIGGER_NO_SUCH_ROW:
+    case OB_ERR_SP_NO_DROP_SP:
     case OB_ERR_SP_BAD_CONDITION_TYPE:
     case OB_ERR_DUP_SIGNAL_SET:
     case OB_ERR_CANNOT_UPDATE_VIRTUAL_COL_IN_TRG: {

@@ -365,7 +365,7 @@ int ObDASBatchScanOp::DASFoldIterator::get_next_row()
   } else if (OB_UNLIKELY(group_id_ > last_group_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("last iterator has not reach iter end", K(ret), K(group_id_), K(last_group_id));
-  } else if (OB_FAIL(last_row_.store_row_->to_expr_skip_const(output_exprs_, *eval_ctx_))) {
+  } else if (OB_FAIL(last_row_.store_row_->to_expr(output_exprs_, *eval_ctx_))) {
     LOG_WARN("to expr skip const failed", K(ret));
   } else {
     last_row_.store_row_->cells()[output_exprs_.count() - 1].set_int(OB_INVALID_INDEX);

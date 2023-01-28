@@ -27,10 +27,10 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
-#include "sql/engine/table/ob_table_lookup_op.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "share/ob_server_blacklist.h"
 #include "common/ob_smart_call.h"
+#include "storage/ob_locality_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -313,6 +313,7 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
         sqc.set_qc_server_id(dfo.get_qc_server_id());
         sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
         sqc.set_ignore_vtable_error(dfo.is_ignore_vtable_error());
+        sqc.set_single_tsc_leaf_dfo(dfo.is_single_tsc_leaf_dfo());
         for (auto iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
           if (addrs.at(i) == (*iter)->server_) {
             if (OB_FAIL(sqc_locations.push_back(*iter))) {
@@ -705,7 +706,7 @@ int ObPXServerAddrUtil::get_access_partition_order_recursively (
     LOG_DEBUG("No GI in this dfo");
   } else if (PHY_GRANULE_ITERATOR == phy_op->get_type()) {
     const ObGranuleIteratorSpec *gi = static_cast<const ObGranuleIteratorSpec*>(phy_op);
-    asc_order = !gi->desc_order();
+    asc_order = !ObGranuleUtil::desc_order(gi->gi_attri_flag_);
   } else if (OB_FAIL(get_access_partition_order_recursively(root, phy_op->get_parent(), asc_order))) {
     LOG_WARN("fail to access partition order", K(ret));
   }
@@ -1662,6 +1663,7 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
                                        int64_t &pos,
                                        ObOpSpec &root,
                                        bool is_fulltree,
+                                       const ObAddr &run_svr,
                                        ObPhyOpSeriCtx *seri_ctx)
 {
   int ret = OB_SUCCESS;
@@ -1673,10 +1675,24 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
   } else if (OB_FAIL((seri_ctx == NULL ? root.serialize(buf, buf_len, pos) :
       root.serialize(buf, buf_len, pos, *seri_ctx)))) {
     LOG_WARN("fail to serialize root", K(ret), "type", root.type_, "root", to_cstring(root));
-  } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == root.type_
-              || PHY_TABLE_LOOKUP == root.type_)
+  } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == root.type_)
              && OB_FAIL(serialize_sub_plan(buf, buf_len, pos, root))) {
     LOG_WARN("fail to serialize sub plan", K(ret));
+  }
+  if (OB_SUCC(ret)
+      && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0
+      && root.is_table_scan()
+      && static_cast<ObTableScanSpec&>(root).is_global_index_back()) {
+    bool is_same_zone = false;
+    if (OB_ISNULL(GCTX.locality_manager_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid argument", K(ret), K(GCTX.locality_manager_));
+    } else if (OB_FAIL(GCTX.locality_manager_->is_same_zone(run_svr, is_same_zone))) {
+      LOG_WARN("check same zone failed", K(ret), K(run_svr));
+    } else if (!is_same_zone) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cross-zone global index lookup during 4.0 upgrade");
+    }
   }
   // Terminate serialization when meet ObReceive, as this op indicates
   for (int32_t i = 0; OB_SUCC(ret) && i < child_cnt; ++i) {
@@ -1684,7 +1700,7 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
     if (OB_ISNULL(child_op)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null child operator", K(i), K(root.type_));
-    } else if (OB_FAIL(serialize_tree(buf, buf_len, pos, *child_op, is_fulltree, seri_ctx))) {
+    } else if (OB_FAIL(serialize_tree(buf, buf_len, pos, *child_op, is_fulltree, run_svr, seri_ctx))) {
       LOG_WARN("fail to serialize tree", K(ret));
     }
   }
@@ -1719,8 +1735,7 @@ int ObPxTreeSerializer::deserialize_tree(const char *buf,
     } else {
       if (OB_FAIL(op->deserialize(buf, data_len, pos))) {
         LOG_WARN("fail to deserialize operator", K(ret), N_TYPE, phy_operator_type);
-      } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op->type_
-                 || PHY_TABLE_LOOKUP == op->type_)
+      } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op->type_)
                  && OB_FAIL(deserialize_sub_plan(buf, data_len, pos, phy_plan, op))) {
         LOG_WARN("fail to deserialize sub plan", K(ret));
       } else {
@@ -1989,8 +2004,7 @@ int64_t ObPxTreeSerializer::get_serialize_op_input_tree_size(
     OB_UNIS_ADD_LEN(static_cast<int64_t>(op_spec_input->get_type())); //serialize operator type
     OB_UNIS_ADD_LEN(*op_spec_input); //serialize input parameter
   }
-  if (PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op_spec.type_
-              || PHY_TABLE_LOOKUP == op_spec.type_) {
+  if (PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op_spec.type_) {
     len += get_serialize_op_input_subplan_size(op_spec, op_kit_store, true/*is_fulltree*/);
     // do nothing
   }
@@ -2057,8 +2071,7 @@ int ObPxTreeSerializer::serialize_op_input_tree(
       ++real_input_count;
     }
   }
-  if (OB_SUCC(ret) && (PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op_spec.type_
-              || PHY_TABLE_LOOKUP == op_spec.type_)
+  if (OB_SUCC(ret) && (PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op_spec.type_)
              && OB_FAIL(serialize_op_input_subplan(
                buf, buf_len, pos, op_spec, op_kit_store, true/*is_fulltree*/, real_input_count))) {
     LOG_WARN("fail to serialize sub plan", K(ret));

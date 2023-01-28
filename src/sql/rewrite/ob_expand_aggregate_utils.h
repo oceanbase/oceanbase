@@ -110,6 +110,7 @@ private:
   //   else NULL
   //   end
   static int build_special_case_when_expr(ObRawExprFactory &expr_factory,
+                                          const ObSQLSessionInfo *session,
                                           ObRawExpr *param_expr1,
                                           ObRawExpr *param_expr2,
                                           ObRawExpr *then_expr,

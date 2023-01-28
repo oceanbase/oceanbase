@@ -679,8 +679,10 @@ int ObPartitionExecutorUtils::expr_cal_and_cast(
     ObNewRow tmp_row;
     RowDesc row_desc;
     ObTempExpr *temp_expr = NULL;
+    CK(OB_NOT_NULL(ctx.get_sql_ctx()));
     OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(expr,
-       row_desc, ctx.get_allocator(), ctx.get_my_session(), temp_expr));
+       row_desc, ctx.get_allocator(), ctx.get_my_session(),
+       ctx.get_sql_ctx()->schema_guard_, temp_expr));
     CK(OB_NOT_NULL(temp_expr));
     OZ(temp_expr->eval(ctx, tmp_row, temp_obj));
     if (OB_FAIL(ret)) {
@@ -765,8 +767,10 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
     ObNewRow tmp_row;
     RowDesc row_desc;
     ObTempExpr *temp_expr = NULL;
+    CK(OB_NOT_NULL(ctx.get_sql_ctx()));
     OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(expr,
-       row_desc, ctx.get_allocator(), ctx.get_my_session(), temp_expr));
+       row_desc, ctx.get_allocator(), ctx.get_my_session(),
+       ctx.get_sql_ctx()->schema_guard_, temp_expr));
     CK(OB_NOT_NULL(temp_expr));
     if (OB_SUCC(ret)
         && NULL != temp_expr->rt_exprs_.at(temp_expr->expr_idx_).args_

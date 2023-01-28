@@ -42,7 +42,8 @@ ObTransmitSpec::ObTransmitSpec(ObIAllocator &alloc, const ObPhyOperatorType type
     null_row_dist_method_(ObNullDistributeMethod::NONE),
     slave_mapping_type_(SlaveMappingType::SM_NONE),
     has_lgi_(false),
-    is_rollup_hybrid_(false)
+    is_rollup_hybrid_(false),
+    is_wf_hybrid_(false)
 {
 }
 
@@ -61,7 +62,8 @@ OB_SERIALIZE_MEMBER((ObTransmitSpec, ObOpSpec),
                     slave_mapping_type_,
                     has_lgi_,
                     is_rollup_hybrid_,
-                    null_row_dist_method_);
+                    null_row_dist_method_,
+                    is_wf_hybrid_);
 
 ObTransmitOp::ObTransmitOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
 : ObOperator(exec_ctx, spec, input)

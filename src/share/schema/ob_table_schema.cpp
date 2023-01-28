@@ -1230,7 +1230,10 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     foreign_key_infos_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     label_se_column_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     trigger_list_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    depend_mock_fk_parent_table_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator))
+    depend_mock_fk_parent_table_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    rls_policy_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    rls_group_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    rls_context_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator))
 {
   reset();
 }
@@ -1302,6 +1305,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       aux_lob_meta_tid_ = src_schema.aux_lob_meta_tid_;
       aux_lob_piece_tid_ = src_schema.aux_lob_piece_tid_;
       compressor_type_ = src_schema.compressor_type_;
+      table_flags_ = src_schema.table_flags_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -1431,6 +1435,11 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       if (OB_SUCC(ret)) {
         if (OB_FAIL(set_simple_index_infos(src_schema.get_simple_index_infos()))) {
           LOG_WARN("fail to set simple index infos", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(assign_rls_objects(src_schema))) {
+          LOG_WARN("failed to assign rls objects", K(ret));
         }
       }
     }
@@ -2784,6 +2793,10 @@ int64_t ObTableSchema::get_convert_size() const
     convert_size += simple_index_infos_.at(i).get_convert_size();
   }
 
+  convert_size += rls_policy_ids_.get_data_size();
+  convert_size += rls_group_ids_.get_data_size();
+  convert_size += rls_context_ids_.get_data_size();
+
   return convert_size;
 }
 
@@ -2858,6 +2871,10 @@ void ObTableSchema::reset()
   simple_index_infos_.reset();
   trigger_list_.reset();
   table_dop_ = 1;
+  table_flags_ = 0;
+  rls_policy_ids_.reset();
+  rls_group_ids_.reset();
+  rls_context_ids_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -5630,7 +5647,11 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 tablet_id,
                 aux_lob_meta_tid_,
                 aux_lob_piece_tid_,
-                depend_mock_fk_parent_table_ids_);
+                depend_mock_fk_parent_table_ids_,
+                table_flags_,
+                rls_policy_ids_,
+                rls_group_ids_,
+                rls_context_ids_);
   }
   LST_DO_CODE(OB_UNIS_ENCODE, object_status_, is_force_view_);
   }();
@@ -5964,7 +5985,11 @@ OB_DEF_DESERIALIZE(ObTableSchema)
                 tablet_id_,
                 aux_lob_meta_tid_,
                 aux_lob_piece_tid_,
-                depend_mock_fk_parent_table_ids_);
+                depend_mock_fk_parent_table_ids_,
+                table_flags_,
+                rls_policy_ids_,
+                rls_group_ids_,
+                rls_context_ids_);
     LST_DO_CODE(OB_UNIS_DECODE, object_status_, is_force_view_);
   }
   }();
@@ -6092,6 +6117,11 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(tablet_id_);
   OB_UNIS_ADD_LEN(aux_lob_meta_tid_);
   OB_UNIS_ADD_LEN(aux_lob_piece_tid_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              table_flags_,
+              rls_policy_ids_,
+              rls_group_ids_,
+              rls_context_ids_);
   OB_UNIS_ADD_LEN(object_status_);
   OB_UNIS_ADD_LEN(is_force_view_);
   return len;
@@ -7105,6 +7135,21 @@ int ObTableSchema::alter_all_view_columns_type_undefined(bool &already_invalid)
       new_column_schema.set_data_precision(-1);
       new_column_schema.set_data_scale(OB_MIN_NUMBER_SCALE - 1);
       OZ (alter_column(new_column_schema, dummy_mode, for_view));
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::assign_rls_objects(const ObTableSchema &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (OB_FAIL(rls_policy_ids_.assign(other.get_rls_policy_ids()))) {
+      LOG_WARN("failed to assign rls policy ids", K(ret));
+    } else if (OB_FAIL(rls_group_ids_.assign(other.get_rls_group_ids()))) {
+      LOG_WARN("failed to assign rls group ids", K(ret));
+    } else if (OB_FAIL(rls_context_ids_.assign(other.get_rls_context_ids()))) {
+      LOG_WARN("failed to assign rls context ids", K(ret));
     }
   }
   return ret;

@@ -51,20 +51,23 @@ public:
   int generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_plan);
 
   // detect batch row count for vectorized execution.
-  static int detect_batch_size(const ObLogPlan &log_plan, int64_t &batch_size);
+  static int detect_batch_size(
+      const ObLogPlan &log_plan, int64_t &batch_size);
 
 private:
   //生成表达式
   //@param [in]  log_plan 逻辑执行计划
   //@param [out] phy_plan 物理执行计划, 会初始化物理对象中rt_exprs_, 和frame_info_
   int generate_exprs(const ObLogPlan &log_plan,
-                     ObPhysicalPlan &phy_plan);
+                     ObPhysicalPlan &phy_plan,
+                     const uint64_t cur_cluster_version);
 
   //生成物理算子
   //@param [in]  log_plan 逻辑执行计划
   //@param [out] phy_plan 物理执行计划
   int generate_operators(const ObLogPlan &log_plan,
-                         ObPhysicalPlan &phy_plan);
+                         ObPhysicalPlan &phy_plan,
+                         const uint64_t cur_cluster_version);
 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCodeGenerator);

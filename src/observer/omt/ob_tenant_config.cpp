@@ -22,7 +22,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_config.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
-#include "sql/monitor/full_link_trace/ob_flt_control_info_mgr.h"
+#include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 
 using namespace oceanbase::common;
 

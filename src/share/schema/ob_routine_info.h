@@ -441,6 +441,7 @@ public:
   OB_INLINE void set_deterministic() { flag_ |= SP_FLAG_DETERMINISTIC; }
   OB_INLINE void set_parallel_enable() { flag_ |= SP_FLAG_PARALLEL_ENABLE; }
   OB_INLINE void set_invoker_right() { flag_ |= SP_FLAG_INVOKER_RIGHT; }
+  OB_INLINE void clear_invoker_right() { flag_ &= (~((uint64_t)SP_FLAG_INVOKER_RIGHT)); }
   OB_INLINE void set_result_cache() { flag_ |= SP_FLAG_RESULT_CACHE; }
   OB_INLINE void set_accessible_by_clause() { flag_ |= SP_FLAG_ACCESSIBLE_BY; }
   OB_INLINE void set_pipelined() { flag_ |= SP_FLAG_PIPELINED; }

@@ -16,7 +16,7 @@
 #include "share/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log_module.h"
-#include "sql/monitor/full_link_trace/ob_flt_control_info_mgr.h"
+#include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "pl/sys_package/ob_dbms_monitor.h"
 #include "lib/number/ob_number_v2.h"
 

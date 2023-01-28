@@ -1229,7 +1229,7 @@ DEF_TIME(_ob_obj_dep_maint_task_interval, OB_CLUSTER_PARAMETER, "1ms", "[0,10s]"
          "Range: [0, 10s]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_newsort, OB_CLUSTER_PARAMETER, "False",
+DEF_BOOL(_enable_newsort, OB_CLUSTER_PARAMETER, "True",
          "control if enable encode sort",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -1326,3 +1326,12 @@ DEF_BOOL(enable_user_defined_rewrite_rules, OB_TENANT_PARAMETER, "False",
 DEF_TIME(_ob_plan_cache_auto_flush_interval, OB_CLUSTER_PARAMETER, "0s", "[0s,)",
          "time interval for auto periodic flush plan cache. Range: [0s, +∞)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_px_join_skew_handling, OB_TENANT_PARAMETER, "True",
+        "enables skew handling for parallel joins. The  default value is True.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_px_join_skew_minfreq, OB_TENANT_PARAMETER, "30", "[1,100]",
+        "sets minimum frequency(%) for skewed value for parallel joins. Range: [1, 100] in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_protocol_diagnose, OB_CLUSTER_PARAMETER, "True",
+        "enables protocol layer diagnosis. The default value is False.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -18,6 +18,12 @@
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "lib/geo/ob_geometry_cast.h"
+#include "sql/engine/expr/ob_expr_subquery_ref.h"
+#include "sql/engine/subquery/ob_subplan_filter_op.h"
+#include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl_allocator.h"
+#include "pl/ob_pl_stmt.h"
+#include "pl/ob_pl_resolver.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -298,7 +304,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   ObRawExpr *cast_raw_expr = NULL;
   const sql::ObSQLSessionInfo *session = NULL;
   bool is_explicit_cast = false;
-  bool is_to_column_cs_level = false;
+  ObCollationLevel cs_level = CS_LEVEL_INVALID;
   if (OB_ISNULL(session = type_ctx.get_session()) ||
       OB_ISNULL(cast_raw_expr = get_raw_expr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -315,7 +321,10 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
                "dst", ob_obj_type_str(dst_type.get_type()));
   } else if (FALSE_IT(is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr->get_extra()))) {
   // check cast supported in cast_map but not support here.
-  } else if (FALSE_IT(is_to_column_cs_level = CM_IS_TO_COLUMN_CS_LEVEL(cast_raw_expr->get_extra()))) {
+  } else if (OB_FAIL(ObSQLUtils::get_cs_level_from_cast_mode(cast_raw_expr->get_extra(),
+                                                             type1.get_collation_level(),
+                                                             cs_level))) {
+    LOG_WARN("failed to get collation level", K(ret));
   } else if (!check_cast_allowed(type1.get_type(), type1.get_collation_type(),
                                  dst_type.get_type(), dst_type.get_collation_type(),
                                  is_explicit_cast)) {
@@ -374,9 +383,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       int32_t length = 0;
       if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())
           || ob_is_geometry(dst_type.get_type())) {
-        type.set_collation_level((is_explicit_cast || is_to_column_cs_level)
-                                 ? CS_LEVEL_IMPLICIT
-                                 : type1.get_collation_level());
+        type.set_collation_level(cs_level);
         int32_t len = dst_type.get_length();
         int16_t length_semantics = ((dst_type.is_string_or_lob_locator_type() || dst_type.is_json())
             ? dst_type.get_length_semantics()
@@ -588,6 +595,118 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
   return ret;
 }
 
+int ObExprCast::get_subquery_iter(const sql::ObExpr &expr,
+                                  sql::ObEvalCtx &ctx,
+                                  ObExpr **&subquery_row,
+                                  ObEvalCtx *&subquery_ctx,
+                                  ObSubQueryIterator *&iter)
+{
+  int ret = OB_SUCCESS;
+  iter = NULL;
+  subquery_row = NULL;
+  subquery_ctx = NULL;
+  sql::ObDatum *subquery_datum = NULL;
+  const ObExprCast::CastMultisetExtraInfo *info =
+    static_cast<const ObExprCast::CastMultisetExtraInfo *>(expr.extra_info_);
+  if (OB_UNLIKELY(2 != expr.arg_cnt_) || OB_ISNULL(info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, subquery_datum))){
+    LOG_WARN("expr evaluate failed", K(ret));
+  } else if (OB_ISNULL(subquery_datum) || subquery_datum->is_null()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL subquery ref info returned", K(ret));
+  } else if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(
+                ctx, ObExprSubQueryRef::Extra::get_info(subquery_datum->get_int()), iter))) {
+    LOG_WARN("get subquery iterator failed", K(ret));
+  } else if (OB_ISNULL(iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL subquery iterator", K(ret));
+  } else if (OB_FAIL(iter->rewind())) {
+    LOG_WARN("start iterate failed", K(ret));
+  } else if (OB_ISNULL(subquery_row = &const_cast<ExprFixedArray &>(iter->get_output()).at(0))){
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null row", K(ret));
+  } else if (OB_ISNULL(subquery_ctx = &iter->get_eval_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ctx", K(ret));
+  } else if (OB_UNLIKELY(iter->get_output().count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected output column count", K(ret), K(iter->get_output().count()));
+  } else if (ObNullType != iter->get_output().at(0)->datum_meta_.type_
+        && iter->get_output().at(0)->datum_meta_.type_ != info->elem_type_.get_obj_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check type failed", K(ret), K(expr), KPC(iter->get_output().at(0)), K(info->elem_type_));
+  }
+  return ret;
+}
+
+int ObExprCast::construct_collection(const sql::ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     sql::ObDatum &res_datum,
+                                     ObExpr **subquery_row,
+                                     ObEvalCtx *subquery_ctx,
+                                     ObSubQueryIterator *subquery_iter)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support", K(ret));
+  return ret;
+}
+
+int ObExprCast::fill_element(const sql::ObExpr &expr,
+                             ObEvalCtx &ctx,
+                             sql::ObDatum &res_datum,
+                             pl::ObPLCollection *coll,
+                             pl::ObPLINS *ns,
+                             const pl::ObCollectionType *collection_type,
+                             ObExpr **subquery_row,
+                             ObEvalCtx *subquery_ctx,
+                             ObSubQueryIterator *subquery_iter)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support", K(ret));
+  return ret;
+}
+
+int ObExprCast::eval_cast_multiset(const sql::ObExpr &expr,
+                                   sql::ObEvalCtx &ctx,
+                                   sql::ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "eval cast multiset");
+  return ret;
+}
+
+int ObExprCast::cg_cast_multiset(ObExprCGCtx &op_cg_ctx,
+                                 const ObRawExpr &raw_expr,
+                                 ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast multiset");
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObExprCast::CastMultisetExtraInfo,
+                    pl_type_, not_null_, elem_type_, capacity_, udt_id_);
+
+int ObExprCast::CastMultisetExtraInfo::deep_copy(common::ObIAllocator &allocator,
+                                                    const ObExprOperatorType type,
+                                                    ObIExprExtraInfo *&copied_info) const
+{
+  int ret = OB_SUCCESS;
+  OZ(ObExprExtraInfoFactory::alloc(allocator, type, copied_info));
+  CastMultisetExtraInfo &other = *static_cast<CastMultisetExtraInfo *>(copied_info);
+  if (OB_SUCC(ret)) {
+    other = *this;
+  }
+  return ret;
+}
+
+
 int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
                         const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const
@@ -627,12 +746,23 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
     rt_expr.is_called_in_sql_ = is_called_in_sql();
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type,
-              out_type, out_cs_type, cast_mode, *(op_cg_ctx.allocator_), rt_expr))) {
-        LOG_WARN("choose_cast_func failed", K(ret));
+      const ObRawExpr *src_raw_expr = raw_expr.get_param_expr(0);
+      if (OB_ISNULL(src_raw_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (src_raw_expr->is_multiset_expr()) {
+        if (OB_FAIL(cg_cast_multiset(op_cg_ctx, raw_expr, rt_expr))) {
+          LOG_WARN("failed to cg cast multiset", K(ret));
+        }
       } else {
-        rt_expr.extra_ = cast_mode;
+        if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type,
+                    out_type, out_cs_type, cast_mode, *(op_cg_ctx.allocator_), rt_expr))) {
+          LOG_WARN("choose_cast_func failed", K(ret));
+        }
       }
+    }
+    if (OB_SUCC(ret)) {
+      rt_expr.extra_ = cast_mode;
     }
   }
   return ret;

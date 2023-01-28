@@ -20,6 +20,7 @@
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/ob_request.h"
 #include "rpc/obmysql/obp20_extra_info.h"
+#include "rpc/obmysql/obsm_struct.h"
 
 namespace oceanbase
 {
@@ -118,6 +119,7 @@ public:
   int64_t large_pkt_buf_pos_;
   common::ObIArray<ObObjKV> *extra_info_kvs_;
   common::ObIArray<Obp20Encoder*> *extra_info_ecds_;
+  observer::ObSMConnection* conn_;
 
   const static int64_t MAX_PROTO20_PAYLOAD_LEN;
   const static int64_t PROTO20_SPLIT_LEN;
@@ -128,11 +130,11 @@ public:
       seri_size_(0), conn_id_(0), encode_ret_(common::OB_SUCCESS),
       need_flush_(false), is_last_(false), is_pkt_encoded_(false),
       large_pkt_buf_(NULL), large_pkt_buf_len_(0), large_pkt_buf_pos_(0),
-      extra_info_kvs_(NULL), extra_info_ecds_(NULL)
+      extra_info_kvs_(NULL), extra_info_ecds_(NULL), conn_(NULL)
   {}
 
   inline bool is_valid() const
-  { return (NULL != proto20_context_) && (NULL != ez_buf_) && (NULL != req_); }
+  { return (NULL != proto20_context_) && (NULL != ez_buf_) && (NULL != req_) && (NULL != conn_); }
 
   inline static void build_param(ObProtoEncodeParam &param, ObMySQLPacket *pkt,
       easy_buf_t &ez_buf, const uint32_t sessid, const bool is_last,
@@ -148,6 +150,10 @@ public:
     param.req_ = req;
     param.extra_info_kvs_ = extra_info;
     param.extra_info_ecds_ = extra_info_ecds;
+    if (NULL != param.req_) {
+      param.conn_ = reinterpret_cast<observer::ObSMConnection *>
+                                (SQL_REQ_OP.get_sql_session(param.req_));
+    }
   }
 
   inline int add_pos(const int64_t delta);

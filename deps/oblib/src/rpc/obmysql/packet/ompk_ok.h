@@ -63,6 +63,7 @@ public:
   inline const common::ObIArray<ObStringKV> &get_system_vars() const { return system_vars_; }
   inline const common::ObIArray<ObStringKV> &get_user_vars() const { return user_vars_; }
   inline ObMySQLCapabilityFlags get_capability() const  { return capability_; }
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_OKP; }
 
   virtual int64_t to_string(char *buf, const int64_t buf_len) const;
 private:

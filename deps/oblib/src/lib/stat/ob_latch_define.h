@@ -305,6 +305,7 @@ LATCH_DEF(REWRITE_RULE_ITEM_LOCK, 292, "rewrite rule item lock", LATCH_FIFO, 200
 LATCH_DEF(SRS_LOCK, 292, "srs lock", LATCH_READ_PREFER, 2000, 0, SRS_LOCK_WAIT, "srs lock")
 LATCH_DEF(DDL_EXECUTE_LOCK, 293, "ddl execute lock", LATCH_FIFO, 2000, 0, DDL_EXECUTE_LOCK_WAIT, "ddl execute lock")
 LATCH_DEF(TENANT_IO_CONFIG_LOCK, 294, "tenant io config lock", LATCH_FIFO, 2000, 0, TENANT_IO_CONFIG_WAIT, "tenant io config lock")
+LATCH_DEF(SQL_WF_PARTICIPATOR_COND_LOCK, 295, "window function participator lock", LATCH_FIFO, 2000, 0, SQL_WF_PARTICIPATOR_COND_WAIT, "window function participator lock")
 
 LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif

@@ -92,7 +92,8 @@ ObStorageTableGuard::~ObStorageTableGuard()
           }
           uint32_t sleep_interval =
             static_cast<uint32_t>(min(min(left_interval, SLEEP_INTERVAL_PER_TIME), expected_wait_time));
-          ob_usleep<common::ObWaitEventIds::STORAGE_WRITING_THROTTLE_SLEEP>(sleep_interval);
+          // don't use ob_usleep, as we are already in the scope of 'wait_guard'
+          ::usleep(sleep_interval);
           sleep_time += sleep_interval;
           time++;
           left_interval -= sleep_interval;

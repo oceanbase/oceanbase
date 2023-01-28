@@ -209,6 +209,7 @@ int ObIndexBuildTask::process()
   } else if (!need_retry()) {
     // by pass
   } else {
+    ddl_tracing_.restore_span_hierarchy();
     const ObDDLTaskStatus status = static_cast<ObDDLTaskStatus>(task_status_);
     switch (status) {
     case ObDDLTaskStatus::PREPARE: {
@@ -259,8 +260,55 @@ int ObIndexBuildTask::process()
       break;
     }
     } // end switch
+    ddl_tracing_.release_span_hierarchy();
   }
   return ret;
+}
+
+void ObIndexBuildTask::flt_set_task_span_tag() const
+{
+  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,
+              ddl_data_table_id, object_id_, ddl_index_table_id, index_table_id_,
+              ddl_is_unique_index, is_unique_index_, ddl_is_global_index, is_global_index_,
+              ddl_schema_version, schema_version_);
+}
+
+void ObIndexBuildTask::flt_set_status_span_tag() const
+{
+  switch (task_status_) {
+  case ObDDLTaskStatus::PREPARE: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::WAIT_TRANS_END: {
+    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_index_table_id, index_table_id_, ddl_schema_version, schema_version_,
+                ddl_snapshot_version, snapshot_version_, ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::REDEFINITION: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::VALIDATE_CHECKSUM: {
+    FLT_SET_TAG(ddl_check_unique_snapshot, check_unique_snapshot_, ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::TAKE_EFFECT: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::FAIL: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::SUCCESS: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  default: {
+    break;
+  }
+  }
 }
 
 int ObIndexBuildTask::init(
@@ -328,6 +376,7 @@ int ObIndexBuildTask::init(
     } else {
       is_inited_ = true;
     }
+    ddl_tracing_.open();
   }
   return ret;
 }
@@ -392,6 +441,9 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;
+
+      // set up span during recover task
+      ddl_tracing_.open_for_recovery();
     }
   }
   return ret;
@@ -471,7 +523,7 @@ int ObIndexBuildTask::check_health()
     if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
-      switch_status(new_status, ret);
+      switch_status(new_status, false, ret);
       LOG_WARN("switch status to build_failed", K(ret), K(old_status), K(new_status));
     }
   }
@@ -497,7 +549,7 @@ int ObIndexBuildTask::prepare()
   }
 
   if (state_finished) {
-    (void)switch_status(ObDDLTaskStatus::WAIT_TRANS_END, ret);
+    (void)switch_status(ObDDLTaskStatus::WAIT_TRANS_END, true, ret);
     LOG_INFO("prepare finished", K(ret), K(*this));
   }
   return ret;
@@ -559,7 +611,7 @@ int ObIndexBuildTask::wait_trans_end()
   }
 
   if (state_finished || OB_FAIL(ret)) {
-    (void)switch_status(ObDDLTaskStatus::REDEFINITION, ret);
+    (void)switch_status(ObDDLTaskStatus::REDEFINITION, true, ret);
     LOG_INFO("wait_trans_end finished", K(ret), K(*this));
   }
   return ret;
@@ -789,7 +841,7 @@ int ObIndexBuildTask::wait_data_complement()
   }
 
   if (state_finished || OB_FAIL(ret)) {
-    (void)switch_status(ObDDLTaskStatus::VALIDATE_CHECKSUM, ret);
+    (void)switch_status(ObDDLTaskStatus::VALIDATE_CHECKSUM, true, ret);
     LOG_INFO("wait data complement finished", K(ret), K(*this));
   }
   return ret;
@@ -945,7 +997,7 @@ int ObIndexBuildTask::verify_checksum()
   }
 
   if (state_finished) {
-    (void)switch_status(ObDDLTaskStatus::TAKE_EFFECT, ret);
+    (void)switch_status(ObDDLTaskStatus::TAKE_EFFECT, true, ret);
     LOG_INFO("verify checksum finished", K(ret), K(*this));
   }
   return ret;
@@ -1068,7 +1120,7 @@ int ObIndexBuildTask::enable_index()
     next_status = ObDDLTaskStatus::TAKE_EFFECT;
   }
   if (state_finished) {
-    (void)switch_status(next_status, ret);
+    (void)switch_status(next_status, true, ret);
     LOG_INFO("enable index finished", K(ret), K(*this));
   }
   return ret;
@@ -1218,7 +1270,7 @@ int ObIndexBuildTask::succ()
   return cleanup();
 }
 
-int ObIndexBuildTask::cleanup()
+int ObIndexBuildTask::cleanup_impl()
 {
   int ret = OB_SUCCESS;
   ObString unused_str;
@@ -1362,6 +1414,11 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, check_unique_snapshot_);
     LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, cluster_version_);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ddl_tracing_.serialize(buf, buf_len, pos))) {
+        LOG_WARN("fail to serialize ddl_flt_ctx", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -1382,6 +1439,11 @@ int ObIndexBuildTask::deserlize_params_from_message(const char *buf, const int64
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, check_unique_snapshot_);
     LST_DO_CODE(OB_UNIS_DECODE, parallelism_, cluster_version_);
+    if (OB_SUCC(ret) && pos < data_len) {
+      if (OB_FAIL(ddl_tracing_.deserialize(buf, data_len, pos))) {
+        LOG_WARN("fail to deserialize ddl_tracing_", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -1392,5 +1454,6 @@ int64_t ObIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i64(check_unique_snapshot_)
       + serialization::encoded_length_i64(task_version_)
       + serialization::encoded_length_i64(parallelism_)
-      + serialization::encoded_length_i64(cluster_version_);
+      + serialization::encoded_length_i64(cluster_version_)
+      + ddl_tracing_.get_serialize_size();
 }

@@ -102,7 +102,8 @@ int ObPxTransmitOpInput::get_data_ch(ObPxTaskChSet &task_ch_set, int64_t timeout
 //------------- end ObPxTransmitOpInput -------
 OB_SERIALIZE_MEMBER((ObPxTransmitSpec, ObTransmitSpec),
     sample_type_, need_null_aware_shuffle_, tablet_id_expr_,
-    random_expr_, sampling_saving_row_, repartition_table_id_);
+    random_expr_, sampling_saving_row_, repartition_table_id_,
+    wf_hybrid_aggr_status_expr_, wf_hybrid_pby_exprs_cnt_array_);
 
 ObPxTransmitSpec::ObPxTransmitSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
     : ObTransmitSpec(alloc, type),
@@ -111,8 +112,9 @@ ObPxTransmitSpec::ObPxTransmitSpec(ObIAllocator &alloc, const ObPhyOperatorType 
       tablet_id_expr_(NULL),
       random_expr_(NULL),
       sampling_saving_row_(alloc),
-      repartition_table_id_(0)
-
+      repartition_table_id_(0),
+      wf_hybrid_aggr_status_expr_(NULL),
+      wf_hybrid_pby_exprs_cnt_array_()
 {
 }
 
@@ -134,7 +136,8 @@ ObPxTransmitOp::ObPxTransmitOp(ObExecContext &exec_ctx, const ObOpSpec &spec, Ob
   sample_stores_(),
   cur_transmit_sampled_rows_(NULL),
   has_set_hybrid_key_(false),
-  batch_param_remain_(false)
+  batch_param_remain_(false),
+  receive_channel_ready_(false)
 {
   MEMSET(rand48_buf_, 0, sizeof(rand48_buf_));
 }
@@ -152,6 +155,7 @@ void ObPxTransmitOp::destroy()
   part_ch_info_.~ObPxPartChInfo();
   ranges_.reset();
   has_set_hybrid_key_ = false;
+  receive_channel_ready_ = false;
   for (int i = 0; i < sample_stores_.count(); ++i) {
     if (OB_NOT_NULL(sample_stores_.at(i))) {
       sample_stores_.at(i)->reset();
@@ -303,7 +307,11 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
   ObDtlDfoKey parent_key;
   ObDtlSqcInfo self_info;
   LOG_TRACE("Try to get channel information from SQC", K(lbt()));
-  if (OB_FAIL(trans_input.get_data_ch(
+  uint64_t min_cluster_version = 0;
+  CK (OB_NOT_NULL(ctx_.get_physical_plan_ctx()) && OB_NOT_NULL(ctx_.get_physical_plan_ctx()->get_phy_plan()));
+  OX (min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(trans_input.get_data_ch(
               task_ch_set_, phy_plan_ctx->get_timeout_timestamp(), ch_info_))) {
     LOG_WARN("Fail to get data dtl channel", K(ret));
   } else if (OB_FAIL(trans_input.get_parent_dfo_key(parent_key))) {
@@ -344,6 +352,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
       } else {
         ch->set_audit(enable_audit);
         ch->set_interm_result(use_interm_result);
+        ch->set_enable_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0);
         ch->set_batch_id(px_batch_id);
         ch->set_compression_type(dfc_.get_compressor_type());
         ch->set_operator_owner();
@@ -454,6 +463,44 @@ int ObPxTransmitOp::inner_close()
   return ret;
 }
 
+int ObPxTransmitOp::set_wf_hybrid_slice_id_calc_type(ObSliceIdxCalc &slice_calc)
+{
+  int ret = OB_SUCCESS;
+
+  const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
+  if (spec.is_wf_hybrid_) {
+    ObDatum &wf_hybrid_aggr_status =
+        MY_SPEC.wf_hybrid_aggr_status_expr_->locate_expr_datum(eval_ctx_);
+    if (OB_ISNULL(wf_hybrid_aggr_status.ptr().int_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("wf_hybrid_aggr_status_expr_expr_ is null ptr", K(ret));
+    } else {
+      int64_t aggr_status = wf_hybrid_aggr_status.get_int();
+      ObWfHybridDistSliceIdCalc &wf_hybrid_slice_calc =
+          static_cast< ObWfHybridDistSliceIdCalc &>(slice_calc);
+      // distribute method is calculate by aggr_status
+      if (aggr_status > 0 && aggr_status > spec.wf_hybrid_pby_exprs_cnt_array_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aggr_status > spec.wf_hybrid_pby_exprs_cnt_array_.count()"
+            , K(ret), K(aggr_status), K(spec.wf_hybrid_pby_exprs_cnt_array_.count()));
+      } else if (0 > aggr_status) {
+        wf_hybrid_slice_calc.set_slice_id_calc_type(
+            ObWfHybridDistSliceIdCalc::SliceIdCalcType::BROADCAST);
+      } else if (0 == aggr_status) {
+        wf_hybrid_slice_calc.set_slice_id_calc_type(
+            ObWfHybridDistSliceIdCalc::SliceIdCalcType::RANDOM);
+      } else {
+        // n_keys is calculate by aggr_status
+        wf_hybrid_slice_calc.set_slice_id_calc_type(
+            ObWfHybridDistSliceIdCalc::SliceIdCalcType::HASH);
+        int64_t n_keys = spec.wf_hybrid_pby_exprs_cnt_array_.at(aggr_status - 1);
+        wf_hybrid_slice_calc.set_calc_hash_keys(n_keys);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPxTransmitOp::set_rollup_hybrid_keys(ObSliceIdxCalc &slice_calc)
 {
   int ret = OB_SUCCESS;
@@ -509,7 +556,9 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
       } else {
         // iter end
         const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
-        if (batch_param_remain_) {
+        if (OB_FAIL(try_wait_channel())) {
+          LOG_WARN("failed to wait channel init", K(ret));
+        } else if (batch_param_remain_) {
           ret = OB_SUCCESS;
           ObPxNewRow px_eof_row;
           px_eof_row.set_eof_row();
@@ -535,7 +584,10 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
       LOG_WARN("fail to get next row", K(ret));
     } else if (OB_FAIL(set_rollup_hybrid_keys(slice_calc))) {
       LOG_WARN("failed to set rollup hybrid keys", K(ret));
-    } else if (OB_FAIL(slice_calc.get_slice_indexes(get_spec().output_, eval_ctx_, slice_idx_array))) {
+    } else if (OB_FAIL(set_wf_hybrid_slice_id_calc_type(slice_calc))) {
+      LOG_WARN("failed to set rollup hybrid keys", K(ret));
+    } else if (OB_FAIL(slice_calc.get_slice_indexes(
+                       get_spec().output_, eval_ctx_, slice_idx_array))) {
       LOG_WARN("fail get slice idx", K(ret));
     } else if (dfc_.all_ch_drained()) {
       ret = OB_ITER_END;
@@ -574,7 +626,6 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
       LOG_WARN("fetch next rows failed", K(ret));
       break;
     }
-
     uint64_t begin_cpu_time = rdtsc();
     if (dfc_.all_ch_drained()) {
       LOG_DEBUG("all channel has been drained");
@@ -594,8 +645,9 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
         batch_info_guard.set_batch_idx(i);
         row_count += 1;
         metric_.count();
-        if (OB_FAIL(slice_calc.get_slice_indexes(get_spec().output_, eval_ctx_,
-                                                 slice_idx_array))) {
+        if (OB_FAIL(set_wf_hybrid_slice_id_calc_type(slice_calc))) {
+          LOG_WARN("failed to set wf hybrid keys", K(ret));
+        } else if (OB_FAIL(slice_calc.get_slice_indexes(get_spec().output_, eval_ctx_, slice_idx_array))) {
           LOG_WARN("fail get slice idx", K(ret));
         } else if (NULL != spec.tablet_id_expr_
                    && OB_FAIL(slice_calc.get_previous_row_tablet_id(tablet_id))) {
@@ -642,7 +694,9 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
       }
     }
     if (OB_SUCC(ret) && brs_.end_) {
-      if (batch_param_remain_) {
+      if (OB_FAIL(try_wait_channel())) {
+        LOG_WARN("failed to wait channel init", K(ret));
+      } else if (batch_param_remain_) {
         ObPxNewRow px_eof_row;
         px_eof_row.set_eof_row();
         px_eof_row.set_data_type(ObDtlMsgType::PX_DATUM_ROW);
@@ -733,6 +787,8 @@ int ObPxTransmitOp::broadcast_rows(ObSliceIdxCalc &slice_calc)
     } else if (dfc_.all_ch_drained()) {
       LOG_DEBUG("all channel has been drained");
       break;
+    } else if (OB_FAIL(try_wait_channel())) {
+      LOG_WARN("failed to wait channel", K(ret));
     } else {
       ObPxNewRow px_row(get_spec().output_);
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
@@ -749,7 +805,9 @@ int ObPxTransmitOp::broadcast_rows(ObSliceIdxCalc &slice_calc)
     }
 
     if (OB_SUCC(ret) && reach_end) {
-      if (OB_FAIL(broadcast_eof_row())) {
+      if (OB_FAIL(try_wait_channel())) {
+        LOG_WARN("failed to wait channel", K(ret));
+      } else if (OB_FAIL(broadcast_eof_row())) {
         LOG_WARN("fail send eof rows to channels", K(ret));
       }
       break;
@@ -767,30 +825,34 @@ int ObPxTransmitOp::send_row(int64_t slice_idx,
   int ret = OB_SUCCESS;
   const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
   bool is_send_row_normal = false;
-  if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == slice_idx) {
-    op_monitor_info_.otherstat_1_value_++;
-    op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
-  } else if (!is_vectorized()) {
-    is_send_row_normal = true;
+  if (OB_FAIL(try_wait_channel())) {
+    LOG_WARN("failed to wait channel init", K(ret));
   } else {
-    OB_ASSERT(slice_idx >= 0 && slice_idx < ch_blocks_.count());
-    ObChunkDatumStore::BlockBufferWrap &blk_buf = blk_bufs_.at(slice_idx);
-    if (!blk_buf.is_inited()) {
+    if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == slice_idx) {
+      op_monitor_info_.otherstat_1_value_++;
+      op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
+    } else if (!is_vectorized()) {
       is_send_row_normal = true;
     } else {
-      if (NULL != spec.tablet_id_expr_) {
-        update_row(spec.tablet_id_expr_, tablet_id);
-      }
-      if (OB_FAIL(blk_buf.append_row(spec.output_, &eval_ctx_, 0))) {
-        if (OB_BUF_NOT_ENOUGH != ret) {
-          SQL_DTL_LOG(WARN, "failed to add row", K(ret));
-        } else {
-          ch_blocks_.at(slice_idx)->rows_ += blk_buf.rows_;
-          *(ch_blocks_.at(slice_idx)->get_buffer()) =
-                            static_cast<ObChunkDatumStore::BlockBuffer &>(blk_buf);
-          blk_buf.reset();
-          is_send_row_normal = true;
-          ret = OB_SUCCESS;
+      OB_ASSERT(slice_idx >= 0 && slice_idx < ch_blocks_.count());
+      ObChunkDatumStore::BlockBufferWrap &blk_buf = blk_bufs_.at(slice_idx);
+      if (!blk_buf.is_inited()) {
+        is_send_row_normal = true;
+      } else {
+        if (NULL != spec.tablet_id_expr_) {
+          update_row(spec.tablet_id_expr_, tablet_id);
+        }
+        if (OB_FAIL(blk_buf.append_row(spec.output_, &eval_ctx_, 0))) {
+          if (OB_BUF_NOT_ENOUGH != ret) {
+            SQL_DTL_LOG(WARN, "failed to add row", K(ret));
+          } else {
+            ch_blocks_.at(slice_idx)->rows_ += blk_buf.rows_;
+            *(ch_blocks_.at(slice_idx)->get_buffer()) =
+                              static_cast<ObChunkDatumStore::BlockBuffer &>(blk_buf);
+            blk_buf.reset();
+            is_send_row_normal = true;
+            ret = OB_SUCCESS;
+          }
         }
       }
     }
@@ -963,6 +1025,7 @@ int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePiec
     if (OB_FAIL(proxy.make_sqc_sample_piece_msg(piece_msg, send_piece))) {
       LOG_WARN("fail to make sqc sample piece msg", K(ret));
     } else if (OB_FAIL(proxy.get_dh_msg(op_id,
+        DH_DYNAMIC_SAMPLE_WHOLE_MSG,
         proxy.get_piece_sample_msg(),
         temp_whole_msg,
         ctx_.get_physical_plan_ctx()->get_timeout_timestamp(),
@@ -1019,11 +1082,82 @@ int ObPxTransmitOp::build_object_sample_piece_msg(
   int ret = OB_SUCCESS;
   ObPxSQCProxy &proxy = ctx_.get_sqc_handler()->get_sqc_proxy();
   piece_msg.expect_range_count_ = expected_range_count;
-  piece_msg.dfo_id_ = proxy.get_dfo_id();
+  piece_msg.source_dfo_id_ = proxy.get_dfo_id();
+  piece_msg.target_dfo_id_ = proxy.get_dfo_id();
   piece_msg.op_id_ = get_spec().id_;
   iter_end_ = ctx_.get_partition_ranges().empty();
   OZ(piece_msg.part_ranges_.assign(ctx_.get_partition_ranges()));
   return ret;
 }
+
+int ObPxTransmitSpec::register_to_datahub(ObExecContext &ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.get_sqc_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null unexpected", K(ret));
+  } else {
+    void *buf = ctx.get_allocator().alloc(sizeof(ObInitChannelWholeMsg::WholeMsgProvider));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      ObInitChannelWholeMsg::WholeMsgProvider *provider =
+        new (buf)ObInitChannelWholeMsg::WholeMsgProvider();
+      ObSqcCtx &sqc_ctx = ctx.get_sqc_handler()->get_sqc_ctx();
+      if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), DH_INIT_CHANNEL_WHOLE_MSG, *provider))) {
+        LOG_WARN("fail add whole msg provider", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxTransmitOp::wait_channel_ready_msg()
+{
+  int ret = OB_SUCCESS;
+  bool send_piece = false;
+  bool need_wait_whole_msg = true;
+  ObPxSqcHandler *handler = ctx_.get_sqc_handler();
+  if (OB_ISNULL(handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get sqc handler", K(ret));
+  } else {
+    ObPxSQCProxy &proxy = handler->get_sqc_proxy();
+    ObInitChannelPieceMsg piece;
+    const ObInitChannelWholeMsg *whole_msg = nullptr;
+    if (OB_FAIL(proxy.get_dh_msg(get_spec().id_,
+                                 dtl::DH_INIT_CHANNEL_WHOLE_MSG,
+                                 piece,
+                                 whole_msg,
+                                 ctx_.get_physical_plan_ctx()->get_timeout_timestamp(),
+                                 send_piece,
+                                 need_wait_whole_msg))) {
+      LOG_WARN("failed to wait whole msg", K(ret), K(spec_.id_), K(GETTID()));
+    } else {
+      receive_channel_ready_ = true;
+      LOG_TRACE("get channel msg, start to transmit", K(spec_.id_), K(GETTID()));
+    }
+  }
+  return ret;
+}
+
+int ObPxTransmitOp::try_wait_channel()
+{
+  int ret = OB_SUCCESS;
+  ObPxSQCProxy *sqc_proxy = NULL;
+  uint64_t min_cluster_version = 0;
+  CK (OB_NOT_NULL(ctx_.get_physical_plan_ctx()) && OB_NOT_NULL(ctx_.get_physical_plan_ctx()->get_phy_plan()));
+  OX (min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(sqc_proxy = reinterpret_cast<ObPxSQCProxy *>(
+      (reinterpret_cast<ObPxTransmitOpInput *> (input_))->get_ch_provider_ptr()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get ch provider ptr", K(ret));
+  } else if (need_wait_sync_msg(*sqc_proxy, min_cluster_version) && OB_FAIL(wait_channel_ready_msg())) {
+    LOG_WARN("failed to wait channel ready msg", K(ret));
+  }
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

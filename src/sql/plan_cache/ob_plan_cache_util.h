@@ -303,6 +303,27 @@ struct ObPCParamEqualInfo
   }
 };
 
+struct ObPCPrivInfo
+{
+  share::ObRawPriv sys_priv_;
+  bool has_privilege_;
+  TO_STRING_KV(K_(sys_priv), K_(has_privilege));
+  ObPCPrivInfo() : sys_priv_(PRIV_ID_NONE), has_privilege_(false)
+  {
+  }
+  int assign(const ObPCPrivInfo &other)
+  {
+    int ret = OB_SUCCESS;
+    sys_priv_ = other.sys_priv_;
+    has_privilege_ = other.has_privilege_;
+    return ret;
+  }
+  inline bool operator==(const ObPCPrivInfo &other) const
+  {
+    return sys_priv_ == other.sys_priv_ && has_privilege_ == other.has_privilege_;
+  }
+};
+
 struct ObOperatorStat
 {
   int64_t plan_id_;
@@ -941,6 +962,9 @@ public:
     enable_px_batch_rescan_(true),
     bloom_filter_enabled_(true),
     enable_newsort_(true),
+    px_join_skew_handling_(true),
+    px_join_skew_minfreq_(30),
+    min_cluster_version_(0),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -977,6 +1001,9 @@ public:
   bool enable_px_ordered_coord_;
   bool bloom_filter_enabled_;
   bool enable_newsort_;
+  bool px_join_skew_handling_;
+  int8_t px_join_skew_minfreq_;
+  uint64_t min_cluster_version_;
 
 private:
   // current cluster config version_

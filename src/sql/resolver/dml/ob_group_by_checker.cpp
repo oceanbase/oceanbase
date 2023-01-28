@@ -26,7 +26,8 @@ namespace sql
 {
 
 //oracle模式下, 某些分析函数的参数要求是partition by的表达式如ntile(c1) (partition by c2)需要报错
-int ObGroupByChecker::check_analytic_function(ObSelectStmt *ref_stmt,
+int ObGroupByChecker::check_analytic_function(const ParamStore *param_store,
+                                              ObSelectStmt *ref_stmt,
                                               common::ObIArray<ObRawExpr *> &exp1_arr, //等价于查询项中表达式
                                               common::ObIArray<ObRawExpr *> &exp2_arr) //等价于group by项
 {
@@ -43,7 +44,7 @@ int ObGroupByChecker::check_analytic_function(ObSelectStmt *ref_stmt,
       }
     }
     if (OB_SUCCESS == ret &&
-        OB_FAIL(check_by_expr(ref_stmt, exp2_arr, exp1_arr,
+        OB_FAIL(check_by_expr(param_store, ref_stmt, exp2_arr, exp1_arr,
                               OB_ERR_WIN_FUNC_ARG_NOT_IN_PARTITION_BY))) {
       LOG_WARN("argument should be a function of expressions in PARTITION BY", K(ret));
     }
@@ -58,15 +59,15 @@ int ObGroupByChecker::check_analytic_function(ObSelectStmt *ref_stmt,
 //  refed exprs  : c1,c2
 //  checked_exprs: c3  --it's wrong
 //  checked_exprs: c2,c2+1  --it's ok
-int ObGroupByChecker::check_by_expr(
-  const ObSelectStmt *ref_stmt,
-  ObIArray<ObRawExpr*> &group_by_exprs,
-  ObIArray<ObRawExpr*> &checked_exprs,
-  int err_code,
-  bool is_check_order_by/*default false*/)
+int ObGroupByChecker::check_by_expr(const ParamStore *param_store,
+                                    const ObSelectStmt *ref_stmt,
+                                    ObIArray<ObRawExpr*> &group_by_exprs,
+                                    ObIArray<ObRawExpr*> &checked_exprs,
+                                    int err_code,
+                                    bool is_check_order_by/*default false*/)
 {
   int ret = OB_SUCCESS;
-  ObGroupByChecker checker(&group_by_exprs);
+  ObGroupByChecker checker(param_store, &group_by_exprs);
   checker.set_level(0);
   checker.set_check_order_by(is_check_order_by);
   ObSelectStmt *sel_stmt = const_cast<ObSelectStmt *>(ref_stmt);
@@ -119,7 +120,7 @@ int ObGroupByChecker::dblink_check_groupby(
   const common::ObIArray<ObRawExpr*> &checked_exprs)
 {
   int ret = OB_SUCCESS;
-  ObGroupByChecker checker(&group_by_exprs, &rollup_exprs);
+  ObGroupByChecker checker(NULL, &group_by_exprs, &rollup_exprs);
   checker.set_dblink_groupby_expr(&group_by_exprs);
   checker.set_level(0);
   ObSelectStmt *sel_stmt = const_cast<ObSelectStmt *>(ref_stmt);
@@ -209,7 +210,11 @@ int ObGroupByChecker::check_groupby_valid(ObRawExpr *expr)
 // eg:
 //  select c1 +1 +2 from t1 having c1+1 >0;  // it need check, report error
 //  select c1 from t1 having 1>0; // it don't need check, it will success
-int ObGroupByChecker::check_group_by(ObSelectStmt *ref_stmt, bool has_having_self_column, bool has_group_by_clause, bool only_need_constraints)
+int ObGroupByChecker::check_group_by(const ParamStore *param_store,
+                                     ObSelectStmt *ref_stmt,
+                                     bool has_having_self_column/*default false*/,
+                                     bool has_group_by_clause,
+                                     bool only_need_constraints)
 {
   int ret = OB_SUCCESS;
   // group by checker
@@ -253,7 +258,8 @@ int ObGroupByChecker::check_group_by(ObSelectStmt *ref_stmt, bool has_having_sel
       }
     }
     if (OB_SUCC(ret)) {
-      ObGroupByChecker checker(&ref_stmt->get_group_exprs(),
+      ObGroupByChecker checker(param_store,
+                               &ref_stmt->get_group_exprs(),
                                &all_rollup_exprs,
                                &all_grouping_sets_exprs);
       checker.set_query_ctx(ref_stmt->get_query_ctx());
@@ -299,13 +305,16 @@ int ObGroupByChecker::add_pc_const_param_info(ObExprEqualCheckContext &check_ctx
   if (OB_ISNULL(query_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else {
+  } else if (param_store_ != NULL) {
     for (int64_t i = 0; OB_SUCC(ret) && i < check_ctx.param_expr_.count(); i++) {
       ObExprEqualCheckContext::ParamExprPair &param_pair = check_ctx.param_expr_.at(i);
-      if (const_param_info.const_idx_.push_back(param_pair.param_idx_)) {
+      if (OB_FAIL(const_param_info.const_idx_.push_back(param_pair.param_idx_))) {
         LOG_WARN("failed to push back element", K(ret));
-      } else {
-        // do nothing
+      } else if (param_pair.param_idx_ < 0 || param_pair.param_idx_ >= param_store_->count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get invalid param idx", K(ret), K(param_pair.param_idx_), K(param_store_->count()));
+      } else if (OB_FAIL(const_param_info.const_params_.push_back(param_store_->at(param_pair.param_idx_)))) {
+        LOG_WARN("failed to psuh back param const value", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
@@ -571,9 +580,9 @@ int ObGroupByChecker::belongs_to_check_stmt(ObRawExpr &expr, bool &belongs_to)
     if (is_top_select_stmt()) {
       // the expr is not from checked stmt
       belongs_to = true;
-      LOG_DEBUG("same level", K(ret), K(expr), K(expr.get_expr_level()), K(top_stmt->get_current_level()), K_(level));
+      LOG_DEBUG("same level", K(ret), K(expr));
     } else {
-      LOG_DEBUG("different level", K(ret), K(expr), K(expr.get_expr_level()), K(top_stmt->get_current_level()), K_(level));
+      LOG_DEBUG("different level", K(ret), K(expr));
     }
   }
   return ret;
@@ -585,13 +594,13 @@ int ObGroupByChecker::belongs_to_check_stmt(ObRawExpr &expr, bool &belongs_to)
 //     select (select a.c1 from t1 b where c1=10 group by b.c1) c1 from t1 a group by a.c1;
 //     a.c1 belongs the select stmt that contains table a
 //     so when check subquery that contains table b, don't check a.c1 whether exists in group by b.c1
-int ObGroupByChecker::colref_belongs_to_check_stmt(ObRawExpr &expr, bool &belongs_to)
+int ObGroupByChecker::colref_belongs_to_check_stmt(ObColumnRefRawExpr &expr, bool &belongs_to)
 {
   int ret = OB_SUCCESS;
   belongs_to = false;
   if (cur_stmts_.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get stmt", K(ret));
+    LOG_WARN("failed to get stmt", K(ret), K(cur_stmts_));
   } else {
     // the stmt needed check
     const ObSelectStmt *top_stmt = cur_stmts_.at(0);
@@ -604,12 +613,15 @@ int ObGroupByChecker::colref_belongs_to_check_stmt(ObRawExpr &expr, bool &belong
     // eg: select count(c1) from t1 group by c2;
     // But if aggregate function not belongs to checked select stmt, then the argument of aggregate function need check
     // eg: select count(c1), (select count(a.c1) from t2 b) from t1 a group by c2; --then "count(a.c1)" in subquery should report error
-    if (expr.get_expr_level() == top_stmt->get_current_level()) {
+    if (OB_ISNULL(top_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("top stmt is null", K(ret));
+    } else if (NULL != top_stmt->get_column_expr_by_id(expr.get_table_id(), expr.get_column_id())) {
       // the expr is not from checked stmt
       belongs_to = true;
-      LOG_DEBUG("same level", K(ret), K(expr), K(expr.get_expr_level()), K(top_stmt->get_current_level()), K_(level));
+      LOG_DEBUG("same level", K(ret), K(expr));
     } else {
-      LOG_DEBUG("different level", K(ret), K(expr), K(expr.get_expr_level()), K(top_stmt->get_current_level()), K_(level));
+      LOG_DEBUG("different level", K(ret), K(expr));
     }
   }
   return ret;
@@ -659,7 +671,6 @@ int ObGroupByChecker::check_select_stmt(const ObSelectStmt *ref_stmt)
 {
   int ret = OB_SUCCESS;
   ++level_;
-  bool ref_query = false;
   LOG_DEBUG("check group by start stmt", K(ret));
 
   if (is_top_select_stmt()) {
@@ -671,25 +682,18 @@ int ObGroupByChecker::check_select_stmt(const ObSelectStmt *ref_stmt)
     LOG_WARN("ref_stmt should not be NULL", K(ret));
   } else if (OB_FAIL(cur_stmts_.push_back(ref_stmt))) {
     LOG_WARN("failed to push back stmt", K(ret));
-  } else if (!is_top_select_stmt() && OB_FAIL(ObTransformUtils::is_ref_outer_block_relation(ref_stmt, ref_stmt->get_current_level(), ref_query))) {
-    LOG_WARN("failed to get ref stmt", K(ret));
-  } else if (!is_top_select_stmt() && !ref_query) {
-    // non ref query
   } else {
-    int32_t ignore_scope = 0;
+    ObStmtExprGetter visitor;
     if (is_top_select_stmt() || only_need_contraints_) {
       // 当前select stmt,则仅仅check having, select item, order
       // eg:
       // select c1,c2,(select d2 from t2 where t1.c1=t2.d1) as c3 from t1 group by c1,c2;
       //  level_=0, the stmt is from "select c1,c2,(select d2 from t2 where t1.c1=t2.d1) as c3 from t1 group by c1,c2"
       //  level_=1, the stmt is from "(select d2 from t2 where t1.c1=t2.d1)"
-      ignore_scope = RelExprCheckerBase::START_WITH_SCOPE
-                   | RelExprCheckerBase::JOIN_CONDITION_SCOPE
-                   | RelExprCheckerBase::CONNECT_BY_SCOPE
-                   | RelExprCheckerBase::LIMIT_SCOPE
-                   | RelExprCheckerBase::WHERE_SCOPE
-                   | RelExprCheckerBase::GROUP_SCOPE
-                   | RelExprCheckerBase::FROM_SCOPE;
+      visitor.remove_all();
+      visitor.add_scope(SCOPE_HAVING);
+      visitor.add_scope(SCOPE_SELECT);
+      visitor.add_scope(SCOPE_ORDERBY);
     } else {
       // 如果是subquery，则需要check所有expression
     }
@@ -703,10 +707,10 @@ int ObGroupByChecker::check_select_stmt(const ObSelectStmt *ref_stmt)
             (NULL == group_by_exprs_ || group_by_exprs_->empty() || ref_stmt->has_distinct()) &&
             (NULL == rollup_exprs_ || rollup_exprs_->empty() || ref_stmt->has_distinct()) &&
             (NULL == grouping_sets_exprs_ || grouping_sets_exprs_->empty() || ref_stmt->has_distinct()))) {
-      ignore_scope |= RelExprCheckerBase::ORDER_SCOPE;
+      visitor.remove_scope(SCOPE_ORDERBY);
     }
     ObArray<ObRawExpr*> relation_expr_pointers;
-    if (OB_FAIL(ref_stmt->get_relation_exprs(relation_expr_pointers, ignore_scope))) {
+    if (OB_FAIL(ref_stmt->get_relation_exprs(relation_expr_pointers, visitor))) {
       LOG_WARN("get stmt relation exprs fail", K(ret));
     }
 
@@ -748,6 +752,8 @@ int ObGroupByChecker::visit(ObQueryRefRawExpr &expr)
   int ret = OB_SUCCESS;
   if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
+  } else if (is_top_select_stmt() && !expr.has_exec_param()) {
+    // do nothing
   } else if (!only_need_contraints_) {
     const ObSelectStmt *ref_stmt = expr.get_ref_stmt();
     if (OB_FAIL(check_select_stmt(ref_stmt))) {

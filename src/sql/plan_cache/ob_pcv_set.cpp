@@ -109,13 +109,13 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
   if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
     if (normal_parse_const_cnt_ != pc_ctx.fp_result_.parameterized_params_.count()) {
-      ret = OB_NOT_SUPPORTED;
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("param num is not equal", K_(normal_parse_const_cnt),
                "parameterized_params_count", pc_ctx.fp_result_.parameterized_params_.count());
     }
   } else {
     if (normal_parse_const_cnt_ != pc_ctx.fp_result_.raw_params_.count()) {
-      ret = OB_NOT_SUPPORTED;
+      ret = OB_ERR_UNEXPECTED;
       SQL_PC_LOG(DEBUG, "const number of fast parse and normal parse is different",
                  "fast_parse_const_num", pc_ctx.fp_result_.raw_params_.count(),
                  K_(normal_parse_const_cnt),
@@ -218,7 +218,7 @@ int ObPCVSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
              K(pc_ctx.sql_ctx_.session_info_));
   } else if (get_plan_num() >= MAX_PCV_SET_PLAN_NUM) {
     static const int64_t PRINT_PLAN_EXCEEDS_LOG_INTERVAL = 20 * 1000 * 1000; // 20s
-    ret = OB_NOT_SUPPORTED;
+    ret = OB_ERR_UNEXPECTED;
     if (REACH_TIME_INTERVAL(PRINT_PLAN_EXCEEDS_LOG_INTERVAL)) {
       LOG_INFO("number of plans in a single pcv_set reach limit", K(ret), K(get_plan_num()), K(pc_ctx));
     }

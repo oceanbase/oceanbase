@@ -73,6 +73,7 @@ int ObTransformProjectPruning::transform_table_items(ObDMLStmt *&stmt,
     LOG_WARN("stmt is NULL", K(ret));
   } else if (stmt->is_insert_stmt()) {
     //do nothing
+    OPT_TRACE("insert stmt can not transform");
   } else {
     //traverse table items(all table items are in from items)
     ObIArray<TableItem*> &table_items = stmt->get_table_items();
@@ -85,6 +86,7 @@ int ObTransformProjectPruning::transform_table_items(ObDMLStmt *&stmt,
         LOG_WARN("Table item is NULL in table items", K(ret));
       } else if (table_item->is_generated_table()) {
         ObSelectStmt *ref_query = NULL;
+        OPT_TRACE("try to prune preject for view:", table_item);
         if (OB_ISNULL(ref_query = table_item->ref_query_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Ref query of generate_table is NULL", K(ret));
@@ -92,6 +94,7 @@ int ObTransformProjectPruning::transform_table_items(ObDMLStmt *&stmt,
           LOG_WARN("failed to check hint allowed prune", K(ret));
         } else if (!is_valid) {
           //do nothing
+          OPT_TRACE("hint reject transform");
         } else if (OB_FAIL(ObTransformUtils::check_project_pruning_validity(*ref_query, is_valid))) {
           LOG_WARN("failed to check transform valid", K(ret));
         } else if (!is_valid) {

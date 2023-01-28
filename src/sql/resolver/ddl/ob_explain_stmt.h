@@ -23,10 +23,15 @@ namespace sql
 
 struct ObExplainDisplayOpt
 {
-  ObExplainDisplayOpt() : with_tree_line_(false), with_color_(false) {}
+  ObExplainDisplayOpt()
+    : with_tree_line_(false),
+    with_color_(false) ,
+    with_real_info_(false)
+    {}
 
   bool with_tree_line_;
   bool with_color_;
+  bool with_real_info_;
 };
 
 class ObExplainStmt : public ObDMLStmt

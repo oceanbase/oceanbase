@@ -52,6 +52,7 @@ ObDASRef::ObDASRef(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx)
     aggregated_tasks_(das_alloc_),
     lookup_cnt_(0),
     task_cnt_(0),
+    init_mem_used_(exec_ctx.get_allocator().used()),
     task_map_(),
     max_das_task_concurrency_(1),
     das_task_concurrency_limit_(1),
@@ -552,6 +553,7 @@ void ObDASRef::reset()
   aggregated_tasks_.destroy();
   lookup_cnt_ = 0;
   task_cnt_ = 0;
+  init_mem_used_ = 0;
   if (task_map_.created()) {
     task_map_.destroy();
   }
@@ -571,6 +573,7 @@ void ObDASRef::reuse()
   aggregated_tasks_.destroy();
   lookup_cnt_ = 0;
   task_cnt_ = 0;
+  init_mem_used_ = 0;
   if (task_map_.created()) {
     task_map_.destroy();
   }

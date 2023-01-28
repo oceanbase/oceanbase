@@ -225,6 +225,7 @@ ObSqlCtx::ObSqlCtx()
     all_equal_param_constraints_(nullptr),
     all_pre_calc_constraints_(nullptr),
     all_expr_constraints_(nullptr),
+    all_priv_constraints_(nullptr),
     is_ddl_from_primary_(false),
     cur_stmt_(NULL),
     cur_plan_(nullptr),
@@ -270,6 +271,7 @@ void ObSqlCtx::reset()
   all_equal_param_constraints_ = nullptr;
   all_pre_calc_constraints_ = nullptr;
   all_expr_constraints_ = nullptr;
+  all_priv_constraints_ = nullptr;
   is_ddl_from_primary_ = false;
   can_reroute_sql_ = false;
   is_sensitive_ = false;

@@ -24,16 +24,18 @@ namespace sql
 class ObUpdateResolver : public ObDelUpdResolver
 {
 public:
-  static const int64_t TABLE = 0;              /* 0. table node */
-  static const int64_t UPDATE_LIST = 1;       /* 1. update list */
-  static const int64_t WHERE = 2;              /* 2. where node */
-  static const int64_t ORDER_BY = 3;        /* 3. order by node */
-  static const int64_t LIMIT = 4;              /* 4. limit node */
-  static const int64_t WHEN = 5;                /* 5. when node */
-  static const int64_t HINT = 6;                /* 6. hint node */
-  static const int64_t IGNORE = 7;               /*7. ignore node */
-  static const int64_t RETURNING = 8;           /*8. returning node */
-  static const int64_t ERRORLOGGING = 9;           /*9. error_logging node */
+  static const int64_t WITH_MYSQL = 0;         /*10. with_clause node in mysql mode*/
+  static const int64_t TABLE = 1;              /* 0. table node */
+  static const int64_t UPDATE_LIST = 2;       /* 1. update list */
+  static const int64_t WHERE = 3;              /* 2. where node */
+  static const int64_t ORDER_BY = 4;        /* 3. order by node */
+  static const int64_t LIMIT = 5;              /* 4. limit node */
+  static const int64_t WHEN = 6;                /* 5. when node */
+  static const int64_t HINT = 7;                /* 6. hint node */
+  static const int64_t IGNORE = 8;               /*7. ignore node */
+  static const int64_t RETURNING = 9;           /*8. returning node */
+  static const int64_t ERRORLOGGING = 10;           /*9. error_logging node */
+
 public:
   explicit ObUpdateResolver(ObResolverParams &params);
   virtual ~ObUpdateResolver();

@@ -215,8 +215,8 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %token <non_reserved_keyword>
       AFTER AUTHID BEGIN_KEY BINARY_INTEGER BODY C CATALOG_NAME CLASS_ORIGIN CLOSE COLUMN_NAME COMMENT
       CONSTRAINT_CATALOG CONSTRAINT_NAME CONSTRAINT_ORIGIN CONSTRAINT_SCHEMA CONTAINS COUNT CURSOR_NAME
-      DATA DEFINER END_KEY EXTEND FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
-      MESSAGE_TEXT MYSQL_ERRNO NEXT NO OF OPEN PACKAGE PRAGMA RECORD RETURNS ROW ROWTYPE
+      DATA DEFINER END_KEY EXTEND FOLLOWS FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
+      MESSAGE_TEXT MYSQL_ERRNO NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
       SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE VALUE
 
 %right END_KEY
@@ -245,7 +245,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> sql_stmt ident simple_ident
 %type <node> into_clause
 %type <node> sp_name sp_call_name opt_sp_param_list opt_sp_fparam_list sp_param_list sp_fparam_list
-%type <node> sp_param sp_fparam
+%type <node> sp_param sp_fparam sp_alter_chistics
 %type <node> opt_sp_definer sp_create_chistics sp_create_chistic sp_chistic opt_parentheses user opt_host_name
 %type <node> param_type sp_cparams opt_sp_cparam_list cexpr sp_cparam opt_sp_cparam_with_assign
 %type <ival> opt_sp_inout opt_if_exists
@@ -268,8 +268,8 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> opt_tail_package_name
 %type <ival> opt_replace
 %type <node> create_trigger_stmt drop_trigger_stmt plsql_trigger_source
-%type <node> trigger_definition trigger_event trigger_body pl_obj_access_ref
-%type <ival> trigger_time 
+%type <node> trigger_definition trigger_event trigger_body pl_obj_access_ref opt_trigger_order
+%type <ival> trigger_time
 /*SQL data type*/
 %type <node> scalar_data_type opt_charset collation opt_collation charset_name collation_name
 %type <node> number_literal literal charset_key opt_float_precision opt_number_precision opt_binary
@@ -991,9 +991,9 @@ plsql_trigger_source:
 ;
 
 trigger_definition:
-    trigger_time trigger_event ON sp_name FOR EACH ROW trigger_body
+    trigger_time trigger_event ON sp_name FOR EACH ROW opt_trigger_order trigger_body
     {
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_SIMPLE_DML, 3, $2, $4, $8);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_SIMPLE_DML, 4, $2, $4, $8, $9);
       $$->int16_values_[0] = $1;
     }
 
@@ -1007,6 +1007,19 @@ trigger_event:
   | DELETE { malloc_terminal_node($$, parse_ctx->mem_pool_, T_DELETE); }
   | UPDATE { malloc_terminal_node($$, parse_ctx->mem_pool_, T_UPDATE); }
 ;
+
+opt_trigger_order:
+    /*EMPTY*/ { $$ = NULL; }
+  | FOLLOWS sp_name
+   {
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_ORDER, 1, $2);
+      $$->value_ = 1; // FOLLOWS
+   }
+  | PRECEDES sp_name
+    {
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_ORDER, 1, $2);
+      $$->value_ = 2; // PRECEDES
+    }
 
 trigger_body:
   sp_proc_stmt
@@ -1059,7 +1072,7 @@ create_procedure_stmt:
       $9->str_len_ = str_len;
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CREATE, 5, $2, $4, $6, sp_clause_node, $9);
     }
-  | CREATE opt_sp_definer PROCEDURE sp_name '(' opt_sp_param_list ')' procedure_body
+  | CREATE opt_sp_definer PROCEDURE sp_name '('opt_sp_param_list  ')' procedure_body
     {
       check_ptr($8);
       const char *stmt_str = parse_ctx->stmt_str_ + @8.first_column;
@@ -1287,11 +1300,18 @@ alter_function_stmt:
 
 opt_sp_alter_chistics:
     /* empty */ { $$ = NULL; }
-  | opt_sp_alter_chistics sp_chistic
+  | sp_alter_chistics
     {
-
+      merge_nodes($$, parse_ctx->mem_pool_, T_SP_CLAUSE_LIST, $1);
     }
 ;
+
+sp_alter_chistics:
+  sp_chistic { $$ = $1; }
+  | sp_alter_chistics sp_chistic
+  {
+    malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_LINK_NODE, 2, $1, $2);
+  }
 
 sp_proc_stmt:
     sp_proc_outer_statement

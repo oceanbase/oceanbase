@@ -2539,10 +2539,14 @@ int ObLoadDataSPImpl::ToolBox::build_calc_partid_expr(ObExecContext &ctx,
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(calc_partid_expr,
+      if (OB_ISNULL(ctx.get_sql_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql ctx is null", K(ret));
+      } else if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(calc_partid_expr,
                                                                row_desc,
                                                                ctx.get_allocator(),
                                                                ctx.get_my_session(),
+                                                               ctx.get_sql_ctx()->schema_guard_,
                                                                temp_expr))) {
         LOG_WARN("fail to gen temp expr", K(ret));
       } else {

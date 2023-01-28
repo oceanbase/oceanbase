@@ -10,14 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX SQL_REWRITE
 #include "ob_transform_expr_pullup.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "common/ob_smart_call.h"
 
-
-#define USING_LOG_PREFIX SQL_REWRITE
 namespace oceanbase {
 namespace sql {
 using namespace common;
@@ -172,6 +171,7 @@ int ObTransformExprPullup::need_transform(const ObIArray<ObParentDMLStmt> &paren
       if (OB_NOT_NULL(outline_hint = query_hint->get_outline_trans_hint(ctx_->trans_list_loc_))) {
         if (outline_hint->get_hint_type() != get_hint_type()) {
           need_trans = false;
+          OPT_TRACE("outline reject transform");
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_size(); ++i) {
             const TableItem *table = NULL;
@@ -269,6 +269,8 @@ int ObExprNodeMap::add_expr_map(ObRawExpr *expr)
   bool is_exist = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (expr->is_const_or_param_expr()) {
+    // do nothing
   } else {
     ExprCounter counter;
     uint64_t hash_v = get_hash_value(expr);
@@ -554,8 +556,6 @@ int ObTransformExprPullup::adjust_subquery(ObRawExpr *expr,
     ObQueryRefRawExpr &query_ref = static_cast<ObQueryRefRawExpr &>(*expr);
     if (OB_FAIL(parent.add_subquery_ref(&query_ref))) {
       LOG_WARN("fail to add subquery ref", K(ret));
-    } else if (OB_FAIL(query_ref.get_ref_stmt()->adjust_subquery_stmt_parent(&child, &parent))) {
-      LOG_WARN("fail to adjust subquery parent", K(ret));
     }
   }
 
@@ -592,6 +592,7 @@ int ObTransformExprPullup::rewrite_decision_by_hint(ObSelectStmt &parent,
       }
     } else {
       go_rewrite = false;
+      OPT_TRACE("outline reject transform");
     }
   } else {
     const ObHint *child_no_rewrite = child.get_stmt_hint().get_no_rewrite_hint();
@@ -601,6 +602,8 @@ int ObTransformExprPullup::rewrite_decision_by_hint(ObSelectStmt &parent,
       go_rewrite = pullup_hint->is_enable_hint();
       if (!go_rewrite && OB_FAIL(ctx_->add_used_trans_hint(pullup_hint))) {
         LOG_WARN("failed to add used trans hint", K(ret));
+      } else if (!go_rewrite) {
+        OPT_TRACE("hint reject transform");
       }
       reason = CTRL_BY_PULLUP_HINT;
     } else if (OB_NOT_NULL(child_no_rewrite) || OB_NOT_NULL(parent_no_rewrite)) {
@@ -611,9 +614,11 @@ int ObTransformExprPullup::rewrite_decision_by_hint(ObSelectStmt &parent,
         LOG_WARN("failed to add used trans hint", K(ret));
       }
       reason = CTRL_BY_NO_REWRITE_HINT;
+      OPT_TRACE("parent or child`s no rewrite hint reject transform");
     } else {
       go_rewrite = stmt_may_reduce_row_count;
       reason = CTRL_BY_SELF_DECISION;
+      OPT_TRACE("stmt may reduce row count:", stmt_may_reduce_row_count);
     }
   }
   LOG_DEBUG("check hint rewrite control", K(go_rewrite), K(stmt_may_reduce_row_count), K(reason));
@@ -691,11 +696,13 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
     //search for exprs cannot pullup
     if (OB_SUCC(ret)) {
       ObSEArray<ObRawExpr *, 16> expr_cannot_pullup;
+      ObStmtExprGetter visitor;
+      visitor.remove_scope(SCOPE_SELECT);
       if (OB_FAIL(child_reject_map.init())) {
         LOG_WARN("fail to init shared exprs", K(ret));
       } else if (OB_FAIL(child_select_map.init())) {
         LOG_WARN("failed to init select map", K(ret));
-      } else if (OB_FAIL(child.get_relation_exprs(expr_cannot_pullup, RelExprCheckerBase::FIELD_LIST_SCOPE))) {
+      } else if (OB_FAIL(child.get_relation_exprs(expr_cannot_pullup, visitor))) {
         LOG_WARN("fail to get relation exprs", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
@@ -808,7 +815,8 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
       }
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(parent.replace_inner_stmt_expr(old_child_project_columns, select_exprs_can_pullup))) {
+        if (OB_FAIL(parent.replace_relation_exprs(old_child_project_columns,
+                                                  select_exprs_can_pullup))) {
           LOG_WARN("fail to replace inner stmt expr", K(ret));
         } else if (OB_FAIL(parent.formalize_stmt(ctx_->session_info_))) {
           LOG_WARN("fail to formalize stmt", K(ret));
@@ -851,6 +859,5 @@ int ObTransformExprPullup::is_stmt_may_reduce_row_count(const ObSelectStmt &stmt
   return ret;
 }
 
-#undef USING_LOG_PREFIX
 }
 }

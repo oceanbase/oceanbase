@@ -97,7 +97,6 @@ class ObWindowFunctionSpec;
 class WinFuncInfo;
 template <int TYPE>
     struct GenSpecHelper;
-class ObTableLookupSpec;
 class ObTableRowStoreSpec;
 //class ObMultiTableReplaceSpec;
 class ObRowSampleScanSpec;
@@ -161,11 +160,12 @@ public:
   template <int TYPE>
   friend struct GenSpecHelper;
 
-  ObStaticEngineCG()
+  ObStaticEngineCG(const uint64_t cur_cluster_version)
     : phy_plan_(NULL),
       opt_ctx_(nullptr),
       dml_cg_service_(*this),
-      tsc_cg_service_(*this)
+      tsc_cg_service_(*this),
+      cur_cluster_version_(cur_cluster_version)
   {
   }
   // generate physical plan
@@ -356,6 +356,8 @@ private:
   // px code gen
   int generate_spec(ObLogStatCollector &op, ObStatCollectorSpec &spec, const bool in_root_job);
   int generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorSpec &spec, const bool in_root_job);
+  int generate_dml_tsc_ids(const ObOpSpec &spec, const ObLogicalOperator &op,
+                           ObIArray<int64_t> &dml_tsc_op_ids, ObIArray<int64_t> &dml_tsc_ref_ids);
   int generate_spec(ObLogExchange &op, ObPxFifoReceiveSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxMSReceiveSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxDistTransmitSpec &spec, const bool in_root_job);
@@ -369,8 +371,6 @@ private:
   // for remote execute
   int generate_spec(ObLogExchange &op, ObDirectTransmitSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObDirectReceiveSpec &spec, const bool in_root_job);
-
-  int generate_spec(ObLogTableLookup &op, ObTableLookupSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpec &spec, const bool in_root_job);
 
@@ -435,11 +435,14 @@ private:
   int convert_index_values(uint64_t table_id,
                            ObIArray<ObExpr*> &output_exprs,
                            ObOpSpec *&trs_spec);
-
+  int generate_popular_values_hash(
+      const common::ObHashFunc &hash_func,
+      const ObIArray<common::ObObj> &popular_values_expr,
+      common::ObFixedArray<uint64_t, common::ObIAllocator> &popular_values_hash);
   int generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpec &spec);
 
   int fill_wf_info(ObIArray<ObExpr *> &all_expr, ObWinFunRawExpr &win_expr,
-                   WinFuncInfo &wf_info);
+                   WinFuncInfo &wf_info, const bool can_push_down);
   int fil_sort_info(const ObIArray<OrderItem> &sort_keys,
                     ObIArray<ObExpr *> &all_exprs,
                     ObIArray<ObExpr *> *sort_exprs,
@@ -498,6 +501,8 @@ private:
                               bool &is_dup);
   bool has_cycle_reference(DASTableIdList &parent_tables, const uint64_t table_id);
 
+  void set_murmur_hash_func(ObHashFunc &hash_func, const ObExprBasicFuncs *basic_funcs_);
+
   int set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
                            const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters);
 private:
@@ -522,6 +527,7 @@ private:
     ObOpSpec* spec_;
     bool is_left_param_;
   };
+
 private:
   ObPhysicalPlan *phy_plan_;
   ObOptimizerContext *opt_ctx_;
@@ -533,7 +539,11 @@ private:
   common::ObSEArray<uint64_t, 10> fake_cte_tables_;
   ObDmlCgService dml_cg_service_;
   ObTscCgService tsc_cg_service_;
+
+  uint64_t cur_cluster_version_;
+
   common::ObSEArray<BatchExecParamCache, 8> batch_exec_param_caches_;
+
 };
 
 } // end namespace sql

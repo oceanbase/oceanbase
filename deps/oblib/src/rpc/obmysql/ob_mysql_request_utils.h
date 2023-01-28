@@ -29,6 +29,10 @@ namespace rpc
 {
 class ObRequest;
 }
+namespace observer
+{
+class ObSMConnection;
+}
 
 namespace obmysql
 {
@@ -281,6 +285,7 @@ public:
   easy_buf_t *send_buf_;
   char *last_pkt_pos_;//proxy last pkt(error+ok, eof+ok, ok)'s pos in orig_ezbuf, default is null
   uint32_t sessid_;
+  observer::ObSMConnection *conn_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCompressionContext);

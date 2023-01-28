@@ -123,13 +123,13 @@ TEST_F(ObLogPlanTest, ob_explain_test)
   // print plan as json
   char output_buf[OB_MAX_LOG_BUFFER_SIZE];
   int64_t pos = 0;
-  Value *val = NULL;
-  plan.get_plan_root()->to_json(output_buf, OB_MAX_LOG_BUFFER_SIZE, pos, val);
-  Tidy tidy(val);
-  LOG_DEBUG("succ to generate json object", K(pos));
+  // Value *val = NULL;
+  // plan.get_plan_root()->to_json(output_buf, OB_MAX_LOG_BUFFER_SIZE, pos, val);
+  // Tidy tidy(val);
+  // LOG_DEBUG("succ to generate json object", K(pos));
 
-  output_buf[0] = '\n';
-  pos = tidy.to_string(output_buf + pos, OB_MAX_LOG_BUFFER_SIZE - pos);
+  // output_buf[0] = '\n';
+  // pos = tidy.to_string(output_buf + pos, OB_MAX_LOG_BUFFER_SIZE - pos);
   if (pos < OB_MAX_LOG_BUFFER_SIZE -2) {
     output_buf[pos + 1] = '\n';
     _OB_LOG(INFO, "%.*s", static_cast<int32_t>(pos + 2), output_buf);

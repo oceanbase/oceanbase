@@ -4459,7 +4459,7 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
       if (OB_FAIL(expr->eval_batch(eval_ctx_, *brs->skip_, brs->size_))) {
         LOG_WARN("eval failed", K(ret));
       } else {
-        ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_batch_;
+        ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_v2_batch_;
         const bool is_batch_seed = (idx > 0);
         hash_func(hash_vals,
                   expr->locate_batch_datums(eval_ctx_), expr->is_batch_result(),
@@ -4471,10 +4471,7 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
     if (OB_SUCC(ret)) {
       uint16_t selector_idx = 0;
       bool skip_null = (is_left_side && skip_left_null_) || (!is_left_side && skip_right_null_);
-      for (int64_t i = 0; i < brs->size_; ++i) {
-        if (brs->skip_->at(i)) {
-          continue;
-        }
+      auto op = [&](const int64_t i) __attribute__((always_inline)) {
         bool need_null_random = false;
         for (int64_t j = 0; j < join_keys.count() && !need_null_random; ++j) {
           ObDatum &curr_key = join_keys.at(j)->locate_batch_datums(eval_ctx_)[i];
@@ -4491,7 +4488,9 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
           right_selector_[selector_idx++] = i;
         }
         hash_vals[i] = hash_vals[i] & ObHashJoinStoredJoinRow::HASH_VAL_MASK;
-      }
+        return OB_SUCCESS;
+      };
+      ObBitVector::flip_foreach(*brs->skip_, brs->size_, op);
       right_selector_cnt_ = selector_idx;
     }
   } else {

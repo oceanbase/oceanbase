@@ -23,6 +23,7 @@
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/optimizer/ob_log_subplan_filter.h"
 #include "sql/optimizer/ob_log_insert_all.h"
+#include "sql/ob_optimizer_trace_impl.h"
 #include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "share/system_variable/ob_sys_var_class_type.h"
@@ -45,12 +46,14 @@ int ObInsertLogPlan::generate_raw_plan()
   } else {
     bool need_osg = false;
     const ObInsertStmt *insert_stmt = get_stmt();
+    LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());
+    OPT_TRACE("generate plan for ", get_stmt());
     if (!insert_stmt->value_from_select()) {
       // insert into values xxxx
       ObLogicalOperator *top = NULL;
       if (insert_stmt->has_sequence() &&
           OB_FAIL(allocate_sequence_as_top(top))) {
-        LOG_WARN("failed to allocate sequence a stop", K(ret));
+        LOG_WARN("failed to allocate sequence as top", K(ret));
       } else if (OB_FAIL(allocate_insert_values_as_top(top))) {
         LOG_WARN("failed to allocate expr values as top", K(ret));
       } else if (OB_FAIL(make_candidate_plans(top))) {
@@ -225,6 +228,9 @@ int ObInsertLogPlan::candi_allocate_insert()
   ObSEArray<CandidatePlan, 8> insert_plans;
   const bool force_no_multi_part = get_log_plan_hint().no_use_distributed_dml();
   const bool force_multi_part = get_log_plan_hint().use_distributed_dml();
+  OPT_TRACE("start generate normal insert plan");
+  OPT_TRACE("force no multi part:", force_no_multi_part);
+  OPT_TRACE("force multi part:", force_multi_part);
   if (OB_FAIL(build_lock_row_flag_expr(lock_row_flag_expr))) {
     LOG_WARN("failed to build lock row flag expr", K(ret));
   } else if (OB_FAIL(calculate_insert_table_location_and_sharding(insert_table_part,
@@ -388,6 +394,7 @@ int ObInsertLogPlan::candi_allocate_pdml_insert()
 {
   int ret = OB_SUCCESS;
   int64_t gidx_cnt = index_dml_infos_.count();
+  OPT_TRACE("start generate pdml insert plan");
   const bool is_pdml_update_split = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < gidx_cnt; i++) {
     if (OB_FAIL(candi_allocate_one_pdml_insert(i > 0,
@@ -793,7 +800,8 @@ int ObInsertLogPlan::copy_index_dml_infos_for_insert_up(const ObInsertTableInfo&
                                                   update_cst_exprs.at(i),
                                                   update_cst_exprs.at(i)))) {
         LOG_WARN("failed to copy schema expr", K(ret));
-      } else if (OB_FAIL(ObTableAssignment::expand_expr(table_info.assignments_,
+      } else if (OB_FAIL(ObTableAssignment::expand_expr(optimizer_context_.get_expr_factory(),
+                                                        table_info.assignments_,
                                                         update_cst_exprs.at(i)))) {
         LOG_WARN("failed to create expanded expr", K(ret));
       }
@@ -1131,11 +1139,10 @@ int ObInsertLogPlan::get_all_rowkey_columns_for_ddl(const ObInsertTableInfo& tab
           //   LOG_WARN("add column item to stmt failed", K(ret));
           spk_expr->set_table_id(table_info.table_id_);
           spk_expr->set_explicited_reference();
-          spk_expr->set_expr_level(stmt->get_current_level());
           spk_expr->get_relation_ids().reuse();
           if (OB_FAIL(spk_expr->add_relation_id(stmt->get_table_bit_index(spk_expr->get_table_id())))) {
             LOG_WARN("add relation id to expr failed", K(ret));
-          } else if (OB_FAIL(spk_expr->pull_relation_id_and_levels(stmt->get_current_level()))) {
+          } else if (OB_FAIL(spk_expr->pull_relation_id())) {
             LOG_WARN("failed to pullup relation ids", K(ret));
           } else if (OB_FAIL(add_var_to_array_no_dup(column_exprs, spk_expr))) {
             LOG_WARN("fail to add column item to array", K(ret));

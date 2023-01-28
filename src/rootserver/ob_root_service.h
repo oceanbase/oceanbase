@@ -636,6 +636,12 @@ public:
   int drop_directory(const obrpc::ObDropDirectoryArg &arg);
   //----End of functions for directory object----
 
+  //----Functions for managing row level security----
+  int handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg);
+  int handle_rls_group_ddl(const obrpc::ObRlsGroupDDLArg &arg);
+  int handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg);
+  //----End of functions for managing row level security----
+
   // server related
   int add_server(const obrpc::ObAdminServerArg &arg);
   int delete_server(const obrpc::ObAdminServerArg &arg);

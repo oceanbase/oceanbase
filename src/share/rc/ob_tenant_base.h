@@ -41,6 +41,9 @@ namespace sql {
   class ObPlanBaselineMgr;
   class ObDataAccessService;
   class ObDASIDService;
+  class ObFLTSpanMgr;
+  class ObSqlPlanMgr;
+  class ObPlanRealInfoMgr;
   class ObUDRMgr;
 }
 namespace blocksstable {
@@ -215,6 +218,9 @@ namespace detector
       storage::ObAccessService*,                     \
       concurrency_control::ObMultiVersionGarbageCollector*, \
       sql::ObUDRMgr*,                        \
+      sql::ObFLTSpanMgr*,                            \
+      sql::ObSqlPlanMgr*,                            \
+      sql::ObPlanRealInfoMgr*,                       \
       ObTestModule*                                  \
   )
 

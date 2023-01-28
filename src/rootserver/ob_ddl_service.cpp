@@ -7232,6 +7232,58 @@ int ObDDLService::delete_constraint_update_new_table(
   return ret;
 }
 
+// if all rls policies are column level and all sec columns of each policy will be droppped, then
+// the rls object flag should be removed
+int ObDDLService::update_new_table_rls_flag(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const common::ObIArray<int64_t> &drop_cols_id_arr,
+    ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.has_table_flag(CASCADE_RLS_OBJECT_FLAG) ||
+      !table_schema.get_rls_group_ids().empty() ||
+      !table_schema.get_rls_context_ids().empty() ||
+      0 == drop_cols_id_arr.count()) {
+    // do nothing
+  } else {
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    const ObRlsPolicySchema *policy = NULL;
+    const int64_t policy_count = table_schema.get_rls_policy_ids().count();
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < policy_count; ++i) {
+      uint64_t policy_id = table_schema.get_rls_policy_ids().at(i);
+      if (OB_FAIL(schema_guard.get_rls_policy_schema_by_id(tenant_id, policy_id, policy))) {
+        LOG_WARN("failed to get rls policy schema", K(ret));
+      } else if (OB_ISNULL(policy)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null rls policy schema", KR(ret), K(policy_id), K(table_schema));
+      } else if (!policy->is_column_level_policy()) {
+        found = true;
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && !found && j < policy->get_sec_column_count(); ++j) {
+        const ObRlsSecColumnSchema* sec_column = policy->get_sec_column_by_idx(j);
+        bool found_col = false;
+        if (OB_ISNULL(sec_column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("rls column is null", KR(ret));
+        }
+        for (int64_t k = 0; OB_SUCC(ret) && !found_col && k < drop_cols_id_arr.count(); ++k) {
+          if (sec_column->get_column_id() == drop_cols_id_arr.at(k)) {
+            found_col = true;
+          }
+        }
+        if (OB_SUCC(ret) && !found_col) {
+          found = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !found) {
+      table_schema.del_table_flag(CASCADE_RLS_OBJECT_FLAG);
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::drop_column_update_new_table(
     const ObTableSchema &origin_table_schema,
     ObTableSchema &new_table_schema,
@@ -7480,6 +7532,10 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
       } else if (OB_FAIL(delete_constraint_update_new_table(alter_table_schema,
                                                             new_table_schema))) {
         LOG_WARN("fail to delete constraints from new table", K(ret));
+      } else if (OB_FAIL(update_new_table_rls_flag(schema_guard,
+                                                   drop_cols_id_arr,
+                                                   new_table_schema))) {
+        LOG_WARN("fail to update new table flags", K(ret));
       } else {/* do nothing. */}
     }
     for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
@@ -13222,6 +13278,60 @@ int ObDDLService::rebuild_hidden_table_priv(const ObTableSchema &orig_table_sche
   return ret;
 }
 
+int ObDDLService::rebuild_hidden_table_rls_objects(
+                  const ObTableSchema &orig_table_schema,
+                  const ObTableSchema &hidden_table_schema,
+                  ObSchemaGetterGuard &schema_guard,
+                  ObDDLOperator &ddl_operator,
+                  ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", K(ret));
+  } else {
+    const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+    ObRlsPolicySchema new_rls_policy;
+    ObRlsGroupSchema new_rls_group;
+    ObRlsContextSchema new_rls_context;
+    ObString empty_str;
+    for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_schema.get_rls_context_ids().count(); ++i) {
+      const ObRlsContextSchema *context_schema = NULL;
+      uint64_t context_id = orig_table_schema.get_rls_context_ids().at(i);
+      OZ (schema_guard.get_rls_context_schema_by_id(tenant_id, context_id, context_schema));
+      CK (OB_NOT_NULL(context_schema));
+      OZ (new_rls_context.assign(*context_schema));
+      OX (new_rls_context.set_tenant_id(hidden_table_schema.get_tenant_id()));
+      OX (new_rls_context.set_table_id(hidden_table_schema.get_table_id()));
+      OZ (ddl_operator.create_rls_context(new_rls_context, trans, empty_str, false, NULL));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_schema.get_rls_group_ids().count(); ++i) {
+      const ObRlsGroupSchema *group_schema = NULL;
+      uint64_t group_id = orig_table_schema.get_rls_group_ids().at(i);
+      OZ (schema_guard.get_rls_group_schema_by_id(tenant_id, group_id, group_schema));
+      CK (OB_NOT_NULL(group_schema));
+      OZ (new_rls_group.assign(*group_schema));
+      OX (new_rls_group.set_tenant_id(hidden_table_schema.get_tenant_id()));
+      OX (new_rls_group.set_table_id(hidden_table_schema.get_table_id()));
+      OZ (ddl_operator.create_rls_group(new_rls_group, trans, empty_str, false, NULL));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_schema.get_rls_policy_ids().count(); ++i) {
+      const ObRlsPolicySchema *policy_schema = NULL;
+      uint64_t policy_id = orig_table_schema.get_rls_policy_ids().at(i);
+      OZ (schema_guard.get_rls_policy_schema_by_id(tenant_id, policy_id, policy_schema));
+      CK (OB_NOT_NULL(policy_schema));
+      OZ (new_rls_policy.rebuild_with_table_schema(*policy_schema, hidden_table_schema));
+      if (OB_FAIL(ret)) {
+      } else if (policy_schema->is_column_level_policy()
+                 && !new_rls_policy.is_column_level_policy()) {
+        // column level policy will be dropped after drop column
+      } else {
+        OZ (ddl_operator.create_rls_policy(new_rls_policy, trans, empty_str, false, NULL));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schema,
                                            ObTableSchema &hidden_table_schema,
                                            const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
@@ -13263,6 +13373,12 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                                ddl_operator,
                                                trans))) {
     LOG_WARN("failed to rebuild hidden table priv", K(ret));
+  } else if (OB_FAIL(rebuild_hidden_table_rls_objects(orig_table_schema,
+                                                      hidden_table_schema,
+                                                      schema_guard,
+                                                      ddl_operator,
+                                                      trans))) {
+    LOG_WARN("failed to rebuild hidden table rls objects", K(ret));
   } else {
     if (OB_FAIL(schemas.push_back(&hidden_table_schema))) {
       LOG_WARN("fail to push back hidden table schema" , K(ret));
@@ -27803,10 +27919,11 @@ int ObDDLService::create_trigger_in_trans(ObTriggerInfo &trigger_info,
     LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-  } else if (OB_FAIL(ddl_operator.create_trigger(trigger_info, trans, error_info, dep_infos,
-             ddl_stmt_str, for_insert_errors))) {
-    LOG_WARN("create trigger failed", K(ret), K(trigger_info));
   }
+  if (OB_SUCC(ret) && !for_insert_errors) {
+      OZ (adjust_trigger_action_order(schema_guard, trans, ddl_operator, trigger_info, true));
+  }
+  OZ (ddl_operator.create_trigger(trigger_info, trans, error_info, dep_infos, ddl_stmt_str, for_insert_errors));
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -27885,9 +28002,9 @@ int ObDDLService::drop_trigger_in_trans(const ObTriggerInfo &trigger_info,
     LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-  } else if (OB_FAIL(ddl_operator.drop_trigger(trigger_info, trans, ddl_stmt_str))) {
-    LOG_WARN("drop trigger failed", K(ret), K(trigger_info));
   }
+  OZ (adjust_trigger_action_order(schema_guard, trans, ddl_operator, const_cast<ObTriggerInfo &>(trigger_info), false));
+  OZ (ddl_operator.drop_trigger(trigger_info, trans, ddl_stmt_str));
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -28120,7 +28237,13 @@ int ObDDLService::do_sequence_ddl(const obrpc::ObSequenceDDLArg &arg)
                                                    trans,
                                                    schema_guard,
                                                    ddl_stmt_str))) {
-            LOG_WARN("fail create sequence", K(arg), K(ret));
+            if (OB_OBJECT_NAME_EXIST == ret && arg.ignore_exists_error()) {
+              LOG_USER_NOTE(OB_OBJECT_NAME_EXIST);
+              LOG_WARN("sequence is exist, no need to create again", K(arg), K(ret));
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail create sequence", K(arg), K(ret));
+            }
           }
           break;
         }
@@ -28141,7 +28264,13 @@ int ObDDLService::do_sequence_ddl(const obrpc::ObSequenceDDLArg &arg)
                                                  schema_guard,
                                                  ddl_stmt_str,
                                                  FROM_SEQUENCE_DDL))) {
-            LOG_WARN("fail drop sequence", K(arg), K(ret));
+            if (OB_OBJECT_NAME_NOT_EXIST == ret && arg.ignore_exists_error()) {
+              LOG_USER_NOTE(OB_OBJECT_NAME_NOT_EXIST, "sequence");
+              LOG_WARN("sequence is not exist, no need to drop", K(arg), K(ret));
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail drop sequence", K(arg), K(ret));
+            }
           }
           break;
         }
@@ -31315,6 +31444,435 @@ bool ObDDLService::need_check_constraint_validity(const obrpc::ObAlterTableArg &
   return need_check_validity;
 }
 
+int ObDDLService::adjust_trigger_action_order(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              ObDDLSQLTransaction &trans,
+                                              ObDDLOperator &ddl_operator,
+                                              ObTriggerInfo &trigger_info,
+                                              bool is_create_trigger)
+{
+  int ret = OB_SUCCESS;
+#define ALTER_OLD_TRIGGER(source_trg_info) \
+  ObTriggerInfo copy_trg_info;   \
+  OZ (copy_trg_info.assign(*source_trg_info)); \
+  OX (copy_trg_info.set_action_order(new_action_order)); \
+  OZ (ddl_operator.alter_trigger(copy_trg_info, trans, NULL, false/*is_update_table_schema_version*/));
+
+  bool is_oracle_mode = false;
+  const uint64_t tenant_id = trigger_info.get_tenant_id();
+  const ObTableSchema *table_schema = NULL;
+  OZ (ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode));
+  OZ (schema_guard.get_table_schema(tenant_id, trigger_info.get_base_object_id(), table_schema));
+  OV (OB_NOT_NULL(table_schema));
+  if (OB_SUCC(ret)) {
+    const common::ObIArray<uint64_t> &trg_list = table_schema->get_trigger_list();
+    const ObTriggerInfo *old_trg_info = NULL;
+    int64_t new_action_order = 0; // the old trigger's new action order
+    if (is_create_trigger) {
+      int64_t action_order = 1; // action order for the trigger being created
+      const ObTriggerInfo *ref_trg_info = NULL;
+      if (OB_SUCC(ret)) {
+        if (!trigger_info.get_ref_trg_name().empty()) {
+          OZ (schema_guard.get_trigger_info(tenant_id, trigger_info.get_database_id(),
+                                            trigger_info.get_ref_trg_name(), ref_trg_info));
+          OV (OB_NOT_NULL(ref_trg_info));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (is_oracle_mode) {
+          if (NULL != ref_trg_info) {
+            uint64_t ref_db_id = OB_INVALID_ID;
+            OZ (schema_guard.get_database_id(tenant_id, trigger_info.get_ref_trg_db_name(), ref_db_id));
+            OZ (schema_guard.get_trigger_info(tenant_id, ref_db_id, trigger_info.get_ref_trg_name(), ref_trg_info));
+            if (OB_SUCC(ret) && trigger_info.is_order_follows()) {
+              action_order = ref_trg_info->get_action_order() + 1;
+            }
+          }
+        } else {
+          if (NULL == ref_trg_info) {
+            for (int64_t i = 0; OB_SUCC(ret) && i < trg_list.count(); i++) {
+              OZ (schema_guard.get_trigger_info(tenant_id, trg_list.at(i), old_trg_info));
+              OV (OB_NOT_NULL(old_trg_info));
+              if (OB_SUCC(ret) && ObTriggerInfo::is_same_timing_event(trigger_info, *old_trg_info)) {
+                action_order++;
+              }
+            }
+          } else {
+            bool is_follows = trigger_info.is_order_follows();
+            action_order = is_follows ? ref_trg_info->get_action_order() + 1 : ref_trg_info->get_action_order();
+            // ref_trg_info need to modify
+            for (int64_t i = 0; OB_SUCC(ret) && i < trg_list.count(); i++) {
+              OZ (schema_guard.get_trigger_info(tenant_id, trg_list.at(i), old_trg_info));
+              OV (OB_NOT_NULL(old_trg_info));
+              if (OB_SUCC(ret) && ObTriggerInfo::is_same_timing_event(trigger_info, *old_trg_info)
+                  && trigger_info.get_trigger_id() != old_trg_info->get_trigger_id()
+                  && ref_trg_info->get_trigger_id() != old_trg_info->get_trigger_id()) {
+                  if (ref_trg_info->get_action_order() < old_trg_info->get_action_order()) {
+                    new_action_order = old_trg_info->get_action_order() + 1;
+                    ALTER_OLD_TRIGGER(old_trg_info);
+                }
+              }
+            }
+            if (OB_SUCC(ret) && !is_follows) {
+              // if `PRECEDES`, the ref_trg_info action_order need to +1
+              new_action_order = ref_trg_info->get_action_order() + 1;
+              ALTER_OLD_TRIGGER(ref_trg_info);
+            }
+          }
+        }
+      }
+      OX (trigger_info.set_action_order(action_order));
+    } else if (!is_oracle_mode) {
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < trg_list.count(); i++) {
+          OZ (schema_guard.get_trigger_info(tenant_id, trg_list.at(i), old_trg_info));
+          OV (OB_NOT_NULL(old_trg_info));
+          if (OB_SUCC(ret) && ObTriggerInfo::is_same_timing_event(trigger_info, *old_trg_info)
+              && trigger_info.get_trigger_id() != old_trg_info->get_trigger_id()
+              && trigger_info.get_action_order() < old_trg_info->get_action_order()) {
+            new_action_order = old_trg_info->get_action_order() - 1;
+            ALTER_OLD_TRIGGER(old_trg_info);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
+int ObDDLService::handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObRlsPolicySchema schema;
+  const ObString &policy_name = arg.schema_.get_policy_name();
+  const ObString &ddl_stmt_str = arg.ddl_stmt_str_;
+  uint64_t tenant_id = arg.schema_.get_tenant_id();
+  int64_t refreshed_schema_version = 0;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("check inner stat failed", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input schema", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema.assign(arg.schema_))) {
+    LOG_WARN("failed to assign rls policy schema", K(ret));
+  } else {
+    ObDDLSQLTransaction trans(schema_service_);
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    const ObTableSchema *table_schema = NULL;
+    const ObRlsGroupSchema *rls_group_schema = NULL;
+    const ObRlsPolicySchema *old_schema = NULL;
+    bool is_db_in_recyclebin = false;
+
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, schema.get_table_id(), table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(schema));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", KR(ret), K(arg));
+    } else if (table_schema->is_in_recyclebin()) {
+      ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+      LOG_WARN("rls table is in recyclebin", KR(ret), K(arg));
+    } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(tenant_id,
+                                                                 table_schema->get_database_id(),
+                                                                 is_db_in_recyclebin))) {
+      LOG_WARN("failed to check database in recyclebin", KR(ret), KPC(table_schema));
+    } else if (is_db_in_recyclebin) {
+      ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+      LOG_WARN("database of rls table is in recyclebin", KR(ret), KPC(table_schema));
+    } else if (!table_schema->is_user_table() && !table_schema->is_view_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("only support rls on user table or user view", KR(ret), KPC(table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "policy on non-user table");
+    } else if (0 == schema.get_rls_group_id()) {
+      // the policy does not belong to any group, do nothing
+    } else if (OB_FAIL(schema_guard.get_rls_group_schema_by_id(tenant_id,
+                                                               schema.get_rls_group_id(),
+                                                               rls_group_schema))) {
+      LOG_WARN("failed to get rls group schema", KR(ret), K(arg));
+    } else if (OB_ISNULL(rls_group_schema)) {
+      ret = OB_ERR_POLICY_GROUP_NOT_EXIST;
+      LOG_WARN("rls group not exist", KR(ret), K(schema));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(refreshed_schema_version), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_rls_policy_schema_by_name(tenant_id, schema.get_table_id(),
+        schema.get_rls_group_id(), policy_name, old_schema))) {
+      LOG_WARN("failed to get rls policy from schema guard", K(ret), K(policy_name), K(arg));
+    } else {
+      switch (arg.ddl_type_) {
+        case OB_DDL_CREATE_RLS_POLICY: {
+          if (OB_NOT_NULL(old_schema)) {
+            ret = OB_ERR_POLICY_EXIST;
+            LOG_WARN("rls policy exist", KPC(old_schema), K(ret));
+          } else if (OB_FAIL(ddl_operator.create_rls_policy(schema, trans, ddl_stmt_str,
+                                                            true, table_schema))) {
+            LOG_WARN("failed to create rls policy", K(ret));
+          }
+          break;
+        }
+        case OB_DDL_DROP_RLS_POLICY: {
+          if (OB_ISNULL(old_schema)) {
+            ret = OB_ERR_POLICY_NOT_EXIST;
+            LOG_WARN("rls policy not exist", K(ret), K(policy_name), K(arg));
+          } else if (OB_FAIL(schema.assign(*old_schema))) {
+            LOG_WARN("failed to assign rls policy schema", KPC(old_schema), K(ret));
+          } else if (OB_FAIL(ddl_operator.drop_rls_policy(schema, trans, ddl_stmt_str,
+                                                          true, table_schema))) {
+            LOG_WARN("failed to drop rls policy", K(ret));
+          }
+          break;
+        }
+        case OB_DDL_ALTER_RLS_POLICY: {
+          if (OB_ISNULL(old_schema)) {
+            ret = OB_ERR_POLICY_NOT_EXIST;
+            LOG_WARN("rls policy not exist", K(ret), K(policy_name), K(arg));
+          } else if (OB_FAIL(schema.assign(*old_schema))) {
+            LOG_WARN("failed to assign rls policy schema", KPC(old_schema), K(ret));
+          } else if (arg.option_bitset_.has_member(ObRlsPolicyDDLArg::AlterOption::ENABLE)) {
+            schema.set_enable_flag(arg.schema_.get_enable_flag());
+            if (OB_FAIL(ddl_operator.alter_rls_policy(schema, trans, ddl_stmt_str))) {
+              LOG_WARN("failed to drop rls policy", K(ret));
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected alter option", K(ret));
+          }
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected stmt type", K(arg), K(ret));
+        }
+      }
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish schema failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::handle_rls_group_ddl(const obrpc::ObRlsGroupDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObRlsGroupSchema schema;
+  const ObString &group_name = arg.schema_.get_policy_group_name();
+  const ObString &ddl_stmt_str = arg.ddl_stmt_str_;
+  uint64_t tenant_id = arg.schema_.get_tenant_id();
+  int64_t refreshed_schema_version = 0;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("check inner stat failed", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input schema", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema.assign(arg.schema_))) {
+    LOG_WARN("failed to assign rls group schema", K(ret));
+  } else {
+    ObDDLSQLTransaction trans(schema_service_);
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    const ObTableSchema *table_schema = NULL;
+    const ObRlsGroupSchema *old_schema = NULL;
+    bool is_db_in_recyclebin = false;
+
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, schema.get_table_id(), table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(schema));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", KR(ret), K(arg));
+    } else if (table_schema->is_in_recyclebin()) {
+      ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+      LOG_WARN("rls table is in recyclebin", KR(ret), K(arg));
+    } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(tenant_id,
+                                                                 table_schema->get_database_id(),
+                                                                 is_db_in_recyclebin))) {
+      LOG_WARN("failed to check database in recyclebin", KR(ret), KPC(table_schema));
+    } else if (is_db_in_recyclebin) {
+      ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+      LOG_WARN("database of rls table is in recyclebin", KR(ret), KPC(table_schema));
+    } else if (!table_schema->is_user_table() && !table_schema->is_view_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("only support rls on user table or user view", KR(ret), KPC(table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "policy on non-user table");
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(refreshed_schema_version), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_rls_group_schema_by_name(tenant_id, schema.get_table_id(),
+        group_name, old_schema))) {
+      LOG_WARN("failed to get rls group from schema guard", K(ret), K(group_name), K(arg));
+    } else {
+      switch (arg.ddl_type_) {
+        case OB_DDL_CREATE_RLS_GROUP: {
+          if (OB_NOT_NULL(old_schema)) {
+            ret = OB_ERR_POLICY_GROUP_EXIST;
+            LOG_WARN("rls group exist", KPC(old_schema), K(ret));
+          } else if (OB_FAIL(ddl_operator.create_rls_group(schema, trans, ddl_stmt_str,
+                                                           true, table_schema))) {
+            LOG_WARN("failed to create rls group", K(ret));
+          }
+          break;
+        }
+        case OB_DDL_DROP_RLS_GROUP: {
+          ObSEArray<const ObRlsPolicySchema *, 4> policy_schemas;
+          if (OB_ISNULL(old_schema)) {
+            ret = OB_ERR_POLICY_GROUP_NOT_EXIST;
+            LOG_WARN("rls group not exist", K(ret), K(group_name), K(arg));
+          } else if (OB_FAIL(schema_guard.get_rls_policy_schemas_in_group(tenant_id,
+              schema.get_table_id(), old_schema->get_rls_group_id(), policy_schemas))) {
+            LOG_WARN("failed to get rls policy schemas", K(ret));
+          } else if (OB_UNLIKELY(policy_schemas.count() != 0)) {
+            ret = OB_ERR_POLICY_EXIST;
+            LOG_WARN("rls group is not empty", K(policy_schemas), K(ret));
+          } else if (OB_FAIL(schema.assign(*old_schema))) {
+            LOG_WARN("failed to assign rls group schema", KPC(old_schema), K(ret));
+          } else if (OB_FAIL(ddl_operator.drop_rls_group(schema, trans, ddl_stmt_str,
+                                                         true, table_schema))) {
+            LOG_WARN("failed to drop rls group", K(ret));
+          }
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected stmt type", K(arg), K(ret));
+        }
+      }
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish schema failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObRlsContextSchema schema;
+  const ObString &context_name = arg.schema_.get_context_name();
+  const ObString &attribute = arg.schema_.get_attribute();
+  const ObString &ddl_stmt_str = arg.ddl_stmt_str_;
+  uint64_t tenant_id = arg.schema_.get_tenant_id();
+  int64_t refreshed_schema_version = 0;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("check inner stat failed", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input schema", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema.assign(arg.schema_))) {
+    LOG_WARN("failed to assign rls context schema", K(ret));
+  } else {
+    ObDDLSQLTransaction trans(schema_service_);
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    const ObTableSchema *table_schema = NULL;
+    const ObRlsContextSchema *old_schema = NULL;
+    bool is_db_in_recyclebin = false;
+
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, schema.get_table_id(), table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(schema));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", KR(ret), K(arg));
+    } else if (table_schema->is_in_recyclebin()) {
+      ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+      LOG_WARN("rls table is in recyclebin", KR(ret), K(arg));
+    } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(tenant_id,
+                                                                 table_schema->get_database_id(),
+                                                                 is_db_in_recyclebin))) {
+      LOG_WARN("failed to check database in recyclebin", KR(ret), KPC(table_schema));
+    } else if (is_db_in_recyclebin) {
+      ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+      LOG_WARN("database of rls table is in recyclebin", KR(ret), KPC(table_schema));
+    } else if (!table_schema->is_user_table() && !table_schema->is_view_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("only support rls on user table or user view", KR(ret), KPC(table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "policy on non-user table");
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(refreshed_schema_version), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_rls_context_schema_by_name(tenant_id, schema.get_table_id(),
+        context_name, attribute, old_schema))) {
+      LOG_WARN("failed to get rls context from schema guard", K(ret), K(context_name), K(attribute));
+    } else {
+      switch (arg.ddl_type_) {
+        case OB_DDL_CREATE_RLS_CONTEXT: {
+          if (OB_NOT_NULL(old_schema)) {
+            ret = OB_ERR_DRIVING_CONTEXT_EXIST;
+            LOG_WARN("rls context exist", KPC(old_schema), K(ret));
+          } else if (OB_FAIL(ddl_operator.create_rls_context(schema, trans, ddl_stmt_str,
+                                                             true, table_schema))) {
+            LOG_WARN("failed to create rls context", K(ret));
+          }
+          break;
+        }
+        case OB_DDL_DROP_RLS_CONTEXT: {
+          if (OB_ISNULL(old_schema)) {
+            ret = OB_ERR_DRIVING_CONTEXT_NOT_EXIST;
+            LOG_WARN("rls context not exist", K(ret), K(context_name), K(attribute), K(arg));
+          } else if (OB_FAIL(schema.assign(*old_schema))) {
+            LOG_WARN("failed to assign rls context schema", KPC(old_schema), K(ret));
+          } else if (OB_FAIL(ddl_operator.drop_rls_context(schema, trans, ddl_stmt_str,
+                                                           true, table_schema))) {
+            LOG_WARN("failed to drop rls context", K(ret));
+          }
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected stmt type", K(arg), K(ret));
+        }
+      }
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish schema failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::ddl_wlock()
 {
   const int64_t timeout_us = THIS_WORKER.is_timeout_ts_valid() ?
@@ -31438,7 +31996,6 @@ int ObDDLService::try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_
   }
   return ret;
 }
-
 
 } // end namespace rootserver
 } // end namespace oceanbase

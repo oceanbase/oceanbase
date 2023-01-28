@@ -23,73 +23,80 @@ using namespace oceanbase::common;
 using namespace share;
 using namespace oceanbase::share::schema;
 
-int ObLogMerge::print_my_plan_annotation(char *buf,
-                                          int64_t &buf_len,
-                                          int64_t &pos,
-                                          ExplainType type)
+int ObLogMerge::get_plan_item_info(PlanText &plan_text,
+                                   ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUG_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("BUG_PRINTF fails", K(ret));
-  } else if (OB_FAIL(print_table_infos(ObString::make_string("columns"),
-                                       buf, buf_len, pos, type))) {
-    LOG_WARN("failed to print table info", K(ret));
-  } else if (NULL != table_partition_info_) {
-    if (OB_SUCC(ret)) {
+  if (OB_FAIL(ObLogDelUpd::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(print_table_infos(ObString::make_string("columns"),
+                                  buf,
+                                  buf_len,
+                                  pos,
+                                  type))) {
+      LOG_WARN("failed to print table info", K(ret));
+    } else if (NULL == table_partition_info_) {
+    } else if(OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("BUG_PRINTF fails", K(ret));
+    } else if (OB_FAIL(explain_print_partitions(*table_partition_info_,
+                                                buf,
+                                                buf_len,
+                                                pos))) {
+      LOG_WARN("Failed to print partitions");
+    } else { }
+    if (OB_SUCC(ret) &&
+        NULL != get_primary_dml_info() &&
+        !get_primary_dml_info()->column_convert_exprs_.empty()) {
+      const ObIArray<ObRawExpr *> &column_values = get_primary_dml_info()->column_convert_exprs_;
       if(OB_FAIL(BUF_PRINTF(", "))) {
         LOG_WARN("BUG_PRINTF fails", K(ret));
-      } else if (OB_FAIL(explain_print_partitions(*table_partition_info_, buf, buf_len, pos))) {
-        LOG_WARN("Failed to print partitions");
-      } else { }//do nothing
+      } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else {
+        EXPLAIN_PRINT_EXPRS(column_values, type);
+      }
     }
-  }
-  if (OB_SUCC(ret) && NULL != get_primary_dml_info() &&
-      !get_primary_dml_info()->column_convert_exprs_.empty()) {
-    const ObIArray<ObRawExpr *> &column_values = get_primary_dml_info()->column_convert_exprs_;
-    if(OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
+    if (OB_SUCC(ret) && !get_update_infos().empty() &&
+        NULL != get_update_infos().at(0)) {
+      const ObAssignments &assigns = get_update_infos().at(0)->assignments_;
+      if (OB_FAIL(BUF_PRINTF(",\n"))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF("      update("))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(print_assigns(assigns,
+                                       buf,
+                                       buf_len,
+                                       pos,
+                                       type))) {
+        LOG_WARN("failed to print assigns", K(ret));
+      } else { /* Do nothing */ }
+      BUF_PRINTF(")");
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
+      LOG_WARN("BUF_PRINTF fails", K(ret));
     } else {
-      EXPLAIN_PRINT_EXPRS(column_values, type);
-    }
-  }
-  if (OB_SUCC(ret) && !get_update_infos().empty() && NULL != get_update_infos().at(0)) {
-    const ObAssignments &assigns = get_update_infos().at(0)->assignments_;
-    if (OB_FAIL(BUF_PRINTF(",\n"))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("      update("))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else if (OB_FAIL(print_assigns(assigns,
-                                     buf, buf_len, pos, type))) {
-      LOG_WARN("failed to print assigns", K(ret));
-    } else { /* Do nothing */ }
-    BUF_PRINTF(")");
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    const ObIArray<ObRawExpr *> &update_conds = get_update_condition();
-    const ObIArray<ObRawExpr *> &delete_conds = get_delete_condition();
-    const ObIArray<ObRawExpr *> &insert_conds = get_insert_condition();
-    EXPLAIN_PRINT_EXPRS(insert_conds, type);
+      const ObIArray<ObRawExpr *> &update_conds = get_update_condition();
+      const ObIArray<ObRawExpr *> &delete_conds = get_delete_condition();
+      const ObIArray<ObRawExpr *> &insert_conds = get_insert_condition();
+      EXPLAIN_PRINT_EXPRS(insert_conds, type);
 
-    if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    }
+      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      }
 
-    EXPLAIN_PRINT_EXPRS(update_conds, type);
-    if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
+      EXPLAIN_PRINT_EXPRS(update_conds, type);
+      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      }
+      EXPLAIN_PRINT_EXPRS(delete_conds, type);
     }
-    EXPLAIN_PRINT_EXPRS(delete_conds, type);
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }
@@ -366,5 +373,28 @@ int ObLogMerge::gen_location_constraint(void *ctx)
   } else if (OB_FAIL(ObLogicalOperator::gen_location_constraint(ctx))) {
     LOG_WARN("failed to gen location constraint", K(ret));
   } else { /* do nothing */ }
+  return ret;
+}
+
+int ObLogMerge::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogDelUpd::inner_replace_op_exprs(to_replace_exprs))) {
+    LOG_WARN("failed to replace op exprs", K(ret));
+  } else if (OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_update_infos()))) {
+    LOG_WARN("failed to replace update dml info exprs");
+  } else if (OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_delete_infos()))) {
+    LOG_WARN("failed to replace delete dml info exprs");
+  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+                        static_cast<ObMergeLogPlan &>(my_dml_plan_).get_insert_condition()))) {
+    LOG_WARN("failed to replace insert condition exprs", K(ret));
+  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+                        static_cast<ObMergeLogPlan &>(my_dml_plan_).get_update_condition()))) {
+    LOG_WARN("failed to replace update condition exprs", K(ret));
+  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+                        static_cast<ObMergeLogPlan &>(my_dml_plan_).get_delete_condition()))) {
+    LOG_WARN("failed to replace delete condition exprs", K(ret));
+  }
   return ret;
 }

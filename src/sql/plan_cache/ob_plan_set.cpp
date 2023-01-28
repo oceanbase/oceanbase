@@ -26,6 +26,7 @@
 #include "sql/plan_cache/ob_plan_cache_value.h"
 #include "sql/plan_cache/ob_cache_object.h"
 #include "sql/plan_cache/ob_dist_plans.h"
+#include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
@@ -128,6 +129,13 @@ int ObPlanSet::match_params_info(const ParamStore *params,
             is_same = (related_user_sess_var_metas_.at(i) == sess_var.meta_);
           }
         }
+      }
+    }
+
+    // privilege
+    if (OB_SUCC(ret) && is_same && all_priv_constraints_.count() > 0) {
+      if (OB_FAIL(match_priv_cons(pc_ctx, is_same))) {
+        LOG_WARN("failed to check privilege constraint", K(ret));
       }
     }
 
@@ -365,6 +373,42 @@ int ObPlanSet::match_multi_stmt_info(const ParamStore &params,
   }
   return ret;
 }
+int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
+{
+  int ret = OB_SUCCESS;
+  is_matched = true;
+  bool has_priv = false;
+  ObSQLSessionInfo *session_info = pc_ctx.sql_ctx_.session_info_;
+  ObSchemaGetterGuard *schema_guard = pc_ctx.sql_ctx_.schema_guard_;
+  if (OB_ISNULL(session_info) || OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_matched && i < all_priv_constraints_.count(); ++i) {
+    const ObPCPrivInfo &priv_info = all_priv_constraints_.at(i);
+    bool has_priv = false;
+    if (OB_FAIL(ObOraSysChecker::check_ora_user_sys_priv(*schema_guard,
+                                                         session_info->get_effective_tenant_id(),
+                                                         session_info->get_priv_user_id(),
+                                                         session_info->get_database_name(),
+                                                         priv_info.sys_priv_,
+                                                         session_info->get_enable_role_array()))) {
+      if (OB_ERR_NO_PRIVILEGE == ret) {
+        ret = OB_SUCCESS;
+        LOG_DEBUG("lack sys privilege", "priv_type", all_priv_constraints_.at(i).sys_priv_);
+      } else {
+        LOG_WARN("failed to check ora user sys priv", K(ret));
+      }
+    } else {
+      has_priv = true;
+    }
+    if (OB_SUCC(ret)) {
+      is_matched = priv_info.has_privilege_ == has_priv;
+    }
+  }
+  return ret;
+}
+
 
 //判断多组参数中同一列参数的是否均为true/false, 并返回第一个参数是true/false
 int ObPlanSet::check_vector_param_same_bool(const ObObjParam &param_obj,
@@ -529,6 +573,7 @@ void ObPlanSet::reset()
   all_plan_const_param_constraints_.reset();
   all_equal_param_constraints_.reset();
   all_pre_calc_constraints_.reset();
+  all_priv_constraints_.reset();
   alloc_.reset();
 }
 
@@ -654,16 +699,19 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
         all_plan_const_param_constraints_.reset();
         all_equal_param_constraints_.reset();
         all_pre_calc_constraints_.reset();
+        all_priv_constraints_.reset();
     } else if (PST_SQL_CRSR == ps_t) {
       // otherwise it should not be empty
       CK( OB_NOT_NULL(sql_ctx.all_plan_const_param_constraints_),
           OB_NOT_NULL(sql_ctx.all_possible_const_param_constraints_),
           OB_NOT_NULL(sql_ctx.all_equal_param_constraints_),
-          OB_NOT_NULL(sql_ctx.all_pre_calc_constraints_));
+          OB_NOT_NULL(sql_ctx.all_pre_calc_constraints_),
+          OB_NOT_NULL(sql_ctx.all_priv_constraints_));
       OZ( (set_const_param_constraint)(*sql_ctx.all_plan_const_param_constraints_, false) );
       OZ( (set_const_param_constraint)(*sql_ctx.all_possible_const_param_constraints_, true) );
       OZ( (set_equal_param_constraint)(*sql_ctx.all_equal_param_constraints_) );
       OZ( (set_pre_calc_constraint(*sql_ctx.all_pre_calc_constraints_)));
+      OZ( (set_priv_constraint(*sql_ctx.all_priv_constraints_)));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get an unexpected plan set type", K(ps_t), K(plan.get_ns()));
@@ -792,6 +840,30 @@ int ObPlanSet::set_pre_calc_constraint(common::ObDList<ObPreCalcExprConstraint> 
   }
   return ret;
 }
+
+// add priv constraint
+int ObPlanSet::set_priv_constraint(common::ObIArray<ObPCPrivInfo> &priv_constraint)
+{
+  int ret = OB_SUCCESS;
+  all_priv_constraints_.reset();
+  all_priv_constraints_.set_allocator(&alloc_);
+  if (priv_constraint.empty()) {
+    //do nothing
+  } else if (OB_FAIL(all_priv_constraints_.init(priv_constraint.count()))) {
+    LOG_WARN("failed to init privilege constraint array", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < priv_constraint.count(); ++i) {
+    const ObPCPrivInfo &priv_info = priv_constraint.at(i);
+    if (OB_UNLIKELY(!(priv_info.sys_priv_ > PRIV_ID_NONE && priv_info.sys_priv_ < PRIV_ID_MAX))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid priv type", K(priv_info), K(ret));
+    } else if (OB_FAIL(all_priv_constraints_.push_back(priv_info))) {
+      LOG_WARN("failed to push back priv info");
+    }
+  }
+  return ret;
+}
+
 // match actually constraint
 int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
 {
@@ -800,6 +872,7 @@ int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
   ObIArray<ObPCConstParamInfo> *possible_param_cons =
                                         pc_ctx.sql_ctx_.all_possible_const_param_constraints_;
   ObIArray<ObPCParamEqualInfo> *equal_cons = pc_ctx.sql_ctx_.all_equal_param_constraints_;
+  ObIArray<ObPCPrivInfo> *priv_cons = pc_ctx.sql_ctx_.all_priv_constraints_;
   is_matched = true;
 
   if (OB_ISNULL(param_cons) ||
@@ -810,7 +883,8 @@ int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
     LOG_WARN("invalid arugment", K(param_cons), K(possible_param_cons), K(equal_cons));
   } else if (param_cons->count() != all_plan_const_param_constraints_.count() ||
              possible_param_cons->count() != all_possible_const_param_constraints_.count() ||
-             equal_cons->count() != all_equal_param_constraints_.count()) {
+             equal_cons->count() != all_equal_param_constraints_.count() ||
+             priv_cons->count() != all_priv_constraints_.count()) {
     is_matched = false;
   } else {
     for (int64_t i=0; is_matched && i < all_plan_const_param_constraints_.count(); i++) {
@@ -821,6 +895,9 @@ int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
     }
     for (int64_t i=0; is_matched && i < all_equal_param_constraints_.count(); i++) {
       is_matched = (all_equal_param_constraints_.at(i)==equal_cons->at(i));
+    }
+    for (int64_t i=0; is_matched && i < all_priv_constraints_.count(); i++) {
+      is_matched = (all_priv_constraints_.at(i)==priv_cons->at(i));
     }
   }
 
@@ -1042,6 +1119,7 @@ int ObSqlPlanSet::add_cache_obj(ObPlanCacheObject &cache_object,
   } else {
     ret = add_plan(static_cast<ObPhysicalPlan&>(cache_object), pc_ctx, ol_param_idx);
   }
+  cache_object.get_pre_expr_ref_count();
   // ref_cnt++;
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to add plan.", K(ret));
@@ -1232,6 +1310,7 @@ int ObSqlPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     enable_inner_part_parallel_exec_ = sql_plan.get_px_dop() > 1;
     contain_index_location = sql_plan.contain_index_location();
     LOG_DEBUG("using px", K(enable_inner_part_parallel_exec_));
+    plan.get_pre_expr_ref_count();
   }
   if (OB_SUCC(ret) && (!contain_index_location || is_multi_stmt_plan())) {
     const ObTablePartitionInfoArray &partition_infos = sql_ctx.partition_infos_;

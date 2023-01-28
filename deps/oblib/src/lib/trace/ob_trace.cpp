@@ -28,10 +28,8 @@ ObFLTSpanMgr* __attribute__((weak)) get_flt_span_manager()
 {
   return nullptr;
 }
-int __attribute__((weak)) handle_span_record(char* buf, const int64_t buf_len, ObFLTSpanMgr* flt_span_manager)
+int __attribute__((weak))handle_span_record(ObFLTSpanMgr *flt_span_manager, char* tag_buf, int64_t tag_len, ::oceanbase::trace::ObSpanCtx* span)
 {
-  UNUSED(buf);
-  UNUSED(buf_len);
   UNUSED(flt_span_manager);
   return 0;
 }
@@ -49,17 +47,6 @@ if (OB_NOT_NULL(span) && 0 == span->span_id_.high_) { \
   span->span_id_.low_ = UUID::gen_rand(); \
   span->span_id_.high_ = span->start_ts_; \
 }
-static const char* __span_type_mapper[] = {
-#define FLT_DEF_SPAN(name, comment) #name,
-#define __HIGH_LEVEL_SPAN
-#define __MIDDLE_LEVEL_SPAN
-#define __LOW_LEVEL_SPAN
-#include "lib/trace/ob_trace_def.h"
-#undef __LOW_LEVEL_SPAN
-#undef __MIDDLE_LEVEL_SPAN
-#undef __HIGH_LEVEL_SPAN
-#undef FLT_DEF_SPAN
-};
 thread_local ObTrace* ObTrace::save_buffer = nullptr;
 
 void flush_trace()
@@ -119,7 +106,7 @@ void flush_trace()
                      span->is_follow_ ? "true" : "false",
                      buf);
         buf[0] = '\0';
-        IGNORE_RETURN sql::handle_span_record(buf, MAX_TRACE_LOG_SIZE, sql::get_flt_span_manager());
+        IGNORE_RETURN sql::handle_span_record(sql::get_flt_span_manager(), buf, pos, span);
         if (0 != span->end_ts_) {
           current_span.remove(span);
           trace.freed_span_.add_first(span);
@@ -432,6 +419,7 @@ ObSpanCtx* ObTrace::begin_span(uint32_t span_type, uint8_t level, bool is_follow
       current_span_.add_first(new_span);
       new_span->span_type_ = span_type;
       new_span->span_id_.low_ = ++seq_;
+      new_span->span_id_.high_ = 0;
       new_span->source_span_ = last_active_span_;
       new_span->is_follow_ = is_follow;
       new_span->start_ts_ = ObTimeUtility::fast_current_time();
@@ -443,6 +431,18 @@ ObSpanCtx* ObTrace::begin_span(uint32_t span_type, uint8_t level, bool is_follow
   return new_span;
 }
 
+// used in ddl task tracing
+ObSpanCtx* ObTrace::begin_span_by_id(const uint32_t span_type, const uint8_t level,
+                                     const bool is_follow, const UUID span_id, const int64_t start_ts)
+{
+  ObSpanCtx *span = begin_span(span_type, level, is_follow);
+  if (OB_NOT_NULL(span)) {
+    span->span_id_ = span_id;
+    span->start_ts_ = start_ts;
+  }
+  return span;
+}
+
 void ObTrace::end_span(ObSpanCtx* span)
 {
   if (!trace_id_.is_inited() || OB_ISNULL(span) || !span->span_id_.is_inited()) {
@@ -450,6 +450,19 @@ void ObTrace::end_span(ObSpanCtx* span)
   } else {
     span->end_ts_ = ObTimeUtility::fast_current_time();
     last_active_span_ = span->source_span_;
+  }
+}
+
+// used in ddl task tracing
+void ObTrace::release_span(ObSpanCtx *&span)
+{
+  if (!trace_id_.is_inited() || OB_ISNULL(span) || !span->span_id_.is_inited()) {
+    // do nothing
+  } else {
+    end_span(span);
+    current_span_.remove(span);
+    freed_span_.add_first(span);
+    span = nullptr;
   }
 }
 
@@ -554,6 +567,11 @@ void ObTrace::dump_span()
   }
   _LIB_LOG(WARN, "%s backtrace: %s", buf, lbt());
 }
+
+OB_SERIALIZE_MEMBER(FltTransCtx,
+                    trace_id_,
+                    span_id_,
+                    policy_);
 
 }
 }

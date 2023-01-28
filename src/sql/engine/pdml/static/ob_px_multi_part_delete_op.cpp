@@ -48,7 +48,7 @@ int ObPxMultiPartDeleteSpec::register_to_datahub(ObExecContext &ctx) const
         ObBarrierWholeMsg::WholeMsgProvider *provider =
           new (buf)ObBarrierWholeMsg::WholeMsgProvider();
         ObSqcCtx &sqc_ctx = ctx.get_sqc_handler()->get_sqc_ctx();
-        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), *provider))) {
+        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), dtl::DH_BARRIER_WHOLE_MSG, *provider))) {
           LOG_WARN("fail add whole msg provider", K(ret));
         }
       }

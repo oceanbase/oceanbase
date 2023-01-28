@@ -64,7 +64,8 @@ private:
   int add_order_by(ObSelectStmt *stmt, ObSelectStmt *select_stmt);
   int check_can_push(ObSelectStmt *stmt, ObSelectStmt *upper_stmt, bool &can_push);
 
-  int pruning_set_query(ObSelectStmt *&stmt,
+  int pruning_set_query(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                        ObSelectStmt *&stmt,
                         bool &trans_happened);
   int check_exprs_constant_false(common::ObIArray<ObRawExpr*> &exprs,
                                  bool &constant_false,
@@ -84,6 +85,10 @@ private:
                                bool &need_remove,
                                int64_t stmt_idx,
                                SimplifySetHelper &helper);
+  int check_first_stmt_removable(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                 ObSelectStmt *&stmt,
+                                 ObIArray<int64_t> &remove_list,
+                                 bool &can_remove);
   int replace_set_stmt_with_child_stmt(ObSelectStmt *&parent_stmt,
                                       ObSelectStmt *child_stmt);
   int add_constraints_by_idx(common::ObIArray<int64_t> &constraints_idx,

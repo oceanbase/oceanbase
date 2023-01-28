@@ -182,47 +182,12 @@ int ObRawExprInfoExtractor::add_const(ObRawExpr &expr)
     ObRawExpr *param_expr = expr.get_param_expr(i);
     CONST_ACTION(param_expr);
   }
-  if (is_const_expr &&
-      (T_FUN_SYS_RAND == expr.get_expr_type()
-          || T_FUN_SYS_UUID == expr.get_expr_type()
-          || T_FUN_SYS_UUID_SHORT == expr.get_expr_type()
-          || T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type()
-          || T_FUN_SYS_AUTOINC_NEXTVAL == expr.get_expr_type()
-          || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == expr.get_expr_type()
-          || T_FUN_SYS_ROWNUM == expr.get_expr_type()
-          || T_FUN_SYS_ROWKEY_TO_ROWID == expr.get_expr_type()
-          || T_OP_CONNECT_BY_ROOT == expr.get_expr_type()
-          || T_FUN_SYS_CONNECT_BY_PATH == expr.get_expr_type()
-          || T_FUN_SYS_GUID == expr.get_expr_type()
-          || T_FUN_SYS_STMT_ID == expr.get_expr_type()
-          || T_FUN_SYS_SLEEP == expr.get_expr_type()
-          || T_OP_PRIOR == expr.get_expr_type()
-          || T_OP_ASSIGN == expr.get_expr_type()
-          || T_OP_GET_USER_VAR == expr.get_expr_type()
-          || T_FUN_NORMAL_UDF == expr.get_expr_type()
-          || T_FUN_SYS_REMOVE_CONST == expr.get_expr_type()
-          || T_FUN_SYS_WRAPPER_INNER == expr.get_expr_type()
-          || T_FUN_SYS_LAST_INSERT_ID == expr.get_expr_type()
-          || T_FUN_SYS_TO_BLOB == expr.get_expr_type()
-          || (T_FUN_SYS_SYSDATE == expr.get_expr_type() && lib::is_mysql_mode())
-          || not_calculable_expr(expr)
-          || (T_FUN_UDF == expr.get_expr_type()
-             && !static_cast<ObUDFRawExpr&>(expr).is_deterministic()))) {
-     is_const_expr = false;
-  }
-  if (OB_SUCC(ret) && T_OP_GET_USER_VAR == expr.get_expr_type()) {
-    if (expr.get_param_count() != 1 || OB_ISNULL(expr.get_param_expr(0)) ||
-        expr.get_param_expr(0)->get_expr_type() != T_USER_VARIABLE_IDENTIFIER) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected expr", K(ret), K(expr));
+  if (is_const_expr) {
+    bool is_const_inherit = true;
+    if (OB_FAIL(expr.is_const_inherit_expr(is_const_inherit))) {
+      LOG_WARN("failed to check expr is const in");
     } else {
-      ObUserVarIdentRawExpr *var_expr =
-          static_cast<ObUserVarIdentRawExpr *>(expr.get_param_expr(0));
-      // 当整个query中不存在对应用户变量的赋值操作，且不存在udf时，可以预计算用户变量
-      // 因为udf中可能存在用户变量赋值，但是resolver解析不到
-      if (var_expr->get_is_contain_assign() || var_expr->get_query_has_udf()) {
-        is_const_expr = false;
-      }
+      is_const_expr = is_const_inherit;
     }
   }
   if (is_const_expr) {
@@ -235,24 +200,6 @@ int ObRawExprInfoExtractor::add_const(ObRawExpr &expr)
     }
   }
   return ret;
-}
-
-bool ObRawExprInfoExtractor::not_calculable_expr(const ObRawExpr &expr)
-{
-  // NOTE: When adding rules here, please check whether ObRawExpr::is_vectorize_result()
-  // need add the same rules.
-  return expr.has_generalized_column()
-         || expr.has_flag(CNT_STATE_FUNC)
-         || expr.has_flag(CNT_USER_VARIABLE)
-         || expr.has_flag(CNT_ALIAS)
-         || expr.has_flag(CNT_VALUES)
-         || expr.has_flag(CNT_SEQ_EXPR)
-         || expr.has_flag(CNT_SYS_CONNECT_BY_PATH)
-         || expr.has_flag(CNT_RAND_FUNC)
-         || expr.has_flag(CNT_SO_UDF)
-         || expr.has_flag(CNT_PRIOR)
-         || expr.has_flag(CNT_VOLATILE_CONST)
-         || expr.has_flag(CNT_ASSIGN_EXPR);
 }
 
 int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
@@ -347,6 +294,10 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
       if (OB_FAIL(expr.add_flag(IS_ASSIGN_EXPR))) {
         LOG_WARN("failed to add flag IS_ASSIGN_EXPR", K(ret));
       }
+    } else if (T_OP_IS == expr.get_expr_type()) {
+      if (OB_FAIL(expr.add_flag(IS_IS_EXPR))) {
+        LOG_WARN("failed to add flag IS_IS_EXPR", K(ret));
+      }
     }
   } else if (3 == expr.get_param_count()) {
     // triple operator
@@ -363,10 +314,6 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
         if (OB_FAIL(expr.add_flag(IS_RANGE_COND))) {
           LOG_WARN("failed to add flag IS_RANGE_COND", K(ret));
         }
-      }
-    } else if (T_OP_IS == expr.get_expr_type()) {
-      if (OB_FAIL(expr.add_flag(IS_IS_EXPR))) {
-        LOG_WARN("failed to add flag IS_IS_EXPR", K(ret));
       }
     } else {}
   }

@@ -805,7 +805,8 @@ public:
                                  common::ObMySQLTransaction &trans);
   int alter_trigger(share::schema::ObTriggerInfo &new_trigger_info,
                     common::ObMySQLTransaction &tran,
-                    const common::ObString *ddl_stmt_str/*=NULL*/);
+                    const common::ObString *ddl_stmt_str/*=NULL*/,
+                    bool is_update_table_schema_version = true);
   int flashback_trigger(const share::schema::ObTriggerInfo &trigger_info,
                         uint64_t new_database_id,
                         const common::ObString &new_table_name,
@@ -898,6 +899,52 @@ public:
                      share::schema::ObDirectorySchema &schema,
                      common::ObMySQLTransaction &trans);
   //----End of functions for directory object----
+
+  //----Functions for row level security----
+  int create_rls_policy(share::schema::ObRlsPolicySchema &schema,
+                        common::ObMySQLTransaction &trans,
+                        const common::ObString &ddl_stmt_str,
+                        bool is_update_table_schema,
+                        const share::schema::ObTableSchema *table_schema);
+  int drop_rls_policy(const share::schema::ObRlsPolicySchema &schema,
+                      common::ObMySQLTransaction &trans,
+                      const common::ObString &ddl_stmt_str,
+                      bool is_update_table_schem,
+                      const share::schema::ObTableSchema *table_schemaa);
+  int alter_rls_policy(const share::schema::ObRlsPolicySchema &schema,
+                       common::ObMySQLTransaction &trans,
+                       const common::ObString &ddl_stmt_str);
+  int create_rls_group(share::schema::ObRlsGroupSchema &schema,
+                       common::ObMySQLTransaction &trans,
+                       const common::ObString &ddl_stmt_str,
+                       bool is_update_table_schema,
+                       const share::schema::ObTableSchema *table_schema);
+  int drop_rls_group(const share::schema::ObRlsGroupSchema &schema,
+                     common::ObMySQLTransaction &trans,
+                     const common::ObString &ddl_stmt_str,
+                     bool is_update_table_schema,
+                     const share::schema::ObTableSchema *table_schema);
+  int create_rls_context(share::schema::ObRlsContextSchema &schema,
+                         common::ObMySQLTransaction &trans,
+                         const common::ObString &ddl_stmt_str,
+                         bool is_update_table_schema,
+                         const share::schema::ObTableSchema *table_schema);
+  int drop_rls_context(const share::schema::ObRlsContextSchema &schema,
+                       common::ObMySQLTransaction &trans,
+                       const common::ObString &ddl_stmt_str,
+                       bool is_update_table_schema,
+                       const share::schema::ObTableSchema *table_schema);
+  int drop_rls_sec_column(const share::schema::ObRlsPolicySchema &schema,
+                          const share::schema::ObRlsSecColumnSchema &column_schema,
+                          common::ObMySQLTransaction &trans,
+                          const common::ObString &ddl_stmt_str);
+  int update_rls_table_schema(const share::schema::ObTableSchema &table_schema,
+                              const share::schema::ObSchemaOperationType ddl_type,
+                              common::ObMySQLTransaction &trans);
+  int drop_rls_object_in_drop_table(const share::schema::ObTableSchema &table_schema,
+                                    common::ObMySQLTransaction &trans,
+                                    share::schema::ObSchemaGetterGuard &schema_guard);
+  //----End of functions for row level security----
 
   int insert_dependency_infos(common::ObMySQLTransaction &trans,
                               common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,

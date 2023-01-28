@@ -275,8 +275,6 @@ int ObVariableSetResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> 
     } else if (OB_UNLIKELY(T_SELECT != info.sub_query_->type_)) {
       ret = OB_ERR_ILLEGAL_TYPE;
       LOG_WARN("Unknown statement type in subquery", "stmt_type", info.sub_query_->type_);
-    } else {
-      info.ref_expr_->set_expr_level(current_level);
     }
 
     if (OB_FAIL(ret)) {
@@ -289,7 +287,6 @@ int ObVariableSetResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> 
       // for set stmt, the parent stmt of subquery is subquery itself
       // we do this only to make sure that the sub_stmt is not a root stmt
       ObDMLStmt *dml_stmt = subquery_resolver.get_select_stmt();
-      sub_stmt->set_parent_namespace_stmt(dml_stmt);
       info.ref_expr_->set_ref_stmt(sub_stmt);
       info.ref_expr_->set_output_column(sub_stmt->get_select_item_size());
       // the column type of ref_expr stores the target type of subquery

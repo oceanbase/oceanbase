@@ -123,6 +123,8 @@ public:
   void set_execute_directly(bool v) { execute_directly_ = v; }
   bool is_execute_directly() const { return execute_directly_; }
   common::ObIAllocator &get_das_alloc() { return das_alloc_; }
+  int64_t get_das_mem_used() const { return das_alloc_.used() - init_mem_used_; }
+
   int pick_del_task_to_first();
   void print_all_das_task();
   void set_frozen_node();
@@ -170,6 +172,7 @@ private:
   DasAggregatedTaskList aggregated_tasks_;
   int64_t lookup_cnt_;
   int64_t task_cnt_;
+  int64_t init_mem_used_;
   ObDASRefMap task_map_;
   int32_t max_das_task_concurrency_;
   int32_t das_task_concurrency_limit_;

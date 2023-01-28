@@ -17,7 +17,6 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/ob_define.h"
 #include "lib/utility/utility.h"
-#include "lib/regex/ob_regex.h"
 #include "lib/checksum/ob_crc64.h"
 #include "lib/json/ob_yson.h"
 #include "common/ob_common_utility.h"

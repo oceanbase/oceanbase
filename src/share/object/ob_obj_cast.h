@@ -47,6 +47,12 @@ namespace common
 #define CM_ERROR_ON_SCALE_OVER           (1ULL << 10)
 #define CM_STRICT_JSON                   (1ULL << 11)
 
+#define CM_CS_LEVEL_RESERVED1            (1ULL << 48)
+#define CM_CS_LEVEL_RESERVED2            (1ULL << 49)
+#define CM_CS_LEVEL_RESERVED3            (1ULL << 50)
+#define CM_CS_LEVEL_SHIFT                48
+#define CM_CS_LEVEL_MASK                 7ULL
+#define CM_TIME_TRUNCATE_FRACTIONAL      (1ULL << 51)
 #define CM_TO_COLUMN_CS_LEVEL            (1ULL << 52)
 #define CM_ERROR_FOR_DIVISION_BY_ZERO    (1ULL << 53)
 #define CM_NO_ZERO_IN_DATE               (1ULL << 54) // reserve
@@ -89,6 +95,7 @@ typedef uint64_t ObCastMode;
 #define CM_IS_INTERNAL_CALL(mode)             ((CM_INTERNAL_CALL & (mode)) != 0)
 #define CM_IS_EXTERNAL_CALL(mode)             (!CM_IS_INTERNAL_CALL(mode))
 #define CM_IS_STRICT_MODE(mode)               ((CM_STRICT_MODE & (mode)) != 0)
+#define CM_IS_TIME_TRUNCATE_FRACTIONAL(mode)  ((CM_TIME_TRUNCATE_FRACTIONAL & (mode)) != 0)
 #define CM_IS_ERROR_FOR_DIVISION_BY_ZERO(mode)    \
   ((CM_ERROR_FOR_DIVISION_BY_ZERO & (mode)) != 0)
 #define CM_IS_NO_ZERO_IN_DATE(mode)           ((CM_NO_ZERO_IN_DATE & (mode)) != 0)
@@ -126,6 +133,10 @@ typedef uint64_t ObCastMode;
 #define CM_SET_GEOMETRY_MULTILINESTRING(mode)     ((mode) &= 0xFFFE0FFF, (mode) |= (5 << 12))
 #define CM_SET_GEOMETRY_MULTIPOLYGON(mode)        ((mode) &= 0xFFFE0FFF, (mode) |= (6 << 12))
 #define CM_SET_GEOMETRY_GEOMETRYCOLLECTION(mode)  ((mode) &= 0xFFFE0FFF, (mode) |= (7 << 12))
+#define CM_GET_CS_LEVEL(mode)                     (((mode) >> CM_CS_LEVEL_SHIFT) & CM_CS_LEVEL_MASK)
+#define CM_SET_CS_LEVEL(mode, level) \
+  ((mode) &= ~(CM_CS_LEVEL_MASK << CM_CS_LEVEL_SHIFT), \
+  (mode) |= ((level & CM_CS_LEVEL_MASK) << CM_CS_LEVEL_SHIFT))
 struct ObObjCastParams
 {
   // add params when necessary

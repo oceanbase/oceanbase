@@ -5056,7 +5056,8 @@ static int string_datetime(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("convert_string_collation", K(ret));
   } else {
     int64_t value = 0;
-    ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
+    bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
+    ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type, need_truncate);
     if (lib::is_oracle_mode()) {
       cvrt_ctx.oracle_nls_format_ = params.dtc_params_.get_nls_format(ObDateTimeType);
       CAST_RET(ObTimeConverter::str_to_date_oracle(utf8_string, cvrt_ctx, value));
@@ -5121,6 +5122,7 @@ static int string_time(const ObObjType expect_type, ObObjCastParams &params,
   int ret = OB_SUCCESS;
   int64_t value = 0;
   ObScale res_scale = -1;
+  bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class()
                   && ObTextTC != in.get_type_class()
                   && ObGeometryTC != in.get_type_class())
@@ -5132,7 +5134,7 @@ static int string_time(const ObObjType expect_type, ObObjCastParams &params,
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("invalid use of blob type", K(ret), K(in), K(expect_type));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cast to blob type");
-  } else if (CAST_FAIL(ObTimeConverter::str_to_time(in.get_string(), value, &res_scale))) {
+  } else if (CAST_FAIL(ObTimeConverter::str_to_time(in.get_string(), value, &res_scale, 0, need_truncate))) {
   } else {
     SET_RES_TIME(out);
   }

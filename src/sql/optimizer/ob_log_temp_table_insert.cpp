@@ -95,3 +95,19 @@ int ObLogTempTableInsert::est_cost()
   }
   return ret;
 }
+
+int ObLogTempTableInsert::get_plan_item_info(PlanText &plan_text,
+                                             ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    ObString &name = get_table_name();
+    BUF_PRINT_OB_STR(name.ptr(),
+                     name.length(),
+                     plan_item.object_alias_,
+                     plan_item.object_alias_len_);
+  }
+  return ret;
+}

@@ -48,6 +48,8 @@ public:
       const ObDDLTaskInfo &addition_info) override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
   virtual bool support_longops_monitoring() const override { return true; }
+  virtual void flt_set_task_span_tag() const override;
+  virtual void flt_set_status_span_tag() const override;
 protected:
   int table_redefinition(const share::ObDDLTaskStatus next_task_status);
   int copy_table_dependent_objects(const share::ObDDLTaskStatus next_task_status);

@@ -798,12 +798,12 @@ int ObDASWriteBuffer::Iterator::get_next_row_skip_const(ObEvalCtx &ctx, const Ob
   int ret = OB_SUCCESS;
   if (OB_LIKELY(cur_row_ != nullptr)) {
     //get next row from buffer list
-    ret = cur_row_->to_expr_skip_const(exprs, ctx);
+    ret = cur_row_->to_expr(exprs, ctx);
     cur_row_ = ObDASWriteBuffer::get_next_dml_row(cur_row_);
   } else if (OB_ISNULL(datum_iter_)) {
     ret = OB_ITER_END;
   } else {
-    ret = datum_iter_->get_next_row_skip_const(ctx, exprs);
+    ret = datum_iter_->get_next_row(ctx, exprs);
   }
 
   return ret;

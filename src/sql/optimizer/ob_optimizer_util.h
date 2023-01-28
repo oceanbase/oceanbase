@@ -69,6 +69,7 @@ class ObTablePartitionInfo;
 struct SubPlanInfo;
 class OptSelectivityCtx;
 class Path;
+class ObSharedExprResolver;
 class ObOptimizerUtil
 {
 public:
@@ -91,12 +92,14 @@ public:
   static int is_const_or_equivalent_expr(const common::ObIArray<ObRawExpr *> &exprs,
                                          const EqualSets &equal_sets,
                                          const common::ObIArray<ObRawExpr*> &const_exprs,
+                                         const common::ObIArray<ObRawExpr *> &exec_ref_exprs,
                                          const int64_t &pos,
                                          bool &is_const);
 
   static int is_const_or_equivalent_expr(const common::ObIArray<OrderItem> &order_items,
                                          const EqualSets &equal_sets,
                                          const common::ObIArray<ObRawExpr*> &const_exprs,
+                                         const common::ObIArray<ObRawExpr *> &exec_ref_exprs,
                                          const int64_t &pos,
                                          bool &is_const);
 
@@ -119,6 +122,7 @@ public:
                                       const common::ObIArray<OrderItem> &ordering,
                                       const EqualSets &equal_sets,
                                       const common::ObIArray<ObRawExpr*> &const_exprs,
+                                      const common::ObIArray<ObRawExpr *> &exec_ref_exprs,
                                       int64_t &prefix_count,
                                       bool &ordering_all_used,
                                       common::ObIArray<ObOrderDirection> &directions,
@@ -136,9 +140,19 @@ public:
                                  const ObRawExpr *to,
                                  const EqualSets &equal_sets);
 
-  static bool is_expr_equivalent(const ObRawExpr *from,
-                                 const ObRawExpr *to);
-
+  static int is_const_expr(const ObRawExpr* expr,
+                           const EqualSets &equal_sets,
+                           const common::ObIArray<ObRawExpr *> &const_exprs,
+                           const common::ObIArray<ObRawExpr *> &exec_ref_exprs,
+                           bool &is_const);
+  static int is_const_expr_recursively(const ObRawExpr* expr,
+                                       const common::ObIArray<ObRawExpr *> &exec_ref_exprs,
+                                       bool &is_const);
+  static int is_root_expr_const(const ObRawExpr* expr,
+                                const EqualSets &equal_sets,
+                                const common::ObIArray<ObRawExpr *> &const_exprs,
+                                const common::ObIArray<ObRawExpr *> &exec_ref_exprs,
+                                bool &is_const);
   static int is_const_expr(const ObRawExpr* expr,
                            const EqualSets &equal_sets,
                            const common::ObIArray<ObRawExpr *> &const_exprs,
@@ -249,13 +263,15 @@ public:
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr)
   {
-    int64_t dummy_index = -1;
-    return find_equal_expr(exprs, expr, dummy_index);
+    return find_item(exprs, expr);
   }
 
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr,
-                              int64_t &idx);
+                              int64_t &idx)
+  {
+    return find_item(exprs, expr ,&idx);
+  }
 
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr,
@@ -268,19 +284,6 @@ public:
   static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
                               const ObRawExpr *expr,
                               const EqualSets &equal_sets,
-                              int64_t &idx);
-
-  static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
-                              const ObRawExpr *expr,
-                              ObExprParamCheckContext &context)
-  {
-    int64_t dummy_index = -1;
-    return find_equal_expr(exprs, expr, context, dummy_index);
-  }
-
-  static bool find_equal_expr(const common::ObIArray<ObRawExpr*> &exprs,
-                              const ObRawExpr *expr,
-                              ObExprParamCheckContext &context,
                               int64_t &idx);
 
   static int find_stmt_expr_direction(const ObDMLStmt &stmt,
@@ -331,8 +334,6 @@ public:
 
   static int get_exec_ref_expr(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                ObIArray<ObRawExpr*> &ref_exprs);
-
-  static ObRawExpr* find_param_expr(const common::ObIArray<ObRawExpr*> &exprs, const int64_t param_num);
 
   static int extract_equal_exec_params(const ObIArray<ObRawExpr *> &exprs,
                                        const ObIArray<ObExecParamRawExpr *> &my_params,
@@ -453,8 +454,6 @@ public:
   static int is_const_expr(const ObRawExpr *expr,
                            const common::ObIArray<ObRawExpr *> &conditions,
                            bool &is_const);
-
-  static bool is_const_expr(const ObRawExpr *expr, const int64_t stmt_level = -1);
 
   static int is_same_table(
     const ObIArray<OrderItem> &exprs,
@@ -706,6 +705,18 @@ public:
                              const ObFdItemSet &fd_item_set,
                              const EqualSets &equal_sets,
                              const ObIArray<ObRawExpr *> &const_exprs,
+                             const ObIArray<ObRawExpr *> &exec_ref_exprs,
+                             const bool is_at_most_one_row,
+                             bool &need_sort,
+                             int64_t &prefix_pos,
+                             const int64_t part_cnt);
+
+  static int check_need_sort(const ObIArray<OrderItem> &expected_order_items,
+                             const ObIArray<OrderItem> &input_ordering,
+                             const ObFdItemSet &fd_item_set,
+                             const EqualSets &equal_sets,
+                             const ObIArray<ObRawExpr *> &const_exprs,
+                             const ObIArray<ObRawExpr *> &exec_ref_exprs,
                              const bool is_at_most_one_row,
                              bool &need_sort,
                              int64_t &prefix_pos);
@@ -716,9 +727,22 @@ public:
                              const ObFdItemSet &fd_item_set,
                              const EqualSets &equal_sets,
                              const ObIArray<ObRawExpr *> &const_exprs,
+                             const ObIArray<ObRawExpr *> &exec_ref_exprs,
                              const bool is_at_most_one_row,
                              bool &need_sort,
                              int64_t &prefix_pos);
+
+  static int check_need_sort(const ObIArray<ObRawExpr*> &expected_order_exprs,
+                             const ObIArray<ObOrderDirection> *expected_order_directions,
+                             const ObIArray<OrderItem> &input_ordering,
+                             const ObFdItemSet &fd_item_set,
+                             const EqualSets &equal_sets,
+                             const ObIArray<ObRawExpr *> &const_exprs,
+                             const ObIArray<ObRawExpr *> &exec_ref_exprs,
+                             const bool is_at_most_one_row,
+                             bool &need_sort,
+                             int64_t &prefix_pos,
+                             const int64_t part_cnt);
 
   static int decide_sort_keys_for_merge_style_op(const ObDMLStmt *stmt,
                                                  const EqualSets &stmt_equal_sets,
@@ -726,6 +750,7 @@ public:
                                                  const ObFdItemSet &fd_item_set,
                                                  const EqualSets &equal_sets,
                                                  const ObIArray<ObRawExpr*> &const_exprs,
+                                                 const ObIArray<ObRawExpr*> &exec_ref_exprs,
                                                  const bool is_at_most_one_row,
                                                  const ObIArray<ObRawExpr*> &merge_exprs,
                                                  const ObIArray<ObOrderDirection> &default_directions,
@@ -833,12 +858,14 @@ public:
   static int simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
                                     const EqualSets &equal_sets,
                                     const ObIArray<ObRawExpr *> &const_exprs,
+                                    const ObIArray<ObRawExpr *> &exec_ref_exprs,
                                     const ObIArray<ObRawExpr *> &candi_exprs,
                                     ObIArray<ObRawExpr *> &root_exprs);
 
   static int simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
                                     const EqualSets &equal_sets,
                                     const ObIArray<ObRawExpr *> &const_exprs,
+                                    const ObIArray<ObRawExpr *> &exec_ref_exprs,
                                     const ObIArray<OrderItem> &candi_items,
                                     ObIArray<OrderItem> &root_items);
 
@@ -847,14 +874,10 @@ public:
 
   static bool has_equal_join_conditions(const ObIArray<ObRawExpr*> &join_conditions);
 
-  static int convert_subplan_scan_const_expr(ObRawExprFactory &expr_factory,
-                                             const EqualSets &equal_sets,
-                                             const uint64_t table_id,
-                                             const ObDMLStmt &parent_stmt,
-                                             const ObSelectStmt &child_stmt,
-                                             bool skip_invalid,
-                                             const ObIArray<ObRawExpr*> &input_exprs,
-                                             ObIArray<ObRawExpr*> &output_exprs);
+  static int get_subplan_const_column(const ObDMLStmt &parent_stmt,
+                                      const uint64_t table_id,
+                                      const ObSelectStmt &child_stmt,
+                                      ObIArray<ObRawExpr *> &output_exprs);
 
   /*
    * 以下函数主要用于把subplan scan中内层继承上来的属性(e.g.,ordering,unique set,partition key)转换成外层可以识别的属性
@@ -904,24 +927,17 @@ public:
                                   ObIArray<ObRawExpr *> &parent_exprs);
 
   static int compute_const_exprs(const ObIArray<ObRawExpr *> &condition_exprs,
-                                 const int64_t stmt_level,
                                  ObIArray<ObRawExpr *> &const_exprs);
 
   static int compute_const_exprs(ObRawExpr *cur_expr,
-                                 const int64_t stmt_level,
                                  ObRawExpr *&res_const_expr);
-
-  static int compute_const_exprs(const ObIArray<ObRawExpr*> &condition_exprs,
-                                 ObIArray<ObRawExpr*> &const_exprs)
-  {
-    return compute_const_exprs(condition_exprs, -1, const_exprs);
-  }
 
   static int compute_stmt_interesting_order(const ObIArray<OrderItem> &ordering,
                                             const ObDMLStmt *stmt,
                                             const bool in_subplan_scan,
                                             EqualSets &equal_sets,
                                             const ObIArray<ObRawExpr *> &const_exprs,
+                                            const bool is_parent_set_disinct,
                                             const int64_t check_scope,
                                             int64_t &match_info,
                                             int64_t &max_prefix_count);
@@ -931,6 +947,7 @@ public:
                                             const bool in_subplan_scan,
                                             EqualSets &equal_sets,
                                             const ObIArray<ObRawExpr *> &const_exprs,
+                                            const bool is_parent_set_distinct,
                                             const int64_t check_scope,
                                             int64_t &match_info);
   /**
@@ -1039,6 +1056,7 @@ public:
                                bool &is_match);
 
   static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless);
+  static int is_lossless_column_conv(const ObRawExpr *expr, bool &is_lossless);
   static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr);
   static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr);
 
@@ -1344,6 +1362,69 @@ public:
 
   static int check_contain_batch_stmt_parameter(ObRawExpr* expr, bool &contain);
 
+  static int expr_calculable_by_exprs(const ObRawExpr *src_expr,
+                                      const ObIArray<ObRawExpr*> &dst_exprs,
+                                      bool &is_calculable);
+  static int get_minset_of_exprs(const ObIArray<ObRawExpr *> &src_exprs,
+                                 ObIArray<ObRawExpr *> &min_set);
+
+  static int build_rel_ids_by_equal_set(const EqualSet &equal_set,
+                                        ObRelIds &rel_ids);
+  static int build_rel_ids_by_equal_sets(const EqualSets &equal_sets,
+                                         ObIArray<ObRelIds> &rel_ids_array);
+  static int find_expr_in_equal_sets(const EqualSets &equal_sets,
+                                     const ObRawExpr *target_expr,
+                                     int64_t &idx);
+  static bool find_rel_ids(const ObIArray<ObRelIds> &rel_ids_array,
+                           const ObRelIds &target_ids,
+                           int64_t *idx = NULL);
+
+  static int check_can_encode_sortkey(const common::ObIArray<OrderItem> &order_keys,
+                                        bool &can_sort_opt,
+                                        ObLogPlan& plan);
+
+  static int extract_equal_join_conditions(const ObIArray<ObRawExpr *> &equal_join_conditions,
+                                           const ObRelIds &left_tables,
+                                           ObIArray<ObRawExpr *> &left_exprs,
+                                           ObIArray<ObRawExpr *> &right_exprs);
+
+  static int extract_pushdown_join_filter_quals(const ObIArray<ObRawExpr *> &left_quals,
+                                                const ObIArray<ObRawExpr *> &right_quals,
+                                                const ObSqlBitSet<> &right_tables,
+                                                ObIArray<ObRawExpr *> &pushdown_left_quals,
+                                                ObIArray<ObRawExpr *> &pushdown_right_quals);
+
+  static int pushdown_join_filter_into_subquery(const ObDMLStmt &parent_stmt,
+                                                const ObSelectStmt &subquery,
+                                                const ObIArray<ObRawExpr*> &pushdown_left_quals,
+                                                const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                ObIArray<ObRawExpr*> &candi_left_quals,
+                                                ObIArray<ObRawExpr*> &candi_right_quals,
+                                                bool &can_pushdown);
+
+  static int check_pushdown_join_filter_quals(const ObDMLStmt &parent_stmt,
+                                              const ObSelectStmt &subquery,
+                                              const ObIArray<ObRawExpr*> &pushdown_left_quals,
+                                              const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                              ObIArray<ObRawExpr*> &candi_left_quals,
+                                              ObIArray<ObRawExpr*> &candi_right_quals);
+
+  static int check_pushdown_join_filter_for_subquery(const ObDMLStmt &parent_stmt,
+                                                     const ObSelectStmt &subquery,
+                                                     ObIArray<ObRawExpr*> &common_exprs,
+                                                     const ObIArray<ObRawExpr*> &pushdown_left_quals,
+                                                     const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                     ObIArray<ObRawExpr*> &candi_left_quals,
+                                                     ObIArray<ObRawExpr*> &candi_right_quals);
+
+  static int check_pushdown_join_filter_for_set(const ObSelectStmt &parent_stmt,
+                                                const ObSelectStmt &subquery,
+                                                ObIArray<ObRawExpr*> &common_exprs,
+                                                const ObIArray<ObRawExpr*> &pushdown_left_quals,
+                                                const ObIArray<ObRawExpr*> &pushdown_right_quals,
+                                                ObIArray<ObRawExpr*> &candi_left_quals,
+                                                ObIArray<ObRawExpr*> &candi_right_quals);
+
   static int init_calc_part_id_expr(ObLogPlan * log_plan,
                                     const uint64_t table_id,
                                     const uint64_t ref_table_id,
@@ -1356,6 +1437,7 @@ public:
   static int replace_column_with_select_for_partid(const ObInsertStmt *stmt,
                                                    ObOptimizerContext &opt_ctx,
                                                    ObRawExpr *&calc_part_id_expr);
+
 private:
   //disallow construct
   ObOptimizerUtil();

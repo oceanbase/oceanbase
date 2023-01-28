@@ -14,6 +14,7 @@
 #define OCEANBASE_OBSERVER_MYSQL_SYNC_CMD_DRIVER_
 
 #include "observer/mysql/ob_query_driver.h"
+#include "rpc/obmysql/packet/ompk_eof.h"
 
 namespace oceanbase
 {
@@ -44,6 +45,7 @@ public:
   virtual ~ObSyncCmdDriver();
 
   int send_eof_packet(bool has_more_result);
+  int seal_eof_packet(bool has_more_result, obmysql::OMPKEOF& eofp);
   virtual int response_query_result(sql::ObResultSet &result,
                                     bool is_ps_protocol,
                                     bool has_more_result,

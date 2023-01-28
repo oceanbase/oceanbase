@@ -708,6 +708,15 @@ public:
                                                      const ObExprResType &column_type,
                                                      const ObString &column_name,
                                                      ObObj &part_value);
+  static int get_generated_column_expr_temp(TableItem *table_item,
+                                            ObIArray<ObRawExpr *> &gen_col_depend, ObIArray<ObString> &gen_col_names,
+                                            ObIArray<ObColumnSchemaV2 *> &gen_col_schema,
+                                            ObSqlSchemaGuard *schema_guard,
+                                            common::ObIAllocator &allocator,
+                                            ObRawExprFactory &expr_factory,
+                                            ObSQLSessionInfo &session_info,
+                                            ObDataTypeCastParams &dtc_params);
+
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,

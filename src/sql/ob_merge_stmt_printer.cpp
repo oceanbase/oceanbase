@@ -25,10 +25,7 @@ void ObMergeStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObMergeS
 int ObMergeStmtPrinter::do_print()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited!", K(ret));
-  } else if (OB_ISNULL(stmt_)) {
+  if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else {
@@ -60,6 +57,10 @@ int ObMergeStmtPrinter::print()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("target table or source table is null",
                K(ret), K(target_table), K(source_table));
+    }
+    if (OB_SUCC(ret) && (print_params_.force_print_cte_ || print_params_.print_with_cte_) &&
+        OB_FAIL(print_cte_define())) {
+      LOG_WARN("failed to print cte", K(ret));
     }
     DATA_PRINTF("merge ");
     if (OB_SUCC(ret) && print_hint()) {

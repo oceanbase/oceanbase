@@ -52,13 +52,13 @@ public:
   ObIArray<IndexDMLInfo *> &get_delete_infos() { return index_del_infos_; }
   const common::ObIArray<ObPCParamEqualInfo> &get_equal_infos() const { return equal_infos_; }
   int set_equal_infos(const ObIArray<ObPCParamEqualInfo> &equal_infos) { return equal_infos_.assign(equal_infos); }
+  virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 protected:
   int generate_rowid_expr_for_trigger() override;
   int generate_multi_part_partition_id_expr() override;
-  virtual int print_my_plan_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type);
   virtual int gen_location_constraint(void *ctx) override;
   DISALLOW_COPY_AND_ASSIGN(ObLogMerge);
 private:

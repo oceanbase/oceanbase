@@ -324,15 +324,15 @@ void TestOptimizerUtils::explain_plan_json(ObLogPlan *logical_plan, std::ofstrea
 
   output_buf[pos++] = '\n';
 
-  // 1. generate json
-  Value *val = NULL;
-  logical_plan->get_plan_root()->to_json(output_buf, OB_MAX_LOG_BUFFER_SIZE, pos, val);
-  Tidy tidy(val);
-  LOG_DEBUG("succ to generate json object", K(pos));
+  // // 1. generate json
+  // Value *val = NULL;
+  // logical_plan->get_plan_root()->to_json(output_buf, OB_MAX_LOG_BUFFER_SIZE, pos, val);
+  // Tidy tidy(val);
+  // LOG_DEBUG("succ to generate json object", K(pos));
 
-  // 2. from json to string
-  pos = tidy.to_string(buf, OB_MAX_LOG_BUFFER_SIZE);
-  LOG_DEBUG("succ to print json to string", K(pos));
+  // // 2. from json to string
+  // pos = tidy.to_string(buf, OB_MAX_LOG_BUFFER_SIZE);
+  // LOG_DEBUG("succ to print json to string", K(pos));
 
   if (pos < OB_MAX_LOG_BUFFER_SIZE -2) {
     output_buf[pos + 1] = '\n';

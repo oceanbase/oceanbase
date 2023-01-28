@@ -4232,7 +4232,7 @@ int ObSchemaPrinter::print_simple_trigger_definition(const ObTriggerInfo &trigge
       OV (OB_NOT_NULL(trigger_define_node = trigger_source_node->children_[1]));
       OV (T_TG_SIMPLE_DML == trigger_define_node->type_,
             OB_ERR_UNEXPECTED, trigger_define_node->type_);
-      OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[3]));
+      OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[4]));
 
       OZ (BUF_PRINTF("\n%.*s",
                     (int)(trigger_body_node->str_len_),

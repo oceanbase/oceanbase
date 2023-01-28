@@ -15,6 +15,7 @@
 
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -44,8 +45,10 @@ class ObExprCGCtx
 public:
   ObExprCGCtx(common::ObIAllocator &allocator,
               ObSQLSessionInfo *session,
-              share::schema::ObSchemaGetterGuard *schema_guard)
-    : allocator_(&allocator), session_(session), schema_guard_(schema_guard)
+              share::schema::ObSchemaGetterGuard *schema_guard,
+              const uint64_t cur_cluster_version)
+    : allocator_(&allocator), session_(session),
+      schema_guard_(schema_guard), cur_cluster_version_(cur_cluster_version)
   {}
 
 private:
@@ -55,6 +58,7 @@ public:
   common::ObIAllocator *allocator_;
   ObSQLSessionInfo *session_;
   share::schema::ObSchemaGetterGuard *schema_guard_;
+  uint64_t cur_cluster_version_;
 };
 
 class ObRawExpr;
@@ -89,11 +93,12 @@ public:
                        ObSQLSessionInfo *session,
                        share::schema::ObSchemaGetterGuard *schema_guard,
                        const int64_t original_param_cnt,
-                       int64_t param_cnt)
+                       int64_t param_cnt,
+                       const uint64_t cur_cluster_version = CLUSTER_CURRENT_VERSION)
     : allocator_(allocator),
       original_param_cnt_(original_param_cnt),
       param_cnt_(param_cnt),
-      op_cg_ctx_(allocator_, session, schema_guard),
+      op_cg_ctx_(allocator_, session, schema_guard, cur_cluster_version),
       flying_param_cnt_(0),
       batch_size_(0),
       rt_question_mark_eval_(false),
@@ -156,6 +161,7 @@ public:
                                     const RowDesc &row_desc,
                                     ObIAllocator &alloctor,
                                     ObSQLSessionInfo *session,
+                                    share::schema::ObSchemaGetterGuard *schema_gaurd,
                                     ObTempExpr *&temp_expr);
 
   static int init_temp_expr_mem_size(ObTempExpr &temp_expr);

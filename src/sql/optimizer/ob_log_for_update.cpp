@@ -42,33 +42,37 @@ const char* ObLogForUpdate::get_name() const
   return ret;
 }
 
-int ObLogForUpdate::print_my_plan_annotation(char *buf,
-                                             int64_t &buf_len,
-                                             int64_t &pos,
-                                             ExplainType type)
+int ObLogForUpdate::get_plan_item_info(PlanText &plan_text,
+                                       ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
-  UNUSED(type);
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF(", lock tables"))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info_.count(); ++i) {
-    TableItem *table = NULL;
-    if (OB_ISNULL(index_dml_info_.at(i)) ||
-        OB_ISNULL(table = stmt->get_table_item_by_id(index_dml_info_.at(i)->table_id_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("index dml info is null", K(ret), K(index_dml_info_.at(i)), K(table));
-    } else if (OB_FAIL(BUF_PRINTF("%c%.*s%c",
-                                  i == 0 ? '(' : ' ',
-                                  table->get_table_name().length(),
-                                  table->get_table_name().ptr(),
-                                  i == index_dml_info_.count() - 1 ? ')' : ','))) {
-      LOG_WARN("failed to print lock table name", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(BUF_PRINTF("lock tables"))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info_.count(); ++i) {
+      TableItem *table = NULL;
+      if (OB_ISNULL(index_dml_info_.at(i)) ||
+          OB_ISNULL(table = stmt->get_table_item_by_id(index_dml_info_.at(i)->table_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index dml info is null", K(ret), K(index_dml_info_.at(i)), K(table));
+      } else if (OB_FAIL(BUF_PRINTF("%c%.*s%c",
+                                    i == 0 ? '(' : ' ',
+                                    table->get_table_name().length(),
+                                    table->get_table_name().ptr(),
+                                    i == index_dml_info_.count() - 1 ? ')' : ','))) {
+        LOG_WARN("failed to print lock table name", K(ret));
+      }
+    }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }
@@ -184,9 +188,7 @@ int ObLogForUpdate::get_for_update_dependant_exprs(ObIArray<ObRawExpr*> &dep_exp
     LOG_WARN("get unexpected null", K(ret));
   } else {
     const TableItem *table_item = NULL;
-    ObSEArray<ObRawExpr*, 4> part_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info_.count(); i++) {
-      part_exprs.reset();
       if (OB_ISNULL(index_dml_info_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index dml info is null", K(ret));
@@ -197,16 +199,6 @@ int ObLogForUpdate::get_for_update_dependant_exprs(ObIArray<ObRawExpr*> &dep_exp
       } else if (NULL != index_dml_info_.at(i)->old_part_id_expr_ &&
                  OB_FAIL(dep_exprs.push_back(index_dml_info_.at(i)->old_part_id_expr_))) {
         LOG_WARN("failed to push back old partition id expr", K(ret));
-      } else if (OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(
-                             index_dml_info_.at(i)->table_id_))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(get_part_column_exprs(table_item->table_id_,
-                                               table_item->ref_id_,
-                                               part_exprs))) {
-        LOG_WARN("failed to get partition exprs", K(ret));
-      } else if (OB_FAIL(append_array_no_dup(dep_exprs, part_exprs))) {
-        LOG_WARN("failed to append exprs", K(ret));
       } else { /*do nothing*/ }
     }
     // mark expr reference
@@ -316,17 +308,41 @@ bool ObLogForUpdate::is_multi_table_skip_locked()
   return is_multi_table_skip_locked;
 }
 
-int ObLogForUpdate::copy_part_expr_pre(CopyPartExprCtx &ctx)
+int ObLogForUpdate::inner_replace_op_exprs(const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info_.count(); ++i) {
     IndexDMLInfo *dml_info = index_dml_info_.at(i);
     if (OB_ISNULL(dml_info)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(dml_info));
-    } else if (NULL != dml_info->old_part_id_expr_ && 
-               OB_FAIL(copy_part_expr(ctx, dml_info->old_part_id_expr_))) {
-      LOG_WARN("failed to copy part expr", K(ret));
+      LOG_WARN("dml info is null", K(ret));
+    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+                                            dml_info->ck_cst_exprs_))) {
+      LOG_WARN("failed to replace exprs", K(ret));
+    } else if (NULL != dml_info->new_part_id_expr_ &&
+        OB_FAIL(replace_expr_action(to_replace_exprs, dml_info->new_part_id_expr_))) {
+      LOG_WARN("failed to replace new parititon id expr", K(ret));
+    } else if (NULL != dml_info->old_part_id_expr_ &&
+        OB_FAIL(replace_expr_action(to_replace_exprs, dml_info->old_part_id_expr_))) {
+      LOG_WARN("failed to replace old parititon id expr", K(ret));
+    } else if (NULL != dml_info->old_rowid_expr_ &&
+        OB_FAIL(replace_expr_action(to_replace_exprs, dml_info->old_rowid_expr_))) {
+      LOG_WARN("failed to replace old rowid expr", K(ret));
+    } else if (NULL != dml_info->new_rowid_expr_ &&
+        OB_FAIL(replace_expr_action(to_replace_exprs, dml_info->new_rowid_expr_))) {
+      LOG_WARN("failed to replace new rowid expr", K(ret));
+    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+              dml_info->column_convert_exprs_))) {
+      LOG_WARN("failed to replace exprs", K(ret));
+    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+                      dml_info->column_old_values_exprs_))) {
+      LOG_WARN("failed to replace column old values exprs ", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < dml_info->assignments_.count(); ++j) {
+      if (OB_FAIL(replace_expr_action(to_replace_exprs,
+                                      dml_info->assignments_.at(j).expr_))) {
+        LOG_WARN("failed to replace expr", K(ret));
+      }
     }
   }
   return ret;

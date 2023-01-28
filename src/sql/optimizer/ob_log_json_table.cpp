@@ -104,28 +104,31 @@ int ObLogJsonTable::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogJsonTable::print_my_plan_annotation(char *buf,
-                                                 int64_t &buf_len,
-                                                 int64_t &pos,
-                                                 ExplainType type)
+int ObLogJsonTable::get_plan_item_info(PlanText &plan_text,
+                                       ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  const ObRawExpr* value = get_value_expr();
-  int64_t tmp_pos = pos;
-
-  if (OB_ISNULL(buf) || OB_ISNULL(value)) {
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else if (OB_ISNULL(get_value_expr())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to print plan annotation.", K(ret));
+    LOG_WARN("unexpected null value expr", K(ret));
   } else {
-    BUF_PRINTF("\n      ");
-    BUF_PRINTF("JSON_TABLE(");
-    if (OB_FAIL(value->get_name(buf, buf_len, pos, type))) {
-      LOG_WARN("failed to print value expr.", K(ret));
-    }
-    BUF_PRINTF(")");
-    if (OB_FAIL(ret)) {
-      pos = tmp_pos;
-    }
+    BEGIN_BUF_PRINT;
+    const ObRawExpr* value = get_value_expr();
+    EXPLAIN_PRINT_EXPR(value, type);
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
+  }
+  if (OB_SUCC(ret)) {
+    const ObString &name = get_table_name();
+    BUF_PRINT_OB_STR(name.ptr(),
+                     name.length(),
+                     plan_item.object_alias_,
+                     plan_item.object_alias_len_);
+    BUF_PRINT_STR("JSON_TABLE",
+                  plan_item.object_type_,
+                  plan_item.object_type_len_);
   }
   return ret;
 }

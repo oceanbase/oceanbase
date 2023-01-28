@@ -601,14 +601,15 @@ int ObPxMSReceiveOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
   // 从channel sets 读取数据，并向上迭代
+  const ObPxReceiveSpec &spec = static_cast<const ObPxReceiveSpec &>(get_spec());
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
   if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Get operator context failed", K(ret), K(MY_SPEC.id_));
   } else if (OB_FAIL(try_link_channel())) {
     LOG_WARN("failed to init channel", K(ret));
-  } else if (ctx_.get_bf_ctx().filter_ready_ && OB_FAIL(ObPxMsgProc::mark_rpc_filter(ctx_))) {
-    LOG_WARN("fail to send rpc bloom filter", K(ret));
+  } else if (!ctx_.get_bloom_filter_ctx_array().empty() && OB_FAIL(prepare_send_bloom_filter())) {
+    LOG_WARN("fail to prepare send bloom filter", K(ret));
   } else if (OB_FAIL(try_send_bloom_filter())) {
     LOG_WARN("fail to send bloom filter", K(ret));
   }
@@ -650,7 +651,7 @@ int ObPxMSReceiveOp::inner_get_next_row()
       } else if (row_heap_.capacity() == row_heap_.count()) {
         if (OB_FAIL(row_heap_.pop(store_row))) {
           LOG_WARN("fail pop row from heap", K(ret));
-        } else if (OB_FAIL(store_row->to_expr(MY_SPEC.all_exprs_, eval_ctx_))) {
+        } else if (OB_FAIL(ObReceiveRowReader::to_expr(store_row, MY_SPEC.all_exprs_, eval_ctx_))) {
           LOG_WARN("failed to convert store row", K(ret));
         } else {
           LOG_TRACE("trace output row", K(ret), K(ObToStringExprRow(eval_ctx_, MY_SPEC.all_exprs_)));

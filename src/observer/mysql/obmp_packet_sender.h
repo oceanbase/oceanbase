@@ -99,9 +99,12 @@ public:
                                 bool is_partition_hit = true,
                                 void *extra_err_info = NULL) = 0;
   virtual int send_ok_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt=NULL) = 0;
-  virtual int send_eof_packet(const sql::ObSQLSessionInfo &session, const ObMySQLResultSet &result) = 0;
+  virtual int send_eof_packet(const sql::ObSQLSessionInfo &session,
+                              const ObMySQLResultSet &result,
+                              ObOKPParam *ok_param = NULL) = 0;
   virtual bool need_send_extra_ok_packet() = 0;
   virtual int flush_buffer(const bool is_last) = 0;
+  virtual ObSMConnection* get_conn() const = 0;
 };
 
 class ObMPPacketSender : public ObIMPPacketSender
@@ -126,7 +129,8 @@ public:
                                 void *extra_err_info = NULL) override;
   virtual int send_ok_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt=NULL) override;
   virtual int send_eof_packet(const sql::ObSQLSessionInfo &session,
-                              const ObMySQLResultSet &result) override;
+                              const ObMySQLResultSet &result,
+                              ObOKPParam *ok_param = NULL) override;
   virtual bool need_send_extra_ok_packet() override
   { return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet(); }
   virtual int flush_buffer(const bool is_last);

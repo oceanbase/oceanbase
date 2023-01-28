@@ -29,7 +29,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::rootserver;
 
 ObColumnRedefinitionTask::ObColumnRedefinitionTask()
-  : ObDDLRedefinitionTask(), sstable_complete_request_time_(0), has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false), 
+  : ObDDLRedefinitionTask(ObDDLType::DDL_COLUMN_REDEFINITION), sstable_complete_request_time_(0), has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false),
     is_sstable_complete_task_submitted_(false), allocator_(lib::ObLabel("RedefTask"))
 {
 }
@@ -72,6 +72,7 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     } else {
       cluster_version_ = GET_MIN_CLUSTER_VERSION();
       is_inited_ = true;
+      ddl_tracing_.open();
     }
   }
   return ret;
@@ -122,6 +123,9 @@ int ObColumnRedefinitionTask::init(const ObDDLTaskRecord &task_record)
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;
+
+      // set up span during recover task
+      ddl_tracing_.open_for_recovery();
     }
   }
   return ret;
@@ -148,7 +152,7 @@ int ObColumnRedefinitionTask::wait_data_complement(const ObDDLTaskStatus next_ta
     if (OB_SUCC(ret) && OB_FAIL(check_data_dest_tables_columns_checksum(1/*execution_id*/))) {
       LOG_WARN("fail to check the columns checkum between data table and hidden one", K(ret));
     }
-    if (OB_FAIL(switch_status(next_task_status, ret))) {
+    if (OB_FAIL(switch_status(next_task_status, true, ret))) {
       LOG_WARN("fail to swith task status", K(ret));
     }
     LOG_INFO("wait data complement finished", K(ret), K(*this));
@@ -517,7 +521,7 @@ int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus
     }
   }
   if (state_finish) {
-    if (OB_FAIL(switch_status(next_task_status, ret))) {
+    if (OB_FAIL(switch_status(next_task_status, true, ret))) {
       LOG_WARN("fail to switch status", K(ret));
     }
   }
@@ -578,7 +582,7 @@ int ObColumnRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status
   }
   DEBUG_SYNC(COLUMN_REDEFINITION_TAKE_EFFECT);
   if (new_status == next_task_status || OB_FAIL(ret)) {
-    if (OB_FAIL(switch_status(next_task_status, ret))) {
+    if (OB_FAIL(switch_status(next_task_status, true, ret))) {
       LOG_WARN("fail to switch status", K(ret));
     }
   }
@@ -594,6 +598,7 @@ int ObColumnRedefinitionTask::process()
   } else if (OB_FAIL(check_health())) {
     LOG_WARN("check health failed", K(ret));
   } else {
+    ddl_tracing_.restore_span_hierarchy();
     switch(task_status_) {
       case ObDDLTaskStatus::PREPARE:
         if (OB_FAIL(prepare(ObDDLTaskStatus::WAIT_TRANS_END))) {
@@ -640,6 +645,7 @@ int ObColumnRedefinitionTask::process()
         LOG_WARN("unexpected table redefinition task state", K(task_status_));
         break;
     }
+    ddl_tracing_.release_span_hierarchy();
   }
   return ret;
 }
@@ -763,4 +769,52 @@ int ObColumnRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
   }
 
   return ret;
+}
+
+void ObColumnRedefinitionTask::flt_set_task_span_tag() const
+{
+  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,
+              ddl_data_table_id, object_id_, ddl_schema_version, schema_version_,
+              ddl_snapshot_version, snapshot_version_, ddl_ret_code, ret_code_);
+}
+
+void ObColumnRedefinitionTask::flt_set_status_span_tag() const
+{
+  switch (task_status_) {
+  case ObDDLTaskStatus::PREPARE: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::WAIT_TRANS_END: {
+    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::LOCK_TABLE: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::REDEFINITION: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::COPY_TABLE_DEPENDENT_OBJECTS: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::TAKE_EFFECT: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::FAIL: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::SUCCESS: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  default: {
+    break;
+  }
+  }
 }

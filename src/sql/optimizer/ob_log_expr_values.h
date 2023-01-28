@@ -65,13 +65,14 @@ class ObLogExprValues : public ObLogicalOperator
     int extract_err_log_info();
     int mark_probably_local_exprs();
     int allocate_dummy_output();
+    virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+
+    virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
   private:
     int construct_array_binding_values();
     int construct_sequence_values();
-    virtual int print_my_plan_annotation(char *buf,
-                                         int64_t &buf_len,
-                                         int64_t &pos,
-                                         ExplainType type);
   private:
     common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> value_exprs_;
     common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> value_desc_;

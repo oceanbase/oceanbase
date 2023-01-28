@@ -1790,7 +1790,8 @@ public:
       in_notfound_scope_(false),
       in_warning_scope_(false),
       in_handler_scope_(false),
-      is_contain_goto_stmt_(false) {}
+      is_contain_goto_stmt_(false),
+      is_autonomous_block_(false) {}
   ObPLStmtBlock(common::ObIAllocator &allocator,
                 ObPLBlockNS *pre_ns,
                 ObPLSymbolTable *symbol_table,
@@ -1809,7 +1810,8 @@ public:
       in_notfound_scope_(false),
       in_warning_scope_(false),
       in_handler_scope_(false),
-      is_contain_goto_stmt_(false) {}
+      is_contain_goto_stmt_(false),
+      is_autonomous_block_(false) {}
   virtual ~ObPLStmtBlock() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -1829,6 +1831,9 @@ public:
   inline bool in_warning() const { return in_warning_scope_; }
   inline void set_handler() { in_handler_scope_ = true; }
   inline bool in_handler() const { return in_handler_scope_; }
+  inline void set_is_autonomous() { is_autonomous_block_ = true; }
+  inline bool get_is_autonomous() const { return is_autonomous_block_; }
+  inline void clear_aotonomous() { is_autonomous_block_ = false; }
   inline bool get_is_contain_goto_stmt() const { return is_contain_goto_stmt_; }
   inline void set_is_contain_goto_stmt(bool flag) { is_contain_goto_stmt_ = flag; }
   inline const ObPLSymbolTable *get_symbol_table() const { return ns_.get_symbol_table(); }
@@ -1855,6 +1860,7 @@ private:
   bool in_warning_scope_;
   bool in_handler_scope_;
   bool is_contain_goto_stmt_;
+  bool is_autonomous_block_; // 是否是标记为autonomous的block
 };
 
 class ObPLDeclareVarStmt : public ObPLStmt

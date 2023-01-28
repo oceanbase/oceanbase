@@ -161,7 +161,7 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
       }
         break;
       default: {
-        ret = OB_NOT_SUPPORTED;
+        ret = OB_ERR_UNEXPECTED;
         PL_CACHE_LOG(WARN, "pl object to cache is not valid", K(pl_object->get_ns()), K(ret));
       }
       break;

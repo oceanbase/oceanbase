@@ -310,8 +310,12 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_virtual_ash.cpp
   virtual_table/ob_virtual_sql_plan_statistics.cpp
   virtual_table/ob_virtual_table_iterator_factory.cpp
-  virtual_table/ob_virtual_trace_log.cpp
   virtual_table/ob_all_virtual_dml_stats.cpp
+  virtual_table/ob_virtual_span_info.cpp
+  virtual_table/ob_virtual_show_trace.cpp
+  virtual_table/ob_all_virtual_sql_plan.cpp
+  virtual_table/ob_all_virtual_plan_table.cpp
+  virtual_table/ob_all_virtual_plan_real_info.cpp
 )
 
 ob_server_add_target(ob_server)

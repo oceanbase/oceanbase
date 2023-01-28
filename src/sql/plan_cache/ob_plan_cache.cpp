@@ -630,7 +630,6 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
   return ret;
 }
 
-
 int ObPlanCache::add_plan_cache(ObILibCacheCtx &ctx,
                                 ObILibCacheObject *cache_obj)
 {
@@ -1206,7 +1205,7 @@ int ObPlanCache::ref_cache_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard
   int ret = OB_SUCCESS;
   ObCacheObjAtomicOp op(guard.ref_handle_);
   ObGlobalReqTimeService::check_req_timeinfo();
-  if (OB_FAIL(co_mgr_.atomic_get_cache_obj(obj_id, op))) {
+  if (OB_FAIL(co_mgr_.atomic_get_alloc_cache_obj(obj_id, op))) {
     SQL_PC_LOG(WARN, "failed to get update plan statistic", K(obj_id), K(ret));
   } else {
     guard.cache_obj_ = op.get_value();

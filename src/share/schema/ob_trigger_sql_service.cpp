@@ -260,6 +260,10 @@ int ObTriggerSqlService::fill_dml_sql(const ObTriggerInfo &trigger_info,
   OZ (dml.add_column("package_exec_env", ObHexEscapeSqlStr(trigger_info.get_package_exec_env())));
   OZ (dml.add_column("sql_mode", trigger_info.get_sql_mode()));
   OZ (dml.add_column("trigger_priv_user", ObHexEscapeSqlStr(trigger_info.get_trigger_priv_user())));
+  OZ (dml.add_column("order_type", trigger_info.get_order_type_value()));
+  OZ (dml.add_column("ref_trg_db_name", ObHexEscapeSqlStr(trigger_info.get_ref_trg_db_name())));
+  OZ (dml.add_column("ref_trg_name", ObHexEscapeSqlStr(trigger_info.get_ref_trg_name())));
+  OZ (dml.add_column("action_order", trigger_info.get_action_order()));
   return ret;
 }
 

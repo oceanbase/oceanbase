@@ -263,6 +263,9 @@ public:
   // https://yuque.antfin-inc.com/ob/sql/cnr75l
   virtual int register_to_datahub(ObExecContext &exec_ctx) const
     { UNUSED(exec_ctx); return common::OB_SUCCESS; }
+  // register init channel msg to sqc_ctx, used for px
+  virtual int register_init_channel_msg(ObExecContext &ctx)
+    { UNUSED(ctx); return common::OB_SUCCESS; }
 
   uint32_t get_child_cnt() const { return child_cnt_; }
   ObOpSpec **get_children() const { return children_; }

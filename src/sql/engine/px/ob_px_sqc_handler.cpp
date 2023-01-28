@@ -393,5 +393,42 @@ void ObPxSqcHandler::check_interrupt()
   }
 }
 
+int ObPxSqcHandler::thread_count_auto_scaling(int64_t &reserved_px_thread_count)
+{
+  int ret = OB_SUCCESS;
+  /* strategy 1
+   * if single table cannot be divided into much ranges,
+   * the max thread cnt should be less than ranges cnt.
+   */
+  int64_t range_cnt = 0;
+  ObGranulePump &pump = sub_coord_->get_sqc_ctx().gi_pump_;
+  int64_t temp_cnt = reserved_px_thread_count;
+  if (reserved_px_thread_count <= 1 || !sqc_init_args_->sqc_.is_single_tsc_leaf_dfo()) {
+  } else if (OB_ISNULL(sub_coord_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("subcoord is null", K(ret));
+  } else {
+    ObGranulePump &pump = sub_coord_->get_sqc_ctx().gi_pump_;
+    if (OB_FAIL(pump.get_first_tsc_range_cnt(range_cnt))) {
+      LOG_WARN("fail to get first tsc range cnt", K(ret));
+    } else if (0 == range_cnt) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("range cnt equal 0", K(ret));
+    } else {
+      reserved_px_thread_count = min(reserved_px_thread_count, range_cnt);
+      reserved_px_thread_count_ = reserved_px_thread_count;
+      if (temp_cnt > reserved_px_thread_count) {
+        LOG_TRACE("sqc px worker auto-scaling worked", K(temp_cnt), K(range_cnt), K(reserved_px_thread_count));
+      }
+      if (OB_FAIL(notifier_->set_expect_worker_count(reserved_px_thread_count))) {
+        LOG_WARN("failed to set expect worker count", K(ret), K(reserved_px_thread_count_));
+      } else {
+        sqc_init_args_->sqc_.set_task_count(reserved_px_thread_count);
+      }
+    }
+  }
+  return ret;
+}
+
 } // sql
 } // oceanbase

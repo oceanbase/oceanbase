@@ -1,7 +1,5 @@
 add_subdirectory(compress)
 add_subdirectory(restore)
-add_subdirectory(regex)
-target_compile_definitions(regex PRIVATE -DREGEX_STANDALONE -DREGEX_WCHAR)
 
 ob_set_subtarget(oblib_lib ALONE
   timezone/ob_timezone_util.cpp

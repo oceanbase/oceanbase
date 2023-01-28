@@ -94,6 +94,7 @@ private:
   int fill_package_info(share::schema::ObTriggerInfo &trigger_info);
 
   int resolve_base_object(obrpc::ObCreateTriggerArg &trigger_arg, bool search_public_schema);
+  int resolve_order_clause(const ParseNode *parse_node, obrpc::ObCreateTriggerArg &trigger_arg);
 
 private:
   static const common::ObString REF_OLD;

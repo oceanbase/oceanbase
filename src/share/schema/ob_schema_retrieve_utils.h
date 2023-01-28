@@ -395,6 +395,11 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(directory);
   RETRIEVE_SCHEMA_FUNC_DECLARE(context);
   RETRIEVE_SCHEMA_FUNC_DECLARE(mock_fk_parent_table);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(rls_policy);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(rls_group);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(rls_context);
+  template<typename T>
+  static int retrieve_object_list(const uint64_t tenant_id, T &result, common::ObIArray<uint64_t> &trigger_list);
   template<typename T>
   static int retrieve_mock_fk_parent_table_schema_column(
       const uint64_t tenant_id, T &result,
@@ -460,6 +465,10 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(directory, ObDirectorySchema);
   FILL_SCHEMA_FUNC_DECLARE(context, ObContextSchema);
   FILL_SCHEMA_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  FILL_SCHEMA_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
+  FILL_SCHEMA_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
+  FILL_SCHEMA_FUNC_DECLARE(rls_context, ObRlsContextSchema);
+  FILL_SCHEMA_FUNC_DECLARE(rls_column, ObRlsSecColumnSchema);
 
   //for full schema
   template<typename T>
@@ -590,6 +599,19 @@ public:
       ObUserInfo *&user_info);
   template<typename T>
   static bool compare_user_id(const T &user_info, const uint64_t user_id);
+  template<typename T>
+  static int retrieve_rls_column_schema(const uint64_t tenant_id,
+                                        T &result,
+                                        ObArray<ObRlsPolicySchema *> &rls_policy_array);
+  template<typename T>
+  static int find_rls_policy_schema(const uint64_t rls_policy_id,
+                                    ObArray<T *> rls_policy_schema_array,
+                                    T *&rls_policy_schema);
+  template<typename T>
+  static bool compare_rls_policy_id(const T *rls_policy_schema, const uint64_t rls_policy_id);
+  template<typename T>
+  static int fill_object_id(const uint64_t tenant_id, T &result,
+                            uint64_t &object_id, bool &is_deleted);
 
 //===========================================================================
 

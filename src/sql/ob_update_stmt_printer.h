@@ -24,7 +24,7 @@ namespace sql
 class ObUpdateStmtPrinter : public ObDMLStmtPrinter {
 
 public:
-  ObUpdateStmtPrinter() {}
+  ObUpdateStmtPrinter()=delete;
   ObUpdateStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObUpdateStmt *stmt,
                       ObSchemaGetterGuard *schema_guard,
                       common::ObObjPrintParams print_params) :

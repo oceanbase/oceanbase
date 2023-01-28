@@ -85,6 +85,7 @@ const int64_t OB_MAX_CLIENT_INFO_LENGTH = 64;
 const int64_t OB_MAX_MOD_NAME_LENGTH = 48;
 const int64_t OB_MAX_ACT_NAME_LENGTH = 32;
 const int64_t OB_MAX_UUID_LENGTH = 16;
+const int64_t OB_MAX_UUID_STR_LENGTH = 36;
 const int64_t MAX_ZONE_LENGTH = 128;
 const int64_t MAX_REGION_LENGTH = 128;
 const int64_t MAX_GTS_NAME_LENGTH = 128;
@@ -156,6 +157,9 @@ const uint64_t SEARRAY_INIT_NUM = 4;
 const int64_t OB_DEFAULT_TABLE_DOP = 1;
 const int64_t OB_DEFAULT_META_OBJ_PERCENTAGE_LIMIT = 10;
 const uint64_t OB_DEFAULT_COLUMN_SRS_ID = 0xffffffffffffffe0;
+const int64_t OB_MAX_SPAN_LENGTH = 1024;
+const int64_t OB_MAX_SPAN_TAG_LENGTH = 8 * 1024L;
+const int64_t OB_MAX_REF_TYPE_LENGTH = 10;
 
 // See ObDeviceHealthStatus for more information
 const int64_t OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH = 20;
@@ -789,6 +793,7 @@ const int64_t SYS_MAX_ALLOCATE_MEMORY = 1L << 34;
 
 // mem factor
 const double SQL_AUDIT_MEM_FACTOR = 0.1;
+const double SQL_PLAN_MEM_FACTOR = 0.1;
 const double MONITOR_MEM_FACTOR = 0.01;
 const double KVCACHE_FACTOR = TENANT_RESERVE_MEM_RATIO;
 
@@ -1570,12 +1575,21 @@ const int64_t OB_MAX_NUMBER_PRECISION = 38;          //Number in Oracle: p:[1, 3
 const int64_t OB_MAX_NUMBER_PRECISION_INNER = 40;    //Number in Oracle: p can reach 40 if not define by user
 const int64_t OB_MIN_NUMBER_SCALE = -84;             //Number in Oracle: s:[-84, 127]
 const int64_t OB_MAX_NUMBER_SCALE = 127;             //Number in Oracle: s:[-84, 127]
+
 // len_ = 2, se_ = 192: 2 digits(e.g: 111.111)
 const uint32_t NUM_DESC_2DIGITS_POSITIVE_DECIMAL = 0xc0000002;
 // len_ = 1, se_ = 191: 1 digit fragment(e.g 0.111)
 const uint32_t NUM_DESC_1DIGIT_POSITIVE_FRAGMENT = 0xbf000001;
 // len_ = 1, se_ = 192: 1 digit integer(e.g 111)
 const uint32_t NUM_DESC_1DIGIT_POSITIVE_INTEGER = 0xc0000001;
+// len_ = 2, se_ = 64: 2 digits(e.g: -111.111)
+const uint32_t NUM_DESC_2DIGITS_NEGATIVE_DECIMAL = 0x40000002;
+// len_ = 1, se_ = 65: 1 digit fragment(e.g -0.111)
+const uint32_t NUM_DESC_1DIGIT_NEGATIVE_FRAGMENT = 0x41000001;
+// len_ = 1, se_ = 64: 1 digit integer(e.g -111)
+const uint32_t NUM_DESC_1DIGIT_NEGATIVE_INTEGER = 0x40000001;
+
+
 const int64_t OB_DECIMAL_NOT_SPECIFIED = -1;
 const int64_t OB_MIN_NUMBER_FLOAT_PRECISION = 1;     //Float in Oracle: p[1, 126]
 const int64_t OB_MAX_NUMBER_FLOAT_PRECISION = 126;
@@ -2072,6 +2086,12 @@ enum ObWFRemoveMode
   REMOVE_EXTRENUM = 2
 };
 
+enum ObTraceGranularity
+{
+  QUERY_LEVEL = 0,
+  TRANS_LEVEL = 1
+};
+
 } // end namespace common
 } // end namespace oceanbase
 
@@ -2166,6 +2186,7 @@ struct ObNumberDesc
   explicit ObNumberDesc(const uint32_t desc): desc_(desc) {}
   explicit ObNumberDesc(const uint8_t len, uint8_t flag, uint8_t exp, uint8_t sign)
                        : len_(len), reserved_(0), flag_(flag), exp_(exp), sign_(sign) {}
+
   bool is_2d_positive_decimal()
   {
     return (desc_ == oceanbase::common::NUM_DESC_2DIGITS_POSITIVE_DECIMAL);
@@ -2178,6 +2199,20 @@ struct ObNumberDesc
   {
     return (desc_ == oceanbase::common::NUM_DESC_1DIGIT_POSITIVE_INTEGER);
   }
+
+  bool is_2d_negative_decimal()
+  {
+    return (desc_ == oceanbase::common::NUM_DESC_2DIGITS_NEGATIVE_DECIMAL);
+  }
+  bool is_1d_negative_fragment()
+  {
+    return (desc_ == oceanbase::common::NUM_DESC_1DIGIT_NEGATIVE_FRAGMENT);
+  }
+  bool is_1d_negative_integer()
+  {
+    return (desc_ == oceanbase::common::NUM_DESC_1DIGIT_NEGATIVE_INTEGER);
+  }
+
   union
   {
     uint32_t desc_;

@@ -1090,9 +1090,9 @@ int ObTableParam::construct_lob_locator_param(const ObTableSchema &table_schema,
   // generate rowid_projector
   if (use_lob_locator && OB_SUCC(ret)) {
     ObSEArray<uint64_t, 4> rowid_col_ids;
-    int64_t rowkey_col_cnt = 0;
-    if (OB_FAIL(table_schema.get_column_ids_serialize_to_rowid(rowid_col_ids, rowkey_col_cnt))) {
-      LOG_WARN("Failed to get columns needed by rowid", K(ret));
+    // The lob type generates column no need partition info in rowkey table.
+    if (OB_FAIL(table_schema.get_rowkey_column_ids(rowid_col_ids))) {
+      LOG_WARN("Failed to get rowkey column ids", K(ret));
     } else if (OB_FAIL(rowid_projector.init(rowid_col_ids.count()))) {
       LOG_WARN("Failed to init rowid projector", K(ret));
     } else {
@@ -1116,16 +1116,15 @@ int ObTableParam::construct_lob_locator_param(const ObTableSchema &table_schema,
           LOG_WARN("column which rowid dependent is not exist",
                    K(rowid_col_ids.at(i)), K(rowid_col_ids), K(ret));
         }
-        // generate rowid_version_
-        if (OB_SUCC(ret) && OB_FAIL(table_schema.get_rowid_version(rowkey_col_cnt,
-                                                                   rowid_col_ids.count(),
-                                                                   rowid_version))) {
-          LOG_WARN("get rowid versionf failed", K(ret));
+        if (table_schema.is_heap_table()) {
+          rowid_version = table_schema.is_extended_rowid_mode() ? ObURowIDData::EXT_HEAP_TABLE_ROWID_VERSION : ObURowIDData::HEAP_TABLE_ROWID_VERSION;
+        } else {
+          rowid_version = common::ObURowIDData::LOB_NO_PK_ROWID_VERSION;
         }
       } // rowid col ids end
     }
     LOG_TRACE("construct lob locator param", K(use_lob_locator), K(rowid_projector),
-            K(rowkey_col_cnt), K(rowid_col_ids), K(rowid_version));
+              K(rowid_col_ids), K(rowid_version));
   }
 
   return ret;

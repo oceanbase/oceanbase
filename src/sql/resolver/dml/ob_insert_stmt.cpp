@@ -96,30 +96,6 @@ int ObInsertStmt::assign(const ObInsertStmt &other)
   return ret;
 }
 
-int ObInsertStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(table_info_.get_relation_exprs(expr_checker))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  } else if (OB_FAIL(ObDelUpdStmt::inner_get_relation_exprs(expr_checker))) {
-    LOG_WARN("get delup stmt relation exprs failed", K(ret));
-  }
-  return ret;
-}
-
-int ObInsertStmt::replace_inner_stmt_expr(const ObIArray<ObRawExpr*> &other_exprs,
-                                          const ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDelUpdStmt::replace_inner_stmt_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else if (OB_FAIL(table_info_.replace_exprs(other_exprs,
-                                               new_exprs))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  }
-  return ret;
-}
-
 int ObInsertStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
 {
   is_modified = table_info_.ref_table_id_ == ref_table_id;
@@ -340,24 +316,6 @@ int ObInsertStmt::get_value_vectors_for_heap_table(common::ObIArray<ObRawExpr*> 
   }
   return ret;
 }
-
-// int ObInsertStmt::expand_exprs(const ObSQLSessionInfo &session)
-// {
-//   int ret = OB_SUCCESS;
-//   if (stmt::T_REPLACE == stmt_type_ || stmt::T_INSERT == stmt_type_) {
-//     // expand returning expr with conv expr in new engine
-//     const common::ObIArray<ObColumnRefRawExpr *> *table_columns = get_table_columns();
-//     CK(NULL != table_columns);
-//     for (int64_t i = 0; OB_SUCC(ret) && i < returning_exprs_.count(); i++) {
-//       for (int64_t j = 0; OB_SUCC(ret) && j < table_columns->count(); j++) {
-//         OZ(ObRawExprUtils::replace_ref_column(returning_exprs_.at(i),
-//                                               table_columns->at(j),
-//                                               column_conv_functions_.at(j)));
-//       }
-//     }
-//   }
-//   return ret;
-// }
 
 int ObInsertStmt::get_ddl_sort_keys(common::ObIArray<OrderItem> &sort_keys) const
 {

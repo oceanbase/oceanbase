@@ -50,6 +50,7 @@ typedef ObFixedArray<common::ObObjMeta, common::ObIAllocator> UserSessionVarMeta
 typedef ObFixedArray<ObPCConstParamInfo, common::ObIAllocator> ConstParamConstraint;
 typedef ObFixedArray<ObPCParamEqualInfo, common::ObIAllocator> EqualParamConstraint;
 typedef ObDList<ObPreCalcExprConstraint> PreCalcExprConstraint;
+typedef ObFixedArray<ObPCPrivInfo, common::ObIAllocator> PrivConstraint;
 
 enum ObPlanSetType
 {
@@ -108,6 +109,7 @@ public:
         all_possible_const_param_constraints_(alloc_),
         all_plan_const_param_constraints_(alloc_),
         all_pre_calc_constraints_(),
+        all_priv_constraints_(),
         multi_stmt_rowkey_pos_(alloc_),
         pre_cal_expr_handler_(NULL),
         res_map_rule_id_(common::OB_INVALID_ID),
@@ -182,6 +184,8 @@ private:
 
   int set_pre_calc_constraint(common::ObDList<ObPreCalcExprConstraint> &pre_calc_cons);
 
+  int set_priv_constraint(common::ObIArray<ObPCPrivInfo> &priv_constraint);
+
   int match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched);
   /**
    * @brief Match const param constraint.
@@ -198,6 +202,7 @@ private:
 
   int pre_calc_exprs(ObExecContext &exec_ctx);
 
+  int match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched);
   static int check_vector_param_same_bool(const ObObjParam &param_obj,
                                          bool &first_val,
                                          bool &is_same);
@@ -222,6 +227,7 @@ protected:
   ConstParamConstraint all_plan_const_param_constraints_;
   EqualParamConstraint all_equal_param_constraints_;
   PreCalcExprConstraint all_pre_calc_constraints_;
+  PrivConstraint all_priv_constraints_;
   // maintain the rowkey position for multi_stmt
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
   // pre calculable expression list handler.

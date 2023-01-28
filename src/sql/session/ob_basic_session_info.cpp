@@ -107,6 +107,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       log_id_level_map_valid_(false),
       cur_phy_plan_(NULL),
       plan_id_(0),
+      flt_vars_(),
       capability_(),
       proxy_capability_(),
       client_mode_(OB_MIN_CLIENT_MODE),
@@ -368,6 +369,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   sys_var_inc_info_.reset();
   sys_var_in_pc_str_.reset();
   config_in_pc_str_.reset();
+  flt_vars_.reset();
   is_first_gen_ = true;
   is_first_gen_config_ = true;
   CHAR_CARRAY_INIT(trace_id_buff_);
@@ -1107,6 +1109,7 @@ int ObBasicSessionInfo::load_default_configs_in_pc()
 {
   int ret = OB_SUCCESS;
   inf_pc_configs_.pushdown_storage_level_ = ObConfigInfoInPC::DEFAULT_PUSHDOWN_STORAGE_LEVEL;
+  inf_pc_configs_.min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
   return ret;
 }
 
@@ -2003,37 +2006,55 @@ void ObBasicSessionInfo::get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_siz
 int ObBasicSessionInfo::set_flt_trace_id(ObString trace_id)
 {
   int ret = OB_SUCCESS;
-  MEMSET(flt_trace_id_, 0x00, common::OB_MAX_UUID_LENGTH + 1);
-  flt_trace_id_[0] = 0xFF;
-  MEMCPY(flt_trace_id_+1, trace_id.ptr(), common::OB_MAX_UUID_LENGTH);
+  MEMSET(flt_vars_.flt_trace_id_, 0x00, common::OB_MAX_UUID_LENGTH + 1);
+  flt_vars_.flt_trace_id_[0] = 0xFF;
+  MEMCPY(flt_vars_.flt_trace_id_+1, trace_id.ptr(), common::OB_MAX_UUID_LENGTH);
   return ret;
 }
 
 int ObBasicSessionInfo::set_flt_span_id(ObString span_id)
 {
   int ret = OB_SUCCESS;
-  MEMSET(flt_span_id_, 0x00, common::OB_MAX_UUID_LENGTH + 1);
-  flt_span_id_[0] = 0xFF;
-  MEMCPY(flt_span_id_+1, span_id.ptr(), common::OB_MAX_UUID_LENGTH);
+  MEMSET(flt_vars_.flt_span_id_, 0x00, common::OB_MAX_UUID_LENGTH + 1);
+  flt_vars_.flt_span_id_[0] = 0xFF;
+  MEMCPY(flt_vars_.flt_span_id_+1, span_id.ptr(), common::OB_MAX_UUID_LENGTH);
   return ret;
 }
 
 void ObBasicSessionInfo::get_flt_trace_id(ObString &trace_id) const
 {
-  if (flt_trace_id_[0] == '\0') {
+  if (flt_vars_.flt_trace_id_[0] == '\0') {
     trace_id.reset();
   } else {
-    trace_id.assign(const_cast<char *>(&flt_trace_id_[1]), common::OB_MAX_UUID_LENGTH);
+    trace_id.assign(const_cast<char *>(&flt_vars_.flt_trace_id_[1]), common::OB_MAX_UUID_LENGTH);
   }
 }
 
 void ObBasicSessionInfo::get_flt_span_id(ObString &span_id) const
 {
-  if (flt_span_id_[0] == '\0') {
+  if (flt_vars_.flt_span_id_[0] == '\0') {
     span_id.reset();
   } else {
-    span_id.assign(const_cast<char *>(&flt_span_id_[1]), common::OB_MAX_UUID_LENGTH);
+    span_id.assign(const_cast<char *>(&flt_vars_.flt_span_id_[1]), common::OB_MAX_UUID_LENGTH);
   }
+}
+
+const ObString &ObBasicSessionInfo::get_last_flt_trace_id() const
+{
+  return flt_vars_.last_flt_trace_id_;
+}
+int ObBasicSessionInfo::set_last_flt_trace_id(const common::ObString &trace_id)
+{
+  int ret = OB_SUCCESS;
+  if (trace_id.empty()) {
+    flt_vars_.last_flt_trace_id_.reset();
+  } else {
+    int64_t trace_len = std::min(static_cast<int64_t>(trace_id.length()), OB_MAX_UUID_STR_LENGTH);
+    MEMCPY(flt_vars_.last_flt_trace_id_buf_, trace_id.ptr(), trace_len);
+    flt_vars_.last_flt_trace_id_buf_[trace_len] = '\0';
+    flt_vars_.last_flt_trace_id_.assign_ptr(flt_vars_.last_flt_trace_id_buf_, trace_len);
+  }
+  return ret;
 }
 
 ObObjType ObBasicSessionInfo::get_sys_variable_type(const ObString &var_name) const
@@ -3505,6 +3526,212 @@ int64_t ObBasicSessionInfo::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
+int ObBasicSessionInfo::get_sync_sys_vars_size(ObIArray<ObSysVarClassType>
+                                                    &sys_var_delta_ids, int64_t &len) const
+{
+  int ret = OB_SUCCESS;
+  len += serialization::encoded_length(sys_var_delta_ids.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < sys_var_delta_ids.count(); ++i) {
+    int64_t sys_var_idx = -1;
+    ObSysVarClassType &type = sys_var_delta_ids.at(i);
+    if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(type, sys_var_idx))) {
+      LOG_WARN("fail to calc sys var store idx", K(i), K(sys_var_idx), K(type), K(ret));
+    } else if (sys_var_idx < 0 || get_sys_var_count() <= sys_var_idx) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys var idx is invalid", K(sys_var_idx), K(get_sys_var_count()), K(ret));
+    } else if (OB_ISNULL(sys_vars_[sys_var_idx])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys var is NULL", K(ret), K(sys_var_idx), K(get_sys_var_count()));
+    } else {
+      int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
+      len += serialization::encoded_length(sys_var_id);
+      len += sys_vars_[sys_var_idx]->get_serialize_size();
+    }
+  }
+  return ret;
+}
+
+bool ObBasicSessionInfo::is_sync_sys_var(share::ObSysVarClassType sys_var_id) const
+{
+  bool not_need_serialize = false;
+  switch (sys_var_id)
+  {
+    case SYS_VAR_SERVER_UUID:
+    case SYS_VAR_OB_PROXY_PARTITION_HIT:
+      not_need_serialize = true;
+      break;
+    default:
+      break;
+  }
+  return not_need_serialize;
+}
+
+int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
+                                                &sys_var_delta_ids) const
+{
+  int ret = OB_SUCCESS;
+  sys_var_delta_ids.reset();
+  const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
+  for (int64_t i = 0; OB_SUCC(ret) && i < ids.count(); i++) {
+    int64_t sys_var_idx = -1;
+    if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(ids.at(i), sys_var_idx))) {
+      LOG_WARN("fail to calc sys var store idx", K(i), K(sys_var_idx), K(ids.at(i)), K(ret));
+    } else {
+      if (!ObSysVariables::get_default_value(sys_var_idx).can_compare(
+        sys_vars_[sys_var_idx]->get_value())||ObSysVariables::get_default_value(sys_var_idx) !=
+        sys_vars_[sys_var_idx]->get_value()) {
+        // need serialize delta vars
+        if (is_sync_sys_var(ids.at(i))){
+          // do nothing
+        } else {
+          if (OB_FAIL(sys_var_delta_ids.push_back(ids.at(i)))) {
+            LOG_WARN("fail to push_back id", K(ret));
+          } else {
+            LOG_DEBUG("schema_and_def not identical", K(sys_var_idx),
+            "val", sys_vars_[sys_var_idx]->get_value(),
+            "def", ObSysVariables::get_default_value(sys_var_idx));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::serialize_sync_sys_vars(ObIArray<ObSysVarClassType>
+        &sys_var_delta_ids, char *buf, const int64_t &buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(serialization::encode(buf, buf_len, pos, sys_var_delta_ids.count()))) {
+    LOG_WARN("fail to serialize sys var delta count", K(buf_len), K(pos),
+              K(sys_var_delta_ids.count()), K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < sys_var_delta_ids.count(); ++i) {
+    int64_t sys_var_idx = -1;
+    if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_delta_ids.at(i), sys_var_idx))) {
+      LOG_WARN("fail to calc sys var store idx", K(i), K(sys_var_idx),
+                K(sys_var_delta_ids.at(i)), K(ret));
+    } else if (sys_var_idx < 0 || get_sys_var_count() <= sys_var_idx) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys var idx is invalid", K(sys_var_idx), K(get_sys_var_count()), K(ret));
+    } else if (OB_ISNULL(sys_vars_[sys_var_idx])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys var is NULL", K(ret), K(sys_var_idx), K(get_sys_var_count()));
+    } else {
+      int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
+      if (OB_FAIL(serialization::encode(buf, buf_len, pos, sys_var_id))) {
+        LOG_WARN("fail to serialize sys var id", K(buf_len), K(pos), K(sys_var_id), K(ret));
+      } else if (OB_FAIL(sys_vars_[sys_var_idx]->serialize(buf, buf_len, pos))) {
+        LOG_WARN("fail to serialize sys var", K(buf_len), K(pos), K(i), K(sys_var_idx),
+                  K(*sys_vars_[sys_var_idx]), K(ret));
+      } else {
+        LOG_DEBUG("serialize sys vars", K(sys_var_idx),
+                  "name", ObSysVariables::get_name(sys_var_idx),
+                  "val", sys_vars_[sys_var_idx]->get_value(),
+                  "def", ObSysVariables::get_default_value(sys_var_idx));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count,
+                              const char *buf, const int64_t &data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(serialization::decode(buf, data_len, pos, deserialize_sys_var_count))) {
+      LOG_WARN("fail to deserialize sys var count", K(data_len), K(pos), K(ret));
+  } else {
+    LOG_DEBUG("total des sys vars", K(deserialize_sys_var_count));
+    const bool check_timezone_valid = false;
+    SysVarIncInfo tmp_sys_var_inc_info;
+    for (int64_t i = 0; OB_SUCC(ret) && i < deserialize_sys_var_count; ++i) {
+      ObObj tmp_val;
+      ObBasicSysVar *sys_var = NULL;
+      ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
+      int16_t tmp_sys_var_id = -1;
+      int64_t store_idx = -1;
+      if (OB_FAIL(serialization::decode(buf, data_len, pos, tmp_sys_var_id))) {
+        LOG_WARN("fail to deserialize sys var id", K(data_len), K(pos), K(ret));
+      } else if (FALSE_IT(sys_var_id = static_cast<ObSysVarClassType>(tmp_sys_var_id))) {
+      } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
+        if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
+          // Maybe the version is different, for compatibility, skip this data and continue the loop
+          ret = OB_SUCCESS;
+          int64_t sys_var_version = 0;
+          int64_t sys_var_len = 0;
+          OB_UNIS_DECODEx(sys_var_version);
+          OB_UNIS_DECODEx(sys_var_len);
+          if (OB_SUCC(ret)) {
+            pos += sys_var_len; // skip
+            LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
+          }
+        } else {
+          LOG_WARN("invalid sys var id", K(sys_var_id), K(ret));
+        }
+      } else if (OB_FAIL(create_sys_var(sys_var_id, store_idx, sys_var))) {
+        LOG_WARN("fail to create sys var", K(sys_var_id), K(ret));
+      } else if (OB_ISNULL(sys_var)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("create sys var is NULL", K(ret));
+      } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
+        LOG_WARN("fail to deserialize sys var", K(data_len), K(pos), K(sys_var_id), K(ret));
+      } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
+        LOG_WARN("fail to update system variable", K(sys_var_id), K(sys_var->get_value()), K(ret));
+      } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
+                                                  check_timezone_valid))) {
+        LOG_ERROR("process system variable error",  K(ret), K(*sys_var));
+      }
+
+      // update the current session's array if there is no updated deserialization sys_var.
+      if (!sys_var_inc_info_.all_has_sys_var_id(sys_var_id)) {
+        sys_var_inc_info_.add_sys_var_id(sys_var_id);
+      }
+      // add all deserialize sys_var id.
+      tmp_sys_var_inc_info.add_sys_var_id(sys_var_id);
+    }
+    const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
+    int64_t store_idx = -1;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ids.count(); ++i) {
+      ObBasicSysVar *sys_var = NULL;
+      if (!is_sync_sys_var(ids.at(i))
+          && !tmp_sys_var_inc_info.all_has_sys_var_id(ids.at(i))) {
+        // need set default values
+        if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(ids.at(i), store_idx))) {
+          LOG_WARN("fail to calc sys var store idx", K(ret));
+        } else {
+          if (OB_FAIL(create_sys_var(ids.at(i), store_idx, sys_var))) {
+            LOG_WARN("fail to create sys var", K(ids.at(i)), K(ret));
+          } else if (OB_ISNULL(sys_var)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("create sys var is NULL", K(ret));
+          } else {
+            ObObj tmp_obj = ObSysVariables::get_default_value(store_idx);
+            if (ob_is_string_type(tmp_obj.get_type())) {
+              if (OB_FAIL(deep_copy_sys_variable(*sys_var, ids.at(i), tmp_obj))) {
+                LOG_WARN("fail to update system variable", K(ret));
+              }
+            } else if (ob_is_number_tc(tmp_obj.get_type())) {
+              if (OB_FAIL(deep_copy_sys_variable(*sys_var, ids.at(i), tmp_obj))) {
+                LOG_WARN("fail to update system variable", K(ret));
+              }
+            } else {
+              // int, bool, enum, uint do not need to do deep copy
+              sys_vars_[store_idx]->set_value(tmp_obj);
+            }
+          }
+        }
+      }
+    }
+    if (OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
+      LOG_WARN("fail to assign sys var delta info",K(ret));
+    } else {
+      //do nothing.
+    }
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::calc_need_serialize_vars(ObIArray<ObSysVarClassType> &sys_var_ids,
                                                  ObIArray<ObString> &user_var_names) const
 {
@@ -3813,7 +4040,9 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               stmt_type_,
               thread_data_.client_addr_,
               thread_data_.user_client_addr_,
-              process_query_time_);
+              process_query_time_,
+              flt_vars_.last_flt_trace_id_,
+              flt_vars_.row_traceformat_);
   }();
   return ret;
 }
@@ -3969,6 +4198,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
 
   sys_var_in_pc_str_.reset(); //sys_var_in_pc_str_在反序列化系统变量阶段可能会被污染，需要reset掉
   config_in_pc_str_.reset();
+  flt_vars_.last_flt_trace_id_.reset();
   const ObTZInfoMap *tz_info_map = tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
   LST_DO_CODE(OB_UNIS_DECODE,
               sys_vars_cache_.inc_data_,
@@ -4002,7 +4232,9 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
               stmt_type_,
               thread_data_.client_addr_,
               thread_data_.user_client_addr_,
-              process_query_time_);
+              process_query_time_,
+              flt_vars_.last_flt_trace_id_,
+              flt_vars_.row_traceformat_);
   // deep copy string.
   if (OB_SUCC(ret)) {
     if (OB_FAIL(name_pool_.write_string(app_trace_id_, &app_trace_id_))) {
@@ -4028,6 +4260,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   sql_scope_flags_.set_flags(sql_scope_flags);
   is_deserialized_ = true;
   tz_info_wrap_.set_tz_info_map(tz_info_map);
+  set_last_flt_trace_id(flt_vars_.last_flt_trace_id_);
 
   //在升级过程中,由于版本差异,高版本server如果收到低版本server发来的session变量,需要兼容处理
   //反序列化完成后, 由于后面存在再次序列化给其他server的场景, 所以需要补齐需要序列化的系统变量
@@ -4309,7 +4542,9 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               stmt_type_,
               thread_data_.client_addr_,
               thread_data_.user_client_addr_,
-              process_query_time_);
+              process_query_time_,
+              flt_vars_.last_flt_trace_id_,
+              flt_vars_.row_traceformat_);
   return len;
 }
 
@@ -4720,6 +4955,16 @@ int ObBasicSessionInfo::get_session_temp_table_used(bool &is_used) const
 int ObBasicSessionInfo::get_enable_optimizer_null_aware_antijoin(bool &is_enabled) const
 {
   return get_bool_sys_var(SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN, is_enabled);
+}
+
+int ObBasicSessionInfo::get_regexp_stack_limit(int64_t &v) const
+{
+  return get_sys_variable(SYS_VAR_REGEXP_STACK_LIMIT, v);
+}
+
+int ObBasicSessionInfo::get_regexp_time_limit(int64_t &v) const
+{
+  return get_sys_variable(SYS_VAR_REGEXP_TIME_LIMIT, v);
 }
 
 // 重置事务相关变量

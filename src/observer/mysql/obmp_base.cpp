@@ -44,6 +44,7 @@
 #include "observer/mysql/ob_query_driver.h"
 #include "share/config/ob_server_config.h"
 #include "storage/tx/ob_trans_define.h"
+#include "sql/monitor/flt/ob_flt_utils.h"
 
 namespace oceanbase
 {
@@ -142,6 +143,8 @@ int ObMPBase::after_process(int error_code)
         // slow query will flush cache
         FLUSH_TRACE();
       }
+    } else if (common::OB_SUCCESS != error_code) {
+      FLUSH_TRACE();
     } else if (can_force_print(error_code)) {
       // 需要打印TRACE日志的错误码添加在这里
       int process_ret = error_code;
@@ -245,12 +248,12 @@ int ObMPBase::load_system_variables(const ObSysVariableSchema &sys_variable_sche
 
 int ObMPBase::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt)
 {
-  return packet_sender_.send_ok_packet(session, ok_param);
+  return packet_sender_.send_ok_packet(session, ok_param, pkt);
 }
 
-int ObMPBase::send_eof_packet(const ObSQLSessionInfo &session, const ObMySQLResultSet &result)
+int ObMPBase::send_eof_packet(const ObSQLSessionInfo &session, const ObMySQLResultSet &result, ObOKPParam *ok_param)
 {
-  return packet_sender_.send_eof_packet(session, result);
+  return packet_sender_.send_eof_packet(session, result, ok_param);
 }
 
 int ObMPBase::create_session(ObSMConnection *conn, ObSQLSessionInfo *&sess_info)
@@ -320,13 +323,10 @@ int ObMPBase::revert_session(ObSQLSessionInfo *sess_info)
 
 int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
                                const ObMultiStmtItem &multi_stmt_item,
-                               sql::ObSQLSessionInfo &session,
-                               bool &use_trace_log) const
+                               sql::ObSQLSessionInfo &session) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(session.is_use_trace_log(use_trace_log))) {
-    LOG_WARN("fail to get use_trace_log", K(ret));
-  } else if (!packet_sender_.is_conn_valid()) {
+  if (!packet_sender_.is_conn_valid()) {
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection already disconnected", K(ret));
   } else {
@@ -358,7 +358,6 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
 //外层调用会忽略do_after_process的错误码，因此这里将set_session_state的错误码返回也没有意义。
 //因此这里忽略set_session_state错误码，warning buffer的reset和trace log 记录的流程不收影响。
 int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
-                               bool use_session_trace,
                                sql::ObSqlCtx &ctx,
                                bool async_resp_used) const
 {
@@ -373,30 +372,32 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
   }
   // clear tsi warning buffer
   ob_setup_tsi_warning_buffer(NULL);
+  return ret;
+}
+
+int ObMPBase::record_flt_trace(sql::ObSQLSessionInfo &session) const
+{
+  int ret = OB_SUCCESS;
   //trace end
   if (lib::is_diagnose_info_enabled()) {
     NG_TRACE(query_end);
 
-    if (use_session_trace) {
+    if (session.is_use_trace_log()) {
       //不影响正常逻辑
-      if (false == ctx.is_show_trace_stmt_) {//show trace语句的trace log不能show，保留之前执行语句的
-        if (NULL != session.get_trace_buf()) {
-          if (nullptr != THE_TRACE) {
-            (void)session.get_trace_buf()->assign(*THE_TRACE);
-          }
-        }
+      // show trace will always show last request info
+      if (OB_FAIL(ObFLTUtils::clean_flt_show_trace_env(session))) {
+        LOG_WARN("failed to clean flt show trace env", K(ret));
       }
-      FORCE_PRINT_TRACE(THE_TRACE, "[show trace]");
-    } else if (ctx.force_print_trace_) {
-      // query with TRACE_LOG hint can also use SHOW TRACE after its execution
-      if (NULL != session.get_trace_buf()) {
-        if (nullptr != THE_TRACE) {
-          (void)session.get_trace_buf()->assign(*THE_TRACE);
-        }
+    } else {
+      // not need to record
+      ObString trace_id;
+      trace_id.reset();
+      if (OB_FAIL(session.set_last_flt_trace_id(trace_id))) {
+        LOG_WARN("failed to reset last flt trace id", K(ret));
       }
-      FORCE_PRINT_TRACE(THE_TRACE, "[trace hint]");
     }
   }
+  ObFLTUtils::clean_flt_env(session);
   return ret;
 }
 
@@ -542,5 +543,6 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
   }
   return ret;
 }
+
 } // namespace observer
 } // namespace oceanbase

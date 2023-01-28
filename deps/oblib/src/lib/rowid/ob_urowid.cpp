@@ -334,7 +334,9 @@ inline int ObURowIDData::get_pk_value(ObObjType obj_type, int64_t &pos, ObObj &p
 {
   int ret = OB_SUCCESS;
   const uint8_t version = get_version();
-  if (OB_UNLIKELY(PK_ROWID_VERSION != version && NO_PK_ROWID_VERSION != version)) {
+  if (OB_UNLIKELY(PK_ROWID_VERSION != version
+                  && NO_PK_ROWID_VERSION != version
+                  && LOB_NO_PK_ROWID_VERSION != version)) {
     ret = OB_INVALID_ROWID;
     COMMON_LOG(WARN, "invalid rowid version", K(ret), K(version));
   } else if (OB_UNLIKELY(obj_type >= ObMaxType)
@@ -489,7 +491,9 @@ bool ObURowIDData::is_valid_urowid() const
     is_valid = rowid_len_ == HEAP_ORGANIZED_TABLE_ROWID_CONTENT_BUF_SIZE;
   } else if (EXT_HEAP_TABLE_ROWID_VERSION == version) {
     is_valid = rowid_len_ == EXT_HEAP_ORGANIZED_TABLE_ROWID_CONTENT_BUF_SIZE;
-  } else if (NO_PK_ROWID_VERSION == version || PK_ROWID_VERSION == version) {
+  } else if (NO_PK_ROWID_VERSION == version
+             || PK_ROWID_VERSION == version
+             || LOB_NO_PK_ROWID_VERSION == version) {
     int64_t pos = get_pk_content_offset();
     ObObj obj;
     for (; is_valid && pos < rowid_len_; ) {
@@ -516,7 +520,8 @@ bool ObURowIDData::is_valid_version(int64_t v)
   } else if (PK_ROWID_VERSION != v
       && NO_PK_ROWID_VERSION != v
       && HEAP_TABLE_ROWID_VERSION != v
-      && EXT_HEAP_TABLE_ROWID_VERSION != v) {
+      && EXT_HEAP_TABLE_ROWID_VERSION != v
+      && LOB_NO_PK_ROWID_VERSION != v) {
     if (!is_valid_part_gen_col_version(v)) {
       bret = false;
     }
@@ -542,7 +547,9 @@ uint8_t ObURowIDData::get_version() const
       int64_t offset = get_pk_version_offset();
       if (offset < rowid_len_) {
         raw_version = rowid_content_[offset];
-        if (PK_ROWID_VERSION == raw_version || NO_PK_ROWID_VERSION == raw_version) {
+        if (PK_ROWID_VERSION == raw_version
+            || NO_PK_ROWID_VERSION == raw_version
+            || LOB_NO_PK_ROWID_VERSION == raw_version) {
           version = raw_version;
         } else if (is_valid_part_gen_col_version(raw_version)) {
           version = PK_ROWID_VERSION;

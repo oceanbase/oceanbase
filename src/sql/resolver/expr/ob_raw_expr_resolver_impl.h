@@ -23,23 +23,6 @@ class ObRawExprResolverImpl: public ObRawExprResolver
 {
   static const int32_t OUT_OF_STR_LEN = -2;
 public:
-  struct AggNestedCheckerGuard
-  {
-    AggNestedCheckerGuard(ObExprResolveContext &ctx)
-      : ctx_(ctx), ret_(common::OB_SUCCESS)
-    { }
-    ~AggNestedCheckerGuard()
-    {
-      ObExprResolveContext::ObAggResolveLinkNode *node =
-        ctx_.agg_resolve_link_.remove_last();
-      if (node != NULL) {
-        ctx_.is_win_agg_ = node->is_win_agg_;
-      }
-    }
-    int check_agg_nested(bool &is_in_nested_aggr);
-    ObExprResolveContext &ctx_;
-    int ret_;
-  };
   explicit ObRawExprResolverImpl(ObExprResolveContext &ctx);
   virtual ~ObRawExprResolverImpl() {}
 

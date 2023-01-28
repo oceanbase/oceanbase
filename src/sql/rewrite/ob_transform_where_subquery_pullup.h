@@ -197,7 +197,10 @@ struct SingleSetParam {
 
   int check_basic_validity(ObDMLStmt *stmt, const ObRawExpr* expr, TransformParam &trans_param);
 
-  int check_subquery_validity(ObSelectStmt *subquery, bool is_correlated, bool &is_valid);
+  int check_subquery_validity(ObQueryRefRawExpr *query_ref,
+                              ObSelectStmt *subquery,
+                              bool is_correlated,
+                              bool &is_valid);
 
   int pull_up_tables_and_columns(ObDMLStmt* stmt, ObSelectStmt* subquery);
 
@@ -228,7 +231,9 @@ struct SingleSetParam {
   int fill_semi_left_table_ids(ObDMLStmt *stmt,
                                SemiInfo *info);
 
-  int is_where_subquery_correlated(const ObSelectStmt &subquery, bool &is_correlated);
+  int is_where_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                   const ObSelectStmt &subquery,
+                                   bool &is_correlated);
 
   int check_const_select(const ObSelectStmt &stmt, bool &is_const_select) const;
 

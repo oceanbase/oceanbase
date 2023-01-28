@@ -77,7 +77,6 @@ ObMPStmtPrexecute::ObMPStmtPrexecute(const ObGlobalContext &gctx)
 int ObMPStmtPrexecute::before_process()
 {
   int ret = OB_SUCCESS;
-  bool use_sess_trace = false;
 
   if (OB_FAIL(ObMPBase::before_process())) {
     LOG_WARN("fail to call before process", K(ret));
@@ -180,8 +179,7 @@ int ObMPStmtPrexecute::before_process()
             THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
             retry_ctrl_.set_tenant_global_schema_version(tenant_version);
             retry_ctrl_.set_sys_global_schema_version(sys_version);
-            if (OB_FAIL(init_process_var(get_ctx(), ObMultiStmtItem(false, 0, ObString()), *session,
-                                         use_sess_trace))) {
+            if (OB_FAIL(init_process_var(get_ctx(), ObMultiStmtItem(false, 0, ObString()), *session))) {
               LOG_WARN("init process var faield.", K(ret));
             } else if (OB_FAIL(check_and_refresh_schema(session->get_login_tenant_id(),
                                                         session->get_effective_tenant_id()))) {

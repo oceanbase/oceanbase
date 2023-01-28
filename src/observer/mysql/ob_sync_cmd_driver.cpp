@@ -48,6 +48,18 @@ int ObSyncCmdDriver::send_eof_packet(bool has_more_result)
 {
   int ret = OB_SUCCESS;
   OMPKEOF eofp;
+
+  if (OB_FAIL(seal_eof_packet(has_more_result, eofp))) {
+    LOG_WARN("failed to seal eof packet", K(ret), K(has_more_result));
+  } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
+    LOG_WARN("response packet fail", K(ret), K(has_more_result));
+  }
+  return ret;
+}
+
+int ObSyncCmdDriver::seal_eof_packet(bool has_more_result, OMPKEOF& eofp)
+{
+  int ret = OB_SUCCESS;
   const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
   uint16_t warning_count = 0;
   if (OB_ISNULL(warnings_buf)) {
@@ -75,12 +87,6 @@ int ObSyncCmdDriver::send_eof_packet(bool has_more_result)
         && OB_FAIL(sender_.update_last_pkt_pos())) {
     LOG_WARN("failed to update last packet pos", K(ret));
   }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
-    LOG_WARN("response packet fail", K(ret), K(has_more_result));
-  }
   return ret;
 }
 
@@ -100,6 +106,8 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
   int ret = OB_SUCCESS;
   bool process_ok = false;
   // for select SQL
+  OMPKEOF eofp;
+  bool need_send_eof = false;
   if (OB_FAIL(result.open())) {
     // 只有open失败的时候才可能重试，因open的时候会开启事务/语句等，并且没有给用户返回任何信息
     int cret = OB_SUCCESS;
@@ -133,8 +141,10 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
         LOG_WARN("close result set fail", K(cret));
       }
     } else {
-      if (OB_FAIL(send_eof_packet(result.has_more_result()))) {
+      if (OB_FAIL(seal_eof_packet(result.has_more_result(), eofp))) {
         LOG_WARN("failed to send eof package", K(ret), K(result.has_more_result()));
+      } else {
+        need_send_eof = true;
       }
     }
   } else { /*do nothing*/ }
@@ -164,10 +174,20 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
       ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
       ok_param.has_more_result_ = result.has_more_result();
       ok_param.has_pl_out_ = is_prexecute_ && result.is_with_rows() ? true : false;
-      if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
-        LOG_WARN("send ok packet fail", K(ok_param), K(ret));
+      if (need_send_eof) {
+        if (OB_FAIL(sender_.send_ok_packet(session_, ok_param, &eofp))) {
+          LOG_WARN("send ok packet fail", K(ok_param), K(ret));
+        }
+      } else {
+        if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
+          LOG_WARN("send ok packet fail", K(ok_param), K(ret));
+        }
       }
-    } else { /*do nothing*/ }
+    } else {
+      if (need_send_eof && OB_FAIL(sender_.response_packet(eofp, &session_))) {
+        LOG_WARN("response packet fail", K(ret));
+      }
+    }
   }
 
   if (!OB_SUCC(ret) && !process_ok && !retry_ctrl_.need_retry()) {

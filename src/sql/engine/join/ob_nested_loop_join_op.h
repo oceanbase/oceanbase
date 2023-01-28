@@ -72,7 +72,8 @@ class ObNestedLoopJoinOp : public ObBasicNestedLoopJoinOp
 public:
   enum ObJoinBatchState {
     JS_FILL_LEFT = 0,
-    JS_PROCESS,
+    JS_RESCAN_RIGHT_OP,
+    JS_PROCESS_RIGHT_BATCH,
     JS_OUTPUT
   };
   enum ObJoinState {
@@ -119,35 +120,7 @@ public:
   }
   ObBatchRescanCtl &get_batch_rescan_ctl() { return batch_rescan_ctl_; }
   int fill_cur_row_rescan_param();
-  // Skip restore if child is material operator to save duplicate work
-  // Note:
-  //   this is a sister function of backup_right_child_exprs(), call it after
-  //   calling backup_right_child_exprs()
-  inline int restore_right_child_exprs()
-  {
-    int ret = OB_SUCCESS;
-    if (right_->get_spec().type_ != PHY_MATERIAL ||
-        (right_->get_spec().type_ == PHY_MATERIAL &&
-         static_cast<ObMaterialOpInput *>(right_->get_input())->is_bypass())) {
-      ret = brs_holder_.restore();
-      brs_holder_.reset();
-    }
-    return ret;
-  }
-  // Skip backup if child is material operator to save duplicate work
-  inline int backup_right_child_exprs()
-  {
-    int ret = OB_SUCCESS;
-    if (right_->get_spec().type_ != PHY_MATERIAL ||
-        (right_->get_spec().type_ == PHY_MATERIAL &&
-         static_cast<ObMaterialOpInput *>(right_->get_input())->is_bypass())) {
-      ret = brs_holder_.save(right_->get_spec().max_batch_size_);
-    }
-    return ret;
-  }
-  int calc_other_conds_with_update_left_expr(bool &is_match,
-                                             ObBatchRowDatums &left_batch,
-                                             const int64_t l_idx);
+  int calc_other_conds(bool &is_match);
 
 public:
   static const int64_t PX_RESCAN_BATCH_ROW_COUNT = 8192;
@@ -182,13 +155,18 @@ private:
   int rescan_params_batch_one(int64_t batch_idx);
   int get_left_batch();
   int group_get_left_batch(const ObBatchRows *&left_brs);
-  int process_left_batch();
-  int calc_right_batch_matched_result(
-      int64_t l_idx, bool &match_right_batch_end,
-      ObEvalCtx::BatchInfoScopeGuard &batch_info_guard);
-  int output();
   int inner_get_next_batch(const int64_t max_row_cnt);
   // for vectorized end
+
+  // for refactor vectorized
+  int rescan_right_op();
+  int process_right_batch();
+  int output();
+  void reset_left_batch_state();
+  void reset_right_batch_state();
+  int left_expr_extend(int32_t size);
+  void skip_l_idx();
+  // for refactor vectorized end
 
   bool continue_fetching() { return !(left_brs_->end_ || is_full());}
 public:
@@ -217,11 +195,19 @@ public:
   ObBitVector *left_matched_;
   bool need_switch_iter_;
   bool iter_end_;
-  ObBatchResultHolder brs_holder_;
   int64_t op_max_batch_size_;
   int64_t max_group_size_;
   ObGroupJoinBufffer group_join_buffer_;
   // for vectorized end
+
+  // for refactor vectorized
+  bool match_left_batch_end_;
+  bool match_right_batch_end_;
+  int64_t l_idx_;
+  bool no_match_row_found_;
+  bool need_output_row_;
+  int32_t left_expr_extend_size_;
+  // for refactor vectorized end
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNestedLoopJoinOp);
 };

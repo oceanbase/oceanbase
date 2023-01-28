@@ -103,8 +103,7 @@ private:
   int set_agg_json_array_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
 
   // helper functions for add_implicit_cast
-  int add_implicit_cast_for_op_row(ObOpRawExpr &parent,
-                                   ObRawExpr *child_ptr,
+  int add_implicit_cast_for_op_row(ObRawExpr *&child_ptr,
                                    const common::ObIArray<ObExprResType> &input_types,
                                    const ObCastMode &cast_mode);
   // try add cast expr on subquery stmt's oubput && update column types.

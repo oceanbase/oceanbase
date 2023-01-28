@@ -38,7 +38,6 @@
 #include "sql/rewrite/ob_transform_groupby_pushdown.h"
 #include "sql/rewrite/ob_transform_subquery_coalesce.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
-#include "sql/rewrite/ob_transform_post_process.h"
 #include "sql/rewrite/ob_transform_predicate_move_around.h"
 #include "sql/rewrite/ob_transform_semi_to_inner.h"
 #include "sql/rewrite/ob_transform_join_limit_pushdown.h"
@@ -65,14 +64,12 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(SMART_CALL(get_stmt_trans_info(stmt)))) {
     LOG_WARN("get_stmt_trans_info failed", K(ret));
-  } else if (OB_FAIL(do_transform_pre_precessing(stmt))) {
+  } else if (OB_FAIL(do_transform_pre_processing(stmt))) {
     LOG_WARN("failed to do transform pre_precessing", K(ret));
   } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(do_transform(stmt))) {
     LOG_WARN("failed to do transform", K(ret));
-  } else if (OB_FAIL(do_transform_post_precessing(stmt))) {
-    LOG_WARN("failed to do transform post precessing", K(ret));
   } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(do_after_transform(stmt))) {
@@ -148,6 +145,8 @@ int ObTransformerImpl::do_after_transform(ObDMLStmt *stmt)
       || OB_ISNULL(ctx_) || OB_ISNULL(exec_ctx = ctx_->exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(query_ctx), K(ctx_), K(exec_ctx));
+  } else if (OB_FAIL(finalize_exec_params(stmt))) {
+    LOG_WARN("failed to finalize exec param", K(ret));
   } else if (OB_FAIL(add_trans_happended_hints(*query_ctx, *ctx_))) {
     LOG_WARN("failed to add trans happended hints", K(ret));
   } else if (OB_FAIL(add_param_and_expr_constraints(*exec_ctx, *ctx_, *stmt))) {
@@ -196,7 +195,7 @@ int ObTransformerImpl::get_all_stmts(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformerImpl::do_transform_pre_precessing(ObDMLStmt *&stmt)
+int ObTransformerImpl::do_transform_pre_processing(ObDMLStmt *&stmt)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
@@ -206,31 +205,11 @@ int ObTransformerImpl::do_transform_pre_precessing(ObDMLStmt *&stmt)
     ObTransformPreProcess trans(ctx_);
     trans.set_transformer_type(PRE_PROCESS);
     uint64_t dummy_value = 0;
+    OPT_TRACE_TITLE("start pre process transform");
     if (OB_FAIL(trans.transform(stmt, dummy_value))) {
       LOG_WARN("failed to do transform pre processing", K(ret));
     } else {
       LOG_TRACE("succeed to do transform pre processing");
-    }
-  }
-  return ret;
-}
-
-int ObTransformerImpl::do_transform_post_precessing(ObDMLStmt *&stmt)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(stmt), K(ret));
-  } else {
-    ObTransformPostProcess trans(ctx_);
-    trans.set_transformer_type(POST_PROCESS);
-    uint64_t dummy_value = 0;
-    if (OB_FAIL(trans.transform(stmt, dummy_value))) {
-      LOG_WARN("failed to do transform post processing", K(ret));
-    } else if (OB_FAIL(finalize_exec_params(stmt))) {
-      LOG_WARN("failed to finalize exec param", K(ret));
-    } else {
-      LOG_TRACE("succeed to do transform post processing");
     }
   }
   return ret;
@@ -246,8 +225,6 @@ int ObTransformerImpl::transform_heuristic_rule(ObDMLStmt *&stmt)
                                         ObTransformRule::ALL_HEURISTICS_RULES,
                                         max_iteration_count_))) {
     LOG_WARN("failed to transform one rule set", K(ret));
-  } else if (OB_FAIL(do_transform_post_precessing(stmt))) {
-    LOG_WARN("failed to transform post processing", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -263,17 +240,22 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
     for (i = 0; OB_SUCC(ret) && need_next_iteration && i < iteration_count; ++i) {
       bool trans_happened_in_iteration = false;
       LOG_TRACE("start to transform one iteration", K(i));
+      OPT_TRACE("-- begin ", i, " iteration");
       if (OB_FAIL(transform_rule_set_in_one_iteration(stmt,
                                                       needed_types,
                                                       trans_happened_in_iteration))) {
         LOG_WARN("failed to do transformation one iteration", K(i), K(ret));
-      } else if (trans_happened_in_iteration &&
-                 OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
-        LOG_WARN("failed to pull relation id and levels", K(ret));
+      } else if (!trans_happened_in_iteration) {
+        need_next_iteration = false;
+      } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+        LOG_WARN("failed to formalize stmt expr", K(ret));
+      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize stmt", K(ret));
       } else {
-        need_next_iteration &= trans_happened_in_iteration;
-        LOG_TRACE("succeed to transform one iteration", K(i));
+        need_next_iteration = true;
       }
+      LOG_TRACE("succeed to transform one iteration", K(i), K(need_next_iteration), K(ret));
+      OPT_TRACE("-- end ", i, " iteration");
     }
     if (OB_SUCC(ret) && i == max_iteration_count_) {
       LOG_INFO("transformer ends without convergence", K(max_iteration_count_));
@@ -378,7 +360,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
-    if (func.contain_unpivot_query_ || func.contain_enum_set_values_) {
+    if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_) {
        disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_sequence_) {
@@ -411,13 +393,15 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
     func.contain_for_update_ = func.contain_for_update_ || stmt->has_for_update();
     func.contain_unpivot_query_ = func.contain_unpivot_query_ || stmt->is_unpivot_select();
   }
-  for (int64_t i = 0; OB_SUCC(ret) && !func.contain_enum_set_values_ &&
-                      i < stmt->get_column_items().count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret)
+                      && (!func.contain_enum_set_values_ || !func.contain_geometry_values_)
+                      && i < stmt->get_column_items().count(); ++i) {
     const ColumnItem &col = stmt->get_column_items().at(i);
     if (OB_ISNULL(col.get_expr())) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (ob_is_enumset_tc(col.get_expr()->get_data_type())) {
-      func.contain_enum_set_values_ = true;
+    } else {
+      func.contain_enum_set_values_ |= ob_is_enumset_tc(col.get_expr()->get_data_type());
+      func.contain_geometry_values_ |= ob_is_geometry_tc(col.get_expr()->get_data_type());
     }
   }
   if (OB_SUCC(ret) && (stmt->is_delete_stmt() ||
@@ -463,18 +447,6 @@ int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt)
       if (OB_FAIL(child_stmts.push_back(temp_table_infos.at(i).temp_table_query_))) {
         LOG_WARN("failed to push back temp table query", K(ret));
       }
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_onetime_exprs().count(); ++i) {
-    ObExecParamRawExpr *exec_param = NULL;
-    if (OB_ISNULL(exec_param = stmt->get_onetime_exprs().at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("onetime expr is invalid", K(ret));
-    } else if (exec_param->get_param_index() >= 0) {
-      // do nothing
-    } else {
-      exec_param->set_param_index(stmt->get_question_marks_count());
-      stmt->increase_question_marks_count();
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
@@ -661,7 +633,7 @@ int ObTransformerImpl::add_all_rowkey_columns_to_stmt(const ObTableSchema &table
       } else if (FALSE_IT(rowkey->clear_explicited_referece())) {
       } else if (OB_FAIL(rowkey->formalize(NULL))) {
         LOG_WARN("formalize rowkey failed", K(ret));
-      } else if (OB_FAIL(rowkey->pull_relation_id_and_levels(stmt.get_current_level()))) {
+      } else if (OB_FAIL(rowkey->pull_relation_id())) {
         LOG_WARN("failed to pullup relation ids", K(ret));
       }
     }

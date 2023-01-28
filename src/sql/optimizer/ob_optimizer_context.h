@@ -157,6 +157,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   {
     expected_worker_map_.destroy();
     minimal_worker_map_.destroy();
+    log_plan_factory_.destroy();
   }
   inline const ObSQLSessionInfo *get_session_info() const { return session_info_; }
   inline ObSQLSessionInfo *get_session_info() { return session_info_; }
@@ -460,6 +461,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   bool has_trigger() const { return has_trigger_; }
   void set_has_pl_udf(bool v) { has_pl_udf_ = v; }
   bool has_pl_udf() const { return has_pl_udf_; }
+  void set_has_subquery_in_function_table(bool v) { has_subquery_in_function_table_ = v; }
+  bool has_subquery_in_function_table() const { return has_subquery_in_function_table_; }
   bool contain_nested_sql() const { return nested_sql_flags_ > 0; }
   //use nested sql can't in online DDL session
   bool contain_user_nested_sql() const { return nested_sql_flags_ > 0 && !is_online_ddl_; }
@@ -533,6 +536,7 @@ private:
       int8_t has_fk_                           : 1; //this sql has foreign key object
       int8_t has_trigger_                      : 1; //this sql has trigger object
       int8_t has_pl_udf_                       : 1; //this sql has pl user defined function
+      int8_t has_subquery_in_function_table_   : 1; //this stmt has function table
     };
   };
   bool has_for_update_;

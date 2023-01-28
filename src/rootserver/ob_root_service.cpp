@@ -5467,6 +5467,64 @@ int ObRootService::drop_directory(const obrpc::ObDropDirectoryArg &arg)
   return ret;
 }
 
+////////////////////////////////////////////////////////////////
+// row level security
+////////////////////////////////////////////////////////////////
+
+int ObRootService::handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.exec_tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_rls");
+  } else if (OB_FAIL(ddl_service_.handle_rls_policy_ddl(arg))) {
+    LOG_WARN("do rls policy ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::handle_rls_group_ddl(const obrpc::ObRlsGroupDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.exec_tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_rls");
+  } else if (OB_FAIL(ddl_service_.handle_rls_group_ddl(arg))) {
+    LOG_WARN("do rls group ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.exec_tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_1_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_rls");
+  } else if (OB_FAIL(ddl_service_.handle_rls_context_ddl(arg))) {
+    LOG_WARN("do rls context ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
 int ObRootService::revoke_database(const ObRevokeDBArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -5679,7 +5737,7 @@ int ObRootService::create_routine(const ObCreateRoutineArg &arg)
     const ObRoutineInfo* old_routine_info = NULL;
     uint64_t tenant_id = routine_info.get_tenant_id();
     ObString database_name = arg.db_name_;
-    bool is_or_replace = lib::is_oracle_mode() ? arg.is_or_replace_ : false;
+    bool is_or_replace = lib::is_oracle_mode() ? arg.is_or_replace_ : arg.is_need_alter_;
     bool is_inner = lib::is_mysql_mode() ? arg.is_or_replace_ : false;
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
@@ -5810,7 +5868,8 @@ int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
       LOG_WARN("routine info is not exist!", K(ret), K(arg.routine_info_));
     }
     if (OB_FAIL(ret)) {
-    } else if (lib::is_oracle_mode() && arg.is_or_replace_) {
+    } else if ((lib::is_oracle_mode() && arg.is_or_replace_) ||
+               (lib::is_mysql_mode() && arg.is_need_alter_)) {
       if (OB_FAIL(create_routine(arg))) {
         LOG_WARN("failed to alter routine with create", K(ret));
       }

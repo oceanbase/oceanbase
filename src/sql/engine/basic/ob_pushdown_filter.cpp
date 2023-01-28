@@ -1404,28 +1404,68 @@ ObPushdownExprSpec::ObPushdownExprSpec(ObIAllocator &alloc)
     access_exprs_(alloc),
     max_batch_size_(0),
     pushdown_filters_(alloc),
-    filters_before_index_back_(alloc),
     pd_storage_flag_(0),
     pd_storage_filters_(alloc),
-    pd_storage_index_back_filters_(alloc),
     pd_storage_aggregate_output_(alloc)
 {
 }
 
-OB_SERIALIZE_MEMBER(ObPushdownExprSpec,
-                    calc_exprs_,
-                    access_exprs_,
-                    max_batch_size_,
-                    pushdown_filters_,
-                    filters_before_index_back_,
-                    pd_storage_flag_,
-                    pd_storage_filters_,
-                    pd_storage_index_back_filters_,
-                    pd_storage_aggregate_output_);
+OB_DEF_SERIALIZE(ObPushdownExprSpec)
+{
+  int ret = OB_SUCCESS;
+  ExprFixedArray fake_filters_before_index_back(CURRENT_CONTEXT->get_allocator());
+  ObPushdownFilter fake_pd_storage_index_back_filters(CURRENT_CONTEXT->get_allocator());
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              calc_exprs_,
+              access_exprs_,
+              max_batch_size_,
+              pushdown_filters_,
+              fake_filters_before_index_back, //mock a fake filters to compatible with 4.0
+              pd_storage_flag_,
+              pd_storage_filters_,
+              fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
+              pd_storage_aggregate_output_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObPushdownExprSpec)
+{
+  int ret = OB_SUCCESS;
+  ExprFixedArray fake_filters_before_index_back(CURRENT_CONTEXT->get_allocator());
+  ObPushdownFilter fake_pd_storage_index_back_filters(CURRENT_CONTEXT->get_allocator());
+  LST_DO_CODE(OB_UNIS_DECODE,
+              calc_exprs_,
+              access_exprs_,
+              max_batch_size_,
+              pushdown_filters_,
+              fake_filters_before_index_back, //mock a fake filters to compatible with 4.0
+              pd_storage_flag_,
+              pd_storage_filters_,
+              fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
+              pd_storage_aggregate_output_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObPushdownExprSpec)
+{
+  int64_t len = 0;
+  ExprFixedArray fake_filters_before_index_back(CURRENT_CONTEXT->get_allocator());
+  ObPushdownFilter fake_pd_storage_index_back_filters(CURRENT_CONTEXT->get_allocator());
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              calc_exprs_,
+              access_exprs_,
+              max_batch_size_,
+              pushdown_filters_,
+              fake_filters_before_index_back, //mock a fake filters to compatible with 4.0
+              pd_storage_flag_,
+              pd_storage_filters_,
+              fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
+              pd_storage_aggregate_output_);
+  return len;
+}
 
 ObPushdownOperator::ObPushdownOperator(ObEvalCtx &eval_ctx, const ObPushdownExprSpec &expr_spec)
   : pd_storage_filters_(nullptr),
-    pd_storage_index_back_filters_(nullptr),
     eval_ctx_(eval_ctx),
     expr_spec_(expr_spec)
 {
@@ -1442,17 +1482,6 @@ int ObPushdownOperator::init_pushdown_storage_filter()
                                                 *this))) {
         LOG_WARN("failed to create filter executor", K(ret));
       } else if (OB_ISNULL(pd_storage_filters_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("filter executor is null", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && OB_NOT_NULL(expr_spec_.pd_storage_index_back_filters_.get_pushdown_filter())) {
-      if (OB_FAIL(filter_exec_constructor.apply(
-                  expr_spec_.pd_storage_index_back_filters_.get_pushdown_filter(),
-                  pd_storage_index_back_filters_,
-                  *this))) {
-        LOG_WARN("failed to create filter executor", K(ret));
-      } else if (OB_ISNULL(pd_storage_index_back_filters_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("filter executor is null", K(ret));
       }
