@@ -23385,6 +23385,18 @@ static const _error _error_OB_ERR_SP_NO_DROP_SP = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9743, Can't drop or alter a procedure/function from within another stored routine.",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9743, Can't drop or alter a '%s' from within another stored routine."
 };
+static const _error _error_OB_ERR_RECOMPILATION_OBJECT = {
+      .error_name            = "OB_ERR_RECOMPILATION_OBJECT",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "errors during recompilation/revalidation of object",
+      .str_user_error        = "errors during recompilation/revalidation of object",
+      .oracle_errno          = 4045,
+      .oracle_str_error      = "ORA-04045: errors during recompilation/revalidation of %.*s.%.*s",
+      .oracle_str_user_error = "ORA-04045: errors during recompilation/revalidation of %.*s.%.*s"
+};
 static const _error _error_OB_SP_RAISE_APPLICATION_ERROR = {
       .error_name            = "OB_SP_RAISE_APPLICATION_ERROR",
       .error_cause           = "Internal Error",
@@ -25423,6 +25435,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_ATTRIBUTE_ASSOCIATION] = &_error_OB_ERR_ATTRIBUTE_ASSOCIATION;
     _errors[-OB_ERR_MERGE_INTO_WITH_POLICY] = &_error_OB_ERR_MERGE_INTO_WITH_POLICY;
     _errors[-OB_ERR_SP_NO_DROP_SP] = &_error_OB_ERR_SP_NO_DROP_SP;
+    _errors[-OB_ERR_RECOMPILATION_OBJECT] = &_error_OB_ERR_RECOMPILATION_OBJECT;
     _errors[-OB_SP_RAISE_APPLICATION_ERROR] = &_error_OB_SP_RAISE_APPLICATION_ERROR;
     _errors[-OB_SP_RAISE_APPLICATION_ERROR_NUM] = &_error_OB_SP_RAISE_APPLICATION_ERROR_NUM;
     _errors[-OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN] = &_error_OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN;
