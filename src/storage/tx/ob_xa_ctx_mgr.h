@@ -38,6 +38,7 @@ public:
       ctx->destroy();
       op_reclaim_free(ctx);
       ctx = NULL;
+      ObXAStatistics::get_instance().dec_ctx_count();
     }
   }
   XACtxHashNode* alloc_node(ObXACtx* node)

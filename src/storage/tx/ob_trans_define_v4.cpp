@@ -151,7 +151,8 @@ OB_SERIALIZE_MEMBER(ObTxDesc,
                     timeout_us_,
                     lock_timeout_us_,
                     active_scn_,
-                    parts_);
+                    parts_,
+                    xid_);
 OB_SERIALIZE_MEMBER(ObTxParam,
                     timeout_us_,
                     lock_timeout_us_,
@@ -1251,7 +1252,8 @@ int ObTxDescMgr::add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc)
     // if fail revert tx_desc.tx_id_ member
     if (OB_FAIL(ret) && !desc_tx_id.is_valid()) { tx_desc.reset_tx_id(); }
   }
-  TRANS_LOG(INFO, "txDescMgr.register trans with txid", K(ret), K(tx_id), K(tx_desc));
+  TRANS_LOG(INFO, "txDescMgr.register trans with txid", K(ret), K(tx_id),
+      K(map_.alloc_cnt()));
   return ret;
 }
 

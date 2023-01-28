@@ -6413,6 +6413,11 @@ def_table_schema(
   ('flushed_log_size', 'int'),
   ('role', 'int'),
   ('is_exiting', 'int'),
+  ('coordinator', 'int'),
+  ('last_request_time', 'timestamp', 'true'),
+  ('gtrid', 'varbinary:128'),
+  ('bqual', 'varbinary:128'),
+  ('format_id', 'int', 'false', '1'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -20006,7 +20011,12 @@ def_table_schema(
       CASE
         WHEN role = 0 THEN 'LEADER'
         ELSE 'FOLLOWER'
-      END AS ROLE
+      END AS ROLE,
+      COORDINATOR AS COORD,
+      LAST_REQUEST_TIME,
+      FORMAT_ID AS FORMATID,
+      HEX(GTRID) AS GLOBALID,
+      HEX(BQUAL) AS BRANCHID
     FROM oceanbase.__all_virtual_trans_stat
     WHERE is_exiting = 0
 """.replace("\n", " "),
@@ -46393,7 +46403,12 @@ def_table_schema(
       CAST (CASE
         WHEN role = 0 THEN 'LEADER'
         ELSE 'FOLLOWER'
-      END AS VARCHAR2(8)) AS ROLE
+      END AS VARCHAR2(8)) AS ROLE,
+      COORDINATOR AS COORD,
+      LAST_REQUEST_TIME,
+      FORMAT_ID AS FORMATID,
+      RAWTOHEX(GTRID) AS GLOBALID,
+      RAWTOHEX(BQUAL) AS BRANCHID
     FROM SYS.ALL_VIRTUAL_TRANS_STAT
     WHERE is_exiting = 0
 """.replace("\n", " "),

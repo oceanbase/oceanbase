@@ -695,6 +695,7 @@ int ObTransService::end_two_phase_tx(const ObTransID &tx_id,
     tx_desc_mgr_.revert(*tx);
     tx = NULL;
   } else {
+    tx->tenant_id_ = MTL_ID();
     tx->commit_expire_ts_ = now + timeout_us;
     tx->coord_id_ = coord;
     tx->xid_ = xid;
@@ -1157,6 +1158,8 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "get tx ctx from mgr fail", K(ret), K(tx.tx_id_), K(ls_id), K(tx), K(arg));
     ctx = NULL;
+  } else if (!tx.xid_.empty()) {
+    ctx->exec_info_.xid_ = tx.xid_;
   }
   TRANS_LOG(TRACE, "create tx ctx", K(ret), K(ls_id), K(tx));
   return ret;
@@ -2241,9 +2244,11 @@ int ObTransService::recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx)
   } else if (OB_FAIL(tx->parts_.assign(tx_info.parts_))) {
     tx_desc_mgr_.revert(*tx);
     tx = NULL;
-    TRANS_LOG(WARN, "assgin parts fail", K(ret), K(tx));
+    TRANS_LOG(WARN, "assgin parts fail", K(ret));
   } else if (OB_FAIL(tx_desc_mgr_.add_with_txid(tx_info.tx_id_, *tx))) {
-    TRANS_LOG(WARN, "add tx to txMgr fail", K(ret), K(tx));
+    tx_desc_mgr_.revert(*tx);
+    tx = NULL;
+    TRANS_LOG(WARN, "add tx to txMgr fail", K(ret));
   } else {
     tx->flags_.REPLICA_ = true;
     tx->flags_.EXPLICIT_ = true;

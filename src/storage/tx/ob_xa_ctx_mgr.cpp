@@ -172,6 +172,7 @@ int ObXACtxMgr::get_xa_ctx_(const ObTransID &trans_id, bool &alloc, ObXACtx*& ct
     } else {
       ctx = tmp_ctx;
       inc_total_ctx_count();
+      ObXAStatistics::get_instance().inc_ctx_count();
     }
   }
 

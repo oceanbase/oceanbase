@@ -232,7 +232,8 @@ private:
                 K_(collected),
                 K_(ref),
                 K_(rec_log_ts),
-                K_(prev_rec_log_ts));
+                K_(prev_rec_log_ts),
+                K_(last_request_ts));
 public:
   static const int64_t OP_LOCAL_NUM = 16;
   static const int64_t RESERVED_MEM_SIZE = 256;
@@ -667,7 +668,7 @@ private:
 protected:
   // for xa
   virtual bool is_sub2pc() const override
-  { return !exec_info_.xid_.empty(); }
+  { return exec_info_.is_sub2pc_; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartTransCtx);
@@ -766,6 +767,10 @@ private:
   TransModulePageAllocator reserve_allocator_;
   // tmp scheduler addr is used to post response for the second phase of xa commit/rollback
   common::ObAddr tmp_scheduler_;
+  // this is used to denote the time of last request including start_access, commit, rollback
+  // this is a tempoary variable which is set to now by default
+  // therefore, if a follower switchs to leader, the variable is set to now
+  int64_t last_request_ts_;
   // ========================================================
 };
 

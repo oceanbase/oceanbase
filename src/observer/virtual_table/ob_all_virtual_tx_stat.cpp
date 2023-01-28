@@ -31,6 +31,7 @@ void ObGVTxStat::reset()
 
   ObVirtualTableScannerIterator::reset();
   all_tenants_.reset();
+  xid_.reset();
   init_ = false;
 }
 
@@ -43,6 +44,7 @@ void ObGVTxStat::destroy()
 
   ObVirtualTableScannerIterator::reset();
   all_tenants_.reset();
+  xid_.reset();
   init_ = false;
 }
 
@@ -151,6 +153,7 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
     }
   } else {
     const int64_t col_count = output_column_ids_.count();
+    xid_ = tx_stat.xid_;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
@@ -245,6 +248,37 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
           break;
         case IS_EXITING:
           cur_row_.cells_[i].set_int(tx_stat.is_exiting_);
+          break;
+        case COORD:
+          cur_row_.cells_[i].set_int(tx_stat.coord_.id());
+          break;
+        case LAST_REQUEST_TS:
+          cur_row_.cells_[i].set_timestamp(tx_stat.last_request_ts_);
+          break;
+        case GTRID:
+          if (!xid_.empty()) {
+            cur_row_.cells_[i].set_varchar(xid_.get_gtrid_str());
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          } else {
+            // use default value NULL
+            cur_row_.cells_[i].reset();
+          }
+          break;
+        case BQUAL:
+          if (!xid_.empty()) {
+            cur_row_.cells_[i].set_varchar(xid_.get_bqual_str());
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          } else {
+            // use default value NULL
+            cur_row_.cells_[i].reset();
+          }
+          break;
+        case FORMAT_ID:
+          if (!xid_.empty()) {
+            cur_row_.cells_[i].set_int(xid_.get_format_id());
+          } else {
+            cur_row_.cells_[i].set_int(-1);
+          }
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

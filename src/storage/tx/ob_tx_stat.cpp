@@ -44,6 +44,9 @@ void ObTxStat::reset()
   session_id_ = 0;
   scheduler_addr_.reset();
   is_exiting_ = false;
+  xid_.reset();
+  coord_.reset();
+  last_request_ts_ = OB_INVALID_TIMESTAMP;
 }
 int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
                    const uint64_t tenant_id,  const bool has_decided,
@@ -56,7 +59,8 @@ int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
                    const int64_t pending_log_size, const int64_t flushed_log_size,
                    const int64_t role_state,
                    const int64_t session_id, const common::ObAddr &scheduler,
-                   const bool is_exiting)
+                   const bool is_exiting, const ObXATransID &xid,
+                   const share::ObLSID &coord, const int64_t last_request_ts)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -86,6 +90,13 @@ int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
     session_id_ = session_id;
     scheduler_addr_ = scheduler;
     is_exiting_ = is_exiting;
+    xid_ = xid;
+    if (part_tx_action == ObPartTransAction::COMMIT && !coord.is_valid()) {
+      coord_ = ls_id;
+    } else {
+      coord_ = coord;
+    }
+    last_request_ts_ = last_request_ts;
   }
   return ret;
 }

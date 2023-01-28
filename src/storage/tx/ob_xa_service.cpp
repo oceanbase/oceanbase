@@ -1107,6 +1107,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       tx_desc = NULL;
     }
   } else {
+    // if enter this branch, tx_desc must be valid
     if (is_first_xa_start) {
       if (is_tightly_coupled && OB_FAIL(update_xa_lock(trans, tenant_id, xid, trans_id))) {
         TRANS_LOG(WARN, "update xa lock record failed", K(ret), K(trans_id), K(xid));
@@ -1143,6 +1144,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
 
       if (OB_FAIL(ret)) {
         if (OB_NOT_NULL(xa_ctx)) {
+          xa_ctx->set_exiting();
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
         }
         MTL(ObTransService *)->release_tx(*tx_desc);
@@ -1250,6 +1252,10 @@ int ObXAService::xa_start_join_(const ObXATransID &xid,
     TRANS_LOG(WARN, "invalid arguments from inner table", K(ret), K(xid),
         K(flags), K(end_flag), K(trans_id), K(scheduler_addr));
   } else {
+    if (NULL != tx_desc) {
+      MTL(ObTransService *)->release_tx(*tx_desc);
+      tx_desc = NULL;
+    }
     const bool is_tightly_coupled = !ObXAFlag::contain_loosely(end_flag);
     ObXACtx *xa_ctx = NULL;
     bool need_retry = false;
@@ -1691,6 +1697,7 @@ int ObXAService::two_phase_xa_rollback_(const ObXATransID &xid,
         TRANS_LOG(INFO, "two phase xa rollback success", K(ret), K(xid), K(tx_id));
       }
     }
+    xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
   }
 
   return ret;
@@ -1767,51 +1774,50 @@ int ObXAService::xa_rollback_remote_(const ObXATransID &xid,
   int ret = OB_SUCCESS;
   int result = OB_SUCCESS;
   int64_t now = ObTimeUtility::current_time();
-  obrpc::ObXARollbackRPCRequest req;
-  obrpc::ObXARPCCB<obrpc::OB_XA_ROLLBACK> cb;
-  ObTransCond cond;
   const int64_t wait_time = (INT64_MAX - now) / 2;
   const int64_t expire_ts = ObTimeUtility::current_time() + timeout_us;
 
-  if (OB_FAIL(cb.init(&cond))) {
-    TRANS_LOG(WARN, "ObXARPCCB init failed", KR(ret));
-  } else if (OB_FAIL(req.init(tx_id, xid, timeout_us, request_id))) {
-    TRANS_LOG(WARN, "fail to init xa rollback rpc request", KR(ret), K(tx_id), K(xid));
-  } else {
-    do {
-      result = OB_SUCCESS;
-      if (OB_FAIL(xa_rpc_.xa_rollback(MTL_ID(), sche_addr, req, &cb))) {
-        TRANS_LOG(WARN, "xa rollback rpc failed", KR(ret), K(req), K(sche_addr));
-      } else if (OB_FAIL(cond.wait(wait_time, result))) {
-        TRANS_LOG(WARN, "wait xa rollback rpc callback failed", KR(ret), K(req), K(sche_addr));
-      } else if (OB_SUCCESS != result) {
-        // do nothing
-      }
-    } while (OB_SUCC(ret) && (OB_EAGAIN == result || OB_TIMEOUT == result) && expire_ts > ObTimeUtility::current_time());
-  }
+  do {
+    obrpc::ObXARollbackRPCRequest req;
+    obrpc::ObXARPCCB<obrpc::OB_XA_ROLLBACK> cb;
+    ObTransCond cond;
+    result = OB_SUCCESS;
+    if (OB_FAIL(cb.init(&cond))) {
+      TRANS_LOG(WARN, "ObXARPCCB init failed", KR(ret));
+    } else if (OB_FAIL(req.init(tx_id, xid, timeout_us, request_id))) {
+      TRANS_LOG(WARN, "fail to init xa rollback rpc request", KR(ret), K(tx_id), K(xid));
+    } else if (OB_FAIL(xa_rpc_.xa_rollback(MTL_ID(), sche_addr, req, &cb))) {
+      TRANS_LOG(WARN, "xa rollback rpc failed", KR(ret), K(req), K(sche_addr));
+    } else if (OB_FAIL(cond.wait(wait_time, result))) {
+      TRANS_LOG(WARN, "wait xa rollback rpc callback failed", KR(ret), K(req), K(sche_addr));
+    } else if (OB_SUCCESS != result) {
+      // do nothing
+    }
+  } while (OB_SUCC(ret) && (OB_EAGAIN == result || OB_TIMEOUT == result) && expire_ts > ObTimeUtility::current_time());
+
   if (OB_SUCC(ret)) {
     switch (result) {
       case OB_TRANS_XA_PROTO:
       case OB_TRANS_COMMITED: {
         ret = OB_TRANS_XA_PROTO;
-        TRANS_LOG(WARN, "xa rollback failed", KR(ret), K(result), K(req), K(sche_addr));
+        TRANS_LOG(WARN, "xa rollback failed", KR(ret), K(result), K(sche_addr));
         break;
       }
       case OB_SUCCESS:
       case OB_TRANS_ROLLBACKED: {
         ret = OB_SUCCESS;
-        TRANS_LOG(WARN, "xa rollback success", KR(ret), K(result), K(req), K(sche_addr));
+        TRANS_LOG(WARN, "xa rollback success", KR(ret), K(result), K(sche_addr));
         break;
       }
       case OB_TIMEOUT:
       case OB_EAGAIN: {
         ret = OB_TRANS_XA_RMFAIL;
-        TRANS_LOG(WARN, "xa rollback rpc failed", KR(ret), K(result), K(req), K(sche_addr));
+        TRANS_LOG(WARN, "xa rollback rpc failed", KR(ret), K(result), K(sche_addr));
         break;
       }
       default: {
         ret = OB_TRANS_XA_PROTO;
-        TRANS_LOG(WARN, "xa rollback rpc failed", KR(ret), K(result), K(req), K(sche_addr));
+        TRANS_LOG(WARN, "xa rollback rpc failed", KR(ret), K(result), K(sche_addr));
         break;
       }
     }
@@ -2217,8 +2223,6 @@ int ObXAService::xa_prepare(const ObXATransID &xid,
   // 1. tightly coupled, OB_ERR_READ_ONLY_TRANSACTION, delete lock and record
   // 2. tightly coupled, OB_TRANS_XA_RDONLY, delete record only
   // 3. loosely coupled, OB_ERR_READ_ONLY_TRANSACTION, delete record
-  // 4. tightly coupled, OB_TRANS_XA_RBROLLBACK, delete lock and all records
-  // 5. loosely coupled, OB_TRANS_XA_RBROLLBACK, delete record
   if (OB_TRANS_XA_RDONLY == ret) {
     // TODO, verify delete_xa_record_state and ret(tmp_ret)
     if (OB_SUCCESS != (tmp_ret = delete_xa_record(tenant_id, xid))) {
@@ -2230,10 +2234,6 @@ int ObXAService::xa_prepare(const ObXATransID &xid,
       TRANS_LOG(WARN, "delete xa branch failed", K(tmp_ret), K(xid), K(tenant_id), K(tx_id));
     }
     ret = OB_TRANS_XA_RDONLY;
-  } else if (OB_TRANS_XA_RBROLLBACK == ret) {
-    if (OB_SUCCESS != (tmp_ret = delete_xa_branch(tenant_id, xid, is_tightly_coupled))) {
-      TRANS_LOG(WARN, "delete xa record failed", K(tmp_ret), K(xid), K(tenant_id), K(tx_id));
-    }
   }
 
   return ret;
@@ -2260,10 +2260,6 @@ int ObXAService::local_xa_prepare_(const ObXATransID &xid,
 
   if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(tx_id, alloc, xa_ctx))) {
     TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(xid), K(tx_id), KP(xa_ctx));
-    // TODO, verify
-    if (OB_TRANS_CTX_NOT_EXIST == ret) {
-      ret = OB_TRANS_XA_RBROLLBACK;
-    }
   } else if (OB_ISNULL(xa_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "xa ctx is null", K(ret), K(xid), K(tx_id));

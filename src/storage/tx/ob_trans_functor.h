@@ -797,7 +797,10 @@ public:
                                             tx_ctx->role_state_,
                                             tx_ctx->session_id_,
                                             tx_ctx->exec_info_.scheduler_,
-                                            tx_ctx->is_exiting_))) {
+                                            tx_ctx->is_exiting_,
+                                            tx_ctx->exec_info_.xid_,
+                                            tx_ctx->exec_info_.upstream_,
+                                            tx_ctx->last_request_ts_))) {
           TRANS_LOG(WARN, "ObTxStat init error", K(tmp_ret), KPC(tx_ctx));
         } else if (OB_TMP_FAIL(tx_stat_iter_.push(tx_stat))) {
           TRANS_LOG(WARN, "ObTxStatIterator push trans stat error", K(tmp_ret));

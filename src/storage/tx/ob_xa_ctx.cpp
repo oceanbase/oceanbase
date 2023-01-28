@@ -162,9 +162,9 @@ int ObXACtx::handle_timeout(const int64_t delay)
         }
       } else {
         set_terminated_();
-        if (0 == xa_ref_count_) {
-          set_exiting_();
-        }
+      }
+      if (0 == xa_ref_count_) {
+        set_exiting_();
       }
       timeout_task_.set_running(false);
     }
@@ -1147,10 +1147,11 @@ int ObXACtx::xa_start_(const ObXATransID &xid,
 
   if (OB_FAIL(ret)) {
     tx_desc->set_xa_ctx(NULL);
+    // if fail, the local variable tx_desc_ should be NULL
+    tx_desc_ = NULL;
     //xa_ref_count_ is added only when success is returned
     if (0 == xa_ref_count_) {
-      is_exiting_ = true;
-      xa_ctx_mgr_->erase_xa_ctx(trans_id_);
+      set_exiting_();
     }
   }
 
@@ -1683,9 +1684,9 @@ int ObXACtx::end_stmt_remote_(const ObXATransID &xid)
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(result)) {
+      set_terminated_();
+      ret = OB_TRANS_XA_BRANCH_FAIL;
       if (OB_TRANS_XA_BRANCH_FAIL == result || OB_TRANS_CTX_NOT_EXIST == result) {
-        set_terminated_();
-        ret = OB_TRANS_XA_BRANCH_FAIL;
         TRANS_LOG(INFO, "original scheduler has terminated", K(ret), K(xid), K(*this));
       } else {
         TRANS_LOG(WARN, "fail to end stmt remote", K(ret), K(xid), K(*this));
@@ -1888,11 +1889,14 @@ int ObXACtx::set_exiting_()
     TRANS_LOG(ERROR, "unexpected xa ref count", K(ret), K(xa_ref_count_), K_(xid), K(*this));
   } else {
     is_exiting_ = true;
+    if (NULL != tx_desc_) {
+      tx_desc_->reset_for_xa();
+      MTL(ObTransService *)->release_tx(*tx_desc_);
+      tx_desc_ = NULL;
+    }
     if (OB_FAIL(xa_ctx_mgr_->erase_xa_ctx(trans_id_))) {
       TRANS_LOG(WARN, "erase xa ctx failed", K(ret), K_(xid), K(*this));
     }
-    tx_desc_->reset_for_xa();
-    MTL(ObTransService *)->release_tx(*tx_desc_);
   }
   TRANS_LOG(INFO, "xa ctx set exiting", K(ret), K_(xid), K(*this));
 
@@ -2459,10 +2463,6 @@ int ObXACtx::wait_xa_prepare(const ObXATransID &xid, const int64_t timeout_us)
     xa_trans_state_ = ObXATransState::PREPARED;
   }
 
-  if (OB_UNLIKELY(OB_TRANS_UNKNOWN == ret)) {
-    ret = OB_TRANS_XA_RBROLLBACK;
-  }
-
   if (OB_LIKELY(!is_exiting_)) {
     is_exiting_ = true;
     if (OB_NOT_NULL(xa_ctx_mgr_)) {
@@ -2517,12 +2517,8 @@ int ObXACtx::two_phase_end_trans(const ObXATransID &xid,
   }
 
   if (OB_FAIL(ret)) {
-    if (OB_LIKELY(!is_exiting_)) {
-      is_exiting_ = true;
-      if (OB_NOT_NULL(xa_ctx_mgr_)) {
-        xa_ctx_mgr_->erase_xa_ctx(trans_id_);
-      }
-    }
+    set_exiting_();
+    tx_desc_ = NULL;
   }
 
   REC_TRACE_EXT(tlog_, xa_end_trans, OB_Y(ret), OB_ID(is_rollback), is_rollback,
@@ -2550,10 +2546,8 @@ int ObXACtx::wait_two_phase_end_trans(const ObXATransID &xid,
   }
 
   if (OB_LIKELY(!is_exiting_)) {
-    is_exiting_ = true;
-    if (OB_NOT_NULL(xa_ctx_mgr_)) {
-      xa_ctx_mgr_->erase_xa_ctx(trans_id_);
-    }
+    set_exiting_();
+    tx_desc_ = NULL;
   }
 
   return ret;

@@ -635,6 +635,7 @@ int ObPartTransCtx::handle_tx_2pc_prepare_redo_req(const Ob2pcPrepareRedoReqMsg 
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
   exec_info_.trans_type_ = TransType::DIST_TRANS;
   exec_info_.xid_ = msg.xid_;
+  exec_info_.is_sub2pc_ = true;
 
   if (FALSE_IT(set_trans_type_(TransType::DIST_TRANS))) {
   } else if (OB_FAIL(set_2pc_upstream_(msg.upstream_))) {

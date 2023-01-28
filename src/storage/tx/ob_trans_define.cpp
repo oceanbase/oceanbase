@@ -1005,6 +1005,7 @@ void ObTxExecInfo::reset()
   prepare_log_info_arr_.reset();
   xid_.reset();
   need_checksum_ = true;
+  is_sub2pc_ = false;
 }
 
 void ObTxExecInfo::destroy()
@@ -1042,7 +1043,8 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
 //                    touched_pkeys_,
                     prepare_log_info_arr_,
                     xid_,
-                    need_checksum_);
+                    need_checksum_,
+                    is_sub2pc_);
 
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 

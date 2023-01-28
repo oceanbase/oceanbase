@@ -632,6 +632,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_abort_response_impl_(const int64_t pa
   } else if (is_2pc_logging()) {
     TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
   } else if (ObTxState::INIT == get_upstream_state()
+             || ObTxState::REDO_COMPLETE == get_upstream_state()
              || ObTxState::PREPARE == get_upstream_state()) {
     // Abandoned: We should not skip the msg during log synchronization, for example,
     // one of the participants aborts and response with the abort, and the

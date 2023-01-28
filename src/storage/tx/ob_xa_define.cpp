@@ -421,6 +421,16 @@ void ObXATimeoutTask::runTimerTask()
   }
 }
 
+void ObXAStatistics::print_statistics(int64_t cur_ts)
+{
+  const int64_t last_stat_ts = ATOMIC_LOAD(&last_stat_ts_);
+  if (cur_ts - last_stat_ts >= STAT_INTERVAL) {
+    if (ATOMIC_BCAS(&last_stat_ts_, last_stat_ts, cur_ts)) {
+      TRANS_LOG(INFO, "xa statistics", K(*this));
+    }
+  }
+}
+
 }//transaction
 
 }//oceanbase

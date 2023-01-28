@@ -1712,7 +1712,8 @@ public:
                //K_(touched_pkeys),
                K_(prepare_log_info_arr),
                K_(xid),
-               K_(need_checksum));
+               K_(need_checksum),
+               K_(is_sub2pc));
   ObTxState state_;
   share::ObLSID upstream_;
   share::ObLSArray participants_;
@@ -1740,6 +1741,7 @@ public:
   // for xa
   ObXATransID xid_;
   bool need_checksum_;
+  bool is_sub2pc_;
 };
 
 static const int64_t GET_GTS_AHEAD_INTERVAL = 300;

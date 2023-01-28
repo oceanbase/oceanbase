@@ -190,7 +190,8 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
                                        TEST_FIRST_SCN,
                                        TEST_LAST_SCN,
                                        TEST_MAX_SUBMITTED_SEQ_NO,
-                                       TEST_CLUSTER_VERSION);
+                                       TEST_CLUSTER_VERSION,
+                                       TEST_XID);
   ObTxPrepareLog filll_prepare(TEST_LS_ARRAY, TEST_LOG_OFFSET);
   ObTxCommitLog fill_commit(share::SCN::base_scn(),
                             TEST_CHECKSUM,
@@ -547,6 +548,8 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   EXPECT_EQ(fill_active_state.get_cluster_version(), replay_active_state.get_cluster_version());
   replay_member_cnt++;
   EXPECT_EQ(fill_active_state.get_max_submitted_seq_no(), replay_active_state.get_max_submitted_seq_no());
+  replay_member_cnt++;
+  EXPECT_EQ(fill_active_state.get_xid(), replay_active_state.get_xid());
   replay_member_cnt++;
   EXPECT_EQ(replay_member_cnt, fill_member_cnt);
 

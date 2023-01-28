@@ -1012,10 +1012,8 @@ int select_trans_stat(lua_State *L)
   int ret = OB_SUCCESS;
   int argc = lua_gettop(L);
   ObTransService *trans_service = nullptr;
-  ObTxStatIterator iter;
   ObArray<uint64_t> tenant_ids;
   ObTxStat tx_stat;
-  iter.reset();
   if (argc > 1) {
     OB_LOG(ERROR, "call select_trans_stat() failed, bad arguments count, should be 0.");
     lua_pushnil(L);
@@ -1026,104 +1024,125 @@ int select_trans_stat(lua_State *L)
     OB_LOG(ERROR, "failed to get tenant_ids", K(ret));
     lua_pushnil(L);
   } else {
-    for (int i = 0; i < tenant_ids.count() && OB_SUCC(ret); ++i) {
-      uint64_t tenant_id = tenant_ids.at(i);
-      MTL_SWITCH(tenant_id) {
-        auto* txs = MTL(transaction::ObTransService*);
-        if (OB_FAIL(txs->iterate_all_observer_tx_stat(iter))) {
-          OB_LOG(ERROR, "iterate transaction stat failed", K(ret));
+    HEAP_VAR(ObTxStatIterator, iter) {
+      iter.reset();
+      for (int i = 0; i < tenant_ids.count() && OB_SUCC(ret); ++i) {
+        uint64_t tenant_id = tenant_ids.at(i);
+        MTL_SWITCH(tenant_id) {
+          auto* txs = MTL(transaction::ObTransService*);
+          if (OB_FAIL(txs->iterate_all_observer_tx_stat(iter))) {
+            OB_LOG(ERROR, "iterate transaction stat failed", K(ret));
+          }
         }
       }
-    }
-    if (OB_FAIL(ret)) {
-      lua_pushnil(L);
-    } else if (OB_FAIL(iter.set_ready())) {
-      OB_LOG(ERROR, "ObTxStatIterator set ready error", K(ret));
-      lua_pushnil(L);
-    } else {
-      ret = iter.get_next(tx_stat);
-    }
-    static constexpr int64_t OB_MAX_BUFFER_SIZE = 512;
-    static constexpr int64_t OB_MIN_BUFFER_SIZE = 128;
-    std::vector<const char*> columns = {
-      "tenant_id",
-      "session_id",
-      "scheduler_addr",
-      "trans_type",
-      "trans_id",
-      "has_decided",
-      "ls_id",
-      "participants",
-      "ctx_create_time",
-      "expired_time",
-      "ref_cnt",
-      "last_op_sn",
-      "pending_write",
-      "state",
-      "part_trans_action",
-      "trans_ctx_addr",
-      "mem_ctx_id",
-      "pending_log_size",
-      "flushed_log_size",
-      "role"
-    };
-    LuaVtableGenerator gen(L, columns);
-    while (OB_SUCC(ret) && !gen.is_end()) {
-      gen.next_row();
-      // tenant_id
-      gen.next_column(tx_stat.tenant_id_);
-      // session_id
-      gen.next_column(tx_stat.session_id_);
-      // scheduler_addr
-      char addr_buf[32];
-      tx_stat.scheduler_addr_.to_string(addr_buf, 32);
-      gen.next_column(addr_buf);
-      // trans_type
-      gen.next_column(tx_stat.tx_type_);
-      // trans_id
-      gen.next_column(tx_stat.tx_id_.get_id());
-      // has_decided
-      gen.next_column(tx_stat.has_decided_);
-      // ls_id
-      gen.next_column(tx_stat.ls_id_.id());
-      // participants
-      if (0 < tx_stat.participants_.count()) {
-        char participants_buffer[OB_MAX_BUFFER_SIZE];
-        tx_stat.participants_.to_string(participants_buffer, OB_MAX_BUFFER_SIZE);
-        gen.next_column(participants_buffer);
+      if (OB_FAIL(ret)) {
+        lua_pushnil(L);
+      } else if (OB_FAIL(iter.set_ready())) {
+        OB_LOG(ERROR, "ObTxStatIterator set ready error", K(ret));
+        lua_pushnil(L);
       } else {
-        gen.next_column("NULL");
+        ret = iter.get_next(tx_stat);
       }
-      // ctx_create_time
-      gen.next_column(tx_stat.tx_ctx_create_time_);
-      // expired_time
-      gen.next_column(tx_stat.tx_expired_time_);
-      // refer
-      gen.next_column(tx_stat.ref_cnt_);
-      // last_op_sn
-      gen.next_column(tx_stat.last_op_sn_);
-      // pending_write
-      gen.next_column(tx_stat.pending_write_);
-      // state
-      gen.next_column(tx_stat.state_);
-      // part_trans_action
-      gen.next_column(tx_stat.part_tx_action_);
-      // trans_ctx_addr
-      gen.next_column((int64_t)tx_stat.tx_ctx_addr_);
-      // mem_ctx_id
-      lua_pushinteger(L, 0);
-      // pending_log_size
-      lua_pushinteger(L, tx_stat.pending_log_size_);
-      // flushed_log_size
-      lua_pushinteger(L, tx_stat.flushed_log_size_);
-      // role
-      gen.next_column(tx_stat.role_state_);
+      static constexpr int64_t OB_MAX_BUFFER_SIZE = 512;
+      static constexpr int64_t OB_MIN_BUFFER_SIZE = 128;
+      std::vector<const char*> columns = {
+        "tenant_id",
+        "session_id",
+        "scheduler_addr",
+        "trans_type",
+        "trans_id",
+        "has_decided",
+        "ls_id",
+        "participants",
+        "ctx_create_time",
+        "expired_time",
+        "ref_cnt",
+        "last_op_sn",
+        "pending_write",
+        "state",
+        "part_trans_action",
+        "trans_ctx_addr",
+        "mem_ctx_id",
+        "pending_log_size",
+        "flushed_log_size",
+        "role",
+        "is_exiting",
+        "coord",
+        "last_request_time",
+        "gtrid",
+        "bqual",
+        "format_id"
+      };
+      LuaVtableGenerator gen(L, columns);
+      while (OB_SUCC(ret) && !gen.is_end()) {
+        gen.next_row();
+        // tenant_id
+        gen.next_column(tx_stat.tenant_id_);
+        // session_id
+        gen.next_column(tx_stat.session_id_);
+        // scheduler_addr
+        char addr_buf[32];
+        tx_stat.scheduler_addr_.to_string(addr_buf, 32);
+        gen.next_column(addr_buf);
+        // trans_type
+        gen.next_column(tx_stat.tx_type_);
+        // trans_id
+        gen.next_column(tx_stat.tx_id_.get_id());
+        // has_decided
+        gen.next_column(tx_stat.has_decided_);
+        // ls_id
+        gen.next_column(tx_stat.ls_id_.id());
+        // participants
+        if (0 < tx_stat.participants_.count()) {
+          char participants_buffer[OB_MAX_BUFFER_SIZE];
+          tx_stat.participants_.to_string(participants_buffer, OB_MAX_BUFFER_SIZE);
+          gen.next_column(participants_buffer);
+        } else {
+          gen.next_column("NULL");
+        }
+        // ctx_create_time
+        gen.next_column(tx_stat.tx_ctx_create_time_);
+        // expired_time
+        gen.next_column(tx_stat.tx_expired_time_);
+        // refer
+        gen.next_column(tx_stat.ref_cnt_);
+        // last_op_sn
+        gen.next_column(tx_stat.last_op_sn_);
+        // pending_write
+        gen.next_column(tx_stat.pending_write_);
+        // state
+        gen.next_column(tx_stat.state_);
+        // part_trans_action
+        gen.next_column(tx_stat.part_tx_action_);
+        // trans_ctx_addr
+        gen.next_column((int64_t)tx_stat.tx_ctx_addr_);
+        // mem_ctx_id
+        lua_pushinteger(L, 0);
+        // pending_log_size
+        lua_pushinteger(L, tx_stat.pending_log_size_);
+        // flushed_log_size
+        lua_pushinteger(L, tx_stat.flushed_log_size_);
+        // role
+        gen.next_column(tx_stat.role_state_);
+        // is_exiting
+        gen.next_column(tx_stat.is_exiting_);
+        // coord
+        gen.next_column(tx_stat.coord_.id());
+        // last_request_ts
+        gen.next_column(tx_stat.last_request_ts_);
+        // gtrid
+        gen.next_column(tx_stat.xid_.get_gtrid_str());
+        // bqual
+        gen.next_column(tx_stat.xid_.get_bqual_str());
+        // format_id
+        gen.next_column(tx_stat.xid_.get_format_id());
 
-      gen.row_end();
-      ret = iter.get_next(tx_stat);
-    }
-    if (OB_ITER_END != ret) {
-      OB_LOG(ERROR, "iter failed", K(ret));
+        gen.row_end();
+        ret = iter.get_next(tx_stat);
+      }
+      if (OB_ITER_END != ret) {
+        OB_LOG(ERROR, "iter failed", K(ret));
+      }
     }
   }
   return 1;

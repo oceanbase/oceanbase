@@ -116,6 +116,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     cluster_version_ = cluster_version;
     part_trans_action_ = ObPartTransAction::INIT;
     trans_2pc_timeout_ = ObServerConfig::get_instance().trx_2pc_retry_interval;
+    last_request_ts_ = ctx_create_time_;
 
     exec_info_.scheduler_ = scheduler;
     exec_info_.trans_type_ = TransType::SP_TRANS;
@@ -713,6 +714,7 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
   }
   if (OB_SUCC(ret)) {
     part_trans_action_ = ObPartTransAction::COMMIT;
+    last_request_ts_ = ObClockGenerator::getClock();
   }
   REC_TRANS_TRACE_EXT2(tlog_, commit, OB_ID(ret), ret,
                        OB_ID(thread_id), GETTID(),
@@ -2536,7 +2538,7 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
   } else {
     ObTxCommitInfoLog commit_info_log(
         exec_info_.scheduler_, exec_info_.participants_, exec_info_.upstream_,
-        false, // sub2pc_
+        exec_info_.is_sub2pc_,
         exec_info_.is_dup_tx_, can_elr_, trace_info_.get_app_trace_id(),
         trace_info_.get_app_trace_info(), exec_info_.prev_record_lsn_, exec_info_.redo_lsns_,
         exec_info_.incremental_participants_, cluster_version_, exec_info_.xid_);
@@ -2617,7 +2619,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
                                       exec_info_.is_dup_tx_,
                                       trans_expired_time_, epoch_, last_op_sn_, first_scn_,
                                       last_scn_, cur_submitted_seq_no,
-                                      cluster_version_);
+                                      cluster_version_,
+                                      exec_info_.xid_);
     bool redo_log_submitted = false;
     ObTxLogCb *log_cb = nullptr;
     if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
@@ -3999,7 +4002,8 @@ int ObPartTransCtx::replay_active_info(const ObTxActiveInfoLog &log,
     // schema_version
     can_elr_ = log.is_elr();
     // cur_query_start_time
-    // sub2pc
+    exec_info_.is_sub2pc_ = log.is_sub2pc();
+    exec_info_.xid_ = log.get_xid();
     epoch_ = log.get_epoch();
     last_op_sn_ = log.get_last_op_sn();
     first_scn_ = log.get_first_scn();
@@ -4062,6 +4066,7 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
       set_2pc_upstream_(commit_info_log.get_upstream());
     }
     exec_info_.xid_ = commit_info_log.get_xid();
+    exec_info_.is_sub2pc_ = commit_info_log.is_sub2pc();
     can_elr_ = commit_info_log.is_elr();
     cluster_version_ = commit_info_log.get_cluster_version();
     sub_state_.set_info_log_submitted();
@@ -4661,6 +4666,7 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "switch to leader failed", KR(ret), K(ret), KPC(this));
   } else {
+    last_request_ts_ = ObClockGenerator::getClock();
 #ifndef NDEBUG
     TRANS_LOG(INFO, "switch to leader succeed", KPC(this));
 #endif
@@ -5590,12 +5596,14 @@ int ObPartTransCtx::sub_prepare(const ObLSArray &parts,
     set_2pc_upstream_(ls_id_);
     exec_info_.trans_type_ = TransType::DIST_TRANS;
     exec_info_.xid_ = xid;
+    exec_info_.is_sub2pc_ = true;
     // (void)set_sub2pc_coord_state(Ob2PCPrepareState::REDO_PREPARING);
     if (OB_FAIL(prepare_redo())) {
       TRANS_LOG(WARN, "fail to execute sub prepare", K(ret), KPC(this));
     } else {
       part_trans_action_ = ObPartTransAction::COMMIT;
     }
+    last_request_ts_ = ObClockGenerator::getClock();
     TRANS_LOG(INFO, "sub prepare", K(ret), K(xid), KPC(this));
   }
   return ret;
@@ -5639,6 +5647,7 @@ int ObPartTransCtx::sub_end_tx(const int64_t &request_id,
     if (OB_FAIL(continue_execution(is_rollback))) {
       TRANS_LOG(WARN, "fail to continue execution", KR(ret), KPC(this));
     }
+    last_request_ts_ = ObClockGenerator::getClock();
   }
   TRANS_LOG(INFO, "sub end tx", K(ret), K(xid), K(is_rollback), K(tmp_scheduler), KPC(this));
   return ret;
@@ -5747,6 +5756,7 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc,
     mt_ctx_.inc_ref();
     mt_ctx_.acquire_callback_list();
   }
+  last_request_ts_ = ObClockGenerator::getClock();
   TRANS_LOG(TRACE, "start_access", K(ret), KPC(this));
   REC_TRANS_TRACE_EXT(tlog_, start_access,
                       OB_ID(ret), ret,
@@ -5972,6 +5982,7 @@ int ObPartTransCtx::abort(const int reason)
     if (OB_FAIL(abort_(reason))) {
       TRANS_LOG(WARN, "abort_ failed", KR(ret), K(*this));
     }
+    last_request_ts_ = ObClockGenerator::getClock();
   }
   return ret;
 }

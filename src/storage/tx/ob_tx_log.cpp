@@ -188,7 +188,8 @@ OB_TX_SERIALIZE_MEMBER(ObTxActiveInfoLog,
                        /* 14 */ first_scn_,
                        /* 15 */ last_scn_,
                        /* 16 */ cluster_version_,
-                       /* 17 */ max_submitted_seq_no_);
+                       /* 17 */ max_submitted_seq_no_,
+                       /* 18 */ xid_);
 
 OB_TX_SERIALIZE_MEMBER(ObTxCommitInfoLog,
                        compat_bytes_,
@@ -246,7 +247,7 @@ int ObTxActiveInfoLog::before_serialize()
       TRANS_LOG(WARN, "reset all compat_bytes_ valid failed", K(ret));
     }
   } else {
-    if (OB_FAIL(compat_bytes_.init(17))) {
+    if (OB_FAIL(compat_bytes_.init(18))) {
       TRANS_LOG(WARN, "init compat_bytes_ failed", K(ret));
     }
   }
@@ -269,6 +270,7 @@ int ObTxActiveInfoLog::before_serialize()
     TX_NO_NEED_SER(last_scn_ == 0, 15, compat_bytes_);
     TX_NO_NEED_SER(cluster_version_ == 0, 16, compat_bytes_);
     TX_NO_NEED_SER(max_submitted_seq_no_ == 0, 17, compat_bytes_);
+    TX_NO_NEED_SER(xid_.empty(), 18, compat_bytes_);
   }
 
   return ret;

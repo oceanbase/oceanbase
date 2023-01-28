@@ -309,12 +309,13 @@ private:
 
 class ObTxActiveInfoLogTempRef {
 public:
-  ObTxActiveInfoLogTempRef() : scheduler_(), app_trace_id_str_(), proposal_leader_() {}
+  ObTxActiveInfoLogTempRef() : scheduler_(), app_trace_id_str_(), proposal_leader_(), xid_() {}
 
 public:
   common::ObAddr scheduler_;
   common::ObString app_trace_id_str_;
   common::ObAddr proposal_leader_;
+  ObXATransID xid_;
 };
 
 class ObTxActiveInfoLog
@@ -327,7 +328,7 @@ public:
         app_trace_id_str_(temp_ref.app_trace_id_str_), schema_version_(0), can_elr_(false),
         proposal_leader_(temp_ref.proposal_leader_), cur_query_start_time_(0), is_sub2pc_(false),
         is_dup_tx_(false), tx_expired_time_(0), epoch_(0), last_op_sn_(0), first_scn_(0),
-        last_scn_(0), max_submitted_seq_no_(0), cluster_version_(0)
+        last_scn_(0), max_submitted_seq_no_(0), cluster_version_(0), xid_(temp_ref.xid_)
   {
     before_serialize();
   }
@@ -347,13 +348,15 @@ public:
                     int64_t first_scn,
                     int64_t last_scn,
                     int64_t max_submitted_seq_no,
-                    uint64_t cluster_version)
+                    uint64_t cluster_version,
+                    const ObXATransID &xid)
       : scheduler_(scheduler), trans_type_(trans_type), session_id_(session_id),
         app_trace_id_str_(app_trace_id_str), schema_version_(schema_version), can_elr_(elr),
         proposal_leader_(proposal_leader), cur_query_start_time_(cur_query_start_time),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), tx_expired_time_(tx_expired_time),
         epoch_(epoch), last_op_sn_(last_op_sn), first_scn_(first_scn), last_scn_(last_scn),
-        max_submitted_seq_no_(max_submitted_seq_no), cluster_version_(cluster_version)
+        max_submitted_seq_no_(max_submitted_seq_no), cluster_version_(cluster_version),
+        xid_(xid)
   {
     before_serialize();
   };
@@ -375,6 +378,7 @@ public:
   int64_t get_last_scn() const { return last_scn_; }
   int64_t get_max_submitted_seq_no() const { return max_submitted_seq_no_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
+  const ObXATransID &get_xid() const { return xid_; }
   // for ob_admin
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
@@ -396,7 +400,8 @@ public:
                K(first_scn_),
                K(last_scn_),
                K(max_submitted_seq_no_),
-               K(cluster_version_));
+               K(cluster_version_),
+               K(xid_));
 
 public:
   int before_serialize();
@@ -425,6 +430,7 @@ private:
   int64_t max_submitted_seq_no_;
 
   uint64_t cluster_version_;
+  ObXATransID xid_;
 };
 
 class ObTxCommitInfoLogTempRef

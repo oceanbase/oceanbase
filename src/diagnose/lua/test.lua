@@ -112,8 +112,13 @@ for i=1,#trans_stat do
                     trans_stat[i]['trans_ctx_id'],
                     trans_stat[i]['pending_log_size'],
                     trans_stat[i]['flushed_log_size'],
+                    trans_stat[i]['role'],
                     trans_stat[i]['is_exiting'],
-                    trans_stat[i]['role'])
+                    trans_stat[i]['coord'],
+                    trans_stat[i]['last_request_time'],
+                    trans_stat[i]['gtrid'],
+                    trans_stat[i]['bqual'],
+                    trans_stat[i]['format_id'])
 end
 
 para["select"] = {"tenant_id", "trans_id", "session_id"}

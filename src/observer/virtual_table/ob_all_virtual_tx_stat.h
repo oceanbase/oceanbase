@@ -80,6 +80,11 @@ private:
     FLUSHED_LOG_SIZE,
     ROLE_STATE,
     IS_EXITING,
+    COORD,
+    LAST_REQUEST_TS,
+    GTRID,
+    BQUAL,
+    FORMAT_ID,
   };
 
   static const int64_t OB_MAX_BUFFER_SIZE = 1024;
@@ -93,6 +98,7 @@ private:
   bool init_;
   transaction::ObTxStatIterator tx_stat_iter_;
   common::ObArray<uint64_t> all_tenants_;
+  transaction::ObXATransID xid_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGVTxStat);
 };
