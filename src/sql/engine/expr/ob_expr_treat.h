@@ -9,8 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  * This file contains declare of the treat.
- * Authors:
- *   aozeliu.azl@oceanbase.com
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_TREAT_H_

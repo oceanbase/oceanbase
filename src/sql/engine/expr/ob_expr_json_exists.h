@@ -8,9 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
- * This file contains implementation for json_valid.
- * Authors:
- *   wuxingying.wxy@oceanbase.com
+ * This file contains implementation for json_exists.
  */
 
 #ifndef OCEANBASE_SRC_SQL_ENGINE_EXPR_OB_EXPR_JSON_EXISTS_H

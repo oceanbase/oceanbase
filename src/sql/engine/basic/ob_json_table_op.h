@@ -9,8 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  * This file contains interface support for the json table abstraction.
- * Authors:
- *   weiyouchao.wyc <weiyouchao.wyc@oceanbase.com>
  */
 
 #ifndef OCEANBASE_BASIC_OB_JSON_TABLE_OP_H_

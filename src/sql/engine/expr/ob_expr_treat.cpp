@@ -9,8 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  * This file contains implementation of treat.
- * Authors:
- *   aozeliu.azl@oceanbase.com
  */
 
 #define USING_LOG_PREFIX SQL_ENG

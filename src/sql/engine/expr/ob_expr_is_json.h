@@ -9,8 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  * This file contains implementation for json_valid.
- * Authors:
- *   wuxingying.wxy@oceanbase.com
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_IS_JSON_H_

@@ -9,8 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  * This file contains implementation support for the log json table abstraction.
- * Authors:
- *   weiyouchao.wyc <weiyouchao.wyc@oceanbase.com>
  */
 
 #ifndef _OB_LOG_JSON_TABLE_H

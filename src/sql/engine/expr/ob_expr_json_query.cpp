@@ -9,10 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  * This file is for func json_query.
- * 	 * ---------------------------------------------------------------------------------------
- * Authors:
- *   chuanyan.wf <chuanyan.wf@oceanbase.com>
- * ---------------------------------------------------------------------------------------
  */
 
 #define USING_LOG_PREFIX SQL_ENG

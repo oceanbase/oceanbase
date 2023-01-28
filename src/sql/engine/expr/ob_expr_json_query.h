@@ -9,10 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  * This file is for func json_query.
- * 	 * ---------------------------------------------------------------------------------------
- * Authors:
- *   chuanyan.wf <chuanyan.wf@oceanbase.com>
- * ---------------------------------------------------------------------------------------
  */
 
 #ifndef OCEANBASE_SRC_SQL_ENGINE_EXPR_OB_EXPR_JSON_QUERY_H

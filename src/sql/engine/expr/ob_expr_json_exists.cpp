@@ -9,9 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  * This file is for func json_exists.
- * ---------------------------------------------------------------------------------------
- * Authors:
- *   wuxingying.wxy@oceanbase.com
  */
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_exists.h"
