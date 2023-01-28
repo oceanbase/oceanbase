@@ -1206,7 +1206,7 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
     }
   } else {
     ObTabletTxMultiSourceDataUnit tx_data;
-    if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
+    if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data, false/*check_valid*/))) {
       LOG_WARN("failed to get tablet tx data", KR(ret), K(tablet_handle));
     } else if (ObTabletStatus::CREATING == tx_data.tablet_status_) {
       ret = OB_EAGAIN;
