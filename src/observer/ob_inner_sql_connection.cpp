@@ -753,7 +753,18 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
             LOG_WARN("get tenant schema version failed", K(ret), K(ob_sql_));
           } else if (OB_FAIL(res.schema_guard_.get_schema_version(OB_SYS_TENANT_ID, local_sys_schema_version))) {
             LOG_WARN("get sys tenant schema version failed", K(ret), K(ob_sql_));
-          } else if (OB_UNLIKELY(is_extern_session())) {
+          } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
+            if (ObSchemaService::is_formal_version(local_tenant_schema_version)) {
+              res.result_set().get_exec_context().get_task_exec_ctx().set_query_tenant_begin_schema_version(local_tenant_schema_version);
+            } else {
+              LOG_WARN("is not a formal_schema_version", K(local_tenant_schema_version));
+            }
+            if (ObSchemaService::is_formal_version(local_sys_schema_version)) {
+              res.result_set().get_exec_context().get_task_exec_ctx().set_query_sys_begin_schema_version(local_sys_schema_version);
+            } else {
+              LOG_WARN("is not a formal_schema_version", K(local_sys_schema_version));
+            }
+          } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
             res.result_set().get_exec_context().get_task_exec_ctx().set_query_tenant_begin_schema_version(local_tenant_schema_version);
             res.result_set().get_exec_context().get_task_exec_ctx().set_query_sys_begin_schema_version(local_sys_schema_version);
           }
@@ -763,7 +774,8 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
             // do nothing
           } else if (OB_FAIL(SMART_CALL(do_query(executor, res)))) {
             ret_code = ret;
-            LOG_WARN("execute failed", K(ret), K(tenant_id), K(executor), K(retry_cnt));
+            LOG_WARN("execute failed", K(ret), K(tenant_id), K(executor), K(retry_cnt),
+                K(local_sys_schema_version), K(local_tenant_schema_version));
             ret = process_retry(res, ret, abs_timeout_us, need_retry, retry_cnt);
             // moved here from ObInnerSQLConnection::do_query() -> ObInnerSQLResult::open().
             int close_ret = res.force_close();

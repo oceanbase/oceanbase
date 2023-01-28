@@ -440,8 +440,7 @@ int ObService::submit_async_refresh_schema_task(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_INVALID_TENANT_ID == tenant_id
-             || OB_INVALID_ID == tenant_id
-             || !ObSchemaService::is_formal_version(schema_version)) {
+             || OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(schema_version));
   } else if (OB_FAIL(schema_updater_.async_refresh_schema(tenant_id, schema_version))) {

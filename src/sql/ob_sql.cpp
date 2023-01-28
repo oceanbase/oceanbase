@@ -1391,6 +1391,19 @@ int ObSql::handle_pl_execute(const ObString &sql,
                                           : PRIV_CHECK_FLAG_IN_PL;
     pctx = ectx.get_physical_plan_ctx();
     ectx.get_das_ctx().get_schema_guard() = context.schema_guard_;
+    int64_t local_tenant_schema_version = -1;
+    int64_t local_sys_schema_version = -1;
+    if (OB_ISNULL(context.schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null");
+    } else if (OB_FAIL(context.schema_guard_->get_schema_version(session.get_effective_tenant_id(), local_tenant_schema_version))) {
+      LOG_WARN("get tenant schema version failed", K(ret), K(session.get_effective_tenant_id()));
+    } else if (OB_FAIL(context.schema_guard_->get_schema_version(OB_SYS_TENANT_ID, local_sys_schema_version))) {
+      LOG_WARN("get sys tenant schema version failed", K(ret), K(OB_SYS_TENANT_ID));
+    } else {
+      result.get_exec_context().get_task_exec_ctx().set_query_tenant_begin_schema_version(local_tenant_schema_version);
+      result.get_exec_context().get_task_exec_ctx().set_query_sys_begin_schema_version(local_sys_schema_version);
+    }
   }
   if (OB_SUCC(ret) && is_prepare_protocol && !is_dynamic_sql) {
     result.set_simple_ps_protocol();
