@@ -733,14 +733,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                 GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TRACE);
                 GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TRACE, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_ALL_VIRTUAL_SHOW_TRACE_TNAME, OB_ALL_VIRTUAL_SHOW_TRACE_ORA_TNAME));
               } else {
-                if (is_oracle_mode) {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("show trace in json format at oracle mode is not support", K(ret));
-                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "show trace in json format at oracle mode is");
-                } else {
                   GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TRACE_JSON);
                   GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TRACE_JSON, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_ALL_VIRTUAL_SHOW_TRACE_TNAME, OB_ALL_VIRTUAL_SHOW_TRACE_ORA_TNAME));
-                }
               }
             }
 
@@ -2750,7 +2744,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE,
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE_JSON,
                        NULL,
                        "select json_arrayagg(json_object('tenant_id', tenant_id, 'trace_id', trace_id, 'rec_svr_ip', rec_svr_ip, 'rec_svr_port', rec_svr_port, 'parent', parent_span_id, 'span_id', span_id, 'span_name', span_name, 'start_ts', start_ts, 'end_ts', end_ts, 'elapse', elapse, 'tags', cast(case when tags='' then NULL else tags end as json), 'logs', cast(case when logs='' then NULL else logs end as json))) as ShowTraceJSON from %s.%s",
-                       R"()",
+                       R"(select json_arrayagg(json_object('tenant_id' : tenant_id, 'trace_id' : trace_id, 'rec_svr_ip' : rec_svr_ip, 'rec_svr_port' : rec_svr_port, 'parent' : parent_span_id, 'span_id' : span_id, 'span_name' : span_name, 'start_ts' : cast(start_ts as varchar(100)), 'end_ts' : cast(end_ts as varchar(100)), 'elapse' : elapse, 'tags' : cast(tags as json), 'logs' : cast(logs as json) returning json) returning json)  as SHOW_TRACE_JSON from %s.%s)",
                        NULL);
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_ENGINES,
