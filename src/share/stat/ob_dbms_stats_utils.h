@@ -42,7 +42,8 @@ public:
                                ObIArray<ObOptTableStat*> &table_stats,
                                ObIArray<ObOptColumnStat*> &column_stats,
                                const bool is_index_stat = false,
-                               const bool is_history_stat = false);
+                               const bool is_history_stat = false,
+                               const bool is_online_stat = false);
 
   static int batch_write_history_stats(sql::ObExecContext &ctx,
                                        ObIArray<ObOptTableStatHandle> &history_tab_handles,
@@ -72,6 +73,21 @@ public:
                                             const uint64_t tablet_id,
                                             const ObIArray<PartInfo> &partition_infos,
                                             int64_t &partition_id);
+
+  static int merge_tab_stats(
+    const ObTableStatParam &param,
+    const TabStatIndMap &table_stats,
+    common::ObIArray<ObOptTableStatHandle> &history_tab_handles,
+    common::ObIArray<ObOptTableStat*> &dst_table_stat);
+
+  static int merge_col_stats(
+    const ObTableStatParam &param,
+    const ColStatIndMap &column_stats,
+    common::ObIArray<ObOptColumnStatHandle> &history_col_handles,
+    common::ObIArray<ObOptColumnStat*> &dst_column_stat);
+
+  static int check_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id, bool &is_valid);
+  static int get_part_ids_from_param(const ObTableStatParam &param, common::ObIArray<int64_t> &part_ids);
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,
@@ -79,7 +95,8 @@ private:
                          ObIArray<ObOptColumnStat*> &column_stats,
                          const int64_t current_time,
                          const bool is_index_stat,
-                         const bool is_history_stat);
+                         const bool is_history_stat,
+                         const bool is_online_stat = false);
 
 };
 

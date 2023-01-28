@@ -43,8 +43,12 @@ int ObExprSysOpOpnsize::calc_sys_op_opnsize_expr(const ObExpr &expr, ObEvalCtx &
   if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("eval param failed", K(ret));
   } else {
-    int64_t size = sizeof(*arg) + (arg->is_null() ? 0 : arg->len_);
-    res.set_int(size);
+    int64_t size = 0;
+    if (OB_FAIL(calc_sys_op_opnsize(arg, size))) {
+      LOG_WARN("fail to cal sys_op_opnsize", K(ret));
+    } else {
+      res.set_int(size);
+    }
   }
 	return ret;
 }
@@ -56,6 +60,17 @@ int ObExprSysOpOpnsize::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_sys_op_opnsize_expr;
+  return ret;
+}
+
+int ObExprSysOpOpnsize::calc_sys_op_opnsize(ObDatum *arg, int64_t &size) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(arg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null pointer", K(ret));
+  } else {
+    size = sizeof(*arg) + (arg->is_null() ? 0 : arg->len_);
+  }
   return ret;
 }
 

@@ -269,6 +269,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_trx_idle_timeout",
   "ob_trx_lock_timeout",
   "ob_trx_timeout",
+  "online_opt_stat_gather",
   "optimizer_capture_sql_plan_baselines",
   "optimizer_use_sql_plan_baselines",
   "parallel_servers_target",
@@ -493,6 +494,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_TRX_IDLE_TIMEOUT,
   SYS_VAR_OB_TRX_LOCK_TIMEOUT,
   SYS_VAR_OB_TRX_TIMEOUT,
+  SYS_VAR_ONLINE_OPT_STAT_GATHER,
   SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES,
   SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES,
   SYS_VAR_PARALLEL_SERVERS_TARGET,
@@ -786,7 +788,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_enable_rich_error_msg",
   "ob_sql_plan_memory_percentage",
   "log_row_value_options",
-  "ob_max_read_stale_time"
+  "ob_max_read_stale_time",
+  "online_opt_stat_gather"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1175,6 +1178,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObSqlPlanMemoryPercentage)
         + sizeof(ObSysVarLogRowValueOptions)
         + sizeof(ObSysVarObMaxReadStaleTime)
+        + sizeof(ObSysVarOnlineOptStatGather)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3170,6 +3174,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_MAX_READ_STALE_TIME))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObMaxReadStaleTime));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOnlineOptStatGather())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOnlineOptStatGather", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_ONLINE_OPT_STAT_GATHER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOnlineOptStatGather));
       }
     }
 
@@ -5626,6 +5639,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObMaxReadStaleTime())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObMaxReadStaleTime", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_ONLINE_OPT_STAT_GATHER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOnlineOptStatGather)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOnlineOptStatGather)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOnlineOptStatGather())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOnlineOptStatGather", K(ret));
       }
       break;
     }

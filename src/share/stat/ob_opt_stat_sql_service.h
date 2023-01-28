@@ -160,12 +160,12 @@ private:
                                  const int64_t saving_time,
                                  ObSqlString &sql_string);
   int get_column_stat_sql(const uint64_t tenant_id,
-                          ObIAllocator &allocator,
-                          const ObOptColumnStat &stat,
-                          const int64_t current_time,
-                          ObObjMeta min_meta,
-                          ObObjMeta max_meta,
-                          ObSqlString &sql_string);
+                                ObIAllocator &allocator,
+                                const ObOptColumnStat &stat,
+                                const int64_t current_time,
+                                ObObjMeta min_meta,
+                                ObObjMeta max_meta,
+                                ObSqlString &sql_string);
   int get_column_stat_history_sql(const uint64_t tenant_id,
                                   ObIAllocator &allocator,
                                   const ObOptColumnStat &stat,
@@ -229,10 +229,10 @@ private:
                        ObIArray<ObOptKeyColumnStat> &key_col_stats);
 
   int get_column_stat_min_max_meta(share::schema::ObSchemaGetterGuard *schema_guard,
-                                   const uint64_t tenant_id,
-                                   const uint64_t table_id,
-                                   ObObjMeta &min_meta,
-                                   ObObjMeta &max_meta);
+                                          const uint64_t tenant_id,
+                                          const uint64_t table_id,
+                                          ObObjMeta &min_meta,
+                                          ObObjMeta &max_meta);
 
   int get_histogram_endpoint_meta(share::schema::ObSchemaGetterGuard *schema_guard,
                                   const uint64_t tenant_id,

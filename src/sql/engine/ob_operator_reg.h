@@ -582,6 +582,12 @@ class ObStatCollectorOp;
 REGISTER_OPERATOR(ObLogStatCollector, PHY_STAT_COLLECTOR, ObStatCollectorSpec, ObStatCollectorOp, NOINPUT,
                   VECTORIZED_OP);
 
+class ObLogOptimizerStatsGathering;
+class ObOptimizerStatsGatheringSpec;
+class ObOptimizerStatsGatheringOp;
+REGISTER_OPERATOR(ObLogOptimizerStatsGathering, PHY_OPTIMIZER_STATS_GATHERING,
+                  ObOptimizerStatsGatheringSpec, ObOptimizerStatsGatheringOp, NOINPUT, VECTORIZED_OP);
+
 #undef REGISTER_OPERATOR
 #undef REGISTER_OPERATOR_FULL
 #undef CHECK_IS_CHAR

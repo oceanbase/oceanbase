@@ -142,6 +142,83 @@
                                            object_type, endpoint_normalized_value, endpoint_value,\
                                            b_endpoint_value, endpoint_repeat_cnt) VALUES "
 
+// not used yet.
+#define INSERT_ONLINE_TABLE_STAT_SQL "INSERT INTO oceanbase.__all_table_stat(tenant_id," \
+                                                               "table_id," \
+                                                               "partition_id," \
+                                                               "index_type," \
+                                                               "object_type," \
+                                                               "last_analyzed," \
+                                                               "sstable_row_cnt," \
+                                                               "sstable_avg_row_len," \
+                                                               "macro_blk_cnt," \
+                                                               "micro_blk_cnt," \
+                                                               "memtable_row_cnt," \
+                                                               "memtable_avg_row_len," \
+                                                               "row_cnt," \
+                                                               "avg_row_len," \
+                                                               "global_stats," \
+                                                               "user_stats," \
+                                                               "stattype_locked," \
+                                                               "stale_stats) VALUES " \
+
+#define INSERT_ONLINE_TABLE_STAT_DUPLICATE "ON DUPLICATE KEY UPDATE " \
+                                           "index_type = index_type," \
+                                           "object_type = object_type," \
+                                           "last_analyzed = VALUES(last_analyzed)," \
+                                           "sstable_row_cnt = VALUES(sstable_row_cnt)," \
+                                           "sstable_avg_row_len = VALUES(sstable_avg_row_len)," \
+                                           "macro_blk_cnt = VALUES(macro_blk_cnt)," \
+                                           "micro_blk_cnt = VALUES(micro_blk_cnt)," \
+                                           "memtable_row_cnt = VALUES(memtable_row_cnt)," \
+                                           "memtable_avg_row_len = VALUES(memtable_avg_row_len)," \
+                                           "row_cnt = row_cnt + VALUES(row_cnt)," \
+                                           "avg_row_len = (avg_row_len*row_cnt + VALUES(avg_row_len)*VALUES(row_cnt)) / (row_cnt+ VALUES(row_cnt))," \
+                                           "global_stats = VALUES(global_stats)," \
+                                           "user_stats = VALUES(user_stats)," \
+                                           "stattype_locked = VALUES(stattype_locked)," \
+                                           "stale_stats = VALUES(stale_stats)"
+//TODO DAISI, MICRO/MACRO/MEMTABLE/SSTABLE
+//TODO DAISI, check lock.
+
+#define INSERT_ONLINE_COL_STAT_SQL "INSERT INTO __all_column_stat(tenant_id," \
+                                                                  "table_id," \
+                                                                  "partition_id," \
+                                                                  "column_id," \
+                                                                  "object_type," \
+                                                                  "last_analyzed," \
+                                                                  "distinct_cnt," \
+                                                                  "null_cnt," \
+                                                                  "max_value," \
+                                                                  "b_max_value," \
+                                                                  "min_value," \
+                                                                  "b_min_value," \
+                                                                  "avg_len," \
+                                                                  "distinct_cnt_synopsis," \
+                                                                  "distinct_cnt_synopsis_size," \
+                                                                  "sample_size,"\
+                                                                  "density,"\
+                                                                  "bucket_cnt," \
+                                                                  "histogram_type," \
+                                                                  "global_stats," \
+                                                                  "user_stats) VALUES "
+
+#define INSERT_ONLINE_COL_STAT_DUPLICATE "ON DUPLICATE KEY UPDATE " \
+                                         "object_type = object_type," \
+                                         "last_analyzed = VALUES(last_analyzed)," \
+                                         "distinct_cnt = VALUES(distinct_cnt) + distinct_cnt," \
+                                         "distinct_cnt_synopsis = VALUES(distinct_cnt_synopsis)," \
+                                         "distinct_cnt_synopsis_size = VALUES(distinct_cnt_synopsis_size)," \
+                                         "null_cnt = VALUES(null_cnt)," \
+                                         "max_value = VALUES(max_value)," \
+                                         "b_max_value = VALUES(b_max_value)," \
+                                         "min_value = VALUES(min_value)," \
+                                         "b_min_value = VALUES(b_min_value)," \
+                                         "global_stats = VALUES(global_stats)," \
+                                         "user_stats = VALUES(user_stats);"
+// TODO DAISI, add a sys_func to merge NDV by llc.
+
+
 #define DEFINE_SQL_CLIENT_RETRY_WEAK_FOR_STAT(sql_client, table_name)    \
   const int64_t snapshot_timestamp = OB_INVALID_TIMESTAMP;         \
   const bool check_sys_variable = false;                           \
@@ -1788,6 +1865,163 @@ int ObOptStatSqlService::get_histogram_endpoint_meta(share::schema::ObSchemaGett
   return ret;
 }
 
+/*
+*** NOTE: leave batch_update_col_stat_online and batch_update_tab_stat_online function for future use.
+*** We use the split_write to update tab & col stats.
+*** In the future, to support rollback, we may update tab & col stats in same connection.
+int ObOptStatSqlService::batch_update_online_tab_stat(const uint64_t tenant_id,
+                                                  const common::ObIArray<ObOptTableStat *> &table_stats,
+                                                  const common::ObIArray<ObOptColumnStatHandle> &old_tab_handles)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString table_stat_sql;
+  ObSqlString tmp;
+  int64_t affected_rows = 0;
+  int64_t current_time = ObTimeUtility::current_time();
+  // merge old and new table stats;
+  for (int64_t i = 0; OB_SUCC(ret) && i < old_tab_handles.count(); i++) {
+    const ObOptTableStat *&old_tab_stat = old_tab_handles.at(i).stat_;
+    ObOptTableStat *new_tab_stat = table_stats.at(i);
+    if (old_tab_stat->get_column_id() != new_tab_stat->get_column_id()
+        || old_tab_stat->get_partition_id() != new_tab_stat->get_partition_id()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column stats do not match", K(ret));
+    } else if (OB_FAIL(new_tab_stat->merge_table_stat(*new_tab_stat))) {
+      //merge
+      LOG_WARN("fail to merge new table stat with old table stat", K(ret));
+    }
+  }
+  if (OB_FAIL(table_stat_sql.append(INSERT_TABLE_STAT_SQL_ONLINE))) {
+    LOG_WARN("failed to append sql", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_stats.count(); ++i) {
+    bool is_last = (i == table_stats.count() - 1);
+    tmp.reset();
+    if (OB_ISNULL(table_stats.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table stat is null", K(ret));
+    } else if (OB_FAIL(get_table_stat_sql(tenant_id, *table_stats.at(i), current_time, false, tmp))) {
+      LOG_WARN("failed to get table stat sql", K(ret));
+    } else if (OB_FAIL(table_stat_sql.append_fmt("(%s)%c",tmp.ptr(), (is_last ? ' ' : ',')))) {
+      LOG_WARN("failed to append table stat sql", K(ret));
+    } else {}
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_stat_sql.append(INSERT_TABLE_STAT_ONLINE_DUPLICATE))) {
+      LOG_WARN("failed to append table stat sql", K(ret));
+    } else if (OB_FAIL(table_stat_sql.append(";"))) {
+      LOG_WARN("failed to append table stat sql", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObMySQLTransaction trans;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(trans.start(mysql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start transaction", K(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.write(tenant_id, table_stat_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to exec sql", K(ret));
+    } else {}
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("fail to commit transaction", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("fail to roll back transaction", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+int ObOptStatSqlService::batch_update_online_col_state(const uint64_t tenant_id,
+                                                   const uint64_t table_id,
+                                                   share::schema::ObSchemaGetterGuard *schema_guard,
+                                                   const common::ObIArray<ObOptColumnStat *> &column_stats,
+                                                   const common::ObIArray<ObOptColumnStatHandle> &old_col_handles)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString col_stat_sql;
+  ObArenaAllocator allocator(ObModIds::OB_BUFFER);
+  // step 1: get old column stat (here we use the history stat);)
+
+  // step 2: merge old and new column stat
+  for (int64_t i = 0; OB_SUCC(ret) && i < old_col_handles.count(); i++) {
+    const ObOptColumnStat *&old_col_stat = old_col_handles.at(i).stat_;
+    ObOptColumnStat *new_col_stat = column_stats.at(i);
+    if (old_col_stat->get_column_id() != new_col_stat->get_column_id()
+        || old_col_stat->get_partition_id() != new_col_stat->get_partition_id()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column stats do not match", K(ret));
+    } else if (OB_FAIL(new_col_stat->merge_column_stat(*new_col_stat))) {
+      //merge
+      LOG_WARN("fail to merge new column stat with old column stat", K(ret));
+    }
+  }
+  // step 3: write column stat
+  // generate column stat sql;
+  if (OB_FAIL(ret)) {
+  } else {
+    ObObjMeta min_meta;
+    ObObjMeta max_meta;
+    int64_t current_time = ObTimeUtility::current_time();
+    if (OB_FAIL(get_column_stat_min_max_meta(schema_guard, tenant_id,
+                                            share::OB_ALL_COLUMN_STAT_TID,
+                                            min_meta,
+                                            max_meta))) {
+      LOG_WARN("failed to get column stat min max meta", K(ret));
+    } else {
+      // HEAD SQL: INSERT INTO....
+      if (OB_FAIL(col_stat_sql.append(INSERT_COL_STAT_SQL_ONLINE))) {
+        LOG_WARN("fail to format str", K(ret));
+      }
+      LOG_WARN("get full insert column stat sql", K(col_stat_sql));
+      ObSqlString tmp;
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_stats.count(); i++) {
+        tmp.reset();
+        if (OB_FAIL(get_column_stat_sql(tenant_id, allocator,
+                                        *column_stats.at(i), current_time,
+                                        min_meta, max_meta, tmp))) {
+          LOG_WARN("fail to get column stat sql", K(ret));
+        } else if (OB_FAIL(col_stat_sql.append_fmt("(%s)%s", tmp.ptr(),
+                                                    (i == column_stats.count() - 1 ? " " : ",")))) {
+          LOG_WARN("failed to append sql", K(ret));
+        }
+      }
+      LOG_WARN("get full insert column stat sql", K(col_stat_sql));
+      // TAIL SQL: ON DUPLICATE KEY
+      if (OB_SUCC(ret) && OB_FAIL(col_stat_sql.append(INSERT_COL_STAT_ONLINE_DUPLICATE))) {
+        LOG_WARN("fail to append insert", K(ret));
+      }
+      LOG_WARN("get full insert column stat sql", K(col_stat_sql));
+    }
+  }
+  // insert
+  if (OB_SUCC(ret)) {
+    // TODO daisi: sending inner sql in same connection to suuport rollback.
+    ObMySQLTransaction trans;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(trans.start(mysql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start transaction", K(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.write(tenant_id, col_stat_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to exec sql", K(ret));
+    } else {
+      LOG_TRACE("Success to write column stats", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("fail to commit transaction", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("fail to roll back transaction", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}*/
+
 } // end of namespace common
 } // end of namespace oceanbase
 
@@ -1803,4 +2037,8 @@ int ObOptStatSqlService::get_histogram_endpoint_meta(share::schema::ObSchemaGett
 #undef DELETE_COL_STAT_SQL
 #undef DELETE_TAB_STAT_SQL
 #undef UPDATE_HISTOGRAM_TYPE_SQL
+#undef INSERT_ONLINE_TABLE_STAT_SQL
+#undef INSERT_ONLINE_TABLE_STAT_DUPLICATE
+#undef INSERT_ONLINE_COL_STAT_SQL
+#undef INSERT_ONLINE_COL_STAT_DUPLICATE
 #undef DEFINE_SQL_CLIENT_RETRY_WEAK_FOR_STAT

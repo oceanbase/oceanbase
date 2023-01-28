@@ -180,6 +180,8 @@ USE_HASH_DISTINCT NO_USE_HASH_DISTINCT
 DISTINCT_PUSHDOWN NO_DISTINCT_PUSHDOWN
 USE_HASH_SET NO_USE_HASH_SET
 USE_DISTRIBUTED_DML NO_USE_DISTRIBUTED_DML
+// hint related to optimizer statistics
+APPEND NO_GATHER_OPTIMIZER_STATISTICS GATHER_OPTIMIZER_STATISTICS
 // other
 NEG_SIGN
 
@@ -8358,6 +8360,18 @@ READ_CONSISTENCY '(' consistency_level ')'
 | NO_COST_BASED_QUERY_TRANSFORMATION
 {
   malloc_terminal_node($$, result->malloc_pool_, T_NO_COST_BASED_QUERY_TRANSFORMATION);
+}
+| APPEND
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_APPEND);
+}
+| NO_GATHER_OPTIMIZER_STATISTICS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NO_GATHER_OPTIMIZER_STATISTICS);
+}
+| GATHER_OPTIMIZER_STATISTICS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_GATHER_OPTIMIZER_STATISTICS);
 }
 ;
 

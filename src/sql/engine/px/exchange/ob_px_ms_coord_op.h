@@ -156,6 +156,7 @@ private:
   ObDynamicSamplePieceMsgP sample_piece_msg_proc_;
   ObRollupKeyPieceMsgP rollup_key_piece_msg_proc_;
   ObRDWFPieceMsgP rd_wf_piece_msg_proc_;
+  ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc_;
   // 存储merge sort的每一路的当前行
   ObArray<ObChunkDatumStore::LastStoredRow*> store_rows_;
   ObChunkDatumStore::LastStoredRow* last_pop_row_;

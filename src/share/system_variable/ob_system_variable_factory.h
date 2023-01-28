@@ -1598,6 +1598,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_MAX_READ_STALE_TIME; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(220); }
 };
+class ObSysVarOnlineOptStatGather : public ObBoolSysVar
+{
+public:
+  ObSysVarOnlineOptStatGather() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_ONLINE_OPT_STAT_GATHER; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(221); }
+};
 
 
 class ObSysVarFactory
@@ -1617,7 +1624,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 124;
+  const static int64_t OB_SYS_VARS_COUNT = 125;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
 
   const static int16_t OB_SPECIFIC_SYS_VAR_ID_OFFSET = 10000;

@@ -31,6 +31,8 @@
 #include "sql/optimizer/ob_optimizer.h"
 #include "share/client_feedback/ob_feedback_int_struct.h"
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
+#include "sql/ob_sql_define.h"
 
 namespace test
 {

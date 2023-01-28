@@ -2905,13 +2905,25 @@ static struct VarsInit{
     ObSysVars[220].alias_ = "OB_SV_MAX_READ_STALE_TIME" ;
     }();
 
+    [&] (){
+      ObSysVars[221].info_ = "control wether we need to gather optimizer stats on insert into select/create table as select" ;
+      ObSysVars[221].name_ = "online_opt_stat_gather" ;
+      ObSysVars[221].data_type_ = ObIntType ;
+      ObSysVars[221].value_ = "0" ;
+      ObSysVars[221].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[221].id_ = SYS_VAR_ONLINE_OPT_STAT_GATHER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ONLINE_OPT_STAT_GATHER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ONLINE_OPT_STAT_GATHER] = 221 ;
+    ObSysVars[221].alias_ = "OB_SV_ONLINE_OPT_STAT_GATHER" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 221;
+static int64_t var_amount = 222;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

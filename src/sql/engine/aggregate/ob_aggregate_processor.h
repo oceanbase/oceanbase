@@ -665,6 +665,7 @@ public:
   int fast_single_row_agg(ObEvalCtx &eval_ctx);
   int fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const int64_t batch_size, const ObBitVector *skip);
   inline void set_support_fast_single_row_agg(const bool flag) { support_fast_single_row_agg_ = flag; }
+  static int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size);
 private:
   template <typename T>
   int inner_process_batch(GroupRow &group_rows, T &selector, int64_t start_idx, int64_t end_idx);

@@ -697,6 +697,5 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
   }
   return ret;
 }
-
 }
 }

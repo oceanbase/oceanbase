@@ -139,6 +139,7 @@ private:
   ObDynamicSamplePieceMsgP sample_piece_msg_proc_;
   ObRollupKeyPieceMsgP rollup_key_piece_msg_proc_;
   ObRDWFPieceMsgP rd_wf_piece_msg_proc_;
+  ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc_;
   ObReceiveRowReader *readers_;
   ObOrderedReceiveFilter receive_order_;
   int64_t reader_cnt_;

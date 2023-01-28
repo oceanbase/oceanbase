@@ -1003,7 +1003,7 @@ int ObExprGeneratorImpl::visit_column_conv_expr(ObRawExpr &expr, ObBaseExprColum
   } else if (column_conv_old->get_str_values().count() > 0
              && OB_FAIL(column_conv_op->deep_copy_str_values(column_conv_old->get_str_values()))) {
     LOG_WARN("failed to deep_copy_str_values", K(raw_column_conv_expr), K(ret));
-  } else {/*do nothing*/}
+  }
   return ret;
 }
 

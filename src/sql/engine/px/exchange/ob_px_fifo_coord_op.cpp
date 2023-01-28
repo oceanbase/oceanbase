@@ -48,7 +48,8 @@ ObPxFifoCoordOp::ObPxFifoCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, 
     interrupt_proc_(exec_ctx, msg_proc_),
     sample_piece_msg_proc_(exec_ctx, msg_proc_),
     rollup_key_piece_msg_proc_(exec_ctx, msg_proc_),
-    rd_wf_piece_msg_proc_(exec_ctx, msg_proc_)
+    rd_wf_piece_msg_proc_(exec_ctx, msg_proc_),
+    opt_stats_gather_piece_msg_proc_(exec_ctx, msg_proc_)
   {}
 
 int ObPxFifoCoordOp::inner_open()
@@ -96,6 +97,7 @@ int ObPxFifoCoordOp::setup_loop_proc()
       .register_processor(sample_piece_msg_proc_)
       .register_processor(rollup_key_piece_msg_proc_)
       .register_processor(rd_wf_piece_msg_proc_)
+      .register_processor(opt_stats_gather_piece_msg_proc_)
       .register_interrupt_processor(interrupt_proc_);
   return ret;
 }
@@ -205,6 +207,7 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
         case ObDtlMsgType::DH_DYNAMIC_SAMPLE_PIECE_MSG:
         case ObDtlMsgType::DH_ROLLUP_KEY_PIECE_MSG:
         case ObDtlMsgType::DH_RANGE_DIST_WF_PIECE_MSG:
+        case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
           // all message processed in callback
           break;
         default:

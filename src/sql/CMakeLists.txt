@@ -123,6 +123,7 @@ ob_set_subtarget(ob_sql engine
   engine/user_defined_function/ob_udf_util.cpp
   engine/user_defined_function/ob_user_defined_function.cpp
   engine/window_function/ob_window_function_op.cpp
+  engine/opt_statistics/ob_optimizer_stats_gathering_op.cpp
 )
 
 ob_set_subtarget(ob_sql engine_aggregate
@@ -679,6 +680,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/datahub/components/ob_dh_sample.cpp
   engine/px/datahub/components/ob_dh_winbuf.cpp
   engine/px/datahub/components/ob_dh_range_dist_wf.cpp
+  engine/px/datahub/components/ob_dh_opt_stats_gather.cpp
 )
 
 ob_set_subtarget(ob_sql engine_set
@@ -831,6 +833,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_table_partition_info.cpp
   optimizer/ob_update_log_plan.cpp
   optimizer/ob_log_stat_collector.cpp
+  optimizer/ob_log_optimizer_stats_gathering.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache

@@ -27,6 +27,7 @@
 #include "sql/engine/px/datahub/components/ob_dh_rollup_key.h"
 #include "sql/engine/px/datahub/components/ob_dh_sample.h"
 #include "sql/engine/px/datahub/components/ob_dh_range_dist_wf.h"
+#include "sql/engine/px/datahub/components/ob_dh_opt_stats_gather.h"
 namespace oceanbase
 {
 namespace sql
@@ -50,7 +51,8 @@ public:
       sqc_proxy_(*this, sqc_arg),
       all_tasks_finish_(false),
       interrupted_(false),
-      px_bloom_filter_msg_proc_(msg_proc_)
+      px_bloom_filter_msg_proc_(msg_proc_),
+      opt_stats_gather_whole_msg_proc_(msg_proc_)
   {}
   ~ObSqcCtx() {  reset(); }
   common::ObIArray<ObPxTask> &get_tasks() { return tasks_; }
@@ -111,6 +113,7 @@ public:
   common::ObSEArray<ObPxTabletInfo, 8> partitions_info_;
   ObPxBloomfilterChProvider bf_ch_provider_;
   ObPxCreateBloomFilterChannelMsgP px_bloom_filter_msg_proc_;
+  ObOptStatsGatherWholeMsgP opt_stats_gather_whole_msg_proc_;
   // 用于 datahub 中保存 whole msg provider，一般情况下一个子计划里不会
   // 超过一个算子会使用 datahub，所以大小默认为 1 即可
   common::ObSEArray<ObPxDatahubDataProvider *, 1> whole_msg_provider_list_;

@@ -4848,6 +4848,15 @@ int ObAggregateProcessor::get_llc_size()
 int ObAggregateProcessor::llc_add_value(const uint64_t value, const ObString &llc_bitmap_buf)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(llc_add_value(value, const_cast<char*>(llc_bitmap_buf.ptr()), llc_bitmap_buf.length()))) {
+    LOG_WARN("fail to add value", K(ret));
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size)
+{
+  int ret = OB_SUCCESS;
   uint64_t bucket_index = value >> (64 - LLC_BUCKET_BITS);
   uint64_t pmax = 0;
   if (0 == value << LLC_BUCKET_BITS) {
@@ -4855,10 +4864,10 @@ int ObAggregateProcessor::llc_add_value(const uint64_t value, const ObString &ll
   } else {
     pmax = ObExprEstimateNdv::llc_leading_zeros(value << LLC_BUCKET_BITS, 64 - LLC_BUCKET_BITS) + 1;
   }
-  ObString::obstr_size_t llc_num_buckets = llc_bitmap_buf.length();
-  if (OB_UNLIKELY(llc_bitmap_buf.length() != get_llc_size())) {
+  ObString::obstr_size_t llc_num_buckets = size;
+  if (OB_UNLIKELY(size != get_llc_size())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("buffer size don't match", K(llc_bitmap_buf.length()), K(get_llc_size()));
+    LOG_WARN("buffer size don't match", K(size), K(get_llc_size()));
   } else if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets))
              || OB_UNLIKELY(llc_num_buckets <= bucket_index)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4866,8 +4875,7 @@ int ObAggregateProcessor::llc_add_value(const uint64_t value, const ObString &ll
              K(llc_num_buckets), K(bucket_index), K(ret));
   } else if (pmax > static_cast<uint8_t>(llc_bitmap_buf[bucket_index])) {
     // 理论上pmax不会超过65.
-    (const_cast<ObString &>(llc_bitmap_buf)).ptr()[bucket_index] = static_cast<uint8_t>(pmax);
-    LOG_DEBUG("llc add value", K(pmax), K(bucket_index));
+    llc_bitmap_buf[bucket_index] = static_cast<uint8_t>(pmax);
   }
   LOG_DEBUG("llc add value", K(pmax), K(bucket_index));
   return ret;

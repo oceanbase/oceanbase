@@ -18,6 +18,8 @@
 #include "common/object/ob_object.h"
 #include "common/rowkey/ob_rowkey_info.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/stat/ob_opt_table_stat.h"
+#include "share/stat/ob_opt_column_stat.h"
 
 namespace oceanbase
 {
@@ -28,6 +30,8 @@ class ObOptColumnStat;
 
 typedef std::pair<int64_t, int64_t> BolckNumPair;
 typedef hash::ObHashMap<int64_t, BolckNumPair, common::hash::NoPthreadDefendMode> PartitionIdBlockMap;
+typedef common::hash::ObHashMap<ObOptTableStat::Key, ObOptTableStat *, common::hash::NoPthreadDefendMode> TabStatIndMap;
+typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptColumnStat *, common::hash::NoPthreadDefendMode> ColStatIndMap;
 
 enum StatOptionFlags
 {
@@ -549,6 +553,23 @@ struct ObOptDmlStat
                K(update_row_count_),
                K(delete_row_count_));
 };
+
+enum OSG_TYPE
+{
+  NORMAL_OSG = 0,
+  GATHER_OSG = 1,
+  MERGE_OSG = 2
+};
+struct OSGPartInfo {
+  OB_UNIS_VERSION(1);
+public:
+  OSGPartInfo() : part_id_(OB_INVALID_ID), tablet_id_(OB_INVALID_ID) {}
+  ObObjectID part_id_;
+  ObTabletID tablet_id_;
+  TO_STRING_KV(K_(part_id), K_(tablet_id));
+};
+
+typedef common::hash::ObHashMap<ObObjectID, OSGPartInfo, common::hash::NoPthreadDefendMode> OSGPartMap;
 
 }
 }

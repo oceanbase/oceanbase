@@ -94,6 +94,7 @@ ObPxMSCoordOp::ObPxMSCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
   sample_piece_msg_proc_(exec_ctx, msg_proc_),
   rollup_key_piece_msg_proc_(exec_ctx, msg_proc_),
   rd_wf_piece_msg_proc_(exec_ctx, msg_proc_),
+  opt_stats_gather_piece_msg_proc_(exec_ctx, msg_proc_),
   store_rows_(),
   last_pop_row_(nullptr),
   row_heap_(),
@@ -168,6 +169,7 @@ int ObPxMSCoordOp::setup_loop_proc()
       .register_processor(sample_piece_msg_proc_)
       .register_processor(rollup_key_piece_msg_proc_)
       .register_processor(rd_wf_piece_msg_proc_)
+      .register_processor(opt_stats_gather_piece_msg_proc_)
       .register_interrupt_processor(interrupt_proc_);
   msg_loop_.set_tenant_id(ctx_.get_my_session()->get_effective_tenant_id());
   return ret;
@@ -407,6 +409,7 @@ int ObPxMSCoordOp::inner_get_next_row()
         case ObDtlMsgType::DH_DYNAMIC_SAMPLE_PIECE_MSG:
         case ObDtlMsgType::DH_ROLLUP_KEY_PIECE_MSG:
         case ObDtlMsgType::DH_RANGE_DIST_WF_PIECE_MSG:
+        case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
           // 这几种消息都在 process 回调函数里处理了
           break;
         default:

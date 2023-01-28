@@ -18,6 +18,7 @@
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/schema/ob_schema_struct.h"
 #include "sql/engine/ob_exec_context.h"
+#include "share/stat/ob_stat_item.h"
 
 namespace oceanbase
 {
@@ -119,7 +120,8 @@ int ObDbmsStatsUtils::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                   ObIArray<ObOptColumnStat*> &column_stats,
                                   const int64_t current_time,
                                   const bool is_index_stat,
-                                  const bool is_history_stat)
+                                  const bool is_history_stat,
+                                  const bool is_online_stat)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObOptStatManager::get_instance().batch_write(schema_guard,
@@ -131,7 +133,7 @@ int ObDbmsStatsUtils::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                                            is_history_stat))) {
     LOG_WARN("failed to batch write stats", K(ret));
   //histroy stat is from cache no need free.
-  } else if (!is_history_stat) {
+  } else if (!is_history_stat && !is_online_stat) {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_stats.count(); ++i) {
       if (NULL != table_stats.at(i)) {
         table_stats.at(i)->~ObOptTableStat();
@@ -278,13 +280,15 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                         ObIArray<ObOptTableStat*> &table_stats,
                                         ObIArray<ObOptColumnStat*> &column_stats,
                                         const bool is_index_stat /*default false*/,
-                                        const bool is_history_stat /*default false*/)
+                                        const bool is_history_stat /*default false*/,
+                                        const bool is_online_stat /*default false*/)
 {
   int ret = OB_SUCCESS;
   int64_t idx_tab_stat = 0;
   int64_t idx_col_stat = 0;
   //avoid the write stat sql is too long, we split write table stats and column stats:
   //  write 2000 tables and 2000 columns every time.
+  LOG_DEBUG("dbms stats write stats", K(table_stats), K(column_stats));
   const int64_t MAX_NUM_OF_WRITE_STATS = 2000;
   int64_t current_time = ObTimeUtility::current_time();
   if (OB_ISNULL(ctx.get_my_session())) {
@@ -333,7 +337,8 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
                                                 write_column_stats,
                                                 current_time,
                                                 is_index_stat,
-                                                is_history_stat))) {
+                                                is_history_stat,
+                                                is_online_stat))) {
         LOG_WARN("failed to batch write stats", K(ret), K(idx_tab_stat), K(idx_col_stat));
       } else {/*do nothing*/}
     }
@@ -420,6 +425,159 @@ int ObDbmsStatsUtils::get_dst_partition_by_tablet_id(sql::ObExecContext &ctx,
     LOG_WARN("get unexpected null", K(ret), K(tablet_id), K(partition_infos));
   } else {
     LOG_TRACE("succeed to get dst partition by tablet id", K(tablet_id), K(partition_infos), K(partition_id));
+  }
+  return ret;
+}
+
+// merge history stats and online stats
+// for each stats in history, first search wether is in online_stats(map).
+//  if not exists, set_refactored.
+//  else merge old and new stats;
+int ObDbmsStatsUtils::merge_tab_stats(const ObTableStatParam &param,
+                                      const TabStatIndMap &online_table_stats,
+                                      common::ObIArray<ObOptTableStatHandle> &old_tab_handles,
+                                      common::ObIArray<ObOptTableStat *> &dst_tab_stats)
+{
+  int ret = OB_SUCCESS;
+  ObOptTableStat *tmp_tab_stat = NULL;
+
+  // the map is faster than array traversal
+  for (int64_t i = 0; OB_SUCC(ret) && i < old_tab_handles.count(); i++) {
+    ObOptTableStat * old_tab_stat = const_cast<ObOptTableStat *>(old_tab_handles.at(i).stat_);
+    ObOptTableStat::Key key(param.tenant_id_, old_tab_stat->get_table_id(),
+                                 old_tab_stat->get_partition_id());
+    if (OB_FAIL(online_table_stats.get_refactored(key, tmp_tab_stat))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to find in hashmap", K(ret));
+      } else {
+        if (OB_FAIL(dst_tab_stats.push_back(old_tab_stat))) {
+          LOG_WARN("fail to push back table stats", K(ret));
+        }
+      }
+    } else if (OB_FAIL(tmp_tab_stat->merge_table_stat(*old_tab_stat))) {
+      //merge
+      LOG_WARN("fail to merge new table stat with old table stat", K(ret));
+    }
+  }
+
+  // put all stats into array for future use.
+  FOREACH_X(it, online_table_stats, OB_SUCC(ret)) {
+    bool is_valid = false;
+    if (OB_FAIL(check_part_id_valid(param, it->second->get_partition_id(), is_valid))) {
+      // if partition is locked, shouldn't gather.
+      LOG_WARN("fail to check part id valid", K(ret));
+    } else if (is_valid) {
+      if (OB_FAIL(dst_tab_stats.push_back(it->second))) {
+        LOG_WARN("fail to push back table stats", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("OSG debug", K(dst_tab_stats));
+
+  return ret;
+}
+
+int ObDbmsStatsUtils::merge_col_stats(const ObTableStatParam &param,
+                                      const ColStatIndMap &online_column_stats,
+                                      common::ObIArray<ObOptColumnStatHandle> &old_col_handles,
+                                      common::ObIArray<ObOptColumnStat*> &dst_col_stats)
+{
+  int ret = OB_SUCCESS;
+  ObOptColumnStat *tmp_col_stat;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < old_col_handles.count(); i++) {
+    ObOptColumnStat * old_col_stat = const_cast<ObOptColumnStat *>(old_col_handles.at(i).stat_);
+    ObOptColumnStat::Key key(param.tenant_id_, old_col_stat->get_table_id(),
+                            old_col_stat->get_partition_id(), old_col_stat->get_column_id());
+    if (OB_FAIL(online_column_stats.get_refactored(key, tmp_col_stat))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to find in hashmap", K(ret));
+      } else {
+        if (OB_FAIL(dst_col_stats.push_back(old_col_stat))) {
+          LOG_WARN("fail to push back table stats", K(ret));
+        }
+      }
+    } else if (OB_FAIL(tmp_col_stat->merge_column_stat(*old_col_stat))) {
+      //merge
+      LOG_WARN("fail to merge new table stat with old table stat", K(ret));
+    }
+  }
+
+  FOREACH_X(it, online_column_stats, OB_SUCC(ret)) {
+    // after merge, we need to re-calc ndv from llc.
+    bool is_valid = false;
+    if (OB_ISNULL(it->second)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null pointer", K(ret));
+    } else if (OB_FAIL(check_part_id_valid(param, it->second->get_partition_id(), is_valid))) {
+      // if partition is locked, shouldn't gather.
+      LOG_WARN("fail to check part id valid", K(ret));
+    } else if (is_valid) {
+      it->second->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(it->second->get_llc_bitmap()));
+      if (OB_FAIL(dst_col_stats.push_back(it->second))) {
+        LOG_WARN("fail to push back table stats", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("OSG debug", K(dst_col_stats));
+
+  return ret;
+}
+
+int ObDbmsStatsUtils::check_part_id_valid(const ObTableStatParam &param,
+                                          const ObObjectID part_id,
+                                          bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  LOG_DEBUG("check part_id valid", K(param), K(part_id));
+  is_valid = false;
+  if (param.need_global_) {
+    if (part_id == param.global_part_id_) {
+      is_valid = true;
+    }
+  }
+  if (!is_valid && param.need_part_) {
+    for (int64_t i = 0; !found && i < param.part_infos_.count(); i++) {
+      if (part_id == param.part_infos_.at(i).part_id_) {
+        found = true;
+        is_valid = true;
+      }
+    }
+  }
+  if (!is_valid && param.need_subpart_) {
+    for (int64_t i = 0; !found && i < param.subpart_infos_.count(); i++) {
+      if (part_id == param.subpart_infos_.at(i).part_id_) {
+        found = true;
+        is_valid = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_part_ids_from_param(const ObTableStatParam &param,
+                                              common::ObIArray<int64_t> &part_ids)
+{
+  int ret = OB_SUCCESS;
+  if (param.need_global_) {
+    if (OB_FAIL(part_ids.push_back(param.global_part_id_))) {
+      LOG_WARN("failed to push back partition id", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && param.need_part_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
+      if (OB_FAIL(part_ids.push_back(param.part_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back partition id", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && param.need_subpart_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
+      if (OB_FAIL(part_ids.push_back(param.subpart_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back partition id", K(ret));
+      }
+    }
   }
   return ret;
 }

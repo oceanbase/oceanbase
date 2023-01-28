@@ -664,6 +664,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     ObRollupKeyPieceMsgP rollup_key_piece_msg_proc(ctx_, terminate_msg_proc);
     ObRDWFPieceMsgP rd_wf_piece_msg_proc(ctx_, terminate_msg_proc);
     ObPxQcInterruptedP interrupt_proc(ctx_, terminate_msg_proc);
+    ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc(ctx_, terminate_msg_proc);
 
     // 这个注册会替换掉旧的proc.
     (void)msg_loop_.clear_all_proc();
@@ -676,7 +677,8 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       .register_processor(winbuf_piece_msg_proc)
       .register_processor(sample_piece_msg_proc)
       .register_processor(rollup_key_piece_msg_proc)
-      .register_processor(rd_wf_piece_msg_proc);
+      .register_processor(rd_wf_piece_msg_proc)
+      .register_processor(opt_stats_gather_piece_msg_proc);
     loop.ignore_interrupt();
 
     ObPxControlChannelProc control_channels;
@@ -735,6 +737,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
           case ObDtlMsgType::DH_DYNAMIC_SAMPLE_PIECE_MSG:
           case ObDtlMsgType::DH_ROLLUP_KEY_PIECE_MSG:
           case ObDtlMsgType::DH_RANGE_DIST_WF_PIECE_MSG:
+          case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
             break;
           default:
             ret = OB_ERR_UNEXPECTED;

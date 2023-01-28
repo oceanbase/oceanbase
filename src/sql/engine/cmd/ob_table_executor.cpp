@@ -38,6 +38,7 @@
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "sql/parser/ob_parser.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
 
 #include "sql/ob_select_stmt_printer.h"
 #include "observer/ob_server_struct.h"
@@ -98,6 +99,9 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   int64_t pos1 = 0;
   bool is_set_subquery = false;
   bool is_oracle_mode = lib::is_oracle_mode();
+  bool no_osg_hint = false;
+  bool osg_hint = false;
+  bool online_sys_var = false;
   const ObString &db_name = stmt.get_database_name();
   const ObString &tab_name = stmt.get_table_name();
   const char sep_char = is_oracle_mode? '"': '`';
@@ -111,18 +115,37 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed");
-  } else if (OB_ISNULL(select_stmt)) {
+  } else if (OB_ISNULL(select_stmt) || OB_ISNULL(select_stmt->get_query_ctx()) || OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt should not be null", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1, "insert into %c%.*s%c.%c%.*s%c",
-                                                    sep_char,
-                                                    db_name.length(),
-                                                    db_name.ptr(),
-                                                    sep_char,
-                                                    sep_char,
-                                                    tab_name.length(),
-                                                    tab_name.ptr(),
-                                                    sep_char))) {
+  } else {
+    //get hint
+    no_osg_hint = select_stmt->get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint();
+    osg_hint = select_stmt->get_query_ctx()->get_global_hint().has_gather_opt_stat_hint();
+
+    //get system variable
+    ObObj online_sys_var_obj;
+    if (OB_FAIL(OB_FAIL(my_session->get_sys_variable(SYS_VAR_ONLINE_OPT_STAT_GATHER, online_sys_var_obj)))) {
+      LOG_WARN("fail to get sys var", K(ret));
+    } else {
+      online_sys_var = online_sys_var_obj.get_bool();
+      LOG_DEBUG("online opt stat gather", K(online_sys_var), K(no_osg_hint));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
+                                      (!no_osg_hint && (online_sys_var || osg_hint))
+                                      ? "insert /*+GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
+                                      : "insert into %c%.*s%c.%c%.*s%c",
+                                      sep_char,
+                                      db_name.length(),
+                                      db_name.ptr(),
+                                      sep_char,
+                                      sep_char,
+                                      tab_name.length(),
+                                      tab_name.ptr(),
+                                      sep_char))) {
     LOG_WARN("fail to print insert into string", K(ret), K(db_name), K(tab_name));
   } else if (lib::is_oracle_mode()) {
     ObTableSchema &table_schema = stmt.get_create_table_arg().schema_;

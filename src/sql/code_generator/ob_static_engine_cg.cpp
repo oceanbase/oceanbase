@@ -51,6 +51,7 @@
 #include "sql/optimizer/ob_log_err_log.h"
 #include "sql/optimizer/ob_insert_log_plan.h"
 #include "sql/optimizer/ob_log_stat_collector.h"
+#include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "sql/engine/ob_operator_factory.h"
@@ -103,6 +104,7 @@
 #include "sql/engine/dml/ob_table_delete_op.h"
 #include "sql/engine/dml/ob_table_merge_op.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
+#include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/engine/dml/ob_table_update_op.h"
 #include "sql/engine/dml/ob_table_lock_op.h"
 #include "sql/engine/table/ob_table_row_store_op.h"
@@ -131,7 +133,9 @@
 #include "sql/engine/table/ob_link_scan_op.h"
 #include "sql/engine/dml/ob_table_insert_all_op.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
+#include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "share/stat/ob_stat_define.h"
 
 namespace oceanbase
 {
@@ -1176,6 +1180,61 @@ int ObStaticEngineCG::generate_spec(ObLogMaterial &op, ObMaterialSpec &spec, con
   int ret = OB_SUCCESS;
   UNUSED(op);
   UNUSED(spec);
+  UNUSED(in_root_job);
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogOptimizerStatsGathering &op, ObOptimizerStatsGatheringSpec &spec, const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext * exec_ctx = nullptr;
+  if (OB_ISNULL(exec_ctx = opt_ctx_->get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get exec context", K(ret));
+  } else {
+    spec.table_id_ = op.get_table_id();
+    spec.type_ = op.get_osg_type();
+    spec.part_level_ = op.get_part_level();
+    if (op.is_gather_osg()) {
+      uint64_t target_id = 0;
+      // default target is 0(root operator), here we traversal the tree to avoid no osg in the root.
+      if (OB_FAIL(op.get_target_osg_id(target_id))) {
+        LOG_WARN("fail to get merge osg id", K(ret));
+      } else {
+        spec.set_target_osg_id(target_id);
+      }
+    }
+    if (OB_SUCC(ret) && (spec.part_level_ == share::schema::PARTITION_LEVEL_ONE
+                         || spec.part_level_ == share::schema::PARTITION_LEVEL_TWO)) {
+      if (OB_ISNULL(op.get_calc_part_id_expr())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("calc_part_id_expr is null", K(ret));
+      } else if (OB_FAIL(generate_calc_part_id_expr(*op.get_calc_part_id_expr(), nullptr, spec.calc_part_id_expr_))) {
+        LOG_WARN("fail to generate calc part id expr", K(ret), KPC(op.get_calc_part_id_expr()));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(spec.col_conv_exprs_.init(op.get_col_conv_exprs().count()))) {
+        LOG_WARN("fail to get generated column count", K(ret));
+      } else if (OB_FAIL(generate_rt_exprs(op.get_col_conv_exprs(), spec.col_conv_exprs_))) {
+        LOG_WARN("fail to generate generated column", K(ret), K(op.get_col_conv_exprs()));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(spec.generated_column_exprs_.init(op.get_generated_column_exprs().count()))) {
+        LOG_WARN("fail to get generated column count", K(ret));
+      } else if (OB_FAIL(generate_rt_exprs(op.get_generated_column_exprs(), spec.generated_column_exprs_))) {
+        LOG_WARN("fail to generate generated column", K(ret), K(op.get_generated_column_exprs()));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(spec.column_ids_.init(op.get_column_ids().count()))) {
+        LOG_WARN("fail to init column_ids", K(ret));
+      } else if (OB_FAIL(append(spec.column_ids_, op.get_column_ids()))) {
+        LOG_WARN("fail to append column id to spec", K(ret), K(spec.column_ids_));
+      }
+    }
+  }
   UNUSED(in_root_job);
   return ret;
 }
@@ -6591,6 +6650,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
     }
     case log_op_def::LOG_STAT_COLLECTOR: {
       type = PHY_STAT_COLLECTOR;
+      break;
+    }
+    case log_op_def::LOG_OPTIMIZER_STATS_GATHERING: {
+      type = PHY_OPTIMIZER_STATS_GATHERING;
       break;
     }
     default:

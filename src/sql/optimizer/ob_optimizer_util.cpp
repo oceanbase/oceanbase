@@ -7811,3 +7811,140 @@ int ObOptimizerUtil::check_contain_batch_stmt_parameter(ObRawExpr* expr, bool &c
   }
   return ret;
 }
+
+int ObOptimizerUtil::init_calc_part_id_expr(ObLogPlan * log_plan,
+                                            const uint64_t table_id,
+                                            const uint64_t ref_table_id,
+                                            ObRawExpr *&calc_part_id_expr)
+{
+  int ret = OB_SUCCESS;
+  calc_part_id_expr = NULL;
+  share::schema::ObPartitionLevel part_level = share::schema::PARTITION_LEVEL_MAX;
+  ObSQLSessionInfo *session = NULL;
+  ObRawExpr *part_expr = NULL;
+  ObRawExpr *subpart_expr = NULL;
+  ObRawExpr *new_part_expr = NULL;
+  ObRawExpr *new_subpart_expr = NULL;
+  if (OB_ISNULL(log_plan) || OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid argument", K(ret), K(ref_table_id));
+  } else if (OB_ISNULL(session = log_plan->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", K(ret));
+  } else {
+    share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+    const share::schema::ObTableSchema *table_schema = NULL;
+    if (OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(
+               session->get_effective_tenant_id(),
+               ref_table_id, table_schema))) {
+      LOG_WARN("get table schema failed", K(ref_table_id), K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret), K(table_schema));
+    } else if (OB_FAIL(log_plan->gen_calc_part_id_expr(table_id,
+                                                       ref_table_id,
+                                                       CALC_PARTITION_TABLET_ID,
+                                                       calc_part_id_expr))) {
+      LOG_WARN("failed to build calc part id expr", K(ret));
+    } else if (!table_schema->is_heap_table() &&
+               OB_NOT_NULL(calc_part_id_expr) &&
+               OB_FAIL(replace_gen_column(log_plan, calc_part_id_expr, calc_part_id_expr))) {
+      LOG_WARN("failed to replace gen column", K(ret));
+    } else {
+      // For no-pk table partitioned by generated column, it is no need to replace generated
+      // column as dependent exprs, because index table scan will add dependant columns
+      // into access_exprs_
+      // eg:
+      // create table t1(c1 int, c2 int, c3 int generated always as (c1 + 1)) partition by hash(c3);
+      // create index idx on t1(c2) global;
+      // select /*+ index(t1 idx) */ * from t1\G
+      // TLU
+      //  TSC // output([pk_inc],[calc_part_id_expr(c3)], [c1]), access([pk_inc], [c1])
+
+      // For pk table partitioned by generated column, we can replace generated column by
+      // dependant exprs, because pk must be a superset of partition columns
+      // eg:
+      // create table t1(c1 int primary key, c2 int, c3 int generated always as (c1 + 1)) partition by hash(c3);
+      // create index idx on t1(c2) global;
+      // select /*+ index(t1 idx) */ * from t1\G
+      // TLU
+      //  TSC // output([c1],[calc_part_id_expr(c1 + 1)]), access([c1])
+      LOG_TRACE("log table scan init calc part id expr", KPC(calc_part_id_expr));
+    }
+  }
+
+  return ret;
+}
+
+int ObOptimizerUtil::replace_column_with_select_for_partid(const ObInsertStmt *stmt,
+                                                           ObOptimizerContext &opt_ctx,
+                                                           ObRawExpr *&calc_part_id_expr)
+{
+  int ret = OB_SUCCESS;
+  // get column_item.
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null pointer", K(ret));
+  } else {
+    ObRawExprCopier copier(opt_ctx.get_expr_factory());
+    const ObInsertTableInfo &insert_info = stmt->get_insert_table_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < insert_info.column_exprs_.count(); ++i) {
+      if (OB_FAIL(copier.add_replaced_expr(insert_info.column_exprs_.at(i),
+                                           insert_info.column_conv_exprs_.at(i)))) {
+        LOG_WARN("failed to add replace pair", K(ret));
+      }
+    }
+    if (OB_FAIL(copier.copy_on_replace(calc_part_id_expr,
+                                       calc_part_id_expr))) {
+      LOG_WARN("failed to copy on replace expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+
+int ObOptimizerUtil::replace_gen_column(ObLogPlan *log_plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> column_exprs;
+  new_part_expr = part_expr;
+  if (OB_ISNULL(part_expr)) {
+    // do nothing
+  } else if (OB_ISNULL(log_plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(part_expr, column_exprs))) {
+    LOG_WARN("fail to extract column exprs", K(part_expr), K(ret));
+  } else {
+    ObRawExprCopier copier(log_plan->get_optimizer_context().get_expr_factory());
+    bool cnt_gen_columns = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+      if (OB_ISNULL(column_exprs.at(i)) ||
+          OB_UNLIKELY(!column_exprs.at(i)->is_column_ref_expr())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else {
+        ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr *>(column_exprs.at(i));
+        if (!col->is_generated_column()) {
+          // do nothing
+        } else if (OB_ISNULL(col->get_dependant_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dependant expr is null", K(ret), K(*col));
+        } else if (OB_FAIL(copier.add_replaced_expr(col, col->get_dependant_expr()))) {
+          LOG_WARN("failed to add replace pair", K(ret));
+        } else {
+          cnt_gen_columns = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && cnt_gen_columns) {
+      if (OB_FAIL(copier.copy_on_replace(part_expr, new_part_expr))) {
+        LOG_WARN("failed to copy on replace expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}

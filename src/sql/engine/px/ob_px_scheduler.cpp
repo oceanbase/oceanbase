@@ -14,6 +14,7 @@
 
 #include "sql/engine/px/ob_px_scheduler.h"
 #include "sql/engine/px/ob_dfo_scheduler.h"
+#include "sql/engine/px/ob_dfo_mgr.h"
 #include "lib/random/ob_random.h"
 #include "share/ob_rpc_share.h"
 #include "share/schema/ob_part_mgr_util.h"
@@ -98,8 +99,6 @@ public:
     return ret;
   }
 };
-
-
 
 int ObPxMsgProc::on_process_end(ObExecContext &ctx)
 {
@@ -416,6 +415,14 @@ int ObPxMsgProc::on_piece_msg(
     const ObRDWFPieceMsg &pkt)
 {
   ObDhPieceMsgProc<ObRDWFPieceMsg> proc;
+  return proc.on_piece_msg(coord_info_, ctx, pkt);
+}
+
+int ObPxMsgProc::on_piece_msg(
+    ObExecContext &ctx,
+    const ObOptStatsGatherPieceMsg &pkt)
+{
+  ObDhPieceMsgProc<ObOptStatsGatherPieceMsg> proc;
   return proc.on_piece_msg(coord_info_, ctx, pkt);
 }
 
@@ -793,6 +800,14 @@ int ObPxTerminateMsgProc::on_piece_msg(
 {
   return common::OB_SUCCESS;
 }
+
+int ObPxTerminateMsgProc::on_piece_msg(
+    ObExecContext &,
+    const ObOptStatsGatherPieceMsg &)
+{
+  return common::OB_SUCCESS;
+}
+
 
 } // end namespace sql
 } // end namespace oceanbase

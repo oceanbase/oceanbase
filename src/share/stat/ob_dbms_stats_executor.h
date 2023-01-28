@@ -45,6 +45,12 @@ public:
   static int delete_column_stats(ObExecContext &ctx,
                                  const ObTableStatParam &param,
                                  const bool only_histogram);
+
+  static int update_stat_online(ObExecContext &ctx,
+                                ObTableStatParam &param,
+                                share::schema::ObSchemaGetterGuard *schema_guard,
+                                TabStatIndMap &online_table_stats,
+                                ColStatIndMap &online_column_stats);
 private:
 
   static int do_gather_stats(ObExecContext &ctx,

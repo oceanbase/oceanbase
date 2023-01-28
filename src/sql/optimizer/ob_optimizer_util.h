@@ -1343,6 +1343,19 @@ public:
                                                     const int64_t cur_dup_table_pos);
 
   static int check_contain_batch_stmt_parameter(ObRawExpr* expr, bool &contain);
+
+  static int init_calc_part_id_expr(ObLogPlan * log_plan,
+                                    const uint64_t table_id,
+                                    const uint64_t ref_table_id,
+                                    ObRawExpr *&calc_part_id_expr);
+
+  static int replace_gen_column(ObLogPlan *log_plan,
+                                ObRawExpr *part_expr,
+                                ObRawExpr *&new_part_expr);
+
+  static int replace_column_with_select_for_partid(const ObInsertStmt *stmt,
+                                                   ObOptimizerContext &opt_ctx,
+                                                   ObRawExpr *&calc_part_id_expr);
 private:
   //disallow construct
   ObOptimizerUtil();

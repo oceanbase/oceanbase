@@ -19,6 +19,7 @@
 #include "ob_sql_parser.h"
 #include "pl/parser/ob_pl_parser.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/json/ob_json_print_utils.h"
 using namespace oceanbase::pl;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

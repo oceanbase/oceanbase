@@ -547,12 +547,7 @@ int64_t ObGlobalTableStat::get_micro_block_count() const
 void ObGlobalNdvEval::add(int64_t ndv, const char *llc_bitmap)
 {
   if (llc_bitmap != NULL) {
-    for (int64_t k = 0; k < ObColumnStat::NUM_LLC_BUCKET; ++k) {
-      if (part_cnt_ == 0 ||
-          static_cast<uint8_t>(llc_bitmap[k]) > static_cast<uint8_t>(global_llc_bitmap_[k])) {
-        global_llc_bitmap_[k] = llc_bitmap[k];
-      }
-    }
+    update_llc(global_llc_bitmap_, llc_bitmap, part_cnt_ == 0);
     ++ part_cnt_;
   }
   if (ndv > global_ndv_) {
@@ -560,13 +555,37 @@ void ObGlobalNdvEval::add(int64_t ndv, const char *llc_bitmap)
   }
 }
 
+void ObGlobalNdvEval::update_llc(char *dst_llc_bitmap, const char *src_llc_bitmap, bool force_update)
+{
+  if (dst_llc_bitmap != NULL && src_llc_bitmap != NULL) {
+    for (int64_t k = 0; k < ObColumnStat::NUM_LLC_BUCKET; ++k) {
+      if (force_update ||
+          static_cast<uint8_t>(src_llc_bitmap[k]) > static_cast<uint8_t>(dst_llc_bitmap[k])) {
+        dst_llc_bitmap[k] = src_llc_bitmap[k];
+      }
+    }
+  }
+}
+
 int64_t ObGlobalNdvEval::get() const
 {
-  int64_t num_distinct = -1;
+  int64_t num_distinct = 0;
   if (part_cnt_ <= 1) {
     num_distinct = global_ndv_;
   } else {
-    const char *llc_bitmap = global_llc_bitmap_;
+    num_distinct = get_ndv_from_llc(global_llc_bitmap_);
+  }
+  return num_distinct;
+}
+
+//splict the get function in to two, so get function should be used outside the NdvEval.
+int64_t ObGlobalNdvEval::get_ndv_from_llc(const char *llc_bitmap)
+{
+  int64_t num_distinct = 0;
+  if (OB_ISNULL(llc_bitmap)) {
+    // ret is useless here, we just need to raise a warn to avoid core.
+    LOG_WARN("get unexpected null pointer");
+  } else {
     double sum_of_pmax = 0;
     double alpha = select_alpha_value(ObColumnStat::NUM_LLC_BUCKET);
     int64_t empty_bucket_num = 0;
@@ -577,7 +596,7 @@ int64_t ObGlobalNdvEval::get() const
       }
     }
     double estimate_ndv = (alpha * ObColumnStat::NUM_LLC_BUCKET
-                           * ObColumnStat::NUM_LLC_BUCKET)  / sum_of_pmax;
+                          * ObColumnStat::NUM_LLC_BUCKET)  / sum_of_pmax;
     num_distinct = static_cast<int64_t>(estimate_ndv);
     // check if estimate result too tiny or large.
     if (estimate_ndv <= 5 * ObColumnStat::NUM_LLC_BUCKET / 2) {
@@ -591,6 +610,7 @@ int64_t ObGlobalNdvEval::get() const
       num_distinct = static_cast<int64_t>((0-pow(2, 32)) * log(1 - estimate_ndv / ObColumnStat::LARGE_NDV_NUMBER));
     }
   }
+
   return num_distinct;
 }
 

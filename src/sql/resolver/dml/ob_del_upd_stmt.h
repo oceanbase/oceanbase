@@ -101,7 +101,7 @@ ObDmlTableInfo(ObDmlTableType table_type)
   inline bool is_update_table() { return ObDmlTableType::UPDATE_TABLE == table_type_; }
   inline bool is_delete_table() { return ObDmlTableType::DELETE_TABLE == table_type_; }
   inline bool is_merge_table() { return ObDmlTableType::MERGE_TABLE == table_type_; }
-  inline bool is_insert_table() { return ObDmlTableType::INSERT_TABLE == table_type_; }
+  inline bool is_insert_table() const { return ObDmlTableType::INSERT_TABLE == table_type_; }
   inline bool is_insert_all_table() { return ObDmlTableType::INSERT_ALL_TABLE == table_type_; }
 
   TO_STRING_KV(K_(table_id),

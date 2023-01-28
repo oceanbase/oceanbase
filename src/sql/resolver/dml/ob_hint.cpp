@@ -283,6 +283,7 @@ void ObGlobalHint::reset()
   disable_cost_based_transform_ = false;
   opt_params_.reset();
   ob_ddl_schema_versions_.reuse();
+  osg_hint_.flags_ = 0;
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -305,6 +306,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_opt_features_version_hint(other.opt_features_version_);
   disable_transform_ |= other.disable_transform_;
   disable_cost_based_transform_ |= other.disable_cost_based_transform_;
+  osg_hint_.flags_ |= other.osg_hint_.flags_;
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -457,6 +459,32 @@ int ObGlobalHint::print_global_hint(planText &plan_text) const
   }
   if (OB_SUCC(ret) && OB_FAIL(opt_params_.print_opt_param_hint(plan_text))) {
     LOG_WARN("failed to print opt param hint", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(osg_hint_.print_osg_hint(plan_text))) {
+    LOG_WARN("failed to print optimizer statistics gathering hint", K(ret));
+  }
+  return ret;
+}
+
+void ObGlobalHint::merge_osg_hint(int8_t flag) {
+  osg_hint_.flags_ |= flag;
+}
+
+int ObOptimizerStatisticsGatheringHint::print_osg_hint(planText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  const char* outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
+  char *buf = plan_text.buf;
+  int64_t &buf_len = plan_text.buf_len;
+  int64_t &pos = plan_text.pos;
+  if ((flags_ & OB_NO_OPT_STATS_GATHER)) {
+    PRINT_GLOBAL_HINT_STR("NO_GATHER_OPTIMIZER_STATISTICS");
+  }
+  if (OB_SUCC(ret) && (flags_ & OB_OPT_STATS_GATHER)) {
+    PRINT_GLOBAL_HINT_STR("GATHER_OPTIMIZER_STATISTICS");
+  }
+  if (OB_SUCC(ret) && (flags_ & OB_APPEND_HINT)) {
+    PRINT_GLOBAL_HINT_STR("APPEND");
   }
   return ret;
 }

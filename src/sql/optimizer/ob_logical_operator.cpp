@@ -363,7 +363,9 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     parallel_(1),
     server_cnt_(1),
     need_late_materialization_(false),
-    op_exprs_()
+    op_exprs_(),
+    allocated_osg_(false)
+
 {
 }
 
@@ -859,6 +861,14 @@ int ObLogicalOperator::compute_op_other_info()
         } else {
           contain_das_op_ |= get_child(i)->get_contains_das_op();
         }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !allocated_osg_ && i < get_num_of_child(); i++) {
+      if (OB_ISNULL(get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else {
+        allocated_osg_ |= get_child(i)->get_allocated_osg();
       }
     }
   }

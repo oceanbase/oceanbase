@@ -333,6 +333,9 @@ public:
                                      const share::schema::ObTableSchema &schema,
                                      ObIArray<ObColumnStatParam> &column_params);
 
+  static bool check_column_validity(const share::schema::ObTableSchema &tab_schema,
+                                   const share::schema::ObColumnSchemaV2 &col_schema);
+
   static int set_default_column_params(ObIArray<ObColumnStatParam> &column_params);
 
   static int parse_size_clause(const ParseNode *node, MethodOptSizeConf &size_opt);
@@ -359,7 +362,8 @@ public:
                                   common::ObIArray<PartInfo> &part_infos,
                                   common::ObIArray<PartInfo> &subpart_infos,
                                   common::ObIArray<int64_t> &part_ids,
-                                  common::ObIArray<int64_t> &subpart_ids);
+                                  common::ObIArray<int64_t> &subpart_ids,
+                                  OSGPartMap *part_map = NULL);
 
   static int update_stat_cache(obrpc::ObCommonRpcProxy *proxy,
                                const ObTableStatParam &param);
@@ -413,12 +417,14 @@ public:
                             ObIArray<PartInfo> &part_infos,
                             ObIArray<PartInfo> &subpart_infos,
                             ObIArray<int64_t> &part_ids,
-                            ObIArray<int64_t> &subpart_ids);
+                            ObIArray<int64_t> &subpart_ids,
+                            OSGPartMap *part_map = NULL);
 
   static int get_subpart_infos(const ObTableSchema &table_schema,
                                const ObPartition *part,
                                ObIArray<PartInfo> &subpart_infos,
-                               ObIArray<int64_t> &subpart_ids);
+                               ObIArray<int64_t> &subpart_ids,
+                               OSGPartMap *part_map = NULL);
 
   static int flush_database_monitoring_info(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
@@ -463,6 +469,9 @@ public:
                                       ObTableStatParam &param,
                                       bool is_data_table = false,
                                       const int64_t data_table_id = -1);
+
+  static int get_table_partition_map(const ObTableSchema &table_schema,
+                                     OSGPartMap &part_map);
 
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);

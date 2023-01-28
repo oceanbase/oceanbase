@@ -61,6 +61,21 @@ struct ObDopHint
   TO_STRING_KV(K_(dfo), K_(dop));
 };
 
+// hint relate to optimizer statistics gathering.
+struct ObOptimizerStatisticsGatheringHint
+{
+  ObOptimizerStatisticsGatheringHint(): flags_(0) {};
+  ~ObOptimizerStatisticsGatheringHint() = default;
+
+  static const int8_t OB_APPEND_HINT = 0x1 << 1;
+  static const int8_t OB_OPT_STATS_GATHER = 0x1 << 2; // OPTIMIZER_STATISTICS_GATHERING
+  static const int8_t OB_NO_OPT_STATS_GATHER = 0x1 << 3; // NO_OPTIMIZER_STATISTICS_GATHERING
+
+  uint64_t flags_;
+  TO_STRING_KV(K_(flags));
+  int print_osg_hint(planText &plan_text) const;
+};
+
 struct ObOptParamHint
 {
   ObOptParamHint() {};
@@ -123,6 +138,7 @@ struct ObGlobalHint {
   void merge_log_level_hint(const ObString &log_level);
   void merge_read_consistency_hint(ObConsistencyLevel read_consistency, int64_t frozen_version);
   void merge_opt_features_version_hint(uint64_t opt_features_version);
+  void merge_osg_hint(int8_t flag);
 
   bool has_hint_exclude_concurrent() const;
   int print_global_hint(planText &plan_text) const;
@@ -138,6 +154,24 @@ struct ObGlobalHint {
   { return MIN_OUTLINE_ENABLE_VERSION <= version && CLUSTER_CURRENT_VERSION >= version; }
   bool disable_query_transform() const { return disable_transform_; }
   bool disable_cost_based_transform() const { return disable_cost_based_transform_; }
+
+  // wether should generate optimizer_statistics_operator.
+  bool should_generate_osg_operator () const {
+    // TODO parallel hint.
+    return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_NO_OPT_STATS_GATHER)
+           ? false
+           : (((osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT)
+             || (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_OPT_STATS_GATHER)) ?
+             true : false);
+  };
+
+  bool has_no_gather_opt_stat_hint() const {
+    return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_NO_OPT_STATS_GATHER) ? true : false;
+  }
+
+  bool has_gather_opt_stat_hint() const {
+    return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_OPT_STATS_GATHER) ? true : false;
+  }
 
   TO_STRING_KV(K_(frozen_version),
                K_(topk_precision),
@@ -160,7 +194,8 @@ struct ObGlobalHint {
                K_(disable_transform),
                K_(disable_cost_based_transform),
                K_(opt_params),
-               K_(ob_ddl_schema_versions));
+               K_(ob_ddl_schema_versions),
+               K_(osg_hint));
   int64_t frozen_version_;
   int64_t topk_precision_;
   int64_t sharding_minimum_row_count_;
@@ -183,6 +218,7 @@ struct ObGlobalHint {
   bool disable_cost_based_transform_;
   ObOptParamHint opt_params_;
   common::ObSArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
+  ObOptimizerStatisticsGatheringHint osg_hint_;
 };
 
 // used in physical plan

@@ -50,6 +50,7 @@
 #include "ob_log_err_log.h"
 #include "ob_log_stat_collector.h"
 #include "ob_del_upd_log_plan.h"
+#include "ob_log_optimizer_stats_gathering.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::log_op_def;
@@ -339,6 +340,13 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     ptr = allocator_.alloc(sizeof(ObLogStatCollector));
     if (NULL != ptr) {
       ret_op = new (ptr) ObLogStatCollector(plan);
+    }
+    break;
+  }
+  case LOG_OPTIMIZER_STATS_GATHERING: {
+    ptr = allocator_.alloc(sizeof(ObLogOptimizerStatsGathering));
+    if (NULL != ptr) {
+      ret_op = new (ptr) ObLogOptimizerStatsGathering(plan);
     }
     break;
   }

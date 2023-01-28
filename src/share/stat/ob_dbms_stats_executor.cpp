@@ -804,6 +804,68 @@ int ObDbmsStatsExecutor::do_gather_index_stats(ObExecContext &ctx,
   return ret;
 }
 
+int ObDbmsStatsExecutor::update_stat_online(ObExecContext &ctx,
+                                            ObTableStatParam &param,
+                                            share::schema::ObSchemaGetterGuard *schema_guard,
+                                            TabStatIndMap &online_table_stats,
+                                            ColStatIndMap &online_column_stats)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t affected_rows = 0;
+
+  //before write, we need record history stats.
+  ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
+  ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
+  ObSEArray<ObOptTableStat *, 4>  table_stats;
+  ObSEArray<ObOptColumnStat *, 4> column_stats;
+  ObSEArray<int64_t, 4> part_ids;
+  if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
+    if (ret == OB_ERR_DBMS_STATS_PL) {
+      param.need_global_ = false;
+      param.need_approx_global_ = false;
+      param.need_part_ = false;
+      param.need_subpart_ = false;
+      ret = OB_SUCCESS; // ignore lock check error
+    }
+    LOG_WARN("fail to check lock stat", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_part_ids_from_param(param, part_ids))) {
+    //part id should generated after check stat locked, since check_stat_locked will change part_info
+    LOG_WARN("fail to get part_ids");
+  } else if (OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx,
+                                                                         param,
+                                                                         history_tab_handles,
+                                                                         history_col_handles))) {
+    LOG_WARN("failed to get history stat handles", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::merge_tab_stats(param,
+                                                       online_table_stats,
+                                                       history_tab_handles,
+                                                       table_stats))) {
+    LOG_WARN("fail to merge tab stats", K(ret), K(history_tab_handles));
+  } else if (OB_FAIL(ObDbmsStatsUtils::merge_col_stats(param,
+                                                       online_column_stats,
+                                                       history_col_handles,
+                                                       column_stats))) {
+    LOG_WARN("fail to merge col stats", K(ret), K(history_col_handles));
+  } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, table_stats, column_stats,
+                                                         false, false, true))) {
+    LOG_WARN("fail to update stat", K(ret), K(table_stats), K(column_stats));
+  } else if (OB_FAIL(ObDbmsStatsUtils::batch_write_history_stats(ctx,
+                                                                 history_tab_handles,
+                                                                 history_col_handles))) {
+    LOG_WARN("failed to batch write history stats", K(ret));
+  } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
+    //update history
+    LOG_WARN("failed to update last modified count", K(ret));
+  } else {
+    // should reuse stats out-side this function.
+  }
+
+  return ret;
+}
+
 } // namespace common
 } // namespace oceanbase
 

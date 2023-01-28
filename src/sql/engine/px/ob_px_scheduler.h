@@ -27,6 +27,7 @@
 #include "sql/engine/px/datahub/components/ob_dh_rollup_key.h"
 #include "sql/engine/px/datahub/components/ob_dh_barrier.h"
 #include "sql/engine/px/datahub/components/ob_dh_range_dist_wf.h"
+#include "sql/engine/px/datahub/components/ob_dh_opt_stats_gather.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ namespace sql
 {
 
 class ObPxCoordOp;
+class ObPxObDfoMgr;
 class ObPxRootDfoAction
 {
 public:
@@ -121,6 +123,7 @@ public:
   int on_piece_msg(ObExecContext &ctx, const ObDynamicSamplePieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObRollupKeyPieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObRDWFPieceMsg &pkt);
+  int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt);
   // end DATAHUB msg processing
 
   ObPxCoordInfo &coord_info_;
@@ -155,6 +158,7 @@ public:
   int on_piece_msg(ObExecContext &ctx, const ObDynamicSamplePieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObRollupKeyPieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObRDWFPieceMsg &pkt);
+  int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt);
   // end DATAHUB msg processing
 private:
   int do_cleanup_dfo(ObDfo &dfo);
@@ -169,7 +173,6 @@ private:
   ObPxRootDfoAction &root_dfo_action_;
   ObDfoSchedulerBasic *scheduler_;
 };
-
 
 } // end namespace sql
 } // end namespace oceanbase

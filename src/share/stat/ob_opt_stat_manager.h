@@ -182,6 +182,7 @@ public:
   int invalidate_plan(const uint64_t tenant_id, const uint64_t table_id);
 
   int handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
+
   static ObOptStatManager &get_instance()
   {
     static ObOptStatManager instance_;

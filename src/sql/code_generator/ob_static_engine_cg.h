@@ -363,6 +363,9 @@ private:
   int generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec &spec, const bool in_root_job);
   int generate_spec(ObLogLink &op, ObLinkScanSpec &spec, const bool in_root_job);
   int generate_spec(ObLogInsertAll &op, ObTableInsertAllSpec &spec, const bool in_root_job);
+
+  // online optimizer stats gathering
+  int generate_spec(ObLogOptimizerStatsGathering &op, ObOptimizerStatsGatheringSpec &spec, const bool in_root_job);
 private:
   int add_update_set(ObSubPlanFilterSpec &spec);
   int generate_basic_transmit_spec(

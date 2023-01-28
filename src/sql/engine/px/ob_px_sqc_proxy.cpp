@@ -99,6 +99,7 @@ int ObPxSQCProxy::setup_loop_proc(ObSqcCtx &sqc_ctx) const
         .register_processor(sqc_ctx.sample_whole_msg_proc_)
         .register_processor(sqc_ctx.rollup_key_whole_msg_proc_)
         .register_processor(sqc_ctx.rd_wf_whole_msg_proc_)
+        .register_processor(sqc_ctx.opt_stats_gather_whole_msg_proc_)
         .register_interrupt_processor(sqc_ctx.interrupt_proc_);
   }
   return ret;

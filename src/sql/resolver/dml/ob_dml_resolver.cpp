@@ -9503,6 +9503,24 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_GATHER_OPTIMIZER_STATISTICS: {
+      CHECK_HINT_PARAM(hint_node, 0) {
+        global_hint.merge_osg_hint(ObOptimizerStatisticsGatheringHint::OB_OPT_STATS_GATHER);
+      }
+      break;
+    }
+    case T_NO_GATHER_OPTIMIZER_STATISTICS: {
+      CHECK_HINT_PARAM(hint_node, 0) {
+        global_hint.merge_osg_hint(ObOptimizerStatisticsGatheringHint::OB_NO_OPT_STATS_GATHER);
+      }
+      break;
+    }
+    case T_APPEND: {
+      CHECK_HINT_PARAM(hint_node, 0) {
+        global_hint.merge_osg_hint(ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT);
+      }
+      break;
+    }
     case T_DOP: {
       CHECK_HINT_PARAM(hint_node, 2) {
         if (OB_FAIL(global_hint.merge_dop_hint(static_cast<uint64_t>(child0->value_),

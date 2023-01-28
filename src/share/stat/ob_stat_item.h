@@ -357,6 +357,8 @@ public:
   void get_llc_bitmap(char *llc_bitmap, const int64_t llc_bitmap_size) const;
 
   static double select_alpha_value(const int64_t num_bucket);
+  static int64_t get_ndv_from_llc(const char *llc_bitmap);
+  static void update_llc(char *dst_llc_bitmap, const char *src_llc_bitmap, bool force_update = false);
 
 private:
   int64_t global_ndv_;

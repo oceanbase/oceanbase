@@ -3146,6 +3146,23 @@ int ObDbmsStats::parse_index_part_info(ObExecContext &ctx,
   return ret;
 }
 
+// we be used in  ObLogPlan::allocate_optimizer_stats_gathering_as_top.
+// We extract it as a independent function to avoid redudant code.
+bool ObDbmsStats::check_column_validity(const share::schema::ObTableSchema &tab_schema,
+                                       const share::schema::ObColumnSchemaV2 &col_schema)
+{
+  bool is_valid = false;
+  if (col_schema.is_hidden() &&
+      (!tab_schema.is_index_table() ||
+        col_schema.get_column_id() < OB_END_RESERVED_COLUMN_ID_NUM ||
+        col_schema.is_shadow_column())) {
+    //pass
+  } else {
+    is_valid = true;
+  }
+  return is_valid;
+}
+
 /// init column stats with conf 'for all column size auto'
 int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
                                          share::schema::ObSchemaGetterGuard &schema_guard,
@@ -3162,10 +3179,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       LOG_WARN("column is null", K(ret), K(col));
     //here add extra column id condition, because func index in oracle mode, the column will mark is
     //hidden, that's will cause the fewer columns.
-    } else if (col->is_hidden() &&
-               (!table_schema.is_index_table() ||
-                col->get_column_id() < OB_END_RESERVED_COLUMN_ID_NUM ||
-                col->is_shadow_column())) {
+    } else if (!check_column_validity(table_schema, *col)){
       continue;
     } else if (OB_FAIL(ob_write_string(allocator,
                                        col->get_column_name_str(),
@@ -4391,7 +4405,8 @@ int ObDbmsStats::get_table_part_infos(const share::schema::ObTableSchema *table_
                                       ObIArray<PartInfo> &part_infos,
                                       ObIArray<PartInfo> &subpart_infos,
                                       ObIArray<int64_t> &part_ids,
-                                      ObIArray<int64_t> &subpart_ids)
+                                      ObIArray<int64_t> &subpart_ids,
+                                      OSGPartMap *part_map/*default NULL*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)) {
@@ -4404,7 +4419,8 @@ int ObDbmsStats::get_table_part_infos(const share::schema::ObTableSchema *table_
                                     part_infos,
                                     subpart_infos,
                                     part_ids,
-                                    subpart_ids))) {
+                                    subpart_ids,
+                                    part_map))) {
     LOG_WARN("failed to get partition infos", K(ret));
   }
   return ret;
@@ -4587,7 +4603,8 @@ int ObDbmsStats::get_part_infos(const ObTableSchema &table_schema,
                                 ObIArray<PartInfo> &part_infos,
                                 ObIArray<PartInfo> &subpart_infos,
                                 ObIArray<int64_t> &part_ids,
-                                ObIArray<int64_t> &subpart_ids)
+                                ObIArray<int64_t> &subpart_ids,
+                                OSGPartMap *part_map/*default null*/)
 {
   int ret = OB_SUCCESS;
   const ObPartition *part = NULL;
@@ -4604,13 +4621,21 @@ int ObDbmsStats::get_part_infos(const ObTableSchema &table_schema,
         part_info.part_name_ = part->get_part_name();
         part_info.part_id_ = part->get_part_id();
         part_info.tablet_id_ = part->get_tablet_id();
+        if (OB_NOT_NULL(part_map)) {
+          OSGPartInfo part_info;
+          part_info.part_id_ = part->get_part_id();
+          part_info.tablet_id_ = part->get_tablet_id();
+          if (OB_FAIL(part_map->set_refactored(part->get_part_id(), part_info))) {
+            LOG_WARN("fail to add part info to hashmap", K(ret), K(part_info), K(part->get_part_id()));
+          }
+        }
         int64_t origin_cnt = subpart_infos.count();
         if (OB_FAIL(part_infos.push_back(part_info))) {
           LOG_WARN("failed to push back part info", K(ret));
         } else if (OB_FAIL(part_ids.push_back(part_info.part_id_))) {
           LOG_WARN("failed to push back part id", K(ret));
         } else if (is_twopart &&
-                   OB_FAIL(get_subpart_infos(table_schema, part, subpart_infos, subpart_ids))) {
+                   OB_FAIL(get_subpart_infos(table_schema, part, subpart_infos, subpart_ids, part_map))) {
           LOG_WARN("failed to get subpart info", K(ret));
         } else {
           part_infos.at(part_infos.count() - 1).subpart_cnt_ = subpart_infos.count() - origin_cnt;
@@ -4626,7 +4651,8 @@ int ObDbmsStats::get_part_infos(const ObTableSchema &table_schema,
 int ObDbmsStats::get_subpart_infos(const ObTableSchema &table_schema,
                                    const ObPartition *part,
                                    ObIArray<PartInfo> &subpart_infos,
-                                   ObIArray<int64_t> &subpart_ids)
+                                   ObIArray<int64_t> &subpart_ids,
+                                   OSGPartMap *part_map/*default NULL*/)
 {
   int ret = OB_SUCCESS;
   ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
@@ -4647,6 +4673,14 @@ int ObDbmsStats::get_subpart_infos(const ObTableSchema &table_schema,
         subpart_info.part_id_ = subpart->get_sub_part_id(); // means object_id
         subpart_info.tablet_id_ = subpart->get_tablet_id();
         subpart_info.first_part_id_ = part->get_part_id();
+        if (OB_NOT_NULL(part_map)) {
+          OSGPartInfo part_info;
+          part_info.part_id_ = part->get_part_id();
+          part_info.tablet_id_ = subpart->get_tablet_id();
+          if (OB_FAIL(part_map->set_refactored(subpart->get_sub_part_id(), part_info))) {
+            LOG_WARN("fail to add part info to hashmap", K(ret), K(part_info), K(subpart->get_sub_part_id()));
+          }
+        }
         if (OB_FAIL(subpart_infos.push_back(subpart_info))) {
           LOG_WARN("failed to push back subpart_info", K(ret));
         } else if (OB_FAIL(subpart_ids.push_back(subpart_info.part_id_))) {
@@ -5872,6 +5906,30 @@ int ObDbmsStats::get_table_partition_infos(const ObTableSchema &table_schema,
              OB_FAIL(partition_infos.assign(subpart_infos))) {
     LOG_WARN("failed to assign", K(ret));
   } else {/*do nothing*/}
+  return ret;
+}
+
+int ObDbmsStats::get_table_partition_map(const ObTableSchema &table_schema,
+                                         OSGPartMap &part_map)
+{
+  int ret = OB_SUCCESS;
+  if (PARTITION_LEVEL_TWO != table_schema.get_part_level()
+      && PARTITION_LEVEL_ONE != table_schema.get_part_level()) {
+  } else {
+    ObSEArray<PartInfo, 4> part_infos;
+    ObSEArray<PartInfo, 4> subpart_infos;
+    ObSEArray<int64_t, 4> part_ids;
+    ObSEArray<int64_t, 4> subpart_ids;
+    if (OB_FAIL(get_table_part_infos(&table_schema,
+                                    part_infos,
+                                    subpart_infos,
+                                    part_ids,
+                                    subpart_ids,
+                                    &part_map))) {
+      LOG_WARN("failed to get table part infos", K(ret));
+    }
+  }
+
   return ret;
 }
 

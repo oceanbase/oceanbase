@@ -237,6 +237,7 @@ namespace share
   static const char* const OB_SV_SQL_PLAN_MEMORY_PERCENTAGE = "ob_sql_plan_memory_percentage";
   static const char* const OB_SV_LOG_ROW_VALUE_OPTIONS = "log_row_value_options";
   static const char* const OB_SV_MAX_READ_STALE_TIME = "ob_max_read_stale_time";
+  static const char* const OB_SV_ONLINE_OPT_STAT_GATHER = "online_opt_stat_gather";
 
 }
 }

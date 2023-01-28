@@ -89,6 +89,7 @@
 #include "sql/optimizer/ob_log_insert_all.h"
 #include "sql/optimizer/ob_log_err_log.h"
 #include "sql/optimizer/ob_log_stat_collector.h"
+#include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
 #include "sql/engine/aggregate/ob_merge_distinct_op.h"
 #include "sql/engine/aggregate/ob_hash_distinct_op.h"
 #include "sql/engine/basic/ob_material_op.h"
@@ -157,6 +158,7 @@
 #include "sql/engine/table/ob_link_scan_op.h"
 #include "sql/engine/dml/ob_table_insert_all_op.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
+#include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
 
 namespace oceanbase
 {
