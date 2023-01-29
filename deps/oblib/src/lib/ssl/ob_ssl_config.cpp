@@ -485,7 +485,7 @@ ssize_t ob_read_regard_ssl(int fd, void *buf, size_t nbytes)
 {
   ssize_t rbytes = 0;
   SSL* ssl = NULL;
-  if (OB_UNLIKELY(fd < 0 || fd > FD_MAX)) {
+  if (OB_UNLIKELY(fd < 0 || fd >= FD_MAX)) {
     COMMON_LOG(ERROR, "fd is beyond limit", K(fd));
     rbytes = -1;
     errno = EINVAL;
@@ -548,7 +548,7 @@ ssize_t ob_write_regard_ssl(int fd, const void *buf, size_t nbytes)
 {
   ssize_t wbytes = 0;
   SSL* ssl = NULL;
-  if (OB_UNLIKELY(fd < 0 || fd > FD_MAX)) {
+  if (OB_UNLIKELY(fd < 0 || fd >= FD_MAX)) {
     COMMON_LOG(ERROR, "fd is beyond limit", K(fd));
     wbytes = -1;
     errno = EINVAL;
