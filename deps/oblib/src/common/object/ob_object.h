@@ -961,7 +961,7 @@ public:
   {
     validate_has_lob_header(has_lob_header_);
     return has_lob_header_ && OB_NOT_NULL(ptr_) &&
-           !is_lob_disk_locator() &&
+           !is_lob_disk_locator() && size_ >= MEM_LOB_COMMON_HEADER_LEN &&
            (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_read_only();
   }
 
@@ -973,7 +973,7 @@ public:
     } else if (OB_NOT_NULL(ptr_)) {
       if (is_lob_disk_locator()) {
         bret = (reinterpret_cast<ObLobCommon *>(ptr_))->in_row_;
-      } else {
+      } else if (size_ >= MEM_LOB_COMMON_HEADER_LEN) {
         bret = (reinterpret_cast<ObMemLobCommon *>(ptr_))->has_inrow_data();
       }
     }
@@ -984,7 +984,7 @@ public:
   {
     validate_has_lob_header(has_lob_header_);
     return has_lob_header_ && OB_NOT_NULL(ptr_) &&
-           !is_lob_disk_locator() &&
+           !is_lob_disk_locator() && size_ >= MEM_LOB_COMMON_HEADER_LEN &&
            (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_open();
   }
 
@@ -992,7 +992,7 @@ public:
   {
     validate_has_lob_header(has_lob_header_);
     return has_lob_header_ && OB_NOT_NULL(ptr_) &&
-           !is_lob_disk_locator() &&
+           !is_lob_disk_locator() && size_ >= MEM_LOB_COMMON_HEADER_LEN &&
            (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_simple();
   }
 
@@ -1000,7 +1000,7 @@ public:
   {
     validate_has_lob_header(has_lob_header_);
     return has_lob_header_ && OB_NOT_NULL(ptr_) &&
-           !is_lob_disk_locator() &&
+           !is_lob_disk_locator() && size_ >= MEM_LOB_COMMON_HEADER_LEN &&
            (reinterpret_cast<ObMemLobCommon *>(ptr_))->has_extern();
   }
 
@@ -1009,7 +1009,7 @@ public:
   {
     validate_has_lob_header(has_lob_header_);
     return has_lob_header_ && OB_NOT_NULL(ptr_) &&
-           !is_lob_disk_locator() &&
+           !is_lob_disk_locator() && size_ >= MEM_LOB_COMMON_HEADER_LEN &&
            (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_persist();
   }
 
@@ -1018,7 +1018,7 @@ public:
     validate_has_lob_header(has_lob_header_);
     return (!has_lob_header_)
            || (has_lob_header_ && OB_NOT_NULL(ptr_) &&
-              !is_lob_disk_locator() &&
+              !is_lob_disk_locator() && size_ >= MEM_LOB_COMMON_HEADER_LEN &&
               (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_temporary_full());
   }
 
@@ -1026,7 +1026,7 @@ public:
   {
     validate_has_lob_header(has_lob_header_);
     return has_lob_header_ && OB_NOT_NULL(ptr_) &&
-           !is_lob_disk_locator() &&
+           !is_lob_disk_locator() && size_ >= MEM_LOB_COMMON_HEADER_LEN &&
            (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_temporary_delta();
   }
 

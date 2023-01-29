@@ -3513,10 +3513,8 @@ int ObLSTabletService::check_old_row_legitimacy(
     const ObIArray<uint64_t> &column_ids = *run_ctx.column_ids_;
     if (OB_FAIL(rowkey_helper.convert_datum_rowkey(rowkey.get_rowkey(), datum_rowkey))) {
       STORAGE_LOG(WARN, "Failed to transfer datum rowkey", K(ret), K(rowkey));
-    } else if (OB_FAIL(old_row_getter.init_dml_access_ctx(run_ctx.store_ctx_, dml_param, true))) {
-      LOG_WARN("init dml access ctx failed", K(ret));
-    } else if (OB_FAIL(old_row_getter.init_dml_access_param(data_table, dml_param, column_ids))) {
-      LOG_WARN("init dml access param failed", K(ret));
+    } else if (OB_FAIL(init_single_row_getter(old_row_getter, run_ctx, column_ids, data_table, true))) {
+      LOG_WARN("failed to init single row getter", K(ret));
     } else if (OB_FAIL(old_row_getter.open(datum_rowkey, true))) {
       LOG_WARN("open old row getter failed", K(ret), K(rowkey));
     } else if (OB_FAIL(old_row_getter.get_next_row(storage_old_row))) {
@@ -3770,7 +3768,9 @@ int ObLSTabletService::insert_lob_col(
     // Notice: currently only inrow data
     ObString raw_data = obj.get_string();
     ObString data;
-    ObLobLocatorV2 loc(raw_data, obj.has_lob_header());
+    // for not strict sql mode, will insert empty string without lob header
+    bool has_lob_header = obj.has_lob_header() && raw_data.length() > 0;
+    ObLobLocatorV2 loc(raw_data, has_lob_header);
     if (OB_FAIL(lob_mngr->append(lob_param, loc))) {
       LOG_WARN("[STORAGE_LOB]lob append failed.", K(ret));
     } else {
