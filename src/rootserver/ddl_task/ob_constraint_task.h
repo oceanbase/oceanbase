@@ -143,7 +143,6 @@ private:
   static const int64_t OB_CONSTRAINT_TASK_VERSION = 1;
   common::TCRWLock lock_;
   ObDDLWaitTransEndCtx wait_trans_ctx_;
-  int64_t ret_code_;
   obrpc::ObAlterTableArg alter_table_arg_;
   common::ObArenaAllocator allocator_;
   ObRootService *root_service_;
