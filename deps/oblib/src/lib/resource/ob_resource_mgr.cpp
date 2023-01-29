@@ -611,7 +611,7 @@ int ObResourceMgr::create_tenant_resource_mgr_unsafe(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else if (OB_UNLIKELY(OB_SERVER_TENANT_ID == tenant_id)) {
-    static char buf[sizeof(ObTenantResourceMgr)];
+    static char buf[sizeof(ObTenantResourceMgr)] __attribute__((__aligned__(16)));
     ptr = buf;
   } else {
     ObMemAttr attr(OB_SERVER_TENANT_ID, "TntResourceMgr");

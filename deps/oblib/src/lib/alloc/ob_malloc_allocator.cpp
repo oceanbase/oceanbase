@@ -378,7 +378,7 @@ ObTenantCtxAllocator *ObMallocAllocator::take_off_tenant_allocator(uint64_t tena
 void ObMallocAllocator::set_root_allocator()
 {
   int ret = OB_SUCCESS;
-  static char buf[sizeof(ObTenantCtxAllocator) * ObCtxIds::MAX_CTX_ID];
+  static char buf[sizeof(ObTenantCtxAllocator) * ObCtxIds::MAX_CTX_ID] __attribute__((__aligned__(16)));
   ObTenantCtxAllocator *allocator = NULL;
   abort_unless(OB_SUCCESS == create_tenant_allocator(OB_SERVER_TENANT_ID, buf, allocator));
   abort_unless(OB_SUCCESS == add_tenant_allocator(allocator));
