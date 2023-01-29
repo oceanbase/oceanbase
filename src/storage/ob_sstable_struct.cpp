@@ -88,8 +88,12 @@ int64_t ObParalleMergeInfo::to_paral_info_string(char *buf, const int64_t buf_le
     J_OBJ_START();
     for (int i = 0; i < ARRAY_IDX_MAX; ++i) {
       J_OBJ_START();
-      J_KV("type", get_para_info_str(i), "min", info_[i].min_value_, "max", info_[i].max_value_,
-          "avg", info_[i].count_ > 0 ? info_[i].sum_value_ / info_[i].count_ : 0);
+      if (0 == info_[i].count_ && 0 == info_[i].sum_value_) {
+        J_KV("type", get_para_info_str(i), "info", "EMPTY");
+      } else {
+        J_KV("type", get_para_info_str(i), "min", info_[i].min_value_, "max", info_[i].max_value_,
+            "avg", info_[i].count_ > 0 ? info_[i].sum_value_ / info_[i].count_ : 0);
+      }
       J_OBJ_END();
       J_COMMA();
     }

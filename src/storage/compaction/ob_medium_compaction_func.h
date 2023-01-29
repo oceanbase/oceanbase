@@ -46,16 +46,22 @@ public:
       const ObIArray<ObITable *> &memtables,
       ObMediumCompactionInfoList &medium_list);
   static int get_palf_role(const share::ObLSID &ls_id, ObRole &role);
+  static int get_table_schema_to_merge(
+    const ObTablet &tablet,
+    const int64_t schema_version,
+    ObIAllocator &allocator,
+    ObMediumCompactionInfo &medium_info);
 
   int schedule_next_medium_for_leader(const int64_t major_snapshot);
 
   int decide_medium_snapshot(
-      const int64_t schedule_medium_snapshot,
+      const bool is_major,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE);
 
   int check_medium_finish();
 
-  TO_STRING_KV("ls_id", ls_.get_ls_id(), "tablet_id", tablet_.get_tablet_meta().tablet_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
+
 protected:
   int get_status_from_inner_table(share::ObTabletCompactionScnInfo &ret_info);
   int prepare_medium_info(const ObGetMergeTablesResult &result, ObMediumCompactionInfo &medium_info);
@@ -86,15 +92,15 @@ protected:
   static int choose_medium_snapshot(
       ObLS &ls,
       ObTablet &tablet,
-      const int64_t schedule_medium_snapshot,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
+      ObIAllocator &allocator,
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result);
   static int choose_major_snapshot(
       ObLS &ls,
       ObTablet &tablet,
-      const int64_t schedule_medium_snapshot,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
+      ObIAllocator &allocator,
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result);
   static int check_need_merge_and_schedule(
@@ -103,8 +109,6 @@ protected:
       const int64_t schedule_scn,
       const ObMediumCompactionInfo::ObCompactionType compaction_type);
   int schedule_next_medium_primary_cluster(const int64_t major_snapshot);
-
-  int get_table_schema_to_merge(const int64_t schema_version, ObMediumCompactionInfo &medium_info);
 
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
   static int get_schedule_medium_from_memtable(
@@ -125,8 +129,8 @@ protected:
   typedef int (*ChooseMediumScn)(
       ObLS &ls,
       ObTablet &tablet,
-      const int64_t schedule_medium_snapshot,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
+      ObIAllocator &allocator,
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result);
   static ChooseMediumScn choose_medium_scn[MEDIUM_FUNC_CNT];

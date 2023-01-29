@@ -816,6 +816,7 @@ constexpr int OB_ERR_INVALID_VARIABLE_IN_JSON_PATH = -5484;
 constexpr int OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED = -5486;
 constexpr int OB_ERR_PATH_EXPRESSION_NOT_LITERAL = -5487;
 constexpr int OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL = -5488;
+constexpr int OB_ERR_SCHEMA_HISTORY_EMPTY = -5489;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -2661,6 +2662,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED__USER_ERROR_MSG "Invalid numeric"
 #define OB_ERR_PATH_EXPRESSION_NOT_LITERAL__USER_ERROR_MSG "path expression not a literal"
 #define OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL__USER_ERROR_MSG "invalid argument for %s call"
+#define OB_ERR_SCHEMA_HISTORY_EMPTY__USER_ERROR_MSG "Schema history is empty"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -4671,6 +4673,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED__ORA_USER_ERROR_MSG "ORA-40451: invalid default value provided"
 #define OB_ERR_PATH_EXPRESSION_NOT_LITERAL__ORA_USER_ERROR_MSG "ORA-40454: path expression not a literal"
 #define OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL__ORA_USER_ERROR_MSG "PLS-00185: invalid argument for %s call"
+#define OB_ERR_SCHEMA_HISTORY_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5489, Schema history is empty"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"

@@ -275,8 +275,8 @@ int ObSchemaRetrieveUtils::retrieve_table_schema(
   SHARE_SCHEMA_LOG(DEBUG, "retrieve table schema");
   if (OB_FAIL(result.next())) {
     if (ret == common::OB_ITER_END) { //no record
-      ret = common::OB_ERR_UNEXPECTED;
-      SHARE_SCHEMA_LOG(WARN, "no row", K(ret));
+      ret = common::OB_ERR_SCHEMA_HISTORY_EMPTY;
+      SHARE_SCHEMA_LOG(WARN, "schema history is empty", KR(ret));
     } else {
       SHARE_SCHEMA_LOG(WARN, "get table schema failed, iter quit", K(ret));
     }
@@ -314,8 +314,8 @@ int ObSchemaRetrieveUtils::retrieve_tablegroup_schema(
   SHARE_SCHEMA_LOG(DEBUG, "retrieve tablegroup schema");
   if (OB_FAIL(result.next())) {
     if (ret == common::OB_ITER_END) { //no record
-      ret = common::OB_ERR_UNEXPECTED;
-      SHARE_SCHEMA_LOG(WARN, "no row", K(ret));
+      ret = common::OB_ERR_SCHEMA_HISTORY_EMPTY;
+      SHARE_SCHEMA_LOG(WARN, "schema history is empty", KR(ret));
     } else {
       SHARE_SCHEMA_LOG(WARN, "get tablegroup schema failed, iter quit", K(ret));
     }

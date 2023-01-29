@@ -35,6 +35,7 @@
 #include "share/ob_column_checksum_error_operator.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "share/ob_server_table_operator.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -431,7 +432,7 @@ int ObMajorMergeScheduler::start_zones_merge(const ObZoneArray &to_merge, const 
           LOG_WARN("fail to get zone", KR(ret), "zone", tmp_info.zone_);
         } else if (0 == tmp_info.is_merging_.get_value()) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_INFO("zone is not merging, can not start merge", KR(ret), 
+          LOG_INFO("zone is not merging, can not start merge", KR(ret),
                    "zone", tmp_info.zone_, K(tmp_info));
         } else if (OB_FAIL(zone_merge_mgr_->start_zone_merge(to_merge.at(i), expected_epoch))) {
           LOG_WARN("fail to start zone merge", KR(ret), "zone", to_merge.at(i), K(expected_epoch));
@@ -562,7 +563,17 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
           LOG_INFO("check updating merge status", K_(tenant_id), K(zone), K(merged), K(cur_all_merged_scn),
             K(cur_merged_scn), K(info),"smallest_snapshot_scn", progress->smallest_snapshot_scn_,
             "merged_cnt", progress->merged_tablet_cnt_, "unmerged_cnt", progress->unmerged_tablet_cnt_);
-
+#ifdef ERRSIM
+          ret = OB_E(EventTable::EN_SKIP_INDEX_MAJOR) ret;
+          if (OB_FAIL(ret)) {
+            ret = OB_SUCCESS;
+            cur_merged_scn = info.broadcast_scn();
+            cur_all_merged_scn = info.broadcast_scn();
+            merged = true;
+            all_merged = true;
+            LOG_INFO("set errsim", K(ret), K(cur_merged_scn), K(cur_all_merged_scn), K(info), K(merged), K(all_merged));
+          }
+#endif
           if (OB_SUCC(ret) && merged) {
             // cur_all_merged_scn >= cur_merged_scn
             // 1. Equal: snapshot_version of all tablets change to frozen_scn after major compaction
@@ -614,6 +625,14 @@ int ObMajorMergeScheduler::handle_all_zone_merge(
                   "/unverified tables", K(all_merged), K(exist_uncompacted), K(exist_unverified));
       }
     }
+#ifdef ERRSIM
+    ret = OB_E(EventTable::EN_SKIP_INDEX_MAJOR) ret;
+    if (OB_FAIL(ret)) {
+      ret = OB_SUCCESS;
+      all_merged = true;
+      LOG_INFO("set errsim", K(ret), K(expected_epoch), K(all_merged));
+    }
+#endif
 
     // 3. execute final operations after all merged
     if (OB_SUCC(ret) && all_merged) {
@@ -731,7 +750,7 @@ int ObMajorMergeScheduler::try_update_epoch_and_reload()
     } else if (latest_epoch < get_epoch()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("latest epoch should not less than cached epoch", KR(ret), K(latest_epoch), "cached_epoch", get_epoch());
-    } 
+    }
   }
   return ret;
 }
@@ -787,7 +806,7 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
     const int64_t MAX_NO_MERGE_INTERVAL = 36 * 3600 * 1000 * 1000L;  // 36 hours
     if ((global_last_merged_time < 0) || (global_merge_start_time < 0)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected global_last_merged_time and global_merge_start_time", KR(ret), 
+      LOG_WARN("unexpected global_last_merged_time and global_merge_start_time", KR(ret),
                K(global_last_merged_time), K(global_merge_start_time), K_(tenant_id));
     } else if ((0 == global_last_merged_time) && (0 == global_merge_start_time)) {
       if (0 == first_check_merge_us_) {
@@ -831,8 +850,8 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
         if (OB_UNLIKELY(!tenant_config.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tenant config is not valid", KR(ret), K_(tenant_id));
-        } else if (((now - max_merge_time) > MAX_NO_MERGE_INTERVAL) && 
-                   (GCONF.enable_major_freeze) && 
+        } else if (((now - max_merge_time) > MAX_NO_MERGE_INTERVAL) &&
+                   (GCONF.enable_major_freeze) &&
                    (!tenant_config->major_freeze_duty_time.disable())) {
           if (TC_REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) {
             LOG_ERROR("long time no major freeze, please check it", KR(ret),

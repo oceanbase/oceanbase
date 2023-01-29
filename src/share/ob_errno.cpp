@@ -11769,6 +11769,18 @@ static const _error _error_OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL = {
       .oracle_str_error      = "PLS-00185: invalid argument for JSON call",
       .oracle_str_user_error = "PLS-00185: invalid argument for %s call"
 };
+static const _error _error_OB_ERR_SCHEMA_HISTORY_EMPTY = {
+      .error_name            = "OB_ERR_SCHEMA_HISTORY_EMPTY",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "Schema history is empty",
+      .str_user_error        = "Schema history is empty",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5489, Schema history is empty",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5489, Schema history is empty"
+};
 static const _error _error_OB_ERR_SP_ALREADY_EXISTS = {
       .error_name            = "OB_ERR_SP_ALREADY_EXISTS",
       .error_cause           = "Internal Error",
@@ -25091,6 +25103,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED] = &_error_OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED;
     _errors[-OB_ERR_PATH_EXPRESSION_NOT_LITERAL] = &_error_OB_ERR_PATH_EXPRESSION_NOT_LITERAL;
     _errors[-OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL] = &_error_OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL;
+    _errors[-OB_ERR_SCHEMA_HISTORY_EMPTY] = &_error_OB_ERR_SCHEMA_HISTORY_EMPTY;
     _errors[-OB_ERR_SP_ALREADY_EXISTS] = &_error_OB_ERR_SP_ALREADY_EXISTS;
     _errors[-OB_ERR_SP_DOES_NOT_EXIST] = &_error_OB_ERR_SP_DOES_NOT_EXIST;
     _errors[-OB_ERR_SP_UNDECLARED_VAR] = &_error_OB_ERR_SP_UNDECLARED_VAR;
