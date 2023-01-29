@@ -1585,17 +1585,35 @@ int ObBackupSetTaskMgr::calculate_start_replay_scn_(ObBackupSCN &start_replay_sc
 {
   int ret = OB_SUCCESS;
   ObBackupLSMetaInfosDesc ls_meta_infos;
-  ObBackupSCN tmp_start_replay_scn = set_task_attr_.start_scn_;
-  if (OB_FAIL(store_.read_ls_meta_infos(ls_meta_infos))) {
+  ObTenantArchiveRoundAttr round_attr;
+  if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {
+    LOG_WARN("failed to get tenant current round", K(ret), KPC(job_attr_));
+  } else if (!round_attr.state_.is_doing()) {
+    ret = OB_LOG_ARCHIVE_NOT_RUNNING;
+    LOG_WARN("backup is not supported when log archive is not doing", K(ret), K(round_attr));
+  } else if (round_attr.start_scn_ > set_task_attr_.start_scn_) {
+    ret = OB_LOG_ARCHIVE_INTERRUPTED;
+    LOG_WARN("backup is not supported when archive is interrupted", K(ret), K(round_attr), K(set_task_attr_.start_scn_));
+  } else if (OB_FAIL(store_.read_ls_meta_infos(ls_meta_infos))) {
     LOG_WARN("fail to read ls meta infos", K(ret));
   } else {
+    // To ensure that restore can be successfully initiated,
+    // we need to avoid clearing too many logs and the start_replay_scn less than the start_scn of the first piece.
+    // so we choose the minimum palf_base_info.prev_log_info_.scn firstly, to ensure keep enough logs.
+    // Then we choose the max(minimum palf_base_info.prev_log_info_.scn, round_attr.start_scn) as the start_replay_scn,
+    // to ensure the start_replay_scn is greater than the start scn of first piece
+    ObBackupSCN tmp_start_replay_scn = set_task_attr_.start_scn_;
     ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i, cnt, OB_SUCC(ret)) {
       const palf::PalfBaseInfo &palf_base_info = ls_meta_infos.ls_meta_packages_.at(i).palf_meta_;
       ObBackupSCN prev_log_scn = palf_base_info.prev_log_info_.log_ts_;
       tmp_start_replay_scn = std::min(tmp_start_replay_scn, prev_log_scn);
     }
+
     if (OB_SUCC(ret)) {
-      start_replay_scn = tmp_start_replay_scn;
+      const uint64_t tmp_scn = static_cast<uint64_t>(tmp_start_replay_scn);
+      const uint64_t round_start_scn = static_cast<uint64_t>(round_attr.start_scn_);
+      start_replay_scn = std::max(tmp_scn, round_start_scn);
+      LOG_INFO("calculate start replay scn finish", K(start_replay_scn), K(ls_meta_infos), K(round_attr));
     }
   }
   return ret;

@@ -1247,22 +1247,27 @@ int ObArchiveStore::get_piece_paths_in_range(const int64_t start_scn, const int6
 
       if (pieces.empty()) {
         // this piece can be used to restore.
-        if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
-          LOG_WARN("failed to get piece path", K(ret), K(dest), K(cur));
-        } else if (OB_FAIL(pieces.push_back(piece_path))) {
-          LOG_WARN("fail to push back path", K(ret), K(piece_path));
+        if (cur.start_scn_ <= start_scn) {
+          if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
+            LOG_WARN("failed to get piece path", K(ret), K(dest), K(cur));
+          } else if (OB_FAIL(pieces.push_back(piece_path))) {
+            LOG_WARN("fail to push back path", K(ret), K(piece_path));
+          } else {
+            last_piece_idx = i;
+          }
         } else {
-          last_piece_idx = i;
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("first piece start_scn is bigger than start_scn", K(ret), K(cur), K(start_scn), K(end_scn));
+          LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
         }
       } else {
         const ObTenantArchivePieceAttr &prev = piece_whole_info.his_frozen_pieces_.at(last_piece_idx);
         if (prev.checkpoint_scn_ != cur.start_scn_) {
           // piece not continous
-          pieces.reset();
+          ret = OB_ENTRY_NOT_EXIST;
           LOG_WARN("pieces are not continous", K(ret), K(prev), K(cur), K(start_scn), K(end_scn));
-        }
-        
-        if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
+          LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
+        } else if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
           LOG_WARN("failed to get piece path", K(ret), K(dest), K(cur));
         } else if (OB_FAIL(pieces.push_back(piece_path))) {
           LOG_WARN("fail to push back path", K(ret), K(piece_path));
