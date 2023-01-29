@@ -45,9 +45,9 @@ inline int jump_call(void * arg_, int(*func_) (void*), void* stack_addr)
 #elif defined(__aarch64__)
 inline int jump_call(void * arg_, int(*func_) (void*), void* stack_addr)
 {
-    register int64_t ret __asm__("x0") = 0;                /* specify x0 assigned to ret */
-    register void* x0 __asm__("x0") = arg_;                /* specify x0 assigned to arg_ */
+    int64_t ret = 0;
     __asm__ __volatile__ ( 
+        "mov  x0, %1\n\t"
         "sub  %3, %3, #0x20\n\t"                           /* reserve space for old sp on new stack, 0x10 for align */
         "stp  x29, x30, [%3, #0x10]\n\t"                   /* x29, x30 may not be stored in the innest function. */
         "mov  x9, sp\n\t"                                  /* store SP in new stack */
@@ -56,9 +56,10 @@ inline int jump_call(void * arg_, int(*func_) (void*), void* stack_addr)
         "blr  %2\n\t"                                      /* run the second arg func_ */
         "ldp  x29, x30, [sp, #0x10]\n\t"                   /* restore x29, x30 */
         "ldr  x9, [sp, #0x00]\n\t"                         /* jump back to old stack */
-        "mov  sp, x9\n\t"                                   
+        "mov  sp, x9\n\t"
+        "mov  %0, x0\n\t"
         :"=r" (ret)                                        
-        :"r"(x0), "r"(func_), "r"(stack_addr) 
+        :"r"(arg_), "r"(func_), "r"(stack_addr)
         :"x9"           
     );
     return (int) ret;
@@ -86,7 +87,9 @@ inline int call_with_new_stack(void * arg_, int(*func_) (void*))
     // To prevent the check_stack_overflow call before the jump
     // Do not introduce other code between the two set_stackattr
     set_stackattr(stack_addr, stack_size);
+    WEAK_BARRIER();
     ret = jump_call(arg_, func_, (char *)stack_addr + stack_size);
+    WEAK_BARRIER();
     set_stackattr(ori_stack_addr, ori_stack_size);
     lib::g_stack_allocer.dealloc(stack_addr);
     all_stack_size -= stack_size;
