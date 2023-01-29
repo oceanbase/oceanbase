@@ -1455,25 +1455,42 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
           if (is_oracle_mode()) { //Oracle mode
             uint64_t object_db_id = OB_INVALID_ID;
             ObString object_name;
+            bool exist = false;
             //search package name in current database, then search in sys tenant space in case of sys package
             OZ (schema_checker.get_database_id(tenant_id, current_database, database_id));
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(schema_checker.get_package_id(
                   tenant_id, database_id, package_or_db_name, COMPATIBLE_ORACLE_MODE, package_id))) {
-              bool exist = false;
               ObSynonymChecker synonym_checker;
               ret = OB_SUCCESS;
               OZ (resolve_synonym_object_recursively(
                 schema_checker, synonym_checker, tenant_id, database_id,
                 package_or_db_name, object_db_id, object_name, exist));
-              if (OB_SUCC(ret)) {
-                if (exist) {
-                  OZ (schema_checker.get_package_id(
-                    tenant_id, object_db_id, object_name, COMPATIBLE_ORACLE_MODE, package_id));
-                } else {
-                  object_db_id = database_id;
-                  object_name = package_or_db_name;
+              if (OB_FAIL(ret)) {
+              } else if (exist) {
+                if (object_db_id != database_id) {
+                  const ObDatabaseSchema *database_schema = NULL;
+                  if (OB_FAIL(schema_checker.get_database_schema(tenant_id, object_db_id, database_schema))) {
+                    LOG_WARN("failed to get database schema",
+                             K(ret), K(object_db_id), K(object_name), K(database_id));
+                  } else if (OB_ISNULL(database_schema)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("database schema is null",
+                              K(ret), K(object_db_id), K(object_name), K(database_id));
+                  } else {
+                    db_name = database_schema->get_database_name_str();
+                  }
                 }
+                if (OB_FAIL(ret)) {
+                } else if (OB_FAIL(schema_checker.get_package_id(
+                                    tenant_id, object_db_id, object_name, COMPATIBLE_ORACLE_MODE, package_id))) {
+                  LOG_WARN("failed to get package id", K(ret), K(object_db_id), K(object_name));
+                } else {
+                  package_name = object_name;
+                }
+              } else {
+                object_db_id = database_id;
+                object_name = package_or_db_name;
               }
             }
             if (OB_FAIL(ret) || OB_INVALID_ID == package_id) {
@@ -1517,7 +1534,7 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
                 package_name = package_or_db_name;
                 db_name.assign_ptr(OB_SYS_DATABASE_NAME, static_cast<int32_t>(strlen(OB_SYS_DATABASE_NAME)));
               }
-            } else {
+            } else if (!exist) {
               package_name = package_or_db_name;
               db_name = current_database;
             }
