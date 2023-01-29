@@ -445,6 +445,7 @@ void ObDDLKV::reset()
 {
   FLOG_INFO("ddl kv reset", KP(this), K(*this));
   is_inited_ = false;
+  ObSSTable::reset();
   ls_id_.reset();
   tablet_id_.reset();
   ddl_start_scn_ = SCN::min_scn();
@@ -469,7 +470,6 @@ void ObDDLKV::reset()
     sstable_index_builder_ = nullptr;
   }
   block_meta_tree_.destroy();
-  ObSSTable::reset();
   arena_allocator_.reset();
 }
 

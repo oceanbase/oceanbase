@@ -7,11 +7,12 @@
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "common/ob_timeout_ctx.h"
 #include "lib/stat/ob_session_stat.h"
+#include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "share/ob_share_util.h"
 #include "share/rc/ob_tenant_base.h"
-#include "observer/omt/ob_tenant.h"
+#include "storage/direct_load/ob_direct_load_table_builder_allocator.h"
 
 namespace oceanbase
 {
@@ -19,6 +20,7 @@ namespace observer
 {
 using namespace common;
 using namespace share;
+using namespace storage;
 
 void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
 {
@@ -236,6 +238,9 @@ void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
   if (STATE_RUNNING == state_) {
     state_ = STATE_STOPPING;
   }
+
+  // clear thread local variables
+  get_table_builder_allocator()->reset();
 
   LOG_INFO("table load task thread stopped", KP(this), "pid", get_tid_cache(), K(thread_idx));
 }
