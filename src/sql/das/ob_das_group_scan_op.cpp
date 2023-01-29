@@ -65,10 +65,9 @@ int ObDASGroupScanOp::release_op()
   int ret = OB_SUCCESS;
   OZ(ObDASScanOp::release_op());
   if (nullptr != group_lookup_op_) {
-    ObITabletScan &tsc_service = get_tsc_service();
-    if (OB_FAIL(tsc_service.revert_scan_iter(group_lookup_op_->get_lookup_storage_iter()))) {
-      LOG_WARN("revert scan iterator failed", K(ret));
-    } 
+    if (OB_FAIL(group_lookup_op_->revert_iter())) {
+      LOG_WARN("revert lookup iterator failed", K(ret));
+    }
   }
   group_lookup_op_ = NULL;
   iter_.reset();
