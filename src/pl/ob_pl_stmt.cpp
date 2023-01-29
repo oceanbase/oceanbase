@@ -3067,12 +3067,12 @@ int ObPLBlockNS::get_cursor_by_name(const ObExprResolveContext &ctx,
     CK (OB_NOT_NULL(get_symbol_table()));
     for (int64_t i = 0; OB_SUCC(ret) && i < get_cursor_table()->get_count() && !found; i++) {
       const ObPLCursor *cur = get_cursor_table()->get_cursor(i);
-      CK (OB_NOT_NULL(cur));
-      CK (OB_NOT_NULL(get_symbol_table()->get_symbol(cur->get_index())));
-      if (OB_SUCC(ret) && 0 == get_symbol_table()->get_symbol(cur->get_index())
-                                ->get_name().case_compare(cursor_name)) {
-        cursor = cur;
-        found = true;
+      if (OB_NOT_NULL(cur)) {
+        const ObPLVar *var = get_symbol_table()->get_symbol(cur->get_index());
+        if (OB_NOT_NULL(var) && 0 == var->get_name().case_compare(cursor_name)) {
+          cursor = cur;
+          found = true;
+        }
       }
     }
     if (OB_SUCC(ret) && !found && NULL != pre_ns_) {
