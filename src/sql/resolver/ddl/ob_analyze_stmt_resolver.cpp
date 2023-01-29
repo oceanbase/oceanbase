@@ -52,8 +52,8 @@ int ObAnalyzeStmtResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("failed to get force parallel query dop", K(ret));
   } else if (T_ANALYZE == parse_tree.type_) {
     if (lib::is_mysql_mode() && !session_info_->is_enable_sql_extension()) {
-      ret = OB_ERR_PARSER_SYNTAX;
-      LOG_WARN("The Oracle-mode analyze syntax is not supported under the MySQL mode", K(ret));
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "The Oracle-mode analyze syntax is used in the disable sql extension MySQL-mode");
     } else if (OB_FAIL(resolve_oracle_analyze(parse_tree, *analyze_stmt))) {
       LOG_WARN("failed to resolve oracle analyze stmt", K(ret));
     } else { /*do nothing*/ }

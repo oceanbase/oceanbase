@@ -209,6 +209,8 @@ int ObTableSqlService::drop_inc_partition(common::ObISQLClient &sql_client,
     ObSqlString sql;
     // used to sync partition level info.
     ObSqlString condition_str;
+    // used to sync partition dml info.
+    ObSqlString dml_info_cond_str;
     const int64_t inc_part_num = inc_table.get_partition_num();
     ObPartition **part_array = inc_table.get_part_array();
 
@@ -225,6 +227,8 @@ int ObTableSqlService::drop_inc_partition(common::ObISQLClient &sql_client,
       LOG_WARN("assign sql str fail", K(ret));
     } else if (OB_FAIL(sql.append_fmt(" (0 = 1"))) {
       LOG_WARN("append sql str fail", K(ret));
+    } else if (OB_FAIL(dml_info_cond_str.append_fmt(" (0 = 1"))) {
+      LOG_WARN("append sql str fail", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; i++) {
       ObPartition *part = part_array[i];
@@ -234,7 +238,11 @@ int ObTableSqlService::drop_inc_partition(common::ObISQLClient &sql_client,
       } else if (OB_FAIL(sql.append_fmt(" OR part_id = %lu", part->get_part_id()))) {
         LOG_WARN("append_fmt failed", K(ret));
       } else if (OB_FAIL(condition_str.append_fmt(" OR partition_id = %lu",
-                                                 part->get_part_id()))) {
+                                                  part->get_part_id()))) {
+        LOG_WARN("fail to append fmt", K(ret));
+      } else if (inc_table.get_part_level() == PARTITION_LEVEL_ONE &&
+                 OB_FAIL(dml_info_cond_str.append_fmt(" OR tablet_id = %lu",
+                                                      part->get_tablet_id().id()))) {
         LOG_WARN("fail to append fmt", K(ret));
       } else {
         // get subpartition info
@@ -246,6 +254,9 @@ int ObTableSqlService::drop_inc_partition(common::ObISQLClient &sql_client,
           } else if (OB_FAIL(condition_str.append_fmt(" OR partition_id = %lu",
                                                       subpart->get_sub_part_id()))) {
             LOG_WARN("append_fmt failed", K(ret));
+          } else if (OB_FAIL(dml_info_cond_str.append_fmt(" OR tablet_id = %lu",
+                                                          subpart->get_tablet_id().id()))) {
+            LOG_WARN("fail to append fmt", K(ret));
           }
         }
       }
@@ -255,6 +266,8 @@ int ObTableSqlService::drop_inc_partition(common::ObISQLClient &sql_client,
         LOG_WARN("append_fmt failed", K(ret));
       } else if (OB_FAIL(sql.append_fmt(" )"))) {
         LOG_WARN("append_fmt failed", K(ret));
+      } else if (OB_FAIL(dml_info_cond_str.append_fmt(" )"))) {
+        LOG_WARN("failed to append fmt", K(ret));
       }
     }
     // delete stat info here.
@@ -272,6 +285,8 @@ int ObTableSqlService::drop_inc_partition(common::ObISQLClient &sql_client,
         LOG_WARN("failed to delete all column stat history", K(ret));
       } else if (OB_FAIL(delete_from_all_histogram_stat_history(sql_client, tenant_id, table_id, &condition_str))) {
         LOG_WARN("failed to delete all histogram_stat history", K(ret));
+      } else if (OB_FAIL(delete_from_all_monitor_modified(sql_client, tenant_id, table_id, &dml_info_cond_str))) {
+        LOG_WARN("failed to delete from all monitor modified", K(ret));
       }
     } 
     
@@ -304,6 +319,7 @@ int ObTableSqlService::drop_inc_sub_partition(common::ObISQLClient &sql_client,
   } else {
     ObSqlString sql;
     ObSqlString condition_str;
+    ObSqlString dml_info_cond_str;
     const int64_t inc_part_num = inc_table.get_partition_num();
     int64_t inc_subpart_num = 0;
     ObPartition **part_array = inc_table.get_part_array();
@@ -318,6 +334,8 @@ int ObTableSqlService::drop_inc_sub_partition(common::ObISQLClient &sql_client,
                                       ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id)))) {
       LOG_WARN("append_fmt failed", K(ret));
     } else if (OB_FAIL(condition_str.assign_fmt("( 1 = 0"))) {
+      LOG_WARN("assign fmt failed", K(ret));
+    } else if (OB_FAIL(dml_info_cond_str.assign_fmt("( 1 = 0"))) {
       LOG_WARN("assign fmt failed", K(ret));
     }
 
@@ -341,6 +359,8 @@ int ObTableSqlService::drop_inc_sub_partition(common::ObISQLClient &sql_client,
             LOG_WARN("append_fmt failed", K(ret));
           } else if (OB_FAIL(condition_str.append_fmt(" OR partition_id = %lu", subpart->get_sub_part_id()))) {
             LOG_WARN("append_fmt failed", K(ret));
+          } else if (OB_FAIL(dml_info_cond_str.append_fmt(" OR tablet_id = %lu", subpart->get_tablet_id().id()))) {
+            LOG_WARN("append_fmt failed", K(ret));
           }
         }
       }
@@ -349,6 +369,8 @@ int ObTableSqlService::drop_inc_sub_partition(common::ObISQLClient &sql_client,
       if (OB_FAIL(sql.append_fmt(" )"))) {
         LOG_WARN("append_fmt failed", K(ret));
       } else if (OB_FAIL(condition_str.append_fmt(" )"))) {
+        LOG_WARN("append_fmt failed", K(ret));
+      } else if (OB_FAIL(dml_info_cond_str.append_fmt(" )"))) {
         LOG_WARN("append_fmt failed", K(ret));
       }
     }
@@ -367,6 +389,8 @@ int ObTableSqlService::drop_inc_sub_partition(common::ObISQLClient &sql_client,
         LOG_WARN("failed to delete all column stat history", K(ret));
       } else if (OB_FAIL(delete_from_all_histogram_stat_history(sql_client, tenant_id, table_id, &condition_str))) {
         LOG_WARN("failed to delete all histogram_stat history", K(ret));
+      } else if (OB_FAIL(delete_from_all_monitor_modified(sql_client, tenant_id, table_id, &dml_info_cond_str))) {
+        LOG_WARN("failed to delete from all monitor modified", K(ret));
       }
     } 
 
@@ -4744,7 +4768,8 @@ int ObTableSqlService::delete_from_all_column_usage(ObISQLClient &sql_client,
 
 int ObTableSqlService::delete_from_all_monitor_modified(ObISQLClient &sql_client,
                                                         const uint64_t tenant_id,
-                                                        const uint64_t table_id)
+                                                        const uint64_t table_id,
+                                                        const ObSqlString *extra_condition)
 {
   int ret = OB_SUCCESS;
   ObDMLSqlSplicer dml;
@@ -4757,6 +4782,9 @@ int ObTableSqlService::delete_from_all_monitor_modified(ObISQLClient &sql_client
             OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
                                   exec_tenant_id, table_id)))) {
     LOG_WARN("add column failed", K(ret));
+  } else if (OB_NOT_NULL(extra_condition) &&
+             OB_FAIL(dml.get_extra_condition().assign(*extra_condition))) {
+    LOG_WARN("fail to assign extra condition", K(ret));
   } else if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id,
                                  OB_ALL_MONITOR_MODIFIED_TNAME,
                                  dml, affected_rows))) {

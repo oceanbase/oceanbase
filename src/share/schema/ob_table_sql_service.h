@@ -341,7 +341,8 @@ private:
                                    const uint64_t table_id);
   int delete_from_all_monitor_modified(ObISQLClient &sql_client,
                                        const uint64_t tenant_id,
-                                       const uint64_t table_id);
+                                       const uint64_t table_id,
+                                       const ObSqlString *extra_condition = NULL);
   int delete_from_all_table_stat_history(ObISQLClient &sql_client,
                                          const uint64_t tenant_id,
                                          const uint64_t table_id,
