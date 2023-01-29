@@ -6950,7 +6950,10 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
   } else if (OB_ISNULL(out_row_desc) || OB_ISNULL(table_lookup)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpected null", K(ret), K(out_row_desc), K(table_lookup));
-  } else if (OB_FAIL(copy_row_desc(*table_scan_out_ops.at(0).second, *out_row_desc))) {
+  } else if (OB_FAIL(copy_row_desc_by_projector(*table_scan_out_ops.at(0).second,
+                 table_scan_out_ops.at(0).first->get_projector(),
+                 table_scan_out_ops.at(0).first->get_projector_size(),
+                 *out_row_desc))) {
     LOG_WARN("failed to copy row desc", K(ret), K(*child_ops.at(0).second));
   } else if (OB_ISNULL(op.get_plan()) ||
              OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_schema_guard()) ||
