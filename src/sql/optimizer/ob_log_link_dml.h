@@ -16,6 +16,7 @@ public:
   virtual ~ObLogLinkDml() {}
   virtual int compute_op_ordering() override;
   virtual int get_explain_name_internal(char *buf, const int64_t buf_len, int64_t &pos) override;
+  virtual int get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_item) override;
   inline void set_dml_type(stmt::StmtType type) { dml_type_ = type; }
 private:
   stmt::StmtType dml_type_;

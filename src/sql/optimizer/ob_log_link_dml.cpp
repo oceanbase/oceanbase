@@ -45,5 +45,22 @@ int ObLogLinkDml::get_explain_name_internal(char *buf, const int64_t buf_len, in
   return ret;
 }
 
+int ObLogLinkDml::get_plan_item_info(PlanText &plan_text,
+                                     ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(get_explain_name_internal(buf, buf_len, pos))) {
+      LOG_WARN("failed to get explain name", K(ret));
+    }
+    END_BUF_PRINT(plan_item.operation_, plan_item.operation_len_);
+  }
+  return ret;
+}
+
+
 } // namespace sql
 } // namespace oceanbase
