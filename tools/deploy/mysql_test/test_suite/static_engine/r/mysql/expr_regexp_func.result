@@ -283,3 +283,34 @@ select regexp_replace('我是好人', '是.', '.....') from dual;
 | 我.....人                                     |
 +-------------------------------------------------+
 
+select regexp_substr('data
+         first:one
+         second:two', '^(.+:.+)$',1,2,'m') as extracted_value
+from dual;
++---------------------+
+| extracted_value     |
++---------------------+
+|          second:two |
++---------------------+
+
+select regexp_replace('data
+         first:one
+         second:two', '^(.+:.+)$','a',1,2,'m') as extracted_value
+from dual;
++---------------------------+
+| extracted_value           |
++---------------------------+
+| data
+         first:one
+a |
++---------------------------+
+
+select regexp_instr('data
+         first:one
+         second:two', '^(.+:.+)$',1,2,0,'m') as extracted_value
+from dual;
++-----------------+
+| extracted_value |
++-----------------+
+|              25 |
++-----------------+

@@ -179,6 +179,7 @@ int ObExprRegexContext::substr(const ObString &text,
     ob_regmatch_t pmatch[nsub + 1];
     int error = 0;
     int64_t tmp_start = 0;
+    int64_t tmp_end = 0;
     int64_t start = 0;
     wchar_t *wc_text = NULL;
     int64_t wc_length = 0;
@@ -191,25 +192,28 @@ int ObExprRegexContext::substr(const ObString &text,
       /*do nothing*/
     } else {
       for (int64_t idx = 0; OB_SUCC(ret) && idx < begin_locations.count() && occurrence > 0; ++idx) {
+        tmp_end = idx + 1 < begin_locations.count() ? begin_locations.at(idx+1): wc_length;
         start = begin_locations.at(idx);
         do {
           tmp_start = start;
           pmatch[0].rm_so = start;
-          pmatch[0].rm_eo = wc_length;
+          pmatch[0].rm_eo = tmp_end;
           error = ob_re_wexec((ob_regex_t *)&reg_, wc_text, wc_length, NULL, nsub + 1, pmatch, 0);
           if (OB_UNLIKELY(0 != error)) {
             if (OB_LIKELY(OB_REG_NOMATCH == error)) {
-              LOG_TRACE("regex not match, str=%.*s", K(wc_length));
+              LOG_TRACE("regex not match, str=%.*s", K(tmp_end));
             } else {
               ret = convert_reg_err_code_to_ob_err_code(error);;
               LOG_WARN("regex match error", K(ret));
             }
-          } else if ( pmatch[0].rm_eo + tmp_start == start && start < wc_length){
+          } else if ( pmatch[0].rm_eo + tmp_start == start && start < tmp_end){
             start = start + 1;
+            --occurrence;
           } else {
             start = static_cast<int64_t>(pmatch[0].rm_eo + tmp_start);
+            --occurrence;
           }
-        } while (OB_SUCC(ret) && --occurrence > 0 && 0 == error && tmp_start < wc_length && !from_begin && !from_end);
+        } while (OB_SUCC(ret) && occurrence > 0 && 0 == error && tmp_start < tmp_end && !from_begin && !from_end);
       }
       if (OB_SUCC(ret)) {
         if (0 == error && 0 == occurrence) {
@@ -329,6 +333,7 @@ int ObExprRegexContext::instr(const ObString &text,
     ob_regmatch_t pmatch[nsub + 1];
     int error = 0;
     int64_t tmp_start = 0;
+    int64_t tmp_end = 0;
     int64_t start = 0;
     wchar_t *wc_text = NULL;
     int64_t wc_length = 0;
@@ -341,25 +346,28 @@ int ObExprRegexContext::instr(const ObString &text,
       /*do nothing*/
     } else {
       for (int64_t idx = 0; OB_SUCC(ret) && idx < begin_locations.count() && occurrence > 0; ++idx) {
+        tmp_end = idx + 1 < begin_locations.count() ? begin_locations.at(idx+1): wc_length;
         start = begin_locations.at(idx);
         do {
           tmp_start = start;
           pmatch[0].rm_so = start;
-          pmatch[0].rm_eo = wc_length;
+          pmatch[0].rm_eo = tmp_end;
           error = ob_re_wexec((ob_regex_t *)&reg_, wc_text, wc_length, NULL, nsub + 1, pmatch, 0);
           if (OB_UNLIKELY(0 != error)) {
             if (OB_LIKELY(OB_REG_NOMATCH == error)) {
-               LOG_TRACE("regex not match", K(ret));
+              LOG_TRACE("regex not match", K(ret));
             } else {
               ret = convert_reg_err_code_to_ob_err_code(error);
               LOG_WARN("regex match error", K(ret));
             }
-          } else if ( pmatch[0].rm_eo + tmp_start == start && start < wc_length){
+          } else if ( pmatch[0].rm_eo + tmp_start == start && start < tmp_end){
             start = start + 1;
+            --occurrence;
           } else {
             start = static_cast<int64_t>(pmatch[0].rm_eo + tmp_start);
+            --occurrence;
           }
-        } while (OB_SUCC(ret) && --occurrence > 0 && 0 == error && tmp_start < wc_length && !from_begin && !from_end);
+        } while (OB_SUCC(ret) && occurrence > 0 && 0 == error && tmp_start < tmp_end && !from_begin && !from_end);
       }
       if (OB_SUCC(ret)) {
         if (0 == error && 0 == occurrence) {
@@ -399,6 +407,7 @@ int ObExprRegexContext::like(const ObString &text,
     ob_regmatch_t pmatch[nsub + 1];
     int error = 0;
     int64_t tmp_start = 0;
+    int64_t tmp_end = 0;
     int64_t start = 0;
     wchar_t *wc_text = NULL;
     int64_t wc_length = 0;
@@ -411,25 +420,28 @@ int ObExprRegexContext::like(const ObString &text,
       /*do nothing*/
     } else {
       for (int64_t idx = 0; OB_SUCC(ret) && idx < begin_locations.count() && occurrence > 0; ++idx) {
+        tmp_end = idx + 1 < begin_locations.count() ? begin_locations.at(idx+1): wc_length;
         start = begin_locations.at(idx);
         do {
           tmp_start = start;
           pmatch[0].rm_so = start;
-          pmatch[0].rm_eo = wc_length;
+          pmatch[0].rm_eo = tmp_end;
           error = ob_re_wexec((ob_regex_t *)&reg_, wc_text, wc_length, NULL, nsub+1, pmatch, 0);
           if (OB_UNLIKELY(0 != error)) {
             if (OB_LIKELY(OB_REG_NOMATCH == error)) {
-               LOG_TRACE("regex not match", K(ret));
+              LOG_TRACE("regex not match", K(ret));
             } else {
               ret = convert_reg_err_code_to_ob_err_code(error);
               LOG_WARN("regex match error", K(error));
             }
-          } else if ( pmatch[0].rm_eo + tmp_start == start && start < wc_length) {
+          } else if ( pmatch[0].rm_eo + tmp_start == start && start < tmp_end) {
             start = start + 1;
+            --occurrence;
           } else {
             start = static_cast<int64_t>(pmatch[0].rm_eo + tmp_start);
+            --occurrence;
           }
-        } while (OB_SUCC(ret) && --occurrence > 0 && 0 == error && tmp_start < wc_length && !from_begin && !from_end);
+        } while (OB_SUCC(ret) && occurrence > 0 && 0 == error && tmp_start < tmp_end && !from_begin && !from_end);
       }
       if (OB_SUCC(ret)) {
         if (0 == error && 0 == occurrence) {
@@ -464,6 +476,7 @@ int ObExprRegexContext::replace_substr(const ObString &text_string,
   ObSEArray<uint32_t, 4> locations_and_length(common::ObModIds::OB_SQL_EXPR_REPLACE,
                                               common::OB_MALLOC_NORMAL_BLOCK_SIZE);
   int64_t tmp_start = 0;
+  int64_t tmp_end = 0;
   int64_t start = 0;
   ObSEArray<ObSEArray<ObString, 8>, 8> subexpr_arrays;//用于保存匹配分组内容用于后续替换
   if (OB_UNLIKELY(!inited_)) {
@@ -489,25 +502,28 @@ int ObExprRegexContext::replace_substr(const ObString &text_string,
         ob_regmatch_t pmatch[nsub + 1];
         ObSEArray<ObString, 8> subexpr_array;
         for (int64_t idx = 0; OB_SUCC(ret) && idx < begin_locations.count() && occurrence > 0; ++idx) {
+          tmp_end = idx + 1 < begin_locations.count() ? begin_locations.at(idx+1): length;
           start = begin_locations.at(idx);
           do {
             tmp_start = start;
             pmatch[0].rm_so = start;
-            pmatch[0].rm_eo = length;
+            pmatch[0].rm_eo = tmp_end;
             error = ob_re_wexec((ob_regex_t *)&reg_, wc_text, length, NULL, nsub+1, pmatch, 0);
             if (OB_UNLIKELY(0 != error)) {
               if (OB_LIKELY(OB_REG_NOMATCH == error)) {
-                LOG_TRACE("regex not match", K(length));
+                LOG_TRACE("regex not match", K(tmp_end));
               } else {
                 ret = convert_reg_err_code_to_ob_err_code(error);
                 LOG_WARN("regex match error", K(ret));
               }
-            } else if ( pmatch[0].rm_eo + tmp_start == start && start < length){
+            } else if ( pmatch[0].rm_eo + tmp_start == start && start < tmp_end){
               start = start + 1;
+              --occurrence;
             } else {
               start = static_cast<int64_t>(pmatch[0].rm_eo + tmp_start);
+              --occurrence;
             }
-          } while (OB_SUCC(ret) && --occurrence > 0 && 0 == error &&  tmp_start < length && !from_begin && !from_end);
+          } while (OB_SUCC(ret) && occurrence > 0 && 0 == error &&  tmp_start < tmp_end && !from_begin && !from_end);
         }
         if (OB_SUCC(ret)) {
           if (0 == error && 0 == occurrence) {
@@ -655,7 +671,7 @@ int ObExprRegexContext::replace(const ObString &text,
     {
       sum_length += locations_and_length.at(i);
     }
-    if (OB_UNLIKELY(OB_MAX_VARCHAR_LENGTH < count_location / 2 * (length_to + length_text) + length_text - sum_length)) {
+    if (OB_UNLIKELY(OB_MAX_VARCHAR_LENGTH < count_location / 2 * length_to + length_text - sum_length)) {
       ret = OB_ERR_VARCHAR_TOO_LONG;
       LOG_WARN("Result of replace_all_str() was larger than OB_MAX_VARCHAR_LENGTH.",
                K(length_text), K(length_to), K(OB_MAX_VARCHAR_LENGTH), K(ret));
