@@ -90,16 +90,17 @@ int ObPsCache::init(const int64_t hash_bucket,
                     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr;
-  attr.label_ = ObModIds::OB_SQL_PS_CACHE;
-  attr.tenant_id_ = tenant_id;
-  attr.ctx_id_ = ObCtxIds::PS_CACHE_CTX_ID;
-  lib::ContextParam param;
-  param.set_properties(lib::ALLOC_THREAD_SAFE |
-                       lib::RETURN_MALLOC_DEFAULT)
+  lib::ObMutexGuard guard(mutex_);
+  if (!inited_) {
+    ObMemAttr attr;
+    attr.label_ = ObModIds::OB_SQL_PS_CACHE;
+    attr.tenant_id_ = tenant_id;
+    attr.ctx_id_ = ObCtxIds::PS_CACHE_CTX_ID;
+    lib::ContextParam param;
+    param.set_properties(lib::ALLOC_THREAD_SAFE |
+                        lib::RETURN_MALLOC_DEFAULT)
     .set_parallel(4)
     .set_mem_attr(attr);
-  if (!inited_) {
     if (OB_FAIL(stmt_id_map_.create(hash::cal_next_prime(hash_bucket),
                                     ObModIds::OB_HASH_BUCKET_PS_CACHE,
                                     ObModIds::OB_HASH_NODE_PS_CACHE,
