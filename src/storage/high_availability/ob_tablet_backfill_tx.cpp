@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "storage/ob_storage_struct.h"
 #include "storage/tablet/ob_tablet_iterator.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

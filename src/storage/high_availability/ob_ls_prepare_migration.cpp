@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "logservice/ob_log_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase;
 using namespace common;

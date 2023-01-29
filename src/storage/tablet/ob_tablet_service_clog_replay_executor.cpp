@@ -16,6 +16,7 @@
 #include "logservice/ob_log_base_header.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::logservice;
 using namespace oceanbase::share;

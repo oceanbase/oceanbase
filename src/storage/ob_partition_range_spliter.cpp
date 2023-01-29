@@ -18,6 +18,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "tx/ob_trans_service.h"
 #include "access/ob_multiple_scan_merge.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

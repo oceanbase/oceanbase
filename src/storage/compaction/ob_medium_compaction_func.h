@@ -14,6 +14,7 @@
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "share/tablet/ob_tablet_filter.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

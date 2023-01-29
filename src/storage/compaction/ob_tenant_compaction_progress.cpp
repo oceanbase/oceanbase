@@ -18,6 +18,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ob_sstable_struct.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

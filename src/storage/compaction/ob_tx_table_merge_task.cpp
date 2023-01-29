@@ -16,6 +16,7 @@
 #include "ob_tablet_merge_ctx.h"
 #include "ob_tablet_merge_task.h"
 #include "ob_tx_table_merge_task.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

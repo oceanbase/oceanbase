@@ -14,6 +14,7 @@
 #include "observer/virtual_table/ob_all_virtual_tablet_info.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/scn.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

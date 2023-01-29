@@ -26,6 +26,7 @@
 #include "storage/tablelock/ob_table_lock_iterator.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tablelock/ob_obj_lock.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

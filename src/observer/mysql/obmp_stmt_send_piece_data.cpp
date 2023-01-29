@@ -25,6 +25,7 @@
 #include "observer/ob_req_time_service.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/mysql/obsm_utils.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
 {

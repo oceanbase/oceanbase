@@ -23,6 +23,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_table/ob_tx_ctx_table.h"
 #include "storage/tx_table/ob_tx_table_define.h"
+#include "storage/tablet/ob_tablet.h"
 
 #define USING_LOG_PREFIX STORAGE
 

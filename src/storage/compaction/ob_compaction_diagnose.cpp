@@ -25,6 +25,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "storage/compaction/ob_compaction_util.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

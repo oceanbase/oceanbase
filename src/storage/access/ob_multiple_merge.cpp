@@ -28,6 +28,7 @@
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

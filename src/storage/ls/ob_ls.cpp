@@ -41,6 +41,7 @@
 #include "rootserver/ob_recovery_ls_service.h"
 #include "rootserver/restore/ob_restore_scheduler.h"
 #include "sql/das/ob_das_id_service.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

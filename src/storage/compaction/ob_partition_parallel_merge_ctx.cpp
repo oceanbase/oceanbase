@@ -19,6 +19,8 @@
 #include "share/scheduler/ob_dag_scheduler.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
+#include "storage/tablet/ob_tablet.h"
+
 namespace oceanbase
 {
 using namespace common;

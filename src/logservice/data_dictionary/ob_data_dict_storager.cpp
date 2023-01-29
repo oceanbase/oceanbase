@@ -149,49 +149,6 @@ int ObDataDictStorage::prepare(const share::SCN &snapshot_scn, ObLogHandler *log
   return ret;
 }
 
-template<class DATA_DICT_META>
-int ObDataDictStorage::handle_dict_meta(
-    const DATA_DICT_META &data_dict_meta,
-    ObDictMetaHeader &header)
-{
-  int ret = OB_SUCCESS;
-  const int64_t dict_serialize_size = data_dict_meta.get_serialize_size();
-  // serialize_header
-  header.set_snapshot_scn(snapshot_scn_);
-  header.set_dict_serialize_length(dict_serialize_size);
-  header.set_storage_type(ObDictMetaStorageType::FULL);
-  const int64_t header_serialize_size = header.get_serialize_size();
-  const int64_t total_serialize_size = dict_serialize_size
-      + header_serialize_size
-      + log_base_header_.get_serialize_size();
-
-  if (! need_new_palf_buf_(total_serialize_size)) {
-    if (OB_FAIL(serialize_to_palf_buf_(header, data_dict_meta))) {
-      DDLOG(WARN, "serialize header_and_dict to palf_buf_ failed", KR(ret), K(header), K(data_dict_meta));
-    }
-  } else if (OB_FAIL(submit_to_palf_())) {
-    DDLOG(WARN, "submit_data_dict_to_palf_ failed", KR(ret), K_(palf_buf_len), K_(palf_pos));
-  } else if (! need_new_palf_buf_(total_serialize_size)) {
-    // check if palf_buf_len is enough for header + data_dict.
-    if (OB_FAIL(serialize_to_palf_buf_(header, data_dict_meta))) {
-      DDLOG(WARN, "serialize header_and_dict to palf_buf_ failed", KR(ret), K(header), K(data_dict_meta));
-    }
-  } else if (OB_FAIL(prepare_dict_buf_(dict_serialize_size))) {
-    DDLOG(WARN, "prepare_dict_buf_ failed", KR(ret), K(dict_serialize_size), K_(dict_buf_len), K_(dict_pos));
-  } else if (OB_FAIL(data_dict_meta.serialize(dict_buf_, dict_buf_len_, dict_pos_))) {
-    DDLOG(WARN, "serialize data_dict_meta to dict_buf failed", KR(ret),
-        K(dict_serialize_size), K_(dict_buf_len), K_(dict_pos));
-  } else if (OB_FAIL(segment_dict_buf_to_palf_(header))) {
-    DDLOG(WARN, "segment_dict_buf_to_palf_ failed", KR(ret), K(header), K_(dict_buf_len), K_(dict_pos), K_(palf_pos));
-  }
-
-  if (OB_SUCC(ret)) {
-    DDLOG(TRACE, "handle data_dict success", K(header), K(data_dict_meta));
-  }
-
-  return ret;
-}
-
 int ObDataDictStorage::finish(
     palf::LSN &start_lsn,
     palf::LSN &end_lsn,
@@ -421,39 +378,6 @@ int ObDataDictStorage::prepare_dict_buf_(const int64_t required_size)
       dict_buf_len_ = alloc_size;
       dict_pos_ = 0;
     }
-  }
-
-  return ret;
-}
-
-template<class DATA_DICT_META>
-int ObDataDictStorage::serialize_to_palf_buf_(
-    const ObDictMetaHeader &header,
-    const DATA_DICT_META &data_dict)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(palf_buf_)) {
-    ret = OB_STATE_NOT_MATCH;
-    DDLOG(WARN, "palf_buf shoule be valid", KR(ret));
-  } else if (palf_pos_ == 0) {
-    if (OB_FAIL(serialize_log_base_header_())) {
-      DDLOG(WARN, "serialize_log_base_header_ failed", KR(ret), K_(palf_pos));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(header.serialize(palf_buf_, palf_buf_len_, palf_pos_))) {
-    DDLOG(WARN, "serialize header to palf_buf failed", KR(ret), K(header),
-        K_(palf_buf_len), K_(palf_pos), "header_serialize_size", header.get_serialize_size());
-  } else if (OB_FAIL(data_dict.serialize(palf_buf_, palf_buf_len_, palf_pos_))) {
-    DDLOG(WARN, "serialize data_dict to palf_buf failed", KR(ret), K(header), K(data_dict),
-        K_(palf_buf_len), K_(palf_pos), "dict_serialize_size", data_dict.get_serialize_size());
-  } else {
-    DDLOG(DEBUG, "serialize data_dict to palf_buf success", KR(ret), K(header), K(data_dict),
-        K_(palf_buf_len), K_(palf_pos),
-        "header_size", header.get_serialize_size(),
-        "data_dict_size", data_dict.get_serialize_size());
   }
 
   return ret;

@@ -28,6 +28,7 @@
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "rpc/obmysql/packet/ompk_piece.h"
 #include "observer/omt/ob_tenant.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
 {

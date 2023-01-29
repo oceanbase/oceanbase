@@ -13,6 +13,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_base_header.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

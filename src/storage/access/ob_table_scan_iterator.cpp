@@ -28,6 +28,7 @@
 #include "storage/memtable/ob_memtable.h"
 #include "ob_table_estimator.h"
 #include "ob_index_sstable_estimator.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

@@ -24,6 +24,7 @@
 #include "storage/tx_table/ob_tx_ctx_memtable.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include <cmath>
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
