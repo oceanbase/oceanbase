@@ -1224,20 +1224,25 @@ int ObArchiveStore::get_piece_paths_in_range(const int64_t start_scn, const int6
   } else {
     const int64_t dest_id = piece_keys.at(0).dest_id_;
     int64_t last_piece_idx = -1;
-    for (int64_t i = 0; OB_SUCC(ret) && i < piece_whole_info.his_frozen_pieces_.count(); i++) {
+    int64_t i = 0;
+    int64_t pieces_cnt = piece_whole_info.his_frozen_pieces_.count();
+    while (OB_SUCC(ret) && i < pieces_cnt) {
       const ObTenantArchivePieceAttr &cur = piece_whole_info.his_frozen_pieces_.at(i);
       ObBackupPath piece_path;
       if (cur.key_.dest_id_ != dest_id) {
         // Filter pieces archived at other path.
+        ++i;
         continue;
       }
 
-      if (cur.start_scn_ >= cur.checkpoint_scn_) {
-        // Filter empty piece
+      if (cur.file_status_ != ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE) {
+        // Filter unavailable piece
+        ++i;
         continue;
       }
 
-      if (cur.checkpoint_scn_ <= start_scn) {
+      if (cur.end_scn_ <= start_scn) {
+        ++i;
         continue;
       }
 
@@ -1246,7 +1251,7 @@ int ObArchiveStore::get_piece_paths_in_range(const int64_t start_scn, const int6
       }
 
       if (pieces.empty()) {
-        // this piece can be used to restore.
+        // this piece may be used to restore.
         if (cur.start_scn_ <= start_scn) {
           if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
             LOG_WARN("failed to get piece path", K(ret), K(dest), K(cur));
@@ -1254,6 +1259,7 @@ int ObArchiveStore::get_piece_paths_in_range(const int64_t start_scn, const int6
             LOG_WARN("fail to push back path", K(ret), K(piece_path));
           } else {
             last_piece_idx = i;
+            ++i;
           }
         } else {
           ret = OB_ENTRY_NOT_EXIST;
@@ -1262,17 +1268,28 @@ int ObArchiveStore::get_piece_paths_in_range(const int64_t start_scn, const int6
         }
       } else {
         const ObTenantArchivePieceAttr &prev = piece_whole_info.his_frozen_pieces_.at(last_piece_idx);
-        if (prev.checkpoint_scn_ != cur.start_scn_) {
-          // piece not continous
-          ret = OB_ENTRY_NOT_EXIST;
-          LOG_WARN("pieces are not continous", K(ret), K(prev), K(cur), K(start_scn), K(end_scn));
-          LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
+        if (prev.end_scn_ != cur.start_scn_) {
+          // The <start_scn, checkpoint_scn, end_scn> of pieces are as following:
+          // Piece#1 : <2022-06-01 00:00:00, 2022-06-01 06:00:00, 2022-06-02 00:00:00>
+          // Piece#2 : <2022-06-01 08:00:00, 2022-06-02 07:59:00, 2022-06-02 08:00:00>
+          // Piece#3 : <2022-06-02 08:00:00, 2022-06-03 06:00:00, 2022-06-03 08:00:00>
+
+          // And the input [start_scn, end_scn] pair is [2022-06-01 12:00:00, 2022-06-03 04:00:00].
+
+          //  Previously, Piece#1 is required, and pushed into 'pieces'. However, when i = 1,
+          //  we find that Piece#2 is not continous with Piece#1, and Piece#1 is not required actually.
+          //  Then Piece#1 is abandoned, and recompute the required pieces.
+          pieces.reset();
+          last_piece_idx = -1;
+          // Do not do ++i, recompute if current piece can be used to restore.
+          LOG_INFO("pieces are not continous", K(prev), K(cur), K(start_scn), K(end_scn));
         } else if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
           LOG_WARN("failed to get piece path", K(ret), K(dest), K(cur));
         } else if (OB_FAIL(pieces.push_back(piece_path))) {
           LOG_WARN("fail to push back path", K(ret), K(piece_path));
         } else {
           last_piece_idx = i;
+          ++i;
         }
       }
     }

@@ -679,6 +679,9 @@ int ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
 
 int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, ARCHIVE_SCN_TYPE &max_checkpoint_scn) const
 {
+  // For standby tenant, archive progress is limited only by the max replayable scn for each log stream.
+  // That will leads some log of type of create log stream is archived before been replayed. In this case,
+  // we should limit tenant archive progress not more than the GTS.
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
   const bool for_update = false;
