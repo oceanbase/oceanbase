@@ -5917,15 +5917,25 @@ int ObSPIService::store_datums(ObObj &dest_addr, const ObIArray<ObObj> &obj_arra
     LOG_WARN("Argument passed in is NULL", K(dest_addr), K(obj_array), K(ret));
   } else {
     int64_t current_datum = 0;
-    if (dest_addr.is_pl_extend()) { //must be record
+    if (dest_addr.is_pl_extend()) {
       if (PL_OPAQUE_TYPE == dest_addr.get_meta().get_extend_type()) {
         CK (1 == obj_array.count());
         OX (current_datum = reinterpret_cast<int64_t>(&dest_addr));
       } else {
         ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(dest_addr.get_ext());
+        ObPLRecord *record = NULL;
         if (NULL == composite || !composite->is_record()) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected composite to store datum", K(composite->get_type()), K(dest_addr), K(obj_array), K(ret));
+          LOG_WARN("unexpected composite to store datum", KPC(composite), K(dest_addr), K(obj_array), K(ret));
+        } else if (OB_ISNULL(record = static_cast<ObPLRecord*>(composite))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected record to store datum", KPC(record), KPC(composite), K(ret));
+        } else if (record->get_count() != obj_array.count()) {
+          //Example: for idx (select obj(1,2) from dual) loop null; end loop;
+          //which is not supported yet!!! Will fixed it later in OB 4.2 version.
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "record`s element count not equal to select item count");
+          LOG_WARN("record`s element count not equal to select item count", K(ret), KPC(record), K(obj_array));
         } else {
           ObPLRecord *record = static_cast<ObPLRecord*>(composite);
           current_datum = reinterpret_cast<int64_t>(record) + ObRecordType::get_data_offset(record->get_count());
