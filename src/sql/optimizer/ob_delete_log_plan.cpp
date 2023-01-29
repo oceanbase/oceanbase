@@ -14,6 +14,7 @@
 #include "sql/optimizer/ob_delete_log_plan.h"
 #include "sql/optimizer/ob_log_delete.h"
 #include "sql/optimizer/ob_log_group_by.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "ob_log_operator_factory.h"
 #include "ob_log_table_scan.h"
 #include "ob_log_sort.h"
@@ -48,11 +49,11 @@ using namespace oceanbase::sql;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::sql::log_op_def;
 
-int ObDeleteLogPlan::generate_raw_plan()
+int ObDeleteLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
-  const ObDeleteStmt *delete_stmt = NULL;
-  if (OB_ISNULL(delete_stmt = get_stmt()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
+  const ObDeleteStmt *delete_stmt = get_stmt();
+  if (OB_ISNULL(delete_stmt) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(delete_stmt), K(ret));
   } else {

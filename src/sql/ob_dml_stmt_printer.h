@@ -23,14 +23,48 @@ namespace oceanbase
 namespace sql
 {
 
-#define PRINT_TABLE_NAME(table_item)                                		    \
+#define PRINT_TABLE_NAME(print_params, table_item)                          \
   do {                                                                		  \
-    ObString database_name = table_item->synonym_name_.empty() ? \
-                              (table_item->is_link_table() ? \
-                                 table_item->link_database_name_ : \
-                                 table_item->database_name_) : \
-                               table_item->synonym_db_name_; \
+    if (!print_params_.for_dblink_) {                                       \
+      PRINT_TABLE_NAME_NORMAL(table_item);                                  \
+    } else {                                                                \
+      PRINT_TABLE_NAME_FOR_DBLINK(table_item);                              \
+    }                                                                       \
+  } while (0)
+
+#define PRINT_TABLE_NAME_NORMAL(table_item)                                 \
+  do {                                                                		  \
+    ObString database_name = table_item->synonym_name_.empty() ?            \
+                              table_item->database_name_ :                  \
+                              table_item->synonym_db_name_;                 \
     ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
+    int64_t temp_buf_len = (table_name.length() + database_name.length()) * 4;  \
+    char temp_buf[temp_buf_len];                                                \
+    ObDataBuffer data_buff(temp_buf, temp_buf_len);                             \
+    if (OB_FAIL(ObCharset::charset_convert(data_buff, table_name, CS_TYPE_UTF8MB4_BIN,  \
+                                           print_params_.cs_type_, table_name))) {      \
+    } else if (OB_FAIL(ObCharset::charset_convert(data_buff, database_name, CS_TYPE_UTF8MB4_BIN, \
+                                            print_params_.cs_type_, database_name))) { \
+    } \
+    bool is_oracle_mode = lib::is_oracle_mode();                            \
+    if (table_item->cte_type_ == TableItem::NOT_CTE) {											\
+      if (!database_name.empty()) {                                         \
+        DATA_PRINTF(is_oracle_mode ? "\"%.*s\"." : "`%.*s`.", LEN_AND_PTR(database_name)); \
+      }                                                                     \
+      DATA_PRINTF(is_oracle_mode ? "\"%.*s\"" : "`%.*s`", LEN_AND_PTR(table_name)); \
+      if (table_item->synonym_name_.empty() && table_item->is_link_type()) {  \
+        const ObString &dblink_name = table_item->dblink_name_;               \
+        DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                       \
+      } \
+    } else {																																\
+        DATA_PRINTF(is_oracle_mode ? "\"%.*s\"" : "`%.*s`", LEN_AND_PTR(table_name)); \
+    }																																				\
+  } while (0)
+
+#define PRINT_TABLE_NAME_FOR_DBLINK(table_item)                             \
+  do {                                                                		  \
+    ObString database_name = table_item->database_name_;                    \
+    ObString table_name = table_item->table_name_;                          \
     int64_t temp_buf_len = (table_name.length() + database_name.length()) * 4; \
     char temp_buf[temp_buf_len];  \
     ObDataBuffer data_buff(temp_buf, temp_buf_len); \
@@ -50,19 +84,30 @@ namespace sql
       PRINT_QUOT;                                                           \
       DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));                         \
       PRINT_QUOT;                                                           \
-      if (table_item->synonym_name_.empty() && table_item->is_link_table()) { \
-        const ObString &dblink_name = table_item->dblink_name_; \
-        DATA_PRINTF("@");                                                     \
-        PRINT_QUOT;                                                           \
-        DATA_PRINTF("%.*s", LEN_AND_PTR(dblink_name));                        \
-        PRINT_QUOT;                                                           \
-      } \
+      if (table_item->is_link_type()) {                                    \
+        const ObString &dblink_name = table_item->dblink_name_;             \
+        if (table_item->is_reverse_link_) {                                 \
+          DATA_PRINTF("@%.*s!", LEN_AND_PTR(dblink_name));                  \
+        }  else {                                                           \
+          DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                   \
+        }                                                                   \
+      }                                                                     \
     } else {																																\
       PRINT_QUOT;                                                           \
       DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));                         \
       PRINT_QUOT;                                                           \
-    }																																				\
-  } while (0)                                                         			\
+    }																																			  \
+  } while (0)
+
+#define PRINT_COLUMN_NAME(column_name) \
+  do {\
+    if (column_name.empty()) { \
+    } else if (lib::is_oracle_mode()) {\
+      DATA_PRINTF("\"%.*s\"", LEN_AND_PTR(column_name));\
+    } else {\
+      DATA_PRINTF("`%.*s`", LEN_AND_PTR(column_name));\
+    }\
+  } while (0);
 
 class ObDMLStmtPrinter {
 public:
@@ -78,7 +123,8 @@ public:
   virtual int do_print() = 0;
 
   int print_from(bool need_from = true);
-  int print_semi_info();
+  int print_semi_join();
+  int print_semi_info_to_subquery();
   int print_where();
   int print_order_by();
   int print_limit();
@@ -87,6 +133,7 @@ public:
   int print_json_table(const TableItem *table_item);
   int print_table(const TableItem *table_item,
                   bool no_print_alias = false);
+  int print_table_with_subquery(const TableItem *table_item);
   int print_base_table(const TableItem *table_item);
   int print_hint();
   void set_is_root(bool is_root) { is_root_ = is_root; }
@@ -94,10 +141,19 @@ public:
   {
     print_params_ = obj_print_params;
   }
-  int print_inline_view(const ObSelectStmt *subselect_stmt,
-                     bool print_bracket,
-                     const bool force_col_alias = false);
+
+  enum SubqueryPrintParam {
+    PRINT_BRACKET          =  1 << 0,
+    FORCE_COL_ALIAS        =  1 << 1,
+    PRINT_CTE              =  1 << 2
+  };
+
+  int print_subquery(const ObSelectStmt *subselect_stmt,
+                     uint64_t subquery_print_params);
   int print_cte_define();
+
+  int print_quote_for_const(ObRawExpr* expr, bool &print_quote);
+  int print_expr_except_const_number(ObRawExpr* expr, ObStmtScope scope);
   int print_cte_define_title(TableItem* cte_table);
   int print_cte_define_title(const ObSelectStmt *sub_select_stmt);
   int print_search_and_cycle(const ObSelectStmt *sub_select_stmt);

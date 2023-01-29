@@ -45,6 +45,7 @@
 #include "sql/optimizer/ob_optimizer_context.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_log_unpivot.h"
+#include "sql/optimizer/ob_log_link_scan.h"
 #include "common/ob_smart_call.h"
 #include "share/system_variable/ob_sys_var_class_type.h"
 
@@ -1600,11 +1601,11 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
 }
 
 int ObSelectLogPlan::allocate_distinct_as_top(ObLogicalOperator *&top,
-				      const AggregateAlgo algo,
-				      const ObIArray<ObRawExpr*> &distinct_exprs,
-				      const double total_ndv,
-				      const bool is_partition_wise,
-				      const bool is_pushed_down)
+              const AggregateAlgo algo,
+              const ObIArray<ObRawExpr*> &distinct_exprs,
+              const double total_ndv,
+              const bool is_partition_wise,
+              const bool is_pushed_down)
 {
 int ret = OB_SUCCESS;
 ObLogDistinct *distinct_op = NULL;
@@ -1612,7 +1613,7 @@ if (OB_ISNULL(top)) {
 ret = OB_ERR_UNEXPECTED;
 LOG_WARN("get unexpected null", K(top), K(ret));
 } else if (OB_ISNULL(distinct_op = static_cast<ObLogDistinct*>(get_log_op_factory().
-			     allocate(*this, LOG_DISTINCT)))) {
+           allocate(*this, LOG_DISTINCT)))) {
 ret = OB_ALLOCATE_MEMORY_FAILED;
 LOG_ERROR("failed to allocate distinct operator", K(ret));
 } else {
@@ -2692,7 +2693,7 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
       OB_ISNULL(right_sharding = right_child.get_sharding()) ||
       OB_ISNULL(select_stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid sharding", K(left_sharding), K(right_sharding), K(ret));
+    LOG_WARN("invalid sharding", K(left_sharding), K(right_sharding), K(ret), K(left_child.get_type()), K(left_child.get_type()), K(get_op_name(left_child.get_type())));
   } else if (OB_FAIL(child_ops.push_back(&left_child)) ||
       OB_FAIL(child_ops.push_back(&right_child))) {
     LOG_WARN("failed to push back child info", K(ret));
@@ -3836,7 +3837,7 @@ int ObSelectLogPlan::compute_set_hash_hash_sharding(const EqualSets &equal_sets,
   return ret;
 }
 
-int ObSelectLogPlan::generate_raw_plan()
+int ObSelectLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
   const ObSelectStmt *select_stmt = get_stmt();
@@ -3850,6 +3851,94 @@ int ObSelectLogPlan::generate_raw_plan()
     ret = generate_raw_plan_for_expr_values();
   } else {
     ret = SMART_CALL(generate_raw_plan_for_plain_select());
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::generate_dblink_raw_plan()
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = NULL;
+  // dblink_info hint
+  int64_t tx_id = -1;
+  int64_t tm_sessid = -1;
+  uint64_t dblink_id = OB_INVALID_ID;
+  const ObSelectStmt *stmt = get_stmt();
+  ObLogicalOperator *top = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (NULL == (query_ctx = stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(dblink_id = stmt->get_dblink_id())) {
+  } else if (0 == dblink_id) { //dblink id = 0 means @!/@xxxx!
+    ObSQLSessionInfo *session = get_optimizer_context().get_session_info();
+    oceanbase::sql::ObReverseLink *reverse_dblink_info = NULL;
+    if (NULL == session) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KP(session));
+    } else if (OB_FAIL(session->get_dblink_context().get_reverse_link(reverse_dblink_info))) {
+      LOG_WARN("failed to get reverse link info from session", K(ret), K(session->get_sessid()));
+    } else if (NULL == reverse_dblink_info) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      // set dblink_info, to unparse a link sql with dblink_info hint
+      query_ctx->get_query_hint_for_update().get_global_hint().merge_dblink_info_hint(
+                                                    reverse_dblink_info->get_tx_id(),
+                                                    reverse_dblink_info->get_tm_sessid());
+      LOG_DEBUG("set tx_id_ and tm_sessid to stmt",
+                                                    K(reverse_dblink_info->get_tx_id()),
+                                                    K(reverse_dblink_info->get_tm_sessid()));
+    }
+  } else {
+    // save dblink_info hint
+    tx_id = query_ctx->get_query_hint_for_update().get_global_hint().get_dblink_tx_id_hint();
+    tm_sessid = query_ctx->get_query_hint_for_update().get_global_hint().get_dblink_tm_sessid_hint();
+    // reset dblink hint, to unparse a link sql without dblink_info hint
+    query_ctx->get_query_hint_for_update().get_global_hint().reset_dblink_info_hint();
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (OB_FAIL(allocate_link_scan_as_top(top))) {
+    LOG_WARN("failed to allocate link dml as top", K(ret));
+  } else if (OB_FAIL(make_candidate_plans(top))) {
+    LOG_WARN("failed to make candidate plans", K(ret));
+  } else if (OB_FAIL(static_cast<ObLogLink *>(top)->set_link_stmt(stmt))) {
+    LOG_WARN("failed to set link stmt", K(ret));
+  } else {
+    top->mark_is_plan_root();
+    top->get_plan()->set_plan_root(top);
+    top->set_dblink_id(dblink_id);
+    if (0 == dblink_id) {
+      static_cast<ObLogLinkScan *>(top)->set_reverse_link(true);
+      // reset dblink info, to avoid affecting the next execution flow
+      query_ctx->get_query_hint_for_update().get_global_hint().reset_dblink_info_hint();
+    } else {
+      // restore dblink_info hint, ensure that the next execution process can get the correct dblink_info
+      query_ctx->get_query_hint_for_update().get_global_hint().merge_dblink_info_hint(tx_id, tm_sessid);
+    }
+    LOG_TRACE("succeed to allocate loglinkscan", K(dblink_id));
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::allocate_link_scan_as_top(ObLogicalOperator *&old_top)
+{
+  int ret = OB_SUCCESS;
+  ObLogLinkScan *link_scan = NULL;
+  if (NULL != old_top) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("old_top should be null", K(ret), K(get_stmt()));
+  } else if (OB_ISNULL(link_scan = static_cast<ObLogLinkScan *>(get_log_op_factory().
+                                  allocate(*this, LOG_LINK_SCAN)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate link dml operator", K(ret));
+  } else if (OB_FAIL(link_scan->compute_property())) {
+    LOG_WARN("failed to compute property", K(ret));
+  } else {
+    old_top = link_scan;
   }
   return ret;
 }
@@ -6433,6 +6522,8 @@ int ObSelectLogPlan::init_selectivity_metas_for_set(ObSelectLogPlan *sub_plan,
   if (OB_ISNULL(sub_plan) || OB_ISNULL(sub_stmt = sub_plan->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(sub_plan), K(sub_stmt));
+  } else if (OB_INVALID_ID != sub_stmt->get_dblink_id()) {
+    // skip
   } else if (OB_FAIL(sub_plan->get_candidate_plans().get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan)) {

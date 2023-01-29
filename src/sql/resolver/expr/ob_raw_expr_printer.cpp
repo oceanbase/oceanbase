@@ -12,10 +12,10 @@
 
 #define USING_LOG_PREFIX SQL
 #include "sql/resolver/expr/ob_raw_expr_printer.h"
-
 #include "lib/oblog/ob_log_module.h"
 #include "sql/ob_select_stmt_printer.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/worker.h"
 #include "pl/ob_pl_user_type.h"
@@ -26,18 +26,14 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
-
 ObRawExprPrinter::ObRawExprPrinter()
     : buf_(NULL),
       buf_len_(0),
       pos_(NULL),
       scope_(T_NONE_SCOPE),
       only_column_namespace_(false),
-      is_inited_(false),
       tz_info_(NULL),
-      print_params_(),
       param_store_(NULL),
-      gen_unique_name_(NULL),
       schema_guard_(NULL)
 {
 }
@@ -49,11 +45,9 @@ ObRawExprPrinter::ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObS
       pos_(pos),
       scope_(T_NONE_SCOPE),
       only_column_namespace_(false),
-      is_inited_(true),
       tz_info_(NULL),
       print_params_(print_params),
       param_store_(param_store),
-      gen_unique_name_(NULL),
       schema_guard_(schema_guard)
 {
 }
@@ -71,44 +65,19 @@ void ObRawExprPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGe
   scope_ = T_NONE_SCOPE;
   schema_guard_ = schema_guard;
   print_params_ = print_params;
-  is_inited_ = true;
   param_store_ = param_store;
 }
 
-int ObRawExprPrinter::set_gen_unique_name(GenUniqueAliasName *gen_unique_name) {
-  int ret = OB_SUCCESS;
-  gen_unique_name_ = gen_unique_name;
-  return ret;
-}
-
-int ObRawExprPrinter::do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace, bool is_bool_expr)
+int ObRawExprPrinter::do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited!", K(ret));
-  } else if (OB_ISNULL(expr)) {
+  if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr should not be NULL", K(ret));
   } else {
     scope_ = scope;
     only_column_namespace_ = only_column_namespace;
-    if (is_bool_expr &&
-        T_QUESTIONMARK == expr->get_expr_type() &&
-        scope_ == T_DBLINK_SCOPE) {
-      if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, static_cast<ObConstRawExpr*>(expr)->get_value().get_unknown()))) {
-        LOG_WARN("fail to write param to buf", K(ret));
-      } else {
-        DATA_PRINTF(" = 1");  // bool expr ? = 1
-      }
-    } else {
-      PRINT_EXPR(expr);
-    }
-//    if (!expr->get_alias_column_name().empty() && T_FIELD_LIST_SCOPE == scope_) {
-//      const ObString &alias_name = expr->get_alias_column_name();
-//      DATA_PRINTF(" AS ");
-//      DATA_PRINTF("`%.*s`", LEN_AND_PTR(alias_name));
-//    }
+    PRINT_EXPR(expr);
   }
   return ret;
 }
@@ -145,8 +114,19 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
     }
     case ObRawExpr::EXPR_EXEC_PARAM: {
       ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr*>(expr);
-      if (scope_ == T_DBLINK_SCOPE) {
-        PRINT_EXPR(exec_expr);
+      if (print_params_.for_dblink_) {
+        bool print_ref = exec_expr->is_ref_same_dblink();
+        if (OB_ISNULL(exec_expr->get_ref_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (exec_expr->get_ref_expr()->is_query_ref_expr()) {
+          print_ref = true;
+        }
+        if (print_ref) {
+          PRINT_EXPR(exec_expr->get_ref_expr());
+        } else {
+          PRINT_EXPR(exec_expr);
+        }
       } else {
         PRINT_EXPR(exec_expr->get_ref_expr());
       }
@@ -224,9 +204,38 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
   if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
-  } else if (T_DBLINK_SCOPE == scope_ && T_QUESTIONMARK == expr->get_expr_type()) {
-    if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, expr->get_value().get_unknown()))) {
-      LOG_WARN("fail to write param to buf", K(ret));
+  } else if (print_params_.for_dblink_ && T_QUESTIONMARK == expr->get_expr_type()) {
+    int64_t idx = expr->get_value().get_unknown();
+    bool is_bool_expr = false;
+    if (expr->is_exec_param_expr()) {
+      ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr*>(expr);
+      if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(exec_expr->get_ref_expr(), is_bool_expr))) {
+        LOG_WARN("failed to check is bool expr", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (is_bool_expr) {
+      /**
+       * For SQL like "select * from T1 where C1 = 1 and C1 = 2",
+       * because the where clause is always false,
+       * the optimizer will replace the filter with startup_filter.
+       * Therefore, dblink needs to handle this special case
+       * by rewriting startup_filter as "0 = 1" or "1 = 1".
+       *
+       */
+      if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "1 = "))) {
+        LOG_WARN("fail to print startup filter", K(ret));
+      } else if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
+        OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
+      } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, expr->get_value().get_unknown()))) {
+        LOG_WARN("fail to write param to buf", K(ret));
+      }
+    } else {
+      if (OB_NOT_NULL(param_store_) && 0 <= idx && idx < param_store_->count()) {
+        OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
+      } else if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, expr->get_value().get_unknown()))) {
+        LOG_WARN("fail to write param to buf", K(ret));
+      }
     }
   } else if (OB_NOT_NULL(param_store_) && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
@@ -244,8 +253,7 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
     } else if (expr->get_expr_type() == T_DATE &&
                OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "date "))) {
       LOG_WARN("fail to print date strign", K(ret));
-    } else if (is_oracle_mode() &&
-               T_BOOL == expr->get_expr_type()) {
+    } else if (T_BOOL == expr->get_expr_type()) {
       /**
        * For SQL like "select * from T1 where C1 = 1 and C1 = 2",
        * because the where clause is always false, 
@@ -354,58 +362,19 @@ int ObRawExprPrinter::print(ObColumnRefRawExpr *expr)
                                                   print_params_.cs_type_,
                                                   col_name))) {
       LOG_WARN("fail to convert charset", K(ret));
-    } else if (scope_ == T_DBLINK_SCOPE) {
-      ObString table_name = expr->get_table_name();
-      if (OB_ISNULL(gen_unique_name_)) {
-        LOG_WARN("gen_unique_name_ of ObRawExprPrinter is NULL", K(gen_unique_name_));
-      } else {
-        if (OB_FAIL(gen_unique_name_->get_unique_name(expr->get_table_id(), table_name))) {
-          LOG_WARN("failed to get unique name", K(ret), K(table_name));
-        } else {
-          if (!table_name.empty()) {
-            CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));
-            PRINT_QUOT;
-            DATA_PRINTF(".");
-          }
-          PRINT_QUOT;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
-          PRINT_QUOT;
-        }
+    } else if (print_params_.for_dblink_) {
+      if (!expr->get_database_name().empty()) {
+        DATA_PRINTF("\"%.*s\".", LEN_AND_PTR(expr->get_database_name()));
       }
-    } else if (expr->is_link_table_column()) {
-      if (!expr->has_table_alias_name() && !expr->get_synonym_db_name().empty()) {
-        ObString synonyn_db_name = expr->get_synonym_db_name();
-        CONVERT_CHARSET_FOR_RPINT(allocator, synonyn_db_name);
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(synonyn_db_name));
-        PRINT_QUOT;
-        DATA_PRINTF(".");
+      if (!expr->get_table_name().empty()) {
+        ObString table_name = expr->get_table_name();
+        CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
+        DATA_PRINTF("\"%.*s\".", LEN_AND_PTR(table_name));
       }
-      ObString table_name = (expr->has_table_alias_name() || expr->get_synonym_name().empty()) ?
-                              expr->get_table_name() : expr->get_synonym_name();
-      CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
-      PRINT_QUOT;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));
-      PRINT_QUOT;
-      DATA_PRINTF(".");
-      PRINT_QUOT;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
-      PRINT_QUOT;
+      DATA_PRINTF("\"%.*s\"", LEN_AND_PTR(col_name));
     } else if (expr->is_cte_generated_column()) {
-      // ObString table_name = expr->get_synonym_name().empty() ?
-      //                                             expr->get_table_name() : expr->get_synonym_name();
-      ObString table_name = T_DBLINK_SCOPE == scope_ ? expr->get_table_name() :
-                                                  expr->get_synonym_name().empty() ?
+      ObString table_name = expr->get_synonym_name().empty() ?
                                                   expr->get_table_name() : expr->get_synonym_name();
-      if (T_DBLINK_SCOPE == scope_) {
-        if (OB_ISNULL(gen_unique_name_)) {
-          LOG_WARN("gen_unique_name_ of ObRawExprPrinter is NULL", K(gen_unique_name_));
-        } else if (OB_FAIL(gen_unique_name_->get_unique_name(expr->get_table_id(), table_name))) {
-          LOG_WARN("failed to get unique name", K(ret), K(table_name));
-        }
-      }
       if (OB_SUCC(ret)) {
         // note: expr's table_name is equal to alias if table's alias is not empty,
         CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
@@ -447,18 +416,9 @@ int ObRawExprPrinter::print(ObColumnRefRawExpr *expr)
         PRINT_QUOT;
         DATA_PRINTF(".");
       }
-      ObString table_name = T_DBLINK_SCOPE == scope_ ? expr->get_table_name() :
-                                                  expr->get_synonym_name().empty() ?
-                                                  expr->get_table_name() : expr->get_synonym_name();
+      ObString table_name = expr->get_synonym_name().empty() ?
+                                  expr->get_table_name() : expr->get_synonym_name();
       if (OB_SUCC(ret)) {
-        if (T_DBLINK_SCOPE == scope_) {
-          if (OB_ISNULL(gen_unique_name_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("gen_unique_name_ of ObRawExprPrinter is NULL", K(gen_unique_name_), K(ret));
-          } else if (OB_FAIL(gen_unique_name_->get_unique_name(expr->get_table_id(), table_name))) {
-            LOG_WARN("failed to get unique name", K(ret), K(table_name));
-          }
-        }
         CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
         // note: expr's table_name is equal to alias if table's alias is not empty,
         if (!table_name.empty()) {
@@ -539,16 +499,7 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       } else {
         DATA_PRINTF("(");
         for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-          if (T_QUESTIONMARK == expr->get_param_expr(i)->get_expr_type() &&
-              scope_ == T_DBLINK_SCOPE) {
-            if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, static_cast<ObConstRawExpr*>(expr->get_param_expr(i))->get_value().get_unknown()))) {
-              LOG_WARN("fail to write param to buf", K(ret));
-            } else {
-              DATA_PRINTF(" = 1");  // bool expr ? = 1
-            }
-          } else {
-            PRINT_EXPR(expr->get_param_expr(i));
-          }
+          PRINT_EXPR(expr->get_param_expr(i));
           DATA_PRINTF(" %.*s ", LEN_AND_PTR(symbol));
         }
         if (OB_SUCC(ret)) {
@@ -937,16 +888,7 @@ int ObRawExprPrinter::print(ObCaseOpRawExpr *expr)
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_when_expr_size(); ++i) {
         DATA_PRINTF(" when ");
-        if (T_QUESTIONMARK == expr->get_when_param_expr(i)->get_expr_type() && scope_ == T_DBLINK_SCOPE) {
-          if (OB_FAIL(ObLinkStmtParam::write(buf_, buf_len_, *pos_, 
-                      static_cast<ObConstRawExpr*>(expr->get_when_param_expr(i))->get_value().get_unknown()))) {
-            LOG_WARN("fail to write param to buf", K(ret));
-          } else {
-            DATA_PRINTF(" = 1");  // bool expr ? = 1
-          }
-        } else {
-          PRINT_EXPR(expr->get_when_param_expr(i));
-        }
+        PRINT_EXPR(expr->get_when_param_expr(i));
         DATA_PRINTF(" then ");
         PRINT_EXPR(expr->get_then_param_expr(i));
       }
@@ -1130,7 +1072,7 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
         }
       }
       if (OB_SUCC(ret)) {
-        if (!database_name.empty()) {
+        if (!print_params_.for_dblink_ && !database_name.empty()) {
           DATA_PRINTF("%.*s.", LEN_AND_PTR(database_name));
         }
         if (!package_name.empty()) {
@@ -2503,6 +2445,25 @@ int ObRawExprPrinter::print_json_equal(ObSysFunRawExpr *expr)
   return ret;
 }
 
+int ObRawExprPrinter::inner_print_fun_params(ObSysFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  int64_t param_count = expr.get_param_count();
+  int64_t i = 0;
+  DATA_PRINTF("(");
+  for (; OB_SUCC(ret) && i < param_count; ++i) {
+    PRINT_EXPR(expr.get_param_expr(i));
+    DATA_PRINTF(",");
+  }
+  if (OB_SUCC(ret)) {
+    if (i > 0) {
+      --*pos_;
+    }
+    DATA_PRINTF(")");
+  }
+  return ret;
+}
+
 int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
 {
   int ret = OB_SUCCESS;
@@ -2587,20 +2548,8 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
             DATA_PRINTF(")");
           }
         } else {
-          DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
-          if (OB_SUCC(ret)) {
-            int64_t i = 0;
-            for (; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-              PRINT_EXPR(expr->get_param_expr(i));
-              DATA_PRINTF(",");
-            }
-            if (OB_SUCC(ret)) {
-              if (i > 0) {
-                --*pos_;
-              }
-              DATA_PRINTF(")");
-            }
-          }
+          DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+          OZ(inner_print_fun_params(*expr));
         }
         break;
       }
@@ -2609,20 +2558,8 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param count should be greater than 1", K(ret), K(expr->get_param_count()));
         } else {
-          DATA_PRINTF("interval(");
-          for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-            if (OB_ISNULL(expr->get_param_expr(i))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get unexpected null", K(ret));
-            } else {
-              PRINT_EXPR(expr->get_param_expr(i));
-              DATA_PRINTF(",");
-            }
-          }
-          if (OB_SUCC(ret)) {
-            --*pos_;
-            DATA_PRINTF(")");
-          }
+          DATA_PRINTF("interval");
+          OZ(inner_print_fun_params(*expr));
         }
         break;
       }
@@ -2887,18 +2824,8 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         if (OB_SUCC(ret)) {
           --*pos_;
-          DATA_PRINTF("(");
         }
-        for (i = 0; OB_SUCC(ret) && i < coll->get_param_count(); ++i) {
-          PRINT_EXPR(coll->get_param_expr(i));
-          DATA_PRINTF(",");
-        }
-        if (OB_SUCC(ret)) {
-          if (i > 0) {
-            --*pos_;
-          }
-          DATA_PRINTF(")");
-        }
+        OZ(inner_print_fun_params(*expr));
         break;
       }
       case T_FUN_PL_OBJECT_CONSTRUCT: {
@@ -2910,18 +2837,8 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         if (OB_SUCC(ret)) {
           --*pos_;
-          DATA_PRINTF("(");
         }
-        for (i = 0; OB_SUCC(ret) && i < object->get_param_count(); ++i) {
-          PRINT_EXPR(object->get_param_expr(i));
-          DATA_PRINTF(",");
-        }
-        if (OB_SUCC(ret)) {
-          if (i > 0) {
-            --*pos_;
-          }
-          DATA_PRINTF(")");
-        }
+        OZ(inner_print_fun_params(*expr));
         break;
       }
       case T_FUN_SYS_DEFAULT: {
@@ -3099,6 +3016,18 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_PAD: {
+        if (print_params_.for_dblink_) {
+          // Oracle do not have function pad,
+          // but resolver will add pad above some expr.
+          // So, only print the first param
+          PRINT_EXPR(expr->get_param_expr(0));
+        } else {
+          DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+          OZ(inner_print_fun_params(*expr));
+        }
+        break;
+      }
       default: {
         // substr
         // date, month
@@ -3186,20 +3115,8 @@ int ObRawExprPrinter::print_translate(ObSysFunRawExpr *expr)
         }
       }
     } else {
-      DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
-      if (OB_SUCC(ret)) {
-        int64_t i = 0;
-        for (; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-          PRINT_EXPR(expr->get_param_expr(i));
-          DATA_PRINTF(",");
-        }
-        if (OB_SUCC(ret)) {
-          if (i > 0) {
-            --*pos_;
-          }
-          DATA_PRINTF(")");
-        }
-      }
+      DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+      OZ(inner_print_fun_params(*expr));
     }
   }
   return ret;
@@ -3212,7 +3129,8 @@ int ObRawExprPrinter::print(ObUDFRawExpr *expr)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
   } else {
-    if (!expr->get_database_name().empty()) {
+    if (!print_params_.for_dblink_ &&
+        !expr->get_database_name().empty()) {
       PRINT_QUOT;
       DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_database_name()));
       PRINT_QUOT;
@@ -4100,7 +4018,7 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
       case T_NUMBER: {
         int16_t precision = parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX];
         int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
-	      if (scope_ == T_DBLINK_SCOPE) {
+	      if (print_params_.for_dblink_) {
           DATA_PRINTF("number");
         } else {
           DATA_PRINTF("number(%d,%d)", precision, scale);

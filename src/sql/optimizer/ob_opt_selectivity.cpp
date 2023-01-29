@@ -393,7 +393,12 @@ int OptTableMetas::get_set_stmt_output_statistics(const ObSelectStmt &stmt,
   uint64_t column_id = OB_APP_MIN_COLUMN_ID + idx;
   const OptColumnMeta *column_meta = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_set_query().count(); ++i) {
-    if (OB_ISNULL(column_meta = child_table_metas.get_column_meta_by_table_id(i, column_id))) {
+    if (OB_ISNULL(stmt.get_set_query().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null set query", K(ret));
+    } else if (OB_INVALID_ID != stmt.get_set_query().at(i)->get_dblink_id()) {
+      // skip
+    } else if (OB_ISNULL(column_meta = child_table_metas.get_column_meta_by_table_id(i, column_id))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null column meta info", K(ret));
     } else if (ObSelectStmt::SetOperator::UNION == stmt.get_set_op()) {

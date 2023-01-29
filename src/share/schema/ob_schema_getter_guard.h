@@ -906,7 +906,9 @@ public:
                             const common::ObString &table_name,
                             common::ObIAllocator &allocator,
                             ObTableSchema *&table_schema,
-                            uint32_t sessid);
+                            sql::ObSQLSessionInfo *session_info,
+                            const ObString &dblink_name,
+                            bool is_reverse_link);
   // dblink function end
 
   // directory function begin

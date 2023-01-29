@@ -61,7 +61,6 @@ public:
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int compute_op_ordering() override;
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
   inline bool is_push_down() const { return is_push_down_; }
   inline void set_push_down(const bool is_push_down) { is_push_down_ = is_push_down; }
   inline double get_total_ndv() const { return total_ndv_; }

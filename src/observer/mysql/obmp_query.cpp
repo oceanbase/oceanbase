@@ -702,7 +702,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit =
     GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
-
   single_process_timestamp_ = ObTimeUtility::current_time();
   /* !!!
    * 注意req_timeinfo_guard一定要放在result前面

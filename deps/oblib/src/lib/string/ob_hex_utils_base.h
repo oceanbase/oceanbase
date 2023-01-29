@@ -31,6 +31,8 @@ class ObHexUtilsBase
 public:
   static int unhex(const ObString &text, ObIAllocator &alloc, ObObj &result);
   static int hex(const ObString &text, ObIAllocator &alloc, ObObj &result);
+  static int unhex(const ObString &text, ObIAllocator &alloc, char *&binary_buf, int64_t &binary_len);
+  static int hex(ObString &text, ObIAllocator &alloc, const char *binary_buf, int64_t binary_len);
 };
 } // end namespace common
 } // end namespace oceanbase

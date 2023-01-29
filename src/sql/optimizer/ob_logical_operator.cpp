@@ -344,7 +344,7 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
     is_partition_wise_(false),
     px_est_size_factor_(),
-    dblink_id_(0),   // 0 represent local cluster.
+    dblink_id_(OB_INVALID_ID),   // OB_INVALID_ID represent local cluster.
     plan_depth_(0),
     contain_fake_cte_(false),
     contain_pw_merge_op_(false),
@@ -1129,19 +1129,22 @@ int ObLogicalOperator::get_plan_item_info(PlanText &plan_text,
     END_BUF_PRINT(plan_item.startup_predicates_,
                   plan_item.startup_predicates_len_);
   }
-  // print vectorized execution batch row count
-  ObPhyOperatorType phy_type = PHY_INVALID;
-  bool is_root_job = is_plan_root() && (get_parent() == nullptr);
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObStaticEngineCG::get_phy_op_type(*this,
-                                                       phy_type,
-                                                       is_root_job))) {
-    /* Do nothing */
-  } else if (NULL != get_plan() &&
-             get_plan()->get_optimizer_context().get_batch_size() > 0 &&
-             ObOperatorFactory::is_vectorized(phy_type)) {
-    plan_item.rowset_ = get_plan()->get_optimizer_context().get_batch_size();
-  } else { /* Do nothing */ }
+
+  if (LOG_LINK_TABLE_SCAN != get_type()) {
+    // print vectorized execution batch row count
+    ObPhyOperatorType phy_type = PHY_INVALID;
+    bool is_root_job = is_plan_root() && (get_parent() == nullptr);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObStaticEngineCG::get_phy_op_type(*this,
+                                                         phy_type,
+                                                         is_root_job))) {
+      /* Do nothing */
+    } else if (NULL != get_plan() &&
+               get_plan()->get_optimizer_context().get_batch_size() > 0 &&
+               ObOperatorFactory::is_vectorized(phy_type)) {
+      plan_item.rowset_ = get_plan()->get_optimizer_context().get_batch_size();
+    } else { /* Do nothing */ }
+  }
   return ret;
 }
 
@@ -1285,19 +1288,6 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
       ret = px_estimate_size_factor_pre();
       break;
     }
-    case ALLOC_LINK: {
-      break;
-    }
-    case GEN_LINK_STMT: {
-      GenLinkStmtPostContext *link_ctx = static_cast<GenLinkStmtPostContext *>(ctx);
-      if (OB_ISNULL(link_ctx)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("link stmt is NULL", K(ret));
-      } else if (OB_FAIL(collect_link_sql_context_pre(*link_ctx))) {
-        LOG_WARN("failed to collect link sql context", K(ret));
-      }
-      break;
-    }
     case ALLOC_STARTUP_EXPR:
       break;
     case COLLECT_BATCH_EXEC_PARAM: {
@@ -1428,22 +1418,6 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
       case PX_ESTIMATE_SIZE: {
         ret = px_estimate_size_factor_post();
         break;
-      }
-      case ALLOC_LINK: {
-        if (OB_FAIL(allocate_link_post())) {
-          LOG_WARN("failed to allocate link post", K(ret));
-        }
-        break;
-      }
-      case GEN_LINK_STMT: {
-        GenLinkStmtPostContext *link_ctx = static_cast<GenLinkStmtPostContext *>(ctx);
-        if (OB_ISNULL(link_ctx)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("link stmt is NULL", K(ret));
-        } else if (OB_FAIL(generate_link_sql_post(*link_ctx))) {
-          LOG_WARN("failed to gen link sql", K(ret));
-        }
-      break;
       }
       case ALLOC_STARTUP_EXPR: {
         if (OB_FAIL(allocate_startup_expr_post())) {
@@ -2176,7 +2150,7 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
           // do nothing
         } else if (log_scan_op->use_das()) {
           // not add to constraints for das
-        } else if (log_scan_op->get_dblink_id() != 0) {
+        } else if (OB_INVALID_ID != log_scan_op->get_dblink_id()) {
           // dblink table, execute at other cluster
         } else if (OB_FAIL(get_tbl_loc_cons_for_scan(loc_cons))) {
           LOG_WARN("failed to get location constraint for table scan op", K(ret));
@@ -3292,7 +3266,7 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
       || OB_ISNULL(stmt = get_plan()->get_stmt())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("NULL pointer error", K(get_plan()), K(opt_ctx), K(schema_guard), K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema, ObSqlSchemaGuard::is_link_table(stmt, table_id)))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     LOG_WARN("fail to get index schema", K(ret), K(ref_table_id), K(table_id));
   }
   int64_t N = partitions.count();
@@ -3898,95 +3872,6 @@ int ObLogicalOperator::pw_allocate_granule_post(AllocGIContext &ctx)
   return ret;
 }
 
-int ObLogicalOperator::allocate_link_post()
-{
-  /**
-   * if all child nodes have same dblink id, just set dblink id of current node,
-   * otherwise, add link op above those childs whose dblink id is not OB_INVALID_ID.
-   */
-  int ret = OB_SUCCESS;
-  bool support_dblink = false;
-  switch(get_type()) {  // white list of supported logical operator.
-    case LOG_COUNT:         /*no break*/
-    case LOG_DISTINCT:      /*no break*/
-    case LOG_GROUP_BY:      /*no break*/
-    case LOG_SET:
-      support_dblink = true;
-      break;
-    case LOG_TABLE_SCAN:
-      if (0 != get_dblink_id() &&
-          OB_NOT_NULL(static_cast<ObLogTableScan*>(this)->get_offset_expr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("dblink not support offset push down to table scan", K(ret), K(type_));
-      } else {
-        support_dblink = true;
-      }
-      break;
-    case LOG_JOIN:
-      support_dblink = CONNECT_BY_JOIN != static_cast<ObLogJoin*>(this)->get_join_type();
-      break;
-    case LOG_SORT:
-      support_dblink = NULL == static_cast<ObLogSort*>(this)->get_topn_expr();
-      break;
-    case LOG_SUBPLAN_SCAN:
-      /**
-       * Temporarily close the reverse spelling of subplanscan op
-       * until the optimizer team completes the col_name of the outputs of the set op
-       * and the col_name of the outputs of its(set op) parent node.
-      */
-      support_dblink = false;
-      break;
-    default:
-      support_dblink = false;
-      break;
-  }
-  if (support_dblink) {
-    uint64_t dblink_id = (get_num_of_child() > 0 && OB_NOT_NULL(get_child(0))) ?
-                         get_child(0)->get_dblink_id() : 0;
-    for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); i++) {
-      if (OB_ISNULL(get_child(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get_child(i) returns unexpected null", K(ret), K(i));
-      } else if (dblink_id != get_child(i)->get_dblink_id()) {
-        dblink_id = 0;
-        break;
-      }
-    }
-    if (OB_SUCC(ret) && 0 != dblink_id) {
-      set_dblink_id(dblink_id);
-    }
-  }
-  // the code above is used to op that have child,
-  // the code below is used to all op.
-  if (OB_SUCC(ret)) {
-    if (0 != get_dblink_id()) {
-      /*
-       * ---------------------------------------------
-       * |0 |MERGE UNION DISTINCT|    |6        |75  |
-       * |1 | TABLE SCAN         |T1  |3        |37  |
-       * |2 | TABLE SCAN         |T2  |3        |37  |
-       * =============================================
-       * DO NOT use is_plan_root(), op 0/1/2 all return true, use 'NULL == get_parent()'.
-       */
-      if (NULL == get_parent() && OB_FAIL(allocate_link_node_above(-1))) {
-        LOG_WARN("allocate link node above failed", K(ret));
-      }
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
-        if (OB_ISNULL(get_child(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get_child(i) returns unexpected null", K(ret), K(i));
-        } else if (0 == get_child(i)->get_dblink_id()) {
-          // skip.
-        } else if (OB_FAIL(get_child(i)->allocate_link_node_above(i))) {
-          LOG_WARN("allocate link node above failed", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObLogicalOperator::allocate_startup_expr_post()
 {
   int ret = OB_SUCCESS;
@@ -4048,79 +3933,6 @@ int ObLogicalOperator::allocate_startup_expr_post(int64_t child_idx)
             LOG_WARN("failed to assign exprs", K(ret));
           }
         }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogicalOperator::collect_link_sql_context_pre(GenLinkStmtPostContext &link_ctx)
-{
-  UNUSED(link_ctx);
-  return OB_SUCCESS;
-}
-
-int ObLogicalOperator::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  UNUSED(link_ctx);
-  return OB_SUCCESS;
-}
-
-int ObLogicalOperator::allocate_link_node_above(int64_t child_idx)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *link = NULL;
-  if (OB_ISNULL(get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Get unexpected null", K(ret), K(get_plan()));
-  } else if (OB_ISNULL(link = get_plan()->get_log_op_factory().allocate(*(get_plan()), LOG_LINK))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("failed to allocate link node");
-  } else {
-    /**
-     * now we pull all link table rows to local, then add exchange op if need repart, like:
-     *
-     *         join                        join
-     *           |                           |
-     *     -------------       =>      -------------
-     *     |           |               |           |
-     * part_table  link_table      part_table   exchange
-     *               (local)                    (repart)
-     *                                             |
-     *                                         link_table
-     *                                           (local)
-     *
-     * the problem is the data from link table maybe transfer twice on network,
-     * because we can only use sql to communicate between different clusters,
-     * and sql have no repart ability, so we must repart all data in local cluster.
-     * BUT, the problem may be solved in certain situation, such as part_table and link_table
-     * can wise join regardless phy location, the transmit op only do data-transfer-job
-     * without any repart job.
-     * ps:
-     * to achieve this optimization, we need add partition info into link table schema,
-     * then every local part read another part from remote cluster using "from t1 partition(p0)",
-     * YES we use from clause "partition(p0)" instead of exchange op, remember that we can not
-     * execute exchange op in remote cluster even if there is no need to repart.
-     */
-    if (NULL != get_parent()) {
-      get_parent()->set_child(child_idx, link);
-      link->set_parent(get_parent());
-    }
-    link->set_child(0, this);
-    this->set_parent(link);
-    link->set_dblink_id(get_dblink_id());
-    if (OB_FAIL(link->compute_property())) {
-      LOG_WARN("failed to compute property", K(ret));
-    }
-
-    if (OB_SUCC(ret) && is_plan_root()) {
-      if (OB_FAIL(link->get_output_exprs().assign(output_exprs_))) {
-        LOG_WARN("failed to assign output exprs", K(ret));
-      } else {
-        link->mark_is_plan_root();
-        get_plan()->set_plan_root(link);
-        this->set_is_plan_root(false);
-        output_exprs_.reuse();
       }
     }
   }

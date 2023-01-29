@@ -100,14 +100,12 @@ public:
   ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
                    common::ObObjPrintParams print_params = common::ObObjPrintParams(),
                    const ParamStore *param_store = NULL);
-  ObRawExprPrinter(bool);
   virtual ~ObRawExprPrinter();
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
             ObObjPrintParams print_params, const ParamStore *param_store = NULL);
   // stmt中会出现若干expr, 为了避免反复实例化，这里将expr作为do_print的参数
-  int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false, bool is_bool_expr = false);
-  int set_gen_unique_name(GenUniqueAliasName *gen_unique_name);
+  int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false);
   int pre_check_treat_opt(ObRawExpr *expr, bool &is_treat);
 private:
   int print(ObRawExpr *expr);
@@ -144,6 +142,8 @@ private:
   int print_order_items(ObWinFunRawExpr *expr);
   int print_window_clause(ObWinFunRawExpr *expr);
 
+  int inner_print_fun_params(ObSysFunRawExpr &expr);
+
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprPrinter);
 private:
@@ -155,11 +155,9 @@ private:
   int64_t *pos_;
   ObStmtScope scope_;
   bool only_column_namespace_;
-  bool is_inited_;
   const common::ObTimeZoneInfo *tz_info_;
   ObObjPrintParams print_params_;
   const ParamStore *param_store_;
-  GenUniqueAliasName *gen_unique_name_;
   ObSchemaGetterGuard *schema_guard_;
 };
 

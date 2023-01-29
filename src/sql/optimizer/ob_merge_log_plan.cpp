@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_log_plan_factory.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_table_scan.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/resolver/ob_resolver_utils.h"
@@ -29,14 +30,14 @@ using namespace sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
 
-int ObMergeLogPlan::generate_raw_plan()
+int ObMergeLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
+  const ObMergeStmt *merge_stmt = get_stmt();
+  if (OB_ISNULL(merge_stmt) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
   } else {
-    const ObMergeStmt *merge_stmt = get_stmt();
     LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());
     OPT_TRACE("generate plan for ", get_stmt());
     if (OB_FAIL(generate_plan_tree())) {

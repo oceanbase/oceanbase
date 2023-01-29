@@ -551,11 +551,16 @@ class ObSelectIntoSpec;
 class ObSelectIntoOp;
 REGISTER_OPERATOR(ObLogSelectInto, PHY_SELECT_INTO, ObSelectIntoSpec, ObSelectIntoOp,
                   NOINPUT, VECTORIZED_OP);
-class ObLogLink;
+class ObLogLinkScan;
 class ObLinkScanSpec;
 class ObLinkScanOp;
-REGISTER_OPERATOR(ObLogLink, PHY_LINK, ObLinkScanSpec, ObLinkScanOp,
+REGISTER_OPERATOR(ObLogLinkScan, PHY_LINK_SCAN, ObLinkScanSpec, ObLinkScanOp,
                   NOINPUT, VECTORIZED_OP);
+
+class ObLogLinkDml;
+class ObLinkDmlSpec;
+class ObLinkDmlOp;
+REGISTER_OPERATOR(ObLogLinkDml, PHY_LINK_DML, ObLinkDmlSpec, ObLinkDmlOp, NOINPUT);
 
 class ObLogFunctionTable;
 class ObFunctionTableSpec;

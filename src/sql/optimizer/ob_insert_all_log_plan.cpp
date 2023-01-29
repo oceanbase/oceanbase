@@ -30,7 +30,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::sql::log_op_def;
 
-int ObInsertAllLogPlan::generate_raw_plan()
+int ObInsertAllLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;

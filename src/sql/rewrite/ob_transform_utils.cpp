@@ -1525,8 +1525,7 @@ int ObTransformUtils::is_column_nullable(const ObDMLStmt *stmt,
                                                   table_item->ref_id_,
                                                   col_expr->get_column_id(),
                                                   col_schema,
-                                                  true,
-                                                  table_item->is_link_table()))) {
+                                                  true))) {
       LOG_WARN("failed to get_column_schema", K(ret));
     } else {
       is_nullable = ! col_schema->is_not_null_for_read();
@@ -4472,14 +4471,13 @@ int ObTransformUtils::compute_basic_table_property(const ObDMLStmt *stmt,
                                                             index_count,
                                                             false,
                                                             true  /*global index*/,
-                                                            false /*domain index*/,
-                                                            table->is_link_table()))) {
+                                                            false /*domain index*/))) {
     LOG_WARN("failed to get can read index", K(ret), K(table->ref_id_));
   } else {
     for (int64_t i = -1; OB_SUCC(ret) && i < index_count; ++i) {
       const ObTableSchema *index_schema = NULL;
       uint64_t index_id = (i == -1 ? table->ref_id_ : index_tids[i]);
-      if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema, table->is_link_table()))) {
+      if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -5439,9 +5437,9 @@ int ObTransformUtils::generate_unique_key(ObTransformerCtx *ctx,
       OB_ISNULL(ctx->expr_factory_) || OB_ISNULL(ctx->session_info_) || OB_ISNULL(item) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params are invalid", K(ret), K(ctx), K(item));
-  } else if (OB_UNLIKELY(!item->is_basic_table() || item->is_link_table())) {
+  } else if (OB_UNLIKELY(!item->is_basic_table())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is not expected basic table", K(*item), K(item->is_link_table()));
+    LOG_WARN("table item is not expected basic table", K(*item));
   } else if (OB_FAIL(ctx->schema_checker_->get_table_schema(ctx->session_info_->get_effective_tenant_id(), item->ref_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema)) {
@@ -6780,7 +6778,9 @@ int ObTransformUtils::create_stmt_with_basic_table(ObTransformerCtx *ctx,
       || OB_ISNULL(ctx->stmt_factory_) || OB_ISNULL(ctx->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (!table->is_basic_table() && !table->is_temp_table() && !table->is_function_table()) {
+  } else if (!table->is_basic_table() && !table->is_temp_table()
+             && !table->is_link_table()
+             && !table->is_function_table()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected table type", K(ret), K(table->type_));
   } else if (OB_FAIL(ctx->stmt_factory_->create_stmt(simple_stmt))) {
@@ -6847,7 +6847,9 @@ int ObTransformUtils::create_view_with_table(ObDMLStmt *stmt,
     } else if (OB_FAIL(old_table_ids.push_back(table->table_id_))) {
       LOG_WARN("failed to push back table id", K(ret));
     }
-  } else if (table->is_basic_table() || table->is_temp_table() || table->is_function_table()) {
+  } else if (table->is_basic_table() || table->is_temp_table()
+             || table->is_link_table()
+             || table->is_function_table()) {
     if (OB_FAIL(create_stmt_with_basic_table(ctx, stmt, table, view_stmt))) {
       LOG_WARN("failed to create stmt with basic table", K(ret));
     } else if (OB_FAIL(old_table_ids.push_back(table->table_id_))) {
@@ -7180,6 +7182,10 @@ int ObTransformUtils::construct_simple_view(ObDMLStmt *stmt,
     } else if (OB_FAIL(simple_stmt->rebuild_tables_hash())) {
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(simple_stmt->update_column_item_rel_id())) {
+      LOG_WARN("failed to update column item by id", K(ret));
+    } else if (OB_FAIL(stmt->rebuild_tables_hash())) {
+      LOG_WARN("failed to rebuild table hash", K(ret));
+    } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update column item by id", K(ret));
     }
   }
@@ -8916,7 +8922,7 @@ int ObTransformUtils::check_can_set_stmt_unique(ObDMLStmt *stmt,
                                                                 can_set_unique)))) {
           LOG_WARN("failed to check can set stmt unique", K(ret));
         } else {/*do nothing */}
-      } else if (table_item->is_basic_table() && !table_item->is_link_table()) {
+      } else if (table_item->is_basic_table()) {
         //do nothing
       } else {
         can_set_unique = false;
@@ -8937,25 +8943,29 @@ int ObTransformUtils::get_rel_ids_from_tables(const ObDMLStmt *stmt,
   }
   TableItem *table = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-    if (OB_FAIL(get_rel_ids_from_table(stmt, table_items.at(i), rel_ids))) {
+    if (OB_ISNULL(table = table_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null.", K(ret));
+    } else if (OB_FAIL(get_rel_ids_from_table(stmt, table,rel_ids))) {
       LOG_WARN("failed to get rel ids from table", K(ret));
     }
   }
   return ret;
 }
 
-int ObTransformUtils::get_rel_ids_from_table(const ObDMLStmt *stmt,
-                                             const TableItem *table_item,
-                                             ObRelIds &rel_ids)
+int ObTransformUtils::get_rel_ids_from_tables(const ObDMLStmt *stmt,
+                                              const ObIArray<uint64_t> &table_ids,
+                                              ObRelIds &rel_ids)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || OB_ISNULL(table_item)) {
+  if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (table_item->is_joined_table()) {
-    ret = get_rel_ids_from_join_table(stmt, static_cast<const JoinedTable*>(table_item), rel_ids);
-  } else if (OB_FAIL(rel_ids.add_member(stmt->get_table_bit_index(table_item->table_id_)))) {
-    LOG_WARN("failed to add member", K(ret), K(table_item->table_id_));
+    LOG_WARN("unexpected null.", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+    if (OB_FAIL(rel_ids.add_member(stmt->get_table_bit_index(table_ids.at(i))))) {
+      LOG_WARN("failed to add member", K(ret), K(table_ids.at(i)));
+    } else { /* do nothing. */ }
   }
   return ret;
 }
@@ -8978,15 +8988,20 @@ int ObTransformUtils::get_left_rel_ids_from_semi_info(const ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::get_rel_ids_from_join_table(const ObDMLStmt *stmt,
-                                                  const JoinedTable *joined_table,
-                                                  ObRelIds &rel_ids)
+int ObTransformUtils::get_rel_ids_from_table(const ObDMLStmt *stmt,
+                                            const TableItem *table,
+                                            ObRelIds &rel_ids)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || OB_ISNULL(joined_table)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null.", K(ret));
+  } else if (!table->is_joined_table()) {
+    if (OB_FAIL(rel_ids.add_member(stmt->get_table_bit_index(table->table_id_)))) {
+      LOG_WARN("failed to add member", K(ret));
+    }
   } else {
+    const JoinedTable *joined_table = static_cast<const JoinedTable*>(table);
     for (int64_t i = 0; OB_SUCC(ret) && i < joined_table->single_table_ids_.count(); ++i) {
       if (OB_FAIL(rel_ids.add_member(
           stmt->get_table_bit_index(joined_table->single_table_ids_.at(i))))) {
@@ -9079,7 +9094,7 @@ int ObTransformUtils::get_base_column(const ObDMLStmt *stmt,
   } else if (OB_ISNULL(table = stmt->get_table_item_by_id(col->get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table item is null", K(ret), K(table));
-  } else if (table->is_basic_table()) {
+  } else if (table->is_basic_table() || table->is_link_table()) {
     /*do nothing*/
   } else if (!table->is_generated_table() && !table->is_temp_table()) {
     ret = OB_ERR_UNEXPECTED;
@@ -12253,6 +12268,35 @@ int ObTransformUtils::rebuild_win_compare_range_expr(ObRawExprFactory* expr_fact
   }
   return ret;
 }
+
+int ObTransformUtils::check_stmt_from_one_dblink(ObDMLStmt *stmt, bool &from_one_dblink)
+{
+  int ret = OB_SUCCESS;
+  from_one_dblink = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  }
+  int64_t dblink_id = OB_INVALID_ID;
+  for (int64_t i = 0; from_one_dblink && i < stmt->get_table_size(); i++) {
+    TableItem *table = NULL;
+    if (OB_ISNULL(table = stmt->get_table_item(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_INVALID_ID != table->dblink_id_ || table->is_reverse_link_) {
+      if (dblink_id == OB_INVALID_ID){
+        dblink_id = table->is_reverse_link_ ? 0 : table->dblink_id_;
+      } else {
+        from_one_dblink = (dblink_id == (table->is_reverse_link_ ? 0 : table->dblink_id_));
+      }
+    } else {
+      from_one_dblink = false;
+    }
+  }
+  from_one_dblink &= (OB_INVALID_ID != dblink_id);
+  return ret;
+}
+
 
 int ObTransformUtils::check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
                                                       bool &is_valid)

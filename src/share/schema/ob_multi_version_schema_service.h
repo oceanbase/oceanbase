@@ -196,12 +196,14 @@ public:
       common::ObIArray<uint64_t> &table_ids);
 
   // link table.
-  int fetch_link_table_schema(const ObDbLinkSchema &dblink_schema,
+  int fetch_link_table_schema(const ObDbLinkSchema *dblink_schema,
                               const common::ObString &database_name,
                               const common::ObString &table_name,
                               common::ObIAllocator &allocator,
                               ObTableSchema *&table_schema,
-                              uint32_t sessid);
+                              sql::ObSQLSessionInfo *session_info,
+                              const ObString &dblink_name,
+                              bool is_reverse_link);
 
   // get the latest schema version
   // if core_schema_version = false, return user schema version

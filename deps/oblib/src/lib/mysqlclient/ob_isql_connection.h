@@ -32,7 +32,7 @@ class ObString;
 
 namespace sqlclient
 {
-
+class ObISQLConnection;
 class ObCommonServerConnectionPool
 {
 public:
@@ -41,6 +41,7 @@ public:
 
   //dblink
   virtual int free_dblink_session(uint32_t sessid) = 0;
+  virtual int release(common::sqlclient::ObISQLConnection *connection, const bool succ, uint32_t sessid = 0) = 0;
   TO_STRING_KV(K_(free_conn_count), K_(busy_conn_count));
 protected:
   volatile uint64_t free_conn_count_;
@@ -71,9 +72,12 @@ public:
 class ObISQLConnection
 {
 public:
-  ObISQLConnection()
-      :oracle_mode_(false),
-       is_init_remote_env_(false)
+  ObISQLConnection() :
+       oracle_mode_(false),
+       is_init_remote_env_(false),
+       dblink_id_(OB_INVALID_ID),
+       dblink_driver_proto_(-1),
+       has_reverse_link_credentials_(false)
   {}
   virtual ~ObISQLConnection() {}
 
@@ -100,15 +104,20 @@ public:
   virtual int get_session_variable(const ObString &name, int64_t &val) = 0;
   virtual int set_session_variable(const ObString &name, int64_t val) = 0;
 
-  // dblink
-  virtual ObCommonServerConnectionPool *get_common_server_pool() = 0;
-
   virtual int execute(const uint64_t tenant_id, ObIExecutor &executor)
   {
     UNUSED(tenant_id);
     UNUSED(executor);
     return OB_NOT_SUPPORTED;
   }
+
+
+  // dblink
+  virtual ObCommonServerConnectionPool *get_common_server_pool() = 0;
+  void set_dblink_id(uint64_t dblink_id) { dblink_id_ = dblink_id; }
+  uint64_t get_dblink_id() { return dblink_id_; }
+  void set_dblink_driver_proto(int64_t dblink_driver_proto) { dblink_driver_proto_ = dblink_driver_proto; }
+  int64_t get_dblink_driver_proto() { return dblink_driver_proto_; }
 
   void set_mysql_compat_mode() { oracle_mode_ = false; }
   void set_oracle_compat_mode() { oracle_mode_ = true; }
@@ -122,9 +131,14 @@ public:
   virtual int64_t get_cluster_id() const { return common::OB_INVALID_ID; }
   void set_init_remote_env(bool flag) { is_init_remote_env_ = flag;}
   bool get_init_remote_env() const { return is_init_remote_env_; }
+  void set_reverse_link_creadentials(bool flag) { has_reverse_link_credentials_ = flag; }
+  bool get_reverse_link_creadentials() { return has_reverse_link_credentials_; }
 protected:
   bool oracle_mode_;
   bool is_init_remote_env_; // for dblink, we have to init remote env with some sql
+  uint64_t dblink_id_; // for dblink, record dblink_id of a connection used by dblink
+  int64_t dblink_driver_proto_; //for dblink, record DblinkDriverProto of a connection used by dblink
+  bool has_reverse_link_credentials_; // for dblink, mark if this link has credentials set
 };
 
 } // end namespace sqlclient

@@ -84,9 +84,6 @@ namespace sql
     PX_ESTIMATE_SIZE,
     BLOOM_FILTER,
 
-    // dblink
-    ALLOC_LINK,
-    GEN_LINK_STMT,
     ALLOC_STARTUP_EXPR,
     ADJUST_SHARED_EXPR,
 

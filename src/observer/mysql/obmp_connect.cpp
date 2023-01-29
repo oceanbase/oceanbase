@@ -87,6 +87,7 @@ int ObMPConnect::deserialize()
     } else {
       conn->cap_flags_ = hsr_.get_capability_flags();
       conn->client_cs_type_ = hsr_.get_char_set();
+      conn->sql_req_level_ = hsr_.get_sql_request_level();
 
       if (hsr_.is_obproxy_client_mode()) {
         conn->is_proxy_ = true;
@@ -262,12 +263,15 @@ int ObMPConnect::process()
     } else {
       // set connection info to session
       session->set_ob20_protocol(conn->proxy_cap_flags_.is_ob_protocol_v2_support());
+      // set sql request level to session, to avoid sql request dead lock between OB cluster (eg. dblink)
+      session->set_sql_request_level(conn->sql_req_level_);
 
       LOG_TRACE("setup user resource group OK",
                "user_id", session->get_user_id(),
                K(tenant_id),
                K(user_name_),
-               "group_id", conn->group_id_);
+               "group_id", conn->group_id_,
+               "sql_req_level", conn->sql_req_level_);
       conn->set_auth_phase();
     }
 

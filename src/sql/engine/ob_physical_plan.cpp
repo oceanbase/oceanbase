@@ -93,6 +93,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     stat_(),
     op_stats_(),
     need_drive_dml_query_(false),
+    tx_id_(-1),
+    tm_sessid_(-1),
     is_returning_(false),
     is_late_materialized_(false),
     is_dep_base_table_(false),
@@ -108,6 +110,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     use_pdml_(false),
     use_temp_table_(false),
     has_link_table_(false),
+    has_link_sfd_(false),
     need_serial_exec_(false),
     temp_sql_can_prepare_(false),
     is_need_trans_(false),
@@ -198,6 +201,7 @@ void ObPhysicalPlan::reset()
   use_pdml_ = false;
   use_temp_table_ = false;
   has_link_table_ = false;
+  has_link_sfd_ = false;
   encrypt_meta_array_.reset();
   need_serial_exec_ = false;
   batch_size_ = 0;
@@ -208,6 +212,8 @@ void ObPhysicalPlan::reset()
   append_table_id_ = 0;
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
+  tx_id_ = -1;
+  tm_sessid_ = -1;
   need_record_plan_info_ = false;
 }
 

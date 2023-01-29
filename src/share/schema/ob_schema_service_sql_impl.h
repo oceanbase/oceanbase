@@ -42,6 +42,7 @@
 #include "share/schema/ob_directory_sql_service.h"
 #include "share/schema/ob_context_sql_service.h"
 #include "share/schema/ob_rls_sql_service.h"
+#include "sql/dblink/ob_dblink_utils.h"
 
 namespace oceanbase
 {
@@ -560,12 +561,14 @@ public:
       common::ObIArray<ObAuxTableMetaInfo> &aux_tables);
 
   // link table.
-  virtual int get_link_table_schema(const ObDbLinkSchema &dblink_schema,
+  virtual int get_link_table_schema(const ObDbLinkSchema *dblink_schema,
                                     const common::ObString &database_name,
                                     const common::ObString &table_name,
                                     common::ObIAllocator &allocator,
                                     ObTableSchema *&table_schema,
-                                    uint32_t sessid);
+                                    sql::ObSQLSessionInfo *session_info,
+                                    const ObString &dblink_name,
+                                    bool is_reverse_link);
 
   static int check_ddl_id_exist(
       common::ObISQLClient &sql_client,
@@ -845,15 +848,29 @@ private:
                            const int64_t schema_version,
                            common::ObISQLClient &sql_client,
                            ObTablegroupSchema *&tablegroup_schema);
+  int fetch_desc_table(uint64_t dblink_id,
+                       common::sqlclient::DblinkDriverProto &link_type,
+                       const ObString &database_name,
+                       const ObString &table_name,
+                       const common::sqlclient::dblink_param_ctx &param_ctx,
+                       sql::ObSQLSessionInfo *session_info,
+                       ObIAllocator &alloctor,
+                       int64_t row_idx,
+                       int32_t &length);
   template<typename T>
-  int fetch_link_table_info(const ObDbLinkSchema &dblink_schema,
+  int fetch_link_table_info(uint64_t tenant_id,
+                            uint64_t dblink_id,
+                            common::sqlclient::DblinkDriverProto &link_type,
+                            sql::DblinkGetConnType conn_type,
                             const common::ObString &database_name,
                             const common::ObString &table_name,
-                            common::ObDbLinkProxy &dblink_client,
                             ObIAllocator &alloctor,
                             T *&table_schema,
-                            uint32_t sessid);
-
+                            sql::ObSQLSessionInfo *session_info,
+                            const ObString &dblink_name,
+                            sql::ObReverseLink *reverse_link,
+                            const common::sqlclient::dblink_param_ctx &param_ctx,
+                            int64_t &next_sql_req_level);
   int try_mock_link_table_column(ObTableSchema &table_schema);
 
   template<typename SCHEMA>

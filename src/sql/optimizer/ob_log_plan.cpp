@@ -4269,8 +4269,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
       share::schema::ObPartitionLevel part_level = share::schema::PARTITION_LEVEL_MAX;
       if (is_virtual_table(ref_table_id)
           || is_inner_table(ref_table_id)
-          || is_cte_table(ref_table_id)
-          || ObSqlSchemaGuard::is_link_table(get_stmt(), table_id)) {
+          || is_cte_table(ref_table_id)) {
         // do nothing
       } else if (OB_FAIL(get_part_exprs(table_id,
                                         ref_table_id,
@@ -8439,9 +8438,8 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
       }
     }
 
-    if (OB_SUCC(ret) && !contain_udf &&
-        !is_virtual_table(table_scan->get_ref_table_id()) &&
-        !(0 != table_scan->get_dblink_id() && NULL != offset_expr) &&
+    if (OB_SUCC(ret) && !contain_udf && !is_virtual_table(table_scan->get_ref_table_id()) &&
+        !(OB_INVALID_ID != table_scan->get_dblink_id() && NULL != offset_expr) &&
         !get_stmt()->is_calc_found_rows() && !table_scan->is_sample_scan() &&
         !(table_scan->get_is_index_global() && table_scan->get_index_back() && table_scan->has_index_lookup_filter()) &&
         (NULL == table_scan->get_limit_expr() ||
@@ -9655,7 +9653,6 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
     ObLocationConstraintContext location_constraints;
     AllocMDContext md_ctx;
     AllocBloomFilterContext bf_ctx;
-    GenLinkStmtPostContext link_ctx(get_allocator(), get_optimizer_context().get_schema_guard());
     SMART_VAR(ObBatchExecParamCtx, batch_exec_param_ctx) {
       // set up context
       switch (operation) {
@@ -9717,14 +9714,6 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
       }
       case PX_ESTIMATE_SIZE:
         break;
-      case GEN_LINK_STMT: {
-        if (OB_FAIL(link_ctx.init())) {
-          LOG_WARN("failed to init link_ctx", K(operation), K(ret));
-        } else {
-          ctx = &link_ctx;
-        }
-        break;
-      }
       case COLLECT_BATCH_EXEC_PARAM: {
         ctx = &batch_exec_param_ctx;
         break;
@@ -11123,8 +11112,7 @@ int ObLogPlan::generate_plan()
     /*do nothing*/
   } else if (OB_FAIL(do_post_plan_processing())) {
     LOG_WARN("failed to post plan processing", K(ret));
-  } else if (OB_FAIL(plan_traverse_loop(ALLOC_LINK,
-                                        BLOOM_FILTER,
+  } else if (OB_FAIL(plan_traverse_loop(BLOOM_FILTER,
                                         ALLOC_GI,
                                         PX_PIPE_BLOCKING,
                                         ALLOC_MONITORING_DUMP,
@@ -11136,13 +11124,35 @@ int ObLogPlan::generate_plan()
                                         GEN_SIGNATURE,
                                         GEN_LOCATION_CONSTRAINT,
                                         PX_ESTIMATE_SIZE,
-                                        GEN_LINK_STMT,
                                         ALLOC_STARTUP_EXPR,
                                         COLLECT_BATCH_EXEC_PARAM))) {
     LOG_WARN("failed to do plan traverse", K(ret));
   } else if (OB_FAIL(do_post_traverse_processing())) {
     LOG_WARN("failed to post traverse processing", K(ret));
   } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObLogPlan::generate_raw_plan()
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  uint64_t dblink_id = OB_INVALID_ID;
+  if (OB_ISNULL(stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(dblink_id = stmt->get_dblink_id())) {
+  } else if (OB_INVALID_ID == dblink_id && OB_FAIL(generate_normal_raw_plan())) {
+    LOG_WARN("fail to generate normal raw plan", K(ret));
+  } else if (OB_INVALID_ID != dblink_id && OB_FAIL(generate_dblink_raw_plan())) {
+    LOG_WARN("fail to generate dblink raw plan", K(ret));
+  }
+  return ret;
+}
+
+int ObLogPlan::generate_dblink_raw_plan()
+{
+  int ret = OB_SUCCESS;
   return ret;
 }
 
@@ -11702,7 +11712,7 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret));
-  } else if (LOG_LINK == op->get_type()) {
+  } else if (LOG_LINK_SCAN == op->get_type()) {
     /*do nothing*/
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
@@ -11715,7 +11725,7 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
     } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
       ObTablePartitionInfo *table_partition_info = NULL;
       ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(op);
-      if (table_scan->get_contains_fake_cte() || 0 != table_scan->get_dblink_id()) {
+      if (table_scan->get_contains_fake_cte() || OB_INVALID_ID != table_scan->get_dblink_id()) {
         /*do nothing*/
       } else if (OB_ISNULL(table_partition_info = table_scan->get_table_partition_info())) {
         ret = OB_ERR_UNEXPECTED;

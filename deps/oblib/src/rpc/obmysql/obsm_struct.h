@@ -67,6 +67,7 @@ public:
     proxy_version_ = 0;
     group_id_ = 0;
     client_cs_type_ = 0;
+    sql_req_level_ = 0;
     pkt_rec_wrapper_.init();
   }
 
@@ -183,6 +184,7 @@ public:
   uint64_t proxy_version_;
   int32_t group_id_;
   int32_t client_cs_type_;
+  int64_t sql_req_level_;
   obmysql::ObPacketRecordWrapper pkt_rec_wrapper_;
 };
 } // end of namespace observer

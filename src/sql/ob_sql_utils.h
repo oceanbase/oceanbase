@@ -20,7 +20,6 @@
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/geo/ob_s2adapter.h"
 #include "share/partition_table/ob_partition_location.h"
-#include "share/ob_errno.h"             // get_ob_errno_from_oracle_errno
 #include "share/ob_i_sql_expression.h"          // ObISqlExpression,ObExprCtx
 #include "share/schema/ob_table_param.h"        // ObColDesc
 #include "share/schema/ob_multi_version_schema_service.h"     // ObMultiVersionSchemaService
@@ -110,13 +109,6 @@ private:
   typedef std::pair<common::ObObjParam*, common::ObObjParam> ArrayObjPair;
   common::ObList<ArrayObjPair, common::ObIAllocator> array_obj_list_;
   int ret_;
-};
-
-class ObDblinkUtils
-{
-public:
-  static int process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, common::sqlclient::ObISQLConnection *dblink_conn, int &ob_errno);
-  static int process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, int &ob_errno);
 };
 
 class ObSQLUtils
@@ -379,7 +371,6 @@ public:
                        ObString &sql,
                        ObSchemaGetterGuard *schema_guard,
                        ObObjPrintParams print_params);
-
 
   static int wrap_expr_ctx(const stmt::StmtType &stmt_type,
                            ObExecContext &exec_ctx,

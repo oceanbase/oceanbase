@@ -94,52 +94,6 @@ ObSqlArrayExpandGuard::~ObSqlArrayExpandGuard()
   }
 }
 
-int ObDblinkUtils::process_dblink_errno(DblinkDriverProto dblink_type, common::sqlclient::ObISQLConnection *dblink_conn, int &ob_errno) {
-  // The purpose of adding the process_dblink_errno function
-  // is to distinguish the errno processing when dblink connects to other types of databases.
-  const int orcl_errno = ob_errno;
-  switch (dblink_type) {
-    case DblinkDriverProto::DBLINK_DRV_OB: {
-      if (OB_UNLIKELY(NULL == dblink_conn)) {
-        get_ob_errno_from_oracle_errno(orcl_errno, NULL, ob_errno);
-      } else {
-        get_ob_errno_from_oracle_errno(orcl_errno, mysql_error(static_cast<common::sqlclient::ObMySQLConnection *>(dblink_conn)->get_handler()), ob_errno);
-      }
-      break;
-    }
-    case DblinkDriverProto::DBLINK_DRV_OCI: {
-      get_ob_errno_from_oracle_errno(orcl_errno, NULL, ob_errno);
-    }
-    default: {
-      //nothing
-      break;
-    }
-  }
-  // some oracle error code can not translate to oceanbase error code,
-  // so use OB_ERR_DBLINK_REMOTE_ECODE to represent those oracle error code.
-  if (orcl_errno == ob_errno &&
-      DblinkDriverProto::DBLINK_DRV_OCI == dblink_type) {
-    LOG_USER_ERROR(OB_ERR_DBLINK_REMOTE_ECODE, orcl_errno);
-    ob_errno = OB_ERR_DBLINK_REMOTE_ECODE;
-  }
-  return OB_SUCCESS;
-}
-
-int ObDblinkUtils::process_dblink_errno(DblinkDriverProto dblink_type, int &ob_errno) {
-  // The purpose of adding the process_dblink_errno function
-  // is to distinguish the errno processing when dblink connects to other types of databases.
-  const int orcl_errno = ob_errno;
-  get_ob_errno_from_oracle_errno(orcl_errno, NULL, ob_errno);
-  // some oracle error code can not translate to oceanbase error code,
-  // so use OB_ERR_DBLINK_REMOTE_ECODE to represent those oracle error code.
-  if (orcl_errno == ob_errno &&
-      DblinkDriverProto::DBLINK_DRV_OCI == dblink_type) {
-    LOG_USER_ERROR(OB_ERR_DBLINK_REMOTE_ECODE, orcl_errno);
-    ob_errno = OB_ERR_DBLINK_REMOTE_ECODE;
-  }
-  return OB_SUCCESS;
-}
-
 bool ObSQLUtils::is_trans_commit_need_disconnect_err(int err)
 {
   bool bool_ret = true;
@@ -2100,8 +2054,12 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   int64_t pos = 0;
   switch (stmt->get_stmt_type()) {
   case stmt::T_SELECT: {
-    ObSelectStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObSelectStmt*>(stmt),
-                                schema_guard, print_params);
+    ObSelectStmtPrinter printer(buf,
+                                buf_len,
+                                &pos,
+                                static_cast<const ObSelectStmt*>(stmt),
+                                schema_guard,
+                                print_params);
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print select stmt", K(ret));
@@ -2113,6 +2071,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   case stmt::T_INSERT_ALL: {
     ObInsertAllStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertAllStmt*>(stmt),
                                    schema_guard, print_params);
+    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print insert stmt", K(ret));
@@ -2125,6 +2084,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   case stmt::T_INSERT: {
     ObInsertStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertStmt*>(stmt),
                                 schema_guard, print_params);
+    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print insert stmt", K(ret));
@@ -2136,6 +2096,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   case stmt::T_DELETE: {
     ObDeleteStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObDeleteStmt*>(stmt),
                                 schema_guard, print_params);
+    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print delete stmt", K(ret));
@@ -2147,6 +2108,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   case stmt::T_UPDATE: {
     ObUpdateStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObUpdateStmt*>(stmt),
                                 schema_guard, print_params);
+    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("fail to print update stmt", K(ret));
@@ -2156,8 +2118,10 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
   }
     break;
   case stmt::T_MERGE: {
-    ObMergeStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObMergeStmt*>(stmt),
-                               schema_guard, print_params);
+    ObMergeStmtPrinter printer(buf, buf_len, &pos,
+                                static_cast<const ObMergeStmt*>(stmt),
+                                schema_guard, print_params);
+    printer.disable_print_cte();
     printer.set_is_root(true);
     if (OB_FAIL(printer.do_print())) {
       LOG_WARN("failed to print merge stmt", K(ret));

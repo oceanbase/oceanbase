@@ -53,7 +53,16 @@ int ObServerConnectionPool::acquire(ObMySQLConnection *&conn, uint32_t sessid)
     ObSpinLockGuard lock(pool_lock_);
     if (server_not_available_) {
       ret = OB_RESOURCE_OUT;
-    } else if ((busy_conn_count_ + free_conn_count_) < max_allowed_conn_count_) {
+    } else if (free_conn_count_ > 0) {
+      if (OB_FAIL(connection_pool_ptr_->get_cached(connection, sessid))) {
+        ATOMIC_DEC(&free_conn_count_);
+        LOG_WARN("fail get conn", K(free_conn_count_), K(busy_conn_count_), K(ret));
+      } else {
+        connection->init(this);
+        ATOMIC_INC(&busy_conn_count_);
+        ATOMIC_DEC(&free_conn_count_);
+      }
+    } else if (busy_conn_count_ < max_allowed_conn_count_) {
       ret = connection_pool_ptr_->alloc(connection, sessid);
       if (OB_ERR_ALREADY_EXISTS == ret) {
 
@@ -67,15 +76,6 @@ int ObServerConnectionPool::acquire(ObMySQLConnection *&conn, uint32_t sessid)
         ATOMIC_INC(&busy_conn_count_);
       } else {
         LOG_ERROR("fail get conn", K(free_conn_count_), K(busy_conn_count_), K(ret));
-      }
-    } else if (free_conn_count_ > 0) {
-      if (OB_FAIL(connection_pool_ptr_->get_cached(connection, sessid))) {
-        ATOMIC_DEC(&free_conn_count_);
-        LOG_WARN("fail get conn", K(free_conn_count_), K(busy_conn_count_), K(ret));
-      } else {
-        connection->init(this);
-        ATOMIC_INC(&busy_conn_count_);
-        ATOMIC_DEC(&free_conn_count_);
       }
     } else {
       ret = OB_RESOURCE_OUT;
@@ -94,17 +94,19 @@ int ObServerConnectionPool::acquire(ObMySQLConnection *&conn, uint32_t sessid)
       }
     }
   }
-  LOG_DEBUG("dblink acquire connection", KP(this), K(busy_conn_count_), K(free_conn_count_), KP(connection), K(sessid), K(ret), K(lbt()));
+  LOG_TRACE("acquire connection from server conn pool", KP(this), K(busy_conn_count_), K(free_conn_count_), KP(connection), K(ret), K(lbt()));
   return ret;
 }
 
-int ObServerConnectionPool::release(ObMySQLConnection *connection, const bool succ, uint32_t sessid)
+int ObServerConnectionPool::release(common::sqlclient::ObISQLConnection *conn, const bool succ, uint32_t sessid)
 {
   int ret = OB_SUCCESS;
+  ObMySQLConnection *connection = static_cast<ObMySQLConnection *>(conn);
   if (OB_ISNULL(connection)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid connection", K(connection), K(ret));
   } else {
+    connection->set_busy(false);
     ObSpinLockGuard lock(pool_lock_);
     if (succ) {
       connection->succ_times_++;
@@ -121,7 +123,7 @@ int ObServerConnectionPool::release(ObMySQLConnection *connection, const bool su
       ATOMIC_INC(&free_conn_count_);
     }
   }
-  LOG_DEBUG("dblink release connection", KP(this), K(busy_conn_count_), K(free_conn_count_), KP(connection), K(sessid), K(succ), K(ret), K(lbt()));
+  LOG_TRACE("release connection to server conn pool", KP(this), K(busy_conn_count_), K(free_conn_count_), KP(connection), K(sessid), K(succ), K(ret), K(lbt()));
   return ret;
 }
 
@@ -184,6 +186,7 @@ int ObServerConnectionPool::init_dblink(uint64_t dblink_id, const ObAddr &server
     LOG_WARN("fail to init", K(ret));
   } else if (OB_INVALID_ID == dblink_id
              || db_tenant.empty() || db_user.empty() || db_pass.empty() /*|| db_name.empty()*/
+             || OB_UNLIKELY(cluster_str.length() >= OB_MAX_CLUSTER_NAME_LENGTH)
              || OB_UNLIKELY(db_tenant.length() >= OB_MAX_TENANT_NAME_LENGTH)
              || OB_UNLIKELY(db_user.length() >= OB_MAX_USER_NAME_LENGTH)
              || OB_UNLIKELY(db_pass.length() >= OB_MAX_PASSWORD_LENGTH)
@@ -215,11 +218,12 @@ int ObServerConnectionPool::free_dblink_session(uint32_t sessid)
 {
   int ret = OB_SUCCESS;
   int64_t fail_recycled_conn_count = 0;
-  if (OB_FAIL(dblink_connection_pool_.free_session_conn_array(sessid, fail_recycled_conn_count))) {
-    ATOMIC_SAF(&free_conn_count_, fail_recycled_conn_count);
+  int64_t succ_recycled_conn_count = 0;
+  if (OB_FAIL(dblink_connection_pool_.free_session_conn_array(sessid, fail_recycled_conn_count, succ_recycled_conn_count))) {
     LOG_WARN("drop dblink session failed, some connection of this seesion will be freed",
-              K(fail_recycled_conn_count), K(sessid), K(ret));
+              K(fail_recycled_conn_count), K(succ_recycled_conn_count), K(sessid), K(ret));
   }
+  LOG_TRACE("free_dblink_session",  KP(this), K(fail_recycled_conn_count), K(succ_recycled_conn_count), K(busy_conn_count_), K(free_conn_count_), K(sessid), K(ret));
   return ret;
 };
 

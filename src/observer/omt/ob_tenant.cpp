@@ -289,9 +289,10 @@ int ObResourceGroup::init()
     LOG_ERROR("group init failed");
   } else {
     req_queue_.set_limit(common::ObServerConfig::get_instance().tenant_task_queue_size);
-    set_token_cnt(static_cast<int64_t>(ceil(tenant_->unit_min_cpu())));
+    uint64_t worker_concurrency = ObCgSet::instance().get_worker_concurrency(group_id_);
+    set_token_cnt(worker_concurrency * static_cast<int64_t>(ceil(tenant_->unit_min_cpu())));
     set_min_token_cnt(token_cnt_);
-    set_max_token_cnt(static_cast<int64_t>(ceil(tenant_->unit_max_cpu())));
+    set_max_token_cnt(worker_concurrency * static_cast<int64_t>(ceil(tenant_->unit_max_cpu())));
     inited_ = true;
   }
   return ret;
@@ -361,8 +362,9 @@ void ObResourceGroup::calibrate_token_count()
           }
         }
       }
-      if (static_cast<int64_t>(ceil(tenant_->unit_min_cpu())) != min_token_cnt_) { // If the user manually adjusts the tenant specifications, the dynamic token adjustment alone cannot respond quickly, and it needs to be adjusted forcibly
-        set_token_cnt(static_cast<int64_t>(ceil(tenant_->unit_min_cpu())));
+      uint64_t worker_concurrency = ObCgSet::instance().get_worker_concurrency(group_id_);
+      if (worker_concurrency * static_cast<int64_t>(ceil(tenant_->unit_min_cpu())) != min_token_cnt_) { // If the user manually adjusts the tenant specifications, the dynamic token adjustment alone cannot respond quickly, and it needs to be adjusted forcibly
+        set_token_cnt(worker_concurrency * static_cast<int64_t>(ceil(tenant_->unit_min_cpu())));
         set_min_token_cnt(token_cnt_);
       }
       if (last_pop_req_cnt_ != 0 && pop_req_cnt_ == last_pop_req_cnt_

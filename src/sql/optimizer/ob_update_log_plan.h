@@ -28,12 +28,13 @@ namespace sql
     {}
     virtual ~ObUpdateLogPlan() {}
 
-    virtual int generate_raw_plan() override;
-
     const ObUpdateStmt *get_stmt() const override
     { return reinterpret_cast<const ObUpdateStmt*>(stmt_); }
 
     int perform_vector_assign_expr_replacement(ObUpdateStmt *stmt);
+
+  protected:
+    virtual int generate_normal_raw_plan() override;
 
   private:
     int candi_allocate_update();

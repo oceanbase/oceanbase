@@ -22,7 +22,7 @@
 #include "lib/thread/thread_mgr.h"
 #include "lib/allocator/ob_malloc.h"
 #include "share/ob_tenant_role.h"//ObTenantRole
-
+#include "lib/mysqlclient/ob_tenant_oci_envs.h"
 namespace oceanbase
 {
 namespace common {
@@ -239,8 +239,10 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       sql::ObFLTSpanMgr*,                            \
       sql::ObSqlPlanMgr*,                            \
       sql::ObPlanRealInfoMgr*,                       \
-      ObTestModule*                                  \
+      ObTestModule*,                                 \
+      oceanbase::common::sqlclient::ObTenantOciEnvs* \
   )
+
 
 // 获取租户ID
 #define MTL_ID() share::ObTenantEnv::get_tenant_local()->id()
@@ -274,7 +276,7 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 //
 // 需要和租户上下文配合使用，获取指定类型的租户局部实例。
 // 比如MTL(ObPxPools*)就可以获取当前租户的PX池子。
-#define MTL(TYPE) share::ObTenantEnv::mtl<TYPE>()
+#define MTL(TYPE) ::oceanbase::share::ObTenantEnv::mtl<TYPE>()
 
 // 辅助函数
 #define MTL_LIST(...) __VA_ARGS__

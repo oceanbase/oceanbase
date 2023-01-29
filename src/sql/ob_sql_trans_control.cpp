@@ -340,9 +340,26 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
     const ObTransID tx_id = tx_desc->get_tx_id();
     MTL_SWITCH(tx_tenant_id) {
       if (tx_desc->is_xa_trans()) {
-        if (OB_FAIL(MTL(transaction::ObXAService *)->handle_terminate_for_xa_branch(
-                session->get_xid(), tx_desc, session->get_xa_end_timeout_seconds()))) {
-          LOG_WARN("rollback xa trans fail", K(ret), K(session_id), KPC(tx_desc));
+        const transaction::ObXATransID xid = session->get_xid();
+        const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+        if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
+          if (OB_FAIL(MTL(transaction::ObXAService *)->handle_terminate_for_xa_branch(
+                  session->get_xid(), tx_desc, session->get_xa_end_timeout_seconds()))) {
+            LOG_WARN("rollback xa trans fail", K(ret), K(xid), K(global_tx_type), K(session_id),
+                K(tx_id));
+          } else {
+            // currently, tx_desc is NULL
+          }
+        } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
+          if (OB_FAIL(MTL(transaction::ObXAService *)->rollback_for_dblink_trans(tx_desc))) {
+            LOG_WARN("fail to rollback for dblink trans", K(ret), K(xid), K(global_tx_type),
+                K(tx_id));
+          } else {
+            // currently, tx_desc is NULL
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected global trans type", K(ret), K(xid), K(global_tx_type), K(tx_id));
         }
         session->get_tx_desc() = NULL;
       } else {
@@ -351,6 +368,7 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
                                                    tx_tenant_id)));
         OZ(txs->abort_tx(*tx_desc, cause), *session, tx_desc->get_tx_id());
       }
+      // NOTE that the tx_desc is set to NULL in xa case, DO NOT print anything in tx_desc
       LOG_INFO("kill tx done", K(ret), K(cause), K(session_id), K(tx_id));
     }
   }

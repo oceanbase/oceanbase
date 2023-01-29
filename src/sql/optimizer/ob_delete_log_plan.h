@@ -29,9 +29,11 @@ public:
     : ObDelUpdLogPlan(ctx, delete_stmt)
   {}
   virtual ~ObDeleteLogPlan() {}
-  virtual int generate_raw_plan() override;
   const ObDeleteStmt *get_stmt() const override
   { return reinterpret_cast<const ObDeleteStmt*>(stmt_); }
+
+protected:
+  virtual int generate_normal_raw_plan() override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDeleteLogPlan);

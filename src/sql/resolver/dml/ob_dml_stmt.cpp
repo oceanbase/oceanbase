@@ -260,6 +260,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   flashback_query_type_ = other.flashback_query_type_;
   // dblink
   dblink_id_ = other.dblink_id_;
+  is_reverse_link_ = other.is_reverse_link_;
   dblink_name_ = other.dblink_name_;
   link_database_name_ = other.link_database_name_;
   // ddl related
@@ -382,7 +383,9 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type)
       subquery_exprs_(),
       transpose_item_(NULL),
       user_var_exprs_(),
-      check_constraint_items_()
+      check_constraint_items_(),
+      dblink_id_(OB_INVALID_ID),
+      is_reverse_link_(false)
 {
 }
 
@@ -490,6 +493,8 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     affected_last_insert_id_ = other.affected_last_insert_id_;
     has_part_key_sequence_ = other.has_part_key_sequence_;
     transpose_item_ = other.transpose_item_;
+    dblink_id_ = other.dblink_id_;
+    is_reverse_link_ = other.is_reverse_link_;
   }
   return ret;
 }
@@ -650,6 +655,8 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     has_part_key_sequence_ = other.has_part_key_sequence_;
     has_fetch_ = other.has_fetch_;
     is_fetch_with_ties_ = other.is_fetch_with_ties_;
+    dblink_id_ = other.dblink_id_;
+    is_reverse_link_ = other.is_reverse_link_;
   }
   if (OB_SUCC(ret)) {
     TransposeItem *tmp = NULL;

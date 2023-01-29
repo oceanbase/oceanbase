@@ -128,9 +128,6 @@ namespace sql
     virtual bool is_block_input(const int64_t child_idx) const override;
     virtual bool is_consume_child_1by1() const { return HASH_JOIN == join_algo_; }
 
-    virtual int collect_link_sql_context_pre(GenLinkStmtPostContext &link_ctx) override;
-    virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
-
     inline bool is_nlj_with_param_down() const { return (NESTED_LOOP_JOIN == join_algo_) &&
                                                         !nl_params_.empty(); }
     inline bool is_nlj_without_param_down() const { return (NESTED_LOOP_JOIN == join_algo_) &&

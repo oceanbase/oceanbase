@@ -1755,7 +1755,6 @@ template<typename ColumnType>
 int ObTableSchema::add_column(const ColumnType &column)
 {
   using namespace common;
-
   int ret = common::OB_SUCCESS;
   char *buf = NULL;
   ColumnType *local_column = NULL;

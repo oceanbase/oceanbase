@@ -423,6 +423,7 @@ private:
   ObExecutor executor_;
   bool is_returning_;
   bool is_com_filed_list_; //used to mark COM_FIELD_LIST
+  bool need_revert_tx_; //dblink
   common::ObString wild_str_;//uesd to save filed wildcard in COM_FIELD_LIST;
   common::ObString ps_sql_; // for sql in pl
   bool is_init_;
@@ -496,6 +497,7 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       executor_(),
       is_returning_(false),
       is_com_filed_list_(false),
+      need_revert_tx_(false),
       wild_str_(),
       ps_sql_(),
       is_init_(false)

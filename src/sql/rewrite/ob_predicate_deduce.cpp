@@ -290,9 +290,8 @@ int ObPredicateDeduce::check_index_part_cond(ObTransformerCtx &ctx,
                                                                 table->ref_id_,
                                                                 col->get_column_id(),
                                                                 column_schema,
-                                                                true,
-                                                                table->is_link_table()))) {
-        LOG_WARN("failed to get column schema", K(ret), K(table->ref_id_), K(col->get_column_id()), K(col->get_table_id()), K(table->is_link_table()), K(table), K(col), K(lbt()));
+                                                                true))) {
+        LOG_WARN("failed to get column schema", K(ret), K(table->ref_id_), K(col->get_column_id()), K(col->get_table_id()), K(table), K(col), K(lbt()));
       } else if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column schema is null", K(ret));
@@ -301,14 +300,12 @@ int ObPredicateDeduce::check_index_part_cond(ObTransformerCtx &ctx,
       } else if (OB_FAIL(ctx.schema_checker_->check_column_has_index(column_schema->get_tenant_id(),
                                                                      table->ref_id_,
                                                                      col->get_column_id(),
-                                                                     is_valid,
-                                                                     table->is_link_table()))) {
+                                                                     is_valid))) {
         LOG_WARN("failed to check column is a key", K(ret));
       } else if (is_valid) {
         // do nothing
-      } else if (!table->is_link_table() &&
-                 (ctx.schema_checker_->check_if_partition_key(session_info->get_effective_tenant_id(),
-                           table->ref_id_, col->get_column_id(), is_valid))) {
+      } else if (ctx.schema_checker_->check_if_partition_key(session_info->get_effective_tenant_id(),
+                           table->ref_id_, col->get_column_id(), is_valid)) {
         LOG_WARN("failed to check if partition key", K(ret));
     }
   }

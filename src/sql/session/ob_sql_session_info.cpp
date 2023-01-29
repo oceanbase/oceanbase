@@ -47,6 +47,7 @@
 #include "lib/utility/utility.h"
 #include "lib/utility/ob_proto_trans_util.h"
 #include "lib/allocator/ob_mod_define.h"
+#include "lib/string/ob_hex_utils_base.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 
@@ -174,6 +175,9 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       got_conn_res_(false),
       mem_context_(nullptr),
       cur_exec_ctx_(nullptr),
+      restore_auto_commit_(false),
+      dblink_context_(this),
+      sql_req_level_(0),
       expect_group_id_(OB_INVALID_ID),
       group_id_not_expected_(false)
 {
@@ -335,6 +339,9 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     auto_flush_trace_ = false;
     coninfo_set_by_sess_ = false;
     is_ob20_protocol_ = false;
+    int temp_ret = OB_SUCCESS;
+    dblink_context_.reset();
+    sql_req_level_ = 0;
     optimizer_tracer_.reset();
     sql_plan_manager_ = NULL;
     destroy_session_plan_mgr();
@@ -430,60 +437,15 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     }
 
 
-    if (OB_SUCC(ret) && OB_FAIL(free_dblink_conn_pool())) {
-      LOG_WARN("fail to free dblink conn pool", K(ret));
-    }
     // 非分布式需要的话，分布式也需要，用于清理package的全局变量值
     reset_all_package_state();
-
+    dblink_context_.reset();
     reset(skip_sys_var);
     destroy_session_plan_mgr();
     is_inited_ = false;
+    sql_req_level_ = 0;
   }
 }
-
-/**
- The meaning of register is to record the ObServerConnectionPool used by this session in the array through pointers.
- The pointer values stored in this array are unique to each other.
-
- If the pointer cannot be stored in the array, then the ObServerConnectionPool corresponding to this pointer will
- free the connection used by this session.
- */
-int ObSQLSessionInfo::register_dblink_conn_pool(common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(dblink_conn_pool)) {
-    //do nothing
-  } else if (OB_FAIL(add_var_to_array_no_dup(dblink_conn_pool_array_, dblink_conn_pool))) {
-    LOG_WARN("register dblink conn pool failed in session", K(dblink_conn_pool), K(get_sessid()), K(ret));
-    // directly free dblink connection in dblink_conn_pool
-    if (OB_FAIL(dblink_conn_pool->free_dblink_session(get_sessid()))) {
-      LOG_WARN("register dblink conn pool failed in session, then free dblink conn pool failed", K(dblink_conn_pool), K(get_sessid()), K(ret));
-    }
-  }
-  return ret;
-}
-
-
-// When the session is about to be destroyed, the session will release all connections
-// from ObServerConnectionPool through this interface
-int ObSQLSessionInfo::free_dblink_conn_pool()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < dblink_conn_pool_array_.count(); ++i) {
-    common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool = dblink_conn_pool_array_.at(i);
-    if (OB_UNLIKELY(NULL == dblink_conn_pool)) {
-      //do nothing
-    } else if (OB_FAIL(dblink_conn_pool->free_dblink_session(get_sessid()))) {
-      LOG_WARN("free dblink conn pool failed", K(dblink_conn_pool), K(get_sessid()), K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    dblink_conn_pool_array_.reset();
-  }
-  return ret;
-}
-
 
 int ObSQLSessionInfo::close_ps_stmt(ObPsStmtId client_stmt_id)
 {

@@ -207,6 +207,7 @@ ob_set_subtarget(ob_storage tx_wrs
 ob_set_subtarget(ob_storage tx
   tx/ob_ctx_tx_data.cpp
   tx/ob_clog_encrypt_info_os.cpp
+  tx/ob_dblink_client.cpp
   tx/ob_dup_table.cpp
   tx/ob_dup_table_rpc.cpp
   tx/ob_gti_rpc.cpp
@@ -272,8 +273,10 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_replay_executor.cpp
   tx/ob_xa_ctx.cpp
   tx/ob_xa_ctx_mgr.cpp
+  tx/ob_xa_dblink_service.cpp
   tx/ob_xa_define.cpp
   tx/ob_xa_inner_table_gc_worker.cpp
+  tx/ob_xa_query.cpp
   tx/ob_xa_rpc.cpp
   tx/ob_xa_service.cpp
   tx/ob_xa_trans_heartbeat_worker.cpp

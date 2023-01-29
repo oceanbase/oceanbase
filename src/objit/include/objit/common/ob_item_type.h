@@ -1211,6 +1211,7 @@ typedef enum ObItemType
   T_CLIENT_VERSION,
   T_MYSQL_DRIVER,
   T_QUERY_TIMEOUT,
+  T_DBLINK_INFO,
   T_LOG_LEVEL,
   T_LEADING,
   T_ORDERED,
@@ -2059,7 +2060,9 @@ typedef enum ObItemType
   T_SP_OBJ_ELEMENT_SPEC_LIST,
   T_FETCH_CLAUSE, //use to support fetch next rows only
   T_FETCH_TIES_CLAUSE, //use to support fetch next rows with tie
+  T_DBLINK_NAME,
   T_CREATE_DBLINK,
+  T_REVERSE_DBLINK,
   T_DROP_DBLINK,
   T_ALTER_DBLINK,
   T_LABEL_LIST,

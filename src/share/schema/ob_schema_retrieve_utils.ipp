@@ -1987,6 +1987,25 @@ int ObSchemaRetrieveUtils::fill_dblink_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, authpwd, dblink_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, default_val);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, passwordx, dblink_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, default_val);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, authpwdx, dblink_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, default_val);
+    bool skip_column_error = true;
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result,
+                                                            encrypted_password,
+                                                            dblink_schema,
+                                                            true,
+                                                            skip_column_error,
+                                                            default_val);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_host_ip, dblink_schema, true, skip_column_error, default_val);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_host_port, dblink_schema, int32_t, true, skip_column_error, 0);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_cluster_name, dblink_schema, true, skip_column_error, default_val);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_tenant_name, dblink_schema, true, skip_column_error, default_val);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_user_name, dblink_schema, true, skip_column_error, default_val);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_password, dblink_schema, true, skip_column_error, default_val);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(dblink_schema.do_decrypt_password())) {
+      LOG_WARN("failed to decrypt password", K(ret));
+    } else if (OB_FAIL(dblink_schema.do_decrypt_reverse_password())) {
+      LOG_WARN("failed to decrypt reverse_password", K(ret));
+    }
   }
   return ret;
 }

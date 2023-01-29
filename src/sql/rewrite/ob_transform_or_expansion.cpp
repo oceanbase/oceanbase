@@ -647,8 +647,7 @@ int ObTransformOrExpansion::get_table_not_on_null_side(TableItem *cur_table,
   if (OB_ISNULL(cur_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if ((cur_table->is_basic_table() && !cur_table->is_link_table())
-             || cur_table->is_temp_table() || cur_table->is_generated_table()) {
+  } else if (cur_table->is_basic_table() || cur_table->is_temp_table() || cur_table->is_generated_table()) {
     target_table = cur_table;
   } else if (!cur_table->is_joined_table()) {
     /* do nothing */

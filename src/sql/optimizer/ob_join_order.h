@@ -1042,6 +1042,7 @@ struct EstimateCostInfo {
       DISALLOW_COPY_AND_ASSIGN(TempTablePath);
   };
 
+
   class CteTablePath : public Path
   {
   public:

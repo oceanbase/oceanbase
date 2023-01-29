@@ -224,7 +224,7 @@ public:
 
   ObFdItemFactory &get_fd_item_factory() const { return optimizer_context_.get_fd_item_factory(); }
 
-  virtual int generate_raw_plan() = 0;
+  int generate_raw_plan();
 
   virtual int generate_plan();
 
@@ -554,7 +554,6 @@ public:
 
   int allocate_cte_table_path(CteTablePath *cte_table_path,
                               ObLogicalOperator *&out_access_path_op);
-
   int allocate_temp_table_path(TempTablePath *temp_table_path,
                                ObLogicalOperator *&out_access_path_op);
 
@@ -1326,6 +1325,8 @@ public:
   int fill_join_filter_info(JoinFilterInfo &join_filter_info);
 
 protected:
+  virtual int generate_normal_raw_plan() = 0;
+  virtual int generate_dblink_raw_plan();
   int update_plans_interesting_order_info(ObIArray<CandidatePlan> &candidate_plans,
                                           const int64_t check_scope);
 

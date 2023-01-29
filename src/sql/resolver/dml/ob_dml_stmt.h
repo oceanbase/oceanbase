@@ -176,7 +176,8 @@ struct TableItem
     flashback_query_expr_ = nullptr;
     flashback_query_type_ = FlashBackQueryType::NOT_USING;
     function_table_expr_ = nullptr;
-    dblink_id_ = 0;
+    is_reverse_link_ = false;
+    dblink_id_ = OB_INVALID_ID;
     ddl_schema_version_ = 0;
     ddl_table_id_ = common::OB_INVALID_ID;
     json_table_def_ = nullptr;
@@ -198,7 +199,7 @@ struct TableItem
                N_MOCK_ID, mock_id_,
                "view_base_item",
                (NULL == view_base_item_ ? OB_INVALID_ID : view_base_item_->table_id_),
-               K_(dblink_id), K_(dblink_name), K_(link_database_name),
+               K_(dblink_id), K_(dblink_name), K_(link_database_name), K_(is_reverse_link),
                K_(ddl_schema_version), K_(ddl_table_id),
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr));
@@ -213,6 +214,7 @@ struct TableItem
     FUNCTION_TABLE,
     UNPIVOT_TABLE,
     TEMP_TABLE,
+    LINK_TABLE,
     JSON_TABLE,
   };
 
@@ -247,8 +249,9 @@ struct TableItem
   bool is_fake_cte_table() const { return CTE_TABLE == type_; }
   bool is_joined_table() const { return JOINED_TABLE == type_; }
   bool is_function_table() const { return FUNCTION_TABLE == type_; }
+  bool is_link_table() const { return OB_INVALID_ID != dblink_id_; } // why not use type_, cause type_ will be changed in dblink transform rule, but dblink id don't change
+  bool is_link_type() const { return LINK_TABLE == type_; } // after dblink transformer, LINK_TABLE will be BASE_TABLE, BASE_TABLE will be LINK_TABLE
   bool is_json_table() const { return JSON_TABLE == type_; }
-  bool is_link_table() const { return !dblink_name_.empty(); }
   bool is_synonym() const { return !synonym_name_.empty(); }
   bool is_oracle_all_or_user_sys_view() const
   {
@@ -320,6 +323,7 @@ struct TableItem
   FlashBackQueryType flashback_query_type_;
   ObRawExpr *function_table_expr_;
   // dblink
+  bool is_reverse_link_;
   int64_t dblink_id_;
   common::ObString dblink_name_;
   common::ObString link_database_name_;
@@ -974,6 +978,10 @@ public:
   inline bool get_affected_last_insert_id() const { return affected_last_insert_id_; }
   inline bool get_affected_last_insert_id() { return affected_last_insert_id_; }
   int add_autoinc_param(share::AutoincParam &autoinc_param) { return autoinc_params_.push_back(autoinc_param); }
+  inline void set_dblink_id(int64_t id) { dblink_id_ = id; }
+  inline int64_t get_dblink_id() const { return dblink_id_; }
+  inline void set_reverse_link() { is_reverse_link_ = true; }
+  inline bool is_reverse_link() const { return is_reverse_link_; }
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);
   virtual int get_child_stmt_size(int64_t &child_size) const;
   int64_t get_subquery_expr_size() const { return subquery_exprs_.count(); }
@@ -1044,7 +1052,9 @@ public:
                N_OFFSET, limit_offset_expr_,
                N_STMT_HINT, stmt_hint_,
                N_SUBQUERY_EXPRS, subquery_exprs_,
-               N_USER_VARS, user_var_exprs_);
+               N_USER_VARS, user_var_exprs_,
+               K_(dblink_id),
+               K_(is_reverse_link));
 
   int check_if_contain_inner_table(bool &is_contain_inner_table) const;
   int check_if_contain_select_for_update(bool &is_contain_select_for_update) const;
@@ -1204,6 +1214,11 @@ protected:
     Needn't maintain it after resolver.
   */
   common::ObSEArray<TableItem*, 2, common::ModulePageAllocator, true> cte_definitions_;
+  /*
+   * If the current needs to be executed at the remote end, dblink_id indicates the remote definition
+   */
+  int64_t dblink_id_;
+  bool is_reverse_link_;
 };
 
 template <typename T>

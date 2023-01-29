@@ -27,17 +27,25 @@ class ObGroupName;
 
 enum ObCgId
 {
-#define CGID_DEF(name, id) name = id,
+#define CGID_DEF(name, id, worker_concurrency...) name = id,
 #include "ob_group_list.h"
 #undef CGID_DEF
   OBCG_MAXNUM,
+};
+
+class ObCgWorkerConcurrency
+{
+public:
+  ObCgWorkerConcurrency() : worker_concurrency_(1) {}
+  void set_worker_concurrency(uint64_t worker_concurrency = 1) { worker_concurrency_ = worker_concurrency; }
+  uint64_t worker_concurrency_;
 };
 
 class ObCgSet
 {
   ObCgSet()
   {
-#define CGID_DEF(name, id) names_[id] = #name;
+#define CGID_DEF(name, id, worker_concurrency...) names_[id] = #name; worker_concurrency_[id].set_worker_concurrency(worker_concurrency);
 #include "ob_group_list.h"
 #undef CGID_DEF
   }
@@ -53,6 +61,15 @@ public:
     return name;
   }
 
+  uint64_t get_worker_concurrency(int64_t id) const
+  {
+    uint64_t worker_concurrency = 1;
+    if (id > 0 && id < OBCG_MAXNUM) {
+      worker_concurrency = worker_concurrency_[id].worker_concurrency_;
+    }
+    return worker_concurrency;
+  }
+
   static ObCgSet &instance()
   {
     return instance_;
@@ -62,6 +79,7 @@ private:
   static ObCgSet instance_;
 
   const char *names_[OBCG_MAXNUM];
+  ObCgWorkerConcurrency worker_concurrency_[OBCG_MAXNUM];
 };
 
 struct OBGroupIOInfo final

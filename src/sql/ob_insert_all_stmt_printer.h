@@ -24,6 +24,7 @@ namespace sql
 class ObInsertAllStmtPrinter : public ObDMLStmtPrinter {
 
 public:
+  ObInsertAllStmtPrinter() = delete;
   ObInsertAllStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObInsertAllStmt *stmt,
                          ObSchemaGetterGuard *schema_guard,
                          common::ObObjPrintParams print_params) :
@@ -31,7 +32,7 @@ public:
   virtual ~ObInsertAllStmtPrinter() {}
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObInsertAllStmt *stmt);
-  virtual int do_print();
+  virtual int do_print()override;
 
 private:
   int print();

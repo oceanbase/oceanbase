@@ -8267,7 +8267,9 @@ int ObSchemaGetterGuard::get_link_table_schema(
     const ObString &table_name,
     ObIAllocator &allocator,
     ObTableSchema *&table_schema,
-    uint32_t sessid)
+    sql::ObSQLSessionInfo *session_info,
+    const ObString &dblink_name,
+    bool is_reverse_link)
 {
   int ret = OB_SUCCESS;
   const ObDbLinkSchema *dblink_schema = NULL;
@@ -8277,17 +8279,16 @@ int ObSchemaGetterGuard::get_link_table_schema(
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("schema service is NULL", KR(ret));
-  } else if (OB_FAIL(get_dblink_schema(tenant_id, dblink_id, dblink_schema))) {
+  } else if (!is_reverse_link && OB_FAIL(get_dblink_schema(tenant_id, dblink_id, dblink_schema))) {
     LOG_WARN("get dblink schema failed", KR(ret), K(tenant_id));
-  } else if (OB_ISNULL(dblink_schema)) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("dblink schema is NULL", KR(ret));
-  } else if (OB_FAIL(schema_service_->fetch_link_table_schema(*dblink_schema,
+  } else if (OB_FAIL(schema_service_->fetch_link_table_schema(dblink_schema,
                                                               database_name, table_name,
                                                               allocator, table_schema,
-                                                              sessid))) {
+                                                              session_info, dblink_name,
+                                                              is_reverse_link))) {
     LOG_WARN("get link table schema failed", KR(ret));
   }
+  LOG_DEBUG("get link table schema", K(is_reverse_link), KP(dblink_schema), K(ret));
   return ret;
 }
 

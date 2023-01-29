@@ -1065,6 +1065,7 @@ struct ObObjPrintParams
       uint32_t use_memcpy_:1;
       uint32_t skip_escape_:1;
       uint32_t beginning_space_:1;
+      uint32_t for_dblink_:1;
       uint32_t binary_string_print_hex_:1;
       uint32_t print_with_cte_:1;
       uint32_t force_print_cte_:1;

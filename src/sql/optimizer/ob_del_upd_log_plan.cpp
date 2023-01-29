@@ -17,8 +17,10 @@
 #include "sql/optimizer/ob_log_insert.h"
 #include "sql/optimizer/ob_log_update.h"
 #include "sql/optimizer/ob_log_exchange.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/dblink/ob_dblink_utils.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -31,7 +33,7 @@ using share::schema::ObTableSchema;
 using share::schema::ObColumnSchemaV2;
 using share::schema::ObSchemaGetterGuard;
 
-int ObDelUpdLogPlan::generate_raw_plan()
+int ObDelUpdLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
   /*do nothing*/
@@ -90,6 +92,35 @@ int ObDelUpdLogPlan::do_check_fullfill_safe_update_mode(ObLogicalOperator *op, b
 int ObDelUpdLogPlan::prepare_dml_infos()
 {
   return OB_SUCCESS;
+}
+
+int ObDelUpdLogPlan::generate_dblink_raw_plan()
+{
+  int ret = OB_SUCCESS;
+  const ObDelUpdStmt *stmt = get_stmt();
+  ObLogicalOperator *top = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(allocate_link_dml_as_top(top))) {
+    LOG_WARN("failed to allocate link dml as top", K(ret));
+  } else if (OB_FAIL(make_candidate_plans(top))) {
+    LOG_WARN("failed to make candidate plans", K(ret));
+  } else if (OB_FAIL(static_cast<ObLogLink *>(top)->set_link_stmt())) {
+    LOG_WARN("failed to set link stmt", K(ret));
+  } else {
+    set_plan_root(top);
+    bool has_reverse_link = false;
+    if (OB_FAIL(ObDblinkUtils::has_reverse_link(stmt, has_reverse_link))) {
+      LOG_WARN("failed to exec has_reverse_link", K(ret));
+    } else {
+      uint64_t dblink_id = stmt->get_dblink_id();
+      top->set_dblink_id(dblink_id);
+      static_cast<ObLogLinkDml *>(top)->set_reverse_link(has_reverse_link);
+      static_cast<ObLogLinkDml *>(top)->set_dml_type(stmt->get_stmt_type());
+    }
+  }
+  return ret;
 }
 
 // check_table_rowkey_distinct 从逻辑上看计划是否可能有一行数据被更新多次
@@ -2013,6 +2044,21 @@ int ObDelUpdLogPlan::check_update_part_key(const ObTableSchema* index_schema,
         break;
       }
     }
+  }
+  return ret;
+}
+int ObDelUpdLogPlan::allocate_link_dml_as_top(ObLogicalOperator *&old_top)
+{
+  int ret = OB_SUCCESS;
+  ObLogLinkDml *link_dml = NULL;
+  if (OB_ISNULL(link_dml = static_cast<ObLogLinkDml *>(get_log_op_factory().
+                                  allocate(*this, LOG_LINK_DML)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate link dml operator", K(ret));
+  } else if (OB_FAIL(link_dml->compute_property())) {
+    LOG_WARN("failed to compute property", K(ret));
+  } else {
+    old_top = link_dml;
   }
   return ret;
 }

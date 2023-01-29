@@ -130,6 +130,21 @@ void ObGlobalHint::merge_query_timeout_hint(int64_t hint_time)
   }
 }
 
+void ObGlobalHint::merge_dblink_info_hint(int64_t tx_id, int64_t tm_sessid)
+{
+  if (-1 != tx_id && -1 != tm_sessid) {
+    tx_id_ = tx_id;
+    tm_sessid_ = tm_sessid;
+    LOG_DEBUG("merge dblink info hint", K(tx_id_), K(tm_sessid_));
+  }
+}
+
+void ObGlobalHint::reset_dblink_info_hint()
+{
+  tx_id_ = -1;
+  tm_sessid_ = -1;
+}
+
 void ObGlobalHint::merge_max_concurrent_hint(int64_t max_concurrent)
 {
   if (max_concurrent >= 0) {
@@ -244,6 +259,7 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || -1 != topk_precision_
          || 0 != sharding_minimum_row_count_
          || UNSET_QUERY_TIMEOUT != query_timeout_
+         || (-1 != tx_id_ && -1 != tm_sessid_)
          || common::INVALID_CONSISTENCY != read_consistency_
          || OB_USE_PLAN_CACHE_INVALID != plan_cache_policy_
          || false != force_trace_log_
@@ -266,6 +282,8 @@ void ObGlobalHint::reset()
   topk_precision_ = -1;
   sharding_minimum_row_count_ = 0;
   query_timeout_ = UNSET_QUERY_TIMEOUT;
+  tx_id_ = -1;
+  tm_sessid_ = -1;
   read_consistency_ = common::INVALID_CONSISTENCY;
   plan_cache_policy_ = OB_USE_PLAN_CACHE_INVALID;
   force_trace_log_ = false;
@@ -294,6 +312,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_read_consistency_hint(other.read_consistency_, other.frozen_version_);
   merge_topk_hint(other.topk_precision_, other.sharding_minimum_row_count_);
   merge_query_timeout_hint(other.query_timeout_);
+  merge_dblink_info_hint(other.tx_id_, other.tm_sessid_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
   merge_log_level_hint(other.log_level_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
@@ -331,7 +350,7 @@ int ObGlobalHint::assign(const ObGlobalHint &other)
 // hints below not print
 // MAX_CONCURRENT
 // ObDDLSchemaVersionHint
-int ObGlobalHint::print_global_hint(PlanText &plan_text) const
+int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_parallel) const
 {
   int ret = OB_SUCCESS;
   char *buf = plan_text.buf_;
@@ -363,7 +382,7 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
 
   //DOP
-  if (OB_SUCC(ret) && !dops_.empty()) {
+  if (OB_SUCC(ret) && !dops_.empty() && !ignore_parallel) {
     for (int64_t i = 0; OB_SUCC(ret) && i < dops_.count(); ++i) {
       if (OB_FAIL(BUF_PRINTF("%sDOP(%lu %lu)", outline_indent, dops_.at(i).dfo_, dops_.at(i).dop_))) {
         LOG_WARN("failed to print dop hint", K(ret));
@@ -388,6 +407,11 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && UNSET_QUERY_TIMEOUT != query_timeout_) { //QUERY_TIMEOUT
     PRINT_GLOBAL_HINT_NUM("QUERY_TIMEOUT", query_timeout_);
+  }
+  if (OB_SUCC(ret) && -1 != tx_id_ && -1 != tm_sessid_) { //DBLINK_INFO
+    if (OB_FAIL(BUF_PRINTF("%s%s(%ld , %ld)", outline_indent, "DBLINK_INFO", tx_id_, tm_sessid_))) {
+      LOG_WARN("failed to print hint", K(ret), K("DBLINK_INFO(%lld , %lld)"));
+    }
   }
   if (OB_SUCC(ret) && plan_cache_policy_ != OB_USE_PLAN_CACHE_INVALID) { //USE_PLAN_CACHE
     const char *plan_cache_policy = "INVALID";
@@ -414,7 +438,7 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
       LOG_WARN("failed to print log level hint", K(ret));
     }
   }
-  if (OB_SUCC(ret) && UNSET_PARALLEL != parallel_) { //PARALLEL
+  if (OB_SUCC(ret) && UNSET_PARALLEL != parallel_ && !ignore_parallel) { //PARALLEL
     PRINT_GLOBAL_HINT_NUM("PARALLEL", parallel_);
   }
   if (OB_SUCC(ret) && monitor_) { //MONITOR

@@ -324,17 +324,26 @@ class ObSqlSchemaGuard
 public:
   ObSqlSchemaGuard()
   { reset(); }
+  ~ObSqlSchemaGuard()
+  { reset(); }
   void set_schema_guard(share::schema::ObSchemaGetterGuard *schema_guard)
   { schema_guard_ = schema_guard; }
   share::schema::ObSchemaGetterGuard *get_schema_guard() const
   { return schema_guard_; }
   void reset();
+  int get_dblink_schema(const uint64_t tenant_id,
+                        const uint64_t dblink_id,
+                        const share::schema::ObDbLinkSchema *&dblink_schema);
   int get_table_schema(uint64_t dblink_id,
                        const common::ObString &database_name,
                        const common::ObString &table_name,
                        const share::schema::ObTableSchema *&table_schema,
-                       uint32_t sessid = 0);
-
+                       sql::ObSQLSessionInfo *session_info,
+                       const ObString &dblink_name,
+                       bool is_reverse_link);
+  int set_link_table_schema(uint64_t dblink_id,
+                            const common::ObString &database_name,
+                            share::schema::ObTableSchema *table_schema);
   int get_table_schema(uint64_t table_id,
                        uint64_t ref_table_id,
                        const ObDMLStmt *stmt,
@@ -351,14 +360,13 @@ public:
   int get_column_schema(uint64_t table_id, uint64_t column_id,
                         const share::schema::ObColumnSchemaV2 *&column_schema,
                         bool is_link = false) const;
-  int get_table_schema_version(const uint64_t table_id, int64_t &schema_version, bool is_link = false) const;
+  int get_table_schema_version(const uint64_t table_id, int64_t &schema_version) const;
   int get_can_read_index_array(uint64_t table_id,
                                uint64_t *index_tid_array,
                                int64_t &size,
                                bool with_mv,
                                bool with_global_index = true,
                                bool with_domain_index = true,
-                               bool is_link = false,
                                bool with_spatial_index = true);
   int get_link_table_schema(uint64_t table_id,
                             const share::schema::ObTableSchema *&table_schema) const;

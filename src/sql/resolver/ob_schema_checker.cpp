@@ -876,12 +876,24 @@ int ObSchemaChecker::get_link_table_schema(const uint64_t dblink_id,
                                            const ObString &database_name,
                                            const ObString &table_name,
                                            const ObTableSchema *&table_schema,
-                                           uint32_t sessid)
+                                           sql::ObSQLSessionInfo *session_info,
+                                           const common::ObString &dblink_name,
+                                           bool is_reverse_link)
 {
   int ret = OB_SUCCESS;
   OV (OB_NOT_NULL(sql_schema_mgr_));
-  OZ (sql_schema_mgr_->get_table_schema(dblink_id, database_name, table_name, table_schema, sessid),
-      dblink_id, database_name, table_name);
+  OZ (sql_schema_mgr_->get_table_schema(dblink_id, database_name, table_name, table_schema, session_info, dblink_name, is_reverse_link),
+      dblink_id, database_name, table_name, is_reverse_link);
+  return ret;
+}
+
+int ObSchemaChecker::set_link_table_schema(uint64_t dblink_id,
+                          const common::ObString &database_name,
+                          share::schema::ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  OV (OB_NOT_NULL(sql_schema_mgr_));
+  OZ (sql_schema_mgr_->set_link_table_schema(dblink_id, database_name, table_schema));
   return ret;
 }
 
@@ -911,8 +923,7 @@ int ObSchemaChecker::get_can_read_index_array(
     uint64_t table_id,
     uint64_t *index_tid_array,
     int64_t &size,
-    bool with_mv,
-    bool is_link /* = false */) const
+    bool with_mv) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -924,7 +935,7 @@ int ObSchemaChecker::get_can_read_index_array(
   } else if (OB_NOT_NULL(sql_schema_mgr_)) {
     if (OB_FAIL(sql_schema_mgr_->get_can_read_index_array(
                 table_id, index_tid_array, size, with_mv,
-                true /* with_global_index*/, true /* with_domin_index*/, is_link, false /* with_spatial_index*/))) {
+                true /* with_global_index*/, true /* with_domin_index*/, false /* with_spatial_index*/))) {
       LOG_WARN("failed to get_can_read_index_array", K(table_id), K(ret));
     }
   } else {
@@ -1099,7 +1110,7 @@ int ObSchemaChecker::check_column_has_index(const uint64_t tenant_id, uint64_t t
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
-  } else if (OB_FAIL(get_can_read_index_array(tenant_id, table_id, index_tid_array, index_cnt, true, is_link))) {
+  } else if (OB_FAIL(get_can_read_index_array(tenant_id, table_id, index_tid_array, index_cnt, true))) {
     LOG_WARN("get table schema failed", K(tenant_id), K(table_id));
   }
   for (int64_t i = 0; OB_SUCC(ret) && !has_index && i < index_cnt; ++i) {

@@ -309,8 +309,6 @@ public:
   inline const ObTablePartitionInfo *get_table_partition_info() const { return table_partition_info_; }
   inline void set_table_partition_info(ObTablePartitionInfo *table_partition_info) { table_partition_info_ = table_partition_info; }
 
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
-
   bool is_index_scan() const { return ref_table_id_ != index_table_id_; }
   bool is_table_whole_range_scan() const { return !is_index_scan() && (NULL == pre_query_range_ ||
                                                   (1 == ranges_.count() && ranges_.at(0).is_whole_range())); }

@@ -491,7 +491,6 @@ public:
     has_dynamic_exec_param_(false),
     is_valid_temporal_part_range_(false),
     is_valid_temporal_subpart_range_(false),
-    is_link_(false),
     is_part_range_get_(false),
     is_subpart_range_get_(false),
     is_non_partition_optimized_(false),
@@ -539,7 +538,6 @@ public:
     has_dynamic_exec_param_(false),
     is_valid_temporal_part_range_(false),
     is_valid_temporal_subpart_range_(false),
-    is_link_(false),
     is_part_range_get_(false),
     is_subpart_range_get_(false),
     is_non_partition_optimized_(false),
@@ -568,8 +566,7 @@ public:
            const ObIArray<common::ObObjectID> *part_ids,
            const common::ObDataTypeCastParams &dtc_params,
            const bool is_dml_table,
-           common::ObIArray<ObRawExpr*> *sort_exprs = NULL,
-           bool is_link = false);
+           common::ObIArray<ObRawExpr*> *sort_exprs = NULL);
   int init(share::schema::ObSchemaGetterGuard &schema_guard,
       const ObDMLStmt &stmt,
       ObExecContext *exec_ctx,
@@ -668,8 +665,7 @@ public:
                            const ObIArray<ObTabletID> &tablet_ids,
                            const ObIArray<ObObjectID> &partition_ids,
                            ObCandiTabletLocIArray &candi_tablet_locs,
-                           bool nonblock = false,
-                           bool is_link = false) const;
+                           bool nonblock = false) const;
 
   static int send_add_interval_partition_rpc_new_engine(ObIAllocator &allocator,
                                                         ObSQLSessionInfo *session,
@@ -768,8 +764,7 @@ public:
                                           uint64_t table_id,
                                           const common::ObIArray<uint64_t> &column_ids,
                                           ObExecContext &exec_ctx,
-                                          const bool is_dml_table = true,
-                                          bool is_link = false);
+                                          const bool is_dml_table = true);
 
   int calc_not_partitioned_table_ids(ObExecContext &exec_ctx);
 
@@ -778,9 +773,6 @@ public:
                K_(has_dynamic_exec_param),
                K_(part_hint_ids));
 private:
-  static int get_link_table_location(const uint64_t tenant_id,
-                                     const uint64_t table_id,
-                                     share::ObLSLocation &location);
   int init_table_location(ObExecContext &exec_ctx,
                           ObSqlSchemaGuard &schema_guard,
                           uint64_t table_id,
@@ -793,8 +785,7 @@ private:
   int init_table_location_with_rowkey(ObSqlSchemaGuard &schema_guard,
                                       uint64_t table_id,
                                       ObExecContext &exec_ctx,
-                                      const bool is_dml_table = true,
-                                      bool is_link = false);
+                                      const bool is_dml_table = true);
 
   //gen_col_node: partition information of dependented column of generated partition column
   //gen_col_expr: expression of dependented column of generated partition column
@@ -1158,8 +1149,6 @@ private:
   //mysql enable partition pruning by query range if part expr is temporal func like year(date)
   bool is_valid_temporal_part_range_;
   bool is_valid_temporal_subpart_range_;
-
-  bool is_link_;   //used to identify whether the table is a link_table
   bool is_part_range_get_;
   bool is_subpart_range_get_;
 

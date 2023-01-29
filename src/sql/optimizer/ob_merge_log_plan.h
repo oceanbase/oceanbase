@@ -29,7 +29,6 @@ public:
       {
       }
   virtual ~ObMergeLogPlan() {}
-  virtual int generate_raw_plan() override;
 
   const ObMergeStmt *get_stmt() const
   { return reinterpret_cast<const ObMergeStmt*>(stmt_); }
@@ -42,6 +41,7 @@ public:
   const ObIArray<ObRawExpr *>& get_delete_condition() const { return delete_condition_exprs_; }
   virtual int prepare_dml_infos() override;
 private:
+  virtual int generate_normal_raw_plan() override;
   int candi_allocate_merge();
   int create_merge_plans(ObIArray<CandidatePlan> &candi_plans,
                          ObTablePartitionInfo *insert_table_part,

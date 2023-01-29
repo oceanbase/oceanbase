@@ -837,7 +837,8 @@ public:
                               ObRawExprFactory &expr_factory);
   // 根据表达式类型判断是否需要增加布尔表达式
   // 因为有些表达式的返回结果就是布尔语义的，这些表达式前面就不用再增加布尔表达式
-  static bool check_need_bool_expr(const ObRawExpr *expr, bool &need_bool_expr);
+  static int check_need_bool_expr(const ObRawExpr *expr, bool &need_bool_expr);
+  static int check_is_bool_expr(const ObRawExpr *expr, bool &is_bool_expr);
 
   // parent_raw_expr -> child_raw_expr加入隐式cast表达式后，变为:
   // parent_raw_expr -> cast_raw_expr -> child_raw_expr

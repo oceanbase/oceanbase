@@ -104,26 +104,6 @@ int ObLogSubPlanScan::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
-int ObLogSubPlanScan::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *child = get_child(first_child);
-  if (0 == dblink_id_) {
-    // do nothing
-  } else if (OB_ISNULL(child)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child is NULL", K(ret));
-  } else if (OB_FAIL(link_ctx.spell_subplan_scan(static_cast<const ObSelectStmt *>(get_stmt()),
-                                                get_output_exprs(),
-                                                child->get_output_exprs(),
-                                                startup_exprs_,
-                                                filter_exprs_,
-                                                subquery_name_))) {
-    LOG_WARN("dblink fail to reverse spell subplan scan", K(dblink_id_), K(ret));
-  }
-  return ret;
-}
-
 int ObLogSubPlanScan::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
 {
   int ret = OB_SUCCESS;

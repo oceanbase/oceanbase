@@ -31,7 +31,7 @@ public:
   { }
   virtual ~ObInsertLogPlan()
   { }
-  virtual int generate_raw_plan() override;
+  virtual int generate_normal_raw_plan() override;
 
   const ObInsertStmt *get_stmt() const override
   { return reinterpret_cast<const ObInsertStmt*>(stmt_); }

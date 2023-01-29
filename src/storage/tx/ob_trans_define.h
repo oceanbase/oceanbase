@@ -229,8 +229,8 @@ class ObTransID
   OB_UNIS_VERSION(1);
 public:
   ObTransID() : tx_id_(0) {}
+  ObTransID(const int64_t tx_id) : tx_id_(tx_id) {}
   ~ObTransID() { tx_id_ = 0; }
-  ObTransID(const int64_t v) :tx_id_(v) {}
   ObTransID &operator=(const ObTransID &r) {
     if (this != &r) {
       tx_id_ = r.tx_id_;
@@ -463,6 +463,13 @@ public:
 private:
   ObTransType() {}
   ~ObTransType() {}
+};
+
+enum class ObGlobalTxType : uint8_t
+{
+  PLAIN = 0,
+  XA_TRANS = 1,
+  DBLINK_TRANS = 2,
 };
 
 /*

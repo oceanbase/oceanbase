@@ -113,7 +113,7 @@ class ObTempTableTransformationOpSpec;
 class ObErrLogSpec;
 class ObSelectIntoSpec;
 class ObFunctionTableSpec;
-class ObLinkScanSpec;
+class ObLinkDmlSpec;
 class ObInsertAllTableInfo;
 class ObTableInsertAllSpec;
 class ObConflictCheckerCtdef;
@@ -386,7 +386,8 @@ private:
   int generate_spec(ObLogInsert &op, ObPxMultiPartSSTableInsertSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec, const bool in_root_job);
   int generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec &spec, const bool in_root_job);
-  int generate_spec(ObLogLink &op, ObLinkScanSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogLinkScan &op, ObLinkScanSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogLinkDml &op, ObLinkDmlSpec &spec, const bool in_root_job);
   int generate_spec(ObLogInsertAll &op, ObTableInsertAllSpec &spec, const bool in_root_job);
   int generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec, const bool in_root_job);
 

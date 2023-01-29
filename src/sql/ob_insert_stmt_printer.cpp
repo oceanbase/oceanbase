@@ -122,7 +122,7 @@ int ObInsertStmtPrinter::print_into()
     if (OB_ISNULL(table_item = insert_stmt->get_table_item(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid table item", K(stmt_->get_table_size()), K(ret));
-    } else if (OB_FAIL(print_table(table_item))) {
+    } else if (OB_FAIL(print_table(table_item, true))) {
       LOG_WARN("failed to print table", K(*table_item), K(ret));
     } else {
       DATA_PRINTF("(");
@@ -169,7 +169,7 @@ int ObInsertStmtPrinter::print_values()
       if (OB_ISNULL(view) || OB_ISNULL(sub_select_stmt = view->ref_query_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sub select stmt is null", K(ret), K(sub_select_stmt));
-      } else if (OB_FAIL(print_inline_view(sub_select_stmt, false, true))) {
+      } else if (OB_FAIL(print_subquery(sub_select_stmt, PRINT_CTE | FORCE_COL_ALIAS))) {
         LOG_WARN("failed to print subquery", K(ret));
       }
     } else {

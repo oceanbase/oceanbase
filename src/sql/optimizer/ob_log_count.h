@@ -29,7 +29,6 @@ public:
       rownum_expr_(NULL)
   {}
   virtual ~ObLogCount() {}
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
   inline ObRawExpr *get_rownum_limit_expr() const { return rownum_limit_expr_; }
   inline void set_rownum_limit_expr(ObRawExpr *rownum_limit_expr) { rownum_limit_expr_ = rownum_limit_expr; }
   inline ObRawExpr *get_rownum_expr() const { return rownum_expr_; }

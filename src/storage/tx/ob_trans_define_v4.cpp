@@ -208,6 +208,7 @@ ObTxDesc::ObTxDesc()
     snapshot_uncertain_bound_(0),
     snapshot_scn_(0),
     sess_id_(0),
+    global_tx_type_(ObGlobalTxType::PLAIN),
     op_sn_(0),                          // default is from 0
     state_(State::INVL),
     flags_({ 0 }),
@@ -336,6 +337,7 @@ void ObTxDesc::reset()
   snapshot_version_.reset();
   snapshot_uncertain_bound_ = 0;
   snapshot_scn_ = 0;
+  global_tx_type_ = ObGlobalTxType::PLAIN;
 
   op_sn_ = -1;
 
@@ -373,6 +375,7 @@ void ObTxDesc::reset()
   commit_task_.reset();
   xa_ctx_ = NULL;
   tlog_.reset();
+  xa_ctx_ = NULL;
 #ifndef NDEBUG
   alloc_link_.reset();
 #endif
@@ -836,6 +839,24 @@ int ObTxDesc::merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_txs
   return ret;
 }
 
+// get global trans type for session
+// 1. if xid is empty or xa_ctx is null, PLAIN is returned.
+// 2. if xid from session is equal to xid in desc and global_tx_type is DBLINK_TRANS,
+//    DBLINK_TRANS is returned.
+// 3. if xid from session is not equal to xid in desc and global_tx_type is DBLINK_TRANS,
+//    XA_TRANS is returned.
+ObGlobalTxType ObTxDesc::get_global_tx_type(const ObXATransID &xid) const
+{
+  ObGlobalTxType tx_type = ObGlobalTxType::PLAIN;
+  if (NULL == xa_ctx_ || xid_.empty()) {
+    // return PLAIN
+  } else if (!xid_.all_equal_to(xid)) {
+    tx_type = ObGlobalTxType::XA_TRANS;
+  } else {
+    tx_type = global_tx_type_;
+  }
+  return tx_type;
+}
 int ObTxDesc::get_parts_copy(ObTxPartList &copy_parts)
 {
   int ret = OB_SUCCESS;

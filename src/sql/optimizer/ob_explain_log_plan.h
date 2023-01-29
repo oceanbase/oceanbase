@@ -25,7 +25,8 @@ namespace sql
       : ObLogPlan(ctx, explain_stmt)
     {}
     virtual ~ObExplainLogPlan() {}
-    virtual int generate_raw_plan() override;
+  protected:
+    virtual int generate_normal_raw_plan() override;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObExplainLogPlan);
   };

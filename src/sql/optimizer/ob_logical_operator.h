@@ -29,7 +29,6 @@
 #include "sql/engine/px/ob_px_op_size_factor.h"
 #include "sql/ob_sql_context.h"
 #include "sql/optimizer/ob_fd_item.h"
-#include "sql/dblink/ob_spell_link_stmt.h"
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/monitor/ob_sql_plan_manager.h"
 namespace oceanbase
@@ -254,7 +253,6 @@ struct partition_location
  */
 
 #define IS_EXPR_PASSBY_OPER(type) (log_op_def::LOG_GRANULE_ITERATOR == (type)    \
-                                   || log_op_def::LOG_LINK == (type)             \
                                    || log_op_def::LOG_MONITORING_DUMP == (type)) \
 
 
@@ -1361,13 +1359,8 @@ public:
   virtual int px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx);
   virtual int has_block_parent_for_shj(bool &has_shj);
 
-  virtual int allocate_link_post();
   virtual int allocate_startup_expr_post();
   int allocate_startup_expr_post(int64_t child_idx);
-  int allocate_link_node_above(int64_t child_idx);
-
-  virtual int collect_link_sql_context_pre(GenLinkStmtPostContext &link_ctx);
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx);
   /**
    *  Start plan tree traverse
    *

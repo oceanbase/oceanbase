@@ -96,7 +96,7 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
     if (0 != (tmp_ret = mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_)))) {
       ret = -mysql_errno(stmt_);
       LOG_WARN("fail to query server","server", stmt_->host, "port", stmt_->port,
-               "err_msg", mysql_error(stmt_), K(tmp_ret), K(ret));
+               "err_msg", mysql_error(stmt_), K(tmp_ret), K(ret), K(sql_str_));
       if (OB_NOT_MASTER == tmp_ret) {
         // conn -> server pool -> connection pool
         conn_->get_root()->get_root()->signal_refresh(); // refresh server pool immediately
@@ -105,7 +105,7 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
       affected_rows = mysql_affected_rows(stmt_);
     }
     int64_t end = ObTimeUtility::current_monotonic_raw_time();
-    LOG_TRACE("execute stat", "excute time(us)", (end - begin), "SQL:", sql_str_);
+    LOG_TRACE("execute stat", "excute time(us)", (end - begin), "SQL:", sql_str_, K(ret));
   }
   return ret;
 }

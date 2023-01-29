@@ -34,7 +34,7 @@ ob_set_subtarget(ob_sql common
 
 ob_set_subtarget(ob_sql common_mixed
   dblink/ob_dblink_utils.cpp
-  dblink/ob_spell_link_stmt.cpp
+  dblink/ob_tm_service.cpp
   privilege_check/ob_ora_priv_check.cpp
   privilege_check/ob_privilege_check.cpp
 )
@@ -226,6 +226,8 @@ ob_set_subtarget(ob_sql engine_dml
   engine/dml/ob_table_modify_op.cpp
   engine/dml/ob_table_replace_op.cpp
   engine/dml/ob_table_update_op.cpp
+  engine/dml/ob_link_dml_op.cpp
+  engine/dml/ob_link_op.cpp
   engine/dml/ob_trigger_handler.cpp
 )
 
@@ -811,6 +813,8 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_json_table.cpp
   optimizer/ob_log_limit.cpp
   optimizer/ob_log_link.cpp
+  optimizer/ob_log_link_scan.cpp
+  optimizer/ob_log_link_dml.cpp
   optimizer/ob_log_material.cpp
   optimizer/ob_log_merge.cpp
   optimizer/ob_log_monitoring_dump.cpp
@@ -1144,6 +1148,8 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_win_magic.cpp
   rewrite/ob_transform_expr_pullup.cpp
   rewrite/ob_transformer_impl.cpp
+  rewrite/ob_transform_dblink.cpp
+  rewrite/ob_union_find.cpp
 )
 
 ob_set_subtarget(ob_sql session

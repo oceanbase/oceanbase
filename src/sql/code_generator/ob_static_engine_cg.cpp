@@ -41,7 +41,8 @@
 #include "sql/optimizer/ob_log_topk.h"
 #include "sql/optimizer/ob_log_count.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
-#include "sql/optimizer/ob_log_link.h"
+#include "sql/optimizer/ob_log_link_scan.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "sql/optimizer/ob_log_monitoring_dump.h"
 #include "sql/optimizer/ob_log_temp_table_access.h"
 #include "sql/optimizer/ob_log_temp_table_insert.h"
@@ -131,6 +132,7 @@
 #include "sql/engine/basic/ob_function_table_op.h"
 #include "sql/engine/basic/ob_json_table_op.h"
 #include "sql/engine/table/ob_link_scan_op.h"
+#include "sql/engine/dml/ob_link_dml_op.h"
 #include "sql/engine/dml/ob_table_insert_all_op.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
@@ -208,12 +210,22 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
   int ret = OB_SUCCESS;
   const int64_t child_num = op.get_num_of_child();
   const bool is_exchange = log_op_def::LOG_EXCHANGE == op.get_type();
-  bool is_link_scan = (log_op_def::LOG_LINK == op.get_type());
+  bool is_link_scan = (log_op_def::LOG_LINK_SCAN == op.get_type());
   spec = NULL;
   // generate child first.
   ObSEArray<ObOpSpec *, 2> children;
   check_eval_once = true;
-
+  if (is_link_scan) {
+    if (OB_ISNULL(op.get_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret));
+    } else if (OB_ISNULL(op.get_plan()->get_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret));
+    } else {
+      phy_plan_->set_has_link_sfd(op.get_plan()->get_stmt()->has_for_update());
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < child_num && !is_link_scan; i++) {
     ObLogicalOperator *child_op = op.get_child(i);
     ObOpSpec *child_spec = NULL;
@@ -676,7 +688,10 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         support = false;
         stop_checking = true;
       }
-      LOG_DEBUG("check_vectorie_supported", K(disable_vectorize), K(support),
+      if (log_op_def::LOG_LINK_SCAN == op->get_type()) {
+        stop_checking = true;
+      }
+      LOG_DEBUG("check_vectorie_supported", K(disable_vectorize), K(support), K(stop_checking),
                 K(op->get_num_of_child()));
       // continue searching until found an operator with vectorization explicitly disabled
       for (int64_t i = 0; !stop_checking && OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
@@ -769,7 +784,7 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
     OZ(generate_rt_exprs(op.get_filter_exprs(), spec.filters_));
   }
   OZ(generate_rt_exprs(op.get_output_exprs(), spec.output_));
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && log_op_def::LOG_LINK_SCAN != op.get_type()) {
     if (OB_FAIL(check_exprs_columnlized(op))) {
       LOG_WARN("check exprs columnlized failed",
                K(ret), K(op.get_name()), K(op.get_op_id()), K(op.get_type()),
@@ -4558,8 +4573,7 @@ int ObStaticEngineCG::set_partition_range_info(ObLogTableScan &op, ObTableScanSp
     LOG_ERROR("invalid table id", K(table_id), K(ref_table_id), K(index_id), K(ret));
   } else if (is_virtual_table(ref_table_id)
              || is_inner_table(ref_table_id)
-             || is_cte_table(ref_table_id)
-             || ObSqlSchemaGuard::is_link_table(op.get_stmt(), table_id)) {
+             || is_cte_table(ref_table_id)) {
     /*do nothing*/
   } else if (!stmt->is_select_stmt()
              || tbl_part_info->get_table_location().has_generated_column()) {
@@ -5549,7 +5563,31 @@ int ObStaticEngineCG::extract_non_aggr_expr(ObExpr *input,
   return ret;
 }
 
-int ObStaticEngineCG::generate_spec(ObLogLink &op, ObLinkScanSpec &spec, const bool in_root_job)
+int ObStaticEngineCG::generate_spec(ObLogLinkScan &op, ObLinkScanSpec &spec, const bool in_root_job)
+{
+  UNUSED(in_root_job);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(op.gen_link_stmt_param_infos())) {
+    LOG_WARN("failed to generate link stmt", K(ret));
+  } else if (OB_FAIL(spec.set_param_infos(op.get_param_infos()))) {
+    LOG_WARN("failed to set param infos", K(ret));
+  } else if (OB_FAIL(spec.set_stmt_fmt(op.get_stmt_fmt_buf(), op.get_stmt_fmt_len()))) {
+    LOG_WARN("failed to set stmt fmt", K(ret));
+  } else if (OB_ISNULL(op.get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_ISNULL(op.get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else {
+    spec.has_for_update_ = op.get_plan()->get_stmt()->has_for_update();
+    spec.is_reverse_link_ = op.get_reverse_link();
+    spec.dblink_id_ = op.get_dblink_id();
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogLinkDml &op, ObLinkDmlSpec &spec, const bool in_root_job)
 {
   UNUSED(in_root_job);
   int ret = OB_SUCCESS;
@@ -5560,7 +5598,10 @@ int ObStaticEngineCG::generate_spec(ObLogLink &op, ObLinkScanSpec &spec, const b
   } else if (OB_FAIL(spec.set_stmt_fmt(op.get_stmt_fmt_buf(), op.get_stmt_fmt_len()))) {
     LOG_WARN("failed to set stmt fmt", K(ret));
   } else {
+    spec.is_reverse_link_ = op.get_reverse_link();
     spec.dblink_id_ = op.get_dblink_id();
+    spec.plan_->set_returning(false);
+    spec.plan_->need_drive_dml_query_ = true;
   }
   return ret;
 }
@@ -6374,6 +6415,8 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     } else {
       phy_plan.set_need_param(param_opt==ObParamOption::FORCE);
     }
+    phy_plan.tx_id_ = log_plan.get_optimizer_context().get_global_hint().tx_id_;
+    phy_plan.tm_sessid_ = log_plan.get_optimizer_context().get_global_hint().tm_sessid_;
   }
 
   if (OB_SUCC(ret)) {
@@ -6807,8 +6850,12 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       type = PHY_UNPIVOT;
       break;
     }
-    case log_op_def::LOG_LINK: {
-      type = PHY_LINK;
+    case log_op_def::LOG_LINK_SCAN: {
+      type = PHY_LINK_SCAN;
+      break;
+    }
+    case log_op_def::LOG_LINK_DML: {
+      type = PHY_LINK_DML;
       break;
     }
     case log_op_def::LOG_STAT_COLLECTOR: {
@@ -6821,7 +6868,7 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
     }
     default:
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unknown logical operator", K(log_op.get_type()));
+      LOG_WARN("unknown logical operator", K(log_op.get_type()), K(lbt()));
       break;
   }
   return ret;

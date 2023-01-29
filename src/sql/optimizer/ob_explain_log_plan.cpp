@@ -32,7 +32,7 @@ using namespace oceanbase::sql::log_op_def;
  *  2. generate the plan text from the logical plan and put the text in the buffer
  *     and remember the logical plan as well.
  */
-int ObExplainLogPlan::generate_raw_plan()
+int ObExplainLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_explain_stmt())) {

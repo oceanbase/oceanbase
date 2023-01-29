@@ -703,33 +703,6 @@ int ObLogSet::allocate_granule_post(AllocGIContext &ctx)
   return ret;
 }
 
-int ObLogSet::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (0 == dblink_id_) {
-    // do nothing
-  } else {
-    bool is_parent_distinct = false;
-    is_parent_distinct = LOG_DISTINCT == get_parent()->get_type();
-    if (!is_parent_distinct && 
-        LOG_SORT  == get_parent()->get_type() &&
-        NULL != get_parent()->get_parent()) {
-      is_parent_distinct = LOG_DISTINCT == get_parent()->get_parent()->get_type();
-    }
-    if (OB_FAIL(link_ctx.spell_set(static_cast<const ObSelectStmt *>(get_stmt()),
-                                          this,
-                                          startup_exprs_,
-                                          filter_exprs_,
-                                          set_op_,
-                                          is_distinct_,
-                                          is_parent_distinct
-                                          ))) {
-      LOG_WARN("dblink fail to reverse spell set", K(dblink_id_), K(ret));
-    }
-  }
-  return ret;
-}
-
 uint64_t ObLogSet::hash(uint64_t seed) const
 {
   seed = do_hash(is_distinct_, seed);

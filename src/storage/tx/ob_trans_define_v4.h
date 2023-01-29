@@ -340,6 +340,7 @@ protected:
   int64_t snapshot_uncertain_bound_;   // uncertain bound of @snapshot_version_
   int64_t snapshot_scn_;               // the time of acquire @snapshot_version_
   uint32_t sess_id_;                   // sesssion id
+  ObGlobalTxType global_tx_type_;      // global trans type, i.e., xa or dblink
 
   uint64_t op_sn_;                     // Tx level operation sequence No
 
@@ -611,7 +612,12 @@ public:
   bool is_xa_terminate_state_() const;
   void set_can_elr(const bool can_elr) { can_elr_ = can_elr; }
   bool is_can_elr() const { return can_elr_; }
+  // for dblink
+  ObGlobalTxType get_global_tx_type(const ObXATransID &xid) const;
+  void set_global_tx_type(const ObGlobalTxType global_tx_type)
+  { global_tx_type_ = global_tx_type; }
   bool need_rollback() { return state_ == State::ABORTED; }
+  int64_t get_timeout_us() const { return timeout_us_; }
   share::SCN get_snapshot_version() { return snapshot_version_; }
   ObITxCallback *cancel_commit_cb();
   int get_parts_copy(ObTxPartList &copy_parts);

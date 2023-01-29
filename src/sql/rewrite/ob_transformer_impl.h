@@ -56,7 +56,9 @@ public:
   }
   int transform(ObDMLStmt *&stmt);
   int do_transform(ObDMLStmt *&stmt);
-  int do_transform_pre_processing(ObDMLStmt *&stmt);
+  int do_transform_pre_precessing(ObDMLStmt *&stmt);
+  int do_transform_dblink_write(ObDMLStmt *&stmt, bool &trans_happened);
+  int do_transform_dblink_read(ObDMLStmt *&stmt);
   int transform_heuristic_rule(ObDMLStmt *&stmt);
   int transform_rule_set(ObDMLStmt *&stmt,
                          uint64_t needed_types,
@@ -115,7 +117,8 @@ public:
       update_global_index_(false),
       contain_unpivot_query_(false),
       contain_enum_set_values_(false),
-      contain_geometry_values_(false)
+      contain_geometry_values_(false),
+      contain_link_table_(false)
     {}
 
     bool all_found() const {
@@ -125,7 +128,8 @@ public:
           update_global_index_ &&
           contain_unpivot_query_ &&
           contain_enum_set_values_ &&
-          contain_geometry_values_;
+          contain_geometry_values_ &&
+          contain_link_table_;
     }
 
     bool contain_hie_query_;
@@ -135,6 +139,7 @@ public:
     bool contain_unpivot_query_;
     bool contain_enum_set_values_;
     bool contain_geometry_values_;
+    bool contain_link_table_;
   };
   int check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func);
   inline ObTransformerCtx *get_trans_ctx() { return ctx_; }

@@ -325,6 +325,8 @@ public:
   inline bool is_use_temp_table() const { return use_temp_table_; }
   inline void set_has_link_table(bool value) { has_link_table_ = value; }
   inline bool has_link_table() const { return has_link_table_; }
+  inline void set_has_link_sfd(bool value) { has_link_sfd_ = value; }
+  inline bool has_link_sfd() const { return has_link_sfd_; }
   void set_batch_size(const int64_t v) { batch_size_ = v; }
   int64_t get_batch_size() const { return batch_size_; }
   bool is_vectorized() const { return batch_size_ > 0; }
@@ -429,6 +431,13 @@ public:
   inline const ObExprFrameInfo &get_expr_frame_info() const { return expr_frame_info_; }
 
   const ObOpSpec *get_root_op_spec() const { return root_op_spec_; }
+  inline bool is_link_dml_plan() {
+    bool is_link_dml = false;
+    if (NULL != get_root_op_spec()) {
+      is_link_dml = oceanbase::sql::ObPhyOperatorType::PHY_LINK_DML == get_root_op_spec()->type_;
+    }
+    return is_link_dml;
+  }
   void set_root_op_spec(ObOpSpec *spec) { root_op_spec_ = spec; is_new_engine_ = true; }
   inline bool need_consistent_snapshot() const { return need_consistent_snapshot_; }
   inline void set_need_consistent_snapshot(bool need_snapshot)
@@ -571,6 +580,8 @@ public:
   //@todo: yuchen.wyc add a temporary member to mark whether
   //the DML statement needs to be executed through get_next_row
   bool need_drive_dml_query_;
+  int64_t tx_id_; //for dblink recover xa tx
+  int64_t tm_sessid_; //for dblink get connection attached on tm session
 private:
   bool is_returning_; //是否设置了returning
 
@@ -601,6 +612,7 @@ public:
   bool use_pdml_; //is parallel dml plan
   bool use_temp_table_;
   bool has_link_table_;
+  bool has_link_sfd_;
   bool need_serial_exec_;//mark if need serial execute?
   bool temp_sql_can_prepare_;
   bool is_need_trans_;

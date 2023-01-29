@@ -35,8 +35,7 @@ public:
                       const bool force_col_alias = false)
   : ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params),
     column_list_(NULL),
-    force_col_alias_(force_col_alias)
-  {}
+    force_col_alias_(force_col_alias) {}
   
   ObSelectStmtPrinter(char *buf,
                       int64_t buf_len,
@@ -48,8 +47,7 @@ public:
                       const bool force_col_alias = false)
   : ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params, param_store),
     column_list_(NULL),
-    force_col_alias_(force_col_alias)
-  {}
+    force_col_alias_(force_col_alias) {}
   virtual ~ObSelectStmtPrinter() {}
 
   void init(char *buf,
@@ -80,6 +78,7 @@ private:
   int print_for_update();
 
   ///////cte related functions
+  int print_with();
   int print_multi_rollup_items(const common::ObIArray<ObMultiRollupItem> &rollup_items);
   int print_with_check_option();
 
@@ -92,6 +91,7 @@ private:
   // data members
   // create view v(column_list) as...
   common::ObIArray<common::ObString> *column_list_;
+  // tell printer whether current stmt is a set left/right subquery
   bool force_col_alias_;
 };
 

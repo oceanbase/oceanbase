@@ -549,20 +549,6 @@ int ObLogGroupBy::print_used_hint(PlanText &plan_text)
   return ret;
 }
 
-int ObLogGroupBy::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (0 == dblink_id_) {
-    // do nothing
-  } else if (OB_FAIL(link_ctx.spell_group_by(startup_exprs_, 
-                                             group_exprs_, 
-                                             rollup_exprs_, 
-                                             filter_exprs_))) {
-    LOG_WARN("dblink fail to reverse spell group by", K(dblink_id_), K(ret));
-  }
-  return ret;
-}
-
 int ObLogGroupBy::compute_fd_item_set()
 {
   int ret = OB_SUCCESS;

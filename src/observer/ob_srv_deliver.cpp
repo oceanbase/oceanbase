@@ -27,6 +27,7 @@
 #include "rpc/obmysql/obsm_struct.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "rpc/obmysql/ob_mysql_packet.h"
 
 using namespace oceanbase::common;
 
@@ -331,7 +332,23 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
   if (NULL != sess) {
     conn = static_cast<ObSMConnection *>(sess);
     tenant = conn->tenant_;
-    req.set_group_id(conn->group_id_);
+    if (static_cast<int64_t>(share::OBCG_DEFAULT) == req.get_group_id()) {
+      int64_t valid_sql_req_level = req.get_sql_request_level() ? req.get_sql_request_level() : conn->sql_req_level_;
+      switch (valid_sql_req_level)
+      {
+      case 1:
+        req.set_group_id(share::OBCG_ID_SQL_REQ_LEVEL1);
+        break;
+      case 2:
+        req.set_group_id(share::OBCG_ID_SQL_REQ_LEVEL2);
+        break;
+      case 3:
+        req.set_group_id(share::OBCG_ID_SQL_REQ_LEVEL3);
+        break;
+      default:
+        break;
+      }
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("session from request is NULL", K(req), K(ret));

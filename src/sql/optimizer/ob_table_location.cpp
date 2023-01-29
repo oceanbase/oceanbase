@@ -651,9 +651,7 @@ int ObTableLocation::get_location_type(const common::ObAddr &server,
   int ret = OB_SUCCESS;
   location_type = OB_TBL_LOCATION_UNINITIALIZED;
   const TableItem *table_item = NULL;
-  if (is_link_) {
-    location_type = OB_TBL_LOCATION_LOCAL;
-  } else if (0 == phy_part_loc_info_list.count()) {
+  if (0 == phy_part_loc_info_list.count()) {
     location_type = OB_TBL_LOCATION_LOCAL;
   } else if (1 == phy_part_loc_info_list.count()) {
     share::ObLSReplicaLocation replica_location;
@@ -718,7 +716,6 @@ int ObTableLocation::assign(const ObTableLocation &other)
     has_dynamic_exec_param_ = other.has_dynamic_exec_param_;
     is_valid_temporal_part_range_ = other.is_valid_temporal_part_range_;
     is_valid_temporal_subpart_range_ = other.is_valid_temporal_subpart_range_;
-    is_link_ = other.is_link_;
     is_part_range_get_ = other.is_part_range_get_;
     is_subpart_range_get_ = other.is_subpart_range_get_;
     is_non_partition_optimized_ = other.is_non_partition_optimized_;
@@ -845,7 +842,6 @@ void ObTableLocation::reset()
   has_dynamic_exec_param_ = false;
   is_valid_temporal_part_range_ = false;
   is_valid_temporal_subpart_range_ = false;
-  is_link_ = false;
   is_part_range_get_ = false;
   is_subpart_range_get_ = false;
   is_non_partition_optimized_ = false;
@@ -907,12 +903,11 @@ int ObTableLocation::init_location(ObSqlSchemaGuard *schema_guard,
           const ObIArray<ObObjectID> *part_ids,
           const common::ObDataTypeCastParams &dtc_params,
           const bool is_dml_table,
-          common::ObIArray<ObRawExpr*> *sort_exprs,
-          bool is_link /* = false */)
+          common::ObIArray<ObRawExpr*> *sort_exprs)
 {
   int ret = common::OB_SUCCESS;
   const share::schema::ObTableSchema *table_schema = NULL;
-  if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema, is_link))) {
+  if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     SQL_OPT_LOG(WARN, "failed to get table schema", K(ret), K(ref_table_id));
   } else if (OB_FAIL(init(table_schema, stmt, exec_ctx, filter_exprs, table_id,
                           ref_table_id, part_ids, dtc_params, is_dml_table, sort_exprs))) {
@@ -938,11 +933,10 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
   loc_meta_.ref_table_id_ = ref_table_id;
   stmt_type_ = stmt.get_stmt_type();
   is_partitioned_ = true;
-  is_link_ = ObSqlSchemaGuard::is_link_table(&stmt, table_id);
   if (OB_ISNULL(stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt query ctx is null");
-  } else if (OB_FAIL(schema_guard.get_table_schema(loc_meta_.ref_table_id_, table_schema, is_link_))) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(loc_meta_.ref_table_id_, table_schema))) {
     LOG_WARN("get table schema failed", K(loc_meta_.ref_table_id_), K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
@@ -1064,8 +1058,7 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
 int ObTableLocation::init_table_location_with_rowkey(ObSqlSchemaGuard &schema_guard,
                                                      uint64_t table_id,
                                                      ObExecContext &exec_ctx,
-                                                     const bool is_dml_table /*= true*/,
-                                                     bool is_link /*= false*/)
+                                                     const bool is_dml_table /*= true*/)
 {
   int ret = OB_SUCCESS;
   ObSchemaChecker schema_checker;
@@ -1079,7 +1072,7 @@ int ObTableLocation::init_table_location_with_rowkey(ObSqlSchemaGuard &schema_gu
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (OB_FAIL(schema_checker.get_table_schema(session_info->get_effective_tenant_id(),
-                                                     table_id, table_schema, is_link))) {
+                                                     table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(session_info->get_effective_tenant_id()), K(table_id), K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
@@ -1108,8 +1101,7 @@ int ObTableLocation::init_table_location_with_rowkey(ObSqlSchemaGuard &schema_gu
                                                            table_id,
                                                            column_ids,
                                                            exec_ctx,
-                                                           is_dml_table,
-                                                           is_link))) {
+                                                           is_dml_table))) {
       LOG_WARN("init table location with column ids failed", K(ret), K(table_id), K(column_ids));
     }
   }
@@ -1120,8 +1112,7 @@ int ObTableLocation::init_table_location_with_column_ids(ObSqlSchemaGuard &schem
                                                          uint64_t table_id,
                                                          const ObIArray<uint64_t> &column_ids,
                                                          ObExecContext &exec_ctx,
-                                                         const bool is_dml_table,
-                                                         bool is_link)
+                                                         const bool is_dml_table)
 {
   int ret = OB_SUCCESS;
   ObSchemaChecker schema_checker;
@@ -1133,7 +1124,7 @@ int ObTableLocation::init_table_location_with_column_ids(ObSqlSchemaGuard &schem
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (OB_FAIL(schema_checker.get_table_schema(session_info->get_effective_tenant_id(),
-                                                     table_id, table_schema, is_link))) {
+                                                     table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(session_info->get_effective_tenant_id()), K(table_id), K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
@@ -1173,7 +1164,7 @@ int ObTableLocation::init_table_location_with_column_ids(ObSqlSchemaGuard &schem
       } else if (OB_FAIL(delete_stmt->set_table_bit_index(real_table_id))) {
         LOG_WARN("set table bit index failed", K(ret), K(real_table_id));
       } else if (OB_UNLIKELY(table_schema->is_index_local_storage() || table_schema->is_aux_lob_table())
-          && OB_FAIL(schema_guard.get_table_schema(real_table_id, real_table_schema, is_link))) {
+          && OB_FAIL(schema_guard.get_table_schema(real_table_id, real_table_schema))) {
         LOG_WARN("get real table schema failed", K(ret), K(real_table_id));
         //由于局部索引没有自己的partition信息，所以如果是计算索引表的partition信息，需要去主表获取分区规则表达式
       } else if (OB_FAIL(delete_resolver.resolve_table_partition_expr(table_item, *real_table_schema))) {
@@ -1247,7 +1238,6 @@ int ObTableLocation::init(
   loc_meta_.ref_table_id_ = ref_table_id;
   stmt_type_ = stmt.get_stmt_type();
   is_partitioned_ = true;
-  is_link_ = ObSqlSchemaGuard::is_link_table(&stmt, table_id);
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("table location init twice", K(ret));
@@ -1387,8 +1377,7 @@ int ObTableLocation::calculate_candi_tablet_locations(
                                           tablet_ids,
                                           partition_ids,
                                           candi_tablet_locs,
-                                          nonblock,
-                                          is_link_))) {
+                                          nonblock))) {
     LOG_WARN("Failed to set partition locations", K(ret), K(partition_ids));
   } else {}//do nothing
 
@@ -1612,10 +1601,6 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLocation not inited", K(ret));
-  } else if (is_link_) {
-    // skip dblink table
-    tablet_ids.push_back(ObTabletID(0));
-    partition_ids.push_back(0);
   } else if (is_non_partition_optimized_
              && FALSE_IT(tablet_mapper.set_non_partitioned_table_ids(
                              tablet_id_, object_id_, &related_list_))) {
@@ -1695,8 +1680,7 @@ int ObTableLocation::get_tablet_locations(ObDASCtx &das_ctx,
                                           const ObIArray<ObTabletID> &tablet_ids,
                                           const ObIArray<ObObjectID> &partition_ids,
                                           ObCandiTabletLocIArray &candi_tablet_locs,
-                                          bool nonblock /*false*/,
-                                          bool is_link /*false*/) const
+                                          bool nonblock /*false*/) const
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == ref_table_id) {
@@ -1714,13 +1698,7 @@ int ObTableLocation::get_tablet_locations(ObDASCtx &das_ctx,
       for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
         location.reset();
         ObCandiTabletLoc &candi_tablet_loc = candi_tablet_locs.at(i);
-        if (is_link) {
-          // TODO ailing.lcq remove this code after impl this issue
-          // https://work.aone.alibaba-inc.com/issue/40073762
-          ret = get_link_table_location(session->get_effective_tenant_id(),
-                                        ref_table_id,
-                                        location);
-        } else if (nonblock) {
+        if (nonblock) {
           //TODO shengle use nonblock after location service support nonblock interface
           ret = loc_router.get(loc_meta_, tablet_ids.at(i), location);
         } else {
@@ -1750,28 +1728,6 @@ int ObTableLocation::get_tablet_locations(ObDASCtx &das_ctx,
     }
   }
 
-  return ret;
-}
-
-// TO DO: this function will be delete after implement log_link_table_scan
-int ObTableLocation::get_link_table_location(const uint64_t tenant_id,
-                                             const uint64_t table_id,
-                                             ObLSLocation &location)
-{
-  int ret = OB_SUCCESS;
-  int64_t now = ObTimeUtility::current_time();
-  ObReplicaProperty mock_prop;
-  ObLSReplicaLocation ls_replica;
-  ObLSRestoreStatus ls_restore_status(ObLSRestoreStatus::RESTORE_NONE);
-  common::ObAddr fake_addr;
-  fake_addr.set_ipv4_addr(654321, 4321);
-  int64_t fake_port = 4321;
-  OZ(ls_replica.init(fake_addr, common::LEADER,
-                     fake_port, REPLICA_TYPE_FULL,
-                     mock_prop, ls_restore_status,
-                     1 /*proposal_id*/));
-  location.init(GCONF.cluster_id, tenant_id, ObLSID(ObLSID::SYS_LS_ID), now);
-  OZ(location.add_replica_location(ls_replica));
   return ret;
 }
 

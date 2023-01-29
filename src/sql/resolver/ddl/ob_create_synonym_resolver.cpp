@@ -177,7 +177,8 @@ int ObCreateSynonymResolver::resolve(const ParseNode &parse_tree)
       // because we may create the dblink with link_name after
       // the synonym is created. check it in runtime.
       ParseNode *dblink_name_node = create_synonym_node->children_[6];
-      if (dblink_name_node != NULL) {
+      if (NULL != dblink_name_node && NULL != dblink_name_node->children_ && NULL != dblink_name_node->children_[0]) {
+        dblink_name_node = dblink_name_node->children_[0];
         ObSqlString obj_with_dblink;
         const ObString &tmp_obj_name = create_synonym_stmt->get_object_name();
         // user write something like 'create synonym syn for remote_db.tbl_name@dblink'

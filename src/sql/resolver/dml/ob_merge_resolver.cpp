@@ -251,8 +251,10 @@ int ObMergeResolver::resolve_target_relation(const ParseNode *target_node)
     } else {
       merge_stmt->set_target_table_id(table_item->table_id_);
     }
-  } else if (table_item->is_basic_table()) {
+  } else if (table_item->is_basic_table() || table_item->is_link_table()) {
     merge_stmt->set_target_table_id(table_item->table_id_);
+    const TableItem &base_table_item = table_item->get_base_table_item();
+    merge_stmt->get_merge_table_info().is_link_table_ = base_table_item.is_link_table();
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected table item type", K(table_item->type_), K(ret));

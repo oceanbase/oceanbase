@@ -16,6 +16,7 @@
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/rewrite/ob_union_find.h"
 
 namespace oceanbase
 {
@@ -77,41 +78,6 @@ private:
     ObSEArray<ObTransformUtils::LazyJoinInfo, 8> lazy_join_tables_;     //lazy left join`s right table item and on condition
     ObSqlBitSet<> expr_relation_ids_;                  //table ids ref by conditions, semi infos, order by items
     bool all_lazy_join_is_unique_join_;                         //all lazy left join key is unique
-  };
-/**
- * @brief 
- * Union-Find: To efficiently check if two nodes in a graph are connected.
- * We use this algorithm to construct a graph for all the tables within a stmt
- * Once the graph is constructed, the connected relations of these tables are
- * also constructed.
- */
-  struct UnionFind {
-    UnionFind()
-      : count_(0),
-        is_inited_(false) {}
-    UnionFind(int64_t n)
-      : count_(n),
-        is_inited_(false) {}
-    virtual ~UnionFind() {}
-    int64_t count_;
-    ObSEArray<int64_t, 8> parent_;
-    ObSEArray<int64_t, 8> tree_size_;
-
-    bool is_inited_;
-    int connect(int64_t p, int64_t q);
-    int find_root(int64_t x, int64_t &root);
-    int is_connected(int64_t p, int64_t q, bool &is_found);
-    int init();
-    void reset() {
-      count_ = 0;
-      parent_.reset();
-      tree_size_.reset();
-      is_inited_ = false;
-    }
-    TO_STRING_KV(K(count_),
-                 K(parent_),
-                 K(tree_size_),
-                 K(is_inited_));
   };
 
 public:

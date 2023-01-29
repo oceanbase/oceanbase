@@ -41,7 +41,7 @@
 #include "ob_log_granule_iterator.h"
 #include "ob_log_monitoring_dump.h"
 #include "ob_log_unpivot.h"
-#include "ob_log_link.h"
+#include "sql/optimizer/ob_log_link_scan.h"
 #include "ob_log_for_update.h"
 #include "ob_log_temp_table_insert.h"
 #include "ob_log_temp_table_access.h"
@@ -50,6 +50,7 @@
 #include "ob_log_err_log.h"
 #include "ob_log_stat_collector.h"
 #include "ob_del_upd_log_plan.h"
+#include "ob_log_link_dml.h"
 #include "ob_log_optimizer_stats_gathering.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -307,10 +308,17 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     } else { /* do nothing */ }
     break;
   }
-  case LOG_LINK: {
-    ptr = allocator_.alloc(sizeof(ObLogLink));
+  case LOG_LINK_SCAN: {
+    ptr = allocator_.alloc(sizeof(ObLogLinkScan));
     if (NULL != ptr) {
-      ret_op = new (ptr) ObLogLink(plan);
+      ret_op = new (ptr) ObLogLinkScan(plan);
+    } else { /* do nothing */ }
+    break;
+  }
+  case LOG_LINK_DML: {
+    ptr = allocator_.alloc(sizeof(ObLogLinkDml));
+    if (NULL != ptr) {
+      ret_op = new (ptr) ObLogLinkDml(plan);
     } else { /* do nothing */ }
     break;
   }

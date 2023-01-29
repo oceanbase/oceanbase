@@ -2239,6 +2239,47 @@ int ObXAService::xa_prepare(const ObXATransID &xid,
   return ret;
 }
 
+int ObXAService::xa_prepare_for_original(const ObXATransID &xid,
+                                         const ObTransID &tx_id,
+                                         const int64_t timeout_seconds)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool is_tightly_coupled = true;
+  const uint64_t tenant_id = MTL_ID();
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "xa service not inited", K(ret));
+  } else if (OB_UNLIKELY(!xid.is_valid()) ||
+             OB_UNLIKELY(0 > timeout_seconds)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(xid), K(timeout_seconds), K(tenant_id));
+  } else {
+    const int64_t timeout_us = timeout_seconds * 1000 * 1000;
+    // original scheduler
+    if (OB_FAIL(local_xa_prepare_(xid, tx_id, timeout_us))) {
+      if (OB_TRANS_XA_RDONLY != ret) {
+        TRANS_LOG(WARN, "local xa prepare failed", K(ret), K(xid), K(tx_id));
+      }
+    }
+  }
+
+  if (OB_TRANS_XA_RDONLY == ret) {
+    if (OB_SUCCESS != (tmp_ret = delete_xa_record(tenant_id, xid))) {
+      TRANS_LOG(WARN, "delete xa record failed", K(tmp_ret), K(tenant_id), K(xid));
+    }
+  } else if (OB_ERR_READ_ONLY_TRANSACTION == ret) {
+    // submited to scheduler, and found it is read only
+    if (OB_SUCCESS != (tmp_ret = delete_xa_branch(tenant_id, xid, is_tightly_coupled))) {
+      TRANS_LOG(WARN, "delete xa branch failed", K(tmp_ret), K(xid), K(tenant_id), K(tx_id));
+    }
+    ret = OB_TRANS_XA_RDONLY;
+  }
+
+  return ret;
+}
+
 // this interface is ONLY for original scheduler
 // executte xa prepare in original scheduler
 int ObXAService::local_xa_prepare(const ObXATransID &xid,

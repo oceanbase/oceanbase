@@ -40,6 +40,8 @@
 #include "sql/engine/expr/ob_expr_minus.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "share/ob_encryption_util.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -10081,6 +10083,8 @@ void ObDbLinkBaseInfo::reset()
   tenant_name_.reset();
   user_name_.reset();
   password_.reset();
+  encrypted_password_.reset();
+  plain_password_.reset();
   host_addr_.reset();
   driver_proto_ = 0;
   flag_ = 0;
@@ -10090,6 +10094,12 @@ void ObDbLinkBaseInfo::reset()
   authpwd_.reset();
   passwordx_.reset();
   authpwdx_.reset();
+  reverse_cluster_name_.reset();
+  reverse_tenant_name_.reset();
+  reverse_user_name_.reset();
+  reverse_password_.reset();
+  plain_reverse_password_.reset();
+  reverse_host_addr_.reset();
 }
 
 bool ObDbLinkBaseInfo::is_valid() const
@@ -10100,8 +10110,78 @@ bool ObDbLinkBaseInfo::is_valid() const
       && !dblink_name_.empty()
       && !tenant_name_.empty()
       && !user_name_.empty()
-      && !password_.empty()
-      && host_addr_.is_valid();
+      && host_addr_.is_valid()
+      && (!password_.empty() || !encrypted_password_.empty());
+}
+
+int ObDbLinkBaseInfo::do_decrypt_password()
+{
+  int ret = OB_SUCCESS;
+  if (!plain_password_.empty()) {
+    // do_nothing
+  } else {
+    if (!password_.empty()) {
+      if (OB_FAIL(deep_copy_str(password_, plain_password_))) {
+        LOG_WARN("failed to deep copy password_ to plain_password_", K(ret));
+      }
+    } else if (encrypted_password_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("encrypted_password_ and password_ is empty", K(ret));
+    } else if (OB_FAIL(ObDbLinkBaseInfo::dblink_decrypt(encrypted_password_, plain_password_))) {
+      LOG_WARN("failed to decrypt encrypted_password_", K(ret));
+    } else if (plain_password_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("plain_password_ is empty", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDbLinkBaseInfo::do_decrypt_reverse_password()
+{
+  int ret = OB_SUCCESS;
+  if (reverse_password_.empty()) {
+    // do nothing
+  } else if (OB_FAIL(ObDbLinkBaseInfo::dblink_decrypt(reverse_password_, plain_reverse_password_))) {
+    LOG_WARN("failed to decrypt reverse_password_", K(ret));
+  } else if (plain_reverse_password_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plain_password_ is empty", K(ret));
+  }
+  return ret;
+}
+
+int ObDbLinkBaseInfo::do_encrypt_password()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDbLinkBaseInfo::dblink_encrypt(plain_password_, encrypted_password_))) {
+    LOG_WARN("failed to encrypt plain_password_", K(ret));
+  }
+  return ret;
+}
+
+int ObDbLinkBaseInfo::do_encrypt_reverse_password()
+{
+  int ret = OB_SUCCESS;
+  if (plain_reverse_password_.empty()) {
+    // do nothing
+  } else if (OB_FAIL(ObDbLinkBaseInfo::dblink_encrypt(plain_reverse_password_, reverse_password_))) {
+    LOG_WARN("failed to encrypt plain_password_", K(ret));
+  }
+  return ret;
+}
+
+int ObDbLinkBaseInfo::dblink_encrypt(common::ObString &src, common::ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+int ObDbLinkBaseInfo::dblink_decrypt(common::ObString &src, common::ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  return ret;
 }
 
 int ObDbLinkBaseInfo::set_host_ip(const common::ObString &host_ip)
@@ -10128,7 +10208,15 @@ OB_SERIALIZE_MEMBER(ObDbLinkInfo,
                     authusr_,
                     authpwd_,
                     passwordx_,
-                    authpwdx_);
+                    authpwdx_,
+                    plain_password_,
+                    encrypted_password_,
+                    reverse_cluster_name_,
+                    reverse_tenant_name_,
+                    reverse_user_name_,
+                    reverse_password_,
+                    plain_reverse_password_,
+                    reverse_host_addr_);
 
 ObDbLinkSchema::ObDbLinkSchema(const ObDbLinkSchema &other)
   : ObDbLinkBaseInfo()
@@ -10159,6 +10247,10 @@ ObDbLinkSchema &ObDbLinkSchema::operator=(const ObDbLinkSchema &other)
       LOG_WARN("Fail to deep copy user name", K(ret), K(other.user_name_));
     } else if (OB_FAIL(deep_copy_str(other.password_, password_))) {
       LOG_WARN("Fail to deep copy password", K(ret), K(other.password_));
+    } else if (OB_FAIL(deep_copy_str(other.encrypted_password_, encrypted_password_))) {
+      LOG_WARN("Fail to deep copy password", K(ret), K(other.encrypted_password_));
+    } else if (OB_FAIL(deep_copy_str(other.plain_password_, plain_password_))) {
+      LOG_WARN("Fail to deep copy password", K(ret), K(other.plain_password_));
     } else if (OB_FAIL(deep_copy_str(other.service_name_, service_name_))) {
       LOG_WARN("Fail to deep copy password", K(ret), K(other.service_name_));
     } else if (OB_FAIL(deep_copy_str(other.conn_string_, conn_string_))) {
@@ -10171,8 +10263,19 @@ ObDbLinkSchema &ObDbLinkSchema::operator=(const ObDbLinkSchema &other)
       LOG_WARN("Fail to deep copy password", K(ret), K(other.passwordx_));
     } else if (OB_FAIL(deep_copy_str(other.authpwdx_, authpwdx_))) {
       LOG_WARN("Fail to deep copy password", K(ret), K(other.authpwdx_));
+    } else if (OB_FAIL(deep_copy_str(other.reverse_cluster_name_, reverse_cluster_name_))) {
+      LOG_WARN("Fail to deep copy password", K(ret), K(other.reverse_cluster_name_));
+    } else if (OB_FAIL(deep_copy_str(other.reverse_tenant_name_, reverse_tenant_name_))) {
+      LOG_WARN("Fail to deep copy password", K(ret), K(other.reverse_tenant_name_));
+    } else if (OB_FAIL(deep_copy_str(other.reverse_user_name_, reverse_user_name_))) {
+      LOG_WARN("Fail to deep copy password", K(ret), K(other.reverse_user_name_));
+    } else if (OB_FAIL(deep_copy_str(other.reverse_password_, reverse_password_))) {
+      LOG_WARN("Fail to deep copy password", K(ret), K(other.reverse_password_));
+    } else if (OB_FAIL(deep_copy_str(other.plain_reverse_password_, plain_reverse_password_))) {
+      LOG_WARN("Fail to deep copy password", K(ret), K(other.plain_reverse_password_));
     }
     host_addr_ = other.host_addr_;
+    reverse_host_addr_ = other.reverse_host_addr_;
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
     }
@@ -10191,6 +10294,8 @@ bool ObDbLinkSchema::operator==(const ObDbLinkSchema &other) const
        && tenant_name_ == other.tenant_name_
        && user_name_ == other.user_name_
        && password_ == other.password_
+       && encrypted_password_ == other.encrypted_password_
+       && plain_password_ == other.plain_password_
        && host_addr_ == other.host_addr_
        && driver_proto_ == other.driver_proto_
        && flag_ == other.flag_
@@ -10199,7 +10304,13 @@ bool ObDbLinkSchema::operator==(const ObDbLinkSchema &other) const
        && authusr_ == other.authusr_
        && authpwd_ == other.authpwd_
        && passwordx_ == other.passwordx_
-       && authpwdx_ == other.authpwdx_);
+       && authpwdx_ == other.authpwdx_
+       && reverse_cluster_name_ == other.reverse_cluster_name_
+       && reverse_tenant_name_ == other.reverse_tenant_name_
+       && reverse_user_name_ == other.reverse_user_name_
+       && reverse_password_ == other.reverse_password_
+       && plain_reverse_password_ == other.plain_reverse_password_
+       && reverse_host_addr_ == other.reverse_host_addr_);
 }
 
 ObSynonymInfo::ObSynonymInfo(common::ObIAllocator *allocator):

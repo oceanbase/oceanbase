@@ -321,6 +321,7 @@ const int64_t OB_MAX_USERNAME_LENGTH = 32;
 const int64_t OB_MAX_PASSWORD_LENGTH = 128;
 const int64_t OB_MAX_PASSWORD_BUF_LENGTH = OB_MAX_PASSWORD_LENGTH + 1;
 // After each sha1 is 41 characters, the incremental backup is up to 64 times, and the maximum password required for recovery is 64*(41+1)=2,688
+const int64_t OB_MAX_ENCRYPTED_PASSWORD_LENGTH = OB_MAX_PASSWORD_LENGTH * 4;
 const int64_t OB_MAX_PASSWORD_ARRAY_LENGTH = 4096;
 const int64_t OB_MAX_ERROR_MSG_LEN = 512;
 const int64_t OB_MAX_RESULT_MESSAGE_LENGTH = 1024;
@@ -1359,6 +1360,20 @@ const char* const OB_LOG_ELLIPSIS = "...";
 
 
 const char *const DEFAULT_REGION_NAME = "default_region";
+
+// The connect attribute key value prefix that the obproxy transparently transmits to the observer
+const char *const OB_PROXY_TRANSPARENT_TRANSMIT_PREFIX__ = "__proxy_dont_care_prefix__";
+
+// The connect attribute key that the proxy transparently transmits to the observer,
+// in order to prevent the sql request thread from deadlocking (such as dblink sql request)
+const char *const OB_SQL_REQUEST_LEVEL = "__proxy_dont_care_prefix__sql_request_level";
+
+// The connect attribute value that the proxy transparently transmits to the observer,
+// in order to prevent the sql request thread from deadlocking (such as dblink sql request)
+const char *const OB_SQL_REQUEST_LEVEL0 = "__sql_request_L0";
+const char *const OB_SQL_REQUEST_LEVEL1 = "__sql_request_L1";
+const char *const OB_SQL_REQUEST_LEVEL2 = "__sql_request_L2";
+const char *const OB_SQL_REQUEST_LEVEL3 = "__sql_request_L3";
 
 // for obproxy
 const char *const OB_MYSQL_CLIENT_MODE = "__mysql_client_type";

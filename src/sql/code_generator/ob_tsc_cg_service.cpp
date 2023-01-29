@@ -773,11 +773,9 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
   }
   //5. generate table schema version
   if (OB_SUCC(ret)) {
-    bool is_link_table = ObSqlSchemaGuard::is_link_table(op.get_stmt(), op.get_table_id());
     ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
     if (OB_FAIL(schema_guard->get_table_schema_version(scan_ctdef.ref_table_id_,
-                                                       scan_ctdef.schema_version_,
-                                                       is_link_table))) {
+                                                       scan_ctdef.schema_version_))) {
       LOG_WARN("get table schema version failed", K(ret), K(scan_ctdef.ref_table_id_));
     }
   }

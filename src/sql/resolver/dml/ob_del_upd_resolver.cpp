@@ -128,7 +128,7 @@ int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
         // Statement `update (select * from t1) t set t.c1 = 1` is legal in oralce, illegal in mysql.
         const bool is_updatable_generated_table = (table->is_generated_table() || table->is_temp_table())
             && (!is_mysql_mode() || table->is_view_table_);
-        if (!table->is_basic_table() && !is_updatable_generated_table) {
+        if (!table->is_basic_table() && !table->is_link_table() && !is_updatable_generated_table) {
           ret = OB_ERR_NON_UPDATABLE_TABLE;
           const ObString &table_name = table->alias_name_;
           ObString scope_name = "UPDATE";
@@ -551,7 +551,7 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session_info_ is null", K(ret));
     } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
-        table_item->get_base_table_item().ref_id_, table_schema))) {
+        table_item->get_base_table_item().ref_id_, table_schema, table_item->is_link_table()))) {
       LOG_WARN("fail to get table schema", K(ret), KPC(table_item));
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -942,7 +942,7 @@ int ObDelUpdResolver::set_base_table_for_view(TableItem &table_item, const bool 
       if (NULL == base) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
-      } else if (base->is_basic_table()) {
+      } else if (base->is_basic_table() || base->is_link_table()) {
         table_item.view_base_item_ = base;
       } else if (base->is_generated_table()) {
         table_item.view_base_item_ = base;
@@ -999,7 +999,7 @@ int ObDelUpdResolver::check_same_base_table(const TableItem &table_item,
         ret = is_mysql_mode() ? OB_ERR_VIEW_MULTIUPDATE : OB_ERR_O_VIEW_MULTIUPDATE;
         LOG_WARN("Can not modify more than one base table through a join view", K(ret), K(col_ref));
       } else {
-        if (new_table_item->is_basic_table()) {
+        if (new_table_item->is_basic_table() || new_table_item->is_link_table()) {
           // is base table, do nothing
         } else if (new_table_item->is_generated_table() || new_table_item->is_temp_table()) {
           const bool inner_log_error = false;
@@ -1039,7 +1039,7 @@ int ObDelUpdResolver::add_all_column_to_updatable_view(ObDMLStmt &stmt,
   } else if (OB_ISNULL(params_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params_.session_info_ is null", K(ret));
-  } else if (!table_item.is_basic_table() && !table_item.is_generated_table()
+  } else if (!table_item.is_basic_table() && !table_item.is_link_table() && !table_item.is_generated_table()
              && !table_item.is_temp_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected table item", K(ret), K(table_item));
@@ -1094,7 +1094,7 @@ int ObDelUpdResolver::add_all_column_to_updatable_view(ObDMLStmt &stmt,
       return ret;
     };
     ColumnItem *col_item = NULL;
-    if (table_item.is_basic_table()) {
+    if (table_item.is_basic_table() || table_item.is_link_table()) {
       const ObTableSchema *table_schema = NULL;
       if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(), table_item.ref_id_, table_schema, table_item.is_link_table()))) {
         LOG_WARN("get table schema failed", K(ret));
@@ -1336,6 +1336,7 @@ int ObDelUpdResolver::resolve_err_log_table(const ParseNode *node)
   bool use_sys_tenant = false;
   uint64_t table_id = OB_INVALID_ID;
   ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
+  bool is_reverse_link = false; // no use
   ObArray<uint64_t> ref_obj_ids;
   CK (OB_NOT_NULL(del_upd_stmt));
   if (OB_ISNULL(relation_factor_node = node->children_[0])) {
@@ -1354,6 +1355,7 @@ int ObDelUpdResolver::resolve_err_log_table(const ParseNode *node)
                                                            dblink_name,
                                                            is_db_explicit,
                                                            use_sys_tenant,
+                                                           is_reverse_link,
                                                            ref_obj_ids))) {
     if (OB_TABLE_NOT_EXIST == ret || OB_ERR_BAD_DATABASE == ret) {
       if (is_information_schema_database_id(database_id)) {
@@ -1979,7 +1981,10 @@ int ObDelUpdResolver::add_all_partition_key_columns_to_stmt(const TableItem &tab
 int ObDelUpdResolver::uv_check_key_preserved(const TableItem &table_item, bool &key_preserved)
 {
   int ret = OB_SUCCESS;
-  if (table_item.is_generated_table() || table_item.is_temp_table()) {
+  if (table_item.is_generated_table() && table_item.get_base_table_item().is_link_table()) {
+    // skip check link table key preserved, do not check it, remote database will report error if the actual key_preserved is false.
+    key_preserved = true;
+  } else if (table_item.is_generated_table() || table_item.is_temp_table()) {
     key_preserved = false;
     if (NULL == table_item.ref_query_) {
       ret = OB_ERR_UNEXPECTED;
@@ -2867,7 +2872,7 @@ int ObDelUpdResolver::resolve_insert_columns(const ParseNode *node,
     }
     ObArray<ColumnItem> column_items;
     if (OB_SUCC(ret)) {
-      if (table_item->is_basic_table()) {
+      if (table_item->is_basic_table() || table_item->is_link_table()) {
         if (OB_FAIL(resolve_all_basic_table_columns(*table_item, false, &column_items))) {
           LOG_WARN("resolve all basic table columns failed", K(ret));
         }

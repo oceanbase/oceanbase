@@ -656,7 +656,8 @@ int ObQueryHint::print_qb_name_hints(PlanText &plan_text) const
 // Used for stmt printer
 // If outline_stmt_id_ is invalid stmt id and has_outline_data(), do not print hint.
 //  This may happened for outline data from SPM.
-int ObQueryHint::print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt, const bool is_root_stmt) const
+int ObQueryHint::print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt,
+                                 const bool is_root_stmt, const bool ignore_parallel) const
 {
   int ret = OB_SUCCESS;
   const int64_t stmt_id = stmt.get_stmt_id();
@@ -671,9 +672,10 @@ int ObQueryHint::print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt, con
     // Not outline data, print current stmt hint here.
     // If stmt is the first stmt can add hint, print global hint and hint with qb name.
     const bool is_first_stmt = is_root_stmt;
-    if (is_first_stmt && OB_FAIL(get_global_hint().print_global_hint(plan_text))) {
+    if ((is_first_stmt || OB_INVALID_ID != stmt.get_dblink_id()) &&
+        OB_FAIL(get_global_hint().print_global_hint(plan_text, ignore_parallel))) {
       LOG_WARN("failed to print global hint", K(ret));
-    } else if (OB_FAIL(stmt.get_stmt_hint().print_stmt_hint(plan_text))) {
+    } else if (OB_FAIL(stmt.get_stmt_hint().print_stmt_hint(plan_text, ignore_parallel))) {
       LOG_WARN("failed to print stmt hint", K(ret));
     } else if (is_first_stmt) {
       int tmp = OB_SUCCESS;
@@ -688,7 +690,7 @@ int ObQueryHint::print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt, con
         }
       }
     }
-  }
+  }/*  */
   return ret;
 }
 
@@ -723,7 +725,7 @@ int ObQueryHint::print_outline_data(PlanText &plan_text) const
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(get_global_hint().print_global_hint(plan_text))) {
+    } else if (OB_FAIL(get_global_hint().print_global_hint(plan_text, /*ignore_parallel*/false))) {
       LOG_WARN("failed to print global hint", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("%sEND_OUTLINE_DATA", ObQueryHint::get_outline_indent(is_oneline)))) {
       LOG_WARN("fail to print buf", K(ret));
@@ -1062,7 +1064,7 @@ DEF_TO_STRING(ObStmtHint)
   return pos;
 }
 
-int ObStmtHint::print_stmt_hint(PlanText &plan_text) const
+int ObStmtHint::print_stmt_hint(PlanText &plan_text, const bool ignore_parallel) const
 {
   int ret = OB_SUCCESS;
   const ObHint *hint = NULL;
@@ -1071,6 +1073,8 @@ int ObStmtHint::print_stmt_hint(PlanText &plan_text) const
     if (OB_ISNULL(hint = get_hint_by_idx(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL", K(ret), K(hint));
+    } else if (ignore_parallel && hint->is_table_parallel_hint()) {
+      // do nothing
     } else if (OB_FAIL(hint->print_hint(plan_text))) {
       LOG_WARN("failed to print hint", K(ret));
     }
@@ -2263,7 +2267,6 @@ int LogTableHint::init_index_hints(ObSqlSchemaGuard &schema_guard)
                                                            false,
                                                            table_->access_all_part(),
                                                            false /*domain index*/,
-                                                           false,
                                                            false /*spatial index*/))) {
     LOG_WARN("failed to get can read index", K(ret));
   } else if (table_index_count > OB_MAX_INDEX_PER_TABLE) {

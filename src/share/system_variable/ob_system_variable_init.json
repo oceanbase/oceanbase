@@ -2946,5 +2946,17 @@
     "info_cn": "控制在insert into select下是否默认收集统计信息",
     "background_cn": "",
     "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/bgfhtiie1m39aawn"
+  },
+  "_set_reverse_dblink_infos": {
+    "id": 10139,
+    "name": "_set_reverse_dblink_infos",
+    "value": "",
+    "data_type": "varchar",
+    "info": "used in the dblink write transaction, the TM side informs the RM side of the necessary information about establishing a reverse dblink by setting system variables",
+    "flags": "SESSION | ORACLE_ONLY",
+    "publish_version": "410",
+    "info_cn": "用于dblink写事务中, TM端通过设置系统变量的方式告知RM端关于建立反向dblink的必要信息",
+    "background_cn": "",
+    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/giztpw"
   }
 }

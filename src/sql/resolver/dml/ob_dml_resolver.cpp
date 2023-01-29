@@ -57,6 +57,7 @@
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_expr_version.h"
 #include "common/ob_smart_call.h"
+#include "observer/virtual_table/ob_table_columns.h"
 #include "share/ob_lob_access_utils.h"
 #include "share/resource_manager/ob_resource_manager.h"
 
@@ -1973,7 +1974,7 @@ int ObDMLResolver::resolve_basic_column_ref(const ObQualifiedName &q_name, ObRaw
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is invalid", KPC(table_item));
     } else {
-      if (table_item->is_basic_table()) {
+      if (table_item->is_basic_table() || table_item->is_link_table()) {
         if (OB_FAIL(resolve_basic_column_item(*table_item, q_name.col_name_, false, column_item))) {
           LOG_WARN("resolve column item failed", K(ret));
         }
@@ -2010,9 +2011,9 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema checker is null", K(stmt), K_(schema_checker), K_(params_.expr_factory));
-  } else if (OB_UNLIKELY(!table_item.is_basic_table() && !table_item.is_fake_cte_table())) {
+  } else if (OB_UNLIKELY(!table_item.is_link_table() && !table_item.is_basic_table() && !table_item.is_fake_cte_table())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not base table or alias from base table", K_(table_item.type));
+    LOG_WARN("not base table or alias from base table", K_(table_item.type), K(ret));
   } else if (NULL != (col_item = stmt->get_column_item(table_item.table_id_, column_name))) {
     //exist, ignore resolve...
   } else {
@@ -2076,9 +2077,6 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       col_expr->set_ref_id(table_item.table_id_, col_schema->get_column_id());
       col_expr->set_unique_key_column(is_uni);
       col_expr->set_mul_key_column(is_mul);
-      if (table_item.is_link_table()) {
-        col_expr->set_link_table_column();
-      }
       if (!table_item.alias_name_.empty()) {
         col_expr->set_table_alias_name();
       }
@@ -2583,6 +2581,7 @@ int ObDMLResolver::resolve_table_relation_factor_wrapper(const ParseNode *table_
                                                          ObString &dblink_name,
                                                          bool &is_db_explicit,
                                                          bool &use_sys_tenant,
+                                                         bool &is_reverse_link,
                                                          ObIArray<uint64_t> &ref_obj_ids)
 {
   int ret = OB_SUCCESS;
@@ -2602,6 +2601,7 @@ int ObDMLResolver::resolve_table_relation_factor_wrapper(const ParseNode *table_
                                               db_name,
                                               dblink_name,
                                               is_db_explicit,
+                                              is_reverse_link,
                                               ref_obj_ids))) {
       if (ret != OB_TABLE_NOT_EXIST) {
         // 只关心找不到表的情况，因此这里直接跳过
@@ -2651,6 +2651,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
   ObDMLStmt *stmt = get_stmt();
   uint64_t tenant_id = OB_INVALID_ID;
   uint64_t dblink_id = OB_INVALID_ID;
+  bool is_reverse_link = false;
   ObString database_name;
   ObString table_name;
   ObString alias_name;
@@ -2700,6 +2701,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
                                                     dblink_name,
                                                     is_db_explicit,
                                                     use_sys_tenant,
+                                                    is_reverse_link,
                                                     ref_obj_ids))) {
     if (OB_TABLE_NOT_EXIST == ret || OB_ERR_BAD_DATABASE == ret) {
       if (is_information_schema_database_id(database_id)) {
@@ -2713,8 +2715,32 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
       LOG_WARN("fail to resolve table name", K(ret));
     }
   }
+  LOG_DEBUG("resolve table relation factor relate to dblink", K(database_name), K(table_name), K(OB_INVALID_ID), K(dblink_id), K(is_reverse_link), K(ret));
+  if (OB_SUCC(ret) && (OB_INVALID_ID != dblink_id)) {
+    if (OB_NOT_NULL(part_node)) {
+      ret = OB_ERR_REMOTE_PART_ILLEGAL;
+      LOG_WARN("partition extended table name cannot refer to a remote object", K(ret));
+    } else if (!OB_ISNULL(alias_node)) {
+      alias_name.assign_ptr(alias_node->str_value_, static_cast<int32_t>(alias_node->str_len_));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(resolve_base_or_alias_table_item_dblink(dblink_id,
+                                                          dblink_name,
+                                                          database_name,
+                                                          table_name,
+                                                          alias_name,
+                                                          synonym_name,
+                                                          synonym_db_name,
+                                                          table_item,
+                                                          is_reverse_link))) {
+        LOG_WARN("resolve base or alias table item for dblink failed", K(ret));
+      } else if (OB_FAIL(resolve_transpose_table(transpose_node, table_item))) {
+        LOG_WARN("resolve_transpose_table failed", K(ret));
+      }
+    }
+  }
 
-  if (OB_SUCC(ret) && OB_INVALID_ID == dblink_id) {
+  if (OB_SUCC(ret) && (OB_INVALID_ID == dblink_id)) {
     if (alias_node != NULL) {
       alias_name.assign_ptr(alias_node->str_value_, static_cast<int32_t>(alias_node->str_len_));
     }
@@ -2843,28 +2869,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
         }
       }
     }
-  } // if (OB_SUCC(ret) && OB_INVALID_ID == dblink_id)
-  if (OB_SUCC(ret) && OB_INVALID_ID != dblink_id) {
-    if (OB_NOT_NULL(part_node)) {
-      ret = OB_ERR_REMOTE_PART_ILLEGAL;
-      LOG_WARN("partition extended table name cannot refer to a remote object", K(ret));
-    } else if (!OB_ISNULL(alias_node)) {
-      alias_name.assign_ptr(alias_node->str_value_, static_cast<int32_t>(alias_node->str_len_));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(resolve_base_or_alias_table_item_dblink(dblink_id,
-                                                          dblink_name,
-                                                          database_name,
-                                                          table_name,
-                                                          alias_name,
-                                                          synonym_name,
-                                                          synonym_db_name,
-                                                          table_item))) {
-        LOG_WARN("resolve base or alias table item for dblink failed", K(ret));
-      }
-    }
   }
-
   LOG_DEBUG("finish resolve_basic_table", K(ret), KPC(table_item));
   return ret;
 }
@@ -3226,9 +3231,9 @@ int ObDMLResolver::check_table_item_with_gen_col_using_udf(const TableItem *tabl
   } else if (table_item->is_generated_table()) {
     // generated table should check it when resolve itself.
     // OZ (SMART_CALL(check_table_item_with_gen_col_using_udf(table_item->view_base_item_, ans)), KPC(table_item));
-  } else if (table_item->is_basic_table() || table_item->is_fake_cte_table()) {
+  } else if (table_item->is_basic_table() || table_item->is_fake_cte_table() || table_item->is_link_table()) {
     /**
-     * CTE_TABLE is same as BASIC_TABLE or ALIAS_TABLE
+     * LINK_TABLE and CTE_TABLE is same as BASIC_TABLE or ALIAS_TABLE
      */
     const ObTableSchema *table_schema = NULL;
     if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(), table_item->ref_id_, table_schema, table_item->is_link_table()))) {
@@ -3236,7 +3241,7 @@ int ObDMLResolver::check_table_item_with_gen_col_using_udf(const TableItem *tabl
        * Should not return OB_TABLE_NOT_EXIST.
        * Because tables have been checked in resolve_table already.
        */
-      LOG_WARN("get table schema failed", K(ret));
+      LOG_WARN("get table schema failed", K(ret), K(table_item->is_link_table()));
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get NULL table schema", K(ret));
@@ -3572,7 +3577,7 @@ int ObDMLResolver::resolve_table_column_expr(const ObQualifiedName &q_name, ObRa
         LOG_WARN("resolve single table column item failed", K(ret));
       } else if (OB_ISNULL(col_item)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("col item is null", K(ret));
+        LOG_WARN("col item is null", K(ret), K(lbt()));
       } else {
         real_ref_expr = col_item->expr_;
       }
@@ -3591,7 +3596,7 @@ int ObDMLResolver::resolve_single_table_column_item(const TableItem &table_item,
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_checker_) || OB_ISNULL(params_.expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema checker is null", K(stmt), K_(schema_checker), K_(params_.expr_factory));
-  } else if (table_item.is_basic_table() || table_item.is_fake_cte_table()) {
+  } else if (table_item.is_basic_table() || table_item.is_fake_cte_table() || table_item.is_link_table()) {
     if (OB_FAIL(resolve_basic_column_item(table_item, column_name, include_hidden, col_item))) {
       LOG_WARN("resolve basic column item failed", K(ret));
     } else { /*do nothing*/ }
@@ -4271,7 +4276,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
         item->table_id_ = generate_table_id();
         item->type_ = TableItem::ALIAS_TABLE;
         //主表schema
-        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tschema->get_data_table_id(), tab_schema, item->is_link_table()))) {
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tschema->get_data_table_id(), tab_schema))) {
           LOG_WARN("get data table schema failed", K(ret), K_(item->ref_id));
         } else {
           item->table_name_ = tab_schema->get_table_name_str(); //主表的名字
@@ -4359,7 +4364,8 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
                                                            const ObString &alias_name,
                                                            const ObString &synonym_name,
                                                            const ObString &synonym_db_name,
-                                                           TableItem *&table_item)
+                                                           TableItem *&table_item,
+                                                           bool is_reverse_link)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
@@ -4372,7 +4378,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create table item failed");
   } else if (OB_FAIL(schema_checker_->get_link_table_schema(dblink_id, database_name,
-                                                            table_name, table_schema, session_info_->get_sessid()))) {
+                                                            table_name, table_schema, session_info_, dblink_name, is_reverse_link))) {
     LOG_WARN("get link table info failed", K(ret));
   } else {
     // common info.
@@ -4382,12 +4388,11 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
       // ex: SELECT c_id FROM remote_dblink_test.stu2@my_link3 WHERE p_id = (SELECT MIN(p_id) FROM remote_dblink_test.stu2@my_link3);
       // parent table id and sub table id may same if table_id_ using table_schema->get_table_id();
       item->table_id_ = generate_table_id();
-      item->type_ = TableItem::BASE_TABLE;
     } else {
       item->table_id_ = generate_table_id();
-      item->type_ = TableItem::ALIAS_TABLE;
       item->alias_name_ = alias_name;
     }
+    item->type_ = TableItem::LINK_TABLE;
     item->ref_id_ = table_schema->get_table_id();
     item->table_name_ = table_name;
     item->is_index_table_ = false;
@@ -4399,6 +4404,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
     item->dblink_id_ = dblink_id;
     item->dblink_name_ = dblink_name;
     item->link_database_name_ = database_name;
+    item->is_reverse_link_ = is_reverse_link;
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(stmt->add_table_item(session_info_, item))) {
@@ -5098,7 +5104,7 @@ int ObDMLResolver::resolve_all_basic_table_columns(const TableItem &table_item, 
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ is null", K(ret));
-  } else if (OB_UNLIKELY(!table_item.is_basic_table()) && OB_UNLIKELY(!table_item.is_fake_cte_table()) ) {
+  } else if (OB_UNLIKELY(!table_item.is_link_table()) && OB_UNLIKELY(!table_item.is_basic_table()) && OB_UNLIKELY(!table_item.is_fake_cte_table()) ) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table isn't basic table", K_(table_item.type));
   } else {
@@ -5109,6 +5115,7 @@ int ObDMLResolver::resolve_all_basic_table_columns(const TableItem &table_item, 
     } else {
       ObColumnIterByPrevNextID iter(*table_schema);
       const ObColumnSchemaV2 *column_schema = NULL;
+      int i = 0;
       while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema))) {
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
@@ -5615,7 +5622,7 @@ int ObDMLResolver::add_column_to_stmt(const TableItem &table_item,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("all basic table's column should add to updatable view before", K(ret));
       }
-    } else if (table_item.is_basic_table()) {
+    } else if (table_item.is_basic_table() || table_item.is_link_table()) {
       column_item = stmt->get_column_item_by_id(table_item.table_id_, col.get_column_id());
       if (NULL == column_item) {
         if (OB_FAIL(resolve_basic_column_item(table_item, col.get_column_name_str(), true, column_item, stmt))) {
@@ -6091,8 +6098,8 @@ int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo *session,
       const ObColumnSchemaV2 *column_schema = NULL;
       const uint64_t tid = OB_INVALID_ID == column->base_tid_ ? column->table_id_ : column->base_tid_;
       const uint64_t cid = OB_INVALID_ID == column->base_cid_ ? column->column_id_ : column->base_cid_;
-      if (OB_FAIL(get_column_schema(tid, cid, column_schema, true))) {
-        LOG_WARN("fail to get column schema", K(ret), K(*column));
+      if (OB_FAIL(get_column_schema(tid, cid, column_schema, true, table_item->is_link_table()))) {
+        LOG_WARN("fail to get column schema", K(ret), K(*column), K(table_item->is_link_table()));
       } else if (NULL == column_schema) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema fail", K(column_schema));
@@ -6942,6 +6949,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObString &synonym_db_name,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
+                                                 bool &is_reverse_link,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
   bool is_db_explicit = false;
@@ -6955,6 +6963,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                        db_name,
                                        dblink_name,
                                        is_db_explicit,
+                                       is_reverse_link,
                                        ref_obj_ids);
 }
 
@@ -6968,6 +6977,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  common::ObString &db_name,
                                                  common::ObString &dblink_name,
                                                  ObSynonymChecker &synonym_checker,
+                                                 bool &is_reverse_link,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
   bool is_db_explicit = false;
@@ -6982,6 +6992,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                        dblink_name,
                                        is_db_explicit,
                                        synonym_checker,
+                                       is_reverse_link,
                                        ref_obj_ids);
 }
 
@@ -6994,6 +7005,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  common::ObString &synonym_db_name,
                                                  common::ObString &dblink_name,
                                                  common::ObString &db_name,
+                                                 bool &is_reverse_link,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
   bool is_db_explicit = false;
@@ -7008,6 +7020,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                        db_name,
                                        dblink_name,
                                        is_db_explicit,
+                                       is_reverse_link,
                                        ref_obj_ids);
 }
 
@@ -7020,11 +7033,12 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
                                                  bool &is_db_explicit,
+                                                 bool &is_reverse_link,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
   return resolve_table_relation_factor(node, session_info_->get_effective_tenant_id(), dblink_id,
                                        database_id, table_name, synonym_name, synonym_db_name,
-                                       db_name, dblink_name, is_db_explicit, ref_obj_ids);
+                                       db_name, dblink_name, is_db_explicit, is_reverse_link, ref_obj_ids);
 }
 
 
@@ -7103,12 +7117,13 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObString &db_name,
                                                  ObString &dblink_name,
                                                  bool &is_db_explicit,
+                                                 bool &is_reverse_link,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
   ObSynonymChecker synonym_checker;
   return resolve_table_relation_factor(node, tenant_id, dblink_id,
                                        database_id, table_name, synonym_name, synonym_db_name,
-                                       db_name, dblink_name, is_db_explicit, synonym_checker, ref_obj_ids);
+                                       db_name, dblink_name, is_db_explicit, synonym_checker, is_reverse_link, ref_obj_ids);
 }
 
 int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
@@ -7122,16 +7137,18 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                  ObString &dblink_name,
                                                  bool &is_db_explicit,
                                                  ObSynonymChecker &synonym_checker,
+                                                 bool &is_reverse_link,
                                                  ObIArray<uint64_t> &ref_obj_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
-  } else if (OB_FAIL(resolve_dblink_name(node, dblink_name))) {
+  } else if (OB_FAIL(resolve_dblink_name(node, dblink_name, is_reverse_link))) {
     LOG_WARN("resolve dblink name failed", K(ret));
   } else {
-    if (dblink_name.empty()) {
+    LOG_DEBUG("resolve dblink name", K(dblink_name), K(is_reverse_link));
+    if (!is_reverse_link && dblink_name.empty()) {
       if (OB_FAIL(resolve_table_relation_factor_normal(node, tenant_id, database_id,
                                                        table_name, synonym_name,
                                                        synonym_db_name, db_name,
@@ -7144,7 +7161,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
           ret = OB_SUCCESS;
           if (OB_FAIL(resolve_dblink_with_synonym(tenant_id, table_name, dblink_name,
                                                   db_name, dblink_id))) {
-            LOG_WARN("try synonym with dblink failed", K(ret));
+            LOG_WARN("try synonym with dblink failed", K(ret), K(table_name), K(dblink_name), K(db_name), K(dblink_id));
             ret = tmp_ret;
             synonym_name.reset();
             synonym_db_name.reset();
@@ -7158,28 +7175,15 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
           synonym_db_name.reset();
         }
       }
-    } else {
-      if (OB_FAIL(resolve_table_relation_factor_dblink(node, tenant_id,
+    } else if (OB_FAIL(resolve_table_relation_factor_dblink(node, tenant_id,
                                                        dblink_name, dblink_id,
-                                                       table_name, db_name))) {
-        LOG_WARN("resolve table relation factor from dblink failed", K(ret));
-      }
+                                                       table_name, db_name,
+                                                       is_reverse_link))) {
+      LOG_WARN("resolve table relation factor from dblink failed", K(ret));
     }
     if (OB_SUCC(ret)) {
       OZ (ref_obj_ids.assign(synonym_checker.get_synonym_ids()));
     }
-  }
-  return ret;
-}
-
-int ObDMLResolver::resolve_dblink_name(const ParseNode *table_node, ObString &dblink_name)
-{
-  int ret = OB_SUCCESS;
-  dblink_name.reset();
-  if (!OB_ISNULL(table_node) && table_node->num_child_ > 2 &&
-      !OB_ISNULL(table_node->children_) && !OB_ISNULL(table_node->children_[2])) {
-    int32_t dblink_name_len = static_cast<int32_t>(table_node->children_[2]->str_len_);
-    dblink_name.assign_ptr(table_node->children_[2]->str_value_, dblink_name_len);
   }
   return ret;
 }
@@ -7228,7 +7232,7 @@ int ObDMLResolver::resolve_dblink_with_synonym(uint64_t tenant_id, ObString &tab
           char *src_ptr = tmp_db_name.ptr();
           for(ObString::obstr_size_t i = 0; i < tmp_db_name.length(); ++i) {
             letter = src_ptr[i];
-            if(letter >= 'a' && letter <= 'z'){
+            if(letter >= 'a' && letter <= 'z') {
               src_ptr[i] = static_cast<char>(letter - 32);
             }
           }
@@ -7274,7 +7278,6 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
   ObString out_db_name;
   ObString out_table_name;
   synonym_db_name.reset();
-
   if (OB_FAIL(resolve_table_relation_node_v2(node, table_name, db_name, is_db_explicit))) {
     LOG_WARN("failed to resolve table relation node!", K(ret));
   } else if (FALSE_IT(orig_name.assign_ptr(table_name.ptr(), table_name.length()))) {
@@ -7303,7 +7306,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     // synonym_db_name.reset();
     // synonym_name.reset();
     synonym_name = orig_name;
-    LOG_WARN("fail to resolve table relation recursively", K(tenant_id), K(ret));
+    LOG_WARN("fail to resolve table relation recursively", K(tenant_id), K(ret), K(database_id), K(database_id), K(table_name), K(db_name));
   } else if (false == synonym_checker.has_synonym()) {
     synonym_name.reset();
     synonym_db_name.reset();
@@ -7341,16 +7344,20 @@ int ObDMLResolver::resolve_table_relation_factor_dblink(const ParseNode *table_n
                                                         const ObString &dblink_name,
                                                         uint64_t &dblink_id,
                                                         ObString &table_name,
-                                                        ObString &database_name)
+                                                        ObString &database_name,
+                                                        bool is_reverse_link)
 {
   int ret = OB_SUCCESS;
   // db name node may null
   ParseNode *dbname_node = table_node->children_[0];
+  if (is_reverse_link) {
+    dblink_id = 0; //set reverse link's dblink id to 0
+  }
   if (OB_ISNULL(table_node) || OB_ISNULL(table_node->children_) ||
       OB_ISNULL(table_node->children_[1])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table node or children is NULL", K(ret));
-  } else if (OB_FAIL(schema_checker_->get_dblink_id(tenant_id, dblink_name, dblink_id))) {
+  } else if (!is_reverse_link && OB_FAIL(schema_checker_->get_dblink_id(tenant_id, dblink_name, dblink_id))) {
     LOG_WARN("failed to get dblink info", K(ret), K(dblink_name));
   } else if (OB_INVALID_ID == dblink_id) {
     ret = OB_DBLINK_NOT_EXIST_TO_ACCESS;
@@ -7359,10 +7366,10 @@ int ObDMLResolver::resolve_table_relation_factor_dblink(const ParseNode *table_n
     if (OB_ISNULL(allocator_)) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("allocator is null", K(ret));
-    } else if (OB_FAIL(schema_checker_->get_dblink_user(tenant_id, dblink_name,
+    } else if (!is_reverse_link && OB_FAIL(schema_checker_->get_dblink_user(tenant_id, dblink_name,
                                                         database_name, *allocator_))){
       LOG_WARN("failed to get dblink user name", K(tenant_id), K(database_name));
-    } else if (database_name.empty()) {
+    } else if (!is_reverse_link && database_name.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dblink user name is empty", K(ret));
     } else {
@@ -7372,21 +7379,9 @@ int ObDMLResolver::resolve_table_relation_factor_dblink(const ParseNode *table_n
         tmp_dbname.assign_ptr(dbname_node->str_value_, database_name_len);
         // the one saved in the schema may different from the one in the parse node, check it.
         if (0 != database_name.case_compare(tmp_dbname)) {
-          LOG_WARN("user name is not same", K(database_name), K(tmp_dbname));
-          //At the beginning, OB dblink only considers accessing a specific user of remote.
-          //So if it finds that the user accessed by sql is not the specified user, it will directly report an error.
-          //This restriction should now be lifted.
-          //
-          //Example:
-          //There are local users user1@tenant1, remote users user1@tenant2 and user2@tenant2.
-          //user1@tenant1 establishes a dblink connected to user1@tenant2,
-          //theoretically user1@tenant2 should be able to use this connection to access user2@tenant2.
+          LOG_DEBUG("user name is not same", K(database_name), K(tmp_dbname));
           database_name = tmp_dbname;
-        } else {
-          // do nothing
         }
-      } else {
-        // do nothing
       }
       // database name may lower char, translate to upper, for all_object's user name is upper
       // why we use database_name, but not dbname_node, because dbname_node is not always exist
@@ -9231,7 +9226,7 @@ int ObDMLResolver::get_transpose_target_sql(const ObIArray<ObString> &columns_in
   sql.reuse();
   //1.get columns
   ObSEArray<ColumnItem, 16> column_items;
-  if (table_item.is_basic_table() || table_item.is_fake_cte_table()) {
+  if (table_item.is_basic_table() || table_item.is_fake_cte_table() || table_item.is_link_table()) {
     if (OB_FAIL(resolve_all_basic_table_columns(table_item, false, &column_items))) {
       LOG_WARN("resolve all basic table columns failed", K(ret));
     }
@@ -9523,7 +9518,7 @@ int ObDMLResolver::format_from_subquery(const ObString &unpivot_alias_name,
   if (OB_ISNULL(params_.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret));
-  } else if (table_item.is_basic_table()) {
+  } else if (table_item.is_basic_table() || table_item.is_link_table()) {
     if (OB_FAIL(sql.append_fmt(" FROM %.*s", table_item.table_name_.length(),
                                              table_item.table_name_.ptr()))) {
       LOG_WARN("fail to append_fmt", K(table_item.table_name_), K(ret));
@@ -10737,9 +10732,9 @@ int ObDMLResolver::get_columns_from_table_item(const TableItem *table_item, ObIA
     OZ (ObResolverUtils::get_all_function_table_column_names(*table_item,
                                                              params_,
                                                              column_names));
-  } else if (table_item->is_basic_table() || table_item->is_fake_cte_table()) {
+  } else if (table_item->is_basic_table() || table_item->is_fake_cte_table() || table_item->is_link_table()) {
     /**
-     * CTE_TABLE is same as BASIC_TABLE or ALIAS_TABLE
+     * LINK_TABLE and CTE_TABLE is same as BASIC_TABLE or ALIAS_TABLE
      */
     const ObTableSchema *table_schema = NULL;
     if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_item->ref_id_, table_schema, table_item->is_link_table()))) {
@@ -11390,7 +11385,7 @@ int ObDMLResolver::inner_resolve_hints(const ParseNode &node,
                                              resolved_hint))) {
         LOG_WARN("failed to resolve global hint", K(ret));
       } else if (resolved_hint) {
-        LOG_DEBUG("resolve global hint node", "type", get_type_name(hint_node->type_));
+        LOG_DEBUG("resolve global hint node", "type", get_type_name(hint_node->type_), K(in_outline_data));
       } else if (OB_FAIL(resolve_transform_hint(*hint_node, resolved_hint, cur_hints))) {
         LOG_WARN("failed to resolve transform hint", K(ret));
       } else if (!resolved_hint && OB_FAIL(resolve_optimize_hint(*hint_node, resolved_hint,
@@ -11461,6 +11456,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     case T_QUERY_TIMEOUT: {
       CHECK_HINT_PARAM(hint_node, 1) {
         global_hint.merge_query_timeout_hint(child0->value_);
+      }
+      break;
+    }
+    case T_DBLINK_INFO: {
+      CHECK_HINT_PARAM(hint_node, 2) {
+        global_hint.merge_dblink_info_hint(child0->value_, child1->value_);
       }
       break;
     }

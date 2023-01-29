@@ -294,17 +294,6 @@ int ObLogDistinct::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogDistinct::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (0 == dblink_id_) {
-    // do nothing
-  } else if (OB_FAIL(link_ctx.spell_distinct(startup_exprs_, filter_exprs_))) {
-    LOG_WARN("dblink fail to reverse spell distinct", K(dblink_id_), K(ret));
-  }
-  return ret;
-}
-
 int ObLogDistinct::print_outline_data(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;

@@ -354,6 +354,9 @@ int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode &inser
     LOG_WARN("get unexpected null", K(ret), K(insert_all_stmt), K(session_info_), K(table_node));
   } else if (OB_FAIL(resolve_basic_table(*table_node, table_item))) {
     LOG_WARN("failed to resolve basic table");
+  } else if (table_item->is_link_table()) {
+    ret = OB_ERR_DDL_ON_REMOTE_DATABASE; // behavior same as Oracle
+    LOG_WARN("dblink dml not support T_INSERT_ALL", K(OB_ERR_DDL_ON_REMOTE_DATABASE));
   } else if (table_item->is_generated_table() || table_item->is_temp_table()) {
     ret = OB_ERR_A_VIEW_NOT_APPROPRIATE_HERE;
     LOG_WARN("a view is not appropriate here", K(ret));

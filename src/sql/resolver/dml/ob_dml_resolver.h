@@ -350,7 +350,8 @@ protected:
                                               const common::ObString &alias_name,
                                               const common::ObString &synonym_name,
                                               const common::ObString &synonym_db_name,
-                                              TableItem *&table_item);
+                                              TableItem *&table_item,
+                                              bool is_reverse_link);
   int resolve_all_basic_table_columns(const TableItem &table_item,
                                       bool included_hidden,
                                       common::ObIArray<ColumnItem> *column_items);
@@ -463,6 +464,7 @@ public:
                                             common::ObString &dblink_name,
                                             bool &is_db_explicit,
                                             bool &use_sys_tenant,
+                                            bool &is_reverse_link,
                                             common::ObIArray<uint64_t> &ref_obj_ids);
 protected:
   int check_resolve_oracle_sys_view(const ParseNode *node, bool &is_oracle_sys_view);
@@ -488,6 +490,7 @@ protected:
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     bool &is_db_explicit,
+                                    bool &is_reverse_link,
                                     common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t &dblink_id,
@@ -498,6 +501,7 @@ protected:
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     bool &is_db_explicit,
+                                    bool &is_reverse_link,
                                     common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t tenant_id,
@@ -508,6 +512,7 @@ protected:
                                     common::ObString &synonym_db_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
+                                    bool &is_reverse_link,
                                     common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t &dblink_id,
@@ -517,6 +522,7 @@ protected:
                                     common::ObString &synonym_db_name,
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
+                                    bool &is_reverse_link,
                                     common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t tenant_id,
@@ -528,6 +534,7 @@ protected:
                                     common::ObString &db_name,
                                     common::ObString &dblink_name,
                                     ObSynonymChecker &synonym_checker,
+                                    bool &is_reverse_link,
                                     common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor(const ParseNode *node,
                                     uint64_t tenant_id,
@@ -540,6 +547,7 @@ protected:
                                     common::ObString &dblink_name,
                                     bool &is_db_expilicit,
                                     ObSynonymChecker &synonym_checker,
+                                    bool &is_reverse_link,
                                     common::ObIArray<uint64_t> &ref_obj_ids);
   int resolve_table_relation_factor_normal(const ParseNode *node,
                                            uint64_t tenant_id,
@@ -563,7 +571,8 @@ protected:
                                            const common::ObString &dblink_name,
                                            uint64_t &dblink_id,
                                            common::ObString &table_name,
-                                           common::ObString &database_name);
+                                           common::ObString &database_name,
+                                           bool is_reverse_link);
   int add_synonym_obj_id(const ObSynonymChecker &synonym_checker, bool error_with_exist);
 
   /*
@@ -785,9 +794,6 @@ private:
   int resolve_pseudo_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int check_keystore_status();
   int resolve_current_of(const ParseNode &node, ObDMLStmt &stmt, ObIArray<ObRawExpr*> &and_exprs);
-
-  int resolve_dblink_name(const ParseNode *table_node, ObString &dblink_name);
-
   int update_errno_if_sequence_object(const ObQualifiedName &q_name, int old_ret);
   int get_all_column_ref(ObRawExpr *expr, common::ObIArray<ObColumnRefRawExpr*> &arr);
 

@@ -1071,40 +1071,6 @@ int ObLogJoin::compute_table_set()
   return ret;
 }
 
-int ObLogJoin::collect_link_sql_context_pre(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  // Only the information of the child nodes of the link operator is collected
-  if (0 != dblink_id_) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < nl_params_.count(); i++) {
-      if (OB_FAIL(link_ctx.append_nl_param_idx(nl_params_.at(i)->get_param_index()))) { //for skip nl_param
-        LOG_WARN("failed to append nl paranm idx", K(ret), K(i), K(nl_params_.at(i)->get_param_index()));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogJoin::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *right_child = get_child(second_child);
-  if (0 == dblink_id_) {
-    // do nothing
-  } else if (OB_ISNULL(right_child)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("right child is NULL", K(ret));
-  } else if (OB_FAIL(link_ctx.spell_join(join_type_, 
-                                         LOG_JOIN == right_child->get_type(),
-                                         filter_exprs_, 
-                                         startup_exprs_,
-                                         join_conditions_,
-                                         join_filters_))) {
-    LOG_WARN("dblink fail to reverse spell join", K(dblink_id_), K(ret));
-  }
-  return ret;
-}
-
 int ObLogJoin::generate_join_partition_id_expr()
 {
   int ret = OB_SUCCESS;

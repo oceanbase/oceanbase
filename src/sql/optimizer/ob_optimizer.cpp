@@ -46,7 +46,8 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
     LOG_WARN("invalid arguments", K(ret), K(query_ctx), K(session), K(target_stmt), K(task_exec_ctx));
   } else if (OB_FAIL(init_env_info(*target_stmt))) {
     LOG_WARN("failed to init px info", K(ret));
-  } else if (OB_FAIL(generate_plan_for_temp_table(*target_stmt))) {
+  } else if (!target_stmt->is_reverse_link() &&
+             OB_FAIL(generate_plan_for_temp_table(*target_stmt))) {
     LOG_WARN("failed to generate plan for temp table", K(ret));
   } else if (OB_ISNULL(plan = ctx_.get_log_plan_factory().create(ctx_, stmt))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -333,7 +334,7 @@ int ObOptimizer::get_stmt_max_table_dop(ObDMLStmt &stmt,
               LOG_WARN("failed to get table schema", K(ret));
             } else if (OB_ISNULL(table_schema)) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get unexpected null", K(ret));
+              LOG_WARN("get unexpected null", K(ret), K(lbt()));
             } else {
               max_table_dop = std::max(max_table_dop, table_schema->get_dop());
             }

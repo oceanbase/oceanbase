@@ -46,6 +46,8 @@
 #include "storage/tx/wrs/ob_i_weak_read_service.h"     // WRS_LEVEL_SERVER
 #include "storage/tx/wrs/ob_weak_read_util.h"          // ObWeakReadUtil
 #include "observer/ob_req_time_service.h"
+#include "sql/dblink/ob_dblink_utils.h"
+#include "sql/dblink/ob_tm_service.h"
 #include <cctype>
 
 using namespace oceanbase::sql;
@@ -266,21 +268,36 @@ int ObResultSet::start_stmt()
   if (OB_ISNULL(phy_plan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid inner state", K(phy_plan));
+  } else if (OB_ISNULL(phy_plan->get_root_op_spec())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root_op_spec of phy_plan is NULL", K(phy_plan), K(ret));
   } else if (OB_FAIL(my_session_.get_autocommit(ac))) {
     LOG_WARN("fail to get autocommit", K(ret));
+  } else if (phy_plan->is_link_dml_plan() || phy_plan->has_link_sfd()) {
+    if (ac) {
+      my_session_.set_autocommit(false);
+      my_session_.set_restore_auto_commit(); // auto commit will be restored at tm_rollback or tm_commit;
+    }
+    LOG_DEBUG("dblink xa trascaction need skip start_stmt()", K(PHY_LINK_DML == phy_plan->get_root_op_spec()->type_), K(my_session_.get_dblink_context().is_dblink_xa_tras()));
   } else {
+    if (-1 != phy_plan->tx_id_) {
+      const transaction::ObTransID tx_id(phy_plan->tx_id_);
+    } else {
+      LOG_DEBUG("recover dblink xa skip", K(phy_plan->tx_id_));
+    }
     bool in_trans = my_session_.get_in_transaction();
 
     // 1. 无论是否处于事务中，只要不是select并且plan为REMOTE的，就反馈给客户端不命中
     // 2. feedback this misshit to obproxy (bug#6255177)
     // 3. 对于multi-stmt，只反馈首个partition hit信息给客户端
     // 4. 需要考虑到重试的情况，需要反馈给客户端的是首个重试成功的partition hit。
-    if (stmt::T_SELECT != stmt_type_) {
+    if (OB_SUCC(ret) && stmt::T_SELECT != stmt_type_) {
       my_session_.partition_hit().try_set_bool(
           OB_PHY_PLAN_REMOTE != phy_plan->get_plan_type());
     }
-
-    if (ObSqlTransUtil::is_remote_trans(
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (ObSqlTransUtil::is_remote_trans(
                 ac, in_trans, phy_plan->get_plan_type())) {
       // pass
     } else if (OB_LIKELY(phy_plan->is_need_trans())) {
@@ -320,7 +337,8 @@ int ObResultSet::end_stmt(const bool is_rollback)
   } else {
     // do nothing
   }
-
+  if (need_revert_tx_) { // ignore ret
+  }
   NG_TRACE(end_stmt);
   return ret;
 }
@@ -1089,7 +1107,9 @@ bool ObResultSet::need_end_trans_callback() const
     } else {}
     if (stmt::T_ANONYMOUS_BLOCK == get_stmt_type() && is_oracle_mode()) {
       need = ac && !explicit_start_trans && !is_with_rows();
-    } else if (OB_LIKELY(NULL != physical_plan_) && OB_LIKELY(physical_plan_->is_need_trans())) {
+    } else if (OB_LIKELY(NULL != physical_plan_) &&
+               OB_LIKELY(physical_plan_->is_need_trans()) &&
+               !physical_plan_->is_link_dml_plan()) {
       need = (true == ObSqlTransUtil::plan_can_end_trans(ac, explicit_start_trans)) &&
           (false == ObSqlTransUtil::is_remote_trans(ac, explicit_start_trans, physical_plan_->get_plan_type()));
     }

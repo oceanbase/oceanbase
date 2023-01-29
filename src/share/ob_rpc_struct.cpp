@@ -4756,14 +4756,14 @@ OB_SERIALIZE_MEMBER((ObDropOutlineArg, ObDDLArg),
 bool ObCreateDbLinkArg::is_valid() const
 {
   return OB_INVALID_ID != dblink_info_.get_tenant_id()
-      && OB_INVALID_ID != dblink_info_.get_owner_id()
-      && OB_INVALID_ID != dblink_info_.get_dblink_id()
-      && !dblink_info_.get_dblink_name().empty()
-//      && !dblink_info_.get_cluster_name().empty()
-      && !dblink_info_.get_tenant_name().empty()
-      && !dblink_info_.get_user_name().empty()
-      && !dblink_info_.get_password().empty()
-      && dblink_info_.get_host_addr().is_valid();
+          && OB_INVALID_ID != dblink_info_.get_owner_id()
+          && OB_INVALID_ID != dblink_info_.get_dblink_id()
+          && !dblink_info_.get_dblink_name().empty()
+          && !dblink_info_.get_tenant_name().empty()
+          && !dblink_info_.get_user_name().empty()
+          && dblink_info_.get_host_addr().is_valid()
+          && (!dblink_info_.get_password().empty() || !dblink_info_.get_encrypted_password().empty());
+
 }
 
 OB_SERIALIZE_MEMBER((ObCreateDbLinkArg, ObDDLArg), dblink_info_);

@@ -2102,9 +2102,9 @@ int ObSelectResolver::expand_target_list(
 {
   int ret = OB_SUCCESS;
   ObArray<ColumnItem> column_items;
-  if (table_item.is_basic_table()) {
+  if (table_item.is_basic_table() || table_item.is_link_table()) {
     if (OB_FAIL(resolve_all_basic_table_columns(table_item, false, &column_items))) {
-      LOG_WARN("resolve all basic table columns failed", K(ret));
+      LOG_WARN("resolve all basic table columns failed", K(ret), K(table_item));
     }
   } else if (table_item.is_generated_table() || table_item.is_temp_table()) {
     if (OB_FAIL(resolve_all_generated_table_columns(table_item, &column_items))) {
@@ -2124,7 +2124,7 @@ int ObSelectResolver::expand_target_list(
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected table type", K_(table_item.type));
+    LOG_WARN("unexpected table type", K_(table_item.type), K(ret));
   }
 
   const bool is_child_unpivot_select = (NULL != table_item.ref_query_
@@ -3356,6 +3356,9 @@ int ObSelectResolver::resolve_from_clause(const ParseNode *node)
       OZ( select_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()) );
       // oracle outer join will change from items
       OZ( add_from_items_order(table_item), table_item );
+      if (OB_SUCC(ret)) {
+        select_stmt->set_has_reverse_link(table_item->is_reverse_link_);
+      }
     }
     OZ( gen_unpivot_target_column(node->num_child_, *select_stmt, *table_item) );
     OZ( check_recursive_cte_usage(*select_stmt) );

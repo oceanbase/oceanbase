@@ -122,8 +122,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
 #define GENERATED_CTXCAT_CASCADE_FLAG (INT64_C(1) << 33)
 #define TABLE_PART_KEY_COLUMN_FLAG (INT64_C(1) << 34)
-#define LINK_TABLE_COLUMN_FLAG (INT64_C(1) << 35)
-#define TABLE_ALIAS_NAME_FLAG (INT64_C(1) << 36)
+#define TABLE_ALIAS_NAME_FLAG (INT64_C(1) << 35)
 /* create table t1(c1 int, c2 as (c1+1)) partition by hash(c2) partitions 2
    c1 and c2 has flag TABLE_PART_KEY_COLUMN_ORG_FLAG */
 #define TABLE_PART_KEY_COLUMN_ORG_FLAG (INT64_C(1) << 37) //column is part key, or column is depened by part key(gc col)
@@ -4976,10 +4975,29 @@ public:
   inline int set_tenant_name(const common::ObString &name) { return deep_copy_str(name, tenant_name_); }
   inline int set_user_name(const common::ObString &name) { return deep_copy_str(name, user_name_); }
   inline int set_password(const common::ObString &password) { return deep_copy_str(password, password_); }
+  inline int set_encrypted_password(const common::ObString &encrypted_password) { return deep_copy_str(encrypted_password, encrypted_password_); }
+  int do_encrypt_password();
+  int set_plain_password(const common::ObString &plain_password) { return deep_copy_str(plain_password, plain_password_); }
   inline void set_host_addr(const common::ObAddr &addr) { host_addr_ = addr; }
   int set_host_ip(const common::ObString &host_ip);
   inline void set_host_port(const int32_t host_port) { host_addr_.set_port(host_port); }
-
+  inline int set_reverse_cluster_name(const common::ObString &name) { return deep_copy_str(name, reverse_cluster_name_); }
+  inline int set_reverse_tenant_name(const common::ObString &name) { return deep_copy_str(name, reverse_tenant_name_); }
+  inline int set_reverse_user_name(const common::ObString &name) { return deep_copy_str(name, reverse_user_name_); }
+  inline int set_reverse_password(const common::ObString &password) { return deep_copy_str(password, reverse_password_); }
+  int do_encrypt_reverse_password();
+  inline int set_plain_reverse_password(const common::ObString &password) { return deep_copy_str(password, plain_reverse_password_); }
+  inline void set_reverse_host_addr(const common::ObAddr &addr) { reverse_host_addr_ = addr; }
+  inline int set_reverse_host_ip(const common::ObString &host_ip) { reverse_host_addr_.set_ip_addr(host_ip, 0); return common::OB_SUCCESS; }
+  inline void set_reverse_host_port(const int32_t host_port) { reverse_host_addr_.set_port(host_port); }
+  inline int set_authusr(const common::ObString &str) { return deep_copy_str(str, authusr_); }
+  inline int set_authpwd(const common::ObString &str) { return deep_copy_str(str, authpwd_); }
+  inline int set_passwordx(const common::ObString &str) { return deep_copy_str(str, passwordx_); }
+  inline int set_authpwdx(const common::ObString &str) { return deep_copy_str(str, authpwdx_); }
+  inline const common::ObString &get_authusr() const { return authusr_; }
+  inline const common::ObString &get_authpwd() const { return authpwd_; }
+  inline const common::ObString &get_passwordx() const { return passwordx_; }
+  inline const common::ObString &get_authpwdx() const { return authpwdx_; }
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_owner_id() const { return owner_id_; }
   inline uint64_t get_dblink_id() const { return dblink_id_; }
@@ -4989,22 +5007,27 @@ public:
   inline const common::ObString &get_tenant_name() const { return tenant_name_; }
   inline const common::ObString &get_user_name() const { return user_name_; }
   inline const common::ObString &get_password() const { return password_; }
+  inline const common::ObString &get_encrypted_password() const { return  encrypted_password_; }
+  int do_decrypt_password();
+  inline const common::ObString &get_plain_password() const { return plain_password_; }
   inline const common::ObAddr &get_host_addr() const { return host_addr_; }
   inline int32_t get_host_port() const { return host_addr_.get_port(); }
+  inline const common::ObString &get_reverse_cluster_name() const { return reverse_cluster_name_; }
+  inline const common::ObString &get_reverse_tenant_name() const { return reverse_tenant_name_; }
+  inline const common::ObString &get_reverse_user_name() const { return reverse_user_name_; }
+  inline const common::ObString &get_reverse_password() const { return reverse_password_; }
+  int do_decrypt_reverse_password();
+  inline const common::ObString &get_plain_reverse_password() const { return plain_reverse_password_; }
+  inline const common::ObAddr &get_reverse_host_addr() const { return reverse_host_addr_; }
+  inline int32_t get_reverse_host_port() const { return reverse_host_addr_.get_port(); }
+
+
   inline int64_t get_driver_proto() const { return driver_proto_; }
   inline void set_driver_proto(int64_t proto) { driver_proto_ = proto; }
   inline int64_t get_flag() const { return flag_; }
   inline void set_flag(int64_t flag) { flag_ = flag; }
-  inline const common::ObString &get_authusr() const { return authusr_; }
-  inline const common::ObString &get_authpwd() const { return authpwd_; }
-  inline const common::ObString &get_passwordx() const { return passwordx_; }
-  inline const common::ObString &get_authpwdx() const { return authpwdx_; }
   inline const common::ObString &get_service_name() const { return service_name_; }
   inline const common::ObString &get_conn_string() const { return conn_string_; }
-  inline int set_authusr(const common::ObString &str) { return deep_copy_str(str, authusr_); }
-  inline int set_authpwd(const common::ObString &str) { return deep_copy_str(str, authpwd_); }
-  inline int set_passwordx(const common::ObString &str) { return deep_copy_str(str, passwordx_); }
-  inline int set_authpwdx(const common::ObString &str) { return deep_copy_str(str, authpwdx_); }
   inline int set_service_name(const common::ObString &str) { return deep_copy_str(str, service_name_); }
   inline int set_conn_string(const common::ObString &str) { return deep_copy_str(str, conn_string_); }
   int get_ora_conn_string(common::ObString &conn_str);
@@ -5014,8 +5037,15 @@ public:
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(owner_id), K_(dblink_id), K_(dblink_name),
                        K_(cluster_name), K_(tenant_name), K_(user_name), K_(host_addr),
                        K_(driver_proto), K_(flag), K_(service_name), K_(conn_string),
-                       K_(authusr), K_(authpwd), K_(passwordx), K_(authpwdx));
-
+                       K_(authusr), K_(authpwd), K_(passwordx), K_(authpwdx),
+                       K_(password), K_(encrypted_password), K_(plain_password),
+                       K_(reverse_cluster_name),
+                       K_(reverse_tenant_name), K_(reverse_user_name),
+                       K_(reverse_password), K_(plain_reverse_password),
+                       K_(reverse_host_addr));
+private:
+  int dblink_encrypt(common::ObString &src, common::ObString &dst);
+  int dblink_decrypt(common::ObString &src, common::ObString &dst);
 protected:
   uint64_t tenant_id_;
   uint64_t owner_id_;
@@ -5035,6 +5065,14 @@ protected:
   common::ObString authpwd_; // 128
   common::ObString passwordx_; // 128
   common::ObString authpwdx_; //128
+  common::ObString plain_password_;
+  common::ObString encrypted_password_;
+  common::ObString reverse_cluster_name_;
+  common::ObString reverse_tenant_name_; // used for reverse dblink
+  common::ObString reverse_user_name_; // used for reverse dblink
+  common::ObString reverse_password_;  // used for reverse dblink
+  common::ObString plain_reverse_password_; // used for reverse dblink
+  common::ObAddr reverse_host_addr_;  // used for reverse dblink
 };
 
 struct ObTenantDbLinkId
@@ -5128,7 +5166,14 @@ public:
          + authusr_.length() + 1
          + authpwd_.length() + 1
          + passwordx_.length() + 1
-         + authpwdx_.length() + 1;
+         + authpwdx_.length() + 1
+         + plain_password_.length() + 1
+         + encrypted_password_.length() + 1
+         + reverse_cluster_name_.length() + 1
+         + reverse_tenant_name_.length() + 1
+         + reverse_user_name_.length() + 1
+         + reverse_password_.length() + 1
+         + plain_reverse_password_.length() + 1;
   }
 };
 

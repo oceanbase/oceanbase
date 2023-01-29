@@ -1754,6 +1754,17 @@ int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, co
     }
     if (OB_SUCC(ret) && OB_FAIL(MTL(ObXAService*)->start_stmt(xid, tx))) {
       TRANS_LOG(WARN, "xa trans start stmt failed", K(ret), K_(tx.xid), K(xid));
+      ObGlobalTxType global_tx_type = tx.get_global_tx_type(xid);
+      if (ObGlobalTxType::DBLINK_TRANS == global_tx_type && OB_TRANS_XA_BRANCH_FAIL == ret) {
+        // if dblink trans, change errno (branch fail) to the errno of plain trans
+        if (OB_FAIL(tx_sanity_check_(tx))) {
+          TRANS_LOG(WARN, "tx state insanity", K(ret), K(global_tx_type), K(xid));
+        } else {
+          // if success, set ret to rollback
+          ret = OB_TRANS_NEED_ROLLBACK;
+          TRANS_LOG(WARN, "need rollback", K(ret), K(global_tx_type), K(xid));
+        }
+      }
     } else {
       tx.set_sessid(session_id);
     }
@@ -1772,6 +1783,17 @@ int ObTransService::sql_stmt_end_hook(const ObXATransID &xid, ObTxDesc &tx)
     // need xid from session
     if (OB_FAIL(MTL(ObXAService*)->end_stmt(xid, tx))) {
       TRANS_LOG(WARN, "xa trans end stmt failed", K(ret), K_(tx.xid), K(xid));
+      ObGlobalTxType global_tx_type = tx.get_global_tx_type(xid);
+      if (ObGlobalTxType::DBLINK_TRANS == global_tx_type && OB_TRANS_XA_BRANCH_FAIL == ret) {
+        // if dblink trans, change errno (branch fail) to the errno of plain trans
+        if (OB_FAIL(tx_sanity_check_(tx))) {
+          TRANS_LOG(WARN, "tx state insanity", K(ret), K(global_tx_type), K(xid));
+        } else {
+          // if success, set ret to rollback
+          ret = OB_TRANS_NEED_ROLLBACK;
+          TRANS_LOG(WARN, "need rollback", K(ret), K(global_tx_type), K(xid));
+        }
+      }
     }
     // deregister from tx_desc_mgr to prevent
     // conflict with resumed xa branch execute

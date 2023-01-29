@@ -400,6 +400,8 @@ public:
   int contain_hierarchical_query(bool &contain_hie_query) const;
   void set_has_prior(bool has_prior) { has_prior_ = has_prior; }
   bool has_prior() const { return has_prior_; }
+  void set_has_reverse_link(bool has_reverse_link) { has_reverse_link_ = has_reverse_link; }
+  bool has_reverse_link() const { return has_reverse_link_; }
   // return single row
   inline bool is_single_set_query() const { return (get_aggr_item_size() > 0
                                              && group_exprs_.empty()
@@ -656,6 +658,7 @@ private:
   bool is_order_siblings_;
   bool is_hierarchical_query_;
   bool has_prior_;
+  bool has_reverse_link_;
 };
 }
 }

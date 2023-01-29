@@ -2917,13 +2917,25 @@ static struct VarsInit{
     ObSysVars[221].alias_ = "OB_SV_ONLINE_OPT_STAT_GATHER" ;
     }();
 
+    [&] (){
+      ObSysVars[222].info_ = "used in the dblink write transaction, the TM side informs the RM side of the necessary information about establishing a reverse dblink by setting system variables" ;
+      ObSysVars[222].name_ = "_set_reverse_dblink_infos" ;
+      ObSysVars[222].data_type_ = ObVarcharType ;
+      ObSysVars[222].value_ = "" ;
+      ObSysVars[222].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[222].id_ = SYS_VAR__SET_REVERSE_DBLINK_INFOS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SET_REVERSE_DBLINK_INFOS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__SET_REVERSE_DBLINK_INFOS] = 222 ;
+    ObSysVars[222].alias_ = "OB_SV__SET_REVERSE_DBLINK_INFOS" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 222;
+static int64_t var_amount = 223;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

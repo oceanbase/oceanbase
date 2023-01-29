@@ -231,8 +231,7 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
                                                                   is_global_index ? NULL : &table_item->part_ids_,
                                                                   dtc_params,
                                                                   is_dml_table,
-                                                                  NULL,
-                                                                  ObSqlSchemaGuard::is_link_table(stmt, table_id)))) {
+                                                                  NULL))) {
       LOG_WARN("Failed to initialize table location", K(ret));
     } else if (OB_FAIL(table_partition_info->calculate_phy_table_location_info(*exec_ctx,
                                                                               *params,
@@ -363,8 +362,6 @@ int ObJoinOrder::compute_sharding_info_for_base_path(const bool use_das,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(opt_ctx),
         K(session_info), K(schema_guard), K(ret));
-  } else if (ObSqlSchemaGuard::is_link_table(stmt, table_partition_info.get_table_id())) {
-    sharding_info = opt_ctx->get_local_sharding();
   } else if (use_das) {
     sharding_info = opt_ctx->get_match_all_sharding();
   } else if (OB_FAIL(schema_guard->get_table_schema(table_partition_info.get_ref_table_id(),
@@ -501,7 +498,7 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(AccessPath *path)
   ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
   uint64_t ref_table_id = path->table_partition_info_->get_ref_table_id();
   uint64_t table_id = path->table_partition_info_->get_table_id();
-  bool is_link = false;
+
   if (OB_ISNULL(get_plan()) || OB_ISNULL(path) ||
       OB_ISNULL(get_plan()->get_stmt()) ||
       OB_ISNULL(path->table_partition_info_) ||
@@ -509,8 +506,6 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(AccessPath *path)
       OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null param", K(ret));
-  } else {
-    is_link = ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id);
   }
   if (OB_FAIL(ret)) {
     // do nothing
@@ -524,7 +519,7 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(AccessPath *path)
       && (OB_TBL_LOCATION_LOCAL == location_type || OB_TBL_LOCATION_REMOTE == location_type)) {
     path->parallel_ = opt_ctx->get_parallel();
     path->server_cnt_ = 1;
-  } else if (path->use_das_ || is_link) {
+  } else if (path->use_das_) {
     path->parallel_ = opt_ctx->get_parallel();
     path->server_cnt_ = 1;
     path->server_list_.reuse();
@@ -954,8 +949,7 @@ int ObJoinOrder::virtual_table_heuristics(const uint64_t table_id,
     for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == idx_id &&  i < valid_index_ids.count(); ++i) {
       if (OB_UNLIKELY(OB_INVALID_ID == valid_index_ids.at(i))) {
         LOG_WARN("index id invalid", K(table_id), K(valid_index_ids.at(i)), K(ret));
-      } else if (OB_FAIL(schema_guard->get_table_schema(valid_index_ids.at(i), index_schema,
-                                        ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id)))
+      } else if (OB_FAIL(schema_guard->get_table_schema(valid_index_ids.at(i), index_schema))
                  || OB_ISNULL(index_schema)) {
         LOG_WARN("fail to get table schema", K(index_schema), K(valid_index_ids.at(i)), K(ret));
       } else if (!index_schema->is_index_table()) {
@@ -1022,7 +1016,7 @@ int ObJoinOrder::user_table_heuristics(const uint64_t table_id,
     for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
       int64_t index_col_num = 0;
       uint64_t index_id = valid_index_ids.at(i);
-      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema, ObSqlSchemaGuard::is_link_table(stmt, table_id)))) {
+      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema))) {
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1806,7 +1800,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
       LOG_WARN("check_and_extract query range failed", K(ret));
     } else {
       const ObTableSchema *index_schema = NULL;
-      if (OB_FAIL(guard->get_table_schema(index_table_id, index_schema, ObSqlSchemaGuard::is_link_table(stmt, table_id)))) {
+      if (OB_FAIL(guard->get_table_schema(index_table_id, index_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
       } else if (OB_ISNULL(index_schema)) {
         LOG_WARN("index schema should not be null", K(ret));
@@ -1927,19 +1921,16 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
   const ObTableSchema *index_schema = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObDMLStmt *stmt = NULL;
-  bool is_link = false;
   index_entry = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
       OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(schema_guard), K(ret));
-  } else {
-    is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
   }
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema, is_link))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema, ObSqlSchemaGuard::is_link_table(stmt, table_id)))) {
     LOG_WARN("failed to get index schema", K(ret));
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1969,9 +1960,6 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
                                            is_index_back))) {
         LOG_WARN("get_access_path_ordering ", K(ret));
       } else {
-        if (is_link) {
-          entry->get_ordering_info().get_ordering().reset();
-        }
         entry->set_is_index_global(is_index_global);
         entry->set_is_index_geo(is_index_geo);
         entry->set_is_index_back(is_index_back);
@@ -2294,7 +2282,6 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
                                                             false,
                                                             table_item->access_all_part(),
                                                             false /*domain index*/,
-                                                            table_item->is_link_table() /*is_link*/,
                                                             false /*spatial index*/))) {
     LOG_WARN("failed to get can read index", K(ref_table_id), K(ret));
   } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
@@ -2523,7 +2510,6 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
   int64_t index_count = OB_MAX_INDEX_PER_TABLE + 3;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObDMLStmt *stmt = NULL;
-  bool is_link = false;
   if (OB_ISNULL(table_opt_info) || OB_ISNULL(get_plan())
       || OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())
       || OB_ISNULL(stmt = get_plan()->get_stmt())) {
@@ -2532,8 +2518,6 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
   } else if (OB_UNLIKELY(OB_INVALID_ID == base_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid table id", K(base_table_id), K(ret));
-  } else {
-    is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
   }
   if (OB_FAIL(ret)) {
     // do nothing
@@ -2542,8 +2526,7 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
                                                             index_count,
                                                             false,
                                                             true /*global index*/,
-                                                            false /*domain index*/,
-                                                            is_link))) {
+                                                            false /*domain index*/))) {
     LOG_WARN("failed to get can read index", K(base_table_id), K(ret));
   } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
     ret = OB_ERR_UNEXPECTED;
@@ -2556,7 +2539,7 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
     for (int64_t i = 0; OB_SUCC(ret) && i < index_count; ++i) {
       ObString name;
       uint64_t index_id = index_ids[i];
-      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema, is_link))) {
+      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema))) {
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -10081,8 +10064,7 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
              OB_UNLIKELY(OB_INVALID_ID == index_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid table id", K(ref_table_id), K(index_id), K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema,
-                                    ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id)))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
     LOG_WARN("failed to get index schema", K(ret));
   } else if (OB_FAIL(extract_used_columns(table_id,
                                           ref_table_id,
@@ -10155,7 +10137,7 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(get_plan()), K(schema_guard), K(ret));
     } else if (OB_FAIL(schema_guard->get_table_schema(est_cost_info.index_id_,
-                                                      index_schema, is_link))) {
+                                                      index_schema))) {
       LOG_WARN("failed to get index schema", K(ret));
     } else if (OB_ISNULL(index_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -10416,8 +10398,7 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(schema_guard), K(get_plan()), K(table_partition_info_), K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema,
-                                   ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id)))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -11333,13 +11314,10 @@ int ObJoinOrder::compute_fd_item_set_for_table_scan(const uint64_t table_id,
   const ObDMLStmt *stmt = NULL;
   uint64_t index_tids[OB_MAX_INDEX_PER_TABLE];
   int64_t index_count = OB_MAX_INDEX_PER_TABLE;
-  bool is_link = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(stmt), K(schema_guard));
-  } else {
-    is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
   }
   if (OB_FAIL(ret)) {
     // do nothing
@@ -11348,14 +11326,13 @@ int ObJoinOrder::compute_fd_item_set_for_table_scan(const uint64_t table_id,
                                                             index_count,
                                                             false,
                                                             true  /*global index*/,
-                                                            false /*domain index*/,
-                                                            is_link))) {
+                                                            false /*domain index*/))) {
     LOG_WARN("failed to get can read index", K(ret), K(table_ref_id));
   }
   for (int64_t i = -1; OB_SUCC(ret) && i < index_count; ++i) {
     const ObTableSchema *index_schema = NULL;
     uint64_t index_id = (i == -1 ? table_ref_id : index_tids[i]);
-    if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema, is_link))) {
+    if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
     } else if (OB_ISNULL(index_schema)) {
       ret = OB_ERR_UNEXPECTED;

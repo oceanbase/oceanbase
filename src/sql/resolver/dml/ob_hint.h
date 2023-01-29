@@ -133,6 +133,8 @@ struct ObGlobalHint {
   int merge_dop_hint(uint64_t dfo, uint64_t dop);
   int merge_dop_hint(const ObIArray<ObDopHint> &dop_hints);
   void merge_query_timeout_hint(int64_t hint_time);
+  void merge_dblink_info_hint(int64_t tx_id, int64_t tm_sessid);
+  void reset_dblink_info_hint();
   void merge_max_concurrent_hint(int64_t max_concurrent);
   void merge_parallel_hint(int64_t parallel);
   void merge_parallel_dml_hint(ObPDMLOption pdml_option);
@@ -145,11 +147,13 @@ struct ObGlobalHint {
   void merge_osg_hint(int8_t flag);
 
   bool has_hint_exclude_concurrent() const;
-  int print_global_hint(PlanText &plan_text) const;
+  int print_global_hint(PlanText &plan_text, const bool ignore_parallel) const;
   int print_monitoring_hints(PlanText &plan_text) const;
 
   ObPDMLOption get_pdml_option() const { return pdml_option_; }
   ObParamOption get_param_option() const { return param_option_; }
+  int64_t get_dblink_tx_id_hint() const { return tx_id_; }
+  int64_t get_dblink_tm_sessid_hint() const { return tm_sessid_; }
   int64_t get_parallel_hint() const { return parallel_; }
   bool has_parallel_hint() const { return UNSET_PARALLEL != parallel_; }
   bool is_topk_specified() const { return topk_precision_ > 0 || sharding_minimum_row_count_ > 0; }
@@ -187,6 +191,8 @@ struct ObGlobalHint {
                K_(topk_precision),
                K_(sharding_minimum_row_count),
                K_(query_timeout),
+               K_(tx_id),
+               K_(tm_sessid),
                K_(read_consistency),
                K_(plan_cache_policy),
                K_(force_trace_log),
@@ -211,6 +217,8 @@ struct ObGlobalHint {
   int64_t topk_precision_;
   int64_t sharding_minimum_row_count_;
   int64_t query_timeout_;
+  int64_t tx_id_;
+  int64_t tm_sessid_;
   common::ObConsistencyLevel read_consistency_;
   ObPlanCachePolicy plan_cache_policy_;
   bool force_trace_log_;

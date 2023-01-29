@@ -19,6 +19,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/lock/ob_latch.h"
 #include "lib/hash/ob_link_hashmap.h"
+#include "storage/tx/ob_dblink_client.h"
 
 namespace oceanbase
 {
@@ -150,6 +151,20 @@ public:
     ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
     return xa_ref_count_;
   }
+public:
+  // for 4.0 dblink
+  int xa_start_for_dblink(const ObXATransID &xid,
+                          const int64_t flags,
+                          const int64_t timeout_seconds,
+                          const bool need_promote,
+                          ObTxDesc *tx_desc);
+  int get_dblink_client(const common::sqlclient::DblinkDriverProto dblink_type,
+                        common::sqlclient::ObISQLConnection *dblink_conn,
+                        ObDBLinkClient *&client);
+  int remove_dblink_client(ObDBLinkClient *client);
+  ObDBLinkClientArray &get_dblink_client_array() { return dblink_client_array_; }
+  int recover_tx_for_dblink_callback(ObTxDesc *&tx_desc);
+  int revert_tx_for_dblink_callback(ObTxDesc *&tx_desc);
   bool has_tx_level_temp_table() { return has_tx_level_temp_table_; }
   
   TO_STRING_KV(K_(is_inited), K_(xid), K_(original_sche_addr), K_(is_exiting),
@@ -233,12 +248,17 @@ private:
   int xa_rollback_session_terminate_();
   int xa_rollback_terminate_();
   
-  int xa_prepare_(const ObXATransID &xid, const int64_t timeout_us);
+  int xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool &need_exit);
   int drive_prepare_(const ObXATransID &xid,
                      const int64_t timeout_us);
   int check_trans_state_(const bool is_rollback,
                          const int64_t request_id,
                          const bool is_xa_one_phase);
+private:
+  // for 4.0 dblink
+  int get_dblink_client_(const common::sqlclient::DblinkDriverProto dblink_type,
+                         common::sqlclient::ObISQLConnection *dblink_conn,
+                         ObDBLinkClient *&dblink_client);
 private:
   bool is_inited_;
   ObXACtxMgr *xa_ctx_mgr_;
@@ -288,6 +308,8 @@ private:
   ObXATransID executing_xid_;
   ObTransCond start_stmt_cond_;
   SyncXACb end_trans_cb_;
+  // if dblink trans, record dblink client
+  ObDBLinkClientArray dblink_client_array_;
   bool has_tx_level_temp_table_;
 };
 

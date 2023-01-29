@@ -1438,6 +1438,7 @@ int ObExecParamRawExpr::assign(const ObRawExpr &other)
       const ObExecParamRawExpr &tmp = static_cast<const ObExecParamRawExpr &>(other);
       outer_expr_ = tmp.outer_expr_;
       is_onetime_ = tmp.is_onetime_;
+      ref_same_dblink_ = tmp.ref_same_dblink_;
     }
   }
   return ret;

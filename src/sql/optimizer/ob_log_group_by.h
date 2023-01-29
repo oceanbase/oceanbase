@@ -143,7 +143,6 @@ public:
   virtual bool is_block_op() const override
   { return (MERGE_AGGREGATE != get_algo() && !is_adaptive_aggregate())
         || ObRollupStatus::ROLLUP_DISTRIBUTOR == rollup_adaptive_info_.rollup_status_; }
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
 
   virtual int compute_fd_item_set() override;
   virtual int compute_op_ordering() override;

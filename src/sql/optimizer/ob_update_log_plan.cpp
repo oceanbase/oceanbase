@@ -25,6 +25,7 @@
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_log_subplan_filter.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
@@ -77,7 +78,7 @@ explain update t2 set j = (select i from t1 where rownum < 2) where i in (select
 */
 
 
-int ObUpdateLogPlan::generate_raw_plan()
+int ObUpdateLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
   /**

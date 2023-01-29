@@ -1114,12 +1114,14 @@ public:
    * ObMultiVersionSchemaService::get_link_table_schema() need adjust
    * schema_version and link_schema_version, so param table_schema should not be const.
    */
-  virtual int get_link_table_schema(const ObDbLinkSchema &dblink_schema,
+  virtual int get_link_table_schema(const ObDbLinkSchema *dblink_schema,
                                     const common::ObString &database_name,
                                     const common::ObString &table_name,
                                     common::ObIAllocator &allocator,
                                     ObTableSchema *&table_schema,
-                                    uint32_t sessid) = 0;
+                                    sql::ObSQLSessionInfo *session_info,
+                                    const common::ObString &dblink_name,
+                                    bool is_reverse_link) = 0;
   // when refresh schema, if new ddl operations are as following:
   // (ALTER USER TABLE, v1), (ALTER SYS TABLE, v2),
   // if we replay new ddl operation one by one, when we execute sql to read sys table

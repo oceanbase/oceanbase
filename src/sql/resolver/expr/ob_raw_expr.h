@@ -2151,13 +2151,15 @@ class ObExecParamRawExpr : public ObConstRawExpr
 {
 public:
   ObExecParamRawExpr() :
-    ObConstRawExpr()
+    ObConstRawExpr(),
+    ref_same_dblink_(false)
   {
     set_expr_class(ObIRawExpr::EXPR_EXEC_PARAM);
   }
 
   ObExecParamRawExpr(common::ObIAllocator &alloc)
-    : ObConstRawExpr(alloc)
+    : ObConstRawExpr(alloc),
+      ref_same_dblink_(false)
   {
     set_expr_class(ObIRawExpr::EXPR_EXEC_PARAM);
   }
@@ -2176,6 +2178,8 @@ public:
   ObRawExpr*& get_ref_expr() { return outer_expr_; }
 
   bool is_onetime() const { return is_onetime_; }
+  bool is_ref_same_dblink() const { return ref_same_dblink_; }
+  void set_ref_same_dblink(bool ref_same_dblink) { ref_same_dblink_ = ref_same_dblink; }
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
@@ -2194,6 +2198,7 @@ private:
   // the refered expr in the outer stmt
   ObRawExpr *outer_expr_;
   bool is_onetime_;
+  bool ref_same_dblink_;
 };
 
 class ObQueryRefRawExpr : public ObRawExpr
@@ -2477,10 +2482,8 @@ public:
   inline bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
   inline bool is_table_part_key_column() const { return column_flags_ & TABLE_PART_KEY_COLUMN_FLAG; }
   inline bool is_table_part_key_org_column() const { return column_flags_ & TABLE_PART_KEY_COLUMN_ORG_FLAG; }
-  inline bool is_link_table_column() const { return column_flags_ & LINK_TABLE_COLUMN_FLAG; }
   inline bool has_table_alias_name() const { return column_flags_ & TABLE_ALIAS_NAME_FLAG; }
   void set_column_flags(uint64_t column_flags) { column_flags_ = column_flags; }
-  void set_link_table_column() { column_flags_ |= LINK_TABLE_COLUMN_FLAG; }
   void set_table_alias_name() { column_flags_ |= TABLE_ALIAS_NAME_FLAG; }
   inline uint64_t get_column_flags() const { return column_flags_; }
   inline const ObRawExpr *get_dependant_expr() const { return dependant_expr_; }

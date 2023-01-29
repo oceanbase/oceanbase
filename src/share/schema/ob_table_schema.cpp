@@ -6865,7 +6865,6 @@ int ObColumnIterByPrevNextID::next(const ObColumnSchemaV2 *&column_schema)
       last_column_schema_ = column_schema;
     }
   }
-
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;

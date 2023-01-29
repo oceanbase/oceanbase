@@ -3913,12 +3913,14 @@ int ObMultiVersionSchemaService::get_recycle_schema_version(
   return ret;
 }
 
-int ObMultiVersionSchemaService::fetch_link_table_schema(const ObDbLinkSchema &dblink_schema,
+int ObMultiVersionSchemaService::fetch_link_table_schema(const ObDbLinkSchema *dblink_schema,
                                                          const ObString &database_name,
                                                          const ObString &table_name,
                                                          ObIAllocator &allocator,
                                                          ObTableSchema *&table_schema,
-                                                         uint32_t sessid)
+                                                         sql::ObSQLSessionInfo *session_info,
+                                                         const ObString &dblink_name,
+                                                         bool is_reverse_link)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(schema_service_)) {
@@ -3927,8 +3929,10 @@ int ObMultiVersionSchemaService::fetch_link_table_schema(const ObDbLinkSchema &d
   } else if (OB_FAIL(schema_service_->get_link_table_schema(dblink_schema,
                                                             database_name, table_name,
                                                             allocator, table_schema,
-                                                            sessid))) {
-    LOG_WARN("get link table schema failed", K(ret));
+                                                            session_info,
+                                                            dblink_name,
+                                                            is_reverse_link))) {
+    LOG_WARN("get link table schema failed", K(ret), K(is_reverse_link));
   }
   return ret;
 }

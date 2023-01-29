@@ -686,8 +686,7 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
       OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema,
-                                         ObSqlSchemaGuard::is_link_table(get_stmt(), table_id_)))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
   } else if (OB_FAIL(get_stmt()->has_lob_column(table_id_, has_lob_column))) {
@@ -1907,29 +1906,6 @@ bool ObLogTableScan::is_need_feedback() const
 
   LOG_TRACE("is_need_feedback", K(estimate_method_), K(table_row_count_),
             K(query_range_row_count_), K(table_row_count_), K(sel), K(ret));
-  return ret;
-}
-
-int ObLogTableScan::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  TableItem *table_item = NULL;
-  const ObDMLStmt *stmt = NULL;
-  if (0 == dblink_id_) {
-    // do nothing
-  } else if (FALSE_IT(link_ctx.check_dblink_id(dblink_id_))) {
-    // do nothing
-  } else if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is NULl", K(ret));
-  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get table item", K(table_id_), K(dblink_id_), K(ret));
-  } else if (OB_FAIL(link_ctx.spell_table_scan(table_item, filter_exprs_, startup_exprs_,
-                                               range_conds_, pushdown_filter_exprs_,
-                                               limit_count_expr_))) {
-    LOG_WARN("dblink fail to reverse spell table scan", K(dblink_id_), K(ret));
-  }
   return ret;
 }
 

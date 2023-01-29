@@ -6395,7 +6395,7 @@ int ObRawExprUtils::try_create_bool_expr(ObRawExpr *src_expr,
   return ret;
 }
 
-bool ObRawExprUtils::check_need_bool_expr(const ObRawExpr *expr, bool &need_bool_expr)
+int ObRawExprUtils::check_need_bool_expr(const ObRawExpr *expr, bool &need_bool_expr)
 {
   int ret = OB_SUCCESS;
   need_bool_expr = true;
@@ -6460,6 +6460,63 @@ bool ObRawExprUtils::check_need_bool_expr(const ObRawExpr *expr, bool &need_bool
       }
       default: {
         need_bool_expr = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::check_is_bool_expr(const ObRawExpr *expr, bool &is_bool_expr)
+{
+  int ret = OB_SUCCESS;
+  is_bool_expr = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("in expr is NULL", K(ret));
+  } else {
+    ObItemType expr_type = expr->get_expr_type();
+    switch (expr_type) {
+      case T_OP_EQ:
+      case T_OP_NSEQ:
+      case T_OP_LE:
+      case T_OP_LT:
+      case T_OP_GE:
+      case T_OP_GT:
+      case T_OP_NE:
+
+      case T_OP_SQ_EQ:
+      case T_OP_SQ_NSEQ:
+      case T_OP_SQ_LE:
+      case T_OP_SQ_LT:
+      case T_OP_SQ_GE:
+      case T_OP_SQ_GT:
+      case T_OP_SQ_NE:
+
+      case T_OP_IS:
+      case T_OP_IS_NOT:
+      case T_OP_BTW:
+      case T_OP_NOT_BTW:
+      case T_OP_LIKE:
+      case T_OP_NOT_LIKE:
+      case T_OP_REGEXP:
+      case T_OP_NOT_REGEXP:
+
+      case T_OP_NOT:
+      case T_OP_AND:
+      case T_OP_OR:
+      case T_OP_IN:
+      case T_OP_NOT_IN:
+      case T_OP_EXISTS:
+      case T_OP_NOT_EXISTS:
+
+      case T_OP_XOR:
+      case T_OP_BOOL:  {
+        is_bool_expr = true;
+        break;
+      }
+      default: {
+        is_bool_expr = false;
         break;
       }
     }

@@ -29,7 +29,6 @@ public:
   { }
   virtual ~ObInsertAllLogPlan()
   { }
-  virtual int generate_raw_plan() override;
 
   const ObInsertAllStmt *get_stmt() const override
   { return reinterpret_cast<const ObInsertAllStmt*>(stmt_); }
@@ -37,6 +36,7 @@ public:
   virtual int prepare_dml_infos() override;
 
 protected:
+  virtual int generate_normal_raw_plan() override;
   int allocate_insert_values_as_top(ObLogicalOperator *&top);
   int candi_allocate_insert_all();
   int create_insert_all_plan(ObLogicalOperator *&top);

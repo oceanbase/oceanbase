@@ -23,6 +23,7 @@
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/optimizer/ob_log_subplan_filter.h"
 #include "sql/optimizer/ob_log_insert_all.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "sql/ob_optimizer_trace_impl.h"
 #include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
@@ -35,15 +36,17 @@ using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::sql::log_op_def;
 
-int ObInsertLogPlan::generate_raw_plan()
+int ObInsertLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
-  if (OB_ISNULL(get_stmt()) || OB_ISNULL(session_info = get_optimizer_context().get_session_info()) ||
+  const ObInsertStmt *insert_stmt = get_stmt();
+  if (OB_ISNULL(insert_stmt) || OB_ISNULL(session_info = get_optimizer_context().get_session_info()) ||
       OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(session_info), K(get_stmt()), K(ret));
+    LOG_WARN("get unexpected error", K(session_info), K(insert_stmt), K(ret));
   } else {
+    LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());
     bool need_osg = false;
     const ObInsertStmt *insert_stmt = get_stmt();
     LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());

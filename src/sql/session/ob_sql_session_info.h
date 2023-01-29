@@ -40,6 +40,8 @@
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/rc/ob_context.h"
+#include "sql/dblink/ob_dblink_utils.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "sql/monitor/flt/ob_flt_extra_info.h"
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
@@ -562,7 +564,14 @@ public:
     warnings_buf_.reset();
     pl_exact_err_msg_.reset();
   }
-
+  void restore_auto_commit()
+  {
+    if (restore_auto_commit_) {
+      set_autocommit(true);
+      restore_auto_commit_ = false;
+    }
+  }
+  void set_restore_auto_commit() { restore_auto_commit_ = true; }
   void reset_show_warnings_buf() { show_warnings_buf_.reset(); }
   ObPrivSet get_user_priv_set() const { return user_priv_set_; }
   ObPrivSet get_db_priv_set() const { return db_priv_set_; }
@@ -581,6 +590,10 @@ public:
   {
     global_sessid_ = global_sessid;
   }
+  oceanbase::sql::ObDblinkCtxInSession &get_dblink_context() { return dblink_context_; }
+  void set_sql_request_level(int64_t sql_req_level) { sql_req_level_ = sql_req_level; }
+  int64_t get_sql_request_level() { return sql_req_level_; }
+  int64_t get_next_sql_request_level() { return sql_req_level_ + 1; }
   int64_t get_global_sessid() const { return global_sessid_; }
   void set_read_uncommited(bool read_uncommited) { read_uncommited_ = read_uncommited; }
   bool get_read_uncommited() const { return read_uncommited_; }
@@ -988,9 +1001,6 @@ public:
   ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
-  //for dblink
-  int register_dblink_conn_pool(common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool);
-  int free_dblink_conn_pool();
 private:
   int close_all_ps_stmt();
   void destroy_contexts_map(ObContextsMap &map, common::ObIAllocator &alloc);
@@ -1133,7 +1143,7 @@ private:
   // No matter whether apply for resource successfully, a session will call on_user_disconnect when disconnect.
   // While only session got connection resource can release connection resource and decrease connections count.
   bool got_conn_res_;
-  ObArray<common::sqlclient::ObCommonServerConnectionPool *> dblink_conn_pool_array_;  //for dblink to free connection when session drop.
+  bool tx_level_temp_table_;
   // get_session_allocator can only apply for fixed-length memory.
   // To customize the memory length, you need to use malloc_alloctor of mem_context
   lib::MemoryContext mem_context_;
@@ -1183,6 +1193,9 @@ private:
   //and remove the record when the SQL execution ends
   //in order to access exec ctx through session during SQL execution
   ObExecContext *cur_exec_ctx_;
+  bool restore_auto_commit_; // for dblink xa transaction to restore the value of auto_commit
+  oceanbase::sql::ObDblinkCtxInSession dblink_context_;
+  int64_t sql_req_level_; // for sql request between cluster avoid dead lock, such as dblink dead lock https://yuque.antfin.com/ob/sql/gum62i
   int64_t expect_group_id_;
   // When try packet retry failed, set this flag true and retry at current thread.
   // This situation is unexpected and will report a warning to user.

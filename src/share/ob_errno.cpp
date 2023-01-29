@@ -26254,32 +26254,24 @@ namespace common
     ob_errno = error_no;
     int64_t edit_dist = 0x7fffffffffffffff;
     int64_t min_edit_dist = 0x7fffffffffffffff;
-    if (nullptr == error_msg) {
+    if (-4016 == error_no || // error_no mayby oceanbase inner errro number sometimes, need skip it
+        -4013 == error_no ||
+        -4012 == error_no ||
+        -4007 == error_no ||
+        -4002 == error_no) {
+    } else if (-2013 == error_no || // error_no mayby mysql inner errro number sometimes
+             -2006 == error_no) {
+      ob_errno = OB_ERR_UNEXPECTED;
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "local server's dblink can not connect to remote sever by mysqlclient(interal error code: 2006 or 2013)");
+    } else if (nullptr == error_msg) { // error_no maybe oracle inner error number at most times.
       for (int i = 0; i < OB_MAX_ERROR_CODE; ++i) {
         if (orcl_errno == get_error(i)->oracle_errno) {
           ob_errno = -i;
           break;
         }
       }
-      /**
-       * In ob-ob mode dblink if there is an error when using the mysql interface
-       * mysql_real_connect to connect to the remote database, 
-       * the ob internal error code is mapped through the MYSQL_ERRNO array, 
-       * so in order to get the original ob internal error code, 
-       * it needs to be reversed mapped through MYSQL_ERRNO instead of ORACLE_ERRNO.
-      */
-      if (ob_errno == error_no) {
-        for (int i = 0; i < OB_MAX_ERROR_CODE; ++i) {
-          if (orcl_errno == get_error(i)->mysql_errno) {
-            ob_errno = -i;
-            break;
-          }
-        }
-      }
     } else {
-      ObEditDistance<ObWords> ed;
-      ObWords errmsg_words(error_msg);
-      errmsg_words.divide();
+      ObEditDistance ed;
       for (int i = 0; i < OB_MAX_ERROR_CODE; ++i) {
         if (orcl_errno == get_error(i)->oracle_errno) {
           const char *orcl_str_error = get_error(i)->oracle_str_user_error;
@@ -26291,9 +26283,7 @@ namespace common
           } else {
             // The edit distance between the strings is used to measure their similarity. 
             // The smaller the edit distance, the greater the similarity, so as to find the most similar error message.
-            ObWords orclmsg_words(orcl_str_error);
-            orclmsg_words.divide();
-            ed.cal_edit_distance(errmsg_words, orclmsg_words, edit_dist);
+            ObEditDistance::cal_edit_distance(error_msg, orcl_str_error, STRLEN(error_msg), STRLEN(orcl_str_error), edit_dist);
           }
           if (edit_dist < min_edit_dist) {
             ob_errno = -i;

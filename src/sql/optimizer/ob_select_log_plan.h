@@ -43,13 +43,16 @@ public:
   virtual ~ObSelectLogPlan();
 
   // @brief GENERATE the raw PLAN tree which have not traversed
-  virtual int generate_raw_plan() override;
-
+  int allocate_link_scan_as_top(ObLogicalOperator *&old_top);
   const ObSelectStmt *get_stmt() const override
   { return reinterpret_cast<const ObSelectStmt*>(stmt_); }
 
   int perform_late_materialization(ObSelectStmt *stmt,
                                    ObLogicalOperator *&op);
+
+protected:
+  virtual int generate_normal_raw_plan() override;
+  virtual int generate_dblink_raw_plan() override;
 
 private:
   // @brief Allocate a hash group by on top of a plan tree

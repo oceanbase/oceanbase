@@ -425,6 +425,7 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
         table_info->loc_table_id_ = base_table_item.table_id_;
         table_info->ref_table_id_ = base_table_item.ref_id_;
         table_info->table_name_ = table_schema->get_table_name_str();
+        table_info->is_link_table_ = base_table_item.is_link_table();
       }
     } else {
       uint64_t view_id = OB_INVALID_ID;

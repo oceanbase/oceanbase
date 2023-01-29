@@ -157,10 +157,17 @@ public:
                          const common::ObString &conn_str,
                          const common::ObString &cluster_str,
                          const dblink_param_ctx &param_ctx);
-  virtual int acquire_dblink(uint64_t dblink_id, ObISQLConnection *&dblink_conn, uint32_t sessid = 0, int64_t timeout_sec = 0);
+  virtual int acquire_dblink(uint64_t dblink_id,
+                             const dblink_param_ctx &param_ctx,
+                             ObISQLConnection *&dblink_conn,
+                             uint32_t sessid = 0, int64_t
+                             sql_request_level = 0);
   virtual int release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid = 0);
-  virtual int do_acquire_dblink(uint64_t dblink_id, ObISQLConnection *&dblink_conn, uint32_t sessid);
-  virtual int try_connect_dblink(ObISQLConnection *dblink_conn, int64_t timeout_sec = 0);
+  virtual int do_acquire_dblink(uint64_t dblink_id,
+                                const dblink_param_ctx &param_ctx,
+                                ObISQLConnection *&dblink_conn,
+                                uint32_t sessid);
+  virtual int try_connect_dblink(ObISQLConnection *dblink_conn, int64_t sql_request_level = 0);
   int get_dblink_pool(uint64_t dblink_id, ObServerConnectionPool *&dblink_pool);
   void set_check_read_consistency(bool need_check) { check_read_consistency_ = need_check; }
 protected:
@@ -225,6 +232,12 @@ protected:
   char init_sql_[OB_MAX_SQL_LENGTH];
   ObConnPoolConfigParam config_;
   mutable obsys::ObRWLock get_lock_;
+  // ObMySQLConnectionPool::do_acquire use obsys::ObRLockGuard lock(get_lock_)
+  // ObMySQLConnectionPool::create_dblink_pool need obsys::ObWLockGuard lock(get_lock_)
+  // do_acquire call create_dblink_pool
+  // will leading to dead lock
+  // need one more lock for create_dblink_pool
+  mutable obsys::ObRWLock dblink_pool_lock_;
   common::ObArenaAllocator allocator_;
   ServerList server_list_;
   TenantServerConnMap tenant_server_pool_map_;

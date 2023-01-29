@@ -423,16 +423,3 @@ int ObLogSort::compute_op_ordering()
   }
   return ret;
 }
-
-int ObLogSort::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  UNUSED(link_ctx);
-  int ret = OB_SUCCESS;
-  if (0 == dblink_id_) {
-    // do nothing
-  } else if (!startup_exprs_.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("set operator have startup filters when reverse spell dblink sql", K(ret));
-  }
-  return ret;
-}

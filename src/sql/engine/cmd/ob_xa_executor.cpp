@@ -62,8 +62,10 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
                              stmt.get_format_id()))) {
     LOG_WARN("set xid error", K(ret), K(stmt));
   } else if (my_session->get_in_transaction()) {
+    ObTxDesc *&tx_desc = my_session->get_tx_desc();
     ret = OB_TRANS_XA_OUTSIDE;
-    LOG_WARN("already start trans", K(ret), K(stmt.get_xa_string()));
+    LOG_WARN("already start trans", K(ret), K(xid), K(tx_desc->tid()),
+        K(tx_desc->get_xid()));
   } else if (OB_FAIL(get_org_cluster_id_(my_session, org_cluster_id))) {
   } else if (OB_FAIL(my_session->get_tx_timeout(tx_timeout))) {
     LOG_ERROR("fail to get trans timeout ts", K(ret));

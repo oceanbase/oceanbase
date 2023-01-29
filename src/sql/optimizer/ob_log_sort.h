@@ -41,7 +41,6 @@ namespace sql
     {}
     virtual ~ObLogSort()
     {}
-    virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
     virtual int est_cost() override;
     virtual int est_width() override;
     virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;

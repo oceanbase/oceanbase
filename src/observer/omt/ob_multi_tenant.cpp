@@ -90,6 +90,7 @@
 #include "logservice/leader_coordinator/ob_leader_coordinator.h"
 #include "storage/lob/ob_lob_manager.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
+#include "lib/mysqlclient/ob_tenant_oci_envs.h"
 #include "sql/monitor/ob_sql_plan_manager.h"
 #include "sql/monitor/ob_plan_real_info_manager.h"
 #include "sql/udr/ob_udr_mgr.h"
@@ -362,6 +363,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND(ObFLTSpanMgr::mtl_init, ObFLTSpanMgr::mtl_destroy);
     MTL_BIND(ObSqlPlanMgr::mtl_init, ObSqlPlanMgr::mtl_destroy);
     MTL_BIND(ObPlanRealInfoMgr::mtl_init, ObPlanRealInfoMgr::mtl_destroy);
+    MTL_BIND(common::sqlclient::ObTenantOciEnvs::mtl_init, common::sqlclient::ObTenantOciEnvs::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObPlanCache::mtl_init, nullptr, ObPlanCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObPsCache::mtl_init, nullptr, ObPsCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(server_obj_pool_mtl_new<ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObPartTransCtx>);

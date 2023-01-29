@@ -28,7 +28,15 @@ class ObCreateDbLinkResolver: public ObDDLResolver
   static const int64_t OPT_DRIVER = 4;
   static const int64_t IP_PORT = 5;
   static const int64_t OPT_CLUSTER = 6;
-  static const int64_t DBLINK_NODE_COUNT = 7;
+  static const int64_t OPT_REVERSE_LINK = 7;
+  static const int64_t DBLINK_NODE_COUNT = 8;
+
+  static const int64_t REVERSE_LINK_USER_NAME = 0;
+  static const int64_t REVERSE_LINK_TENANT_NAME = 1;
+  static const int64_t REVERSE_LINK_PASSWORD = 2;
+  static const int64_t REVERSE_LINK_IP_PORT = 3;
+  static const int64_t REVERSE_LINK_OPT_CLUSTER = 4;
+  static const int64_t REVERSE_DBLINK_NODE_COUNT = 5;
 public:
   enum DriverType {
     DRV_UNKNOWN = -1,
@@ -39,6 +47,7 @@ public:
   virtual ~ObCreateDbLinkResolver();
   virtual int resolve(const ParseNode &parse_tree);
 private:
+  int resolve_opt_reverse_link(const ParseNode *node, sql::ObCreateDbLinkStmt *link_stmt, DriverType drv_type);
   int cut_host_string(const ObString &host_string, ObString &ip_port, ObString &conn_string);
   int resolve_conn_string(const ObString &conn_string, const ObString &ip_port_str,
                           sql::ObCreateDbLinkStmt &link_stmt);

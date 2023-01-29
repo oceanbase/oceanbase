@@ -94,7 +94,6 @@ public:
   int get_equal_set_conditions(ObIArray<ObRawExpr*> &equal_conds);
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
   ObIArray<int64_t> &get_map_array() { return map_array_; }
   int set_map_array(const ObIArray<int64_t> &map_array)
   {

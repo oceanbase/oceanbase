@@ -62,7 +62,7 @@ public:
   };
 public:
   explicit ObRequest(Type type, int nio_protocol=0)
-      : ez_req_(NULL), nio_protocol_(nio_protocol), type_(type), handle_ctx_(NULL), group_id_(0), pkt_(NULL),
+      : ez_req_(NULL), nio_protocol_(nio_protocol), type_(type), handle_ctx_(NULL), group_id_(0), sql_req_level_(0), pkt_(NULL),
         connection_phase_(ConnectionPhaseEnum::CPE_CONNECTED),
         recv_timestamp_(0), enqueue_timestamp_(0),
         request_arrival_time_(0), stc_(), arrival_push_diff_(0),
@@ -81,6 +81,8 @@ public:
 
   int32_t get_group_id() const { return group_id_; }
   void set_group_id(const int32_t &group_id) { group_id_ = group_id; }
+  int64_t get_sql_request_level() const { return sql_req_level_; }
+  void set_sql_request_level(const int64_t &sql_req_level) { sql_req_level_ = sql_req_level; }
   bool large_retry_flag() const { return large_retry_flag_; }
   void set_large_retry_flag(bool large_retry_flag) { large_retry_flag_ = large_retry_flag; }
 
@@ -127,7 +129,7 @@ public:
 
   ObLockWaitNode &get_lock_wait_node() { return lock_wait_node_; }
   bool is_retry_on_lock() const { return lock_wait_node_.try_lock_times_ > 0;}
-  VIRTUAL_TO_STRING_KV("packet", pkt_, "type", type_, "group", group_id_, "connection_phase", connection_phase_, K(recv_timestamp_), K(enqueue_timestamp_), K(request_arrival_time_), K(trace_id_));
+  VIRTUAL_TO_STRING_KV("packet", pkt_, "type", type_, "group", group_id_, "sql_req_level", sql_req_level_, "connection_phase", connection_phase_, K(recv_timestamp_), K(enqueue_timestamp_), K(request_arrival_time_), K(trace_id_));
 
   ObLockWaitNode lock_wait_node_;
   mutable ObReusableMem reusable_mem_;
@@ -138,6 +140,7 @@ protected:
   Type type_;
   void* handle_ctx_;
   int32_t group_id_;
+  int64_t sql_req_level_;
   const ObPacket *pkt_; // set in rpc handler
   ConnectionPhaseEnum connection_phase_;
   int64_t recv_timestamp_;

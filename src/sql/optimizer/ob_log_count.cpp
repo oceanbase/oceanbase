@@ -28,17 +28,6 @@ namespace oceanbase
 namespace sql
 {
 
-int ObLogCount::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (0 == dblink_id_) {
-    // do nothing
-  } else if (OB_FAIL(link_ctx.spell_count(startup_exprs_, filter_exprs_, rownum_limit_expr_))) {
-    LOG_WARN("dblink fail to reverse spell count", K(dblink_id_), K(ret));
-  }
-  return ret;
-}
-
 int ObLogCount::est_cost()
 {
   int ret = OB_SUCCESS;

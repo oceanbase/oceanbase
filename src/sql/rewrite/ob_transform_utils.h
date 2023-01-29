@@ -1294,17 +1294,17 @@ public:
                                      const ObIArray<TableItem*> &table_items,
                                      ObRelIds &rel_ids);
 
-  static int get_rel_ids_from_table(const ObDMLStmt *stmt,
-                                    const TableItem *table_item,
-                                    ObRelIds &rel_ids);
+  static int get_rel_ids_from_tables(const ObDMLStmt *stmt,
+                                     const ObIArray<uint64_t> &table_ids,
+                                     ObRelIds &rel_ids);
 
   static int get_left_rel_ids_from_semi_info(const ObDMLStmt *stmt,
                                              SemiInfo *info,
                                              ObSqlBitSet<> &rel_ids);
 
-  static int get_rel_ids_from_join_table(const ObDMLStmt *stmt,
-                                         const JoinedTable *joined_table,
-                                         ObRelIds &rel_ids);
+  static int get_rel_ids_from_table(const ObDMLStmt *stmt,
+                                    const TableItem *table,
+                                    ObRelIds &rel_ids);
 
   static int adjust_single_table_ids(JoinedTable *joined_table);
 
@@ -1645,6 +1645,8 @@ public:
   static int rebuild_win_compare_range_expr(ObRawExprFactory* expr_factory,
                                             ObWinFunRawExpr &win_expr,
                                             ObRawExpr* order_expr);
+
+  static int check_stmt_from_one_dblink(ObDMLStmt *stmt, bool &from_one_dblink);
 
   static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
                                              bool &is_valid);

@@ -186,7 +186,7 @@ int ObExprResultTypeUtil::get_round_result_type(ObObjType &type,
 
     if (OB_UNLIKELY(!ob_is_valid_obj_type(type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_WARN("unsupported type for round", K(ret), K(type1), K(lbt()));
+      LOG_WARN("unsupported type for round", K(ret), K(type), K(type1), K(lbt()));
     }
   } else {
     type = ROUND_RESULT_TYPE[type1];

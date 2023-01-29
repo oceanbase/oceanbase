@@ -62,7 +62,6 @@ int ObSelectStmtPrinter::do_print()
       }
     }
   }
-
   return ret;
 }
 
@@ -78,8 +77,12 @@ int ObSelectStmtPrinter::print()
     LOG_WARN("Not a valid select stmt", K(stmt_->get_stmt_type()), K(ret));
   } else {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
-    if (OB_FAIL(print_with())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(print_with())) {
       LOG_WARN("print with failed");
+    } else if (print_params_.print_with_cte_ &&
+               OB_FAIL(print_cte_define())) {
+      LOG_WARN("failed to print cte", K(ret));
     } else if (select_stmt->is_set_stmt()) {
       if (select_stmt->is_recursive_union() &&
           !print_params_.print_origin_stmt_) {
@@ -115,6 +118,13 @@ int ObSelectStmtPrinter::print_unpivot()
              K(stmt_->get_table_items().count()), K(ret));
   } else {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
+    if (!is_root_stmt()) {
+      DATA_PRINTF("(");
+    }
+
+    if (print_params_.print_with_cte_ && OB_FAIL(print_cte_define())) {
+      LOG_WARN("failed to print cte", K(ret));
+    }
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(print_select())) {
@@ -268,7 +278,13 @@ int ObSelectStmtPrinter::print_set_op_stmt()
         std::swap(child_stmts.at(0), child_stmts.at(1));
       }
       DATA_PRINTF("(");
-      ObSelectStmtPrinter stmt_printer(buf_, buf_len_, pos_, child_stmts.at(0), schema_guard_, print_params_, need_print_alias());
+      ObSelectStmtPrinter stmt_printer(buf_,
+                                       buf_len_,
+                                       pos_,
+                                       child_stmts.at(0),
+                                       schema_guard_,
+                                       print_params_,
+                                       /*force_col_alias*/true);
       stmt_printer.set_column_list(column_list_);
       stmt_printer.disable_print_cte();
       ObString set_op_str = ObString::make_string(
@@ -411,6 +427,9 @@ int ObSelectStmtPrinter::print_select()
       } else {
         if (select_stmt->has_distinct()) { // distinct
           DATA_PRINTF("distinct ");
+        }
+        if (select_stmt->get_select_item_size() == 0) {
+          DATA_PRINTF("1 ");
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
           const SelectItem &select_item = select_stmt->get_select_item(i);
@@ -631,7 +650,7 @@ int ObSelectStmtPrinter::print_group_by()
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs_size; ++i) {
-        if (OB_FAIL(expr_printer_.do_print(group_exprs.at(i), T_GROUP_SCOPE))) {
+        if (OB_FAIL(print_expr_except_const_number(group_exprs.at(i), T_GROUP_SCOPE))) {
           LOG_WARN("fail to print group expr", K(ret));
         }
         DATA_PRINTF(",");
@@ -642,7 +661,7 @@ int ObSelectStmtPrinter::print_group_by()
             DATA_PRINTF(" rollup( ");
           } else { /* do nothing. */ }
           for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs_size; ++i) {
-            if (OB_FAIL(expr_printer_.do_print(rollup_exprs.at(i), T_GROUP_SCOPE))) {
+            if (OB_FAIL(print_expr_except_const_number(rollup_exprs.at(i), T_GROUP_SCOPE))) {
               LOG_WARN("fail to print group expr", K(ret));
             }
             DATA_PRINTF(",");
@@ -759,21 +778,15 @@ int ObSelectStmtPrinter::print_order_by()
           }
         }
         if (sel_item_pos != -1) {
-          ObObjParam val;
-          val.set_int(sel_item_pos);
-          val.set_scale(0);
-          val.set_param_meta();
-          expr.set_expr_type(T_INT);
-          expr.set_value(val);
-          order_expr = &expr;
-        }
-        if (OB_SUCC(ret)) {
+          DATA_PRINTF(" %ld", sel_item_pos);
+        } else {
           DATA_PRINTF(" ");
+          if (OB_FAIL(print_expr_except_const_number(order_item.expr_, T_ORDER_SCOPE))) {
+            LOG_WARN("fail to print order by expr", K(ret));
+          }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(expr_printer_.do_print(order_expr, T_ORDER_SCOPE))) {
-            LOG_WARN("fail to print order by expr", K(ret));
-          } else if (lib::is_mysql_mode()) {
+          if (lib::is_mysql_mode()) {
             if (is_descending_direction(order_item.order_type_)) {
               DATA_PRINTF(" desc");
             }
@@ -866,6 +879,52 @@ int ObSelectStmtPrinter::print_for_update()
     }
   }
 
+  return ret;
+}
+
+//把cte的定义完整的恢复出来
+int ObSelectStmtPrinter::print_with()
+{
+  int ret = OB_SUCCESS;
+  const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
+  if (OB_ISNULL(stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (select_stmt->get_cte_definition_size() == 0) {
+      // don't print
+  } else {
+    const ObIArray<TableItem *> &cte_tables = select_stmt->get_cte_definitions();
+    DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE ");
+    //恢复定义，cte先放本stmt中T_WITH_CLAUSE产生的的cte，再放parent放过来的
+    for (int64_t i = 0; OB_SUCC(ret) && i < cte_tables.count() && OB_SUCC(ret); i++) {
+      TableItem* cte_table = cte_tables.at(i);
+      //打印定义
+      if (OB_ISNULL(cte_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the cte tableitem can not be null", K(ret));
+      } else if (TableItem::NORMAL_CTE == cte_table->cte_type_
+                || TableItem::RECURSIVE_CTE == cte_table->cte_type_) {
+        if (OB_FAIL(print_cte_define_title(cte_table))) {
+          LOG_WARN("print column name failed", K(ret));
+        } else if (OB_FAIL(print_subquery(cte_table->ref_query_, PRINT_BRACKET))) {
+          LOG_WARN("print table failed", K(ret));
+        } else if (OB_FAIL(print_search_and_cycle(cte_table->ref_query_))) {
+          LOG_WARN("print search and cycle failed", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected cte type", K(ret), K(cte_table->cte_type_));
+      }
+      //打印尾巴
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else if (i == cte_tables.count() - 1) {
+        DATA_PRINTF(" ");
+      } else {
+        DATA_PRINTF(", ");
+      }
+    }
+  }
   return ret;
 }
 

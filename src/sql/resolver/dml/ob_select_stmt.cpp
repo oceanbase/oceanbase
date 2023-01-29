@@ -213,6 +213,7 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     is_order_siblings_ = other.is_order_siblings_;
     is_hierarchical_query_ = other.is_hierarchical_query_;
     has_prior_ = other.has_prior_;
+    has_reverse_link_ = other.has_reverse_link_;
   }
   return ret;
 }
@@ -297,6 +298,7 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     is_order_siblings_ = other.is_order_siblings_;
     is_hierarchical_query_ = other.is_hierarchical_query_;
     has_prior_ = other.has_prior_;
+    has_reverse_link_ = other.has_reverse_link_;
     // copy insert into statement
     if (OB_SUCC(ret) && NULL != other.into_item_) {
       ObSelectIntoItem *temp_into_item = NULL;
@@ -488,6 +490,7 @@ ObSelectStmt::ObSelectStmt()
   is_order_siblings_ = false;
   is_hierarchical_query_ = false;
   has_prior_ = false;
+  has_reverse_link_ = false;
 }
 
 ObSelectStmt::~ObSelectStmt()
@@ -681,7 +684,9 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
            //K_(win_func_exprs),
            K(child_stmts),
            K_(is_hierarchical_query),
-           K_(check_option)
+           K_(check_option),
+           K_(dblink_id),
+           K_(is_reverse_link)
              );
     }
   } else {
@@ -693,7 +698,9 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
          N_ORDER_BY, order_items_,
          N_LIMIT, limit_count_expr_,
          N_SELECT, select_items_,
-         K(child_stmts));
+         K(child_stmts),
+         K_(dblink_id),
+         K_(is_reverse_link));
   }
   J_OBJ_END();
   return ret;
