@@ -654,6 +654,10 @@ public:
   {
     io_event_observer_ = observer;
   }
+  inline void set_op_eval_infos(ObIArray<ObEvalInfo *> *eval_infos)
+  {
+    op_eval_infos_ = eval_infos;
+  }
   inline ObIArray<ObAggrInfo> &get_aggr_infos() { return aggr_infos_; }
   int single_row_agg(GroupRow &group_row, ObEvalCtx &eval_ctx);
   int single_row_agg_batch(GroupRow **group_rows, ObEvalCtx &eval_ctx, const int64_t batch_size, const ObBitVector *skip);
@@ -838,6 +842,15 @@ private:
                                 GroupConcatExtraResult *&extra,
                                 ObDatum &concat_result);
 
+  OB_INLINE void clear_op_evaluated_flag()
+  {
+    if (OB_NOT_NULL(op_eval_infos_)) {
+      for (int i = 0; i < op_eval_infos_->count(); i++) {
+        op_eval_infos_->at(i)->clear_evaluated_flag();
+      }
+    }
+  }
+
   // HyperLogLogCount-related functions
   int llc_init(AggrCell &aggr_cell);
   int llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx);
@@ -918,6 +931,7 @@ private:
   ObIOEventObserver *io_event_observer_;
   RemovalInfo removal_info_;
   bool support_fast_single_row_agg_;
+  ObIArray<ObEvalInfo *> *op_eval_infos_;
 };
 
 struct ObAggregateCalcFunc

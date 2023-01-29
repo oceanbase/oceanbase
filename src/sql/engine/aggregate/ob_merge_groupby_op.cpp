@@ -242,6 +242,7 @@ int ObMergeGroupByOp::init()
         for (int64_t i = 0; !has_dup_group_expr_ && i < MY_SPEC.is_duplicate_rollup_expr_.count(); ++i) {
           has_dup_group_expr_ = MY_SPEC.is_duplicate_rollup_expr_.at(i);
         }
+        aggr_processor_.set_op_eval_infos(&eval_infos_);
       }
     }
   }
