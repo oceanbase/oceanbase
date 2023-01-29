@@ -49,7 +49,6 @@ public:
   ~ObTableQuerySyncSession();
 
   void set_result_iterator(ObNormalTableQueryResultIterator* iter);
-  int deep_copy_select_columns(const ObTableQuery &query);
   void set_in_use(bool in_use) {in_use_ = in_use;}
   bool is_in_use() {return in_use_;}
   int init();
@@ -64,12 +63,13 @@ public:
   sql::TransState* get_trans_state() {return &trans_state_;}
   transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
   void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
+  ObTableQuery &get_query() { return query_; }
 
 private:
   bool in_use_;
   uint64_t timeout_ts_;
   common::ObObjectID tenant_id_;
-  ObTableQuery query_; // only select_columns is correct
+  ObTableQuery query_; // deep copy from arg_.query_ in query_start
   ObNormalTableQueryResultIterator *result_iterator_;
   ObArenaAllocator allocator_;
   ObTableServiceQueryCtx table_service_ctx_;

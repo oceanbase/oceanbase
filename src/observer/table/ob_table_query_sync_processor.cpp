@@ -32,23 +32,6 @@ using namespace oceanbase::sql;
 /**
  * ---------------------------------------- ObTableQuerySyncSession ----------------------------------------
  */
-int ObTableQuerySyncSession::deep_copy_select_columns(const ObTableQuery &query)
-{
-  int ret = OB_SUCCESS;
-  const ObIArray<ObString> &select_columns = query.get_select_columns();
-  const int64_t N = select_columns.count();
-  ObString tmp_str;
-  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
-    if (OB_FAIL(ob_write_string(*get_allocator(), select_columns.at(i), tmp_str))) {
-      LOG_WARN("failed to copy column name", K(ret));
-      break;
-    } else if (OB_FAIL(query_.add_select_column(tmp_str))) {
-      LOG_WARN("failed to add column name", K(ret));
-    }
-  } // end for
-  return ret;
-}
-
 void ObTableQuerySyncSession::set_result_iterator(ObNormalTableQueryResultIterator *query_result)
 {
   result_iterator_ = query_result;
@@ -162,7 +145,7 @@ int ObQuerySyncMgr::get_query_session(uint64_t sessid, ObTableQuerySyncSession *
   if (OB_FAIL(query_session_map_.get_refactored(sessid, query_session))) {
     if (OB_HASH_NOT_EXIST != ret) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get session from query session map", K(ret));
+      LOG_WARN("failed to get session from query session map", K(ret), K(sessid));
     }
   } else if (OB_ISNULL(query_session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -481,7 +464,6 @@ int ObTableQuerySyncP::query_scan_with_new_context(
     }
   } else if (result_iterator->has_more_result()){
     result_.is_end_ = false;
-    query_session->deep_copy_select_columns(arg_.query_);
     query_session->set_result_iterator(dynamic_cast<ObNormalTableQueryResultIterator *>(result_iterator));
     query_session->set_trans_desc(trans_desc_); // save processor's trans_desc_ to query session
   } else {
@@ -507,6 +489,8 @@ int ObTableQuerySyncP::query_scan_with_init()
   table::ObTableQueryResultIterator *result_iterator = nullptr;
   const bool is_readonly = true;
   const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
+  ObArenaAllocator *allocator = query_session_->get_allocator();
+  ObTableQuery &query = query_session_->get_query();
 
   if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
@@ -516,11 +500,16 @@ int ObTableQuerySyncP::query_scan_with_init()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
   } else if (FALSE_IT(table_service_ctx_->param_tablet_id() = tablet_ids.at(0))) {
+  } else if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null allocator", K(ret));
+  } else if (OB_FAIL(arg_.query_.deep_copy(*allocator, query))) {
+    LOG_WARN("fail to deep copy query", K(ret), K(arg_.query_));
   } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_->param_ls_id()))) {
     LOG_WARN("failed to get ls id", K(ret));
   } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, table_service_ctx_->param_ls_id(), timeout_ts_))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
-  } else if (OB_FAIL(table_service_->execute_query(*table_service_ctx_, arg_.query_, result_, result_iterator))) {
+  } else if (OB_FAIL(table_service_->execute_query(*table_service_ctx_, query, result_, result_iterator))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("failed to execute query", K(ret), K(table_id));
     }

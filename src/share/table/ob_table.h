@@ -592,6 +592,7 @@ public:
   const ObString &get_filter() const { return filter_string_; }
   void clear_columns() { select_column_qualifier_.reset(); }
   uint64_t get_checksum() const;
+  int deep_copy(common::ObIAllocator &allocator, ObHTableFilter &dst) const;
 
   TO_STRING_KV(K_(is_valid),
                "column_qualifier", select_column_qualifier_,
@@ -676,6 +677,7 @@ public:
 
   void clear_scan_range() { key_ranges_.reset(); }
   void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_allocator_ = allocator; }
+  int deep_copy(common::ObIAllocator &allocator, ObTableQuery &dst) const;
   TO_STRING_KV(K_(key_ranges),
                K_(select_columns),
                K_(filter_string),
