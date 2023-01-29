@@ -32,7 +32,7 @@ int ObColMap::init(const int64_t col_count)
     STORAGE_LOG(WARN, "ObColMap init twice", K(ret));
   } else if (count <= FINAL_LEVEL_MAX_COL_NUM) {
     if (OB_UNLIKELY(count > FIRST_LEVEL_MAX_COL_NUM)) {
-      if (NULL == (ptr = ob_malloc(sizeof(ColMapFinal)))) {
+      if (NULL == (ptr = ob_malloc(sizeof(ColMapFinal), ObModIds::OB_COL_MAP))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(ERROR, "fail to allocate memory for column_ids map", K(ret));
       } else {

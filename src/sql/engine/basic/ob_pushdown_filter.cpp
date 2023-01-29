@@ -163,12 +163,18 @@ int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &
   } else if (ObRawExpr::EXPR_COLUMN_REF != child->get_expr_class()) {
     need_check = false;
   } else {
+    const ObObjMeta &col_meta = child->get_result_meta();
     for (int64_t i = 1; OB_SUCC(ret) && need_check && i < raw_expr->get_param_count(); i++) {
       if (OB_ISNULL(child = raw_expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null child expr", K(ret), K(i));
       } else {
         need_check = child->is_const_expr();
+        if (need_check) {
+          const ObObjMeta &param_meta = child->get_result_meta();
+          need_check = param_meta.is_null() ||
+            (col_meta.get_type() == param_meta.get_type() && col_meta.get_collation_type() == param_meta.get_collation_type());
+        }
       }
     }
   }
