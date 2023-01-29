@@ -184,10 +184,12 @@ int ObDDLTaskQueue::add_task_to_last(ObDDLTask *task)
   return ret;
 }
 
-int ObDDLTaskQueue::get_task(const ObDDLTaskKey &task_key, ObDDLTask *&task)
+template<typename F>
+int ObDDLTaskQueue::modify_task(const ObDDLTaskKey &task_key, F &&op)
 {
   int ret = OB_SUCCESS;
   common::ObSpinLockGuard guard(lock_);
+  ObDDLTask *task = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
     LOG_WARN("ObDDLTaskQueue has not been inited", K(ret));
@@ -197,14 +199,21 @@ int ObDDLTaskQueue::get_task(const ObDDLTaskKey &task_key, ObDDLTask *&task)
   } else if (OB_FAIL(task_map_.get_refactored(task_key, task))) {
     ret = OB_HASH_NOT_EXIST == ret ? OB_ENTRY_NOT_EXIST : ret;
     LOG_WARN("get from task map failed", K(ret), K(task_key));
+  } else if (OB_ISNULL(task)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("invalid task", K(ret), K(task_key));
+  } else if (OB_FAIL(op(*task))) {
+    LOG_WARN("failed to modify task", K(ret));
   }
   return ret;
 }
 
-int ObDDLTaskQueue::get_task(const int64_t task_id, ObDDLTask *&task)
+template<typename F>
+int ObDDLTaskQueue::modify_task(const int64_t task_id, F &&op)
 {
   int ret = OB_SUCCESS;
   common::ObSpinLockGuard guard(lock_);
+  ObDDLTask *task = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
     LOG_WARN("ObDDLTaskQueue has not been inited", K(ret));
@@ -214,6 +223,11 @@ int ObDDLTaskQueue::get_task(const int64_t task_id, ObDDLTask *&task)
   } else if (OB_FAIL(task_id_map_.get_refactored(task_id, task))) {
     ret = OB_HASH_NOT_EXIST == ret ? OB_ENTRY_NOT_EXIST : ret;
     LOG_WARN("get from task map failed", K(ret), K(task_id));
+  } else if (OB_ISNULL(task)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("invalid task", K(ret), K(task_id));
+  } else if (OB_FAIL(op(*task))) {
+    LOG_WARN("failed to modify task", K(ret), K(task_id));
   }
   return ret;
 }
@@ -900,7 +914,6 @@ int ObDDLScheduler::copy_table_dependents(const int64_t task_id,
 {
   int ret = OB_SUCCESS;
   ObDDLTask *task = nullptr;
-  ObTableRedefinitionTask *table_redefinition_task = nullptr;
   int64_t table_task_status = 0;
   int64_t table_execution_id = 0;
   int64_t pos = 0;
@@ -917,21 +930,23 @@ int ObDDLScheduler::copy_table_dependents(const int64_t task_id,
                                                                 table_task_status,
                                                                 table_execution_id))) {
     LOG_WARN("select for update failed", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(task_queue_.get_task(task_id, task))) {
-    LOG_WARN("get task fail", K(ret));
-  } else if (OB_ISNULL(table_redefinition_task = static_cast<ObTableRedefinitionTask*>(task))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get task", K(ret));
   } else {
     HEAP_VAR(ObTableRedefinitionTask, redefinition_task) {
       ObDDLTaskRecord task_record;
       common::ObArenaAllocator allocator(lib::ObLabel("copy_table_dep"));
       task_record.reset();
-      if (OB_UNLIKELY(!table_redefinition_task->is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("table rdefinition task is not valid", K(ret));
-      } else if (OB_FAIL(table_redefinition_task->convert_to_record(task_record, allocator))) {
-        LOG_WARN("convert to ddl task record failed", K(ret), K(*table_redefinition_task));
+      if (OB_FAIL(task_queue_.modify_task(task_id, [&task_record, &allocator](ObDDLTask &task) -> int {
+            int ret = OB_SUCCESS;
+            ObTableRedefinitionTask *table_redefinition_task = static_cast<ObTableRedefinitionTask*>(&task);
+            if (OB_UNLIKELY(!table_redefinition_task->is_valid())) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("table rdefinition task is not valid", K(ret));
+            } else if (OB_FAIL(table_redefinition_task->convert_to_record(task_record, allocator))) {
+              LOG_WARN("convert to ddl task record failed", K(ret), K(*table_redefinition_task));
+            }
+            return ret;
+          }))) {
+        LOG_WARN("failed to modify task", K(ret));
       } else if (OB_FAIL(redefinition_task.init(task_record))) {
         LOG_WARN("init table redefinition task failed", K(ret));
       } else if (OB_FAIL(redefinition_task.set_trace_id(task_record.trace_id_))) {
@@ -979,7 +994,6 @@ int ObDDLScheduler::finish_redef_table(const int64_t task_id, const uint64_t ten
 {
   int ret = OB_SUCCESS;
   ObDDLTask *task = nullptr;
-  ObTableRedefinitionTask *table_redefinition_task = nullptr;
   int64_t table_task_status = 0;
   int64_t table_execution_id = 0;
   int64_t pos = 0;
@@ -996,21 +1010,23 @@ int ObDDLScheduler::finish_redef_table(const int64_t task_id, const uint64_t ten
                                                                 table_task_status,
                                                                 table_execution_id))) {
     LOG_WARN("select for update failed", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(task_queue_.get_task(task_id, task))) {
-    LOG_WARN("get task fail", K(ret));
-  } else if (OB_ISNULL(table_redefinition_task = static_cast<ObTableRedefinitionTask*>(task))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get task", K(ret));
   } else {
     HEAP_VAR(ObTableRedefinitionTask, redefinition_task) {
       ObDDLTaskRecord task_record;
       common::ObArenaAllocator allocator(lib::ObLabel("finish_redef"));
       task_record.reset();
-      if (OB_UNLIKELY(!table_redefinition_task->is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("table rdefinition task is not valid", K(ret));
-      } else if (OB_FAIL(table_redefinition_task->convert_to_record(task_record, allocator))) {
-        LOG_WARN("convert to ddl task record failed", K(ret), K(*table_redefinition_task));
+      if (OB_FAIL(task_queue_.modify_task(task_id, [&task_record, &allocator](ObDDLTask &task) -> int {
+            int ret = OB_SUCCESS;
+            ObTableRedefinitionTask *table_redefinition_task = static_cast<ObTableRedefinitionTask*>(&task);
+            if (OB_UNLIKELY(!table_redefinition_task->is_valid())) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("table rdefinition task is not valid", K(ret));
+            } else if (OB_FAIL(table_redefinition_task->convert_to_record(task_record, allocator))) {
+              LOG_WARN("convert to ddl task record failed", K(ret), K(*table_redefinition_task));
+            }
+            return ret;
+          }))) {
+        LOG_WARN("failed to modify task", K(ret));
       } else if (OB_FAIL(redefinition_task.init(task_record))) {
         LOG_WARN("init table redefinition task failed", K(ret));
       } else if (OB_FAIL(redefinition_task.set_trace_id(task_record.trace_id_))) {
@@ -1939,53 +1955,17 @@ int ObDDLScheduler::on_column_checksum_calc_reply(
   } else if (OB_UNLIKELY(!(task_key.is_valid() && tablet_id.is_valid()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_key), K(tablet_id), K(ret_code));
-  } else {
-    ObDDLTask *ddl_task = nullptr;
-    if (OB_FAIL(task_queue_.get_task(task_key, ddl_task))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("get task failed", K(ret), K(task_key));
-      }
-    } else if (OB_ISNULL(ddl_task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("index task is null", K(ret));
-    } else if (ObDDLType::DDL_CREATE_INDEX != ddl_task->get_task_type()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ddl task type not global index", K(ret), K(ddl_task));
-    } else if (OB_FAIL(reinterpret_cast<ObIndexBuildTask *>(ddl_task)->update_column_checksum_calc_status(tablet_id, ret_code))) {
-      LOG_WARN("update column checksum calc status failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDDLScheduler::on_update_execution_id(
-    const int64_t task_id,
-    int64_t &ret_execution_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(task_id <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(task_id));
-  } else {
-    ObDDLTask *ddl_task = nullptr;
-    if (OB_FAIL(task_queue_.get_task(task_id, ddl_task))) {
-      LOG_WARN("get task failed", K(ret), K(task_id));
-    } else if (OB_ISNULL(ddl_task)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("ddl task must not be nullptr", K(ret));
-    } else if (OB_FAIL(ddl_task->get_task_id() != task_id)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("update task id is diff from ddl task id",
-        K(ret), K(task_id), KPC(ddl_task));
-    } else if (OB_FAIL(ddl_task->push_execution_id())) {
-      LOG_WARN("fail to push execution id", K(ret), KPC(ddl_task));
-    }
-    if (nullptr != ddl_task) {
-      ret_execution_id = ddl_task->get_execution_id();  // ignore ret, if fail, take old execution id
-    }
+  } else if (OB_FAIL(task_queue_.modify_task(task_key, [&tablet_id, &ret_code](ObDDLTask &task) -> int {
+        int ret = OB_SUCCESS;
+        if (OB_UNLIKELY(ObDDLType::DDL_CREATE_INDEX != task.get_task_type())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ddl task type not global index", K(ret), K(task));
+        } else if (OB_FAIL(reinterpret_cast<ObIndexBuildTask *>(&task)->update_column_checksum_calc_status(tablet_id, ret_code))) {
+          LOG_WARN("update column checksum calc status failed", K(ret));
+        }
+        return ret;
+      }))) {
+    LOG_WARN("failed to modify task", K(ret));
   }
   return ret;
 }
@@ -2005,59 +1985,53 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
   } else if (OB_UNLIKELY(!(task_key.is_valid() && snapshot_version > 0 && execution_id >= 0))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_key), K(snapshot_version), K(execution_id), K(ret_code));
-  } else {
-    ObDDLTask *ddl_task = nullptr;
-    if (OB_FAIL(task_queue_.get_task(task_key, ddl_task))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("get task failed", K(ret), K(task_key));
-      }
-    } else if (OB_ISNULL(ddl_task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("index task is null", K(ret));
-    } else {
-      const int64_t task_type = ddl_task->get_task_type();
-      switch (task_type) {
-        case ObDDLType::DDL_CREATE_INDEX:
-          if (OB_FAIL(static_cast<ObIndexBuildTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
-            LOG_WARN("update complete sstable job status failed", K(ret));
-          }
-          break;
-        case ObDDLType::DDL_DROP_PRIMARY_KEY: 
-          if (OB_FAIL(static_cast<ObDropPrimaryKeyTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
-            LOG_WARN("update complete sstable job status", K(ret));
-          }
-          break;
-        case ObDDLType::DDL_ADD_PRIMARY_KEY:
-        case ObDDLType::DDL_ALTER_PRIMARY_KEY:
-        case ObDDLType::DDL_ALTER_PARTITION_BY:
-        case ObDDLType::DDL_MODIFY_COLUMN:
-        case ObDDLType::DDL_CONVERT_TO_CHARACTER:
-        case ObDDLType::DDL_TABLE_REDEFINITION:
-        case ObDDLType::DDL_DIRECT_LOAD:
-          if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
-            LOG_WARN("update complete sstable job status", K(ret));
-          }
-          break;
-        case ObDDLType::DDL_CHECK_CONSTRAINT:
-        case ObDDLType::DDL_FOREIGN_KEY_CONSTRAINT:
-        case ObDDLType::DDL_ADD_NOT_NULL_COLUMN:
-          if (OB_FAIL(static_cast<ObConstraintTask *>(ddl_task)->update_check_constraint_finish(ret_code))) {
-            LOG_WARN("update check constraint finish", K(ret));
-          }
-          break;
-        case ObDDLType::DDL_DROP_COLUMN:
-        case ObDDLType::DDL_ADD_COLUMN_OFFLINE:
-        case ObDDLType::DDL_COLUMN_REDEFINITION:
-          if (OB_FAIL(static_cast<ObColumnRedefinitionTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
-            LOG_WARN("update complete sstable job status", K(ret), K(tablet_id), K(snapshot_version), K(ret_code));
-          }
-          break;
-        default:
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not supported ddl task", K(ret), K(*ddl_task));
-          break;
-      }
-    }
+  } else if (OB_FAIL(task_queue_.modify_task(task_key, [&tablet_id, &snapshot_version, &execution_id, &ret_code, &addition_info](ObDDLTask &task) -> int {
+        int ret = OB_SUCCESS;
+        const int64_t task_type = task.get_task_type();
+        switch (task_type) {
+          case ObDDLType::DDL_CREATE_INDEX:
+            if (OB_FAIL(static_cast<ObIndexBuildTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+              LOG_WARN("update complete sstable job status failed", K(ret));
+            }
+            break;
+          case ObDDLType::DDL_DROP_PRIMARY_KEY:
+            if (OB_FAIL(static_cast<ObDropPrimaryKeyTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+              LOG_WARN("update complete sstable job status", K(ret));
+            }
+            break;
+          case ObDDLType::DDL_ADD_PRIMARY_KEY:
+          case ObDDLType::DDL_ALTER_PRIMARY_KEY:
+          case ObDDLType::DDL_ALTER_PARTITION_BY:
+          case ObDDLType::DDL_MODIFY_COLUMN:
+          case ObDDLType::DDL_CONVERT_TO_CHARACTER:
+          case ObDDLType::DDL_TABLE_REDEFINITION:
+          case ObDDLType::DDL_DIRECT_LOAD:
+            if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+              LOG_WARN("update complete sstable job status", K(ret));
+            }
+            break;
+          case ObDDLType::DDL_CHECK_CONSTRAINT:
+          case ObDDLType::DDL_FOREIGN_KEY_CONSTRAINT:
+          case ObDDLType::DDL_ADD_NOT_NULL_COLUMN:
+            if (OB_FAIL(static_cast<ObConstraintTask *>(&task)->update_check_constraint_finish(ret_code))) {
+              LOG_WARN("update check constraint finish", K(ret));
+            }
+            break;
+          case ObDDLType::DDL_DROP_COLUMN:
+          case ObDDLType::DDL_ADD_COLUMN_OFFLINE:
+          case ObDDLType::DDL_COLUMN_REDEFINITION:
+            if (OB_FAIL(static_cast<ObColumnRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+              LOG_WARN("update complete sstable job status", K(ret), K(tablet_id), K(snapshot_version), K(ret_code));
+            }
+            break;
+          default:
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not supported ddl task", K(ret), K(task));
+            break;
+        }
+        return ret;
+      }))) {
+    LOG_WARN("failed to modify task", K(ret));
   }
   return ret;
 }
@@ -2077,29 +2051,11 @@ int ObDDLScheduler::on_ddl_task_finish(
     LOG_WARN("invalid arguments", K(ret), K(parent_task_id), K(child_task_key));
   } else {
     ObDDLTask *ddl_task = nullptr;
-    ObDDLRedefinitionTask *redefinition_task = nullptr;
-    if (OB_FAIL(task_queue_.get_task(parent_task_id, ddl_task))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        bool is_cancel = false;
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(parent_task_trace_id, is_cancel))) {
-          LOG_WARN("check task is canceled", K(tmp_ret), K(parent_task_trace_id));
-        }
-        if (is_cancel || OB_ENTRY_NOT_EXIST == tmp_ret) {
-          ret = OB_CANCELED;
-          LOG_INFO("parent task is canceled, return to cleaup child task", 
-            K(ret), K(ret_code), K(parent_task_id), K(child_task_key), K(parent_task_trace_id));
-        }
-      }
-      if (OB_FAIL(ret) && OB_CANCELED != ret) {
-        LOG_WARN("get from task map failed", K(ret), K(parent_task_id), K(parent_task_trace_id));
-      }
-    } else if (OB_ISNULL(ddl_task)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("ddl task must not be nullptr", K(ret));
-    } else if (FALSE_IT(redefinition_task = static_cast<ObDDLRedefinitionTask *>(ddl_task))) {
-    } else if (OB_FAIL(redefinition_task->on_child_task_finish(child_task_key.object_id_, ret_code))) {
-      LOG_WARN("on child task finish failed", K(ret), K(child_task_key));
+    if (OB_FAIL(task_queue_.modify_task(parent_task_id, [&child_task_key, &ret_code](ObDDLTask &task) -> int {
+          ObDDLRedefinitionTask *redefinition_task = static_cast<ObDDLRedefinitionTask *>(&task);
+          return redefinition_task->on_child_task_finish(child_task_key.object_id_, ret_code);
+        }))) {
+      LOG_WARN("failed to modify task", K(ret));
     }
   }
   return ret;
@@ -2116,37 +2072,31 @@ int ObDDLScheduler::notify_update_autoinc_end(const ObDDLTaskKey &task_key,
   } else if (OB_UNLIKELY(!task_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_key), K(ret_code));
-  } else {
-    ObDDLTask *ddl_task = nullptr;
-    if (OB_FAIL(task_queue_.get_task(task_key, ddl_task))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("get task failed", K(ret), K(task_key));
-      }
-    } else if (OB_ISNULL(ddl_task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("index task is null", K(ret));
-    } else {
-      const int64_t task_type = ddl_task->get_task_type();
-      switch (task_type) {
-        case ObDDLType::DDL_MODIFY_COLUMN:
-        case ObDDLType::DDL_ALTER_PARTITION_BY:
-        case ObDDLType::DDL_TABLE_REDEFINITION:
-        case ObDDLType::DDL_DIRECT_LOAD:
-          if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(ddl_task)->notify_update_autoinc_finish(autoinc_val, ret_code))) {
-            LOG_WARN("update complete sstable job status", K(ret));
-          }
-          break;
-        case ObDDLType::DDL_MODIFY_AUTO_INCREMENT:
-          if (OB_FAIL(static_cast<ObModifyAutoincTask *>(ddl_task)->notify_update_autoinc_finish(autoinc_val, ret_code))) {
-            LOG_WARN("update complete sstable job status", K(ret), K(ret_code));
-          }
-          break;
-        default:
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not supported ddl task", K(ret), K(*ddl_task));
-          break;
-      }
-    }
+  } else if (OB_FAIL(task_queue_.modify_task(task_key, [&autoinc_val, &ret_code](ObDDLTask &task) -> int {
+        int ret = OB_SUCCESS;
+        const int64_t task_type = task.get_task_type();
+        switch (task_type) {
+          case ObDDLType::DDL_MODIFY_COLUMN:
+          case ObDDLType::DDL_ALTER_PARTITION_BY:
+          case ObDDLType::DDL_TABLE_REDEFINITION:
+          case ObDDLType::DDL_DIRECT_LOAD:
+            if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->notify_update_autoinc_finish(autoinc_val, ret_code))) {
+              LOG_WARN("update complete sstable job status", K(ret));
+            }
+            break;
+          case ObDDLType::DDL_MODIFY_AUTO_INCREMENT:
+            if (OB_FAIL(static_cast<ObModifyAutoincTask *>(&task)->notify_update_autoinc_finish(autoinc_val, ret_code))) {
+              LOG_WARN("update complete sstable job status", K(ret), K(ret_code));
+            }
+            break;
+          default:
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not supported ddl task", K(ret), K(task));
+            break;
+        }
+        return ret;
+      }))) {
+    LOG_WARN("failed to modify task", K(ret));
   }
   return ret;
 }

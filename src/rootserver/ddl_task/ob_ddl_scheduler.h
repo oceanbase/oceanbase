@@ -59,8 +59,10 @@ public:
   int get_next_task(ObDDLTask *&task);
   int remove_task(ObDDLTask *task);
   int add_task_to_last(ObDDLTask *task);
-  int get_task(const ObDDLTaskKey &task_key, ObDDLTask *&task);
-  int get_task(const int64_t task_id, ObDDLTask *&task);
+  template<typename F>
+  int modify_task(const ObDDLTaskKey &task_key, F &&op);
+  template<typename F>
+  int modify_task(const int64_t task_id, F &&op);
   int update_task_copy_deps_setting(const int64_t task_id,
                                     const bool is_copy_constraints,
                                     const bool is_copy_indexes,
@@ -207,9 +209,6 @@ public:
   int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res);
   int update_ddl_task_active_time(const int64_t task_id);
 
-  int on_update_execution_id(
-      const int64_t task_id,
-      int64_t &ret_execution_id);
   int prepare_alter_table_arg(const ObPrepareAlterTableArgParam &param,
                               const ObTableSchema *target_table_schema,
                               obrpc::ObAlterTableArg &alter_table_arg);

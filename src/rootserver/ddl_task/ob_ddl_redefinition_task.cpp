@@ -105,20 +105,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(oracle_mode))) {
     LOG_WARN("get oracle mode failed", K(ret));
   } else {
-    (void)ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_,
-                                                        dest_table_id_,
-                                                        task_id_,
-                                                        execution_id_,
-                                                        inner_sql_exec_addr_,
-                                                        trace_id_,
-                                                        schema_version_,
-                                                        snapshot_version_,
-                                                        need_exec_new_inner_sql);
-    if (!need_exec_new_inner_sql) {
-      LOG_INFO("succ to wait and complete old task finished!", K(ret));
-    } else if (OB_FAIL(root_service_->get_ddl_scheduler().on_update_execution_id(task_id_, execution_id_))) {  // genenal new ObIndexSSTableBuildTask::execution_id_ and persist to inner table
-      LOG_WARN("failed to update execution id", K(ret));
-    } else if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
+    if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
                                                            data_table_id_,
                                                            dest_table_id_,
                                                            schema_version_,
@@ -2198,6 +2185,45 @@ int ObSyncTabletAutoincSeqCtx::call_and_process_all_tablet_autoinc_seqs(P &proxy
     if (OB_UNLIKELY(orig_src_tablet_ids_.count() != autoinc_params_.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid count", K(orig_src_tablet_ids_), K(autoinc_params_));
+    }
+  }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::try_reap_old_replica_build_task()
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  const int64_t data_table_id = object_id_;
+  const int64_t dest_table_id = target_object_id_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObIndexBuildTask has not been inited", K(ret));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+      tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(data_table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(data_table_id));
+  } else if (OB_UNLIKELY(nullptr == table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret));
+  } else {
+    const int64_t old_execution_id = get_execution_id();
+    const ObTabletID unused_tablet_id;
+    const ObDDLTaskInfo unused_addition_info;
+    const int old_ret_code = OB_SUCCESS;
+    bool need_exec_new_inner_sql = true;
+    ObAddr invalid_addr;
+    (void)ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_, dest_table_id,
+        task_id_, old_execution_id, invalid_addr, trace_id_,
+        table_schema->get_schema_version(), snapshot_version_, need_exec_new_inner_sql);
+    if (!need_exec_new_inner_sql) {
+      if (OB_FAIL(update_complete_sstable_job_status(unused_tablet_id, snapshot_version_, old_execution_id, old_ret_code, unused_addition_info))) {
+        LOG_INFO("succ to wait and complete old task finished!", K(ret));
+      }
+    } else {
+      ret = OB_ENTRY_NOT_EXIST;
     }
   }
   return ret;

@@ -1154,22 +1154,28 @@ int ObDDLTask::copy_longops_stat(ObLongopsValue &value)
   return ret;
 }
 
-int ObDDLTask::push_execution_id()
+int64_t ObDDLTask::get_execution_id() const
+{
+  TCRLockGuard guard(lock_);
+  return execution_id_;
+}
+
+int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, int64_t &new_execution_id)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObRootService *root_service = nullptr;
-  int64_t table_task_status = 0;
-  int64_t table_execution_id = 0;
+  int64_t task_status = 0;
+  int64_t execution_id = 0;
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
+  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
-    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id_, task_id_, table_task_status, table_execution_id))) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id))) {
       LOG_WARN("select for update failed", K(ret), K(task_id));
-    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id_, task_id_, table_execution_id + 1))) {
+    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, execution_id + 1))) {
       LOG_WARN("update task status failed", K(ret));
     }
     bool commit = (OB_SUCCESS == ret);
@@ -1179,9 +1185,7 @@ int ObDDLTask::push_execution_id()
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     }
     if (OB_SUCC(ret)) {
-      execution_id_ = table_execution_id + 1;
-    } else {
-      execution_id_ = execution_id_ >= 0 ? execution_id_ : 0; // use old execution or inner table default value(0)
+      new_execution_id = execution_id + 1;
     }
   }
   return ret;

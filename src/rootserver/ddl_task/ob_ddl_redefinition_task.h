@@ -106,7 +106,7 @@ class ObDDLRedefinitionTask : public ObDDLTask
 {
 public:
   explicit ObDDLRedefinitionTask(const share::ObDDLType task_type):
-    ObDDLTask(task_type), lock_(), wait_trans_ctx_(), sync_tablet_autoinc_seq_ctx_(),
+    ObDDLTask(task_type), wait_trans_ctx_(), sync_tablet_autoinc_seq_ctx_(),
     build_replica_request_time_(0), complete_sstable_job_ret_code_(INT64_MAX), alter_table_arg_(),
     dependent_task_result_map_(), snapshot_held_(false), has_synced_autoincrement_(false),
     has_synced_stats_info_(false), update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0),
@@ -126,6 +126,7 @@ public:
   virtual void flt_set_task_span_tag() const = 0;
   virtual void flt_set_status_span_tag() const = 0;
   virtual int cleanup_impl() override;
+  int try_reap_old_replica_build_task();
 protected:
   int prepare(const share::ObDDLTaskStatus next_task_status);
   int lock_table(const share::ObDDLTaskStatus next_task_status);
@@ -208,7 +209,6 @@ protected:
   static const int64_t MAX_DEPEND_OBJECT_COUNT = 100L;
   static const int64_t RETRY_INTERVAL = 1 * 1000 * 1000; // 1s
   static const int64_t RETRY_LIMIT = 100;   
-  common::TCRWLock lock_;
   ObDDLWaitTransEndCtx wait_trans_ctx_;
   ObSyncTabletAutoincSeqCtx sync_tablet_autoinc_seq_ctx_;
   int64_t build_replica_request_time_;

@@ -374,7 +374,7 @@ private:
       const common::ObAddr &inner_sql_exec_addr,
       const common::ObCurTraceId::TraceId &trace_id,
       const uint64_t tenant_id,
-      const int64_t schema_version,
+      const int64_t execution_id,
       const int64_t scn,
       bool &is_old_task_session_exist);
 

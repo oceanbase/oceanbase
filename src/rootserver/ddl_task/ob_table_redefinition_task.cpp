@@ -148,7 +148,8 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, snapshot version is not equal", K(ret), K(snapshot_version_), K(snapshot_version));
         } else if (execution_id < execution_id_) {
-          LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
+          ret = OB_TASK_EXPIRED;
+          LOG_WARN("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
         } else {
           complete_sstable_job_ret_code_ = ret_code;
           execution_id_ = execution_id; // update ObTableRedefinitionTask::execution_id_ from ObDDLRedefinitionSSTableBuildTask::execution_id_
@@ -185,6 +186,7 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
   bool modify_autoinc = false;
   bool use_heap_table_ddl_plan = false;
   ObRootService *root_service = GCTX.root_service_;
+  int64_t new_execution_id = 0;
   if (OB_ISNULL(root_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
@@ -192,6 +194,8 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
     LOG_WARN("failed to check modify autoinc", K(ret));
   } else if (OB_FAIL(check_use_heap_table_ddl_plan(use_heap_table_ddl_plan))) {
     LOG_WARN("fail to check heap table ddl plan", K(ret));
+  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, new_execution_id))) {
+    LOG_WARN("failed to fetch new execution id", K(ret));
   } else {
     ObSQLMode sql_mode = alter_table_arg_.sql_mode_;
     if (!modify_autoinc) {
@@ -213,7 +217,7 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
         target_object_id_,
         schema_version_,
         snapshot_version_,
-        execution_id_,  // will init in ObDDLRedefinitionSSTableBuildTask::process
+        new_execution_id,
         sql_mode,
         trace_id_,
         parallelism_,
@@ -307,7 +311,9 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   }
 
   if (OB_SUCC(ret) && !is_build_replica_end && 0 == build_replica_request_time_) {
-    if (OB_FAIL(send_build_replica_request())) {
+    if (OB_SUCCESS == try_reap_old_replica_build_task()) {
+      is_build_replica_end = true;
+    } else if (OB_FAIL(send_build_replica_request())) {
       LOG_WARN("fail to send build replica request", K(ret));
     } else {
       build_replica_request_time_ = ObTimeUtility::current_time();
@@ -348,7 +354,7 @@ int ObTableRedefinitionTask::replica_end_check(const int ret_code)
       break;
     }
     default : {
-      if (OB_FAIL(check_data_dest_tables_columns_checksum(execution_id_))) {
+      if (OB_FAIL(check_data_dest_tables_columns_checksum(get_execution_id()))) {
         LOG_WARN("fail to check the columns checksum of data table and destination table", K(ret));
       }
       break;

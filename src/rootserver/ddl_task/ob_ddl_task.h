@@ -373,7 +373,7 @@ class ObDDLTask : public common::ObDLinkBase<ObDDLTask>
 {
 public:
   explicit ObDDLTask(const share::ObDDLType task_type)
-    : ddl_tracing_(this), is_inited_(false), need_retry_(true), is_running_(false),
+    : lock_(), ddl_tracing_(this), is_inited_(false), need_retry_(true), is_running_(false),
       task_type_(task_type), trace_id_(), tenant_id_(0), object_id_(0), schema_version_(0),
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
@@ -403,7 +403,6 @@ public:
   ObDDLTaskKey get_task_key() const { return ObDDLTaskKey(target_object_id_, schema_version_); }
   int64_t get_parent_task_id() const { return parent_task_id_; }
   int64_t get_task_version() const { return task_version_; }
-  int64_t get_execution_id() const { return execution_id_; }
   int64_t get_parallelism() const { return parallelism_; }
   static int deep_copy_table_arg(common::ObIAllocator &allocator,
                                  const obrpc::ObDDLArg &source_arg,
@@ -438,7 +437,8 @@ public:
   void calc_next_schedule_ts(const int ret_code, const int64_t total_task_cnt);
   bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
   bool is_replica_build_need_retry(const int ret_code);
-  int push_execution_id();
+  int64_t get_execution_id() const;
+  static int push_execution_id(const uint64_t tenant_id, const int64_t task_id, int64_t &new_execution_id);
   virtual bool support_longops_monitoring() const { return false; }
   int cleanup();
   virtual int cleanup_impl() = 0;
@@ -488,6 +488,7 @@ protected:
   int init_ddl_task_monitor_info(const ObTableSchema *target_schema);
 protected:
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
+  common::TCRWLock lock_;
   ObDDLTracing ddl_tracing_;
   bool is_inited_;
   bool need_retry_;
@@ -515,7 +516,7 @@ protected:
   ObDDLTaskStatInfo stat_info_;
   int64_t delay_schedule_time_;
   int64_t next_schedule_ts_;
-  int64_t execution_id_;
+  int64_t execution_id_; // guarded by lock_
   common::ObAddr sql_exec_addr_;
   int64_t cluster_version_;
 };
