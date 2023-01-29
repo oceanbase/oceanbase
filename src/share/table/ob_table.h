@@ -766,6 +766,7 @@ public:
   void rewind();
   virtual int get_next_entity(const ObITableEntity *&entity) override;
   int add_property_name(const ObString &name);
+  void reset_property_names() { properties_names_.reset(); }
   int add_row(const common::ObNewRow &row);
   int add_all_property(const ObTableQueryResult &other);
   int add_all_row(const ObTableQueryResult &other);

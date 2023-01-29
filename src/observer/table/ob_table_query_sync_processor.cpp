@@ -457,6 +457,10 @@ int ObTableQuerySyncP::query_scan_with_new_context(
   } else if (OB_ISNULL(result_iterator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null result iterator", K(ret));
+  } else if (OB_ISNULL(query_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null query session", K(ret));
+  } else if (FALSE_IT(query_session->set_result_iterator(dynamic_cast<ObNormalTableQueryResultIterator *>(result_iterator)))) {
   } else if (OB_FAIL(result_iterator->get_next_result(query_result))) {
     if (OB_ITER_END == ret) {  // scan to end
       ret = OB_SUCCESS;
@@ -464,7 +468,6 @@ int ObTableQuerySyncP::query_scan_with_new_context(
     }
   } else if (result_iterator->has_more_result()){
     result_.is_end_ = false;
-    query_session->set_result_iterator(dynamic_cast<ObNormalTableQueryResultIterator *>(result_iterator));
     query_session->set_trans_desc(trans_desc_); // save processor's trans_desc_ to query session
   } else {
     result_.is_end_ = true;
@@ -585,7 +588,11 @@ int ObTableQuerySyncP::try_process()
       }
       ret = tmp_ret;
     } else if (result_.is_end_) {
-      if (OB_FAIL(destory_query_session(false))) {
+      // destroy session后session中的allocator_析构，导致session.query_的select columns内存被回收
+      // 因此需要深拷出来
+      if (OB_FAIL(deep_copy_result_property_names())) {
+        LOG_WARN("fail to deep copy result property names", K(ret));
+      } else if (OB_FAIL(destory_query_session(false))) {
         LOG_WARN("fail to destory query session", K(ret), K(query_session_id_));
       }
     } else {
@@ -631,6 +638,29 @@ int ObTableQuerySyncP::check_query_type()
             arg_.query_type_ != table::ObQueryOperationType::QUERY_NEXT){
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid query operation type", K(ret), K(arg_.query_type_));
+  }
+  return ret;
+}
+
+int ObTableQuerySyncP::deep_copy_result_property_names()
+{
+  int ret = OB_SUCCESS;
+  ObTableQuery &query = query_session_->get_query();
+  ObNormalTableQueryResultIterator *result_iterator = query_session_->get_result_iterator();
+  if ((OB_NOT_NULL(result_iterator))) {
+    const ObIArray<ObString> &select_columns = query.get_select_columns();
+    ObTableQueryResult *one_result = result_iterator->get_one_result();
+    if (OB_NOT_NULL(one_result)) {
+      one_result->reset_property_names();
+      for (int64_t i = 0; OB_SUCC(ret) && i < select_columns.count(); i++) {
+        ObString select_column;
+        if (OB_FAIL(ob_write_string(allocator_, select_columns.at(i), select_column))) {
+          LOG_WARN("Fail to deep copy select column", K(ret), K(select_columns.at(i)));
+        } else if (OB_FAIL(one_result->add_property_name(select_column))) {
+          LOG_WARN("fail to add property name", K(ret), K(select_column));
+        }
+      }
+    }
   }
   return ret;
 }
