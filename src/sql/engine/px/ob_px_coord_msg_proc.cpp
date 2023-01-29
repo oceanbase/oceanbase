@@ -124,7 +124,7 @@ int ObPxSubCoordMsgProc::on_whole_msg(
     const ObRDWFWholeMsg &pkt) const
 {
   ObDhWholeeMsgProc<ObRDWFWholeMsg> proc;
-  return proc.on_whole_msg(sqc_ctx_, dtl::DH_RANGE_DIST_WF_WHOLE_MSG, pkt);
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_RANGE_DIST_WF_PIECE_MSG, pkt);
 }
 
 int ObPxSubCoordMsgProc::on_whole_msg(
