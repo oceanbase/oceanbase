@@ -2180,7 +2180,7 @@ int ObPartTransCtx::generate_prepare_version_()
 {
   int ret = OB_SUCCESS;
 
-  if (ObTxState::PREPARE > upstream_state_) {
+  if (!mt_ctx_.is_prepared()) {
     int64_t gts = 0;
     int64_t local_max_read_version = 0;
     bool is_gts_ok = false;
@@ -2213,7 +2213,12 @@ int ObPartTransCtx::generate_prepare_version_()
       if (OB_FAIL(get_local_max_read_version_(local_max_read_version))) {
         TRANS_LOG(WARN, "get local max read version failed", KR(ret), K(*this));
       } else {
-        exec_info_.prepare_version_ = std::max(gts, local_max_read_version);
+        // should not overwrite the prepare version of other participants
+        exec_info_.prepare_version_ = std::max(std::max(gts, local_max_read_version),
+                                               exec_info_.prepare_version_);
+        if (exec_info_.prepare_version_ > gts) {
+          mt_ctx_.before_prepare(exec_info_.prepare_version_);
+        }
       }
     }
   }
@@ -3103,6 +3108,7 @@ int ObPartTransCtx::submit_record_log_()
 int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id_) {
     switch (log_type) {
     // for instant logging during execution,
@@ -3123,11 +3129,28 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
       break;
     }
     case ObTxLogType::TX_PREPARE_LOG: {
-      ret = submit_prepare_log_();
+      // try generate prepare verison
+      ret = generate_prepare_version_();
+
+      if (OB_SUCC(ret) && mt_ctx_.is_prepared()) {
+        ret = submit_prepare_log_();
+      }
       break;
     }
     case ObTxLogType::TX_COMMIT_LOG: {
-      ret = submit_commit_log_();
+      if (!mt_ctx_.is_prepared()) {
+        if (!is_local_tx_()) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "not set prepare verison into mt_ctx, unexpected error", "ret", tmp_ret, K(*this));
+          print_trace_log_();
+        } else {
+          // try generate commit version
+          ret = generate_commit_version_();
+        }
+      }
+      if (OB_SUCC(ret) && mt_ctx_.is_prepared()) {
+        ret = submit_commit_log_();
+      }
       break;
     }
     case ObTxLogType::TX_ABORT_LOG: {
@@ -3246,7 +3269,7 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
   if (OB_SUCC(ret) && is_contain(cb_arg_array, ObTxLogType::TX_PREPARE_LOG)) {
     sub_state_.set_state_log_submitting();
     sub_state_.set_state_log_submitted();
-    exec_info_.prepare_version_ = MAX(log_cb->get_log_ts(), exec_info_.prepare_version_);
+    exec_info_.prepare_version_ = std::max(log_cb->get_log_ts(), exec_info_.prepare_version_);
   }
   if (OB_SUCC(ret) && is_contain(cb_arg_array, ObTxLogType::TX_COMMIT_LOG)) {
     sub_state_.set_state_log_submitting();
