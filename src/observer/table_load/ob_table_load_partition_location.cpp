@@ -73,7 +73,10 @@ int ObTableLoadPartitionLocation::fetch_ls_locations(uint64_t tenant_id,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObTabletToLSTableOperator::batch_get_ls(*(GCTX.sql_proxy_),
       tenant_id, tablet_ids_, ls_ids))) {
-    LOG_WARN("table_load_partition failed to batch get ls", K(ret), K(tenant_id));
+    if (OB_LIKELY(OB_ITEM_NOT_MATCH == ret)) {
+      ret = OB_SCHEMA_NOT_UPTODATE;
+    }
+    LOG_WARN("table_load_partition failed to batch get ls", KR(ret), K(tenant_id));
   } else {
     ObLSLocation location;
     ObHashMap<ObLSID, ObAddr> ls_location_map;

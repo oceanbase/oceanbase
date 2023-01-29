@@ -30,6 +30,11 @@ ObTableLoadRedefTable::ObTableLoadRedefTable()
 
 ObTableLoadRedefTable::~ObTableLoadRedefTable()
 {
+  reset();
+}
+
+void ObTableLoadRedefTable::reset()
+{
   if (!is_finish_or_abort_called_) {
     abort(); // 这个必须执行
   }
@@ -162,8 +167,13 @@ int ObTableLoadRedefTable::abort()
       LOG_WARN("failed to abort redef table", KR(ret), K(abort_redef_table_arg));
     } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ctx_->param_.tenant_id_, ddl_task_id_,
       *session_info_, common_rpc_proxy))) {
-      LOG_WARN("failed to wait ddl finish", KR(ret));
-    } else {
+      if (OB_CANCELED == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to wait ddl finish", KR(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       LOG_INFO("abort_redef_table success", KR(ret));
     }
     THIS_WORKER.set_timeout_ts(origin_timeout_ts);

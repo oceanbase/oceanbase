@@ -48,17 +48,19 @@ int ObTableLoadCoordinatorCtx::init(ObSQLSessionInfo *session_info,
   } else if (idx_array.count() != ctx_->param_.column_count_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid idx_array", KR(ret), K(idx_array.count()), K_(ctx_->param_.column_count));
-  } else if (OB_FAIL(redef_table_.init(ctx_, session_info))) {
-    LOG_WARN("failed to init ddl processor", KR(ret));
-  } else if (OB_FAIL(redef_table_.start())) {
-    LOG_WARN("failed to create hidden table", KR(ret));
-  } else if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->param_.database_id_,
-                                          ctx_->param_.target_table_id_, allocator_))) {
-    LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
-              K(ctx_->param_.target_table_id_));
   } else {
+    // init redef table
+    if (OB_FAIL(redef_table_.init(ctx_, session_info))) {
+      LOG_WARN("failed to init ddl processor", KR(ret));
+    } else if (OB_FAIL(redef_table_.start())) {
+      LOG_WARN("failed to create hidden table", KR(ret));
+    } else if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->param_.database_id_,
+                                            ctx_->param_.target_table_id_, allocator_))) {
+      LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
+                K(ctx_->param_.target_table_id_));
+    }
     // init idx array
-    if (OB_FAIL(idx_array_.assign(idx_array))) {
+    else if (OB_FAIL(idx_array_.assign(idx_array))) {
       LOG_WARN("failed to assign idx array", KR(ret), K(idx_array));
     }
     // init partition_location_
@@ -148,6 +150,7 @@ void ObTableLoadCoordinatorCtx::destroy()
   trans_ctx_map_.reuse();
   segment_ctx_map_.reset();
   commited_trans_ctx_array_.reset();
+  redef_table_.reset();
 }
 
 int ObTableLoadCoordinatorCtx::generate_credential(uint64_t user_id)

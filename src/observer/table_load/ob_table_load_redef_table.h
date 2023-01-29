@@ -21,6 +21,7 @@ class ObTableLoadRedefTable
 public:
   ObTableLoadRedefTable();
   ~ObTableLoadRedefTable();
+  void reset();
   int init(ObTableLoadTableCtx *ctx, sql::ObSQLSessionInfo *session_info);
   int start();
   int finish();
