@@ -354,18 +354,32 @@ int ObPhyTableLocation::get_location_idx_by_part_id(int64_t part_id, int64_t &lo
   return ret;
 }
 
+// The reason for not using the remove interface is that
+// the remove interface will not free the memory of the removed node.
+// If the interface is called multiple times for anti-corruption,
+// the problem of memory bloat will occur.
 int ObPhyTableLocation::erase_partition_location(int64_t partition_id)
 {
   int ret = OB_SUCCESS;
+  ObPartitionReplicaLocationSEArray tmp_location_list;
   int64_t N = partition_location_list_.count();
   for (int64_t idx = N - 1; OB_SUCC(ret) && idx >= 0; --idx) {
-    if (partition_location_list_.at(idx).get_partition_id() == partition_id) {
-      if (OB_FAIL(partition_location_list_.remove(idx))) {
-        LOG_WARN("remote partition location from list failed", K(ret), K(idx));
+    if (partition_location_list_.at(idx).get_partition_id() != partition_id) {
+      if (OB_FAIL(tmp_location_list.push_back(partition_location_list_.at(idx)))) {
+        LOG_WARN("add partition location from list failed", K(ret), K(idx));
       }
-      break;
+    } else {
+      LOG_DEBUG("remove partition succ", K(idx), K(partition_id));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    partition_location_list_.reset();
+    if (OB_FAIL(partition_location_list_.assign(tmp_location_list))) {
+      LOG_WARN("fail to assign partition location list", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret) && location_idx_map_.size() > 0) {
     location_idx_map_.clear();
   }
