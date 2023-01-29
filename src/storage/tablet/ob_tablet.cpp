@@ -2612,7 +2612,7 @@ int ObTablet::inner_get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data, bool &ex
   return ret;
 }
 
-int ObTablet::get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data) const
+int ObTablet::get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data, const bool check_valid) const
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -2624,7 +2624,7 @@ int ObTablet::get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data) const
     LOG_WARN("not inited", K(ret), K_(is_inited), K(tenant_id), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(inner_get_tx_data(tx_data, exist_on_memtable))) {
     LOG_WARN("fail to inner get tx data", K(ret));
-  } else if (OB_UNLIKELY(!tx_data.is_valid())) {
+  } else if (check_valid && OB_UNLIKELY(!tx_data.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, tx data is invalid", K(ret), K(tenant_id), K(ls_id), K(tablet_id),
         K(exist_on_memtable), K(tx_data));

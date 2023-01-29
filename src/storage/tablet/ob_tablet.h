@@ -223,7 +223,7 @@ public:
 
   // multi-source data operation
   int check_tx_data(bool &is_valid) const;
-  int get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data) const;
+  int get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data, const bool check_valid = true) const;
   int get_ddl_data(ObTabletBindingInfo &ddl_data) const;
   int get_tablet_status(ObTabletStatus::Status &tablet_status);
 
