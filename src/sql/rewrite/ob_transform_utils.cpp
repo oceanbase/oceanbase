@@ -9209,32 +9209,9 @@ int ObTransformUtils::add_const_param_constraints(ObRawExpr *expr,
   return ret;
 }
 
-int ObTransformUtils::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
-                                                           ObTransformerCtx *trans_ctx,
-                                                           bool need_check_add_expr) {
-  int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx *plan_ctx = NULL;
-  ObSEArray<ObPCConstParamInfo, 4> pc_constraints;
-  ObSEArray<ObPCParamEqualInfo, 4> eq_constraints;
-  if (OB_ISNULL(trans_ctx) || OB_ISNULL(trans_ctx->exec_ctx_) || OB_ISNULL(plan_ctx = trans_ctx->exec_ctx_->get_physical_plan_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(trans_ctx), K(plan_ctx));
-  } else if (OB_FAIL(inner_replace_stmt_expr_with_groupby_exprs(select_stmt, &plan_ctx->get_param_store(), pc_constraints, eq_constraints, need_check_add_expr ? trans_ctx : NULL))) {
-    LOG_WARN("fail to replace stmt expr with group by exprs", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(trans_ctx->plan_const_param_constraints_, pc_constraints))) {
-    LOG_WARN("failed to append const param info", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(trans_ctx->equal_param_constraints_, eq_constraints))) {
-    LOG_WARN("failed to append const param info", K(ret));
-  }
-  return ret;
-}
-
 //pc_constraints are for non-paramlized groupby exprs while eq_constraints are for paramlized groupby exprs
-int ObTransformUtils::inner_replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
-                                                           const ParamStore *param_store,  
-                                                           ObIArray<ObPCConstParamInfo>& pc_constraints,
-                                                           ObIArray<ObPCParamEqualInfo> & eq_constraints,
-                                                           ObTransformerCtx *trans_ctx/*default null*/)
+int ObTransformUtils::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
+                                                           ObTransformerCtx *trans_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(select_stmt)) {
@@ -9247,9 +9224,8 @@ int ObTransformUtils::inner_replace_stmt_expr_with_groupby_exprs(ObSelectStmt *s
       if (OB_FAIL(replace_with_groupby_exprs(select_stmt,
                                              select_items.at(i).expr_,
                                              true,
-                                             param_expr_idxs,
-                                             eq_constraints,
-                                             trans_ctx))) {
+                                             trans_ctx,
+                                             false))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/ }
     }
@@ -9258,9 +9234,8 @@ int ObTransformUtils::inner_replace_stmt_expr_with_groupby_exprs(ObSelectStmt *s
       if (OB_FAIL(replace_with_groupby_exprs(select_stmt,
                                              having_exprs.at(i),
                                              true,
-                                             param_expr_idxs,
-                                             eq_constraints,
-                                             trans_ctx))) {
+                                             trans_ctx,
+                                             false))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/ }
     }
@@ -9269,34 +9244,10 @@ int ObTransformUtils::inner_replace_stmt_expr_with_groupby_exprs(ObSelectStmt *s
       if (OB_FAIL(replace_with_groupby_exprs(select_stmt,
                                              order_items.at(i).expr_,
                                              false,
-                                             param_expr_idxs,
-                                             eq_constraints,
-                                             trans_ctx))) {
+                                             trans_ctx,
+                                             false))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/ }
-    }
-    if (OB_SUCC(ret) && param_expr_idxs.count() > 0) {
-      //build pc_constraints
-      if (OB_ISNULL(param_store)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(param_store));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < param_expr_idxs.count(); i++) {
-          ObPCConstParamInfo const_param_info;
-          int64_t param_idx = param_expr_idxs.at(i);
-          if (OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected error", K(ret), K(param_idx),
-                                              K(param_store->count()));
-          } else if (OB_FAIL(const_param_info.const_idx_.push_back(param_idx))) {
-            LOG_WARN("failed to push back param idx", K(ret));
-          } else if (OB_FAIL(const_param_info.const_params_.push_back(param_store->at(param_idx)))) {
-            LOG_WARN("failed to push back value", K(ret));
-          } else if (OB_FAIL(pc_constraints.push_back(const_param_info))) {
-            LOG_WARN("failed to push back param info", K(ret));
-          } else {/*do nothing*/}
-        }
-      }
     }
   }
   return ret;
@@ -9305,10 +9256,8 @@ int ObTransformUtils::inner_replace_stmt_expr_with_groupby_exprs(ObSelectStmt *s
 int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                                                  ObRawExpr *&expr,
                                                  bool need_query_compare,
-                                                 ObIArray<int64_t> & param_expr_idxs,
-                                                 ObIArray<ObPCParamEqualInfo> & eq_constraints,
                                                  ObTransformerCtx *trans_ctx,
-                                                 bool in_add_expr/*default false*/)
+                                                 bool in_add_expr)
 {
   int ret = OB_SUCCESS;
   ObStmtCompareContext check_context;
@@ -9334,8 +9283,6 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
       if (OB_FAIL(SMART_CALL(replace_with_groupby_exprs(select_stmt,
                                                         expr->get_param_expr(i),
                                                         need_query_compare,
-                                                        param_expr_idxs,
-                                                        eq_constraints,
                                                         trans_ctx,
                                                         T_OP_ADD == expr->get_expr_type())))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
@@ -9347,41 +9294,23 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
     ObIArray<ObGroupingSetsItem> &grouping_sets_items = select_stmt->get_grouping_sets_items();
     ObIArray<ObMultiRollupItem> &multi_rollup_items = select_stmt->get_multi_rollup_items();
     for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < groupby_exprs.count(); i++) {
-      check_context.param_expr_.reset();
-      check_context.equal_param_info_.reset();
       if (OB_ISNULL(groupby_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("got an unexpected null", K(ret));
-      } else if (groupby_exprs.at(i)->same_as(*expr, &check_context)) {
-       // add_var_to_array_no_dup
-        if (OB_FAIL(append(param_exprs_local, check_context.param_expr_))) {
-          LOG_WARN("fail to append param expr", K(ret));
-        } else if (OB_FAIL(append(equal_params_local, check_context.equal_param_info_))) {
-          LOG_WARN("fail to append equal param info", K(ret));
-        } else {
-          expr = groupby_exprs.at(i);
-          is_existed = true;
-        }
+      } else if ((is_mysql_mode() || !expr->is_static_const_expr())
+                  && groupby_exprs.at(i)->same_as(*expr, &check_context)) {
+        expr = groupby_exprs.at(i);
+        is_existed = true;
       } else { /*do nothing.*/ }
-      
     }
     for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < rollup_exprs.count(); i++) {
-      check_context.param_expr_.reset();
-      check_context.equal_param_info_.reset();
       if (OB_ISNULL(rollup_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("got an unexpected null", K(ret));
-      } else if (((lib::is_mysql_mode() && !(expr->has_flag(IS_CONST) && ob_is_integer_type(expr->get_result_type().get_type())))||
-                 (lib::is_oracle_mode() && !expr->is_static_const_expr()))
+      } else if ((lib::is_mysql_mode()|| !expr->is_static_const_expr())
                   && rollup_exprs.at(i)->same_as(*expr, &check_context)) {
-        if (OB_FAIL(append(param_exprs_local, check_context.param_expr_))) {
-          LOG_WARN("fail to append param expr", K(ret));
-        } else if (OB_FAIL(append(equal_params_local, check_context.equal_param_info_))) {
-          LOG_WARN("fail to append equal param info", K(ret));
-        } else {
-          expr = rollup_exprs.at(i);
-          is_existed = true;
-        }
+        expr = rollup_exprs.at(i);
+        is_existed = true;
       } else { /*do nothing.*/ }
     }
     for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < grouping_sets_items.count(); i++) {
@@ -9395,14 +9324,8 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got an unexpected null", K(ret));
           } else if (groupby_exprs.at(k)->same_as(*expr, &check_context)) {
-            if (OB_FAIL(append(param_exprs_local, check_context.param_expr_))) {
-              LOG_WARN("fail to append param expr", K(ret));
-            } else if (OB_FAIL(append(equal_params_local, check_context.equal_param_info_))) {
-              LOG_WARN("fail to append equal param info", K(ret));
-            } else {
-              expr = groupby_exprs.at(k);
-              is_existed = true;
-            }
+            expr = groupby_exprs.at(k);
+            is_existed = true;
           } else if (trans_ctx != NULL && in_add_expr &&
                      expr->get_expr_type() == T_QUESTIONMARK &&
                      groupby_exprs.at(k)->get_expr_type() == T_QUESTIONMARK &&
@@ -9418,7 +9341,6 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
             if (OB_FAIL(replace_add_exprs_with_groupby_exprs(expr,
                                                              groupby_exprs.at(k),
                                                              trans_ctx,
-                                                             equal_params_local,
                                                              is_existed))) {
               LOG_WARN("replace exprs in add failed", K(ret));
             }
@@ -9432,20 +9354,12 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
           for (int64_t k = 0; OB_SUCC(ret) && !is_existed && k < rollup_list_exprs.count(); k++) {
             ObIArray<ObRawExpr*> &groupby_exprs = rollup_list_exprs.at(k).groupby_exprs_;
             for (int64_t m = 0; OB_SUCC(ret) && !is_existed && m < groupby_exprs.count(); m++) {
-              check_context.param_expr_.reset();
-              check_context.equal_param_info_.reset();
               if (OB_ISNULL(groupby_exprs.at(m))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("got an unexpected null", K(ret));
               } else if (groupby_exprs.at(m)->same_as(*expr, &check_context)) {
-                if (OB_FAIL(append(param_exprs_local, check_context.param_expr_))) {
-                  LOG_WARN("fail to append param expr", K(ret));
-                } else if (OB_FAIL(append(equal_params_local, check_context.equal_param_info_))) {
-                  LOG_WARN("fail to append equal param info", K(ret));
-                } else {
-                  expr = groupby_exprs.at(m);
-                  is_existed = true;
-                }
+                expr = groupby_exprs.at(m);
+                is_existed = true;
               } else { /*do nothing.*/ }
             }
           }
@@ -9458,33 +9372,14 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
         for (int64_t j = 0; OB_SUCC(ret) && !is_existed && j < rollup_list_exprs.count(); j++) {
           ObIArray<ObRawExpr*> &groupby_exprs = rollup_list_exprs.at(j).groupby_exprs_;
           for (int64_t k = 0; OB_SUCC(ret) && !is_existed && k < groupby_exprs.count(); k++) {
-            check_context.param_expr_.reset();
-            check_context.equal_param_info_.reset();
             if (OB_ISNULL(groupby_exprs.at(k))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("got an unexpected null", K(ret));
             } else if (groupby_exprs.at(k)->same_as(*expr, &check_context)) {
-              if (OB_FAIL(append(param_exprs_local, check_context.param_expr_))) {
-                LOG_WARN("fail to append param expr", K(ret));
-              } else if (OB_FAIL(append(equal_params_local, check_context.equal_param_info_))) {
-                LOG_WARN("fail to append equal param info", K(ret));
-              } else {
-                expr = groupby_exprs.at(k);
-                is_existed = true;
-              }
+              expr = groupby_exprs.at(k);
+              is_existed = true;
             } else { /*do nothing.*/ }
           }
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(append_array_no_dup(eq_constraints, equal_params_local))) {
-        LOG_WARN("fail to append equal param info", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < param_exprs_local.count(); ++i) {
-          if (OB_FAIL(add_var_to_array_no_dup(param_expr_idxs, param_exprs_local.at(i).param_idx_))) {
-            LOG_WARN("fail to append equal param constraints", K(ret));
-          }  
         }
       }
     }
@@ -9495,7 +9390,6 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
 int ObTransformUtils::replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
                                                   ObRawExpr *expr_r,
                                                   ObTransformerCtx *trans_ctx,
-                                                  ObIArray<ObPCParamEqualInfo> & eq_constraints,
                                                   bool &is_existed)
 {
   int ret = OB_SUCCESS;
@@ -9528,14 +9422,8 @@ int ObTransformUtils::replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
     } else if (check_objparam_negative(left_param) && !check_objparam_negative(right_param)) {
       // replace the expr with a T_OP_NEG expr who's child is groupby_exprs.at(k);
       ObOpRawExpr *neg = NULL;
-      ObPCParamEqualInfo eq_info;
-      eq_info.first_param_idx_ = idx_left;
-      eq_info.second_param_idx_ = idx_right;
-      eq_info.use_abs_cmp_ = true;
       if (OB_FAIL(expr_factory->create_raw_expr(T_OP_NEG, neg))) {
         LOG_WARN("failed to create neg expr", K(ret));
-      } else if (OB_FAIL(eq_constraints.push_back(eq_info))) {
-        LOG_WARN("failed to push back equal param", K(ret));
       } else if (OB_ISNULL(expr_l = neg)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("neg expr is NULL", K(ret));

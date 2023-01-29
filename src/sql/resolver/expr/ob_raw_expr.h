@@ -1229,7 +1229,8 @@ struct ObExprEqualCheckContext
     override_set_op_compare_(false),
     err_code_(common::OB_SUCCESS),
     param_expr_(),
-    need_check_deterministic_(false)
+    need_check_deterministic_(false),
+    ignore_param_(false)
   { }
   ObExprEqualCheckContext(bool need_check_deterministic)
   : override_const_compare_(false),
@@ -1240,7 +1241,8 @@ struct ObExprEqualCheckContext
     override_set_op_compare_(false),
     err_code_(common::OB_SUCCESS),
     param_expr_(),
-    need_check_deterministic_(need_check_deterministic)
+    need_check_deterministic_(need_check_deterministic),
+    ignore_param_(false)
   { }
   virtual ~ObExprEqualCheckContext() {}
   struct ParamExprPair
@@ -1286,6 +1288,7 @@ struct ObExprEqualCheckContext
     err_code_ = OB_SUCCESS;
     param_expr_.reset();
     need_check_deterministic_ = false;
+    ignore_param_ = false;
   }
   bool override_const_compare_;
   bool override_column_compare_;
@@ -1297,6 +1300,7 @@ struct ObExprEqualCheckContext
   //when compare with T_QUESTIONMARK, as T_QUESTIONMARK is unkown, record this first.
   common::ObSEArray<ParamExprPair, 3, common::ModulePageAllocator, true> param_expr_;
   bool need_check_deterministic_;
+  bool ignore_param_; // only compare structure of expr
 };
 
 struct ObExprParamCheckContext : ObExprEqualCheckContext

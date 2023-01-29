@@ -209,7 +209,7 @@ int ObGroupByChecker::check_groupby_valid(ObRawExpr *expr)
 // eg:
 //  select c1 +1 +2 from t1 having c1+1 >0;  // it need check, report error
 //  select c1 from t1 having 1>0; // it don't need check, it will success
-int ObGroupByChecker::check_group_by(ObSelectStmt *ref_stmt, bool has_having_self_column/*default false*/, bool has_group_by_clause)
+int ObGroupByChecker::check_group_by(ObSelectStmt *ref_stmt, bool has_having_self_column, bool has_group_by_clause, bool only_need_constraints)
 {
   int ret = OB_SUCCESS;
   // group by checker
@@ -217,10 +217,11 @@ int ObGroupByChecker::check_group_by(ObSelectStmt *ref_stmt, bool has_having_sel
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
   } else if (ref_stmt->has_group_by() ||
-      	       ref_stmt->has_rollup() ||
-      	       ref_stmt->has_grouping_sets() ||
-      	       has_having_self_column ||
-      	       has_group_by_clause) {
+              ref_stmt->has_rollup() ||
+              (is_oracle_mode() &&
+              (ref_stmt->has_grouping_sets() ||
+              has_having_self_column ||
+              has_group_by_clause))) {
     ObSEArray<ObGroupbyExpr, 4> all_grouping_sets_exprs;
     ObSEArray<ObRawExpr*, 4> all_rollup_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_grouping_sets_items_size(); ++i) {
@@ -257,9 +258,10 @@ int ObGroupByChecker::check_group_by(ObSelectStmt *ref_stmt, bool has_having_sel
                                &all_grouping_sets_exprs);
       checker.set_query_ctx(ref_stmt->get_query_ctx());
       checker.set_nested_aggr(ref_stmt->contain_nested_aggr());
+      checker.only_need_contraints_ = only_need_constraints;
       if (OB_FAIL(checker.check_select_stmt(ref_stmt))) {
         LOG_WARN("failed to check group by", K(ret));
-      } else {
+      } else if (!only_need_constraints) {
         for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_group_expr_size(); i++) {
           if (OB_FAIL(check_groupby_valid(ref_stmt->get_group_exprs().at(i)))) {
             LOG_WARN("failed to check groupby valid.", K(ret));
@@ -324,6 +326,7 @@ int ObGroupByChecker::add_pc_const_param_info(ObExprEqualCheckContext &check_ctx
 bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
 {
   bool found = false;
+  bool found_same_structure = false;
   ObStmtCompareContext check_ctx;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(query_ctx_)) {
@@ -341,9 +344,24 @@ bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
         LOG_DEBUG("found in rollup exprs", K(expr));
       }
     }
+    if (OB_SUCCESS == check_ctx.err_code_ && !found_same_structure && is_top_select_stmt()) {
+      for (int64_t nth_rollup = 0; !found_same_structure && nth_rollup < rollup_cnt; ++nth_rollup) {
+        //in oracle mode, only non static const expr will be replaced later in replace_group_by_exprs
+        if (is_mysql_mode() || !rollup_exprs_->at(nth_rollup)->is_static_const_expr()) {
+          check_ctx.reset();
+          check_ctx.ignore_param_ = true;
+          check_ctx.override_const_compare_ = true;
+          check_ctx.override_query_compare_ = true;
+          if (expr.same_as(*rollup_exprs_->at(nth_rollup), &check_ctx)) {
+            found_same_structure = true;
+            LOG_DEBUG("found same structure in rollup exprs", K(expr));
+          }
+        }
+      }
+    }
   }
   if (OB_FAIL(ret)) {
-  } else if (found && OB_SUCCESS == check_ctx.err_code_ && lib::is_oracle_mode()) {
+  } else if ((found || found_same_structure) && OB_SUCCESS == check_ctx.err_code_) {
     if (OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
                        check_ctx.equal_param_info_))) {
       LOG_WARN("failed to append equal params constraints", K(ret));
@@ -376,7 +394,7 @@ bool ObGroupByChecker::find_in_group_by(ObRawExpr &expr)
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (found && OB_SUCCESS == check_ctx.err_code_ && lib::is_oracle_mode()) {
+  } else if (found && OB_SUCCESS == check_ctx.err_code_) {
     // 这里抽取了两种约束：
     // 1. select a+1 from t1 group by a+1 --> select a+? from t1 group by a+?
     //    抽取一种等值约束，使得只要是两个问号值相同就可以匹配，比如：
@@ -399,6 +417,7 @@ bool ObGroupByChecker::find_in_grouping_sets(ObRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   bool found = false;
+  bool found_same_structure = false;
   ObStmtCompareContext check_ctx;
   if (OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -419,9 +438,26 @@ bool ObGroupByChecker::find_in_grouping_sets(ObRawExpr &expr)
         }
       }
     }
+    if (OB_SUCCESS == check_ctx.err_code_ && !found && is_top_select_stmt()) {
+      for (int64_t nth_gs = 0; !found_same_structure && nth_gs < gs_cnt; ++nth_gs) {
+        int64_t group_by_cnt = grouping_sets_exprs_->at(nth_gs).groupby_exprs_.count();
+        //in oracle mode, only non static const expr will be replaced later in replace_group_by_exprs
+        for (int64_t nth_group_by = 0; !found_same_structure && nth_group_by < group_by_cnt; ++nth_group_by) {
+          check_ctx.reset();
+          check_ctx.ignore_param_ = true;
+          check_ctx.override_const_compare_ = true;
+          check_ctx.override_query_compare_ = true;
+          if (expr.same_as(*grouping_sets_exprs_->at(nth_gs).groupby_exprs_.at(nth_group_by),
+                          &check_ctx)) {
+            found_same_structure = true;
+            LOG_DEBUG("found in grouping sets exprs", K(expr));
+          }
+        }
+      }
+    }
   }
   if (OB_FAIL(ret)) {
-  } else if (found && OB_SUCCESS == check_ctx.err_code_ && lib::is_oracle_mode()) {
+  } else if ((found || found_same_structure) && OB_SUCCESS == check_ctx.err_code_ && lib::is_oracle_mode()) {
     if (OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
                        check_ctx.equal_param_info_))) {
       LOG_WARN("failed to append equal params constraints", K(ret));
@@ -479,7 +515,15 @@ int ObGroupByChecker::add_abs_equal_constraint_in_grouping_sets(ObConstRawExpr &
               }
               // add precalc_constraint in transformer: expr > 0;
             } else {
-              //do nothing.
+              // same stucture, add pc const param constraint
+              ObStmtCompareContext check_ctx;
+              if (OB_FAIL(check_ctx.add_param_pair(expr.get_value().get_unknown(), NULL))) {
+                LOG_WARN("fail to add param pair", K(ret));
+              } else if (OB_FAIL(check_ctx.add_param_pair(c_expr->get_value().get_unknown(), NULL))) {
+                LOG_WARN("fail to add param pair", K(ret));
+              } else if (OB_FAIL(add_pc_const_param_info(check_ctx))) {
+                LOG_WARN("failed to append pc constraints", K(ret));
+              }
             }
           }
         }
@@ -574,9 +618,13 @@ int ObGroupByChecker::colref_belongs_to_check_stmt(ObRawExpr &expr, bool &belong
 int ObGroupByChecker::visit(ObConstRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  if (is_mysql_mode()) {
+    if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+      set_skip_expr(&expr);
+    }
+  } else if (find_in_rollup(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
-  }  else if (OB_FAIL(add_abs_equal_constraint_in_grouping_sets(expr))) {
+  } else if (OB_FAIL(add_abs_equal_constraint_in_grouping_sets(expr))) {
     LOG_WARN("fail to add abs_equal constraintd", K(ret));
   }
   return ret;
@@ -585,7 +633,9 @@ int ObGroupByChecker::visit(ObConstRawExpr &expr)
 int ObGroupByChecker::visit(ObExecParamRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr.get_ref_expr())) {
+  if (only_need_contraints_) {
+    // do nothing
+  } else if (OB_ISNULL(expr.get_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is invalid", K(ret));
   } else if (OB_FAIL(expr.get_ref_expr()->preorder_accept(*this))) {
@@ -627,7 +677,7 @@ int ObGroupByChecker::check_select_stmt(const ObSelectStmt *ref_stmt)
     // non ref query
   } else {
     int32_t ignore_scope = 0;
-    if (is_top_select_stmt()) {
+    if (is_top_select_stmt() || only_need_contraints_) {
       // 当前select stmt,则仅仅check having, select item, order
       // eg:
       // select c1,c2,(select d2 from t2 where t1.c1=t2.d1) as c3 from t1 group by c1,c2;
@@ -676,7 +726,7 @@ int ObGroupByChecker::check_select_stmt(const ObSelectStmt *ref_stmt)
       ret = tmp_ret;
       LOG_WARN("failed to pop back stmt", K(ret));
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !only_need_contraints_) {
       const ObIArray<ObSelectStmt*> &child_stmts = ref_stmt->get_set_query();
       for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
         ret = check_select_stmt(child_stmts.at(i));
@@ -698,7 +748,7 @@ int ObGroupByChecker::visit(ObQueryRefRawExpr &expr)
   int ret = OB_SUCCESS;
   if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
-  } else {
+  } else if (!only_need_contraints_) {
     const ObSelectStmt *ref_stmt = expr.get_ref_stmt();
     if (OB_FAIL(check_select_stmt(ref_stmt))) {
       LOG_WARN("failed to check select stmt", K(ret));
@@ -716,7 +766,11 @@ int ObGroupByChecker::visit(ObColumnRefRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   bool belongs_to = true;
-  if (OB_FAIL(colref_belongs_to_check_stmt(expr, belongs_to))) {
+  if (only_need_contraints_) {
+    if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+      set_skip_expr(&expr);
+    }
+  } else if (OB_FAIL(colref_belongs_to_check_stmt(expr, belongs_to))) {
     LOG_WARN("failed to get belongs to stmt", K(ret));
   } else if (belongs_to) {
     // expr is in the current  stmt
@@ -763,6 +817,8 @@ int ObGroupByChecker::visit(ObOpRawExpr &expr)
   int ret = OB_SUCCESS;
   if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
+  } else if (only_need_contraints_) {
+    // do nothing
   } else {
     switch(expr.get_expr_type()) {
       case T_OP_CONNECT_BY_ROOT:
@@ -803,6 +859,8 @@ int ObGroupByChecker::visit(ObAggFunRawExpr &expr)
     //    then a.d2 that is in max(a.d2) is not in group by d1, it will report error
   if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
+  } else if (only_need_contraints_) {
+    // do nothing
   } else if (OB_FAIL(belongs_to_check_stmt(expr, belongs_to))) {
     LOG_WARN("failed to get belongs to stmt", K(ret));
   } else if (belongs_to) {
@@ -825,7 +883,7 @@ int ObGroupByChecker::visit(ObSysFunRawExpr &expr)
   int ret = OB_SUCCESS;
   if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
-  } else {
+  } else if (!only_need_contraints_) {
     if (T_FUN_SYS_ROWNUM == expr.get_expr_type()) {
       bool belongs_to = true;
       if (OB_FAIL(belongs_to_check_stmt(expr, belongs_to))) {
@@ -875,7 +933,11 @@ int ObGroupByChecker::visit(ObPseudoColumnRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   bool belongs_to = true;
-  if (OB_FAIL(belongs_to_check_stmt(expr, belongs_to))) {
+  if (only_need_contraints_) {
+    if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+      set_skip_expr(&expr);
+    }
+  } else if (OB_FAIL(belongs_to_check_stmt(expr, belongs_to))) {
     LOG_WARN("failed to get belongs to stmt", K(ret));
   } else if (belongs_to) {
     if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {

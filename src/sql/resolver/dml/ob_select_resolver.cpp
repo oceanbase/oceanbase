@@ -740,9 +740,11 @@ int ObSelectResolver::check_group_by()
   ObSelectStmt *select_stmt = get_select_stmt();
   CK(OB_NOT_NULL(select_stmt), OB_NOT_NULL(session_info_));
   CK(OB_NOT_NULL(select_stmt->get_query_ctx()));
+  bool only_need_constraints = true;
   if (is_only_full_group_by_on(session_info_->get_sql_mode()) &&
       !select_stmt->get_query_ctx()->is_prepare_stmt()) {
     if (is_oracle_mode()) {
+      only_need_constraints = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_group_expr_size(); i++) {
         ObRawExpr *group_by_expr = NULL;
         if (OB_ISNULL(group_by_expr = select_stmt->get_group_exprs().at(i))) {
@@ -798,54 +800,6 @@ int ObSelectResolver::check_group_by()
           LOG_WARN("failed to check multi rollup items valid", K(ret));
         } else {/*do nothing*/}
       }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObGroupByChecker::check_group_by(select_stmt, having_has_self_column_, has_group_by_clause()))) {
-        LOG_WARN("failed to check group by in oracle mode");
-      } else if (OB_ISNULL(params_.param_list_) || OB_ISNULL(params_.query_ctx_)) {
-        // do nothing
-        LOG_DEBUG("null obj", K(params_.param_list_), K(params_.query_ctx_));
-      } else if (NULL != params_.secondary_namespace_) {
-        //处于PL的prepare阶段，跳过即可
-      } else {
-        // group by checker只是把表达式中常量的index存在了常量约束里，需要在这里回填obj
-        // 填充all_plan_const_param_constraints_中的obj
-        for (int64_t i = 0; OB_SUCC(ret) && i < params_.query_ctx_->all_plan_const_param_constraints_.count();
-             i++) {
-          ObPCConstParamInfo &const_param_info = params_.query_ctx_->all_plan_const_param_constraints_.at(i);
-          const_param_info.const_params_.reset();
-          for (int64_t j = 0; OB_SUCC(ret) && j < const_param_info.const_idx_.count(); j++) {
-            int64_t idx = const_param_info.const_idx_.at(j);
-            if (idx < 0 || idx >= params_.param_list_->count()) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid index", K(ret), K(idx), K(i), K(j));
-            } else if (OB_FAIL(const_param_info.const_params_.push_back(params_.param_list_->at(idx)))) {
-              LOG_WARN("failed to push back element", K(ret));
-            } else {
-              // do nothing
-            }
-          }
-        } // for end
-
-        // 填充all_possible_const_param_constraints_中的obj
-        for (int64_t i = 0;
-             OB_SUCC(ret) && i < params_.query_ctx_->all_possible_const_param_constraints_.count();
-             i++) {
-          ObPCConstParamInfo &const_param_info = params_.query_ctx_->all_possible_const_param_constraints_.at(i);
-          const_param_info.const_params_.reset();
-          for (int64_t j = 0; OB_SUCC(ret) && j < const_param_info.const_idx_.count(); j++) {
-            int64_t idx = const_param_info.const_idx_.at(j);
-            if (idx < 0 || idx >= params_.param_list_->count()) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid index", K(ret), K(idx), K(i), K(j));
-            } else if (OB_FAIL(const_param_info.const_params_.push_back(params_.param_list_->at(idx)))) {
-              LOG_WARN("failed to push back element", K(ret));
-            } else {
-              // do nothing
-            }
-          }
-        } // for end
-      }
     } else {
       //在解析过程中，standard group checker会记录需要检查的column和expr,在所有语句都解析完成后
       if (OB_FAIL(standard_group_checker_.check_only_full_group_by())) {
@@ -854,35 +808,62 @@ int ObSelectResolver::check_group_by()
     }
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObGroupByChecker::check_group_by(select_stmt, having_has_self_column_, has_group_by_clause(), only_need_constraints))) {
+    LOG_WARN("failed to check group by in oracle mode");
+  } else if (OB_ISNULL(params_.param_list_) || OB_ISNULL(params_.query_ctx_)) {
+    // do nothing
+    LOG_DEBUG("null obj", K(params_.param_list_), K(params_.query_ctx_));
+  } else if (NULL != params_.secondary_namespace_) {
+    //处于PL的prepare阶段，跳过即可
+  } else {
+    // group by checker只是把表达式中常量的index存在了常量约束里，需要在这里回填obj
+    // 填充all_plan_const_param_constraints_中的obj
+    for (int64_t i = 0; OB_SUCC(ret) && i < params_.query_ctx_->all_plan_const_param_constraints_.count();
+          i++) {
+      ObPCConstParamInfo &const_param_info = params_.query_ctx_->all_plan_const_param_constraints_.at(i);
+      const_param_info.const_params_.reset();
+      for (int64_t j = 0; OB_SUCC(ret) && j < const_param_info.const_idx_.count(); j++) {
+        int64_t idx = const_param_info.const_idx_.at(j);
+        if (idx < 0 || idx >= params_.param_list_->count()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid index", K(ret), K(idx), K(i), K(j));
+        } else if (OB_FAIL(const_param_info.const_params_.push_back(params_.param_list_->at(idx)))) {
+          LOG_WARN("failed to push back element", K(ret));
+        } else {
+          // do nothing
+        }
+      }
+    } // for end
+
+    // 填充all_possible_const_param_constraints_中的obj
+    for (int64_t i = 0;
+          OB_SUCC(ret) && i < params_.query_ctx_->all_possible_const_param_constraints_.count();
+          i++) {
+      ObPCConstParamInfo &const_param_info = params_.query_ctx_->all_possible_const_param_constraints_.at(i);
+      const_param_info.const_params_.reset();
+      for (int64_t j = 0; OB_SUCC(ret) && j < const_param_info.const_idx_.count(); j++) {
+        int64_t idx = const_param_info.const_idx_.at(j);
+        if (idx < 0 || idx >= params_.param_list_->count()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid index", K(ret), K(idx), K(i), K(j));
+        } else if (OB_FAIL(const_param_info.const_params_.push_back(params_.param_list_->at(idx)))) {
+          LOG_WARN("failed to push back element", K(ret));
+        } else {
+          // do nothing
+        }
+      }
+    } // for end
+  }
+
   // replace with same group by columns.
   // groupby之上的计算我们放在这里统一处理：
   // 1. select item/having/order item中的表达式树(子树)需要每个都在group by列中找到
   // 2. 递归查找是否在groupby列中，将在groupby的列的指针替换。
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(replace_stmt_expr_with_groupby_exprs(select_stmt, params_.query_ctx_))) {
+    if (OB_FAIL(ObTransformUtils::replace_stmt_expr_with_groupby_exprs(select_stmt, NULL))) {
       LOG_WARN("failed to replace stmt expr with groupby columns", K(ret));
     }
-  }
-  return ret;
-}
-
-int ObSelectResolver::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
-                                                           ObQueryCtx *query_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObPCConstParamInfo, 4> pc_constraints;
-  ObSEArray<ObPCParamEqualInfo, 4> eq_constraints;
-  if (OB_ISNULL(query_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(query_ctx));
-  } else if (OB_FAIL(ObTransformUtils::inner_replace_stmt_expr_with_groupby_exprs(select_stmt, params_.param_list_, pc_constraints, eq_constraints))) {
-    LOG_WARN("failed to replace stmt expr with groupby columns", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(query_ctx->all_plan_const_param_constraints_, pc_constraints))) {
-    LOG_WARN("failed to append const param info", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(query_ctx->all_possible_const_param_constraints_, pc_constraints))) {
-    LOG_WARN("failed to append const param info", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(query_ctx->all_equal_param_constraints_, eq_constraints))) {
-    LOG_WARN("failed to append const param info", K(ret));
   }
   return ret;
 }
