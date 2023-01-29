@@ -926,7 +926,11 @@ int ObTimeConverter::datetime_to_str(int64_t value, const ObTimeZoneInfo *tz_inf
     LOG_WARN("failed to convert seconds to ob time", K(ret));
   } else if (nls_format.empty()) {
     if (OB_FAIL(ob_time_to_str(ob_time, DT_TYPE_DATETIME, scale, buf, buf_len, pos, with_delim))) {
-      LOG_WARN("failed to convert ob time to string", K(ret));
+      if (OB_SIZE_OVERFLOW == ret) {
+        LOG_TRACE("failed to convert ob time to string", K(ret));
+      } else {
+        LOG_WARN("failed to convert ob time to string", K(ret));
+      }
     }
   } else {
     if (OB_FAIL(ob_time_to_str_oracle_dfm(ob_time, scale, nls_format, buf, buf_len, pos))) {
