@@ -11,6 +11,9 @@
  */
 
 #include "ob_fifo_arena.h"
+#ifdef OB_USE_ASAN
+#include <malloc.h>
+#endif
 #include "math.h"
 #include "ob_memstore_allocator_mgr.h"
 #include "share/ob_tenant_mgr.h"
@@ -29,8 +32,12 @@ int64_t ObFifoArena::total_hold_ = 0;
 
 int64_t ObFifoArena::Page::get_actual_hold_size()
 {
+#ifdef OB_USE_ASAN
+  return malloc_usable_size(this);
+#else
   //every time of alloc_page, ruturn a chunk actually
   return ObTenantCtxAllocator::get_obj_hold(this);
+#endif
 }
 
 void ObFifoArena::ObWriteThrottleInfo::reset()
