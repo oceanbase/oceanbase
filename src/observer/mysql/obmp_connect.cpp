@@ -302,7 +302,6 @@ int ObMPConnect::process()
       ObOKPParam ok_param;
       ok_param.is_on_connect_ = true;
       ok_param.affected_rows_ = 0;
-      SQL_REQ_OP.set_sql_session_to_sock_desc(req_, (void *)session);
       if (OB_FAIL(send_ok_packet(*session, ok_param))) {
         LOG_WARN("fail to send ok packet", K(ok_param), K(ret));
       }
@@ -1819,6 +1818,7 @@ int ObMPConnect::verify_identify(ObSMConnection &conn, ObSQLSessionInfo &session
   } else {
     session.update_last_active_time();
     SQL_REQ_OP.get_sock_desc(req_, session.get_sock_desc());
+    SQL_REQ_OP.set_sql_session_to_sock_desc(req_, (void *)&session);
     if (NULL != gctx_.sql_engine_) {
       session.set_plan_cache_manager(gctx_.sql_engine_->get_plan_cache_manager());
     }
