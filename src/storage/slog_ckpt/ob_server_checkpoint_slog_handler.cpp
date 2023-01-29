@@ -558,7 +558,10 @@ int ObServerCheckpointSlogHandler::replay_delete_tenant_prepare(const char *buf,
     } else {
       LOG_WARN("failed to get tenant meta", K(ret), K(tenant_id));
     }
-  } else if (omt::ObTenantCreateStatus::CREATE_COMMIT != meta.create_status_) {
+  // meta.create_status_== DELETING may because the status in memory is set to DELETING
+  // and a checkpoint is created when exit the lock for preventing to do ckpt.
+  } else if (omt::ObTenantCreateStatus::CREATE_COMMIT != meta.create_status_ &&
+      omt::ObTenantCreateStatus::DELETING != meta.create_status_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant create_status mismatch", K(ret), K(meta));
   } else if (FALSE_IT(meta.create_status_ = omt::ObTenantCreateStatus::DELETING)) {

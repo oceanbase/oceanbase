@@ -833,9 +833,6 @@ int ObLSService::get_ls(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!is_running_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls service is not running.", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id));
@@ -1105,9 +1102,6 @@ int ObLSService::check_ls_exist(const share::ObLSID &ls_id, bool &exist)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!is_running_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls service is not running.", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id));
@@ -1135,9 +1129,6 @@ int ObLSService::check_ls_waiting_safe_destroy(const share::ObLSID &ls_id, bool 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!is_running_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls service is not running.", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id));
@@ -1166,9 +1157,6 @@ int ObLSService::get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGet
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!is_running_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls service is not running.", K(ret));
   } else if (NULL == (buf = iter_allocator_.alloc(sizeof(ObLSIterator), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("Fail to allocate memory for log stream iterator.", K(ret));
