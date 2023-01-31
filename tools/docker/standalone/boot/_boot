@@ -39,9 +39,12 @@ function exit_while_error() {
 function remove_disk_check_logic_in_obd() {
   # make sure obd copy the plugin code
   obd cluster list
-  start_check_file='/root/.obd/plugins/oceanbase/3.1.0/start_check.py'
-  sed -i "s/critical('(%s) %s not enough disk space\. (Avail/alert('(%s) %s not enough disk space\. (Avail/g" $start_check_file
-  sed -i "s/critical(EC_OBSERVER_NOT_ENOUGH_DISK_4_CLOG/alert(EC_OBSERVER_NOT_ENOUGH_DISK_4_CLOG/g" $start_check_file
+  start_check_files=('/root/.obd/plugins/oceanbase/3.1.0/start_check.py' '/root/.obd/plugins/oceanbase/4.0.0.0/start_check.py')
+  for start_check_file in ${start_check_files[@]}
+  do
+    sed -i "s/critical('(%s) %s not enough disk space\. (Avail/alert('(%s) %s not enough disk space\. (Avail/g" $start_check_file
+    sed -i "s/critical(EC_OBSERVER_NOT_ENOUGH_DISK_4_CLOG/alert(EC_OBSERVER_NOT_ENOUGH_DISK_4_CLOG/g" $start_check_file
+  done
 }
 
 # We should decide whether the observer's data exists and
@@ -70,18 +73,19 @@ else # nothing here, bootstrap
   sed -i "s|@OB_HOME_PATH@|${OB_HOME_PATH}|g" $TMPFILE
   sed -i "s|@OB_MYSQL_PORT@|${OB_MYSQL_PORT}|g" $TMPFILE
   sed -i "s|@OB_RPC_PORT@|${OB_RPC_PORT}|g" $TMPFILE
-  sed -i "s|@OB_ROOT_PASSWORD@|${OB_ROOT_PASSWORD}|g" $TMPFILE
+  sed -i "s|@OB_CLUSTER_NAME@|${OB_CLUSTER_NAME}|g" $TMPFILE
 
   [ "${OB_DATA_DIR}" ] && echo "    data_dir: ${OB_DATA_DIR}" >> $TMPFILE
   [ "${OB_REDO_DIR}" ] && echo "    redo_dir: ${OB_REDO_DIR}" >> $TMPFILE
   echo "create boot dirs and deploy ob cluster ..."
   mkdir -p $OB_HOME_PATH
 
-  #obd mirror clone /root/pkg/*.rpm \
-  #&& obd mirror list local
+  obd mirror clone /root/pkg/*.rpm \
+  && obd mirror list local
 
   remove_disk_check_logic_in_obd
-  obd cluster autodeploy "${OB_CLUSTER_NAME}" -c $TMPFILE \
+  obd devmode enable \
+    && obd cluster autodeploy "${OB_CLUSTER_NAME}" -c $TMPFILE \
     && obd cluster tenant create "${OB_CLUSTER_NAME}" -n ${OB_TENANT_NAME} \
     && obclient -h127.1 -uroot@${OB_TENANT_NAME} -A -P${OB_MYSQL_PORT} < init_tenant_user.sql \
     && mv -f $TMPFILE ${OB_HOME_PATH}/boot.yaml \
@@ -99,5 +103,5 @@ else
     echo "Please check the log file ${OB_HOME_PATH}/log/observer.log"
   fi
 fi
-exec /sbin/init
+exec tail -f /dev/null
 

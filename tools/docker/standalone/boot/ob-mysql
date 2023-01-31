@@ -3,15 +3,10 @@ CWD=$(cd `dirname $0`;pwd)
 cd "${CWD}"
 source _env
 
-PASSCMD=""
-
 case "$1" in
   sys)
     LOGIN_USER="root@sys"
     DB="oceanbase"
-    if [[ "${OB_ROOT_PASSWORD}x" != "x" ]]; then
-      PASSCMD=-p${OB_ROOT_PASSWORD}
-    fi
     ;;
   root)
     DB="oceanbase"
