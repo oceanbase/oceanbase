@@ -718,6 +718,12 @@ int ObTxDataSingleRowGetter::get_next_row(ObTxData &tx_data)
       STORAGE_LOG(WARN, "This tablet does not have sstables.", KR(ret), K(table_store));
     } else {
       ret = get_next_row_(sstables, tx_data);
+      if (OB_TIMEOUT == ret) {
+        ret = OB_EAGAIN;
+        STORAGE_LOG(WARN,
+                    "modify ret code from OB_TIMEOUT to OB_EAGAIN due to gettting tx data from sstable time out.",
+                    KR(ret));
+      }
     }
   }
   return ret;
