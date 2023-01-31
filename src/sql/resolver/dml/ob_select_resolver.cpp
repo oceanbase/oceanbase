@@ -1026,8 +1026,13 @@ int ObSelectResolver::set_for_update_mysql(ObSelectStmt& stmt, const int64_t wai
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Table item is NULL", K(ret));
     } else if (table_item->is_basic_table()) {
-      table_item->for_update_ = true;
-      table_item->for_update_wait_us_ = wait_us;
+      if (is_virtual_table(table_item->ref_id_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "using for update with virtual table");
+      } else {
+        table_item->for_update_ = true;
+        table_item->for_update_wait_us_ = wait_us;
+      }
     }
   }
   return ret;
