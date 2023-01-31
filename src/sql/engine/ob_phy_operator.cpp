@@ -432,8 +432,10 @@ int ObPhyOperator::get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
   int ret = OB_SUCCESS;
   const ObNewRow* input_row = NULL;
   bool is_filtered = false;
-  ObPhyOperatorCtx* op_ctx = NULL;
-  if (OB_ISNULL(op_ctx = GET_PHY_OPERATOR_CTX(ObPhyOperatorCtx, ctx, get_id()))) {
+  ObPhyOperatorCtx *op_ctx = NULL;
+  if (is_dml_operator() && OPEN_NONE == get_operator_open_order(ctx)) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(op_ctx = GET_PHY_OPERATOR_CTX(ObPhyOperatorCtx, ctx, get_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get_phy_operator_ctx failed", K(ret), K_(id), "op_type", ob_phy_operator_type_str(get_type()));
   } else if (OB_ISNULL(op_ctx->expr_ctx_.calc_buf_)) {
