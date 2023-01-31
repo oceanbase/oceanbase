@@ -522,6 +522,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
         OZ (ctx.exec_ctx_.get_pl_ctx()->add(result));
       } else {
         OZ (deep_copy_obj(alloc, tmp_result, result));
+        OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj());
       }
     } else {
       result = tmp_result;
