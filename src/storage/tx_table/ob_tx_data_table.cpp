@@ -695,12 +695,14 @@ int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, O
 int ObTxDataTable::get_recycle_ts(int64_t &recycle_ts)
 {
   int ret = OB_SUCCESS;
+  // set recycle_ts = 0 as default which means clear nothing
+  recycle_ts = 0;
+
   int64_t min_end_ts = INT64_MAX;
   int64_t min_end_ts_from_old_tablets = INT64_MAX;
   int64_t min_end_ts_from_latest_tablets = INT64_MAX;
   ObMigrationStatus migration_status;
-  // set recycle_ts = 0 as default which means clear nothing
-  recycle_ts = 0;
+  share::ObLSRestoreStatus restore_status;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -709,9 +711,14 @@ int ObTxDataTable::get_recycle_ts(int64_t &recycle_ts)
     STORAGE_LOG(WARN, "get migration status failed", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
     recycle_ts = 0;
-    STORAGE_LOG(INFO, "logstream is not in a normal state. skip recycle tx data", "ls_id", ls_->get_ls_id());
+    STORAGE_LOG(INFO, "logstream is in migrate state. skip recycle tx data", "ls_id", ls_->get_ls_id());
+  } else if (OB_FAIL(ls_->get_restore_status(restore_status))) {
+    STORAGE_LOG(WARN, "get restore status failed", KR(ret), "ls_id", ls_->get_ls_id());
+  } else if (share::ObLSRestoreStatus::RESTORE_NONE != restore_status) {
+    recycle_ts = 0;
+    STORAGE_LOG(INFO, "logstream is in restore state. skip recycle tx data", "ls_id", ls_->get_ls_id());
   } else if (OB_FAIL(get_ls_min_end_log_ts_in_latest_tablets_(min_end_ts_from_latest_tablets))) {
-    // get_ls_min_end_log_ts_in_latest_tablets must before get_ls_min_end_log_ts_in_old_tablets
+    // get_ls_min_end_scn_in_latest_tablets must before get_ls_min_end_scn_in_old_tablets
     STORAGE_LOG(WARN, "fail to get ls min end log ts in all of latest tablets", KR(ret));
   } else if (OB_FAIL(ls_tablet_svr_->get_ls_min_end_log_ts_in_old_tablets(min_end_ts_from_old_tablets))) {
     STORAGE_LOG(WARN, "fail to get ls min end log ts in all of old tablets", KR(ret));
