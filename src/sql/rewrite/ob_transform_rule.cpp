@@ -332,7 +332,6 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt>& parent_st
   int ret = OB_SUCCESS;
   bool trans_happened = false;
   stmt_cost_ = -1;
-  LOG_TRACE("before transfrom self stmt", KPC(stmt), K(trans_happened_));
 
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -355,7 +354,6 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt>& parent_st
     LOG_WARN("failed to update base tid and cid", K(ret));
   }
   trans_happened_ = (trans_happened_ || trans_happened);
-  LOG_TRACE("succeed to transfrom self stmt", KPC(stmt), K(trans_happened_), K(lbt()));
   return ret;
 }
 

@@ -9075,34 +9075,32 @@ Outputs & filters:
 
 SQL: select * from t4 where (select c1 from t7)+1 in (select 2 from t8 where t4.c1=t8.c1); 
 
-=========================================
-|ID|OPERATOR      |NAME|EST. ROWS|COST  |
------------------------------------------
-|0 |SUBPLAN FILTER|    |49500    |283357|
-|1 | MERGE JOIN   |    |99000    |210039|
-|2 |  TABLE SCAN  |t4  |100000   |64066 |
-|3 |  TABLE SCAN  |t8  |100000   |59654 |
-|4 | TABLE SCAN   |t7  |100000   |59654 |
-=========================================
+==========================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST   |
+------------------------------------------
+|0 |SUBPLAN FILTER|    |50000    |3741916|
+|1 | TABLE SCAN   |t4  |100000   |64066  |
+|2 | TABLE SCAN   |t7  |100000   |59654  |
+|3 | TABLE GET    |t8  |1        |36     |
+==========================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t4.c1], [t4.c2], [t4.c3]), filter([?]), 
-      exec_params_(nil), onetime_exprs_([subquery(1) + ? = ?]), init_plan_idxs_(nil)
+  0 - output([t4.c1], [t4.c2], [t4.c3]), filter([? = ANY(subquery(2))]),
+      exec_params_([t4.c1]), onetime_exprs_([subquery(1) + ?]), init_plan_idxs_(nil)
   1 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
-      equal_conds([t4.c1 = t8.c1]), other_conds(nil)
-  2 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0), 
       is_index_back=false, 
       range_key([t4.c1], [t4.c2]), range(MIN,MIN ; MAX,MAX)always true
-  3 - output([t8.c1]), filter(nil), 
-      access([t8.c1]), partitions(p0), 
-      is_index_back=false, 
-      range_key([t8.c1]), range(MIN ; MAX)always true
-  4 - output([t7.c1]), filter(nil), 
+  2 - output([t7.c1]), filter(nil),
       access([t7.c1]), partitions(p0), 
       is_index_back=false, 
       range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([?]), filter(nil),
+      access([t8.c1]), partitions(p0),
+      is_index_back=false,
+      range_key([t8.c1]), range(MIN ; MAX)always true,
+      range_cond([? = t8.c1])
 
 *************** Case 264(end)  ************** 
 

@@ -69,11 +69,10 @@ bool ObSelectStmt::check_table_be_modified(uint64_t ref_table_id) const
   bool is_exists = false;
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && !is_exists && i < table_items_.count(); ++i) {
-    TableItem* table_item = table_items_.at(i);
-    if (OB_ISNULL(table_item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("table item is NULL", K(ret), K(i), K(table_items_.count()));
-    } else if (table_item->for_update_ && ref_table_id == table_item->ref_id_) {
+    TableItem *table_item = table_items_.at(i);
+    if (NULL != table_item &&
+        table_item->for_update_ &&
+        ref_table_id == table_item->ref_id_) {
       is_exists = true;
       LOG_DEBUG("duplicate table is used in select for update", K(is_exists), K(ref_table_id), K(table_items_.count()));
     }
@@ -81,15 +80,15 @@ bool ObSelectStmt::check_table_be_modified(uint64_t ref_table_id) const
   if (OB_SUCC(ret) && !is_exists) {
     ObSEArray<ObSelectStmt*, 16> child_stmts;
     if (OB_FAIL(get_child_stmts(child_stmts))) {
-      LOG_ERROR("get child stmt failed", K(ret));
+      LOG_WARN("get child stmt failed", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && !is_exists && i < child_stmts.count(); ++i) {
         ObSelectStmt* sub_stmt = child_stmts.at(i);
         if (OB_ISNULL(sub_stmt)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("sub stmt is null", K(ret));
-        } else if (OB_FAIL(sub_stmt->check_table_be_modified(ref_table_id))) {
-          LOG_WARN("check sub stmt whether has select for update failed", K(ret), K(i));
+          LOG_WARN("sub stmt is null", K(ret));
+        } else {
+          is_exists = sub_stmt->check_table_be_modified(ref_table_id);
         }
       }
     }

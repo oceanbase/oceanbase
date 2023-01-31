@@ -472,8 +472,11 @@ int ObOptimizerUtil::extract_target_level_query_ref_expr(ObRawExpr* expr, const 
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ret = SMART_CALL(extract_target_level_query_ref_expr(expr->get_param_expr(i), level, ignore_exprs, subqueries));
     }
-  } else if (level == expr->get_expr_level() && !find_item(ignore_exprs, expr)) {
-    ret = add_var_to_array_no_dup(subqueries, expr);
+  } else if (level > expr->get_expr_level()) {
+    // skip
+  } else if (level == expr->get_expr_level() && !find_item(ignore_exprs, expr) &&
+             OB_FAIL(add_var_to_array_no_dup(subqueries, expr))) {
+    LOG_WARN("failed to push back query ref into array", K(ret));
   } else {
     ObSelectStmt* ref_query = static_cast<ObQueryRefRawExpr*>(expr)->get_ref_stmt();
     ObSEArray<ObRawExpr*, 4> exprs;
@@ -5155,11 +5158,6 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator* allocator, ObS
         ObCollationType coll_type = CS_TYPE_INVALID;
         bool skip_add_cast = false;
         if (lib::is_oracle_mode()) {
-          /*
-           * Oracle has more strict constraints for data types used in set operator
-           * https://docs.oracle.com/cd/B19306_01/server.102/b14200/queries004.htm
-           */
-          // need to refine this when more data type are added in oracle mode
           if (!((left_type.is_null() && !right_type.is_lob() && !right_type.is_lob_locator()) ||
                   (right_type.is_null() && !left_type.is_lob() && !left_type.is_lob_locator()) ||
                   (left_type.is_raw() && right_type.is_raw()) ||

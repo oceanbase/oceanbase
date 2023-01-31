@@ -104,7 +104,9 @@ private:
 
   int check_join_expr_validity(ObSelectStmt* stmt, ObIArray<PushDownParam>& params, ObRawExpr* expr, bool& is_valid);
 
-  int check_outer_join_aggr(ObSelectStmt* stmt, JoinedTable* joined_table, bool& is_valid);
+  int is_lob_filter(ObRawExpr *expr, bool &has);
+
+  int check_outer_join_aggr(ObSelectStmt *stmt, JoinedTable *joined_table, bool &is_valid);
 
   int get_null_side_tables(ObDMLStmt& stmt, JoinedTable& joined_table, ObSqlBitSet<>& table_set);
 

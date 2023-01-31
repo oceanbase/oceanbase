@@ -318,7 +318,7 @@ const ObTablesAssignments* ObUpdateStmt::get_slice_from_all_table_assignments(
       bool is_update_unique_key = false;
       if (dml_index_info.all_part_num_ > 1) {  // Only partition tables have part_key
         for (int i = 0; i < dml_index_info.assignments_.count(); ++i) {
-          uint64_t col_id = dml_index_info.assignments_.at(i).column_expr_->get_column_id();
+          uint64_t col_id = dml_index_info.assignments_.at(i).base_column_id_;
           for (int j = 0; j < dml_index_info.part_key_ids_.count(); ++j) {
             if (dml_index_info.part_key_ids_.at(j) == col_id) {
               is_update_part_key = true;
@@ -330,7 +330,7 @@ const ObTablesAssignments* ObUpdateStmt::get_slice_from_all_table_assignments(
 
       if (share::schema::ObSimpleTableSchemaV2::is_global_unique_index_table(dml_index_info.index_type_)) {
         for (int i = 0; i < dml_index_info.assignments_.count(); ++i) {
-          uint64_t col_id = dml_index_info.assignments_.at(i).column_expr_->get_column_id();
+          uint64_t col_id = dml_index_info.assignments_.at(i).base_column_id_;
           for (int j = 0; j < dml_index_info.primary_key_ids_.count(); ++j) {
             if (dml_index_info.primary_key_ids_.at(j) == col_id) {
               is_update_unique_key = true;
@@ -340,7 +340,6 @@ const ObTablesAssignments* ObUpdateStmt::get_slice_from_all_table_assignments(
         }
       }
 
-      // [pdml]: 对于每个索引表单独计算，不应该继承主表的属性
       table_assignments->is_update_part_key_ = is_update_part_key;
       table_assignments->is_update_unique_key_ = is_update_unique_key;
       table_assignments->table_id_ = dml_index_info.table_id_;

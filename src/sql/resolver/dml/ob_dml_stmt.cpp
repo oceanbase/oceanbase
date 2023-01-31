@@ -1890,6 +1890,12 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr& expr)
           OB_FAIL(set_sharable_expr_reference(*column_expr.get_dependant_expr()))) {
         LOG_WARN("failed to set sharable expr", K(ret));
       }
+    } else if (expr.get_expr_level() != get_current_level()) {
+      // do nothing
+    } else if (expr.is_query_ref_expr() &&
+               !ObRawExprUtils::find_expr(get_subquery_exprs(), &expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to find subquery expr", K(ret));
     }
   }
   if (OB_SUCC(ret) && (expr.has_flag(CNT_COLUMN) || expr.has_flag(CNT_AGG) || expr.has_flag(CNT_WINDOW_FUNC) ||
@@ -3901,7 +3907,8 @@ int ObDMLStmt::adjust_subquery_list()
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 8> relation_exprs;
-  ObSEArray<ObRawExpr*, 8> nest_sunquery_exprs;
+  ObSEArray<ObQueryRefRawExpr *, 4> query_ref_exprs;
+  ObSEArray<ObRawExpr *, 4> exprs;
   if (OB_FAIL(get_relation_exprs(relation_exprs))) {
     LOG_WARN("failed to get relation exprs", K(ret));
   } else {
@@ -3917,17 +3924,17 @@ int ObDMLStmt::adjust_subquery_list()
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(relation_exprs, subquery_exprs_))) {
+    } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(relation_exprs, query_ref_exprs))) {
       LOG_WARN("failed to extract query ref expr", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::extract_target_level_query_ref_expr(
-                   subquery_exprs_, current_level_, subquery_exprs_, nest_sunquery_exprs))) {
+                   query_ref_exprs, current_level_, subquery_exprs_, exprs))) {
       LOG_WARN("failed to extract level query ref expr", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < nest_sunquery_exprs.count(); ++i) {
-      if (OB_ISNULL(expr = nest_sunquery_exprs.at(i)) || !expr->is_query_ref_expr()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+      if (OB_ISNULL(expr = exprs.at(i)) || !expr->is_query_ref_expr()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected expr", K(ret));
-      } else if (OB_FAIL(subquery_exprs_.push_back(dynamic_cast<ObQueryRefRawExpr*>(expr)))) {
+      } else if (OB_FAIL(subquery_exprs_.push_back(static_cast<ObQueryRefRawExpr*>(expr)))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
     }

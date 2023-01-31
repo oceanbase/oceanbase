@@ -120,7 +120,7 @@ int ObTransformWinMagic::check_subquery_validity(
   } else if (subquery->get_select_item_size() != 1 || subquery->get_group_expr_size() > 0 || subquery->has_order_by() ||
              subquery->has_rollup() || subquery->has_having() || subquery->has_limit() ||
              subquery->has_window_function() || subquery->has_set_op() || !subquery->get_joined_tables().empty() ||
-             subquery->is_hierarchical_query()) {
+             subquery->is_hierarchical_query() || subquery->get_semi_info_size() > 0) {
     is_valid = false;
     LOG_TRACE("subquery is invalid for transform", K(is_valid));
   } else if (OB_FAIL(subquery->has_rownum(has_rownum))) {

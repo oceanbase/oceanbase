@@ -142,7 +142,7 @@ int ObWhereSubQueryPullup::gather_transform_params(ObDMLStmt* stmt, ObRawExpr* e
       } else if (OB_UNLIKELY(!trans_param.op_->get_param_expr(1)->is_query_ref_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected expr type", K(*trans_param.op_->get_param_expr(1)), K(ret));
-      } else if (OB_UNLIKELY(trans_param.op_->get_param_expr(0)->is_query_ref_expr())) {
+      } else if (OB_UNLIKELY(trans_param.op_->get_param_expr(0)->has_flag(CNT_SUB_QUERY))) {
         // subquery in subquery, subquery = all subquery do not transform
         trans_param.can_be_transform_ = false;
       } else {
@@ -2178,6 +2178,9 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt* stmt, bool& tra
       } else if (!is_null_reject &&
                  queries.at(j)->get_ref_stmt()->get_semi_info_size() > 0) {
         // do nothing
+      } else if (queries.at(j)->get_ref_stmt()->is_eliminated() ||
+                 queries.at(j)->get_ref_stmt()->get_select_item_size() > 1) {
+        // do nothing
       } else if (OB_FAIL(unnest_single_set_subquery(stmt, queries.at(j), !is_null_reject, false))) {
         LOG_WARN("failed to unnest single set subquery", K(ret));
       } else {
@@ -2201,8 +2204,11 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt* stmt, bool& tra
       ObSelectStmt *subquery = NULL;
       if (OB_ISNULL(queries.at(j)) || OB_ISNULL(subquery = queries.at(j)->get_ref_stmt())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (subquery->is_eliminated()) {
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (subquery->get_semi_info_size() > 0) {
+        //do nothing
+      } else if (subquery->is_eliminated() ||
+                 subquery->get_select_item_size() > 1) {
         //do nothing
       } else if (OB_FAIL(unnest_single_set_subquery(stmt, queries.at(j), true, is_vector_assign, is_select_expr))) {
         LOG_WARN("failed to unnest single set subquery", K(ret));

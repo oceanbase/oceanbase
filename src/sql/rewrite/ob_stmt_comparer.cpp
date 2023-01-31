@@ -250,8 +250,22 @@ int ObStmtComparer::is_same_from(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ref query is null", K(ret));
     } else {
-      is_same = (first_table->ref_query_->get_view_ref_id() == second_table->ref_query_->get_view_ref_id()) &&
-                first_table->ref_query_->get_view_ref_id() != OB_INVALID_ID;
+      const int64_t first_select_size = first_table->ref_query_->get_select_item_size();
+      const int64_t second_select_size = second_table->ref_query_->get_select_item_size();
+      is_same = (first_table->ref_query_->get_view_ref_id() ==
+                 second_table->ref_query_->get_view_ref_id()) &&
+          first_select_size == second_select_size &&
+          first_table->ref_query_->get_view_ref_id() != OB_INVALID_ID;
+      for (int64_t i = 0; OB_SUCC(ret) && is_same && i < first_select_size; ++i) {
+        // for sake of select item being pruned
+        const SelectItem &first_item = first_table->ref_query_->get_select_item(i);
+        const SelectItem &second_item = second_table->ref_query_->get_select_item(i);
+        if (0 != first_item.alias_name_.compare(second_item.alias_name_) ||
+            first_item.alias_name_.empty()) {
+          is_same = false;
+        }
+      }
+
     }
   }
   return ret;
