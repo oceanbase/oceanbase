@@ -1613,8 +1613,12 @@ private:
 class ObDirtyTransMarkerFunctor {
 public:
   explicit ObDirtyTransMarkerFunctor(
-      const memtable::ObMemtable* const frozen_memtable, const memtable::ObMemtable* const active_memtable)
-      : frozen_memtable_(frozen_memtable), active_memtable_(active_memtable), cb_cnt_(0), applied_log_ts_(INT64_MAX)
+      const memtable::ObMemtable *const frozen_memtable, const memtable::ObMemtable *const active_memtable)
+      : frozen_memtable_(frozen_memtable),
+        active_memtable_(active_memtable),
+        cb_cnt_(0),
+        applied_log_ts_(INT64_MAX),
+        ret_(OB_SUCCESS)
   {}
 
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
@@ -1622,19 +1626,24 @@ public:
     int ret = common::OB_SUCCESS;
 
     if (!trans_id.is_valid() || OB_ISNULL(ctx_base)) {
+      ret_ = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "invalid argument", K(trans_id), "ctx", OB_P(ctx_base));
     } else {
       int64_t cb_cnt = 0;
       ObPartTransCtx* ctx = static_cast<ObPartTransCtx*>(ctx_base);
       if (OB_FAIL(ctx->mark_frozen_data(frozen_memtable_, active_memtable_, cb_cnt))) {
         TRANS_LOG(WARN, "mark frozen data failed", K(trans_id));
+        if (OB_SUCCESS == ret_) {
+          ret_ = ret;
+        }
       } else {
         cb_cnt_ += cb_cnt;
         applied_log_ts_ = MIN(applied_log_ts_, ctx->get_applying_log_ts() - 1);
       }
     }
 
-    return OB_SUCC(ret);
+    // never return error
+    return true;
   }
 
   // Returns the number of newly discovered callbacks
@@ -1649,12 +1658,17 @@ public:
   {
     return applied_log_ts_;
   }
+  int get_ret_code() const
+  {
+    return ret_;
+  }
 
 private:
   const memtable::ObMemtable* const frozen_memtable_;
   const memtable::ObMemtable* const active_memtable_;
   int64_t cb_cnt_;
   int64_t applied_log_ts_;
+  int ret_;
 };
 
 class ObGetAppliedLogTsFunctor {

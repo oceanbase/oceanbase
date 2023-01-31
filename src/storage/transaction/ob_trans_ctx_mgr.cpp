@@ -1681,7 +1681,7 @@ int ObPartitionTransCtxMgr::mark_dirty_trans(const ObMemtable* const frozen_memt
   cb_cnt = fn.get_pending_cb_cnt();
   applied_log_ts = fn.get_applied_log_ts();
 
-  return ret;
+  return fn.get_ret_code();
 }
 
 int ObPartitionTransCtxMgr::get_applied_log_ts(int64_t& applied_log_ts)
