@@ -216,6 +216,9 @@ int ObConnectByOpBFSPump::push_back_row_to_stack(
     LOG_WARN("fail to deep copy row", K(ret));
   } else if (OB_FAIL(calc_path_node(pump_node))) {
     LOG_WARN("fail to calc path node", K(pump_node), K(ret));
+  } else if (pump_node.is_cycle_) {
+    ret = OB_ERR_CBY_LOOP;
+    LOG_WARN("there is a cycle", K(ret));
   } else if (OB_FAIL(connect_by_->restore_prior_expr())) {
     LOG_WARN("failed to restore prior expr", K(ret));
   } else if (OB_ISNULL(pump_node.pump_row_ = new_left_row)
