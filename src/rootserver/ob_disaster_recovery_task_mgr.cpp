@@ -251,6 +251,15 @@ int ObDRTaskQueue::push_task_in_schedule_list(
       FLOG_INFO("[DRTASK_NOTICE] finish add task into schedule list", KPC(new_task));
     }
   }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(new_task)) {
+      remove_task_from_map_and_free_it_(new_task);
+    } else if (OB_NOT_NULL(raw_ptr)) {
+      task_alloc_.free(raw_ptr);
+      raw_ptr = nullptr;
+    }
+  }
   return ret;
 }
 
