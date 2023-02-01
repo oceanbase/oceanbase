@@ -9,7 +9,7 @@ project("OceanBase CE"
   HOMEPAGE_URL "https://open.oceanbase.com/"
   LANGUAGES CXX C ASM)
 
-ob_define(WITH_OSS OFF)
+ob_define(WITH_OSS ON)
 ob_define(ENABLE_FATAL_ERROR_HANG OFF)
 
 if(ENABLE_DEBUG_LOG)

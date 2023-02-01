@@ -12,6 +12,9 @@ devdeps-mariadb-connector-c-3.1.12-16.el8.aarch64.rpm
 devdeps-openssl-static-1.0.1e-12.el8.aarch64.rpm
 devdeps-libaio-0.3.112-6.el8.aarch64.rpm
 devdeps-rapidjson-1.1.0-3.el8.aarch64.rpm
+devdeps-mxml-2.12.0-12022090616.el8.aarch64.rpm
+devdeps-apr-1.6.5-32022090616.el8.aarch64.rpm
+devdeps-oss-c-sdk-3.9.2-162022090714.el8.aarch64.rpm
 
 [tools]
 obdevtools-binutils-2.30-7.el8.aarch64.rpm
