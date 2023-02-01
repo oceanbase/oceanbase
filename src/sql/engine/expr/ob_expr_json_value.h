@@ -124,7 +124,7 @@ private:
                          common::ObCollationType dst_coll_type,
                          ObDatum &res);
   template<typename Obj>
-  static bool try_set_error_val(Obj &res, int &ret, uint8_t error_type, Obj *error_val);
+  static bool try_set_error_val(Obj &res, int &ret, uint8_t error_type, Obj *error_val, const char *type = NULL);
   // new sql engine
   static inline void set_val(ObDatum &res, ObDatum *val)
   { res.set_datum(*val); }
