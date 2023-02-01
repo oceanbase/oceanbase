@@ -68,7 +68,9 @@ int ObColumnNamespaceChecker::remove_reference_table(int64_t tid)
  * for oracle mode, if table name is specified, we need to make sure that this column does not appear in the using columns in the joined table
  * for example, select t1.a from t1 inner join t2 using (a), this is not allowed in oracle mode
  */
-int ObColumnNamespaceChecker::check_table_column_namespace(const ObQualifiedName &q_name, const TableItem *&table_item)
+int ObColumnNamespaceChecker::check_table_column_namespace(const ObQualifiedName &q_name,
+                                                           const TableItem *&table_item,
+                                                           bool is_from_multi_tab_insert/*default false*/)
 {
   int ret = OB_SUCCESS;
   table_item = NULL;
@@ -76,7 +78,7 @@ int ObColumnNamespaceChecker::check_table_column_namespace(const ObQualifiedName
   bool need_check_unique = false;
   //针对multi table insert需要进行特殊检测,因为同一个sql中可能插入多次相同表,eg:
   //insert all into t1 values(1,1) into t1 values(2,2) select 1 from dual;
-  if (get_resolve_params().is_multi_table_insert_) {
+  if (is_from_multi_tab_insert) {
     if (OB_UNLIKELY(all_table_refs_.count() <= 0) ||
         OB_ISNULL(cur_table = all_table_refs_.at(all_table_refs_.count() - 1))) {
       ret = OB_ERR_UNEXPECTED;
@@ -533,7 +535,8 @@ int ObColumnNamespaceChecker::check_rowscn_table_column_namespace(
 }
 
 int ObColumnNamespaceChecker::check_rowid_table_column_namespace(const ObQualifiedName &q_name,
-                                                                 const TableItem *&table_item)
+                                                                 const TableItem *&table_item,
+                                                                 bool is_from_multi_tab_insert/*default false*/)
 {
   int ret = OB_SUCCESS;
   table_item = nullptr;
@@ -541,7 +544,7 @@ int ObColumnNamespaceChecker::check_rowid_table_column_namespace(const ObQualifi
   bool is_match = false;
   //for multi table insert need extra check, because rowid must be come from generate table and the
   //generate table must be the last one in all_table_refs_.
-  if (get_resolve_params().is_multi_table_insert_) {
+  if (is_from_multi_tab_insert) {
     if (OB_UNLIKELY(all_table_refs_.count() <= 1) ||
         OB_ISNULL(cur_table = all_table_refs_.at(all_table_refs_.count() - 1)) ||
         OB_UNLIKELY(!cur_table->is_generated_table())) {

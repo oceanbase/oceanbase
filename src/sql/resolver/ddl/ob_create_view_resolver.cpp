@@ -125,6 +125,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       ObViewTableResolver view_table_resolver(params_, stmt->get_database_name(),
                                               table_schema.get_table_name());
       view_table_resolver.params_.is_from_create_view_ = true;
+      view_table_resolver.params_.is_specified_col_name_ = parse_tree.children_[VIEW_COLUMNS_NODE] != NULL;
       view_table_resolver.set_current_view_level(1);
       view_table_resolver.set_is_create_view(true);
       // set ObViewSchema.materialized_ in RS

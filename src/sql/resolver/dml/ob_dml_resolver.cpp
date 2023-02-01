@@ -791,7 +791,8 @@ int ObDMLResolver::resolve_basic_column_ref(const ObQualifiedName &q_name, ObRaw
     ret = OB_NOT_INIT;
     LOG_WARN("stmt is null", K(ret));
   } else {
-    if (OB_FAIL(column_namespace_checker_.check_table_column_namespace(q_name, table_item))) {
+    if (OB_FAIL(column_namespace_checker_.check_table_column_namespace(q_name, table_item,
+                                                                       stmt->is_insert_all_stmt()))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "check basic column namespace failed", K(ret), K(q_name));
     } else if (OB_ISNULL(table_item)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2358,12 +2359,13 @@ int ObDMLResolver::resolve_table_column_expr(const ObQualifiedName &q_name, ObRa
   //1. joined table column
   //2. basic table column or generated table column
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(session_info_)) {
+  if (OB_ISNULL(session_info_) || OB_ISNULL(get_stmt())) {
     ret = OB_NOT_INIT;
-    LOG_WARN("session info is null", K_(session_info));
+    LOG_WARN("session info is null", K_(session_info), K(get_stmt()));
   } else {
     const TableItem *table_item = NULL;
-    if (OB_FAIL(column_namespace_checker_.check_table_column_namespace(q_name, table_item))) {
+    if (OB_FAIL(column_namespace_checker_.check_table_column_namespace(q_name, table_item,
+                                                                       get_stmt()->is_insert_all_stmt()))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "column don't found in table", K(ret), K(q_name));
     } else if (table_item->is_joined_table()) {
       const JoinedTable &joined_table = static_cast<const JoinedTable&>(*table_item);
@@ -4224,9 +4226,6 @@ int ObDMLResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquer
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Too many levels of subquery");
   }
-  //resolve subquery in insert all need reset the flag.
-  bool is_multi_table_insert = params_.is_multi_table_insert_;
-  params_.is_multi_table_insert_ = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < subquery_info.count(); i++) {
     const ObSubQueryInfo &info = subquery_info.at(i);
     ObSelectResolver subquery_resolver(params_);
@@ -4248,7 +4247,6 @@ int ObDMLResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquer
     }
     set_query_ref_expr(NULL);
   }
-  params_.is_multi_table_insert_ = is_multi_table_insert;
   return ret;
 }
 
@@ -8843,7 +8841,11 @@ int ObDMLResolver::check_rowid_table_column_in_all_namespace(const ObQualifiedNa
 {
   int ret = OB_SUCCESS;
   //first check current resolver
-  if (OB_FAIL(column_namespace_checker_.check_rowid_table_column_namespace(q_name, table_item))) {
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index schema should not be null", K(ret), K(get_stmt()));
+  } else if (OB_FAIL(column_namespace_checker_.check_rowid_table_column_namespace(q_name, table_item,
+                                                                                  get_stmt()->is_insert_all_stmt()))) {
     LOG_WARN("check rowid table colum namespace failed", K(ret));
   } else if (table_item != NULL) {
     dml_stmt = get_stmt();

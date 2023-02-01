@@ -1513,6 +1513,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
   ObSelectStmt *select_stmt = NULL;
   ObSelectResolver select_resolver(params_);
   select_resolver.params_.is_from_create_table_ = true;
+  select_resolver.params_.is_specified_col_name_ = parse_tree.num_child_ > 3 &&
+                                                   parse_tree.children_[3] != NULL &&
+                                                   T_TABLE_ELEMENT_LIST == parse_tree.children_[3]->type_;
   //select层不应该看到上层的insert stmt的属性，所以upper scope stmt应该为空
   select_resolver.set_parent_namespace_resolver(NULL);
   if (lib::is_mysql_mode()
@@ -1521,6 +1524,11 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
         && !params_.is_prepare_protocol_) {
     ret = OB_ERR_PARSER_SYNTAX;
     LOG_WARN("not support questionmark in normal create.", K(ret));
+  } else if (OB_UNLIKELY(parse_tree.num_child_ <= 3 ||
+                         (parse_tree.children_[3] != NULL &&
+                          T_TABLE_ELEMENT_LIST != parse_tree.children_[3]->type_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument.", K(ret));
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_) || OB_ISNULL(params_.param_list_)) {
     ret = OB_NOT_INIT;
     SQL_RESV_LOG(WARN, "ObCreateTableResolver is not init", K(params_.param_list_), K(allocator_),
