@@ -3133,7 +3133,7 @@ int ObPartitionStorage::process_old_row(ObDMLRunningCtx& run_ctx, const bool dat
           } else if (!exists) {
             ret = OB_ERR_DEFENSIVE_CHECK;
             check_leader_changed_for_sql_recheck_(run_ctx, ret);
-            if (OB_FAIL(ret)) {
+            if (OB_FAIL(ret) && OB_NOT_MASTER != ret) {
               ObString func_name = ObString::make_string("process_old_row");
               LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
               STORAGE_LOG(ERROR,
