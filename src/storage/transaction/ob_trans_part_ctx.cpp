@@ -11015,15 +11015,15 @@ int ObPartTransCtx::submit_log_sync_(const int64_t log_type, bool& has_redo_log)
 
   do {
     need_retry = false;
-    if (OB_FAIL(submit_log_impl_(log_type, false, false, has_redo_log))) {
+    if (OB_FAIL(submit_log_impl_(log_type, false, true, has_redo_log))) {
       if (ObClogAdapter::need_retry(ret) && ObTimeUtility::current_time() <= abs_timeout) {
         need_retry = true;
         retry_cnt++;
-        PAUSE();
+        usleep(1000);  // 1ms
       }
     }
 
-    if (need_retry && retry_cnt % 1000 == 0) {
+    if (need_retry && (retry_cnt % 10 == 0)) {
       TRANS_LOG(INFO, "retry submit log", K(ret), K(retry_cnt), K(abs_timeout));
     }
   } while (need_retry);
