@@ -8,6 +8,9 @@ target_include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${EASY_INCLUDE_DIRS}
   ${DEP_DIR}/include
+  ${DEP_DIR}/include/apr-1
+  ${DEP_DIR}/include/oss_c_sdk
+  ${DEP_DIR}/include/mxml
 )
 
 set(ARCH_COMPILE_OPTIONS "")
