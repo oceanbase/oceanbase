@@ -344,7 +344,7 @@ bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
         LOG_DEBUG("found in rollup exprs", K(expr));
       }
     }
-    if (OB_SUCCESS == check_ctx.err_code_ && !found_same_structure && is_top_select_stmt()) {
+    if (OB_SUCCESS == check_ctx.err_code_ && !found && is_top_select_stmt()) {
       for (int64_t nth_rollup = 0; !found_same_structure && nth_rollup < rollup_cnt; ++nth_rollup) {
         //in oracle mode, only non static const expr will be replaced later in replace_group_by_exprs
         if (is_mysql_mode() || !rollup_exprs_->at(nth_rollup)->is_static_const_expr()) {
