@@ -184,10 +184,13 @@ int ObDbmsStatsUtils::check_table_read_write_valid(const uint64_t tenant_id, boo
   return ret;
 }
 
-bool ObDbmsStatsUtils::is_stat_sys_table(const int64_t table_id)
+bool ObDbmsStatsUtils::is_stat_sys_table(const uint64_t tenant_id, const int64_t table_id)
 {
   const uint64_t id = table_id;
-  return (is_sys_table(id) || share::is_oracle_mapping_real_virtual_table(id)) &&
+  return (is_sys_table(id) ||
+          (share::is_oracle_mapping_real_virtual_table(id) &&
+           (!share::is_restrict_access_virtual_table(id) || tenant_id == OB_SYS_TENANT_ID))
+         ) &&
          !(is_core_table(table_id) ||
            ObSysTableChecker::is_sys_table_index_tid(table_id) ||
            id == share::OB_ALL_TABLE_STAT_TID ||

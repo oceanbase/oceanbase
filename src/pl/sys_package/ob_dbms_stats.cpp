@@ -3566,7 +3566,7 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
       } else {/*do nothing*/}
     }
   }
-  if (OB_SUCC(ret) && table_schema != NULL) {
+  if (OB_SUCC(ret) && table_schema != NULL && !table_schema->is_view_table()) {
     param.table_id_ = table_schema->get_table_id();
     param.part_level_ = table_schema->get_part_level();
     if (OB_FAIL(set_param_global_part_id(ctx, param))) {
@@ -3615,7 +3615,7 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
     param.tenant_id_ = session->get_effective_tenant_id();
     param.is_temp_table_ = table_schema->is_tmp_table();
   }
-  if (OB_SUCC(ret) && table_schema != NULL) {
+  if (OB_SUCC(ret) && table_schema != NULL && !table_schema->is_view_table()) {
     param.table_id_ = table_schema->get_table_id();
     param.part_level_ = table_schema->get_part_level();
     if (OB_FAIL(set_param_global_part_id(ctx, param))) {
@@ -5053,7 +5053,8 @@ int ObDbmsStats::get_all_table_ids_in_database(ObExecContext &ctx,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret));
           } else if (!(table_schemas.at(i)->is_user_table() ||
-                       ObDbmsStatsUtils::is_stat_sys_table(table_schemas.at(i)->get_table_id()))) {
+                       ObDbmsStatsUtils::is_stat_sys_table(stat_param.tenant_id_,
+                                                           table_schemas.at(i)->get_table_id()))) {
             // only need following tables:
             // 1. user table
             // 2. valid sys table and real agent virtual table
@@ -5174,7 +5175,8 @@ int ObDbmsStats::get_need_statistics_tables(sql::ObExecContext &ctx,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), K(table_schema));
           } else if (!(table_schema->is_user_table() ||
-                       ObDbmsStatsUtils::is_stat_sys_table(table_schema->get_table_id()))) {
+                       ObDbmsStatsUtils::is_stat_sys_table(tenant_id,
+                                                           table_schema->get_table_id()))) {
             // only gather statistics for following tables:
             // 1. user table
             // 2. valid sys table and real agent virtual table

@@ -100,7 +100,9 @@ private:
   int copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
                             ObIArray<ObOptStat> &dst_opt_stats);
 
-  int copy_col_stats(ObIArray<ObOptColumnStat *> &src_col_stats,
+  int copy_col_stats(const int64_t cur_row_cnt,
+                     const int64_t total_row_cnt,
+                     ObIArray<ObOptColumnStat *> &src_col_stats,
                      ObIArray<ObOptColumnStat *> &dst_col_stats);
 
 protected:
