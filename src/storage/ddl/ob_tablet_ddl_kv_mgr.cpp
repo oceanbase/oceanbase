@@ -301,8 +301,15 @@ int ObTabletDDLKvMgr::set_commit_success(const int64_t start_log_ts)
       ret = OB_TASK_EXPIRED;
       LOG_WARN("ddl task expired", K(ret), K(start_log_ts), K(*this));
     } else if (OB_UNLIKELY(start_log_ts > start_log_ts_)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("sucess start log ts too large", K(ret), K(start_log_ts), K(*this));
+      if (start_log_ts_ > 0) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("sucess start log ts too large", K(ret), K(start_log_ts), K(*this));
+      } else {
+        ret = OB_EAGAIN;
+        if (REACH_TIME_INTERVAL(1000L * 1000L * 60L)) {
+          LOG_INFO("ddl start scn is invalid, maybe migration has offlined the logstream", K(*this));
+        }
+      }
     } else {
       success_start_log_ts_ = start_log_ts;
     }
