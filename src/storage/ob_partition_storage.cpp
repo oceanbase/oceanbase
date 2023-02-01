@@ -5265,9 +5265,11 @@ void ObPartitionStorage::dump2text(
   char dump_ss_dir[OB_MAX_FILE_NAME_LENGTH];
   char dump_mem_name[OB_MAX_FILE_NAME_LENGTH];
   char dump_ss_name[OB_MAX_FILE_NAME_LENGTH];
-  if (OB_FAIL(FileDirectoryUtils::get_file_size("/proc/sys/kernel/core_pattern", file_size)) ||
-      file_size > OB_MAX_FILE_NAME_LENGTH) {
+  if (OB_FAIL(FileDirectoryUtils::get_file_size("/proc/sys/kernel/core_pattern", file_size))) {
     STORAGE_LOG(WARN, "fail to get size", K(ret));
+  } else if (file_size > OB_MAX_FILE_NAME_LENGTH) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "file size too long", K(ret));
   } else if (NULL == (fd = fopen("/proc/sys/kernel/core_pattern", "r"))) {
     ret = OB_IO_ERROR;
     STORAGE_LOG(WARN, "open file fail:", K(ret));
@@ -5359,6 +5361,10 @@ void ObPartitionStorage::dump2text(
         }
       }
     }
+  }
+
+  if (OB_NOT_NULL(fd)) {
+    fclose(fd);
   }
 }
 
@@ -7123,9 +7129,6 @@ int ObPartitionStorage::deep_copy_build_index_schemas(const ObTableSchema* data_
       buf += sizeof(ObTableSchema);
       deep_copy_index_schema = new (buf) ObTableSchema(&allocator);
       buf += sizeof(ObTableSchema);
-      if (NULL != deep_copy_dep_table_schema) {
-        deep_copy_dep_table_schema = new (buf) ObTableSchema(&allocator);
-      }
       if (OB_FAIL(deep_copy_data_table_schema->assign(*data_table_schema))) {
         STORAGE_LOG(WARN, "fail to assign table schema", K(ret));
       } else if (OB_FAIL(deep_copy_index_schema->assign(*index_schema))) {

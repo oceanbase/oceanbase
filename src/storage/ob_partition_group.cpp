@@ -1673,7 +1673,7 @@ int ObPartitionGroup::offline_itself(const bool is_physical_drop)
   } else if (OB_ISNULL(cb = op_alloc(ObOfflinePartitionCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "alloc memory fail", K(ret), KP(cb));
-  } else if (cb->init(&(ps_->get_callback_async_worker()), is_physical_drop)) {
+  } else if (OB_FAIL(cb->init(&(ps_->get_callback_async_worker()), is_physical_drop))) {
     STORAGE_LOG(WARN, "ObOfflinePartitionCb init error", K(ret), K(pkey_));
   } else if (OB_SUCCESS != (ret = serialization::encode_i64(buf, OFFLINE_PARTITION_LOG_BUF_LEN, pos, log_type))) {
     STORAGE_LOG(WARN, "serialize log_type error", K(ret), K(log_type));

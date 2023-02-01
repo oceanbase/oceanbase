@@ -151,7 +151,9 @@ int ObFreezeRecord::submit_freeze(ObMemtable& frozen_memtable, const int64_t fre
     STORAGE_LOG(WARN, "freeze_ts is invalid id", K(ret), K(freeze_ts));
   } else {
     freeze_ts_ = freeze_ts;
-    frozen_memtable_handle_.set_table(&frozen_memtable);
+    if (OB_FAIL(frozen_memtable_handle_.set_table(&frozen_memtable))) {
+      STORAGE_LOG(ERROR, "set frozen memtable failed", K(ret), K(frozen_memtable), K(freeze_ts));
+    }
   }
 
   return ret;
