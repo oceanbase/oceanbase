@@ -233,8 +233,9 @@ int ObRemoteFetchLogImpl::get_palf_base_lsn_ts_(ObLS &ls, LSN &lsn, int64_t &log
     LOG_WARN("get end log ts failed", K(ret), K(id));
   } else if (OB_FAIL(palf_handle_guard.get_end_lsn(lsn))) {
     LOG_WARN("get end lsn failed", K(ret), K(id));
-  } else {
-    log_ts = std::max(log_ts, ls.get_clog_checkpoint_ts());
+  } else if (log_ts <= 0) {
+    // LS created with sys log, and no backup exists
+    log_ts = ls.get_clog_checkpoint_ts();
   }
   return ret;
 }
