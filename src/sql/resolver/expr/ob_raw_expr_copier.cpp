@@ -105,8 +105,10 @@ int ObRawExprCopier::check_need_copy(const ObRawExpr *old_expr,
   } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != tmp)) {
     ret = tmp;
     LOG_WARN("get expr from hash map failed", K(ret));
-  } else if (old_expr->is_exec_param_expr() &&
-             !static_cast<const ObExecParamRawExpr *>(old_expr)->is_onetime()) {
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(new_expr) &&
+      old_expr->is_exec_param_expr() &&
+      !static_cast<const ObExecParamRawExpr *>(old_expr)->is_onetime()) {
     // TODO link.zt skip the copy of exec param expr
     // let the query ref raw expr to copy the expr
     // to be improved
