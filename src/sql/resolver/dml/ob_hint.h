@@ -162,10 +162,14 @@ struct ObGlobalHint {
   { return MIN_OUTLINE_ENABLE_VERSION <= version && CLUSTER_CURRENT_VERSION >= version; }
   bool disable_query_transform() const { return disable_transform_; }
   bool disable_cost_based_transform() const { return disable_cost_based_transform_; }
-  bool has_append() const { return enable_append_; }
+  bool has_append() const {
+    return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT) ? true : false;
+  }
   void set_append(const bool enable_append)
   {
-    enable_append_ = enable_append;
+    if (enable_append) {
+      merge_osg_hint(ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT);
+    }
   }
 
 

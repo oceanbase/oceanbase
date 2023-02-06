@@ -366,6 +366,9 @@ public:
                                   common::ObIArray<int64_t> &subpart_ids,
                                   OSGPartMap *part_map = NULL);
 
+  static int get_part_ids_from_schema(const share::schema::ObTableSchema *table_schema,
+                                      common::ObIArray<ObObjectID> &target_part_ids);
+
   static int update_stat_cache(obrpc::ObCommonRpcProxy *proxy,
                                const ObTableStatParam &param);
 
@@ -470,7 +473,9 @@ public:
   static int set_param_global_part_id(ObExecContext &ctx,
                                       ObTableStatParam &param,
                                       bool is_data_table = false,
-                                      const int64_t data_table_id = -1);
+                                      const int64_t data_table_id = -1,
+                                      share::schema::ObPartitionLevel data_table_level
+                                          = share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO);
 
   static int get_table_partition_map(const ObTableSchema &table_schema,
                                      OSGPartMap &part_map);

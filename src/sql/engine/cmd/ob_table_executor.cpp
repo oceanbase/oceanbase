@@ -138,7 +138,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
                                       (!no_osg_hint && (online_sys_var || osg_hint))
                                       ? "insert /*+GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
-                                      : "insert into %c%.*s%c.%c%.*s%c",
+                                      : "insert /*+NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
                                       sep_char,
                                       db_name.length(),
                                       db_name.ptr(),

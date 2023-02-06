@@ -24,6 +24,8 @@
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_client.h"
 #include "share/scn.h"
+#include "pl/sys_package/ob_dbms_stats.h"
+
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -1469,14 +1471,12 @@ int ObDDLRedefinitionTask::sync_partition_level_stats_info(common::ObMySQLTransa
   int ret = OB_SUCCESS;
   ObArray<ObObjectID> src_partition_ids;
   ObArray<ObObjectID> dest_partition_ids;
-  ObArray<ObTabletID> src_tablet_ids;
-  ObArray<ObTabletID> dest_tablet_ids;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id_);
   if (!data_table_schema.is_partitioned_table()) {
     // if not partition table, no need to sync partition level stats
-  } else if (OB_FAIL(data_table_schema.get_all_tablet_and_object_ids(src_tablet_ids, src_partition_ids))) {
+  } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&data_table_schema, src_partition_ids))) {
     LOG_WARN("fail to get all tablet and object ids", K(ret));
-  } else if (OB_FAIL(new_table_schema.get_all_tablet_and_object_ids(dest_tablet_ids, dest_partition_ids))) {
+  } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&new_table_schema, dest_partition_ids))) {
     LOG_WARN("fail to get all tablet and object ids", K(ret));
   } else {
     const int64_t BATCH_SIZE = 256;
@@ -1642,14 +1642,12 @@ int ObDDLRedefinitionTask::sync_one_column_partition_level_stats_info(common::Ob
   int ret = OB_SUCCESS;
   ObArray<ObObjectID> src_partition_ids;
   ObArray<ObObjectID> dest_partition_ids;
-  ObArray<ObTabletID> src_tablet_ids;
-  ObArray<ObTabletID> dest_tablet_ids;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id_);
   if (!data_table_schema.is_partitioned_table()) {
     // if not partition table, no need to sync partition level stats
-  } else if (OB_FAIL(data_table_schema.get_all_tablet_and_object_ids(src_tablet_ids, src_partition_ids))) {
+  } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&data_table_schema, src_partition_ids))) {
     LOG_WARN("fail to get all tablet and object ids", K(ret));
-  } else if (OB_FAIL(new_table_schema.get_all_tablet_and_object_ids(dest_tablet_ids, dest_partition_ids))) {
+  } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&new_table_schema, dest_partition_ids))) {
     LOG_WARN("fail to get all tablet and object ids", K(ret));
   } else {
     const int64_t BATCH_SIZE = 256;

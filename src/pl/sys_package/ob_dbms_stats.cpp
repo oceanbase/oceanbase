@@ -3202,7 +3202,8 @@ int ObDbmsStats::parse_index_part_info(ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(index_schema), K(param.db_name_),
                                      K(param.tab_name_));
-  } else if (OB_FAIL(set_param_global_part_id(ctx, param, true, table_schema->get_table_id()))) {
+  } else if (OB_FAIL(set_param_global_part_id(ctx, param, true, table_schema->get_table_id(),
+                                              table_schema->get_part_level()))) {
     LOG_WARN("fail to set global part id for index data table", K(ret));
   } else if (OB_FAIL(ob_write_string(ctx.get_allocator(),
                                      table_schema->get_table_name_str(),
@@ -4539,6 +4540,39 @@ int ObDbmsStats::get_table_part_infos(const share::schema::ObTableSchema *table_
                                     subpart_ids,
                                     part_map))) {
     LOG_WARN("failed to get partition infos", K(ret));
+  }
+  return ret;
+}
+
+int ObDbmsStats::get_part_ids_from_schema(const ObTableSchema *table_schema,
+                                          common::ObIArray<ObObjectID> &target_part_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexptect null pointer", K(ret));
+  } else {
+    if (!table_schema->is_partitioned_table()) {
+      if (OB_FAIL(target_part_ids.push_back(table_schema->get_object_id()))) {
+        LOG_WARN("fail to push back part id", K(ret));
+      }
+    } else {
+      ObSEArray<PartInfo, 4> dummy_part_infos;
+      ObSEArray<PartInfo, 4> dummy_subpart_infos;
+      ObSEArray<int64_t, 4> part_ids;
+      ObSEArray<int64_t, 4> subpart_ids;
+      if (OB_FAIL(get_table_part_infos(table_schema,
+                                       dummy_part_infos,
+                                       dummy_subpart_infos,
+                                       part_ids,
+                                       subpart_ids))) {
+        LOG_WARN("fail to get part infos", K(ret));
+      } else if (OB_FAIL(append(target_part_ids, part_ids))) {
+        LOG_WARN("fail to append target part id", K(ret));
+      } else if (OB_FAIL(append(target_part_ids, subpart_ids))) {
+        LOG_WARN("fail to append target part id", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -5992,14 +6026,16 @@ int ObDbmsStats::get_index_schema(sql::ObExecContext &ctx,
 int ObDbmsStats::set_param_global_part_id(ObExecContext &ctx,
                                           ObTableStatParam &param, 
                                           bool is_data_table,
-                                          int64_t data_table_id)
+                                          int64_t data_table_id,
+                                          share::schema::ObPartitionLevel data_table_level)
 {
   int ret = OB_SUCCESS;
-  if (param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO) {
+  share::schema::ObPartitionLevel part_level = is_data_table ? data_table_level : param.part_level_;
+  int64_t target_table_id = is_data_table ? data_table_id : param.table_id_;
+  if (part_level == share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO) {
     ObDASTabletMapper tablet_mapper;
     ObSEArray<ObTabletID, 1> tmp_tablet_ids;
     ObSEArray<ObObjectID, 1> tmp_part_ids;
-    int64_t target_table_id = is_data_table ? data_table_id : param.table_id_;
     if (OB_FAIL(ctx.get_das_ctx().get_das_tablet_mapper(target_table_id, tablet_mapper))) {
       LOG_WARN("fail to get das tablet mapper", K(ret));
     } else if (OB_FAIL(tablet_mapper.get_non_partition_tablet_id(tmp_tablet_ids, tmp_part_ids))) {
