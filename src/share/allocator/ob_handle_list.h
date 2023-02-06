@@ -116,6 +116,7 @@ public:
     }
     void set_frozen() { ATOMIC_STORE(&freeze_stat_, FROZEN); }
     bool is_active() const { return ATOMIC_LOAD(&freeze_stat_) == ACTIVE; }
+    bool is_frozen() const { return ATOMIC_LOAD(&freeze_stat_) == FROZEN; }
     TO_STRING_KV(K_(freeze_stat), K_(id), K_(clock));
   };
   ObHandleList(): id_(0), hazard_(INT64_MAX), total_count_(0) {
