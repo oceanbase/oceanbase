@@ -1307,21 +1307,6 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
   return ret;
 }
 
-template <typename T>
-int ObJsonExprHelper::pack_json_str_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, T &str, common::ObIAllocator *allocator)
-{
-  int ret = OB_SUCCESS;
-  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
-  if (OB_FAIL(text_result.init(str.length(), allocator))) {
-    LOG_WARN("init lob result failed");
-  } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
-    LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
-  } else {
-    text_result.set_result();
-  }
-  return ret;
-}
-
 int ObJsonExprHelper::get_cast_type(const ObExprResType param_type2,
                                     ObExprResType &dst_type)
 {

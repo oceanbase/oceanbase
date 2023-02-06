@@ -189,7 +189,7 @@ public:
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
   int get_key(uint64_t index, common::ObString &key_out) const override;
   int get_raw_binary(common::ObString &out, ObIAllocator *allocator = NULL) const;
-  int get_use_size(uint64_t& obj_size, uint64_t& used_size) const;
+  int get_use_size(uint64_t& used_size) const;
   int get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_t& max_offset) const ;
   int array_remove(uint64_t index) override;
   int object_remove(const common::ObString &key) override;
@@ -439,7 +439,8 @@ private:
                              uint64_t length,
                              uint8_t type,
                              uint64_t value_offset,
-                             ObJsonNode *&json_tree);
+                             ObJsonNode *&json_tree,
+                             uint64_t type_size);
 
   int deserialize_json_object_v0(const char *data, uint64_t length, ObJsonObject *object);
   inline int deserialize_json_object(const char *data, uint64_t length, ObJsonObject *object, ObJBVerType vertype);
@@ -447,7 +448,7 @@ private:
   int deserialize_json_array_v0(const char *data, uint64_t length, ObJsonArray *array);
   inline int deserialize_json_array(const char *data, uint64_t length, ObJsonArray *array, ObJBVerType vertype);
 
-  int set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t type);
+  int set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t type, uint8_t entry_size = 0);
   void parse_obj_header(const char *data, uint64_t &offset, uint8_t &node_type,
                         uint8_t &type, uint8_t& obj_size_type, uint64_t &count, uint64_t &obj_size) const;
   
@@ -547,7 +548,7 @@ public:
   static uint8_t get_var_type(uint64_t var);
   static int read_var(const char *data, uint8_t type, int64_t *var);
   static uint64_t var_int2uint(int64_t var);
-  static int64_t var_uint2int(uint64_t var);
+  static int64_t var_uint2int(uint64_t var, uint8_t entry_size);
   static uint8_t get_var_type(int64_t var);
 };
 

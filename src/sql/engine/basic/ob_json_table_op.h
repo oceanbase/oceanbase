@@ -248,7 +248,7 @@ public:
   common::ObSEArray<JtColNode*, 4, common::ModulePageAllocator, true> reg_col_defs_;
   JtColNode* nest_col_def_;
 
-  common::ObArray<int64_t> child_idx_;
+  common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> child_idx_;
 };
 
 
