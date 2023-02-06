@@ -233,14 +233,15 @@ public:
   /// Fetch next batch result
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
   virtual bool has_more_result() const override { return row_iterator_.has_more_result(); }
+  virtual table::ObTableQueryResult *get_one_result() override { return one_result_; }
+  virtual void set_one_result(ObTableQueryResult *result) override {one_result_ = result;}
   void set_scan_result(table::ObTableApiScanRowIterator *scan_result) { row_iterator_.set_scan_result(scan_result); }
   void set_ttl(int32_t ttl_value) { row_iterator_.set_ttl(ttl_value); }
   // parse the filter string
   int parse_filter_string(common::ObArenaAllocator* allocator);
 private:
-  const ObTableQuery &query_;
   ObHTableRowIterator row_iterator_;
-  table::ObTableQueryResult &one_result_;
+  table::ObTableQueryResult *one_result_;
   table::ObHTableFilterParser filter_parser_;
   table::hfilter::Filter *hfilter_;
   int32_t batch_size_;

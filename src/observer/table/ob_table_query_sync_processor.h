@@ -74,13 +74,13 @@ public:
   {}
   ~ObTableQuerySyncSession();
 
-  void set_result_iterator(ObNormalTableQueryResultIterator* iter);
+  void set_result_iterator(table::ObTableQueryResultIterator* iter);
   void set_in_use(bool in_use) {in_use_ = in_use;}
   bool is_in_use() {return in_use_;}
   int init();
 
   void set_timout_ts(uint64_t timeout_ts) { timeout_ts_ = timeout_ts; }
-  ObNormalTableQueryResultIterator *get_result_iterator() { return result_iterator_; }
+  table::ObTableQueryResultIterator *get_result_iterator() { return result_iterator_; }
   ObArenaAllocator *get_allocator() {return &allocator_;}
   common::ObObjectID get_tenant_id() { return tenant_id_; }
   table::ObTableQuery &get_query() { return query_; }
@@ -95,7 +95,7 @@ private:
   uint64_t timeout_ts_;
   common::ObObjectID tenant_id_;
   ObTableQuery query_; // deep copy from arg_.query_
-  ObNormalTableQueryResultIterator *result_iterator_;
+  table::ObTableQueryResultIterator *result_iterator_;
   ObArenaAllocator allocator_;
   ObTableQuerySyncCtx query_ctx_;
   lib::MemoryContext iterator_mementity_;
@@ -199,22 +199,16 @@ protected:
 private:
   int process_query_start();
   int process_query_next();
-  int process_query_end();
   int destory_query_session(bool need_rollback_trans);
   DISALLOW_COPY_AND_ASSIGN(ObTableQuerySyncP);
 
 private:
-  int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
   int get_session_id(uint64_t &real_sessid, uint64_t arg_sessid);
   int get_query_session(uint64_t sessid, ObTableQuerySyncSession *&query_session);
   int query_scan_with_init();
   int query_scan_without_init();
-  int query_scan_with_old_context(const int64_t timeout);
-  int query_scan_with_new_context(ObTableQuerySyncSession * session_ctx, table::ObTableQueryResultIterator *result_iterator,
-    const int64_t timeout);
 
 private:
-  void set_trans_from_session(ObTableQuerySyncSession *query_session);
   int check_query_type();
   int init_tb_ctx(table::ObTableCtx &ctx);
   int execute_query(ObTableQuerySyncSession &query_session);

@@ -8835,6 +8835,106 @@ TEST_F(TestBatchExecute, query_sync_multi_batch)
   the_table = NULL;
 }
 
+// create table if not exists htable1_query_sync (
+// K varbinary(1024), Q varbinary(256), T bigint, V varbinary(1024),
+// primary key(K, Q, T));
+TEST_F(TestBatchExecute, htble_query_sync)
+{
+  // setup
+  ObTable *the_table = NULL;
+  int ret = service_client_->alloc_table(ObString::make_string("htable1_query_sync"), the_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
+  ObTableEntityFactory<ObTableEntity> entity_factory;
+  ObTableBatchOperation batch_operation;
+  ObITableEntity *entity = NULL;
+  ////////////////////////////////////////////////////////////////
+  static constexpr int64_t VERSIONS_COUNT = 10;
+  DefaultBuf *rows = new (std::nothrow) DefaultBuf[BATCH_SIZE];
+  ASSERT_TRUE(NULL != rows);
+  ObObj key1, key2, key3;
+  ObObj value;
+  for (int64_t i = 0; i < BATCH_SIZE; ++i) {
+    sprintf(rows[i], "row%ld", i);
+    key1.set_varbinary(ObString::make_string(rows[i]));
+    key2.set_varbinary(ObString::make_string(""));  // empty qualifier
+    for (int64_t k = 0; k < VERSIONS_COUNT; ++k)
+    {
+      key3.set_int(k);
+      entity = entity_factory.alloc();
+      ASSERT_TRUE(NULL != entity);
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key1));
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key2));
+      ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key3));
+      value.set_varbinary(ObString::make_string("value_string"));
+      ASSERT_EQ(OB_SUCCESS, entity->set_property(V, value));
+      ASSERT_EQ(OB_SUCCESS, batch_operation.insert(*entity));
+    }   // end for
+  }     // end for
+
+  ASSERT_TRUE(!batch_operation.is_readonly());
+  ASSERT_TRUE(batch_operation.is_same_type());
+  ASSERT_TRUE(batch_operation.is_same_properties_names());
+  ObTableBatchOperationResult result;
+  ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
+  OB_LOG(INFO, "batch execute result", K(result));
+  ASSERT_EQ(BATCH_SIZE*VERSIONS_COUNT, result.count());
+  ////////////////////////////////////////////////////////////////
+  ObTableQuery query;
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(K));
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(Q));
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(T));
+  ASSERT_EQ(OB_SUCCESS, query.add_select_column(V));
+  ObObj pk_objs_start[3];
+  pk_objs_start[0].set_min_value();
+  pk_objs_start[1].set_min_value();
+  pk_objs_start[2].set_min_value();
+  ObObj pk_objs_end[3];
+  pk_objs_end[0].set_max_value();
+  pk_objs_end[1].set_max_value();
+  pk_objs_end[2].set_max_value();
+  ObNewRange range;
+  range.start_key_.assign(pk_objs_start, 3);
+  range.end_key_.assign(pk_objs_end, 3);
+  range.border_flag_.set_inclusive_start();
+  range.border_flag_.set_inclusive_end();
+  ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+
+  ObHTableFilter &htable_filter = query.htable_filter();
+  ASSERT_EQ(OB_SUCCESS, htable_filter.add_column(ObString::make_string("")));
+  htable_filter.set_max_versions(2);
+  htable_filter.set_valid(true);
+  const int64_t query_round = 4;
+  query.set_batch(50);
+
+  ObTableQuerySyncResult *iter = nullptr;
+  const ObITableEntity *result_entity = NULL;
+  uint64_t result_cnt = 0;
+  uint64_t round = 0;
+  ASSERT_EQ(OB_SUCCESS, the_table->query_start(query, iter));
+  while (OB_SUCC(iter->get_next_entity(result_entity))) {
+    ++result_cnt;
+  }
+  ASSERT_EQ(OB_ITER_END, ret);
+  while (OB_SUCC(the_table->query_next(iter))) {
+    ++round;
+    // printf("iterator row count: %ld\n", iter->get_row_count());
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      ++result_cnt;
+    }
+    printf("round: %ld\n", round);
+    ASSERT_EQ(OB_ITER_END, ret);
+  }
+  ASSERT_EQ(OB_ITER_END, ret);
+  ASSERT_EQ(200, result_cnt); // set_max_versions(2)，故只有200条
+  ASSERT_EQ(round, query_round - 1); // start已经扫描了一次
+  ////////////////////////////////////////////////////////////////
+  // teardown
+  service_client_->free_table(the_table);
+  the_table = NULL;
+  delete [] rows;
+}
+
 // create table if not exists large_scan_query_sync_test (C1 bigint primary key, C2 bigint, C3 varchar(100));
 TEST_F(TestBatchExecute, large_scan_query_sync)
 {
