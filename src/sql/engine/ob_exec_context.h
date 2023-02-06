@@ -155,7 +155,7 @@ public:
    * @brief initialize execute context, must call before calling any function
    */
   int init_phy_op(uint64_t phy_op_size);
-  int init_expr_op(const uint64_t expr_op_size);
+  int init_expr_op(const uint64_t expr_op_size, ObIAllocator *allocator = NULL);
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
   int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
