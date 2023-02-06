@@ -98,7 +98,7 @@ private:
 private:
   bool is_inited_;
   ObArray<ObDDLMacroHandle> macro_blocks_;
-  ObFIFOAllocator fifo_allocator_;
+  ObArenaAllocator arena_;
   BtreeNodeAllocator tree_allocator_;
   KeyBtree block_tree_;
   blocksstable::ObDataStoreDesc data_desc_;

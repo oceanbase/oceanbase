@@ -39,7 +39,7 @@ using namespace oceanbase::share::schema;
 
 
 ObBlockMetaTree::ObBlockMetaTree()
-  : is_inited_(false), fifo_allocator_(), tree_allocator_(fifo_allocator_), block_tree_(tree_allocator_)
+  : is_inited_(false), arena_(), tree_allocator_(arena_), block_tree_(tree_allocator_)
 {
 
 }
@@ -62,8 +62,7 @@ int ObBlockMetaTree::init(const share::ObLSID &ls_id,
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !table_key.is_valid() || cluster_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(table_key));
-  } else if (OB_FAIL(fifo_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
-    LOG_WARN("init fifo allocator failed", K(ret));
+  } else if (FALSE_IT(arena_.set_attr(mem_attr))) {
   } else if (OB_FAIL(block_tree_.init())) {
     LOG_WARN("init block tree failed", K(ret));
   } else if (OB_FAIL(ObTabletDDLUtil::prepare_index_data_desc(ls_id,
@@ -160,7 +159,8 @@ void ObBlockMetaTree::destroy()
   block_tree_.destroy();
   data_desc_.reset();
   sorted_rowkeys_.reset();
-  fifo_allocator_.reset();
+  tree_allocator_.reset();
+  arena_.reset();
 }
 
 int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,

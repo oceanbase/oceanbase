@@ -132,9 +132,6 @@ void TestBlockMetaTree::prepare_schema()
 TEST_F(TestBlockMetaTree, random_keybtree)
 {
   ObBlockMetaTree meta_tree;
-  ObArenaAllocator arena;
-  const ObMemAttr mem_attr(TEST_TENANT_ID, "DDL_KV");
-  ASSERT_OK(meta_tree.fifo_allocator_.init(&arena, OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr));
 
   LOG_INFO("wenqu debug: check size",
       "sizeof(BtreeNode)", sizeof(keybtree::BtreeNode<blocksstable::ObDatumRowkeyWrapper, const blocksstable::ObDataMacroBlockMeta *>),
