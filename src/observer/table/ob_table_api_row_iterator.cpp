@@ -264,7 +264,9 @@ int ObTableApiRowIterator::fill_generate_columns(common::ObNewRow &row)
 }
 
 
-int ObTableApiRowIterator::cons_all_columns(const ObITableEntity &entity, const bool ignore_missing_column)
+int ObTableApiRowIterator::cons_all_columns(const ObITableEntity &entity,
+                                            const bool ignore_missing_column,
+                                            const bool allow_rowkey_in_properties)
 {
   int ret = OB_SUCCESS;
   const ObRowkeyInfo &rowkey_info = table_schema_->get_rowkey_info();
@@ -299,6 +301,9 @@ int ObTableApiRowIterator::cons_all_columns(const ObITableEntity &entity, const 
       } else if (!ignore_missing_column && column_schema->is_generated_column()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("Should not have generate columns, ", K(ret), K(cname));
+      } else if (!allow_rowkey_in_properties && column_schema->is_rowkey_column()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("rowkey column should not be in properties, ", K(ret), K(cname));
       } else if (OB_FAIL(column_ids_.push_back(column_schema->get_column_id()))) {
         LOG_WARN("failed to add column id", K(ret));
       } else if (OB_FAIL(add_column_type(*column_schema))) {
@@ -762,7 +767,7 @@ int ObTableApiUpdateRowIterator::open(const ObTableOperation &table_operation,
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("The table api update row iterator has not been inited, ", K(ret));
-  } else if (OB_FAIL(cons_all_columns(table_operation.entity()))) {
+  } else if (OB_FAIL(cons_all_columns(table_operation.entity(), false, false))) {
     LOG_WARN("Fail to construct all columns, ", K(ret));
   } else if (OB_FAIL(cons_update_columns(need_update_rowkey))) {
     LOG_WARN("Fail to construct update columns, ", K(ret));
@@ -1142,7 +1147,7 @@ int ObTableApiMultiUpdateRowIterator::open(const ObTableBatchOperation &batch_op
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("The table api update row iterator has not been inited, ", K(ret));
-  } else if (OB_FAIL(cons_all_columns(batch_operation.at(0).entity()))) {
+  } else if (OB_FAIL(cons_all_columns(batch_operation.at(0).entity(), false, false))) {
     LOG_WARN("Fail to construct all columns, ", K(ret));
   } else if (OB_FAIL(cons_update_columns(false/*need_update_rowkey*/))) {
     LOG_WARN("Fail to construct update columns, ", K(ret));
