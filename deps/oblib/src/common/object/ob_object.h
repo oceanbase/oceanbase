@@ -864,7 +864,7 @@ public:
   {
     // Notice: should be called only when ptr_ is from ObLobType data
     ObLobLocator *loc_v1 = reinterpret_cast<ObLobLocator *>(ptr_);
-    return loc_v1->is_valid();
+    return size_ >= sizeof(ObLobLocator) && loc_v1->is_valid();
   }
 
   OB_INLINE bool is_lob_disk_locator() const
