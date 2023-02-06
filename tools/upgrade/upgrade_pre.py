@@ -1215,6 +1215,8 @@
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
 #    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+#    actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
+#    actions.set_parameter(cur, 'enable_rereplication', 'False', timeout)
 #####========******####======== actions begin ========####******========####
 #  return
 #####========******####========= actions end =========####******========####
