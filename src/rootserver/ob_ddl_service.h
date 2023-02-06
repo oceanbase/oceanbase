@@ -959,6 +959,18 @@ public:
                                   ObDDLOperator &ddl_operator,
                                   ObTriggerInfo &trigger_info,
                                   bool is_create_trigger);
+  int recursive_alter_ref_trigger(share::schema::ObSchemaGetterGuard &schema_guard,
+                                  ObDDLSQLTransaction &trans,
+                                  ObDDLOperator &ddl_operator,
+                                  const ObTriggerInfo &ref_trigger_info,
+                                  const common::ObIArray<uint64_t> &trigger_list,
+                                  const ObString &trigger_name,
+                                  int64_t action_order);
+  int recursive_check_trigger_ref_cyclic(share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const ObTriggerInfo &ref_trigger_info,
+                                         const common::ObIArray<uint64_t> &trigger_list,
+                                         const ObString &create_trigger_name,
+                                         const ObString &generate_cyclic_name);
 
   // only push schema version, and publish schema
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);

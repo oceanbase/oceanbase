@@ -31744,13 +31744,19 @@ int ObDDLService::adjust_trigger_action_order(share::schema::ObSchemaGetterGuard
         }
         if (OB_FAIL(ret)) {
         } else if (is_oracle_mode) {
-          if (NULL != ref_trg_info) {
-            uint64_t ref_db_id = OB_INVALID_ID;
-            OZ (schema_guard.get_database_id(tenant_id, trigger_info.get_ref_trg_db_name(), ref_db_id));
-            OZ (schema_guard.get_trigger_info(tenant_id, ref_db_id, trigger_info.get_ref_trg_name(), ref_trg_info));
-            if (OB_SUCC(ret) && trigger_info.is_order_follows()) {
-              action_order = ref_trg_info->get_action_order() + 1;
+          OZ (recursive_check_trigger_ref_cyclic(schema_guard, trigger_info, trg_list,
+                                                 trigger_info.get_trigger_name(), trigger_info.get_ref_trg_name()));
+          if (OB_SUCC(ret)) {
+            if (NULL != ref_trg_info) {
+              uint64_t ref_db_id = OB_INVALID_ID;
+              OZ (schema_guard.get_database_id(tenant_id, trigger_info.get_ref_trg_db_name(), ref_db_id));
+              OZ (schema_guard.get_trigger_info(tenant_id, ref_db_id, trigger_info.get_ref_trg_name(), ref_trg_info));
+              if (OB_SUCC(ret) && trigger_info.is_order_follows()) {
+                action_order = ref_trg_info->get_action_order() + 1;
+                }
             }
+            OZ (recursive_alter_ref_trigger(schema_guard, trans, ddl_operator, trigger_info,
+                                            trg_list, trigger_info.get_trigger_name(), action_order));
           }
         } else {
           if (NULL == ref_trg_info) {
@@ -31801,9 +31807,68 @@ int ObDDLService::adjust_trigger_action_order(share::schema::ObSchemaGetterGuard
       }
     }
   }
+#undef ALTER_OLD_TRIGGER
   return ret;
 }
 
+int ObDDLService::recursive_alter_ref_trigger(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              ObDDLSQLTransaction &trans,
+                                              ObDDLOperator &ddl_operator,
+                                              const ObTriggerInfo &ref_trigger_info,
+                                              const common::ObIArray<uint64_t> &trigger_list,
+                                              const ObString &trigger_name,
+                                              int64_t action_order)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_id = ref_trigger_info.get_tenant_id();
+  const ObTriggerInfo *trg_info = NULL;
+  int64_t new_action_order = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < trigger_list.count(); i++) {
+    OZ (schema_guard.get_trigger_info(tenant_id, trigger_list.at(i), trg_info));
+    OV (OB_NOT_NULL(trg_info));
+    if (0 != trg_info->get_trigger_name().case_compare(trigger_name)) {
+      if (OB_SUCC(ret) && 0 == trg_info->get_ref_trg_name().case_compare(ref_trigger_info.get_trigger_name())) {
+        ObTriggerInfo copy_trg_info;
+        OX (new_action_order = action_order + 1);
+        OZ (copy_trg_info.assign(*trg_info));
+        OX (copy_trg_info.set_action_order(new_action_order));
+        OZ (ddl_operator.alter_trigger(copy_trg_info, trans, NULL, false/*is_update_table_schema_version*/));
+        OZ (SMART_CALL(recursive_alter_ref_trigger(schema_guard, trans, ddl_operator,
+                                                   *trg_info, trigger_list, trigger_name, new_action_order)));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::recursive_check_trigger_ref_cyclic(share::schema::ObSchemaGetterGuard &schema_guard,
+                                                     const ObTriggerInfo &ref_trigger_info,
+                                                     const common::ObIArray<uint64_t> &trigger_list,
+                                                     const ObString &create_trigger_name,
+                                                     const ObString &generate_cyclic_name)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ref_trigger_info.get_tenant_id();
+  const ObTriggerInfo *trg_info = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < trigger_list.count(); i++) {
+    OZ (schema_guard.get_trigger_info(tenant_id, trigger_list.at(i), trg_info));
+    OV (OB_NOT_NULL(trg_info));
+    if (OB_SUCC(ret)) {
+      if (0 != trg_info->get_trigger_name().case_compare(create_trigger_name)) {
+        if (0 == trg_info->get_ref_trg_name().case_compare(ref_trigger_info.get_trigger_name())) {
+          if (0 == trg_info->get_trigger_name().case_compare(generate_cyclic_name)) {
+            ret = OB_ERR_REF_CYCLIC_IN_TRG;
+            LOG_WARN("ORA-25023: cyclic trigger dependency is not allowed", K(ret),
+                     K(generate_cyclic_name), KPC(trg_info));
+          }
+          OZ (SMART_CALL(recursive_check_trigger_ref_cyclic(schema_guard, *trg_info, trigger_list,
+                                                            create_trigger_name, generate_cyclic_name)));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObDDLService::handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg)
 {

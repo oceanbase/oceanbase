@@ -1783,7 +1783,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       } else if (trigger_info->is_enable()) {
         // if disable trigger, use the previous plan cache, whether trigger is enable ???
         need_fire = trigger_info->has_event(dml_event);
-        if (OB_SUCC(ret) && need_fire && !trigger_info->get_ref_trg_name().empty()) {
+        if (OB_SUCC(ret) && need_fire && !trigger_info->get_ref_trg_name().empty() && lib::is_oracle_mode()) {
           const ObTriggerInfo *ref_trigger_info = NULL;
           uint64_t ref_db_id = OB_INVALID_ID;
           OZ (schema_guard->get_database_id(tenant_id, trigger_info->get_ref_trg_db_name(), ref_db_id));
@@ -1793,9 +1793,26 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
             ret = OB_ERR_TRIGGER_NOT_EXIST;
             LOG_WARN("ref_trigger_info is NULL", K(trigger_info->get_ref_trg_db_name()),
                      K(trigger_info->get_ref_trg_name()), K(ret));
-            if (lib::is_oracle_mode()) {
-              LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trigger_info->get_ref_trg_name().length(),
-                                    trigger_info->get_ref_trg_name().ptr());
+            LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trigger_info->get_ref_trg_name().length(),
+                                  trigger_info->get_ref_trg_name().ptr());
+          }
+          if (OB_SUCC(ret)) {
+            if (trigger_info->is_simple_dml_type() && !ref_trigger_info->is_compound_dml_type()) {
+              if (!(trigger_info->is_row_level_before_trigger() && ref_trigger_info->is_row_level_before_trigger())
+                  && !(trigger_info->is_row_level_after_trigger() && ref_trigger_info->is_row_level_after_trigger())
+                  && !(trigger_info->is_stmt_level_before_trigger() && ref_trigger_info->is_stmt_level_before_trigger())
+                  && !(trigger_info->is_stmt_level_after_trigger()
+                       && ref_trigger_info->is_stmt_level_after_trigger())) {
+                ret = OB_ERR_RECOMPILATION_OBJECT;
+                LOG_WARN("errors during recompilation/revalidation of trigger",
+                          KPC(trigger_info), KPC(ref_trigger_info), K(ret));
+                // ref_trg_db_name and trigger_info's database_name are the same
+                LOG_ORACLE_USER_ERROR(OB_ERR_RECOMPILATION_OBJECT,
+                                      trigger_info->get_ref_trg_db_name().length(),
+                                      trigger_info->get_ref_trg_db_name().ptr(),
+                                      trigger_info->get_trigger_name().length(),
+                                      trigger_info->get_trigger_name().ptr());
+              }
             }
           }
         }
