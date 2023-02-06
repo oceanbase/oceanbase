@@ -41,6 +41,7 @@ ObMacroBlockReader::ObMacroBlockReader()
      allocator_(ObModIds::OB_CS_SSTABLE_READER),
      encryption_(nullptr)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObMacroBlockReader::~ObMacroBlockReader()
