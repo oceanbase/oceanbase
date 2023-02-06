@@ -583,10 +583,13 @@ OB_INLINE int ObPushdownOperator::filter_row_outside(const ObExprPtrIArray &expr
 {
   int ret = common::OB_SUCCESS;
   ret = ObOperator::filter_row(eval_ctx_, exprs, filtered);
-  // For filter on data table (not before index back), clear evaluated flag if row filtered,
-  // to reuse the expression result. Table scan inner_get_next_row() will do the clear work
-  // if row not filtered.
-  if (OB_SUCC(ret) && filtered) {
+  // always clear evaluated flag, because filter expr and table scan output expr may have
+  // common expr, when eval filter expr, memory of dependence column may from storage,
+  // if not filter and we don't clear eval flag, output expr will used the result datum
+  // of filter expr which memory may expired, so we need clear eval flag after eval filter expr,
+  // and the common expr in table scan output need evaluate again,
+  // now the memory of dependence column have been deep copy
+  if (OB_SUCC(ret)) {
     clear_datum_eval_flag();
   }
   return ret;
