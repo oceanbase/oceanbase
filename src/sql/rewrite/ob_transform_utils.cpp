@@ -5263,8 +5263,11 @@ int ObTransformUtils::merge_table_items(ObDMLStmt *stmt,
     }
 
     if (OB_SUCC(ret) && !from_col_exprs.empty()) {
-      if (OB_FAIL(stmt->replace_relation_exprs(from_col_exprs, to_col_exprs))) {
-        LOG_WARN("failed to replace col exprs", K(ret));
+      ObStmtExprReplacer replacer;
+      if (OB_FAIL(replacer.add_replace_exprs(from_col_exprs, to_col_exprs))) {
+        LOG_WARN("failed to add replace exprs", K(ret));
+      } else if (OB_FAIL(stmt->iterate_stmt_expr(replacer))) {
+        LOG_WARN("failed to iterate stmt expr", K(ret));
       }
     }
     if (OB_SUCC(ret) && stmt->is_delete_stmt()) {
