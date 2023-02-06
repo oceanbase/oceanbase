@@ -2573,7 +2573,6 @@ int ObMultiVersionSchemaService::refresh_tenant_schema(
   bool refresh_full_schema = false;
   bool is_standby_cluster = GCTX.is_standby_cluster();
   bool is_restore = false;
-  int64_t baseline_schema_version = OB_INVALID_VERSION;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", KR(ret));
@@ -2583,8 +2582,6 @@ int ObMultiVersionSchemaService::refresh_tenant_schema(
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy is null", KR(ret));
-  } else if (OB_FAIL(get_baseline_schema_version(tenant_id, true/*auto_update*/, baseline_schema_version))) {
-    LOG_WARN("fail to get baseline schema version", KR(ret), K(tenant_id));
   } else if (!ObSchemaService::g_liboblog_mode_
              && OB_FAIL(check_tenant_is_restore(NULL, tenant_id, is_restore))) {
     LOG_WARN("fail to check restore tenant exist", KR(ret), K(tenant_id));
@@ -2623,7 +2620,10 @@ int ObMultiVersionSchemaService::refresh_tenant_schema(
 
     if (OB_SUCC(ret)) {
       bool need_refresh = true;
-      if (OB_FAIL(refresh_full_schema_map_.get_refactored(tenant_id, refresh_full_schema))) {
+      int64_t baseline_schema_version = OB_INVALID_VERSION;
+      if (OB_FAIL(get_baseline_schema_version(tenant_id, true/*auto_update*/, baseline_schema_version))) {
+        LOG_WARN("fail to get baseline schema version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(refresh_full_schema_map_.get_refactored(tenant_id, refresh_full_schema))) {
         LOG_WARN("refresh full schema", KR(ret), K(tenant_id));
       } else if (!refresh_full_schema) {
         if (OB_FAIL(get_schema_version_in_inner_table(
