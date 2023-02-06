@@ -26,10 +26,15 @@ namespace sql
 
 /************************************* start ObSortOpImpl *********************************/
 ObSortOpImpl::ObAdaptiveQS::ObAdaptiveQS(common::ObIArray<ObChunkDatumStore::StoredRow *> &sort_rows,
-                                         common::ObIAllocator &alloc, int64_t rows_begin,
-                                         int64_t rows_end, bool &can_encode)
+                                         common::ObIAllocator &alloc)
   : orig_sort_rows_(sort_rows),
     alloc_(alloc)
+{
+}
+
+int ObSortOpImpl::ObAdaptiveQS::init(common::ObIArray<ObChunkDatumStore::StoredRow *> &sort_rows,
+                                         common::ObIAllocator &alloc, int64_t rows_begin,
+                                         int64_t rows_end, bool &can_encode)
 {
   int ret = OB_SUCCESS;
   can_encode = true;
@@ -56,6 +61,7 @@ ObSortOpImpl::ObAdaptiveQS::ObAdaptiveQS(common::ObIArray<ObChunkDatumStore::Sto
       if (item.len_>1) item.sub_cache_[1] = item.key_ptr_[1];
     }
   }
+  return ret;
 }
 
 /*
@@ -1352,8 +1358,10 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
       if (comp_.cmp_start_ != comp_.cmp_end_) {
         if (enable_encode_sortkey_) {
           bool can_encode = true;
-          ObAdaptiveQS aqs(rows, allocator, rows_last, rows_idx, can_encode);
-          if (can_encode) {
+          ObAdaptiveQS aqs(rows, allocator);
+          if (OB_FAIL(aqs.init(rows, allocator, rows_last, rows_idx, can_encode))) {
+            LOG_WARN("failed to init aqs", K(ret));
+          } else if (can_encode) {
             aqs.sort(rows_last, rows_idx);
           } else {
             enable_encode_sortkey_ = false;
@@ -1631,8 +1639,10 @@ int ObSortOpImpl::sort_inmem_data()
         do_partition_sort(*rows_, begin, rows_->count());
       } else if (enable_encode_sortkey_) {
         bool can_encode = true;
-        ObAdaptiveQS aqs(*rows_, mem_context_->get_malloc_allocator(), begin, rows_->count(), can_encode);
-        if (can_encode) {
+        ObAdaptiveQS aqs(*rows_, mem_context_->get_malloc_allocator());
+        if (OB_FAIL(aqs.init(*rows_, mem_context_->get_malloc_allocator(), begin, rows_->count(), can_encode))) {
+          LOG_WARN("failed to init aqs", K(ret));
+        } else if (can_encode) {
           aqs.sort(begin, rows_->count());
         } else {
           enable_encode_sortkey_ = false;
