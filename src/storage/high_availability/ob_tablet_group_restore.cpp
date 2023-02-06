@@ -797,8 +797,6 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
   ObTabletRestoreStatus::STATUS action_restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   ObTabletRestoreStatus::STATUS tablet_restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   const int64_t timeout_us = ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
-  bool dag_net_is_in_retry = false;
-  bool dag_is_in_retry = false;
   ObInitialTabletGroupRestoreDag *dag = nullptr;
 
   if (!is_inited_) {
@@ -807,13 +805,9 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls));
-  } else if (OB_FAIL(ctx_->check_is_in_retry(dag_net_is_in_retry))) {
-    LOG_WARN("failed to get retry count", K(ret), KP(ls));
   } else if (OB_ISNULL(dag = static_cast<ObInitialTabletGroupRestoreDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("start tablet group restore dag should not be NULL", K(ret), KP(dag));
-  } else if (OB_FAIL(dag->check_is_in_retry(dag_is_in_retry))) {
-    LOG_WARN("failed to get retry count", K(ret), KPC_(dag));
   } else if (OB_FAIL(ObTabletRestoreAction::trans_restore_action_to_restore_status(
       ctx_->arg_.action_, action_restore_status))) {
     LOG_WARN("failed to trans restore action to restore status", K(ret), KPC(ctx_));
@@ -842,12 +836,10 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet restore status is unexpected", K(ret), K(tablet_id), K(action_restore_status),
             K(tablet_restore_status), K(ctx_->arg_));
-      } else if (action_restore_status == tablet_restore_status && !dag_net_is_in_retry && !dag_is_in_retry) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet restore status is unexpected", K(ret), K(tablet_id), K(action_restore_status),
-            K(tablet_restore_status), K(ctx_->arg_), K(dag_net_is_in_retry), K(dag_is_in_retry));
-      } else if (action_restore_status != tablet_restore_status
-          && OB_FAIL(ctx_->tablet_id_array_.push_back(tablet_id))) {
+      } else if (action_restore_status == tablet_restore_status) {
+        LOG_INFO("tablet restore status is equal to restore action, skip restore it", K(tablet_id),
+            K(action_restore_status), K(tablet_restore_status), K(ctx_->arg_));
+      } else if (OB_FAIL(ctx_->tablet_id_array_.push_back(tablet_id))) {
         LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id), KPC(ctx_));
       }
     }
