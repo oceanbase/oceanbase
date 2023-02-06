@@ -126,6 +126,9 @@ public:
   virtual int handle_message(const ElectionAcceptResponseMsg &msg) override final;
   virtual int handle_message(const ElectionChangeLeaderMsg &msg) override final;
   virtual const common::ObAddr &get_self_addr() const override;
+  int add_inner_priority_seed_bit(const PRIORITY_SEED_BIT new_bit);
+  int clear_inner_priority_seed_bit(const PRIORITY_SEED_BIT old_bit);
+  int set_inner_priority_seed(const uint64_t seed);
   TO_STRING_KV(K_(is_inited), K_(is_running), K_(proposer), K_(acceptor), KPC_(priority));
 private:// 定向暴露给友元类
   void refresh_priority_();

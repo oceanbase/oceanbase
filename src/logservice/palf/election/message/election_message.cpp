@@ -159,7 +159,10 @@ ElectionPrepareRequestMsgMiddle::ElectionPrepareRequestMsgMiddle() :
 ElectionMsgBase(),
 role_(ObRole::INVALID_ROLE),
 is_buffer_valid_(false),
-inner_priority_seed_(DEFAULT_SEED) { memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE); }
+inner_priority_seed_(static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED))
+{
+  memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE);
+}
 
 int ElectionPrepareRequestMsgMiddle::set(const ElectionPriority *priority,
                                    const common::ObRole role) {
@@ -257,7 +260,7 @@ lease_started_ts_on_proposer_(0),
 lease_interval_(0),
 accepted_(false),
 is_buffer_valid_(false),
-inner_priority_seed_(DEFAULT_SEED)
+inner_priority_seed_(static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED))
 {
   memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE);
 }

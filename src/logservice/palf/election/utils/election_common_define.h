@@ -99,9 +99,13 @@ enum class LogPhase
   SET_MEMBER = 7,
 };
 
-// inner priority seed define
-constexpr int64_t DEFAULT_SEED = (1ULL << 12);
-constexpr int64_t SEED_NOT_NORMOL_REPLICA_BIT = (1ULL << 48);
+// inner priority seed define, bigger means lower priority
+enum class PRIORITY_SEED_BIT : uint64_t
+{
+  DEFAULT_SEED = (1ULL << 12),
+  SEED_IN_REBUILD_PHASE_BIT = (1ULL << 32),
+  SEED_NOT_NORMOL_REPLICA_BIT = (1ULL << 48),
+};
 
 constexpr int64_t MSG_DELAY_WARN_THRESHOLD = 200_ms;
 constexpr int64_t MAX_LEASE_TIME = 10_s;

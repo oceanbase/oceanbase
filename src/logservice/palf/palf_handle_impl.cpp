@@ -2238,6 +2238,11 @@ int PalfHandleImpl::do_init_mem_(
   int ret = OB_SUCCESS;
   int pret = -1;
   const bool is_normal_replica = (log_meta.get_log_replica_property_meta().replica_type_ == NORMAL_REPLICA);
+  // inner priority seed: smaller means higher priority
+  // reserve some bits for future requirements
+  const uint64_t election_inner_priority_seed = is_normal_replica ?
+                                                static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED) :
+                                                0ULL | static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT);
   palf::PalfRoleChangeCbWrapper &role_change_cb_wrpper = role_change_cb_wrpper_;
   if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
@@ -2249,9 +2254,7 @@ int PalfHandleImpl::do_init_mem_(
                                               election_timer,
                                               &election_msg_sender_,
                                               self,
-                                              /*inner priority seed: smaller means higher priority*/
-                                              /*reserve some bits for future requirements*/
-                                              is_normal_replica ? DEFAULT_SEED : (0ULL | SEED_NOT_NORMOL_REPLICA_BIT),
+                                              election_inner_priority_seed,
                                               1,
                                               [&role_change_cb_wrpper](int64_t id,
                                                                        const ObAddr &dest_addr){
