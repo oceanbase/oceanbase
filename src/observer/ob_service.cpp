@@ -2439,6 +2439,7 @@ int ObService::get_ls_sync_scn(
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObLSService *ls_svr = nullptr;
   SCN cur_sync_scn = SCN::min_scn();
+  SCN cur_restore_source_max_scn = SCN::min_scn();
   bool restore_to_newest = false;
   LOG_INFO("start get_ls_sync_scn", K(arg));
 
@@ -2482,13 +2483,15 @@ int ObService::get_ls_sync_scn(
     } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get restore_handler failed", KR(ret), K(ls_id), KP(ls));
-    } else if (FALSE_IT(restore_to_newest =
-               arg.check_sync_to_latest() ? restore_handler->check_restore_to_newest() : false)) {
+    // scn get order, sync_scn from leader before archive_scn
     } else if (OB_FAIL(log_handler->get_end_scn(cur_sync_scn))) {
       LOG_WARN("failed to get ls cur_sync_scn", KR(ret), K(ls_id), KPC(ls));
-    } else if (OB_FAIL(result.init(arg.get_tenant_id(), ls_id, cur_sync_scn, restore_to_newest))) {
+    } else if (arg.check_sync_to_latest()
+               && OB_FAIL(restore_handler->check_restore_to_newest(cur_sync_scn, cur_restore_source_max_scn))) {
+      LOG_WARN("failed to check_restore_to_newest", KR(ret), K(arg), KPC(ls));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id(), ls_id, cur_sync_scn, cur_restore_source_max_scn))) {
       LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()), K(ls_id), K(cur_sync_scn),
-                                     K(restore_to_newest));
+                                     K(cur_restore_source_max_scn));
     } else if (OB_FAIL(log_ls_svr->get_palf_role(ls_id, role, second_leader_epoch))) {
       COMMON_LOG(WARN, "failed to get palf role", KR(ret), K(ls_id));
     } else if (first_leader_epoch != second_leader_epoch || !is_strong_leader(role)) {
@@ -2497,7 +2500,7 @@ int ObService::get_ls_sync_scn(
           K(second_leader_epoch), K(role));
     }
   }
-  LOG_INFO("finish get_ls_sync_scn", KR(ret), K(cur_sync_scn), K(arg), K(result));
+  LOG_INFO("finish get_ls_sync_scn", KR(ret), K(cur_sync_scn), K(cur_restore_source_max_scn), K(arg), K(result));
   return ret;
 }
 

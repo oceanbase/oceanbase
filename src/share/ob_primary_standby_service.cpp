@@ -263,6 +263,8 @@ int ObPrimaryStandbyService::do_recover_tenant(const obrpc::ObRecoverTenantArg &
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   common::ObMySQLTransaction trans;
   const ObSimpleTenantSchema *tenant_schema = nullptr;
+  ObLSRecoveryStatOperator ls_recovery_operator;
+  ObLSRecoveryStat sys_ls_recovery;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
   } else if (!arg.is_valid()) {
@@ -293,15 +295,20 @@ int ObPrimaryStandbyService::do_recover_tenant(const obrpc::ObRecoverTenantArg &
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("tenant switchover_status is not NORMAL", K(tenant_info));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant switchover_status is not NORMAL, recover is");
+  } else if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, share::SYS_LS,
+                     true /*for_update*/, sys_ls_recovery, trans))) {
+    LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id));
   } else if (obrpc::ObRecoverTenantArg::RecoverType::UNTIL == arg.get_type()
-              && (arg.get_recovery_until_scn() < tenant_info.get_sync_scn())) {
+              && (arg.get_recovery_until_scn() < tenant_info.get_sync_scn()
+                  || arg.get_recovery_until_scn() < sys_ls_recovery.get_sync_scn())) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("recover before sync_scn is not allow", KR(ret), K(tenant_info), K(tenant_id), K(arg));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover before sync_scn is");
+    LOG_WARN("recover before tenant sync_scn or SYS LS sync_scn is not allow", KR(ret), K(tenant_info),
+             K(tenant_id), K(arg), K(sys_ls_recovery));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover before tenant sync_scn or SYS LS sync_scn is");
   } else if (tenant_schema->is_normal()) {
     ObLogRestoreSourceMgr restore_source_mgr;
     const SCN &recovery_until_scn = obrpc::ObRecoverTenantArg::RecoverType::UNTIL == arg.get_type() ?
-                                        arg.get_recovery_until_scn() : tenant_info.get_sync_scn();
+          arg.get_recovery_until_scn() : SCN::max(tenant_info.get_sync_scn(), sys_ls_recovery.get_sync_scn());
     if (tenant_info.get_recovery_until_scn() == recovery_until_scn) {
       LOG_WARN("recovery_until_scn is same with original", KR(ret), K(tenant_info), K(tenant_id), K(arg));
     } else if (OB_FAIL(restore_source_mgr.init(tenant_id, &trans))) {
@@ -560,6 +567,8 @@ int ObPrimaryStandbyService::switch_to_standby_prepare_ls_status_(
       ret = OB_NEED_RETRY;
       LOG_WARN("switchover is concurrency", KR(ret), K(switchover_epoch), K(new_tenant_info));
     }
+
+    DEBUG_SYNC(SWITCHING_TO_STANDBY);
   }
 
   return ret;

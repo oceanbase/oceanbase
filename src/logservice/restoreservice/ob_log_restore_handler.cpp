@@ -546,15 +546,16 @@ int ObLogRestoreHandler::check_restore_done(const SCN &recovery_end_scn, bool &d
   return ret;
 }
 
-bool ObLogRestoreHandler::check_restore_to_newest()
+int ObLogRestoreHandler::check_restore_to_newest(share::SCN &end_scn, share::SCN &archive_scn)
 {
   int ret = OB_SUCCESS;
-  bool bret = false;
   ObRemoteSourceGuard guard;
   ObRemoteLogParent *source = NULL;
   ObLogArchivePieceContext *piece_context = NULL;
   share::ObBackupDest *dest = NULL;
-  SCN end_scn;
+  end_scn = SCN::min_scn();
+  archive_scn = SCN::min_scn();
+  SCN restore_scn = SCN::min_scn();
   {
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
@@ -572,33 +573,21 @@ bool ObLogRestoreHandler::check_restore_to_newest()
       CLOG_LOG(WARN, "source is invalid", K(ret), KPC(this), KPC(source));
     } else {
       ObRemoteLocationParent *location_source = dynamic_cast<ObRemoteLocationParent *>(source);
-      location_source->get(dest, piece_context, end_scn);
+      location_source->get(dest, piece_context, restore_scn);
     }
   }
 
   if (OB_SUCC(ret) && NULL != piece_context) {
     palf::LSN archive_lsn;
-    SCN archive_scn;
-    SCN scn;
-    if (OB_FAIL(palf_handle_.get_end_scn(scn))) {
+    if (OB_FAIL(palf_handle_.get_end_scn(end_scn))) {
       CLOG_LOG(WARN, "get end scn failed", K(ret), K(id_));
     } else if (OB_FAIL(piece_context->get_max_archive_log(archive_lsn, archive_scn))) {
       CLOG_LOG(WARN, "get max archive log failed", K(ret), K(id_));
     } else {
-      if (archive_scn == scn) {
-        bret = true;
-        CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(bret), K(archive_scn), K(scn));
-      } else if (archive_scn < scn) {
-        bret = true;
-        CLOG_LOG(INFO, "archive_scn smaller than palf end_scn, check_restore_to_newest succ",
-            K(id_), K(bret), K(archive_scn), K(scn));
-      } else {
-        CLOG_LOG(INFO, "archive_scn bigger than palf end_scn, restore log not finish",
-            K(id_), K(bret), K(archive_scn), K(scn));
-      }
+      CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn));
     }
   }
-  return bret;
+  return ret;
 }
 
 int ObLogRestoreHandler::submit_sorted_task(ObFetchLogTask &task)

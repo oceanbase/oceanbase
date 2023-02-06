@@ -5235,15 +5235,15 @@ DEF_TO_STRING(ObSplitPartitionBatchArg)
 
 bool ObCheckpoint::is_valid() const
 {
-  return (ls_id_.is_valid() && cur_sync_scn_.is_valid_and_not_min());
+  return (ls_id_.is_valid() && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_max_scn_.is_valid_and_not_min());
 }
 
 bool ObCheckpoint::operator==(const obrpc::ObCheckpoint &r) const
 {
-  return ls_id_ == r.ls_id_ && cur_sync_scn_ == r.cur_sync_scn_ && is_sync_to_latest_ == r.is_sync_to_latest_;
+  return ls_id_ == r.ls_id_ && cur_sync_scn_ == r.cur_sync_scn_ && cur_restore_source_max_scn_ == r.cur_restore_source_max_scn_;
 }
 
-OB_SERIALIZE_MEMBER(ObCheckpoint, ls_id_, cur_sync_scn_, is_sync_to_latest_);
+OB_SERIALIZE_MEMBER(ObCheckpoint, ls_id_, cur_sync_scn_, cur_restore_source_max_scn_);
 
 OB_SERIALIZE_MEMBER(ObGetWRSArg, tenant_id_, scope_, need_filter_);
 OB_SERIALIZE_MEMBER(ObGetWRSResult, self_addr_, err_code_);
@@ -5391,31 +5391,32 @@ int ObGetLSSyncScnArg::assign(const ObGetLSSyncScnArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObGetLSSyncScnRes, tenant_id_, ls_id_, cur_sync_scn_, is_sync_to_latest_);
+OB_SERIALIZE_MEMBER(ObGetLSSyncScnRes, tenant_id_, ls_id_, cur_sync_scn_, cur_restore_source_max_scn_);
 
 bool ObGetLSSyncScnRes::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
          && ls_id_.is_valid()
-         && cur_sync_scn_.is_valid_and_not_min();
+         && cur_sync_scn_.is_valid_and_not_min()
+         && cur_restore_source_max_scn_.is_valid_and_not_min();
 }
 int ObGetLSSyncScnRes::init(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const share::SCN &cur_sync_scn,
-    const bool is_sync_to_latest)
+    const share::SCN &cur_restore_source_max_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   || !ls_id.is_valid()
                   || !cur_sync_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_sync_scn), K(is_sync_to_latest));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_sync_scn), K(cur_restore_source_max_scn));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     cur_sync_scn_ = cur_sync_scn;
-    is_sync_to_latest_ = is_sync_to_latest;
+    cur_restore_source_max_scn_ = cur_restore_source_max_scn;
   }
   return ret;
 }
@@ -5427,7 +5428,7 @@ int ObGetLSSyncScnRes::assign(const ObGetLSSyncScnRes &other)
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
     cur_sync_scn_ = other.cur_sync_scn_;
-    is_sync_to_latest_ = other.is_sync_to_latest_;
+    cur_restore_source_max_scn_ = other.cur_restore_source_max_scn_;
   }
   return ret;
 }
