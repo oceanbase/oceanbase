@@ -393,7 +393,7 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
                                              session_id))) {
       LOG_WARN("fail to handle autoinc column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
     } else if (column_schema->is_identity_column() &&
-               OB_FAIL(handle_identity_column(column_schema, datum_row.storage_datums_[i]))) {
+               OB_FAIL(handle_identity_column(column_schema, datum_row.storage_datums_[i], cast_allocator))) {
       LOG_WARN("fail to handle identity column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
     }
   }
@@ -415,20 +415,17 @@ int ObTableLoadTransStoreWriter::handle_autoinc_column(const ObColumnSchemaV2 *c
                                                        const ObObjTypeClass &tc, int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t save_timeout_ts = THIS_WORKER.get_timeout_ts();
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() +
-                             max(GCONF.rpc_timeout, RPC_TIMEOUT_US));
   if (OB_FAIL(ObTableLoadAutoincNextval::eval_nextval(
         &(store_ctx_->session_ctx_array_[session_id - 1].autoinc_param_), datum, tc,
         param_.sql_mode_))) {
     LOG_WARN("fail to get auto increment next value", KR(ret));
   }
-  THIS_WORKER.set_timeout_ts(save_timeout_ts);
   return ret;
 }
 
 int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *column_schema,
-                                                        ObStorageDatum &datum)
+                                                        ObStorageDatum &datum,
+                                                        ObArenaAllocator &cast_allocator)
 {
   int ret = OB_SUCCESS;
   if (column_schema->is_always_identity_column()) {
@@ -438,11 +435,12 @@ int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *
     ret = OB_ERR_INVALID_NOT_NULL_CONSTRAINT_ON_IDENTITY_COLUMN;
     LOG_WARN("default identity column has null value", KR(ret));
   } else if (column_schema->is_default_on_null_identity_column()) {
+    ObSequenceValue seq_value;
     if (OB_FAIL(share::ObSequenceCache::get_instance().nextval(
-          trans_ctx_->ctx_->store_ctx_->sequence_schema_, allocator_, seq_value_))) {
+          trans_ctx_->ctx_->store_ctx_->sequence_schema_, cast_allocator, seq_value))) {
       LOG_WARN("fail get nextval for seq", KR(ret));
     } else if (datum.is_null()) {
-      datum.set_number(seq_value_.val());
+      datum.set_number(seq_value.val());
     }
   }
   return ret;
