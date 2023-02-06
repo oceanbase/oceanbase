@@ -458,9 +458,12 @@ int ObSharedMacroBlockMgr::update_tablet(
   ObSArray<ObTableHandleV2> table_handles;
   ObTableHandleV2 sstable_handle;
   ObSArray<ObITable *> sstables;
+  uint64_t data_version = 0;
 
   if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(sstables))) {
     LOG_WARN("fail to get sstables of this tablet", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get data version", K(ret));
   }
   for (int64_t i = 0; i < sstables.count() && OB_SUCC(ret); i++) {
     const ObSSTable *sstable = static_cast<ObSSTable *>(sstables.at(i));
@@ -476,6 +479,7 @@ int ObSharedMacroBlockMgr::update_tablet(
         if (OB_FAIL(rebuild_sstable(
             *(tablet_handle.get_obj()),
             *sstable,
+            data_version,
             sstable_index_builder,
             index_block_rebuilder,
             sstable_handle))) {
@@ -514,6 +518,7 @@ int ObSharedMacroBlockMgr::update_tablet(
 int ObSharedMacroBlockMgr::rebuild_sstable(
     const ObTablet &tablet,
     const ObSSTable &old_sstable,
+    const uint64_t data_version,
     ObSSTableIndexBuilder &sstable_index_builder,
     ObIndexBlockRebuilder &index_block_rebuilder,
     ObTableHandleV2 &table_handle)
@@ -538,7 +543,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
       old_sstable.get_meta().get_basic_meta(),
       merge_type,
       tablet.get_snapshot_version(),
-      GET_MIN_CLUSTER_VERSION(),
+      data_version,
       data_desc))) {
     LOG_WARN("fail to prepare data desc", K(ret), K(merge_type), K(tablet.get_snapshot_version()));
   } else if (OB_FAIL(sstable_index_builder.init(data_desc, nullptr, ObSSTableIndexBuilder::DISABLE))) {
@@ -569,6 +574,8 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
         || OB_FAIL(ObSSTableMetaChecker::check_sstable_meta_strict_equality(old_sstable.get_meta(), new_sstable->get_meta()))) {
       ret = OB_INVALID_DATA;
       LOG_WARN("new sstable is not equal to old sstable", K(ret), KPC(new_sstable), K(old_sstable));
+    } else {
+      FLOG_INFO("successfully rebuild one sstable", K(ret), K(block_info), K(new_sstable->get_key()), K(new_sstable->get_meta()));
     }
   }
 

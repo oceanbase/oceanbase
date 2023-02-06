@@ -137,7 +137,7 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
   int ret = OB_SUCCESS;
 
   int opt = 0;
-  const char* opt_string = "d:hf:a:i:n:qxk:m:";
+  const char* opt_string = "d:hf:a:i:n:qxk:m:t:s:";
 
   struct option longopts[] = {
     // commands
@@ -151,7 +151,9 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
     { "quiet", 0, NULL, 'q' },
     { "hex-print", 0, NULL, 'x' },
     { "master_key", 1, NULL, 'k'},
-    { "master_key_id", 1, NULL, 'm'}
+    { "master_key_id", 1, NULL, 'm'},
+    { "tablet_id", 1, NULL, 't'},
+    { "scn", 1, NULL, 's'}
   };
 
   int index = -1;
@@ -209,6 +211,14 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
       key_hex_str_ = optarg;
       break;
     }
+    case 't': {
+      dump_macro_context_.tablet_id_ = strtoll(optarg, NULL, 10);
+      break;
+    }
+    case 's': {
+      dump_macro_context_.scn_ = strtoll(optarg, NULL, 10);
+      break;
+    }
     default: {
       print_usage();
       exit(1);
@@ -238,9 +248,10 @@ int ObAdminDumpsstExecutor::dump_single_macro_block(const char* buf, const int64
     STORAGE_LOG(ERROR, "invalid argument", K(ret), KP(buf), K(size));
   } else if (OB_FAIL(macro_reader.init(buf, size, hex_print_))) {
     STORAGE_LOG(ERROR, "failed to init macro reader", K(ret), KP(buf), K(size));
-  } else if (OB_FAIL(macro_reader.dump())) {
-    STORAGE_LOG(ERROR, "failed dump macro block", K(ret), KP(buf), K(size));
+  } else if (OB_FAIL(macro_reader.dump(dump_macro_context_.tablet_id_, dump_macro_context_.scn_))) {
+    STORAGE_LOG(ERROR, "failed dump macro block", K(ret), KP(buf), K(size), K(dump_macro_context_));
   }
+
   return ret;
 }
 
@@ -337,9 +348,13 @@ void ObAdminDumpsstExecutor::print_usage()
   printf(HELP_FMT, "-x,--hex-print", "print obj value in hex mode");
   printf(HELP_FMT, "-k,--master_key", "master key, hex str");
   printf(HELP_FMT, "-m,--master_key_id", "master key id");
+  printf(HELP_FMT, "-t,--tablet_id", "tablet id");
+  printf(HELP_FMT, "-s,--logical_version", "macro block logical version");
   printf("samples:\n");
   printf("  dump all rows in macro: \n");
   printf("\tob_admin -d macro_block -f block_file_path -a macro_id\n");
+  printf("  dump specified block in the shared block: \n");
+  printf("\tob_admin -d macro_block -f block_file_path -a macro_id -t tablet_id -s logical_version\n");
 }
 } //namespace tools
 } //namespace oceanbase
