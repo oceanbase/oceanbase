@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_executor_factory.h"
+#include "ob_table_cg_service.h"
 #include "share/datum/ob_datum_util.h"
 
 namespace oceanbase

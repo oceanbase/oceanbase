@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_execute_processor.h"
-#include "ob_table_rpc_processor_util.h"
 #include "observer/ob_service.h"
 #include "ob_table_end_trans_cb.h"
 #include "sql/optimizer/ob_table_location.h"  // ObTableLocation
@@ -331,38 +330,6 @@ int ObTableApiExecuteP::get_tablet_id(uint64_t table_id, const ObRowkey &rowkey,
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("partitioned table not supported", K(ret), K(table_id));
   }
-  return ret;
-}
-
-template<int TYPE>
-int ObTableApiExecuteP::process_dml_op()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_arg2())) {
-    LOG_WARN("fail to check arg", K(ret));
-  } else if (OB_FAIL(init_tb_ctx())) {
-    LOG_WARN("fail to init tb ctx", K(ret));
-  } else if (OB_FAIL(start_trans(false, /* is_readonly */
-                                 sql::stmt::T_INSERT,
-                                 arg_.consistency_level_,
-                                 tb_ctx_.get_table_id(),
-                                 tb_ctx_.get_ls_id(),
-                                 get_timeout_ts()))) {
-    LOG_WARN("fail to start trans", K(ret));
-  } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
-    LOG_WARN("fail to init trans", K(ret));
-  } else if (OB_FAIL(ObTableOpWrapper::process_op<TYPE>(tb_ctx_, result_))) {
-    LOG_WARN("fail to process op", K(ret));
-  }
-
-  result_.set_errno(ret);
-  ObTableRpcProcessorUtil::replace_ret_code(ret);
-  int tmp_ret = ret;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
-    LOG_WARN("fail to end trans", K(ret));
-  }
-
-  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
   return ret;
 }
 

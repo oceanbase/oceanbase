@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_cache.h"
-#include "ob_table_cg_service.h"
-
 namespace oceanbase
 {
 
@@ -196,32 +194,6 @@ int ObTableApiCacheGuard::get_expr_info(ObTableCtx *tb_ctx, ObExprFrameInfo *&ex
       expr_frame_info = cache_obj->get_expr_frame_info();
     }
   }
-  return ret;
-}
-
-template<int TYPE>
-int ObTableApiCacheGuard::get_spec(ObTableCtx *tb_ctx, ObTableApiSpec *&spec)
-{
-  int ret = OB_SUCCESS;
-  ObTableApiCacheObj *cache_obj = nullptr;
-  ObTableApiSpec *tmp_spec = nullptr;
-  if (OB_ISNULL(cache_obj = static_cast<ObTableApiCacheObj *>(cache_guard_.get_cache_obj()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cache obj is null", K(ret));
-  } else if (OB_ISNULL(tmp_spec = cache_obj->get_spec())) {
-    if (OB_FAIL(ObTableSpecCgService::generate<TYPE>(cache_obj->get_allocator(),
-                                                     *tb_ctx,
-                                                     tmp_spec))) {
-      LOG_WARN("fail to generate spec", K(ret));
-    } else {
-      cache_obj->set_spec(tmp_spec);
-      if (OB_FAIL(lib_cache_->add_cache_obj(cache_ctx_, &cache_key_, cache_obj))) {
-        // spec生成后直接加入的lib cache
-        LOG_WARN("fail to add cache obj to lib cache", K(ret), K(cache_key_));
-      }
-    }
-  }
-  spec = tmp_spec;
   return ret;
 }
 

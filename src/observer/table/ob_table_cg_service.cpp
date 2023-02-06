@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_cg_service.h"
 #include "share/datum/ob_datum_util.h"
-#include "ob_table_executor_factory.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "share/system_variable/ob_system_variable.h" // for ObBinlogRowImage::FULL
 
@@ -1870,68 +1869,6 @@ int ObTableDmlCgService::generate_related_upd_ctdef(ObTableCtx &ctx,
     } else if (OB_FAIL(upd_ctdefs.push_back(related_das_ctdef))) {
       LOG_WARN("fail to store related ctdef", K(ret));
     }
-  }
-
-  return ret;
-}
-
-// generate spec tree witch a child node
-template<int FATHER_TYPE, int CHILD_TYPE>
-int ObTableSpecCgService::generate_with_child(ObIAllocator &alloc,
-                                              ObTableCtx &ctx,
-                                              ObTableApiSpec *&root_spec)
-{
-  int ret = OB_SUCCESS;
-  ObTableApiSpec *child_spec = nullptr;
-  if (FATHER_TYPE <= TABLE_API_EXEC_INVALID || FATHER_TYPE >= TABLE_API_EXEC_MAX ||
-      CHILD_TYPE <= TABLE_API_EXEC_INVALID || CHILD_TYPE >= TABLE_API_EXEC_MAX) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid type", K(ret), K(FATHER_TYPE), K(CHILD_TYPE));
-  } else if (OB_FAIL(ObTableExecutorFactory::generate_spec(
-                       alloc, static_cast<ObTableExecutorType>(CHILD_TYPE), ctx, child_spec))) {
-    LOG_WARN("fail to generate scan spec", K(ret));
-  } else {
-    ObTableApiSpec *father_spec = nullptr;
-    if (OB_FAIL(ObTableExecutorFactory::generate_spec(
-                  alloc, static_cast<ObTableExecutorType>(FATHER_TYPE), ctx, father_spec))) {
-      LOG_WARN("fail to generate update spec", K(ret));
-    } else {
-      father_spec->set_child(child_spec);
-      child_spec->set_parent(father_spec);
-      root_spec = father_spec;
-    }
-  }
-
-  return ret;
-}
-
-// NOTE: In default, generate spec tree with one node which type is input TYPE
-template<int TYPE>
-int ObTableSpecCgService::generate(ObIAllocator &alloc,
-                                   ObTableCtx &ctx,
-                                   ObTableApiSpec *&root_spec)
-{
-  int ret = OB_SUCCESS;
-  ObTableApiSpec *spec = nullptr;
-  if (TYPE <= TABLE_API_EXEC_INVALID || TYPE >= TABLE_API_EXEC_MAX) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("input TYPE is invalid", K(ret), K(TYPE));
-  } else if (TYPE == TABLE_API_EXEC_UPDATE) {
-    ret = ObTableSpecCgService::generate_with_child
-        <TABLE_API_EXEC_UPDATE, TABLE_API_EXEC_SCAN>(alloc, ctx, root_spec);
-  } else if (TYPE == TABLE_API_EXEC_DELETE) {
-    ret = ObTableSpecCgService::generate_with_child
-        <TABLE_API_EXEC_DELETE, TABLE_API_EXEC_SCAN>(alloc, ctx, root_spec);
-  } else if (TYPE == TABLE_API_EXEC_LOCK) {
-    ret = ObTableSpecCgService::generate_with_child
-        <TABLE_API_EXEC_LOCK, TABLE_API_EXEC_SCAN>(alloc, ctx, root_spec);
-  } else if (OB_FAIL(ObTableExecutorFactory::generate_spec(alloc,
-                                                           static_cast<ObTableExecutorType>(TYPE),
-                                                           ctx,
-                                                           spec))) {
-    LOG_WARN("fail to generate spec", K(ret));
-  } else {
-    root_spec = spec;
   }
 
   return ret;
