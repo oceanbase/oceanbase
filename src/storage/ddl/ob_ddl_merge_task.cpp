@@ -381,8 +381,10 @@ int ObDDLTableMergeTask::process()
                                                                                         is_scn_overlap))) {
       LOG_WARN("check ddl sstable integrity failed", K(ret), K(ddl_sstable_handles), K(ddl_param), K(merge_param_));
     } else if (merge_param_.is_commit_ && !is_data_complete) {
-      ret = OB_NOT_ENOUGH_STORE;
-      LOG_WARN("current ddl sstables not contain all data", K(ddl_sstable_handles), K(ddl_param), K(merge_param_));
+      ret = OB_EAGAIN;
+      if (TC_REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
+        LOG_WARN("current ddl sstables not contain all data", K(ddl_sstable_handles), K(ddl_param), K(merge_param_));
+      }
     } else if (FALSE_IT(ddl_param.table_key_.table_type_ = merge_param_.is_commit_ ?
           ObITable::TableType::MAJOR_SSTABLE : ObITable::TableType::DDL_DUMP_SSTABLE)) {
     } else if (OB_FAIL(ObTabletDDLUtil::compact_ddl_sstable(ddl_sstable_handles.get_tables(),
