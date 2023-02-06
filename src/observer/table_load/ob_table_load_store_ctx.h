@@ -49,12 +49,12 @@ public:
 public:
   OB_INLINE table::ObTableLoadStatusType get_status() const
   {
-    lib::ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     return status_;
   }
   OB_INLINE int get_error_code() const
   {
-    lib::ObMutexGuard guard(mutex_);
+    obsys::ObRLockGuard guard(rwlock_);
     return error_code_;
   }
   OB_INLINE int set_status_inited()
@@ -153,7 +153,7 @@ private:
   typedef common::ObLinkHashMap<table::ObTableLoadSegmentID, SegmentCtx> SegmentCtxMap;
 private:
   ObTableLoadObjectAllocator<ObTableLoadStoreTrans> trans_allocator_; // 多线程安全
-  mutable lib::ObMutex mutex_;
+  mutable obsys::ObRWLock rwlock_;
   common::ObArenaAllocator allocator_;
   table::ObTableLoadStatusType status_;
   int error_code_;
