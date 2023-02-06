@@ -167,7 +167,8 @@ public:
       const int64_t schema_version);
   int drop_inc_partition_add_extra_str(const ObTableSchema &inc_table,
                                        ObSqlString &sql,
-                                       ObSqlString &condition_str);
+                                       ObSqlString &condition_str,
+                                       ObSqlString &dml_info_cond_str);
   int drop_inc_partition(common::ObISQLClient &sql_client,
                          const ObTableSchema &ori_table,
                          const ObTableSchema &inc_table,
@@ -353,7 +354,8 @@ private:
                                    const uint64_t table_id);
   int delete_from_all_monitor_modified(ObISQLClient &sql_client,
                                        const uint64_t tenant_id,
-                                       const uint64_t table_id);
+                                       const uint64_t table_id,
+                                       const ObSqlString *extra_condition = NULL);
   int delete_from_all_table_stat_history(ObISQLClient &sql_client,
                                          const uint64_t tenant_id,
                                          const uint64_t table_id,
