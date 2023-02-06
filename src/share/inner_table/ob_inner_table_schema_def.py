@@ -24726,6 +24726,8 @@ def_table_schema(
                           THEN CONCAT(lower(v.data_type_str),'(',rp.param_precision, ',', rp.param_scale,')')
                           WHEN rp.param_type IN (18, 20)
                           THEN CONCAT(lower(v.data_type_str),'(', rp.param_scale, ')')
+                          WHEN rp.param_type IN (22, 23)
+                          THEN CONCAT(lower(v.data_type_str),'(', rp.param_length, ')')
                           ELSE lower(v.data_type_str) END AS char(4194304)) AS DTD_IDENTIFIER,
                         CAST(CASE WHEN r.routine_type = 1 THEN 'PROCEDURE'
                           WHEN ROUTINE_TYPE = 2 THEN 'FUNCTION'
