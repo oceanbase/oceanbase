@@ -4138,30 +4138,31 @@ int ObIJsonBase::compare_object(const ObIJsonBase &other, int &res) const
     const uint64_t len_b = other.element_count();
     res = ObJsonBaseUtil::compare_numbers(len_a, len_b);
     for (uint64_t i = 0; (res == 0) && OB_SUCC(ret) && i < len_a; i++) {
-      ObString key;
-      if (OB_FAIL(get_key(i, key))) {
+      ObString key_a, key_b;
+      if (OB_FAIL(get_key(i, key_a))) {
         LOG_WARN("failed to get this key", K(ret), K(i));
+      } else if (OB_FAIL(other.get_key(i, key_b))) {
+        LOG_WARN("failed to get other key.", K(ret), K(i));
       } else {
-        ObIJsonBase *jb_a_ptr = NULL;
-        ObIJsonBase *jb_b_ptr = NULL;
-        ObJsonBin j_bin_a(allocator_);
-        ObJsonBin j_bin_b(allocator_);
-        if (is_bin()) {
-          jb_a_ptr = &j_bin_a;
-          jb_b_ptr = &j_bin_b;
-        }
-        // Compare value.
-        if (OB_FAIL(get_object_value(i, jb_a_ptr))) {
-          LOG_WARN("fail to get this json obj element", K(ret), K(i), K(len_a));
-        } else if (OB_FAIL(other.get_object_value(key, jb_b_ptr))) {
-          if (ret == OB_SEARCH_NOT_FOUND) {
-            // not equal, it is normal.
-            res = -1;
-            ret = OB_SUCCESS;
+        // Compare keys.
+        res = key_a.compare(key_b);
+        if (res == 0) {
+          ObIJsonBase *jb_a_ptr = NULL;
+          ObIJsonBase *jb_b_ptr = NULL;
+          ObJsonBin j_bin_a(allocator_);
+          ObJsonBin j_bin_b(allocator_);
+          if (is_bin()) {
+            jb_a_ptr = &j_bin_a;
+            jb_b_ptr = &j_bin_b;
           }
-          LOG_WARN("fail to get other json obj element", K(ret), K(i), K(len_b));
-        } else if (OB_FAIL(jb_a_ptr->compare(*jb_b_ptr, res))) {
-          LOG_WARN("fail to compare this json to other json", K(ret), K(i), K(len_a), K(len_b));
+          // Compare value.
+          if (OB_FAIL(get_object_value(i, jb_a_ptr))) {
+            LOG_WARN("fail to get this json obj element", K(ret), K(i), K(len_a));
+          } else if (OB_FAIL(other.get_object_value(i, jb_b_ptr))) {
+            LOG_WARN("fail to get other json obj element", K(ret), K(i), K(len_b));
+          } else if (OB_FAIL(jb_a_ptr->compare(*jb_b_ptr, res))) {
+            LOG_WARN("fail to compare this json to other json", K(ret), K(i), K(len_a), K(len_b));
+          }
         }
       }
     }
