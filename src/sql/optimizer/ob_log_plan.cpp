@@ -3814,7 +3814,9 @@ int ObLogPlan::inner_remove_redundancy_pred(ObIArray<ObRawExpr*> &join_pred,
     if (OB_ISNULL(cur_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(cur_expr));
-    } else if (T_OP_EQ == cur_expr->get_expr_type()) {
+    } else if (T_OP_EQ == cur_expr->get_expr_type() &&
+               2 == cur_expr->get_param_count() &&
+               cur_expr->get_param_expr(0) != cur_expr->get_param_expr(1)) {
       if (OB_ISNULL(left_expr = cur_expr->get_param_expr(0)) ||
           OB_ISNULL(right_expr = cur_expr->get_param_expr(1))) {
         ret = OB_ERR_UNEXPECTED;
