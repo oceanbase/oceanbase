@@ -3212,8 +3212,10 @@ int ObTransformPreProcess::transform_for_rls_table(ObDMLStmt *stmt, bool &trans_
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
-      } else if (table_item->is_basic_table() && !table_item->is_system_table_ &&
-                 !table_item->is_link_table()) {
+      } else if ((table_item->is_basic_table() &&
+                  !table_item->is_system_table_ &&
+                  !table_item->is_link_table()) ||
+                 table_item->is_view_table_) {
         uint64_t table_ref_id = table_item->ref_id_;
         const ObTableSchema *table_schema = NULL;
         if (OB_FAIL(schema_checker->get_table_schema(session_info->get_effective_tenant_id(),
