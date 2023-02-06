@@ -596,12 +596,11 @@ int ObSortOpImpl::init(
   } else if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(sort_collations) || OB_ISNULL(sort_cmp_funs) || OB_ISNULL(eval_ctx)
-            || sort_collations->count() != sort_cmp_funs->count() || OB_ISNULL(exec_ctx)
-            || part_cnt > sort_collations->count()) {
+  } else if (OB_ISNULL(sort_collations) || OB_ISNULL(sort_cmp_funs)
+             || OB_ISNULL(eval_ctx) || OB_ISNULL(exec_ctx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument: argument is null", K(ret), K(tenant_id),
-              K(sort_collations), K(sort_cmp_funs), K(eval_ctx), K(part_cnt));
+    LOG_WARN("invalid argument: argument is null", K(ret),
+              K(tenant_id), K(sort_collations), K(sort_cmp_funs), K(eval_ctx));
   } else if (OB_FAIL(comp_.init(sort_collations, sort_cmp_funs,
                       exec_ctx, enable_encode_sortkey))) {
     LOG_WARN("failed to init compare functions", K(ret));

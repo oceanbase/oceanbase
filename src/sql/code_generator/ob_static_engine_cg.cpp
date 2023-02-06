@@ -1762,6 +1762,16 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
         spec.part_cnt_ = op.get_part_cnt();
         LOG_TRACE("trace order by", K(spec.all_exprs_.count()), K(spec.all_exprs_));
       }
+      if (OB_SUCC(ret)) {
+        if (spec.sort_collations_.count() != spec.sort_cmp_funs_.count()
+            || (spec.part_cnt_ > 0 && spec.part_cnt_ >= spec.sort_collations_.count())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("part cnt or sort size not meet the expection", K(ret),
+            K(OB_NOT_NULL(op.get_topn_expr())), K(OB_NOT_NULL(op.get_topk_limit_expr())),
+            K(spec.enable_encode_sortkey_opt_), K(spec.prefix_pos_), K(spec.is_local_merge_sort_),
+            K(spec.part_cnt_), K(spec.sort_collations_.count()), K(spec.sort_cmp_funs_.count()));
+        }
+      }
     }
   }
   return ret;
