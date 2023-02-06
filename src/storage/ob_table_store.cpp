@@ -1006,6 +1006,16 @@ int ObTableStore::get_major_merge_tables(const ObGetMergeTablesParam &param, ObG
       } else {
         result.create_sstable_for_large_snapshot_ = true;
       }
+    } else {
+      const ObITable *last_minor = nullptr;
+      if (OB_ISNULL(last_minor = result.handle_.get_last_table())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null table", K(ret), K(result));
+      } else if (last_minor->get_snapshot_version() < next_major_freeze_ts) {
+        ret = OB_NO_NEED_MERGE;
+        LOG_WARN("cannot major due to snapshot version fallback which may happened after migrate",
+            K(ret), K(param), KPC(last_minor), K(next_major_version), K(next_major_freeze_ts), K(result), K(PRETTY_TS(*this)));
+      }
     }
     if (OB_SUCC(ret)) {
       const int64_t major_snapshot = std::max(base_table->get_snapshot_version(), next_major_freeze_ts);
