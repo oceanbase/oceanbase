@@ -11310,13 +11310,21 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
                                         is_correlated))) {
     LOG_WARN("failed to check is correlated expr", K(ret));
   } else if (!is_correlated) {
-    if (pos >= new_column_list.count()) {
+    if (expr->is_exec_param_expr()) {
+      //do nothing
+    } else if (pos >= new_column_list.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect array pos", K(pos), K(new_column_list), K(ret));
     } else {
       expr = new_column_list.at(pos);
       ++pos;
     }
+  } else if (T_OP_EXISTS == expr->get_expr_type() ||
+             T_OP_NOT_EXISTS == expr->get_expr_type() ||
+             IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type()) ||
+             T_FUN_SYS_CAST == expr->get_expr_type()) {
+    //exists(subquery)、cast(expr as type)、c1 > any(subquery)
+    //do nothing
   } else {
     int64_t N = expr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
@@ -11368,22 +11376,21 @@ int ObTransformUtils::pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
     } else if (OB_FAIL(new_select_list.push_back(expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     }
+  } else if (T_OP_EXISTS == expr->get_expr_type() ||
+             T_OP_NOT_EXISTS == expr->get_expr_type() ||
+             IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type()) ||
+             T_FUN_SYS_CAST == expr->get_expr_type()) {
+    //exists(subquery)、cast(expr as type)、c1 > any(subquery)
+    //do nothing
   } else {
     int64_t N = expr->get_param_count();
+    bool param_correlated = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      bool param_correlated = false;
       if (OB_FAIL(SMART_CALL(pullup_correlated_expr(query_ref,
                                                     expr->get_param_expr(i),
                                                     new_select_list,
                                                     param_correlated)))) {
         LOG_WARN("failed to pullup correlated expr", K(ret));
-      } else {
-        is_correlated = param_correlated || is_correlated;
-      }
-    }
-    if (OB_SUCC(ret) && !is_correlated) {
-      if (OB_FAIL(new_select_list.push_back(expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
       }
     }
   }

@@ -56,3 +56,23 @@ int ObLogSelectInto::compute_plan_type()
   } else { /*do nothing*/ }
   return ret;
 }
+
+int ObLogSelectInto::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  const ObSelectStmt *sel_stmt = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!stmt->is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected stmt type", K(ret));
+  } else if (OB_FALSE_IT(sel_stmt = static_cast<const ObSelectStmt*>(stmt))) {
+  } else if (OB_FAIL(sel_stmt->get_select_exprs(output_exprs_))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+    LOG_WARN("failed to get op exprs", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}

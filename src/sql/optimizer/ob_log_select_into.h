@@ -99,6 +99,7 @@ public:
   }
   virtual int est_cost() override;
   virtual int compute_plan_type() override;
+  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
 private:
   ObItemType into_type_;
   common::ObObj outfile_name_;
