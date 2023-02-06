@@ -19,6 +19,7 @@ using namespace blocksstable;
 using namespace common;
 using namespace table;
 using namespace observer;
+using namespace share::schema;
 
 int ObTableLoadUtils::check_user_access(const common::ObString &credential_str,
                                         const observer::ObGlobalContext &gctx,
@@ -26,10 +27,37 @@ int ObTableLoadUtils::check_user_access(const common::ObString &credential_str,
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  if (OB_FAIL(serialization::decode(credential_str.ptr(), credential_str.length(), pos, credential))) {
+  ObSchemaGetterGuard schema_guard;
+  const ObUserInfo *user_info = NULL;
+  if (OB_ISNULL(gctx.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", K(ret));
+  } else if (OB_FAIL(serialization::decode(credential_str.ptr(), credential_str.length(), pos, credential))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));
+  } else if (OB_FAIL(gctx.schema_service_->get_tenant_schema_guard(credential.tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), "tenant_id", credential.tenant_id_);
+  } else if (OB_FAIL(schema_guard.get_user_info(credential.tenant_id_, credential.user_id_, user_info))) {
+    LOG_WARN("fail to get user info", K(ret), K(credential));
+  } else if (OB_ISNULL(user_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("user info is null", K(ret), K(credential));
+  } else {
+    const uint64_t user_token = user_info->get_passwd_str().hash();
+    uint64_t hash_val = credential.hash(user_token);
+    uint64_t my_cluster_id = GCONF.cluster_id;
+    if (hash_val != credential.hash_val_) {
+      ret = OB_ERR_NO_PRIVILEGE;
+      LOG_WARN("invalid credential", K(ret), K(credential), K(hash_val));
+    } else if (my_cluster_id != credential.cluster_id_) {
+      ret = OB_ERR_NO_PRIVILEGE;
+      LOG_WARN("invalid credential cluster id", K(ret), K(credential), K(my_cluster_id));
+    } else if (user_info->get_is_locked()) { // check whether user is locked.
+      ret = OB_ERR_USER_IS_LOCKED;
+      LOG_WARN("user is locked", K(ret), K(credential));
+    } else {
+      LOG_DEBUG("user can access", K(credential));
+    }
   }
-  //暂时不检查用户，后续加上
   return ret;
 }
 
