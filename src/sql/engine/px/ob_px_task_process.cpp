@@ -463,7 +463,8 @@ int ObPxTaskProcess::do_process()
       // nop
     } else if (IS_INTERRUPTED()) {
       //当前是被QC中断的，不再向QC发送中断，退出即可。
-    } else if (arg_.get_sqc_handler()->get_sqc_init_arg().sqc_.is_ignore_vtable_error()) {
+    } else if (ret != OB_TIMEOUT &&
+        arg_.get_sqc_handler()->get_sqc_init_arg().sqc_.is_ignore_vtable_error()) {
       // 忽略虚拟表错误
     } else {
       (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret);

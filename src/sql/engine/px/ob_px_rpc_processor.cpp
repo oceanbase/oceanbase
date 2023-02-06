@@ -265,7 +265,7 @@ void ObFastInitSqcReportQCMessageCall::operator()(hash::HashMapPair<ObInterrupti
 {
   UNUSED(entry);
   if (OB_NOT_NULL(sqc_)) {
-    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS) {
+    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS && err_ != OB_TIMEOUT) {
       // 当该SQC是虚拟表查询时, 调度RPC失败时需要忽略错误结果.
       // 并mock一个sqc finsh msg发送给正在轮询消息的PX算子
       // 此操作已确认是线程安全的.
