@@ -141,7 +141,24 @@ int ObLogGranuleIterator::set_range_order()
     } else {
       add_flag(GI_DESC_ORDER);
     }
-    LOG_TRACE("partition/block order", K(is_asc_order), K(gi_attri_flag_));
+    LOG_TRACE("partition order", K(is_asc_order), K(gi_attri_flag_), K(ret));
+  } else if (affinitize()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null operator", K(child), K(ret));
+    } else if (child->get_op_ordering().count() <= 0) {
+      //do nothing
+    } else {
+      common::ObIArray<OrderItem> &child_ordering = child->get_op_ordering();
+      bool is_asc_order = is_ascending_direction(child_ordering.at(0).order_type_);
+      if (is_asc_order) {
+        add_flag(GI_ASC_ORDER);
+      } else {
+        add_flag(GI_DESC_ORDER);
+      }
+      LOG_TRACE("affinitize partition order", K(is_asc_order), K(gi_attri_flag_), K(ret));
+    }
   }
   return ret;
 }
