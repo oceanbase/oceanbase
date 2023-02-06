@@ -928,7 +928,10 @@ int ObTabletMemtableMgr::get_multi_source_data_unit(
     } else {
       for (int64_t i = memtable_tail_ - 1; (OB_ENTRY_NOT_EXIST == ret || OB_SUCC(ret)) && i >= memtable_head_; --i) {
         memtable = static_cast<ObMemtable*>(get_memtable_(i));
-        if (OB_FAIL(memtable->get_multi_source_data_unit(multi_source_data_unit, allocator))) {
+        if (OB_ISNULL(memtable)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("memtable is nullptr", K(ret), K(i), KP(memtable));
+        } else if (OB_FAIL(memtable->get_multi_source_data_unit(multi_source_data_unit, allocator))) {
           if (OB_ENTRY_NOT_EXIST == ret) {
           } else {
             LOG_WARN("fail to get multi source data", K(ret), K(tablet_id_));
