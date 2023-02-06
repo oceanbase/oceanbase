@@ -1497,6 +1497,9 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_const_select(ObSelect
         LOG_WARN("invalid expr", K(ret));
       } else if (!child_expr->is_const_expr()) {
         // do nothing
+      } else if (child_expr->get_result_type().is_ext() ||
+                 parent_expr->get_result_type().is_ext()) {
+        // OP_EQ between udt not supported
       } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(
                            ctx_, child_stmt, child_expr, NULLABLE_SCOPE::NS_TOP, is_not_null))) {
         LOG_WARN("failed to check expr not null", K(ret));

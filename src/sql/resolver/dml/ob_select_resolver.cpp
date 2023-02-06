@@ -342,6 +342,8 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode &parse_tree, b
     LOG_WARN("failed to formalize stmt", K(ret));
   } else if (OB_FAIL(check_order_by())) {
     LOG_WARN("failed to check order by", K(ret));
+  } else if (OB_FAIL(check_udt_set_query())) {
+    LOG_WARN("failed to check udt set query", K(ret));
   } else if (has_top_limit_) {
     has_top_limit_ = false;
     select_stmt->set_has_top_limit(NULL != parse_tree.children_[PARSE_SELECT_LIMIT]);
@@ -444,9 +446,39 @@ int ObSelectResolver::do_resolve_set_query(const ParseNode &parse_tree)
     LOG_WARN("failed to formalize stmt", K(ret));
   } else if (OB_FAIL(check_order_by())) {
     LOG_WARN("failed to check order by", K(ret));
+  } else if (OB_FAIL(check_udt_set_query())) {
+    LOG_WARN("failed to check udt set query", K(ret));
   } else if (has_top_limit_) {
     has_top_limit_ = false;
     select_stmt->set_has_top_limit(NULL != parse_tree.children_[PARSE_SELECT_LIMIT]);
+  }
+  return ret;
+}
+
+int ObSelectResolver::check_udt_set_query()
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *select_stmt = get_select_stmt();
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (select_stmt->is_set_stmt()) {
+    if (select_stmt->get_set_op() == ObSelectStmt::UNION && !select_stmt->is_set_distinct()) {
+      // UNION ALL
+      // do nothing
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); i++) {
+        ObRawExpr *expr = select_stmt->get_select_item(i).expr_;
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (expr->get_result_type().is_ext()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("set operator for udt not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "set operator for udt");
+        }
+      }
+    }
   }
   return ret;
 }

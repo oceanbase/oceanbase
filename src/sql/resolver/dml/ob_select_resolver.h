@@ -249,6 +249,7 @@ protected:
   int check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&expr);
   int check_window_exprs();
   int check_sequence_exprs();
+  int check_udt_set_query();
   int set_having_self_column(const ObRawExpr *real_ref_expr);
   int check_win_func_arg_valid(ObSelectStmt *select_stmt,
                                const ObItemType func_type,

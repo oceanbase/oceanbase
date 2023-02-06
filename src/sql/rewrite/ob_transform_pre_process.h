@@ -602,7 +602,11 @@ struct DistinctObjMeta
   int transform_cast_multiset_for_stmt(ObDMLStmt *&stmt, bool &is_happened);
   int transform_cast_multiset_for_expr(ObRawExpr *&expr, bool &trans_happened);
   int add_constructor_to_multiset(ObQueryRefRawExpr *multiset_expr,
-                                  const pl::ObPLDataType &elem_type);
+                                  const pl::ObPLDataType &elem_type,
+                                  bool& trans_happened);
+  int add_column_conv_to_multiset(ObQueryRefRawExpr *multiset_expr,
+                                  const pl::ObPLDataType &elem_type,
+                                  bool& trans_happened);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);
 };
