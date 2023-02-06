@@ -7245,8 +7245,6 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
                                            ObIArray<ObRawExpr *> &common_exprs)
 {
   int ret = OB_SUCCESS;
-  int64_t set_size = 32;
-  hash::ObHashSet<uint64_t> expr_set;
   ObArray<ObRawExpr *> relation_exprs;
   if (OB_ISNULL(parent) || OB_ISNULL(view_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7255,6 +7253,22 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(view_stmt->get_relation_exprs(relation_exprs))) {
     LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (OB_FAIL(extract_shared_exprs(parent, relation_exprs, common_exprs))) {
+    LOG_WARN("failed to extract shared exprs from relation exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
+                                           ObIArray<ObRawExpr *> &relation_exprs,
+                                           ObIArray<ObRawExpr *> &common_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t set_size = 32;
+  hash::ObHashSet<uint64_t> expr_set;
+  if (OB_ISNULL(parent)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(parent));
   } else if (relation_exprs.count() > set_size) {
     set_size = relation_exprs.count();
   }

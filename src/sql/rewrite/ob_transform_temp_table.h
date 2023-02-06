@@ -181,13 +181,15 @@ public:
 
   int pushdown_conditions(ObSelectStmt *parent_stmt,
                         const ObIArray<int64_t> &cond_map,
-                        const ObIArray<int64_t> &common_cond_map);
+                        const ObIArray<int64_t> &common_cond_map,
+                        ObIArray<ObRawExpr*> &pushdown_exprs);
 
-  int pushdown_group_by(ObSelectStmt *parent_stmt);
+  int pushdown_group_by(ObSelectStmt *parent_stmt, ObIArray<ObRawExpr*> &pushdown_exprs);
 
   int pushdown_having_conditions(ObSelectStmt *parent_stmt,
                               const ObIArray<int64_t> &having_map,
-                              const ObIArray<int64_t> &common_having_map);
+                              const ObIArray<int64_t> &common_having_map,
+                              ObIArray<ObRawExpr*> &pushdown_exprs);
 
   int apply_temp_table(ObSelectStmt *parent_stmt,
                       TableItem *view_table,
@@ -254,6 +256,8 @@ public:
                          bool &hint_force_no_trans);
 
   int sort_materialize_stmts(Ob2DArray<MaterializeStmts *> &materialize_stmts);
+
+  int pushdown_shared_subqueries(ObSelectStmt *parent_stmt, ObIArray<ObRawExpr*> &candi_exprs);
 
 private:
   ObArenaAllocator allocator_;
