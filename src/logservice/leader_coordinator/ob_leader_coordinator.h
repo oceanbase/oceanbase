@@ -49,7 +49,8 @@ class ObLeaderCoordinator
   friend class unittest::TestElectionPriority;
 public:
   ObLeaderCoordinator();
-  ~ObLeaderCoordinator() { }
+  ~ObLeaderCoordinator();
+  void destroy();
   ObLeaderCoordinator(const ObLeaderCoordinator &rhs) = delete;
   ObLeaderCoordinator& operator=(const ObLeaderCoordinator &rhs) = delete;
   static int mtl_init(ObLeaderCoordinator *&p_coordinator);

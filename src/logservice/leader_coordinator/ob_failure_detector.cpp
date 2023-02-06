@@ -52,6 +52,8 @@ ObFailureDetector::ObFailureDetector()
   COORDINATOR_LOG(INFO, "ObFailureDetector constructed");
 }
 
+ObFailureDetector::~ObFailureDetector() {}
+
 constexpr int VALUE_BUFFER_SIZE = 512;
 
 int ObFailureDetector::mtl_init(ObFailureDetector *&p_failure_detector)
@@ -116,25 +118,14 @@ void ObFailureDetector::mtl_wait(ObFailureDetector *&p_failure_detector)
   }
 }
 
-void ObFailureDetector::mtl_destroy(ObFailureDetector *&p_failure_detector)
-{
-  if (OB_ISNULL(p_failure_detector)) {
-    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_failure_detector is NULL");
-  } else {
-    COORDINATOR_LOG(INFO, "ObFailureDetector mtl destroy");
-  }
-}
-
 void ObFailureDetector::destroy()
 {
   LC_TIME_GUARD(1_s);
-  failure_task_handle_.stop_and_wait();
-  recovery_task_handle_.stop_and_wait();
   has_add_clog_hang_event_ = false;
   has_add_slog_hang_event_ = false;
   has_add_sstable_hang_event_ = false;
   has_add_clog_full_event_ = false;
-  COORDINATOR_LOG(INFO, "failure detector destroyed", K(lbt()));
+  COORDINATOR_LOG(INFO, "ObFailureDetector mtl destroy");
 }
 
 void ObFailureDetector::detect_recover()
@@ -260,8 +251,6 @@ int ObFailureDetector::remove_failure_event(const FailureEvent &event)
       (void) insert_event_to_table_(events_with_ops_[idx].event_, events_with_ops_[idx].recover_detect_operation_, "REMOVE FAILURE");
       if (CLICK_FAIL(events_with_ops_.remove(idx))) {
         COORDINATOR_LOG(WARN, "remove event failed", KR(ret), K(event), K(events_with_ops_));
-      } else if (CLICK_FAIL(events_with_ops_.remove(idx))) {
-        COORDINATOR_LOG(ERROR, "remove event failed", KR(ret), K(event), K(events_with_ops_));
       } else {
         COORDINATOR_LOG(INFO, "user remove failure event success", KR(ret), K(event), K(events_with_ops_));
       }

@@ -48,19 +48,12 @@ class ObFailureDetector
   friend class ObLeaderCoordinator;
 public:
   ObFailureDetector();
-  /**
-   * @description: 初始化timer，提交一detect_recover()和detect_connection_status()任务
-   * @param {*}
-   * @return {*}
-   * @Date: 2022-01-04 15:27:39
-   */
-  int init(ObLeaderCoordinator *coordinator);
+  ~ObFailureDetector();
   void destroy();
   static int mtl_init(ObFailureDetector *&p_failure_detector);
   static int mtl_start(ObFailureDetector *&p_failure_detector);
   static void mtl_stop(ObFailureDetector *&p_failure_detector);
   static void mtl_wait(ObFailureDetector *&p_failure_detector);
-  static void mtl_destroy(ObFailureDetector *&p_failure_detector);
   /**
    * @description: 设置一个不可自动恢复的failure，需要由注册的模块手动调用remove_failure_event()接口恢复failure，否则将持续存在
    * @param {FailureEvent} event failure事件，定义在failure_event.h中

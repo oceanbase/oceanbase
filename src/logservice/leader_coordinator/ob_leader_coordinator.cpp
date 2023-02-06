@@ -36,6 +36,8 @@ ObLeaderCoordinator::ObLeaderCoordinator()
       lock_(common::ObLatchIds::ELECTION_LOCK)
 {}
 
+ObLeaderCoordinator::~ObLeaderCoordinator() {}
+
 struct AllLsElectionReferenceInfoFactory
 {
   static ObArray<LsElectionReferenceInfo> *create_new()
@@ -57,6 +59,16 @@ struct AllLsElectionReferenceInfoFactory
     }
   }
 };
+
+void ObLeaderCoordinator::destroy()
+{
+  LC_TIME_GUARD(1_s);
+  recovery_detect_timer_.stop_and_wait();
+  failure_detect_timer_.stop_and_wait();
+  AllLsElectionReferenceInfoFactory::delete_obj(all_ls_election_reference_info_);
+  all_ls_election_reference_info_ = NULL;
+  COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl destroy");
+}
 
 int ObLeaderCoordinator::mtl_init(ObLeaderCoordinator *&p_coordinator)// init timer
 {
@@ -116,20 +128,6 @@ void ObLeaderCoordinator::mtl_wait(ObLeaderCoordinator *&p_coordinator)// wait t
   } else {
     p_coordinator->refresh_priority_task_handle_.wait();
     COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl wait");
-  }
-}
-
-void ObLeaderCoordinator::mtl_destroy(ObLeaderCoordinator *&p_coordinator)// destroy timer
-{
-  LC_TIME_GUARD(1_s);
-  if (OB_ISNULL(p_coordinator)) {
-    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_coordinator is NULL");
-  } else {
-    p_coordinator->recovery_detect_timer_.stop_and_wait();
-    p_coordinator->failure_detect_timer_.stop_and_wait();
-    AllLsElectionReferenceInfoFactory::delete_obj(p_coordinator->all_ls_election_reference_info_);
-    p_coordinator->all_ls_election_reference_info_ = NULL;
-    COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl destroy");
   }
 }
 
