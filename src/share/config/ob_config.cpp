@@ -519,11 +519,11 @@ ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer *container,
 
 int64_t ObConfigCapacityItem::parse(const char *str, bool &valid) const
 {
-  int64_t ret = ObConfigCapacityParser::get(str, valid);
+  int64_t value = ObConfigCapacityParser::get(str, valid);
   if (!valid) {
-      OB_LOG(ERROR, "set capacity error", "name", name(), K(str), K(valid));
+      OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set capacity error", "name", name(), K(str), K(valid));
   }
-  return ret;
+  return value;
 }
 
 // ObConfigTimeItem
@@ -946,7 +946,7 @@ int ObConfigLogArchiveOptionsItem::format_option_str(const char *src, int64_t sr
     int64_t pos = 0;
     while (OB_SUCC(ret) && (source_left_len > 0)
            && (NULL != (locate_str = STRCHR(source_str, '=')))) {
-      locate = locate_str - source_str;
+      locate = static_cast<int32_t>(locate_str - source_str);
       if (OB_FAIL(databuff_printf(dest, dest_len, pos, "%.*s = ", locate, source_str))) {
         OB_LOG(WARN, "failed to databuff_print", K(ret), K(dest), K(locate), K(source_str));
       } else {

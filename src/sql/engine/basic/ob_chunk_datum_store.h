@@ -156,6 +156,9 @@ public:
       if (OB_UNLIKELY(0 == exprs.count())) {
         // 没有任何列
         // 场景：如distinct 1，对于常量，不会有任何处理
+      } else if (OB_UNLIKELY(extra_size < 0 || extra_size > INT32_MAX)) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_ENG_LOG(ERROR, "invalid extra size", K(ret), K(extra_size));
       } else if (OB_FAIL(ObChunkDatumStore::row_copy_size(exprs, ctx, row_size))) {
         SQL_ENG_LOG(WARN, "failed to calc copy size", K(ret));
       } else {
@@ -198,7 +201,7 @@ public:
         }
         if (OB_SUCC(ret)) {
           int64_t pos = head_size;
-          if (OB_FAIL(StoredRow::build(store_row_, exprs, ctx, buf, buffer_len, extra_size))) {
+          if (OB_FAIL(StoredRow::build(store_row_, exprs, ctx, buf, buffer_len, static_cast<int32_t>(extra_size)))) {
             SQL_ENG_LOG(WARN, "failed to build stored row", K(ret), K(buffer_len), K(row_size));
           } else {
             max_size_ = buffer_len;
@@ -291,6 +294,7 @@ public:
     {
       int ret = common::OB_SUCCESS;
       int64_t buffer_len = datum_cnt * sizeof(ObDatum) + sizeof(StoredRow);
+      const int64_t row_size = datum_cnt * sizeof(ObDatum) + sizeof(StoredRow);
       char *buf = nullptr;
       if (nullptr != store_row_) {
         // inited
@@ -298,14 +302,17 @@ public:
       } else if (NULL != alloc_) {
         ret = common::OB_INIT_TWICE;
         SQL_ENG_LOG(WARN, "init twice", K(ret));
+      } else if (row_size < 0 || row_size > INT32_MAX) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_ENG_LOG(WARN, "invalid row_size", K(ret), K(datum_cnt), K(row_size));
       } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buffer_len)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         SQL_ENG_LOG(WARN, "alloc buf failed", K(ret));
       } else {
         alloc_ = &allocator;
         store_row_ = new (buf) StoredRow();
-        store_row_->cnt_ = datum_cnt;
-        store_row_->row_size_ = datum_cnt * sizeof(ObDatum) + sizeof(StoredRow);
+        store_row_->cnt_ = static_cast<int32_t>(datum_cnt);
+        store_row_->row_size_ = static_cast<int32_t>(row_size);
         saved_ = false;
       }
       return ret;
@@ -361,7 +368,7 @@ public:
     virtual void reuse()
     {
       if (nullptr != store_row_) {
-        int64_t payload_len = store_row_->cnt_ * sizeof(ObDatum);
+        uint32_t payload_len = store_row_->cnt_ * sizeof(ObDatum);
         //reserve the memory of datum.ptr_ to assign ObObj
         bzero(store_row_->payload_, payload_len);
         store_row_->row_size_ = payload_len + sizeof(StoredRow);

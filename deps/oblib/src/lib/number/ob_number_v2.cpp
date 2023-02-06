@@ -3597,7 +3597,7 @@ int ObNumber::get_npi_(double n, ObNumber& out, ObIAllocator &alloc, const bool 
 
   const int64_t MAX_DOUBLE_PRINT_SIZE = 512;
   char buf[MAX_DOUBLE_PRINT_SIZE] = {0};
-  (void)ob_gcvt_opt(n, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL, lib::is_oracle_mode(), TRUE);
+  (void)ob_gcvt_opt(n, OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1), buf, NULL, lib::is_oracle_mode(), TRUE);
 
   ObNumber n_obnum;
   ObNumber pi = get_pi();

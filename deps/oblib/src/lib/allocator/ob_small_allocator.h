@@ -39,7 +39,10 @@ public:
     if (limit_num < INT64_MAX) {
       block_alloc_.set_limit(limit_num * obj_size);
     }
-    if (OB_FAIL(ObSliceAlloc::init(obj_size, block_size, block_alloc_, attr_))) {
+    if (obj_size < 0 || obj_size > INT32_MAX || block_size < 0 || block_size > INT32_MAX) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (OB_FAIL(ObSliceAlloc::init(static_cast<int32_t>(obj_size),
+        static_cast<int32_t>(block_size), block_alloc_, attr_))) {
     } else {
       ObSliceAlloc::set_nway(OB_MAX_CPU_NUM * 16);
     }

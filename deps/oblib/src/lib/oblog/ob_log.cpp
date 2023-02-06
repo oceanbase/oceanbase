@@ -1668,7 +1668,7 @@ int64_t ObLogger::get_wait_us(const int32_t level)
 }
 
 
-int ObLogger::alloc_log_item(const int32_t level, const int32_t size, ObPLogItem *&log_item)
+int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item)
 {
   UNUSED(level);
   int ret = OB_SUCCESS;

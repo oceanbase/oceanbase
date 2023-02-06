@@ -291,7 +291,7 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
 int main(int argc, char **argv)
 {
   system("rm -f test_block_cache.log*");
-  OB_LOGGER.set_file_name("test_block_cache.log", true, true);
+  OB_LOGGER.set_file_name("test_block_cache.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -566,7 +566,7 @@ int ObCgroupCtrl::get_cpu_usage(const uint64_t tenant_id, int32_t &cpu_usage)
   if (0 == last_usage_check_time_) {
     last_cpu_usage_ = cur_usage;
   } else if (cur_time - last_usage_check_time_ > 1000000) {
-    cpu_usage = (cur_usage - last_cpu_usage_) / (cur_time - last_usage_check_time_);
+    cpu_usage = static_cast<int32_t>(cur_usage - last_cpu_usage_) / (cur_time - last_usage_check_time_);
   }
 
   return ret;
@@ -772,14 +772,14 @@ int ObCgroupCtrl::write_string_to_file_(const char *filename, const char *conten
 {
   int ret = OB_SUCCESS;
   int fd = -1;
-  int tmp_ret = -1;
+  int64_t write_size = -1;
   if ((fd = ::open(filename, O_WRONLY)) < 0) {
     ret = OB_IO_ERROR;
     LOG_WARN("open file error", K(filename), K(errno), KERRMSG, K(ret));
-  } else if ((tmp_ret = write(fd, content, strlen(content))) < 0) {
+  } else if ((write_size = write(fd, content, static_cast<int32_t>(strlen(content)))) < 0) {
     ret = OB_IO_ERROR;
     LOG_WARN("write file error",
-        K(filename), K(content), K(ret), K(errno), KERRMSG, K(tmp_ret));
+        K(filename), K(content), K(ret), K(errno), KERRMSG);
   } else {
     // do nothing
   }
@@ -795,11 +795,11 @@ int ObCgroupCtrl::get_string_from_file_(const char *filename, char content[VALUE
 {
   int ret = OB_SUCCESS;
   int fd = -1;
-  int tmp_ret = -1;
+  int64_t read_size = -1;
   if ((fd = ::open(filename, O_RDONLY)) < 0) {
     ret = OB_IO_ERROR;
     LOG_WARN("open file error", K(filename), K(errno), KERRMSG, K(ret));
-  } else if ((tmp_ret = read(fd, content, VALUE_BUFSIZE)) < 0) {
+  } else if ((read_size = read(fd, content, VALUE_BUFSIZE)) < 0) {
     ret = OB_IO_ERROR;
     LOG_WARN("read file error",
         K(filename), K(content), K(ret), K(errno), KERRMSG, K(ret));

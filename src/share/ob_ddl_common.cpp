@@ -795,7 +795,7 @@ int ObDDLUtil::find_table_scan_table_id(const ObOpSpec *spec, uint64_t &table_id
   } else if (spec->is_table_scan()) {
     table_id = static_cast<const ObTableScanSpec *>(spec)->get_ref_table_id();
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < spec->get_child_cnt(); ++i) {
+    for (uint32_t i = 0; OB_SUCC(ret) && i < spec->get_child_cnt(); ++i) {
       if (OB_FAIL(SMART_CALL(find_table_scan_table_id(spec->get_child(i), table_id)))) {
         LOG_WARN("fail to find sample scan", K(ret));
       }

@@ -872,7 +872,7 @@ struct ObIntervalDSValue
     return validate();
   }
 
-  static inline int64_t get_store_size() { return sizeof(int64_t) + sizeof(int32_t); }
+  static inline uint32_t get_store_size() { return static_cast<uint32_t>(sizeof(int64_t) + sizeof(int32_t)); }
   inline int decode(const char *buf)
   {
     int ret = OB_SUCCESS;

@@ -114,7 +114,7 @@ int ObPhysicalRestoreWhiteList::get_format_str(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected format str", KR(ret), K(format_str_buf), K(format_str_length));
   } else {
-    str.assign_ptr(format_str_buf, format_str_length - 1);
+    str.assign_ptr(format_str_buf, static_cast<int32_t>(format_str_length - 1));
     LOG_DEBUG("get format white_list str", KR(ret), K(str));
   }
   return ret;
@@ -152,7 +152,7 @@ int ObPhysicalRestoreWhiteList::get_hex_str(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
-    str.assign_ptr(hex_buf, hex_size);
+    str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
     LOG_DEBUG("get hex white_list str", KR(ret), K(str));
   }
   return ret;

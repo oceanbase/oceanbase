@@ -222,7 +222,7 @@ int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObTabletMergeCtx &m
     } else {
       int64_t total_bytes = 0;
       int64_t total_rows = 0;
-      int32_t mini_merge_thread = 0;
+      int64_t mini_merge_thread = 0;
       if (OB_FAIL(memtable->estimate_phy_size(nullptr, nullptr, total_bytes, total_rows))) {
         STORAGE_LOG(WARN, "Failed to get estimate size from memtable", K(ret));
       } else if (MTL(ObTenantDagScheduler *)->get_up_limit(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, mini_merge_thread)) {

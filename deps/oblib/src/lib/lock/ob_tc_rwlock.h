@@ -117,7 +117,7 @@ public:
   {
     [[nodiscard]] explicit WLockGuardWithRetryInterval(TCRWLock &lock,
                                          const int64_t try_thresold_us,
-                                         const int64_t retry_interval_us)
+                                         const uint32_t retry_interval_us)
       : lock_(lock)
     {
       int ret = OB_SUCCESS;

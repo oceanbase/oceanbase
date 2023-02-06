@@ -3227,7 +3227,7 @@ int ObPartitionSchema::try_generate_hash_part()
         if (OB_FAIL(ObPartitionSchema::gen_hash_part_name(
             i, FIRST_PART, is_oracle_mode, buf, BUF_SIZE, NULL, NULL))) {
           LOG_WARN("fail to get part name", KR(ret), K(i));
-        } else if (FALSE_IT(part_name.assign_ptr(buf, strlen(buf)))) {
+        } else if (FALSE_IT(part_name.assign_ptr(buf, static_cast<int32_t>(strlen(buf))))) {
         } else if (OB_FAIL(part.set_part_name(part_name))) {
           LOG_WARN("fail to set part name", KR(ret), K(part_name));
         } else if (OB_FAIL(add_partition(part))) {
@@ -3282,7 +3282,7 @@ int ObPartitionSchema::try_generate_hash_subpart(bool &generated)
         if (OB_FAIL(gen_hash_part_name(j, TEMPLATE_SUB_PART,
                     is_oracle_mode, buf, BUF_SIZE, NULL, NULL))) {
           LOG_WARN("fail to get def subpart name", KR(ret), K(j));
-        } else if (FALSE_IT(sub_part_name.assign_ptr(buf, strlen(buf)))) {
+        } else if (FALSE_IT(sub_part_name.assign_ptr(buf, static_cast<int32_t>(strlen(buf))))) {
         } else if (OB_FAIL(subpart.set_part_name(sub_part_name))) {
           LOG_WARN("set subpart name failed", KR(ret), K(sub_part_name), KPC(this));
         } else if (OB_FAIL(add_def_subpartition(subpart))) {
@@ -3354,7 +3354,7 @@ int ObPartitionSchema::try_generate_subpart_by_template(bool &generated)
                      part->get_part_name().ptr(), is_oracle_mode ? "S" : "s",
                      def_subpart_array[j]->get_part_name().ptr()))) {
             LOG_WARN("part name is too long", KR(ret), KPC(part), K(subpart));
-          } else if (FALSE_IT(sub_part_name.assign_ptr(buf, strlen(buf)))) {
+          } else if (FALSE_IT(sub_part_name.assign_ptr(buf, static_cast<int32_t>(strlen(buf))))) {
           } else if (OB_FAIL(subpart.set_part_name(sub_part_name))) {
             LOG_WARN("set subpart name failed", KR(ret), K(sub_part_name), KPC(this));
           } else if (OB_FAIL(part->add_partition(subpart))) {
@@ -3744,16 +3744,6 @@ int ObPartitionSchema::serialize_partitions(char *buf,
   return ret;
 }
 
-int ObPartitionSchema::get_def_subpartitions_serialize_len() {
-  int64_t length = serialization::encoded_length_vi64(def_subpartition_num_);
-  for (int64_t i = 0; i < def_subpartition_num_; i++) {
-    if (NULL != def_subpartition_array_[i]) {
-      length += def_subpartition_array_[i]->get_serialize_size();
-    }
-  }
-  return length;
-}
-
 int ObPartitionSchema::serialize_def_subpartitions(char *buf,
     const int64_t data_len, int64_t &pos) const
 {
@@ -3889,7 +3879,7 @@ int ObPartitionSchema::set_transition_point_with_hex_str(
     LOG_WARN("allocate memory for default value buffer failed", K(ret), K(serialize_len));
   } else if (OB_UNLIKELY(hex_length != str_to_hex(
        transition_point_hex.ptr(), static_cast<int32_t>(hex_length),
-       serialize_buf, serialize_len))) {
+       serialize_buf, static_cast<int32_t>(serialize_len)))) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("Failed to get hex_str buf", K(ret));
   } else if (OB_FAIL(transition_point_.deserialize(*allocator, serialize_buf, serialize_len, pos))) {
@@ -3963,7 +3953,7 @@ int ObPartitionSchema::set_interval_range_with_hex_str(
     LOG_WARN("allocate memory for default value buffer failed", K(ret), K(serialize_len));
   } else if (OB_UNLIKELY(hex_length != str_to_hex(
        interval_range_hex.ptr(), static_cast<int32_t>(hex_length),
-       serialize_buf, serialize_len))) {
+       serialize_buf, static_cast<int32_t>(serialize_len)))) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("Failed to get hex_str buf", K(ret));
   } else if (OB_FAIL(interval_range_.deserialize(*allocator, serialize_buf, serialize_len, pos))) {
@@ -5400,7 +5390,7 @@ int ObBasePartition::set_high_bound_val_with_hex_str(
     LOG_WARN("fail to alloc buf", KR(ret), K(seri_length));
   } else if (OB_UNLIKELY(hex_length != str_to_hex(
        high_bound_val_hex.ptr(), static_cast<int32_t>(hex_length),
-       serialize_buf, seri_length))) {
+       serialize_buf, static_cast<int32_t>(seri_length)))) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("Failed to get hex_str buf", K(ret));
   } else if (OB_FAIL(high_bound_val_.deserialize(*allocator, serialize_buf, seri_length, pos))) {

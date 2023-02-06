@@ -60,7 +60,7 @@ public:
       stat->p3_ = desc.p3_;
 #ifndef NDEBUG
       const char *bt = lbt();
-      int size = std::min(sizeof(stat->bt_) - 1, STRLEN(bt));
+      int64_t size = std::min(sizeof(stat->bt_) - 1, STRLEN(bt));
       MEMCPY(stat->bt_, bt, size);
       stat->bt_[size] = '\0';
 #endif

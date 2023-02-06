@@ -311,7 +311,7 @@ public:
   OB_INLINE bool is_need_build() const { return is_inited_ && need_build_; }
   OB_INLINE bool is_valid() const { return is_inited_ && bf_cache_value_.is_valid(); }
   OB_INLINE int32_t get_row_count() const { return bf_cache_value_.get_row_count(); }
-  OB_INLINE int32_t get_rowkey_column_count() const { return bf_cache_value_.get_prefix_len(); }
+  OB_INLINE int64_t get_rowkey_column_count() const { return bf_cache_value_.get_prefix_len(); }
   TO_STRING_KV(K_(is_inited), K_(need_build), K_(max_row_count), K_(bf_cache_value));
 private:
   ObBloomFilterCacheValue bf_cache_value_;

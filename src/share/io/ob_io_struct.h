@@ -242,7 +242,7 @@ public:
   int remove_group_queues(const uint64_t tenant_id);
   int stop_phy_queue(const uint64_t tenant_id, const uint64_t index);
   int notify();
-  int32_t get_queue_count() const;
+  int64_t get_queue_count() const;
   int get_sender_status(const uint64_t tenant_id, const uint64_t index, ObSenderInfo &sender_info);
   TO_STRING_KV(K(is_inited_), K(stop_submit_), KPC(io_queue_), K(tg_id_));
 //private:

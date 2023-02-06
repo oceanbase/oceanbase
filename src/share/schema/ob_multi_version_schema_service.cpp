@@ -2181,7 +2181,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
   } else {
     int64_t retry_cnt = 0;
     int64_t MAX_RETRY_CNT = 1000;
-    int64_t RETRY_IDLE_TIME = 100 * 1000L; // 100ms
+    const __useconds_t RETRY_IDLE_TIME = 100 * 1000L; // 100ms
     while (OB_SUCC(ret)) {
       if (THIS_WORKER.is_timeout()
           || (INT64_MAX == THIS_WORKER.get_timeout_ts() && retry_cnt >= MAX_RETRY_CNT)) {
@@ -2651,7 +2651,7 @@ int ObMultiVersionSchemaService::refresh_tenant_schema(
           LOG_WARN("fail to refresh schema by tenant", KR(ret), K(refresh_schema_status));
         }
       }
-      int64_t tmp_ret = OB_SUCCESS;
+      int tmp_ret = OB_SUCCESS;
       if (OB_INVALID_SCHEMA_VERSION != new_received_schema_version) {
         if (OB_SUCCESS != (tmp_ret = set_tenant_received_broadcast_version(tenant_id, new_received_schema_version))) {
           LOG_WARN("fail to set tenant received schema version", KR(tmp_ret), K(tenant_id), K(new_received_schema_version));
@@ -4033,7 +4033,7 @@ int ObMultiVersionSchemaService::get_tablet_to_table_history(
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
              || tablet_ids_cnt <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), KR(tenant_id), K(tablet_ids_cnt));
+    LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(tablet_ids_cnt));
   } else if (OB_FAIL(table_ids.reserve(tablet_ids_cnt))) {
     LOG_WARN("fail to reserve array", KR(ret), K(tablet_ids_cnt));
   } else {
@@ -4083,7 +4083,7 @@ int ObMultiVersionSchemaService::get_tablet_to_table_history(
       if (OB_UNLIKELY(schema_version <= 0
           || !ObSchemaService::is_formal_version(schema_version))) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid arg", KR(ret), KR(tenant_id), K(tablet_ids_cnt), K(schema_version));
+        LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(tablet_ids_cnt), K(schema_version));
       } else if (OB_FAIL(tablet_map.create(BUCKET_NUM, "TbtTbPair", "TbtTbPair"))) {
         LOG_WARN("fail to create hashmap", KR(ret), K(tenant_id));
       }

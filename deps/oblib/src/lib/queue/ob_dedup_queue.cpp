@@ -56,7 +56,7 @@ ObDedupQueue::~ObDedupQueue()
   destroy();
 }
 
-int ObDedupQueue::init(int32_t thread_num /*= DEFAULT_THREAD_NUM*/,
+int ObDedupQueue::init(const int64_t thread_num /*= DEFAULT_THREAD_NUM*/,
                        const char* thread_name /*= NULL*/,
                        const int64_t queue_size /*= TASK_QUEUE_SIZE*/,
                        const int64_t task_map_size /*= TASK_MAP_SIZE*/,

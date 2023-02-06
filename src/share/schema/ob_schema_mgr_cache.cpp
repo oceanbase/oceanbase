@@ -414,7 +414,7 @@ int ObSchemaMgrCache::build_ref_mod_infos_(const int64_t *mod_ref,
     }
   }
   if (OB_SUCC(ret)) {
-    int str_len = pos;
+    const int32_t str_len = static_cast<int32_t>(pos);
     if (0 != str_len) {
       str.assign(buff, str_len);
     }

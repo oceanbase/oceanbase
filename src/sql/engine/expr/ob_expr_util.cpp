@@ -652,7 +652,7 @@ int ObExprUtil::convert_utf8_charset(ObIAllocator& allocator,
                                                 result_len))) {
     LOG_WARN("charset convert failed", K(ret), K(from_collation), K(CS_TYPE_UTF8MB4_BIN));
   } else {
-    to_string.assign(buf, result_len);
+    to_string.assign(buf, static_cast<int32_t>(result_len));
   }
   return ret;
 }

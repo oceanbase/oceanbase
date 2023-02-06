@@ -366,7 +366,7 @@ struct EstimateCostInfo {
     inline common::ObIArray<OrderItem> &get_ordering() { return ordering_; }
     inline const common::ObIArray<ObAddr> &get_server_list() const { return server_list_; }
     inline common::ObIArray<ObAddr> &get_server_list() { return server_list_; }
-    inline int get_interesting_order_info() const { return interesting_order_info_; }
+    inline int64_t get_interesting_order_info() const { return interesting_order_info_; }
     inline void set_interesting_order_info(int64_t info) { interesting_order_info_ = info; }
     inline void add_interesting_order_flag(OrderingFlag flag) { interesting_order_info_ |= flag; }
     inline void add_interesting_order_flag(int64_t flags) { interesting_order_info_ |= flags; }

@@ -105,8 +105,9 @@ public:
     if (OB_SUCCESS != rcode.rcode_) {
       DETECT_LOG_RET(WARN, rcode.rcode_, "detector rpc returns error code(rpc level)", K(rcode), K(dst));
     } else if (OB_SUCCESS != remote_ret) {
-      DETECT_LOG_RET(WARN, remote_ret, "detector rpc returns error code(detector level)",
-                       KR(remote_ret), K(rcode.rcode_), K(dst));
+      const int32_t tmp_ret = static_cast<int32_t>(remote_ret);
+      DETECT_LOG_RET(WARN, tmp_ret, "detector rpc returns error code(detector level)",
+                       KR(tmp_ret), K(rcode.rcode_), K(dst));
     } else {
       // do nothing
     }

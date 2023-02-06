@@ -63,7 +63,7 @@ public:
   virtual ~EasySPAlloc() {}
   void *alloc(int64_t size) const
   {
-    return easy_pool_alloc(pool_, size);
+    return easy_pool_alloc(pool_, static_cast<uint32_t>(size));
   }
 private:
   easy_pool_t *pool_;

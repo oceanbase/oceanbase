@@ -121,7 +121,7 @@ int ObIndexStatsEstimator::fill_index_info(common::ObIAllocator &alloc,
   } else {
     const char *fmt_str = "INDEX(%.*s %.*s)";
     char *buf = NULL;
-    int32_t buf_len = table_name.length() + index_name.length() + strlen(fmt_str);
+    int64_t buf_len = table_name.length() + index_name.length() + strlen(fmt_str);
     if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(buf), K(buf_len));
@@ -165,7 +165,7 @@ int ObIndexStatsEstimator::fill_index_group_by_info(ObIAllocator &allocator,
     LOG_WARN("get unexpected type", K(extra.type_), K(ret));
   }
   if (OB_SUCC(ret)) {
-    const int32_t len = strlen(fmt_str) +
+    const int64_t len = strlen(fmt_str) +
                         param.data_table_name_.length() +
                         param.tab_name_.length() +
                         type_str.length() ;
@@ -210,7 +210,7 @@ int ObIndexStatsEstimator::fill_partition_condition(ObIAllocator &allocator,
     } else if (extra.type_ == SUBPARTITION_LEVEL) {
       type_str = ObString(7, "SUBPART");
     }
-    const int32_t len = strlen(fmt_str) +
+    const int64_t len = strlen(fmt_str) +
                         param.data_table_name_.length() +
                         param.tab_name_.length() +
                         type_str.length() + 30;

@@ -89,7 +89,7 @@ public:
         if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
           COMMON_LOG_RET(WARN, ret_, "Fail to write lock for 10s, ", K_(ret));
         }
-        ob_usleep(timeout);
+        ob_usleep(static_cast<uint32_t>(timeout));
       }
     }
     ~WRLockGuardRetryTimeout()

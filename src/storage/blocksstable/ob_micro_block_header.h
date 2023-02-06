@@ -85,8 +85,8 @@ public:
   int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
   uint32_t get_serialize_size() { return get_serialize_size(column_count_, has_column_checksum_); }
   static uint32_t get_serialize_size(const int64_t column_count, const bool need_calc_column_chksum) {
-    return ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET  +
-        (need_calc_column_chksum ? column_count * sizeof(int64_t) : 0);
+    return static_cast<uint32_t>(ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET  +
+        (need_calc_column_chksum ? column_count * sizeof(int64_t) : 0));
   }
   TO_STRING_KV(K_(magic), K_(version), K_(header_size), K_(header_checksum),
       K_(column_count), K_(rowkey_column_count), K_(has_column_checksum), K_(row_count), K_(row_store_type),

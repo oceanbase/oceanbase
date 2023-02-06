@@ -170,21 +170,21 @@ public:
       const int64_t schema_rowkey_col_cnt,
       const bool is_multi_version)
   {
-    int ret = -1;
+    int64_t index = -1;
     if (is_multi_version) {
-      ret = schema_rowkey_col_cnt + ObMultiVersionExtraRowkeyIds::TRANS_VERSION_COL;
+      index = schema_rowkey_col_cnt + ObMultiVersionExtraRowkeyIds::TRANS_VERSION_COL;
     }
-    return ret;
+    return index;
   }
   static int64_t get_sql_sequence_col_store_index(
       const int64_t schema_rowkey_col_cnt,
       const bool is_multi_version)
   {
-    int ret = -1;
+    int64_t index = -1;
     if (is_multi_version) {
-      ret = schema_rowkey_col_cnt + ObMultiVersionExtraRowkeyIds::SQL_SEQUENCE_COL;
+      index = schema_rowkey_col_cnt + ObMultiVersionExtraRowkeyIds::SQL_SEQUENCE_COL;
     }
-    return ret;
+    return index;
   }
 
   static int add_extra_rowkey_cols(ObColDescIArray &store_out_cols);

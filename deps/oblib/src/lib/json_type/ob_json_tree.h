@@ -194,13 +194,13 @@ public:
   OB_INLINE void set_serialize_size(uint64_t size) { serialize_size_ = size; }
   OB_INLINE uint32_t depth() const override
   {
-    uint64_t max_child = 0;
+    uint32_t max_child = 0;
     uint64_t count = element_count();
     ObJsonNode *child_node = NULL;
     for (uint64_t i = 0; i < count; i++) {
       child_node = get_value(i);
       if (OB_NOT_NULL(child_node)) {
-        max_child = max(max_child, static_cast<uint64_t>(child_node->depth()));
+        max_child = max(max_child, child_node->depth());
       }
     }
     return max_child + 1;
@@ -322,13 +322,13 @@ public:
   OB_INLINE uint64_t element_count() const override { return node_vector_.size(); }
   OB_INLINE uint32_t depth() const override
   {
-    uint64_t max_child = 0;
+    uint32_t max_child = 0;
     uint64_t size = element_count();
     ObJsonNode *child_node = NULL;
     for (uint64_t i = 0; i < size; i++) {
       child_node = node_vector_[i];
       if (OB_NOT_NULL(child_node)) {
-        max_child = max(max_child, static_cast<uint64_t>(child_node->depth()));
+        max_child = max(max_child, child_node->depth());
       }
     }
     return max_child + 1;

@@ -4948,7 +4948,7 @@ int ObServerSchemaService::fetch_increment_tenant_schemas_for_data_dict_(
     } // end FOREACH_X
     FOREACH_X(key, schema_keys.alter_tenant_keys_, OB_SUCC(ret)) {
       const uint64_t tenant_id = key->first.get_tenant_key();
-      int64_t hash_ret = schema_keys.new_tenant_keys_.exist_refactored(key->first);
+      int hash_ret = schema_keys.new_tenant_keys_.exist_refactored(key->first);
       if (OB_HASH_NOT_EXIST == hash_ret) {
         if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
           LOG_WARN("fail to push back tenant keys", KR(ret), K(tenant_id));

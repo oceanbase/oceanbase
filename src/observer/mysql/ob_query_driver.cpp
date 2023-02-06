@@ -267,7 +267,7 @@ int ObQueryDriver::convert_field_charset(ObIAllocator& allocator,
           result_len))) {
     LOG_WARN("charset convert failed", K(ret), K(from_collation), K(dest_collation));
   } else {
-    dest_string.assign(buf, result_len);
+    dest_string.assign(buf, static_cast<int32_t>(result_len));
   }
   return ret;
 }

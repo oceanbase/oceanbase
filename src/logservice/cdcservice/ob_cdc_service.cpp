@@ -130,7 +130,7 @@ void ObCdcService::run1()
         last_purge_ts = current_ts;
       }
 
-      ob_usleep(BASE_INTERVAL);
+      ob_usleep(static_cast<uint32_t>(BASE_INTERVAL));
     }
   }
 }

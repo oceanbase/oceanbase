@@ -53,7 +53,7 @@ int ObLocalIOEvents::get_ith_ret_code(const int64_t i) const
     if (res >= 0) {
       ret_code = 0;
     } else {
-      ret_code = -res;
+      ret_code = static_cast<int32_t>(-res);
     }
   } else {
     SHARE_LOG_RET(WARN, ret_code, "invalid member", KP(io_events_), K(i), K(complete_io_cnt_));
@@ -64,7 +64,7 @@ int ObLocalIOEvents::get_ith_ret_code(const int64_t i) const
 int ObLocalIOEvents::get_ith_ret_bytes(const int64_t i) const
 {
   const int64_t res = static_cast<int64_t>(io_events_[i].res);
-  return (nullptr != io_events_ && i < complete_io_cnt_ && res >= 0) ? res : 0;
+  return (nullptr != io_events_ && i < complete_io_cnt_ && res >= 0) ? static_cast<int32_t>(res) : 0;
 }
 
 void *ObLocalIOEvents::get_ith_data(const int64_t i) const
@@ -307,7 +307,7 @@ int ObLocalDevice::close(const ObIOFd &fd)
   if (OB_UNLIKELY(fd.is_block_file())) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "The block file does not need close, ", K(ret), K(fd));
-  } else if (0 != ::close(fd.second_id_)) {
+  } else if (0 != ::close(static_cast<int32_t>(fd.second_id_))) {
     ret = convert_sys_errno();
     SHARE_LOG(WARN, "Fail to close file, ", K(ret), K(fd));
   }
@@ -488,7 +488,7 @@ int ObLocalDevice::fsync(const ObIOFd &fd)
     SHARE_LOG(WARN, "invalid fd, not normal file, ", K(ret), K(fd));
   } else {
     int sys_ret = 0;
-    if (0 != (sys_ret = ::fsync(fd.second_id_))) {
+    if (0 != (sys_ret = ::fsync(static_cast<int32_t>(fd.second_id_)))) {
       ret = convert_sys_errno();
       SHARE_LOG(WARN, "Fail to fsync, ", K(ret), K(sys_ret), K(fd), KERRMSG);
     }
@@ -504,7 +504,7 @@ int ObLocalDevice::fdatasync(const ObIOFd &fd)
     SHARE_LOG(WARN, "invalid fd, not normal file, ", K(ret), K(fd));
   } else {
     int sys_ret = 0;
-    if (0 != (sys_ret = ::fdatasync(fd.second_id_))) {
+    if (0 != (sys_ret = ::fdatasync(static_cast<int32_t>(fd.second_id_)))) {
       ret = convert_sys_errno();
       SHARE_LOG(WARN, "Fail to fdatasync, ", K(ret), K(sys_ret), K(fd), KERRMSG);
     }
@@ -520,7 +520,7 @@ int ObLocalDevice::fallocate(const ObIOFd &fd, mode_t mode, const int64_t offset
     SHARE_LOG(WARN, "invalid args, not normal file", K(ret), K(fd));
   } else {
     int sys_ret = 0;
-    if (0 != (sys_ret = ::fallocate(fd.second_id_, mode, offset, len))) {
+    if (0 != (sys_ret = ::fallocate(static_cast<int32_t>(fd.second_id_), mode, offset, len))) {
       ret = convert_sys_errno();
       SHARE_LOG(WARN, "fail to fallocate", K(ret), K(sys_ret), K(fd), K(offset), K(len), KERRMSG);
     }
@@ -534,7 +534,7 @@ int ObLocalDevice::lseek(const ObIOFd &fd, const int64_t offset, const int whenc
   if (OB_UNLIKELY(!fd.is_normal_file())) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid args, not normal file", K(ret), K(fd));
-  } else if (-1 == (result_offset = ::lseek(fd.second_id_, offset, whence))) {
+  } else if (-1 == (result_offset = ::lseek(static_cast<int32_t>(fd.second_id_), offset, whence))) {
     ret = convert_sys_errno();
     SHARE_LOG(WARN, "fail to lseek", K(ret), K(fd), K(offset), K(errno), KERRMSG);
   }
@@ -619,7 +619,7 @@ int ObLocalDevice::fstat(const ObIOFd &fd, ObIODFileStat &statbuf)
     SHARE_LOG(WARN, "invalid args, not normal file", K(ret), K(fd));
   } else {
     struct stat buf;
-    if (0 != ::fstat(fd.second_id_, &buf)) {
+    if (0 != ::fstat(static_cast<int32_t>(fd.second_id_), &buf)) {
       ret = convert_sys_errno();
       SHARE_LOG(WARN, "Fail to stat file, ", K(ret), K(fd), K(errno), KERRMSG);
     } else {
@@ -975,7 +975,7 @@ int ObLocalDevice::read(
   } else if (OB_UNLIKELY(!fd.is_normal_file())) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "fd is not normal file", K(ret), K(fd));
-  } else if (-1 == (read_size = ::read(fd.second_id_, buf, size))) {
+  } else if (-1 == (read_size = ::read(static_cast<int32_t>(fd.second_id_), buf, size))) {
     ret = convert_sys_errno();
     SHARE_LOG(WARN, "fail to read", K(ret), K(fd), K(size), K(errno), KERRMSG);
   }
@@ -995,7 +995,7 @@ int ObLocalDevice::write(
   } else if (OB_UNLIKELY(!fd.is_normal_file())) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "fd is not normal file", K(ret), K(fd));
-  } else if (-1 == (write_size = ::write(fd.second_id_, buf, size))) {
+  } else if (-1 == (write_size = ::write(static_cast<int32_t>(fd.second_id_), buf, size))) {
     ret = convert_sys_errno();
     SHARE_LOG(WARN, "fail to read", K(ret), K(fd), K(size), K(errno), KERRMSG);
   }
@@ -1087,7 +1087,7 @@ int ObLocalDevice::io_prepare_pwrite(
     if (fd.is_block_file()) {
       ::io_prep_pwrite(&(local_iocb->iocb_), block_fd_, buf, count, get_block_file_offset(fd, offset));
     } else {
-      ::io_prep_pwrite(&(local_iocb->iocb_), fd.second_id_, buf, count, offset);
+      ::io_prep_pwrite(&(local_iocb->iocb_), static_cast<int32_t>(fd.second_id_), buf, count, offset);
     }
     local_iocb->iocb_.data = callback;
   }
@@ -1121,7 +1121,7 @@ int ObLocalDevice::io_prepare_pread(
     if (fd.is_block_file()) {
       ::io_prep_pread(&(local_iocb->iocb_), block_fd_, buf, count, get_block_file_offset(fd, offset));
     } else {
-      ::io_prep_pread(&(local_iocb->iocb_), fd.second_id_, buf, count, offset);
+      ::io_prep_pread(&(local_iocb->iocb_), static_cast<int32_t>(fd.second_id_), buf, count, offset);
     }
     local_iocb->iocb_.data = callback;
   }
@@ -1521,7 +1521,7 @@ int ObLocalDevice::pread_impl(const int64_t fd, void *buf, const int64_t size, c
   int64_t read_offset = offset;
   ssize_t sz = 0;
   while (OB_SUCC(ret) && read_sz > 0) {
-    sz = ::pread(fd, buffer, read_sz, read_offset);
+    sz = ::pread(static_cast<int32_t>(fd), buffer, read_sz, read_offset);
     if (sz < 0) {
       if (EINTR == errno) {
         SHARE_LOG(INFO, "pread is interrupted before any data is read, just retry", K(errno), KERRMSG);
@@ -1552,7 +1552,7 @@ int ObLocalDevice::pwrite_impl(const int64_t fd, const void *buf, const int64_t 
   int64_t write_offset = offset;
   ssize_t sz = 0;
   while (OB_SUCC(ret) && write_sz > 0) {
-    sz = ::pwrite(fd, buffer, write_sz, write_offset);
+    sz = ::pwrite(static_cast<int32_t>(fd), buffer, write_sz, write_offset);
     if (sz <= 0) {
       // if physical end of medium is reached and there's no space for any byte, EFBIG is set
       // and we think pwrite will never return 0

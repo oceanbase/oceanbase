@@ -288,7 +288,7 @@ int ObAggregateFunction::init_first_rollup_cols(common::ObIAllocator *alloc,
                                                 const ObIArray<ObColumnInfo>& group_idxs,
                                                 const ObIArray<ObColumnInfo>& rollup_idxs)
 {
-  int64_t ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   common::ObSEArray<int64_t, 16> no_dup_group_col_idxs;
   common::ObSEArray<int64_t, 16> no_dup_rollup_col_idxs;
   first_rollup_cols_.set_allocator(alloc);

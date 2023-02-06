@@ -1582,7 +1582,7 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, x509_subject, user_info, false, ObSchemaService::g_ignore_column_retrieve_error_, default_ssl_specified);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result,
-        type, user_info, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
+        type, user_info, int32_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID_AND_DEFAULT_VALUE(result, profile_id,
         user_info, tenant_id, false, ObSchemaService::g_ignore_column_retrieve_error_, common::OB_INVALID_ID);
     int64_t default_last_changed = -1;

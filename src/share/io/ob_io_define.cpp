@@ -812,7 +812,7 @@ int ObIOHandle::wait(const int64_t timeout_ms)
     ObWaitEventGuard wait_guard(req_->io_info_.flag_.get_wait_event(),
                                 timeout_ms,
                                 req_->io_info_.size_);
-    int real_wait_timeout = min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms);
+    const int64_t real_wait_timeout = min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms);
 
     if (real_wait_timeout > 0) {
       ObThreadCondGuard guard(req_->cond_);
@@ -1092,7 +1092,7 @@ int ObTenantIOConfig::parse_group_config(const char *config_str)
   } else {
     str_trim(copied_str);
     int pos = 0;
-    int len = strlen(copied_str);
+    const int64_t len = strlen(copied_str);
     for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
       if (';' == copied_str[i]) {
         copied_str[i] = '\0';

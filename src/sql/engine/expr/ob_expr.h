@@ -1146,7 +1146,7 @@ inline int encode(char *buf, const int64_t buf_len, int64_t &pos, sql::ObExpr *e
   if (NULL != expr) {
     sql::ObExpr::ObExprIArray *array = sql::ObExpr::get_serialize_array();
     if (OB_UNLIKELY(NULL == array || array->empty() || expr < &array->at(0)
-                    || (idx = expr - &array->at(0) + 1) > array->count())) {
+                    || (idx = static_cast<uint32_t>(expr - &array->at(0) + 1)) > array->count())) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "expr not in array", K(ret), KP(array), KP(idx), KP(expr));
     }

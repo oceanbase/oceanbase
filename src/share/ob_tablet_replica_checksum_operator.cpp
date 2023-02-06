@@ -169,7 +169,7 @@ int64_t ObTabletReplicaReportColumnMeta::get_string_length() const
 int64_t ObTabletReplicaReportColumnMeta::get_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  int32_t column_cnt = column_checksums_.count();
+  int32_t column_cnt = static_cast<int32_t>(column_checksums_.count());
   common::databuff_printf(buf, buf_len, pos, "magic:%lX,", MAGIC_NUMBER);
   common::databuff_printf(buf, buf_len, pos, "compat:%d,", compat_version_);
   common::databuff_printf(buf, buf_len, pos, "method:%d,", checksum_method_);
@@ -796,7 +796,7 @@ int ObTabletReplicaChecksumOperator::construct_tablet_replica_checksum_item_(
     item.tenant_id_ = (uint64_t)int_tenant_id;
     item.tablet_id_ = (uint64_t)int_tablet_id;
     item.ls_id_ = ls_id;
-    if (OB_UNLIKELY(!item.server_.set_ip_addr(ip, port))) {
+    if (OB_UNLIKELY(!item.server_.set_ip_addr(ip, static_cast<int32_t>(port)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to set ip_addr", KR(ret), K(item), K(ip), K(port));
     } else if (OB_FAIL(set_column_meta_with_hex_str(column_meta_hex_str, item.column_meta_))) {
@@ -1614,7 +1614,7 @@ int ObTabletReplicaChecksumOperator::get_visible_column_meta(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("size overflow", KR(ret), K(pos), K(length));
   } else {
-    column_meta_visible_str.assign(column_meta_str, pos);
+    column_meta_visible_str.assign(column_meta_str, static_cast<int32_t>(pos));
   }
   return ret;
 }
@@ -1654,7 +1654,7 @@ int ObTabletReplicaChecksumOperator::get_hex_column_meta(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
-    column_meta_hex_str.assign_ptr(hex_buf, hex_size);
+    column_meta_hex_str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
   }
   return ret;
 }

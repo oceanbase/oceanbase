@@ -76,7 +76,7 @@ public:
     common::ColumnsFieldArray &dst_fields);
 
   int init_params(int64_t param_count);
-  int get_param_name_count() const { return param_names_.count(); }
+  int64_t get_param_name_count() const { return param_names_.count(); }
   ObIArray<ObString>& get_param_names() { return param_names_; }
 
   int add_param_name(ObString &clone_name);

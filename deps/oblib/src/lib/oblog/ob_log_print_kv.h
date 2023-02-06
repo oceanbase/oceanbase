@@ -103,7 +103,7 @@ public:
   {
     int64_t pos = 0;
     if (OB_LIKELY(NULL != buf && len > 0)) {
-      int max_cpy = MIN(len, len_);
+      int64_t max_cpy = MIN(len, len_);
       STRNCPY(buf, str_, max_cpy);
       while (buf[pos] != '\0' && pos < max_cpy)
 	pos++;

@@ -72,7 +72,7 @@ int ObEncryptKey<BUFSIZE>::assign(const ObEncryptKey &rhs)
 {
   int ret = common::OB_SUCCESS;
   str_.set_length(0);
-  int64_t rhs_len = rhs.get_content().length();
+  const int32_t rhs_len = rhs.get_content().length();
   if (OB_UNLIKELY(rhs_len != str_.write(rhs.get_content().ptr(), rhs_len))) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "key content is wrong", K(ret), K(rhs), K(rhs_len));
@@ -104,7 +104,7 @@ int ObEncryptKey<BUFSIZE>::set_content(const char *ptr, const int64_t len)
     ret = common::OB_INVALID_ARGUMENT;
   } else {
     str_.set_length(0);
-    str_.write(ptr, len);
+    str_.write(ptr, static_cast<int32_t>(len));
   }
   return ret;
 }

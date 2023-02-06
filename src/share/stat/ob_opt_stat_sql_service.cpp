@@ -1658,7 +1658,7 @@ int ObOptStatSqlService::get_valid_obj_str(const ObObj &src_obj,
         ret = OB_SUCCESS;
         const char *incorrect_string = "-4258: Incorrect string value, can't show.";
         ObObj incorrect_str_obj;
-        incorrect_str_obj.set_string(new_obj.get_type(), incorrect_string, strlen(incorrect_string));
+        incorrect_str_obj.set_string(new_obj.get_type(), incorrect_string, static_cast<int32_t>(strlen(incorrect_string)));
         if (OB_FAIL(get_obj_str(incorrect_str_obj, allocator, dest_str))) {
           LOG_WARN("failed to get obj str", K(ret));
         } else {/*do nothing*/}

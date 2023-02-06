@@ -369,9 +369,9 @@ public:
   int update_thread_cnt(double tenant_unit_cpu);
   int64_t update_memory_size(int64_t memory_size)
   {
-    int orig_size_ = memory_size_;
+    int64_t orig_size = memory_size_;
     memory_size_ = memory_size;
-    return orig_size_;
+    return orig_size;
   }
   int64_t get_memory_size() { return memory_size_; }
   bool update_mini_mode(bool mini_mode)

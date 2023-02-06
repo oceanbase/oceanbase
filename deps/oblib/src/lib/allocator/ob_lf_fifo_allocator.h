@@ -37,8 +37,11 @@ public:
     mattr_.tenant_id_ = tenant_id;
     block_alloc_.set_limit(total_limit);
     if (OB_FAIL(ObVSliceAlloc::init(page_size, block_alloc_, mattr_))) {
-    }  else{
-      ObVSliceAlloc::set_nway(cache_page_count);
+    } else if (cache_page_count < 0 || cache_page_count > INT32_MAX) {
+      ret = OB_INVALID_ARGUMENT;
+      LIB_ALLOC_LOG(ERROR, "invalid cache_page_count", K(ret), K(cache_page_count));
+    } else{
+      ObVSliceAlloc::set_nway(static_cast<int32_t>(cache_page_count));
     }
     return ret;
   }

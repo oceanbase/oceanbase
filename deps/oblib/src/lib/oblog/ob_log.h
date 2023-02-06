@@ -706,7 +706,7 @@ private:
                            const int64_t log_size, bool &allow);
   bool need_print_log_limit_msg();
 
-  int alloc_log_item(const int32_t level, const int32_t size, ObPLogItem *&log_item);
+  int alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item);
   void free_log_item(ObPLogItem *log_item);
   void inc_dropped_log_count(const int32_t level);
   template<typename Function>

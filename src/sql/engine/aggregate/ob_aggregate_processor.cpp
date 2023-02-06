@@ -5852,7 +5852,8 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
               ObString origin_str;
               if (ob_is_lob_locator(val_type)) {
                 const ObLobLocator &lob_locator = converted_datum.get_lob_locator();
-                origin_str.assign(const_cast<char *>(lob_locator.get_payload_ptr()), lob_locator.payload_size_);
+                origin_str.assign(const_cast<char *>(lob_locator.get_payload_ptr()),
+                    static_cast<ObString::obstr_size_t>(lob_locator.payload_size_));
                 val_type = ObVarcharType;
               } else if (tmp_obj->is_lob_storage()) {
                 origin_str = converted_datum.get_string();
@@ -6244,7 +6245,8 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
                 ObString origin_str;
                 if (ob_is_lob_locator(val_type1)) {
                   const ObLobLocator &lob_locator = converted_datum.get_lob_locator();
-                  origin_str.assign(const_cast<char *>(lob_locator.get_payload_ptr()), lob_locator.payload_size_);
+                  origin_str.assign(const_cast<char *>(lob_locator.get_payload_ptr()),
+                      static_cast<ObString::obstr_size_t>(lob_locator.payload_size_));
                   val_type1 = ObVarcharType;
                 } else if (tmp_obj->is_lob_storage()) {
                   origin_str = converted_datum.get_string();

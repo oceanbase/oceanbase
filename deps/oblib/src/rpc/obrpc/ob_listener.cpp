@@ -187,7 +187,7 @@ static int read_client_magic(int fd, uint64_t &client_magic, uint8_t &index)
 {
   int ret = OB_SUCCESS;
   const int64_t recv_buf_len = 1 * 1024;
-  int rcv_byte = 0;
+  int64_t rcv_byte = 0;
   uint64_t header_magic = 0;
   int64_t pos = 0;
   uint16_t msg_body_len = 0;
@@ -235,7 +235,7 @@ static int connection_redispatch(int conn_fd, io_threads_pipefd_pool_t *ths_fd_p
   int ret = OB_SUCCESS;
   int wrfd = -1;
   int count = ths_fd_pool->count;
-  int write_bytes = 0;
+  int64_t write_bytes = 0;
 
   if (OB_ISNULL(ths_fd_pool)) {
     RPC_LOG(ERROR, "ths_fd_pool is NULL");

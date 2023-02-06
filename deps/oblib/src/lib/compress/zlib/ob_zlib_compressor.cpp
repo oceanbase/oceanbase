@@ -77,7 +77,7 @@ int ObZlibCompressor::fast_level0_compress(unsigned char *dest, unsigned long *d
       dest += DEFLATE_HEADER_LEN;
       MEMCPY(dest, source + idx, step);
       dest += step;
-      adler = adler32(adler, source + idx, step);
+      adler = adler32(adler, source + idx, static_cast<uint32_t>(step));
     }
     if (step >= max_dist_size) {
       //last step is zero

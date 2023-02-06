@@ -370,7 +370,7 @@ extern ObRpcProxy::NoneT None;
   }                                                                     \
   inline CLS& group_id(uint64_t group_id)                                    \
   {                                                                     \
-    set_group_id(group_id);                                              \
+    set_group_id(static_cast<int32_t>(group_id));                       \
     return *this;                                                       \
   }                                                                     \
   inline CLS& as(uint64_t tenant_id)                                    \

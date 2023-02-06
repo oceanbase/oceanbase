@@ -199,7 +199,7 @@ int ObDbmsStatsExportImport::export_table_stats(ObExecContext &ctx,
   const char *from_table_name = lib::is_oracle_mode() ? "sys.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT"
                                                           : "oceanbase.__all_table_stat";
   const char *null_str = "NULL";
-  int32_t null_str_len = strlen(null_str);
+  int32_t null_str_len = static_cast<int32_t>(strlen(null_str));
   if (OB_FAIL(table_name_str.append_fmt(lib::is_oracle_mode() ? "\"%.*s\".\"%.*s\"" :
                                                                   "`%.*s`.`%.*s`",
                                         param.stat_own_.length(), param.stat_own_.ptr(),

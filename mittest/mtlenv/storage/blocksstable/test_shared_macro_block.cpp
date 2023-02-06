@@ -168,7 +168,7 @@ TEST_F(TestSharedMacroBlk, test_invalid_write)
 int main(int argc, char **argv)
 {
   system("rm -f test_shared_macro_block.log*");
-  OB_LOGGER.set_file_name("test_shared_macro_block.log", true, true);
+  OB_LOGGER.set_file_name("test_shared_macro_block.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

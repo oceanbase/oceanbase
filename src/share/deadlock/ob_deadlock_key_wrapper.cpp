@@ -119,7 +119,7 @@ int64_t UserBinaryKey::to_string(char *buffer, const int64_t length) const
     #undef USER_REGISTER
   default:
     static const char *err_str = "invalid key";
-    const int err_str_len = strlen(err_str);
+    const int64_t err_str_len = strlen(err_str);
     if (length >= err_str_len) {
       memcpy(buffer, err_str, err_str_len);
       used_length = err_str_len;

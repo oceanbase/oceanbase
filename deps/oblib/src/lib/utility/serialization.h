@@ -1340,15 +1340,15 @@ int decode_decimal_type(const char *buf, const int64_t buf_len, int64_t &pos, bo
 
 inline int64_t encoded_length_decimal_type(int8_t nwords, const uint32_t *words)
 {
-  int64_t ret = 6;
+  int64_t len = 6;
   if (OB_UNLIKELY(NULL == words)) {
-    _OB_LOG(ERROR, "null decimal words");
+    _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "null decimal words");
   } else {
     for (int8_t i = 0; i < nwords; ++i) {
-      ret += static_cast<int32_t>(encoded_length_vi32(words[i]));
+      len += static_cast<int32_t>(encoded_length_vi32(words[i]));
     }
   }
-  return ret;
+  return len;
 }
 
 inline int encode_double_type(char *buf, const int64_t buf_len, int64_t &pos, double val,

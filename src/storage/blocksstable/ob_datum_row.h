@@ -545,12 +545,12 @@ OB_INLINE int ObStorageDatum::from_buf_enhance(const char *buf, const int64_t bu
 {
   int ret = common::OB_SUCCESS;
 
-  if (OB_UNLIKELY(nullptr == buf || buf_len < 0)) {
+  if (OB_UNLIKELY(nullptr == buf || buf_len < 0 || buf_len > UINT32_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to transfer from buf", K(ret), KP(buf), K(buf_len));
   } else {
     reuse();
-    len_ = buf_len;
+    len_ = static_cast<uint32_t>(buf_len);
     if (buf_len > 0) {
       ptr_ = buf;
     }

@@ -1460,7 +1460,7 @@ int main(int argc, char **argv)
 {
   system("rm -f test_index_tree.log*");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  OB_LOGGER.set_file_name("test_index_tree.log", true);
+  OB_LOGGER.set_file_name("test_index_tree.log");
   srand(time(NULL));
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

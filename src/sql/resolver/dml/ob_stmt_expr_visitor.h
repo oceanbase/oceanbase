@@ -79,7 +79,7 @@ public:
 
   void add_scope(DmlStmtScope scope)
   {
-    flags_ = (flags_ | (1L << scope));
+    flags_ = static_cast<uint32_t>((flags_ | (1L << scope)));
   }
 
   void add_scope(const ObIArray<DmlStmtScope> &scopes);

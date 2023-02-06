@@ -76,7 +76,6 @@ public:
   int set_item_count(int64_t count);
   inline void set_need_construct_binding_array(bool need_construct) { need_construct_binding_array_ = need_construct; }
   inline bool need_construct_binding_array() const { return need_construct_binding_array_; }
-  inline void set_array_param_index(int64_t array_param_index) { array_param_index_ = array_param_index; }
   inline int64_t get_array_param_index() const { return array_param_index_; }
   /**
     common::ObIAllocator &alloc, * 设置表达式

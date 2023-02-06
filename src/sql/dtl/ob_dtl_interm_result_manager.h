@@ -40,7 +40,7 @@ struct ObDTLIntermResultMonitorInfo
     qc_id_(qc_id), dfo_id_(dfo_id), sqc_id_(sqc_id)
   { }
     TO_STRING_KV(K_(qc_id), K_(dfo_id), K_(sqc_id));
-  int32_t qc_id_;
+  int64_t qc_id_;
   int64_t dfo_id_;
   int64_t sqc_id_;
 };

@@ -91,10 +91,10 @@ public:
   } CACHE_ALIGNED;
 public:
   ObVSliceAlloc(): nway_(0), bsize_(0), blk_alloc_(default_blk_alloc) {}
-  ObVSliceAlloc(const ObMemAttr &attr, int block_size = DEFAULT_BLOCK_SIZE, BlockAlloc &blk_alloc = default_blk_alloc)
+  ObVSliceAlloc(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE, BlockAlloc &blk_alloc = default_blk_alloc)
     : nway_(1), bsize_(block_size), mattr_(attr), blk_alloc_(blk_alloc) {}
   virtual ~ObVSliceAlloc() override { destroy(); }
-  int init(int block_size, BlockAlloc& block_alloc, const ObMemAttr& attr) {
+  int init(int64_t block_size, BlockAlloc& block_alloc, const ObMemAttr& attr) {
     int ret = OB_SUCCESS;
     new(this)ObVSliceAlloc(attr, block_size, block_alloc);
     return ret;

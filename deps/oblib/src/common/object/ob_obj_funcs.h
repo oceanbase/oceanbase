@@ -384,10 +384,10 @@ template <>
     UNUSED(params);                                                    \
     int64_t print_len = 0;\
     if (IS_DOUBLE) {\
-      print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, length - pos , buffer + pos, \
+      print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(length - pos) , buffer + pos, \
                               NULL, lib::is_oracle_mode(), TRUE);\
     } else {\
-      print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, length - pos, buffer + pos, \
+      print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(length - pos), buffer + pos, \
                               NULL, lib::is_oracle_mode(), TRUE);\
     }\
     if (OB_UNLIKELY(print_len <=0 || print_len + pos > length)) {\
@@ -418,10 +418,10 @@ template <>
     } else {                                                                \
       buffer[pos++] = '\'';                                                 \
       if (IS_DOUBLE) {\
-        print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, length - pos , buffer + pos, \
+        print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(length - pos), buffer + pos, \
                                 NULL, lib::is_oracle_mode(), TRUE);\
       } else {\
-        print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, length - pos, buffer + pos, \
+        print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(length - pos), buffer + pos, \
                                 NULL, lib::is_oracle_mode(), TRUE);\
       }\
       if (OB_UNLIKELY(print_len <= 0 || print_len + pos > length)) {\
@@ -457,10 +457,10 @@ template <>
     UNUSED(params);                                                    \
     int64_t print_len = 0;\
     if (IS_DOUBLE) {\
-      print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, length - pos , buffer + pos, \
+      print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(length - pos), buffer + pos, \
                               NULL, lib::is_oracle_mode(), TRUE);\
     } else {\
-      print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, length - pos, buffer + pos, \
+      print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(length - pos), buffer + pos, \
                               NULL, lib::is_oracle_mode(), TRUE);\
     }\
     if (OB_UNLIKELY(print_len <=0 || print_len + pos > length)) {\

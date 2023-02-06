@@ -132,13 +132,13 @@ int try_get_fd_inner(ObFdSimulator::FirstArray* first_array, int32_t second_arra
 {
   int ret = OB_SUCCESS;
   int i = 0;
-  int32_t free_id = ObFdSimulator::INVALID_SLOT_ID;
+  int64_t free_id = ObFdSimulator::INVALID_SLOT_ID;
   ObFdSimulator::FdSlot *second_array_p = NULL;
   for (; i < second_array_num; i++) {
     free_id = first_array[i].second_array_free_hd;
     second_array_p = first_array[i].second_array_p;
     if (free_id != ObFdSimulator::INVALID_SLOT_ID) {
-      int32_t next_free_id = second_array_p[free_id].pointer.index_id;
+      int64_t next_free_id = second_array_p[free_id].pointer.index_id;
       ob_sim_fd_id sim_fd;
       sim_fd.sim_id_.first_pos_ = i;
       sim_fd.sim_id_.second_pos_ = free_id;

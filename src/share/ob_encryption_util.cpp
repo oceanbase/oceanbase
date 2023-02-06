@@ -364,7 +364,7 @@ int ObHashUtil::hash(const enum ObHashAlgorithm algo, const ObString data,
   } else if (OB_FAIL(hash(algo, data_ptr, data.length(), buf, buf_len, out_len))) {
     LOG_WARN("fail to calc hash output", K(ret));
   } else {
-    output.assign_ptr(buf, out_len);
+    output.assign_ptr(buf, static_cast<int32_t>(out_len));
   }
   return ret;
 }

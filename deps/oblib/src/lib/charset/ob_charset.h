@@ -485,7 +485,7 @@ public:
                              const uint32_t from_len,
                              const ObCollationType to_type,
                              char *to_str,
-                             uint32_t to_len,
+                             int64_t to_len,
                              uint32_t &result_len,
                              bool trim_incomplete_tail = true,
                              bool report_error = true,

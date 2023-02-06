@@ -334,7 +334,7 @@ int ObExprUserEnv::eval_lang(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
         if (0 == language.get_string().case_compare(lang_map_[i].language)) {
           found = true;
           abbreviated.assign(lang_map_[i].abbreviated,
-                             strlen(lang_map_[i].abbreviated));
+                             static_cast<int32_t>(strlen(lang_map_[i].abbreviated)));
         }
       }
       if (!found) {

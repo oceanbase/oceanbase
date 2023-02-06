@@ -175,15 +175,15 @@ inline double max(const double x, const double y)
   return x < y ? y : x;
 }
 
+template <class T>
+void max(T, T) = delete;
+
 template<oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id = oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
-inline void ob_usleep(useconds_t v)
+inline void ob_usleep(const useconds_t v)
 {
   oceanbase::common::ObWaitEventGuard wait_guard(event_id, 0, (int64_t)v);
   ::usleep(v);
 }
-
-template <class T>
-void max(T, T) = delete;
 
 int get_double_expand_size(int64_t &new_size, const int64_t limit_size);
 /**
@@ -239,23 +239,6 @@ inline const char *get_peer_ip(char *buffer, size_t n, easy_request_t *req)
   } else {
     return mess;
   }
-}
-
-inline const char *get_peer_ip_str(char *buffer, size_t n, easy_request_t *req)
-{
-  static char mess[8] = "unknown";
-  if (OB_LIKELY(nullptr != req && nullptr != req->ms && nullptr != req->ms->c)) {
-    if (AF_INET == req->ms->c->addr.family) {
-      return inet_ntoa_s(buffer, n, req->ms->c->addr.u.addr);
-    } else if (AF_INET6 == req->ms->c->addr.family) { // ipv6
-      in6_addr in6;
-      MEMCPY(in6.s6_addr, req->ms->c->addr.u.addr6, sizeof(in6_addr));
-      if(!inet_ntop(AF_INET6, &in6, buffer, n)) {
-        return buffer;
-      }
-    }
-  }
-  return mess;
 }
 
 inline const char *get_peer_ip(char *buffer, size_t n, easy_connection_t *c)

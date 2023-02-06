@@ -689,7 +689,7 @@ void ObIOTuner::run1()
       if (REACH_TIME_INTERVAL(1000L * 1000L * 1L)) {
         print_io_status();
       }
-      ob_usleep(100L * 1000L); // 100ms
+      ob_usleep(100 * 1000); // 100ms
     }
     LOG_INFO("io tuner thread stopped");
   }
@@ -1240,7 +1240,7 @@ int ObIOSender::notify()
   return ret;
 }
 
-int32_t ObIOSender::get_queue_count() const
+int64_t ObIOSender::get_queue_count() const
 {
   return OB_ISNULL(io_queue_) ?  0 : sender_req_count_;
 }
@@ -1718,7 +1718,7 @@ void ObAsyncIOChannel::destroy()
     // wait flying request
   const int64_t max_wait_ts = ObTimeUtility::fast_current_time() + 1000L * 1000L * 30L; // 30s
   while (submit_count_ > 0 && ObTimeUtility::fast_current_time() < max_wait_ts) {
-    ob_usleep(1000L * 10L);
+    ob_usleep(1000 * 10);
   }
   if (submit_count_ > 0) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "some request have not returned from file system", K(submit_count_));

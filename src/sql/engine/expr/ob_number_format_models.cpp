@@ -1772,10 +1772,10 @@ int ObNFMToChar::process_tm_format(const ObNFMObj &nfm_obj, char *buf,
   } else {
     ObObjType obj_type = nfm_obj.get_obj_type();
     if (ObFloatType == obj_type) {
-      num_str_len = ob_gcvt_opt(nfm_obj.get_float(), OB_GCVT_ARG_FLOAT, alloc_size,
+      num_str_len = ob_gcvt_opt(nfm_obj.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(alloc_size),
                                 num_str_buf, NULL, lib::is_oracle_mode(), TRUE);
     } else if (ObDoubleType == obj_type) {
-      num_str_len = ob_gcvt_opt(nfm_obj.get_double(), OB_GCVT_ARG_DOUBLE, alloc_size,
+      num_str_len = ob_gcvt_opt(nfm_obj.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(alloc_size),
                                 num_str_buf, NULL, lib::is_oracle_mode(), TRUE);
     } else if (ObNumberType == obj_type) {
       number::ObNumber num = nfm_obj.get_number();
@@ -1824,10 +1824,10 @@ int ObNFMToChar::process_tme_format(const ObNFMObj &nfm_obj, char *buf,
   } else {
     ObObjType obj_type = nfm_obj.get_obj_type();
     if (ObFloatType == obj_type) {
-      num_str_len = ob_gcvt_opt(nfm_obj.get_float(), OB_GCVT_ARG_FLOAT, alloc_size,
+      num_str_len = ob_gcvt_opt(nfm_obj.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(alloc_size),
                                 num_str_buf, NULL, lib::is_oracle_mode(), TRUE);
     } else if (ObDoubleType == obj_type) {
-      num_str_len = ob_gcvt_opt(nfm_obj.get_double(), OB_GCVT_ARG_DOUBLE, alloc_size,
+      num_str_len = ob_gcvt_opt(nfm_obj.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(alloc_size),
                                 num_str_buf, NULL, lib::is_oracle_mode(), TRUE);
     } else if (ObNumberType == obj_type) {
       number::ObNumber num = nfm_obj.get_number();

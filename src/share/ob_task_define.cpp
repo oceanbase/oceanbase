@@ -66,7 +66,7 @@ public:
 private:
   void per_err_logs(int &first_thread_cnt, int &left_cnt)
   {
-    int total_cnt = std::min(rate_, (int64_t)INT32_MAX);
+    int total_cnt = std::min(static_cast<int32_t>(rate_), INT32_MAX);
     first_thread_cnt = std::min(std::max(total_cnt / 2, 24), 48);
     left_cnt = std::max(0, total_cnt - first_thread_cnt);
   }
@@ -310,7 +310,7 @@ int ObSyslogPerErrLimiter::do_acquire(int64_t permits, int log_level, int errcod
   int ret = OB_SUCCESS;
   if (log_level == OB_LOG_LEVEL_WARN && inited_ && rate_ > 0) {
     PerErrorItem &perr = locate_perr(errcode);
-    int mytid = GETTID();
+    int mytid = static_cast<int32_t>(GETTID());
     int tid = ATOMIC_LOAD(&perr.first_tid_);
     int tidcnt = -1;
     if (0 == tid) {

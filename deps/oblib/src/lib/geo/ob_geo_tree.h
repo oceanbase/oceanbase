@@ -164,8 +164,8 @@ public:
   const value_type &back() const { return *(vec_.end()-1); };
   value_type &front() { return *(vec_.begin()); }
   const value_type &front() const { return *(vec_.begin()); }
-  value_type &operator[](int32_t i) { return vec_[i]; }
-  const value_type &operator[](int32_t i) const { return vec_[i]; }
+  value_type &operator[](int64_t i) { return vec_[i]; }
+  const value_type &operator[](int64_t i) const { return vec_[i]; }
   // iterator
   iterator begin() { return vec_.begin(); }
   const_iterator begin() const { return const_iterator(&*(const_cast<common::ObArray<T> *>(&vec_))->begin()); }

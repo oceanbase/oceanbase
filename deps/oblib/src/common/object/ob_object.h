@@ -747,7 +747,7 @@ struct ObMemLobExternHeader
     rowkey_size_(rowkey_size), payload_offset_(0), payload_size_(0)
   {}
 
-  ObMemLobExternHeader(uint64_t table_id, uint64_t column_idx, uint16_t rowkey_size,
+  ObMemLobExternHeader(uint64_t table_id, uint32_t column_idx, uint16_t rowkey_size,
                        uint32_t payload_offset, uint32_t payload_size) :
     reserved_(0), table_id_(table_id), column_idx_(column_idx), flags_(),
     rowkey_size_(rowkey_size),

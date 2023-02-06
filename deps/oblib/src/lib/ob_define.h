@@ -351,7 +351,7 @@ const int64_t OB_MPI_MAX_PARTITION_NUM = 128;
 const int64_t OB_MPI_MAX_TASK_NUM = 256;
 
 const int64_t OB_MAX_TABLE_NUM_PER_STMT = 256;
-const int64_t OB_TMP_BUF_SIZE_256 = 256;
+const int32_t OB_TMP_BUF_SIZE_256 = 256;
 const int64_t OB_SCHEMA_MGR_MAX_USED_TID_MAP_BUCKET_NUM = 64;
 const int64_t OB_MAX_SLAVE_READ_DELAY_TS = 5 * 1000 * 1000;
 const int64_t OB_SKIP_RANGE_LIMIT = 256;
@@ -513,7 +513,7 @@ const int32_t OB_UPS_LIMIT_RATIO = 2;
 
 const int64_t OB_MERGED_VERSION_INIT = 1;
 
-const int64_t OB_TRACE_BUFFER_SIZE = 4 * 1024; //4k
+const int32_t OB_TRACE_BUFFER_SIZE = 4 * 1024; //4k
 const int64_t OB_TRACE_STAT_BUFFER_SIZE= 200; //200
 
 

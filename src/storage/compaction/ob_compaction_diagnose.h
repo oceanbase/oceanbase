@@ -113,7 +113,7 @@ public:
   int init(ObCompactionDiagnoseInfo *info_array, const int64_t max_cnt);
   int diagnose_all_tablets(const int64_t tenant_id);
   int diagnose_tenant_tablet();
-  int get_cnt() { return idx_; }
+  int64_t get_cnt() { return idx_; }
   static int diagnose_dag(
       const storage::ObMergeType merge_type,
       const ObLSID ls_id,

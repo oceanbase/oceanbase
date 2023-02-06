@@ -462,6 +462,7 @@ ob_set_subtarget(ob_share unit
 
 ob_add_new_object_target(ob_share ob_share)
 
+target_compile_options(ob_share PRIVATE -Wshorten-64-to-32)
 target_link_libraries(ob_share PUBLIC ob_base)
 
 add_library(ob_share_static

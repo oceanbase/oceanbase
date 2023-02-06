@@ -315,7 +315,7 @@ public:
 private:
   char buf_[sizeof(MyReentrantThread)];
   MyReentrantThread *th_ = nullptr;
-  int thread_cnt_;
+  int64_t thread_cnt_;
 
 };
 class MyThreadPool : public lib::ThreadPool
@@ -401,7 +401,7 @@ public:
 private:
   char buf_[sizeof(MyThreadPool)];
   MyThreadPool *th_ = nullptr;
-  int thread_cnt_;
+  int64_t thread_cnt_;
 };
 
 class MySimpleThreadPool : public common::ObSimpleThreadPool
@@ -619,7 +619,7 @@ public:
 private:
   char buf_[sizeof(common::ObDedupQueue)];
   common::ObDedupQueue *qth_ = nullptr;
-  int32_t thread_num_;
+  int64_t thread_num_;
   const int64_t queue_size_;
   const int64_t task_map_size_;
   const int64_t total_mem_limit_;
@@ -797,7 +797,7 @@ public:
 private:
   char buf_[sizeof(share::ObAsyncTaskQueue)];
   share::ObAsyncTaskQueue *qth_ = nullptr;
-  int thread_cnt_;
+  int64_t thread_cnt_;
   int64_t queue_size_;
 };
 
@@ -890,7 +890,7 @@ public:
 private:
   char buf_[sizeof(TimerType) * MAX_CNT];
   TimerType *timers_[MAX_CNT] = {nullptr};
-  const int cnt_ = 0;
+  const int64_t cnt_ = 0;
   bool is_inited_ = false;
 };
 

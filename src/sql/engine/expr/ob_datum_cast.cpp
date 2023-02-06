@@ -366,7 +366,7 @@ int ObDatumHexUtils::rawtohex(const ObExpr &expr, const ObString &in_str,
         ObScale res_scale = -1;
         char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
         MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
-        int64_t length = ob_gcvt_opt(in_val, OB_GCVT_ARG_FLOAT, sizeof(buf) - 1,
+        int64_t length = ob_gcvt_opt(in_val, OB_GCVT_ARG_FLOAT, static_cast<int32_t>(sizeof(buf) - 1),
                                      buf, NULL, TRUE, TRUE);
         ObString float_str(sizeof(buf), static_cast<int32_t>(length), buf);
         number::ObNumber nmb;
@@ -384,7 +384,7 @@ int ObDatumHexUtils::rawtohex(const ObExpr &expr, const ObString &in_str,
         ObScale res_scale = -1;
         char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
         MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
-        int64_t length = ob_gcvt_opt(in_val, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1,
+        int64_t length = ob_gcvt_opt(in_val, OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1),
                                      buf, NULL, TRUE, TRUE);
         ObString double_str(sizeof(buf), static_cast<int32_t>(length), buf);
         number::ObNumber nmb;
@@ -1880,7 +1880,7 @@ static int common_floating_number(const IN_TYPE in_val,
   MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
   int64_t length = 0;
   if (lib::is_oracle_mode() || OB_GCVT_ARG_DOUBLE == arg_type) {
-    length = ob_gcvt_opt(in_val, arg_type, sizeof(buf) - 1,
+    length = ob_gcvt_opt(in_val, arg_type, static_cast<int32_t>(sizeof(buf) - 1),
                          buf, NULL, lib::is_oracle_mode(), TRUE);
   } else {
     length = ob_gcvt(in_val, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL);
@@ -1939,7 +1939,7 @@ static int common_floating_string(const ObExpr &expr,
     if (0 <= scale) {
       length = ob_fcvt(in_val, scale, sizeof(buf) - 1, buf, NULL);
     } else {
-      length = ob_gcvt_opt(in_val, arg_type, sizeof(buf) - 1,
+      length = ob_gcvt_opt(in_val, arg_type, static_cast<int32_t>(sizeof(buf) - 1),
                            buf, NULL, lib::is_oracle_mode(), TRUE);
     }
   }

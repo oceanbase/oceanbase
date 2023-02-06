@@ -314,7 +314,7 @@ int ObLSRestoreProgressPersistInfo::parse_from(common::sqlclient::ObMySQLResult 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_FINISH_TABLET_COUNT, finish_tablet_count_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TOTAL_BYTES, total_bytes_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_FINISH_BYTES, finish_bytes_, int64_t);
-  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, result_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, result_, int32_t);
 
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_TRACE_ID, trace_id, OB_MAX_TRACE_ID_BUFFER_SIZE, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_COMMENT, comment, MAX_TABLE_COMMENT_LENGTH, real_length);
@@ -395,7 +395,7 @@ const char *ObHisRestoreJobPersistInfo::get_status_str() const
 int ObHisRestoreJobPersistInfo::get_status(const ObString &str_str) const
 {
   int status = -1;
-  for (int64_t i = 0; i < ARRAYSIZEOF(STATUS_STR); ++i) {
+  for (int32_t i = 0; i < ARRAYSIZEOF(STATUS_STR); ++i) {
     if (0 == str_str.case_compare(STATUS_STR[i])) {
       status = i;
       break;

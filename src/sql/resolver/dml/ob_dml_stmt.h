@@ -1126,7 +1126,7 @@ public:
   int check_and_get_same_rowid_expr(const ObRawExpr *expr, ObRawExpr *&same_rowid_expr);
 
   int add_cte_definition(TableItem * table_item) { return cte_definitions_.push_back(table_item); }
-  int get_cte_definition_size() const { return cte_definitions_.count(); }
+  int64_t get_cte_definition_size() const { return cte_definitions_.count(); }
   common::ObIArray<TableItem *>& get_cte_definitions() { return cte_definitions_; }
   const common::ObIArray<TableItem *>& get_cte_definitions() const { return cte_definitions_; }
 

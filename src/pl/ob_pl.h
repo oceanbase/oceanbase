@@ -326,7 +326,7 @@ public:
   }
   int add_routine(ObPLFunction *routine);
   int get_routine(int64_t routine_idx, ObPLFunction *&routine) const;
-  void init_routine_table(int64_t count) { routine_table_.set_capacity(count); }
+  void init_routine_table(int64_t count) { routine_table_.set_capacity(static_cast<uint32_t>(count)); }
   inline const ObIArray<ObUserDefinedType *> &get_type_table() const { return type_table_; }
   inline sql::ObRawExprFactory &get_expr_factory() { return expr_factory_; }
 

@@ -321,7 +321,7 @@ int ObBackupCheckFile::compare_check_file_name_(
     LOG_WARN("failed to get check file prefix", K(ret), K_(tenant_id));
   } else {
     ObDirPrefixEntryNameFilter prefix_op(d_entrys);
-    if (OB_FAIL(prefix_op.init(check_file_prefix, strlen(check_file_prefix)))) {
+    if (OB_FAIL(prefix_op.init(check_file_prefix, static_cast<int32_t>(strlen(check_file_prefix))))) {
       LOG_WARN("failed to init dir prefix", K(ret), K(check_file_prefix), K_(tenant_id));
     } else if (OB_FAIL(util.list_files(path.get_obstr(), backup_dest.get_storage_info(), prefix_op))) {
       LOG_WARN("failed to list files", K(ret), K_(tenant_id));
@@ -450,7 +450,7 @@ int ObBackupCheckFile::delete_permission_check_file(const ObBackupDest &backup_d
     LOG_WARN("failed to get check file path", K(ret), K(backup_dest));
   } else {
     ObDirPrefixEntryNameFilter prefix_op(d_entrys);
-    if (OB_FAIL(prefix_op.init(check_file_prefix, strlen(check_file_prefix)))) {
+    if (OB_FAIL(prefix_op.init(check_file_prefix, static_cast<int32_t>(strlen(check_file_prefix))))) {
       LOG_WARN("failed to init dir prefix", K(ret), K(check_file_prefix), K_(tenant_id));
     } else if (OB_FAIL(util.list_files(path.get_obstr(), backup_dest.get_storage_info(), prefix_op))) {
       LOG_WARN("failed to list files", K(ret), K_(tenant_id));

@@ -173,7 +173,6 @@ public:
   OB_INLINE uint8_t get_page_nums() const { return page_nums_; }
   OB_INLINE void set_block_id(const int64_t block_id) { block_id_ = block_id; }
   OB_INLINE int64_t get_block_id() const { return block_id_; }
-  OB_INLINE void set_offset(const int64_t offset) { offset_ = offset; }
   OB_INLINE int32_t get_offset() const { return offset_; }
   OB_INLINE ObTmpFile &get_owner() { return *owner_; }
   TO_STRING_KV(K_(is_alloced), K_(fd), K_(g_offset_start), K_(g_offset_end), KP_(owner),

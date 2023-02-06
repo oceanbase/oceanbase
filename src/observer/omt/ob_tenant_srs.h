@@ -58,7 +58,7 @@ public:
   void dec_ref_count() { ATOMIC_DEC(&ref_count_); }
   void inc_ref_count() { ATOMIC_INC(&ref_count_); }
   int64_t get_ref_count() { return ATOMIC_LOAD64(&ref_count_); }
-  int get_srs_count() { return srs_item_map_.size(); }
+  int64_t get_srs_count() { return srs_item_map_.size(); }
   int parse_srs_item(common::sqlclient::ObMySQLResult *result,
                      const common::ObSrsItem *&srs_item, uint64_t &srs_version);
   int add_pg_reserved_srs_item(const common::ObString &pg_wkt, const uint32_t srs_id);

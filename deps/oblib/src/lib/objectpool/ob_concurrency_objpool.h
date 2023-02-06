@@ -389,7 +389,7 @@ class ObFixedClassAllocator
 public:
   ObFixedClassAllocator(const int obj_size, const ObMemAttr &attr, int blk_size, int64_t nway) : allocator_(obj_size, attr, blk_size)
   {
-    allocator_.set_nway(nway);
+    allocator_.set_nway(static_cast<int32_t>(nway));
   }
   virtual ~ObFixedClassAllocator() {}
 

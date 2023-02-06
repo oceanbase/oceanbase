@@ -3736,7 +3736,7 @@ int ObTableSchema::convert_char_to_byte_semantics(const ObColumnSchemaV2 *col_sc
       LOG_WARN("mbmaxlen is less than 0", K(ret), K(mbmaxlen));
     } else {
       if (!is_oracle_byte_length(is_oracle_mode, col_schema->get_length_semantics())) {
-        col_byte_len = col_byte_len * mbmaxlen;
+        col_byte_len = static_cast<int32_t>(col_byte_len * mbmaxlen);
       }
     }
   }
@@ -4524,9 +4524,9 @@ int ObTableSchema::check_column_can_be_altered_online(
             int32_t src_col_byte_len = src_schema->get_data_length();
             int32_t dst_col_byte_len = dst_schema->get_data_length();
             if (!is_oracle_byte_length(is_oracle_mode, src_schema->get_length_semantics())) {
-              src_col_byte_len = src_col_byte_len * mbmaxlen;
+              src_col_byte_len = static_cast<int32_t>(src_col_byte_len * mbmaxlen);
             } else {
-              dst_col_byte_len = dst_col_byte_len * mbmaxlen;
+              dst_col_byte_len = static_cast<int32_t>(dst_col_byte_len * mbmaxlen);
             }
             if (src_col_byte_len > dst_col_byte_len) {
               ret = OB_ERR_DECREASE_COLUMN_LENGTH;
@@ -4863,7 +4863,7 @@ int ObTableSchema::get_vp_column_ids(common::ObIArray<ObColDesc> &column_ids) co
       } else if (it->is_primary_vp_column() || it->is_aux_vp_column()) {
         // The same VP table will not have a primary VP column and a secondary VP column at the same time
         // Therefore, the type of VP table is not judged here.
-        col_desc.col_id_ = it->get_column_id();
+        col_desc.col_id_ = static_cast<int32_t>(it->get_column_id());
         col_desc.col_type_ = it->get_meta_type();
         //for non-rowkey, col_desc.col_order_ is not meaningful
         if (OB_FAIL(column_ids.push_back(col_desc))) {
@@ -4899,7 +4899,7 @@ int ObTableSchema::get_vp_column_ids_with_rowkey(common::ObIArray<ObColDesc> &co
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The rowkey column is NULL, ", K(i));
       } else {
-        col_desc.col_id_ = rowkey_column->column_id_;
+        col_desc.col_id_ = static_cast<int32_t>(rowkey_column->column_id_);
         col_desc.col_type_ = rowkey_column->type_;
         col_desc.col_order_ = rowkey_column->order_;
         if (OB_FAIL(column_ids.push_back(col_desc))) {
@@ -4917,7 +4917,7 @@ int ObTableSchema::get_vp_column_ids_with_rowkey(common::ObIArray<ObColDesc> &co
           && (!no_virtual || !(it->is_virtual_generated_column()))) {
         // This column is a VP column, if it is also a primary key column, skip it,
         // because the first step has been added
-        col_desc.col_id_ = it->get_column_id();
+        col_desc.col_id_ = static_cast<int32_t>(it->get_column_id());
         col_desc.col_type_ = it->get_meta_type();
         //for non-rowkey, col_desc.col_order_ is not meaningful
         if (OB_FAIL(column_ids.push_back(col_desc))) {
@@ -5107,7 +5107,7 @@ int ObTableSchema::get_rowkey_column_ids(common::ObIArray<ObColDesc> &column_ids
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The rowkey column is NULL, ", K(i));
       } else {
-        col_desc.col_id_ = rowkey_column->column_id_;
+        col_desc.col_id_ = static_cast<int32_t>(rowkey_column->column_id_);
         col_desc.col_type_ = rowkey_column->type_;
         col_desc.col_order_ = rowkey_column->order_;
         if (OB_FAIL(column_ids.push_back(col_desc))) {
@@ -5184,7 +5184,7 @@ int ObTableSchema::get_column_ids_without_rowkey(
         LOG_WARN("The column is NULL, ", K(i));
       } else if (!column_array_[i]->is_rowkey_column()
           && !(no_virtual && column_array_[i]->is_virtual_generated_column())) {
-        col_desc.col_id_ = column_array_[i]->get_column_id();
+        col_desc.col_id_ = static_cast<int32_t>(column_array_[i]->get_column_id());
         col_desc.col_type_ = column_array_[i]->get_meta_type();
         //for non-rowkey, col_desc.col_order_ is not meaningful
         if (OB_FAIL(column_ids.push_back(col_desc))) {

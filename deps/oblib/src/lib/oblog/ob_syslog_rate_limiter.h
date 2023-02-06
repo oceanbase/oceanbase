@@ -48,8 +48,8 @@ public:
   {
     RLOCAL_INLINE(bool, in_acquire);
     int ret = common::OB_SUCCESS;
-    int log_level = arg0;
-    int errcode = arg1;
+    int log_level = static_cast<int>(arg0);
+    int errcode = static_cast<int>(arg1);
     if (!in_acquire) {
       if (0 == rate_) {
         ret = common::OB_EAGAIN;

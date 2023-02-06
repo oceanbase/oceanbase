@@ -120,7 +120,7 @@ public:
 private:
   char buf_[sizeof(MyObThreadPool)];
   MyObThreadPool *th_ = nullptr;
-  int thread_cnt_;
+  int64_t thread_cnt_;
 };
 
 } // end of namespace share

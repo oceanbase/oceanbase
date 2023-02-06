@@ -591,10 +591,10 @@ int ObExprInet6Aton::inet6_aton(const ObString& ip, bool& is_ip_format_invalid, 
         } else if (is_ip_format_invalid) {
           LOG_WARN("ip format invalid", K(ip));
         } else {
-          str_result.assign(result_buf, sizeof(in6_addr));
+          str_result.assign(result_buf, static_cast<int32_t>(sizeof(in6_addr)));
         }
       } else {
-        str_result.assign(result_buf, sizeof(in_addr));
+        str_result.assign(result_buf, static_cast<int32_t>(sizeof(in_addr)));
       }
     }
   }

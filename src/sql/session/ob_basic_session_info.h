@@ -1588,7 +1588,7 @@ private:
       if (trace_info.empty()) {
         ob_trace_info_.reset();
       } else {
-        int64_t trace_len = std::min(static_cast<int64_t>(trace_info.length()), OB_TRACE_BUFFER_SIZE);
+        const int32_t trace_len = std::min(trace_info.length(), OB_TRACE_BUFFER_SIZE);
         MEMCPY(trace_info_buf_, trace_info.ptr(), trace_len);
         ob_trace_info_.assign_ptr(trace_info_buf_, trace_len);
       }
@@ -1606,8 +1606,8 @@ private:
       if (plsql_ccflags.empty()) {
         ob_plsql_ccflags_.reset();
       } else {
-        int64_t ccflags_len
-          = std::min(static_cast<int64_t>(plsql_ccflags.length()), OB_TMP_BUF_SIZE_256);
+        const int32_t ccflags_len
+          = std::min(plsql_ccflags.length(), OB_TMP_BUF_SIZE_256);
         MEMCPY(plsql_ccflags_, plsql_ccflags.ptr(), ccflags_len);
         ob_plsql_ccflags_.assign_ptr(plsql_ccflags_, ccflags_len);
       }

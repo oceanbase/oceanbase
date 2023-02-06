@@ -2679,7 +2679,7 @@ int ObCharset::charset_convert(const ObCollationType from_type,
                                const uint32_t from_len,
                                const ObCollationType to_type,
                                char *to_str,
-                               uint32_t to_len,
+                               int64_t to_len,
                                uint32_t &result_len,
                                bool trim_incomplete_tail,
                                bool report_error /*true*/,
@@ -2692,7 +2692,7 @@ int ObCharset::charset_convert(const ObCollationType from_type,
                   || to_type <= CS_TYPE_INVALID
                   || to_type >= CS_TYPE_MAX
                   || (OB_ISNULL(to_str)
-                  || OB_UNLIKELY(to_len <= 0)))) {
+                  || OB_UNLIKELY(to_len <= 0 || to_len > UINT32_MAX)))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid convert", K(ret), K(from_type), K(to_type),
              K(ObString(from_len, from_str)), KP(to_str), K(from_len), K(to_len), KCSTRING(lbt()));
@@ -2704,7 +2704,7 @@ int ObCharset::charset_convert(const ObCollationType from_type,
       LOG_WARN("unexpected collation type", K(ret), K(from_type), K(to_type));
     } else {
       uint errors = 0;
-      result_len = ob_convert(to_str, to_len, to_cs, from_str, from_len, from_cs,
+      result_len = ob_convert(to_str, static_cast<uint32_t>(to_len), to_cs, from_str, from_len, from_cs,
                               trim_incomplete_tail, replaced_char, &errors);
       if (OB_UNLIKELY(errors != 0 && report_error)) {
         ret = OB_ERR_INCORRECT_STRING_VALUE;

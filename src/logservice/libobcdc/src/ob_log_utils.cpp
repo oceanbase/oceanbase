@@ -1209,7 +1209,7 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
       // Retry to get it again
       ret = OB_SUCCESS;
       // After a failure to acquire the tenant schema, and in order to ensure that the modules can handle the performance, usleep for a short time
-      ob_usleep(100L);
+      ob_usleep(100);
     }
 
     int64_t left_time = end_time - ObTimeUtility::current_time();

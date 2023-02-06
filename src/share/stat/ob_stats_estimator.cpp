@@ -253,7 +253,7 @@ int ObStatsEstimator::fill_partition_info(ObIAllocator &allocator,
     const ObString &part_name = part_info.part_name_;
     const char *fmt_str = lib::is_oracle_mode() ? "PARTITION (\"%.*s\")" : "PARTITION (`%.*s`)";
     char *buf = NULL;
-    const int32_t len = strlen(fmt_str) + part_name.length();
+    const int64_t len = strlen(fmt_str) + part_name.length();
     int32_t real_len = -1;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -291,7 +291,7 @@ int ObStatsEstimator::fill_group_by_info(ObIAllocator &allocator,
     LOG_WARN("get unexpected type", K(extra.type_), K(ret));
   }
   if (OB_SUCC(ret)) {
-    const int32_t len = strlen(fmt_str) +
+    const int64_t len = strlen(fmt_str) +
                         (param.is_index_stat_ ? param.data_table_name_.length() : param.tab_name_.length()) +
                         type_str.length();
     int32_t real_len = -1;

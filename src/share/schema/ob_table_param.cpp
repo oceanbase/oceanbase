@@ -772,7 +772,7 @@ int ObTableParam::construct_columns_and_projector(
 
   // column array
   const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
-  int32_t rowkey_count = rowkey_info.get_size();
+  int64_t rowkey_count = rowkey_info.get_size();
   if (OB_SUCC(ret)) {
     //add rowkey columns
     for (int32_t i = 0; OB_SUCC(ret) && i < rowkey_count; ++i) {
@@ -794,7 +794,7 @@ int ObTableParam::construct_columns_and_projector(
       } else if (OB_FAIL(tmp_access_cols_index.push_back(i))) {
         LOG_WARN("fail to push_back tmp_access_cols_index", K(ret));
       } else {
-        tmp_col_desc.col_id_ = column->get_column_id();
+        tmp_col_desc.col_id_ = static_cast<uint32_t>(column->get_column_id());
         tmp_col_desc.col_type_ = column->get_meta_type();
         tmp_col_desc.col_order_ = column->get_column_order();
         if (tmp_col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
@@ -854,7 +854,7 @@ int ObTableParam::construct_columns_and_projector(
 
       if (OB_SUCC(ret)) {
         has_virtual_column_ = column_ids_no_virtual.count() != column_ids.count();
-        tmp_col_desc.col_id_ = column->get_column_id();
+        tmp_col_desc.col_id_ = static_cast<uint32_t>(column->get_column_id());
         tmp_col_desc.col_type_ = column->get_meta_type();
         tmp_col_desc.col_order_ = column->get_column_order();
         if (tmp_col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
@@ -1146,7 +1146,7 @@ int ObTableParam::construct_lob_locator_param(const ObTableSchema &table_schema,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected null col param", K(ret), K(j), K(storage_project_columns));
           } else if (rowid_col_ids.at(i) == col_param->get_column_id())  {
-            if (OB_FAIL(rowid_projector.push_back(j))) {
+            if (OB_FAIL(rowid_projector.push_back(static_cast<int32_t>(j)))) {
               LOG_WARN("Failed to push back rowid project", K(ret));
             } else {
               exist = true;

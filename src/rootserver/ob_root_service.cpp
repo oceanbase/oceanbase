@@ -7381,7 +7381,7 @@ int ObRootService::check_can_stop(const ObZone &zone,
 bool ObRootService::have_other_stop_task(const ObZone &zone)
 {
   bool bret = false;
-  int64_t ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   ObArray<ObZoneInfo> zone_infos;
   bool stopped = false;
   //Check if there are other servers in the stopped state on other zones

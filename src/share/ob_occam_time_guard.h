@@ -97,7 +97,7 @@ private:
                 }
               }
             }
-            ob_usleep(500_ms);
+            ob_usleep(static_cast<uint32_t>(500_ms));
           } else {
             OCCAM_LOG(INFO, "thread hung detect thread is stopped");
             break;
@@ -263,7 +263,7 @@ public:
     if (OB_LIKELY(idx_ < CAPACITY)) {
       int64_t now = common::ObTimeUtility::fast_current_time();
       line_array_[idx_] = static_cast<uint16_t>(line);
-      click_poinsts_[idx_] = now - last_click_ts_;
+      click_poinsts_[idx_] = static_cast<uint32_t>(now - last_click_ts_);
       last_click_ts_ = now;
       ++idx_;
     }
@@ -435,7 +435,7 @@ struct TimeGuardFactory
                                      const int64_t line,
                                      const char *mod) {
     UNUSED(line);
-    return ObOccamTimeGuard(threshold1, file, func, mod);
+    return ObOccamTimeGuard(static_cast<uint32_t>(threshold1), file, func, mod);
   }
   static ObOccamTimeGuardDetectHung make_guard(const int64_t threshold1,
                                                const int64_t threshold2,
@@ -443,7 +443,8 @@ struct TimeGuardFactory
                                                const char *func,
                                                const int64_t line,
                                                const char *mod) {
-    return ObOccamTimeGuardDetectHung(threshold1, threshold2, file, func, mod, line);
+    return ObOccamTimeGuardDetectHung(static_cast<uint32_t>(threshold1),
+        static_cast<uint32_t>(threshold2), file, func, mod, line);
   }
 };
 

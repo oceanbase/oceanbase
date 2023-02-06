@@ -284,14 +284,14 @@ public:
    */
   ObServerObjectPool(const int64_t tenant_id, const bool regist, const bool is_mini_mode)
     : tenant_id_(tenant_id), regist_(regist), is_mini_mode_(is_mini_mode), arena_num_(0),
-      arena_(NULL), is_inited_(false)
+      arena_(NULL), cnt_per_arena_(0), item_size_(0), buf_(nullptr), is_inited_(false)
   {}
 
   int init()
   {
     int ret = OB_SUCCESS;
     const bool is_mini = (lib::is_mini_mode() || is_mini_mode_);
-    arena_num_ = is_mini ? get_cpu_count()/2 : get_cpu_count();
+    arena_num_ = static_cast<int32_t>(is_mini ? get_cpu_count()/2 : get_cpu_count());
     //If the assignment logic of buf_ below is not reached, buf_ will not be initialized
     buf_ = NULL;
     cnt_per_arena_ = is_mini ? 16 : 128;
@@ -398,7 +398,7 @@ private:
   const int64_t tenant_id_;
   const bool regist_;
   const bool is_mini_mode_;
-  int arena_num_;
+  int32_t arena_num_;
   ObPoolArenaHead *arena_;
   int64_t cnt_per_arena_;
   int64_t item_size_;

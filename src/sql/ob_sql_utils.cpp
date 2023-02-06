@@ -2976,7 +2976,7 @@ int ObSQLUtils::ConvertFiledNameAttribute(ObIAllocator& allocator,
       }
 
       if (OB_SUCC(ret)) {
-        dst.assign(buf, result_len);
+        dst.assign(buf, static_cast<int32_t>(result_len));
       }
     }
   }

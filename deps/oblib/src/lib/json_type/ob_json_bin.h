@@ -398,10 +398,10 @@ private:
     uint32_t idx_;       // the index of array or object array
     uint64_t offset_;    // cur node offset from 
     uint64_t obj_size_;  // cur node total size
-    ObJBNodeMeta(uint8_t ver_type, uint8_t size_type, uint8_t entry_type, uint64_t idx, uint64_t offset, uint64_t obj_size) :
-                ver_type_(ver_type), size_type_(size_type), entry_type_(entry_type), idx_(idx), offset_(offset), obj_size_(obj_size) {}
-    ObJBNodeMeta() : ver_type_(0), size_type_(0), entry_type_(0), idx_(0), offset_(0), obj_size_(0) {}
-    ObJBNodeMeta(const ObJBNodeMeta& src): ver_type_(src.ver_type_), size_type_(src.size_type_), entry_type_(src.entry_type_),
+    ObJBNodeMeta(uint8_t ver_type, uint8_t size_type, uint8_t entry_type, uint32_t idx, uint64_t offset, uint64_t obj_size) :
+                ver_type_(ver_type), size_type_(size_type), entry_type_(entry_type), reserve(0), idx_(idx), offset_(offset), obj_size_(obj_size) {}
+    ObJBNodeMeta() : ver_type_(0), size_type_(0), entry_type_(0), reserve(0), idx_(0), offset_(0), obj_size_(0) {}
+    ObJBNodeMeta(const ObJBNodeMeta& src): ver_type_(src.ver_type_), size_type_(src.size_type_), entry_type_(src.entry_type_), reserve(0),
                 idx_(src.idx_), offset_(src.offset_), obj_size_(src.obj_size_) {}
   };
 

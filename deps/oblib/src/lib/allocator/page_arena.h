@@ -39,7 +39,8 @@ inline int64_t sys_page_size()
 // convenient function for memory alignment
 inline size_t get_align_offset(void *p, const int64_t alignment)
 {
-  assert(ob_is_power_of_two(alignment));
+  assert(alignment >= 0 && alignment < UINT32_MAX);
+  assert(ob_is_power_of_two(static_cast<uint32_t>(alignment)));
   return alignment - (((uint64_t)p) & (alignment - 1));
 }
 
@@ -748,7 +749,8 @@ public: // API
    */
   CharT *alloc_aligned_bf(const int64_t sz, const int64_t alignment)
   {
-    assert(ob_is_power_of_two(alignment));
+    assert(alignment >=0 && alignment <= UINT32_MAX);
+    assert(ob_is_power_of_two(static_cast<uint32_t>(alignment)));
     CharT *ret = nullptr;
     ensure_cur_page();
     // find the best page
@@ -792,7 +794,7 @@ public: // API
         ret = alloc_big(adjusted_sz);
       }
       if (nullptr != ret) {
-        ret = (CharT*)ob_aligned_to2((int64_t)ret, alignment);
+        ret = (CharT*)ob_aligned_to2((int64_t)ret, static_cast<uint32_t>(alignment));
         used_ += adjusted_sz;
       }
     }

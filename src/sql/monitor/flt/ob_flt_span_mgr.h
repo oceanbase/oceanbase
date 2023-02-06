@@ -181,7 +181,7 @@ namespace sql
 
     int64_t get_start_idx() const { return (int64_t)queue_.get_pop_idx(); }
     int64_t get_end_idx() const { return (int64_t)queue_.get_push_idx(); }
-    int get_tenant_id() { return tenant_id_; }
+    uint64_t get_tenant_id() { return tenant_id_; }
     int init(uint64_t tenant_id, const int64_t max_mem_size, const int64_t queue_size);
     int record_span(ObFLTSpanData &span_data);
     int release_old(int64_t limit = BATCH_RELEASE_COUNT); // evict old span and release memory

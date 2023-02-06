@@ -234,12 +234,13 @@ void ObNetEasy::init_eio_(easy_io_t *eio, const ObNetOptions &opts)
   }
 }
 
-void ObNetEasy::update_eio_rpc_tcp_keepalive(easy_io_t* eio, int64_t user_timeout)
+void ObNetEasy::update_eio_rpc_tcp_keepalive(easy_io_t* eio, int64_t input_user_timeout)
 {
   if (NULL != eio) {
+    const uint32_t user_timeout = static_cast<uint32_t>(input_user_timeout);
     eio->tcp_keepalive = (user_timeout > 0) ? 1: 0;
     // tcp keeyalive args
-    eio->tcp_keepidle = max(user_timeout/5000000, 1);
+    eio->tcp_keepidle = max(user_timeout/5000000, 1u);
     eio->tcp_keepintvl = eio->tcp_keepidle;
     eio->tcp_keepcnt = 5;
     eio->conn_timeout = user_timeout/1000;
@@ -248,16 +249,16 @@ void ObNetEasy::update_eio_rpc_tcp_keepalive(easy_io_t* eio, int64_t user_timeou
 }
 
 void ObNetEasy::update_eio_sql_tcp_keepalive(easy_io_t* eio, int64_t user_timeout,
-                                             int enable_tcp_keepalive, int64_t tcp_keepidle,
-                                             int64_t tcp_keepintvl, int64_t tcp_keepcnt)
+                                              int enable_tcp_keepalive, int64_t tcp_keepidle,
+                                              int64_t tcp_keepintvl, int64_t tcp_keepcnt)
 {
   if (NULL != eio) {
-    eio->tcp_keepalive = (enable_tcp_keepalive > 0) ? 1: 0;
+    eio->tcp_keepalive = (enable_tcp_keepalive > 0) ? 1u: 0u;
     // tcp keeyalive args
-    eio->tcp_keepidle = max(tcp_keepidle/1000000, 1);
-    eio->tcp_keepintvl = max(tcp_keepintvl/1000000, 1);
-    eio->tcp_keepcnt = tcp_keepcnt;
-    eio->conn_timeout = user_timeout/1000;
+    eio->tcp_keepidle = static_cast<uint32_t>(max(tcp_keepidle/1000000, 1));
+    eio->tcp_keepintvl = static_cast<uint32_t>(max(tcp_keepintvl/1000000, 1));
+    eio->tcp_keepcnt = static_cast<uint32_t>(tcp_keepcnt);
+    eio->conn_timeout = static_cast<uint32_t>(user_timeout/1000);
     eio->ack_timeout = 0;
   }
 }

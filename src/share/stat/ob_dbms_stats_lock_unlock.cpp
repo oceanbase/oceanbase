@@ -202,7 +202,7 @@ int ObDbmsStatsLockUnlock::get_stats_history_sql(ObExecContext &ctx,
 int ObDbmsStatsLockUnlock::check_stat_locked(ObExecContext &ctx,
                                              ObTableStatParam &param)
 {
-  int64_t ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   ObSqlString raw_sql;
   ObSEArray<int64_t, 4> locked_partition_ids;
   ObSEArray<int64_t, 4> dummy_array;
@@ -247,7 +247,7 @@ int ObDbmsStatsLockUnlock::check_stat_locked(ObExecContext &ctx,
 int ObDbmsStatsLockUnlock::fill_stat_locked(ObExecContext &ctx,
                                             ObTableStatParam &param)
 {
-  int64_t ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   ObSqlString raw_sql;
   ObSEArray<int64_t, 4> locked_partition_ids;
   ObSEArray<int64_t, 4> stattype_locked_array;

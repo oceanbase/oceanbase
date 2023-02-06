@@ -150,7 +150,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_set_list_format_str(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected format str", KR(ret), K(str_buf), K(str_buf_len));
   } else {
-    str.assign_ptr(str_buf, str_buf_len - 1);
+    str.assign_ptr(str_buf, static_cast<int32_t>(str_buf_len - 1));
     LOG_DEBUG("get format backup set path list str", KR(ret), K(str));
   }
   return ret;
@@ -186,7 +186,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_set_desc_list_format_str(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected format str", KR(ret), K(str_buf), K(str_buf_len));
   } else {
-    str.assign_ptr(str_buf, STRLEN(str_buf));
+    str.assign_ptr(str_buf, static_cast<int32_t>(STRLEN(str_buf)));
     LOG_DEBUG("get format backup set path list str", KR(ret), K(str));
   }
   return ret;
@@ -221,7 +221,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_piece_list_format_str(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected format str", KR(ret), K(str_buf), K(str_buf_len));
   } else {
-    str.assign_ptr(str_buf, str_buf_len - 1);
+    str.assign_ptr(str_buf, static_cast<int32_t>(str_buf_len - 1));
     LOG_DEBUG("get format backup piece path list str", KR(ret), K(str));
   }
   return ret;
@@ -256,7 +256,7 @@ int ObPhysicalRestoreBackupDestList::get_log_path_list_format_str(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected format str", KR(ret), K(str_buf), K(str_buf_len));
   } else {
-    str.assign_ptr(str_buf, str_buf_len - 1);
+    str.assign_ptr(str_buf, static_cast<int32_t>(str_buf_len - 1));
     LOG_DEBUG("get log path list str", KR(ret), K(str));
   }
   return ret;
@@ -508,7 +508,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_set_list_hex_str(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
-    str.assign_ptr(hex_buf, hex_size);
+    str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
     LOG_DEBUG("get hex backup set list str", KR(ret), K(str));
   }
   return ret;
@@ -545,7 +545,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_piece_list_hex_str(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
-    str.assign_ptr(hex_buf, hex_size);
+    str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
     LOG_DEBUG("get hex backup piece list str", KR(ret), K(str));
   }
   return ret;
@@ -582,7 +582,7 @@ int ObPhysicalRestoreBackupDestList::get_log_path_list_hex_str(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
-    str.assign_ptr(hex_buf, hex_size);
+    str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
     LOG_DEBUG("get hex log path list str", KR(ret), K(str));
   }
   return ret;
@@ -1398,11 +1398,11 @@ bool ObBackupStorageInfo::operator !=(const ObBackupStorageInfo &storage_info) c
 int64_t ObBackupStorageInfo::hash() const
 {
   int64_t hash_value = 0;
-  hash_value = murmurhash(&device_type_, sizeof(device_type_), hash_value);
-  hash_value = murmurhash(endpoint_, strlen(endpoint_), hash_value);
-  hash_value = murmurhash(access_id_, strlen(access_id_), hash_value);
-  hash_value = murmurhash(access_key_, strlen(access_key_), hash_value);
-  hash_value = murmurhash(extension_, strlen(extension_), hash_value);
+  hash_value = murmurhash(&device_type_, static_cast<int32_t>(sizeof(device_type_)), hash_value);
+  hash_value = murmurhash(endpoint_, static_cast<int32_t>(strlen(endpoint_)), hash_value);
+  hash_value = murmurhash(access_id_, static_cast<int32_t>(strlen(access_id_)), hash_value);
+  hash_value = murmurhash(access_key_, static_cast<int32_t>(strlen(access_key_)), hash_value);
+  hash_value = murmurhash(extension_, static_cast<int32_t>(strlen(extension_)), hash_value);
   return hash_value;
 }
 
@@ -1493,7 +1493,7 @@ int64_t ObBackupDest::hash() const
 {
   int64_t hash_val = 0;
   if (is_valid()) {
-    hash_val = murmurhash(root_path_, strlen(root_path_), hash_val);
+    hash_val = murmurhash(root_path_, static_cast<int32_t>(strlen(root_path_)), hash_val);
     hash_val += storage_info_->hash();
   }
   return hash_val;
@@ -1684,7 +1684,7 @@ int ObBackupDest::set(const char *root_path, const ObBackupStorageInfo *storage_
 
 void ObBackupDest::root_path_trim_()
 {
-  int len = strlen(root_path_);
+  int len = static_cast<int32_t>(strlen(root_path_));
   for (int i = len - 1; i >=0 ; i--) {
     if (root_path_[i] == '/') {
       root_path_[i] = '\0';
@@ -4089,7 +4089,7 @@ int share::backup_time_to_strftime(const int64_t &ts_s, char *buf,
   int ret = OB_SUCCESS;
   ObSqlString format;
   struct tm lt;
-  int strftime_len = 0;
+  int64_t strftime_len = 0;
   time_t t = static_cast<time_t>(ts_s);
 
   (void) localtime_r(&t, &lt);

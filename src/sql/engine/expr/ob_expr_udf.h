@@ -87,7 +87,7 @@ class ObExprUDF : public ObFuncExprOperator
     }
 
     ParamStore* get_param_store() { return params_; }
-    int get_param_count() { return OB_ISNULL(params_) ? 0 : params_->count(); }
+    int64_t get_param_count() { return OB_ISNULL(params_) ? 0 : params_->count(); }
 
     private:
     void* param_store_buf_;

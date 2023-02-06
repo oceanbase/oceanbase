@@ -338,7 +338,7 @@ void ObBGThreadMonitor::run_loop_()
     if (cost_time > 100*1000) {
       SHARE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ObBGThreadMonitor cost too much time", K(cost_time));
     }
-    int64_t sleep_time = CHECK_INTERVAL - cost_time;
+    int32_t sleep_time = static_cast<int32_t>(CHECK_INTERVAL - cost_time);
     if (sleep_time < 0) {
       sleep_time = 0;
     }
