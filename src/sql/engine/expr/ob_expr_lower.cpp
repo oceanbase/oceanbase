@@ -446,7 +446,12 @@ int ObExprLowerUpper::calc_common(const ObExpr &expr, ObEvalCtx &ctx,
       }
     }
     if (OB_SUCC(ret)) {
-      expr_datum.set_string(str_result);
+      if (OB_UNLIKELY(is_oracle_mode() && str_result.length() == 0
+                      && ob_is_string_tc(expr.datum_meta_.type_))) {
+        expr_datum.set_null();
+      } else {
+        expr_datum.set_string(str_result);
+      }
     }
   }
   return ret;

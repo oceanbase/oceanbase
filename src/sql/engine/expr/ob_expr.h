@@ -351,6 +351,18 @@ typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ObStrValues
 #define EVAL_FUNC_ARG_DECL const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
 #define EVAL_FUNC_ARG_LIST expr, ctx, expr_datum
 
+
+#ifndef NDEBUG
+#define CHECK_STRING_LENGTH(expr, datum)   \
+  if (OB_SUCC(ret) && 0 == datum.len_ && !datum.is_null() && is_oracle_mode() &&\
+      (ob_is_string_tc(expr.datum_meta_.type_) || ob_is_raw(expr.datum_meta_.type_))) {  \
+    SQL_ENG_LOG(ERROR, "unexpected datum length", K(expr)); \
+  }
+#else
+#define CHECK_STRING_LENGTH(expr, datum)
+#endif
+
+
 // default evaluate batch function which call eval() for every datum of batch.
 extern int expr_default_eval_batch_func(BATCH_EVAL_FUNC_ARG_DECL);
 
@@ -1016,6 +1028,7 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
         datum->ptr_ = frame + res_buf_off_;
       }
       ret = eval_func_(*this, ctx, *datum);
+      CHECK_STRING_LENGTH((*this), (*datum));
       if (OB_LIKELY(common::OB_SUCCESS == ret)) {
         eval_info->evaluated_ = true;
       } else {
