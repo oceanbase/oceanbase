@@ -49,7 +49,7 @@ public:
   ~ObTabletStat() = default;
   void reset() { MEMSET(this, 0, sizeof(ObTabletStat)); }
   bool is_valid() const;
-  bool is_empty_query() const;
+  bool check_need_report() const;
   ObTabletStat& operator=(const ObTabletStat &other);
   ObTabletStat& operator+=(const ObTabletStat &other);
   ObTabletStat& archive(int64_t factor);
@@ -74,6 +74,10 @@ public:
   static constexpr int64_t BASIC_TABLE_CNT_THRESHOLD = 5;
   static constexpr int64_t BASIC_MICRO_BLOCK_CNT_THRESHOLD = 16;
   static constexpr int64_t BASIC_ROW_CNT_THRESHOLD = 10000; // TODO(@Danling) make it a comfiguration item
+  static constexpr int64_t QUERY_REPORT_MIN_ROW_CNT = 100;
+  static constexpr int64_t QUERY_REPORT_MIN_MICRO_BLOCK_CNT = 10;
+  static constexpr int64_t QUERY_REPORT_MIN_SCAN_TABLE_CNT = 2;
+  static constexpr int64_t MERGE_REPORT_MIN_ROW_CNT = 100;
 public:
   int64_t ls_id_;
   uint64_t tablet_id_;

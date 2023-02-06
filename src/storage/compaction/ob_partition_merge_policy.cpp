@@ -1432,7 +1432,10 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
     if (AdaptiveMergeReason::NONE == reason && OB_TMP_FAIL(check_ineffecient_read(tablet_stat, tablet, reason))) {
       LOG_WARN("failed to check ineffecient read", K(tmp_ret), K(ls_id), K(tablet_id));
     }
-    LOG_INFO("DanLing Check tablet adaptive merge reason", K(reason), K(tablet_stat)); // TODO tmp log, remove later
+
+    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000 /*10s*/)) {
+      LOG_INFO("Check tablet adaptive merge reason", K(reason), K(tablet_stat)); // TODO tmp log, remove later
+    }
   }
   return ret;
 }

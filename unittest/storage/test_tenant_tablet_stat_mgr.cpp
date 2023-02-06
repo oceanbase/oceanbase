@@ -113,6 +113,7 @@ void TestTenantTabletStatMgr::batch_report_stat(int64_t report_num)
     curr_stat.ls_id_ = 1;
     curr_stat.tablet_id_ = 10001 + i;
     curr_stat.query_cnt_ = 100 * (i + 1);
+    curr_stat.scan_physical_row_cnt_ = 10000 + i;
 
     std::thread sub_report_thread(report, stat_mgr_, curr_stat);
     if (sub_report_thread.joinable()) {

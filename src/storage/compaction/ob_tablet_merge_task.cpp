@@ -1195,7 +1195,8 @@ int ObTabletMergeFinishTask::try_report_tablet_stat_after_mini(ObTabletMergeCtx 
   } else if (OB_FAIL(ObTableEstimator::estimate_row_count_for_scan(
       base_input, ranges, part_estimate, records))) {
     LOG_WARN("failed to estimate row counts", K(ret), K(part_estimate), K(records));
-  } else if (0 == part_estimate.logical_row_count_ && 0 == part_estimate.physical_row_count_) {
+  } else if (0 == part_estimate.logical_row_count_ &&
+      ObTabletStat::MERGE_REPORT_MIN_ROW_CNT >= part_estimate.physical_row_count_) {
   } else {
     ObTabletStat report_stat;
     report_stat.ls_id_ = ctx.param_.ls_id_.id(),
