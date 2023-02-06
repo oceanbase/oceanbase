@@ -999,8 +999,14 @@ int ObIndexBuildTask::enable_index()
       if (INDEX_STATUS_AVAILABLE == index_status) {
         state_finished = true;
       } else if (INDEX_STATUS_UNAVAILABLE != index_status) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("index status not match", K(ret), K(index_table_id_), K(index_status));
+        if (INDEX_STATUS_UNUSABLE == index_status) {
+          // the index is unused, for example dropped
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("the index status is unusable, maybe dropped", K(ret), K(index_table_id_), K(index_status));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index status not match", K(ret), K(index_table_id_), K(index_status));
+        }
       } else if (OB_FAIL(update_index_status_in_schema(*index_schema, INDEX_STATUS_AVAILABLE))) {
         LOG_WARN("fail to try notify index take effect", K(ret), K(index_table_id_));
       } else {
