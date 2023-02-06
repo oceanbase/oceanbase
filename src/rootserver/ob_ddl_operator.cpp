@@ -6684,14 +6684,6 @@ int ObDDLOperator::init_tenant_users(
   } else {
     if (OB_FAIL(init_tenant_user(tenant_id, sys_user_name, "", OB_SYS_USER_ID, "system administrator", trans))) {
       RS_LOG(WARN, "failed to init sys user", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id,
-                   ora_auditor_user_name,
-                   OB_ORA_AUDITOR_NAME,
-                   OB_ORA_AUDITOR_USER_ID,
-                   "system administrator",
-                   trans,
-                   true))) {
-      RS_LOG(WARN, "failed to init mysql audit user", K(ret), K(tenant_id));
     }
   }
 
