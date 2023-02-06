@@ -96,6 +96,7 @@ public:
   virtual int get_end_scn(share::SCN &scn) const = 0;
   virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
+  virtual int get_election_leader(common::ObAddr &addr) const = 0;
   virtual int change_replica_num(const common::ObMemberList &member_list,
                                  const int64_t curr_replica_num,
                                  const int64_t new_replica_num,
@@ -292,6 +293,13 @@ public:
   // @brief, get global learner list of this paxos group
   // @param[out] common::GlobalLearnerList&
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
+  // @brief, get leader from election, used for non_palf_leader rebuilding
+  // @param[out] addr: address of leader
+  // retval:
+  //   OB_SUCCESS
+  //   OB_NOT_INIT
+  //   OB_LEADER_NOT_EXIST
+  int get_election_leader(common::ObAddr &addr) const override final;
   // PalfBaseInfo include the 'base_lsn' and the 'prev_log_info' of sliding window.
   // @param[in] const LSN&, base_lsn of ls.
   // @param[out] PalfBaseInfo&, palf_base_info

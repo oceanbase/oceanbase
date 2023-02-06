@@ -404,6 +404,12 @@ int ObLogHandler::get_global_learner_list(common::GlobalLearnerList &learner_lis
   return palf_handle_.get_global_learner_list(learner_list);
 }
 
+int ObLogHandler::get_election_leader(common::ObAddr &addr) const
+{
+  RLockGuard guard(lock_);
+  return palf_handle_.get_election_leader(addr);
+}
+
 int ObLogHandler::enable_sync()
 {
   RLockGuard guard(lock_);

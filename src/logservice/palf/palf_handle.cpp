@@ -288,6 +288,12 @@ int PalfHandle::get_paxos_member_list(common::ObMemberList &member_list, int64_t
   return palf_handle_impl_->get_paxos_member_list(member_list, paxos_replica_num);
 }
 
+int PalfHandle::get_election_leader(common::ObAddr &addr) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_election_leader(addr);
+}
+
 int PalfHandle::change_replica_num(const common::ObMemberList &member_list,
                                    const int64_t curr_replica_num,
                                    const int64_t new_replica_num,

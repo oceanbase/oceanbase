@@ -238,6 +238,7 @@ public:
 
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
+  virtual int get_election_leader(common::ObAddr &addr) const = 0;
 
   // @brief: a special config change interface, change replica number of paxos group
   // @param[in] common::ObMemberList: current memberlist, for pre-check
@@ -634,6 +635,7 @@ public:
   int change_leader_to(const common::ObAddr &dest_addr) override final;
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const override final;
+  int get_election_leader(common::ObAddr &addr) const;
   int change_replica_num(const common::ObMemberList &member_list,
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
@@ -913,6 +915,7 @@ private:
   int check_need_advance_base_info_(const LSN &base_lsn,
                                     const LogInfo &base_prev_log_info,
                                     const bool is_rebuild);
+  int get_election_leader_without_lock_(ObAddr &addr) const;
   // ========================= flashback ==============================
   int can_do_flashback_(const int64_t mode_version,
                         const share::SCN &flashback_scn,

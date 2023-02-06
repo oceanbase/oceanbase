@@ -489,6 +489,14 @@ int PalfHandleImpl::get_paxos_member_list(
   return ret;
 }
 
+int PalfHandleImpl::get_election_leader(ObAddr &addr) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  ret = get_election_leader_without_lock_(addr);
+  return ret;
+}
+
 int PalfHandleImpl::config_change_pre_check(const ObAddr &server,
                                             const LogGetMCStReq &req,
                                             LogGetMCStResp &resp)
@@ -3474,6 +3482,22 @@ int PalfHandleImpl::append_disk_log_to_sw_(const LSN &start_lsn)
       ret = OB_SUCCESS;
       PALF_LOG(INFO, "append_disk_log_to_sw_ success", K(ret), K(iterator), K(start_lsn));
     }
+  }
+  return ret;
+}
+
+int PalfHandleImpl::get_election_leader_without_lock_(ObAddr &addr) const
+{
+  int ret = OB_SUCCESS;
+  int64_t unused_leader_epoch = -1;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
+  } else if (OB_FAIL(election_.get_current_leader_likely(addr, unused_leader_epoch))) {
+    PALF_LOG(WARN, "get_election_leader failed", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!addr.is_valid())) {
+    ret = OB_LEADER_NOT_EXIST;
+    PALF_LOG(WARN, "election has no leader", K(ret), KPC(this));
   }
   return ret;
 }
