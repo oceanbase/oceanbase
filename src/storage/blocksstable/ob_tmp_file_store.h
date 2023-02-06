@@ -297,11 +297,10 @@ public:
   bool is_valid() const;
   void reset();
   OB_INLINE ObTmpTenantFileStore* get_tenant_store() const { return tenant_store_; }
-
+  TO_STRING_KV(KP_(tenant_store), KP_(allocator));
 private:
   ObTmpTenantFileStore *tenant_store_;
   common::ObConcurrentFIFOAllocator *allocator_;
-
 };
 
 class ObTmpFileStore final
