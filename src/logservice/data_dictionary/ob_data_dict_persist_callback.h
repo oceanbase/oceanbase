@@ -35,8 +35,9 @@ public:
 public:
   virtual int on_success() override
   {
-    is_callback_invoked_ = true;
     is_success_ = true;
+    MEM_BARRIER();
+    is_callback_invoked_ = true;
     return OB_SUCCESS;
   }
   virtual int on_failure() override

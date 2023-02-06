@@ -525,6 +525,8 @@ int ObLogTenantMgr::add_tenant(
     LOG_ERROR("invalid arguments", KR(ret), K(tenant_id), K(sys_schema_version));
   } else if (is_meta_tenant(tenant_id)) {
     LOG_INFO("won't add meta tenant", K(tenant_id), K(sys_schema_version));
+  } else if (OB_FAIL(ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(tenant_id))) {
+    LOG_ERROR("create and add tenant allocator failed", K(ret), K(tenant_id));
   } else {
     if (is_online_refresh_mode(refresh_mode_)) {
       TenantSchemaInfo tenant_schema_info;
@@ -644,6 +646,10 @@ int ObLogTenantMgr::add_tenant(
   // reset tenant_start_ddl_info for specified tenant_id regardless of ret(in case of tenant already dropped or not serve
   // and other unexpected case, otherwise global_heartbeat will be stucked.)
   try_del_tenant_start_ddl_info_(tenant_id);
+
+  if (! add_tenant_succ) {
+    ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
+  }
 
   return ret;
 }

@@ -77,7 +77,6 @@ private:
   void switch_role_to_(bool is_leader);
   int do_dump_data_dict_();
   int check_cluster_status_normal_(bool &is_normal);
-  int get_sys_ls_log_handle_(logservice::ObLogHandler *&log_handler);
   int get_snapshot_scn_(share::SCN &snapshot_scn);
   int generate_dict_and_dump_(const share::SCN &snapshot_scn);
   int get_tenant_schema_guard_(

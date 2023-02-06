@@ -245,6 +245,8 @@ int ObDataDictService::do_dump_data_dict_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObLSHandle ls_handle; // NOTICE: ls_handle is a guard for usage of log_handler.
+  ObLS *ls = NULL;
   ObLogHandler *log_handler = NULL;
   bool is_leader = false;
   share::SCN snapshot_scn;
@@ -252,12 +254,16 @@ int ObDataDictService::do_dump_data_dict_()
   palf::LSN end_lsn;
   bool is_cluster_status_normal = false;
   bool is_data_dict_dump_success = false;
+  bool is_any_log_callback_fail = false;
   storage_.reuse();
   allocator_.reset();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     DDLOG(WARN, "data_dict_service not inited", KR(ret), K_(tenant_id), K_(is_inited));
+  } else if (OB_ISNULL(ls_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    DDLOG(WARN, "invalid ls_service", KR(ret), K_(tenant_id));
   } else if (OB_UNLIKELY(stop_flag_)) {
     ret = OB_NOT_RUNNING;
     DDLOG(WARN, "data_dict_service not running", KR(ret), K_(tenant_id), K_(stop_flag));
@@ -265,10 +271,16 @@ int ObDataDictService::do_dump_data_dict_()
     DDLOG(TRACE, "check_cluster_status_normal_ failed", KR(ret), K(is_cluster_status_normal));
   } else if (OB_UNLIKELY(! is_cluster_status_normal)) {
     DDLOG(TRACE, "cluster_status not normal, won't dump_data_dict", K(is_cluster_status_normal));
-  } else if (OB_FAIL(get_sys_ls_log_handle_(log_handler))) {
+  } else if (OB_FAIL(ls_service_->get_ls(share::SYS_LS, ls_handle, ObLSGetMod::DATA_DICT_MOD))) {
     if (OB_LS_NOT_EXIST != ret || REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_DETAIL_INTERVAL)) {
-      DDLOG(WARN, "get_sys_ls_log_handle_ failed", KR(ret));
+      DDLOG(WARN, "get_ls for data_dict_service from ls_service failed", KR(ret), K_(tenant_id));
     }
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    DDLOG(WARN, "invalid ls get from ls_handle", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    DDLOG(WARN, "invalid log_handler_ get from OBLS", KR(ret), K_(tenant_id));
   } else if (check_ls_leader(log_handler, is_leader)) {
     DDLOG(WARN, "check_is_sys_ls_leader failed", KR(ret));
   } else if (! is_leader) {
@@ -288,13 +300,15 @@ int ObDataDictService::do_dump_data_dict_()
       start_lsn,
       end_lsn,
       is_data_dict_dump_success,
+      is_any_log_callback_fail,
       stop_flag_))) {
     if (OB_IN_STOP_STATE != tmp_ret && OB_STATE_NOT_MATCH != tmp_ret) {
       DDLOG(WARN, "finish storage for data_dict_service failed", KR(ret), KR(tmp_ret),
           K(snapshot_scn), K(start_lsn), K(end_lsn), K_(stop_flag), K_(is_inited));
     }
     ret = tmp_ret;
-  } else if (is_data_dict_dump_success) {
+  } else if (is_data_dict_dump_success && ! is_any_log_callback_fail) {
+    // only report when dict dump success and all log_callback success.
     const int64_t half_dump_interval = ATOMIC_LOAD(&dump_interval_) / 2;
     const int64_t report_timeout = DEFAULT_REPORT_TIMEOUT > half_dump_interval ? half_dump_interval : DEFAULT_REPORT_TIMEOUT;
     const int64_t current_time = get_timestamp_us();
@@ -342,29 +356,6 @@ int ObDataDictService::check_cluster_status_normal_(bool &is_normal)
   } else {
     const ObClusterSchemaStatus cluster_status = schema_service->get_cluster_schema_status();
     is_normal = (ObClusterSchemaStatus::NORMAL_STATUS == cluster_status);
-  }
-
-  return ret;
-}
-
-int ObDataDictService::get_sys_ls_log_handle_(ObLogHandler *&log_handler)
-{
-  int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLS *ls = NULL;
-
-  if (OB_ISNULL(ls_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid ls_service", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(ls_service_->get_ls(share::SYS_LS, ls_handle, ObLSGetMod::DATA_DICT_MOD))) {
-    DDLOG(WARN, "get_ls for data_dict_service from ls_service failed", KR(ret), K_(tenant_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid ls get from ls_handle", KR(ret), K_(tenant_id));
-  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
-    ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid log_handler_ get from OBLS", KR(ret), K_(tenant_id));
-  } else {
   }
 
   return ret;
