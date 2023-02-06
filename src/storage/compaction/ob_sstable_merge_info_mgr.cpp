@@ -205,6 +205,7 @@ void ObTenantSSTableMergeInfoMgr::destroy()
   minor_merge_infos_.destroy();
   allocator_.reset();
   is_inited_ = false;
+  STORAGE_LOG(INFO, "ObTenantSSTableMergeInfoMgr is destroyed");
 }
 
 int ObTenantSSTableMergeInfoMgr::add_sstable_merge_info(ObSSTableMergeInfo &merge_info)
