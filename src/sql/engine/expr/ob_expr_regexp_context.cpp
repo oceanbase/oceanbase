@@ -782,7 +782,7 @@ int ObExprRegexContext::get_valid_replace_string(ObIAllocator &alloc,
     //oracle mode replace string '\1' <==> '$1' in mysql mode, we need extra convert.
     UErrorCode m_error_code = U_ZERO_ERROR;
     int32_t group_count = uregex_groupCount(regexp_engine_, &m_error_code);
-    MEMSET(u_replace, 0, origin_replace.length() * sizeof(UChar));
+    MEMSET(u_replace, 0, buf_len);
     if (OB_FAIL(check_icu_regexp_status(m_error_code))) {
       LOG_WARN("failed to check icu regexp status", K(ret), K(u_errorName(m_error_code)));
     } else {

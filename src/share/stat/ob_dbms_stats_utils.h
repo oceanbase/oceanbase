@@ -61,7 +61,7 @@ public:
 
   static int check_table_read_write_valid(const uint64_t tenant_id, bool &is_valid);
 
-  static bool is_stat_sys_table(const int64_t table_id);
+  static bool is_stat_sys_table(const uint64_t tenant_id, const int64_t table_id);
 
   static int parse_granularity(const ObString &granularity,
                                bool &need_global,

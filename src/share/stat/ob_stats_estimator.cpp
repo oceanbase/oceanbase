@@ -14,6 +14,7 @@
 #include "ob_stats_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include "sql/optimizer/ob_opt_selectivity.h"
 
 namespace oceanbase
 {
@@ -450,7 +451,7 @@ int ObStatsEstimator::copy_opt_stat(ObOptStat &src_opt_stat,
         dst_opt_stats.at(i).table_stat_->set_row_count(row_cnt);
         dst_opt_stats.at(i).table_stat_->set_avg_row_size(tmp_tab_stat->get_avg_row_size());
         dst_opt_stats.at(i).table_stat_->set_sample_size(tmp_tab_stat->get_row_count());
-        if (OB_FAIL(copy_col_stats(tmp_col_stats, dst_opt_stats.at(i).column_stats_))) {
+        if (OB_FAIL(copy_col_stats(tmp_tab_stat->get_row_count(), row_cnt, tmp_col_stats, dst_opt_stats.at(i).column_stats_))) {
           LOG_WARN("failed to copy col stat", K(ret));
         } else {/*do nothing*/}
       } else {/*do nothing*/}
@@ -463,7 +464,9 @@ int ObStatsEstimator::copy_opt_stat(ObOptStat &src_opt_stat,
   return ret;
 }
 
-int ObStatsEstimator::copy_col_stats(ObIArray<ObOptColumnStat *> &src_col_stats,
+int ObStatsEstimator::copy_col_stats(const int64_t cur_row_cnt,
+                                     const int64_t total_row_cnt,
+                                     ObIArray<ObOptColumnStat *> &src_col_stats,
                                      ObIArray<ObOptColumnStat *> &dst_col_stats)
 {
   int ret = OB_SUCCESS;
@@ -480,9 +483,9 @@ int ObStatsEstimator::copy_col_stats(ObIArray<ObOptColumnStat *> &src_col_stats,
         int64_t num_null = src_col_stats.at(i)->get_num_null();
         int64_t num_distinct = src_col_stats.at(i)->get_num_distinct();
         if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
+          num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, cur_row_cnt, num_distinct);
           num_not_null = static_cast<int64_t>(num_not_null * 100 / sample_value_);
           num_null = static_cast<int64_t>(num_null * 100 / sample_value_);
-          num_distinct = static_cast<int64_t>(num_distinct * 100 / sample_value_);
         }
         dst_col_stats.at(i)->set_max_value(src_col_stats.at(i)->get_max_value());
         dst_col_stats.at(i)->set_min_value(src_col_stats.at(i)->get_min_value());
