@@ -41,45 +41,88 @@ namespace coordinator
 using namespace common;
 
 ObFailureDetector::ObFailureDetector()
-    : coordinator_(nullptr),
+    : is_running_(false),
+      coordinator_(nullptr),
       has_add_clog_hang_event_(false),
       has_add_slog_hang_event_(false),
       has_add_sstable_hang_event_(false),
       has_add_clog_full_event_(false),
       lock_(common::ObLatchIds::ELECTION_LOCK)
-{}
+{
+  COORDINATOR_LOG(INFO, "ObFailureDetector constructed");
+}
 
 constexpr int VALUE_BUFFER_SIZE = 512;
 
-int ObFailureDetector::init(ObLeaderCoordinator *coordinator)
+int ObFailureDetector::mtl_init(ObFailureDetector *&p_failure_detector)
+{
+  int ret = OB_SUCCESS;
+  ObLeaderCoordinator *coordinator = MTL(ObLeaderCoordinator *);
+  if (OB_ISNULL(coordinator)) {
+    ret = OB_INVALID_ARGUMENT;
+    COORDINATOR_LOG(ERROR, "coordinator is nullptr", KR(ret));
+  } else {
+    p_failure_detector->coordinator_ = coordinator;
+    COORDINATOR_LOG(INFO, "ObFailureDetector mtl init");
+  }
+  return ret;
+}
+
+int ObFailureDetector::mtl_start(ObFailureDetector *&p_failure_detector)
 {
   LC_TIME_GUARD(1_s);
   int ret = OB_SUCCESS;
-  event_.reset();
-  recover_detect_operation_.reset();
-  if (OB_NOT_NULL(coordinator_)) {
-    ret = OB_INIT_TWICE;
-    COORDINATOR_LOG(ERROR, "has been inited", KR(ret), K(MTL_ID()), KP_(coordinator));
-  } else if (OB_ISNULL(coordinator)) {
-    ret = OB_INVALID_ARGUMENT;
-    COORDINATOR_LOG(ERROR, "coordinator is nullptr", KR(ret), K(MTL_ID()));
+  p_failure_detector->events_with_ops_.reset();
+
+  if (OB_ISNULL(p_failure_detector->coordinator_)) {
+    ret = OB_NOT_INIT;
+    COORDINATOR_LOG(ERROR, "not init yet", KR(ret), KP_(p_failure_detector->coordinator));
+  } else if (CLICK_FAIL(p_failure_detector->coordinator_->failure_detect_timer_.schedule_task_repeat(p_failure_detector->failure_task_handle_, 100_ms, [p_failure_detector]() {
+    p_failure_detector->detect_failure();
+    return false;
+  }))) {
+    COORDINATOR_LOG(ERROR, "fail to schedule failure detect task", KR(ret));
+  } else if (CLICK_FAIL(p_failure_detector->coordinator_->recovery_detect_timer_.schedule_task_repeat(p_failure_detector->recovery_task_handle_, 1_s, [p_failure_detector]() {
+    p_failure_detector->detect_recover();
+    return false;
+  }))) {
+    COORDINATOR_LOG(ERROR, "fail to schedule recovery detect task", KR(ret));
   } else {
-    coordinator_ = coordinator;
-    if (CLICK_FAIL(coordinator_->failure_detect_timer_.schedule_task_repeat(failure_task_handle_, 100_ms, [this]() {
-      detect_failure();
-      return false;
-    }))) {
-      COORDINATOR_LOG(ERROR, "fail to schedule failure detect task", KR(ret), K(MTL_ID()));
-    } else if (CLICK_FAIL(coordinator_->recovery_detect_timer_.schedule_task_repeat(recovery_task_handle_, 1_s, [this]() {
-      detect_recover();
-      return false;
-    }))) {
-      COORDINATOR_LOG(ERROR, "fail to schedule recovery detect task", KR(ret), K(MTL_ID()));
-    } else {
-      COORDINATOR_LOG(INFO, "failure detector init success", KR(ret), K(MTL_ID()), K(lbt()));
-    }
+    p_failure_detector->is_running_ = true;
+    COORDINATOR_LOG(INFO, "ObFailureDetector mtl start");
   }
   return ret;
+}
+
+void ObFailureDetector::mtl_stop(ObFailureDetector *&p_failure_detector)
+{
+  if (OB_ISNULL(p_failure_detector)) {
+    COORDINATOR_LOG(WARN, "p_failure_detector is NULL");
+  } else {
+    p_failure_detector->failure_task_handle_.stop();
+    p_failure_detector->recovery_task_handle_.stop();
+    COORDINATOR_LOG(INFO, "ObFailureDetector mtl init");
+  }
+}
+
+void ObFailureDetector::mtl_wait(ObFailureDetector *&p_failure_detector)
+{
+  if (OB_ISNULL(p_failure_detector)) {
+    COORDINATOR_LOG(WARN, "p_failure_detector is NULL");
+  } else {
+    p_failure_detector->failure_task_handle_.wait();
+    p_failure_detector->recovery_task_handle_.wait();
+    COORDINATOR_LOG(INFO, "ObFailureDetector mtl init");
+  }
+}
+
+void ObFailureDetector::mtl_destroy(ObFailureDetector *&p_failure_detector)
+{
+  if (OB_ISNULL(p_failure_detector)) {
+    COORDINATOR_LOG(WARN, "p_failure_detector is NULL");
+  } else {
+    COORDINATOR_LOG(INFO, "ObFailureDetector mtl destroy");
+  }
 }
 
 void ObFailureDetector::destroy()
@@ -91,63 +134,30 @@ void ObFailureDetector::destroy()
   has_add_slog_hang_event_ = false;
   has_add_sstable_hang_event_ = false;
   has_add_clog_full_event_ = false;
-  COORDINATOR_LOG(INFO, "failure detector destroyed", K(MTL_ID()), K(lbt()));
-}
-
-int ObFailureDetector::mtl_init(ObFailureDetector *&p_failure_detector)
-{
-  LC_TIME_GUARD(1_s);
-  int ret = OB_SUCCESS;
-  ObLeaderCoordinator *p_coordinator = MTL(ObLeaderCoordinator *);
-  if (OB_ISNULL(p_coordinator)) {
-    ret = OB_INVALID_ARGUMENT;
-    COORDINATOR_LOG(ERROR, "invalid argument", KR(ret), K(MTL_ID()));
-  } else if (CLICK_FAIL(p_failure_detector->init(p_coordinator))) {
-    COORDINATOR_LOG(ERROR, "init failure detector failed", KR(ret), K(MTL_ID()));
-  }
-  return ret;
+  COORDINATOR_LOG(INFO, "failure detector destroyed", K(lbt()));
 }
 
 void ObFailureDetector::detect_recover()
 {
   LC_TIME_GUARD(1_s);
   int ret = OB_SUCCESS;
+  ObArray<FailureEventWithRecoverOp> temp_events_with_ops;
   ObSpinLockGuard guard(lock_);
-  ObArray<FailureEvent> temp_event_;
-  ObArray<ObFunction<bool()>> temp_recover_detect_operation_;
-  if (!event_.empty()) {
-    COORDINATOR_LOG(INFO, "doing detect revocer operation", K(MTL_ID()), K_(event), K_(recover_detect_operation));
+  if (!events_with_ops_.empty()) {
+    COORDINATOR_LOG(INFO, "doing detect recover operation", K_(events_with_ops));
   }
-  for (int64_t idx = 0; idx < event_.count() && OB_SUCC(ret); ++idx) {
-    if (recover_detect_operation_[idx].is_valid()) {
+  for (int64_t idx = 0; idx < events_with_ops_.count() && OB_SUCC(ret); ++idx) {
+    if (events_with_ops_[idx].recover_detect_operation_.is_valid()) {
       LC_TIME_GUARD(10_ms);
-      bool recover_flag = recover_detect_operation_[idx]();
+      bool recover_flag = events_with_ops_[idx].recover_detect_operation_();
       if (recover_flag) {
-        COORDINATOR_LOG(INFO, "revocer event detected", K(MTL_ID()), K(event_[idx]));
-        (void) insert_event_to_table_(event_[idx], recover_detect_operation_[idx], "DETECT REVOCER");
-      } else {
-        if (CLICK_FAIL(temp_event_.push_back(event_[idx]))) {
-          COORDINATOR_LOG(WARN, "fail to push event to temp_event_", KR(ret), K(MTL_ID()), K(event_[idx]));
-        } else if (CLICK_FAIL(temp_recover_detect_operation_.push_back(recover_detect_operation_[idx]))) {
-          temp_event_.pop_back();
-          COORDINATOR_LOG(WARN, "fail to push detect operation to temp_recover_detect_operation_", KR(ret), K(MTL_ID()), K(event_[idx]));
+        COORDINATOR_LOG(INFO, "revocer event detected", K(events_with_ops_[idx]));
+        if (CLICK_FAIL(events_with_ops_.remove(idx))) {
+          COORDINATOR_LOG(WARN, "fail to remove", K(events_with_ops_[idx]));
+        } else {
+          (void) insert_event_to_table_(events_with_ops_[idx].event_, events_with_ops_[idx].recover_detect_operation_, "DETECT REVOCER");
+          --idx;// next loop is still access to idx
         }
-      }
-    } else {
-      if (CLICK_FAIL(temp_event_.push_back(event_[idx]))) {
-        COORDINATOR_LOG(WARN, "fail to push event to temp_event_", KR(ret), K(MTL_ID()), K(event_[idx]));
-      } else if (CLICK_FAIL(temp_recover_detect_operation_.push_back(recover_detect_operation_[idx]))) {
-        temp_event_.pop_back();
-        COORDINATOR_LOG(WARN, "fail to push detect operation to temp_recover_detect_operation_", KR(ret), K(MTL_ID()), K(event_[idx]));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (temp_event_.count() != event_.count()) {
-      if (CLICK_FAIL(event_.assign(temp_event_))) {
-        COORDINATOR_LOG(WARN, "replace event array failed", KR(ret), K(MTL_ID()));
-      } else if (CLICK_FAIL(recover_detect_operation_.assign(temp_recover_detect_operation_))) {
-        COORDINATOR_LOG(WARN, "replace recover detect operation array failed", KR(ret), K(MTL_ID()));
       }
     }
   }
@@ -171,23 +181,28 @@ int ObFailureDetector::add_failure_event(const FailureEvent &event)
   LC_TIME_GUARD(1_s);
   int ret = OB_SUCCESS;
   int64_t idx = 0;
+  FailureEventWithRecoverOp event_with_op;
   ObSpinLockGuard guard(lock_);
-  for (; idx < event_.count(); ++idx) {
-    if (event_[idx] == event) {
-      break;
-    }
-  }
-  if (idx != event_.count()) {
-    ret = OB_ENTRY_EXIST;
-    COORDINATOR_LOG(WARN, "this failure event has been exist", KR(ret), K(MTL_ID()), K(event), K(event_));
-  } else if (CLICK_FAIL(event_.push_back(event))) {
-    COORDINATOR_LOG(WARN, "fail to push event to failure detector", KR(ret), K(MTL_ID()), K(event), K(event_));
-  } else if (CLICK_FAIL(recover_detect_operation_.push_back(ObFunction<bool()>()))) {
-    COORDINATOR_LOG(WARN, "fail to push default recover operation to failure detector", KR(ret), K(MTL_ID()), K(event), K(event_));
-    event_.pop_back();
+  if (!check_is_running_()) {
+    ret = OB_NOT_RUNNING;
+    COORDINATOR_LOG(WARN, "not running", KR(ret), K(event), K(events_with_ops_));
   } else {
-    COORDINATOR_LOG(INFO, "success report a failure event without recover detect operation", KR(ret), K(MTL_ID()), K(event), K(event_));
-    (void) insert_event_to_table_(event, ObFunction<bool()>(), event.info_.get_ob_string());
+    for (; idx < events_with_ops_.count(); ++idx) {
+      if (events_with_ops_[idx].event_ == event) {
+        break;
+      }
+    }
+    if (idx != events_with_ops_.count()) {
+      ret = OB_ENTRY_EXIST;
+      COORDINATOR_LOG(WARN, "this failure event has been exist", KR(ret), K(event), K(events_with_ops_));
+    } else if (CLICK_FAIL(event_with_op.init(event, ObFunction<bool()>()))) {
+      COORDINATOR_LOG(WARN, "fail to init event with op", KR(ret), K(event), K(events_with_ops_));
+    } else if (CLICK_FAIL(events_with_ops_.push_back(event_with_op))) {
+      COORDINATOR_LOG(WARN, "fail to push", KR(ret), K(event), K(events_with_ops_));
+    } else {
+      COORDINATOR_LOG(INFO, "success report a failure event without recover detect operation", KR(ret), K(event), K(events_with_ops_));
+      (void) insert_event_to_table_(event, ObFunction<bool()>(), event.info_.get_ob_string());
+    }
   }
   return ret;
 }
@@ -197,23 +212,28 @@ int ObFailureDetector::add_failure_event(const FailureEvent &event, const ObFunc
   LC_TIME_GUARD(1_s);
   int ret = OB_SUCCESS;
   int64_t idx = 0;
+  FailureEventWithRecoverOp event_with_op;
   ObSpinLockGuard guard(lock_);
-  for (; idx < event_.count(); ++idx) {
-    if (event_[idx] == event) {
-      break;
-    }
-  }
-  if (idx != event_.count()) {
-    ret = OB_ENTRY_EXIST;
-    COORDINATOR_LOG(WARN, "this failure event has been exist", KR(ret), K(MTL_ID()), K(event), K(event_));
-  } else if (CLICK_FAIL(event_.push_back(event))) {
-    COORDINATOR_LOG(WARN, "fail to push event to failure detector", KR(ret), K(MTL_ID()), K(event), K(event_));
-  } else if (CLICK_FAIL(recover_detect_operation_.push_back(recover_detect_operation))) {
-    COORDINATOR_LOG(INFO, "fail to push recover operation to failure detector", KR(ret), K(MTL_ID()), K(event), K(event_));
-    event_.pop_back();
+  if (!check_is_running_()) {
+    ret = OB_NOT_RUNNING;
+    COORDINATOR_LOG(WARN, "not running", KR(ret), K(event), K(events_with_ops_));
   } else {
-    COORDINATOR_LOG(INFO, "success report a failure event with recover detect operation", KR(ret), K(MTL_ID()), K(event), K(event_));
-    (void) insert_event_to_table_(event, recover_detect_operation, event.info_.get_ob_string());
+    for (; idx < events_with_ops_.count(); ++idx) {
+      if (events_with_ops_[idx].event_ == event) {
+        break;
+      }
+    }
+    if (idx != events_with_ops_.count()) {
+      ret = OB_ENTRY_EXIST;
+      COORDINATOR_LOG(WARN, "this failure event has been exist", KR(ret), K(event), K(events_with_ops_));
+    } else if (CLICK_FAIL(event_with_op.init(event, recover_detect_operation))) {
+      COORDINATOR_LOG(WARN, "fail to init event with op", KR(ret), K(event), K(events_with_ops_));
+    } else if (CLICK_FAIL(events_with_ops_.push_back(event_with_op))) {
+      COORDINATOR_LOG(WARN, "fail to push", KR(ret), K(event), K(events_with_ops_));
+    } else {
+      COORDINATOR_LOG(INFO, "success report a failure event with recover detect operation", KR(ret), K(event), K(events_with_ops_));
+      (void) insert_event_to_table_(event, recover_detect_operation, event.info_.get_ob_string());
+    }
   }
   return ret;
 }
@@ -224,64 +244,74 @@ int ObFailureDetector::remove_failure_event(const FailureEvent &event)
   int ret = OB_SUCCESS;
   int64_t idx = 0;
   ObSpinLockGuard guard(lock_);
-  for (; idx < event_.count(); ++idx) {
-    if (event_[idx] == event) {
-      break;
-    }
-  }
-  if (idx == event_.count()) {
-    ret = OB_ENTRY_NOT_EXIST;
-    COORDINATOR_LOG(WARN, "this failure event not exist", KR(ret), K(MTL_ID()), K(event), K(event_));
+  if (!check_is_running_()) {
+    ret = OB_NOT_RUNNING;
+    COORDINATOR_LOG(WARN, "not running", KR(ret), K(event), K(events_with_ops_));
   } else {
-    (void) insert_event_to_table_(event_[idx], recover_detect_operation_[idx], "REMOVE FAILURE");
-    if (CLICK_FAIL(event_.remove(idx))) {
-      COORDINATOR_LOG(WARN, "remove event failed", KR(ret), K(MTL_ID()), K(event), K(event_));
-    } else if (CLICK_FAIL(recover_detect_operation_.remove(idx))) {
-      COORDINATOR_LOG(WARN, "remove operation failed", KR(ret), K(MTL_ID()), K(event), K(event_));
+    for (; idx < events_with_ops_.count(); ++idx) {
+      if (events_with_ops_[idx].event_ == event) {
+        break;
+      }
+    }
+    if (idx == events_with_ops_.count()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      COORDINATOR_LOG(WARN, "this failure event not exist", KR(ret), K(event), K(events_with_ops_));
     } else {
-      COORDINATOR_LOG(INFO, "user remove failure event success", KR(ret), K(MTL_ID()), K(event), K(event_));
+      (void) insert_event_to_table_(events_with_ops_[idx].event_, events_with_ops_[idx].recover_detect_operation_, "REMOVE FAILURE");
+      if (CLICK_FAIL(events_with_ops_.remove(idx))) {
+        COORDINATOR_LOG(WARN, "remove event failed", KR(ret), K(event), K(events_with_ops_));
+      } else if (CLICK_FAIL(events_with_ops_.remove(idx))) {
+        COORDINATOR_LOG(ERROR, "remove event failed", KR(ret), K(event), K(events_with_ops_));
+      } else {
+        COORDINATOR_LOG(INFO, "user remove failure event success", KR(ret), K(event), K(events_with_ops_));
+      }
     }
   }
   return ret;
-}
-
-int ObFailureDetector::insert_event_to_table_(const FailureEvent &event, const ObFunction<bool()> &recover_operation, ObString info)
-{
-  LC_TIME_GUARD(1_s);
-  #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(event), K(recover_operation)
-  int ret = OB_SUCCESS;
-  if (CLICK_FAIL(SERVER_EVENT_ADD("FAILURE_DETECTOR",
-                               common::to_cstring(info),
-                               "FAILURE_MODULE",
-                               obj_to_cstring(event.module_),
-                               "FAILURE_TYPE",
-                               obj_to_cstring(event.type_),
-                               "AUTO_RECOVER",
-                               common::to_cstring(recover_operation.is_valid())))) {
-    COORDINATOR_LOG_(WARN, "insert into __all_server_event_history failed");
-  } else {
-    COORDINATOR_LOG_(INFO, "insert into __all_server_event_history success");
-  }
-  return ret;
-  #undef PRINT_WRAPPER
 }
 
 int ObFailureDetector::get_specified_level_event(FailureLevel level, ObIArray<FailureEvent> &results)
 {
   LC_TIME_GUARD(1_s);
-  #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(level), K(results)
+  #define PRINT_WRAPPER KR(ret), K(level), K(results)
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
-  results.reset();
-  for (int64_t idx = 0; idx < event_.count(); ++idx) {
-    if (event_.at(idx).get_failure_level() == level) {
-      if (CLICK_FAIL(results.push_back(event_.at(idx)))) {
-        COORDINATOR_LOG_(WARN, "fail to push back event to results");
+  if (!check_is_running_()) {
+    ret = OB_NOT_RUNNING;
+    COORDINATOR_LOG(WARN, "not running", KR(ret), K(events_with_ops_));
+  } else {
+    results.reset();
+    for (int64_t idx = 0; idx < events_with_ops_.count(); ++idx) {
+      if (events_with_ops_.at(idx).event_.get_failure_level() == level) {
+        if (CLICK_FAIL(results.push_back(events_with_ops_.at(idx).event_))) {
+          COORDINATOR_LOG_(WARN, "fail to push back event to results");
+        }
       }
     }
+    if (CLICK_FAIL(ret)) {
+      COORDINATOR_LOG_(WARN, "fail to get specified level failure event");
+    }
   }
-  if (CLICK_FAIL(ret)) {
-    COORDINATOR_LOG_(WARN, "fail to get specified level failure event");
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int ObFailureDetector::insert_event_to_table_(const FailureEvent &event, const ObFunction<bool()> &recover_operation, ObString info)
+{
+  LC_TIME_GUARD(1_s);
+  #define PRINT_WRAPPER KR(ret), K(event), K(recover_operation)
+  int ret = OB_SUCCESS;
+  if (CLICK_FAIL(SERVER_EVENT_ADD("FAILURE_DETECTOR",
+                                  common::to_cstring(info),
+                                  "FAILURE_MODULE",
+                                  obj_to_cstring(event.module_),
+                                  "FAILURE_TYPE",
+                                  obj_to_cstring(event.type_),
+                                  "AUTO_RECOVER",
+                                  common::to_cstring(recover_operation.is_valid())))) {
+    COORDINATOR_LOG_(WARN, "insert into __all_server_event_history failed");
+  } else {
+    COORDINATOR_LOG_(INFO, "insert into __all_server_event_history success");
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -440,6 +470,24 @@ void ObFailureDetector::detect_palf_disk_full_()
       COORDINATOR_LOG(INFO, "clog disk has left space, remove failure event", K(ret), K(clog_disk_full_event));
     }
   }
+}
+
+int ObFailureDetector::FailureEventWithRecoverOp::init(const FailureEvent &event,
+                                                       const ObFunction<bool()> &recover_detect_operation)
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+  if (CLICK_FAIL(event_.assign(event))) {
+    COORDINATOR_LOG(WARN, "fail to assign event", K(ret));
+  } else if (CLICK_FAIL(recover_detect_operation_.assign(recover_detect_operation))) {
+    COORDINATOR_LOG(WARN, "fail to assign op", K(ret));
+  }
+  return ret;
+}
+
+int ObFailureDetector::FailureEventWithRecoverOp::assign(const FailureEventWithRecoverOp &rhs)
+{
+  return init(rhs.event_, rhs.recover_detect_operation_);
 }
 
 }
