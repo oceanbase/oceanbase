@@ -380,7 +380,7 @@ int ObDataAccessService::do_async_remote_das_task(
   ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
   int64_t timeout = plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time();
 #ifdef ERRSIM
-  int inject_timeout = -E(EventTable::EN_DAS_SIMULATE_ASYNC_RPC_TIMEOUT) OB_SUCCESS;
+  int inject_timeout = -OB_E(EventTable::EN_DAS_SIMULATE_ASYNC_RPC_TIMEOUT) OB_SUCCESS;
   if (OB_SUCCESS != inject_timeout) {
     LOG_INFO("das async rpc simulate timeout", K(inject_timeout));
     timeout = inject_timeout - 10;
