@@ -147,8 +147,8 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
 void ObSimpleArbServer::destroy()
 {
   is_inited_ = false;
-  palf_env_mgr_.destroy();
   srv_network_frame_.destroy();
+  palf_env_mgr_.destroy();
   timer_.destroy();
 }
 
@@ -157,7 +157,7 @@ int ObSimpleArbServer::simple_start(const bool is_bootstrat)
 {
   int ret = OB_SUCCESS;
   palflite::PalfEnvKey key(cluster_id_, OB_SERVER_TENANT_ID);
-  if (true == is_bootstrat && OB_FAIL(srv_network_frame_.start())) {
+  if (OB_FAIL(srv_network_frame_.start())) {
     CLOG_LOG(WARN, "start ObArbSrvNetWorkFrame failed", K(ret));
   } else if (OB_FAIL(palf_env_mgr_.create_palf_env_lite(key))) {
     CLOG_LOG(WARN, "PalfEnvLiteMgr create_palf_env_lite failed", K(ret));
@@ -183,10 +183,14 @@ int ObSimpleArbServer::simple_restart(const std::string &cluster_name,
                                       const int64_t node_idx)
 {
   int ret = OB_SUCCESS;
+  srv_network_frame_.deliver_.stop();
   palf_env_mgr_.destroy();
   timer_.destroy();
   if (OB_FAIL(simple_init(cluster_name, self_, node_idx, false))) {
     CLOG_LOG(WARN, "simple_init failed", K(ret));
+  } else if (OB_FAIL(srv_network_frame_.deliver_.start(srv_network_frame_.normal_rpc_qhandler_,
+      srv_network_frame_.server_rpc_qhandler_))) {
+    CLOG_LOG(WARN, "start ObArbSrvNetWorkFrame failed", K(ret));
   } else if (OB_FAIL(timer_.start())) {
     CLOG_LOG(WARN, "timer start failed", K(ret));
   }
