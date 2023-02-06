@@ -1032,7 +1032,6 @@ private:
   const common::ObVersionProvider *version_provider_;
   const ObSQLConfigProvider *config_provider_;
   char tenant_buff_[sizeof(share::ObTenantSpaceFetcher)];
-  share::ObTenantSpaceFetcher* with_tenant_ctx_;
   obmysql::ObMySQLRequestManager *request_manager_;
   sql::ObFLTSpanMgr *flt_span_mgr_;
   ObSqlPlanMgr *sql_plan_manager_;

@@ -127,7 +127,6 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       trans_type_(transaction::ObTxClass::USER),
       version_provider_(NULL),
       config_provider_(NULL),
-      with_tenant_ctx_(NULL),
       request_manager_(NULL),
       flt_span_mgr_(NULL),
       sql_plan_manager_(NULL),
@@ -278,10 +277,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     config_provider_ = NULL;
     request_manager_ = NULL;
     flt_span_mgr_ = NULL;
-    if (NULL != with_tenant_ctx_) {
-      with_tenant_ctx_->~ObTenantSpaceFetcher();
-      with_tenant_ctx_ = NULL;
-    }
     MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
     ps_cache_ = NULL;
     found_rows_ = 1;
@@ -758,23 +753,8 @@ ObMySQLRequestManager* ObSQLSessionInfo::get_request_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == request_manager_) {
-    uint64_t t_id = get_priv_tenant_id();
-    with_tenant_ctx_ = new(tenant_buff_) share::ObTenantSpaceFetcher(t_id);
-    if (OB_FAIL(with_tenant_ctx_->get_ret())) {
-      if (OB_TENANT_NOT_IN_SERVER == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        SERVER_LOG(WARN, "failed to switch tenant context", K(t_id), K(ret));
-      }
-    } else if (NULL == with_tenant_ctx_){
-      request_manager_ = NULL;
-    } else {
-      ObTenantBase* tenant = with_tenant_ctx_->entity().get_tenant();
-      if (NULL == tenant) {
-        request_manager_ = NULL;
-      } else {
-        request_manager_ = tenant->get<obmysql::ObMySQLRequestManager*>();
-      }
+    MTL_SWITCH(get_priv_tenant_id()) {
+      request_manager_ = MTL(obmysql::ObMySQLRequestManager*);
     }
   }
 
@@ -785,23 +765,8 @@ sql::ObFLTSpanMgr* ObSQLSessionInfo::get_flt_span_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == flt_span_mgr_) {
-    uint64_t t_id = get_priv_tenant_id();
-    with_tenant_ctx_ = new(tenant_buff_) share::ObTenantSpaceFetcher(t_id);
-    if (OB_FAIL(with_tenant_ctx_->get_ret())) {
-      if (OB_TENANT_NOT_IN_SERVER == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        SERVER_LOG(WARN, "failed to switch tenant context", K(t_id), K(ret));
-      }
-    } else if (NULL == with_tenant_ctx_){
-      flt_span_mgr_ = NULL;
-    } else {
-      ObTenantBase* tenant = with_tenant_ctx_->entity().get_tenant();
-      if (NULL == tenant) {
-        flt_span_mgr_ = NULL;
-      } else {
-        flt_span_mgr_ = tenant->get<sql::ObFLTSpanMgr*>();
-      }
+    MTL_SWITCH(get_priv_tenant_id()) {
+      flt_span_mgr_ = MTL(sql::ObFLTSpanMgr*);
     }
   }
   return flt_span_mgr_;
@@ -811,23 +776,8 @@ ObSqlPlanMgr* ObSQLSessionInfo::get_sql_plan_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == sql_plan_manager_) {
-    uint64_t t_id = get_priv_tenant_id();
-    with_tenant_ctx_ = new(tenant_buff_) share::ObTenantSpaceFetcher(t_id);
-    if (OB_FAIL(with_tenant_ctx_->get_ret())) {
-      if (OB_TENANT_NOT_IN_SERVER == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        SERVER_LOG(WARN, "failed to switch tenant context", K(t_id), K(ret));
-      }
-    } else if (NULL == with_tenant_ctx_){
-      sql_plan_manager_ = NULL;
-    } else {
-      ObTenantBase* tenant = with_tenant_ctx_->entity().get_tenant();
-      if (NULL == tenant) {
-        sql_plan_manager_ = NULL;
-      } else {
-        sql_plan_manager_ = tenant->get<ObSqlPlanMgr*>();
-      }
+    MTL_SWITCH(get_priv_tenant_id()) {
+      sql_plan_manager_ = MTL(ObSqlPlanMgr*);
     }
   }
   return sql_plan_manager_;
