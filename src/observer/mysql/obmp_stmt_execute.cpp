@@ -1634,6 +1634,9 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
             LOG_WARN("fail setup user resource group", K(ret));
           }
         }
+        if (sess != NULL) {
+          revert_session(sess);
+        }
         ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }
     }
