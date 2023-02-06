@@ -354,8 +354,7 @@ ObDASTaskResp::ObDASTaskResp()
     op_results_(),
     rcode_(),
     trans_result_(),
-    das_factory_(nullptr),
-    rpc_rcode_(OB_SUCCESS)
+    das_factory_(nullptr)
 {
 }
 

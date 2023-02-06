@@ -365,8 +365,6 @@ public:
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
   const transaction::ObTxExecResult &get_trans_result() const { return trans_result_; }
   void set_das_factory(ObDASTaskFactory *das_factory) { das_factory_ = das_factory; };
-  void set_rpc_rcode(int rcode) { rpc_rcode_ = rcode; };
-  int get_rpc_rcode() const { return rpc_rcode_; };
   TO_STRING_KV(K_(has_more),
                K_(ctrl_svr),
                K_(runner_svr),
@@ -381,7 +379,6 @@ private:
   obrpc::ObRpcResultCode rcode_; //返回的错误信息
   transaction::ObTxExecResult trans_result_;
   ObDASTaskFactory *das_factory_;  // no need to serialize
-  int rpc_rcode_;  // store async remote rpc error code. no need to serialize
 };
 
 template <typename T>

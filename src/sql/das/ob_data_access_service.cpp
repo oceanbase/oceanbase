@@ -604,11 +604,13 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   }
   if (OB_FAIL(ret)) {
     // if error happened, it must be the last.
+    // Special case is rpc error, because we cannot do a partition retry on rpc error.
+    // So it's safe to only mark the first das task op failed.
     task_op->set_task_status(ObDasTaskStatus::FAILED);
     task_op->errcode_ = ret;
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(task_op->state_advance())) {
-      LOG_WARN("failed to advance das task state.",K(ret));
+      LOG_WARN("failed to advance das task state.",K(tmp_ret));
     }
   } else {
     // if no error happened, all tasks were executed successfully.
