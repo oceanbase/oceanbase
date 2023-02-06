@@ -159,6 +159,9 @@ int ObLSDDLLogHandler::replay(const void *buffer,
         ret = replay_ddl_redo_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
       }
+      case ObDDLClogType::OLD_DDL_COMMIT_LOG: {
+        break; // ignore the old ddl commit log
+      }
       case ObDDLClogType::DDL_COMMIT_LOG: {
         ret = replay_ddl_commit_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
