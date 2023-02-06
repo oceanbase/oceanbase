@@ -184,7 +184,7 @@ int ObAdminLogExecutor::alloc_mutator_string_buf_()
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(mutator_str_buf_)) {
-    mutator_str_buf_ = static_cast<char *>(ob_malloc(MAX_TX_LOG_STRING_SIZE));
+    mutator_str_buf_ = static_cast<char *>(ob_malloc(MAX_TX_LOG_STRING_SIZE, "AdminDumpLog"));
     mutator_buf_size_ = MAX_TX_LOG_STRING_SIZE;
   }
 
