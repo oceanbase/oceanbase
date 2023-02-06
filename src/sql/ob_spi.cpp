@@ -2592,6 +2592,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
           if (OB_SUCCESS != close_ret) {
             LOG_WARN("close result set failed", K(ret), K(close_ret));
           }
+          ret = OB_SUCCESS == ret ? close_ret : ret;
           is_retry = true;
         } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type()); //SPI只做LOCAL重试
         session->get_retry_info_for_update().clear();
@@ -3222,6 +3223,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                   spi_result->get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
               OZ (cursor->set_and_register_snapshot(snapshot));
             }
+            bool need_destruct = false;
             if (OB_FAIL(ret) && OB_NOT_NULL(spi_result)) {
               int tmp_ret = ret;
               ret = OB_SUCCESS;
@@ -3233,11 +3235,14 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                 }
               }
               ret = tmp_ret;
-              spi_result->~ObSPIResultSet();
+              need_destruct = true;
               LOG_WARN("cursor open result failed.", K(ret));
             }
             if (OB_NOT_NULL(spi_result)) {
               spi_result->end_cursor_stmt(ctx, ret);
+            }
+            if (need_destruct) {
+              spi_result->~ObSPIResultSet();
             }
           } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
         }
