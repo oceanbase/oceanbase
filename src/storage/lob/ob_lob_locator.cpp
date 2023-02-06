@@ -171,7 +171,6 @@ int ObLobLocatorHelper::fill_lob_locator(ObDatumRow &row,
   } else {
     STORAGE_LOG(DEBUG, "start to fill lob locator", K(row));
     //ObLobLocatorHelper is inited, we always cound find a lob cell in projected row
-    locator_allocator_.reuse();
 
     if (OB_FAIL(build_rowid_obj(row, rowkey_str_, is_projected_row, *col_descs, *out_project,
                                 access_param.iter_param_.tablet_id_))) {
@@ -236,7 +235,6 @@ int ObLobLocatorHelper::fill_lob_locator_v2(ObDatumRow &row,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid col count", K(row), KPC(out_cols_param));
   } else {
-    locator_allocator_.reuse();
     if (OB_FAIL(build_rowid_obj(row, rowkey_str_, false, *col_descs, *out_project, access_param.iter_param_.tablet_id_))) {
       STORAGE_LOG(WARN, "Failed to build rowid obj", K(ret), K(rowkey_str_));
     } else {

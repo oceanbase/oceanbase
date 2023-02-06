@@ -481,6 +481,9 @@ int ObLobManager::query_remote(ObLobAccessParam& param, common::ObAddr& dst_addr
             }
           }
         }
+        if (ret == OB_ITER_END) {
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
