@@ -117,7 +117,7 @@ int ObTableLoadStoreTrans::get_store_writer_for_write(
   } else if (OB_FAIL(check_trans_status(ObTableLoadTransStatusType::RUNNING))) {
     LOG_WARN("fail to check trans status", KR(ret));
   } else {
-    ObMutexGuard guard(trans_ctx_->mutex_);
+    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_store_writer_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null store writer", KR(ret));
@@ -143,7 +143,7 @@ int ObTableLoadStoreTrans::get_store_writer_for_flush(
   } else if (OB_FAIL(check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
     LOG_WARN("fail to check trans status", KR(ret));
   } else {
-    ObMutexGuard guard(trans_ctx_->mutex_);
+    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_store_writer_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null store writer", KR(ret));
@@ -170,7 +170,7 @@ int ObTableLoadStoreTrans::get_store_writer_for_clean_up(
   } else if (OB_FAIL(check_trans_status(ObTableLoadTransStatusType::ABORT))) {
     LOG_WARN("fail to check trans status", KR(ret));
   } else {
-    ObMutexGuard guard(trans_ctx_->mutex_);
+    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_store_writer_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null store writer", KR(ret));
@@ -192,7 +192,7 @@ void ObTableLoadStoreTrans::put_store_writer(ObTableLoadTransStoreWriter *store_
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null store", KR(ret));
   } else {
-    ObMutexGuard guard(trans_ctx_->mutex_);
+    obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
     OB_ASSERT(trans_store_writer_ == store_writer);
   }
   if (OB_SUCC(ret)) {
@@ -224,7 +224,7 @@ int ObTableLoadStoreTrans::output_store(ObTableLoadTransStore *&trans_store)
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStoreTrans not init", KR(ret), KP(this));
   } else {
-    ObMutexGuard guard(trans_ctx_->mutex_);
+    obsys::ObWLockGuard guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_store_) || OB_ISNULL(trans_store_writer_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null store", KR(ret), KP_(trans_store), KP_(trans_store_writer));

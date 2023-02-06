@@ -33,7 +33,7 @@ int ObTableLoadTransCtx::advance_trans_status(ObTableLoadTransStatusType trans_s
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(trans_status));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObWLockGuard guard(rwlock_);
     if (OB_UNLIKELY(ObTableLoadTransStatusType::ERROR == trans_status_)) {
       ret = error_code_;
       LOG_WARN("trans has error", KR(ret));
@@ -60,7 +60,7 @@ int ObTableLoadTransCtx::set_trans_status_error(int error_code)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(error_code));
   } else {
-    ObMutexGuard guard(mutex_);
+    obsys::ObWLockGuard guard(rwlock_);
     if (OB_UNLIKELY(trans_status_ == ObTableLoadTransStatusType::ABORT)) {
       ret = OB_TRANS_KILLED;
     } else if (trans_status_ != ObTableLoadTransStatusType::ERROR) {
@@ -74,7 +74,7 @@ int ObTableLoadTransCtx::set_trans_status_error(int error_code)
 int ObTableLoadTransCtx::set_trans_status_abort()
 {
   int ret = OB_SUCCESS;
-  ObMutexGuard guard(mutex_);
+  obsys::ObWLockGuard guard(rwlock_);
   trans_status_ = ObTableLoadTransStatusType::ABORT;
   return ret;
 }
@@ -82,7 +82,7 @@ int ObTableLoadTransCtx::set_trans_status_abort()
 int ObTableLoadTransCtx::check_trans_status(ObTableLoadTransStatusType trans_status) const
 {
   int ret = OB_SUCCESS;
-  ObMutexGuard guard(mutex_);
+  obsys::ObRLockGuard guard(rwlock_);
   if (OB_UNLIKELY(trans_status != trans_status_)) {
     if (ObTableLoadTransStatusType::ERROR == trans_status_) {
       ret = error_code_;
