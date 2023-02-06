@@ -545,7 +545,7 @@ void ObDTLIntermResultManager::dec_interm_result_ref_count(ObDTLIntermResultInfo
     int64_t ref_count = result_info->dec_ref_count();
     if (ref_count <= 0) {
       if (OB_UNLIKELY(ref_count < 0)) {
-        LOG_ERROR("ref count of interm result < 0", K(ref_count), KPC(result_info));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ref count of interm result < 0", K(ref_count), KPC(result_info));
       }
       free_interm_result_info(result_info);
       result_info = NULL;

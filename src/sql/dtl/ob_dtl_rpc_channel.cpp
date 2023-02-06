@@ -32,7 +32,7 @@ namespace dtl {
 
 void ObDtlRpcChannel::SendMsgCB::on_invalid()
 {
-  LOG_WARN("SendMsgCB invalid, check object serialization impl or oom",
+  LOG_WARN_RET(OB_ERROR, "SendMsgCB invalid, check object serialization impl or oom",
            K_(trace_id));
   AsyncCB::on_invalid();
   const ObDtlRpcDataResponse &resp = result_;
@@ -44,7 +44,7 @@ void ObDtlRpcChannel::SendMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendMsgCB::on_timeout()
 {
-  LOG_WARN("SendMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
+  LOG_WARN_RET(OB_TIMEOUT, "SendMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
            K_(trace_id));
   const ObDtlRpcDataResponse &resp = result_;
   int ret = response_.on_finish(resp.is_block_, OB_TIMEOUT);
@@ -80,7 +80,7 @@ rpc::frame::ObReqTransport::AsyncCB *ObDtlRpcChannel::SendMsgCB::clone(
 
 void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
 {
-  LOG_WARN("SendBCMsgCB invalid, check object serialization impl or oom",
+  LOG_WARN_RET(OB_ERROR, "SendBCMsgCB invalid, check object serialization impl or oom",
            K_(trace_id));
   AsyncCB::on_invalid();
   ObIArray<ObDtlRpcDataResponse> &resps = result_.resps_;
@@ -98,7 +98,7 @@ void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
 {
-  LOG_WARN("SendBCMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
+  LOG_WARN_RET(OB_TIMEOUT, "SendBCMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate",
            K_(trace_id));
   ObIArray<ObDtlRpcDataResponse> &resps = result_.resps_;
   for (int64_t i = 0; i < responses_.count(); ++i) {

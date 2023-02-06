@@ -102,7 +102,7 @@ void ObArchiveTimer::run1()
   lib::set_thread_name("ArcTimer");
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "ObArchiveTimer not init", K(tenant_id_));
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "ObArchiveTimer not init", K(tenant_id_));
   } else {
     while (!has_set_stop()) {
       int64_t begin_tstamp = ObTimeUtility::current_time();
@@ -147,7 +147,7 @@ ObArchiveTimer::LSMetaRecordTask::~LSMetaRecordTask()
 void ObArchiveTimer::LSMetaRecordTask::handle()
 {
   if (NULL == timer_ || NULL == timer_->recorder_) {
-    ARCHIVE_LOG(ERROR, "invalid timer", K(timer_), K(timer_->recorder_));
+    ARCHIVE_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid timer", K(timer_), K(timer_->recorder_));
   } else {
     timer_->recorder_->handle();
   }

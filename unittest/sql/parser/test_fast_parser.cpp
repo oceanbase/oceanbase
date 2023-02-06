@@ -86,6 +86,7 @@ bool TestFastParser::compare_parser_result(
      ParamList *p_list,
      const int64_t param_num)
 {
+  int ret = OB_SUCCESS;
   int64_t cmp_param_num = parse_result.param_node_num_;
   char *cmp_no_param_sql_ptr = parse_result.no_param_sql_;
   int64_t cmp_no_param_sql_len = parse_result.no_param_sql_len_;
@@ -209,7 +210,7 @@ int TestFastParser::parse(const ObString &sql)
   int ret2 = ObFastParser::parse(sql, fp_ctx, allocator_,
     no_param_sql_ptr, no_param_sql_len, p_list, param_num);
   if ((OB_SUCCESS == ret1) != (OB_SUCCESS == ret2)) {
-    SQL_PC_LOG(ERROR, "parser results are not equal", K(ret1), K(ret2), K(sql));
+    SQL_PC_LOG_RET(ERROR, OB_ERROR, "parser results are not equal", K(ret1), K(ret2), K(sql));
     return OB_ERROR;
   }
   if (OB_SUCCESS == ret1) {

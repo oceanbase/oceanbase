@@ -27,7 +27,7 @@ int64_t ObTimeUtility::current_time()
   int err_ret = 0;
   struct timeval t;
   if (OB_UNLIKELY((err_ret = gettimeofday(&t, nullptr)) < 0)) {
-    LIB_LOG(ERROR, "gettimeofday error", K(err_ret), K(errno));
+    LIB_LOG_RET(ERROR, err_ret, "gettimeofday error", K(err_ret), K(errno));
     ob_abort();
   }
   return (static_cast<int64_t>(t.tv_sec) * 1000000L +
@@ -39,7 +39,7 @@ int64_t ObTimeUtility::current_time_ns()
 	int err_ret = 0;
   struct timespec ts;
   if (OB_UNLIKELY((err_ret = clock_gettime(CLOCK_REALTIME, &ts)) != 0)) {
-      LIB_LOG(WARN, "current system not support CLOCK_REALTIME", K(err_ret), K(errno));
+      LIB_LOG_RET(WARN, err_ret, "current system not support CLOCK_REALTIME", K(err_ret), K(errno));
 			ob_abort();
 	}
 	return static_cast<int64_t>(ts.tv_sec) * 1000000000L +
@@ -54,7 +54,7 @@ int64_t ObTimeUtility::current_monotonic_raw_time()
 
   if (IS_SYSTEM_SUPPORT_MONOTONIC_RAW) {
     if (OB_UNLIKELY((err_ret = clock_gettime(CLOCK_MONOTONIC_RAW, &ts)) != 0)) {
-      LIB_LOG(WARN, "current system not support CLOCK_MONOTONIC_RAW", K(err_ret), K(errno));
+      LIB_LOG_RET(WARN, err_ret, "current system not support CLOCK_MONOTONIC_RAW", K(err_ret), K(errno));
       IS_SYSTEM_SUPPORT_MONOTONIC_RAW = false;
       ret_val = current_time();
     } else {

@@ -242,7 +242,7 @@ int ObLSRestoreTaskMgr::cancel_task()
         if (OB_FAIL(check_task_exist_(iter->first, is_exist))) {
           LOG_WARN("fail to check task exist", K(ret), "taks_id", iter->first);
         } else if (is_exist && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-          LOG_WARN("cancel dag next task cost too much time", K(ret), "task_id", iter->first,
+          LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "cancel dag next task cost too much time", K(ret), "task_id", iter->first,
               "cost_time", ObTimeUtil::current_time() - start_ts);
         }
       } while (is_exist && OB_SUCC(ret));

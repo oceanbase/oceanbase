@@ -165,8 +165,8 @@ int ObServerSuperBlock::deserialize(const char *buf, const int64_t buf_size, int
     LOG_WARN("failed to decode header", K(ret), KP(buf), K(buf_size), K(pos));
   } else if (OB_UNLIKELY(header_.body_crc_ !=
       (calc_crc = static_cast<int32_t>(ob_crc64(buf + pos, header_.body_size_))))) {
-    ret = OB_CHECKSUM_ERROR;
-    LOG_WARN("failed to check crc", K(ret), KP(buf), K(buf_size), K(pos), K_(header), K(calc_crc));
+    ret = OB_PHYSIC_CHECKSUM_ERROR;
+    LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg", "failed to check crc", K(ret), KP(buf), K(buf_size), K(pos), K_(header), K(calc_crc));
   } else if (OB_FAIL(body_.deserialize(buf, buf_size, pos))) {
     LOG_WARN("failed to decode body", K(ret), KP(buf), K(buf_size), K(pos));
   } else if (OB_UNLIKELY(!is_valid())) {

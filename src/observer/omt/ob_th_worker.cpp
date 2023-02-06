@@ -192,7 +192,7 @@ ObThWorker::Status ObThWorker::check_qtime_throttle()
           (get_query_start_time() - get_query_enqueue_time() >=
            static_cast<int64_t>(st_metrics.queue_time_ * 1000000L))) {
         st = WS_OUT_OF_THROTTLE;
-        LOG_WARN("query is throttled",
+        LOG_WARN_RET(OB_ERROR, "query is throttled",
                  "queue_time_threshold(s)", st_metrics.queue_time_,
                  "query_enqueue_time", get_query_enqueue_time(),
                  "query_start_time", get_query_start_time());
@@ -215,7 +215,7 @@ ObThWorker::Status ObThWorker::check_throttle()
          (curr_time - get_query_start_time() >=
           static_cast<int64_t>(st_metrics.rt_ * 1000000L))) {
         st = WS_OUT_OF_THROTTLE;
-        LOG_WARN("query is throttled",
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "query is throttled",
                  "rt_threshold(s)", st_metrics.rt_,
                  "query_start_time", get_query_start_time(),
                  "current_time", curr_time);

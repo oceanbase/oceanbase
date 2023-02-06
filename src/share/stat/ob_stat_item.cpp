@@ -584,7 +584,7 @@ int64_t ObGlobalNdvEval::get_ndv_from_llc(const char *llc_bitmap)
   int64_t num_distinct = 0;
   if (OB_ISNULL(llc_bitmap)) {
     // ret is useless here, we just need to raise a warn to avoid core.
-    LOG_WARN("get unexpected null pointer");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get unexpected null pointer");
   } else {
     double sum_of_pmax = 0;
     double alpha = select_alpha_value(ObColumnStat::NUM_LLC_BUCKET);

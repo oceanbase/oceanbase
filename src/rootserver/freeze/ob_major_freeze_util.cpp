@@ -78,6 +78,7 @@ ObFreezeTimeGuard::~ObFreezeTimeGuard()
     if (n >= buffer_size) {
       snprintf(&strbuffer[buffer_size - 6], 6, "..., ");
     }
+    int ret = OB_ERR_TOO_MUCH_TIME;
     common::OB_PRINT(log_mod_, OB_LOG_LEVEL_DIRECT(WARN), strbuffer,
       LOG_KVS(K_(warn_threshold_us), K(total_cost_us), K_(start_time_us), K(now_us)));
   }

@@ -2444,7 +2444,7 @@ TableItem *ObDMLStmt::create_table_item(ObIAllocator &allocator)
   TableItem *table_item = NULL;
   void *ptr = NULL;
   if (NULL == (ptr = allocator.alloc(sizeof(TableItem)))) {
-    LOG_WARN("alloc table item failed");
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc table item failed");
   } else {
     table_item = new(ptr) TableItem();
   }

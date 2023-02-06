@@ -1181,9 +1181,9 @@ bool LogConfigMgr::can_memberlist_majority_(const int64_t new_member_list_len, c
   // 2. len(member_list) >= replica_num / 2 + 1
   bool bool_ret = false;
   if (new_member_list_len > new_replica_num) {
-    PALF_LOG(WARN, "can't change config, replica_num too small", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "can't change config, replica_num too small", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
   } else if (new_member_list_len < (new_replica_num / 2 + 1)) {
-    PALF_LOG(WARN, "can't change config, replica_num too large", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "can't change config, replica_num too large", K_(palf_id), K_(self), K(new_replica_num), K(new_member_list_len));
   } else {
     bool_ret = true;
   }

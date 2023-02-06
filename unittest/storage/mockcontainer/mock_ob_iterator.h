@@ -118,7 +118,7 @@ public:
               cmp_multi_version_row_flag, cmp_is_get_and_scan_index);
           STORAGE_LOG(DEBUG, "compare row", K(bool_ret), K(ret1), K(*this_row), K(ret2), K(*other_row));
           if (this_row->trans_id_ != other_row->trans_id_) {
-            STORAGE_LOG(ERROR, "not equal trans_id", K(*this_row), K(this_row->trans_id_),
+            STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "not equal trans_id", K(*this_row), K(this_row->trans_id_),
                 K(*other_row), K(other_row->trans_id_));
             bool_ret = false;
           }
@@ -134,7 +134,7 @@ public:
     }
 
     if (!bool_ret) {
-      STORAGE_LOG(WARN, "iter is not equal",
+      STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "iter is not equal",
                   K(idx), K(ret1), K(ret2),
                   "this_row", this_row ? to_cstring(*this_row): "null",
                   "other_row", other_row ? to_cstring(*other_row) : "null");
@@ -208,7 +208,7 @@ public:
     }
 
     if (!bool_ret) {
-      STORAGE_LOG(WARN, "iter is not equal",
+      STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "iter is not equal",
                   K(idx),
                   "this_row", to_cstring(*this_row),
                   "other_row", to_cstring(*other_row));

@@ -210,7 +210,7 @@ void ObExecutorRpcImpl::deal_with_rpc_timeout_err(ObExecutorRpcCtx &rpc_ctx,
         int a_ret = OB_SUCCESS;
         if (OB_UNLIKELY(OB_SUCCESS != (a_ret = retry_info->add_invalid_server_distinctly(
                         dist_server)))) {
-          LOG_WARN("fail to add invalid server distinctly", K(a_ret), K(dist_server));
+          LOG_WARN_RET(a_ret, "fail to add invalid server distinctly", K(a_ret), K(dist_server));
         } else {
           //LOG_INFO("YZFDEBUG add invalid server distinctly", K(a_ret), K(dist_server), "p", &retry_info->get_invalid_servers());
         }

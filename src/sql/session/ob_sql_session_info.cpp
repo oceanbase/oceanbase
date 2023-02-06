@@ -893,18 +893,18 @@ ObPlanCache *ObSQLSessionInfo::get_plan_cache()
     //release old plancache and get new
     ObPCMemPctConf pc_mem_conf;
     if (OB_SUCCESS != get_pc_mem_conf(pc_mem_conf)) {
-      LOG_ERROR("fail to get pc mem conf");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fail to get pc mem conf");
       plan_cache_ = NULL;
     } else {
       plan_cache_ = MTL(ObPlanCache*);
       if (OB_ISNULL(plan_cache_)) {
-        LOG_WARN("failed to get plan cache");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to get plan cache");
       } else if (MTL_ID() != get_effective_tenant_id()) {
-        LOG_ERROR("unmatched tenant_id", K(MTL_ID()), K(get_effective_tenant_id()));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unmatched tenant_id", K(MTL_ID()), K(get_effective_tenant_id()));
       } else if (plan_cache_->is_inited()) {
         // skip update mem conf
       } else if (OB_SUCCESS != plan_cache_->set_mem_conf(pc_mem_conf)) {
-        LOG_ERROR("fail to set plan cache memory conf");
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fail to set plan cache memory conf");
       }
     }
   }
@@ -1223,7 +1223,7 @@ ObPLCursorInfo *ObSQLSessionInfo::get_cursor(int64_t cursor_id)
 {
   ObPLCursorInfo *cursor = NULL;
   if (OB_SUCCESS != pl_cursor_cache_.pl_cursor_map_.get_refactored(cursor_id, cursor)) {
-    LOG_WARN("get cursor info failed", K(cursor_id), K(get_sessid()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cursor info failed", K(cursor_id), K(get_sessid()));
   }
   return cursor;
 }
@@ -1448,7 +1448,7 @@ ObTraceEventRecorder* ObSQLSessionInfo::get_trace_buf()
   if (NULL == trace_recorder_) {
     void *ptr = name_pool_.alloc(sizeof(ObTraceEventRecorder));
     if (NULL == ptr) {
-      LOG_WARN("fail to alloc trace recorder");
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc trace recorder");
     } else {
       trace_recorder_ = new (ptr) ObTraceEventRecorder(false, ObLatchIds::SESSION_TRACE_RECORDER_LOCK);
     }
@@ -1718,7 +1718,7 @@ void ObSQLSessionInfo::update_alive_time_stat()
 void ObSQLSessionInfo::set_session_type_with_flag()
 {
   if (OB_UNLIKELY(INVALID_TYPE == session_type_)) {
-    LOG_WARN("session type is not init, only happen when old server send rpc to new server");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "session type is not init, only happen when old server send rpc to new server");
     session_type_ = inner_flag_ ? INNER_SESSION : USER_SESSION;
   }
 }
@@ -2353,7 +2353,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&sort_area_size_, tenant_config->_sort_area_size);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
-        LOG_WARN("fail get tenant_config", "ret", tmp_ret,
+        LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,
                                            K(session_->get_priv_tenant_id()),
                                            K(effective_tenant_id),
                                            K(lbt()));
@@ -2408,7 +2408,7 @@ void* ObSQLSessionInfo::get_piece_cache(bool need_init) {
                             get_effective_tenant_id())) {
         get_session_allocator().free(piece_cache_);
         piece_cache_ = NULL;
-        LOG_WARN("init piece cache fail");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "init piece cache fail");
       }
     }
   }
@@ -2966,9 +2966,9 @@ int64_t ObSQLSessionInfo::get_xa_end_timeout_seconds() const
     if (NULL != xa_timeout_value) {
       int64_t tmp_val = 0;
       if (OB_SUCCESS != (tmp_ret = xa_timeout_value->get_number().cast_to_int64(tmp_val))) {
-        LOG_WARN("failed to get xa timeout", K(tmp_ret), K(tmp_val));
+        LOG_WARN_RET(tmp_ret, "failed to get xa timeout", K(tmp_ret), K(tmp_val));
       } else if (0 >= tmp_val) {
-        LOG_WARN("invalid xa timeout", K(tmp_val));
+        LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid xa timeout", K(tmp_val));
       } else {
         ret_val = tmp_val;
         LOG_INFO("get xa timeout from user variable", K(ret_val), "session_id", get_sessid());

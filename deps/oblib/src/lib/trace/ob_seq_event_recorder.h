@@ -45,7 +45,7 @@ struct ObSeqEventRecorder
   EventType &add_event(bool &overflow)
   {
     if (0 > next_idx_) {
-      COMMON_LOG(ERROR, "fatal: next_idx illegal", K_(next_idx));
+      COMMON_LOG_RET(ERROR, OB_ERROR, "fatal: next_idx illegal", K_(next_idx));
       dropped_events_++;
       overflow = true;
       return events_[EVENT_COUNT-1];
@@ -63,7 +63,7 @@ struct ObSeqEventRecorder
   EventType &add_event()
   {
     if (0 > next_idx_) {
-      COMMON_LOG(ERROR, "fatal: next_idx illegal", K_(next_idx));
+      COMMON_LOG_RET(ERROR, OB_ERROR, "fatal: next_idx illegal", K_(next_idx));
       dropped_events_++;
       return events_[EVENT_COUNT-1];
     } else if (next_idx_ >= EVENT_COUNT) {  // Avoid the following atomic operations

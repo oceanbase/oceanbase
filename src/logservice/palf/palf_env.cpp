@@ -70,7 +70,7 @@ int PalfEnv::create_palf_env(
 void PalfEnv::destroy_palf_env(PalfEnv *&palf_env)
 {
   MTL_DELETE(PalfEnv, "palf_env", palf_env);
-  PALF_LOG(WARN, "destroy_palf_env success", K(palf_env));
+  PALF_LOG_RET(WARN, OB_SUCCESS, "destroy_palf_env success", K(palf_env));
 }
 
 int PalfEnv::start_()

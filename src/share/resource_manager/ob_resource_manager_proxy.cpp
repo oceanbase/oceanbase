@@ -60,7 +60,7 @@ ObResourceManagerProxy::TransGuard::~TransGuard()
     bool is_commit = (OB_SUCCESS == ret_);
     int trans_ret = trans_.end(is_commit);
     if (OB_SUCCESS != trans_ret) {
-      LOG_WARN("fail commit/rollback trans", K_(ret), K(is_commit), K(trans_ret));
+      LOG_WARN_RET(trans_ret, "fail commit/rollback trans", K_(ret), K(is_commit), K(trans_ret));
     }
     if (OB_SUCCESS == ret_) {
       ret_ = trans_ret;

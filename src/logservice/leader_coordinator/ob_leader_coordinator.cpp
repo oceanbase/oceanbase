@@ -43,7 +43,7 @@ struct AllLsElectionReferenceInfoFactory
     LC_TIME_GUARD(1_s);
     ObArray<LsElectionReferenceInfo> *new_all_ls_election_reference_info = nullptr;
     if (nullptr == (new_all_ls_election_reference_info = (ObArray<LsElectionReferenceInfo>*)mtl_malloc(sizeof(ObArray<LsElectionReferenceInfo>), "Coordinator"))) {
-      COORDINATOR_LOG(ERROR, "alloc memory failed");
+      COORDINATOR_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "alloc memory failed");
     } else {
       new(new_all_ls_election_reference_info) ObArray<LsElectionReferenceInfo>();
     }
@@ -101,7 +101,7 @@ int ObLeaderCoordinator::mtl_start(ObLeaderCoordinator *&p_coordinator)// start 
 void ObLeaderCoordinator::mtl_stop(ObLeaderCoordinator *&p_coordinator)// stop timer task
 {
   if (OB_ISNULL(p_coordinator)) {
-    COORDINATOR_LOG(WARN, "p_coordinator is NULL");
+    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_coordinator is NULL");
   } else {
     p_coordinator->is_running_ = false;
     p_coordinator->refresh_priority_task_handle_.stop();
@@ -112,7 +112,7 @@ void ObLeaderCoordinator::mtl_stop(ObLeaderCoordinator *&p_coordinator)// stop t
 void ObLeaderCoordinator::mtl_wait(ObLeaderCoordinator *&p_coordinator)// wait timer task
 {
   if (OB_ISNULL(p_coordinator)) {
-    COORDINATOR_LOG(WARN, "p_coordinator is NULL");
+    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_coordinator is NULL");
   } else {
     p_coordinator->refresh_priority_task_handle_.wait();
     COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl wait");
@@ -123,7 +123,7 @@ void ObLeaderCoordinator::mtl_destroy(ObLeaderCoordinator *&p_coordinator)// des
 {
   LC_TIME_GUARD(1_s);
   if (OB_ISNULL(p_coordinator)) {
-    COORDINATOR_LOG(WARN, "p_coordinator is NULL");
+    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_coordinator is NULL");
   } else {
     p_coordinator->recovery_detect_timer_.stop_and_wait();
     p_coordinator->failure_detect_timer_.stop_and_wait();

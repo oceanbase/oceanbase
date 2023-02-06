@@ -544,7 +544,7 @@ void ObMySQLRequestUtils::wakeup_easy_request(easy_request_t &ez_req, bool &req_
 void ObMySQLRequestUtils::disconnect(easy_request_t &ez_req)
 {
   if (OB_ISNULL(ez_req.ms)) {
-    SERVER_LOG(WARN, "null req input", KP(ez_req.ms));
+    SERVER_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "null req input", KP(ez_req.ms));
   } else {
     easy_connection_destroy_dispatch(ez_req.ms->c);
   }

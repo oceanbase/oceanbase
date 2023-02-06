@@ -112,7 +112,7 @@ inline void ObSchemaMgrHandle::revert()
         && ref_timestamp_ > 0
         && ObClockGenerator::getClock() - ref_timestamp_ >= REF_TIME_THRESHOLD) {
       ObSchemaMgr *&schema_mgr = schema_mgr_item_->schema_mgr_;
-      LOG_WARN("long time to hold one guard", K(schema_mgr),
+      LOG_WARN_RET(OB_SUCCESS, "long time to hold one guard", K(schema_mgr),
                "tenant_id", schema_mgr->get_tenant_id(),
                "version", schema_mgr->get_schema_version(),
                "cur_timestamp", ObTimeUtility::current_time(),

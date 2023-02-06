@@ -111,7 +111,7 @@ bool ObUnitManager::ObUnitLoadOrder::operator()(const ObUnitLoad &left,
   if (OB_SUCCESS != ret_) {
   } else if (!left.is_valid() || !right.is_valid()) {
     ret_ = OB_INVALID_ARGUMENT;
-    RS_LOG(WARN, "invalid argument", K(left), K(right), K_(ret));
+    RS_LOG_RET(WARN, ret_, "invalid argument", K(left), K(right), K_(ret));
   } else if (OB_SUCCESS != (ret_ = ObResourceUtils::calc_load(left, server_load_, weights_, weights_count_, left_load))) {
   } else if (OB_SUCCESS != (ret_ = ObResourceUtils::calc_load(right, server_load_, weights_, weights_count_, right_load))) {
   } else {
@@ -335,7 +335,7 @@ bool ObUnitManager::ObServerLoadOrder::operator()(const ObServerLoad *left,
   } else if (OB_ISNULL(left) || OB_ISNULL(right)
              || !left->is_valid() || !right->is_valid()) {
     ret_ = OB_INVALID_ARGUMENT;
-    RS_LOG(WARN, "invalid argument", K(left), K(right), K_(ret));
+    RS_LOG_RET(WARN, ret_, "invalid argument", K(left), K(right), K_(ret));
   } else if (OB_SUCCESS != (ret_ = left->get_load(weights_, weights_count_, left_load))) {
   } else if (OB_SUCCESS != (ret_ = right->get_load(weights_, weights_count_, right_load))) {
   } else {
@@ -423,7 +423,7 @@ void ObUnitManager::dump()
     common::ObArray<uint64_t> *ptr = iter5->second;
     ObAddr server = iter5->first;
     if (OB_ISNULL(ptr)) {
-      LOG_WARN("DUMP get invalid unit info", K(server));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "DUMP get invalid unit info", K(server));
     } else {
       LOG_INFO("DUMP SERVER_MIGRATE_UNIT_MAP", K(server), K(*ptr));
     }

@@ -207,6 +207,8 @@ int ObTenantChecker::check_garbage_tenant_(bool &passed)
           LOG_INFO("tenant is in restore", KPC(tenant_schema));
         } else {
           LOG_ERROR("tenant maybe create failed", K(tenant_id));
+          LOG_DBA_WARN(OB_ERR_ROOT_INSPECTION, "msg", "create tenant may fail",
+                       K(tenant_id), "tenant_name", tenant_schema->get_tenant_name());
           ROOTSERVICE_EVENT_ADD("inspector", "tenant_checker",
                                 "info", "tenant maybe create failed",
                                 "tenant_id", tenant_id,
@@ -602,7 +604,7 @@ ObAsyncTask *ObInspector::deep_copy(char *buf, const int64_t buf_size) const
 {
   ObInspector *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
     task = new(buf) ObInspector(rs_);
   }
@@ -644,7 +646,7 @@ ObAsyncTask *ObPurgeRecyclebinTask::deep_copy(char *buf, const int64_t buf_size)
 {
   ObPurgeRecyclebinTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
     task = new(buf) ObPurgeRecyclebinTask(root_service_);
   }
@@ -1013,7 +1015,7 @@ int ObRootInspection::check_sys_param_(const uint64_t tenant_id)
   } else if (GCONF.in_upgrade_mode()) {
     LOG_WARN("check sys_variable failed", KR(ret));
   } else {
-    LOG_ERROR("check sys_variable failed", KR(ret));
+    LOG_DBA_ERROR(OB_ERR_ROOT_INSPECTION, "msg", "system variables are unmatched", KR(ret));
   }
   return ret;
 }
@@ -1334,6 +1336,7 @@ int ObRootInspection::check_sys_table_schemas_(
     LOG_WARN("check sys table schema failed", KR(ret), K(tenant_id));
   } else {
     LOG_ERROR("check sys table schema failed", KR(ret), K(tenant_id));
+    LOG_DBA_ERROR(OB_ERR_ROOT_INSPECTION, "msg", "inner tables are unmatched", KR(ret), K(tenant_id));
   }
   return ret;
 }

@@ -1039,7 +1039,7 @@ bool ObLogHandler::is_replay_enabled() const
   if (IS_NOT_INIT) {
   } else if (FALSE_IT(id = id_)) {
   } else if (OB_SUCCESS != (tmp_ret = replay_service_->is_enabled(id, bool_ret))) {
-    CLOG_LOG(WARN, "check replay service is enabled failed", K(tmp_ret), K(id));
+    CLOG_LOG_RET(WARN, tmp_ret, "check replay service is enabled failed", K(tmp_ret), K(id));
   } else {
     // do nothing
   }

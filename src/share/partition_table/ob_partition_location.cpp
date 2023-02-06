@@ -157,7 +157,7 @@ bool ObPartitionLocation::operator==(const ObPartitionLocation &other) const
   bool equal = true;
   if (!is_valid() || !other.is_valid()) {
     equal = false;
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (replica_locations_.count() != other.replica_locations_.count()) {
     equal = false;
   } else {
@@ -476,7 +476,7 @@ bool ObPartitionReplicaLocation::operator==(const ObPartitionReplicaLocation &ot
   bool equal = true;
   if (!is_valid() || !other.is_valid()) {
     equal = false;
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (replica_location_ != other.replica_location_) {
     equal = false;
   } else {

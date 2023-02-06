@@ -215,7 +215,7 @@ ObExprEqualSet *ObEqualAnalysis::new_equal_set()
   if (NULL != (ptr = equal_set_alloc_.alloc(sizeof(ObExprEqualSet)))) {
     equal_set = new(ptr) ObExprEqualSet();
     if (!equal_sets_.add_last(equal_set)) {
-      LOG_WARN("add equal set failed");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "add equal set failed");
       equal_set->~ObEqualSet();
       equal_set_alloc_.free(equal_set);
       equal_set = NULL;

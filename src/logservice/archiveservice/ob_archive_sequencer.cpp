@@ -134,7 +134,7 @@ void ObArchiveSequencer::run1()
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "ObArchiveSequencer not init");
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "ObArchiveSequencer not init");
   } else {
     while (! has_set_stop()) {
       int64_t begin_tstamp = ObTimeUtility::current_time();

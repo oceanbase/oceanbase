@@ -249,10 +249,10 @@ int ObBasicSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
 void ObBasicSessionInfo::destroy()
 {
   if (magic_num_ != 0x13572468) {
-    LOG_ERROR("ObBasicSessionInfo may be double free!!!", K(magic_num_));
+    LOG_ERROR_RET(OB_ERROR, "ObBasicSessionInfo may be double free!!!", K(magic_num_));
   }
   if (OB_NOT_NULL(tx_desc_)) {
-    LOG_ERROR("tx_desc != NULL", KPC(this), KPC_(tx_desc));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tx_desc != NULL", KPC(this), KPC_(tx_desc));
   }
   tx_desc_ = NULL;
   tx_result_.reset();
@@ -5028,7 +5028,7 @@ bool ObBasicSessionInfo::is_isolation_serializable() const
 void ObBasicSessionInfo::set_tx_isolation(ObTxIsolationLevel isolation)
 {
   if (isolation == ObTxIsolationLevel::INVALID) {
-    LOG_ERROR("set invalid tx isolation", K(isolation), KPC(this));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "set invalid tx isolation", K(isolation), KPC(this));
   }
   next_tx_isolation_ = isolation;
   trans_spec_status_ = TRANS_SPEC_SET;
@@ -6062,20 +6062,20 @@ observer::ObSMConnection *ObBasicSessionInfo::get_sm_connection()
   if (rpc::ObRequest::TRANSPORT_PROTO_EASY == sock_desc.type_) {
     easy_connection_t* easy_conn = nullptr;
     if (OB_ISNULL((easy_conn = static_cast<easy_connection_t *>(sock_desc.sock_desc_)))) {
-      LOG_ERROR("easy sock_desc is null");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "easy sock_desc is null");
     } else {
       conn = static_cast<observer::ObSMConnection*>(easy_conn->user_data);
     }
   } else if (rpc::ObRequest::TRANSPORT_PROTO_POC == sock_desc.type_) {
     obmysql::ObSqlSockSession *sess = nullptr;
     if (OB_ISNULL(sess = static_cast<obmysql::ObSqlSockSession *>(sock_desc.sock_desc_))) {
-      LOG_ERROR("sql nio sock_desc is null");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "sql nio sock_desc is null");
     } else {
       conn = &sess->conn_;
     }
   }
     else {
-    LOG_ERROR("invalid sock_desc type", K(sock_desc.type_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid sock_desc type", K(sock_desc.type_));
   }
   return conn;
 }

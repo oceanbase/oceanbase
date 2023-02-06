@@ -98,7 +98,7 @@ void TestLogSlidingWindow::SetUp()
   ObMemAttr attr(tenant_id, ObModIds::OB_TENANT_MUTIL_ALLOCATOR);
   void *buf = ob_malloc(sizeof(common::ObTenantMutilAllocator), attr);
   if (NULL == buf) {
-    CLOG_LOG(WARN, "alloc memory failed");
+    CLOG_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "alloc memory failed");
     OB_ASSERT(FALSE);
   }
   alloc_mgr_ = new (buf) common::ObTenantMutilAllocator(tenant_id);

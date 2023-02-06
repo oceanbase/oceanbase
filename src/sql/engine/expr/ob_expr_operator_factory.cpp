@@ -396,7 +396,7 @@ static AllocFunc OP_ALLOC_ORCL[T_MAX_OP];
     [&]() {                                         \
       OpClass op(alloc);                            \
       if (OB_UNLIKELY(i >= EXPR_OP_NUM)) {          \
-        LOG_ERROR("out of the max expr");           \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");           \
       } else {                                      \
         NAME_TYPES[i].name_ = op.get_name();        \
         NAME_TYPES[i].type_ = op.get_type();        \
@@ -414,9 +414,9 @@ static AllocFunc OP_ALLOC_ORCL[T_MAX_OP];
   do {                                                                 \
     [&]() {                                                            \
       if (OB_UNLIKELY((idx_mysql) >= EXPR_OP_NUM)) {                   \
-        LOG_ERROR("out of the max expr");                              \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");                              \
       } else if (OB_ISNULL(OP_ALLOC[OriOpType])) {                     \
-        LOG_ERROR("OriOp is not registered yet", K(OriOpType), K(NewOpType)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "OriOp is not registered yet", K(OriOpType), K(NewOpType)); \
       } else {                                                         \
         NAME_TYPES[(idx_mysql)].name_ = NewOpName;                     \
         NAME_TYPES[(idx_mysql)].type_ = NewOpType;                     \
@@ -431,7 +431,7 @@ static AllocFunc OP_ALLOC_ORCL[T_MAX_OP];
     [&]() {                                         \
       OpClass op(alloc);                            \
       if (OB_UNLIKELY(j >= EXPR_OP_NUM)) {          \
-        LOG_ERROR("out of the max expr");           \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");           \
       } else {                                      \
         NAME_TYPES_ORCL[j].name_ = op.get_name();   \
         NAME_TYPES_ORCL[j].type_ = op.get_type();   \
@@ -447,9 +447,9 @@ static AllocFunc OP_ALLOC_ORCL[T_MAX_OP];
   do {                                                                     \
     [&]() {                                                                \
       if (OB_UNLIKELY((idx_oracle) >= EXPR_OP_NUM)) {                      \
-        LOG_ERROR("out of the max expr");                                  \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");                                  \
       } else if (OB_ISNULL(OP_ALLOC_ORCL[OriOpType])) {                    \
-        LOG_ERROR("OriOp is not registered yet", K(OriOpType), K(NewOpType)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "OriOp is not registered yet", K(OriOpType), K(NewOpType)); \
       } else {                                                             \
         NAME_TYPES_ORCL[(idx_oracle)].name_ = NewOpName;                   \
         NAME_TYPES_ORCL[(idx_oracle)].type_ = NewOpType;                   \

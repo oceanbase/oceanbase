@@ -119,7 +119,7 @@ int ObServerLogBlockMgr::init(const char *log_disk_base_path)
 
 void ObServerLogBlockMgr::destroy()
 {
-  CLOG_LOG(WARN, "ObServerLogBlockMgr  destroy", KPC(this));
+  CLOG_LOG_RET(WARN, OB_SUCCESS, "ObServerLogBlockMgr  destroy", KPC(this));
   is_inited_ = false;
   min_log_disk_size_for_all_tenants_ = 0;
   max_block_id_ = 0;

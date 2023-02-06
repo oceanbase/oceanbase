@@ -409,18 +409,18 @@ ObPartLocCalcNode *ObPartLocCalcNode::create_part_calc_node(
       break;
     }
     default: {
-      LOG_WARN("Invalid ObPartLocCalcNode type", K(type));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "Invalid ObPartLocCalcNode type", K(type));
       break;
     }
   }
   if (OB_UNLIKELY(NULL == ptr)
       || OB_UNLIKELY(NULL == ret_node)) {
-    LOG_WARN("Failed to allocate ObPartLocCalcNode", K(type));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "Failed to allocate ObPartLocCalcNode", K(type));
   } else if (OB_SUCCESS != calc_nodes.push_back(ret_node)) {
     ret_node->~ObPartLocCalcNode();
     allocator.free(ret_node);
     ret_node = NULL;
-    LOG_WARN("Store ObPartLocCalcNode failed");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Store ObPartLocCalcNode failed");
   } else { }//do nothing
 
   return ret_node;

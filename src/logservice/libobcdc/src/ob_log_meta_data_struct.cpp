@@ -471,7 +471,7 @@ void ObDictTenantInfoGuard::revert_tenant()
 {
   int revert_ret = GLOGMETADATASERVICE.get_baseline_loader().revert_tenant(tenant_info_);
   if (OB_SUCCESS != revert_ret) {
-    LOG_ERROR("revert ObLogTenant fail", K(revert_ret), KPC(tenant_info_));
+    LOG_ERROR_RET(revert_ret, "revert ObLogTenant fail", K(revert_ret), KPC(tenant_info_));
   } else {
     tenant_info_ = NULL;
   }

@@ -2817,11 +2817,11 @@ void ObXAService::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc)
 {
   const ObTransID &tx_id = tx_desc->tid();
   if (OB_UNLIKELY(!is_inited_)) {
-    TRANS_LOG(WARN, "xa service not inited");
+    TRANS_LOG_RET(WARN, OB_NOT_INIT, "xa service not inited");
   } else {
     ObXACtx *xa_ctx = tx_desc->get_xa_ctx();
     if (NULL == xa_ctx) {
-      TRANS_LOG(WARN, "xa ctx is null", K(tx_id), K(xid));
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "xa ctx is null", K(tx_id), K(xid));
     } else {
       xa_ctx->dec_xa_ref_count();
       if (0 == xa_ctx->get_xa_ref_count()) {

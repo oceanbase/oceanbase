@@ -1313,7 +1313,7 @@ bool ObBackupProviderItemCompare::operator()(const ObBackupProviderItem *left, c
   bool bret = false;
   if (OB_ISNULL(left) || OB_ISNULL(right)) {
     result_code_ = OB_INVALID_DATA;
-    LOG_WARN("provider item should not be null", K_(result_code), KP(left), KP(right));
+    LOG_WARN_RET(result_code_, "provider item should not be null", K_(result_code), KP(left), KP(right));
   } else if (backup_data_type_.is_minor_backup()) {  // minor sstable is sorted by log ts range end log ts
     if (left->get_tablet_id().id() < right->get_tablet_id().id()) {
       bret = true;

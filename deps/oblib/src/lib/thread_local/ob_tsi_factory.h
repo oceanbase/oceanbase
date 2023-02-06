@@ -362,7 +362,7 @@ public:
       }
       if (nullptr == instance_buffer || nullptr == node_buffer) {
         if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
-          LIB_LOG(WARN, "new instance fail", "type", typeid(T).name());
+          LIB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "new instance fail", "type", typeid(T).name());
         }
         ::usleep(100L * 1000L);
       } else {
@@ -396,7 +396,7 @@ public:
   TSIFactory() : key_(INVALID_THREAD_KEY)
   {
     if (0 != pthread_key_create(&key_, destroy_thread_data_)) {
-      _LIB_LOG(WARN, "pthread_key_create fail errno=%u", errno);
+      _LIB_LOG_RET(WARN, OB_ERROR, "pthread_key_create fail errno=%u", errno);
     }
   }
   ~TSIFactory()
@@ -405,7 +405,7 @@ public:
       void *ptr = pthread_getspecific(key_);
       destroy_thread_data_(ptr);
       if (0 != pthread_key_delete(key_)) {
-        _LIB_LOG(WARN, "pthread_key_delete fail errno=%u", errno);
+        _LIB_LOG_RET(WARN, OB_ERROR, "pthread_key_delete fail errno=%u", errno);
       } else {
         key_ = INVALID_THREAD_KEY;
       }
@@ -427,7 +427,7 @@ public:
         //}
         if (NULL != tsi
             && 0 != pthread_setspecific(key_, tsi)) {
-          _LIB_LOG(WARN, "pthread_setspecific fail errno=%u key=%d", errno, key_);
+          _LIB_LOG_RET(WARN, OB_ERROR, "pthread_setspecific fail errno=%u key=%d", errno, key_);
           delete tsi;
           tsi = NULL;
         }

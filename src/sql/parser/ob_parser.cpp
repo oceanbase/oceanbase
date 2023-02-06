@@ -493,7 +493,7 @@ ObParser::State ObParser::transform_normal(
     } break;
     default: {
       is_not_pl = true;
-      LOG_WARN("unexpecte state", K(state));
+      LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "unexpecte state", K(state));
     } break;
   }
   return state;

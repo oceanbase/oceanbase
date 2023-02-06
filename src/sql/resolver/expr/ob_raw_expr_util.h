@@ -92,7 +92,7 @@ public:
   void free(T *data)
   {
     if (NULL == data || NULL == allocator_) {
-      SQL_LOG(WARN, "invalid param null pointer", KP(data), KP(allocator_));
+      SQL_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid param null pointer", KP(data), KP(allocator_));
     } else {
       data->~T();
       allocator_->free(data);

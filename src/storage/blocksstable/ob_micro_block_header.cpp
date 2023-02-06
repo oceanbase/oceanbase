@@ -122,7 +122,7 @@ int ObMicroBlockHeader::check_header_checksum() const
 
   if (0 != checksum) {
     ret = OB_PHYSIC_CHECKSUM_ERROR;
-    LOG_ERROR("record check checksum failed", K(ret), K(*this));
+    LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg","record check checksum failed", K(ret), K(*this));
   }
   return ret;
 }
@@ -139,7 +139,7 @@ int ObMicroBlockHeader::check_payload_checksum(const char *buf, const int64_t le
     const int64_t data_checksum = ob_crc64_sse42(buf, len);
     if (data_checksum != data_checksum_) {
       ret = OB_PHYSIC_CHECKSUM_ERROR;
-      LOG_ERROR("checksum error", K(ret), K(data_checksum_), K(data_checksum));
+      LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg","checksum error", K(ret), K(data_checksum_), K(data_checksum));
     }
   }
   return ret;

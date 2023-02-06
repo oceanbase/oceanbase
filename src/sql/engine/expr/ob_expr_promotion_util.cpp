@@ -33,7 +33,7 @@ struct MyIntegrityChecker3
     for (int tc1 = ObNullTC; tc1 < ObMaxTC; tc1++) {
       for (int tc2 = ObNullTC; tc2 < tc1; tc2++) {
         if (DIV_TYPE_PROMOTION[tc1][tc2] != DIV_TYPE_PROMOTION[tc2][tc1]) {
-          LOG_ERROR("DIV_TYPE_PROMOTION is wrong", "ret", OB_ERR_UNEXPECTED,
+          LOG_ERROR_RET(OB_ERR_UNEXPECTED, "DIV_TYPE_PROMOTION is wrong", "ret", OB_ERR_UNEXPECTED,
                     K(tc1), K(tc2),
                     "tc1 => tc2", DIV_TYPE_PROMOTION[tc1][tc2],
                     "tc2 => tc1", DIV_TYPE_PROMOTION[tc2][tc1]);

@@ -86,7 +86,7 @@ namespace observer
 int ObErrorP::process()
 {
   if (ret_ == OB_SUCCESS) {
-    LOG_ERROR("should not return success in error packet", K(ret_));
+    LOG_ERROR_RET(ret_, "should not return success in error packet", K(ret_));
   }
   return ret_;
 }

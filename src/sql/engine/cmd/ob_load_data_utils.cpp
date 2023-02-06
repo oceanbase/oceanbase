@@ -213,7 +213,7 @@ ObString ObLoadDataUtils::escape_quotation(const ObString &value, ObDataBuffer &
   ObString result;
 
   if (OB_ISNULL(buf)) {
-    LOG_WARN("data buf is not inited");
+    LOG_WARN_RET(OB_NOT_INIT, "data buf is not inited");
   } else {
     //check if escape is needed
     bool need_escape = false;
@@ -242,7 +242,7 @@ ObString ObLoadDataUtils::escape_quotation(const ObString &value, ObDataBuffer &
         escape_sm.shift_by_input(*(src + i));
       }
       if (OB_UNLIKELY(pos >= data_buf.get_capacity())) {
-        LOG_ERROR("data is too long"); //this should never happened, just for protection
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "data is too long"); //this should never happened, just for protection
         result.reset();
       } else {
         result.assign_ptr(buf, static_cast<int32_t>(pos));
@@ -269,7 +269,7 @@ bool ObKMPStateMachine::scan_buf(char *&cur_pos, const char *buf_end)
 {
   bool matched = false;
   if (OB_UNLIKELY(!is_inited_ || NULL == cur_pos)) {
-    LOG_ERROR("ObKmpStateMachine not inited.", K(cur_pos), K(buf_end));
+    LOG_ERROR_RET(OB_NOT_INIT, "ObKmpStateMachine not inited.", K(cur_pos), K(buf_end));
   } else {
     for (;!matched && cur_pos < buf_end; cur_pos++) {
       while (matched_pos_ > 0 && *cur_pos != str_[matched_pos_]) {

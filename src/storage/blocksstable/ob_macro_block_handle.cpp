@@ -271,7 +271,7 @@ void ObMacroBlocksHandle::reset()
 
     for (int64_t i = 0; i < macro_id_list_.count(); ++i) {
       if (OB_SUCCESS != (tmp_ret = OB_SERVER_BLOCK_MGR.dec_ref(macro_id_list_.at(i)))) {
-        LOG_ERROR("failed to dec macro block ref cnt", K(tmp_ret), "macro_id", macro_id_list_.at(i));
+        LOG_ERROR_RET(tmp_ret, "failed to dec macro block ref cnt", K(tmp_ret), "macro_id", macro_id_list_.at(i));
       }
     }
   }

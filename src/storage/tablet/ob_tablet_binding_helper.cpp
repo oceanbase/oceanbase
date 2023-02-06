@@ -197,11 +197,11 @@ void ObTabletBindingHelper::rollback_lock_tablet_binding_for_create(
         // do nothing
       } else if (ObTabletCreateDeleteHelper::is_pure_hidden_tablets(info)) {
         if (OB_TMP_FAIL(helper.unlock_tablet_binding(info.data_tablet_id_))) {
-          LOG_ERROR("failed to lock orig tablet binding", K(tmp_ret));
+          LOG_ERROR_RET(tmp_ret, "failed to lock orig tablet binding", K(tmp_ret));
         }
       } else if (ObTabletCreateDeleteHelper::is_pure_aux_tablets(info)) {
         if (has_lob_tablets(arg, info) && OB_TMP_FAIL(helper.unlock_tablet_binding(info.data_tablet_id_))) {
-          LOG_ERROR("failed to lock tablet binding", K(tmp_ret));
+          LOG_ERROR_RET(tmp_ret, "failed to lock tablet binding", K(tmp_ret));
         }
       }
     }

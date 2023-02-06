@@ -77,13 +77,13 @@ void ObSqlEndTransCb::callback(int cb_param, const transaction::ObTransID &trans
 //cb_param : the error code from SQL engine
 void ObSqlEndTransCb::callback(int cb_param)
 {
-  int tmp_ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   uint32_t sessid = 0;
   uint64_t proxy_sessid = 0;
   sql::ObSQLSessionInfo *session_info = sess_info_;
   if (OB_ISNULL(session_info)) {
-    tmp_ret = OB_ERR_NULL_VALUE;
-    SERVER_LOG(ERROR, "session info is NULL", "ret", tmp_ret, K(session_info));
+    ret = OB_ERR_NULL_VALUE;
+    SERVER_LOG(ERROR, "session info is NULL", "ret", ret, K(session_info));
   } else {
     sql::ObSQLSessionInfo::LockGuard lock_guard(session_info->get_query_lock());
     bool reuse_tx = OB_SUCCESS == cb_param
@@ -94,17 +94,19 @@ void ObSqlEndTransCb::callback(int cb_param)
     proxy_sessid = session_info->get_proxy_sessid();
     // 临界区内检查这些变量，预防并发callback造成的不良影响
     if (OB_UNLIKELY(!pkt_param_.is_valid())) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(ERROR, "pkt_param_ is invalid", K(tmp_ret), K(pkt_param_));
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(ERROR, "pkt_param_ is invalid", K(ret), K(pkt_param_));
     } else if (FALSE_IT(ObCurTraceId::set(pkt_param_.get_trace_id()))) { // 尽早设置trace_id
       //do nothing
     } else if (!packet_sender_.is_conn_valid()) {
       //network problem, callback will still be called
-      tmp_ret = OB_CONNECT_ERROR;
-      SERVER_LOG(INFO, "connection is invalid", "ret", tmp_ret);
+      ret = OB_CONNECT_ERROR;
+      SERVER_LOG(INFO, "connection is invalid", "ret", ret);
     } else if (OB_SUCCESS != packet_sender_.alloc_ezbuf()) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc easy buf");
     } else if (OB_SUCCESS != packet_sender_.update_last_pkt_pos()) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to update last packet pos");
     } else {
       session_info->set_show_warnings_buf(cb_param);
@@ -116,14 +118,14 @@ void ObSqlEndTransCb::callback(int cb_param)
         ok_param.lii_ = pkt_param_.get_last_insert_id_to_client();
         ok_param.warnings_count_ = static_cast<uint16_t>(session_info->get_warnings_buffer().get_readable_warning_count());
         ok_param.is_partition_hit_ = pkt_param_.get_is_partition_hit();
-        if (OB_SUCCESS != (tmp_ret = packet_sender_.send_ok_packet(*session_info, ok_param))) {
-          SERVER_LOG(WARN, "encode ok packet fail", K(ok_param), "ret", tmp_ret);
+        if (OB_SUCCESS != (ret = packet_sender_.send_ok_packet(*session_info, ok_param))) {
+          SERVER_LOG(WARN, "encode ok packet fail", K(ok_param), "ret", ret);
         }
       } else {
         //error + possible ok packet
         const char *error_msg = session_info->get_warnings_buffer().get_err_msg();
-        if (OB_SUCCESS != (tmp_ret = packet_sender_.send_error_packet(cb_param, error_msg, pkt_param_.get_is_partition_hit()))) {
-          SERVER_LOG(WARN, "encode error packet fail", "ret", tmp_ret);
+        if (OB_SUCCESS != (ret = packet_sender_.send_error_packet(cb_param, error_msg, pkt_param_.get_is_partition_hit()))) {
+          SERVER_LOG(WARN, "encode error packet fail", "ret", ret);
         }
       }
       //succ or not reset warning buffer
@@ -150,7 +152,7 @@ void ObSqlEndTransCb::callback(int cb_param)
       }
     }
 
-    if (OB_SUCCESS == tmp_ret) {
+    if (OB_SUCCESS == ret) {
       if (need_disconnect_) {
         packet_sender_.force_disconnect();
       }
@@ -174,7 +176,7 @@ void ObSqlEndTransCb::callback(int cb_param)
     MEM_BARRIER();
     int sret = packet_sender_.revert_session(session_info);
     if (OB_SUCCESS != sret) {
-      SERVER_LOG(ERROR, "revert session fail", K(sessid), K(proxy_sessid), K(sret), "ret", tmp_ret, K(lbt()));
+      SERVER_LOG_RET(ERROR, sret, "revert session fail", K(sessid), K(proxy_sessid), K(sret), "ret", ret, K(lbt()));
     }
   }
 }

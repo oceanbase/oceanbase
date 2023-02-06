@@ -93,7 +93,7 @@ void ObAsyncCB<PC, AsyncRpcProxy>::on_invalid()
   int tmp_ret = common::OB_SUCCESS;
   AsyncCB::rcode_.rcode_ = common::OB_RPC_PACKET_INVALID;
   if (common::OB_SUCCESS != (tmp_ret = proxy_.receive_response())) {
-    RPC_LOG(WARN, "proxy_ receive_response failed", K(tmp_ret));
+    RPC_LOG_RET(WARN, tmp_ret, "proxy_ receive_response failed", K(tmp_ret));
   }
 }
 

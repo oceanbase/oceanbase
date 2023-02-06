@@ -457,10 +457,25 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       (void)unregister_timeout_task_();
       update_trans_2pc_timeout_();
       timeout_task_.set_running(true);
-      if (ObTxState::INIT == exec_info_.state_ &&
-          trans_expired_time_ > 0 && trans_expired_time_ < INT64_MAX &&
-          now >= (trans_expired_time_ + OB_TRANS_WARN_USE_TIME)) {
-        TRANS_LOG(ERROR, "transaction use too much time", KPC(this));
+
+      if (trans_expired_time_ > 0 && trans_expired_time_ < INT64_MAX) {
+        if (part_trans_action_ == ObPartTransAction::COMMIT || part_trans_action_ == ObPartTransAction::ABORT) {
+          if (now >= trans_expired_time_ + OB_TRANS_WARN_USE_TIME) {
+            tmp_ret = OB_TRANS_COMMIT_TOO_MUCH_TIME;
+            LOG_DBA_ERROR(OB_TRANS_COMMIT_TOO_MUCH_TIME,
+                    "msg", "transaction commit cost too much time",
+                    "ret", tmp_ret,
+                    K(*this));
+          }
+        } else {
+          if (now >= ctx_create_time_ + OB_TRANS_WARN_USE_TIME) {
+            tmp_ret = OB_TRANS_LIVE_TOO_MUCH_TIME;
+            LOG_DBA_WARN(OB_TRANS_LIVE_TOO_MUCH_TIME,
+                    "msg", "transaction live cost too much time without commit or abort",
+                    "ret", tmp_ret,
+                    K(*this));
+          }
+        }
       }
       if (exec_info_.is_dup_tx_) {
         if (ObTxState::REDO_COMPLETE == exec_info_.state_) {
@@ -2038,7 +2053,7 @@ void ObPartTransCtx::check_and_register_timeout_task_()
     const int64_t timeout_left = is_committing_() ? trans_2pc_timeout_
         : MIN(MAX_TRANS_2PC_TIMEOUT_US, MAX(trans_expired_time_ - ObClockGenerator::getClock(), 1000 * 1000));
     if (OB_SUCCESS != (tmp_ret = register_timeout_task_(timeout_left))) {
-      TRANS_LOG(WARN, "register timeout task failed", KR(tmp_ret), KPC(this));
+      TRANS_LOG_RET(WARN, tmp_ret, "register timeout task failed", KR(tmp_ret), KPC(this));
     }
   }
 }
@@ -4832,7 +4847,7 @@ const SCN ObPartTransCtx::get_min_undecided_log_ts() const
   if (!busy_cbs_.is_empty()) {
     const ObTxLogCb *log_cb = busy_cbs_.get_first();
     if (OB_ISNULL(log_cb)) {
-      TRANS_LOG(ERROR, "unexpected null ptr", K(*this));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected null ptr", K(*this));
     } else {
       log_ts = log_cb->get_log_ts();
     }
@@ -5370,7 +5385,7 @@ int ObPartTransCtx::set_scheduler_(const common::ObAddr &scheduler)
 const common::ObAddr &ObPartTransCtx::get_scheduler() const
 {
   if (exec_info_.data_complete_ && !exec_info_.scheduler_.is_valid()) {
-    TRANS_LOG(ERROR, "invalid scheduler addr", K(trans_id_));
+    TRANS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid scheduler addr", K(trans_id_));
   }
   return exec_info_.scheduler_;
 }

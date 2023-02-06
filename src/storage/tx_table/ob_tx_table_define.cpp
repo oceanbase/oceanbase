@@ -395,7 +395,7 @@ bool ObCommitVersionsArray::is_valid()
         array_.at(i).start_scn_ > array_.at(i + 1).start_scn_ ||
         array_.at(i).start_scn_ > array_.at(i).commit_version_) {
       bool_ret = false;
-      STORAGE_LOG(ERROR, "this commit version array is invalid", K(array_.at(i)),
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "this commit version array is invalid", K(array_.at(i)),
                   K(array_.at(i + 1)));
     }
   }

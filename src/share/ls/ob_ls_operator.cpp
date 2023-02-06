@@ -499,7 +499,7 @@ ObLSOperationType ObLSAttrOperator::get_ls_operation_by_status(const ObLSStatus 
   ObLSOperationType type_ret = OB_LS_OP_INVALID_TYPE;
   if (OB_UNLIKELY(!is_valid_status_in_ls(ls_status))) {
     type_ret = OB_LS_OP_INVALID_TYPE;
-    LOG_WARN("status is invalid", K(ls_status));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "status is invalid", K(ls_status));
   } else if (OB_LS_CREATING == ls_status) {
     type_ret = OB_LS_OP_CREATE_PRE;
   } else if (OB_LS_NORMAL == ls_status) {
@@ -512,7 +512,7 @@ ObLSOperationType ObLSAttrOperator::get_ls_operation_by_status(const ObLSStatus 
     type_ret = OB_LS_OP_DROP_PRE;
   } else {
     type_ret = OB_LS_OP_INVALID_TYPE;
-    LOG_WARN("status is invalid", K(ls_status));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "status is invalid", K(ls_status));
   }
   return type_ret;
 }

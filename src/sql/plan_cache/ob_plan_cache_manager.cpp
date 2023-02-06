@@ -71,7 +71,7 @@ void ObPlanCacheManager::destroy()
          it != pcm_.end();
          it++) {
       if (OB_ISNULL(it->second)) {
-        BACKTRACE(ERROR, true, "plan_cache is null");
+        BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "plan_cache is null");
       } else {
         it->second->destroy();
       }

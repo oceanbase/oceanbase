@@ -370,7 +370,7 @@ bool ObLogWindowFunction::is_block_op() const
   ObWinFunRawExpr *win_expr = NULL;
   for (int64_t i = 0; i < win_exprs_.count(); ++i) {
     if (OB_ISNULL(win_expr = win_exprs_.at(i))) {
-      LOG_ERROR("win expr is null");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "win expr is null");
     } else if (win_expr->get_partition_exprs().count() > 0 ||
         win_expr->get_upper().type_ != BoundType::BOUND_UNBOUNDED ||
         win_expr->get_lower().type_ != BoundType::BOUND_UNBOUNDED ) {

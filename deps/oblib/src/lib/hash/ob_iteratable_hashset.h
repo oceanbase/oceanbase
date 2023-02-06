@@ -142,7 +142,7 @@ public:
          it != other.end();
          ++it) {
       if (OB_SUCCESS != (tmp_ret = set_refactored(*it))) {
-        _OB_LOG(ERROR, "fail set value. tmp_ret=%d", tmp_ret);
+        _OB_LOG_RET(ERROR, tmp_ret, "fail set value. tmp_ret=%d", tmp_ret);
         break;
       }
     }

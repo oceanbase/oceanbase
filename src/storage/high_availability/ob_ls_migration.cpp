@@ -332,7 +332,7 @@ bool ObMigrationDagNet::operator == (const ObIDagNet &other) const
     const ObMigrationDagNet &other_migration_dag = static_cast<const ObMigrationDagNet &>(other);
     if (OB_ISNULL(other_migration_dag.ctx_) || OB_ISNULL(ctx_)) {
       is_same = false;
-      LOG_ERROR("migration ctx is NULL", KPC(ctx_), KPC(other_migration_dag.ctx_));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx is NULL", KPC(ctx_), KPC(other_migration_dag.ctx_));
     } else if (ctx_->arg_.ls_id_ != other_migration_dag.ctx_->arg_.ls_id_) {
       is_same = false;
     }
@@ -344,7 +344,7 @@ int64_t ObMigrationDagNet::hash() const
 {
   int64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
-    LOG_ERROR("migration ctx is NULL", KPC(ctx_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx is NULL", KPC(ctx_));
   } else {
     hash_value = common::murmurhash(&ctx_->arg_.ls_id_, sizeof(ctx_->arg_.ls_id_), hash_value);
   }
@@ -466,7 +466,7 @@ bool ObInitialMigrationDag::operator == (const ObIDag &other) const
       is_same = false;
     } else if (OB_ISNULL(ctx) || OB_ISNULL(other_dag.get_migration_ctx())) {
       is_same = false;
-      LOG_ERROR("migration ctx should not be NULL", KP(ctx), KP(other_dag.get_migration_ctx()));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx should not be NULL", KP(ctx), KP(other_dag.get_migration_ctx()));
     } else if (NULL != ctx && NULL != other_dag.get_migration_ctx()) {
       if (ctx->arg_.ls_id_ != other_dag.get_migration_ctx()->arg_.ls_id_) {
         is_same = false;
@@ -482,7 +482,7 @@ int64_t ObInitialMigrationDag::hash() const
   ObMigrationCtx * ctx = get_migration_ctx();
 
   if (OB_ISNULL(ctx)) {
-    LOG_ERROR("migration ctx should not be NULL", KP(ctx));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx should not be NULL", KP(ctx));
   } else {
     hash_value = common::murmurhash(
         &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);

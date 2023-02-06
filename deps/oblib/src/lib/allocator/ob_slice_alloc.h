@@ -319,7 +319,7 @@ public:
       // slice_size is larger than block_size
       tmp_ret = OB_ERR_UNEXPECTED;
       if (REACH_TIME_INTERVAL(100 * 1000)) {
-        LIB_LOG(ERROR, "slice size is larger than block size, unexpected !", K(tmp_ret), K(isize_), K(slice_limit_));
+        LIB_LOG_RET(ERROR, tmp_ret, "slice size is larger than block size, unexpected !", K(tmp_ret), K(isize_), K(slice_limit_));
       }
     }
     while(NULL == ret && OB_SUCCESS == tmp_ret) {
@@ -370,7 +370,7 @@ public:
       abort_unless(bsize_ != 0);
 #else
       if (this != blk->get_slice_alloc()) {
-        LIB_LOG(ERROR, "blk is freed or alloced by different slice_alloc", K(this), K(blk->get_slice_alloc()));
+        LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "blk is freed or alloced by different slice_alloc", K(this), K(blk->get_slice_alloc()));
         return;
       }
 #endif

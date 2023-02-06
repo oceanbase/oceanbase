@@ -143,19 +143,19 @@ bool ObDataDictMetaInfoHeader::check_integrity(const char *data,
   const int64_t item_size = dummy_item.get_serialize_size();
   if (DATADICT_METAINFO_HEADER_MAGIC != magic_) {
     bret = false;
-    DDLOG(WARN, "error magic number of datadict metainfo", KPC(this));
+    DDLOG_RET(WARN, OB_ERR_UNEXPECTED, "error magic number of datadict metainfo", KPC(this));
   } else if (OB_ISNULL(data)) {
     bret = false;
-    DDLOG(WARN, "data is null when check integrity", K(data), K(data_size_), KPC(this));
+    DDLOG_RET(WARN, OB_ERR_UNEXPECTED, "data is null when check integrity", K(data), K(data_size_), KPC(this));
   } else if (data_size < data_size_) {
     bret = false;
-    DDLOG(WARN, "the size of buffer being deserialized is smaller than the data size",
+    DDLOG_RET(WARN, OB_ERR_UNEXPECTED, "the size of buffer being deserialized is smaller than the data size",
         K(data_size), K(data_size_), KPC(this));
   } else {
     const int64_t data_crc_code = ob_crc64(data, data_size_);
     if (data_crc_code != checksum_) {
       bret = false;
-      DDLOG(WARN, "check sum mismatch", K(data), K(data_size_), K(data_crc_code), KPC(this));
+      DDLOG_RET(WARN, OB_ERR_UNEXPECTED, "check sum mismatch", K(data), K(data_size_), K(data_crc_code), KPC(this));
     } else {
       // succ
     }
@@ -249,14 +249,14 @@ bool ObDataDictMetaInfo::check_integrity() const
   const int64_t item_arr_count = item_arr_.count();
   if (item_arr_count != header_.get_item_count()) {
     bret = false;
-    DDLOG(WARN, "item count in array and header is not equal", K(item_arr_count), K(header_));
+    DDLOG_RET(WARN, OB_ERR_UNEXPECTED, "item count in array and header is not equal", K(item_arr_count), K(header_));
   } else {
     const ObDataDictMetaInfoItem &max_scn_item = item_arr_.at(0);
     const ObDataDictMetaInfoItem &min_scn_item = item_arr_.at(item_arr_count-1);
     if (max_scn_item.snapshot_scn_ != header_.get_max_snapshot_scn() &&
         min_scn_item.snapshot_scn_ != header_.get_min_snapshot_scn()) {
       bret = false;
-      DDLOG(WARN, "min scn and max scn record in header is inconsistent with item_arr", K(header_),
+      DDLOG_RET(WARN, OB_ERR_UNEXPECTED, "min scn and max scn record in header is inconsistent with item_arr", K(header_),
           K(max_scn_item), K(min_scn_item));
     }
   }

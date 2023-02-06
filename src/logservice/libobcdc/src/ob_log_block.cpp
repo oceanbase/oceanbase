@@ -70,9 +70,9 @@ void Block::fill(const offset_t offset, IObLogBufTask *task)
 
   if (NULL == task || offset < 0) {
     tmp_ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR( "invalid argument", "ret", tmp_ret, KP(task), K(offset));
+    LOG_ERROR_RET(tmp_ret, "invalid argument", "ret", tmp_ret, KP(task), K(offset));
   } else if (OB_SUCCESS != (tmp_ret = task->fill_buffer(buf_, offset))) {
-    LOG_ERROR( "fill_buffer fail", "ret", tmp_ret, KP_(buf), K(offset));
+    LOG_ERROR_RET(tmp_ret, "fill_buffer fail", "ret", tmp_ret, KP_(buf), K(offset));
   } else {
     IObLogBatchBufTask::add_callback_to_list(task);
   }
@@ -138,9 +138,9 @@ void BigBlock::fill(const offset_t offset, IObLogBufTask *task)
 
   if (NULL == task || offset < 0) {
     tmp_ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR( "invalid argument", "ret", tmp_ret, KP(task), K(offset));
+    LOG_ERROR_RET(tmp_ret, "invalid argument", "ret", tmp_ret, KP(task), K(offset));
   } else if (OB_SUCCESS != (tmp_ret = task->fill_buffer(buf_, offset))) {
-    LOG_ERROR( "fill_buffer fail", "ret", tmp_ret, KP_(buf), K(offset));
+    LOG_ERROR_RET(tmp_ret, "fill_buffer fail", "ret", tmp_ret, KP_(buf), K(offset));
   } else {
     IObLogBatchBufTask::add_callback_to_list(task);
   }

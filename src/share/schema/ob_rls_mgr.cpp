@@ -83,7 +83,7 @@ int ObRlsPolicyMgr::init()
 void ObRlsPolicyMgr::reset()
 {
   if (IS_NOT_INIT) {
-    LOG_WARN("rls_policy manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "rls_policy manger not init");
   } else {
     rls_policy_infos_.clear();
     rls_policy_name_map_.clear();
@@ -559,7 +559,7 @@ int ObRlsGroupMgr::init()
 void ObRlsGroupMgr::reset()
 {
   if (IS_NOT_INIT) {
-    LOG_WARN("rls_group manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "rls_group manger not init");
   } else {
     rls_group_infos_.clear();
     rls_group_name_map_.clear();
@@ -1004,7 +1004,7 @@ int ObRlsContextMgr::init()
 void ObRlsContextMgr::reset()
 {
   if (IS_NOT_INIT) {
-    LOG_WARN("rls_context manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "rls_context manger not init");
   } else {
     rls_context_infos_.clear();
     rls_context_name_map_.clear();

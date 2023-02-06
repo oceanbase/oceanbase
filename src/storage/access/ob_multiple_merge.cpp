@@ -659,7 +659,7 @@ void ObMultipleMerge::report_tablet_stat()
     tablet_stat.scan_micro_block_cnt_ = access_ctx_->table_store_stat_.micro_access_cnt_;
     tablet_stat.pushdown_micro_block_cnt_ = access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
     if (OB_TMP_FAIL(MTL(storage::ObTenantTabletStatMgr *)->report_stat(tablet_stat))) {
-      STORAGE_LOG(WARN, "failed to report tablet stat", K(tmp_ret), K(tablet_stat));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to report tablet stat", K(tmp_ret), K(tablet_stat));
     }
   }
 }
@@ -1085,7 +1085,7 @@ const ObTableIterParam * ObMultipleMerge::get_actual_iter_param(const ObITable *
 {
   const ObTableIterParam *ptr = NULL;
   if (OB_ISNULL(table)) {
-    STORAGE_LOG(WARN, "input table is NULL", KP(table));
+    STORAGE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "input table is NULL", KP(table));
   } else{
     ptr = &access_param_->iter_param_;
   }

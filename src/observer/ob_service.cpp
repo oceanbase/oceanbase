@@ -222,6 +222,9 @@ int ObService::init(common::ObMySQLProxy &sql_proxy,
     inited_ = true;
   }
   FLOG_INFO("[OBSERVICE_NOTICE] init ob_service finish", KR(ret), K_(inited));
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR(OB_ERR_OBSERVICE_START, "msg", "observice init() has failure", KR(ret));
+  }
   return ret;
 }
 
@@ -270,6 +273,9 @@ int ObService::start()
     LOG_ERROR("start meta table checker failed", KR(ret));
   }
   FLOG_INFO("[OBSERVICE_NOTICE] start ob_service end", KR(ret));
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR(OB_ERR_OBSERVICE_START, "msg", "observice start() has failure", KR(ret));
+  }
   return ret;
 }
 
@@ -284,7 +290,7 @@ void ObService::stop()
 {
   FLOG_INFO("[OBSERVICE_NOTICE] start to stop observice");
   if (!inited_) {
-    FLOG_WARN("ob_service not init", K_(inited));
+    FLOG_WARN_RET(OB_NOT_INIT, "ob_service not init", K_(inited));
   } else {
     FLOG_INFO("begin to add server event");
     SERVER_EVENT_ADD("observer", "stop");
@@ -316,7 +322,7 @@ void ObService::wait()
 {
   FLOG_INFO("[OBSERVICE_NOTICE] wait ob_service begin");
   if (!inited_) {
-    LOG_WARN("ob_service not init", K_(inited));
+    LOG_WARN_RET(OB_NOT_INIT, "ob_service not init", K_(inited));
   } else {
     FLOG_INFO("begin to wait schema updater");
     schema_updater_.wait();
@@ -1728,7 +1734,7 @@ bool ObService::is_heartbeat_expired() const
 {
   bool bret = false;  // returns false on error
   if (OB_UNLIKELY(!inited_)) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     bret = !lease_state_mgr_.is_valid_heartbeat();
   }
@@ -1740,7 +1746,7 @@ bool ObService::is_svr_lease_valid() const
   // Determine if local lease is valid in OFS mode
   bool bret = false;
   if (OB_UNLIKELY(!inited_)) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     bret = lease_state_mgr_.is_valid_lease();
   }

@@ -52,8 +52,8 @@ void *ObAllocator::alloc(const int64_t size, const ObMemAttr &attr)
     if (OB_UNLIKELY(nullptr == obj) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
       auto ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(attr_.tenant_id_,
                                                                                  attr_.ctx_id_);
-      _OB_LOG(WARN, "[OOPS] alloc failed reason: %s", alloc_failed_msg());
-      _OB_LOG(WARN, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
+      _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "[OOPS] alloc failed reason: %s", alloc_failed_msg());
+      _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
               "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
               inner_attr.tenant_id_, inner_attr.ctx_id_,
               common::get_global_ctx_info().get_ctx_name(inner_attr.ctx_id_),

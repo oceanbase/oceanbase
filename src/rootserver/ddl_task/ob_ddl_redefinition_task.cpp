@@ -1340,6 +1340,7 @@ int ObDDLRedefinitionTask::check_health()
       || ObDDLTaskStatus::SUCCESS == static_cast<ObDDLTaskStatus>(task_status_)) {
     ret = OB_SUCCESS; // allow clean up
   }
+  check_ddl_task_execute_too_long();
   return ret;
 }
 

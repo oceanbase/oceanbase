@@ -282,7 +282,7 @@ void PalfEnvImpl::wait()
 
 void PalfEnvImpl::destroy()
 {
-  PALF_LOG(WARN, "PalfEnvImpl destroy", KPC(this));
+  PALF_LOG_RET(WARN, OB_SUCCESS, "PalfEnvImpl destroy", KPC(this));
   is_running_ = false;
   is_inited_ = false;
   palf_handle_impl_map_.destroy();
@@ -553,7 +553,7 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
 {
   bool bool_ret = true;
   if (NULL == palf_handle_impl) {
-    PALF_LOG(ERROR, "the value in hashmap is NULL, unexpected error", K(palf_id), KP(palf_handle_impl));
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "the value in hashmap is NULL, unexpected error", K(palf_id), KP(palf_handle_impl));
     bool_ret = false;
   } else {
     int ret = OB_SUCCESS;
@@ -667,7 +667,8 @@ int PalfEnvImpl::try_recycle_blocks()
       ATOMIC_STORE(&diskspace_enough_, curr_diskspace_enough);
     }
     if ((true == need_recycle && false == has_recycled && false == is_shrinking) || false == diskspace_enough_) {
-      PALF_LOG(ERROR, "clog disk space is almost full",
+      int tmp_ret = OB_LOG_OUTOF_DISK_SPACE;
+      LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "log disk space is almost full", "ret", tmp_ret,
           "total_size(MB)", disk_opts_for_recycling_blocks.log_disk_usage_limit_size_/MB,
           "used_size(MB)", total_used_size_byte/MB,
           "used_percent(%)", (total_used_size_byte* 100) / (disk_opts_for_recycling_blocks.log_disk_usage_limit_size_ + 1),

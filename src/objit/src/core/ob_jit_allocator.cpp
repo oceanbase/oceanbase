@@ -112,13 +112,13 @@ ObJitMemoryBlock ObJitMemory::allocate_mapped_memory(int64_t num_bytes,
 #endif
     ) {
       if (REACH_TIME_INTERVAL(10000000)) { //间隔10s打印日志
-        LOG_ERROR("allocate jit memory failed", K(addr), K(num_bytes), K(page_size), K(num_pages));
+        LOG_ERROR_RET(common::OB_ALLOCATE_MEMORY_FAILED, "allocate jit memory failed", K(addr), K(num_bytes), K(page_size), K(num_pages));
       }
       ::usleep(100000); //100ms
 #if defined(__aarch64__)
       if (MAP_FAILED != addr) {
         if (0 != ::munmap(addr, page_size*num_pages)) {
-          LOG_WARN("jit block munmap failed", K(addr), K(page_size*num_pages));
+          LOG_WARN_RET(OB_ERR_SYS, "jit block munmap failed", K(addr), K(page_size*num_pages));
         }
         start = reinterpret_cast<int64_t>(addr) + UINT32_MAX - page_size*num_pages; //先向上移4G，再移动此次分配的大小，以保证此次分配的地址高16位一致
         LOG_INFO("aarch64 memory allocated not safe, try again", K(addr), K(start), K(page_size), K(num_pages));
@@ -286,7 +286,7 @@ void ObJitMemoryGroup::reserve(int64_t sz, int64_t align, int64_t p_flags)
     LOG_INFO("AARCH64: reserve ObJitMemoryGroup successed",
              K(header_), K(total_), K(block_cnt_), K(*cur));
   } else {
-    LOG_ERROR("AARCH64: reserve ObJitMemoryGroup failed", K(header_), K(total_), K(*cur));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "AARCH64: reserve ObJitMemoryGroup failed", K(header_), K(total_), K(*cur));
   }
 }
 
@@ -336,7 +336,7 @@ void *ObJitAllocator::alloc(const JitMemType mem_type, int64_t sz, int64_t align
       ret = code_mem_.alloc_align(sz, align, PROT_WRITE | PROT_READ);
     } break;
     default : {
-      LOG_WARN("invalid mem type", K(mem_type));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid mem type", K(mem_type));
     } break;
   }
 

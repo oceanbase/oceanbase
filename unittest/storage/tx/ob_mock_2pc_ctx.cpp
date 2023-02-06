@@ -283,14 +283,14 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
 {
   switch (new_state) {
   case ObTxState::INIT: {
-    TRANS_LOG(ERROR, "tx switch to init failed", K(*this), K(new_state));
+    TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to init failed", K(*this), K(new_state));
     ob_abort();
     break;
   }
   case ObTxState::PREPARE: {
     if (ObTxState::INIT != downstream_state_
         && ObTxState::PREPARE != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to prepare failed", K(*this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to prepare failed", K(*this), K(new_state));
       ob_abort();
     }
     break;
@@ -298,7 +298,7 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
   case ObTxState::PRE_COMMIT: {
     if (ObTxState::PREPARE != downstream_state_
         && ObTxState::PRE_COMMIT != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to pre commit failed", KPC(this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to pre commit failed", KPC(this), K(new_state));
       ob_abort();
     }
     break;
@@ -306,7 +306,7 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
   case ObTxState::COMMIT: {
     if (ObTxState::PRE_COMMIT != downstream_state_
         && ObTxState::COMMIT != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to commit failed", K(*this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to commit failed", K(*this), K(new_state));
       ob_abort();
     } else {
       tx_state_ = new_state;
@@ -317,7 +317,7 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
     if (ObTxState::INIT != downstream_state_
         && ObTxState::PREPARE != downstream_state_
         && ObTxState::ABORT != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to abort failed", K(*this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to abort failed", K(*this), K(new_state));
       ob_abort();
     } else {
       tx_state_ = new_state;
@@ -327,13 +327,13 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
   case ObTxState::CLEAR: {
     if (ObTxState::COMMIT != downstream_state_
         && ObTxState::ABORT != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to clear failed", K(*this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to clear failed", K(*this), K(new_state));
       ob_abort();
     }
     break;
   }
   default: {
-    TRANS_LOG(WARN, "invalid 2pc state", KPC(this));
+    TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid 2pc state", KPC(this));
     ob_abort();
     break;
   }
@@ -399,7 +399,7 @@ bool MockOb2pcCtx::check_status_valid(const bool should_commit)
   }
 
   if (!bret) {
-    TRANS_LOG(ERROR, "state is not match", K(*this), K(should_commit));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "state is not match", K(*this), K(should_commit));
   }
 
   return bret;

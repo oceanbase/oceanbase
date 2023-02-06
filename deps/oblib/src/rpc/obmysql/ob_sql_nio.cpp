@@ -426,7 +426,7 @@ public:
   void set_handler_close_been_called() { handler_close_flag_ = true; }
   void remove_fd_from_epoll(int epfd) {
     if (epoll_ctl(epfd, EPOLL_CTL_DEL, fd_, nullptr) < 0) {
-      LOG_WARN("remove sock fd from epoll failed", K(fd_), K(epfd));
+      LOG_WARN_RET(common::OB_ERR_SYS, "remove sock fd from epoll failed", K(fd_), K(epfd));
     }
   }
   void set_shutdown() { ATOMIC_STORE(&need_shutdown_, true); }
@@ -482,7 +482,7 @@ static int epoll_regist(int epfd, int fd, uint32_t eflag, void* s) {
   struct epoll_event event;
   if (0 != epoll_ctl(epfd, EPOLL_CTL_ADD, fd, __make_epoll_event(&event, eflag, s))) {
     err = -EIO;
-    LOG_ERROR("add fd to epoll failed", K(fd), K(epfd), K(errno));
+    LOG_ERROR_RET(common::OB_ERR_SYS, "add fd to epoll failed", K(fd), K(epfd), K(errno));
   }
   return err;
 }
@@ -497,19 +497,19 @@ static int listen_create(int port) {
   int fd = 0;
   struct sockaddr_in sin;
   if ((fd = socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, 0)) < 0) {
-    LOG_ERROR("sql nio create socket for listen failed", K(errno));
+    LOG_ERROR_RET(common::OB_ERR_SYS, "sql nio create socket for listen failed", K(errno));
     err = errno;
   } else if (socket_set_opt(fd, SO_REUSEPORT, 1) < 0) {
-    LOG_ERROR("sql nio set sock opt SO_REUSEPORT failed", K(errno), K(fd));
+    LOG_ERROR_RET(OB_ERR_SYS, "sql nio set sock opt SO_REUSEPORT failed", K(errno), K(fd));
     err = errno;
   } else if (socket_set_opt(fd, SO_REUSEADDR, 1) < 0) {
-    LOG_ERROR("sql nio set sock opt SO_REUSEADDR failed", K(errno), K(fd));
+    LOG_ERROR_RET(OB_ERR_SYS, "sql nio set sock opt SO_REUSEADDR failed", K(errno), K(fd));
     err = errno;
   } else if (bind(fd, (sockaddr*)obrpc::make_unix_sockaddr(&sin, 0, port), sizeof(sin))) {
-    LOG_ERROR("sql nio bind listen fd failed", K(errno), K(fd));
+    LOG_ERROR_RET(OB_ERR_SYS, "sql nio bind listen fd failed", K(errno), K(fd));
     err = errno;
   } else if (listen(fd, 1024) < 0) {
-    LOG_ERROR("sql nio listen failed", K(errno), K(fd));
+    LOG_ERROR_RET(OB_ERR_SYS, "sql nio listen failed", K(errno), K(fd));
     err = errno;
   }
   if (0 != err) {
@@ -620,10 +620,10 @@ public:
   }
   void push_close_req(ObSqlSock* s) {
     if (s->set_error(EIO)) {
-      LOG_WARN("close sql sock by user req", K(*s));
+      LOG_WARN_RET(OB_ERR_SYS, "close sql sock by user req", K(*s));
       close_req_queue_.push(s);
     } else {
-      LOG_WARN("user req close, and epoll thread already set error", K(*s));
+      LOG_WARN_RET(OB_ERR_SYS, "user req close, and epoll thread already set error", K(*s));
     }
   }
   void push_write_req(ObSqlSock* s) {
@@ -692,7 +692,7 @@ private:
     }
   }
   void prepare_destroy(ObSqlSock* s) {
-    LOG_WARN("prepare destroy", K(*s));
+    LOG_TRACE("prepare destroy", K(*s));
     s->remove_fd_from_epoll(epfd_);
     s->on_disconnect();
     pending_destroy_list_.add(&s->dlink_);
@@ -714,7 +714,7 @@ private:
             LOG_INFO("sock ref clean, do destroy", K(*s));
             need_destroy = true;
           } else {
-            LOG_WARN("wait handling done...", K(*s));
+            LOG_TRACE("wait handling done...", K(*s));
           }
         }
         if (need_destroy) {
@@ -735,10 +735,10 @@ private:
     if (OB_UNLIKELY((EPOLLERR & mask) || (EPOLLHUP & mask) || (EPOLLRDHUP & mask))) {
 
       if (s->set_error(EIO)) {
-        LOG_WARN("sock error detect by epoll", K(mask), K(*s));
+        LOG_WARN_RET(OB_ERR_SYS, "sock error detect by epoll", K(mask), K(*s));
         prepare_destroy(s);
       } else {
-        LOG_WARN("sock error detect by epoll, and worker thread alread set error", K(*s));
+        LOG_WARN_RET(OB_ERR_SYS, "sock error detect by epoll, and worker thread alread set error", K(*s));
       }
     } else {
       int err = 0;
@@ -792,13 +792,13 @@ private:
         if (EAGAIN == errno || EWOULDBLOCK == errno) {
           break;
         } else {
-          LOG_ERROR("accept4 fail", K(lfd_), K(errno));
+          LOG_ERROR_RET(OB_ERR_SYS, "accept4 fail", K(lfd_), K(errno));
           break;
         }
       } else {
         int err = 0;
         if (0 != (err = do_accept_one(fd))) {
-          LOG_ERROR("do_accept_one fail", K(fd), K(err));
+          LOG_ERROR_RET(OB_ERR_SYS, "do_accept_one fail", K(fd), K(err));
           close(fd);
         }
       }
@@ -811,14 +811,14 @@ private:
     uint32_t epflag = EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLET | EPOLLRDHUP;
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&enable_tcp_nodelay, sizeof(enable_tcp_nodelay)) < 0) {
       err = errno;
-      LOG_WARN("set TCP_NODELAY failed", K(fd), KERRNOMSG(errno));
+      LOG_WARN_RET(OB_ERR_SYS, "set TCP_NODELAY failed", K(fd), KERRNOMSG(errno));
     } else if (NULL == (s = alloc_sql_sock(fd))) {
       err = -ENOMEM;
-      LOG_WARN("alloc_sql_sock fail", K(fd), K(err));
+      LOG_WARN_RET(OB_ERR_SYS, "alloc_sql_sock fail", K(fd), K(err));
     } else if (0 != (err = epoll_regist(epfd_, fd, epflag, s))) {
-      LOG_WARN("epoll_regist fail", K(fd), K(err));
+      LOG_WARN_RET(OB_ERR_SYS, "epoll_regist fail", K(fd), K(err));
     } else if (0 != (err = handler_.on_connect(s->sess_, fd))) {
-      LOG_WARN("on_connect fail", K(err));
+      LOG_WARN_RET(OB_ERR_SYS, "on_connect fail", K(err));
     } else {
       LOG_INFO("accept one succ", K(*s));
     }
@@ -860,13 +860,13 @@ private:
           cur = cur->next_;
           int fd = s->get_fd();
           if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&tcp_keepalive_enabled_, sizeof(tcp_keepalive_enabled_)) < 0) {
-            LOG_WARN("setsockopt SO_KEEPALIVE failed", K(fd), KERRNOMSG(errno));
+            LOG_WARN_RET(OB_ERR_SYS, "setsockopt SO_KEEPALIVE failed", K(fd), KERRNOMSG(errno));
           } else if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, (const void *)&tcp_keepidle_, sizeof(tcp_keepidle_)) < 0) {
-            LOG_WARN("setsockopt TCP_KEEPIDLE failed", K(fd), KERRNOMSG(errno));
+            LOG_WARN_RET(OB_ERR_SYS, "setsockopt TCP_KEEPIDLE failed", K(fd), KERRNOMSG(errno));
           } else if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, (const void *)&tcp_keepintvl_, sizeof(tcp_keepintvl_)) < 0) {
-            LOG_WARN("setsockopt TCP_KEEPINTVL failed", K(fd), KERRNOMSG(errno));
+            LOG_WARN_RET(OB_ERR_SYS, "setsockopt TCP_KEEPINTVL failed", K(fd), KERRNOMSG(errno));
           } else if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, (const void *)&tcp_keepcnt_, sizeof(tcp_keepcnt_)) < 0) {
-            LOG_WARN("setsockopt TCP_KEEPCNT failed", K(fd), KERRNOMSG(errno));
+            LOG_WARN_RET(OB_ERR_SYS, "setsockopt TCP_KEEPCNT failed", K(fd), KERRNOMSG(errno));
           }
         }
       }
@@ -1050,7 +1050,7 @@ void ObSqlNio::update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_k
       impl_[index].update_tcp_keepalive_params(keepalive_enabled, tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
     }
   } else {
-    LOG_ERROR("sql nio impl_ is nullptr", KP(impl_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "sql nio impl_ is nullptr", KP(impl_));
   }
 }
 

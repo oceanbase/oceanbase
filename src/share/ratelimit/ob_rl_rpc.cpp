@@ -54,11 +54,11 @@ oceanbase::rpc::frame::ObReqTransport::AsyncCB* ObRLGetRegionBWCallback::clone(
   void *buf = NULL;
   ObRLGetRegionBWCallback *newcb = NULL;
   if (IS_NOT_INIT) {
-    OB_LOG(ERROR, "ObRLGetRegionBWCallback not inited.");
+    OB_LOG_RET(ERROR, OB_NOT_INIT, "ObRLGetRegionBWCallback not inited.");
   } else {
     buf = alloc(sizeof (*this));
     if (OB_ISNULL(buf)) {
-      OB_LOG(ERROR, "Failed to alloc memory for ObRLGetRegionBWCallback clone", KP(buf));
+      OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "Failed to alloc memory for ObRLGetRegionBWCallback clone", KP(buf));
     } else {
       newcb = new (buf) ObRLGetRegionBWCallback();
       newcb->dst_server_idx_ = dst_server_idx_;

@@ -89,7 +89,7 @@ public:
   {
     const ObAddr &dst = ObBatchRpcProxy::AsyncCB<OB_BATCH>::dst_;
     const int error = this->get_error();
-    RPC_LOG(WARN, "batch rpc timeout", K(dst), K(error));
+    RPC_LOG_RET(WARN, OB_TIMEOUT, "batch rpc timeout", K(dst), K(error));
   }
 private:
   DISALLOW_COPY_AND_ASSIGN(BatchCallBack);

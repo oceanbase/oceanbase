@@ -52,7 +52,7 @@ char *ObSelfBufferWriter::alloc(const int64_t size)
   if (size == macro_block_mem_ctx_.get_block_size()) {
     data = (char *)macro_block_mem_ctx_.alloc();
     if (OB_ISNULL(data)) {
-      STORAGE_LOG(WARN, "fail to alloc buf from mem ctx", K(size));
+      STORAGE_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "fail to alloc buf from mem ctx", K(size));
     }
   }
 #endif

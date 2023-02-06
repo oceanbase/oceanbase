@@ -40,7 +40,7 @@ const char* ObBackupCleanStatus::get_str() const
 
   STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(new_backup_clean_status_strs), "status count mismatch");
   if (status_ < INIT || status_ >= MAX_STATUS) {
-    LOG_ERROR("invalid backup clean job status", K(status_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid backup clean job status", K(status_));
   } else {
     str = new_backup_clean_status_strs[status_];
   }
@@ -626,4 +626,4 @@ int ObDeletePolicyAttr::assign(const ObDeletePolicyAttr &other)
 bool ObDeletePolicyAttr::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_ && 0 != strlen(policy_name_);
-} 
+}

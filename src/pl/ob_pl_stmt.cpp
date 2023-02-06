@@ -515,7 +515,7 @@ bool ObPLRoutineInfo::has_self_param() const
   for (int64_t i = 0; !bret && i < params_.count(); ++i) {
     param = params_.at(i);
     if (OB_ISNULL(param)) {
-      LOG_WARN("get unexpected null param", K(i));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "get unexpected null param", K(i));
       break;
     } else {
       bret = bret || param->get_is_self_param();
@@ -532,7 +532,7 @@ int64_t ObPLRoutineInfo::get_self_param_pos() const
   for (int64_t i = 0; !stop && i < params_.count(); ++i) {
     param = params_.at(i);
     if (OB_ISNULL(param)) {
-      LOG_WARN("get unexpected null param", K(i));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "get unexpected null param", K(i));
       break;
     } else if (param->get_is_self_param()) {
       pos = i;

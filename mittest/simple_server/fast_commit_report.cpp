@@ -566,6 +566,7 @@ TEST_F(ObFastCommitReport, fast_commit_report)
     }
 
     std::cout << "Data reading has been finished, you can generate it with command: sudo perf script -i perf.data -F ip,sym -f > data.viz\n";
+    std::cout << "And finally you can graph it with command: `cat data.viz | ./perfdata2graph.py` or our web based perf tool.\n";
   }
 }
 
@@ -614,25 +615,25 @@ int main(int argc, char **argv)
 
   if (oceanbase::unittest::fast_commit_test_mode != oceanbase::unittest::FastCommitTestMode::NORMAL_TEST
       && oceanbase::unittest::fast_commit_test_mode != oceanbase::unittest::FastCommitTestMode::BIANQUE_TEST) {
-    TRANS_LOG(ERROR, "wrong choice", K(oceanbase::unittest::fast_commit_test_mode));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "wrong choice", K(oceanbase::unittest::fast_commit_test_mode));
     ob_abort();
   }
 
   if (oceanbase::unittest::fast_commit_data_mode != oceanbase::unittest::FastCommitReportDataMode::ALL_CLEANOUT
       && oceanbase::unittest::fast_commit_data_mode != oceanbase::unittest::FastCommitReportDataMode::ALL_SAME_TXN_DELAY_CLEANOUT
       && oceanbase::unittest::fast_commit_data_mode != oceanbase::unittest::FastCommitReportDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT) {
-    TRANS_LOG(ERROR, "wrong choice", K(oceanbase::unittest::fast_commit_data_mode));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "wrong choice", K(oceanbase::unittest::fast_commit_data_mode));
     ob_abort();
   }
 
   if (oceanbase::unittest::fast_commit_tx_table_mode != oceanbase::unittest::FastCommitReportTxTableMode::ALL_IN_MEMORY
       && oceanbase::unittest::fast_commit_tx_table_mode != oceanbase::unittest::FastCommitReportTxTableMode::ALL_IN_DISK) {
-    TRANS_LOG(ERROR, "wrong choice", K(oceanbase::unittest::fast_commit_tx_table_mode));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "wrong choice", K(oceanbase::unittest::fast_commit_tx_table_mode));
     ob_abort();
   }
 
   if (oceanbase::unittest::total_fc_row_count < oceanbase::unittest::total_fc_session) {
-    TRANS_LOG(ERROR, "wrong choice", K(oceanbase::unittest::total_fc_row_count), K(oceanbase::unittest::total_fc_session));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "wrong choice", K(oceanbase::unittest::total_fc_row_count), K(oceanbase::unittest::total_fc_session));
     ob_abort();
   }
 

@@ -171,7 +171,7 @@ void ObPxSQCProxy::destroy()
   int ret_unreg = OB_SUCCESS;
   if (OB_SUCCESS != (ret_unreg = sqc_ctx_.msg_loop_.unregister_all_channel())) {
     // the following unlink actions is not safe is any unregister failure happened
-    LOG_ERROR("fail unregister all channel from msg_loop", KR(ret_unreg));
+    LOG_ERROR_RET(ret_unreg, "fail unregister all channel from msg_loop", KR(ret_unreg));
   }
   sample_msg_.reset();
 }

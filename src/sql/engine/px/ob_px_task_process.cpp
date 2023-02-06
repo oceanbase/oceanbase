@@ -500,7 +500,7 @@ void ObPxTaskProcess::release() {
   if (NULL != arg_.sqc_task_ptr_) {
     arg_.sqc_task_ptr_->set_task_state(SQC_TASK_EXIT);
   } else {
-    LOG_ERROR("Unexpected px task process", K(arg_.sqc_task_ptr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Unexpected px task process", K(arg_.sqc_task_ptr_));
   }
 }
 
@@ -722,9 +722,9 @@ uint64_t ObPxTaskProcess::get_session_id() const
   ObExecContext *exec_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(exec_ctx = arg_.exec_ctx_)) {
-    LOG_WARN("exec ctx is NULL", K(exec_ctx));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "exec ctx is NULL", K(exec_ctx));
   } else if (OB_ISNULL(session = exec_ctx->get_my_session())) {
-    LOG_WARN("session is NULL", K(exec_ctx));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "session is NULL", K(exec_ctx));
   } else {
     session_id = session->get_sessid();
   }
@@ -737,9 +737,9 @@ uint64_t ObPxTaskProcess::get_tenant_id() const
   ObExecContext *exec_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(exec_ctx = arg_.exec_ctx_)) {
-    LOG_WARN("exec ctx is NULL", K(exec_ctx));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "exec ctx is NULL", K(exec_ctx));
   } else if (OB_ISNULL(session = exec_ctx->get_my_session())) {
-    LOG_WARN("session is NULL", K(exec_ctx));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "session is NULL", K(exec_ctx));
   } else {
     tenant_id = session->get_effective_tenant_id();
   }

@@ -225,7 +225,7 @@ public:
         }
       } else if (SyncValueMode::FIRST_MODE == val_mode) {
       } else {
-        OB_LOG(ERROR, "the value mode is not supported", K(val_mode));
+        OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "the value mode is not supported", K(val_mode));
       }
       if (n_times + 1 >= shared_hj_info->sqc_thread_count_) {
         // last time, set final value

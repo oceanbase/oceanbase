@@ -697,7 +697,7 @@ int64_t ObTabletMemtableMgr::get_unmerged_memtable_count_() const
   for (int64_t i = memtable_head_; i < memtable_tail_; i++) {
     ObMemtable *memtable = get_memtable_(i);
     if (NULL == memtable) {
-      LOG_ERROR("memtable must not null");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "memtable must not null");
     } else if (0 == memtable->get_minor_merged_time()) {
       cnt++;
     }

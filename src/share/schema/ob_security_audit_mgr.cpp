@@ -108,7 +108,7 @@ int ObSAuditMgr::init()
 void ObSAuditMgr::reset()
 {
   if (OB_UNLIKELY(!is_inited_)) {
-    LOG_WARN("audit manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "audit manger not init");
   } else {
     audit_infos_.clear();
     audit_map_.clear();

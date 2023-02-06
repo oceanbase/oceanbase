@@ -208,7 +208,7 @@ const char *ObZoneMergeInfo::get_merge_status_str(const MergeStatus status)
   const char *str_array[] = { "IDLE", "MERGING", "CHECKSUM" };
   STATIC_ASSERT(MERGE_STATUS_MAX == ARRAYSIZEOF(str_array), "status count mismatch");
   if (status < 0 || status >= MERGE_STATUS_MAX) {
-    LOG_WARN("invalid merge status", K(status));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid merge status", K(status));
   } else {
     str = str_array[status];
   }

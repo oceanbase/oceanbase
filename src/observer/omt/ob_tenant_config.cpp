@@ -60,7 +60,7 @@ void ObTenantConfig::print() const
   ObConfigContainer::const_iterator it = container_.begin();
   for (; it != container_.end(); ++it) {
     if (OB_ISNULL(it->second)) {
-      OB_LOG(WARN, "config item is null", "name", it->first.str());
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "config item is null", "name", it->first.str());
     } else {
       _OB_LOG(INFO, "| %-36s = %s", it->first.str(), it->second->str());
     }

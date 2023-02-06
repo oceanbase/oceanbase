@@ -329,7 +329,7 @@ int ObFreezeInfoManager::set_freeze_info()
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
         ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-        LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
+        LOG_WARN("fail to end trans", "is_commit", OB_SUCCESS == ret,  KR(tmp_ret));
       }
     }
   }
@@ -515,7 +515,7 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
       ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-      LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
+      LOG_WARN("fail to end trans", "is_commit", OB_SUCCESS == ret, KR(tmp_ret));
     }
   }
 
@@ -605,7 +605,7 @@ int ObFreezeInfoManager::try_gc_freeze_info()
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
       ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-      LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
+      LOG_WARN("fail to end trans", "is_commit", OB_SUCCESS == ret, KR(tmp_ret));
     }
   }
   return ret;

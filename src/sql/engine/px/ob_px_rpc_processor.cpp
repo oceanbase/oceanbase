@@ -540,7 +540,7 @@ void ObDealWithRpcTimeoutCall::deal_with_rpc_timeout_err()
         int a_ret = OB_SUCCESS;
         if (OB_UNLIKELY(OB_SUCCESS != (a_ret = retry_info_->add_invalid_server_distinctly(
                         addr_)))) {
-          LOG_WARN("fail to add invalid server distinctly", K_(trace_id), K(a_ret), K_(addr));
+          LOG_WARN_RET(a_ret, "fail to add invalid server distinctly", K_(trace_id), K(a_ret), K_(addr));
         }
       }
       ret_ = OB_RPC_CONNECT_ERROR;

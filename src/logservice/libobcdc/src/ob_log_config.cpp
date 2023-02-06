@@ -106,7 +106,7 @@ void ObLogConfig::print() const
   char *buf = static_cast<char*>(ob_malloc(BUF_SIZE, ObModIds::OB_LOG_CONFIG));
 
   if (OB_ISNULL(buf)) {
-    LOG_ERROR("allocate memory fail", K(BUF_SIZE));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(BUF_SIZE));
   } else {
     int64_t pos = 0;
     int64_t size = BUF_SIZE;

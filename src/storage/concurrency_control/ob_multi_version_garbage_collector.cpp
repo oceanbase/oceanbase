@@ -538,7 +538,7 @@ int ObMultiVersionGarbageCollector::refresh_()
 void ObMultiVersionGarbageCollector::decide_gc_status_(const ObMultiVersionGCStatus gc_status)
 {
   if (gc_status & ObMultiVersionGCStatus::DISABLED_GC_STATUS) {
-    MVCC_LOG(WARN, "gc status is disabled", KPC(this),
+    MVCC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "gc status is disabled", KPC(this),
              K(global_reserved_snapshot_), K(gc_status));
     gc_is_disabled_ = true;
   } else if (gc_is_disabled_) {
@@ -593,12 +593,12 @@ share::SCN ObMultiVersionGarbageCollector::get_reserved_snapshot_for_active_txn(
     return share::SCN::max_scn();
   } else if (refresh_error_too_long_) {
     if (REACH_TENANT_TIME_INTERVAL(1_s)) {
-      MVCC_LOG(WARN, "get reserved snapshot for active txn with long not updated", KPC(this));
+      MVCC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get reserved snapshot for active txn with long not updated", KPC(this));
     }
     return share::SCN::max_scn();
   } else if (gc_is_disabled_) {
     if (REACH_TENANT_TIME_INTERVAL(1_s)) {
-      MVCC_LOG(WARN, "get reserved snapshot for active txn with gc is disabled", KPC(this));
+      MVCC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get reserved snapshot for active txn with gc is disabled", KPC(this));
     }
     return share::SCN::max_scn();
   } else {

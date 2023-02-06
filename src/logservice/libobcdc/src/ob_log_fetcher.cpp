@@ -294,7 +294,7 @@ void ObLogFetcher::stop()
     if (0 != misc_tid_) {
       int pthread_ret = pthread_join(misc_tid_, NULL);
       if (0 != pthread_ret) {
-        LOG_ERROR("join fetcher misc thread fail", K(misc_tid_), K(pthread_ret),
+        LOG_ERROR_RET(OB_ERR_SYS, "join fetcher misc thread fail", K(misc_tid_), K(pthread_ret),
             KERRNOMSG(pthread_ret));
       }
       misc_tid_ = 0;
@@ -303,7 +303,7 @@ void ObLogFetcher::stop()
     if (0 != heartbeat_dispatch_tid_) {
       int pthread_ret = pthread_join(heartbeat_dispatch_tid_, NULL);
       if (0 != pthread_ret) {
-        LOG_ERROR("join fetcher heartbeat dispatch thread fail", K(heartbeat_dispatch_tid_),
+        LOG_ERROR_RET(OB_ERR_SYS, "join fetcher heartbeat dispatch thread fail", K(heartbeat_dispatch_tid_),
             K(pthread_ret), KERRNOMSG(pthread_ret));
       }
       heartbeat_dispatch_tid_ = 0;

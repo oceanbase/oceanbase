@@ -244,7 +244,7 @@ void ObMonitoringDumpTest::is_equal_content(const char* tmp_file, const char* re
   EXPECT_EQ(true, if_expected.is_open());
   std::istream_iterator<std::string> it_expected(if_expected);
   bool is_equal = std::equal(it_test, std::istream_iterator<std::string>(), it_expected);
-  _OB_LOG(WARN, "result file is %s, expect file is %s, is_equal:%d", tmp_file, result_file, is_equal);
+  _OB_LOG(INFO, "result file is %s, expect file is %s, is_equal:%d", tmp_file, result_file, is_equal);
   if (is_equal) {
     std::remove(tmp_file);
   } else if (test::clp.record_test_result) {

@@ -53,9 +53,9 @@ char *DynamicBuffer::acquire(const int64_t size)
   char *buf = NULL;
   int64_t real_size = size <= BASIC_BUF_SIZE ? size : upper_align_(size);
   if (size > MAX_BUF_SIZE) {
-    ARCHIVE_LOG(WARN, "get buf oversize, not support", K(size));
+    ARCHIVE_LOG_RET(WARN, OB_NOT_SUPPORTED, "get buf oversize, not support", K(size));
   } else if (0 != ATOMIC_LOAD(&ref_)) {
-    ARCHIVE_LOG(ERROR, "buffer ref not zero", KPC(this));
+    ARCHIVE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "buffer ref not zero", KPC(this));
   } else if (NULL == buf_ || buf_size_ < size) {
     free_();
     alloc_(real_size);
@@ -71,7 +71,7 @@ char *DynamicBuffer::acquire(const int64_t size)
 void DynamicBuffer::reclaim(void *ptr)
 {
   if (ptr != buf_) {
-    ARCHIVE_LOG(ERROR, "invalid reclaim ptr", K(ptr), KPC(this));
+    ARCHIVE_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid reclaim ptr", K(ptr), KPC(this));
   } else {
     ATOMIC_DEC(&ref_);
     if (buf_size_ <= BASIC_BUF_SIZE) {
@@ -88,7 +88,7 @@ void DynamicBuffer::purge()
     if (0 == ATOMIC_LOAD(&ref_)) {
       free_();
     } else {
-      ARCHIVE_LOG(ERROR, "buffer ref not zero, memory may leak", KPC(this));
+      ARCHIVE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "buffer ref not zero, memory may leak", KPC(this));
     }
   }
 }
@@ -140,7 +140,7 @@ void DynamicBuffer::alloc_(const int64_t size)
 {
   void *data = NULL;
   if (OB_ISNULL(data = share::mtl_malloc(size, label_.ptr()))) {
-    ARCHIVE_LOG(WARN, "alloc failed", K(size));
+    ARCHIVE_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "alloc failed", K(size));
   } else {
     buf_ = (char *)data;
     buf_size_ = size;
@@ -164,7 +164,7 @@ void DynamicBuffer::add_statistic_(const int64_t size)
   }
   int64_t index = get_usage_index_(size);
   if (index >= buf_size_usage_.count()) {
-    ARCHIVE_LOG(ERROR, "get usage index failed", K(index), K(buf_size_usage_));
+    ARCHIVE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "get usage index failed", K(index), K(buf_size_usage_));
   } else {
     buf_size_usage_[index]++;
     total_usage_++;

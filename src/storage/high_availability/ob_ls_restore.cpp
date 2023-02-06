@@ -325,7 +325,7 @@ bool ObLSRestoreDagNet::operator == (const ObIDagNet &other) const
     const ObLSRestoreDagNet &other_ls_restore_dag = static_cast<const ObLSRestoreDagNet &>(other);
     if (OB_ISNULL(other_ls_restore_dag.ctx_) || OB_ISNULL(ctx_)) {
       is_same = false;
-      LOG_ERROR("ls restore ctx is NULL", KPC(ctx_), KPC(other_ls_restore_dag.ctx_));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx is NULL", KPC(ctx_), KPC(other_ls_restore_dag.ctx_));
     } else if (ctx_->arg_.ls_id_ != other_ls_restore_dag.ctx_->arg_.ls_id_) {
       is_same = false;
     }
@@ -337,7 +337,7 @@ int64_t ObLSRestoreDagNet::hash() const
 {
   int64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
-    LOG_ERROR("ls restore ctx is NULL", KPC(ctx_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx is NULL", KPC(ctx_));
   } else {
     hash_value = common::murmurhash(&ctx_->arg_.ls_id_, sizeof(ctx_->arg_.ls_id_), hash_value);
   }
@@ -464,7 +464,7 @@ bool ObLSRestoreDag::operator == (const ObIDag &other) const
       is_same = false;
     } else if (OB_ISNULL(ctx) || OB_ISNULL(other_dag.get_ctx())) {
       is_same = false;
-      LOG_ERROR("ls restore ctx should not be NULL", KP(ctx), KP(other_dag.get_ctx()));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx should not be NULL", KP(ctx), KP(other_dag.get_ctx()));
     } else if (NULL != ctx && NULL != other_dag.get_ctx()) {
       if (ctx->arg_.ls_id_ != other_dag.get_ctx()->arg_.ls_id_) {
         is_same = false;
@@ -480,7 +480,7 @@ int64_t ObLSRestoreDag::hash() const
   ObLSRestoreCtx *ctx = get_ctx();
 
   if (OB_ISNULL(ctx)) {
-    LOG_ERROR("ls restore ctx should not be NULL", KP(ctx));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx should not be NULL", KP(ctx));
   } else {
     hash_value = common::murmurhash(
         &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);

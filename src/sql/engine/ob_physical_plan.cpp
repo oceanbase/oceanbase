@@ -962,7 +962,7 @@ int64_t ObPhysicalPlan::get_pre_expr_ref_count() const
 void ObPhysicalPlan::inc_pre_expr_ref_count()
 {
   if (OB_ISNULL(stat_.pre_cal_expr_handler_)) {
-    LOG_WARN("pre-calcuable expression handler has not been initalized.");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "pre-calcuable expression handler has not been initalized.");
   } else {
      stat_.pre_cal_expr_handler_->inc_ref_cnt();
   }

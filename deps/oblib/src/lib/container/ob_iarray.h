@@ -47,7 +47,7 @@ public:
   virtual int assign(const ObIArray &other) = 0;
   virtual int prepare_allocate(int64_t capacity) = 0;
   virtual T *alloc_place_holder()
-  { OB_LOG(WARN, "Not supported"); return NULL; }
+  { OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "Not supported"); return NULL; }
 
   virtual int64_t to_string(char* buf, int64_t buf_len) const
   {

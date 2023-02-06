@@ -160,7 +160,7 @@ OB_DEF_SERIALIZE_SIZE(ObTxRedoLog)
   int64_t len = 0;
   if (mutator_size_ < 0) {
     len = mutator_size_;
-    TRANS_LOG(WARN, "mutator_buf_ has not set");
+    TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "mutator_buf_ has not set");
   } else {
     len = len + ctx_redo_info_.get_serialize_size();
     len = len + MUTATOR_SIZE_NEED_BYTES;

@@ -82,7 +82,7 @@ public:
   inline int inc_ref(int32_t x)
   {
     if (ref_ < 0) {
-      TRANS_LOG(ERROR, "unexpected ref when inc ref", K(ref_));
+      TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected ref when inc ref", K(ref_));
     }
     return ATOMIC_FAA(&ref_, x);
   }
@@ -90,7 +90,7 @@ public:
   {
     int32_t ref = ATOMIC_SAF(&ref_, x);
     if (ref < 0) {
-      TRANS_LOG(ERROR, "unexpected error", K(ref_));
+      TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected error", K(ref_));
     }
     return ref;
   }
@@ -457,7 +457,7 @@ private:
         : lock_(const_cast<LockType &>(lock)), ret_(OB_SUCCESS)
     {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock()))) {
-        COMMON_LOG(WARN, "Fail to read lock, ", K_(ret));
+        COMMON_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
       } else {
         ObTransHashMap::get_thread_node().set_thread_id(thread_id);
       }
@@ -486,10 +486,10 @@ private:
       // no need to lock
       if (get_itid() == get_thread_node().get_thread_id()) {
         locked_ = false;
-        TRANS_LOG(ERROR, "unexpected thread status", K(thread_id));
+        TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected thread status", K(thread_id));
       } else {
         if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
-          COMMON_LOG(WARN, "Fail to write lock, ", K_(ret));
+          COMMON_LOG_RET(WARN, ret_, "Fail to write lock, ", K_(ret));
         } else {
           locked_ = true;
           ObTransHashMap::get_thread_node().set_thread_id(thread_id);

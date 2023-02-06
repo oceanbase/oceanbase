@@ -194,7 +194,7 @@ void ObPLCtx::reset_obj()
   int tmp_ret = OB_SUCCESS;
   for (int64_t i = 0; i < objects_.count(); ++i) {
     if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(objects_.at(i)))) {
-      LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "failed to destruct pl object", K(i), K(tmp_ret));
     }
   }
   objects_.reset();
@@ -454,7 +454,7 @@ void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSes
       }
     }
   } else {
-    DETECT_LOG(WARN, "not register to deadlock", K(last_trans_id), K(now_trans_id));
+    DETECT_LOG_RET(WARN, OB_ERR_UNEXPECTED, "not register to deadlock", K(last_trans_id), K(now_trans_id));
   }
 }
 
@@ -3399,7 +3399,7 @@ void ObPLCompileUnit::dump_deleted_log_info(const bool is_debug_log /* = true */
   if (is_anon()) {
     const pl::ObPLFunction *pl_func = dynamic_cast<const pl::ObPLFunction *>(this);
     if (OB_ISNULL(pl_func)) {
-      LOG_ERROR("the plan is null", K(object_id_),
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "the plan is null", K(object_id_),
                                     K(tenant_id_),
                                     K(added_to_lc_),
                                     K(get_ref_count()),

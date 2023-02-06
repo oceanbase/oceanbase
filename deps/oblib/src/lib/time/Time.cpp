@@ -22,7 +22,7 @@ ObSysTime ObSysTime::now(Clock clock)
         if(gettimeofday(&tv, 0) < 0)
         {
 #ifdef _NO_EXCEPTION
-            _OB_LOG(ERROR,"%s","SyscallException");
+            _OB_LOG_RET(ERROR, oceanbase::common::OB_ERROR, "%s","SyscallException");
             assert( 0 );
 #else
             throw SyscallException(__FILE__, __LINE__, errno);
@@ -36,7 +36,7 @@ ObSysTime ObSysTime::now(Clock clock)
         if(clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
         {
 #ifdef _NO_EXCEPTION
-            _OB_LOG(ERROR,"%s","SyscallException");
+            _OB_LOG_RET(ERROR, oceanbase::common::OB_ERROR, "%s","SyscallException");
             assert(0);
 #else
             throw SyscallException(__FILE__, __LINE__, errno);

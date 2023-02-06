@@ -423,7 +423,7 @@ bool ObResultSet::transaction_set_violation_and_retry(int &err, int64_t &retry_t
     // bug#6361189  pass err to force rollback stmt in do_close_plan()
     if (OB_TRANSACTION_SET_VIOLATION == err && 0 == retry_times && !is_isolation_RR_or_SE) {
       // TSC错误重试时，只在第一次打印WARN日志
-      LOG_WARN("transaction set consistency violation, will retry");
+      LOG_WARN_RET(err, "transaction set consistency violation, will retry");
     }
     int ret = do_close_plan(err, get_exec_context());
     ObPhysicalPlanCtx *plan_ctx = get_exec_context().get_physical_plan_ctx();
@@ -1048,7 +1048,7 @@ void ObResultSet::refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool 
     int err2 = ObTaskExecutorCtxUtil::refresh_location_cache(task_exec_ctx,
                                                              is_nonblock);
     if (OB_SUCCESS != err2) {
-      LOG_WARN("fail to refresh location cache", K(err2), K(is_nonblock), K(err));
+      LOG_WARN_RET(err2, "fail to refresh location cache", K(err2), K(is_nonblock), K(err));
     }
     LOG_TRACE("partition change or not master or no response, refresh location cache", K(err));
   }

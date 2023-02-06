@@ -827,7 +827,7 @@ void ObLogTenantGuard::revert_tenant()
   if (OB_NOT_NULL(tenant_) && OB_NOT_NULL(tenant_mgr)) {
     int revert_ret = tenant_mgr->revert_tenant(tenant_);
     if (OB_SUCCESS != revert_ret) {
-      LOG_ERROR("revert ObLogTenant fail", K(revert_ret), KPC(tenant_));
+      LOG_ERROR_RET(revert_ret, "revert ObLogTenant fail", K(revert_ret), KPC(tenant_));
     } else {
       tenant_ = NULL;
     }

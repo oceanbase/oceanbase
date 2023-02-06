@@ -367,7 +367,7 @@ MockSchemaService *MockObServer::get_schema_service()
   MockSchemaService *ss = NULL;
 
   if (!is_inited_) {
-    STORAGE_LOG(WARN, "ob server not inited");
+    STORAGE_LOG_RET(WARN, OB_NOT_INIT, "ob server not inited");
   } else {
     ss = schema_service_;
   }

@@ -515,12 +515,12 @@ bool ObDatumRow::operator==(const ObDatumRow &other) const
   bool is_equal = true;
   if (count_ != other.count_) {
     is_equal = false;
-    STORAGE_LOG(WARN, "datum row count no equal", K(other), K(*this));
+    STORAGE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "datum row count no equal", K(other), K(*this));
   } else {
     for (int64_t i = 0; is_equal && i < count_; i++) {
       is_equal = storage_datums_[i] == other.storage_datums_[i];
       if (!is_equal) {
-        STORAGE_LOG(WARN, "obj and datum no equal", K(i), K(other), K(*this));
+        STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "obj and datum no equal", K(i), K(other), K(*this));
       }
     }
   }
@@ -532,13 +532,13 @@ bool ObDatumRow::operator==(const ObNewRow &other) const
   bool is_equal = true;
   if (count_ != other.count_) {
     is_equal = false;
-    STORAGE_LOG(WARN, "datum row count no equal", K(other), K(*this));
+    STORAGE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "datum row count no equal", K(other), K(*this));
   } else {
     int ret = OB_SUCCESS;
     for (int64_t i = 0; is_equal && i < count_; i++) {
       is_equal = storage_datums_[i] == other.cells_[i];
       if (!is_equal) {
-        STORAGE_LOG(WARN, "obj and datum no equal", K(i), K(other), K(*this));
+        STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "obj and datum no equal", K(i), K(other), K(*this));
       }
     }
   }

@@ -29,7 +29,7 @@ void ObArbitrationService::update_arb_timeout_()
 {
   arb_timeout_us_ = 2 * 1000 * 1000L;
   if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
-    CLOG_LOG(WARN, "update_arb_timeout_", K_(self), K_(arb_timeout_us));
+    CLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "update_arb_timeout_", K_(self), K_(arb_timeout_us));
   }
 }
 }

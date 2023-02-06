@@ -41,7 +41,7 @@ ObArchiveLogFetchTask::ObArchiveLogFetchTask() :
 ObArchiveLogFetchTask::~ObArchiveLogFetchTask()
 {
   if (NULL != send_task_) {
-    ARCHIVE_LOG(ERROR, "residual send task exist, maybe memory leak", KPC(this));
+    ARCHIVE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "residual send task exist, maybe memory leak", KPC(this));
     send_task_ = NULL;
   }
   id_.reset();

@@ -435,7 +435,7 @@ int ObLogFileHandler::open(const char *file_path, const int flags, const mode_t 
     if (OB_SUCC(ret)) {
       const int64_t total_retry_time = ObTimeUtility::fast_current_time() - start_time;
       if (total_retry_time > MAX_RETRY_TIME) {
-        LOG_WARN("open file costs too much time", K(ret), K(total_retry_time), K(file_path), K(io_fd));
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "open file costs too much time", K(ret), K(total_retry_time), K(file_path), K(io_fd));
       }
     }
   }

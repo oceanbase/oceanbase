@@ -466,7 +466,7 @@ ObStmtFactory *ObExecContext::get_stmt_factory()
 {
   if (OB_ISNULL(stmt_factory_)) {
     if (OB_ISNULL(stmt_factory_ = OB_NEWx(ObStmtFactory, (&allocator_), allocator_))) {
-      LOG_WARN("fail to create log plan factory", K(stmt_factory_));
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to create log plan factory", K(stmt_factory_));
     }
   } else {
     // do nothing
@@ -478,7 +478,7 @@ ObRawExprFactory *ObExecContext::get_expr_factory()
 {
   if (OB_ISNULL(expr_factory_)) {
     if (OB_ISNULL(expr_factory_ = OB_NEWx(ObRawExprFactory, (&allocator_), allocator_))) {
-      LOG_WARN("fail to create log plan factory", K(expr_factory_));
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to create log plan factory", K(expr_factory_));
     }
   } else {
     // do nothing

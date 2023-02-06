@@ -97,7 +97,7 @@ int ObFailureDetector::mtl_start(ObFailureDetector *&p_failure_detector)
 void ObFailureDetector::mtl_stop(ObFailureDetector *&p_failure_detector)
 {
   if (OB_ISNULL(p_failure_detector)) {
-    COORDINATOR_LOG(WARN, "p_failure_detector is NULL");
+    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_failure_detector is NULL");
   } else {
     p_failure_detector->failure_task_handle_.stop();
     p_failure_detector->recovery_task_handle_.stop();
@@ -108,7 +108,7 @@ void ObFailureDetector::mtl_stop(ObFailureDetector *&p_failure_detector)
 void ObFailureDetector::mtl_wait(ObFailureDetector *&p_failure_detector)
 {
   if (OB_ISNULL(p_failure_detector)) {
-    COORDINATOR_LOG(WARN, "p_failure_detector is NULL");
+    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_failure_detector is NULL");
   } else {
     p_failure_detector->failure_task_handle_.wait();
     p_failure_detector->recovery_task_handle_.wait();
@@ -119,7 +119,7 @@ void ObFailureDetector::mtl_wait(ObFailureDetector *&p_failure_detector)
 void ObFailureDetector::mtl_destroy(ObFailureDetector *&p_failure_detector)
 {
   if (OB_ISNULL(p_failure_detector)) {
-    COORDINATOR_LOG(WARN, "p_failure_detector is NULL");
+    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_failure_detector is NULL");
   } else {
     COORDINATOR_LOG(INFO, "ObFailureDetector mtl destroy");
   }

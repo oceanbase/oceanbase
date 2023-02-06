@@ -1004,7 +1004,7 @@ void ObTextStringResult::calc_buffer_len(int64_t res_len)
       res_len += sizeof(ObLobCommon);
       buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, res_len, false);
     } else {
-      LOG_WARN("Lob: out row temp lob not implemented",
+      LOG_WARN_RET(OB_NOT_IMPLEMENT, "Lob: out row temp lob not implemented",
         K(OB_NOT_IMPLEMENT), K(this), K(pos_), K(buff_len_));
     }
   }

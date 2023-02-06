@@ -98,9 +98,9 @@ int ObLSAdapter::replay(ObLogReplayTask *replay_task)
     if (replay_task->replay_cost_ > MAX_SINGLE_REPLAY_ERROR_TIME_THRESOLD
         && !get_replay_is_writing_throttling()
         && lib::is_mini_mode()) {
-      CLOG_LOG(ERROR, "single replay task cost too much time. replay may be delayed", KPC(replay_task));
+      CLOG_LOG_RET(ERROR, OB_ERR_TOO_MUCH_TIME, "single replay task cost too much time. replay may be delayed", KPC(replay_task));
     } else {
-      CLOG_LOG(WARN, "single replay task cost too much time", KPC(replay_task));
+      CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "single replay task cost too much time", KPC(replay_task));
     }
   }
   return ret;

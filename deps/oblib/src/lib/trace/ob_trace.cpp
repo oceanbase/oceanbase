@@ -339,7 +339,7 @@ ObTrace* ObTrace::get_instance()
     thread_local Guard guard2(default_tls_buffer, MIN_BUFFER_SIZE);
     if (OB_ISNULL(default_tsi_buffer)) {
       save_buffer = (ObTrace*)default_tls_buffer;
-      LIB_LOG(WARN, "tsi was nullptr");
+      LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tsi was nullptr");
     } else {
       save_buffer = (ObTrace*)default_tsi_buffer;
     }
@@ -470,7 +470,7 @@ void ObTrace::reset_span()
 {
   #ifndef NDEBUG
   if (!check_magic()) {
-    LIB_LOG(ERROR, "trace buffer was not inited");
+    LIB_LOG_RET(ERROR, OB_NOT_INIT, "trace buffer was not inited");
   }
   #endif
   // remove all end span
@@ -527,7 +527,7 @@ void ObTrace::check_leak_span()
   ObSpanCtx* span = current_span_.get_first();
   while (current_span_.get_header() != span) {
     if (0 == span->end_ts_) {
-      _LIB_LOG(WARN, "there were leak span %s", lbt());
+      _LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "there were leak span %s", lbt());
       dump_span();
       break;
     }
@@ -539,7 +539,7 @@ void ObTrace::reset()
 {
   #ifndef NDEBUG
   if (!check_magic()) {
-    LIB_LOG(ERROR, "trace buffer was not inited");
+    LIB_LOG_RET(ERROR, OB_NOT_INIT, "trace buffer was not inited");
   }
   #endif
   offset_ = buffer_size_ / 2;

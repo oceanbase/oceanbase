@@ -215,7 +215,7 @@ int ObCdcService::fetch_log(const obrpc::ObCdcLSFetchLogReq &req,
     ret = fetcher_.fetch_log(req, resp);
     const int64_t end_ts = ObTimeUtility::current_time();
     if (end_ts - start_ts > FETCH_LOG_WARN_THRESHOLD) {
-      EXTLOG_LOG(WARN, "fetch log cost too much time", "time", end_ts - start_ts, K(req), K(resp));
+      EXTLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "fetch log cost too much time", "time", end_ts - start_ts, K(req), K(resp));
     }
 
     resp.set_l2s_net_time(recv_ts - send_ts);
@@ -247,7 +247,7 @@ int ObCdcService::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
     ret = fetcher_.fetch_missing_log(req, resp);
     const int64_t end_ts = ObTimeUtility::current_time();
     if (end_ts - start_ts > FETCH_LOG_WARN_THRESHOLD) {
-      EXTLOG_LOG(WARN, "fetch log cost too much time", "time", end_ts - start_ts, K(req), K(resp));
+      EXTLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "fetch log cost too much time", "time", end_ts - start_ts, K(req), K(resp));
     }
 
     resp.set_l2s_net_time(recv_ts - send_ts);

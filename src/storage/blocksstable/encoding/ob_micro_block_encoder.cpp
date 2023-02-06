@@ -258,7 +258,7 @@ int ObMicroBlockEncoder::calc_and_validate_checksum(const ObDatumRow &row)
     }
     if (OB_UNLIKELY(buffered_rows_checksum_ != micro_block_checksum_)) {
       ret = OB_CHECKSUM_ERROR;
-      FLOG_ERROR("micro block checksum is not equal", K(ret), K_(micro_block_checksum),
+      LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "micro block checksum is not equal", K(ret), K_(micro_block_checksum),
           K_(buffered_rows_checksum), K(row), K(buf_row));
     }
   }
@@ -341,7 +341,7 @@ void ObMicroBlockEncoder::update_estimate_size_limit(const ObMicroBlockEncodingC
 
   // We should make sure expand_pct_ never equal to 0
   if (OB_UNLIKELY(0 == expand_pct_)) {
-    LOG_ERROR("expand_pct equal to zero",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "expand_pct equal to zero",
         K_(expand_pct), K(ctx.estimate_block_size_), K(ctx.real_block_size_));
   }
 

@@ -41,7 +41,7 @@ const char *ObLogGranuleIterator::get_name() const
   int tmp_ret = OB_SUCCESS;
   int64_t index = 0;
   if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = is_partition_gi(is_part_gi)))) {
-    LOG_ERROR("failed to check is partition gi", K(tmp_ret));
+    LOG_ERROR_RET(tmp_ret, "failed to check is partition gi", K(tmp_ret));
     index = 1;
   } else if (is_part_gi) {
     index = 1;

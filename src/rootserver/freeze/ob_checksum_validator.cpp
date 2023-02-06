@@ -329,7 +329,7 @@ int ObTabletChecksumValidator::check_table_compaction_finished(
               if (OB_FAIL(ObTabletReplicaChecksumOperator::check_tablet_replica_checksum(tenant_id_,
                           pairs, frozen_scn, *sql_proxy_))) {
                 if (OB_CHECKSUM_ERROR == ret) {
-                  LOG_ERROR("ERROR! ERROR! ERROR! checksum error in major tablet_replica_checksum",
+                  LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in major tablet_replica_checksum",
                             KR(ret), K_(tenant_id), K(frozen_scn), "pair_cnt", pairs.count());
                 } else {
                   LOG_WARN("fail to check major tablet_replica checksum", KR(ret), K_(tenant_id),
@@ -474,7 +474,7 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
                   } else if (is_exist || is_wait_tablet_checksum_timeout) { // all tablet checksum exist or timeout
                     if (OB_FAIL(check_cross_cluster_checksum(*table_schema, frozen_scn))) {
                       if (OB_CHECKSUM_ERROR == ret) {
-                        LOG_ERROR("ERROR! ERROR! ERROR! checksum error in cross-cluster checksum", KR(ret),
+                        LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in cross-cluster checksum", KR(ret),
                                   K_(tenant_id), K(frozen_scn), KPC(table_schema));
                       } else {
                         LOG_WARN("fail to check cross-cluster checksum", KR(ret), K_(tenant_id),
@@ -613,7 +613,7 @@ int ObCrossClusterTabletChecksumValidator::check_column_checksum(
           } else if (0 == (cmp_ret = tablet_checksum_item.compare_tablet(tablet_replica_checksum_item))) {
             if (OB_FAIL(tablet_checksum_item.verify_tablet_column_checksum(tablet_replica_checksum_item))) {
               if (OB_CHECKSUM_ERROR == ret) {
-                LOG_ERROR("ERROR! ERROR! ERROR! checksum error in cross-cluster checksum",
+                LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in cross-cluster checksum",
                   K(tablet_checksum_item), K(tablet_replica_checksum_item));
                 check_ret = OB_CHECKSUM_ERROR;
                 ret = OB_SUCCESS; // continue checking next checksum
@@ -1011,7 +1011,7 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
                       if (FAILEDx(ObTabletReplicaChecksumOperator::check_column_checksum(tenant_id_,
                             *data_table_schema, *table_schema, frozen_scn, *sql_proxy_, expected_epoch))) {
                         if (OB_CHECKSUM_ERROR == ret) {
-                          LOG_ERROR("ERROR! ERROR! ERROR! checksum error in index checksum", KR(ret), KPC(data_table_schema),
+                          LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in index checksum", KR(ret), KPC(data_table_schema),
                             K_(tenant_id), K(frozen_scn), KPC(table_schema));
                         } else {
                           LOG_WARN("fail to check index column checksum", KR(ret), K_(tenant_id), KPC(data_table_schema),

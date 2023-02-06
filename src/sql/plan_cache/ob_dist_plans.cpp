@@ -236,7 +236,7 @@ int64_t ObDistPlans::get_mem_size() const
   int64_t plan_set_mem = 0;
   for (int64_t i = 0; i < dist_plans_.count(); i++) {
     if (OB_ISNULL(dist_plans_.at(i))) {
-      BACKTRACE(ERROR, true, "null physical plan");
+      BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "null physical plan");
     } else {
       plan_set_mem += dist_plans_.at(i)->get_mem_size();
     }
@@ -260,11 +260,11 @@ int ObDistPlans::remove_plan_stat()
     for (int64_t i = 0; i < dist_plans_.count(); i++) {
       if (OB_ISNULL(dist_plans_.at(i))) {
         tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get an unexpected null", K(tmp_ret), K(dist_plans_.at(i)));
+        LOG_WARN_RET(tmp_ret, "get an unexpected null", K(tmp_ret), K(dist_plans_.at(i)));
       } else if (FALSE_IT(plan_id = dist_plans_.at(i)->get_plan_id())) {
       } else if (OB_SUCCESS !=
                  (tmp_ret = plan_set_->remove_cache_obj_entry(plan_id))) {
-        LOG_WARN("failed to remove plan stat",
+        LOG_WARN_RET(tmp_ret, "failed to remove plan stat",
                  K(tmp_ret), K(plan_id), K(i));
       } else {
         /* do nothing */

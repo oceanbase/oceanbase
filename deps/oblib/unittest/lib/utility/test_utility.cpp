@@ -303,6 +303,7 @@ TEST(utility, long_to_str10)
 
 void test_max_speed(const int64_t rate, const int64_t total_size, const int64_t buf_size)
 {
+  int ret = 0;
   COMMON_LOG(INFO, "test_max_speed", K(rate), K(total_size), K(buf_size));
   ASSERT_NE(0, rate);
   ObBandwidthThrottle throttle;
@@ -363,6 +364,7 @@ TEST(utility, DISABLED_bandwidth_throttle)
 
 TEST(utility, ob_localtime)
 {
+  int ret = 0;
   struct tm std_tm;
   struct tm ob_tm;
 

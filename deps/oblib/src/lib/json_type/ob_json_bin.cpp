@@ -4604,7 +4604,7 @@ uint64_t ObJsonVar::get_var_size(uint8_t type)
       break;
     }
     default: {
-      LOG_WARN("invalid var type.", K(OB_NOT_SUPPORTED), K(size));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid var type.", K(OB_NOT_SUPPORTED), K(size));
       break;
     }
   }
@@ -4681,7 +4681,7 @@ uint64_t ObJsonVar::var_int2uint(int64_t var)
       break;
     }
     default: {
-      LOG_WARN("invalid var type.", K(size));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid var type.", K(size));
       break;
     }
   }
@@ -4718,7 +4718,7 @@ int64_t ObJsonVar::var_uint2int(uint64_t var)
       break;
     }
     default: {
-      LOG_WARN("invalid var type.", K(size));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid var type.", K(size));
       break;
     }
   }

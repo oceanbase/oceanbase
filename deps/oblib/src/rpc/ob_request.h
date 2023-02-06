@@ -181,7 +181,7 @@ inline void ObRequest::set_ez_req(easy_request_t *r)
 inline void ObRequest::enable_request_ratelimit()
 {
   if (OB_ISNULL(ez_req_)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req_));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
   } else {
     ez_req_->ratelimit_enabled = 1;
     ez_req_->redispatched = 0;
@@ -191,7 +191,7 @@ inline void ObRequest::enable_request_ratelimit()
 inline void ObRequest::set_request_background_flow()
 {
   if (OB_ISNULL(ez_req_)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req_));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
   } else {
     ez_req_->is_bg_flow = 1;
   }
@@ -200,7 +200,7 @@ inline void ObRequest::set_request_background_flow()
 inline void ObRequest::set_request_opacket_size(int64_t size)
 {
   if (OB_ISNULL(ez_req_)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req_));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
   } else {
     ez_req_->opacket_size = size;
   }

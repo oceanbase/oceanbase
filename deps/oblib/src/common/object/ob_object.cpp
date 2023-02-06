@@ -1303,7 +1303,7 @@ int ObObj::check_collation_free_and_compare(const ObObj &other) const
       || CS_TYPE_COLLATION_FREE != get_collation_type()
       || get_type() != other.get_type()
       || !is_character_type()) {
-    LOG_ERROR("unexpected error, invalid argument", K(*this), K(other));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "unexpected error, invalid argument", K(*this), K(other));
     right_to_die_or_duty_to_live();
   } else {
     // 只用于sortkey转换后的Obj比较
@@ -1809,7 +1809,7 @@ bool ObObj::check_collation_integrity() const
   }
   if (!is_ok) {
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-      BACKTRACE(WARN, true, "unexpected collation type: %s", to_cstring(get_meta()));
+      BACKTRACE_RET(WARN, true, common::OB_ERR_UNEXPECTED, "unexpected collation type: %s", to_cstring(get_meta()));
     }
   }
 #endif
@@ -1866,7 +1866,7 @@ void ObObj::checksum(ObBatchChecksum &bc) const
 
 void ObObj::dump(const int32_t log_level /*= OB_LOG_LEVEL_DEBUG*/) const
 {
-  _OB_NUM_LEVEL_LOG(log_level, "%s", S(*this));
+  _OB_NUM_LEVEL_LOG(log_level, 0, "%s", S(*this));
 }
 
 int ObObj::print_varchar_literal(const ObIArray<ObString> &type_infos, char *buffer, int64_t length, int64_t &pos) const

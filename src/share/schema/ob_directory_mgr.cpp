@@ -81,7 +81,7 @@ int ObDirectoryMgr::init()
 void ObDirectoryMgr::reset()
 {
   if (IS_NOT_INIT) {
-    LOG_WARN("directory manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "directory manger not init");
   } else {
     directory_infos_.clear();
     directory_name_map_.clear();

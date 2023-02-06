@@ -427,14 +427,14 @@ void ObTenantWeakReadService::process_cluster_heartbeat_rpc_cb(
     int64_t cur_tstamp = ObTimeUtility::current_time();
     int64_t delta =  cur_tstamp - last_succ_cluster_heartbeat_tstamp_;
     if (delta > 500 * 1000L) {
-      LOG_WARN("tenant weak read service cluster heartbeat cost too much time",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant weak read service cluster heartbeat cost too much time",
           K(tenant_id_), K(delta), K(last_succ_cluster_heartbeat_tstamp_));
     }
 
     ATOMIC_INC(&succ_cluster_heartbeat_count_);
     ATOMIC_SET(&last_succ_cluster_heartbeat_tstamp_, cur_tstamp);
   } else {
-    LOG_WARN("tenant weak read service cluster heartbeat RPC fail", K(rcode), K(tenant_id_),
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant weak read service cluster heartbeat RPC fail", K(rcode), K(tenant_id_),
         K(dst), "cluster_service_tablet_id", cluster_service_.get_cluster_service_tablet_id());
     // force refresh cluster service master
     refresh_cluster_service_master_();

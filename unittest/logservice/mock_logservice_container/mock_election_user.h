@@ -216,7 +216,7 @@ private:
       auto buffer = TH_BUFFER;
       int ret = common::OB_SUCCESS;
       if (MSG_DELAY == 0) {
-        ret = THREAD_POOL.commit_task_ignore_ret([buffer, election, this]() mutable {
+        ret = THREAD_POOL.commit_task_ignore_ret([buffer, election, ret, this]() mutable {
           int64_t begin = ObClockGenerator::getRealClock();
           this->decode_and_process_buffer(buffer, election);
           int64_t end = ObClockGenerator::getRealClock();
@@ -225,7 +225,7 @@ private:
           }
         });
       } else {
-        ret = TIMER.schedule_task_ignore_handle_after(MSG_DELAY, [buffer, election, this]() mutable {
+        ret = TIMER.schedule_task_ignore_handle_after(MSG_DELAY, [buffer, election, ret, this]() mutable {
           int64_t begin = ObClockGenerator::getRealClock();
           this->decode_and_process_buffer(buffer, election);
           int64_t end = ObClockGenerator::getRealClock();
@@ -238,7 +238,7 @@ private:
       assert(ret == OB_SUCCESS);
       // ELECT_LOG(INFO, "send message success", K(msg));
     } else {
-      ELECT_LOG(WARN, "send message failed", K(msg));
+      ELECT_LOG_RET(WARN, OB_ERR_UNEXPECTED, "send message failed", K(msg));
     }
   }
   unordered_map<std::pair<ObAddr,ObAddr>, Election*> map_;

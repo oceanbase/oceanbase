@@ -413,7 +413,7 @@ void ObTabletStreamPool::free(ObTabletStreamNode *node)
     int tmp_ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
       tmp_ret = OB_NOT_INIT;
-      LOG_ERROR("[MEMORY LEAK] ObTabletStreamPool is not inited, cannot free this node!!!",
+      LOG_ERROR_RET(tmp_ret, "[MEMORY LEAK] ObTabletStreamPool is not inited, cannot free this node!!!",
           K(tmp_ret), KPC(node));
     } else if (DYNAMIC_ALLOC == node->flag_) {
       node->~ObTabletStreamNode();
@@ -703,7 +703,7 @@ void ObTenantTabletStatMgr::process_stats()
       if (!cur_stat.is_valid()) {
         // allow dirty read
       } else if (OB_TMP_FAIL(update_tablet_stream(cur_stat))) {
-        LOG_WARN("failed to update tablet stat", K(tmp_ret), K(cur_stat));
+        LOG_WARN_RET(tmp_ret, "failed to update tablet stat", K(tmp_ret), K(cur_stat));
       }
     }
     report_cursor_ = pending_cur; // only TabletStatUpdater update this value.
@@ -728,7 +728,7 @@ void ObTenantTabletStatMgr::TabletStatUpdater::runTimerTask()
   int64_t interval_step = 0;
   if (CHECK_SCHEDULE_TIME_INTERVAL(CHECK_INTERVAL, interval_step)) {
     if (OB_UNLIKELY(interval_step > 1)) {
-      LOG_WARN("tablet streams not refresh too long", K(interval_step));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "tablet streams not refresh too long", K(interval_step));
     }
     mgr_.refresh_all(interval_step);
     FLOG_INFO("TenantTabletStatMgr refresh all tablet stream", K(MTL_ID()), K(interval_step));

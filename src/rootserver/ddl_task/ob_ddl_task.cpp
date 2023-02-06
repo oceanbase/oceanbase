@@ -153,13 +153,13 @@ trace::ObSpanCtx* ObDDLTracing::restore_parent_task_span()
   if (OB_DDL_TASK_ENABLE_TRACING) {
   trace::ObSpanCtx *span = nullptr;
   if (!OBTRACE->get_trace_id().is_inited()) {
-    LOG_WARN("trace id not inited!!!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+    LOG_WARN_RET(OB_NOT_INIT, "trace id not inited!!!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
   } else {
     // no need to specify start_ts, this is dummy parent, only span id is used by its child
     span = FLT_RESTORE_DDL_SPAN(ddl_table_redefinition, parent_task_span_id_, 0 /*start_ts*/);
   }
   if (OB_ISNULL(span)) {
-    LOG_WARN("restore parent task span return nullptr");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "restore parent task span return nullptr");
   }
   return span;
   } else {
@@ -184,7 +184,7 @@ trace::ObSpanCtx* ObDDLTracing::begin_task_span()
   const share::ObDDLType task_type = task_->get_task_type();
   trace::ObSpanCtx *span = nullptr;
   if (!OBTRACE->get_trace_id().is_inited()) {
-    LOG_WARN("trace id not inited!!!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+    LOG_WARN_RET(OB_NOT_INIT, "trace id not inited!!!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
   } else {
     switch (task_type) {
       case DDL_CREATE_INDEX:
@@ -228,7 +228,7 @@ trace::ObSpanCtx* ObDDLTracing::begin_task_span()
         break;
       default:
         span = nullptr;
-        LOG_WARN("begin task span return nullptr", K(task_type));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "begin task span return nullptr", K(task_type));
         break;
     }
   }
@@ -264,7 +264,7 @@ trace::ObSpanCtx* ObDDLTracing::restore_task_span()
   const share::ObDDLType task_type = task_->get_task_type();
   trace::ObSpanCtx *span = nullptr;
   if (!OBTRACE->get_trace_id().is_inited()) {
-    LOG_WARN("trace id not inited!!!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+    LOG_WARN_RET(OB_NOT_INIT, "trace id not inited!!!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
   } else {
     switch (task_type) {
       case DDL_CREATE_INDEX:
@@ -308,7 +308,7 @@ trace::ObSpanCtx* ObDDLTracing::restore_task_span()
         break;
       default:
         span = nullptr;
-        LOG_WARN("restore task span return nullptr");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "restore task span return nullptr");
         break;
     }
   }
@@ -333,7 +333,7 @@ trace::ObSpanCtx* ObDDLTracing::begin_status_span(const share::ObDDLTaskStatus s
   if (OB_DDL_TASK_ENABLE_TRACING) {
   trace::ObSpanCtx* span = nullptr;
   if (!OBTRACE->get_trace_id().is_inited()) {
-    LOG_WARN("trace id not inited!!! check if init_task_span() is invoked!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+    LOG_WARN_RET(OB_NOT_INIT, "trace id not inited!!! check if init_task_span() is invoked!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
   } else {
     switch (status) {
       case ObDDLTaskStatus::PREPARE:
@@ -388,7 +388,7 @@ trace::ObSpanCtx* ObDDLTracing::begin_status_span(const share::ObDDLTaskStatus s
         break;
       default:
         span = nullptr;
-        LOG_WARN("begin status span return nullptr", K(status));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "begin status span return nullptr", K(status));
         break;
     }
     if (OB_NOT_NULL(span)) {
@@ -427,7 +427,7 @@ trace::ObSpanCtx* ObDDLTracing::restore_status_span()
   const int64_t task_status = task_->get_task_status();
   trace::ObSpanCtx* span = nullptr;
   if (!OBTRACE->get_trace_id().is_inited()) {
-    LOG_WARN("trace id not inited!!! check if init_task_span() is invoked!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
+    LOG_WARN_RET(OB_NOT_INIT, "trace id not inited!!! check if init_task_span() is invoked!", K(OBTRACE->get_trace_id()), K(OBTRACE->get_level()));
   } else {
     switch (task_status) {
       case ObDDLTaskStatus::PREPARE:
@@ -482,7 +482,7 @@ trace::ObSpanCtx* ObDDLTracing::restore_status_span()
         break;
       default:
         span = nullptr;
-        LOG_WARN("restore status span return nullptr");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "restore status span return nullptr");
         break;
     }
   }
@@ -1260,6 +1260,18 @@ bool ObDDLTask::is_replica_build_need_retry(
   }
   need_retry = OB_TABLE_NOT_EXIST == ret ? false : need_retry;
   return need_retry;
+}
+
+void ObDDLTask::check_ddl_task_execute_too_long()
+{
+  int ret = OB_SUCCESS;
+  const int64_t execute_time = ObTimeUtility::current_time() - start_time_;
+  if (execute_time > TASK_EXECUTE_TIME_THRESHOLD) {
+    if (REACH_TIME_INTERVAL(3600 * 1000 * 1000L)) {
+      ret = OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME;
+      LOG_DBA_ERROR(OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME, "msg","ddl task executes too much time", K(ret), K(tenant_id_), K(task_id_), K(execute_time));
+    }
+  }
 }
 
 #ifdef ERRSIM

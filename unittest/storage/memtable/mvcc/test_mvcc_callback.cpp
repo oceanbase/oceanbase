@@ -63,7 +63,7 @@ public:
     if (bit >= 100000) {
       ob_abort();
     } else if (1 == set_[bit]) {
-      TRANS_LOG(ERROR, "set in unexpected", K(bit));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set in unexpected", K(bit));
       ob_abort();
     } else {
       set_[bit] = 1;
@@ -77,11 +77,11 @@ public:
     for (int i = 0; i < 100000; i++) {
       if (set_[i] != other.set_[i]) {
         if (set_[i] == 1) {
-          TRANS_LOG(ERROR, "different bit set", K(i),
+          TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "different bit set", K(i),
                     "set_[i]", "1",
                     "other.set_[i]", "0");
         } else {
-          TRANS_LOG(ERROR, "different bit set", K(i),
+          TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "different bit set", K(i),
                     "set_[i]", "0",
                     "other.set_[i]", "1");
         }

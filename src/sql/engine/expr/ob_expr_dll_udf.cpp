@@ -228,7 +228,7 @@ OB_DEF_SERIALIZE_SIZE(ObExprDllUdf)
     const ObUdfConstArgs &args = calculable_results_.at(j);
     const ObSqlExpression *expr = args.sql_calc_;
     if (OB_ISNULL(expr)) {
-      LOG_ERROR("udf normal expr is null");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "udf normal expr is null");
     } else {
       len += expr->get_serialize_size();
     }

@@ -123,7 +123,7 @@ bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
   bool bool_ret = false;
   if (IS_NOT_INIT) {
   } else if (!lsn.is_valid() || total_len <= 0) {
-    PALF_LOG(WARN, "invalid arguments", K(bool_ret), K(lsn), K(total_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(bool_ret), K(lsn), K(total_len));
   } else {
     LSN fake_ref_lsn(LOG_MAX_LSN_VAL);
     bool_ret = can_handle_new_log(lsn, total_len, fake_ref_lsn);
@@ -143,11 +143,11 @@ bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
   reuse_lsn = MIN(reuse_lsn, ref_reuse_lsn);
   if (IS_NOT_INIT) {
   } else if (!lsn.is_valid() || total_len <= 0 || !ref_reuse_lsn.is_valid()) {
-    PALF_LOG(WARN, "invalid arguments", K(bool_ret), K(lsn), K(total_len), K(ref_reuse_lsn));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(bool_ret), K(lsn), K(total_len), K(ref_reuse_lsn));
   } else if (lsn < start_lsn) {
-    PALF_LOG(WARN, "lsn is less than start_lsn", K(bool_ret), K(lsn), K_(start_lsn));
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "lsn is less than start_lsn", K(bool_ret), K(lsn), K_(start_lsn));
   } else if (end_lsn > reuse_lsn + get_available_buffer_size()) {
-    PALF_LOG(WARN, "end_lsn is larger than max reuse pos", K(bool_ret), K(lsn), K(end_lsn),
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "end_lsn is larger than max reuse pos", K(bool_ret), K(lsn), K(end_lsn),
         K(reuse_lsn), K_(available_buffer_size));
   } else {
     bool_ret = true;

@@ -38,7 +38,7 @@ int ObLobManager::mtl_new(ObLobManager *&m) {
 void ObLobManager::mtl_destroy(ObLobManager *&m)
 {
   if (OB_UNLIKELY(nullptr == m)) {
-    LOG_WARN("meta mem mgr is nullptr", KP(m));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "meta mem mgr is nullptr", KP(m));
   } else {
     OB_DELETE(ObLobManager, oceanbase::ObModIds::OMT_TENANT, m);
     m = nullptr;

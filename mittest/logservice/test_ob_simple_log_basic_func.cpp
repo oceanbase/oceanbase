@@ -454,7 +454,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
   const int64_t has_batched_size = leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_;
   const int64_t handle_count = leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.handle_count_;
   const int64_t log_id = leader.palf_handle_impl_->sw_.get_max_log_id();
-  PALF_LOG(ERROR, "batched_size", K(has_batched_size), K(log_id));
+  PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "batched_size", K(has_batched_size), K(log_id));
 
   unblock_net(leader_idx, lag_follower_idx);
   unblock_net(lag_follower_idx, leader_idx);
@@ -463,7 +463,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
   LSN lag_follower_max_lsn = lag_follower.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   while (lag_follower_max_lsn < max_lsn) {
     sleep(1);
-    PALF_LOG(ERROR, "follower is lagged", K(max_lsn), K(lag_follower_max_lsn));
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "follower is lagged", K(max_lsn), K(lag_follower_max_lsn));
     lag_follower_max_lsn = lag_follower.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   }
   const int64_t follower_has_batched_size = lag_follower.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_;
@@ -471,7 +471,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
   EXPECT_EQ(OB_SUCCESS, revert_cluster_palf_handle_guard(palf_list));
 
   int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-  PALF_LOG(ERROR, "runlin trace performance", K(cost_ts), K(log_id), K(max_lsn), K(has_batched_size), K(handle_count),
+  PALF_LOG_RET(ERROR, OB_SUCCESS, "runlin trace performance", K(cost_ts), K(log_id), K(max_lsn), K(has_batched_size), K(handle_count),
       K(follower_has_batched_size), K(follower_handle_count));
 }
 

@@ -100,7 +100,7 @@ int ObTabletChecksumItem::verify_tablet_column_checksum(const ObTabletReplicaChe
         LOG_WARN("fail to check column_meta equal", KR(ret), K(replica_item));
       } else if ((row_count_ != replica_item.row_count_) || !is_same_column_checksum) {
         ret = OB_CHECKSUM_ERROR;
-        LOG_ERROR("fatal checksum error", KR(ret), K(is_same_column_checksum), K(replica_item), K(*this));
+        LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "fatal checksum error", KR(ret), K(is_same_column_checksum), K(replica_item), K(*this));
       }
     } 
   }

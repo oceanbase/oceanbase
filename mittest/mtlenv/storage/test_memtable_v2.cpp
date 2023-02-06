@@ -51,7 +51,7 @@ void *ObMemtableCtx::callback_alloc(const int64_t size)
 {
   void* ret = NULL;
   if (OB_ISNULL(ret = std::malloc(size))) {
-    TRANS_LOG(ERROR, "callback alloc error, no memory", K(size), K(*this));
+    TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback alloc error, no memory", K(size), K(*this));
   } else {
     ATOMIC_FAA(&callback_mem_used_, size);
     ATOMIC_INC(&callback_alloc_count_);
@@ -62,7 +62,7 @@ void *ObMemtableCtx::callback_alloc(const int64_t size)
 void ObMemtableCtx::callback_free(ObITransCallback *cb)
 {
   if (OB_ISNULL(cb)) {
-    TRANS_LOG(ERROR, "cb is null, unexpected error", KP(cb), K(*this));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
   } else {
     ATOMIC_INC(&callback_free_count_);
     std::free(cb);

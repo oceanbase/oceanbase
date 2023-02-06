@@ -159,7 +159,7 @@ int ObSynonymMgr::init()
 void ObSynonymMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("synonym manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "synonym manger not init");
   } else {
     synonym_infos_.clear();
     synonym_id_map_.clear();

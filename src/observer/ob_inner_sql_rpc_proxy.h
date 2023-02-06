@@ -273,7 +273,7 @@ public:
   {
     ObInnerSQLTransmitResult *ret_result = NULL;
     if (!result_.is_scanner_inited()) {
-      SQL_EXE_LOG(ERROR, "result_ is not inited");
+      SQL_EXE_LOG_RET(ERROR, common::OB_NOT_INIT, "result_ is not inited");
     } else {
       ret_result = &result_;
     }

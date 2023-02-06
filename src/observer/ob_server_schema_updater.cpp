@@ -167,7 +167,7 @@ int ObServerSchemaUpdater::init(const common::ObAddr &host, ObMultiVersionSchema
 void ObServerSchemaUpdater::stop()
 {
   if (!inited_) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     task_queue_.stop();
   }
@@ -176,7 +176,7 @@ void ObServerSchemaUpdater::stop()
 void ObServerSchemaUpdater::wait()
 {
   if (!inited_) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     task_queue_.wait();
   }

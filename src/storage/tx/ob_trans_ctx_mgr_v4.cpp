@@ -701,7 +701,7 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
   // run callback out of lock, ignore ret
   (void)process_callback_(cb_array);
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "switch_to_follower_forcedly use too much time", K(timeguard), "manager", *this);
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "switch_to_follower_forcedly use too much time", K(timeguard), "manager", *this);
   }
   TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] switch_to_follower_forcedly", K(ret), KPC(this));
   return ret;
@@ -918,7 +918,7 @@ int ObLSTxCtxMgr::stop(const bool graceful)
     }
   }
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "stop trans use too much time", K(timeguard), "manager", *this);
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "stop trans use too much time", K(timeguard), "manager", *this);
   }
   process_callback_(cb_array);
   TRANS_LOG(INFO, "[LsTxCtxMgr] stop done", K(timeguard), "manager", *this);
@@ -942,7 +942,7 @@ int ObLSTxCtxMgr::kill_all_tx(const bool graceful, bool &is_all_tx_cleaned_up)
     is_all_tx_cleaned_up = (get_tx_ctx_count_() == 0);
   }
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "kill_all_tx use too much time", K(timeguard), "manager", *this);
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "kill_all_tx use too much time", K(timeguard), "manager", *this);
   }
   (void)process_callback_(cb_array);
   TRANS_LOG(INFO, "[LsTxCtxMgr] kill_all_tx done", K(timeguard), "manager", *this);
@@ -1052,7 +1052,7 @@ int ObLSTxCtxMgr::check_modify_schema_elapsed(const ObTabletID &tablet_id,
     block_tx_id = fn.get_tx_id();
   }
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "ObLSTxCtxMgr::check_modify_schema_elapsed use too much time",
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ObLSTxCtxMgr::check_modify_schema_elapsed use too much time",
               K(timeguard), "manager", *this);
   }
 
@@ -1081,7 +1081,7 @@ int ObLSTxCtxMgr::check_modify_time_elapsed(const ObTabletID &tablet_id,
     block_tx_id = fn.get_tx_id();
   }
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "ObLSTxCtxMgr::check_modify_time_elapsed use too much time",
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ObLSTxCtxMgr::check_modify_time_elapsed use too much time",
               K(timeguard), "manager", *this);
   }
 
@@ -1619,7 +1619,7 @@ void ObTxCtxMgr::destroy()
 
   if (is_inited_) {
     if (OB_TMP_FAIL(remove_all_ls_())) {
-      TRANS_LOG(WARN, "remove all ls error", K(tmp_ret));
+      TRANS_LOG_RET(WARN, tmp_ret, "remove all ls error", K(tmp_ret));
     } else {
       tenant_id_ = OB_INVALID_TENANT_ID;
       ls_tx_ctx_mgr_map_.destroy();

@@ -3138,7 +3138,7 @@ bool ObPrivilegeCheck::check_password_expired_time(int64_t password_last_changed
     /*do nothing*/
   } else if ((uint64_t)(timeline) > (uint64_t)password_last_changed_ts) {
     is_expired = true;
-    LOG_WARN("the password is out of date, please change the password");
+    LOG_WARN_RET(OB_SUCCESS, "the password is out of date, please change the password");
   }
   return is_expired;
 }

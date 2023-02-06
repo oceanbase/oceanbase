@@ -35,7 +35,7 @@ struct ObJsonBaseCmp {
     } else if (a->is_bin() && b->is_bin()) {
       is_eq = (a->get_data() == b->get_data());
     } else {
-      LOG_WARN("unexpected type", K(OB_ERR_UNEXPECTED), K(*a), K(*b));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected type", K(OB_ERR_UNEXPECTED), K(*a), K(*b));
     }
     return is_eq;
   }
@@ -6023,7 +6023,7 @@ ObObjType ObJsonBaseUtil::get_time_type(ObJsonNodeType json_type)
       break;
     }
     default:
-      LOG_WARN("undefined datetime json type", K(json_type));
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "undefined datetime json type", K(json_type));
       break;
   }
   return type;

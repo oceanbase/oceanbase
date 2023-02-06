@@ -62,11 +62,11 @@ void ObEndTransAsyncCallback::callback(int cb_param)
 {
   bool need_disconnect = false;
   if (OB_UNLIKELY(!has_set_need_rollback_)) {
-    LOG_ERROR("is_need_rollback_ has not been set",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "is_need_rollback_ has not been set",
               K(has_set_need_rollback_),
               K(is_need_rollback_));
   } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
-    LOG_ERROR("end trans type is invalid", K(cb_param), K(end_trans_type_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "end trans type is invalid", K(cb_param), K(end_trans_type_));
   } else {
     ObSQLUtils::check_if_need_disconnect_after_end_trans(
         cb_param, is_need_rollback_,

@@ -220,7 +220,7 @@ int32_t ObExprLower::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->casedn_multiply;
   }
@@ -245,7 +245,7 @@ int32_t ObExprUpper::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->caseup_multiply;
   }
@@ -537,7 +537,7 @@ int32_t ObExprNlsLower::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->casedn_multiply;
   }
@@ -579,7 +579,7 @@ int32_t ObExprNlsUpper::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->casedn_multiply;
   }

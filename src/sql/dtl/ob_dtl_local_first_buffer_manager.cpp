@@ -219,7 +219,7 @@ void ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::destroy()
   DLIST_FOREACH_REMOVESAFE_NORET(node, free_list_) {
     buffer_info = node;
     if (nullptr != buffer_info->buffer()) {
-      LOG_ERROR("data buffer is not null", K(buffer_info));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "data buffer is not null", K(buffer_info));
       buffer_info->set_buffer(nullptr);
     }
     free_list_.remove(buffer_info);

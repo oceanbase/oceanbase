@@ -62,7 +62,7 @@ using namespace oceanbase::obrpc;
 void MultiLevelReqCnt::atomic_inc(const int32_t level)
 {
   if (level < 0 || level >= MAX_REQUEST_LEVEL) {
-    LOG_WARN("unexpected level", K(level));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected level", K(level));
   } else {
     ATOMIC_INC(&cnt_[level]);
   }
@@ -208,7 +208,7 @@ void ObPxPool::handle(ObLink *task)
 {
   Task *t  = static_cast<Task*>(task);
   if (t == nullptr) {
-    LOG_ERROR("px task is invalid");
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "px task is invalid");
   } else {
     t->func_();
     OB_DELETE(Task, ObModIds::OMT_TENANT, t);
@@ -905,7 +905,7 @@ void ObTenant::wait()
     }
     ob_usleep(10L * 1000L);
   }
-  LOG_WARN("start remove nesting", K(nesting_workers_.get_size()), K_(id));
+  LOG_WARN_RET(OB_SUCCESS,"start remove nesting", K(nesting_workers_.get_size()), K_(id));
   while (nesting_workers_.get_size() > 0) {
     int ret = OB_SUCCESS;
     if (OB_SUCC(workers_lock_.trylock())) {
@@ -930,11 +930,11 @@ void ObTenant::wait()
     }
     ob_usleep(10L * 1000L);
   }
-  LOG_WARN("finish remove nesting", K(nesting_workers_.get_size()), K_(id));
+  LOG_WARN_RET(OB_SUCCESS, "finish remove nesting", K(nesting_workers_.get_size()), K_(id));
 
-  LOG_WARN("start remove group_map", K_(id));
+  LOG_WARN_RET(OB_SUCCESS, "start remove group_map", K_(id));
   group_map_.wait_group();
-  LOG_WARN("finish remove group_map", K_(id));
+  LOG_WARN_RET(OB_SUCCESS, "finish remove group_map", K_(id));
 
   if (!is_virtual_tenant_id(id_) && !wait_mtl_finished_) {
     ObTenantSwitchGuard guard(this);
@@ -954,7 +954,7 @@ void ObTenant::destroy()
   }
   if (cgroup_ctrl_.is_valid()
       && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.remove_tenant_cgroup(id_))) {
-    LOG_WARN("remove tenant cgroup failed", K(tmp_ret), K_(id));
+    LOG_WARN_RET(tmp_ret, "remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
   worker_pool_.destroy();
   group_map_.destroy_group();
@@ -983,7 +983,7 @@ void ObTenant::set_unit_max_cpu(double cpu)
   int32_t cfs_quota_us = static_cast<int32_t>(default_cfs_period_us * cpu);
   if (cgroup_ctrl_.is_valid()
       && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.set_cpu_cfs_quota(cfs_quota_us, id_))) {
-    LOG_WARN("set cpu cfs quota failed", K(tmp_ret), K_(id), K(cfs_quota_us));
+    LOG_WARN_RET(tmp_ret, "set cpu cfs quota failed", K(tmp_ret), K_(id), K(cfs_quota_us));
   }
 }
 
@@ -995,7 +995,7 @@ void ObTenant::set_unit_min_cpu(double cpu)
   int32_t cpu_shares = static_cast<int32_t>(default_cpu_shares * cpu);
   if (cgroup_ctrl_.is_valid()
       && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.set_cpu_shares(cpu_shares, id_))) {
-    LOG_WARN("set cpu shares failed", K(tmp_ret), K_(id), K(cpu_shares));
+    LOG_WARN_RET(tmp_ret, "set cpu shares failed", K(tmp_ret), K_(id), K(cpu_shares));
   }
 }
 

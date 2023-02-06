@@ -225,9 +225,9 @@ ObArchiveLogFetchTask *ObArchiveFetcher::alloc_log_fetch_task()
 {
   ObArchiveLogFetchTask *task = NULL;
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(WARN, "ObArchiveFetcher not init");
+    ARCHIVE_LOG_RET(WARN, OB_NOT_INIT, "ObArchiveFetcher not init");
   } else if (OB_ISNULL(allocator_)) {
-    ARCHIVE_LOG(ERROR, "allocator_ is NULL", K(allocator_));
+    ARCHIVE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "allocator_ is NULL", K(allocator_));
   } else {
     task = allocator_->alloc_log_fetch_task();
   }
@@ -273,7 +273,7 @@ void ObArchiveFetcher::run1()
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "ObArchiveFetcher not init");
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "ObArchiveFetcher not init");
   } else {
     while (!has_set_stop() && !(OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
       int64_t begin_tstamp = ObTimeUtility::current_time();

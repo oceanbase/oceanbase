@@ -69,7 +69,7 @@ ObPLInterfaceType ObPLInterfaceService::get_type(ObString &name) const
 {
   ObPLInterfaceType type = INTERFACE_END;
   if (OB_SUCCESS != interface_map_.get_refactored(name, type)) {
-    LOG_WARN("get interface failed", K(name), K(type));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get interface failed", K(name), K(type));
   }
   return type;
 }

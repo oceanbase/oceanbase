@@ -2582,7 +2582,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
         if (ObTimeUtility::fast_current_time() - start_time > SYNC_TABLET_SEQ_LOG_TIMEOUT) {
           wait_timeout = true;
         }
-        LOG_WARN("submit sync tablet seq log wait too much time", K(retry_cnt), K(wait_timeout));
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "submit sync tablet seq log wait too much time", K(retry_cnt), K(wait_timeout));
       }
     }
     if (wait_timeout) {
@@ -2801,7 +2801,7 @@ int ObTablet::write_tablet_schema_version_change_clog(
           if (ObTimeUtility::fast_current_time() - start_time > CHECK_SCHEMA_VERSION_CHANGE_LOG_TIMEOUT) {
             wait_timeout = true;
           }
-          LOG_WARN("submit schema version change log wait too much time", K(retry_cnt), K(wait_timeout));
+          LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "submit schema version change log wait too much time", K(retry_cnt), K(wait_timeout));
         }
       }
       if (wait_timeout) {

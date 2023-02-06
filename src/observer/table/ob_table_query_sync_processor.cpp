@@ -102,7 +102,7 @@ ObQuerySyncMgr &ObQuerySyncMgr::get_instance()
       instance = OB_NEW(ObQuerySyncMgr, ObModIds::TABLE_PROC);
       if (OB_LIKELY(OB_NOT_NULL(instance))) {
         if (common::OB_SUCCESS != instance->init()) {
-          LOG_WARN("failed to init ObQuerySyncMgr instance");
+          LOG_WARN_RET(OB_ERROR, "failed to init ObQuerySyncMgr instance");
           OB_DELETE(ObQuerySyncMgr, ObModIds::TABLE_PROC, instance);
           instance = NULL;
           ATOMIC_BCAS(&once_, 1, 0);

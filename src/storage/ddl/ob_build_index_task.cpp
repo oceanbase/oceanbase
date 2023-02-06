@@ -746,7 +746,7 @@ int64_t ObUniqueCheckingDag::hash() const
   int64_t hash_val = 0;
   if (NULL == index_schema_) {
     tmp_ret = OB_ERR_SYS;
-    STORAGE_LOG(ERROR, "index schema must not be NULL", K(tmp_ret));
+    STORAGE_LOG_RET(ERROR, tmp_ret, "index schema must not be NULL", K(tmp_ret));
   } else {
     hash_val = tablet_id_.hash() + index_schema_->get_table_id();
   }
@@ -798,7 +798,7 @@ bool ObUniqueCheckingDag::operator==(const ObIDag &other) const
     const ObUniqueCheckingDag &dag = static_cast<const ObUniqueCheckingDag &>(other);
     if (NULL == index_schema_ || NULL == dag.index_schema_) {
       tmp_ret = OB_ERR_SYS;
-      STORAGE_LOG(ERROR, "index schema must not be NULL", K(tmp_ret), KP(index_schema_),
+      STORAGE_LOG_RET(ERROR, tmp_ret, "index schema must not be NULL", K(tmp_ret), KP(index_schema_),
           KP(dag.index_schema_));
     } else {
       is_equal = tablet_id_ == dag.tablet_id_

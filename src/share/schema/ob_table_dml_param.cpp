@@ -226,7 +226,7 @@ const ObColumnParam * ObTableSchemaParam::get_column_by_idx(const int64_t idx) c
 {
   const ObColumnParam * ptr = NULL;
   if (idx < 0 || idx >= columns_.count()) {
-    LOG_WARN("idx out of range", K(idx), K(columns_.count()), K(lbt()));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "idx out of range", K(idx), K(columns_.count()), K(lbt()));
   } else {
     ptr = columns_.at(idx);
   }
@@ -237,7 +237,7 @@ const ObColumnParam * ObTableSchemaParam::get_rowkey_column_by_idx(const int64_t
 {
   const ObColumnParam * ptr = NULL;
   if (idx < 0 || idx >= read_info_.get_schema_rowkey_count()) {
-    LOG_WARN("idx out of range", K(idx), K(read_info_.get_schema_rowkey_count()));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "idx out of range", K(idx), K(read_info_.get_schema_rowkey_count()));
   } else {
     ptr = columns_.at(idx);
   }

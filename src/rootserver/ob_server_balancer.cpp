@@ -7240,6 +7240,7 @@ bool ObServerBalancer::UnitGroupLoadCmp::operator()(
   bool bool_ret = false;
   double left_value = 0.0;
   double right_value = 0.0;
+  int &ret = ret_;
   if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
     // ignore
   } else if (OB_UNLIKELY(NULL == left || NULL == right)) {
@@ -7391,7 +7392,7 @@ bool ObServerBalancer::ServerTotalLoadCmp::operator()(
     // ignore
   } else if (OB_UNLIKELY(NULL == left || NULL == right)) {
     ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret_), KP(left), KP(right));
+    LOG_WARN_RET(ret_, "invalid argument", K(ret_), KP(left), KP(right));
   } else if (left->wild_server_ && !left->wild_server_) {
     bool_ret = true;
   } else if (!left->wild_server_ && right->wild_server_) {
@@ -7441,7 +7442,7 @@ bool ObServerBalancer::IntraServerLoadCmp::operator()(
     // ignore
   } else if (OB_UNLIKELY(NULL == left || NULL == right)) {
     ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret_), KP(left), KP(right));
+    LOG_WARN_RET(ret_, "invalid argument", K(ret_), KP(left), KP(right));
   } else if (left->intra_ttg_load_value_ > right->intra_ttg_load_value_) {
     bool_ret = true;
   } else {
@@ -7479,7 +7480,7 @@ bool ObServerBalancer::InterServerLoadCmp::operator()(
     // ignore
   } else if (OB_UNLIKELY(NULL == left || NULL == right)) {
     ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret_), KP(left), KP(right));
+    LOG_WARN_RET(ret_, "invalid argument", K(ret_), KP(left), KP(right));
   } else if (left->inter_ttg_load_value_ > right->inter_ttg_load_value_) {
     bool_ret = true;
   } else {
@@ -7517,7 +7518,7 @@ bool ObServerBalancer::ServerLoadUgCntCmp::operator()(
     // ignore
   } else if (OB_UNLIKELY(NULL == left || NULL == right)) {
     ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret_), KP(left), KP(right));
+    LOG_WARN_RET(ret_, "invalid argument", K(ret_), KP(left), KP(right));
   } else if (left->unitgroup_loads_.count() < right->unitgroup_loads_.count()) {
     bool_ret = true;
   } else {
@@ -8125,7 +8126,7 @@ bool ObServerBalancer::ServerDiskPercentCmp::operator()(
     // ignore
   } else if (OB_UNLIKELY(NULL == left || NULL == right)) {
     ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret_), KP(left), KP(right));
+    LOG_WARN_RET(ret_,"invalid argument", K(ret_), KP(left), KP(right));
   } else {
     double left_percent = left->get_disk_used_percent();
     double right_percent = right->get_disk_used_percent();
@@ -8145,6 +8146,7 @@ bool ObServerBalancer::UnitLoadDiskCmp::operator()(
   bool bool_ret = false;
   ObUnitStat left_stat;
   ObUnitStat right_stat;
+  int &ret = ret_;
   if (common::OB_SUCCESS != ret_) {
     // bypass
   } else if (NULL == left || NULL == right) {

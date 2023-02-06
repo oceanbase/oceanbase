@@ -406,7 +406,7 @@ template<int64_t SIZE>
 void ObFixedSizeBlockMemoryContext<SIZE>::destroy()
 {
   if (0 != used_block_num_) {
-    COMMON_LOG(ERROR, "not all block be freed, potential memory leak!", K(used_block_num_));
+    COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "not all block be freed, potential memory leak!", K(used_block_num_));
   }
   used_block_num_ = 0;
   is_inited_ = false;

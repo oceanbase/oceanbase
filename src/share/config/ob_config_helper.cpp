@@ -444,7 +444,7 @@ int64_t ObConfigIntParser::get(const char *str, bool &valid)
       valid = true;
     } else {
       valid = false;
-      OB_LOG(WARN, "set int error", K(str), K(valid));
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set int error", K(str), K(valid));
     }
   }
   return value;
@@ -487,7 +487,7 @@ int64_t ObConfigCapacityParser::get(const char *str, bool &valid)
       value <<= CAP_PB;
     } else {
       valid = false;
-      OB_LOG(WARN, "set capacity error", K(str), K(p_unit));
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set capacity error", K(str), K(p_unit));
     }
   }
 
@@ -518,7 +518,7 @@ int64_t ObConfigReadableIntParser::get(const char *str, bool &valid)
       value *= UNIT_M;
     } else {
       valid = false;
-      OB_LOG(WARN, "set readable int error", K(str), K(p_unit));
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set readable int error", K(str), K(p_unit));
     }
   }
 
@@ -554,7 +554,7 @@ int64_t ObConfigTimeParser::get(const char *str, bool &valid)
       value = value * TIME_DAY;
     } else {
       valid = false;
-      OB_LOG(WARN, "set time error", K(str), K(p_unit));
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set time error", K(str), K(p_unit));
     }
   }
 
@@ -605,7 +605,7 @@ bool ObConfigBoolParser::get(const char *str, bool &valid)
 
   if (OB_ISNULL(str)) {
     valid = false;
-    OB_LOG(WARN, "Get bool config item fail, str is NULL!");
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Get bool config item fail, str is NULL!");
   } else if (0 == STRCASECMP(str, "false")) {
     valid = true;
     value = false;
@@ -637,7 +637,7 @@ bool ObConfigBoolParser::get(const char *str, bool &valid)
     valid = true;
     value = false;
   } else {
-    OB_LOG(WARN, "Get bool config item fail", K(str));
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Get bool config item fail", K(str));
     valid = false;
   }
   return value;

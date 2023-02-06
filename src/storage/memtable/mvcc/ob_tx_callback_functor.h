@@ -203,7 +203,7 @@ public:
 
     if (need_checksum_ && true == is_reverse_) {
       is_valid = false;
-      TRANS_LOG(ERROR, "we cannot calc checksum when reverse remove", KPC(this));
+      TRANS_LOG_RET(ERROR, common::OB_INVALID_ERROR, "we cannot calc checksum when reverse remove", KPC(this));
     }
 
     return is_valid;
@@ -222,7 +222,7 @@ public:
     if (need_checksum_) {
       return checksum_last_scn_;
     } else {
-      TRANS_LOG(ERROR, "we donot go here if we donot checksum", KPC(this));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "we donot go here if we donot checksum", KPC(this));
       return share::SCN::min_scn();
     }
   }
@@ -316,7 +316,7 @@ public:
     if (NULL != checksumer_) {
       return checksum_last_scn_;
     } else {
-      TRANS_LOG(ERROR, "we donot go here if we donot checksum", KPC(this));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "we donot go here if we donot checksum", KPC(this));
       return share::SCN::min_scn();
     }
   }

@@ -217,7 +217,7 @@ template<typename Key, typename Value>
 void ObConcurrentHashMapWithHazardValue<Key, Value *>::DefaultValueReclaimCallback::reclaim_value(Value *value)
 {
   if (OB_ISNULL(alloc_)) {
-    COMMON_LOG(WARN, "DefaultValueReclaimCallback wrong status", KP(alloc_));
+    COMMON_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "DefaultValueReclaimCallback wrong status", KP(alloc_));
   } else {
     alloc_->free(value);
     value = NULL;
@@ -241,7 +241,7 @@ template<typename Key, typename Value>
 void ObConcurrentHashMapWithHazardValue<Key, Value *>::HazardPtrReclaimCallback::reclaim_ptr(uintptr_t ptr)
 {
   if (OB_ISNULL(value_reclaim_callback_)) {
-    COMMON_LOG(ERROR, "HazardPtrReclaimCallback wrong status", K(value_reclaim_callback_));
+    COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "HazardPtrReclaimCallback wrong status", K(value_reclaim_callback_));
   } else {
     value_reclaim_callback_->reclaim_value(reinterpret_cast<Value *>(ptr));
   }
@@ -266,11 +266,11 @@ void ObConcurrentHashMapWithHazardValue<Key, Value *>::HashReclaimCallback::recl
 {
   UNUSED(key);
   if (OB_ISNULL(hazard_ptr_)) {
-    COMMON_LOG(ERROR, "HashReclaimCallback status error", KP(hazard_ptr_));
+    COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "HashReclaimCallback status error", KP(hazard_ptr_));
   } else {
-    int tmp_ret = hazard_ptr_->retire(reinterpret_cast<uintptr_t>(value));
-    if (OB_SUCCESS != tmp_ret) {
-      COMMON_LOG(ERROR, "retire ptr error", K(value), K(tmp_ret));
+    int ret = hazard_ptr_->retire(reinterpret_cast<uintptr_t>(value));
+    if (OB_SUCCESS != ret) {
+      COMMON_LOG(ERROR, "retire ptr error", K(value), K(ret));
     }
   }
 }

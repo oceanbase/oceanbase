@@ -1551,7 +1551,7 @@ int PalfHandleImpl::inner_append_log(const LSN &lsn,
     const int64_t time_cost = ObTimeUtility::current_time() - begin_ts;
     append_cost_stat_.stat(time_cost);
     if (time_cost >= 5 * 1000) {
-      PALF_LOG(WARN, "write log cost too much time", K(ret), KPC(this), K(lsn), K(scn), K(time_cost));
+      PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "write log cost too much time", K(ret), KPC(this), K(lsn), K(scn), K(time_cost));
     }
   }
   return ret;
@@ -1572,7 +1572,7 @@ int PalfHandleImpl::inner_append_log(const LSNArray &lsn_array,
     const int64_t time_cost = ObTimeUtility::current_time() - begin_ts;
     append_cost_stat_.stat(time_cost);
     if (time_cost > 10 * 1000) {
-      PALF_LOG(WARN, "write log cost too much time", K(ret), KPC(this), K(lsn_array),
+      PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "write log cost too much time", K(ret), KPC(this), K(lsn_array),
                K(scn_array), K(time_cost));
     }
   }

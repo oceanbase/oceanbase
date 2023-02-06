@@ -136,7 +136,7 @@
       if (arg == other.arg) { \
       } else { \
         is_equal = false; \
-        DDLOG(WARN, #arg " not equal", "current", arg, "other", other.arg); \
+        DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #arg " not equal", "current", arg, "other", other.arg); \
       } \
     }
 
@@ -148,12 +148,12 @@
           is_equal = ((array_ptr[i]) == (other.array_ptr[i])); \
         } \
         if (! is_equal) { \
-          DDLOG(WARN, #array_ptr " not equal", K(i), K(array_size), \
+          DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #array_ptr " not equal", K(i), K(array_size), \
               "current", array_ptr[i], "other", other.array_ptr[i]); \
         } \
       } else { \
         is_equal = false; \
-        DDLOG(WARN, #array_size " not equal", K(array_size), "other", other.array_size); \
+        DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #array_size " not equal", K(array_size), "other", other.array_size); \
       } \
     }
 
@@ -165,12 +165,12 @@
           is_equal = array_ref.at(i) == other.array_ref.at(i); \
         } \
         if (! is_equal) { \
-          DDLOG(WARN, #array_ref " not equal", K(i), "count", array_ref.count(), \
+          DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #array_ref " not equal", K(i), "count", array_ref.count(), \
               "current", array_ref.at(i), "other", other.array_ref.at(i)); \
         } \
       } else { \
         is_equal = false; \
-        DDLOG(WARN, #array_ref " size not equal", \
+        DDLOG_RET(WARN, OB_ERR_UNEXPECTED, #array_ref " size not equal", \
             "current", array_ref.count(), "other", other.array_ref.count()); \
       } \
     }

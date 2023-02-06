@@ -88,7 +88,7 @@ int EventRecorder::report_event_(ElectionEventType type, const common::ObString 
     }
     if (++retry_times > 12 || OB_SUCC(ret)) {
       if (retry_times > 12) {// this may happened cause inner sql may not work for a long time, but i have tried my very best, so let it miss.
-        LOG_EVENT(WARN, "fail to schedule report event task cause retry too much times");
+        LOG_EVENT_RET(WARN, OB_ERR_TOO_MUCH_TIME, "fail to schedule report event task cause retry too much times");
       }
       stop_flag = true;
     }

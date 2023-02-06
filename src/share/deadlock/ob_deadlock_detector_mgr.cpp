@@ -118,7 +118,7 @@ int ObDeadLockDetectorMgr::InnerAllocHandle::InnerFactory::create(const UserBina
 void ObDeadLockDetectorMgr::InnerAllocHandle::InnerFactory::release(ObIDeadLockDetector *p_detector)
 {
   if (nullptr == p_detector) {
-    DETECT_LOG(WARN, "p_detector is nullptr", KP(p_detector));
+    DETECT_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "p_detector is nullptr", KP(p_detector));
   } else {
     p_detector->~ObIDeadLockDetector();
     ob_free(p_detector);
@@ -133,7 +133,7 @@ ObDeadLockDetectorMgr::DetectorRefGuard::~DetectorRefGuard()
 {
   ObDeadLockDetectorMgr *p_deadlock_detector_mgr = MTL(ObDeadLockDetectorMgr *);
   if (OB_ISNULL(p_deadlock_detector_mgr)) {
-    DETECT_LOG(ERROR, "can not get ObDeadLockDetectorMgr", KP(p_deadlock_detector_mgr), K(MTL_ID()));
+    DETECT_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "can not get ObDeadLockDetectorMgr", KP(p_deadlock_detector_mgr), K(MTL_ID()));
   } else {
     p_deadlock_detector_mgr->detector_map_.revert(p_detector_);
   }
@@ -389,7 +389,7 @@ int ObDeadLockDetectorMgr::process_notify_parent_message(
       DETECT_LOG(ERROR, "can not get ObDeadLockDetectorMgr", KP(p_deadlock_detector_mgr), K(MTL_ID()));
     } else if (OB_FAIL(p_deadlock_detector_mgr->inner_alloc_handle_.inner_factory_.create(binary_key,
                                                             [](const common::ObIArray<ObDetectorInnerReportInfo> &,
-                                                               const int64_t) -> int { DETECT_LOG(ERROR, "should not kill inner node");
+                                                               const int64_t) -> int { DETECT_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "should not kill inner node");
                                                                                        return common::OB_ERR_UNEXPECTED; },
                                                             [binary_key](ObDetectorUserReportInfo& report_info) -> int {
                                                               ObSharedGuard<char> ptr;

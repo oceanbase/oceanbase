@@ -126,7 +126,7 @@ void ObSQLUtils::check_if_need_disconnect_after_end_trans(const int end_trans_er
     if (OB_UNLIKELY(OB_SUCCESS != end_trans_err && is_explicit)) {
       // 显式rollback失败，要断连接
       is_need_disconnect = true;
-      LOG_WARN("fail to rollback explicitly, disconnect", K(end_trans_err));
+      LOG_WARN_RET(end_trans_err, "fail to rollback explicitly, disconnect", K(end_trans_err));
     } else {
       // 隐式rollback（不管成功还是失败），或者显式rollback成功，不用断连接
       is_need_disconnect = false;
@@ -135,7 +135,7 @@ void ObSQLUtils::check_if_need_disconnect_after_end_trans(const int end_trans_er
     // commit
     if (OB_UNLIKELY(ObSQLUtils::is_trans_commit_need_disconnect_err(end_trans_err))) {
       is_need_disconnect = true;
-      LOG_WARN("fail to commit, and error number is unexpected, disconnect", K(end_trans_err), K(lbt()));
+      LOG_WARN_RET(end_trans_err, "fail to commit, and error number is unexpected, disconnect", K(end_trans_err), K(lbt()));
     } else {
       is_need_disconnect = false;
     }
@@ -963,7 +963,7 @@ int64_t ObSQLUtils::get_usec()
 {
   struct timeval time_val;
   if (0 != gettimeofday(&time_val, NULL)) { //success: return 0, failed: return -1
-    LOG_WARN("fail to get time of day");
+    LOG_WARN_RET(OB_ERR_SYS, "fail to get time of day");
   }
   return time_val.tv_sec*1000000 + time_val.tv_usec;
 }
@@ -2813,7 +2813,7 @@ void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &t
     }
     CHECK_COMPATIBILITY_MODE(session);
   } else {
-    LOG_WARN("Molly couldn't get compatibility mode from session, use default", K(lbt()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Molly couldn't get compatibility mode from session, use default", K(lbt()));
   }
   type_ctx.set_session(session);
 }
@@ -4324,7 +4324,7 @@ bool ObSQLUtils::is_select_from_dual(ObExecContext &ctx)
       depend_tables = ctx.get_sql_ctx()->cur_stmt_->get_global_dependency_table();
     }
     if (depend_tables == nullptr) {
-      LOG_WARN("depend tables is nullptr");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "depend tables is nullptr");
     } else if (depend_tables->empty()) {
       bret = true;
     } else {

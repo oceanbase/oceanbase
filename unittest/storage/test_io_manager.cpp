@@ -1307,7 +1307,7 @@ void write_group_perf_config()
   int fd = -1;
   const char *file_name = GROUP_PERF_CONFIG_FILE;
   if (0 > (fd = ::open(file_name, O_RDWR | O_CREAT | O_TRUNC, 0644))) {
-    LOG_WARN("open perf config file failed", K(fd), K(file_name));
+    LOG_WARN_RET(OB_ERR_SYS, "open perf config file failed", K(fd), K(file_name));
   } else {
     const char *file_buf =
       "sender_count      schedule_media_id     io_greed\n"
@@ -1329,7 +1329,7 @@ void write_group_perf_config()
     const int64_t file_len = strlen(file_buf);
     int write_ret = ::write(fd, file_buf, file_len);
     if (write_ret < file_len) {
-      LOG_WARN("write file content failed", K(write_ret), K(file_len));
+      LOG_WARN_RET(OB_ERR_SYS, "write file content failed", K(write_ret), K(file_len));
     }
     close(fd);
   }

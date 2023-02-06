@@ -326,8 +326,9 @@ private: // helpers
       total_  += sz;
       ++pages_;
     } else {
-      _OB_LOG(WARN, "cannot allocate memory.sz=%ld, pages_=%ld,total_=%ld",
-              sz, pages_, total_);
+      _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED,
+                  "cannot allocate memory.sz=%ld, pages_=%ld,total_=%ld",
+                  sz, pages_, total_);
     }
 
     return page;
@@ -351,7 +352,8 @@ private: // helpers
       } else {
         page = alloc_new_page(sz);
         if (NULL == page) {
-          _OB_LOG(WARN, "extend_page sz =%ld cannot alloc new page", sz);
+          _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED,
+                      "extend_page sz =%ld cannot alloc new page", sz);
         } else {
           insert_tail(page);
         }
@@ -466,7 +468,7 @@ public: // API
         enable_sanity_(enable_sanity)
   {
     if (page_size < (int64_t)sizeof(Page)) {
-      _OB_LOG(ERROR, "invalid page size(page_size=%ld, page=%ld)", page_size,
+      _OB_LOG_RET(ERROR, OB_ERROR, "invalid page size(page_size=%ld, page=%ld)", page_size,
               (int64_t)sizeof(Page));
     }
   }
@@ -586,7 +588,7 @@ public: // API
     T *ret = NULL;
     void *tmp = (void *)alloc_aligned(sizeof(T));
     if (NULL == tmp) {
-      _OB_LOG(WARN, "fail to alloc mem for T");
+      _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "fail to alloc mem for T");
     } else {
       ret = new(tmp)T();
     }

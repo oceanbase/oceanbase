@@ -310,7 +310,7 @@ void ObDtlBasicChannel::destroy()
   }
   if (alloc_buffer_cnt_ != free_buffer_cnt_) {
     int tmp_ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("channel may exists buffer to free", KP(id_), K(peer_id_), K(tmp_ret), K(alloc_buffer_cnt_), K(free_buffer_cnt_));
+    LOG_ERROR_RET(tmp_ret, "channel may exists buffer to free", KP(id_), K(peer_id_), K(tmp_ret), K(alloc_buffer_cnt_), K(free_buffer_cnt_));
   }
 }
 

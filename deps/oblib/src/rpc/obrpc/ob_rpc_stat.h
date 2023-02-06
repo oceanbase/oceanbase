@@ -153,7 +153,7 @@ void RpcStatBulk<N>::add_piece(const RpcStatPiece &piece)
     if (common::OB_SUCCESS == items_[idx].lock_.trylock()) {
       items_[idx].add_piece(piece);
       if (OB_UNLIKELY(common::OB_SUCCESS != items_[idx].lock_.unlock())) {
-        RPC_LOG(ERROR, "unlock fail");
+        RPC_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unlock fail");
       }
       break;
     }

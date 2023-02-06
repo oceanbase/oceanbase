@@ -2258,10 +2258,10 @@ inline int64_t obj_val_get_serialize_size<ObExtendType>(const ObObj &obj)
   int64_t len = 0;
   OB_UNIS_ADD_LEN(obj.get_ext());
   if (obj.is_pl_extend()) {
-    COMMON_LOG(ERROR, "Unexpected serialize", K(OB_NOT_SUPPORTED), K(obj), K(obj.get_meta().get_extend_type()));
+    COMMON_LOG_RET(ERROR, OB_NOT_SUPPORTED, "Unexpected serialize", K(OB_NOT_SUPPORTED), K(obj), K(obj.get_meta().get_extend_type()));
     return len; //TODO:@ryan.ly: close this feature before composite refactor
     if (NULL == composite_serialize_size_callback) {
-      COMMON_LOG(ERROR, "Unexpected callback", K(OB_ERR_UNEXPECTED), K(obj));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected callback", K(OB_ERR_UNEXPECTED), K(obj));
     } else {
       len += composite_serialize_size_callback(obj);
     }

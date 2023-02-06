@@ -4448,7 +4448,7 @@ ObColumnSchemaV2* ObResolverUtils::get_column_schema_from_array(
 {
   for (int64_t i = 0; i < resolved_cols.count(); ++i) {
     if (OB_ISNULL(resolved_cols.at(i))) {
-      LOG_WARN("resolved_cols has null pointer", K(i), K(resolved_cols));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "resolved_cols has null pointer", K(i), K(resolved_cols));
       return NULL;
     } else if (0 == resolved_cols.at(i)->get_column_name_str().case_compare(column_name)) {
       return resolved_cols.at(i);
@@ -7370,7 +7370,7 @@ ColumnItem *ObResolverUtils::find_col_by_base_col_id(ObDMLStmt &stmt,
   ColumnItem *c = NULL;
   const TableItem *t = stmt.get_table_item_by_id(table_id);
   if (OB_ISNULL(t)) {
-    LOG_WARN("get table item failed", K(table_id));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get table item failed", K(table_id));
   } else {
     c = find_col_by_base_col_id(stmt, *t, base_column_id, base_table_id);
   }
@@ -7407,7 +7407,7 @@ const ColumnItem *ObResolverUtils::find_col_by_base_col_id(const ObDMLStmt &stmt
   const ColumnItem *c = NULL;
   const TableItem *t = stmt.get_table_item_by_id(table_id);
   if (OB_ISNULL(t)) {
-    LOG_WARN("get table item failed", K(table_id));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get table item failed", K(table_id));
   } else {
     c = find_col_by_base_col_id(stmt, *t, base_column_id, base_table_id, ignore_updatable_check);
   }

@@ -259,7 +259,7 @@ int ObNetKeepAlive::in_black(const easy_addr_t &ez_addr, bool &in_black, ObNetKe
     } else {
       ret = OB_ERR_UNEXPECTED;
       if (REACH_TIME_INTERVAL(1000000)) {
-        _LOG_WARN("keepalive thread maybe not work, last_write_ts: %ld", last_wts);
+        _LOG_WARN_RET(OB_ERR_UNEXPECTED, "keepalive thread maybe not work, last_write_ts: %ld", last_wts);
       }
     }
   } else {
@@ -327,7 +327,7 @@ void ObNetKeepAlive::mark_white_black()
       rs->in_black_ = 0;
     } else {
       if (!rs->in_black_) {
-        _LOG_WARN("mark black, addr: %s", addr_to_string(rs->svr_addr_));
+        _LOG_INFO("mark black, addr: %s", addr_to_string(rs->svr_addr_));
         rs->in_black_ts_ = now;
       }
       rs->in_black_ = 1;
@@ -345,7 +345,7 @@ rpc_server *get_rpc_server(const easy_addr_t *addr, rpc_server **rss, int32_t n_
       if (!rs) {
         rpc_server *s = (rpc_server*)ob_malloc(sizeof(rpc_server), "rpc_server");
         if (NULL == s) {
-          _LOG_WARN("alloc memory failed");
+          _LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc memory failed");
           break;
         }
         bzero(s, sizeof(rpc_server));

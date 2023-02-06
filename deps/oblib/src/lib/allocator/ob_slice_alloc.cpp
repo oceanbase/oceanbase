@@ -19,7 +19,7 @@ namespace common {
 
 void ObBlockSlicer::print_leak_slice() {
   if (OB_ISNULL(slice_alloc_)) {
-    LIB_LOG(WARN, "invalid slice allocator", KP(this));
+    LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid slice allocator", KP(this));
     return;
   }
 
@@ -38,7 +38,7 @@ void ObBlockSlicer::print_leak_slice() {
     if (flist_.is_in_queue(item)) {
       // this item has been freed
     } else {
-      LIB_LOG(WARN, "leak info : ", KP(item), KP(slice));
+      LIB_LOG_RET(WARN, OB_SUCCESS, "leak info : ", KP(item), KP(slice));
     }
   }
 }
@@ -64,8 +64,9 @@ void ObSliceAlloc::destroy()
       dlink = blk_list_.top();
     } else {
       blk->print_leak_slice();
-      _LIB_LOG(
-          ERROR, "there was memory leak, stock=%d, total=%d, remain=%d", blk->stock(), blk->total(), blk->remain());
+      _LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED,
+               "there was memory leak, stock=%d, total=%d, remain=%d",
+               blk->stock(), blk->total(), blk->remain());
       dlink = nullptr;  // break
     }
   }

@@ -321,9 +321,9 @@ int64_t LogConfigVersion::to_string(char *buf, const int64_t buf_len)
 {
   int64_t pos = 0;
   if (OB_SUCCESS != databuff_print_obj(buf, buf_len, pos, proposal_id_)) {
-    PALF_LOG(WARN, "databuff_print_obj failed", K(pos));
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "databuff_print_obj failed", K(pos));
   } else if (OB_SUCCESS != databuff_print_obj(buf, buf_len, pos, config_seq_)) {
-    PALF_LOG(WARN, "databuff_print_obj failed", K(pos));
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "databuff_print_obj failed", K(pos));
   } else {
   }
   return pos;

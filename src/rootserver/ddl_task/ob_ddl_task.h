@@ -378,7 +378,8 @@ public:
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
-      longops_stat_(nullptr), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(-1), sql_exec_addr_(), cluster_version_(0)
+      longops_stat_(nullptr), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
+      execution_id_(-1), sql_exec_addr_(), start_time_(0), cluster_version_(0)
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -439,6 +440,7 @@ public:
   bool is_replica_build_need_retry(const int ret_code);
   int64_t get_execution_id() const;
   static int push_execution_id(const uint64_t tenant_id, const int64_t task_id, int64_t &new_execution_id);
+  void check_ddl_task_execute_too_long();
   virtual bool support_longops_monitoring() const { return false; }
   int cleanup();
   virtual int cleanup_impl() = 0;
@@ -488,6 +490,7 @@ protected:
   int init_ddl_task_monitor_info(const ObTableSchema *target_schema);
 protected:
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
+  static const int64_t TASK_EXECUTE_TIME_THRESHOLD = 3 * 24 * 60 * 60 * 1000000L; // 3 days
   common::TCRWLock lock_;
   ObDDLTracing ddl_tracing_;
   bool is_inited_;
@@ -518,6 +521,7 @@ protected:
   int64_t next_schedule_ts_;
   int64_t execution_id_; // guarded by lock_
   common::ObAddr sql_exec_addr_;
+  int64_t start_time_;
   int64_t cluster_version_;
 };
 

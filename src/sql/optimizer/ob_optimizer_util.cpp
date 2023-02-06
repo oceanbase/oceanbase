@@ -523,12 +523,12 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
     // do nothing
   } else if (ObRawExprUtils::expr_is_order_consistent(from, to, is_consistent)
              != OB_SUCCESS) {
-    LOG_WARN("check expr is order consist ent failed");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "check expr is order consist ent failed");
   } else if (is_consistent) {
     int64_t N = equal_sets.count();
     for (int64_t i = 0; !found && i < N; ++i) {
       if (OB_ISNULL(equal_sets.at(i))) {
-        LOG_WARN("get null equal set");
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "get null equal set");
       } else if (find_equal_expr(*equal_sets.at(i), from) &&
                  find_equal_expr(*equal_sets.at(i), to)) {
         found = true;

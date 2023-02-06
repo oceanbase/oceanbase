@@ -30,7 +30,7 @@ void ObTransStatItem::add(const int64_t value)
   const int64_t now = ObClockGenerator::getClock();
 
   if (value <= 0) {
-    TRANS_LOG(WARN, "invalid argument", K(value)) ;
+    TRANS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument", K(value)) ;
   } else {
     while (bool_ret) {
       bool need_print = false;

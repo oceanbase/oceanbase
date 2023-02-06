@@ -31,8 +31,12 @@ public:
 
   bool is_force_allows() const override { return false; }
   void reset_force_allows() override {}
-  int acquire(int64_t permits=1) override;
-  int try_acquire(int64_t permits=1) override;
+  virtual int try_acquire(const int64_t permits = 1,
+                          const int64_t arg0 = 0,
+                          const int64_t arg1 = 0) override;
+  virtual int acquire(const int64_t permits = 1,
+                      const int64_t arg0 = 0,
+                      const int64_t arg1 = 0) override;
 
 private:
   static int64_t current_time();
@@ -41,14 +45,19 @@ private:
   int64_t last_ship_time_;
 };
 
-inline int ObQueryRateLimiter::acquire(int64_t permits)
+inline int ObQueryRateLimiter::acquire(const int64_t permits,
+                                       const int64_t arg0,
+                                       const int64_t arg1)
 {
-  UNUSED(permits);
+  UNUSEDx(permits, arg0, arg1);
   return OB_NOT_SUPPORTED;
 }
 
-inline int ObQueryRateLimiter::try_acquire(int64_t permits)
+inline int ObQueryRateLimiter::try_acquire(const int64_t permits,
+                                           const int64_t arg0,
+                                           const int64_t arg1)
 {
+  UNUSEDx(arg0, arg1);
   int ret = OB_SUCCESS;
   constexpr int64_t SEC2MICROS = 1000000L;
   if (OB_LIKELY(rate_ > 0)) {

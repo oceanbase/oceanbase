@@ -33,7 +33,7 @@ void ObThreadIdling::wakeup()
   wakeup_cnt_++;
   int tmp_ret = cond_.broadcast();
   if (OB_SUCCESS != tmp_ret) {
-    LOG_WARN("condition broadcast fail", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "condition broadcast fail", K(tmp_ret));
   }
 }
 

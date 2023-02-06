@@ -651,7 +651,7 @@ void ObRatelimitMgr::calculate_s2r_max_bw_all()
 {
   ObRegionBwStat *region_bw_stat = nullptr;
   if (IS_NOT_INIT) {
-    OB_LOG(ERROR, "ObRatelimitMgr not inited.");
+    OB_LOG_RET(ERROR, OB_NOT_INIT, "ObRatelimitMgr not inited.");
   } else {
     for (int i = 0; i < peer_region_bw_list_.count(); i++) {
       region_bw_stat = &(peer_region_bw_list_[i]);

@@ -468,7 +468,7 @@ void ObCompactionTimeGuard::add_time_guard(const ObCompactionTimeGuard &other)
     if (line_array_[i] == other.line_array_[i]) {
       click_poinsts_[i] += other.click_poinsts_[i];
     } else {
-      LOG_WARN("failed to add_time_guard", KPC(this), K(other));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to add_time_guard", KPC(this), K(other));
       break;
     }
   }
@@ -1349,7 +1349,7 @@ void ObTabletMergeCtx::collect_running_info()
   }
 
   if (OB_TMP_FAIL(MTL(storage::ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(sstable_merge_info))) {
-    LOG_WARN("failed to add sstable merge info ", K(tmp_ret), K(sstable_merge_info));
+    LOG_WARN_RET(tmp_ret, "failed to add sstable merge info ", K(tmp_ret), K(sstable_merge_info));
   }
 }
 

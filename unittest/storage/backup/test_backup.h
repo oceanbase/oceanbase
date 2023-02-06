@@ -160,7 +160,7 @@ static bool cmp(const common::ObIArray<T> &lhs_list, const common::ObIArray<T> &
   LOG_INFO("compare summary", "lhs_count", lhs_list.count(), "rhs_count", rhs_list.count());
   if (lhs_list.count() != rhs_list.count()) {
     bret = false;
-    LOG_WARN("count not match", K(lhs_list.count()), K(rhs_list.count()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "count not match", K(lhs_list.count()), K(rhs_list.count()));
   } else {
     for (int64_t i = 0; i < lhs_list.count(); ++i) {
       const T &lhs = lhs_list.at(i);
@@ -169,7 +169,7 @@ static bool cmp(const common::ObIArray<T> &lhs_list, const common::ObIArray<T> &
         bret = true;
       } else {
         bret = false;
-        LOG_WARN("value not match", K(lhs), K(rhs));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "value not match", K(lhs), K(rhs));
         break;
       }
     }

@@ -180,7 +180,7 @@ public:
         (void)ATOMIC_STORE(&updating_, 0);
       }
     } else {
-      _COMMON_LOG(ERROR, "resource pool constuctor may be failed, this=%p type=%s", this, typeid(T).name());
+      _COMMON_LOG_RET(ERROR, OB_ERROR, "resource pool constuctor may be failed, this=%p type=%s", this, typeid(T).name());
     }
     return ret;
   };
@@ -189,7 +189,7 @@ public:
     if (NULL != ptr) {
       Node *node = (Node *)ptr;
       if (ALLOC_MAGIC_NUM != node->magic) {
-        _COMMON_LOG(ERROR, "node=%p magic=%lx not match %lx", node, node->magic,
+        _COMMON_LOG_RET(ERROR, OB_ERROR, "node=%p magic=%lx not match %lx", node, node->magic,
                     ALLOC_MAGIC_NUM);
       } else {
         free_node_(node);
@@ -249,7 +249,7 @@ protected:
         bool need_free = true;
         if (ATOMIC_LOAD(&inner_allocated_num_) < max_idle_num_) {
           if (common::OB_SUCCESS != free_list_.push(ptr)) {
-            _COMMON_LOG(ERROR, "free node to list fail, size=%ld ptr=%p", free_list_.get_total(), ptr);
+            _COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "free node to list fail, size=%ld ptr=%p", free_list_.get_total(), ptr);
           } else {
             need_free = false;
           }
@@ -263,7 +263,7 @@ protected:
         ptr->~Node();
         common::ob_free(ptr);
       } else {
-        _COMMON_LOG(ERROR, "invalid flag=%lu", ptr->flag);
+        _COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid flag=%lu", ptr->flag);
       }
     }
   }

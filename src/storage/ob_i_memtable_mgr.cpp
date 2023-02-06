@@ -261,7 +261,7 @@ void ObIMemtableMgr::reset_tables()
 void ObIMemtableMgr::release_head_memtable()
 {
   if (OB_ISNULL(t3m_)) {
-    STORAGE_LOG(ERROR, "t3m is nullptr", KP_(t3m));
+    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "t3m is nullptr", KP_(t3m));
   } else {
     memtable::ObIMemtable *memtable = tables_[get_memtable_idx(memtable_head_)];
     tables_[get_memtable_idx(memtable_head_)] = nullptr;
@@ -277,7 +277,7 @@ void ObIMemtableMgr::release_tail_memtable()
 {
   if (memtable_tail_ > memtable_head_) {
     if (OB_ISNULL(t3m_)) {
-      STORAGE_LOG(ERROR, "t3m is nullptr", KP_(t3m));
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "t3m is nullptr", KP_(t3m));
     } else {
       memtable::ObIMemtable *memtable = tables_[get_memtable_idx(memtable_tail_ - 1)];
       tables_[get_memtable_idx(memtable_tail_ - 1)] = nullptr;

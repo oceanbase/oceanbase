@@ -37,7 +37,7 @@ const char* ObArbitrationServiceStatus::get_status_str() const
       && status_ < MAX) {
     str = arbitration_service_status_strs[static_cast<int64_t>(status_)];
   } else {
-    LOG_WARN("invalid ArbitrationServiceStatus", K_(status));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid ArbitrationServiceStatus", K_(status));
   }
   return str;
 }

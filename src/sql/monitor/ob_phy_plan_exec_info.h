@@ -104,7 +104,7 @@ int64_t ObPhyPlanExecInfo::print_info(char *buf, int64_t buf_len) const
       J_OBJ_START();
       if (is_timestamp(i)) {
         if (common::OB_SUCCESS != share::ObTimeUtility2::usec_to_str(plan_info_array_[i], timebuf, time_buf_len, time_buf_pos)) {
-          SQL_MONITOR_LOG(WARN, "fail to print time as str", K(i));
+          SQL_MONITOR_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "fail to print time as str", K(i));
           J_KV(OB_PLAN_MONITOR_INFOS[i].info_name_, plan_info_array_[i]);
         } else {
           timebuf[time_buf_pos] = '\0';

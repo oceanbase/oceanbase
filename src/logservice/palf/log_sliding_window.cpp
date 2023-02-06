@@ -57,7 +57,7 @@ bool GetLaggedListFunc::operator()(const common::ObAddr &server, LsnTsInfo &valu
   } else if (value.lsn_ >= dst_lsn_) {
     // skip
   } else if (OB_SUCCESS != (tmp_ret = lagged_list_.add_server(server))){
-    PALF_LOG(ERROR, "lagged_list_.add_server failed", K(tmp_ret));
+    PALF_LOG_RET(ERROR, tmp_ret, "lagged_list_.add_server failed", K(tmp_ret));
   }
   return bool_ret;
 }
@@ -333,11 +333,11 @@ bool LogSlidingWindow::leader_can_submit_new_log_(const int64_t valid_log_size)
   LSN curr_committed_end_lsn;
   get_committed_end_lsn_(curr_committed_end_lsn);
   if (OB_SUCCESS != (tmp_ret = lsn_allocator_.get_curr_end_lsn(curr_end_lsn))) {
-    PALF_LOG(WARN, "get_curr_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self), K(valid_log_size));
+    PALF_LOG_RET(WARN, tmp_ret, "get_curr_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self), K(valid_log_size));
   // NB: 采用committed_lsn作为可复用起点的下界，避免写盘立即复用group_buffer导致follower的
   //     group_buffer被uncommitted log填满而无法滑出
   } else if (!group_buffer_.can_handle_new_log(curr_end_lsn, valid_log_size, curr_committed_end_lsn)) {
-    PALF_LOG(WARN, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
         K(valid_log_size), K(curr_end_lsn), K(curr_committed_end_lsn),
         "start_id", get_start_id(), "max_log_id", get_max_log_id());
   } else {
@@ -356,7 +356,7 @@ bool LogSlidingWindow::leader_can_submit_group_log_(const LSN &lsn, const int64_
   // NB: 采用committed_lsn作为可复用起点的下界，避免写盘立即复用group_buffer导致follower的
   //     group_buffer被uncommitted log填满而无法滑出
   if (!group_buffer_.can_handle_new_log(lsn, group_log_size, curr_committed_end_lsn)) {
-    PALF_LOG(WARN, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
         K(lsn), K(group_log_size), K(curr_committed_end_lsn),
         "start_id", get_start_id(), "max_log_id", get_max_log_id());
   } else {
@@ -1960,7 +1960,7 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       const int64_t fs_cb_cost = ObTimeUtility::current_time() - fs_cb_begin_ts;
       fs_cb_cost_stat_.stat(fs_cb_cost);
       if (fs_cb_cost > 1 * 1000) {
-        PALF_LOG(WARN, "fs_cb->update_end_lsn() cost too much time", K(tmp_ret), K_(palf_id), K_(self),
+        PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "fs_cb->update_end_lsn() cost too much time", K(tmp_ret), K_(palf_id), K_(self),
             K(fs_cb_cost), K(log_id), K(log_begin_lsn), K(log_end_lsn), K(log_proposal_id));
       }
 
@@ -1971,7 +1971,7 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
 
       if (log_life_time > 100 * 1000) {
         if (palf_reach_time_interval(100 * 1000, log_life_long_warn_time_)) {
-          PALF_LOG(WARN, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
+          PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
               K(fs_cb_begin_ts), K(log_life_time));
         }
       }
@@ -2039,9 +2039,9 @@ bool LogSlidingWindow::is_all_log_flushed_()
   get_max_flushed_end_lsn(max_flushed_end_lsn);
   LSN curr_end_lsn;
   if (OB_SUCCESS != (tmp_ret = lsn_allocator_.get_curr_end_lsn(curr_end_lsn))) {
-    PALF_LOG(WARN, "get_curr_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self));
+    PALF_LOG_RET(WARN, tmp_ret, "get_curr_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self));
   } else if (max_flushed_end_lsn < curr_end_lsn) {
-    PALF_LOG(WARN, "there is some log has not been flushed", K_(palf_id), K_(self), K(curr_end_lsn),
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "there is some log has not been flushed", K_(palf_id), K_(self), K(curr_end_lsn),
         K(max_flushed_end_lsn), K_(max_flushed_lsn));
   } else {
     bool_ret = true;
@@ -3212,7 +3212,7 @@ bool LogSlidingWindow::need_update_log_task_(LogGroupEntryHeader &header,
   const int64_t log_id = header.get_log_id();
   if (IS_NOT_INIT) {
   } else if (!header.is_valid() || NULL == log_task) {
-    PALF_LOG(WARN, "invalid argumetns", K_(palf_id), K_(self), K(header), KP(log_task));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argumetns", K_(palf_id), K_(self), K(header), KP(log_task));
   } else {
     int64_t old_pid = INVALID_PROPOSAL_ID;
     LSN log_end_lsn;
@@ -3250,7 +3250,7 @@ bool LogSlidingWindow::need_update_log_task_(LogGroupEntryHeader &header,
         // 收到了proposal_id更小的日志，预期不应该出现.
         // 这里间接依赖了: follower响应fetch log请求时只能返回committed logs, 因此在同一个proposal_id下,
         // 不会有两个副本同时发送log_id相同但proposal_id不同的日志给同一个目的端.
-        PALF_LOG(ERROR, "receive log with smaller proposal_id, unexpected error", K_(palf_id), K_(self), K(log_id),
+        PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "receive log with smaller proposal_id, unexpected error", K_(palf_id), K_(self), K(log_id),
                    K(new_pid), KPC(log_task), K(header), KPC(log_task));
       } else {
         PALF_LOG(INFO, "receive log with larger proposal_id, maybe need truncate", K_(palf_id), K_(self), K(log_id),
@@ -3378,12 +3378,12 @@ bool LogSlidingWindow::pre_check_for_config_log(const int64_t &msg_proposal_id,
       //    that means more old/new logs with smaller/begger proposal_id have been committed,
       //    but current leader did not reconfirm them, it is unexpected error case!!!
       bool_ret = false;
-      PALF_LOG(ERROR, "last_slide_log_pid is unexpected", K(bool_ret), K_(palf_id), K_(self), K(msg_proposal_id),
+      PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "last_slide_log_pid is unexpected", K(bool_ret), K_(palf_id), K_(self), K(msg_proposal_id),
           K(last_slide_lsn), K(last_slide_log_pid), K(lsn), K(log_proposal_id));
     } else {
       bool_ret = false;
       tmp_ret = OB_STATE_NOT_MATCH;
-      PALF_LOG(WARN, "log proposal_id does not match", K(bool_ret), K(msg_proposal_id), K_(palf_id), K_(self),
+      PALF_LOG_RET(WARN, tmp_ret, "log proposal_id does not match", K(bool_ret), K(msg_proposal_id), K_(palf_id), K_(self),
           K(lsn), K(last_slide_lsn), K(last_slide_log_pid), K(log_proposal_id));
     }
   } else {
@@ -3393,12 +3393,12 @@ bool LogSlidingWindow::pre_check_for_config_log(const int64_t &msg_proposal_id,
       LogTask *log_task = NULL;
       LogTaskGuard guard(this);
       if (OB_SUCCESS != (tmp_ret = guard.get_log_task(tmp_log_id, log_task))) {
-        PALF_LOG(WARN, "get_log_task failed", K(tmp_ret), K_(palf_id), K_(self), K(tmp_log_id));
+        PALF_LOG_RET(WARN, tmp_ret, "get_log_task failed", K(tmp_ret), K_(palf_id), K_(self), K(tmp_log_id));
       } else {
         log_task->lock();
         if (!log_task->is_valid()) {
           tmp_ret = OB_ENTRY_NOT_EXIST;
-          PALF_LOG(WARN, "this log_task is invalid", K(tmp_ret), K(tmp_log_id), K_(palf_id), K_(self), KPC(log_task));
+          PALF_LOG_RET(WARN, tmp_ret, "this log_task is invalid", K(tmp_ret), K(tmp_log_id), K_(palf_id), K_(self), KPC(log_task));
         } else {
           const LSN curr_lsn = log_task->get_begin_lsn();
           const LSN curr_log_end_lsn = (log_task->get_begin_lsn() + LogGroupEntryHeader::HEADER_SER_SIZE
@@ -3414,20 +3414,20 @@ bool LogSlidingWindow::pre_check_for_config_log(const int64_t &msg_proposal_id,
                 match_log_end_lsn = curr_log_end_lsn;
               } else {
                 // this log has not been flushed
-                PALF_LOG(WARN, "local log is match with arg, but it has not been flushed", K(bool_ret),
+                PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "local log is match with arg, but it has not been flushed", K(bool_ret),
                     K(msg_proposal_id), K_(palf_id), K_(self), K(max_flushed_end_lsn), K(curr_log_end_lsn),
                     K(lsn), K(log_proposal_id));
               }
             } else {
               // proposal_id does not match with arg
               tmp_ret = OB_STATE_NOT_MATCH;
-              PALF_LOG(WARN, "log proposal_id dest not match", K(bool_ret), K(msg_proposal_id), K_(palf_id), K_(self),
+              PALF_LOG_RET(WARN, tmp_ret, "log proposal_id dest not match", K(bool_ret), K(msg_proposal_id), K_(palf_id), K_(self),
                  K(lsn), KPC(log_task));
             }
           } else if (curr_lsn > lsn) {
             // curr_lsn > lsn, dest log was not found
             tmp_ret = OB_ENTRY_NOT_EXIST;
-            PALF_LOG(WARN, "curr_lsn is larger than than arg lsn, the request is maybe stale",
+            PALF_LOG_RET(WARN, tmp_ret, "curr_lsn is larger than than arg lsn, the request is maybe stale",
                 K(bool_ret), K(msg_proposal_id), K_(palf_id), K_(self), K(curr_lsn), K(lsn), K(log_proposal_id));
           } else {
             // curr_lsn < lsn, need check next log_task
@@ -3453,7 +3453,7 @@ bool LogSlidingWindow::pre_check_for_config_log(const int64_t &msg_proposal_id,
     LogTaskGuard guard(this);
     const int64_t next_log_id = match_log_id + 1;
     if (OB_SUCCESS != (tmp_ret = guard.get_log_task(next_log_id, log_task))) {
-      PALF_LOG(WARN, "get_log_task failed", K(tmp_ret), K_(palf_id), K_(self), K(next_log_id));
+      PALF_LOG_RET(WARN, tmp_ret, "get_log_task failed", K(tmp_ret), K_(palf_id), K_(self), K(next_log_id));
     } else {
       log_task->lock();
       if (!log_task->is_valid()) {
@@ -3472,7 +3472,7 @@ bool LogSlidingWindow::pre_check_for_config_log(const int64_t &msg_proposal_id,
           truncate_log_info.truncate_begin_lsn_ = match_log_end_lsn;
         }
         truncate_log_info.truncate_log_proposal_id_ = log_task->get_proposal_id();
-        PALF_LOG(WARN, "next log proposal_id is less than msg_proposal_id, need truncate", K_(palf_id), K_(self),
+        PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "next log proposal_id is less than msg_proposal_id, need truncate", K_(palf_id), K_(self),
             K(next_log_id), K(msg_proposal_id), K(truncate_log_info), KPC(log_task));
       } else {
         PALF_LOG(INFO, "next log proposal_id is not less than msg_proposal_id, no need truncate",
@@ -3499,7 +3499,7 @@ bool LogSlidingWindow::is_prev_log_pid_match(const int64_t log_id,
   int64_t local_prev_log_accum_checksum = -1;
   int tmp_ret = OB_SUCCESS;
   if (OB_INVALID_LOG_ID == log_id || !lsn.is_valid()) {
-    PALF_LOG(WARN, "invalid argumetns", K(log_id), K_(palf_id), K_(self), K(lsn));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argumetns", K(log_id), K_(palf_id), K_(self), K(lsn));
   } else if (FIRST_VALID_LOG_ID == log_id) {
     bool_ret = true;
     PALF_LOG(INFO, "this is the first log, no need check prev log proposal_id", K(log_id),
@@ -3507,7 +3507,7 @@ bool LogSlidingWindow::is_prev_log_pid_match(const int64_t log_id,
   } else if (OB_SUCCESS != (tmp_ret = get_prev_log_info_(log_id, local_prev_lsn, local_prev_end_lsn,
           local_prev_scn, local_prev_log_pid, local_prev_log_accum_checksum))) {
     if (REACH_TIME_INTERVAL(100 * 1000)) {
-      PALF_LOG(WARN, "get_prev_log_info_ failed", K(tmp_ret), K(log_id), K_(palf_id), K_(self), K(log_id),
+      PALF_LOG_RET(WARN, tmp_ret, "get_prev_log_info_ failed", K(tmp_ret), K(log_id), K_(palf_id), K_(self), K(log_id),
           K(lsn), K(prev_lsn), K(prev_log_pid));
     }
   } else {
@@ -3520,7 +3520,7 @@ bool LogSlidingWindow::is_prev_log_pid_match(const int64_t log_id,
       bool_ret = true;
     } else {
       bool_ret = false;
-      PALF_LOG(WARN, "prev_log_task does not match with arg", K(log_id), K_(palf_id), K_(self), K(lsn),
+      PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "prev_log_task does not match with arg", K(log_id), K_(palf_id), K_(self), K(lsn),
           K(prev_lsn), K(prev_log_pid), K(local_prev_lsn), K(local_prev_end_lsn), K(local_prev_log_pid));
     }
   }

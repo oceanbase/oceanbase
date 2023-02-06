@@ -66,7 +66,7 @@ static int cast_not_support(const ObObjType expect_type,
                             const ObCastMode cast_mode)
 {
   UNUSED(params);
-  LOG_WARN("not supported obj type convert",
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "not supported obj type convert",
             K(expect_type), K(in), K(out), K(cast_mode));
   return OB_NOT_SUPPORTED;
 }
@@ -78,7 +78,7 @@ static int cast_not_expected(const ObObjType expect_type,
                              const ObCastMode cast_mode)
 {
   UNUSED(params);
-  LOG_WARN("not expected obj type convert",
+  LOG_WARN_RET(OB_ERR_UNEXPECTED, "not expected obj type convert",
             K(expect_type), K(in), K(out), K(cast_mode));
   return OB_ERR_UNEXPECTED;
 }
@@ -92,7 +92,7 @@ static int cast_inconsistent_types(const ObObjType expect_type,
   UNUSED(params);
   UNUSED(out);
   UNUSED(cast_mode);
-  LOG_WARN("inconsistent datatypes", "expected", expect_type, "got", in.get_type());
+  LOG_WARN_RET(OB_ERR_INVALID_TYPE_FOR_OP, "inconsistent datatypes", "expected", expect_type, "got", in.get_type());
   return OB_ERR_INVALID_TYPE_FOR_OP;
 }
 
@@ -123,8 +123,8 @@ static int cast_inconsistent_type_json_explicit(const ObObjType expect_type,
 {
   UNUSED(params);
   UNUSED(out);
-  LOG_WARN("inconsistent datatypes", "expected", expect_type, "got", in.get_type());
   int ret = OB_ERR_INVALID_TYPE_FOR_OP;
+  LOG_WARN("inconsistent datatypes", "expected", expect_type, "got", in.get_type());
   return ret;
 }
 
@@ -134,7 +134,7 @@ static int cast_not_support_enum_set(const ObExpectType &expect_type,
                                      ObObj &out)
 {
   UNUSED(params);
-  LOG_WARN("not supported obj type convert", K(expect_type), K(in), K(out));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "not supported obj type convert", K(expect_type), K(in), K(out));
   return OB_NOT_SUPPORTED;
 }
 
@@ -157,7 +157,7 @@ static int cast_not_expected_enum_set(const ObExpectType &expect_type,
                                       ObObj &out)
 {
   UNUSED(params);
-  LOG_WARN("not expected obj type convert", K(expect_type), K(in), K(out));
+  LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "not expected obj type convert", K(expect_type), K(in), K(out));
   return OB_ERR_UNEXPECTED;
 }
 
@@ -11003,7 +11003,7 @@ bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_typ
                   || ob_is_blob_locator(expect_type, expect_cs_type);
   if (OB_UNLIKELY(ob_is_invalid_obj_type(orig_type) ||
                   ob_is_invalid_obj_type(expect_type))) {
-    LOG_WARN("invalid cast type", K(orig_type), K(expect_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid cast type", K(orig_type), K(expect_type));
   // number类型可以转换为clob但是不能转为blob, 无法通过矩阵实现这一点，所以在这里做特殊处理。
   } else if (is_oracle_mode() && (clob_in || ob_is_number_tc(orig_type) || ob_is_int_tc(orig_type)
                                   || ob_is_datetime_tc(orig_type)) && blob_out) {
@@ -11015,7 +11015,7 @@ bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_typ
     ObObjTypeClass expect_tc = ob_obj_type_class(expect_type);
     if (ObIntervalTC == orig_tc && ObIntervalTC == expect_tc && orig_type != expect_type) {
       bret = false;
-      LOG_WARN("cast between intervalYM and intervalDS not allowed",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "cast between intervalYM and intervalDS not allowed",
                 K(bret), K(orig_type), K(expect_type));
     } else {
       ObObjCastFunc cast_func = lib::is_oracle_mode() ?

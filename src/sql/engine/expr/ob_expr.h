@@ -456,7 +456,7 @@ public:
     len = 0;
     int64_t idx = batch_idx_mask_ & datum_idx;
     if (OB_UNLIKELY(!ObDynReserveBuf::supported(datum_meta_.type_))) {
-      SQL_ENG_LOG(ERROR, "unexpected alloc string result memory called", K(*this));
+      SQL_ENG_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected alloc string result memory called", K(*this));
     } else {
       ObDynReserveBuf *drb = reinterpret_cast<ObDynReserveBuf *>(
         ctx.frames_[frame_idx_] + dyn_buf_header_offset_ + sizeof(ObDynReserveBuf) * idx);
@@ -1080,7 +1080,7 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
   mgr->inc_level();
   CStringBufMgr::BufNode *node = mgr->acquire();
   if (OB_ISNULL(node)) {
-    LIB_LOG(ERROR, "buffer is NULL");
+    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
     buffer = node->buf_;
     databuff_printf(buffer, CStringBufMgr::BUF_SIZE, pos, "vectorized_rows(%ld)=", index);

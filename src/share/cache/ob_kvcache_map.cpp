@@ -96,7 +96,7 @@ void ObKVCacheMap::destroy()
     if (is_inited_) {
       GlobalHazardVersionGuard hazard_guard(global_hazard_version_);
       if (OB_UNLIKELY(OB_SUCCESS != hazard_guard.get_ret())) {
-        COMMON_LOG(WARN, "Fail to acquire version", K(hazard_guard.get_ret()));
+        COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Fail to acquire version", K(hazard_guard.get_ret()));
       } else {
         for (int64_t i = 0; i < bucket_num_; i++) {
           Node *&bucket_ptr = get_bucket_node(i);

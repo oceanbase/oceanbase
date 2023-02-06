@@ -69,7 +69,7 @@ public:
   HashMapIterator &operator ++()
   {
     if (OB_ISNULL(map_)) {
-      OB_LOG(ERROR, "hash map must not be NULL", K(lbt()));
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "hash map must not be NULL", K(lbt()));
     } else if (bucket_pos_ == map_->bucket_num_ && slot_pos_ >= map_->overflow_count_) {
       // do nothing
     } else {
@@ -155,7 +155,7 @@ public:
   HashMapConstIterator &operator ++()
   {
     if (OB_ISNULL(map_)) {
-      OB_LOG(ERROR, "hash map must not be NULL", K(lbt()));
+      OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "hash map must not be NULL", K(lbt()));
     } else if (bucket_pos_ == map_->bucket_num_ && slot_pos_ >= map_->overflow_count_) {
       // do nothing
     } else {

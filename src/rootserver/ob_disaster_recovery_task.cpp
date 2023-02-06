@@ -115,7 +115,7 @@ const char* ob_disaster_recovery_task_ret_comment_strs(const rootserver::ObDRTas
     str = disaster_recovery_task_ret_comment_strs[static_cast<int64_t>(ret_comment)];
   } else {
     str = disaster_recovery_task_ret_comment_strs[static_cast<int64_t>(rootserver::ObDRTaskRetComment::MAX)];
-    LOG_WARN("invalid ObDRTaskRetComment", K(ret_comment));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid ObDRTaskRetComment", K(ret_comment));
   }
   return str;
 }
@@ -134,7 +134,7 @@ const char* ob_disaster_recovery_task_priority_strs(const rootserver::ObDRTaskPr
   if (task_priority >= rootserver::ObDRTaskPriority::HIGH_PRI && task_priority < rootserver::ObDRTaskPriority::MAX_PRI) {
     str = disaster_recovery_task_priority_strs[static_cast<int64_t>(task_priority)];
   } else {
-    LOG_WARN("invalid ObDRTask priority", K(task_priority));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid ObDRTask priority", K(task_priority));
   }
   return str; 
 }
@@ -158,7 +158,7 @@ const char *ob_disaster_recovery_task_type_strs(const rootserver::ObDRTaskType t
   if (type >= rootserver::ObDRTaskType::LS_MIGRATE_REPLICA && type < rootserver::ObDRTaskType::MAX_TYPE) {
     str = disaster_recovery_task_type_strs[static_cast<int64_t>(type)];
   } else {
-    LOG_WARN("invalid ObDRTask type", K(type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid ObDRTask type", K(type));
   }
   return str;
 }
@@ -184,7 +184,7 @@ const char *ob_replica_type_strs(const ObReplicaType type)
       break;
     }
     default: {
-      LOG_WARN("invalid replica type", K(type));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid replica type", K(type));
       break;
     }
   }

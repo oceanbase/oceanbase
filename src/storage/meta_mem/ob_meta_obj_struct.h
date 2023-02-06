@@ -192,7 +192,7 @@ void ObMetaObjGuard<T>::set_obj(ObMetaObj<T> &obj)
   obj_pool_ = obj.pool_;
   if (nullptr != obj.ptr_) {
     if (nullptr == obj.pool_) {
-      STORAGE_LOG(ERROR, "object pool is nullptr", K(obj));
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K(obj));
       ob_abort();
     } else {
       obj_ = obj.ptr_;
@@ -208,7 +208,7 @@ void ObMetaObjGuard<T>::set_obj(T *obj, common::ObIAllocator *allocator)
   allocator_ = allocator;
   if (nullptr != obj) {
    if (nullptr == allocator) {
-     STORAGE_LOG(ERROR, "allocator is nullptr", KP(obj), KP(allocator));
+     STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "allocator is nullptr", KP(obj), KP(allocator));
      ob_abort();
    } else {
      obj_ = obj;
@@ -241,13 +241,13 @@ ObMetaObjGuard<T> &ObMetaObjGuard<T>::operator = (const ObMetaObjGuard<T> &other
     allocator_ = other.allocator_;
     if (nullptr != other.obj_) {
       if (OB_UNLIKELY(!other.is_valid())) {
-        STORAGE_LOG(ERROR, "object pool and allocator is nullptr", K(other), KPC(this));
+        STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool and allocator is nullptr", K(other), KPC(this));
         ob_abort();
       } else {
         obj_ = other.obj_;
         other.obj_->inc_ref();
         if (OB_UNLIKELY(other.obj_->get_ref() < 2)) {
-          STORAGE_LOG(ERROR, "obj guard may be accessed by multiple threads or ref cnt leak", KP(obj_), KP(obj_pool_));
+          STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj guard may be accessed by multiple threads or ref cnt leak", KP(obj_), KP(obj_pool_));
         }
       }
     }
@@ -279,7 +279,7 @@ void ObMetaObjGuard<T>::reset_obj()
 {
   if (nullptr != obj_) {
     if (OB_UNLIKELY(!is_valid())) {
-      STORAGE_LOG(ERROR, "object pool and allocator is nullptr", K_(obj), K_(obj_pool), K_(allocator));
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool and allocator is nullptr", K_(obj), K_(obj_pool), K_(allocator));
       ob_abort();
     } else {
       const int64_t ref_cnt = obj_->dec_ref();
@@ -293,7 +293,7 @@ void ObMetaObjGuard<T>::reset_obj()
           allocator_->free(obj_);
         }
       } else if (OB_UNLIKELY(ref_cnt < 0)) {
-        STORAGE_LOG(ERROR, "obj ref cnt may be leaked", K(ref_cnt), KPC(this));
+        STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "obj ref cnt may be leaked", K(ref_cnt), KPC(this));
       }
       obj_ = nullptr;
     }

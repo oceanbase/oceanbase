@@ -278,7 +278,7 @@ bool LogModeMgr::is_state_changed() const
       }
       default:
       {
-        PALF_LOG(ERROR, "Invalid ModeChangeState", K_(palf_id), K_(self), K_(state));
+        PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "Invalid ModeChangeState", K_(palf_id), K_(self), K_(state));
         break;
       }
     }
@@ -604,7 +604,7 @@ bool LogModeMgr::can_receive_mode_meta(const int64_t proposal_id,
   } else if (false == state_mgr_->can_receive_config_log(proposal_id)) {
     // for arbitration replica, is_sync_enabled is false, so check can_receive_mode_meta
     // with LogStateMgr::can_receive_config_log
-    PALF_LOG(WARN, "can_receive_mode_meta failed", K_(palf_id), K_(self),
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "can_receive_mode_meta failed", K_(palf_id), K_(self),
         K(proposal_id), K(mode_meta));
   } else if (accepted_mode_meta_.proposal_id_ > mode_meta.proposal_id_) {
     // skip, do not receive mode_meta with smaller proposal_id

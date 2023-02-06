@@ -149,7 +149,7 @@ int async_cb(easy_request_t *r)
   const int64_t process_time = after_process_time - after_decode_time;
   const int64_t session_destroy_time = cur_time - after_process_time;
   if (total_time > OB_EASY_HANDLER_COST_TIME) {
-    LOG_WARN("async_cb handler cost too much time", K(total_time), K(decode_time),
+    LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "async_cb handler cost too much time", K(total_time), K(decode_time),
         K(process_time), K(session_destroy_time), K(pcode));
   }
 

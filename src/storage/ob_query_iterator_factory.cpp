@@ -137,7 +137,7 @@ void ObQueryIteratorFactory::free_merge_iter(ObQueryRowIterator *iter)
       (void)ATOMIC_FAA(&multi_get_merge_release_count_, 1);
       break;
     default:
-      STORAGE_LOG(ERROR, "invalid iterator type", K(iter->get_type()));
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid iterator type", K(iter->get_type()));
       break;
     }
   }

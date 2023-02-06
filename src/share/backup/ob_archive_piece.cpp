@@ -36,7 +36,7 @@ ObArchivePiece::~ObArchivePiece()
 ObArchivePiece::ObArchivePiece(const SCN &scn, const int64_t interval_us, const SCN &genesis_scn, const int64_t base_piece_id)
 {
   if (!scn.is_valid() || interval_us < ONE_SECOND || !genesis_scn.is_valid() || base_piece_id < 1) {
-    LOG_ERROR("invalid argument", K(scn), K(interval_us), K(genesis_scn), K(base_piece_id));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", K(scn), K(interval_us), K(genesis_scn), K(base_piece_id));
   } else {
     interval_us_ = interval_us;
     genesis_scn_ = genesis_scn;
@@ -107,7 +107,7 @@ ObArchivePiece &ObArchivePiece::operator++()
 bool ObArchivePiece::operator==(const ObArchivePiece &other) const
 {
   if (interval_us_ != other.interval_us_) {
-    LOG_ERROR("different piece interval, can not compare", KPC(this), K(other));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "different piece interval, can not compare", KPC(this), K(other));
   }
   return piece_id_ == other.piece_id_;
 }
@@ -120,7 +120,7 @@ bool ObArchivePiece::operator!=(const ObArchivePiece &other) const
 bool ObArchivePiece::operator>(const ObArchivePiece &other) const
 {
   if (interval_us_ != other.interval_us_) {
-    LOG_ERROR("different piece interval, can not compare", KPC(this), K(other));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "different piece interval, can not compare", KPC(this), K(other));
   }
   return piece_id_ > other.piece_id_;
 }

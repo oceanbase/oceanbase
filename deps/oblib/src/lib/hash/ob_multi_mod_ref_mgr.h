@@ -86,7 +86,7 @@ public:
     bool can_release = false;
     const int mod = static_cast<int>(t);
     if (mod < 0 || mod >= static_cast<int>(T::TOTAL_MAX_MOD)) {
-      COMMON_LOG(WARN, "dec ref", "type", typeid(T).name(), K(this), K(mod));
+      COMMON_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "dec ref", "type", typeid(T).name(), K(this), K(mod));
     } else {
       int32_t idx = (int32_t)(get_itid() % MAX_CPU_NUM);
       // lock one slot

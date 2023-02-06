@@ -27,7 +27,7 @@ bool ObIWkbGeometry::is_empty() const
   if (OB_NOT_NULL(ptr)) {
     empty = this->is_empty_inner();
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
   return empty;
 }
@@ -39,7 +39,7 @@ uint64_t ObIWkbGeometry::length() const
   if (OB_NOT_NULL(ptr)) {
     s = this->length_inner();
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
   return s;
 }
@@ -51,7 +51,7 @@ double ObIWkbGeomPoint::x() const
   if (OB_NOT_NULL(ptr)) {
     val = ptr->get<0>();
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
   return val;
 }
@@ -63,7 +63,7 @@ double ObIWkbGeomPoint::y() const
   if (OB_NOT_NULL(ptr)) {
     val = ptr->get<1>();
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
   return val;
 }
@@ -74,7 +74,7 @@ void ObIWkbGeomPoint::x(double d)
   if (OB_NOT_NULL(ptr)) {
     ptr->set<0>(d);
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
 }
 
@@ -84,7 +84,7 @@ void ObIWkbGeomPoint::y(double d)
   if (OB_NOT_NULL(ptr)) {
     ptr->set<1>(d);
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
 }
 
@@ -147,7 +147,7 @@ double ObIWkbGeogPoint::x() const
   if (OB_NOT_NULL(ptr)) {
     val = ptr->get<0>();
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
   return val;
 }
@@ -159,7 +159,7 @@ double ObIWkbGeogPoint::y() const
   if (OB_NOT_NULL(ptr)) {
     val = ptr->get<1>();
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
   return val;
 }
@@ -170,7 +170,7 @@ void ObIWkbGeogPoint::x(double d)
   if (OB_NOT_NULL(ptr)) {
     ptr->set<0>(d);
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
 }
 
@@ -180,7 +180,7 @@ void ObIWkbGeogPoint::y(double d)
   if (OB_NOT_NULL(ptr)) {
     ptr->set<1>(d);
   } else {
-    LOG_WARN("Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
+    LOG_WARN_RET(OB_ERR_NULL_VALUE, "Try to access NULL pointer.", K(OB_ERR_NULL_VALUE));
   }
 }
 

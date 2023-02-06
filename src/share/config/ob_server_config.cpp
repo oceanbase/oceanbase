@@ -125,7 +125,7 @@ int ObServerConfig::check_all() const
       OB_LOG(ERROR, "config item is null", "name", it->first.str(), K(ret));
     } else if (!it->second->check()) {
       int temp_ret = OB_INVALID_CONFIG;
-      OB_LOG(WARN, "Configure setting invalid",
+      OB_LOG_RET(WARN, temp_ret, "Configure setting invalid",
              "name", it->first.str(), "value", it->second->str(), K(temp_ret));
     } else {
       // do nothing
@@ -152,7 +152,7 @@ void ObServerConfig::print() const
   ObConfigContainer::const_iterator it = container_.begin();
   for (; it != container_.end(); ++it) {
     if (OB_ISNULL(it->second)) {
-      OB_LOG(WARN, "config item is null", "name", it->first.str());
+      OB_LOG_RET(WARN, OB_ERROR, "config item is null", "name", it->first.str());
     } else {
       _OB_LOG(INFO, "| %-36s = %s", it->first.str(), it->second->str());
     }
@@ -257,7 +257,7 @@ void ObServerMemoryConfig::set_server_memory_limit(int64_t memory_limit)
   if (memory_limit > system_memory_) {
     LOG_INFO("update memory_limit success", K(memory_limit), K(system_memory_));
   } else {
-    LOG_ERROR("update memory_limit failed", K(memory_limit), K(system_memory_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "update memory_limit failed", K(memory_limit), K(system_memory_));
   }
 }
 

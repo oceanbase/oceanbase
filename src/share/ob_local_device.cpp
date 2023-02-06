@@ -56,7 +56,7 @@ int ObLocalIOEvents::get_ith_ret_code(const int64_t i) const
       ret_code = -res;
     }
   } else {
-    SHARE_LOG(WARN, "invalid member", KP(io_events_), K(i), K(complete_io_cnt_));
+    SHARE_LOG_RET(WARN, ret_code, "invalid member", KP(io_events_), K(i), K(complete_io_cnt_));
   }
   return ret_code;
 }
@@ -713,7 +713,7 @@ int ObLocalDevice::alloc_block(const common::ObIODOpts *opts, ObIOFd &block_id)
     SHARE_LOG(WARN, "The ObLocalDevice is not ready, ", K(ret), K(is_inited_), K(is_marked_));
   } else if (OB_UNLIKELY(free_block_cnt_ <= 0)) {
     ret = OB_SERVER_OUTOF_DISK_SPACE;
-    SHARE_LOG(ERROR, "Fail to alloc block, ", K(ret), K(free_block_cnt_), K(total_block_cnt_));
+    LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "Fail to alloc block", K(ret), K(free_block_cnt_), K(total_block_cnt_));
   } else {
     block_idx = free_block_array_[free_block_pop_pos_];
     if (0 == block_bitmap_[block_idx]) {
@@ -1312,7 +1312,7 @@ int ObLocalDevice::check_space_full(const int64_t required_size) const
         && used_percent >= GCONF.data_disk_usage_limit_percentage) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
       if (REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
-        SHARE_LOG(ERROR, "disk is almost full", K(ret), K(required_size),
+        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "disk is almost full", K(ret), K(required_size),
             K(required_count), K(free_count), K(used_percent));
       }
     }
@@ -1355,7 +1355,7 @@ int ObLocalDevice::get_block_file_size(
     block_file_size = suggest_file_size > 0 ? suggest_file_size : total_space * disk_percentage / 100;
     if (block_file_size > old_block_file_size + free_space) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
-      SHARE_LOG(ERROR, "data file size is too large, ", K(ret), K(block_file_size_), K(total_space),
+      LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret), K(block_file_size_), K(total_space),
           K(free_space), K(reserved_size), K(old_block_file_size), K(block_file_size));
     } else if (block_file_size <= block_size) {
       ret = OB_INVALID_ARGUMENT;

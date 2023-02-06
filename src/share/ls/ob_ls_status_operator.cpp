@@ -237,7 +237,7 @@ const char* ObLSStatusOperator::ls_status_to_str(const ObLSStatus &status)
   const char* str = "UNKNOWN";
 
   if (OB_UNLIKELY(OB_LS_EMPTY == status)) {
-    LOG_WARN("invalid log stream status", K(status));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid log stream status", K(status));
   } else {
     str = LS_STATUS_ARRAY[status];
   }

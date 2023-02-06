@@ -223,7 +223,7 @@ public:
         ObMemAttr attr(tenant_id_, ObModIds::OB_SERVER_OBJECT_POOL);
         char *p = static_cast<char*>(ob_malloc(item_size_, attr));
         if (NULL == p) {
-          COMMON_LOG(ERROR, "allocate memory failed", K(typeid(T).name()), K(item_size_));
+          COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed", K(typeid(T).name()), K(item_size_));
         } else {
           Meta *cmeta = reinterpret_cast<Meta*>(p);
           cmeta->next = NULL;
@@ -241,9 +241,9 @@ public:
 
   void return_object(T* x) {
     if (NULL == x) {
-      COMMON_LOG(ERROR, "allocate memory failed", K(typeid(T).name()), K(item_size_), K(get_itid()));
+      COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed", K(typeid(T).name()), K(item_size_), K(get_itid()));
     } else if (OB_UNLIKELY(!is_inited_)){
-      COMMON_LOG(ERROR, "unexpected return", K(typeid(T).name()), K(item_size_), K(get_itid()));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected return", K(typeid(T).name()), K(item_size_), K(get_itid()));
     } else {
       Meta *cmeta = PTR_OBJ2META(x);
       int64_t aid = cmeta->arena_id;
@@ -379,7 +379,7 @@ public:
         is_inited_ = false;
       }
       if (has_unfree) {
-        COMMON_LOG(ERROR, "server object leak", K(tenant_id_), K(typeid(T).name()));
+        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "server object leak", K(tenant_id_), K(typeid(T).name()));
       }
     }
   }

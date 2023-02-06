@@ -107,7 +107,7 @@ int64_t UserBinaryKey::to_string(char *buffer, const int64_t length) const
       GET_TYPE(ID) key;\
       if (OB_SUCCESS != key.deserialize(key_binary_code_buffer_,\
                                         key_binary_code_buffer_length_, pos)) {\
-        DETECT_LOG(WARN, "key deserilalize failed", KP_(key_type_id));\
+        DETECT_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "key deserilalize failed", KP_(key_type_id));\
       } else {\
         used_length = key.to_string(buffer, length);\
       }\

@@ -479,7 +479,7 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
       switch (v) {                                                      \
         def(DEF_ENUM_CASE)                                              \
         default:                                                        \
-          LIB_LOG(WARN, "unknown" #type "value", "value", v);           \
+          LIB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "unknown" #type "value", "value", v);           \
           return NULL;                                                  \
       }                                                                 \
     }                                                                   \
@@ -490,12 +490,12 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
     type __VA_ARGS__ get_##func_name##_value(const common::ObString &str)           \
     {                                                                   \
       if (str.empty()) {                                                \
-        LIB_LOG(WARN, "invalid argument, empty str");                   \
+        LIB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument, empty str");                   \
         return static_cast<type>(0);                                    \
       } else {                                                          \
        def(DEF_ENUM_STRCMP)                                             \
       }                                                                 \
-      LIB_LOG(WARN, "unknown " #type "string", K(str));                  \
+      LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "unknown " #type "string", K(str));                  \
       return static_cast<type>(0);                                      \
     }
 
@@ -605,6 +605,15 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
     } \
   } while (false)
 
+#define BACKTRACE_RET(LEVEL, errcode, cond, _fmt_, args...) \
+  do \
+  { \
+    if (OB_UNLIKELY(cond)) \
+    { \
+      _OB_LOG_RET(LEVEL, errcode, _fmt_ " BACKTRACE:%s", ##args, oceanbase::common::lbt()); \
+    } \
+  } while (false)
+
 #ifdef NDEBUG
 #define OB_ASSERT(x) (void)(x)
 #else
@@ -612,8 +621,8 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
   do{                                                   \
     bool v=(x);                                         \
     if(OB_UNLIKELY(!(v))) {                             \
-      _OB_LOG(ERROR, "assert fail, exp=%s", #x);        \
-      BACKTRACE(ERROR, 1, "assert fail");               \
+      _OB_LOG_RET(ERROR, oceanbase::common::OB_ERROR, "assert fail, exp=%s", #x);        \
+      BACKTRACE_RET(ERROR, oceanbase::common::OB_ERROR, 1, "assert fail");               \
       assert(v);                                        \
     }                                                   \
   } while(false)
@@ -624,8 +633,8 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
   do{                                                 \
     bool v=(x);                                       \
     if(OB_UNLIKELY(!(v))) {                           \
-      _OB_LOG(ERROR, "assert fail, exp=%s", #x);      \
-      BACKTRACE(ERROR, 1, ##msg);                     \
+      _OB_LOG_RET(ERROR, OB_ERROR, "assert fail, exp=%s", #x);      \
+      BACKTRACE_RET(ERROR, OB_ERROR, 1, ##msg);                     \
       assert(v);                                      \
     }                                                 \
   } while(false)
@@ -634,8 +643,8 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
   do{                                                   \
     bool v=(x);                                         \
     if(OB_UNLIKELY(!(v))) {                             \
-      _OB_LOG(ERROR, "assert fail, exp=%s", #x);        \
-      BACKTRACE(ERROR, 1, "assert fail");               \
+      _OB_LOG_RET(ERROR, OB_ERROR, "assert fail, exp=%s", #x);        \
+      BACKTRACE_RET(ERROR, OB_ERROR, 1, "assert fail");               \
       ob_abort();                                          \
       exit(1);                                          \
     }                                                   \

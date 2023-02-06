@@ -905,9 +905,9 @@ ObJsonNode *ObJsonArray::operator[](uint64_t index) const
   ObJsonNode *node = NULL;
 
   if (index >= element_count()) {
-    LOG_WARN("index is out of range", K(index));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "index is out of range", K(index));
   } else if (node_vector_[index]->get_parent() != this) {
-    LOG_WARN("unexpected parent json node", K(index));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected parent json node", K(index));
   } else {
     node = node_vector_[index];
   }
@@ -1043,7 +1043,7 @@ ObJsonNode *ObJsonTreeUtil::clone_new_node(ObIAllocator* allocator, Args &&... a
   T *new_node = NULL;
 
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for ObJsonNode");    
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for ObJsonNode");
   } else {
     new_node = new(buf)T(std::forward<Args>(args)...);
   }

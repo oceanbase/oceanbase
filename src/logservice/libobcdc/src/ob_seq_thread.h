@@ -162,8 +162,8 @@ int ObSeqThread<MAX_THREAD_NUM, ModuleClass>::start()
       int pthread_ret = 0;
 
       if (0 != (pthread_ret = pthread_create(tids_ + index, NULL, thread_func_, this))) {
-        LIB_LOG(ERROR, "pthread_create fail", K(pthread_ret), KERRNOMSG(pthread_ret), K(index));
         ret = OB_ERR_UNEXPECTED;
+        LIB_LOG(ERROR, "pthread_create fail", K(pthread_ret), KERRNOMSG(pthread_ret), K(index));
       }
     }
   }
@@ -182,7 +182,7 @@ void ObSeqThread<MAX_THREAD_NUM, ModuleClass>::stop()
         int pthread_ret = pthread_join(tids_[index], NULL);
 
         if (0 != pthread_ret) {
-          LIB_LOG(ERROR, "pthread_join fail", "thread_id", tids_[index], K(pthread_ret));
+          LIB_LOG_RET(ERROR, common::OB_ERR_SYS, "pthread_join fail", "thread_id", tids_[index], K(pthread_ret));
         } else {
           // do nothing
         }

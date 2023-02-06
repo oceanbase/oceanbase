@@ -232,7 +232,7 @@ protected:
   virtual int leader_process() = 0;
   virtual int follower_process()
   {
-    RS_LOG(WARN, "not master rootserver");
+    RS_LOG_RET(WARN, common::OB_RS_NOT_MASTER, "not master rootserver");
     return common::OB_RS_NOT_MASTER;
   }
 protected:

@@ -625,7 +625,7 @@ void ObIORequest::inc_ref(const char *msg)
     int tmp_ret = OB_SUCCESS;
     ObIOTracer::TraceType trace_type = 0 == old_ref_cnt ? ObIOTracer::TraceType::IS_FIRST : ObIOTracer::TraceType::OTHER;
     if (OB_TMP_FAIL(tenant_io_mgr_.get_ptr()->trace_request_if_need(this, msg, trace_type))) {
-      LOG_WARN("add trace for io request failed", K(tmp_ret), KP(this), K(trace_type));
+      LOG_WARN_RET(tmp_ret, "add trace for io request failed", K(tmp_ret), KP(this), K(trace_type));
     }
   }
 }
@@ -882,7 +882,7 @@ void ObIOHandle::estimate()
     }
     static const int64_t LONG_IO_PRINT_TRIGGER_US = 1000L * 1000L * 3L; // 3s
     if (request_delay > LONG_IO_PRINT_TRIGGER_US) {
-      LOG_WARN("io request wait too long", KPC(req_),
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "io request wait too long", KPC(req_),
           K(prepare_delay),
           K(schedule_queue_delay),
           K(submit_delay),

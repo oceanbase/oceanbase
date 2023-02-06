@@ -83,7 +83,7 @@ public:
   void run()
   {
     if (0 != pthread_create(&thread_, NULL, pthread_routine_, this)){
-      PALF_LOG(ERROR, "create thread fail", K(thread_));
+      PALF_LOG_RET(ERROR, OB_ERR_SYS, "create thread fail", K(thread_));
     } else {
       PALF_LOG(INFO, "create thread success", K(thread_));
     }

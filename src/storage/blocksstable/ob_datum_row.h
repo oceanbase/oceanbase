@@ -620,7 +620,7 @@ OB_INLINE bool ObStorageDatum::operator==(const ObStorageDatum &other) const
     bret = ObDatum::binary_equal(*this, other);
   }
   if (!bret) {
-    STORAGE_LOG(WARN, "obj and datum no equal", K(other), K(*this));
+    STORAGE_LOG(DEBUG, "obj and datum no equal", K(other), K(*this));
   }
   return bret;
 
@@ -638,7 +638,7 @@ OB_INLINE bool ObStorageDatum::operator==(const common::ObObj &other) const
     bret = *this == datum;
   }
   if (!bret) {
-    STORAGE_LOG(WARN, "obj and datum no equal", K(other), K(datum), KPC(this));
+    STORAGE_LOG(DEBUG, "obj and datum no equal", K(other), K(datum), KPC(this));
   }
   return bret;
 }

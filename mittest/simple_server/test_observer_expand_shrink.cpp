@@ -93,7 +93,7 @@ TEST_F(ObserverExpandShink, basic_func)
   sleep(6);
   EXPECT_EQ(GCONF.log_disk_size, 3 * 1024 * 1024 * 1024ul);
   EXPECT_EQ(OB_ZONE_RESOURCE_NOT_ENOUGH, create_tenant("runlin"));
-  CLOG_LOG(ERROR, "create runlin finished");
+  CLOG_LOG_RET(ERROR, OB_SUCCESS, "create runlin finished");
   GCONF.log_disk_size = 1024 * 1024 * 1024ul * 1024 * 100ul;
   int64_t log_disk_size = 0;
   int64_t log_disk_percentage = 0;

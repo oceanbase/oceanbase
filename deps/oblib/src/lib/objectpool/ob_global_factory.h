@@ -65,7 +65,7 @@ inline ObTCBlock *ObTCBlock::new_block(int32_t obj_size, const lib::ObLabel &lab
   ObMemAttr memattr(OB_SERVER_TENANT_ID, label);
   void *ptr = ob_malloc(BLOCK_SIZE, memattr);
   if (OB_ISNULL(ptr)) {
-    LIB_LOG(WARN, "no memory");
+    LIB_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "no memory");
   } else {
     blk_ret = new(ptr) ObTCBlock(obj_size);
   }
@@ -75,7 +75,7 @@ inline ObTCBlock *ObTCBlock::new_block(int32_t obj_size, const lib::ObLabel &lab
 inline void ObTCBlock::delete_block(ObTCBlock *blk)
 {
   if (OB_ISNULL(blk) || OB_UNLIKELY(false == blk->can_delete())) {
-    LIB_LOG(ERROR, "block is NULL or block can not be deleted", K(blk));
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "block is NULL or block can not be deleted", K(blk));
   } else {
     blk->~ObTCBlock();
     ob_free(blk);
@@ -86,7 +86,7 @@ inline int32_t ObTCBlock::get_batch_count_by_obj_size(int32_t obj_size)
 {
   // Checking the parameters here is just to hit the log
   if (OB_UNLIKELY(obj_size < 0)) {
-    LIB_LOG(ERROR, "obj_size < 0, is invalid");
+    LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "obj_size < 0, is invalid");
   } else {}
   int32_t batch_count = static_cast<int32_t>(BLOCK_SIZE) / obj_size;
   if (batch_count < 2) {
@@ -105,7 +105,7 @@ inline ObTCBlock *ObTCBlock::get_block_by_obj(void *obj)
 inline void ObTCBlock::freelist_push(void *ptr)
 {
   if (OB_ISNULL(ptr)) {
-    LIB_LOG(ERROR, "invalid argument, ptr is NULL");
+    LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument, ptr is NULL");
   } else {
     FreeNode *node = reinterpret_cast<FreeNode *>(ptr);
     node->next_ = freelist_;
@@ -180,9 +180,9 @@ inline void *ObTCBlock::alloc()
 inline void ObTCBlock::free(void *ptr)
 {
   if (OB_ISNULL(ptr)) {
-    LIB_LOG(ERROR, "ptr is NULL");
+    LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "ptr is NULL");
   } else if (OB_UNLIKELY((char *)ptr - (char *)this >= BLOCK_SIZE)) {
-    LIB_LOG(ERROR, "size is larger than BLOCK_SIZE", K(ptr), K(this),
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "size is larger than BLOCK_SIZE", K(ptr), K(this),
             K(((char *)ptr - (char *)this)), LITERAL_K(BLOCK_SIZE));
   } else {
     freelist_push(ptr);
@@ -267,7 +267,7 @@ public:
             "nonempty_blocks_num", nonempty_blocks_.get_size());
     DLIST_FOREACH_NORET(blk, nonempty_blocks_) {
       if (OB_ISNULL(blk)) {
-        LIB_LOG(ERROR, "nonempty_block is NULL");
+        LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "nonempty_block is NULL");
       } else {
         const int32_t obj_size = blk->get_obj_size();
         LIB_LOG(INFO, "[GFACTORY_STAT] nonempty_block",
@@ -286,15 +286,15 @@ private:
     DLIST_REMOVE_ALL_NORET(ptr, range) {
       ObTCBlock *blk = NULL;
       if (OB_ISNULL(ptr)) {
-        LIB_LOG(ERROR, "obj ptr is NULL");
+        LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj ptr is NULL");
       } else if (OB_ISNULL(blk = ObTCBlock::get_block_by_obj(ptr))) {
-        LIB_LOG(ERROR, "block is NULL");
+        LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "block is NULL");
       } else {
         if (blk->is_empty()) {
           // move from empty list to nonempty list
           empty_blocks_.remove(blk);
           if (OB_UNLIKELY(false == nonempty_blocks_.add_last(blk))) {
-            LIB_LOG(ERROR, "fail to add block to nonempty_blocks_'s tail");
+            LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "fail to add block to nonempty_blocks_'s tail");
           }
         } else {}
         ptr->~T();
@@ -476,7 +476,7 @@ ObGlobalFactory<T, MAX_CLASS_NUM, LABEL> *ObGlobalFactory<T, MAX_CLASS_NUM, LABE
   if (OB_ISNULL(INSTANCE)) {
     INSTANCE = new(std::nothrow) self_t();
     if (OB_ISNULL(INSTANCE)) {
-      LIB_LOG(ERROR, "failed to create singleton instance");
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "failed to create singleton instance");
     } else {}
   } else {}
   return INSTANCE;

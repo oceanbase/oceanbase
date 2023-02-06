@@ -125,7 +125,7 @@ void ObTabletMetaTableCompactionOperator::handle_trans_stat(
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(tmp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }

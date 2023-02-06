@@ -141,7 +141,7 @@ void TestCellWriter::check_int(
         break;
       }
     default:
-      COMMON_LOG(WARN, "invalid attr.");
+      COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid attr.");
   }
 }
 

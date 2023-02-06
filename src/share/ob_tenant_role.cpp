@@ -36,7 +36,7 @@ const char* ObTenantRole::to_str() const
   const char *type_str = "UNKNOWN";
   if (OB_UNLIKELY(value_ >= ARRAYSIZEOF(TENANT_ROLE_ARRAY)
                   || value_ < INVALID_TENANT)) {
-    LOG_ERROR("fatal error, unknown tenant role", K_(value));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown tenant role", K_(value));
   } else {
     type_str = TENANT_ROLE_ARRAY[value_];
   }
@@ -57,7 +57,7 @@ ObTenantRole::ObTenantRole(const ObString &str)
   }
 
   if (INVALID_TENANT == value_) {
-    LOG_WARN("invalid tenant role", K_(value), K(str));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid tenant role", K_(value), K(str));
   }
 }
 

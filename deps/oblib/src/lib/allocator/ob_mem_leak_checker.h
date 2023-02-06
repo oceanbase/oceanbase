@@ -15,7 +15,6 @@
 #include "lib/utility/ob_defer.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/alloc/alloc_struct.h"
-#include "lib/utility/ob_simple_rate_limiter.h"
 
 
 namespace oceanbase
@@ -282,7 +281,7 @@ private:
   int len_;
   mod_alloc_info_t malloc_info_;
 private:
-  static lib::ObSimpleRateLimiter rl_;
+  static ObSimpleRateLimiter rl_;
 };
 }; // end namespace common
 }; // end namespace oceanbase

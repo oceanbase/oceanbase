@@ -93,7 +93,7 @@ int ObMySQLHandler::encode(easy_request_t *r, void *packet)
 void do_wakeup(easy_request_t *r)
 {
   if (OB_ISNULL(r)) {
-    LOG_ERROR("null input request", K(r));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "null input request", K(r));
   } else {
     easy_client_wait_t *wait_obj = r->client_wait;
     if (NULL != r->client_wait) {
@@ -107,7 +107,7 @@ void do_wakeup_request(easy_request_t *r)
 {
   if (OB_ISNULL(r) || OB_ISNULL(r->ms) || OB_ISNULL(r->ms->c)
       || OB_ISNULL(r->ms->pool) || OB_ISNULL(r->ms->c->pool)) {
-    LOG_ERROR("null input", K(r));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "null input", K(r));
   } else {
     easy_atomic_inc(&r->ms->c->pool->ref);
     easy_atomic_inc(&r->ms->pool->ref);
@@ -159,7 +159,7 @@ int ObMySQLHandler::process(easy_request_t *r)
   }
     // check if arguments is valid
   if (OB_ISNULL(r) || OB_ISNULL(r->ipacket)) {
-    LOG_ERROR("request is empty", K(r), K(r->ipacket), K(sessid));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "request is empty", K(r), K(r->ipacket), K(sessid));
     eret = EASY_BREAK;
   } else {
     if (r->retcode != EASY_AGAIN) {
@@ -173,9 +173,9 @@ int ObMySQLHandler::process(easy_request_t *r)
         ObVirtualCSProtocolProcessor *processor = get_protocol_processor(r->ms->c);
         if (OB_ISNULL(processor)) {
           eret = EASY_BREAK;
-          LOG_ERROR("invalid protocol processor", KP(processor));
+          LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid protocol processor", KP(processor));
         } else if (OB_UNLIKELY(OB_SUCCESS != processor->process(r, need_decode_more))) {
-          LOG_ERROR("fail to process", K(sessid));
+          LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "fail to process", K(sessid));
           eret = EASY_BREAK;
         } else if (need_decode_more) {
           eret = EASY_OK;
@@ -195,7 +195,7 @@ int ObMySQLHandler::process(easy_request_t *r)
           eret = EASY_OK;
         #endif
         } else if (OB_ISNULL(buf = easy_alloc(r->ms->pool, sizeof (ObRequest)))) {
-          RPC_LOG(WARN, "alloc easy memory fail", K(sessid));
+          RPC_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "alloc easy memory fail", K(sessid));
           eret = EASY_BREAK;
         } else {
           ObRequest *req = NULL;
@@ -239,7 +239,7 @@ int ObMySQLHandler::process(easy_request_t *r)
         }
       } else {
         eret = EASY_BREAK;
-        LOG_ERROR("invalid easy message", K(r->ms), K(sessid));
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid easy message", K(r->ms), K(sessid));
       }
 
     } else {
@@ -259,10 +259,10 @@ int ObMySQLHandler::process(easy_request_t *r)
           }
         } else {
           eret = EASY_BREAK;
-          LOG_ERROR("invalid easy message", K(r->ms));
+          LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid easy message", K(r->ms));
         }
       } else {
-        LOG_WARN("client_wait is NULL, connection may be destroyed", K(sessid));
+        LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "client_wait is NULL, connection may be destroyed", K(sessid));
       }
       eret = EASY_AGAIN;
     }
@@ -300,10 +300,10 @@ char *ObMySQLHandler::easy_alloc(easy_pool_t *pool, int64_t size) const
 {
   char *buf = NULL;
   if (OB_ISNULL(pool)) {
-    LOG_WARN("invalid easy pool", KP(pool));
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid easy pool", KP(pool));
   } else {
     if (size > UINT32_MAX || size < 0) {
-      LOG_WARN("easy alloc fail", K(size));
+      LOG_WARN_RET(common::OB_ALLOCATE_MEMORY_FAILED, "easy alloc fail", K(size));
     } else {
       buf = static_cast<char*>(easy_pool_alloc(pool, static_cast<uint32_t>(size)));
     }
@@ -564,7 +564,7 @@ inline ObVirtualCSProtocolProcessor *ObMySQLHandler::get_protocol_processor(easy
       break;
     }
     default: {
-      LOG_ERROR("invalid cs protocol type", K(ptype));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid cs protocol type", K(ptype));
       break;
     }
   }

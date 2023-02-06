@@ -561,7 +561,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       bret = dlists_[prio].add_first(item);
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return bret;
   }
@@ -572,7 +572,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       bret = dlists_[prio].add_last(item);
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return bret;
   }
@@ -585,7 +585,7 @@ public:
         bret = true;
       }
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return bret;
   }
@@ -596,7 +596,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       result = dlists_[prio].get_header();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return result;
   }
@@ -607,7 +607,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       result = dlists_[prio].get_first();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return result;
   }
@@ -618,7 +618,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       result = dlists_[prio].remove_first();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return result;
   }
@@ -629,7 +629,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       result = dlists_[prio].remove_last();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return result;
   }
@@ -640,7 +640,7 @@ public:
     if (prio >= 0 && prio < PRIO_CNT) {
       bret = dlists_[prio].is_empty();
     } else {
-      COMMON_LOG(ERROR, "invalid priority", K(prio), K(PRIO_CNT));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid priority", K(prio), K(PRIO_CNT));
     }
     return bret;
   }

@@ -315,7 +315,7 @@ void check_fuse_row_flag(
   row.flag_ = old_flag;
   row.flag_.fuse_flag(ObDmlRowFlag(input_flag));
   if (expect_flag != row.flag_.whole_flag_) {
-    STORAGE_LOG(WARN, "not equal", K(old_flag), K(input_flag),
+    STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "not equal", K(old_flag), K(input_flag),
         K(expect_flag), "fused_flag", row.flag_);
   }
 }

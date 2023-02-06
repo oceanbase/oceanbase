@@ -783,7 +783,7 @@ void ObLogFormatter::handle_non_full_columns_(
   PartTransTask &task = dml_stmt_task.get_host();
 
   if (! skip_dirty_data_) {
-    LOG_ERROR("row data is not full recorded",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "row data is not full recorded",
         "tls_id", task.get_tls_id(),
         "commit_log_lsn", task.get_commit_log_lsn(),
         "commit_version", task.get_trans_commit_version(),

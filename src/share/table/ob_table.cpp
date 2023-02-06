@@ -926,7 +926,7 @@ int ObTableQuery::set_scan_index(const ObString &index_name)
 
 int ObTableQuery::set_filter(const ObString &filter)
 {
-  LOG_WARN("general filter not supported", K(filter));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "general filter not supported", K(filter));
   return OB_NOT_SUPPORTED;
 }
 

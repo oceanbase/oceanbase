@@ -844,7 +844,7 @@ bool ObLogKVCollection::is_valid() const
 {
   bool valid = true;
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(kv_delimiter_) || OB_ISNULL(pair_delimiter_)) {
-    LOG_ERROR("invalid argument", K_(inited), K_(kv_delimiter), K_(pair_delimiter));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", K_(inited), K_(kv_delimiter), K_(pair_delimiter));
     valid = false;
   } else {
     int64_t idx = 0;

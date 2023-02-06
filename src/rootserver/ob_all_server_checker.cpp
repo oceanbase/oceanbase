@@ -159,7 +159,7 @@ ObAsyncTask *ObCheckServerTask::deep_copy(char *buf, const int64_t buf_size) con
 {
   ObCheckServerTask *task = NULL;
   if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(common::OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
     task = new(buf) ObCheckServerTask(work_queue_, checker_);
   }

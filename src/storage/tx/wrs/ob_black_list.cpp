@@ -119,7 +119,7 @@ int ObBLService::add(const ObBLKey &bl_key)
 void ObBLService::remove(const ObBLKey &bl_key)
 {
   if (OB_UNLIKELY(!is_inited_)) {
-    TRANS_LOG(ERROR, "BLService not inited");
+    TRANS_LOG_RET(ERROR, OB_NOT_INIT, "BLService not inited");
   } else {
     switch(bl_key.get_type()) {
       case BLTYPE_LS: {
@@ -127,7 +127,7 @@ void ObBLService::remove(const ObBLKey &bl_key)
         break;
       }
       default: {
-        TRANS_LOG(ERROR, "unknown key type", K(bl_key));
+        TRANS_LOG_RET(ERROR, OB_UNKNOWN_OBJ, "unknown key type", K(bl_key));
       }
     }
   }
@@ -166,7 +166,7 @@ void ObBLService::run1()
   TRANS_LOG(INFO, "blacklist refresh thread start", K(thread_index));
 
   if (OB_UNLIKELY(!is_inited_)) {
-    TRANS_LOG(ERROR, "BLService not inited");
+    TRANS_LOG_RET(ERROR, OB_NOT_INIT, "BLService not inited");
   } else {
     while (!has_set_stop()) {
       int64_t begin_tstamp = ObTimeUtility::current_time();

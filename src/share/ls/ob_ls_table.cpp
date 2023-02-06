@@ -44,7 +44,7 @@ bool ObLSTable::is_valid_key(const uint64_t tenant_id, const ObLSID &ls_id)
   bool valid = true;
   if (common::OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid()) {
     valid = false;
-    LOG_WARN("invalid tenant and log stream id", KT(tenant_id), K(ls_id));
+    LOG_WARN_RET(OB_INVALID_ERROR, "invalid tenant and log stream id", KT(tenant_id), K(ls_id));
   }
   return valid;
 }

@@ -37,7 +37,7 @@ const char *ob_replica_status_str(const ObReplicaStatus status)
   if (status >= 0 && status < REPLICA_STATUS_MAX) {
     str = replica_display_status_strs[status];
   } else {
-    LOG_WARN("invalid replica status", K(status));
+    LOG_WARN_RET(OB_INVALID_ERROR, "invalid replica status", K(status));
   }
   return str;
 }
@@ -487,7 +487,7 @@ bool ObLSInfo::is_strong_leader(int64_t index) const
   } else {
     FOREACH_CNT(r, replicas_) {
       if (OB_ISNULL(r)) {
-        LOG_WARN("get invalie replica", K_(replicas), K(r));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "get invalie replica", K_(replicas), K(r));
       } else if (r->get_proposal_id() > replicas_.at(index).get_proposal_id()) {
         is_leader = false;
         break;

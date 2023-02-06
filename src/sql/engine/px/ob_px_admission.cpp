@@ -192,13 +192,13 @@ void ObPxSubAdmission::acquire(int64_t max, int64_t min, int64_t &acquired_cnt)
   oceanbase::omt::ObThWorker *worker = nullptr;
   int64_t upper_bound = 1;
   if (nullptr == (worker = THIS_THWORKER_SAFE)) {
-    LOG_ERROR("Oooops! can't find tenant. Unexpected!", K(max), K(min));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Oooops! can't find tenant. Unexpected!", K(max), K(min));
   } else if (nullptr == (tenant = worker->get_tenant())) {
-    LOG_ERROR("Oooops! can't find tenant. Unexpected!", KP(worker), K(max), K(min));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Oooops! can't find tenant. Unexpected!", KP(worker), K(max), K(min));
   } else {
     oceanbase::omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant->id()));
     if (!tenant_config.is_valid()) {
-      LOG_WARN("get tenant config failed, use default cpu_quota_concurrency");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "get tenant config failed, use default cpu_quota_concurrency");
       upper_bound = tenant->unit_min_cpu() * 4;
     } else {
       upper_bound = tenant->unit_min_cpu() * tenant_config->cpu_quota_concurrency;

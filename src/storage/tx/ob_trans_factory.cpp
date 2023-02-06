@@ -82,7 +82,7 @@ const char *ObLSTxCtxMgrFactory::mod_type_ = "OB_PARTITION_TRANS_CTX_MGR";
   void object_name##Factory::release(object_name *object)  \
   {\
     if (OB_ISNULL(object)) {\
-      TRANS_LOG(WARN, "object is null", KP(object));\
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "object is null", KP(object));\
     } else {\
       object->destroy();  \
       allocator_type##_FREE(object, LABEL);        \
@@ -116,7 +116,7 @@ ObTransCtx *ObTransCtxFactory::alloc(const int64_t ctx_type)
       // During restart, the number of transaction contexts is relatively large
       // and cannot be limited, otherwise there will be circular dependencies
       if (ATOMIC_LOAD(&active_part_ctx_count_) > MAX_PART_CTX_COUNT && GCTX.status_ == observer::SS_SERVING) {
-        TRANS_LOG(ERROR, "participant context memory alloc failed", K_(active_part_ctx_count));
+        TRANS_LOG_RET(ERROR, tmp_ret, "participant context memory alloc failed", K_(active_part_ctx_count));
         tmp_ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
       } else if (NULL != (ctx = mtl_sop_borrow(ObPartTransCtx))) {
         (void)ATOMIC_FAA(&active_part_ctx_count_, 1);
@@ -129,8 +129,8 @@ ObTransCtx *ObTransCtxFactory::alloc(const int64_t ctx_type)
         // do nothing
       }
     } else {
-      TRANS_LOG(ERROR, "unexpected error when context alloc", K(ctx_type));
       tmp_ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG_RET(ERROR, tmp_ret, "unexpected error when context alloc", K(ctx_type));
     }
   }
   if (REACH_TIME_INTERVAL(TRANS_MEM_STAT_INTERVAL)) {
@@ -148,7 +148,7 @@ ObTransCtx *ObTransCtxFactory::alloc(const int64_t ctx_type)
 void ObTransCtxFactory::release(ObTransCtx *ctx)
 {
   if (OB_ISNULL(ctx)) {
-    TRANS_LOG(ERROR, "context pointer is null when released", KP(ctx));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "context pointer is null when released", KP(ctx));
   } else {
     ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx);
     part_ctx->destroy();
@@ -175,7 +175,7 @@ ObLSTxCtxMgr *ObLSTxCtxMgrFactory::alloc(const uint64_t tenant_id)
       K_(alloc_count), K_(release_count), "used", alloc_count_ - release_count_);
   }
   if (!is_valid_tenant_id(tenant_id)) {
-    TRANS_LOG(WARN, "invalid tenant_id", K(tenant_id));
+    TRANS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid tenant_id", K(tenant_id));
   } else if (NULL != (ptr = ob_malloc(sizeof(ObLSTxCtxMgr), memattr))) {
     partition_trans_ctx_mgr = new(ptr) ObLSTxCtxMgr;
     (void)ATOMIC_FAA(&alloc_count_, 1);
@@ -186,7 +186,7 @@ ObLSTxCtxMgr *ObLSTxCtxMgrFactory::alloc(const uint64_t tenant_id)
 void ObLSTxCtxMgrFactory::release(ObLSTxCtxMgr *partition_trans_ctx_mgr)
 {
   if (OB_ISNULL(partition_trans_ctx_mgr)) {
-    TRANS_LOG(ERROR, "ObLSTxCtxMgr pointer is null when released",
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "ObLSTxCtxMgr pointer is null when released",
       KP(partition_trans_ctx_mgr));
   } else {
     partition_trans_ctx_mgr->~ObLSTxCtxMgr();

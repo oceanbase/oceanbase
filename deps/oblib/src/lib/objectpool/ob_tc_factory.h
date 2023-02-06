@@ -38,7 +38,7 @@ public:
   void push(T *ptr)
   {
     if (OB_UNLIKELY(false == list_.add_last(ptr))) {
-      LIB_LOG(ERROR, "fail to add ptr to list_'s tail");
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "fail to add ptr to list_'s tail");
     }
   }
   T *pop()
@@ -87,7 +87,7 @@ template <typename T>
 void ob_tc_factory_callback_on_put(T *obj, BoolType<true>)
 {
   if (OB_ISNULL(obj)) {
-    LIB_LOG(ERROR, "obj is NULL");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj is NULL");
   } else {
     obj->reset();
   }
@@ -169,7 +169,7 @@ ObTCFactory<T, MAX_CLASS_NUM, LABEL, MEM_LIMIT, MAX_FREE_LIST_LENGTH>
 {
   auto *instance = GET_TSI(self_t);
   if (OB_ISNULL(instance)) {
-    LIB_LOG(ERROR, "failed to init tc_factory");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "failed to init tc_factory");
   } else {
     // link all the tc_factory of all threads
     volatile self_t *old_v = NULL;
@@ -192,11 +192,11 @@ T *ObTCFactory<T, MAX_CLASS_NUM, LABEL, MEM_LIMIT, MAX_FREE_LIST_LENGTH>::get(
   UNUSED(tenant_id);
   T *ptr_ret = NULL;
   if (OB_UNLIKELY(0 > type_id) || OB_UNLIKELY(type_id >= MAX_CLASS_NUM)) {
-    LIB_LOG(ERROR, "invalid class type id", K(type_id));
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid class type id", K(type_id));
   } else {
     global_factory_t *gfactory = global_factory_t::get_instance();
     if (OB_ISNULL(gfactory)) {
-      LIB_LOG(ERROR, "gfactory is NULL");
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "gfactory is NULL");
     } else {
       const int32_t obj_size = gfactory->get_obj_size(type_id);
       //OB_PHY_OP_INC(type_id);
@@ -223,11 +223,11 @@ template <typename T, int64_t MAX_CLASS_NUM, const char *LABEL,
   T *ptr_ret = NULL;
   freelist_t &list = freelists_[type_id];
   if (OB_UNLIKELY(false == list.is_empty())) {
-    LIB_LOG(ERROR, "list is not empty");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "list is not empty");
   } else {
     global_factory_t *gfactory = global_factory_t::get_instance();
     if (OB_ISNULL(gfactory)) {
-      LIB_LOG(ERROR, "gfactory is NULL");
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "gfactory is NULL");
     } else {
       const int32_t batch_count = gfactory->get_batch_count(type_id);
       const int32_t move_num = std::min(batch_count, list.get_max_length());
@@ -272,7 +272,7 @@ void ObTCFactory<T, MAX_CLASS_NUM, LABEL, MEM_LIMIT, MAX_FREE_LIST_LENGTH>::put(
   if (OB_LIKELY(NULL != ptr)) {
     global_factory_t *gfactory = global_factory_t::get_instance();
     if (OB_ISNULL(gfactory)) {
-      LIB_LOG(ERROR, "gfactory is NULL");
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "gfactory is NULL");
     } else {
       const int32_t type_id = static_cast<const int32_t>(ptr->get_type());
       const int32_t obj_size = gfactory->get_obj_size(type_id);
@@ -301,7 +301,7 @@ void ObTCFactory<T, MAX_CLASS_NUM, LABEL, MEM_LIMIT, MAX_FREE_LIST_LENGTH>::list
 {
   global_factory_t *gfactory = global_factory_t::get_instance();
   if (OB_ISNULL(gfactory)) {
-    LIB_LOG(ERROR, "gfactory is NULL");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "gfactory is NULL");
   } else {
     const int32_t batch_count = gfactory->get_batch_count(type_id);
     // release batch_count objs to the global factory

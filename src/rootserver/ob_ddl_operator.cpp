@@ -94,7 +94,7 @@ ObSysStat::Item::Item(ObSysStat::ItemList &list, const char *name, const char *i
   value_.set_int(0);
   const bool add_success = list.add_last(this);
   if (!add_success) {
-    LOG_WARN("add last failed");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "add last failed");
   }
 }
 

@@ -76,7 +76,7 @@ public:
        ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(index_)))) {
-      SHARE_LOG(WARN, "Fail to read lock bucket, ", K_(index), K_(ret));
+      SHARE_LOG_RET(WARN, ret_, "Fail to read lock bucket, ", K_(index), K_(ret));
     } else {
       lock_start_ts_ = ObClockGenerator::getClock();;
     }
@@ -85,7 +85,7 @@ public:
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdunlock(index_)))) {
-        SHARE_LOG(WARN, "Fail to unlock bucket, ", K_(ret));
+        SHARE_LOG_RET(WARN,  ret_, "Fail to unlock bucket, ", K_(ret));
       } else {
         const int64_t lock_end_ts = ObClockGenerator::getClock();;
         if (lock_end_ts - lock_start_ts_ > 5 * 1000 * 1000) {
@@ -117,7 +117,7 @@ public:
        ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock(index_)))) {
-      SHARE_LOG(WARN, "Fail to write lock bucket, ", K_(index), K_(ret));
+      SHARE_LOG_RET(WARN, ret_, "Fail to write lock bucket, ", K_(index), K_(ret));
     } else {
       lock_start_ts_ = ObClockGenerator::getClock();;
     }
@@ -126,7 +126,7 @@ public:
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrunlock(index_)))) {
-        SHARE_LOG(WARN, "Fail to unlock bucket, ", K_(index), K_(ret));
+        SHARE_LOG_RET(WARN, ret_, "Fail to unlock bucket, ", K_(index), K_(ret));
       } else {
         const int64_t lock_end_ts = ObClockGenerator::getClock();;
         if (lock_end_ts - lock_start_ts_ > 5 * 1000 * 1000) {
@@ -185,7 +185,7 @@ public:
        ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock_all()))) {
-      SHARE_LOG(WARN, "Fail to try write lock all buckets", K_(ret));
+      SHARE_LOG_RET(WARN, ret_, "Fail to try write lock all buckets", K_(ret));
     } else {
       lock_start_ts_ = ObClockGenerator::getClock();;
     }
@@ -194,7 +194,7 @@ public:
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrunlock_all()))) {
-        SHARE_LOG(WARN, "Fail to unlock all buckets, ", K_(ret));
+        SHARE_LOG_RET(WARN, ret_, "Fail to unlock all buckets, ", K_(ret));
       } else {
         const int64_t lock_end_ts = ObClockGenerator::getClock();;
         if (lock_end_ts - lock_start_ts_ > 5 * 1000 * 1000) {
@@ -225,10 +225,10 @@ public:
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.try_rdlock_all()))) {
       if (OB_EAGAIN != ret_) {
-        SHARE_LOG(WARN, "Fail to try read lock all buckets", K_(ret), K(lbt()));
+        SHARE_LOG_RET(WARN, ret_, "Fail to try read lock all buckets", K_(ret), K(lbt()));
       } else {
         if (REACH_COUNT_INTERVAL(1000)) {// print one log per 1000 times.
-          SHARE_LOG(WARN, "fail to lock all buckets, need to try again", K_(ret), K(lbt()));
+          SHARE_LOG_RET(WARN, ret_, "fail to lock all buckets, need to try again", K_(ret), K(lbt()));
         }
       }
     } else {
@@ -239,7 +239,7 @@ public:
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdunlock_all()))) {
-        SHARE_LOG(WARN, "Fail to unlock all buckets, ", K_(ret));
+        SHARE_LOG_RET(WARN, ret_, "Fail to unlock all buckets, ", K_(ret));
       } else {
         const int64_t lock_end_ts = ObClockGenerator::getClock();;
         if (lock_end_ts - lock_start_ts_ > 5 * 1000 * 1000) {

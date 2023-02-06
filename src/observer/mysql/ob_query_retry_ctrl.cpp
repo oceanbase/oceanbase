@@ -111,7 +111,7 @@ public:
   {
     int refresh_err = v.result_.refresh_location_cache(is_async);
     if (OB_SUCCESS != refresh_err) {
-      LOG_WARN("fail to refresh location cache", K(is_async), K(refresh_err), K(v));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to refresh location cache", K(is_async), K(refresh_err), K(v));
     }
   }
 };
@@ -157,7 +157,7 @@ public:
       v.client_ret_ = v.err_;
       v.retry_type_ = RETRY_TYPE_NONE;
       v.no_more_test_ = true;
-      LOG_WARN("server down error, fast fail", K(v));
+      LOG_WARN_RET(v.err_, "server down error, fast fail", K(v));
     }
   }
 };
@@ -182,7 +182,7 @@ public:
   {
     try_packet_retry(v);
     if (RETRY_TYPE_LOCAL == v.retry_type_) {
-      LOG_WARN("set retry packet failed, retry at local",
+      LOG_WARN_RET(v.err_, "set retry packet failed, retry at local",
         K(v.ctx_.multi_stmt_item_.is_part_of_multi_stmt()),
         K(v.ctx_.multi_stmt_item_.get_seq_num()));
       v.session_.set_group_id_not_expected(true);
@@ -242,7 +242,7 @@ public:
   {
     int err = v.err_;
     if (v.result_.is_pl_stmt(v.result_.get_stmt_type()) && !v.session_.get_pl_can_retry()) {
-      LOG_WARN("current pl can not retry, commit may have occurred",
+      LOG_WARN_RET(err, "current pl can not retry, commit may have occurred",
                K(v), K(v.result_.get_stmt_type()));
       v.client_ret_ = err;
       v.retry_type_ = RETRY_TYPE_NONE;
@@ -412,7 +412,7 @@ public:
         v.client_ret_ = v.err_;
         v.retry_type_ = RETRY_TYPE_NONE;
         v.no_more_test_ = true;
-        LOG_WARN("server down error, the write dml is remote, don't retry",
+        LOG_WARN_RET(v.err_, "server down error, the write dml is remote, don't retry",
                  K(autocommit), K(plan_type), K(in_transaction), K(v));
       }
     }
@@ -438,7 +438,7 @@ public:
         v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
         v.retry_type_ = RETRY_TYPE_NONE;
         v.no_more_test_ = true;
-        LOG_WARN("can not retry local", K(v));
+        LOG_WARN_RET(v.client_ret_, "can not retry local", K(v));
       }
     }
   }
@@ -456,7 +456,7 @@ public:
       v.client_ret_ = OB_TRANS_CANNOT_SERIALIZE;
       v.retry_type_ = RETRY_TYPE_NONE;
       v.no_more_test_ = true;
-      LOG_WARN("transaction cannot serialize", K(v));
+      LOG_WARN_RET(v.client_ret_, "transaction cannot serialize", K(v));
     }
   }
 };
@@ -471,7 +471,7 @@ public:
     v.client_ret_ = OB_TRANS_CANNOT_SERIALIZE;
     v.retry_type_ = RETRY_TYPE_NONE;
     v.no_more_test_ = true;
-    LOG_WARN("transaction cannot serialize", K(v));
+    LOG_WARN_RET(v.client_ret_, "transaction cannot serialize", K(v));
   }
 };
 
@@ -490,7 +490,7 @@ public:
         v.client_ret_ = v.err_;
         v.retry_type_ = RETRY_TYPE_NONE;
         v.no_more_test_ = true;
-        LOG_WARN("can not retry local. need to terminate to prevent thread resouce deadlock", K(v));
+        LOG_WARN_RET(v.client_ret_, "can not retry local. need to terminate to prevent thread resouce deadlock", K(v));
       }
     }
   }
@@ -701,7 +701,7 @@ void ObQueryRetryCtrl::snapshot_discard_proc(ObRetryParam &v)
     // see: https://aone.alibaba-inc.com/req/21981135
     v.client_ret_ = v.err_;
     v.retry_type_ = RETRY_TYPE_NONE;
-    LOG_WARN("snapshot discarded in serializable isolation should not retry", K(v));
+    LOG_WARN_RET(v.client_ret_, "snapshot discarded in serializable isolation should not retry", K(v));
   } else {
     // 读到落后太多的备机或者正在回放日志的副本了
     // 副本不可读类型的错误最多在本线程重试1次。
@@ -860,17 +860,17 @@ void ObQueryRetryCtrl::after_func(ObRetryParam &v)
 {
   if (OB_TRY_LOCK_ROW_CONFLICT != v.client_ret_ && OB_ERR_PROXY_REROUTE != v.client_ret_) {
     //锁冲突就不要打印了，避免日志刷屏
-    LOG_WARN("[RETRY] check if need retry", K(v), "need_retry", RETRY_TYPE_NONE != v.retry_type_);
+    LOG_WARN_RET(v.client_ret_, "[RETRY] check if need retry", K(v), "need_retry", RETRY_TYPE_NONE != v.retry_type_);
   }
   if (RETRY_TYPE_NONE != v.retry_type_) {
     v.session_.get_retry_info_for_update().set_last_query_retry_err(v.err_);
     v.session_.get_retry_info_for_update().inc_retry_cnt();
     if (OB_UNLIKELY(v.err_ != v.client_ret_)) {
-      LOG_ERROR("when need retry, v.client_ret_ must be equal to err", K(v));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "when need retry, v.client_ret_ must be equal to err", K(v));
     }
   }
   if (OB_UNLIKELY(OB_SUCCESS == v.client_ret_)) {
-    LOG_ERROR("no matter need retry or not, v.client_ret_ should not be OB_SUCCESS", K(v));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "no matter need retry or not, v.client_ret_ should not be OB_SUCCESS", K(v));
   }
 }
 

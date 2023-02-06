@@ -347,11 +347,11 @@ bool ObStorageSchema::is_valid() const
       || !check_column_array_valid(rowkey_array_)
       || !check_column_array_valid(column_array_)) {
     valid_ret = false;
-    STORAGE_LOG(WARN, "invalid", K_(is_inited), KP_(allocator), K_(schema_version), K_(column_cnt),
+    STORAGE_LOG_RET(WARN, OB_INVALID_ERROR, "invalid", K_(is_inited), KP_(allocator), K_(schema_version), K_(column_cnt),
         K_(tablet_size), K_(pctfree), K_(table_type), K_(table_mode), K_(index_type));
   } else if (!column_info_simplified_ && column_cnt_ != column_array_.count()) {
     valid_ret = false;
-    STORAGE_LOG(WARN, "invalid column count", K(valid_ret), K_(column_info_simplified), K_(column_cnt), K_(column_array));
+    STORAGE_LOG_RET(WARN, OB_INVALID_ERROR, "invalid column count", K(valid_ret), K_(column_info_simplified), K_(column_cnt), K_(column_array));
   } else if (is_view_table()) {
     // no need checking other options for view
   }

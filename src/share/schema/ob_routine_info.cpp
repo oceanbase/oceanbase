@@ -132,20 +132,20 @@ bool ObRoutineParam::is_same(const ObRoutineParam &other) const
   //   bret = false;
   // }
   if (bret && 0 != get_name().case_compare(other.get_name())) {
-    LOG_WARN("param name is not same", K(get_name()), K(other.get_name()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "param name is not same", K(get_name()), K(other.get_name()));
     bret = false;
   }
   if (bret && get_flag() != other.get_flag()) {
-    LOG_WARN("param flag is not same", K(get_flag()), K(other.get_flag()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "param flag is not same", K(get_flag()), K(other.get_flag()));
     bret = false;
   }
   if (bret && get_param_type().get_obj_type() != other.get_param_type().get_obj_type()) {
-    LOG_WARN("param type is not same", K(get_param_type().get_obj_type()),
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "param type is not same", K(get_param_type().get_obj_type()),
                                        K(other.get_param_type().get_obj_type()));
     bret = false;
   }
   if (bret && is_complex_type() && get_type_owner() != other.get_type_owner()) {
-    LOG_WARN("param type is complex and not same", K(is_complex_type()),
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "param type is complex and not same", K(is_complex_type()),
                                                    K(get_type_owner()),
                                                    K(other.get_type_owner()));
     bret = false;

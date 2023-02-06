@@ -37,13 +37,13 @@ bool DummyBufferTask::is_valid() const
 
 int64_t DummyBufferTask::get_data_len() const
 {
-  LOG_ERROR("the function should not be called");
+  LOG_ERROR_RET(OB_ERR_UNEXPECTED, "the function should not be called");
   return 0;
 }
 
 int64_t DummyBufferTask::get_entry_cnt() const
 {
-  LOG_ERROR("the function should not be called");
+  LOG_ERROR_RET(OB_ERR_UNEXPECTED, "the function should not be called");
   return 0;
 }
 

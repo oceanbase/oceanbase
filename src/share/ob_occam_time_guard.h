@@ -90,7 +90,7 @@ private:
                 if (cur_ts > allow_print_ts) {
                   int64_t next_allow_print_ts = point.timeout_ts_ + 30_s;
                   next_print_ts_[idx] = next_allow_print_ts;// only this thread read it, so no need atomic write
-                  OCCAM_LOG(WARN, "thread maybe hung!", K(point), K(idx), KTIMERANGE(next_allow_print_ts, HOUR, MSECOND));
+                  OCCAM_LOG_RET(WARN, OB_ERR_UNEXPECTED, "thread maybe hung!", K(point), K(idx), KTIMERANGE(next_allow_print_ts, HOUR, MSECOND));
                 } else {
                   OCCAM_LOG(DEBUG, "this thread has been repoted hung, wait for next print time",
                                 K(point), K(idx), KTIME(allow_print_ts));
@@ -246,7 +246,7 @@ public:
       if (n >= buffer_size) {
         snprintf(&strbuffer[buffer_size - 6], 6, "..., ");
       }
-      ::oceanbase::common::OB_PRINT(log_mod_, OB_LOG_LEVEL_DIRECT(WARN), strbuffer, LOG_KVS(K(*this)));
+      ::oceanbase::common::OB_PRINT(log_mod_, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(WARN), OB_SUCCESS, strbuffer, LOG_KVS(K(*this)));
     }
   }
   bool is_timeout()
@@ -378,7 +378,7 @@ public:
       MEM_BARRIER();
       ++g_point.version_;
     } else {
-      OCCAM_LOG(WARN, "this time guard will not detect thread hung, cause global slot is not enough",
+      OCCAM_LOG_RET(WARN, OB_ERR_UNEXPECTED, "this time guard will not detect thread hung, cause global slot is not enough",
                    K(file), K(func), K(line), K(lbt()));
     }
   }

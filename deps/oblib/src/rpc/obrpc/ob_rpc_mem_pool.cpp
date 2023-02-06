@@ -43,7 +43,7 @@ static ObRpcMemPool::Page* rpc_mem_pool_create_page(int64_t sz) {
   int64_t alloc_sz = std::max(sizeof(ObRpcMemPool::Page) + sz, (uint64_t)ObRpcMemPool::RPC_POOL_PAGE_SIZE);
   ObRpcMemPool::Page* page = (typeof(page))rpc_mem_pool_direct_alloc(alloc_sz);
   if (OB_ISNULL(page)) {
-    LOG_ERROR("rpc memory pool alloc memory failed", K(sz), K(alloc_sz));
+    LOG_ERROR_RET(common::OB_ALLOCATE_MEMORY_FAILED, "rpc memory pool alloc memory failed", K(sz), K(alloc_sz));
   } else {
     new(page)ObRpcMemPool::Page(alloc_sz);
   }

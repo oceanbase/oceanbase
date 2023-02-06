@@ -637,7 +637,7 @@ ObRebuildListener::ObRebuildListener(transaction::ObLSTxCtxMgr &mgr)
 {
   int tmp_ret = OB_SUCCESS;
   while (OB_SUCCESS != (tmp_ret = ls_tx_ctx_mgr_.lock_minor_merge_lock())) {
-    STORAGE_LOG(ERROR, "lock minor merge lock failed, we need retry forever", K(tmp_ret));
+    STORAGE_LOG_RET(ERROR, tmp_ret, "lock minor merge lock failed, we need retry forever", K(tmp_ret));
   }
 }
 
@@ -645,7 +645,7 @@ ObRebuildListener::~ObRebuildListener()
 {
   int tmp_ret = OB_SUCCESS;
   while (OB_SUCCESS != (tmp_ret = ls_tx_ctx_mgr_.unlock_minor_merge_lock())) {
-    STORAGE_LOG(ERROR, "unlock minor merge lock failed, we need retry forever", K(tmp_ret));
+    STORAGE_LOG_RET(ERROR, tmp_ret, "unlock minor merge lock failed, we need retry forever", K(tmp_ret));
   }
 }
 

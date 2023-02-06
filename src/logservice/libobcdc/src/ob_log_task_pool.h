@@ -270,7 +270,7 @@ private:
     TaskType *ret_task = NULL;
     int64_t alloc_size = static_cast<int64_t>(sizeof(TaskType));
     if (OB_ISNULL(ret_task = static_cast<TaskType*>(alloc_->alloc(alloc_size)))) {
-      OBLOG_LOG(WARN, "failed to alloc task", K(ret_task), K(alloc_size));
+      OBLOG_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "failed to alloc task", K(ret_task), K(alloc_size));
     } else {
       new(ret_task)TaskType();
       ret_task->set_pool(this);
@@ -397,7 +397,7 @@ private:
   {
     if (NULL != prealloc_pages_) {
       if (prealloc_page_pool_.get_total() < prealloc_page_cnt_) {
-        OBLOG_LOG(WARN, "part trans task prealloc pages are not reverted all",
+        OBLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "part trans task prealloc pages are not reverted all",
             K_(prealloc_page_cnt), "pool_size", prealloc_page_pool_.get_total());
       }
 

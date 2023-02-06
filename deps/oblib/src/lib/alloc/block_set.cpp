@@ -415,7 +415,7 @@ int64_t BlockSet::sync_wash(int64_t wash_size)
               result = ::madvise(data, len, MADV_DONTNEED);
             } while (result == -1 && errno == EAGAIN);
             if (-1 == result) {
-              _OB_LOG(WARN, "madvise failed, errno: %d", errno);
+              _OB_LOG_RET(WARN, OB_ERR_SYS, "madvise failed, errno: %d", errno);
               has_ignore = true;
             } else {
               take_off_free_block(block, cls, chunk);

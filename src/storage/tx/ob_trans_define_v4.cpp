@@ -672,7 +672,7 @@ inline bool ObTxDesc::acq_commit_cb_lock_if_need_()
     if (ret == OB_EAGAIN) {
       if (OB_NOT_NULL(commit_cb_)) {
         if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
-          TRANS_LOG(WARN, "use too much time wait lock", K_(tx_id));
+          TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "use too much time wait lock", K_(tx_id));
         }
         if (++cnt < 200) { PAUSE(); }
         else { ob_usleep(5000); }

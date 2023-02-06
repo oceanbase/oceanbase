@@ -88,6 +88,7 @@ public:
   }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override
   {
+    int ret = 0;
     ObAsyncTask *task = NULL;
     if (buf == NULL || buf_size < sizeof(*this)) {
       OB_LOG(ERROR, "invalid argument");

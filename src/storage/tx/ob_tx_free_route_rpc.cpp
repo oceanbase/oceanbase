@@ -112,7 +112,7 @@ int ObTxFreeRouteRPCCB<PC>::process()
 template<ObRpcPacketCode PC>
 void ObTxFreeRouteRPCCB<PC>::on_timeout()
 {
-  TRANS_LOG(WARN, "txn free route rpc timeout");
+  TRANS_LOG_RET(WARN, OB_TIMEOUT, "txn free route rpc timeout");
 }
 
 template int ObTxFreeRouteRPCCB<OB_TX_FREE_ROUTE_CHECK_ALIVE>::process();

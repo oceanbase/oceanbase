@@ -50,7 +50,7 @@ void ObILibCacheObject::reset()
 void ObILibCacheObject::dump_deleted_log_info(const bool is_debug_log /* = true */) const
 {
   if (is_debug_log) {
-    SQL_PC_LOG(WARN, "Dumping Cache Deleted Info",
+    SQL_PC_LOG_RET(WARN, OB_SUCCESS, "Dumping Cache Deleted Info",
                K(object_id_),
                K(tenant_id_),
                K(added_to_lc_),

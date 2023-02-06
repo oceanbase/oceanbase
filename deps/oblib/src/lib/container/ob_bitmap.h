@@ -466,12 +466,12 @@ ObBitmap::get_block(const size_type pos) const
 {
   ObBitmap::size_type result = 0;
   if (OB_UNLIKELY(valid_bits_ < pos)) {
-    LIB_LOG(WARN, "Index out of range when getting block from bitmap", K_(valid_bits), K(pos));
+    LIB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "Index out of range when getting block from bitmap", K_(valid_bits), K(pos));
   } else {
     size_type inner_pos = pos;
     MemBlock *mem_block = find_block(pos, inner_pos);
     if (OB_ISNULL(mem_block)) {
-      LIB_LOG(WARN, "Null pointer error when finding memblock", K(pos));
+      LIB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "Null pointer error when finding memblock", K(pos));
     } else {
       result = mem_block->bits_[block_index(inner_pos)];
     }

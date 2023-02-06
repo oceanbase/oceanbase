@@ -84,7 +84,7 @@ ObArchiveLogFetchTask *ObArchiveAllocator::alloc_log_fetch_task()
   ObArchiveLogFetchTask *task = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(WARN, "ObArchiveAllocator not init");
+    ARCHIVE_LOG_RET(WARN, OB_NOT_INIT, "ObArchiveAllocator not init");
   } else if (OB_ISNULL(data = log_fetch_task_allocator_.alloc())) {
     // alloc fail
   } else {
@@ -111,7 +111,7 @@ char *ObArchiveAllocator::alloc_send_task(const int64_t buf_len)
   char *data = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(WARN, "ObArchiveAllocator not init");
+    ARCHIVE_LOG_RET(WARN, OB_NOT_INIT, "ObArchiveAllocator not init");
   } else if (OB_ISNULL(data = static_cast<char *>(send_task_allocator_.acquire(buf_len)))) {
     // alloc fail
   } else {
@@ -137,9 +137,9 @@ ObArchiveTaskStatus *ObArchiveAllocator::alloc_send_task_status(const share::ObL
   ObArchiveTaskStatus *task_status = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(WARN, "ObArchiveAllocator not init");
+    ARCHIVE_LOG_RET(WARN, OB_NOT_INIT, "ObArchiveAllocator not init");
   } else if (OB_ISNULL(data = send_task_status_allocator_.alloc())) {
-    ARCHIVE_LOG(WARN, "alloc data fail");
+    ARCHIVE_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "alloc data fail");
   } else {
     task_status = new (data) ObArchiveTaskStatus(id);
   }

@@ -840,7 +840,7 @@ int ObTenantRoleTransitionService::switchover_update_tenant_status(
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), KR(temp_ret));
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, KR(temp_ret));
       ret = OB_SUCC(ret) ? temp_ret : ret;
     }
   }

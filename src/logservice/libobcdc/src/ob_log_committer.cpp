@@ -217,7 +217,7 @@ void ObLogCommitter::stop()
       int pthread_ret = pthread_join(commit_pid_, NULL);
 
       if (0 != pthread_ret) {
-        LOG_ERROR("join Committer commit thread fail", K(commit_pid_), KERRNOMSG(pthread_ret));
+        LOG_ERROR_RET(OB_ERR_SYS, "join Committer commit thread fail", K(commit_pid_), KERRNOMSG(pthread_ret));
       } else {
         LOG_INFO("stop Committer commit thread succ");
       }
@@ -229,7 +229,7 @@ void ObLogCommitter::stop()
       int pthread_ret = pthread_join(heartbeat_pid_, NULL);
 
       if (0 != pthread_ret) {
-        LOG_ERROR("join Committer HEARTBEAT thread fail", K(heartbeat_pid_), KERRNOMSG(pthread_ret));
+        LOG_ERROR_RET(OB_ERR_SYS, "join Committer HEARTBEAT thread fail", K(heartbeat_pid_), KERRNOMSG(pthread_ret));
       } else {
         LOG_INFO("stop Committer HEARTBEAT thread succ");
       }

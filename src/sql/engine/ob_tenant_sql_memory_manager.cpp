@@ -1095,7 +1095,7 @@ bool ObTenantSqlMemoryManager::enable_auto_sql_memory_manager()
     LOG_TRACE("get work area policy config", K(tenant_id_), K(auto_memory_mgr), K(tmp_str),
       K(tenant_config->workarea_size_policy.str()));
   } else {
-    LOG_WARN("failed to init tenant config", K(tenant_id_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to init tenant config", K(tenant_id_));
   }
   return auto_memory_mgr;
 }

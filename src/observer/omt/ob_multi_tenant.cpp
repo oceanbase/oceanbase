@@ -1986,7 +1986,7 @@ void ObMultiTenant::run1()
       set_group_sug_token();
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
-          LOG_ERROR("unexpected condition");
+          LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
         } else if ((*it)->has_stopped()) {
           // skip stopped tenant
         } else {

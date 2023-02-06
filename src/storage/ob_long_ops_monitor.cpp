@@ -386,7 +386,7 @@ void ObILongOpsStatHandle::reset()
   if (NULL != ptr_) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = ObLongOpsMonitor::get_instance().dec_handle_ref(*this))) {
-      LOG_WARN("fail to dec handle ref", K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "fail to dec handle ref", K(tmp_ret));
     }
   }
 }

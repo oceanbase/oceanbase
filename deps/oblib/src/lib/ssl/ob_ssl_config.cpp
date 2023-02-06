@@ -109,9 +109,9 @@ static X509* ob_ssl_get_sm_cert_memory(const char *cert)
   BIO *bio = NULL;
   X509 *x509 = NULL;
   if (NULL == (bio = BIO_new_mem_buf((void *)cert, -1))) {
-    COMMON_LOG(ERROR, "BIO_new_mem_buf failed", K(cert));
+    COMMON_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "BIO_new_mem_buf failed", K(cert));
   } else if (NULL == (x509 = PEM_read_bio_X509(bio, NULL, NULL, NULL))) {
-    COMMON_LOG(WARN, "PEM_read_bio_X509 failed", K(cert));
+    COMMON_LOG_RET(WARN, OB_ERR_SYS, "PEM_read_bio_X509 failed", K(cert));
   }
   if (NULL != bio) {
     BIO_free(bio);
@@ -124,9 +124,9 @@ static EVP_PKEY* ob_ssl_get_sm_pkey_memory(const char *key)
   BIO *bio = NULL;
   EVP_PKEY *pkey = NULL;
   if (NULL == (bio = BIO_new_mem_buf((void *)key, strlen(key)))) {
-    COMMON_LOG(ERROR, "BIO_new_mem_buf failed", K(key));
+    COMMON_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "BIO_new_mem_buf failed", K(key));
   } else if (NULL == (pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL))) {
-    COMMON_LOG(WARN, "PEM_read_bio_PrivateKey failed", K(key));
+    COMMON_LOG_RET(WARN, OB_ERR_SYS, "PEM_read_bio_PrivateKey failed", K(key));
   }
   if (NULL != bio) {
     BIO_free(bio);
@@ -486,7 +486,7 @@ ssize_t ob_read_regard_ssl(int fd, void *buf, size_t nbytes)
   ssize_t rbytes = 0;
   SSL* ssl = NULL;
   if (OB_UNLIKELY(fd < 0 || fd >= FD_MAX)) {
-    COMMON_LOG(ERROR, "fd is beyond limit", K(fd));
+    COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "fd is beyond limit", K(fd));
     rbytes = -1;
     errno = EINVAL;
   } else if (OB_LIKELY(NULL == (ssl = gs_ssl_array[fd].ssl))) {
@@ -508,11 +508,11 @@ ssize_t ob_read_regard_ssl(int fd, void *buf, size_t nbytes)
           } else if (SSL_ERROR_WANT_WRITE == err) {
             rbytes = -1;
             errno = EIO;
-            COMMON_LOG(ERROR, "SSL_do_handshake want write in reading process", K(fd));
+            COMMON_LOG_RET(ERROR, OB_ERR_SYS, "SSL_do_handshake want write in reading process", K(fd));
           } else {
             rbytes = -1;
             errno = EIO;
-            COMMON_LOG(WARN, "SSL_do_handshake failed", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
+            COMMON_LOG_RET(WARN, OB_ERR_SYS, "SSL_do_handshake failed", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
           }
         }
     } else {
@@ -527,16 +527,16 @@ ssize_t ob_read_regard_ssl(int fd, void *buf, size_t nbytes)
         } else if (SSL_ERROR_WANT_WRITE == ssl_error) {
           rbytes = -1;
           errno = EIO;
-          COMMON_LOG(ERROR, "SSL_read want write, maybe peer started SSL renegotiation", K(fd));
+          COMMON_LOG_RET(ERROR, OB_ERR_SYS, "SSL_read want write, maybe peer started SSL renegotiation", K(fd));
         } else if (SSL_ERROR_ZERO_RETURN == ssl_error || 0 == ERR_peek_error()) {
           /* connection shutdown by peer*/
           rbytes = 0;
-          COMMON_LOG(WARN, "SSL_read, peer shutdown cleanly", K(fd), K(ssl_error));
+          COMMON_LOG_RET(WARN, OB_ERR_SYS, "SSL_read, peer shutdown cleanly", K(fd), K(ssl_error));
         } else {
           rbytes = -1;
 		  int sys_errno = errno;
           errno = EIO;
-          COMMON_LOG(WARN, "SSL_read failed", K(fd), K(sys_errno), K(ssl_error), K(ERR_error_string(ERR_get_error(), NULL)));
+          COMMON_LOG_RET(WARN, OB_ERR_SYS, "SSL_read failed", K(fd), K(sys_errno), K(ssl_error), K(ERR_error_string(ERR_get_error(), NULL)));
         }
       }
     }
@@ -549,7 +549,7 @@ ssize_t ob_write_regard_ssl(int fd, const void *buf, size_t nbytes)
   ssize_t wbytes = 0;
   SSL* ssl = NULL;
   if (OB_UNLIKELY(fd < 0 || fd >= FD_MAX)) {
-    COMMON_LOG(ERROR, "fd is beyond limit", K(fd));
+    COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "fd is beyond limit", K(fd));
     wbytes = -1;
     errno = EINVAL;
   } else if (OB_LIKELY(NULL == (ssl = gs_ssl_array[fd].ssl))) {
@@ -571,7 +571,7 @@ ssize_t ob_write_regard_ssl(int fd, const void *buf, size_t nbytes)
           } else {
             wbytes = -1;
             errno = EIO;
-            COMMON_LOG(ERROR, "SSL_do_handshake failed", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
+            COMMON_LOG_RET(ERROR, OB_ERR_SYS, "SSL_do_handshake failed", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
           }
         }
     } else {
@@ -585,10 +585,10 @@ ssize_t ob_write_regard_ssl(int fd, const void *buf, size_t nbytes)
           errno = EAGAIN;
         } else if (SSL_ERROR_WANT_READ == ssl_error) {
           errno = EIO;
-          COMMON_LOG(ERROR, "SSL_write want read", K(fd));
+          COMMON_LOG_RET(ERROR, OB_ERR_SYS, "SSL_write want read", K(fd));
         } else {
           errno = EIO;
-          COMMON_LOG(ERROR, "ssl write faild", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
+          COMMON_LOG_RET(ERROR, OB_ERR_SYS, "ssl write faild", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
         }
       }
     }

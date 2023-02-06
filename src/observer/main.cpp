@@ -25,6 +25,7 @@
 #include "lib/utility/ob_defer.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_struct.h"
+#include "observer/ob_server_utils.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_version.h"
@@ -254,7 +255,7 @@ parse_short_opt(const int c, const char *value, ObServerOptions &opts)
       MPRINT("malformed log level, candicates are: "
              "    ERROR,USER_ERR,WARN,INFO,TRACE,DEBUG");
       MPRINT("!! Back to INFO log level.");
-      opts.log_level_ = 3;
+      opts.log_level_ = OB_LOG_LEVEL_WARN;
     }
     break;
 
@@ -299,7 +300,7 @@ static int callback(struct dl_phdr_info *info, size_t size, void *data)
   UNUSED(size);
   UNUSED(data);
   if (OB_ISNULL(info)) {
-    LOG_ERROR("invalid argument", K(info));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", K(info));
   } else {
     MPRINT("name=%s (%d segments)", info->dlpi_name, info->dlpi_phnum);
     for (int j = 0; j < info->dlpi_phnum; j++) {
@@ -457,7 +458,7 @@ int main(int argc, char *argv[])
   setlocale(LC_TIME, "en_US.UTF-8");
   setlocale(LC_NUMERIC, "en_US.UTF-8");
   // memset(&opts, 0, sizeof (opts));
-  opts.log_level_ = 3;
+  opts.log_level_ = OB_LOG_LEVEL_WARN;
   parse_opts(argc, argv, opts);
 
   if (OB_FAIL(check_uid_before_start(CONF_DIR))) {
@@ -480,9 +481,11 @@ int main(int argc, char *argv[])
     CURLcode curl_code = curl_global_init(CURL_GLOBAL_ALL);
     OB_ASSERT(CURLE_OK == curl_code);
 
+    const char *syslog_file_info = ObServerUtils::build_syslog_file_info(ObAddr());
     easy_log_level = EASY_LOG_INFO;
     OB_LOGGER.set_log_level(opts.log_level_);
     OB_LOGGER.set_max_file_size(LOG_FILE_SIZE);
+    OB_LOGGER.set_new_file_info(syslog_file_info);
     OB_LOGGER.set_file_name(LOG_FILE_NAME, false, true, RS_LOG_FILE_NAME, ELECT_ASYNC_LOG_FILE_NAME, TRACE_LOG_FILE_NAME, audit_file);
     ObPLogWriterCfg log_cfg;
     // if (OB_SUCCESS != (ret = ASYNC_LOG_INIT(ELECT_ASYNC_LOG_FILE_NAME, opts.log_level_, true))) {
@@ -503,6 +506,7 @@ int main(int argc, char *argv[])
       _LOG_INFO("Virtual memory : %'15ld byte", memory_used);
     }
     // print in log file.
+    LOG_INFO("Build basic information for each syslog file", "info", syslog_file_info);
     print_args(argc, argv);
     print_version();
     print_all_limits();

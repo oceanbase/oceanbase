@@ -49,7 +49,7 @@ bool ObUpdateRsListTask::try_lock()
   int64_t cnt = ATOMIC_AAF(&g_wait_cnt_, 1);
   if (1 != cnt) {
     if (cnt < 0) {
-      LOG_ERROR("unexpected waiting task cnt", K(cnt));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected waiting task cnt", K(cnt));
     } else {
       LOG_INFO("update rslist task exist, do not submit again", K(cnt));
     }
@@ -441,7 +441,7 @@ ObAsyncTask *ObUpdateRsListTimerTask::deep_copy(char *buf, const int64_t buf_siz
 {
   ObUpdateRsListTimerTask *task = NULL;
   if (OB_ISNULL(buf) || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN("buffer not large enough", K(buf_size));
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
   } else {
     task = new(buf) ObUpdateRsListTimerTask(rs_);
   }

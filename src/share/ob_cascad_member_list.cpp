@@ -228,7 +228,7 @@ ObCascadMemberList &ObCascadMemberList::operator=(const ObCascadMemberList &memb
   if (this != &member_list) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != ( tmp_ret = deep_copy(member_list))) {
-      COMMON_LOG(ERROR, "deep_copy failed", K(tmp_ret));
+      COMMON_LOG_RET(ERROR, tmp_ret, "deep_copy failed", K(tmp_ret));
     }
   }
   return *this;

@@ -162,9 +162,9 @@ rpc::frame::ObReqTransport::AsyncCB *FetchLogSRpc::RpcCB::clone(const rpc::frame
   RpcCB *cb = NULL;
 
   if (OB_ISNULL(buf = alloc(sizeof(RpcCB)))) {
-    LOG_ERROR("clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
   } else if (OB_ISNULL(cb = new(buf) RpcCB(host_))) {
-    LOG_ERROR("construct RpcCB fail", K(buf));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "construct RpcCB fail", K(buf));
   } else {
     // success
   }
@@ -527,7 +527,7 @@ void FetchLogARpc::stop()
     while (get_flying_request_count() > 0) {
       wait_count++;
       if (0 == (wait_count % WARN_COUNT_ON_STOP)) {
-        LOG_WARN("wait for flying async fetch log rpc done",
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "wait for flying async fetch log rpc done",
             "fetch_stream", &host_, K_(svr),
             "flying_request_count", get_flying_request_count(),
             "wait_time", get_timestamp() - start_time);
@@ -590,7 +590,7 @@ void FetchLogARpc::revert_result(FetchLogARpcResult *result)
   ObSpinLockGuard guard(lock_);
 
   if (OB_ISNULL(result_pool_)) {
-    LOG_ERROR("invalid rpc result pool", K(result_pool_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid rpc result pool", K(result_pool_));
   } else if (OB_NOT_NULL(result)) {
     result_pool_->free(result);
     result = NULL;
@@ -1093,9 +1093,9 @@ rpc::frame::ObReqTransport::AsyncCB *FetchLogARpc::RpcCB::clone(const rpc::frame
   RpcCB *cb = NULL;
 
   if (OB_ISNULL(buf = alloc(sizeof(RpcCB)))) {
-    LOG_ERROR("clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
   } else if (OB_ISNULL(cb = new(buf) RpcCB(host_))) {
-    LOG_ERROR("construct RpcCB fail", K(buf));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "construct RpcCB fail", K(buf));
   } else {
     // 成功
   }

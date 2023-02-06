@@ -73,7 +73,7 @@ SCN ObWeakReadUtil::generate_min_weak_read_version(const uint64_t tenant_id)
   base_version_when_no_valid_partition.convert_from_ts(ObTimeUtility::current_time() - max_stale_time);
 
   if ((!tenant_config_exist) && REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
-    TRANS_LOG(WARN, "tenant not exist when generate min weak read version, use default max stale time instead",
+    TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tenant not exist when generate min weak read version, use default max stale time instead",
         K(tenant_id), K(base_version_when_no_valid_partition), K(lbt()));
   }
 
@@ -93,7 +93,7 @@ bool ObWeakReadUtil::enable_monotonic_weak_read(const uint64_t tenant_id)
       /* failure */ [tenant_id, &is_monotonic]() mutable {
         is_monotonic = true;
         if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
-        TRANS_LOG(WARN, "tenant not exist when check enable monotonic weak read, use true as default instead",
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tenant not exist when check enable monotonic weak read, use true as default instead",
                   K(tenant_id), K(is_monotonic), K(lbt()));
         }
       }
@@ -115,7 +115,7 @@ int64_t ObWeakReadUtil::max_stale_time_for_weak_consistency(const uint64_t tenan
       /* failure */ [tenant_id, ignore_warn, &max_stale_time]() mutable {
         max_stale_time = DEFAULT_MAX_STALE_TIME_FOR_WEAK_CONSISTENCY;
         if (IGNORE_TENANT_EXIST_WARN != ignore_warn && REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
-        TRANS_LOG(WARN, "tenant not exist when get max stale time for weak consistency,"
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tenant not exist when get max stale time for weak consistency,"
                   " use default max stale time instead",
                   K(tenant_id), K(max_stale_time), K(lbt()));
         }

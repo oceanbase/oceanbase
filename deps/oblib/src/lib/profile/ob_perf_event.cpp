@@ -29,7 +29,7 @@ void ObPerfConfig::start()
   ObPerfWriter *perf_writer = get_perf_writer();
   if (OB_NOT_NULL(perf_writer) && !perf_writer->is_opened()) {
     if (OB_SUCCESS != (err = perf_writer->open(data_filename_))) {
-      LOG_WARN("failed to open obperf data file", K(err));
+      LOG_WARN_RET(err, "failed to open obperf data file", K(err));
     } else {
       enabled_ = true;
     }
@@ -43,7 +43,7 @@ void ObPerfConfig::stop()
   int err = OB_SUCCESS;
   if (OB_NOT_NULL(perf_writer) && perf_writer->is_opened()) {
     if (OB_SUCCESS != (err = perf_writer->close())) {
-      LOG_WARN("failed to close obperf data file", K(err));
+      LOG_WARN_RET(err, "failed to close obperf data file", K(err));
     }
   }
 }

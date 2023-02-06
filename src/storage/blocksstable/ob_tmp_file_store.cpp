@@ -245,7 +245,7 @@ int64_t ObTmpFilePageBuddy::to_string(char* buf, const int64_t buf_len) const
 void ObTmpFilePageBuddy::free(const int32_t start_page_id, const int32_t page_nums)
 {
   if (OB_UNLIKELY(start_page_id + page_nums >= std::pow(2, MAX_ORDER))) {
-    STORAGE_LOG(ERROR, "page id more than max numbers in block", K(start_page_id), K(page_nums));
+    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "page id more than max numbers in block", K(start_page_id), K(page_nums));
     ob_abort();
   } else {
     int32_t start_id = start_page_id;
@@ -295,7 +295,7 @@ ObTmpFileArea *ObTmpFilePageBuddy::find_buddy(const int32_t page_nums, const int
   ObTmpFileArea *tmp = NULL;
   if (MAX_PAGE_NUMS < page_nums || page_nums <= 0 || start_page_id < 0
       || start_page_id >= MAX_PAGE_NUMS) {
-    STORAGE_LOG(WARN, "invalid argument", K(page_nums), K(start_page_id));
+    STORAGE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument", K(page_nums), K(start_page_id));
   } else if (MAX_PAGE_NUMS == page_nums) {
     // no buddy, so, nothing to do.
   } else {

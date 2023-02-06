@@ -502,7 +502,7 @@ int ObPLCompiler::update_schema_object_dep_info(ObPLCompileUnitAST &ast,
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(ret), K(temp_ret));
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(ret), K(temp_ret));
         ret = OB_SUCC(ret) ? temp_ret : ret;
       }
     }

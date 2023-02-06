@@ -29,7 +29,7 @@ namespace election
 #define CHECK_SILENCE()\
 do {\
   if (ATOMIC_LOAD(&INIT_TS) < 0) {\
-    ELECT_LOG(ERROR, "INIT_TS is less than 0, may not call GLOBAL_INIT_ELECTION_MODULE yet!", K(*this));\
+    ELECT_LOG_RET(ERROR, common::OB_ERROR, "INIT_TS is less than 0, may not call GLOBAL_INIT_ELECTION_MODULE yet!", K(*this));\
     return;\
   } else if (OB_UNLIKELY(get_monotonic_ts() < ATOMIC_LOAD(&INIT_TS) + MAX_LEASE_TIME)) {\
     ELECT_LOG(INFO, "keep silence for safty, won't send response", K(*this));\
@@ -108,7 +108,7 @@ void ElectionAcceptor::advance_ballot_number_and_reset_related_states_(const int
     ballot_of_time_window_ = ballot_number_;
     reset_time_window_states_(phase);
   } else {
-    LOG_PHASE(ERROR, phase, "invalid argument");
+    LOG_PHASE_RET(ERROR, OB_INVALID_ARGUMENT, phase, "invalid argument");
   }
   #undef PRINT_WRAPPER
 }

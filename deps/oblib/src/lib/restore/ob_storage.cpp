@@ -46,7 +46,7 @@ void print_access_storage_log(
         *is_slow = true;
       }
       speed = 1.0 * (double)size / 1024 / 1024 * 1000 * 1000 / (double)cost_ts;
-      _STORAGE_LOG(WARN, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
+      _STORAGE_LOG_RET(WARN, OB_SUCCESS, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
         msg, uri.length(), uri.ptr(), size, cost_ts, speed);
     }
   }
@@ -140,7 +140,7 @@ void ObStorageGlobalIns::fin()
 
 void ObStorageGlobalIns::set_io_prohibited(bool prohibited)
 {
-  STORAGE_LOG(WARN, "set_io_prohibited", K_(io_prohibited), K(prohibited));
+  STORAGE_LOG_RET(WARN, OB_SUCCESS, "set_io_prohibited", K_(io_prohibited), K(prohibited));
   io_prohibited_ = prohibited;
 }
 
@@ -548,7 +548,7 @@ ObStorageReader::ObStorageReader()
 ObStorageReader::~ObStorageReader()
 {
   if (NULL != reader_) {
-    STORAGE_LOG(ERROR, "reader not closed", KCSTRING(uri_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "reader not closed", KCSTRING(uri_));
   }
 }
 
@@ -669,7 +669,7 @@ ObStorageWriter::ObStorageWriter()
 ObStorageWriter::~ObStorageWriter()
 {
   if (NULL != writer_) {
-    STORAGE_LOG(ERROR, "writer not close");
+    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "writer not close");
   }
 }
 
@@ -795,7 +795,7 @@ ObStorageAppender::ObStorageAppender(StorageOpenMode mode)
 ObStorageAppender::~ObStorageAppender()
 {
   if (is_opened_ && NULL != appender_) {
-    STORAGE_LOG(ERROR, "appender not close");
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "appender not close");
   }
 }
 
@@ -967,7 +967,7 @@ int64_t ObStorageAppender::get_length()
   int64_t ret_int = -1;
 
   if (OB_ISNULL(appender_)) {
-    STORAGE_LOG(WARN, "appender not opened");
+    STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "appender not opened");
   } else {
     ret_int = appender_->get_length();
   }

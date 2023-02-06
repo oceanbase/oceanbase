@@ -739,7 +739,12 @@ int ObMediumCompactionScheduleFunc::check_medium_checksum_table(
   } else {
     for (int i = 1; OB_SUCC(ret) && i < checksum_items.count(); ++i) {
       if (OB_FAIL(checksum_items.at(0).verify_checksum(checksum_items.at(i)))) {
-        LOG_ERROR("checksum verify failed", K(ret), K(checksum_items.at(0)), K(i), K(checksum_items.at(i)));
+        if (ret == OB_CHECKSUM_ERROR) {
+          LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum verify failed", K(ret), K(checksum_items.at(0)), K(i), K(checksum_items.at(i)));
+        } else {
+          LOG_ERROR("checksum verify failed", K(ret), K(checksum_items.at(0)), K(i), K(checksum_items.at(i)));
+
+        }
       }
     }
 #ifdef ERRSIM

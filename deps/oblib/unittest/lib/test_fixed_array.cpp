@@ -186,6 +186,7 @@ TEST(ObTestFiexedArray, serialize3)
 }
 TEST(ObTestFiexedArray, other)
 {
+  int ret = 0;
   ObArray<int> tmp_array;
   Testfun testfun(tmp_array);
   OB_LOG(WARN, "return size", K(sizeof(testfun)), K(sizeof(Testfun)));

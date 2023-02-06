@@ -99,7 +99,7 @@ int ObTimestampService::handle_request(const ObGtsRequest &request, ObGtsRpcResu
   const int64_t cost_us = request.get_srr().mts_ - end.mts_;
   //Print the gts request that takes a long time for network transmission
   if (cost_us > 500 * 1000) {
-    TRANS_LOG(WARN, "gts request fly too much time", K(request), K(result), K(cost_us));
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "gts request fly too much time", K(request), K(result), K(cost_us));
   }
   ATOMIC_INC(&total_cnt);
   ObTransStatistic::get_instance().add_gts_request_total_count(request.get_tenant_id(), 1);

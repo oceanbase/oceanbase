@@ -471,7 +471,7 @@ int ObLogArchivePieceContext::get_piece_(const SCN &scn,
     }
 
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
-      CLOG_LOG(WARN, "get piece cost too much time", K(scn), K(lsn), KPC(this));
+      CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "get piece cost too much time", K(scn), K(lsn), KPC(this));
     }
   }
   return ret;

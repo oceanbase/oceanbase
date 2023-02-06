@@ -174,7 +174,7 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
       PAUSE();
       if (++cnt > 100) { ob_usleep(500); }
       if (cnt > 2000 && TC_REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
-        TRANS_LOG(WARN, "blocking to wait tx referent quiescent cost too much time",
+        TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "blocking to wait tx referent quiescent cost too much time",
                   "tx_id", orig_tx_id, KP(&tx), K(final_ref_cnt), K(tx.get_ref()));
         tx.print_trace();
       }
@@ -1637,7 +1637,7 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
     }
     if (tx.active_ts_ > 0) { // skip txn has not active
       if (tx.finish_ts_ <= 0) {
-        TRANS_LOG(WARN, "tx finish ts is unset", K(tx));
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tx finish ts is unset", K(tx));
       } else if (tx.finish_ts_ > tx.active_ts_) {
         TX_STAT_TIME_USED(tx.finish_ts_ - tx.active_ts_);
       }

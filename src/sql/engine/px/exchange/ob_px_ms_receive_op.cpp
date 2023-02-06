@@ -255,7 +255,7 @@ void ObPxMSReceiveOp::LocalOrderInput::clean_row_store(ObExecContext &ctx)
 void ObPxMSReceiveOp::LocalOrderInput::destroy()
 {
   if (nullptr != get_row_store_ || nullptr != add_row_store_) {
-    LOG_ERROR("unexpected status: row store is not null", K(get_row_store_), K(add_row_store_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected status: row store is not null", K(get_row_store_), K(add_row_store_));
   }
   get_row_store_ = nullptr;
   add_row_store_ = nullptr;
@@ -493,7 +493,7 @@ void ObPxMSReceiveOp::GlobalOrderInput::clean_row_store(
 void ObPxMSReceiveOp::GlobalOrderInput::destroy()
 {
   if (nullptr != add_row_store_ || nullptr != get_row_store_) {
-    LOG_ERROR("unexpect status: row store is not null", K(add_row_store_), K(get_row_store_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpect status: row store is not null", K(add_row_store_), K(get_row_store_));
   }
   get_row_store_ = nullptr;
   add_row_store_ = nullptr;

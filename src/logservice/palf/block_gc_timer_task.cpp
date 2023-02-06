@@ -95,7 +95,7 @@ void BlockGCTimerTask::runTimerTask()
   } else {
     int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us;
     if (cost_time_us >= 1 * 1000) {
-      PALF_LOG(WARN, "try_recycle_blocks cost too much time", K(ret), K(cost_time_us), KPC(palf_env_impl_));
+      PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "try_recycle_blocks cost too much time", K(ret), K(cost_time_us), KPC(palf_env_impl_));
     }
     if (palf_reach_time_interval(10 * 1000 * 1000, warn_time_)) {
       PALF_LOG(INFO, "BlockGCTimerTask success", K(ret), K(cost_time_us), KPC(palf_env_impl_));

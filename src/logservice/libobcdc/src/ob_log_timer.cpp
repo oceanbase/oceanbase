@@ -118,7 +118,7 @@ void ObLogFixedTimer::stop()
     if (0 != tid_) {
       int pthread_ret = pthread_join(tid_, NULL);
       if (0 != pthread_ret) {
-        LOG_ERROR("pthread_join fail", K(tid_), K(pthread_ret), KERRNOMSG(pthread_ret));
+        LOG_ERROR_RET(OB_ERR_SYS, "pthread_join fail", K(tid_), K(pthread_ret), KERRNOMSG(pthread_ret));
       }
 
       tid_ = 0;

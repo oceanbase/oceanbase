@@ -1044,7 +1044,7 @@ int ObLogTenantMgr::get_tenant_guard(const uint64_t tenant_id, ObLogTenantGuard 
 void ObLogTenantMgr::revert_tenant_(ObLogTenant *tenant)
 {
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogTenantMgr has not inited");
+    LOG_ERROR_RET(OB_NOT_INIT, "ObLogTenantMgr has not inited");
   } else if (NULL != tenant) {
     tenant_hash_map_.revert(tenant);
   }

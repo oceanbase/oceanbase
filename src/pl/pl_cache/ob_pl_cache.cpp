@@ -218,7 +218,7 @@ int64_t ObPLObjectValue::get_mem_size()
 {
   int64_t value_mem_size = 0;
   if (OB_ISNULL(pl_routine_obj_)) {
-    BACKTRACE(ERROR, true, "invalid routine obj");
+    BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "invalid routine obj");
   } else {
     value_mem_size = pl_routine_obj_->get_mem_size();
   }
@@ -974,7 +974,7 @@ int64_t ObPLObjectSet::get_mem_size()
 
   DLIST_FOREACH_NORET(pl_object_value, object_value_sets_) {
     if (OB_ISNULL(pl_object_value)) {
-      BACKTRACE(ERROR, true, "invalid pl_object_value");
+      BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "invalid pl_object_value");
     } else {
       value_mem_size += pl_object_value->get_mem_size();
     }

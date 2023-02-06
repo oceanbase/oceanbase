@@ -84,7 +84,7 @@ bool ObSnapshotInfo::is_valid() const
       || snapshot_type_ > MAX_SNAPSHOT_TYPE
       || !snapshot_scn_.is_valid()) {
     bret = false;
-    LOG_WARN("invalid snapshot", K(bret), K(*this));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid snapshot", K(bret), K(*this));
   }
   return bret;
 }

@@ -146,7 +146,7 @@ int ObMySQLPreparedStatement::set_int(const int64_t col_idx, const int64_t int_v
   // TODO
   UNUSED(col_idx);
   UNUSED(int_val);
-  LOG_WARN("call not implemented function.");
+  LOG_WARN_RET(OB_NOT_IMPLEMENT, "call not implemented function.");
   return OB_NOT_IMPLEMENT;
 }
 
@@ -155,7 +155,7 @@ int ObMySQLPreparedStatement::set_varchar(const int64_t col_idx, const ObString 
   // TODO
   UNUSED(col_idx);
   UNUSED(varchar_val);
-  LOG_WARN("call not implemented function.");
+  LOG_WARN_RET(OB_NOT_IMPLEMENT, "call not implemented function.");
   return OB_NOT_IMPLEMENT;
 }
 

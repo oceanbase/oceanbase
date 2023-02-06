@@ -105,7 +105,7 @@ ObMySQLConnectionPool::ObMySQLConnectionPool()
   init_sql_[0] = '\0';
 
   if (OB_UNLIKELY(0 != mysql_library_init(0, NULL, NULL))) {
-    LOG_WARN("could not initialize MySQL library");
+    LOG_WARN_RET(OB_ERROR, "could not initialize MySQL library");
   } else if (OB_FAIL(tenant_server_pool_map_.init(ObModIds::LIB_OBSQL))) {
     LOG_WARN("init tenant_server_pool_map_ failed", K(ret));
   }
@@ -581,7 +581,7 @@ int ObMySQLConnectionPool::release(ObMySQLConnection *connection, const bool suc
   } else {
     const int64_t cost_time = ::oceanbase::common::ObTimeUtility::current_time() - connection->get_timestamp();
     if (cost_time > config_.connection_pool_warn_time_) {
-      LOG_WARN("this connection cost too much time", K(this), K(cost_time),
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "this connection cost too much time", K(this), K(cost_time),
                K(config_.connection_pool_warn_time_), K(connection->get_server()),
                "start time", time2str(connection->get_timestamp()));
     }
@@ -1055,7 +1055,7 @@ bool ObMySQLConnectionPool::TenantServerConnPoolPurger::operator()(
   bool need_purge = false;
 
   if (OB_ISNULL(tenant_server_pool)) {
-    LOG_ERROR("tenant_server_pool must not be null", K(tenant_key));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tenant_server_pool must not be null", K(tenant_key));
   } else if (is_tenant_not_serve_(tenant_key.tenant_id_)) {
     need_purge = true;
     purge_count_++;

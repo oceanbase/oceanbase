@@ -251,7 +251,7 @@ public:
 
     default:
       SET_AUDIT_SQL_STRING(unknown);
-      SERVER_LOG(WARN, "unknow process type", K(process_type), K(elapsed_us), K(rows));
+      SERVER_LOG_RET(WARN, OB_ERR_UNEXPECTED, "unknow process type", K(process_type), K(elapsed_us), K(rows));
       break;
     }
   }

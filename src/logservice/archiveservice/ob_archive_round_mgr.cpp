@@ -101,7 +101,7 @@ void ObArchiveRoundMgr::set_archive_force_stop(const ArchiveKey &key)
   WLockGuard guard(rwlock_);
 
   if (OB_UNLIKELY(! key.is_valid())) {
-    ARCHIVE_LOG(WARN, "invalid arguments", K(key));
+    ARCHIVE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(key));
   } else {
     key_ = key;
     log_archive_state_.status_ = ObArchiveRoundState::Status::STOP;
@@ -113,7 +113,7 @@ void ObArchiveRoundMgr::set_archive_interrupt(const ArchiveKey &key)
   WLockGuard guard(rwlock_);
 
   if (OB_UNLIKELY(! key.is_valid())) {
-    ARCHIVE_LOG(WARN, "invalid arguments", K(key));
+    ARCHIVE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(key));
   } else {
     key_ = key;
     log_archive_state_.status_ = ObArchiveRoundState::Status::INTERRUPTED;
@@ -125,7 +125,7 @@ void ObArchiveRoundMgr::set_archive_suspend(const ArchiveKey &key)
   WLockGuard guard(rwlock_);
 
   if (OB_UNLIKELY(! key.is_valid())) {
-    ARCHIVE_LOG(WARN, "invalid arguments", K(key));
+    ARCHIVE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(key));
   } else {
     key_ = key;
     log_archive_state_.status_ = ObArchiveRoundState::Status::SUSPEND;

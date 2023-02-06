@@ -205,7 +205,7 @@ int64_t ObDtlTenantMemManager::get_min_buffer_size()
   if (tenant_config.is_valid()) {
     reserve_buffer_min_size = tenant_config->_parallel_min_message_pool;
   } else {
-    LOG_WARN("failed to init tenant config", K(tenant_id_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to init tenant config", K(tenant_id_));
   }
   return reserve_buffer_min_size;
 }

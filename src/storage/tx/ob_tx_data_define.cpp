@@ -400,28 +400,28 @@ bool ObTxData::is_valid_in_tx_data_table() const
   if (ObTxData::RUNNING == state_) {
     if (!end_scn_.is_valid()) {
       bool_ret = false;
-      STORAGE_LOG(ERROR, "tx data end log ts is invalid", KPC(this));
+      STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "tx data end log ts is invalid", KPC(this));
     } else if (OB_ISNULL(undo_status_list_.head_)) {
       bool_ret = false;
-      STORAGE_LOG(ERROR, "tx data undo status list is invalid", KPC(this));
+      STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "tx data undo status list is invalid", KPC(this));
     } else {
       bool_ret = true;
     }
   } else if (state_ < 0 || state_ >= MAX_STATE_CNT) {
     bool_ret = false;
-    STORAGE_LOG(ERROR, "tx data state is invalid", KPC(this));
+    STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "tx data state is invalid", KPC(this));
   } else if (!start_scn_.is_valid()) {
     bool_ret = false;
-    STORAGE_LOG(ERROR, "tx data start_scn is invalid", KPC(this));
+    STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "tx data start_scn is invalid", KPC(this));
   } else if (!end_scn_.is_valid()) {
     bool_ret = false;
-    STORAGE_LOG(ERROR, "tx data end_scn is invalid", KPC(this));
+    STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "tx data end_scn is invalid", KPC(this));
   } else if (end_scn_ < start_scn_) {
     bool_ret = false;
-    STORAGE_LOG(ERROR, "tx data end_scn is less than start_scn", KPC(this));
+    STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "tx data end_scn is less than start_scn", KPC(this));
   } else if (!commit_version_.is_valid() && state_ != RUNNING && state_ != ABORT) {
     bool_ret = false;
-    STORAGE_LOG(ERROR, "tx data commit_version is invalid but state is not running or abort",
+    STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "tx data commit_version is invalid but state is not running or abort",
                 KPC(this));
   }
 

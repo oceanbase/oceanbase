@@ -6297,7 +6297,7 @@ bool ObDMLResolver::is_need_add_additional_function(const ObRawExpr *expr)
 {
   bool bret = false;
   if (OB_ISNULL(expr)) {
-    LOG_WARN("invalid argument to check whether to add additional function", K(expr));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument to check whether to add additional function", K(expr));
   } else if (T_FUN_COLUMN_CONV == expr->get_expr_type()) {
     bret = false;
   } else {
@@ -11315,7 +11315,7 @@ const ParseNode *ObDMLResolver::get_outline_data_hint_node()
       || NULL == (select_node = params_.outline_parse_result_->result_tree_->children_[0])) {
     /* do nothing */
   } else if (OB_UNLIKELY(T_SELECT != select_node->type_)) {
-    LOG_WARN("unexpected node type", "type", get_type_name(select_node->type_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected node type", "type", get_type_name(select_node->type_));
   } else {
     node = select_node->children_[PARSE_SELECT_HINTS];
   }

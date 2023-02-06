@@ -103,9 +103,9 @@ public:
     ObRpcResultCode &rcode = ObDetectorRpcProxy::AsyncCB<PC>::rcode_;
 
     if (OB_SUCCESS != rcode.rcode_) {
-      DETECT_LOG(WARN, "detector rpc returns error code(rpc level)", K(rcode), K(dst));
+      DETECT_LOG_RET(WARN, rcode.rcode_, "detector rpc returns error code(rpc level)", K(rcode), K(dst));
     } else if (OB_SUCCESS != remote_ret) {
-      DETECT_LOG(WARN, "detector rpc returns error code(detector level)",
+      DETECT_LOG_RET(WARN, remote_ret, "detector rpc returns error code(detector level)",
                        KR(remote_ret), K(rcode.rcode_), K(dst));
     } else {
       // do nothing

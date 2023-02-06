@@ -71,7 +71,7 @@ void ObITableArray::reset_table(const int64_t pos)
   // maybe called by thread without tenant, such as iocallback, comment until remove tablet_handle from iocallback
   // } else if (OB_UNLIKELY(meta_mem_mgr_ != MTL(ObTenantMetaMemMgr *) || nullptr == meta_mem_mgr_)) {
   } else if (OB_ISNULL(meta_mem_mgr_) || OB_ISNULL(allocator_)) {
-    LOG_ERROR("[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KP(allocator_), KPC(array_[pos]));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KP(allocator_), KPC(array_[pos]));
   } else if (0 == array_[pos]->dec_ref()) {
     if (meta_mem_mgr_->is_used_obj_pool(allocator_)) {
       if (OB_UNLIKELY(OB_INVALID_TENANT_ID == MTL_ID()
@@ -731,7 +731,7 @@ void ObMemtableArray::reset_table(const int64_t pos)
   if (pos < 0 || pos >= count()) { // do nothing
   } else if (OB_ISNULL(table = get_table(pos))) {
   } else if (OB_ISNULL(meta_mem_mgr_)) {
-    LOG_ERROR("[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KPC(table));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KPC(table));
   } else if (0 == table->dec_ref()) {
     meta_mem_mgr_->push_table_into_gc_queue(table, table->get_key().table_type_);
   }
@@ -982,7 +982,7 @@ bool ObTableStoreUtil::ObITableLogTsRangeCompare::operator()(
   bool bret = false;
   if (OB_SUCCESS != result_code_) {
   } else if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, bret))) {
-    LOG_WARN("failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
+    LOG_WARN_RET(result_code_, "failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
   }
   return bret;
 }
@@ -993,7 +993,7 @@ bool ObTableStoreUtil::ObITableSnapshotVersionCompare::operator()(
   bool bret = false;
   if (OB_SUCCESS != result_code_) {
   } else if (OB_SUCCESS != (result_code_ = compare_table_by_snapshot_version(ltable, rtable, bret))) {
-    LOG_WARN("failed to compare table with SnapshotVersion", K(result_code_), KPC(ltable), KPC(rtable));
+    LOG_WARN_RET(result_code_, "failed to compare table with SnapshotVersion", K(result_code_), KPC(ltable), KPC(rtable));
   }
   return bret;
 }
@@ -1007,7 +1007,7 @@ bool ObTableStoreUtil::ObTableHandleV2LogTsRangeCompare::operator()(
     const ObITable *ltable = lhandle.get_table();
     const ObITable *rtable = rhandle.get_table();
     if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, bret))) {
-      LOG_WARN("failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
+      LOG_WARN_RET(result_code_, "failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
     }
   }
   return bret;
@@ -1024,7 +1024,7 @@ bool ObTableStoreUtil::ObTableHandleV2SnapshotVersionCompare::operator()(
     const ObITable *ltable = lhandle.get_table();
     const ObITable *rtable = rhandle.get_table();
     if (OB_SUCCESS != (result_code_ = compare_table_by_snapshot_version(ltable, rtable, bret))) {
-      LOG_WARN("failed to compare table with SnapshotVersion", K(result_code_), KPC(ltable), KPC(rtable));
+      LOG_WARN_RET(result_code_, "failed to compare table with SnapshotVersion", K(result_code_), KPC(ltable), KPC(rtable));
     }
   }
   return bret;

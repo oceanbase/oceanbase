@@ -52,7 +52,7 @@ public:
     Iterator &operator++()
     {
       if (pos_ == end_) {
-        COMMON_LOG(ERROR, "pos is equal to end, unexpected error!");
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "pos is equal to end, unexpected error!");
       } else {
         ++pos_;
         advance_past_empty_and_deleted();
@@ -259,7 +259,7 @@ public:
     int64_t pos = 0;
     if (OB_SUCCESS == placement_hash_search(key, pos)) {
       if (pos < 0 || pos >= capacity_) {
-        COMMON_LOG(ERROR, "unexpected error", K(pos), K_(capacity));
+        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected error", K(pos), K_(capacity));
       } else {
         ret = &cells_[pos];
       }
@@ -591,8 +591,8 @@ public:
     int hash_ret = OB_HASH_NOT_EXIST;
 
     if (OB_UNLIKELY(NULL == sub_maps_[0])) {
-      COMMON_LOG(WARN, "not initialize pointer hash map");
       hash_ret = OB_NOT_INIT;
+      COMMON_LOG_RET(WARN, hash_ret, "not initialize pointer hash map");
     } else {
       for (int64_t i = 0; i < sub_map_count_; ++i) {
         if (OB_HASH_NOT_EXIST != (hash_ret = sub_maps_[i]->get_refactored(key, value))) {
@@ -613,7 +613,7 @@ public:
     const V *ret = NULL;
 
     if (OB_UNLIKELY(NULL == sub_maps_[0])) {
-      COMMON_LOG(WARN, "not initialize pointer hash map");
+      COMMON_LOG_RET(WARN, common::OB_NOT_INIT, "not initialize pointer hash map");
     } else {
       for (int64_t i = 0; i < sub_map_count_; ++i) {
         if (NULL != (ret = sub_maps_[i]->get(key))) {
@@ -630,7 +630,7 @@ public:
     V *ret = NULL;
 
     if (OB_UNLIKELY(NULL == sub_maps_[0])) {
-      COMMON_LOG(WARN, "not initialize pointer hash map");
+      COMMON_LOG_RET(WARN, common::OB_NOT_INIT, "not initialize pointer hash map");
     } else {
       for (int64_t i = 0; i < sub_map_count_; ++i) {
         if (NULL != (ret = sub_maps_[i]->get(key))) {
@@ -647,7 +647,7 @@ public:
   void dump_keys(void) const
   {
     if (OB_UNLIKELY(NULL == sub_maps_[0])) {
-      COMMON_LOG(WARN, "not initialize pointer hash map");
+      COMMON_LOG_RET(WARN, common::OB_NOT_INIT, "not initialize pointer hash map");
     } else {
       for (int64_t i = 0; i < sub_map_count_; ++i) {
         sub_maps_[i]->dump_keys();
@@ -743,7 +743,7 @@ public:
     if (OB_UNLIKELY(sub_map_id >= 0) && OB_UNLIKELY(sub_map_id < sub_map_count_)) {
       iter = sub_maps_[sub_map_id]->begin();
     } else {
-      COMMON_LOG(ERROR, "invalid sub map id", K(sub_map_id), K(sub_map_count_));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid sub map id", K(sub_map_id), K(sub_map_count_));
     }
     return iter;
   }
@@ -754,7 +754,7 @@ public:
     if (OB_UNLIKELY(sub_map_id >= 0) && OB_UNLIKELY(sub_map_id < sub_map_count_)) {
       iter = sub_maps_[sub_map_id]->end();
     } else {
-      COMMON_LOG(ERROR, "invalid sub map id", K(sub_map_id), K(sub_map_count_));
+      COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid sub map id", K(sub_map_id), K(sub_map_count_));
     }
     return iter;
   }
@@ -776,7 +776,7 @@ private:
     void *sub_map_mem = NULL;
 
     if (NULL == (sub_map_mem = allocator_.alloc(sub_map_mem_size_))) {
-      COMMON_LOG(ERROR, "failed to allocate memory for sub map", K_(sub_map_mem_size));
+      COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "failed to allocate memory for sub map", K_(sub_map_mem_size));
     } else if (NULL != sub_map_in) {
       sub_map = new(sub_map_mem) SubMap(*sub_map_in);
     } else {
@@ -870,7 +870,7 @@ private:
       if (OB_MALLOC_NORMAL_BLOCK_SIZE == sub_map_mem_size_) {
         resize_to = sub_map_count_ * extend_size;
         if (resize_to > OB_MALLOC_BIG_BLOCK_SIZE) {
-          COMMON_LOG(ERROR, "unexpected error", K(resize_to));
+          COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected error", K(resize_to));
         }
       } else if (OB_MALLOC_BIG_BLOCK_SIZE == sub_map_mem_size_) {
         resize_to = sub_map_count_ * extend_size;
@@ -889,7 +889,7 @@ private:
         }
       } else {
         // overfollow, return NULL
-        COMMON_LOG(ERROR, "can't add more sub map", K_(sub_map_count));
+        COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "can't add more sub map", K_(sub_map_count));
       }
     } else {
       ObPointerHashMap tmp(*this, resize_to);

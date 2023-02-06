@@ -243,7 +243,7 @@ public:
   return;
 #endif
     if (nullptr == slice_allocator_) {
-      STORAGE_LOG(ERROR, "invalid slice allocator", KPC(this));
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid slice allocator", KPC(this));
       ob_abort();
     } else if (0 == ATOMIC_SAF(&ref_cnt_, 1)) {
       if (OB_UNLIKELY(nullptr != undo_status_list_.head_)) {

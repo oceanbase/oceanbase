@@ -483,7 +483,7 @@ void TestOptimizerUtils::formalize_tmp_file(const char *tmp_file)
   std::string cmd_string = "./remove_pointer.py ";
   cmd_string += tmp_file;
   if (0 != system(cmd_string.c_str())) {
-    LOG_ERROR("fail formalize tmp file", K(cmd_string.c_str()));
+    LOG_ERROR_RET(OB_ERR_SYS, "fail formalize tmp file", K(cmd_string.c_str()));
   }
 }
 

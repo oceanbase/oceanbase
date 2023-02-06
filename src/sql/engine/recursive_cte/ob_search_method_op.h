@@ -92,7 +92,7 @@ public:
                   || OB_ISNULL(r)
                   || (l->cnt_ != r->cnt_)) {
         *err_ = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "invalid parameter", KPC(l), KPC(r), K(*err_));
+        SQL_LOG_RET(WARN, *err_, "invalid parameter", KPC(l), KPC(r), K(*err_));
       } else {
         const ObDatum *lcells = l->cells();
         const ObDatum *rcells = r->cells();
@@ -101,7 +101,7 @@ public:
           const int64_t idx = sort_collations_.at(i).field_idx_;
           if (idx >= exprs_.count()) {
             *err_ = OB_ERR_UNEXPECTED;
-            SQL_LOG(WARN, "compare column id greater than exprs count", K(*err_),
+            SQL_LOG_RET(WARN, *err_, "compare column id greater than exprs count", K(*err_),
                       K(idx), K(exprs_.count()));
           } else {
             bool null_first = (NULL_FIRST == sort_collations_.at(i).null_pos_);

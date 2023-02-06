@@ -153,7 +153,7 @@ void ObPxSqcHandler::release_handler(ObPxSqcHandler *sqc_handler)
 {
   bool all_released = false;
   if (OB_ISNULL(sqc_handler)) {
-    LOG_ERROR("Get null sqc handler", K(sqc_handler));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "Get null sqc handler", K(sqc_handler));
   } else if (FALSE_IT(sqc_handler->release(all_released))) {
   } else if (all_released) {
     IGNORE_RETURN sqc_handler->destroy_sqc();

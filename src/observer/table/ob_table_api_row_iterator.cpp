@@ -742,7 +742,7 @@ ObTableApiUpdateRowIterator::~ObTableApiUpdateRowIterator()
       access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
 }
@@ -754,7 +754,7 @@ void ObTableApiUpdateRowIterator::reset()
       access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
   scan_param_.destroy();
@@ -1250,7 +1250,7 @@ ObTableApiDeleteRowIterator::~ObTableApiDeleteRowIterator()
       access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
 }
@@ -1262,7 +1262,7 @@ void ObTableApiDeleteRowIterator::reset()
       access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR_RET(OB_INVALID_ERROR, "The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
   scan_param_.destroy();
@@ -1415,7 +1415,7 @@ ObTableApiGetRowIterator::~ObTableApiGetRowIterator()
       access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
 }
@@ -1429,7 +1429,7 @@ void ObTableApiGetRowIterator::reset()
       access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
   ObTableApiRowIterator::reset();

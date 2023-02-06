@@ -73,7 +73,7 @@ extern bool USE_CO_LATCH;
           if (NULL != dsi) {                                                                          \
             latch_stat.wait_time_ += dsi->get_curr_wait().wait_time_;                                 \
             if (dsi->get_curr_wait().wait_time_ > 1000 * 1000) {                                      \
-              COMMON_LOG(WARN, "The Latch wait too much time, ",                                      \
+              COMMON_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "The Latch wait too much time, ",                                      \
                   K(dsi->get_curr_wait()), KCSTRING(lbt()));                                          \
             }                                                                                         \
           }                                                                                           \
@@ -374,14 +374,14 @@ public:
       : lock_(lock), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.lock(latch_id)))) {
-      COMMON_LOG(ERROR, "lock error", K(latch_id), K(ret_));
+      COMMON_LOG_RET(ERROR, ret_, "lock error", K(latch_id), K(ret_));
     }
   }
   ~ObLatchMutexGuard()
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock()))) {
-        COMMON_LOG(ERROR, "unlock error", K(ret_));
+        COMMON_LOG_RET(ERROR, ret_, "unlock error", K(ret_));
       }
     }
   }
@@ -401,14 +401,14 @@ public:
         ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(latch_id)))) {
-      COMMON_LOG(ERROR, "lock error, ", K(latch_id), K(ret_));
+      COMMON_LOG_RET(ERROR, ret_, "lock error, ", K(latch_id), K(ret_));
     }
   }
   ~ObLatchRGuard()
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock()))) {
-        COMMON_LOG(ERROR, "unlock error, ", K(ret_));
+        COMMON_LOG_RET(ERROR, ret_, "unlock error, ", K(ret_));
       }
     }
   }
@@ -429,14 +429,14 @@ public:
         ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock(latch_id)))) {
-      COMMON_LOG(ERROR, "lock error, ", K(latch_id), K(ret_));
+      COMMON_LOG_RET(ERROR, ret_, "lock error, ", K(latch_id), K(ret_));
     }
   }
   ~ObLatchWGuard()
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock()))) {
-        COMMON_LOG(ERROR, "unlock error, ", K(ret_));
+        COMMON_LOG_RET(ERROR, ret_, "unlock error, ", K(ret_));
       }
     }
   }

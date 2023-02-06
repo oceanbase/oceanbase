@@ -2186,7 +2186,7 @@ int ObMemtable::dump2text(const char *fname)
 void ObMemtable::set_max_schema_version(const int64_t schema_version)
 {
   if (INT64_MAX == schema_version) {
-    TRANS_LOG(ERROR, "invalid schema version", K(schema_version), KPC(this));
+    TRANS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid schema version", K(schema_version), KPC(this));
   } else {
     inc_update(&max_schema_version_, schema_version);
   }

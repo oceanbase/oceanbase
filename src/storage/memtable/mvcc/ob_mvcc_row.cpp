@@ -758,7 +758,7 @@ void ObMvccRow::mvcc_write_end(ObIMemtableCtx &ctx, int64_t ret) const
       EVENT_INC(MEMSTORE_WRITE_LOCK_SUCC_COUNT);
     }
     if (lock_use_time >= WARN_TIME_US && TC_REACH_TIME_INTERVAL(LOG_INTERVAL)) {
-      TRANS_LOG(WARN, "wait mvcc write use too much time",
+      TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "wait mvcc write use too much time",
           K(ctx), K(ret), K(lock_use_time));
     }
   }
@@ -1048,7 +1048,7 @@ void ObMvccRow::mvcc_undo()
   ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
 
   if (OB_ISNULL(iter)) {
-    TRANS_LOG(ERROR, "mvcc undo with no mvcc data");
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mvcc undo with no mvcc data");
   } else {
     iter->set_aborted();
     ATOMIC_STORE(&(list_head_), iter->prev_);

@@ -153,7 +153,7 @@ vector<ElectionImpl *> create_election_group(vector<ElectionPriorityImpl> &v_pri
         THREAD_POOL.commit_task_ignore_ret([election, dest_addr]() { election->change_leader_to(dest_addr); });
         return OB_SUCCESS;
       },
-      [op](Election *election, ObRole before, ObRole after, RoleChangeReason reason) {
+      [op, ret](Election *election, ObRole before, ObRole after, RoleChangeReason reason) {
         if (before == ObRole::FOLLOWER && after == ObRole::LEADER) {
           ELECT_LOG(INFO, "i become LEADER", K(obj_to_string(reason)), KPC(election));
           op();

@@ -472,7 +472,7 @@ GlobalHazardVersionGuard::GlobalHazardVersionGuard(GlobalHazardVersion &g_versio
       ret_(OB_SUCCESS)
 {
   if (OB_UNLIKELY( OB_SUCCESS != (ret_ = global_hazard_version_.acquire()) )) {
-    COMMON_LOG(WARN, "Fail to acquire hazard version", K(ret_));
+    COMMON_LOG_RET(WARN, ret_, "Fail to acquire hazard version", K(ret_));
   }
 }
 

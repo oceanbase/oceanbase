@@ -297,7 +297,7 @@ private:
           dump_ = true;
         }
       } else {
-        OB_LOG(ERROR, "invalid arguments", K(key));
+        OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid arguments", K(key));
       }
       lua_pop(stack_, 1);
     }
@@ -330,7 +330,7 @@ int usage(lua_State* L)
 {
   int argc = lua_gettop(L);
   if (0 != argc) {
-    OB_LOG(ERROR, "call usage() failed, bad arguments count, should be 0.");
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "call usage() failed, bad arguments count, should be 0.");
     lua_pushnil(L);
   } else {
     lua_pushstring(L, usage_str);
@@ -383,7 +383,7 @@ int get_tenant_id_list(lua_State* L)
 {
   int argc = lua_gettop(L);
   if (0 != argc) {
-    OB_LOG(ERROR, "call get_tenant_id_list() failed, bad arguments count, should be 0.");
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "call get_tenant_id_list() failed, bad arguments count, should be 0.");
   } else {
     lua_newtable(L);
     uint64_t *tenant_ids = nullptr;
@@ -406,7 +406,7 @@ int get_tenant_mem_limit(lua_State* L)
 {
   int argc = lua_gettop(L);
   if (1 != argc) {
-    OB_LOG(ERROR, "call get_tenant_mem_limit() failed, bad arguments count, should be 1.");
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "call get_tenant_mem_limit() failed, bad arguments count, should be 1.");
   } else {
     luaL_checktype(L, 1, LUA_TNUMBER);
     lua_pushinteger(L, ObMallocAllocator::get_instance()->get_tenant_limit(lua_tointeger(L, 1)));
@@ -598,7 +598,7 @@ int show_log_probe(lua_State* L)
 {
   int argc = lua_gettop(L);
   if (0 != argc) {
-    OB_LOG(ERROR, "call show_log_probe() failed, bad arguments count, should be 0.");
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "call show_log_probe() failed, bad arguments count, should be 0.");
   } else {
     lua_pushstring(L, OB_LOGGER.show_probe());
   }
@@ -960,7 +960,7 @@ int select_tenant_ctx_memory_info(lua_State *L)
 {
   int argc = lua_gettop(L);
   if (argc > 1) {
-    OB_LOG(ERROR, "call select_tenant_ctx_memory_info() failed, bad arguments count, should be less than 2.");
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "call select_tenant_ctx_memory_info() failed, bad arguments count, should be less than 2.");
     lua_pushnil(L);
   } else {
     uint64_t *tenant_ids = nullptr;
@@ -1465,7 +1465,7 @@ int select_tenant_memory_info(lua_State *L)
 {
   int argc = lua_gettop(L);
   if (argc > 1) {
-    OB_LOG(ERROR, "call select_tenant_memory_info() failed, bad arguments count, should be less than 2.");
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "call select_tenant_memory_info() failed, bad arguments count, should be less than 2.");
     lua_pushnil(L);
   } else {
     uint64_t *tenant_ids = nullptr;
@@ -1602,10 +1602,10 @@ void *diagnose::alloc(const int size)
       ret = (char*)ret + 8;
       ObLuaHandler::get_instance().memory_update(size + 8);
     } else {
-      OB_LOG(ERROR, "lua memory alloc failed", K(size), K(get_global_allocator().total()));
+      OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "lua memory alloc failed", K(size), K(get_global_allocator().total()));
     }
   } else {
-    OB_LOG(ERROR, "lua memory usage over limit", K(size));
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "lua memory usage over limit", K(size));
   }
   return ret;
 }

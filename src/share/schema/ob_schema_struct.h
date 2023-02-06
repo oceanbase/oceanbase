@@ -1817,7 +1817,7 @@ public:
     if (common::OB_SUCCESS != ret_) {
       // failed before
     } else if (common::OB_SUCCESS != (ret_ = common::ObRowUtil::compare_row(left, right, cmp))) {
-      SHARE_SCHEMA_LOG(ERROR, "l or r is invalid", K(ret_));
+      SHARE_SCHEMA_LOG_RET(ERROR, ret_, "l or r is invalid", K(ret_));
     } else {
       bool_ret = (cmp < 0);
     }

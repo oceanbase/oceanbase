@@ -30,7 +30,7 @@ uint64_t ObStmtResolver::generate_table_id()
   if (NULL != params_.query_ctx_) {
     return params_.query_ctx_->available_tb_id_--;
   } else {
-    LOG_WARN("query ctx pointer is null");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "query ctx pointer is null");
     return OB_INVALID_ID;
   }
 }

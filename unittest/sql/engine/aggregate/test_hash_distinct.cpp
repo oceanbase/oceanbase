@@ -112,7 +112,7 @@ public:
     ASSERT_EQ(0, item.hold_);
     lib::get_tenant_label_memory(tenant_id_, ObNewModIds::TEST3, item);
     ASSERT_EQ(0, item.hold_);
-    SQL_ENG_LOG(WARN,"TearDown finished");
+    SQL_ENG_LOG(INFO,"TearDown finished");
   }
 
 
@@ -194,7 +194,7 @@ public:
         hit_val[v] = '1';
       }
       if (n != i) {
-        SQL_ENG_LOG(WARN, "already hitted", K(i), K(v));
+        SQL_ENG_LOG_RET(WARN, OB_ERROR, "already hitted", K(i), K(v));
       }
       ASSERT_EQ(n, i);
       ASSERT_EQ(0, MEMCMP(hit_val, hit_val_base, sizeof(char) * n));

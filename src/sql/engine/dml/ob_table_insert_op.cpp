@@ -355,7 +355,7 @@ OB_INLINE int ObTableInsertOp::check_insert_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_insert_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table insert affected row is not match with index table", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table insert affected row is not match with index table", K(ret),
                   "primary_affected_rows", pri_rtdef.das_rtdef_.affected_rows_,
                   "index_affected_rows", idx_rtdef.das_rtdef_.affected_rows_,
                   "primary_ins_ctdef", pri_ctdef,
@@ -369,7 +369,7 @@ OB_INLINE int ObTableInsertOp::check_insert_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_insert_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table insert affected row is not match with found rows", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table insert affected row is not match with found rows", K(ret),
                   "primary_affected_rows", pri_rtdef.das_rtdef_.affected_rows_,
                   "primary_ins_ctdef", pri_ctdef,
                   "primary_ins_rtdef", pri_rtdef);

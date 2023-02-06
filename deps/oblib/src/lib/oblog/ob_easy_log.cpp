@@ -56,7 +56,7 @@ void ob_easy_log_format(int level, const char *file, int line, const char *funct
                                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                                  tm.tm_hour, tm.tm_min, tm.tm_sec,
                                  (int)((now - static_cast<ev_tstamp>(t)) * 1000 * 1000)))) {
-      OB_LOG(ERROR, "fail to snprint timestr to buf", KCSTRING(time_str));
+      OB_LOG_RET(ERROR, OB_ERR_SYS, "fail to snprint timestr to buf", KCSTRING(time_str));
     }
   }
 
@@ -72,7 +72,7 @@ void ob_easy_log_format(int level, const char *file, int line, const char *funct
   // Remove the last'\n'
   while (buffer[len - 1] == '\n') { len --; }
   if (OB_UNLIKELY(len >= buf_len - 1)) {
-    OB_LOG(WARN, "invalid buf len", K(len), K(buf_len));
+    OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid buf len", K(len), K(buf_len));
   } else {
     buffer[len++] = '\n';
     buffer[len] = '\0';

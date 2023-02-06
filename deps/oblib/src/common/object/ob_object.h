@@ -678,7 +678,7 @@ struct ObMemLobCommon
                 && (type_ > INVALID_LOB && type_ <= TEMP_DELTA_LOB)
                 && ((is_simple_ & has_extern_) != 1);
     if (!bret) {
-      COMMON_LOG(WARN, "Invalid lob locator v2!",
+      COMMON_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "Invalid lob locator v2!",
         K(lob_common_), K(version_), K(type_), K(is_simple_), K(has_extern_), K(lbt()));
     }
     return bret;
@@ -892,7 +892,7 @@ public:
         bret = false;
       }
       if (!bret) {
-        COMMON_LOG(WARN, "Invalid lob locator!", KP(ptr_), K(size_));
+        COMMON_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "Invalid lob locator!", KP(ptr_), K(size_));
         if (OB_NOT_NULL(loc) && is_assert) {
           OB_ASSERT(0);
         }
@@ -1197,7 +1197,7 @@ public:
   OB_INLINE void set_type(const ObObjType &type)
   {
     if (OB_UNLIKELY(ObNullType > type || ObMaxType < type)) {
-      COMMON_LOG(ERROR, "invalid type", K(type));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid type", K(type));
       meta_.set_type(ObUnknownType);
     } else {
       meta_.set_type(type);

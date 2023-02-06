@@ -698,7 +698,7 @@ void ObDRTaskMgr::run3()
 {
   FLOG_INFO("Disaster recovery task mgr start");
   if (OB_UNLIKELY(!inited_ || stopped_)) {
-    LOG_WARN("ObDRTaskMgr not init", K(inited_), K_(stopped));
+    LOG_WARN_RET(OB_NOT_INIT, "ObDRTaskMgr not init", K(inited_), K_(stopped));
   } else {
     int64_t last_dump_ts = ObTimeUtility::current_time();
     int64_t last_check_task_in_progress_ts = ObTimeUtility::current_time();

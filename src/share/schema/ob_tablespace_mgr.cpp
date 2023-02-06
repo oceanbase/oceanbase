@@ -259,7 +259,7 @@ int ObTablespaceMgr::init()
 void ObTablespaceMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("tablespace manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "tablespace manger not init");
   } else {
     tablespace_infos_.clear();
     tablespace_map_.clear();

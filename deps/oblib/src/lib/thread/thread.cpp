@@ -227,7 +227,7 @@ void* Thread::__th_start(void *arg)
   nss.ss_size = SIG_STACK_SIZE;
   bool restore_sigstack = false;
   if (-1 == sigaltstack(&nss, &oss)) {
-    LOG_WARN("sigaltstack failed, ignore it", K(errno));
+    LOG_WARN_RET(OB_ERR_SYS, "sigaltstack failed, ignore it", K(errno));
   } else {
     restore_sigstack = true;
   }

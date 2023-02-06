@@ -7544,7 +7544,7 @@ ObKeyPart *ObQueryRange::create_new_key_part()
     if (OB_UNLIKELY(OB_SUCCESS != key_part_store_.store_obj(key_part))) {
       key_part->~ObKeyPart();
       key_part = NULL;
-      LOG_WARN("Store ObKeyPart failed");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "Store ObKeyPart failed");
     }
   }
   return key_part;

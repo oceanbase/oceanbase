@@ -51,7 +51,7 @@ public:
   bool operator()(const ObAddr &leader, ObLSArray &ls_array)
   {
     if (OB_SUCCESS != (ret_value_ = ls_array.push_back(id_))) {
-      CLOG_LOG(WARN, "ls_array push_back failed", K(ret_value_), K(id_), K(leader));
+      CLOG_LOG_RET(WARN, ret_value_, "ls_array push_back failed", K(ret_value_), K(id_), K(leader));
     }
     return common::OB_SUCCESS == ret_value_;
   }
@@ -78,7 +78,7 @@ public:
   bool operator()(const common::ObAddr &leader, ObLSArray &ls_array)
   {
     if (OB_SUCCESS != (ret_value_ = handle_ls_array_(leader, ls_array))) {
-      CLOG_LOG(WARN, "handle_pg_array_ failed", K(ret_value_), K(ls_array), K(leader));
+      CLOG_LOG_RET(WARN, ret_value_, "handle_pg_array_ failed", K(ret_value_), K(ls_array), K(leader));
     }
     return common::OB_SUCCESS == ret_value_;
   }
@@ -687,7 +687,7 @@ void ObGCHandler::submit_log_(const ObGCLSLOGType log_type)
         ob_usleep(WAIT_TIME);
         retry_cnt++;
         if (retry_cnt % 1000 == 0) {
-          CLOG_LOG(WARN, "GC ls log wait cb too much time", K(retry_cnt), K(log_type));
+          CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "GC ls log wait cb too much time", K(retry_cnt), K(log_type));
         }
       }
     }

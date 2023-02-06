@@ -139,7 +139,7 @@ ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
   min_value_.set_null();
   max_value_.set_null();
   if (NULL == (llc_bitmap_ = static_cast<char*>(allocator.alloc(ObColumnStat::NUM_LLC_BUCKET)))) {
-    COMMON_LOG(WARN, "allocate memory for llc_bitmap_ failed.");
+    COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for llc_bitmap_ failed.");
   } else {
     llc_bitmap_size_ = ObColumnStat::NUM_LLC_BUCKET;
     MEMSET(llc_bitmap_, 0, llc_bitmap_size_);

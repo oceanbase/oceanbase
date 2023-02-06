@@ -269,7 +269,7 @@ int ObSequenceMgr::init()
 void ObSequenceMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("sequence manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "sequence manger not init");
   } else {
     sequence_infos_.clear();
     sequence_map_.clear();

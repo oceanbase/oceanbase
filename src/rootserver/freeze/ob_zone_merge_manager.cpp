@@ -174,7 +174,7 @@ void ObZoneMergeManagerBase::handle_trans_stat(
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
@@ -1192,7 +1192,7 @@ ObZoneMergeManager::ObZoneMergeMgrGuard::~ObZoneMergeMgrGuard()
   if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
   } else if (OB_UNLIKELY(OB_SUCCESS !=
       (tmp_ret = ObZoneMergeManager::copy_infos(zone_merge_mgr_, shadow_)))) {
-    LOG_WARN("fail to copy from zone_merge_mgr shadow", K(tmp_ret), K_(ret));
+    LOG_WARN_RET(tmp_ret, "fail to copy from zone_merge_mgr shadow", K(tmp_ret), K_(ret));
   }
   if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
     ret_ = tmp_ret;

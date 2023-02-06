@@ -199,7 +199,7 @@ bool ObLSPrepareMigrationDagNet::operator == (const ObIDagNet &other) const
   } else {
     const ObLSPrepareMigrationDagNet &other_dag_net = static_cast<const ObLSPrepareMigrationDagNet &>(other);
     if (!is_valid() || !other_dag_net.is_valid()) {
-      LOG_ERROR("ls prepare migration dag net is invalid", K(*this), K(other));
+      LOG_ERROR_RET(OB_INVALID_ERROR, "ls prepare migration dag net is invalid", K(*this), K(other));
     } else if (ctx_.arg_.ls_id_ != other_dag_net.get_ls_id()) {
       is_same = false;
     }
@@ -213,7 +213,7 @@ int64_t ObLSPrepareMigrationDagNet::hash() const
   int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     tmp_ret = OB_NOT_INIT;
-    LOG_ERROR("migration ctx is NULL", K(tmp_ret), K(ctx_));
+    LOG_ERROR_RET(tmp_ret, "migration ctx is NULL", K(tmp_ret), K(ctx_));
   } else {
     hash_value = common::murmurhash(&ctx_.arg_.ls_id_, sizeof(ctx_.arg_.ls_id_), hash_value);
   }
@@ -325,7 +325,7 @@ bool ObPrepareMigrationDag::operator == (const ObIDag &other) const
       is_same = false;
     } else if (OB_ISNULL(ha_dag_net_ctx_) || OB_ISNULL(ha_dag.get_ha_dag_net_ctx())) {
       is_same = false;
-      LOG_ERROR("prepare migration ctx should not be NULL", KP(ha_dag_net_ctx_), KP(ha_dag.get_ha_dag_net_ctx()));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "prepare migration ctx should not be NULL", KP(ha_dag_net_ctx_), KP(ha_dag.get_ha_dag_net_ctx()));
     } else if (ha_dag_net_ctx_->get_dag_net_ctx_type() != ha_dag.get_ha_dag_net_ctx()->get_dag_net_ctx_type()) {
       is_same = false;
     } else {

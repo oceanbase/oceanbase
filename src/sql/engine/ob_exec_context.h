@@ -42,7 +42,7 @@
       op_ctx = new (ptr) ctx_type(exec_ctx); \
       int64_t tenant_id = GET_MY_SESSION(exec_ctx)->get_effective_tenant_id(); \
       if (oceanbase::common::OB_SUCCESS != (_ret_ = op_ctx->init_base(tenant_id))) { \
-        SQL_ENG_LOG(WARN, "init operator ctx failed", K(_ret_)); \
+        SQL_ENG_LOG_RET(WARN, _ret_, "init operator ctx failed", K(_ret_)); \
       } else { \
         op_ctx->set_op_id(op_id); \
         op_ctx->set_op_type(op_type); \

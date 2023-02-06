@@ -203,7 +203,7 @@ int ObTenantFreezer::ls_freeze_(ObLS *ls)
       ob_usleep(SLEEP_TS);
     }
     if (retry_times % 10 == 0) {
-      LOG_WARN("wait ls freeze finished cost too much time", K(retry_times));
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "wait ls freeze finished cost too much time", K(retry_times));
     }
   } while (ret == OB_ENTRY_EXIST);
   if (OB_NOT_RUNNING == ret) {
@@ -426,7 +426,7 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
     // skip freeze when there is another self freeze task is running
     if (++skip_count > 10) {
       int64_t cost_time = (FREEZE_TRIGGER_INTERVAL * skip_count);
-      LOG_WARN("A tx data tenant self freeze task cost too much time",
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "A tx data tenant self freeze task cost too much time",
                   K(tenant_info_.tenant_id_), K(skip_count), K(cost_time));
     }
   } else if (OB_FAIL(get_tenant_tx_data_mem_used_(tenant_tx_data_mem_used))) {
@@ -479,7 +479,7 @@ int ObTenantFreezer::check_and_do_freeze()
   int64_t check_and_freeze_end_ts = ObTimeUtil::current_time();
   int64_t spend_time = check_and_freeze_end_ts - check_and_freeze_start_ts;
   if (spend_time > 2_s) {
-    STORAGE_LOG(WARN, "check and do freeze spend too much time", K(spend_time));
+    STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "check and do freeze spend too much time", K(spend_time));
   }
   return ret;
 }

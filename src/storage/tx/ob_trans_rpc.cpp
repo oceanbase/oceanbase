@@ -227,9 +227,9 @@ int ObTransRpc::start()
 void ObTransRpc::stop()
 {
   if (!is_inited_) {
-    TRANS_LOG(WARN, "ObTransRpc is not inited");
+    TRANS_LOG_RET(WARN, OB_NOT_INIT, "ObTransRpc is not inited");
   } else if (!is_running_) {
-    TRANS_LOG(WARN, "ObTransRpc already has been stopped");
+    TRANS_LOG_RET(WARN, OB_IN_STOP_STATE, "ObTransRpc already has been stopped");
   } else {
     is_running_ = false;
     TRANS_LOG(INFO, "ObTransRpc stop success");
@@ -239,9 +239,9 @@ void ObTransRpc::stop()
 void ObTransRpc::wait()
 {
   if (!is_inited_) {
-    TRANS_LOG(WARN, "ObTransRpc is not inited");
+    TRANS_LOG_RET(WARN, OB_NOT_INIT, "ObTransRpc is not inited");
   } else if (is_running_) {
-    TRANS_LOG(WARN, "ObTransRpc is already running");
+    TRANS_LOG_RET(WARN, OB_IN_STOP_STATE, "ObTransRpc is already running");
   } else {
     TRANS_LOG(INFO, "ObTransRpc wait success");
   }

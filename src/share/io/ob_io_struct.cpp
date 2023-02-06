@@ -613,7 +613,7 @@ void ObCpuUsage::get_cpu_usage(double &avg_usage_percentage)
   int sys_errno = 0;
   if (0 != (sys_errno = getrusage(RUSAGE_SELF, &new_usage))) {
     if (REACH_TIME_INTERVAL(1000L * 1000L * 10)) {
-      LOG_WARN("get cpu usage failed", K(sys_errno));
+      LOG_WARN_RET(OB_ERR_SYS, "get cpu usage failed", K(sys_errno));
     }
   } else {
     if (last_ts_ > 0 && new_ts > last_ts_) {
@@ -1721,7 +1721,7 @@ void ObAsyncIOChannel::destroy()
     ob_usleep(1000L * 10L);
   }
   if (submit_count_ > 0) {
-    LOG_WARN("some request have not returned from file system", K(submit_count_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "some request have not returned from file system", K(submit_count_));
   }
   destroy_thread();
   if (nullptr != io_context_) {
@@ -2666,7 +2666,7 @@ const char *oceanbase::common::device_health_status_to_str(const ObDeviceHealthS
       break;
   }
   if (STRLEN(hstr) > OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH) {
-    LOG_ERROR("invalid device health status str", K(hstr),
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid device health status str", K(hstr),
         K(OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH), K(dhs));
   }
   return hstr;
@@ -2917,7 +2917,8 @@ void ObIOFaultDetector::set_device_error()
   }
   last_device_error_ts_ = ObTimeUtility::fast_current_time();
   is_device_error_ = true;
-  LOG_ERROR("set_disk_error: attention!!!");
+  LOG_ERROR_RET(OB_IO_ERROR, "set_disk_error: attention!!!");
+  LOG_DBA_ERROR(OB_DISK_ERROR, "msg", "The disk may be corrupted");
 }
 
 ObIOTracer::ObIOTracer()
@@ -2963,7 +2964,7 @@ void ObIOTracer::reuse()
 {
   int tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(trace_map_.reuse())) {
-    LOG_WARN("reuse trace map failed", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "reuse trace map failed", K(tmp_ret));
   }
 }
 
@@ -3112,4 +3113,3 @@ void ObIOTracer::print_status()
     }
   }
 }
-

@@ -1738,7 +1738,7 @@ void ObDRWorker::statistic_remain_dr_task()
   int64_t low_schedule_cnt = 0;
   if (OB_ISNULL(disaster_recovery_task_mgr_)) {
     tmp_ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("disaster_recovery_task_mgr_ is null", KR(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "disaster_recovery_task_mgr_ is null", KR(tmp_ret));
   } else if (FALSE_IT(dr_task_mgr_is_loaded_ = disaster_recovery_task_mgr_->is_loaded())) {
     LOG_INFO("disaster_recovery_task_mgr_ is not loaded yet");
   } else if (!dr_task_mgr_is_loaded_) {
@@ -1748,7 +1748,7 @@ void ObDRWorker::statistic_remain_dr_task()
           high_schedule_cnt,
           low_wait_cnt,
           low_schedule_cnt))) {
-    LOG_WARN("fail to get all task count", KR(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "fail to get all task count", KR(tmp_ret));
   } else if (-1 != task_count_statistic_.remain_task_cnt_
              || 0 != high_wait_cnt + high_schedule_cnt + low_wait_cnt + low_schedule_cnt) {
     // remain_task_cnt_ == -1 means it is the initial stat

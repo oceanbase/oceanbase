@@ -64,10 +64,10 @@ void ObBackupTaskSchedulerQueue::reset()
     ObBackupScheduleTask *t = wait_list_.remove_first();
     if (NULL != t) {
       if (OB_SUCCESS != (tmp_ret = clean_tenant_ref_(t->get_tenant_id()))) {
-        LOG_WARN("fail to clean tenant ref", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean tenant ref", K(tmp_ret), KPC(t));
       }
       if (OB_SUCCESS != (tmp_ret = clean_task_map(t->get_task_key()))) {
-        LOG_WARN("fail to clean task map", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean task map", K(tmp_ret), KPC(t));
       }
       t->~ObBackupScheduleTask();
       task_allocator_.free(t);
@@ -78,13 +78,13 @@ void ObBackupTaskSchedulerQueue::reset()
     ObBackupScheduleTask *t = schedule_list_.remove_first();
     if (NULL != t) {
       if (OB_SUCCESS != (tmp_ret = clean_server_ref_(t->get_dst(), t->get_type()))) {
-        LOG_WARN("fail to clean server ref", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean server ref", K(tmp_ret), KPC(t));
       } 
       if (OB_SUCCESS != (tmp_ret = clean_tenant_ref_(t->get_tenant_id()))) {
-        LOG_WARN("fail to clean tenant ref", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean tenant ref", K(tmp_ret), KPC(t));
       } 
       if (OB_SUCCESS != (tmp_ret = clean_task_map(t->get_task_key()))) {
-        LOG_WARN("fail to clean task map", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean task map", K(tmp_ret), KPC(t));
       }
       t->~ObBackupScheduleTask();
       task_allocator_.free(t);
@@ -1120,7 +1120,7 @@ void ObBackupTaskScheduler::stop()
   int tmp_ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     tmp_ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "not init", K(tmp_ret));
   } else {
     ObRsReentrantThread::stop();
     idling_.wakeup();
@@ -1147,7 +1147,7 @@ void ObBackupTaskScheduler::wakeup()
   int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     tmp_ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "not init", K(tmp_ret));
   } else {
     idling_.wakeup();
   }
@@ -1440,7 +1440,7 @@ void ObBackupTaskScheduler::dump_statistics_(int64_t &last_dump_time)
     // record scheduler execution log periodically
     last_dump_time = now;
     if (OB_SUCCESS != (tmp_ret = queue_.dump_statistics())) {
-      LOG_WARN("fail to dump statistics", K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "fail to dump statistics", K(tmp_ret));
     }
   }
 }

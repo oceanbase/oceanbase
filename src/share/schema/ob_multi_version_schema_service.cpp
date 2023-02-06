@@ -149,7 +149,7 @@ void ObSchemaConstructTask::wait(const int64_t version)
   clock_gettime(CLOCK_REALTIME, &ts);
   ts.tv_sec += 1;
   if (dbg_construct_task) {
-    LOG_WARN("task: waiting", K(version), K(count()));
+    LOG_WARN_RET(OB_SUCCESS, "task: waiting", K(version), K(count()));
   }
   int rc = 0;
   do {
@@ -161,7 +161,7 @@ void ObSchemaConstructTask::wait(const int64_t version)
 void ObSchemaConstructTask::wakeup(const int64_t version)
 {
   if (dbg_construct_task) {
-    LOG_WARN("task: wakingup", K(version), K(count()));
+    LOG_WARN_RET(OB_SUCCESS, "task: wakingup", K(version), K(count()));
   }
   (void)pthread_cond_broadcast(&schema_cond_);
 }

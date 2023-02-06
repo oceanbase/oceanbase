@@ -531,7 +531,7 @@ const char *ObMaxIdFetcher::get_max_id_name(const ObMaxIdType max_id_type)
 {
   const char *name = NULL;
   if (max_id_type < 0 || max_id_type >= ARRAYSIZEOF(max_id_name_info_)) {
-    LOG_WARN("invalid argument", K(max_id_type), "array size", ARRAYSIZEOF(max_id_name_info_));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", K(max_id_type), "array size", ARRAYSIZEOF(max_id_name_info_));
   } else {
     name = max_id_name_info_[max_id_type][0];
   }
@@ -542,7 +542,7 @@ const char *ObMaxIdFetcher::get_max_id_info(const ObMaxIdType max_id_type)
 {
   const char *info = NULL;
   if (max_id_type < 0 || max_id_type >= ARRAYSIZEOF(max_id_name_info_)) {
-    LOG_WARN("invalid argument", K(max_id_type), "array size", ARRAYSIZEOF(max_id_name_info_));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", K(max_id_type), "array size", ARRAYSIZEOF(max_id_name_info_));
   } else {
     info = max_id_name_info_[max_id_type][1];
   }

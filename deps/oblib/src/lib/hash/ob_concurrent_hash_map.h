@@ -279,7 +279,7 @@ bool ObConcurrentHashMap<Key, Value>::RemoveIf<Function>::operator()(Key &key, V
     if (OB_SUCCESS != (tmp_ret = hash_.remove_refactored(key))) {
       //if remove failed, stop traversing.
       bool_ret = false;
-      COMMON_LOG(WARN, "hash remove error", K(tmp_ret), K(key), K(value));
+      COMMON_LOG_RET(WARN, tmp_ret, "hash remove error", K(tmp_ret), K(key), K(value));
     }
   }
   return bool_ret;

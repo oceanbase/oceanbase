@@ -2748,7 +2748,7 @@ int ObLSTabletService::update_rows(
       EVENT_ADD(STORAGE_UPDATE_ROW_COUNT, afct_num);
     }
     if (timeguard.get_diff() > 3 * 1000 * 1000) {
-      LOG_WARN("update rows use too much time", K(afct_num), K(got_row_count));
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "update rows use too much time", K(afct_num), K(got_row_count));
     }
   }
   NG_TRACE(S_update_rows_end);
@@ -3576,7 +3576,7 @@ int ObLSTabletService::check_old_row_legitimacy(
       } else {
         ObString func_name = ObString::make_string("check_old_row_legitimacy");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
             "column_id", column_ids,
             KPC(storage_old_row),
             "sql_old_row", old_row,
@@ -4557,7 +4557,7 @@ int ObLSTabletService::check_new_row_nullable_value(
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_nullable_value");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   K(column_id), K(column_ids), K(new_row), K(data_table));
       }
     } else if (new_row.get_cell(i).is_number()) {
@@ -4571,7 +4571,7 @@ int ObLSTabletService::check_new_row_nullable_value(
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_nullable_value");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   K(column_id), K(column_ids), K(new_row), K(data_table));
       }
     }
@@ -4620,7 +4620,7 @@ int ObLSTabletService::check_new_row_nullable_value(const ObIArray<ObColDesc> &c
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_nullable_value");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   K(column_id), K(col_descs), K(new_row), K(relative_table));
       }
     } else if (new_row.get_cell(i).is_number()) {
@@ -4634,7 +4634,7 @@ int ObLSTabletService::check_new_row_nullable_value(const ObIArray<ObColDesc> &c
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_nullable_value");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   K(column_id), K(col_descs), K(new_row), K(relative_table));
       }
     }
@@ -4695,7 +4695,7 @@ int ObLSTabletService::check_new_row_shadow_pk(
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_new_row_shadow_pk");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
                   "column_id", column_ids, K(new_row), K(data_table),
                   K(spk_value), "pk_value", new_row.get_cell(pk_idx),
                   K(pk_idx), K(i), K(spk_column_id), K(real_pk_id));

@@ -37,9 +37,9 @@ char *ObVirtualRpcProtocolProcessor::easy_alloc(easy_pool_t *pool, int64_t size)
 {
   char *buf = NULL;
   if (size > UINT32_MAX || size < 0) {
-    LOG_WARN("invalid size", K(size));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid size", K(size));
   } else if (OB_ISNULL(pool)) {
-    LOG_ERROR("Easy pool is NULL");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Easy pool is NULL");
   } else {
     buf = static_cast<char*>(easy_pool_alloc(pool, static_cast<uint32_t>(size)));
   }

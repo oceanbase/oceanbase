@@ -155,7 +155,7 @@ public:
   }
   virtual void get_queue_num(int64_t &num)
   {
-    OB_LOG(ERROR, "unexpected invoke");
+    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected invoke");
     num = 0;
   }
   virtual int push_task(const common::IObDedupTask &task)
@@ -1124,6 +1124,7 @@ public:
 
 #define TG_REENTRANT_LOGICAL_STOP(tg_id)                                                                \
   ({                                                                                                    \
+    int ret = OB_SUCCESS;                                                                               \
     enum TGType tg_type = TGType::INVALID;                                                              \
     ITG* tg = TG_MGR.tgs_[tg_id];                                                                       \
     if (nullptr != tg) {                                                                                \
@@ -1133,12 +1134,14 @@ public:
       TG<TGType::REENTRANT_THREAD_POOL>* tmp_tg = static_cast<TG<TGType::REENTRANT_THREAD_POOL>*>(tg); \
       tmp_tg->logical_stop();                                                                           \
     } else {                                                                                            \
+      ret = common::OB_ERR_UNEXPECTED;                                                                  \
       OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
     }                                                                                                   \
   })
 
 #define TG_REENTRANT_LOGICAL_WAIT(tg_id)                                                                \
   ({                                                                                                    \
+    int ret = OB_SUCCESS;                                                                               \
     enum TGType tg_type = TGType::INVALID;                                                              \
     ITG* tg = TG_MGR.tgs_[tg_id];                                                                       \
     if (nullptr != tg) {                                                                                \
@@ -1148,6 +1151,7 @@ public:
       TG<TGType::REENTRANT_THREAD_POOL>* tmp_tg = static_cast<TG<TGType::REENTRANT_THREAD_POOL>*>(tg); \
       tmp_tg->logical_wait();                                                                           \
     } else {                                                                                            \
+      ret = common::OB_ERR_UNEXPECTED;                                                                  \
       OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
     }                                                                                                   \
   }) 

@@ -392,7 +392,7 @@ void ObResourceMap<Key, Value>::destroy()
     for (iter = map_.begin(); iter != map_.end(); iter++) {
       ValueStore *value_store = iter->second;
       if (OB_NOT_NULL(value_store)) {
-        STORAGE_LOG(WARN, "exception: this value should be erased before.",
+        STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "exception: this value should be erased before.",
                 K(*value_store->get_value_ptr()));
         free_resource(value_store);
       }

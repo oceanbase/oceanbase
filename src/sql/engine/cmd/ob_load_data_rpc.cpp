@@ -183,7 +183,7 @@ int ObRpcLoadDataShuffleTaskCallBack::process() {
 }
 
 void ObRpcLoadDataShuffleTaskCallBack::on_timeout() {
-  LOG_WARN("LOAD DATA main thread shuffle task rpc timeout");
+  LOG_WARN_RET(OB_TIMEOUT, "LOAD DATA main thread shuffle task rpc timeout");
   if (OB_NOT_NULL(handle_)) {
     handle_->result.flags_.set_bit(ObTaskResFlag::RPC_TIMEOUT);
   }
@@ -230,12 +230,12 @@ void ObRpcLoadDataInsertTaskCallBack::set_args(const Request &arg)
 void ObRpcLoadDataInsertTaskCallBack::on_timeout() {
   int64_t task_id = -2; //undefined
   if (OB_ISNULL(insert_task_)) {
-    LOG_ERROR("insert task is null on timeout");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "insert task is null on timeout");
   } else {
     task_id = insert_task_->task_id_;
     insert_task_->result_.flags_.set_bit(ObTaskResFlag::RPC_TIMEOUT);
   }
-  LOG_WARN("LOAD DATA main thread insert task rpc timeout", K(task_id));
+  LOG_WARN_RET(OB_TIMEOUT, "LOAD DATA main thread insert task rpc timeout", K(task_id));
   release_resouce();
 }
 
@@ -526,18 +526,18 @@ void ObParallelTaskController::wait_all_task_finish(const char *task_name, int64
     if (0 == wait_duration_ms % 1000) {
       int64_t current_ts = ObTimeUtil::current_time();
       if (current_ts > until_ts) {
-        LOG_ERROR("waiting load data task too long and exceed max waiting timestamp",
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "waiting load data task too long and exceed max waiting timestamp",
                   K(begin_ts), K(until_ts), K(current_ts));
       }
     }
     if (!is_too_long && wait_duration_ms > 10 * 1000) {
       is_too_long = true;
-      LOG_WARN("LOAD DATA, waiting task finish too long",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "LOAD DATA, waiting task finish too long",
                K(task_name), K(processing_count), K(wait_duration_ms), K(until_ts));
     }
   }
   if (is_too_long) {
-    LOG_WARN("LOAD DATA finish waitting long task", K(wait_duration_ms));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "LOAD DATA finish waitting long task", K(wait_duration_ms));
   }
 }
 

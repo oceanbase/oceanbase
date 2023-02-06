@@ -1607,7 +1607,7 @@ bool ObAlterTableArg::is_allow_when_upgrade() const
       for (int64_t i = 0 ; bret && i < index_arg_list_.count(); i++) {
         if (OB_ISNULL(index_arg_list_.at(i))) {
           bret = false;
-          LOG_WARN("ptr is null", K(bret));
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "ptr is null", K(bret));
         } else {
           bret = index_arg_list_.at(i)->is_allow_when_upgrade();
         }
@@ -1629,7 +1629,7 @@ bool ObAlterTableArg::is_allow_when_upgrade() const
       for(; bret && it_begin != it_end; it_begin++) {
         if (OB_ISNULL(*it_begin)) {
           bret = false;
-          LOG_WARN("*it_begin is NULL", K(bret));
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "*it_begin is NULL", K(bret));
         } else {
           alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin);
           // mysql mode, OB_ALL_MODIFY_COLUMN function is a subset of OB_ALL_CHANGE_COLUMN;
@@ -2653,10 +2653,10 @@ bool ObRenameIndexArg::is_valid() const
   int bret = true;
   if (origin_index_name_.empty()) {
     bret = false;
-    LOG_WARN("origin_index_name is empty", K_(origin_index_name));
+    LOG_WARN_RET(OB_INVALID_ERROR, "origin_index_name is empty", K_(origin_index_name));
   } else if (new_index_name_.empty()){
     bret = false;
-    LOG_WARN("new_index_name is empty", K_(origin_index_name));
+    LOG_WARN_RET(OB_INVALID_ERROR, "new_index_name is empty", K_(origin_index_name));
   }else{
     bret = ObIndexArg::is_valid();
   }
@@ -2791,14 +2791,14 @@ bool ObFlashBackTableFromRecyclebinArg::is_valid() const
   int bret = true;
   if (OB_INVALID_ID == tenant_id_) {
     bret = false;
-    LOG_WARN("tenant_id is invalid", K_(tenant_id));
+    LOG_WARN_RET(OB_INVALID_ERROR, "tenant_id is invalid", K_(tenant_id));
   } else if (origin_table_name_.empty()) {
     bret = false;
-    LOG_WARN("origin_table_name is empty", K_(origin_table_name));
+    LOG_WARN_RET(OB_INVALID_ERROR, "origin_table_name is empty", K_(origin_table_name));
   } else if ((new_db_name_.empty() && !new_table_name_.empty()) ||
       (!new_db_name_.empty() && new_table_name_.empty())) {
     bret = false;
-    LOG_WARN("new_db_name or new_table_name is invalid",
+    LOG_WARN_RET(OB_INVALID_ERROR, "new_db_name or new_table_name is invalid",
              K_(new_db_name), K_(new_table_name));
   }
   return bret;
@@ -2816,13 +2816,13 @@ bool ObFlashBackTableToScnArg::is_valid() const
   int bret = true;
   if (OB_INVALID_ID == tenant_id_) {
     bret = false;
-    LOG_WARN("tenant_id is invalid", K_(tenant_id));
+    LOG_WARN_RET(OB_INVALID_ERROR, "tenant_id is invalid", K_(tenant_id));
   } else if (OB_INVALID_ID == time_point_) {
     bret = false;
-    LOG_WARN("timepoint is invalid", K_(time_point));
+    LOG_WARN_RET(OB_INVALID_ERROR, "timepoint is invalid", K_(time_point));
   } else if (0 == tables_.count()) {
     bret = false;
-    LOG_WARN("table is empty", K_(tables));
+    LOG_WARN_RET(OB_INVALID_ERROR, "table is empty", K_(tables));
   } else if (-1 == query_end_time_) {
     bret = false;
   }
@@ -2840,14 +2840,14 @@ bool ObFlashBackIndexArg::is_valid() const
   int bret = true;
   if (OB_INVALID_ID == tenant_id_) {
     bret = false;
-    LOG_WARN("tenant_id is invalid", K_(tenant_id));
+    LOG_WARN_RET(OB_INVALID_ERROR, "tenant_id is invalid", K_(tenant_id));
   } else if (origin_table_name_.empty()) {
     bret = false;
-    LOG_WARN("origin_table_name is empty", K_(origin_table_name));
+    LOG_WARN_RET(OB_INVALID_ERROR, "origin_table_name is empty", K_(origin_table_name));
   } else if ((new_db_name_.empty() && !new_table_name_.empty()) ||
       (!new_db_name_.empty() && new_table_name_.empty())) {
     bret = false;
-    LOG_WARN("new_db_name or new_table_name is invalid",
+    LOG_WARN_RET(OB_INVALID_ERROR, "new_db_name or new_table_name is invalid",
              K_(new_db_name), K_(new_table_name));
   }
   return bret;

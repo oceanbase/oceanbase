@@ -2024,11 +2024,11 @@ double ObOptEstCostModel::cost_hash(double rows, const ObIArray<ObRawExpr *> &ha
   for (int64_t i = 0; i < hash_exprs.count(); ++i) {
     const ObRawExpr *expr = hash_exprs.at(i);
     if (OB_ISNULL(expr)) {
-      LOG_WARN("qual should not be NULL, but we don't set error return code here, just skip it");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "qual should not be NULL, but we don't set error return code here, just skip it");
     } else {
       ObObjTypeClass calc_type = expr->get_result_type().get_calc_type_class();
       if (OB_UNLIKELY(hash_params_[calc_type] < 0)) {
-        LOG_WARN("hash type not supported, skipped", K(calc_type));
+        LOG_WARN_RET(OB_NOT_SUPPORTED, "hash type not supported, skipped", K(calc_type));
       } else {
         cost_per_row += hash_params_[calc_type];
       }
@@ -2166,7 +2166,7 @@ double ObOptEstCostModel::cost_quals(double rows, const ObIArray<ObRawExpr *> &q
   for (int64_t i = 0; i < quals.count(); ++i) {
     const ObRawExpr *qual = quals.at(i);
     if (OB_ISNULL(qual)) {
-      LOG_WARN("qual should not be NULL, but we don't set error return code here, just skip it");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "qual should not be NULL, but we don't set error return code here, just skip it");
     } else if (qual->is_spatial_expr()) {
       cost_per_row +=  cost_params_.CMP_SPATIAL_COST * factor;
       if (need_scale) {
@@ -2175,7 +2175,7 @@ double ObOptEstCostModel::cost_quals(double rows, const ObIArray<ObRawExpr *> &q
     } else {
       ObObjTypeClass calc_type = qual->get_result_type().get_calc_type_class();
       if (OB_UNLIKELY(comparison_params_[calc_type] < 0)) {
-        LOG_WARN("comparison type not supported, skipped", K(calc_type));
+        LOG_WARN_RET(OB_NOT_SUPPORTED, "comparison type not supported, skipped", K(calc_type));
       } else {
         cost_per_row += comparison_params_[calc_type] * factor;
         if (need_scale) {

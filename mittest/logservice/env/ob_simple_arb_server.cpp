@@ -58,7 +58,7 @@ ObSimpleArbServer::~ObSimpleArbServer()
     ob_delete(tenant_base_);
     tenant_base_ = NULL;
   }
-  CLOG_LOG(WARN, "reset tenant_base_");
+  CLOG_LOG_RET(WARN, OB_SUCCESS, "reset tenant_base_");
 }
 
 int ObSimpleArbServer::simple_init(const std::string &cluster_name,
@@ -120,7 +120,7 @@ int ObSimpleArbServer::simple_init(const std::string &cluster_name,
   } else if (OB_FAIL(timer_.init(lib::TGDefIDs::ArbServerTimer, &palf_env_mgr_))) {
     CLOG_LOG(WARN, "timer init failed", K(ret), K(addr), K(clog_dir.c_str()));
   } else {
-    filter_ = [this](const ObAddr &src) -> bool {
+    filter_ = [this, &ret](const ObAddr &src) -> bool {
       if (blacklist_.need_filter_packet_by_blacklist(src)) {
         SERVER_LOG(WARN, "need_filter_packet_by_blacklist", K(src));
         return true;
@@ -172,7 +172,7 @@ int ObSimpleArbServer::simple_start(const bool is_bootstrat)
 
 int ObSimpleArbServer::simple_close(const bool is_shutdown)
 {
-  CLOG_LOG(WARN, "arb simple_close");
+  CLOG_LOG_RET(WARN, OB_SUCCESS, "arb simple_close");
   srv_network_frame_.destroy();
   palf_env_mgr_.destroy();
   timer_.destroy();

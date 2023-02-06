@@ -105,7 +105,7 @@ protected:
   inline void CHECK_BALANCE(const char *type) const
   {
     if (OB_UNLIKELY(callback_counter_ != call_counter_)) {
-      SQL_LOG(ERROR, "Callback times mismatch. bug!!!",
+      SQL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Callback times mismatch. bug!!!",
               K(type), K(this), K(common::lbt()), K_(callback_counter), K_(call_counter));
     }
   }

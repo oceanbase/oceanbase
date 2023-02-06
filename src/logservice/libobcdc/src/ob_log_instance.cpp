@@ -113,7 +113,7 @@ ObLogInstance *ObLogInstance::get_instance()
 ObLogInstance &ObLogInstance::get_ref_instance()
 {
   if (NULL == instance_) {
-    LOG_ERROR("ObLogInstance is NULL", K(instance_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObLogInstance is NULL", K(instance_));
   }
   return *instance_;
 }
@@ -1796,7 +1796,7 @@ void ObLogInstance::handle_error(const int err_no, const char *fmt, ...)
         err_cb_(err);
         LOG_INFO("ERROR_CALLBACK end", KP(err_cb_));
       } else {
-        LOG_ERROR("No ERROR CALLBACK function available, abort now");
+        LOG_ERROR_RET(OB_ERROR, "No ERROR CALLBACK function available, abort now");
       }
 
       // notify other module to stop
@@ -1826,7 +1826,7 @@ void ObLogInstance::write_pid_file_()
 
   pid_file_fd = open(pid_file, O_RDWR | O_CREAT, 0600);
   if (OB_UNLIKELY(pid_file_fd < 0)) {
-    LOG_ERROR("open pid file fail", K(pid_file), K(pid_file_fd), K(errno), KERRMSG);
+    LOG_ERROR_RET(OB_ERR_SYS, "open pid file fail", K(pid_file), K(pid_file_fd), K(errno), KERRMSG);
   } else {
     char buf[32] = {};
     (void)snprintf(buf, sizeof(buf), "%d\n", getpid());
@@ -1835,7 +1835,7 @@ void ObLogInstance::write_pid_file_()
     ssize_t len = strlen(buf);
     ssize_t nwrite = write(pid_file_fd, buf, len);
     if (OB_UNLIKELY(len != nwrite)) {
-      LOG_ERROR("write pid file fail", K(pid_file), K(pid_file_fd),
+      LOG_ERROR_RET(OB_ERR_SYS, "write pid file fail", K(pid_file), K(pid_file_fd),
           K(buf), K(len), K(errno), KERRMSG);
     }
 
@@ -2054,7 +2054,7 @@ void ObLogInstance::wait_threads_stop_()
   if (0 != timer_tid_) {
     int pthread_ret = pthread_join(timer_tid_, NULL);
     if (0 != pthread_ret) {
-      LOG_ERROR("join timer thread fail", K(timer_tid_), K(pthread_ret),
+      LOG_ERROR_RET(OB_ERR_SYS, "join timer thread fail", K(timer_tid_), K(pthread_ret),
           KERRNOMSG(pthread_ret));
     } else {
       LOG_INFO("stop timer thread succ", K(timer_tid_));
@@ -2066,7 +2066,7 @@ void ObLogInstance::wait_threads_stop_()
   if (0 != sql_tid_) {
     int pthread_ret = pthread_join(sql_tid_, NULL);
     if (0 != pthread_ret) {
-      LOG_ERROR("join sql thread fail", K(sql_tid_), K(pthread_ret),
+      LOG_ERROR_RET(OB_ERR_SYS, "join sql thread fail", K(sql_tid_), K(pthread_ret),
           KERRNOMSG(pthread_ret));
     } else {
       LOG_INFO("stop sql thread succ", K(sql_tid_));
@@ -2078,7 +2078,7 @@ void ObLogInstance::wait_threads_stop_()
   if (0 != flow_control_tid_) {
     int pthread_ret = pthread_join(flow_control_tid_, NULL);
     if (0 != pthread_ret) {
-      LOG_ERROR("join flow control thread fail", K(flow_control_tid_), K(pthread_ret),
+      LOG_ERROR_RET(OB_ERR_SYS, "join flow control thread fail", K(flow_control_tid_), K(pthread_ret),
           KERRNOMSG(pthread_ret));
     } else {
       LOG_INFO("stop flow control thread succ", K(flow_control_tid_));
@@ -2158,7 +2158,7 @@ void ObLogInstance::print_tenant_memory_usage_()
   lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
 
   if (OB_ISNULL(mallocator)) {
-    LOG_ERROR("mallocator is NULL, can not print_tenant_memory_usage");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "mallocator is NULL, can not print_tenant_memory_usage");
   } else {
     mallocator->print_tenant_memory_usage(OB_SYS_TENANT_ID);
     mallocator->print_tenant_ctx_memory_usage(OB_SYS_TENANT_ID);
@@ -2548,7 +2548,7 @@ int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
 void ObLogInstance::do_drc_consume_tps_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->do_drc_consume_tps_stat();
   }
@@ -2557,7 +2557,7 @@ void ObLogInstance::do_drc_consume_tps_stat_()
 void ObLogInstance::do_drc_consume_rps_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->do_drc_consume_rps_stat();
   }
@@ -2566,7 +2566,7 @@ void ObLogInstance::do_drc_consume_rps_stat_()
 void ObLogInstance::do_drc_release_tps_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->do_drc_release_tps_stat();
   }
@@ -2575,7 +2575,7 @@ void ObLogInstance::do_drc_release_tps_stat_()
 void ObLogInstance::do_drc_release_rps_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->do_drc_release_rps_stat();
   }
@@ -2601,7 +2601,7 @@ void ObLogInstance::do_stat_for_part_trans_task_count_(int record_type,
 void ObLogInstance::print_trans_stat_()
 {
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat is null", K(trans_stat_mgr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "trans_stat is null", K(trans_stat_mgr_));
   } else {
     trans_stat_mgr_->print_stat_info();
   }
@@ -2613,8 +2613,8 @@ int ObLogInstance::init_ob_trace_id_(const char *ob_trace_id_ptr)
   int64_t pos = 0;
 
   if (OB_ISNULL(ob_trace_id_ptr)) {
-    LOG_ERROR("ob_trace_id_ptr is null", K(ob_trace_id_ptr));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ob_trace_id_ptr is null", K(ob_trace_id_ptr));
   } else if (OB_FAIL(databuff_printf(ob_trace_id_str_, sizeof(ob_trace_id_str_), pos, "%s",
           ob_trace_id_ptr))) {
     LOG_ERROR("databuff_printf ob_trace_id_str_ fail", K(ob_trace_id_str_), K(pos), K(ob_trace_id_ptr));

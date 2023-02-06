@@ -43,7 +43,7 @@ bool ObConnectByOpBFSPump::RowComparer::operator()(const PumpNode &pump_node1, c
              || OB_ISNULL(r)
              || OB_UNLIKELY(l->cnt_ != r->cnt_)) {
     ret_ = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid parameter", KPC(l), KPC(r), K(ret_));
+    LOG_WARN_RET(ret_, "invalid parameter", KPC(l), KPC(r), K(ret_));
   } else {
     const ObDatum *lcells = l->cells();
     const ObDatum *rcells = r->cells();

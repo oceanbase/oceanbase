@@ -383,7 +383,7 @@ void ObReplayServiceReplayTask::reset()
       if (replay_task->is_pre_barrier_) {
         ObLogReplayBuffer *replay_buf = static_cast<ObLogReplayBuffer *>(replay_task->log_buf_);
         if (NULL == replay_buf) {
-          CLOG_LOG(ERROR, "replay_buf is NULL when reset", KPC(replay_task));
+          CLOG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "replay_buf is NULL when reset", KPC(replay_task));
         } else if (0 == replay_buf->dec_replay_ref()) {
           replay_status_->free_replay_task_log_buf(replay_task);
           replay_status_->dec_pending_task(replay_task->log_size_);
@@ -854,7 +854,7 @@ bool ObReplayStatus::has_remained_replay_task() const
   bool bool_ret = (0 != pending_task_count_);
 
   if (pending_task_count_ > PENDING_COUNT_THRESHOLD && REACH_TIME_INTERVAL(1000 * 1000)) {
-    CLOG_LOG(WARN, "too many pending replay task", K(count), KPC(this));
+    CLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "too many pending replay task", K(count), KPC(this));
   }
   return bool_ret;
 }
@@ -1148,9 +1148,9 @@ int ObReplayStatus::batch_push_all_task_queue()
 void ObReplayStatus::inc_pending_task(const int64_t log_size)
 {
   if (log_size < 0) {
-    CLOG_LOG(ERROR, "task is invalid", K(log_size), KPC(this));
+    CLOG_LOG_RET(ERROR, OB_INVALID_ERROR, "task is invalid", K(log_size), KPC(this));
   } else if (OB_ISNULL(rp_sv_)) {
-    CLOG_LOG(ERROR, "rp sv is NULL", K(log_size), KPC(this));
+    CLOG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "rp sv is NULL", K(log_size), KPC(this));
   } else {
     ATOMIC_INC(&pending_task_count_);
     rp_sv_->inc_pending_task_size(log_size);
@@ -1160,9 +1160,9 @@ void ObReplayStatus::inc_pending_task(const int64_t log_size)
 void ObReplayStatus::dec_pending_task(const int64_t log_size)
 {
   if (log_size < 0) {
-    CLOG_LOG(ERROR, "task is invalid", K(log_size), KPC(this));
+    CLOG_LOG_RET(ERROR, OB_INVALID_ERROR, "task is invalid", K(log_size), KPC(this));
   } else if (OB_ISNULL(rp_sv_)) {
-    CLOG_LOG(ERROR, "rp sv is NULL", K(log_size), KPC(this));
+    CLOG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "rp sv is NULL", K(log_size), KPC(this));
   } else {
     ATOMIC_DEC(&pending_task_count_);
     rp_sv_->dec_pending_task_size(log_size);

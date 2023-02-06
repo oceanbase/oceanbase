@@ -1273,7 +1273,7 @@ void ObPlanCacheValue::reset()
   reset_tpl_sql_const_cons();
 
   if (OB_SUCCESS != outline_params_wrapper_.destroy()) {
-    LOG_ERROR("fail to destroy ObOutlineParamWrapper");
+    LOG_ERROR_RET(OB_ERROR, "fail to destroy ObOutlineParamWrapper");
   }
   outline_params_wrapper_.reset_allocator();
   //use_global_location_cache_ = true;
@@ -1303,7 +1303,7 @@ int64_t ObPlanCacheValue::get_mem_size()
   int64_t value_mem_size = 0;
   DLIST_FOREACH_NORET(plan_set, plan_sets_) {
     if (OB_ISNULL(plan_set)) {
-      BACKTRACE(ERROR, true, "invalid plan_set");
+      BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "invalid plan_set");
     } else {
       value_mem_size += plan_set->get_mem_size();
     }

@@ -791,7 +791,7 @@ int64_t ObExprLike::match_with_instr_mode(const ObString &text, const InstrInfo 
     text_len -= new_text != NULL ? new_text - text_ptr + instr_len[idx] : 0;
     if (OB_UNLIKELY(text_len < 0)) {
       match = false;
-      LOG_ERROR("unexpected result of memmem", K(text),
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected result of memmem", K(text),
                 K(ObString(instr_len[idx], instr_pos[idx])));
     } else {
       match = new_text != NULL;

@@ -362,7 +362,7 @@ int ObTxRetainCtxMgr::for_each_remove_(RetainFuncHandler remove_handler,
     }
     const int64_t use_ts = ObTimeUtility::current_time() - start_ts;
     if (use_ts > max_run_us) {
-      TRANS_LOG(WARN, "remove retain ctx use too much time", K(use_ts), K(remove_count));
+      TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "remove retain ctx use too much time", K(use_ts), K(remove_count));
       break;
     }
 

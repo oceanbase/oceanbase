@@ -57,9 +57,9 @@ ObColumnStat::ObColumnStat(common::ObIAllocator &allocator)
   min_value_.set_min_value();
   max_value_.set_max_value();
   if (NULL == (llc_bitmap_ = static_cast<char*>(allocator.alloc(NUM_LLC_BUCKET)))) {
-    COMMON_LOG(WARN, "allocate memory for llc_bitmap_ failed.");
+    COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for llc_bitmap_ failed.");
   } else if (NULL == (object_buf_ = static_cast<char*>(allocator.alloc(MAX_OBJECT_SERIALIZE_SIZE * 2)))) {
-    COMMON_LOG(WARN, "allocate memory for object_buf_ failed.");
+    COMMON_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "allocate memory for object_buf_ failed.");
   } else {
     llc_bitmap_size_ = NUM_LLC_BUCKET;
     MEMSET(llc_bitmap_, 0, llc_bitmap_size_);

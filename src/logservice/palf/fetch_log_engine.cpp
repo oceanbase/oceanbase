@@ -268,9 +268,9 @@ bool FetchLogEngine::is_task_queue_timeout_(FetchLogTask *task) const
   bool bool_ret = false;
 
   if (!is_inited_) {
-    PALF_LOG(WARN, "FetchLogEngine not init");
+    PALF_LOG_RET(WARN, OB_NOT_INIT, "FetchLogEngine not init");
   } else if (OB_ISNULL(task)) {
-    PALF_LOG(WARN, "invalid argument", KP(task));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument", KP(task));
   } else {
     bool_ret = (ObTimeUtility::current_time() - task->get_timestamp_us())
                > PALF_FETCH_LOG_INTERVAL_US;

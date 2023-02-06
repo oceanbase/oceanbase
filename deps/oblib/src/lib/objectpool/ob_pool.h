@@ -119,7 +119,7 @@ public:
   {
     void *ptr_ret = NULL;
     if (sz > block_pool_.get_obj_size()) {
-      LIB_LOG(ERROR, "Wrong block size", K(sz), K(block_pool_.get_obj_size()));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Wrong block size", K(sz), K(block_pool_.get_obj_size()));
     } else {
       ptr_ret = block_pool_.alloc();
     }

@@ -239,7 +239,12 @@ int ObRpcProxy::init_pkt(
     pkt->set_timeout(timeout_);
     pkt->set_priority(opts.pr_);
     pkt->set_session_id(0);
-    pkt->set_log_level(common::ObThreadLogLevelUtils::get_level());
+    int8_t log_level = common::ObThreadLogLevelUtils::get_level();
+    // for log level compatibility, disable thread log level while upgrading.
+    if (OB_LOGGER.is_info_as_wdiag()) {
+      log_level = OB_LOG_LEVEL_NONE;
+    }
+    pkt->set_log_level(log_level);
     pkt->set_tenant_id(tenant_id_);
     pkt->set_priv_tenant_id(priv_tenant_id_);
     pkt->set_timestamp(ObTimeUtility::current_time());

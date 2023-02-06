@@ -720,5 +720,4 @@ private:
 #define LOG_KVS_(N, ...) CONCAT(LOG_KVS_, N)(__VA_ARGS__)
 #define LOG_KVS(...) "placeholder" LOG_KVS_(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
 
-
 #endif

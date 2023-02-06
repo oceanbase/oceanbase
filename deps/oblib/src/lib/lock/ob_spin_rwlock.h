@@ -64,14 +64,14 @@ public:
       : lock_(const_cast<SpinRWLock&>(lock)), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock()))) {
-      COMMON_LOG(WARN, "Fail to read lock, ", K_(ret));
+      COMMON_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
     }
   }
   ~SpinRLockGuard()
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock()))) {
-        COMMON_LOG(WARN, "Fail to unlock, ", K_(ret));
+        COMMON_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
       }
     }
   }
@@ -90,14 +90,14 @@ public:
       : lock_(const_cast<SpinRWLock&>(lock)), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
-      COMMON_LOG(WARN, "Fail to write lock, ", K_(ret));
+      COMMON_LOG_RET(WARN, ret_, "Fail to write lock, ", K_(ret));
     }
   }
   ~SpinWLockGuard()
   {
     if (OB_LIKELY(OB_SUCCESS == ret_)) {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock()))) {
-        COMMON_LOG(WARN, "Fail to unlock, ", K_(ret));
+        COMMON_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
       }
     }
   }

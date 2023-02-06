@@ -255,7 +255,7 @@ int ObTableLoadGeneralTableCompactor::start()
 
 void ObTableLoadGeneralTableCompactor::stop()
 {
-  LOG_WARN("LOAD TABLE COMPACT STOP");
+  LOG_WARN_RET(OB_SUCCESS, "LOAD TABLE COMPACT STOP");
   is_stop_ = true;
   // 遍历合并中的任务队列, 调用stop
   ObMutexGuard guard(mutex_);

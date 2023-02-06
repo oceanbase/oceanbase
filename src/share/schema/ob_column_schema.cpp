@@ -53,7 +53,7 @@ const char *ObColumnSchemaV2::convert_column_type_to_str(ColumnType type)
   } else if (ObRawType == type) {
     type_str = STR_COLUMN_TYPE_RAW;
   } else {
-    LOG_ERROR("Not supported column type, ", K(type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Not supported column type, ", K(type));
   }
   return type_str;
 }
@@ -86,7 +86,7 @@ ColumnType ObColumnSchemaV2::convert_str_to_column_type(const char *str)
   } else if (STRCMP(str, STR_COLUMN_TYPE_UNKNOWN) == 0) {
     type = ObUnknownType;
   } else {
-    LOG_ERROR("Not supported column type, ", K(str));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Not supported column type, ", K(str));
   }
   return type;
 }
@@ -461,7 +461,7 @@ void ObColumnSchemaV2::print_info() const
 void ObColumnSchemaV2::print(FILE *fd) const
 {
   if (OB_ISNULL(fd)) {
-    LOG_WARN("fd is NULL");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "fd is NULL");
   } else {
     fprintf(fd, " column: %8ld %16ld %24.*s %16s %8d %8d %8d\n",
             column_id_, schema_version_,

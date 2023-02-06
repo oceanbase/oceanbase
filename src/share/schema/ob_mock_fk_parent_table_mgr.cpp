@@ -124,7 +124,7 @@ int ObMockFKParentTableMgr::init()
 void ObMockFKParentTableMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("mock_fk_parent_table manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "mock_fk_parent_table manger not init");
   } else {
     mock_fk_parent_table_infos_.clear();
     mock_fk_parent_table_map_.clear();
@@ -221,18 +221,27 @@ int ObMockFKParentTableMgr::rebuild_mock_fk_parent_table_hashmap(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mock_fk_parent_table schema is NULL", K(ret), K(schema));
     } else {
-      bool overwrite = true;
+      bool overwrite = false;
       ObMockFKParentTableHashWrapper hash_wrapper(schema->get_tenant_id(),
                                                   schema->get_database_id(),
                                                   schema->get_mock_fk_parent_table_name());
-      if (OB_FAIL(map.set_refactored(hash_wrapper, schema, overwrite))) {
-        LOG_WARN("build mock_fk_parent_table_hashmap failed", K(ret));
+      int hash_ret = map.set_refactored(hash_wrapper, schema, overwrite);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : hash_ret;
+        LOG_ERROR("build mock_fk_parent_table_hashmap failed", KR(ret), KR(hash_ret),
+                  "exist_tenant_id", schema->get_tenant_id(),
+                  "exist_database_id", schema->get_database_id(),
+                  "exist_mock_fk_parent_table_name", schema->get_mock_fk_parent_table_name());
       }
     }
   }
   if (OB_SUCC(ret) && OB_UNLIKELY(infos.count() != map.count())) {
+    ret = OB_DUPLICATE_OBJECT_NAME_EXIST;
     LOG_ERROR("unexpected mock_fk_parent_table_hashmap map count",
-              K(infos.count()), K(map.count()));
+              KR(ret), K(infos.count()), K(map.count()));
+    LOG_DBA_ERROR(OB_DUPLICATE_OBJECT_NAME_EXIST,
+                  "msg", "duplicate mock fk parent table name exist after rebuild",
+                  K(infos.count()), K(map.count()));
     right_to_die_or_duty_to_live();
   }
   return ret;

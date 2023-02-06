@@ -124,7 +124,7 @@ public:
     if (INT64_MAX == min_table_version_) {
       //第一次更新，需要防御入参为INT64_MAX
       if (INT64_MAX == table_version) {
-        TRANS_LOG(WARN, "unexpected table version", K(table_version), K(*this));
+        TRANS_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "unexpected table version", K(table_version), K(*this));
       } else {
         min_table_version_ = table_version;
         max_table_version_ = table_version;
@@ -134,7 +134,7 @@ public:
       TRANS_LOG(DEBUG, "current table version lower the last one", K(table_version), K(*this));
       //非第一次更新table version，预期不会是int64_max
     } else if (INT64_MAX == table_version) {
-      TRANS_LOG(ERROR, "unexpected table version", K(table_version), K(*this));
+      TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected table version", K(table_version), K(*this));
     } else {
       max_table_version_ = table_version;
     }

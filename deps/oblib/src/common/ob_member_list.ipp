@@ -270,7 +270,7 @@ ObMemberListBase<MAX_MEMBER_NUM> &ObMemberListBase<MAX_MEMBER_NUM>::operator=(co
   if (this != &member_list) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = deep_copy(member_list))) {
-      COMMON_LOG(WARN, "deep_copy failed", K(tmp_ret));
+      COMMON_LOG_RET(WARN, tmp_ret, "deep_copy failed", K(tmp_ret));
     }
   }
   return *this;
@@ -301,7 +301,7 @@ int64_t ObMemberListBase<MAX_MEMBER_NUM>::to_string(char *buf, const int64_t buf
   databuff_printf(buf, buf_len , pos, "%ld", member_number_);
   for (int64_t i = 0; i < member_number_; ++i) {
     if (OB_SUCCESS != (tmp_ret = databuff_print_obj(buf, buf_len, pos, member_[i]))) {
-      COMMON_LOG(WARN, "databuff_print_objfailed", K(tmp_ret));
+      COMMON_LOG_RET(WARN, tmp_ret, "databuff_print_objfailed", K(tmp_ret));
     }
   }
   return pos;

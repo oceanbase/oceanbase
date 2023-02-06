@@ -291,14 +291,14 @@ public:
   inline T &operator[](int64_t idx)  // dangerous
   {
     if (OB_UNLIKELY(0 > idx || idx >= count_)) {
-      LIB_LOG(ERROR, "idx out of range", K(idx), K(count_));
+      LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "idx out of range", K(idx), K(count_));
     }
     return data_[idx];
   }
   inline const T &operator[](int64_t idx) const  // dangerous
   {
     if (OB_UNLIKELY(0 > idx || idx >= count_)) {
-      LIB_LOG(ERROR, "idx out of range", K(idx), K(count_));
+      LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "idx out of range", K(idx), K(count_));
     }
     return data_[idx];
   }

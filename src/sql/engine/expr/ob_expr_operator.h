@@ -69,7 +69,7 @@ public:
                   calc_meta_(calc_meta), max_length_(max_length), flag_(flag)
   {
     if (OB_UNLIKELY(calc_meta.get_type() >= common::ObMaxType)) {
-      SQL_LOG(ERROR, "the wrong type");
+      SQL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "the wrong type");
     }
   }
   virtual ~ObFuncInputType() {}
@@ -712,7 +712,7 @@ inline int ObExprOperator::calc_result_type0(ObExprResType &type,
   UNUSED(type);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -725,7 +725,7 @@ inline int ObExprOperator::calc_result_type1(ObExprResType &type,
   UNUSED(type1);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -740,7 +740,7 @@ inline int ObExprOperator::calc_result_type2(ObExprResType &type,
   UNUSED(type2);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -757,7 +757,7 @@ inline int ObExprOperator::calc_result_type3(ObExprResType &type,
   UNUSED(type3);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -772,7 +772,7 @@ inline int ObExprOperator::calc_result_typeN(ObExprResType &type,
   UNUSED(param_num);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(ERROR, "not implement", K(type_), K(get_type_name(type_)));
+  SQL_LOG_RET(ERROR, common::OB_NOT_IMPLEMENT, "not implement", K(type_), K(get_type_name(type_)));
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -781,7 +781,7 @@ inline int ObExprOperator::calc_result_type0(ObExprResType &type,
 {
   UNUSED(type);
   UNUSED(type_ctx);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -792,7 +792,7 @@ inline int ObExprOperator::calc_result_type1(ObExprResType &type,
   UNUSED(type);
   UNUSED(type1);
   UNUSED(type_ctx);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -805,7 +805,7 @@ inline int ObExprOperator::calc_result_type2(ObExprResType &type,
   UNUSED(type1);
   UNUSED(type2);
   UNUSED(type_ctx);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -820,7 +820,7 @@ inline int ObExprOperator::calc_result_type3(ObExprResType &type,
   UNUSED(type2);
   UNUSED(type3);
   UNUSED(type_ctx);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -833,7 +833,7 @@ inline int ObExprOperator::calc_result_typeN(ObExprResType &type,
   UNUSED(types);
   UNUSED(param_num);
   UNUSED(type_ctx);
-  SQL_LOG(ERROR, "not implement", K(type_), K(get_type_name(type_)));
+  SQL_LOG_RET(ERROR, common::OB_NOT_IMPLEMENT, "not implement", K(type_), K(get_type_name(type_)));
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -945,7 +945,7 @@ inline void ObExprOperator::calc_result_flagN(ObExprResType &type,
 
   bool not_null = true;
   if (OB_ISNULL(types) || OB_UNLIKELY(param_num < 0)) {
-    SQL_LOG(ERROR, "null types or the wrong param_num");
+    SQL_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "null types or the wrong param_num");
   } else {
     for (int64_t i = 0; i < param_num; ++i) {
       if (!types[i].has_result_flag(NOT_NULL_FLAG)) {
@@ -2162,14 +2162,14 @@ private:
     if (lib::is_oracle_mode()) {                                           \
       if (common::OB_SUCCESS != (expr_ctx).my_session_->                   \
           get_collation_server(cast_coll_type)) {                          \
-        SQL_LOG(ERROR, "fail to get server collation");                    \
+        SQL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "fail to get server collation");                    \
         cast_coll_type = ObCharset::get_default_collation(                 \
             ObCharset::get_default_charset());                             \
       }                                                                    \
     } else if (lib::is_mysql_mode()) {                                     \
       if (common::OB_SUCCESS != (expr_ctx).my_session_->                   \
           get_collation_connection(cast_coll_type)) {                      \
-        SQL_LOG(ERROR, "fail to get collation_connection, "                \
+        SQL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "fail to get collation_connection, "                \
                 "set it to default collation");                            \
         cast_coll_type = ObCharset::get_default_collation(                 \
             ObCharset::get_default_charset());                             \
@@ -2177,10 +2177,10 @@ private:
     }                                                                      \
     if (common::OB_SUCCESS != ObSQLUtils::set_compatible_cast_mode(        \
                                 (expr_ctx).my_session_, cp_cast_mode_)) {  \
-      SQL_LOG(ERROR, "fail to get compatible mode for cast_mode");         \
+      SQL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "fail to get compatible mode for cast_mode");         \
     }                                                                      \
   } else {                                                                 \
-    SQL_LOG(WARN, "session is null");                                      \
+    SQL_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "session is null");                                      \
     cast_coll_type = ObCharset::get_system_collation();                    \
   }                                                                        \
   const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params((expr_ctx).my_session_);\

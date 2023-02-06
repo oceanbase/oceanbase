@@ -33,7 +33,7 @@ ObDASGroupScanOp::ObDASGroupScanOp(ObIAllocator &op_alloc)
 ObDASGroupScanOp::~ObDASGroupScanOp()
 {
   if (result_iter_ != nullptr && result_iter_->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR("table group scan iter is not released, maybe some bug occured",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "table group scan iter is not released, maybe some bug occured",
               KPC(scan_ctdef_), K(scan_param_), KPC(scan_rtdef_));
   }
 }
@@ -250,13 +250,13 @@ ObGroupLookupOp::~ObGroupLookupOp()
 {
   const ObNewRowIterator *lookup_iter = get_lookup_storage_iter();
   if (lookup_iter != nullptr && lookup_iter->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR("lookup_iter iter is not released, maybe some bug occured",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "lookup_iter iter is not released, maybe some bug occured",
               KPC(lookup_ctdef_), K(scan_param_), KPC(index_ctdef_),
               K(lookup_rowkey_cnt_), K(lookup_row_cnt_));
   }
   const ObNewRowIterator *rowkey_iter = static_cast<ObGroupScanIter *>(get_rowkey_iter())->get_iter();
   if (rowkey_iter != nullptr && rowkey_iter->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR("rowkey_iter iter is not released, maybe some bug occured",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "rowkey_iter iter is not released, maybe some bug occured",
               KPC(lookup_ctdef_), K(scan_param_), KPC(index_ctdef_),
               K(lookup_rowkey_cnt_), K(lookup_row_cnt_));
   }

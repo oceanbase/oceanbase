@@ -221,7 +221,7 @@ public:
             const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_
                             + (*e)->res_buf_len_ * idx;
             if (datum_ptr != res_ptr) {
-              SQL_LOG(WARN, "sanity check failure, column index", K(expr_idx), K(idx),
+              SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index", K(expr_idx), K(idx),
                                      KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
               abort();
             }
@@ -230,7 +230,7 @@ public:
           const char *datum_ptr = datum->ptr_;
           const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_;
           if (datum_ptr != res_ptr) {
-            SQL_LOG(WARN, "sanity check failure, column index",
+            SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index",
                      K(expr_idx), KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
             abort();
           }

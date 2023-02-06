@@ -319,7 +319,7 @@ int ObMySQLUtil::store_obstr_nzt_with_pre_space(char *buf, int64_t len, ObString
 void ObMySQLUtil::prepend_zeros(char *buf, int64_t org_char_size, int64_t offset) {
   // memmove(buf + offset, buf, org_char_size);
   if (OB_ISNULL(buf)) {
-    LOG_WARN("invalid buf input", KP(buf));
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid buf input", KP(buf));
   } else {
     char *src_last = buf + org_char_size;
     char *dst_last = src_last + offset;

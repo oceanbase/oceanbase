@@ -782,9 +782,9 @@ void ObServerManager::clear_in_recovery_server_takenover_by_rs(
   if (OB_SUCCESS == tmp_ret) {
     status_ptr->in_recovery_for_takenover_by_rs_ = false;;
   } else if (OB_ENTRY_NOT_EXIST != tmp_ret) {
-    LOG_WARN("find failed", K(server), K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "find failed", K(server), K(tmp_ret));
   } else {
-    LOG_WARN("fail to find server", K(server), K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "fail to find server", K(server), K(tmp_ret));
   }
 }
 
@@ -2731,14 +2731,14 @@ bool ObServerManager::have_server_deleting() const
   ObArray<ObServerStatus> server_statuses;
   if (!inited_) {
     tmp_ret = OB_NOT_INIT;
-    LOG_WARN("server manager not inited", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "server manager not inited", K(tmp_ret));
   } else if (OB_SUCCESS != (tmp_ret = get_server_statuses(zone, server_statuses))) {
-    LOG_WARN("fail to get server status", K(zone), K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "fail to get server status", K(zone), K(tmp_ret));
   } else {
     FOREACH_CNT_X(status, server_statuses, OB_SUCCESS == tmp_ret) {
       if (OB_ISNULL(status)) {
         tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get invalid status", K(tmp_ret));
+        LOG_WARN_RET(tmp_ret, "get invalid status", K(tmp_ret));
       } else if (ObServerStatus::OB_SERVER_ADMIN_DELETING == status->admin_status_) {
         bret = true;
         break;

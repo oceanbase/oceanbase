@@ -2054,7 +2054,7 @@ inline int ObNumber::uint32cmp(const uint32_t *s1, const uint32_t *s2, const int
 {
   int cret = 0;
   if (n > 0 && (OB_ISNULL(s1) || OB_ISNULL(s2))) {
-    LIB_LOG(ERROR, "the poniter is null");
+    LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "the poniter is null");
   } else {
     for (int64_t i = 0; i < n; ++i) {
       if (s1[i] < s2[i]) {
@@ -3084,7 +3084,7 @@ inline bool ObNumber::is_integer() const
     bret = true;
   } else if (OB_ISNULL(digits_) || OB_UNLIKELY(0 >= d_.len_)) {
     bret = false;
-    _OB_LOG(ERROR, "not init");
+    _OB_LOG_RET(ERROR, common::OB_NOT_INIT, "not init");
   } else {
     if (POSITIVE == d_.sign_) {
       int_len = d_.se_ - POSITIVE_EXP_BOUNDARY;
@@ -3122,7 +3122,7 @@ inline bool ObNumber::is_integer(const int32_t expr_value) const
     bret = true;
   } else if (OB_ISNULL(digits_) || OB_UNLIKELY(0 >= d_.len_)) {
     bret = false;
-    _OB_LOG(ERROR, "not init");
+    _OB_LOG_RET(ERROR, common::OB_NOT_INIT, "not init");
   } else if (expr_value < 0 || (expr_value + 1 < d_.len_)) {
     bret = false;
   } else {

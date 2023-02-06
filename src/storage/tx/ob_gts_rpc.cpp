@@ -190,9 +190,9 @@ void ObGtsRequestRpc::destroy()
   if (is_inited_) {
     if (is_running_) {
       if (OB_SUCCESS != (tmp_ret = stop())) {
-        TRANS_LOG(WARN, "gts request rpc stop error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "gts request rpc stop error", K(tmp_ret));
       } else if (OB_SUCCESS != (tmp_ret = wait())) {
-        TRANS_LOG(WARN, "gts request rpc wait error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "gts request rpc wait error", K(tmp_ret));
       } else {
         // do nothing
       }
@@ -321,9 +321,9 @@ void ObGtsResponseRpc::destroy()
   if (is_inited_) {
     if (is_running_) {
       if (OB_SUCCESS != (tmp_ret = stop())) {
-        TRANS_LOG(WARN, "gts response rpc stop error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "gts response rpc stop error", K(tmp_ret));
       } else if (OB_SUCCESS != (tmp_ret = wait())) {
-        TRANS_LOG(WARN, "gts response rpc wait error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "gts response rpc wait error", K(tmp_ret));
       } else {
         // do nothing
       }

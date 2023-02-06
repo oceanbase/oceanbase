@@ -55,7 +55,7 @@ OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow *left, const ObSt
       || OB_UNLIKELY(NULL == right)
       || OB_UNLIKELY(0 == sort_column_index_.count())) {
     result_code_ = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invaid argument, ", KP(left), KP(right),
+    STORAGE_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "Invaid argument, ", KP(left), KP(right),
       K(sort_column_index_.count()), K_(result_code));
   } else {
     for (int64_t i = 0; OB_LIKELY(common::OB_SUCCESS == result_code_) && i < sort_column_index_.count(); ++i) {
@@ -71,7 +71,7 @@ OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow *left, const ObSt
         }
       } else {
         result_code_ = common::OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "index is out of bound",
+        STORAGE_LOG_RET(WARN, result_code_, "index is out of bound",
             K_(result_code),
             K(index),
             K(left->row_val_.count_),

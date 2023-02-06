@@ -53,7 +53,7 @@ void ObVirtualSqlMonitor::reset()
 {
   if (NULL != monitor_manager_) {
     if (OB_SUCCESS != monitor_manager_->revert(&ref_)) {
-      LOG_WARN("fail to revert ref");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to revert ref");
     }
   }
   info_buf_[0] = '\0';

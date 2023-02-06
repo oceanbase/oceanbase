@@ -496,7 +496,7 @@ void ObLS::wait()
     if (!wait_finished) {
       ob_usleep(100 * 1000); // 100 ms
       if (retry_times % 100 == 0) { // every 10 s
-        LOG_WARN("ls wait not finished.", K(ls_meta_), K(start_ts));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "ls wait not finished.", K(ls_meta_), K(start_ts));
       }
     }
   } while (!wait_finished);
@@ -514,7 +514,7 @@ void ObLS::wait_()
     if (!wait_finished) {
       ob_usleep(100 * 1000); // 100 ms
       if (retry_times % 100 == 0) { // every 10 s
-        LOG_WARN("ls wait not finished.", K(ls_meta_), K(start_ts));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "ls wait not finished.", K(ls_meta_), K(start_ts));
       }
     }
   } while (!wait_finished);
@@ -760,7 +760,7 @@ int ObLS::offline()
     if (OB_EAGAIN == ret) {
       ob_usleep(100 * 1000); // 100 ms
       if (retry_times % 100 == 0) { // every 10 s
-        LOG_WARN("ls offline use too much time.", K(ls_meta_), K(start_ts));
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "ls offline use too much time.", K(ls_meta_), K(start_ts));
       }
     }
   } while (OB_EAGAIN == ret);
@@ -784,7 +784,7 @@ int ObLS::offline_without_lock()
     if (OB_EAGAIN == ret) {
       ob_usleep(100 * 1000); // 100 ms
       if (retry_times % 100 == 0) { // every 10 s
-        LOG_WARN("ls offline use too much time.", K(ls_meta_), K(start_ts));
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "ls offline use too much time.", K(ls_meta_), K(start_ts));
       }
     }
   } while (OB_EAGAIN == ret);

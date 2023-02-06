@@ -51,7 +51,7 @@ void ObCacheObjectFactory::inner_free(ObILibCacheObject *&cache_obj,
   uint64_t tenant_id = cache_obj->get_tenant_id();
   ObPlanCache *lib_cache = MTL(ObPlanCache*);
   if (OB_ISNULL(lib_cache)) {
-    LOG_WARN("invalid null plan cache");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid null plan cache");
   } else {
     lib_cache->free_cache_obj(cache_obj, ref_handle);
   }
@@ -62,7 +62,7 @@ void ObCacheObjectFactory::inner_free(ObPlanCache *pc,
                                       const CacheRefHandleID ref_handle)
 {
   if (OB_ISNULL(pc)) {
-    LOG_WARN("invalid null plan cache");
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid null plan cache");
   } else {
     pc->free_cache_obj(cache_obj, ref_handle);
   }

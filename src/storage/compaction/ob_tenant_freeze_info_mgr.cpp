@@ -964,10 +964,10 @@ void ObTenantFreezeInfoMgr::ReloadTask::runTimerTask()
 {
   int tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(refresh_merge_info())) {
-    LOG_WARN("fail to refresh merge info", KR(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "fail to refresh merge info", KR(tmp_ret));
   }
   if (OB_TMP_FAIL(try_update_info())) {
-    LOG_WARN("fail to try update info", KR(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "fail to try update info", KR(tmp_ret));
   }
 }
 
@@ -976,11 +976,11 @@ void ObTenantFreezeInfoMgr::UpdateLSResvSnapshotTask::runTimerTask()
   int tmp_ret = OB_SUCCESS;
   uint64_t compat_version = 0;
   if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
-    LOG_WARN("fail to get data version", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "fail to get data version", K(tmp_ret));
   } else if (compat_version < DATA_VERSION_4_1_0_0) {
     // do nothing, should not update reserved snapshot
   } else if (OB_TMP_FAIL(mgr_.try_update_reserved_snapshot())) {
-    LOG_WARN("fail to try reserved snapshot", KR(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "fail to try reserved snapshot", KR(tmp_ret));
   }
 }
 

@@ -127,7 +127,7 @@ void ObTransCtx::print_trace_log_if_necessary_()
 {
   // freectx
   if (!is_exiting_) {
-    TRANS_LOG(WARN, "ObPartTransCtx not exiting", "context", *this, K(lbt()));
+    TRANS_LOG_RET(WARN, OB_ERROR, "ObPartTransCtx not exiting", "context", *this, K(lbt()));
     FORCE_PRINT_TRACE(tlog_, "[trans debug] ");
   }
 
@@ -152,7 +152,7 @@ void ObTransCtx::set_exiting_()
 
     const int64_t ctx_ref = get_ref();
     if (NULL == ls_tx_ctx_mgr_) {
-      TRANS_LOG(ERROR, "ls_tx_ctx_mgr_ is null, unexpected error", KP(ls_tx_ctx_mgr_), "context", *this);
+      TRANS_LOG_RET(ERROR, tmp_ret, "ls_tx_ctx_mgr_ is null, unexpected error", KP(ls_tx_ctx_mgr_), "context", *this);
     } else {
       ls_tx_ctx_mgr_->del_tx_ctx(this);
       TRANS_LOG(DEBUG, "transaction exiting", "context", *this, K(lbt()));

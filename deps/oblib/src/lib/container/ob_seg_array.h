@@ -397,7 +397,7 @@ Seg<T, SIZE>::Seg(const SegCreationType type)
     end_idx_ = 0;
   } else {
     // only used in this file, caller guarantee valid args
-    LIB_LOG(ERROR, "unkown SegCreationType", K(type), K(lbt()));
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unkown SegCreationType", K(type), K(lbt()));
   }
 }
 
@@ -405,7 +405,7 @@ template<typename T, int64_t SIZE>
 Seg<T, SIZE>::Seg(const T &item)
 {
   if (SIZE <= 0) {
-    LIB_LOG(ERROR, "SIZE invalid", K(SIZE));
+    LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "SIZE invalid", K(SIZE));
   } else {
     start_idx_ = 0;
     end_idx_ = 0;
@@ -636,7 +636,7 @@ private:
     {
       bool bret = false;
       if (OB_UNLIKELY(0 == x->get_count())) {
-        LIB_LOG(ERROR, "invalid argument", "x.count", x->get_count());
+        LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", "x.count", x->get_count());
       } else {
         bret = (x->get_delegate() <= *y_);
       }

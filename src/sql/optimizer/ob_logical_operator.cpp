@@ -217,7 +217,7 @@ ObPxPipeBlockingCtx::OpCtx *ObPxPipeBlockingCtx::alloc()
   OpCtx *ctx = NULL;
   void *mem = alloc_.alloc(sizeof(OpCtx));
   if (OB_ISNULL(mem)) {
-    LOG_WARN("allocate memory failed");
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed");
   } else {
     ctx = new(mem)OpCtx();
   }
@@ -426,7 +426,7 @@ double FilterCompare::get_selectivity(ObRawExpr *expr)
     }
   }
   if (!found) {
-    LOG_PRINT_EXPR(WARN, "Failed to get selectivity", expr);
+    LOG_PRINT_EXPR_RET(WARN, OB_ERR_UNEXPECTED, "Failed to get selectivity", expr);
   }
   return selectivity;
 }

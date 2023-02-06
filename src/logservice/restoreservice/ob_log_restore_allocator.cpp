@@ -60,7 +60,7 @@ char *ObLogRestoreAllocator::alloc_iterator_buffer(const int64_t size)
   char *data = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(WARN, "ObArchiveAllocator not init");
+    ARCHIVE_LOG_RET(WARN, OB_NOT_INIT, "ObArchiveAllocator not init");
   } else if (OB_ISNULL(data = static_cast<char *>(iterator_buf_allocator_.acquire(size)))) {
     // alloc fail
   } else {

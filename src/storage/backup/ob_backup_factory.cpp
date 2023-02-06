@@ -23,7 +23,7 @@ ObILSTabletIdReader *ObLSBackupFactory::get_ls_tablet_id_reader(const ObLSTablet
   if (LS_TABLET_ID_READER == type) {
     reader = OB_NEW(ObLSTabletIdReader, ObModIds::BACKUP);
   } else {
-    LOG_ERROR("unknown tablet reader type", K(type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown tablet reader type", K(type));
   }
   return reader;
 }
@@ -34,7 +34,7 @@ ObITabletLogicMacroIdReader *ObLSBackupFactory::get_tablet_logic_macro_id_reader
   if (TABLET_LOGIC_ID_READER == type) {
     reader = OB_NEW(ObTabletLogicMacroIdReader, ObModIds::BACKUP);
   } else {
-    LOG_ERROR("unknown reader type", K(type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", K(type));
   }
   return reader;
 }
@@ -45,7 +45,7 @@ ObIMacroBlockBackupReader *ObLSBackupFactory::get_macro_block_backup_reader(cons
   if (LOCAL_MACRO_BLOCK_READER == type) {
     reader = OB_NEW(ObMacroBlockBackupReader, ObModIds::BACKUP);
   } else {
-    LOG_ERROR("unknown reader type", K(type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", K(type));
   }
   return reader;
 }
@@ -63,7 +63,7 @@ ObITabletMetaBackupReader *ObLSBackupFactory::get_tablet_meta_backup_reader(cons
   } else if (SSTABLE_META_READER == type) {
     reader = OB_NEW(ObSSTableMetaBackupReader, ObModIds::BACKUP);
   } else {
-    LOG_ERROR("unknown reader type", K(type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", K(type));
   }
   return reader;
 }
@@ -78,7 +78,7 @@ ObIBackupIndexIterator *ObLSBackupFactory::get_backup_index_iterator(const ObBac
   } else if (BACKUP_META_INDEX_ITERATOR == type) {
     iterator = OB_NEW(ObBackupMetaIndexIterator, ObModIds::BACKUP);
   } else {
-    LOG_ERROR("unknown iterator type", K(type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown iterator type", K(type));
   }
   return iterator;
 }
@@ -89,7 +89,7 @@ ObIBackupTabletProvider *ObLSBackupFactory::get_backup_tablet_provider(const ObB
   if (BACKUP_TABLET_PROVIDER == type) {
     provider = OB_NEW(ObBackupTabletProvider, ObModIds::BACKUP);
   } else {
-    LOG_ERROR("unknown provider type", K(type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown provider type", K(type));
   }
   return provider;
 }
@@ -102,7 +102,7 @@ ObIBackupMacroBlockIndexFuser *ObLSBackupFactory::get_backup_macro_index_fuser(c
   } else if (type == BACKUP_MACRO_INDEX_MAJOR_FUSER) {
     fuser = OB_NEW(ObBackupMacroIndexMajorFuser, ObModIds::BACKUP);
   } else {
-    LOG_ERROR("unknown fuser type", K(type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown fuser type", K(type));
   }
   return fuser;
 }
@@ -118,7 +118,7 @@ void ObLSBackupFactory::free(ObILSTabletIdReader *&reader)
     if (LS_TABLET_ID_READER == reader->get_type()) {
       OB_DELETE(ObILSTabletIdReader, ObModIds::BACKUP, reader);
     } else {
-      LOG_ERROR("unknown reader type", "type", reader->get_type());
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", "type", reader->get_type());
     }
   }
 }
@@ -129,7 +129,7 @@ void ObLSBackupFactory::free(ObITabletLogicMacroIdReader *&reader)
     if (TABLET_LOGIC_ID_READER == reader->get_type()) {
       OB_DELETE(ObITabletLogicMacroIdReader, ObModIds::BACKUP, reader);
     } else {
-      LOG_ERROR("unknown reader type", "type", reader->get_type());
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", "type", reader->get_type());
     }
   }
 }
@@ -140,7 +140,7 @@ void ObLSBackupFactory::free(ObIMacroBlockBackupReader *&reader)
     if (LOCAL_MACRO_BLOCK_READER == reader->get_type()) {
       OB_DELETE(ObIMacroBlockBackupReader, ObModIds::BACKUP, reader);
     } else {
-      LOG_ERROR("unknown reader type", "type", reader->get_type());
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", "type", reader->get_type());
     }
   }
 }
@@ -158,7 +158,7 @@ void ObLSBackupFactory::free(ObITabletMetaBackupReader *&reader)
     } else if (SSTABLE_META_READER == reader->get_type()) {
       OB_DELETE(ObITabletMetaBackupReader, ObModIds::BACKUP, reader);
     } else {
-      LOG_ERROR("unknown reader type", "type", reader->get_type());
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown reader type", "type", reader->get_type());
     }
   }
 }
@@ -176,7 +176,7 @@ void ObLSBackupFactory::free(ObIMacroBlockIndexIterator *&iterator)
     } else if (BACKUP_MACRO_RANGE_INDEX_ITERATOR == iterator->get_type()) {
       OB_DELETE(ObIMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
     } else {
-      LOG_ERROR("unknown iterator type", "type", iterator->get_type());
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown iterator type", "type", iterator->get_type());
     }
   }
 }
@@ -187,7 +187,7 @@ void ObLSBackupFactory::free(ObIBackupTabletProvider *&provider)
     if (BACKUP_TABLET_PROVIDER == provider->get_type()) {
       OB_DELETE(ObIBackupTabletProvider, ObModIds::BACKUP, provider);
     } else {
-      LOG_ERROR("unknown provider type", "type", provider->get_type());
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown provider type", "type", provider->get_type());
     }
   }
 }
@@ -200,7 +200,7 @@ void ObLSBackupFactory::free(ObIBackupMacroBlockIndexFuser *&fuser)
     } else if (BACKUP_MACRO_INDEX_MAJOR_FUSER == fuser->get_type()) {
       OB_DELETE(ObIBackupMacroBlockIndexFuser, ObModIds::BACKUP, fuser);
     } else {
-      LOG_ERROR("unknown fuser type", "type", fuser->get_type());
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown fuser type", "type", fuser->get_type());
     }
   }
 }

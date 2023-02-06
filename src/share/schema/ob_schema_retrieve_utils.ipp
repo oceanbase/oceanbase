@@ -4083,7 +4083,7 @@ bool ObSchemaRetrieveUtils::compare_table_id(
 {
   bool cmp = false;
   if (OB_ISNULL(table_schema)) {
-    SHARE_SCHEMA_LOG(WARN, "table schema is NULL");
+    SHARE_SCHEMA_LOG_RET(WARN, OB_ERR_UNEXPECTED, "table schema is NULL");
   } else {
     //order by table id desc, used in sort function, the tenant_id is desc too
     cmp = table_schema->get_table_id() > table_id;
@@ -5069,7 +5069,7 @@ bool ObSchemaRetrieveUtils::compare_rls_policy_id(
 {
   bool cmp = false;
   if (OB_ISNULL(rls_policy_schema)) {
-    SHARE_SCHEMA_LOG(WARN, "rls_policy schema is NULL");
+    SHARE_SCHEMA_LOG_RET(WARN, OB_ERR_UNEXPECTED, "rls_policy schema is NULL");
   } else {
     cmp = rls_policy_schema->get_rls_policy_id() > rls_policy_id;
   }

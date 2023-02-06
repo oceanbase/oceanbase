@@ -158,8 +158,8 @@ int64_t __attribute__ ((weak)) get_rpc_port(int &server_fd_ret)
   }
   STORAGE_LOG(INFO, "find port", K(find_port));
   if (find_port == 0) {
-    STORAGE_LOG(WARN, "find port fail", K(find_port));
-    STORAGE_LOG(WARN, "net", "ss", _executeShellCommand("ss -antlp").c_str());
+    STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "find port fail", K(find_port));
+    STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "net", "ss", _executeShellCommand("ss -antlp").c_str());
     OB_ASSERT(false);
   }
   return find_port;

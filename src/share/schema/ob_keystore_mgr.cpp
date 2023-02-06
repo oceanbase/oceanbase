@@ -61,7 +61,7 @@ int ObKeystoreMgr::init()
 void ObKeystoreMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("keystore manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "keystore manger not init");
   } else {
     keystore_infos_.clear();
     keystore_map_.clear();

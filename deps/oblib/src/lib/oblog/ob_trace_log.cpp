@@ -20,7 +20,7 @@ namespace oceanbase
 namespace common
 {
 const char *const ObTraceLogConfig::LOG_LEVEL_ENV_KEY = "_OB_TRACE_LOG_LEVEL_";
-const char *const ObTraceLogConfig::level_strs_[] = {"ERROR", "USER_ERR", "WARN", "INFO", "TRACE", "DEBUG"};
+const char *const ObTraceLogConfig::level_strs_[] = {"ERROR", "WARN", "INFO", "EDIAG", "WDIAG", "TRACE", "DEBUG"};
 volatile int ObTraceLogConfig::log_level_ = OB_LOG_LEVEL_TRACE;
 bool ObTraceLogConfig::got_env_ = false;
 

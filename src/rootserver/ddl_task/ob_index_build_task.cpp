@@ -152,7 +152,7 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
 {
   ObIndexSSTableBuildTask *task = NULL;
   if (NULL == buf || buf_size < (sizeof(*task))) {
-    LOG_WARN("invalid argument", KP(buf), K(buf_size));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", KP(buf), K(buf_size));
   } else {
     task = new (buf) ObIndexSSTableBuildTask(
         task_id_,
@@ -354,6 +354,7 @@ int ObIndexBuildTask::init(
     task_id_ = task_id;
     parent_task_id_ = parent_task_id;
     task_version_ = OB_INDEX_BUILD_TASK_VERSION;
+    start_time_ = ObTimeUtility::current_time();
     cluster_version_ = GET_MIN_CLUSTER_VERSION();
     if (OB_SUCC(ret)) {
       task_status_ = static_cast<ObDDLTaskStatus>(task_status);
@@ -424,6 +425,7 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     task_id_ = task_record.task_id_;
     parent_task_id_ = task_record.parent_task_id_;
     ret_code_ = task_record.ret_code_;
+    start_time_ = ObTimeUtility::current_time();
 
     if (OB_FAIL(init_ddl_task_monitor_info(data_schema))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
@@ -519,6 +521,7 @@ int ObIndexBuildTask::check_health()
       || ObDDLTaskStatus::SUCCESS == static_cast<ObDDLTaskStatus>(task_status_)) {
     ret = OB_SUCCESS; // allow clean up
   }
+  check_ddl_task_execute_too_long();
   return ret;
 }
 

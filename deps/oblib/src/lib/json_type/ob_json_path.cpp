@@ -221,7 +221,7 @@ bool ObJsonPathBasicNode::is_autowrap() const
     }
 
     default:{
-      LOG_WARN("invalid node type", K(node_type_));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid node type", K(node_type_));
       break;
     }
   }
@@ -252,7 +252,7 @@ bool ObJsonPathBasicNode::is_multi_array_autowrap() const
     }
 
     default:{
-      LOG_WARN("invalid node type", K(node_type_));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid node type", K(node_type_));
       break;
     }
   }
@@ -2662,7 +2662,7 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
     bool first_codepoint = (last_pos == 0);
     if (!rapidjson::UTF8<char>::Decode(input_stream, &codepoint)) { 
       ret_bool = false;
-      LOG_WARN("fail to decode.", 
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to decode.",
           K(ret_bool), K(codepoint), K(input_stream.Tell()), KCSTRING(name));
     }
 
@@ -2677,7 +2677,7 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
         more possibilities are available for subsequent characters.
       */
       ret_bool = false;
-      LOG_WARN("first character must be $, _ or letter.", 
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "first character must be $, _ or letter.",
           K(ret_bool), K(codepoint), K(input_stream.Tell()), KCSTRING(name));
     } else if (unicode_combining_mark(codepoint) || isdigit(codepoint)
               || is_connector_punctuation(codepoint)
@@ -2689,7 +2689,7 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
     } else {
       // nope
       ret_bool = false;
-      LOG_WARN("not ecmascript identifier.",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "not ecmascript identifier.",
           K(ret_bool), K(codepoint), K(input_stream.Tell()), KCSTRING(name));
     }
   }

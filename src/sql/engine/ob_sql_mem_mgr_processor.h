@@ -152,7 +152,7 @@ public:
   int64_t get_dir_id()
   {
     if (dir_id_ < -1) {
-      SQL_ENG_LOG(ERROR, "get unexpected dir id", K(dir_id_));
+      SQL_ENG_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "get unexpected dir id", K(dir_id_));
     }
     return dir_id_;
   }

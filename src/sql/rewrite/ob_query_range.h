@@ -182,7 +182,7 @@ public:
     {
       uint64_t uval = 0;
       if (NULL == range_) {
-        SQL_REWRITE_LOG(WARN, "range_ is not inited.");
+        SQL_REWRITE_LOG_RET(WARN, common::OB_NOT_INIT, "range_ is not inited.");
       } else {
         uval = range_->hash();
       }

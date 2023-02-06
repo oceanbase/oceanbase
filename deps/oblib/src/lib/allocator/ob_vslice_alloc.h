@@ -111,7 +111,7 @@ public:
             destroy_block(old_blk);
           } else {
             // can not monitor all leak !!!
-            LIB_LOG(ERROR, "there was memory leak", K(old_blk->ref_));
+            LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "there was memory leak", K(old_blk->ref_));
           }
         }
       }
@@ -213,7 +213,7 @@ public:
       abort_unless(bsize_ != 0);
 #else
       if (this != blk->get_vslice_alloc()) {
-        LIB_LOG(ERROR, "blk is freed or alloced by different vslice_alloc", K(this), K(blk->get_vslice_alloc()));
+        LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "blk is freed or alloced by different vslice_alloc", K(this), K(blk->get_vslice_alloc()));
         return;
       }
 #endif

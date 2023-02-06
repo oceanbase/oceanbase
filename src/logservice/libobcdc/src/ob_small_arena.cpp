@@ -73,7 +73,7 @@ void ObSmallArena::set_allocator(const int64_t page_size,
 void ObSmallArena::set_prealloc_page(void *page)
 {
   if (NULL != local_page_) {
-    LOG_ERROR("prealloc page has been set", K(local_page_), K(page));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "prealloc page has been set", K(local_page_), K(page));
   } else if (NULL != page) {
     local_page_ = new(page) SmallPage();
   }
@@ -108,12 +108,12 @@ void* ObSmallArena::alloc_aligned(const int64_t size, const int64_t align)
   ObSmallSpinLockGuard<ObByteLock> guard(lock_);
   if (OB_UNLIKELY(!is_valid_())) {
     tmp_ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("small arena is not valid", K(large_allocator_), K(page_size_));
+    LOG_ERROR_RET(tmp_ret, "small arena is not valid", K(large_allocator_), K(page_size_));
   } else if (OB_UNLIKELY(0 >= size)
              || OB_UNLIKELY(0 != (align & (align - 1)))
              || OB_UNLIKELY(align > (page_size_ / 2))) {
     tmp_ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("small arena alloc error, invalid argument", "ret", tmp_ret, K(size),
+    LOG_ERROR_RET(tmp_ret, "small arena alloc error, invalid argument", "ret", tmp_ret, K(size),
               K(align), K(page_size_));
   } else if (need_large_page_(size, align)) {
     ret_ptr = do_alloc_large_(size, align);
@@ -135,12 +135,12 @@ void* ObSmallArena::do_alloc_large_(const int64_t size, const int64_t align)
 {
   void *ret_ptr = NULL;
   if (OB_ISNULL(large_allocator_)) {
-    LOG_ERROR("invalid large allocator", K(large_allocator_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid large allocator", K(large_allocator_));
   } else {
     int64_t alloc_size = size + LARGE_PAGE_HEADER_SIZE + align - 1;
     LargePage *large_page = static_cast<LargePage *>(large_allocator_->alloc(alloc_size));
     if (OB_ISNULL(large_page)) {
-      LOG_ERROR("alloc large page fail", K(alloc_size));
+      LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc large page fail", K(alloc_size));
     } else {
       int64_t start_addr = reinterpret_cast<int64_t>(large_page->addr_);
       ret_ptr = reinterpret_cast<void *>(upper_align(start_addr, align));
@@ -159,7 +159,7 @@ void ObSmallArena::alloc_small_page_()
   mem_attr.label_ = common::ObModIds::OB_LOG_PART_TRANS_TASK_SMALL;
 
   if (OB_ISNULL(ptr = ob_malloc(page_size_, mem_attr))) {
-    LOG_ERROR("alloc small page error", K(ptr), K(page_size_));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc small page error", K(ptr), K(page_size_));
   } else {
     new_cur_page = new (ptr) SmallPage();
     new_cur_page->next_ = small_page_list_;

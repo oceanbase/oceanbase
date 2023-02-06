@@ -32,7 +32,7 @@ void ObPsStmtItemRefAtomicOp::operator()(const PsStmtIdKV &entry)
     }
   } else {
     callback_ret_ = OB_ERR_UNEXPECTED;
-    LOG_WARN("value is NULL", K(entry), K(callback_ret_));
+    LOG_WARN_RET(callback_ret_, "value is NULL", K(entry), K(callback_ret_));
   }
 }
 
@@ -53,7 +53,7 @@ void ObPsStmtItemDerefAtomicOp::operator()(const PsStmtIdKV &entry)
 {
   if (OB_ISNULL(entry.second)) {
     ret_ = OB_HASH_NOT_EXIST;
-    LOG_WARN("entry not exist", K_(ret));
+    LOG_WARN_RET(ret_, "entry not exist", K_(ret));
   } else {
     entry.second->dec_ref_count_check_erase();
   }
@@ -63,7 +63,7 @@ void ObPsStmtItemEraseAtomicOp::operator()(const PsStmtIdKV &entry)
 {
   if (OB_ISNULL(entry.second)) {
     ret_ = OB_HASH_NOT_EXIST;
-    LOG_WARN("entry not exist", K_(ret));
+    LOG_WARN_RET(ret_, "entry not exist", K_(ret));
   } else if (entry.second->get_ps_stmt_id() == stmt_id_) {
     if (ATOMIC_BCAS(entry.second->get_is_expired_evicted_ptr(), false, true)) {
       need_erase_ = true;
@@ -83,7 +83,7 @@ void ObPsStmtInfoRefAtomicOp::operator ()(const PsStmtInfoKV &entry)
     }
   } else {
     callback_ret_ = OB_ERR_UNEXPECTED;
-    LOG_WARN("value is NULL", K(entry), K(callback_ret_));
+    LOG_WARN_RET(callback_ret_, "value is NULL", K(entry), K(callback_ret_));
   }
 }
 
@@ -104,7 +104,7 @@ void ObPsStmtInfoDerefAtomicOp::operator()(const PsStmtInfoKV &entry)
 {
   if (OB_ISNULL(entry.second)) {
     ret_ = OB_HASH_NOT_EXIST;
-    LOG_WARN("entry not exist", K_(ret));
+    LOG_WARN_RET(ret_, "entry not exist", K_(ret));
   } else {
     is_erase_ = entry.second->dec_ref_count_check_erase();
     if (is_erase_) {

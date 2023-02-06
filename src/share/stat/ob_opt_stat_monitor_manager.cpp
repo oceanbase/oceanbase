@@ -145,14 +145,14 @@ void ObOptStatMonitorManager::destroy()
     inited_ = false;
     for (auto iter = column_usage_maps_.begin(); iter != column_usage_maps_.end(); ++iter) {
       if (OB_ISNULL(iter->second)) {
-        BACKTRACE(ERROR, true, "column usage map is null");
+        BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "column usage map is null");
       } else {
         iter->second->destroy();
       }
     }
     for (auto iter = dml_stat_maps_.begin(); iter != dml_stat_maps_.end(); ++iter) {
       if (OB_ISNULL(iter->second)) {
-        BACKTRACE(ERROR, true, "dml stats map is null");
+        BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "dml stats map is null");
       } else {
         iter->second->destroy();
       }

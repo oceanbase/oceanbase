@@ -262,7 +262,8 @@ int ObPartitionMerger::process(const ObDatumRow &row)
   } else if (OB_UNLIKELY(!row.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to append row", K(ret), K(row));
-  } else if (row.row_flag_.is_not_exist()) {
+  } else if (OB_UNLIKELY(row.row_flag_.is_not_exist())) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "Unexpected not exist row to append", K(ret), K(row));
   } else if (OB_FAIL(try_filter_row(row, filter_ret))) {
     STORAGE_LOG(WARN, "failed to filter row", K(ret), K(row));

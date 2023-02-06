@@ -322,9 +322,9 @@ void TestDataFilePrepareUtil::destory()
   if (is_inited_) {
     char cmd[OB_MAX_FILE_NAME_LENGTH];
     if (OB_SUCCESS != databuff_printf(cmd, OB_MAX_FILE_NAME_LENGTH, "rm -rf %s", data_dir_)) {
-      STORAGE_LOG(ERROR, "failed to gen cmd", K(data_dir_));
+      STORAGE_LOG_RET(ERROR, OB_ERROR, "failed to gen cmd", K(data_dir_));
     } else if (0 != system(cmd)) {
-      STORAGE_LOG(ERROR, "failed to  rm data dir", K(cmd), K(errno), KERRMSG);
+      STORAGE_LOG_RET(ERROR, OB_ERR_SYS, "failed to  rm data dir", K(cmd), K(errno), KERRMSG);
     }
   }
   getter_ = nullptr;

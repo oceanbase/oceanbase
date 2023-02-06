@@ -86,7 +86,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
     if (replace_ctdef != nullptr) {
       OB_UNIS_ADD_LEN(*replace_ctdef);
     } else {
-      LOG_WARN("replace_ctdef is null unexpected");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "replace_ctdef is null unexpected");
     }
   }
   OB_UNIS_ADD_LEN(only_one_unique_key_);

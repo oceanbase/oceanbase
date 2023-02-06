@@ -329,7 +329,7 @@ int ObSqlWorkareaUtil::get_workarea_size(const ObSqlWorkAreaType wa_type, const 
 void ObSqlMemMgrProcessor::unregister_profile_if_necessary()
 {
   if (!is_unregistered()) {
-    LOG_ERROR("profile is not actively unregistered", K(lbt()));
+    LOG_ERROR_RET(OB_ERROR, "profile is not actively unregistered", K(lbt()));
     unregister_profile();
   }
 }

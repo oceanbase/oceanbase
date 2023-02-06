@@ -40,9 +40,9 @@ ObMemtable *ObMemtableFactory::alloc(const uint64_t tenant_id)
   ObMemtable *mt = NULL;
   void *mt_buffer = ob_malloc(sizeof(ObMemtable), memattr);
   if (NULL == mt_buffer) {
-    TRANS_LOG(WARN, "alloc memory for memtable fail");
+    TRANS_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "alloc memory for memtable fail");
   } else if (NULL == (mt = new(mt_buffer) ObMemtable())) {
-    TRANS_LOG(WARN, "construct object of memtable fail");
+    TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "construct object of memtable fail");
     ob_free(mt_buffer);
     mt_buffer = NULL;
   } else {

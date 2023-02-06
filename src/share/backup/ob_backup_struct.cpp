@@ -1795,7 +1795,7 @@ const char *ObBackupInfoStatus::get_status_str(const BackupStatus &status)
   };
   STATIC_ASSERT(MAX == ARRAYSIZEOF(info_backup_status_strs), "status count mismatch");
   if (status < 0 || status >= MAX) {
-    LOG_ERROR("invalid backup info status", K(status));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid backup info status", K(status));
   } else {
     str = info_backup_status_strs[status];
   }
@@ -1887,7 +1887,7 @@ const char *ObBackupType::get_backup_type_str() const
   };
   STATIC_ASSERT(MAX == ARRAYSIZEOF(backup_func_type_strs), "types count mismatch");
   if (type_ < 0 || type_ >= MAX) {
-    LOG_ERROR("invalid backup type", K(type_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid backup type", K(type_));
   } else {
     str = backup_func_type_strs[type_];
   }
@@ -1924,7 +1924,6 @@ int ObBackupType::set_backup_type(
   }
   return ret;
 }
-
 
 ObBaseBackupInfoStruct::ObBaseBackupInfoStruct()
   : tenant_id_(OB_INVALID_ID), backup_set_id_(0), incarnation_(0), backup_dest_(),
@@ -2722,16 +2721,16 @@ bool ObNonFrozenBackupPieceInfo::is_valid() const
 
   if (!cur_piece_info_.is_valid()) {
     is_valid = false;
-    LOG_WARN("cur piece info is invalid", K(*this));
+    LOG_WARN_RET(OB_INVALID_ERROR, "cur piece info is invalid", K(*this));
   }
 
   if (has_prev_piece_info_ && is_valid) {
     if (!prev_piece_info_.is_valid()) {
       is_valid = false;
-      LOG_WARN("prev piece info is invalid", K(*this));
+      LOG_WARN_RET(OB_INVALID_ERROR, "prev piece info is invalid", K(*this));
     } else if (ObBackupPieceStatus::BACKUP_PIECE_ACTIVE == prev_piece_info_.status_) {
       is_valid = false;
-      LOG_WARN("previous piece info is active", K(*this));
+      LOG_WARN_RET(OB_INVALID_ERROR, "previous piece info is active", K(*this));
     }
   }
 
@@ -2934,7 +2933,7 @@ const char* ObBackupStatus::get_str() const
 
   STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(status_strs), "status count mismatch");
   if (status_ < INIT || status_ >= MAX_STATUS) {
-    LOG_ERROR("invalid backup data job status", K(status_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid backup data job status", K(status_));
   } else {
     str = status_strs[status_];
   }
@@ -3007,7 +3006,7 @@ const char* ObBackupTaskStatus::get_str() const
   };
   STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(status_strs), "status count mismatch");
   if (status_ < INIT || status_ >= MAX_STATUS) {
-    LOG_ERROR("invalid backup data task status", K(status_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid backup data task status", K(status_));
   } else {
     str = status_strs[status_];
   }
@@ -3283,7 +3282,7 @@ const char* ObBackupDataTaskType::get_str() const
     "BACKUP_META"
   };
   if (type_ < Type::BACKUP_DATA_SYS || type_ >= Type::BACKUP_MAX) {
-    LOG_ERROR("invalid compressor type", K(type_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid compressor type", K(type_));
   } else {
     str = type_strs[type_];
   }
@@ -3550,7 +3549,7 @@ const char *ObBackupSetFileDesc::get_backup_set_status_str() const
 
   STATIC_ASSERT(MAX == ARRAYSIZEOF(backup_set_file_info_status_strs), "status count mismatch");
   if (status_ < 0 || status_ >= MAX) {
-    LOG_WARN("invalid backup set status", K(status_));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid backup set status", K(status_));
   } else {
     str = backup_set_file_info_status_strs[status_];
   }
@@ -3724,7 +3723,7 @@ const char *ObBackupLevel::get_str() const
     "USER_TENANT"
   };
   if (level_ < Level::CLUSTER || level_ >= Level::MAX_LEVEL) {
-    LOG_ERROR("invalid backup level", K(level_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid backup level", K(level_));
   } else {
     str = level_strs[level_];
   }
@@ -3806,7 +3805,7 @@ const char *ObLogArchiveDestState::get_str() const
     "DEFER"
   };
   if (!is_valid()) {
-    LOG_ERROR("invalid state", K(state_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid state", K(state_));
   } else {
     str = state_strs[state_];
   }

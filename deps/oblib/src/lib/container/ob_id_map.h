@@ -250,7 +250,7 @@ void ObIDMap<T, ID_TYPE, TSI_HOLD_NUM>::revert(const ID_TYPE id, const bool eras
       array_[pos].data = NULL;
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = free_list_.push(&(array_[pos])))) {
-        _OB_LOG(ERROR, "push to free list fail ret=%d free list size=%ld", tmp_ret,
+        _OB_LOG_RET(ERROR, tmp_ret, "push to free list fail ret=%d free list size=%ld", tmp_ret,
                   free_list_.get_total());
       }
     }
@@ -275,7 +275,7 @@ void ObIDMap<T, ID_TYPE, TSI_HOLD_NUM>::erase(const ID_TYPE id)
       array_[pos].data = NULL;
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = free_list_.push(&(array_[pos])))) {
-        _OB_LOG(ERROR, "push to free list fail ret=%d free list size=%ld", tmp_ret,
+        _OB_LOG_RET(ERROR, tmp_ret, "push to free list fail ret=%d free list size=%ld", tmp_ret,
                   free_list_.get_total());
       }
     }

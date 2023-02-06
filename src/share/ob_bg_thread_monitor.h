@@ -68,7 +68,7 @@ private:
   do {                                                                          \
     ObTSIBGMonitorMemory *bg_memory = GET_TSI(ObTSIBGMonitorMemory);            \
     if (OB_UNLIKELY(OB_ISNULL(bg_memory))) {                                    \
-      SHARE_LOG(ERROR, "GET_TSI for ObTSIBGMonitorMemory failed");              \
+      SHARE_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "GET_TSI for ObTSIBGMonitorMemory failed");              \
     } else {                                                                    \
       bg_memory->sub_size(PTR->get_class_size());                               \
     }                                                                           \
@@ -128,7 +128,7 @@ public:
   int callback() final
   {
     int ret = common::OB_SUCCESS;
-    SHARE_LOG(WARN, "BGDummyCallback cost too much time-->", K(function_name_));
+    SHARE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "BGDummyCallback cost too much time-->", K(function_name_));
     return ret;
   }
   void destroy()

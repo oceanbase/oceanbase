@@ -959,7 +959,7 @@ ObTwoPhaseCommitMsgType ObPartTransCtx::switch_msg_type_(const int16_t msg_type)
     ret_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_CLEAR_RESP;
     break;
   default:
-    TRANS_LOG(ERROR, "invalid msg type", K(msg_type));
+    TRANS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid msg type", K(msg_type));
   }
 
   return ret_type;

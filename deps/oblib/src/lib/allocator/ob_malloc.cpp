@@ -64,7 +64,7 @@ void *oceanbase::common::ob_malloc_align(const int64_t alignment, const int64_t 
     }
     int64_t padding = align_ptr - ptr;
     if (!(padding <= alignment && padding > 0)) {
-      _OB_LOG(ERROR, "invalid padding(padding=%ld, alignment=%ld", padding, alignment);
+      _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid padding(padding=%ld, alignment=%ld", padding, alignment);
     }
     uint8_t *sign_ptr = reinterpret_cast<uint8_t *>(align_ptr - 1);
     int64_t *header_ptr = reinterpret_cast<int64_t *>(align_ptr - 1 - sizeof(int64_t));
@@ -75,7 +75,7 @@ void *oceanbase::common::ob_malloc_align(const int64_t alignment, const int64_t 
       *header_ptr = padding;
     }
   } else {
-    _OB_LOG(WARN, "ob_tc_malloc allocate memory failed, alignment[%ld], nbyte[%ld], label[%s].",
+    _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "ob_tc_malloc allocate memory failed, alignment[%ld], nbyte[%ld], label[%s].",
             alignment, nbyte, (const char *)label);
   }
   return align_ptr;
@@ -94,7 +94,7 @@ void *oceanbase::common::ob_malloc_align(const int64_t alignment, const int64_t 
     }
     int64_t padding = align_ptr - ptr;
     if (!(padding <= alignment && padding > 0)) {
-      _OB_LOG(ERROR, "invalid padding(padding=%ld, alignment=%ld", padding, alignment);
+      _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid padding(padding=%ld, alignment=%ld", padding, alignment);
     }
     uint8_t *sign_ptr = reinterpret_cast<uint8_t *>(align_ptr - 1);
     int64_t *header_ptr = reinterpret_cast<int64_t *>(align_ptr - 1 - sizeof(int64_t));
@@ -105,7 +105,7 @@ void *oceanbase::common::ob_malloc_align(const int64_t alignment, const int64_t 
       *header_ptr = padding;
     }
   } else {
-    _OB_LOG(WARN, "ob_tc_malloc allocate memory failed, alignment[%ld], nbyte[%ld], tenant_id[%lu], label[%s].",
+    _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "ob_tc_malloc allocate memory failed, alignment[%ld], nbyte[%ld], tenant_id[%lu], label[%s].",
             alignment, nbyte, attr.tenant_id_, (const char*)attr.label_);
   }
   return align_ptr;
@@ -114,7 +114,7 @@ void *oceanbase::common::ob_malloc_align(const int64_t alignment, const int64_t 
 void oceanbase::common::ob_free_align(void *ptr)
 {
   if (NULL == ptr) {
-    _OB_LOG(WARN, "cannot free NULL pointer.");
+    _OB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "cannot free NULL pointer.");
   } else if (oceanbase::lib::ObMallocAllocator::is_inited_) {
     uint8_t *sign_ptr = reinterpret_cast<uint8_t *>(static_cast<char *>(ptr) - 1);
     int64_t *header_ptr = reinterpret_cast<int64_t *>(static_cast<char *>(ptr) - 1 - sizeof(int64_t));

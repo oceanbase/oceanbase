@@ -267,7 +267,7 @@ bool ObRapidJsonHandler::seeing_value(ObJsonNode *value)
       }
 
       default: {
-        LOG_WARN("unexpected json value", K(next_state_));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected json value", K(next_state_));
         is_continue = false;
         break;
       }
@@ -282,7 +282,7 @@ bool ObRapidJsonHandler::is_start_object_or_array(ObJsonNode *value, ObJsonExpec
   bool is_continue = false;
 
   if (ObJsonParser::is_json_doc_over_depth(depth_)) {
-    LOG_WARN("current json doc is over depth", K(OB_ERR_JSON_OUT_OF_DEPTH));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "current json doc is over depth", K(OB_ERR_JSON_OUT_OF_DEPTH));
   } else {
     depth_++;
     is_continue = seeing_value(value);
@@ -302,7 +302,7 @@ bool ObRapidJsonHandler::is_end_object_or_array()
   if (OB_ISNULL(parent)) { // current is root
     if (depth_ != 0) {
       is_continue = false;
-      LOG_WARN("unexpected tree depth", K(depth_));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected tree depth", K(depth_));
     } else {
       next_state_ = ObJsonExpectNextState::EXPECT_EOF;
     }
@@ -333,7 +333,7 @@ bool ObRapidJsonHandler::Null()
 
   void *buf = alloc(sizeof(ObJsonNull));
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for null json node", K(OB_ALLOCATE_MEMORY_FAILED));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for null json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
     ObJsonNull *node = new (buf) ObJsonNull();
     is_continue = seeing_value(node);
@@ -348,7 +348,7 @@ bool ObRapidJsonHandler::Bool(bool value)
 
   void *buf = alloc(sizeof(ObJsonBoolean));
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for boolean json node", K(OB_ALLOCATE_MEMORY_FAILED));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for boolean json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
     ObJsonBoolean *node = new (buf) ObJsonBoolean(value);
     is_continue = seeing_value(node);
@@ -363,7 +363,7 @@ bool ObRapidJsonHandler::Int(int value)
 
   void *buf = alloc(sizeof(ObJsonInt));
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for int json node", K(OB_ALLOCATE_MEMORY_FAILED));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for int json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
     ObJsonInt *node = new (buf) ObJsonInt(value);
     is_continue = seeing_value(node);
@@ -378,7 +378,7 @@ bool ObRapidJsonHandler::Uint(unsigned value)
 
   void *buf = alloc(sizeof(ObJsonInt)); // adapt mysql, use ObJsonInt
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for uint json node", K(OB_ALLOCATE_MEMORY_FAILED));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for uint json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
     ObJsonInt *node = new (buf) ObJsonInt(value);
     is_continue = seeing_value(node);
@@ -393,7 +393,7 @@ bool ObRapidJsonHandler::Int64(int64_t value)
 
   void *buf = alloc(sizeof(ObJsonInt));
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for int64 json node", K(OB_ALLOCATE_MEMORY_FAILED));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for int64 json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
     ObJsonInt *node = new (buf) ObJsonInt(value);
     is_continue = seeing_value(node);
@@ -408,7 +408,7 @@ bool ObRapidJsonHandler::Uint64(uint64_t value)
 
   void *buf = alloc(sizeof(ObJsonUint));
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for uint64 json node", K(OB_ALLOCATE_MEMORY_FAILED));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for uint64 json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
     ObJsonUint *node = new (buf) ObJsonUint(value);
     is_continue = seeing_value(node);
@@ -422,11 +422,11 @@ bool ObRapidJsonHandler::Double(double value)
   bool is_continue = false;
 
   if (!std::isfinite(value)) {
-    LOG_WARN("value is not finite", K(value));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "value is not finite", K(value));
   } else {
     void *buf = alloc(sizeof(ObJsonDouble));
     if (OB_ISNULL(buf)) {
-      LOG_WARN("fail to alloc memory for double json node", K(OB_ALLOCATE_MEMORY_FAILED));
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for double json node", K(OB_ALLOCATE_MEMORY_FAILED));
     } else {
       ObJsonDouble *node = new (buf) ObJsonDouble(value);
       is_continue = seeing_value(node);
@@ -450,14 +450,14 @@ bool ObRapidJsonHandler::String(const char *str, rapidjson::SizeType length, boo
 
   void *buf = alloc(sizeof(ObJsonString));
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for string json node", K(OB_ALLOCATE_MEMORY_FAILED));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
     if (copy) {
       void *dst_buf = NULL;
       ObString src_str(length, str);
       if (length > 0) {
         if (OB_ISNULL(dst_buf = allocator_->alloc(length))) {
-          LOG_WARN("allocate memory fail", K(length));
+          LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(length));
         } else {
           MEMCPY(dst_buf, src_str.ptr(), src_str.length());
           ObJsonString *node = new (buf) ObJsonString(static_cast<char *>(dst_buf), length);
@@ -483,7 +483,7 @@ bool ObRapidJsonHandler::StartObject()
 
   void *buf = alloc(sizeof(ObJsonObject));
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for object json node", K(OB_ALLOCATE_MEMORY_FAILED));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for object json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
     ObJsonObject *node= new (buf) ObJsonObject(allocator_);
     is_continue = is_start_object_or_array(node, ObJsonExpectNextState::EXPECT_OBJECT_KEY);
@@ -499,7 +499,7 @@ bool ObRapidJsonHandler::EndObject(rapidjson::SizeType length)
 
   if (next_state_ != ObJsonExpectNextState::EXPECT_OBJECT_KEY) {
     is_continue = false;
-    LOG_WARN("unexpected next json state", K(next_state_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected next json state", K(next_state_));
   } else {
     is_continue = is_end_object_or_array();
   }
@@ -513,7 +513,7 @@ bool ObRapidJsonHandler::StartArray()
 
   void *buf = alloc(sizeof(ObJsonArray));
   if (OB_ISNULL(buf)) {
-    LOG_WARN("fail to alloc memory for array json node", K(OB_ALLOCATE_MEMORY_FAILED));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for array json node", K(OB_ALLOCATE_MEMORY_FAILED));
   } else {
     ObJsonArray *node = new (buf) ObJsonArray(allocator_);
     is_continue = is_start_object_or_array(node, ObJsonExpectNextState::EXPECT_ARRAY_VALUE);
@@ -529,7 +529,7 @@ bool ObRapidJsonHandler::EndArray(rapidjson::SizeType length)
 
   if (next_state_ != ObJsonExpectNextState::EXPECT_ARRAY_VALUE) {
     is_continue = false;
-    LOG_WARN("unexpected next json state", K(next_state_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected next json state", K(next_state_));
   } else {
     is_continue = is_end_object_or_array();
   }
@@ -542,7 +542,7 @@ bool ObRapidJsonHandler::Key(const char *str, rapidjson::SizeType length, bool c
   bool is_continue = false;
 
   if (next_state_ != ObJsonExpectNextState::EXPECT_OBJECT_KEY) {
-    LOG_WARN("unexpected next json state", K(next_state_));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "unexpected next json state", K(next_state_));
   } else {
     // need deep-copy
     if (copy) {
@@ -550,7 +550,7 @@ bool ObRapidJsonHandler::Key(const char *str, rapidjson::SizeType length, bool c
       ObString src_str(length, str);
       if (length > 0) {
         if (OB_ISNULL(dst_buf = allocator_->alloc(length))) {
-          LOG_WARN("allocate memory fail", K(length));
+          LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(length));
         } else {
           MEMCPY(dst_buf, src_str.ptr(), src_str.length());
           key_.assign_ptr(static_cast<char *>(dst_buf), length);

@@ -67,7 +67,7 @@ public:
   void destroy()
   {
     if (-1 == fd_) {
-      HASH_WRITE_LOG(HASH_WARNING, "have not inited");
+      HASH_WRITE_LOG_RET(HASH_WARNING, OB_NOT_INIT, "have not inited");
     } else {
       close(fd_);
     }

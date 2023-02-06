@@ -48,7 +48,7 @@ inline ObLockGuard<LockT>::ObLockGuard(LockT &lock)
       ret_(common::OB_SUCCESS)
 {
   if (OB_UNLIKELY(common::OB_SUCCESS != (ret_ = lock_.lock()))) {
-    COMMON_LOG(ERROR, "Fail to lock, ", K_(ret));
+    COMMON_LOG_RET(ERROR, ret_, "Fail to lock, ", K_(ret));
   }
 }
 
@@ -57,7 +57,7 @@ inline ObLockGuard<LockT>::~ObLockGuard()
 {
   if (OB_LIKELY(common::OB_SUCCESS == ret_)) {
     if (OB_UNLIKELY(common::OB_SUCCESS != (ret_ = lock_.unlock()))) {
-      COMMON_LOG(ERROR, "Fail to unlock, ", K_(ret));
+      COMMON_LOG_RET(ERROR, ret_, "Fail to unlock, ", K_(ret));
     }
   }
 }

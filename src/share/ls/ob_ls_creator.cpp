@@ -76,7 +76,7 @@ bool ObLSCreator::is_valid()
   if (OB_INVALID_TENANT_ID == tenant_id_
       || !id_.is_valid()) {
     bret = false;
-    LOG_WARN("tenant id or log stream id is invalid", K(bret), K_(tenant_id), K_(id));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "tenant id or log stream id is invalid", K(bret), K_(tenant_id), K_(id));
   }
   return bret;
 }

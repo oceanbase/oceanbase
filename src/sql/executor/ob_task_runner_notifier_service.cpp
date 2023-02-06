@@ -39,10 +39,10 @@ void ObTaskRunnerNotifierService::ObKillTaskRunnerNotifier::operator()(
   ret_ = OB_SUCCESS;
   if (OB_ISNULL(entry.second)) {
     ret_ = OB_ERR_UNEXPECTED;
-    LOG_ERROR("notifier is NULL", K(ret_), "key", entry.first);
+    LOG_ERROR_RET(ret_, "notifier is NULL", K(ret_), "key", entry.first);
   } else {
     if (OB_SUCCESS != (ret_ = entry.second->kill())) {
-      LOG_WARN("notify kill task failed", K(ret_));
+      LOG_WARN_RET(ret_, "notify kill task failed", K(ret_));
     }
   }
 }
@@ -103,7 +103,7 @@ ObTaskRunnerNotifierService *ObTaskRunnerNotifierService::get_instance()
 {
   ObTaskRunnerNotifierService *instance = NULL;
   if (OB_ISNULL(instance_) || OB_UNLIKELY(!instance_->inited_)) {
-    LOG_ERROR("instance is NULL or not inited", K(instance_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "instance is NULL or not inited", K(instance_));
   } else {
     instance = instance_;
   }

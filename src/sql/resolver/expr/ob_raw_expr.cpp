@@ -173,7 +173,7 @@ int ObVarInfo::deep_copy(common::ObIAllocator &allocator, ObVarInfo &var_info) c
 ObRawExpr::~ObRawExpr()
 {
   if (0x86427531 == magic_num_) {
-    LOG_ERROR("ObRawExpr maybe double free!");
+    LOG_ERROR_RET(OB_ERROR, "ObRawExpr maybe double free!");
   }
   magic_num_ = 0x86427531;
 }
@@ -548,7 +548,7 @@ bool ObRawExpr::is_priv_geo_expr() const
 ObGeoType ObRawExpr::get_geo_expr_result_type() const
 {
   if (!is_geo_expr() && T_FUN_SYS_CAST != this->get_expr_type()) {
-    LOG_WARN("Expr is not a geo expr");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Expr is not a geo expr");
     return ObGeoType::GEOTYPEMAX;
   } else {
     switch (this->get_expr_type()) {
@@ -1783,7 +1783,7 @@ const ObRawExpr *ObAliasRefRawExpr::get_param_expr(int64_t index) const
 {
   ObRawExpr *expr = NULL;
   if (index < 0 || index > 1) {
-    LOG_WARN("index out of range", K(index));
+    LOG_WARN_RET(OB_ERROR, "index out of range", K(index));
   } else {
     expr = ref_expr_;
   }
@@ -1794,7 +1794,7 @@ ObRawExpr *&ObAliasRefRawExpr::get_param_expr(int64_t index)
 {
   ObRawExpr **expr = &USELESS_POINTER;
   if (index < 0 || index >= 1) {
-    LOG_WARN("index out of range", K(index));
+    LOG_WARN_RET(OB_ERROR, "index out of range", K(index));
   } else {
     expr = &ref_expr_;
   }
@@ -1833,7 +1833,7 @@ bool ObAliasRefRawExpr::inner_same_as(const ObRawExpr &expr,
   UNUSED(check_context);
   bool bret = false;
   if (OB_ISNULL(ref_expr_)) {
-    LOG_WARN("ref_expr_ is null");
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "ref_expr_ is null");
   } else if (expr.get_expr_type() == get_expr_type()) {
     const ObAliasRefRawExpr &alias_ref = static_cast<const ObAliasRefRawExpr&>(expr);
     bret = (alias_ref.get_ref_expr() == get_ref_expr());
@@ -1846,13 +1846,13 @@ ObExprOperator *ObNonTerminalRawExpr::get_op()
 {
   if (NULL == op_) {
     if (OB_ISNULL(inner_alloc_)) {
-      LOG_WARN("invalid inner alloc", K(inner_alloc_));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid inner alloc", K(inner_alloc_));
     } else if (type_ != T_OP_ROW) {
       ObExprOperatorFactory factory(*inner_alloc_);
       if (OB_SUCCESS != factory.alloc(type_, op_)) {
-        LOG_WARN("Can not malloc expression operator", "expr_type", get_type_name(type_), K(lbt()));
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "Can not malloc expression operator", "expr_type", get_type_name(type_), K(lbt()));
       } else if (OB_ISNULL(op_)) {
-        LOG_ERROR("alloc a null expr_op", K(op_));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "alloc a null expr_op", K(op_));
       }
     }
   }
@@ -3656,11 +3656,11 @@ ObExprOperator *ObSysFunRawExpr::get_op()
     if (T_INVALID != (type = ObExprOperatorFactory::get_type_by_name(func_name_))) {
       set_expr_type(type);
     } else {
-      LOG_ERROR("invalid func name", K_(func_name));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid func name", K_(func_name));
     }
   }
   if (OB_UNLIKELY(NULL == (op = ObOpRawExpr::get_op()))) {
-    LOG_ERROR("make function failed", K_(func_name));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "make function failed", K_(func_name));
   }
   return op;
 }

@@ -56,7 +56,7 @@ void ObTableApiSessPoolMgr::destroy()
          it != sess_pool_map_.end();
          it++) {
       if (OB_ISNULL(it->second)) {
-        BACKTRACE(ERROR, true, "session pool is null");
+        BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "session pool is null");
       } else {
         it->second->~ObTableApiSessPool();
         ob_free(it->second);
@@ -293,7 +293,7 @@ void ObTableApiSessPool::destroy()
 {
   if (is_inited_) {
     if (OB_SUCCESS != evict_all_session()) {
-      LOG_WARN("fail to evict all seesion");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to evict all seesion");
     }
     is_inited_ = false;
   }
@@ -570,9 +570,9 @@ void ObTableApiSessNodeVal::give_back_to_free_list()
     ObLockGuard<ObSpinLock> guard(owner_node_->sess_lists_.lock_);
     ObTableApiSessNodeVal *rm_sess = nullptr;
     if (OB_ISNULL(rm_sess = (used_list.remove(this)))) {
-      LOG_WARN("fail to remove sess from used list", K(*rm_sess));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to remove sess from used list", K(*rm_sess));
     } else if (false == (free_list.add_last(rm_sess))) {
-      LOG_WARN("fail to add sess val to free list", K(*rm_sess));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to add sess val to free list", K(*rm_sess));
     }
   }
 }

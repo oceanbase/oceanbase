@@ -152,7 +152,7 @@ ObUseWeakGuard::ObUseWeakGuard()
     tsi_value->inited_ = true;
     tsi_value->did_use_weak_ = GCTX.is_standby_cluster_and_started();;
   } else {
-    LOG_ERROR("tsi value is NULL");
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "tsi value is NULL");
   }
 }
 
@@ -169,7 +169,7 @@ bool ObUseWeakGuard::did_use_weak()
   bool use_weak = false;
   auto *tsi_value = GET_TSI(TSIUseWeak);
   if (NULL == tsi_value) {
-    LOG_ERROR("tsi value is NULL");
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "tsi value is NULL");
     use_weak = GCTX.is_standby_cluster_and_started();
   } else if (tsi_value->inited_) {
     use_weak = tsi_value->did_use_weak_;

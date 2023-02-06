@@ -209,7 +209,7 @@ int ObDDLEpochMgr::promote_ddl_epoch_inner_(const uint64_t tenant_id, int64_t &n
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
       ret = ((OB_SUCC(ret)) ? tmp_ret : ret);
-      LOG_WARN("fail to end trans", "is_commit", OB_SUCC(ret), KR(tmp_ret));
+      LOG_WARN("fail to end trans", "is_commit", OB_SUCCESS == ret, KR(tmp_ret));
     }
   }
   if (OB_SUCC(ret)) {

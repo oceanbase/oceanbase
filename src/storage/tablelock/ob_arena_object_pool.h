@@ -57,7 +57,7 @@ void *ObArenaObjPool<T, OBJ_NUM>::alloc()
     ptr = allocator_.alloc(size);
   }
   if (OB_ISNULL(ptr)) {
-    TABLELOCK_LOG(ERROR, "obj alloc error, no memory", K(*this), K(lbt()));
+    TABLELOCK_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "obj alloc error, no memory", K(*this), K(lbt()));
   } else {
     ATOMIC_INC(&alloc_count_);
     TABLELOCK_LOG(DEBUG, "obj alloc succ", K(*this), KP(ptr), K(lbt()));
@@ -70,7 +70,7 @@ void ObArenaObjPool<T, OBJ_NUM>::free(void *obj)
 {
   bool need_free = true;
   if (OB_ISNULL(obj)) {
-    TABLELOCK_LOG(ERROR, "obj is null, unexpected error", KP(obj), K(*this), K(lbt()));
+    TABLELOCK_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj is null, unexpected error", KP(obj), K(*this), K(lbt()));
   } else {
     TABLELOCK_LOG(DEBUG, "object free succ", KP(obj), K(*this), K(lbt()));
     ATOMIC_INC(&free_count_);
@@ -90,7 +90,7 @@ template <typename T, int64_t OBJ_NUM>
 void ObArenaObjPool<T, OBJ_NUM>::reset()
 {
   if (OB_UNLIKELY(alloc_count_ != free_count_)) {
-    TABLELOCK_LOG(ERROR, "object alloc and free count not match", K(*this));
+    TABLELOCK_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object alloc and free count not match", K(*this));
   }
   pos_ = 0;
   alloc_count_ = 0;

@@ -567,9 +567,9 @@ bool ObTabletTableStore::check_read_tables(
 {
   bool contain_snapshot_version = false;
   if (!iterator.is_valid()) {
-    LOG_WARN("iterator invalid, must not contain snapshot_version", K(iterator));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "iterator invalid, must not contain snapshot_version", K(iterator));
   } else if (OB_ISNULL(tablet_ptr_)) {
-    LOG_WARN("Unexpected null tablet ptr, must not contain snapshot version");
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "Unexpected null tablet ptr, must not contain snapshot version");
   } else {
     if (iterator.get_boundary_table(false)->is_major_sstable()) {
       contain_snapshot_version = iterator.get_boundary_table(false)->get_snapshot_version() == snapshot_version;
@@ -580,7 +580,7 @@ bool ObTabletTableStore::check_read_tables(
     }
   }
   if (!contain_snapshot_version) {
-    LOG_WARN("table store has no contain snapshot version", K(snapshot_version), KPC_(tablet_ptr), K(iterator), K(*this));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "table store has no contain snapshot version", K(snapshot_version), KPC_(tablet_ptr), K(iterator), K(*this));
   }
   return contain_snapshot_version;
 }

@@ -146,7 +146,7 @@ public:
       if (nullptr != allocator_) {
         allocator_->free(buckets_);
       } else {
-        SQL_ENG_LOG(ERROR, "buckets is not null", KP(buckets_));
+        SQL_ENG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "buckets is not null", KP(buckets_));
       }
       buckets_ = nullptr;
     }

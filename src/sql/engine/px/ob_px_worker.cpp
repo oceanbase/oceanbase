@@ -157,8 +157,13 @@ void PxWorkerFunctor::operator ()()
     ObPxInterruptGuard px_int_guard(task_arg_.task_.get_interrupt_id().px_interrupt_id_);
     // 环境初始化
     ObCurTraceId::set(env_arg_.get_trace_id());
-    if (OB_LOG_LEVEL_NONE != env_arg_.get_log_level() && enable_trace_log) {
-      ObThreadLogLevelUtils::init(env_arg_.get_log_level());
+    // Do not set thread local log level while log level upgrading (OB_LOGGER.is_info_as_wdiag)
+    if (OB_LOGGER.is_info_as_wdiag()) {
+      ObThreadLogLevelUtils::clear();
+    } else {
+      if (OB_LOG_LEVEL_NONE != env_arg_.get_log_level() && enable_trace_log) {
+        ObThreadLogLevelUtils::init(env_arg_.get_log_level());
+      }
     }
     THIS_WORKER.set_group_id(env_arg_.get_group_id());
     MTL_SWITCH(sqc_handler->get_tenant_id()) {

@@ -689,7 +689,7 @@ void ObOBJLock::wakeup_waiters_(const ObTableLockOp &lock_op)
   if (OB_LIKELY(!lock_op.need_wakeup_waiter())) {
     // do nothing
   } else if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
-    LOG_WARN("MTL(ObLockWaitMgr*) is null");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "MTL(ObLockWaitMgr*) is null");
   } else {
     MTL(ObLockWaitMgr*)->wakeup(lock_op.lock_id_);
     LOG_DEBUG("ObOBJLock::wakeup_waiters_ ", K(lock_op));
@@ -1082,14 +1082,14 @@ void ObOBJLock::get_exist_lock_mode_without_cur_trans(
     if (row_exclusive_nums > 1 ||
         share_nums > 1 ||
         share_row_exclusive_nums > 1) {
-      LOG_ERROR("unexpected error",
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected error",
                 K(row_exclusive_nums), K(share_nums), K(share_row_exclusive_nums));
     }
   } else if (lock_mode_in_same_trans & ROW_EXCLUSIVE) {
     // other trans in the obj should not have S or SRX
     if (share_nums > 1 ||
         share_row_exclusive_nums > 1) {
-      LOG_ERROR("unexpected error",
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected error",
                 K(row_exclusive_nums), K(share_nums), K(share_row_exclusive_nums));
     }
     curr_mode |= (row_exclusive_nums > 1 ? ROW_EXCLUSIVE : 0);
@@ -1097,7 +1097,7 @@ void ObOBJLock::get_exist_lock_mode_without_cur_trans(
     // other trans in the obj should not have RX or SRX
     if (row_exclusive_nums > 1 ||
         share_row_exclusive_nums > 1) {
-      LOG_ERROR("unexpected error",
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected error",
                 K(row_exclusive_nums), K(share_nums), K(share_row_exclusive_nums));
     }
     curr_mode |= (share_nums > 1 ? SHARE : 0);
@@ -1116,7 +1116,7 @@ void ObOBJLock::get_exist_lock_mode_without_cur_trans(
         share_nums > 1 ||
         share_row_exclusive_nums > 1 ||
         exclusive_nums > 1) {
-      LOG_ERROR("unexpected error", K(row_share_nums), K(row_exclusive_nums),
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected error", K(row_share_nums), K(row_exclusive_nums),
                 K(share_nums), K(share_row_exclusive_nums), K(exclusive_nums));
     }
   } else {

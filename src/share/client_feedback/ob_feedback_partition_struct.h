@@ -112,7 +112,7 @@ public:
     bool equal = true;
     if (!is_valid_obj() || !other.is_valid_obj()) {
       equal = false;
-      SHARE_LOG(WARN, "invalid argument", "self", *this, K(other));
+      SHARE_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
     } else if (type_ != other.type_) {
       equal = false;
     } else if (replicas_.count() != other.replicas_.count()) {

@@ -1105,7 +1105,7 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
       res = &EXPR_BASIC_FUNCS[type];
     }
   } else {
-    LOG_WARN("invalid obj type", K(type));
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid obj type", K(type));
   }
   return res;
 }

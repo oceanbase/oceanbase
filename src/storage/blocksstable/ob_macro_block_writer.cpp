@@ -129,7 +129,7 @@ int ObMicroBlockBufferHelper::check_micro_block(
     STORAGE_LOG(WARN, "failed to decompress data", K(ret));
   } else if (uncompressed_size != real_decomp_size) {
     ret = OB_CHECKSUM_ERROR;
-    STORAGE_LOG(ERROR, "decompressed size is not equal to original size", K(ret),
+    LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "decompressed size is not equal to original size", K(ret),
         K(uncompressed_size), K(real_decomp_size));
   }
   if (OB_SUCC(ret)) {
@@ -178,7 +178,7 @@ int ObMicroBlockBufferHelper::check_micro_block_checksum(
       if (checksum != new_checksum) {
         print_micro_block_row(micro_reader);
         ret = OB_CHECKSUM_ERROR; // ignore print error code
-        FLOG_ERROR("micro block checksum is not equal", K(new_checksum),
+        LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "micro block checksum is not equal", K(new_checksum),
             K(checksum), K(ret), KPC(data_store_desc_));
       }
     }
@@ -1597,7 +1597,7 @@ void ObMacroBlockWriter::dump_block_and_writer_buffer()
   // dump cur_macro_block and micro_writer_buffer
   dump_micro_block(*micro_writer_);
   dump_macro_block(macro_blocks_[current_index_]);
-  FLOG_WARN("dump block and writer buffer", K(this),
+  FLOG_WARN_RET(OB_SUCCESS, "dump block and writer buffer", K(this),
       K_(current_index), K_(current_macro_seq), KPC_(data_store_desc));
 }
 

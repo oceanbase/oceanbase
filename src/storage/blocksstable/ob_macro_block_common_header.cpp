@@ -52,7 +52,7 @@ void ObMacroBlockCommonHeader::set_attr(const int64_t seq)
       break;
     default:
       attr_ = MacroBlockType::MaxMacroType;
-      LOG_WARN("invalid data seq", K(seq));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid data seq", K(seq));
   }
 }
 

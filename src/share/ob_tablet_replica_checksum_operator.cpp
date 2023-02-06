@@ -963,7 +963,7 @@ int ObTabletReplicaChecksumOperator::innner_verify_tablet_replica_checksum(
         if (curr_item.is_same_tablet(prev_item)) { // same tablet
           if (OB_FAIL(curr_item.verify_checksum(prev_item))) {
             if (OB_CHECKSUM_ERROR == ret) {
-              LOG_ERROR("ERROR! ERROR! ERROR! checksum error in tablet replica checksum", KR(ret),
+              LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum error in tablet replica checksum", KR(ret),
                 K(curr_item), K(prev_item));
               check_ret = ret;
               ret = OB_SUCCESS; // continue checking next checksum
@@ -1090,7 +1090,7 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
         } else if (OB_FAIL(compare_column_checksum_(data_table_schema, index_table_schema, data_column_ckm_sum_map,
             index_column_ckm_sum_map, check_cnt, ckm_error_info))) {
           if (OB_CHECKSUM_ERROR == ret) {
-            LOG_ERROR("data table and global index table column checksum are not equal", KR(ret), K(ckm_error_info));
+            LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "data table and global index table column checksum are not equal", KR(ret), K(ckm_error_info));
             if (OB_TMP_FAIL(ObColumnChecksumErrorOperator::insert_column_checksum_err_info(sql_proxy, tenant_id,
                 ckm_error_info))) {
               LOG_WARN("fail to insert global index column checksum error info", KR(tmp_ret), K(ckm_error_info));
@@ -1189,7 +1189,7 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
               } else if (OB_FAIL(compare_column_checksum_(data_table_schema, index_table_schema, data_column_ckm_map,
                   index_column_ckm_map, check_cnt, ckm_error_info))) {
                 if (OB_CHECKSUM_ERROR == ret) {
-                  LOG_ERROR("data table and local index table column checksum are not equal", KR(ret), K(ckm_error_info));
+                  LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "data table and local index table column checksum are not equal", KR(ret), K(ckm_error_info));
                   if (OB_TMP_FAIL(ObColumnChecksumErrorOperator::insert_column_checksum_err_info(sql_proxy, tenant_id,
                       ckm_error_info))) {
                     LOG_WARN("fail to insert local index column checksum error info", KR(tmp_ret), K(ckm_error_info));
@@ -1555,7 +1555,7 @@ void ObTabletReplicaChecksumOperator::print_detail_tablet_replica_checksum(
   const int64_t item_cnt = items.count();
   for (int64_t i = 0; i < item_cnt; ++i) {
     const ObTabletReplicaChecksumItem &cur_item = items.at(i);
-    FLOG_WARN("detail tablet replica checksum", K(i), K(cur_item));
+    FLOG_WARN_RET(OB_SUCCESS, "detail tablet replica checksum", K(i), K(cur_item));
   }
 }
 

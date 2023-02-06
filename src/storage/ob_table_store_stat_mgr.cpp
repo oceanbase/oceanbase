@@ -234,7 +234,7 @@ int ObTableStoreStatMgr::ReportTask::init(ObTableStoreStatMgr *stat_mgr)
 void ObTableStoreStatMgr::ReportTask::runTimerTask()
 {
   if (OB_ISNULL(stat_mgr_)) {
-    LOG_WARN("ReportTask is not inited");
+    LOG_WARN_RET(OB_NOT_INIT, "ReportTask is not inited");
   } else {
     stat_mgr_->run_report_task();
   }
