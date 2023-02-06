@@ -489,6 +489,8 @@ def no_direct_access(keywords):
   return keywords
 
 def find_column_def(keywords, column_name):
+  gm_column_num = len(keywords['gm_columns'])
+  column_num = len(keywords['rowkey_columns']) + len(keywords['normal_columns'])
   i = 1
   for col in keywords['rowkey_columns']:
     if col[0] == column_name:
@@ -500,21 +502,30 @@ def find_column_def(keywords, column_name):
       return (i, col)
     else:
       i += 1
+  if gm_column_num > 0 or i > column_num:
+    raise IOError("invalid column idx for index, idx:{0}, column_num:{1}, gm_column_num:{2}".format(i, column_num, gm_column_num));
+
 
 def add_index_column(keywords, rowkey_id, index_id, column):
   (idx, column_def) = find_column_def(keywords, column)
   add_column(column_def, rowkey_id, index_id, 0, idx)
+  return idx
 
 def add_index_columns(columns, **keywords):
   rowkey_id = 1
+  max_used_column_idx = 1
   for column in columns:
-    add_index_column(keywords, rowkey_id, rowkey_id, column)
+    column_idx = add_index_column(keywords, rowkey_id, rowkey_id, column)
+    max_used_column_idx = max(max_used_column_idx, column_idx)
     rowkey_id += 1
   for col in keywords['rowkey_columns']:
     if col[0] not in columns:
-      add_index_column(keywords, rowkey_id, 0, col[0])
+      column_idx = add_index_column(keywords, rowkey_id, 0, col[0])
+      max_used_column_idx = max(max_used_column_idx, column_idx)
       rowkey_id += 1
-  return rowkey_id - 1
+  # For historical factor, max_used_column_id maybe less than column_id for index table, now fix it.
+  return max(rowkey_id - 1, max_used_column_idx)
+
 def add_rowkey_columns(columns, *args):
   rowkey_id = 1
   index_id = 0
@@ -1185,7 +1196,7 @@ def def_table_schema(**keywords):
       add_field(field, database_id)
     elif field == 'table_name':
       if keywords.has_key('index_name') :
-        add_char_field(field, table_name2index_tname(keywords['table_name'], keywords['index_name']))
+        add_char_field(field, table_name2index_tname(keywords['table_name'] + keywords['name_postfix'], keywords['index_name']))
       else:
         if keywords["name_postfix"] != '_ORA':
           add_char_field(field, table_name2tname(keywords['table_name']))
@@ -1463,12 +1474,14 @@ def generate_h_content():
   sys_view_count = 0
 
   print_class_head_h()
+  new_table_name_postfix_ids = sorted(table_name_postfix_ids, key = lambda table : table[1])
+  new_index_name_ids = sorted(index_name_ids, key = lambda index : index[1])
 
   h_f.write("\npublic:\n")
   method_line = "  static int {0}_schema(share::schema::ObTableSchema &table_schema);\n"
-  for (table_name, table_id) in table_name_postfix_ids:
+  for (table_name, table_id) in new_table_name_postfix_ids:
     h_f.write(method_line.format(table_name.replace('$', '_').lower().strip('_'), table_id))
-  for line in index_name_ids:
+  for line in new_index_name_ids:
     h_f.write(method_line.format(line[2].replace('$', '_').strip('_').lower()+'_'+line[0].lower(), line[1]))
   line = """
 private:
@@ -1483,32 +1496,40 @@ private:
 
   method_name = "  ObInnerTableSchema::{0}_schema,\n"
   h_f.write("const schema_create_func core_table_schema_creators [] = {\n")
-  for (table_name, table_id) in table_name_postfix_ids:
+  for (table_name, table_id) in new_table_name_postfix_ids:
     if table_id <= max_core_table_id and table_id != kv_core_table_id:
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       core_table_count = core_table_count + 1
   h_f.write("  NULL,};\n\n")
 
   h_f.write("const schema_create_func sys_table_schema_creators [] = {\n")
-  for (table_name, table_id) in table_name_postfix_ids:
+  for (table_name, table_id) in new_table_name_postfix_ids:
     if table_id > max_core_table_id and table_id <= max_sys_table_id:
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       sys_table_count = sys_table_count + 1
   h_f.write("  NULL,};\n\n")
 
   h_f.write("const schema_create_func virtual_table_schema_creators [] = {\n")
-  for (table_name, table_id) in table_name_postfix_ids:
-    if table_id > max_sys_table_id and table_id <= max_ora_virtual_table_id:
+  for (table_name, table_id) in new_table_name_postfix_ids:
+    if table_id > max_sys_table_id and table_id <= max_ob_virtual_table_id:
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       virtual_table_count = virtual_table_count + 1
-  for index_l in index_name_ids:
-    if index_l[1] > max_sys_table_id and index_l[1] <= max_ora_virtual_table_id:
+  for index_l in new_index_name_ids:
+    if index_l[1] > max_sys_table_id and index_l[1] <= max_ob_virtual_table_id:
+      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
+      virtual_table_count = virtual_table_count + 1
+  for (table_name, table_id) in new_table_name_postfix_ids:
+    if table_id > max_ob_virtual_table_id and table_id <= max_ora_virtual_table_id:
+      h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
+      virtual_table_count = virtual_table_count + 1
+  for index_l in new_index_name_ids:
+    if index_l[1] > max_ob_virtual_table_id and index_l[1] <= max_ora_virtual_table_id:
       h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
       virtual_table_count = virtual_table_count + 1
   h_f.write("  NULL,};\n\n")
 
   h_f.write("const schema_create_func sys_view_schema_creators [] = {\n")
-  for (table_name, table_id) in table_name_postfix_ids:
+  for (table_name, table_id) in new_table_name_postfix_ids:
     if table_id > max_ora_virtual_table_id and table_id <= max_sys_view_id:
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       sys_view_count = sys_view_count + 1

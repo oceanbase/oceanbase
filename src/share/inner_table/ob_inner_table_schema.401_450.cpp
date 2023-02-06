@@ -839,7 +839,7 @@ int ObInnerTableSchema::all_table_v2_history_idx_data_table_id_schema(ObTableSch
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
   table_schema.set_data_table_id(combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_V2_HISTORY_TID));
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 24);
   return ret;
 }
 
@@ -954,7 +954,7 @@ int ObInnerTableSchema::all_table_history_idx_data_table_id_schema(ObTableSchema
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
   table_schema.set_data_table_id(combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_HISTORY_TID));
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 24);
   return ret;
 }
 

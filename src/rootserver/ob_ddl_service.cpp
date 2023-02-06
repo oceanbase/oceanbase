@@ -10317,6 +10317,7 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg, 
 int ObDDLService::add_table_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
   ObPartitionUnitsArray partition_units_array;
   ObArray<ObZone> zones;
   if (OB_FAIL(check_inner_stat())) {
@@ -10327,22 +10328,40 @@ int ObDDLService::add_table_schema(ObTableSchema &table_schema)
       LOG_WARN("create_table_in_trans failed", K(table_schema), K(ret));
     }
   }
+  LOG_INFO("[UPGRADE] add virtual table or system view",
+      KR(ret),
+      "tenant_id",
+      table_schema.get_tenant_id(),
+      "table_id",
+      table_schema.get_table_id(),
+      "table_name",
+      table_schema.get_table_name(),
+      "cost",
+      ObTimeUtility::current_time() - start_time);
   return ret;
 }
 
 int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
   ObString *stmt = NULL;
   ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t table_id = table_schema.get_table_id();
+  const ObSimpleTableSchemaV2 *table = NULL;
   if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("variable is not init");
-  } else if (!is_inner_table(table_schema.get_table_id())) {
+    LOG_WARN("variable is not init", KR(ret), K(table_id));
+  } else if (!is_inner_table(table_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table not inner table", "table_id", table_schema.get_table_id(), K(ret));
+    LOG_WARN("table not inner table", KR(ret), K(table_id));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
+    LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(table_id));
+  } else if (OB_ISNULL(table)) {
+    // virtual table index may be dropped with virtual table, so here we ignore OB_TABLE_NOT_EXIST failure.
+    LOG_INFO("table has already been dropped, just ignore", K(table_id), "table_name", table_schema.get_table_name());
   } else if (OB_FAIL(drop_table_in_trans(schema_guard,
                  table_schema,
                  false,
@@ -10350,8 +10369,16 @@ int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_sch
                  false, /* to recyclebin*/
                  stmt,
                  NULL))) {
-    LOG_WARN("drop table in transaction failed", K(ret), K(table_schema));
+    LOG_WARN("drop table in transaction failed", KR(ret), K(table_id));
   }
+  LOG_INFO("[UPGRADE] drop virtual table or system view",
+      KR(ret),
+      K(tenant_id),
+      K(table_id),
+      "table_name",
+      table_schema.get_table_name(),
+      "cost",
+      ObTimeUtility::current_time() - start_time);
   return ret;
 }
 

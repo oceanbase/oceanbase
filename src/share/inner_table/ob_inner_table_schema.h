@@ -1310,24 +1310,24 @@ public:
   static int all_backup_piece_files_idx_data_table_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_v2_history_idx_data_table_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_history_idx_data_table_id_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_plan_cache_stat_all_virtual_plan_cache_stat_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_session_event_all_virtual_session_event_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_session_wait_all_virtual_session_wait_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_session_wait_history_all_virtual_session_wait_history_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_system_event_all_virtual_system_event_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_sesstat_all_virtual_sesstat_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_sysstat_all_virtual_sysstat_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_replica_task_all_virtual_replica_task_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_plan_cache_stat_ora_all_virtual_plan_cache_stat_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_session_wait_ora_all_virtual_session_wait_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_session_wait_history_ora_all_virtual_session_wait_history_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_sesstat_ora_all_virtual_sesstat_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_sysstat_ora_all_virtual_sysstat_i1_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_system_event_ora_all_virtual_system_event_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_replica_task_all_virtual_replica_task_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sysstat_all_virtual_sysstat_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sesstat_all_virtual_sesstat_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_system_event_all_virtual_system_event_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_session_wait_history_all_virtual_session_wait_history_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_session_wait_all_virtual_session_wait_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_session_event_all_virtual_session_event_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_plan_cache_stat_all_virtual_plan_cache_stat_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_system_event_ora_all_virtual_system_event_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sysstat_ora_all_virtual_sysstat_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sesstat_ora_all_virtual_sesstat_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_session_wait_history_ora_all_virtual_session_wait_history_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_session_wait_ora_all_virtual_session_wait_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_plan_cache_stat_ora_all_virtual_plan_cache_stat_i1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schema(share::schema::ObTableSchema &table_schema);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObInnerTableSchema);
@@ -1820,6 +1820,16 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_schema_memory_schema,
   ObInnerTableSchema::all_virtual_schema_slot_schema,
   ObInnerTableSchema::all_virtual_kv_hotkey_stat_schema,
+  ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema,
+  ObInnerTableSchema::all_virtual_replica_task_all_virtual_replica_task_i1_schema,
+  ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema,
+  ObInnerTableSchema::all_virtual_sysstat_all_virtual_sysstat_i1_schema,
+  ObInnerTableSchema::all_virtual_sesstat_all_virtual_sesstat_i1_schema,
+  ObInnerTableSchema::all_virtual_system_event_all_virtual_system_event_i1_schema,
+  ObInnerTableSchema::all_virtual_session_wait_history_all_virtual_session_wait_history_i1_schema,
+  ObInnerTableSchema::all_virtual_session_wait_all_virtual_session_wait_i1_schema,
+  ObInnerTableSchema::all_virtual_session_event_all_virtual_session_event_i1_schema,
+  ObInnerTableSchema::all_virtual_plan_cache_stat_all_virtual_plan_cache_stat_i1_schema,
   ObInnerTableSchema::all_virtual_table_agent_schema,
   ObInnerTableSchema::all_virtual_column_agent_schema,
   ObInnerTableSchema::all_virtual_database_agent_schema,
@@ -1987,24 +1997,14 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_trans_lock_stat_ora_schema,
   ObInnerTableSchema::all_virtual_res_mgr_mapping_rule_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_res_mgr_consumer_group_real_agent_ora_schema,
-  ObInnerTableSchema::all_virtual_plan_cache_stat_all_virtual_plan_cache_stat_i1_schema,
-  ObInnerTableSchema::all_virtual_session_event_all_virtual_session_event_i1_schema,
-  ObInnerTableSchema::all_virtual_session_wait_all_virtual_session_wait_i1_schema,
-  ObInnerTableSchema::all_virtual_session_wait_history_all_virtual_session_wait_history_i1_schema,
-  ObInnerTableSchema::all_virtual_system_event_all_virtual_system_event_i1_schema,
-  ObInnerTableSchema::all_virtual_sesstat_all_virtual_sesstat_i1_schema,
-  ObInnerTableSchema::all_virtual_sysstat_all_virtual_sysstat_i1_schema,
-  ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema,
-  ObInnerTableSchema::all_virtual_replica_task_all_virtual_replica_task_i1_schema,
-  ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema,
-  ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schema,
-  ObInnerTableSchema::all_virtual_plan_cache_stat_ora_all_virtual_plan_cache_stat_i1_schema,
-  ObInnerTableSchema::all_virtual_session_wait_ora_all_virtual_session_wait_i1_schema,
-  ObInnerTableSchema::all_virtual_session_wait_history_ora_all_virtual_session_wait_history_i1_schema,
-  ObInnerTableSchema::all_virtual_sesstat_ora_all_virtual_sesstat_i1_schema,
-  ObInnerTableSchema::all_virtual_sysstat_ora_all_virtual_sysstat_i1_schema,
-  ObInnerTableSchema::all_virtual_system_event_ora_all_virtual_system_event_i1_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_monitor_i1_schema,
+  ObInnerTableSchema::all_virtual_system_event_ora_all_virtual_system_event_i1_schema,
+  ObInnerTableSchema::all_virtual_sysstat_ora_all_virtual_sysstat_i1_schema,
+  ObInnerTableSchema::all_virtual_sesstat_ora_all_virtual_sesstat_i1_schema,
+  ObInnerTableSchema::all_virtual_session_wait_history_ora_all_virtual_session_wait_history_i1_schema,
+  ObInnerTableSchema::all_virtual_session_wait_ora_all_virtual_session_wait_i1_schema,
+  ObInnerTableSchema::all_virtual_plan_cache_stat_ora_all_virtual_plan_cache_stat_i1_schema,
+  ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schema,
   NULL,};
 
 const schema_create_func sys_view_schema_creators [] = {
