@@ -3881,14 +3881,16 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
       for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
         ObRawExpr* exec_param = func.get_expr(params.at(i));
         bool need_modify = false;
+        bool is_array_binding = true;
         CK (OB_NOT_NULL(exec_param));
-        OZ (check_raw_expr_in_forall(exec_param, stmt.get_ident(), need_modify, can_array_binding));
+        OZ (check_raw_expr_in_forall(exec_param, stmt.get_ident(), need_modify, is_array_binding));
         if (OB_SUCC(ret)) {
           if (need_modify) {
             OZ (need_modify_exprs.push_back(i));
           }
           OZ (sql_stmt->get_array_binding_params().push_back(params.at(i)));
         }
+        can_array_binding &= is_array_binding;
       }
       if (OB_SUCC(ret) && 0 == need_modify_exprs.count()) {
         ret = OB_ERR_FORALL_DML_WITHOUT_BULK;
