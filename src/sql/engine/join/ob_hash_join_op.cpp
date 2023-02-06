@@ -390,6 +390,9 @@ int ObHashJoinOp::inner_open()
   ObSQLSessionInfo *session = NULL;
   if (OB_FAIL(set_shared_info())) {
     LOG_WARN("failed to set shared info", K(ret));
+  } else if (is_shared_ && OB_FAIL(sync_wait_open())) {
+    is_shared_ = false;
+    LOG_WARN("failed to sync open for shared hj", K(ret));
   } else if ((OB_UNLIKELY(MY_SPEC.all_join_keys_.count() <= 0
       || MY_SPEC.all_join_keys_.count() != MY_SPEC.all_hash_funcs_.count()
       || OB_ISNULL(left_)))) {
@@ -2388,6 +2391,25 @@ int ObHashJoinOp::sync_wait_close()
     LOG_WARN("failed to sync fetch next batch", K(ret), K(spec_.id_));
   } else {
     LOG_TRACE("debug sync fetch next batch", K(ret), K(spec_.id_));
+  }
+  return ret;
+}
+
+int ObHashJoinOp::sync_wait_open()
+{
+  int ret = OB_SUCCESS;
+  ObHashJoinInput *hj_input = static_cast<ObHashJoinInput*>(input_);
+  if (OB_ISNULL(hj_input)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: shared hash join info is null", K(ret));
+  } else if (OB_FAIL(hj_input->sync_wait(
+      ctx_, hj_input->get_open_cnt(),
+      [&](int64_t n_times) {
+        UNUSED(n_times);
+      }))) {
+    LOG_WARN("failed to sync open", K(ret), K(spec_.id_));
+  } else {
+    LOG_TRACE("debug sync sync open", K(ret), K(spec_.id_));
   }
   return ret;
 }
