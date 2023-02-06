@@ -3270,7 +3270,7 @@ int ObTransformPreProcess::check_exempt_rls_policy(bool &exempt_rls_policy)
       || OB_ISNULL(schema_checker->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null unexpected", K(ctx_), K(ret));
-  } else if (!session_info->is_user_session()) {
+  } else if (!session_info->is_user_session() || session_info->is_tenant_changed()) {
     exempt_rls_policy = true;
   } else if (OB_FAIL(ObOraSysChecker::check_ora_user_sys_priv(*schema_checker->get_schema_guard(),
                                                         session_info->get_effective_tenant_id(),
