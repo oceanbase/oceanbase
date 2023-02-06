@@ -461,6 +461,7 @@ public:
         const palf::LSN lsn = palf::LSN(++lsn_);
         cb->set_log_ts(scn);
         cb->set_lsn(lsn);
+        cb->set_submit_ts(ObTimeUtility::current_time());
         ts_ = ts;
         ApplyCbTask *apply_task = new ApplyCbTask();
         apply_task->replay_hint_ = replay_hint;
