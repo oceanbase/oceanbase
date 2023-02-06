@@ -3678,6 +3678,20 @@ const ObRawExpr *ObRawExprUtils::skip_inner_added_expr(const ObRawExpr *expr)
   return expr;
 }
 
+const ObColumnRefRawExpr *ObRawExprUtils::get_column_ref_expr_recursively(const ObRawExpr *expr)
+{
+  const ObColumnRefRawExpr *res = NULL;
+  if (OB_ISNULL(expr)) {
+  } else if (expr->is_column_ref_expr()) {
+    res = static_cast<const ObColumnRefRawExpr *>(expr);
+  } else {
+    for (int i = 0; OB_ISNULL(res) && i < expr->get_param_count(); i++) {
+      res = get_column_ref_expr_recursively(expr->get_param_expr(i));
+    }
+  }
+  return res;
+}
+
 ObRawExpr *ObRawExprUtils::skip_implicit_cast(ObRawExpr *e)
 {
   ObRawExpr *res = e;
@@ -3696,35 +3710,6 @@ ObRawExpr *ObRawExprUtils::skip_inner_added_expr(ObRawExpr *expr)
     expr = skip_inner_added_expr(expr->get_param_expr(0));
   }
   return expr;
-}
-
-int ObRawExprUtils::is_contain_spatial_exprs(ObRawExpr *raw_expr,
-                                             bool &is_contain)
-{
-  int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-
-  if (is_contain) {
-   // return
-  } else if (NULL == raw_expr) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid raw expr", K(ret), K(raw_expr));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret));
-  } else if (raw_expr->is_spatial_expr()) {
-    is_contain = true;
-  } else {
-    int64_t N = raw_expr->get_param_count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      if (OB_FAIL(SMART_CALL(is_contain_spatial_exprs(raw_expr->get_param_expr(i), is_contain)))) {
-        LOG_WARN("fail to extract contain expr", K(ret));
-      }
-    }
-  }
-  return ret;
 }
 
 int ObRawExprUtils::create_to_type_expr(ObRawExprFactory &expr_factory,

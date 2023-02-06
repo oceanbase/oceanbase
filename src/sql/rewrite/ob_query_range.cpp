@@ -3469,83 +3469,93 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else {
       op_type = get_geo_relation(expr->get_expr_type());
-      if (OB_UNLIKELY(r_expr->has_flag(IS_COLUMN))) {
-        column_item = static_cast<const ObColumnRefRawExpr *>(r_expr);
+      if (OB_UNLIKELY(r_expr->has_flag(CNT_COLUMN))) {
+        column_item = ObRawExprUtils::get_column_ref_expr_recursively(r_expr);
         const_item = l_expr;
-      } else if (l_expr->has_flag(IS_COLUMN)) {
-        column_item = static_cast<const ObColumnRefRawExpr *>(l_expr);
+      } else if (l_expr->has_flag(CNT_COLUMN)) {
+        column_item = ObRawExprUtils::get_column_ref_expr_recursively(l_expr);
         const_item = r_expr;
         op_type = (ObGeoRelationType::T_COVERS == op_type ? ObGeoRelationType::T_COVEREDBY :
                   (ObGeoRelationType::T_COVEREDBY == op_type ? ObGeoRelationType::T_COVERS : op_type));
-      }
-      bool is_cellid_col = false;
-      uint64_t column_id = column_item->get_column_id();
-      ObGeoColumnInfo column_info;
-      if (OB_FAIL(columnId_map_.get_refactored(column_id, column_info))) {
-        if (OB_NOT_INIT == ret || OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to get from columnId_map_", K(ret));
-        }
       } else {
-        is_cellid_col = true;
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find column item", K(ret), KPC(r_expr), KPC(l_expr));
+      }
+
+      if (OB_SUCC(ret) && OB_ISNULL(column_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find column item", K(ret), KPC(r_expr), KPC(l_expr));
       }
 
       if (OB_SUCC(ret)) {
-        if (const_item->cnt_param_expr()) {
-          query_range_ctx_->need_final_extract_ = true;
-        }
-        ObKeyPartId key_part_id(column_item->get_table_id(),
-                                is_cellid_col ? column_info.cellid_columnId_ : column_id);
-        ObKeyPartPos key_part_pos;
-        bool b_is_key_part = false;
-        if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
-          LOG_WARN("is_key_part failed", K(ret));
-        } else if (!b_is_key_part) {
-          GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-        } else if (OB_ISNULL((out_key_part = create_new_key_part()))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("alloc memory failed", K(ret));
-        } else {
-          contain_geo_filters_ = true;
-          out_key_part->id_ = key_part_id;
-          out_key_part->pos_ = key_part_pos;
-          if (op_type == ObGeoRelationType::T_DWITHIN) {
-            if (OB_FAIL(get_dwithin_item(expr, extra_item))) {
-              LOG_WARN("failed to get dwithin item", K(ret));
-            }
-          }
-
-          ObObj const_val;
-          bool is_valid = true;
-          if (OB_FAIL(ret)) {
-            // do nothing
-          } else if (OB_FAIL(get_calculable_expr_val(const_item, const_val, is_valid))) {
-            LOG_WARN("failed to get calculable expr val", K(ret));
-          } else if (!is_valid) {
-            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-          } else if (OB_FAIL(out_key_part->create_geo_key())) {
-            LOG_WARN("create like geo part failed", K(ret));
-          } else if (extra_item != NULL &&
-                     OB_FAIL(get_calculable_expr_val(extra_item,
-                                                    out_key_part->geo_keypart_->distance_,
-                                                    is_valid))) {
-            LOG_WARN("failed to get calculable expr val", K(ret));
-          } else if (!is_valid) {
-            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        bool is_cellid_col = false;
+        uint64_t column_id = column_item->get_column_id();
+        ObGeoColumnInfo column_info;
+        if (OB_FAIL(columnId_map_.get_refactored(column_id, column_info))) {
+          if (OB_NOT_INIT == ret || OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
           } else {
-            if (const_item->cnt_param_expr()) {
-              ObObj val;
-              out_key_part->geo_keypart_->geo_type_ = op_type;
-              if (OB_FAIL(get_final_expr_val(const_item, out_key_part->geo_keypart_->wkb_))) {
-                LOG_WARN("failed to get final expr idx", K(ret));
-              } else if (extra_item != NULL &&
-                         OB_FAIL(get_final_expr_val(extra_item, out_key_part->geo_keypart_->distance_))) {
-                  LOG_WARN("failed to get final distance expr idx", K(ret));
+            LOG_WARN("failed to get from columnId_map_", K(ret));
+          }
+        } else {
+          is_cellid_col = true;
+        }
+        if (OB_SUCC(ret)) {
+          if (const_item->cnt_param_expr()) {
+            query_range_ctx_->need_final_extract_ = true;
+          }
+          ObKeyPartId key_part_id(column_item->get_table_id(),
+                                  is_cellid_col ? column_info.cellid_columnId_ : column_id);
+          ObKeyPartPos key_part_pos;
+          bool b_is_key_part = false;
+          if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
+            LOG_WARN("is_key_part failed", K(ret));
+          } else if (!b_is_key_part) {
+            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+          } else if (OB_ISNULL((out_key_part = create_new_key_part()))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("alloc memory failed", K(ret));
+          } else {
+            contain_geo_filters_ = true;
+            out_key_part->id_ = key_part_id;
+            out_key_part->pos_ = key_part_pos;
+            if (op_type == ObGeoRelationType::T_DWITHIN) {
+              if (OB_FAIL(get_dwithin_item(expr, extra_item))) {
+                LOG_WARN("failed to get dwithin item", K(ret));
               }
+            }
+
+            ObObj const_val;
+            bool is_valid = true;
+            if (OB_FAIL(ret)) {
+              // do nothing
+            } else if (OB_FAIL(get_calculable_expr_val(const_item, const_val, is_valid))) {
+              LOG_WARN("failed to get calculable expr val", K(ret));
+            } else if (!is_valid) {
+              GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+            } else if (OB_FAIL(out_key_part->create_geo_key())) {
+              LOG_WARN("create like geo part failed", K(ret));
+            } else if (extra_item != NULL &&
+                      OB_FAIL(get_calculable_expr_val(extra_item,
+                                                      out_key_part->geo_keypart_->distance_,
+                                                      is_valid))) {
+              LOG_WARN("failed to get calculable expr val", K(ret));
+            } else if (!is_valid) {
+              GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
             } else {
-              if (OB_FAIL(get_geo_range(const_val, op_type, out_key_part))) {
-                LOG_WARN("create geo range failed", K(ret));
+              if (const_item->cnt_param_expr()) {
+                ObObj val;
+                out_key_part->geo_keypart_->geo_type_ = op_type;
+                if (OB_FAIL(get_final_expr_val(const_item, out_key_part->geo_keypart_->wkb_))) {
+                  LOG_WARN("failed to get final expr idx", K(ret));
+                } else if (extra_item != NULL &&
+                          OB_FAIL(get_final_expr_val(extra_item, out_key_part->geo_keypart_->distance_))) {
+                    LOG_WARN("failed to get final distance expr idx", K(ret));
+                }
+              } else {
+                if (OB_FAIL(get_geo_range(const_val, op_type, out_key_part))) {
+                  LOG_WARN("create geo range failed", K(ret));
+                }
               }
             }
           }
