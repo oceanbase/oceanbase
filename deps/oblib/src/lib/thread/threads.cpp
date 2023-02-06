@@ -94,8 +94,8 @@ int Threads::do_set_thread_count(int64_t n_threads)
         }
       }
     }
-  } else {
-    n_threads_ = n_threads;
+  } else { // modify init_threads_ before start
+    init_threads_ = n_threads;
   }
   return ret;
 }
@@ -165,6 +165,7 @@ int Threads::start()
   int ret = OB_SUCCESS;
   // 检查租户上下文
   IRunWrapper *expect_wrapper = get_expect_run_wrapper();
+  n_threads_ = init_threads_;
   if (expect_wrapper != nullptr && expect_wrapper != run_wrapper_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Threads::start tenant ctx not match", KP(expect_wrapper), KP(run_wrapper_));

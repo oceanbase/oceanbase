@@ -54,6 +54,7 @@ class Threads
 public:
   explicit Threads(int64_t n_threads = 1)
       : n_threads_(n_threads),
+        init_threads_(n_threads),
         threads_(nullptr),
         stack_size_(global_thread_stack_size),
         stop_(true),
@@ -133,6 +134,7 @@ private:
 private:
   static thread_local uint64_t thread_idx_;
   int64_t n_threads_;
+  int64_t init_threads_;
   Thread **threads_;
   int64_t stack_size_;
   bool stop_;
