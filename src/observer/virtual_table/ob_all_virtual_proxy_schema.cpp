@@ -449,6 +449,10 @@ int ObAllVirtualProxySchema::inner_open()
         } else {
           sql_res_ = sql_res;
         }
+        if (OB_FAIL(ret) && sql_res != NULL) {
+          sql_res->~ReadResult();
+          sql_res = NULL;
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(init_convert_ctx())) {
