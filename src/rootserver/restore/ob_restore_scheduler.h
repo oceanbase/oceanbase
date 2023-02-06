@@ -110,6 +110,7 @@ private:
   /* modify schema related */
   int force_drop_schema(const uint64_t tenant_id);
   int filter_schema(const share::ObPhysicalRestoreJob& job_info);
+  int force_drop_index(const share::ObPhysicalRestoreJob& job_info);
   int convert_schema_options(const uint64_t tenant_id);
   int convert_database_options(const uint64_t tenant_id);
   int convert_tablegroup_options(const uint64_t tenant_id);

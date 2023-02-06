@@ -1050,9 +1050,11 @@ int ObRestoreScheduler::check_locality_valid(const share::schema::ZoneLocalityIA
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i++) {
       const share::ObZoneReplicaAttrSet &attr = locality.at(i);
-      if (attr.is_specific_readonly_replica() || attr.is_allserver_readonly_replica()) {
+      if (attr.is_specific_readonly_replica()
+          || attr.is_allserver_readonly_replica()
+          || attr.get_logonly_replica_num() > 0) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("locality with readonly replica is not supported", K(ret), K(locality));
+        LOG_WARN("locality with readonly/logonly replica is not supported", K(ret), K(locality));
       } else if (attr.is_mixed_locality()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("mixed locality is not supported", K(ret), K(locality));
@@ -1633,6 +1635,8 @@ int ObRestoreScheduler::modify_schema(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("restore scheduler stopped", K(ret));
   } else if (OB_FAIL(force_drop_schema(tenant_id))) {
     LOG_WARN("fail to force drop schema", K(ret), K(tenant_id));
+  } else if (OB_FAIL(force_drop_index(job_info))) {
+    LOG_WARN("fail to force drop index", K(ret), K(tenant_id));
   } else if (OB_FAIL(filter_schema(job_info))) {
     LOG_WARN("fail to filter schema", KR(ret), K(job_info));
   } else if (OB_FAIL(convert_schema_options(tenant_id))) {
@@ -1695,6 +1699,67 @@ int ObRestoreScheduler::force_drop_schema(const uint64_t tenant_id)
       ret = OB_EAGAIN;
       LOG_WARN("dropped schema exist, wait for next round", K(ret), K(tenant_id));
     }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::force_drop_index(const ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = job_info.tenant_id_;
+  const int64_t restore_schema_version = job_info.restore_schema_version_;
+  ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
+  ObSchemaGetterGuard schema_guard;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id || OB_SYS_TENANT_ID == tenant_id || restore_schema_version <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id or restore schema version", KR(ret), K(tenant_id), K(restore_schema_version));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id, table_schemas))) {
+    LOG_WARN("fail to get table schemas", KR(ret), K(tenant_id));
+  } else {
+    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
+    const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default is 2s
+    const int64_t PARTITION_CNT_PER_RPC = 5;            // consider drop 5 partitions per 2s
+
+    obrpc::ObForceDropSchemaArg arg;
+    arg.exec_tenant_id_ = tenant_id;
+    arg.recycle_schema_version_ = 0;
+    arg.type_ = share::schema::TABLE_SCHEMA;
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+      const ObSimpleTableSchemaV2 *table = table_schemas.at(i);
+      if (OB_FAIL(check_stop())) {
+        LOG_WARN("restore scheduler stopped", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table ptr is null", KR(ret));
+      } else if (!table->is_index_table() || table->get_schema_version() > restore_schema_version) {
+        // skip the following cases:
+        // 1. not index table
+        // 2. index status changed after modify_schema()
+      } else if (!is_available_index_status(table->get_index_status())) {
+        // index is not available when restore
+        arg.schema_id_ = table->get_table_id();
+        int64_t timeout = (table->get_all_part_num() / PARTITION_CNT_PER_RPC) * TIMEOUT_PER_RPC;
+        timeout = max(timeout, DEFAULT_TIMEOUT);
+        if (OB_FAIL(rpc_proxy_->timeout(timeout).force_drop_schema(arg))) {
+          LOG_WARN("fail to force drop index", KR(ret), K(arg), K(timeout));
+        } else {
+          LOG_INFO("force drop index success",
+              KR(ret),
+              K(arg),
+              K(timeout),
+              "schema_version",
+              table->get_schema_version(),
+              K(restore_schema_version));
+        }
+      }
+    }  // end for
   }
   return ret;
 }
@@ -2438,14 +2503,9 @@ int ObRestoreScheduler::convert_table_options(const uint64_t tenant_id)
 }
 
 /*
- * If index's index_staus is:
- * case 1. unavaliable/restore_error: should be reset to error.
- * case 2. error/unusable : do nothing.
- * case 3. avaliable:
- * - case 3.1. If index is avaliable when data backup, we do nothing.
- * - case 3.2. If index is created or is avaliable when clog backup,
- *             index_status should be reset to unavaliable, and index should be rebuilded later.
- * Since we have dropped delay-deleted schemas before, we don't consider delay-deleted indexes here.
+ * Before convert index status, delay_deleted indexes or indexes which are not available will be dropped forcely.
+ * So we only consider if available index is also available in backuped schema version.
+ * If not, such avaiable index will be reset to INDEX_STATUS_UNAVAILABLE and rebuild.
  */
 int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob &job_info)
 {
@@ -2477,17 +2537,12 @@ int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob &job_inf
           LOG_WARN("error unexpected, table schema is NULL", KR(ret));
         } else if (is_inner_table(table_schema->get_table_id())) {
           // inner_table's index won't rebuild, just skip
+        } else if (table_schema->get_schema_version() > job_info.restore_schema_version_) {
+          // skip changed index table after restore schema version
         } else if (table_schema->is_index_table()) {
           const uint64_t index_id = table_schema->get_table_id();
           const ObIndexStatus index_status = table_schema->get_index_status();
-          if (INDEX_STATUS_UNAVAILABLE == index_status || INDEX_STATUS_RESTORE_INDEX_ERROR == index_status) {
-            // case 1
-            if (OB_FAIL(error_index_ids.push_back(index_id))) {
-              LOG_WARN("fail to push back index id", KR(ret), K(index_id));
-            }
-          } else if (INDEX_STATUS_INDEX_ERROR == index_status || INDEX_STATUS_UNUSABLE == index_status) {
-            // case 2, just skip
-          } else if (INDEX_STATUS_AVAILABLE == index_status) {
+          if (is_available_index_status(index_status)) {
             if (OB_FAIL(avaliable_index_ids.push_back(index_id))) {
               LOG_WARN("fail to push back index id", KR(ret), K(index_id));
             }
@@ -2495,10 +2550,8 @@ int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob &job_inf
         }
       }
     }
-    if (FAILEDx(generate_unavaliable_index_ids_(job_info, avaliable_index_ids, unavaliable_index_ids))) {  // case 3
+    if (FAILEDx(generate_unavaliable_index_ids_(job_info, avaliable_index_ids, unavaliable_index_ids))) {
       LOG_WARN("fail to generate unavaliable_index_ids", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(update_index_status(error_index_ids, INDEX_STATUS_INDEX_ERROR))) {
-      LOG_WARN("fail to update index status", KR(ret), K(tenant_id));
     } else if (OB_FAIL(update_index_status(unavaliable_index_ids, INDEX_STATUS_UNAVAILABLE))) {
       LOG_WARN("fail to update index status", KR(ret), K(tenant_id));
     }
