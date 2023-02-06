@@ -1965,10 +1965,10 @@ int ObJsonBin::set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t ty
         int64_t pos = 0;
         if (OB_FAIL(serialization::decode_i16(data_, curr_.length() - new_pos, pos, &prec))) {
           LOG_WARN("fail to deserialize decimal precision.", K(ret), K(new_pos), K(curr_.length()));
-        } else if (serialization::decode_i16(data_, curr_.length() - new_pos, pos, &scale)) {
+        } else if (OB_FAIL(serialization::decode_i16(data_, curr_.length() - new_pos, pos, &scale))) {
           LOG_WARN("fail to deserialize decimal scale.", K(ret), K(new_pos), K(pos), K(curr_.length()));
         } else if (OB_FAIL(number_.deserialize(data_, curr_.length() - new_pos, pos))) {
-          LOG_WARN("failed to deserialize decimal data", K(ret));
+          LOG_WARN("failed to deserialize decimal data", K(ret), K(new_pos), K(pos), K(curr_.length()));
         } else {
           prec_ = prec;
           scale_ = scale;

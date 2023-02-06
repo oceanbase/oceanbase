@@ -57,7 +57,10 @@ int ObJsonExprHelper::get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
     LOG_WARN("eval json arg failed", K(ret));
   } else if (json_datum->is_null() || val_type == ObNullType) {
     is_null = true;
-  } else if (val_type != ObExtendType && val_type != ObJsonType && !ob_is_string_type(val_type)) {
+  } else if (!ob_is_extend(val_type)
+              && !ob_is_json(val_type)
+              && !ob_is_raw(val_type)
+              && !ob_is_string_type(val_type)) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("input type error", K(val_type));
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *json_datum,

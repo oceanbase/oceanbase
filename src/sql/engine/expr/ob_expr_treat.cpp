@@ -59,9 +59,6 @@ int ObExprTreat::calc_result_type2(ObExprResType &type,
     type.set_length(OB_MAX_SQL_LENGTH);
     type.set_length_semantics(LS_CHAR);
     type.set_calc_type(ObJsonType);
-  } else if(ob_is_extend(as_type)){
-    type.set_type(ObExtendType);
-    type.set_udt_id(type2.get_udt_id());
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("target type not json", K(ret), K(type1), K(type2));

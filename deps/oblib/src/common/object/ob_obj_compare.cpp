@@ -1323,20 +1323,36 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int cmp_ret = CR_OB_ERROR;                                                                  \
     int ret = OB_SUCCESS;                                                                       \
     int result = 0;                                                                             \
-    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                           \
-    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                           \
-    ObIJsonBase *j_base1 = &j_bin1;                                                             \
-    ObIJsonBase *j_base2 = &j_bin2;                                                             \
-    if (OB_FAIL(j_bin1.reset_iter())) {                                                         \
-      LOG_WARN("fail to reset json bin1 iter", K(ret), K(obj1.val_len_));                       \
-    } else if (OB_FAIL(j_bin2.reset_iter())) {                                                  \
-      LOG_WARN("fail to reset json bin2 iter", K(ret), K(obj2.val_len_));                       \
-    } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                   \
-      LOG_WARN("fail to compare json", K(ret), K(obj1.val_len_), K(obj1.val_len_));             \
+    ObString data_str1;                                                                         \
+    ObString data_str2;                                                                         \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) {                                         \
+      LOG_ERROR("not support outrow json lobs", K(obj1), K(obj2));                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) {                                           \
+      LOG_ERROR("invalid json lob object1",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) {                                           \
+      LOG_ERROR("invalid json lob object2",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
     } else {                                                                                    \
-      cmp_ret = result op_str 0;                                                                \
+      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length());                                    \
+      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length());                                    \
+      ObIJsonBase *j_base1 = &j_bin1;                                                           \
+      ObIJsonBase *j_base2 = &j_bin2;                                                           \
+      if (OB_FAIL(j_bin1.reset_iter())) {                                                       \
+        LOG_WARN("fail to reset json bin1 iter", K(ret), K(data_str1.length()));                \
+      } else if (OB_FAIL(j_bin2.reset_iter())) {                                                \
+        LOG_WARN("fail to reset json bin2 iter", K(ret), K(data_str2.length()));                \
+      } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                 \
+        LOG_WARN("fail to compare json", K(ret), K(data_str1.length()), K(data_str2.length())); \
+      } else {                                                                                  \
+        cmp_ret = result op_str 0;                                                              \
+      }                                                                                         \
     }                                                                                           \
-                                                                                                \
     return cmp_ret;                                                                             \
   }
 
@@ -1351,18 +1367,35 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     UNUSED(cmp_ctx);                                                                            \
     int ret = OB_SUCCESS;                                                                       \
     int result = CR_OB_ERROR;                                                                   \
-    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                           \
-    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                           \
-    ObIJsonBase *j_base1 = &j_bin1;                                                             \
-    ObIJsonBase *j_base2 = &j_bin2;                                                             \
-    if (OB_FAIL(j_bin1.reset_iter())) {                                                         \
-      LOG_WARN("fail to reset json bin1 iter", K(ret), K(obj1.val_len_));                       \
-    } else if (OB_FAIL(j_bin2.reset_iter())) {                                                  \
-      LOG_WARN("fail to reset json bin2 iter", K(ret), K(obj2.val_len_));                       \
-    } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                   \
-      LOG_WARN("fail to compare json", K(ret), K(obj1.val_len_), K(obj1.val_len_));             \
+    ObString data_str1;                                                                         \
+    ObString data_str2;                                                                         \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) {                                         \
+      LOG_ERROR("not support outrow json lobs", K(obj1), K(obj2));                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) {                                           \
+      LOG_ERROR("invalid json lob object1",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) {                                           \
+      LOG_ERROR("invalid json lob object2",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
     } else {                                                                                    \
-      result = INT_TO_CR(result);                                                               \
+      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length());                                    \
+      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length());                                    \
+      ObIJsonBase *j_base1 = &j_bin1;                                                           \
+      ObIJsonBase *j_base2 = &j_bin2;                                                           \
+      if (OB_FAIL(j_bin1.reset_iter())) {                                                       \
+        LOG_WARN("fail to reset json bin1 iter", K(ret), K(data_str1.length()));                \
+      } else if (OB_FAIL(j_bin2.reset_iter())) {                                                \
+        LOG_WARN("fail to reset json bin2 iter", K(ret), K(data_str2.length()));                \
+      } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                 \
+        LOG_WARN("fail to compare json", K(ret), K(data_str1.length()), K(data_str2.length())); \
+      } else {                                                                                  \
+        result = INT_TO_CR(result);                                                             \
+      }                                                                                         \
     }                                                                                           \
                                                                                                 \
     return result;                                                                              \
