@@ -24,6 +24,7 @@
 #include "sql/das/ob_das_location_router.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "deps/oblib/src/lib/alloc/memory_sanity.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -482,6 +483,9 @@ int ObVirtualTableIterator::get_next_row()
     for (int64_t i = 0; OB_SUCC(ret) && i < scan_param_->output_exprs_->count(); i++) {
       ObExpr *expr = scan_param_->output_exprs_->at(i);
       ObDatum &datum = expr->locate_datum_for_write(scan_param_->op_->get_eval_ctx());
+#ifdef ENABLE_SANITY
+      sanity_check_range(datum.ptr_, datum.len_);
+#endif
       if (OB_FAIL(datum.from_obj(row->cells_[i], expr->obj_datum_map_))) {
         LOG_WARN("convert ObObj to ObDatum failed", K(ret));
       } else if (is_lob_storage(row->cells_[i].get_type()) &&
