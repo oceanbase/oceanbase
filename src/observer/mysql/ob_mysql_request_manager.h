@@ -92,10 +92,14 @@ public:
 
 public:
   int init(uint64_t tenant_id, const int64_t max_mem_size, const int64_t queue_size);
+  int start();
+  void wait();
+  void stop();
   void destroy();
 
 public:
 
+  static int mtl_new(ObMySQLRequestManager* &req_mgr);
   static int mtl_init(ObMySQLRequestManager* &req_mgr);
   static void mtl_destroy(ObMySQLRequestManager* &req_mgr);
 
@@ -176,6 +180,7 @@ private:
   // tenant id of this request manager
   uint64_t tenant_id_;
   int tg_id_;
+  volatile bool stop_flag_;
 };
 
 } // end of namespace obmysql

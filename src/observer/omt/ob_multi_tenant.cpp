@@ -350,7 +350,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND(ObPxPools::mtl_init, ObPxPools::mtl_destroy);
     MTL_BIND(ObTenantDfc::mtl_init, ObTenantDfc::mtl_destroy);
     MTL_BIND(init_compat_mode, nullptr);
-    MTL_BIND(ObMySQLRequestManager::mtl_init, ObMySQLRequestManager::mtl_destroy);
+    MTL_BIND2(ObMySQLRequestManager::mtl_new, ObMySQLRequestManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, ObMySQLRequestManager::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObTenantWeakReadService::mtl_init, mtl_start_default,
               mtl_stop_default,
               mtl_wait_default,
