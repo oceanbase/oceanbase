@@ -364,6 +364,9 @@ int ObTableCtx::adjust_properties()
         LOG_WARN("fail to get column schema", K(ret), K(col_name));
       } else if (is_get) {
         // do nothing
+      } else if (col_schema->is_rowkey_column()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("property should not be rowkey column", K(ret), K(prop_names), K(i));
       } else if (OB_FAIL(adjust_column(*col_schema, prop_obj))) {
         LOG_WARN("fail to adjust column", K(ret), K(prop_obj));
       }

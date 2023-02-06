@@ -364,6 +364,16 @@ TEST_F(TestBatchExecute, all_single_operation)
     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
     ASSERT_TRUE(result_entity->is_empty());
   }
+  // update rowkey column
+  {
+    entity->reset();
+    ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
+    value.set_varchar(c3_value);
+    value.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C1, value));
+    ObTableOperation table_operation = ObTableOperation::update(*entity);
+    ASSERT_EQ(OB_NOT_SUPPORTED, table_->execute(table_operation, r));
+  }
   // replace C3
   {
     entity->reset();
