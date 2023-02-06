@@ -21,9 +21,15 @@ int ObVirtualTableProjector::project_row(const ObIArray<Column>& columns, ObNewR
   if (columns.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("columns is empty", K(ret));
-  } else if (NULL == row.cells_) {
+  } else if (output_column_ids_.count() > row.count_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column num not match", K(ret), K(row), K_(output_column_ids));
+  } else if (OB_ISNULL(row.cells_) && row.count_ != 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("row.cells is null", K(ret));
+    LOG_WARN("row count is not valid", K(ret), K(row));
+  } else if (OB_ISNULL(row.cells_)) {
+    // just skip, won't project row
+    // column not specified, eg: count(*)
   } else {
     int64_t cell_idx = 0;
     FOREACH_CNT_X(column_id, output_column_ids_, OB_SUCCESS == ret)
