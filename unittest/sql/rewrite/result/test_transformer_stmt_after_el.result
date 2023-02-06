@@ -87166,9 +87166,9 @@ SQL: select t1.c1 as a1, t2.c1 as a2 from t1 left join t2 on t1.c1 != t2.c1 wher
           "item_type":"T_OP_ROW",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":"NULL",
               "collation":"binary",
-              "coercibility":"NUMERIC"
+              "coercibility":"IGNORABLE"
             },
             "accuracy": {
               "length":-1,
@@ -87938,9 +87938,9 @@ SQL: select t1.c1 as a1, t2.c1 as a2 from t1 left join t2 on t1.c1 != t2.c1 wher
           "item_type":"T_OP_ROW",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":"NULL",
               "collation":"binary",
-              "coercibility":"NUMERIC"
+              "coercibility":"IGNORABLE"
             },
             "accuracy": {
               "length":-1,
@@ -88920,9 +88920,9 @@ SQL: select t1.c1 as a1, t2.c1 as a2 from t1 left join t2 on t1.c1 != t2.c1 wher
           "item_type":"T_OP_ROW",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":"NULL",
               "collation":"binary",
-              "coercibility":"NUMERIC"
+              "coercibility":"IGNORABLE"
             },
             "accuracy": {
               "length":-1,
@@ -89584,9 +89584,9 @@ SQL: select t1.c1 as a1, t2.c1 as a2 from t1 left join t2 on t1.c1 != t2.c1 wher
           "item_type":"T_OP_ROW",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":"NULL",
               "collation":"binary",
-              "coercibility":"NUMERIC"
+              "coercibility":"IGNORABLE"
             },
             "accuracy": {
               "length":-1,
@@ -90356,9 +90356,9 @@ SQL: select t1.c1 as a1, t2.c1 as a2 from t1 left join t2 on t1.c1 != t2.c1 wher
           "item_type":"T_OP_ROW",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":"NULL",
               "collation":"binary",
-              "coercibility":"NUMERIC"
+              "coercibility":"IGNORABLE"
             },
             "accuracy": {
               "length":-1,

@@ -98238,9 +98238,9 @@ SQL: select * from (select a.acctnbr as l1, a.timeuniqueextn as l2  from cb_loan
           "item_type":"T_OP_ROW",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":"NULL",
               "collation":"binary",
-              "coercibility":"NUMERIC"
+              "coercibility":"IGNORABLE"
             },
             "accuracy": {
               "length":-1,

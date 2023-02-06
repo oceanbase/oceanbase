@@ -5374,6 +5374,7 @@ int ObTransformUtils::create_simple_view(
     stmt->get_column_items().reuse();
     stmt->clear_from_items();
     stmt->get_part_exprs().reset();
+    stmt->get_deduced_exprs().reuse();
     if (OB_FAIL(stmt->rebuild_tables_hash())) {
       LOG_WARN("failed to rebuild tables hash", K(ret));
     }

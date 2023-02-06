@@ -2334,17 +2334,27 @@ int ObSql::replace_joined_table_bool_filter(ObSQLSessionInfo *session, JoinedTab
 int ObSql::replace_expr_bool_filter(ObSQLSessionInfo *session, ObRawExpr *expr, ParamStore &params)
 {
   int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret), K(is_stack_overflow));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (OB_ISNULL(expr) || OB_ISNULL(session)) {
-    ret = OB_INVALID_ARGUMENT;
+  bool replaced = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(expr), K(ret));
-  } else if (expr->is_const_expr()) {
-    ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(expr);
+  } else if (OB_FAIL(replace_expr_bool_filter(*expr, params, replaced))) {
+    LOG_WARN("failed to replace expr bool filter", K(ret));
+  } else if (!replaced) {
+    /*do nothing*/
+  } else if (OB_FAIL(expr->formalize(session))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else { /*do nothing*/
+  }
+  return ret;
+}
+
+int ObSql::replace_expr_bool_filter(ObRawExpr &expr, ParamStore &params, bool &replaced)
+{
+  int ret = OB_SUCCESS;
+  replaced = false;
+  if (expr.is_const_expr()) {
+    ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(&expr);
     bool is_true = true;
     if (T_QUESTIONMARK == const_expr->get_expr_type()) {
       int64_t param_idx = -1;
@@ -2369,16 +2379,20 @@ int ObSql::replace_expr_bool_filter(ObSQLSessionInfo *session, ObRawExpr *expr, 
       const_expr->set_expr_type(T_BOOL);
       const_expr->get_value().set_bool(is_true);
       const_expr->set_expr_obj_meta(const_expr->get_value().get_meta());
-      if (OB_FAIL(const_expr->formalize(session))) {
-        LOG_WARN("failed to formalize expr", K(ret));
-      } else { /*do nothing*/
-      }
+      replaced = true;
     }
-  } else if (T_OP_AND == expr->get_expr_type() || T_OP_OR == expr->get_expr_type()) {
-    ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
+  } else if (T_OP_AND == expr.get_expr_type() || T_OP_OR == expr.get_expr_type()) {
+    ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(&expr);
+    ObRawExpr *child_expr = NULL;
+    bool is_replaced = false;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < op_expr->get_param_count(); ++idx) {
-      if (OB_FAIL(SMART_CALL(replace_expr_bool_filter(session, op_expr->get_param_expr(idx), params)))) {
+      if (OB_ISNULL(child_expr = op_expr->get_param_expr(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(expr), K(ret));
+      } else if (OB_FAIL(SMART_CALL(replace_expr_bool_filter(*child_expr, params, is_replaced)))) {
         LOG_WARN("Failed to replace sub_expr bool filter", K(ret));
+      } else {
+        replaced |= is_replaced;
       }
     }
   } else {

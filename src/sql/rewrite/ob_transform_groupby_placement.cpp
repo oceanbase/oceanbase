@@ -901,6 +901,7 @@ int ObTransformGroupByPlacement::transform_groupby_push_down(ObSelectStmt* stmt,
     }
   }
   if (OB_SUCC(ret)) {
+    stmt->get_deduced_exprs().reuse();  // remove deduced exprs after transform
     if (OB_FAIL(stmt->rebuild_tables_hash())) {
       LOG_WARN("failed to rebuild table hashes", K(ret));
     } else if (OB_FAIL(stmt->update_column_item_rel_id())) {

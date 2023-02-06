@@ -269,6 +269,7 @@ private:
   //@brief replace bool filter in expr. Only search 'T_OP_AND' and 'T_OP_OR' expr type, and
   // replace const expr to bool(tinyint) value.
   static int replace_expr_bool_filter(ObSQLSessionInfo* session, ObRawExpr* expr, ParamStore& params);
+  static int replace_expr_bool_filter(ObRawExpr& expr, ParamStore& params, bool& replaced);
   static int replace_joined_table_bool_filter(ObSQLSessionInfo* session, JoinedTable& joined_table, ParamStore& params);
   int transform_stmt_with_outline(ObPlanCacheCtx& pc_ctx, ObOutlineState& outline_state, common::ObString& rewrite_sql);
   int get_outline_info(ObPlanCacheCtx& pc_ctx, const ObString& outline_key,

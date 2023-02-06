@@ -545,73 +545,73 @@ int ObRawExprDeduceType::visit(ObOpRawExpr& expr)
     result_type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     result_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
     expr.set_result_type(result_type);
+  } else if (T_OP_ROW == expr.get_expr_type()) {
+    expr.set_data_type(ObNullType);
   } else {
-    if (T_OP_ROW != expr.get_expr_type()) {
-      ObExprOperator* op = expr.get_op();
-      if (NULL == op) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("Get expression operator failed", "expr type", expr.get_expr_type());
-      } else {
-        ObExprResTypes types;
-        for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); ++i) {
-          const ObRawExpr* param_expr = expr.get_param_expr(i);
-          if (OB_ISNULL(param_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("param expr is null", K(i));
-          } else if (T_OP_ROW == param_expr->get_expr_type()) {
-            if (OB_FAIL(get_row_expr_param_type(*param_expr, types))) {
-              LOG_WARN("get row expr param type failed", K(ret));
-            }
-          } else if (T_REF_QUERY == param_expr->get_expr_type() && T_OP_EXISTS != expr.get_expr_type() &&
-                     T_OP_NOT_EXISTS != expr.get_expr_type()) {
-            const ObQueryRefRawExpr* ref_expr = static_cast<const ObQueryRefRawExpr*>(param_expr);
-            const ObIArray<ObExprResType>& column_types = ref_expr->get_column_types();
-            for (int64_t j = 0; OB_SUCC(ret) && j < column_types.count(); ++j) {
-              if (OB_FAIL(types.push_back(column_types.at(j)))) {
-                LOG_WARN("push back param type failed", K(ret));
-              }
-            }
-          } else if (OB_FAIL(types.push_back(param_expr->get_result_type()))) {
-            LOG_WARN("push back param type failed", K(ret));
+    ObExprOperator* op = expr.get_op();
+    if (NULL == op) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Get expression operator failed", "expr type", expr.get_expr_type());
+    } else {
+      ObExprResTypes types;
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); ++i) {
+        const ObRawExpr* param_expr = expr.get_param_expr(i);
+        if (OB_ISNULL(param_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param expr is null", K(i));
+        } else if (T_OP_ROW == param_expr->get_expr_type()) {
+          if (OB_FAIL(get_row_expr_param_type(*param_expr, types))) {
+            LOG_WARN("get row expr param type failed", K(ret));
           }
-        } /* end for */
-        if (OB_SUCC(ret)) {
-          int32_t row_dimension = ObExprOperator::NOT_ROW_DIMENSION;
-          ObCastMode cast_mode = CM_NONE;
-          if (expr.get_param_count() > 0) {
-            if (OB_ISNULL(expr.get_param_expr(0))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("param expr is null");
-            } else if (T_OP_ROW == expr.get_param_expr(0)->get_expr_type()) {
-              row_dimension = static_cast<int32_t>(expr.get_param_expr(0)->get_param_count());
-            } else if (expr.get_param_expr(0)->has_flag(IS_SUB_QUERY)) {
-              ObQueryRefRawExpr* ref_expr = static_cast<ObQueryRefRawExpr*>(expr.get_param_expr(0));
-              if (T_OP_EXISTS == expr.get_expr_type() || T_OP_NOT_EXISTS == expr.get_expr_type()) {
-                // let row_dimension of exists be ObExprOperator::NOT_ROW_DIMENSION
-              } else if (ref_expr->get_output_column() > 1) {
-                // The result of the subquery as a vector
-                row_dimension = static_cast<int32_t>(ref_expr->get_output_column());
-              } else if (T_OP_IN == expr.get_expr_type() || T_OP_NOT_IN == expr.get_expr_type()) {
-                row_dimension = 1;
-              }
+        } else if (T_REF_QUERY == param_expr->get_expr_type() && T_OP_EXISTS != expr.get_expr_type() &&
+                    T_OP_NOT_EXISTS != expr.get_expr_type()) {
+          const ObQueryRefRawExpr* ref_expr = static_cast<const ObQueryRefRawExpr*>(param_expr);
+          const ObIArray<ObExprResType>& column_types = ref_expr->get_column_types();
+          for (int64_t j = 0; OB_SUCC(ret) && j < column_types.count(); ++j) {
+            if (OB_FAIL(types.push_back(column_types.at(j)))) {
+              LOG_WARN("push back param type failed", K(ret));
+            }
+          }
+        } else if (OB_FAIL(types.push_back(param_expr->get_result_type()))) {
+          LOG_WARN("push back param type failed", K(ret));
+        }
+      } /* end for */
+      if (OB_SUCC(ret)) {
+        int32_t row_dimension = ObExprOperator::NOT_ROW_DIMENSION;
+        ObCastMode cast_mode = CM_NONE;
+        if (expr.get_param_count() > 0) {
+          if (OB_ISNULL(expr.get_param_expr(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("param expr is null");
+          } else if (T_OP_ROW == expr.get_param_expr(0)->get_expr_type()) {
+            row_dimension = static_cast<int32_t>(expr.get_param_expr(0)->get_param_count());
+          } else if (expr.get_param_expr(0)->has_flag(IS_SUB_QUERY)) {
+            ObQueryRefRawExpr* ref_expr = static_cast<ObQueryRefRawExpr*>(expr.get_param_expr(0));
+            if (T_OP_EXISTS == expr.get_expr_type() || T_OP_NOT_EXISTS == expr.get_expr_type()) {
+              // let row_dimension of exists be ObExprOperator::NOT_ROW_DIMENSION
+            } else if (ref_expr->get_output_column() > 1) {
+              // The result of the subquery as a vector
+              row_dimension = static_cast<int32_t>(ref_expr->get_output_column());
             } else if (T_OP_IN == expr.get_expr_type() || T_OP_NOT_IN == expr.get_expr_type()) {
               row_dimension = 1;
             }
+          } else if (T_OP_IN == expr.get_expr_type() || T_OP_NOT_IN == expr.get_expr_type()) {
+            row_dimension = 1;
           }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(calc_result_type(expr, types, cast_mode, row_dimension))) {
-            LOG_WARN("fail calc result type", K(ret));
-          } else if (OB_FAIL(op->set_input_types(types))) {
-            LOG_WARN("fail convert expr calc result type to op func input types", K(ret), K(types));
-          } else if (OB_ISNULL(my_session_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("my_session_ is NULL", K(ret));
-          } else if (my_session_->use_static_typing_engine() && expr.deduce_type_adding_implicit_cast() &&
-                     OB_FAIL(add_implicit_cast(expr, cast_mode))) {
-            LOG_WARN("fail add_implicit_cast", K(ret), K(expr));
-          }
-        } /* end if */
-      }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(calc_result_type(expr, types, cast_mode, row_dimension))) {
+          LOG_WARN("fail calc result type", K(ret));
+        } else if (OB_FAIL(op->set_input_types(types))) {
+          LOG_WARN("fail convert expr calc result type to op func input types", K(ret), K(types));
+        } else if (OB_ISNULL(my_session_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("my_session_ is NULL", K(ret));
+        } else if (my_session_->use_static_typing_engine() && expr.deduce_type_adding_implicit_cast() &&
+                    OB_FAIL(add_implicit_cast(expr, cast_mode))) {
+          LOG_WARN("fail add_implicit_cast", K(ret), K(expr));
+        }
+      } /* end if */
     }
   }
   return ret;
