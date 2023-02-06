@@ -132,9 +132,9 @@ private:
   bool is_observer_stopped_;// kill -15
   bool is_server_stopped_;
   bool is_zone_stopped_;
-  common::ObSArray<FailureEvent> fatal_failures_;// negative infos
+  common::ObSEArray<FailureEvent, 3> fatal_failures_;// negative infos
   bool is_primary_region_;
-  common::ObSArray<FailureEvent> serious_failures_;// negative infos
+  common::ObSEArray<FailureEvent, 3> serious_failures_;// negative infos
   share::SCN scn_;
   bool is_in_blacklist_;
   common::ObStringHolder in_blacklist_reason_;

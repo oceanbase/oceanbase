@@ -239,6 +239,8 @@ private:// 定向暴露给友元类
               }
               LOG_PHASE(TRACE, phase, "compare priority done");
             }
+            lhs_priority->~ElectionPriority();
+            rhs_priority->~ElectionPriority();
           }
         }
       }
