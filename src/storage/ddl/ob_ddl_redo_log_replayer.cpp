@@ -80,7 +80,11 @@ int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const int64_t l
                                                             log.get_cluster_version(),
                                                             log.get_execution_id(),
                                                             0/*checkpoint_log_ts*/))) {
-    LOG_WARN("start ddl log failed", K(ret), K(log), K(log_ts));
+    if (OB_TASK_EXPIRED != ret) {
+      LOG_WARN("start ddl log failed", K(ret), K(log), K(log_ts));
+    } else {
+      ret = OB_SUCCESS; // ignored expired ddl start log
+    }
   } else {
     LOG_INFO("succeed to replay ddl start log", K(ret), K(log), K(log_ts));
   }
