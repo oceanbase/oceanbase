@@ -901,6 +901,8 @@ ObPlanCache *ObSQLSessionInfo::get_plan_cache()
         LOG_WARN("failed to get plan cache");
       } else if (MTL_ID() != get_effective_tenant_id()) {
         LOG_ERROR("unmatched tenant_id", K(MTL_ID()), K(get_effective_tenant_id()));
+      } else if (plan_cache_->is_inited()) {
+        // skip update mem conf
       } else if (OB_SUCCESS != plan_cache_->set_mem_conf(pc_mem_conf)) {
         LOG_ERROR("fail to set plan cache memory conf");
       }
