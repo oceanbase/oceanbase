@@ -17,6 +17,17 @@
 namespace oceanbase {
 namespace common {
 
+#define DECL_EVAL_MACRO(macro, args...) macro(args)
+#define DECL_ATTR_LIST(M)                                                              \
+  DECL_EVAL_MACRO(M, Section, ROOT_SERVICE, LOAD_BALANCE, DAILY_MERGE, LOCATION_CACHE, \
+                  SSTABLE, LOGSERVICE, CACHE, TRANS, TENANT, RPC, OBPROXY, OBSERVER, RESOURCE_LIMIT); \
+  DECL_EVAL_MACRO(M, Scope, CLUSTER, TENANT);                                          \
+  DECL_EVAL_MACRO(M, Source, DEFAULT, FILE, OBADMIN, CMDLINE, CLUSTER, TENANT);        \
+  DECL_EVAL_MACRO(M, Session, NO, YES);                                                \
+  DECL_EVAL_MACRO(M, VisibleLevel, SYS, COMMON, INVISIBLE);                            \
+  DECL_EVAL_MACRO(M, EditLevel, READONLY, STATIC_EFFECTIVE, DYNAMIC_EFFECTIVE);        \
+  DECL_EVAL_MACRO(M, CompatMode, MYSQL, ORACLE, COMMON);
+
 #define _ENUM_EXP(arg) arg
 
 #define DECL_ATTR(ATTR_CLS, args...)                                           \
@@ -27,14 +38,7 @@ typedef struct ATTR_CLS {                                                      \
   static const char *VALUES[];                                                 \
 } ATTR_CLS;
 
-DECL_ATTR(Section, ROOT_SERVICE, LOAD_BALANCE, DAILY_MERGE, LOCATION_CACHE,
-          SSTABLE, LOGSERVICE, CACHE, TRANS, TENANT, RPC, OBPROXY, OBSERVER, RESOURCE_LIMIT);
-DECL_ATTR(Scope, CLUSTER, TENANT);
-DECL_ATTR(Source, DEFAULT, FILE, OBADMIN, CMDLINE, CLUSTER, TENANT);
-DECL_ATTR(Session, NO, YES);
-DECL_ATTR(VisibleLevel, SYS, COMMON, INVISIBLE);
-DECL_ATTR(EditLevel, READONLY, STATIC_EFFECTIVE, DYNAMIC_EFFECTIVE);
-DECL_ATTR(CompatMode, MYSQL, ORACLE, COMMON);
+DECL_ATTR_LIST(DECL_ATTR);
 
 // TODO: whether we need this
 struct InfluencePlan {};
