@@ -888,9 +888,9 @@ int ObResourceManagerProxy::get_user_mapping_info(
             ++affected_rows;
           }
           if (OB_ITER_END == ret) {
-            if (OB_UNLIKELY(!is_single_row(affected_rows))) {
+            if (OB_UNLIKELY(affected_rows > 1)) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected value. expect only 1 row affected", K(ret), K(affected_rows), K(user));
+              LOG_WARN("unexpected value. expect only 0 or 1 row affected", K(ret), K(affected_rows), K(user));
             } else {
               ret = OB_SUCCESS;
             }
