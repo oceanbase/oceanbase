@@ -2876,7 +2876,7 @@ int ObDDLTaskRecordOperator::select_for_update(
         LOG_WARN("fail to get sql result", K(ret), KP(result));
       } else if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
+          ret = OB_ENTRY_NOT_EXIST;
         } else {
           LOG_WARN("fail to get next row", K(ret));
         }
