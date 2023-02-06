@@ -646,7 +646,20 @@ int ObWindowFunction::NonAggFuncRankLike::eval(
     }
     if (T_WIN_FUN_PERCENT_RANK == func_ctx_->func_info_->func_type_) {
       // result will be zero when only one row within frame
-      if (0 == frame.tail_ - frame.head_) {
+      if (share::is_mysql_mode()) {
+        if (0 == frame.tail_ - frame.head_) {
+          val.set_double(0);
+        } else {
+          double numerator = static_cast<double>(rank - 1);
+          double denominator = static_cast<double>(frame.tail_ - frame.head_);
+          if (OB_UNLIKELY(0 == denominator)) {
+            ret = OB_DIVISION_BY_ZERO;
+            LOG_WARN("div zero", K(ret), K(denominator), K(frame.tail_), K(frame.head_));
+          } else {
+            val.set_double(numerator / denominator);
+          }
+        }
+      } else if (0 == frame.tail_ - frame.head_) {
         number::ObNumber res_nmb;
         res_nmb.set_zero();
         val.set_number(res_nmb);
