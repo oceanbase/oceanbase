@@ -334,7 +334,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
       access_ctx_->defensive_check_record_.query_flag_ = access_ctx_->query_flag_;
       transaction::ObTransService *trx = MTL(transaction::ObTransService *);
       bool trx_id_valid = (NULL != access_ctx_->store_ctx_
-                          && access_ctx_->store_ctx_->mvcc_acc_ctx_.snapshot_.is_valid());
+                          && access_ctx_->store_ctx_->mvcc_acc_ctx_.snapshot_.trx_id_.is_valid());
       if (OB_NOT_NULL(trx)
           && trx_id_valid
           && NULL != trx->get_defensive_check_mgr()) {
