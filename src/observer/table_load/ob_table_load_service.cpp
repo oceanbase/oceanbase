@@ -44,8 +44,9 @@ void ObTableLoadService::ObGCTask::runTimerTask()
     LOG_WARN("ObTableLoadService::ObGCTask not init", KR(ret), KP(this));
   } else {
     LOG_DEBUG("table load start gc", K(tenant_id_));
-    auto fn = [this](uint64_t table_id, ObTableLoadTableCtx *) -> bool {
+    auto fn = [this](common::hash::HashMapPair<uint64_t, ObTableLoadTableCtx *> &entry) -> int {
       int ret = OB_SUCCESS;
+      uint64_t table_id = entry.first;
       ObTableLoadTableCtx *table_ctx = nullptr;
       if (OB_FAIL(service_.get_table_ctx(table_id, table_ctx))) {
       } else if (table_ctx->is_dirty()) {
@@ -81,7 +82,7 @@ void ObTableLoadService::ObGCTask::runTimerTask()
         service_.put_table_ctx(table_ctx);
         table_ctx = nullptr;
       }
-      return true;
+      return ret;
     };
     service_.table_ctx_manager_.for_each(fn);
   }
