@@ -118,9 +118,6 @@ int ObSelectStmtPrinter::print_unpivot()
              K(stmt_->get_table_items().count()), K(ret));
   } else {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
-    if (!is_root_stmt()) {
-      DATA_PRINTF("(");
-    }
 
     if (print_params_.print_with_cte_ && OB_FAIL(print_cte_define())) {
       LOG_WARN("failed to print cte", K(ret));
@@ -879,52 +876,6 @@ int ObSelectStmtPrinter::print_for_update()
     }
   }
 
-  return ret;
-}
-
-//把cte的定义完整的恢复出来
-int ObSelectStmtPrinter::print_with()
-{
-  int ret = OB_SUCCESS;
-  const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
-  if (OB_ISNULL(stmt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  } else if (select_stmt->get_cte_definition_size() == 0) {
-      // don't print
-  } else {
-    const ObIArray<TableItem *> &cte_tables = select_stmt->get_cte_definitions();
-    DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE ");
-    //恢复定义，cte先放本stmt中T_WITH_CLAUSE产生的的cte，再放parent放过来的
-    for (int64_t i = 0; OB_SUCC(ret) && i < cte_tables.count() && OB_SUCC(ret); i++) {
-      TableItem* cte_table = cte_tables.at(i);
-      //打印定义
-      if (OB_ISNULL(cte_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the cte tableitem can not be null", K(ret));
-      } else if (TableItem::NORMAL_CTE == cte_table->cte_type_
-                || TableItem::RECURSIVE_CTE == cte_table->cte_type_) {
-        if (OB_FAIL(print_cte_define_title(cte_table))) {
-          LOG_WARN("print column name failed", K(ret));
-        } else if (OB_FAIL(print_subquery(cte_table->ref_query_, PRINT_BRACKET))) {
-          LOG_WARN("print table failed", K(ret));
-        } else if (OB_FAIL(print_search_and_cycle(cte_table->ref_query_))) {
-          LOG_WARN("print search and cycle failed", K(ret));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected cte type", K(ret), K(cte_table->cte_type_));
-      }
-      //打印尾巴
-      if (OB_FAIL(ret)) {
-        //do nothing
-      } else if (i == cte_tables.count() - 1) {
-        DATA_PRINTF(" ");
-      } else {
-        DATA_PRINTF(", ");
-      }
-    }
-  }
   return ret;
 }
 
