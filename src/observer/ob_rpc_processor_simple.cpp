@@ -2022,7 +2022,11 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(table_key.tablet_id_, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      LOG_WARN("get ddl kv manager failed", K(ret));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_EAGAIN;
+      } else {
+        LOG_WARN("get ddl kv manager failed", K(ret));
+      }
     } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
     } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
