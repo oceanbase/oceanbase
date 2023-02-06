@@ -133,13 +133,15 @@ private:
   int inner_get_next_row_();
   int fill_row_(
       share::schema::ObSchemaGetterGuard &schema_guard,
+      const common::ObString &table_name,
       const share::schema::ObTableSchema &table_schema,
       const share::ObLSReplicaLocation &replica,
       const common::ObTabletID &tablet_id,
       const DupReplicaType dup_replica_type);
 
   //////////// tenant server related ////////////
-  int get_next_tenant_server_(const share::schema::ObTableSchema *table_schema);
+  int get_next_tenant_server_(const common::ObString &table_name,
+                              const share::schema::ObTableSchema *table_schema);
   int get_tenant_servers_(const uint64_t tenant_id);
   int fill_tenant_servers_(
       const uint64_t tenant_id,
@@ -151,6 +153,7 @@ private:
 
   //////////// tablet location related ////////////
   int get_next_tablet_location_(
+      const common::ObString &table_name,
       const share::schema::ObTableSchema *table_schema,
       const common::ObTabletID &tablet_id);
   int get_table_tablet_location_(
