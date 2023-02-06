@@ -7836,9 +7836,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     } else if (NULL == right_path.get_strong_sharding()) {
       is_match_repart = false;
       OPT_TRACE("strong sharding of right path is null, not use partition none");
-    } else if (OB_ISNULL(right_path.get_sharding())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
     } else if (!right_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
       is_match_repart = false;
       OPT_TRACE("right path not meet repart");
@@ -7879,8 +7876,11 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_NONE)) {
     OPT_TRACE("check hash none method");
     target_part_keys.reuse();
-    if (!right_sharding->is_distributed_without_table_location_with_partitioning() ||
-        !ObShardingInfo::is_shuffled_server_list(right_path.get_server_list())) {
+    if (NULL == right_path.get_strong_sharding()) {
+      is_match_single_side_hash = false;
+      OPT_TRACE("strong sharding of right path is null, not use hash none");
+    } else if (!right_sharding->is_distributed_without_table_location_with_partitioning() ||
+               !ObShardingInfo::is_shuffled_server_list(right_path.get_server_list())) {
       is_match_single_side_hash = false;
     } else if (OB_FAIL(right_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get partition keys", K(ret));
@@ -7916,9 +7916,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     } else if (NULL == left_path.get_strong_sharding()) {
       is_match_repart = false;
       OPT_TRACE("strong sharding of left path is null, not use none partition");
-    } else if (OB_ISNULL(left_path.get_sharding())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
     } else if (!left_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
       is_match_repart = false;
       OPT_TRACE("left path not meet repart");
@@ -7952,8 +7949,11 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_HASH)) {
     OPT_TRACE("check none hash method");
     target_part_keys.reuse();
-    if (!left_sharding->is_distributed_without_table_location_with_partitioning() ||
-        !ObShardingInfo::is_shuffled_server_list(left_path.get_server_list())) {
+    if (NULL == left_path.get_strong_sharding()) {
+      is_match_single_side_hash = false;
+      OPT_TRACE("strong sharding of left path is null, not use none hash");
+    } else if (!left_sharding->is_distributed_without_table_location_with_partitioning() ||
+               !ObShardingInfo::is_shuffled_server_list(left_path.get_server_list())) {
       is_match_single_side_hash = false;
     } else if (OB_FAIL(left_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get all partition keys", K(ret));
