@@ -823,11 +823,13 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const bool enable_flt, 
   int real_ret_code = ret_code;
   bool is_tenant_dropped = false;
   const ObDDLTaskStatus old_status = task_status_;
+  const bool error_need_retry = OB_SUCCESS != ret_code && is_error_need_retry(ret_code);
   if (OB_TMP_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(trace_id_, is_cancel))) {
     LOG_WARN("check task is canceled", K(tmp_ret), K(trace_id_));
-  } else if (is_cancel) {
-    real_ret_code = (OB_SUCCESS == ret_code || is_error_need_retry(ret_code)) ? OB_CANCELED : ret_code;
-  } else if (SUCCESS == old_status || (OB_SUCCESS != ret_code && is_error_need_retry(ret_code))) {
+  }
+  if (is_cancel) {
+    real_ret_code = (OB_SUCCESS == ret_code || error_need_retry) ? OB_CANCELED : ret_code;
+  } else if (SUCCESS == old_status || error_need_retry) {
     LOG_INFO("error code found, but execute again", K(ret_code), K(ret_code_), K(old_status), K(new_status), K(err_code_occurence_cnt_));
     ret_code_ = OB_SUCCESS;
     new_status = old_status;
@@ -2717,7 +2719,7 @@ int ObDDLTaskRecordOperator::insert_record(
     ObSqlString ddl_stmt_string;
     ObSqlString message_string;
     int64_t affected_rows = 0;
-    char trace_id_str[64] = { 0 };
+    char trace_id_str[256] = { 0 };
     int64_t pos = 0;
     if (OB_UNLIKELY(0 > (pos = record.trace_id_.to_string(trace_id_str, sizeof(trace_id_str))))) {
       ret = OB_ERR_UNEXPECTED;
