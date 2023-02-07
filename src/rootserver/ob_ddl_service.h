@@ -455,7 +455,7 @@ public:
                              ObArenaAllocator &allocator,
                              int64_t &task_id);
   virtual int new_truncate_table(const obrpc::ObTruncateTableArg &arg,
-                                 const obrpc::ObDDLRes &ddl_res,
+                                 obrpc::ObDDLRes &ddl_res,
                                  const share::SCN &frozen_scn);
   int drop_not_null_cst_in_column_flag(const ObTableSchema &orig_table_schema,
                                        const AlterTableSchema &alter_table_schema,
@@ -1518,7 +1518,8 @@ private:
                               const common::ObString &db_name);
   int new_truncate_table_in_trans(const ObIArray<const share::schema::ObTableSchema*> &orig_table_schemas,
                                   ObDDLSQLTransaction &trans,
-                                  const ObString *ddl_stmt_str);
+                                  const ObString *ddl_stmt_str,
+                                  obrpc::ObDDLRes &ddl_res);
   int restore_obj_priv_after_truncation(
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,

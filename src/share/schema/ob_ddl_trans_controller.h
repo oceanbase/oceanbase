@@ -17,6 +17,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/task/ob_timer.h"
 #include "lib/hash/ob_hashset.h"
+#include "common/ob_queue_thread.h"
 
 namespace oceanbase
 {
@@ -36,10 +37,11 @@ struct TaskDesc
 };
 
 // impl for ddl schema change trans commit in order with schema_version
-class ObDDLTransController : public common::ObTimerTask
+class ObDDLTransController : public lib::ThreadPool
 {
 public:
   ObDDLTransController() : inited_(false), schema_service_(NULL) {}
+  ~ObDDLTransController();
   int init(share::schema::ObMultiVersionSchemaService *schema_service);
   static const int DDL_TASK_COND_SLOT = 128;
   int create_task_and_assign_schema_version(const uint64_t tenant_id,
@@ -51,7 +53,7 @@ public:
   int check_enable_ddl_trans_new_lock(int64_t tenant_id, bool &res);
   int set_enable_ddl_trans_new_lock(int64_t tenant_id);
 private:
-  virtual void runTimerTask() override;
+  virtual void run1() override;
   int check_task_ready(int64_t task_id, bool &ready);
 private:
   bool inited_;
@@ -66,6 +68,8 @@ private:
   // for compat
   common::SpinRWLock lock_for_tenant_set_;
   common::hash::ObHashSet<uint64_t> tenant_for_ddl_trans_new_lock_;
+
+  common::ObCond wait_cond_;
 };
 
 } // end schema

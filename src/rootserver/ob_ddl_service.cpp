@@ -16150,7 +16150,8 @@ int ObDDLService::generate_table_schemas(const ObIArray<const ObTableSchema*> &o
 
 int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema*> &orig_table_schemas,
                                               ObDDLSQLTransaction &trans,
-                                              const ObString *ddl_stmt_str)
+                                              const ObString *ddl_stmt_str,
+                                              obrpc::ObDDLRes &ddl_res)
 {
   int ret = OB_SUCCESS;
   ObString table_name;
@@ -16262,6 +16263,13 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     if (FAILEDx(trans.serialize_inc_schemas(first_schema_version - 1))) {
       LOG_WARN("fail to serialize inc schemas", KR(ret), K(tenant_id), "start_schema_version", first_schema_version - 1);
     }
+
+    if (OB_SUCC(ret)) {
+      ddl_res.tenant_id_ = tenant_id;
+      ddl_res.schema_id_ = new_table_schemas.at(0)->get_table_id();
+      ddl_res.task_id_ = boundary_schema_version;
+    }
+
   } // else
 
 
@@ -16286,21 +16294,16 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
   // For table has auto_increment
   // Sequence will not start from 1 when table not refresh newest schema
   //To protect sequence value, we should synchronous refresh schema when we finish truncate table
-  if (OB_SUCC(ret)) {
-    uint64_t column_id = orig_table_schemas.at(0)->get_autoinc_column_id();
-    if (0 != column_id) {
-      if (OB_FAIL(publish_schema(tenant_id))) {
-        LOG_WARN("publish_schema failed", KR(ret), K(table_name), K(tenant_id));
-      }
-    }
-  }
-  int64_t finish_truncate_in_trans = ObTimeUtility::current_time();
+  //if (OB_SUCC(ret)) {
+  //  if (OB_FAIL(publish_schema(tenant_id))) {
+  //    LOG_WARN("publish_schema failed", KR(ret), K(table_name), K(tenant_id));
+  //  }
+  //}
   LOG_INFO("truncate cost after truncate_in_trans finish", KR(ret), K(task_id),
-           "cost", finish_truncate_in_trans - start_time,
+           "trans_cost", trans_end - start_time,
            "fetch_schema_cost", before_wait_task - before_fetch_schema,
            "wait_task_cost", wait_task - before_wait_task,
-           "trans_end_cost", trans_end - wait_task,
-           "publish_schema_cost", finish_truncate_in_trans - trans_end);
+           "trans_end_cost", trans_end - wait_task);
 
   return ret;
 }
@@ -16499,7 +16502,7 @@ int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_
 }
 
 int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
-                                     const obrpc::ObDDLRes &ddl_res,
+                                     obrpc::ObDDLRes &ddl_res,
                                      const SCN &frozen_version)
 {
   int ret = OB_SUCCESS;
@@ -16581,7 +16584,7 @@ int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
     int64_t after_get_schema =  ObTimeUtility::current_time();
     LOG_INFO("truncate cost after get schema and check legal",
             KR(ret), "cost_ts", after_get_schema - after_table_lock);
-    if (FAILEDx(new_truncate_table_in_trans(table_schema_array, trans, &arg.ddl_stmt_str_))) {
+    if (FAILEDx(new_truncate_table_in_trans(table_schema_array, trans, &arg.ddl_stmt_str_, ddl_res))) {
       LOG_WARN("truncate table in trans failed",
               KR(ret), K(arg.table_name_), K(table_id), K(orig_table_schema.get_schema_version()));
     }
