@@ -24,7 +24,8 @@ class ObBlockMarkDeletionMaker {
 public:
   typedef common::ObSEArray<int32_t, common::OB_DEFAULT_COL_DEC_NUM> OutColsProject;
   static const int64_t MAX_REUSE_MEMORY_LIMIT = 100;
-
+  static const int64_t MAX_ROW_COUNT = 1000000;
+  static const int64_t MAX_MACRO_BLOCK_COUNT = 10000;
 public:
   ObBlockMarkDeletionMaker();
   virtual ~ObBlockMarkDeletionMaker();
@@ -36,9 +37,12 @@ public:
 private:
   int prepare_tables_(const common::ObPartitionKey& pkey, const uint64_t index_id, const int64_t snapshot_version,
       const uint64_t end_log_id);
-  int init_(const share::schema::ObTableSchema& table_schema, const common::ObPartitionKey& pkey,
-      const uint64_t index_id, const int64_t snapshot_version, memtable::ObIMemtableCtxFactory* ctx_factory);
-
+  int check_data_size_();
+  int init_(const share::schema::ObTableSchema &table_schema,
+      const common::ObPartitionKey &pkey,
+      const uint64_t index_id,
+      const int64_t snapshot_version,
+      memtable::ObIMemtableCtxFactory *ctx_factory);
 private:
   bool is_inited_;
   storage::ObTableAccessParam access_param_;

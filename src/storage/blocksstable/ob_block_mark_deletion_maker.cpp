@@ -50,11 +50,10 @@ int ObBlockMarkDeletionMaker::init(const ObTableSchema& table_schema, const ObPa
   int ret = OB_SUCCESS;
   if (OB_FAIL(prepare_tables_(pkey, index_id, snapshot_version, end_log_id))) {
     STORAGE_LOG(WARN, "failed to prepare tables", K(ret), K(pkey), K(index_id), K(snapshot_version));
-  } else if (OB_FAIL(init_(table_schema,
-                 pkey,
-                 index_id,
-                 snapshot_version,
-                 ObPartitionService::get_instance().get_trans_service()->get_mem_ctx_factory()))) {
+  } else if (OB_FAIL(check_data_size_())) {
+    STORAGE_LOG(WARN, "Failed to mark delete due to data size", K(ret));
+  } else if (OB_FAIL(init_(table_schema, pkey, index_id, snapshot_version,
+      ObPartitionService::get_instance().get_trans_service()->get_mem_ctx_factory()))) {
     STORAGE_LOG(WARN, "fail to init block mark deletion", K(ret));
   }
   return ret;
@@ -221,10 +220,44 @@ int ObBlockMarkDeletionMaker::prepare_tables_(const common::ObPartitionKey& pkey
   return ret;
 }
 
-int ObBlockMarkDeletionMaker::can_mark_delete(bool& can_mark_deletion, ObExtStoreRange& range)
+int ObBlockMarkDeletionMaker::check_data_size_()
 {
   int ret = OB_SUCCESS;
-  ObStoreRow* store_row = NULL;
+  const ObITable *table = nullptr;
+  const ObIArray<ObITable*> &tables = tables_handle_.get_tables();
+
+  if (tables.count() > 10) {
+    ret = OB_CANCELED;
+    STORAGE_LOG(WARN, "too many tables to do mark delete", K(ret), K(tables));
+  } else {
+    int64_t row_count = 0;
+    int64_t macro_block_count = 0;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
+      if (OB_ISNULL(table = tables.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected null table", K(ret), K(i), K(tables));
+      } else if (table->is_sstable()) {
+        const ObSSTable *sstable = reinterpret_cast<const ObSSTable*>(table);
+        row_count += sstable->get_total_row_count();
+        macro_block_count += sstable->get_macro_block_count();
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (row_count >= MAX_ROW_COUNT || macro_block_count >= MAX_MACRO_BLOCK_COUNT) {
+        ret = OB_CANCELED;
+        STORAGE_LOG(WARN, "too big data size to do mark delete", K(ret), K(tables), K(row_count), K(macro_block_count));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObBlockMarkDeletionMaker::can_mark_delete(bool &can_mark_deletion, ObExtStoreRange &range)
+{
+  int ret = OB_SUCCESS;
+  ObStoreRow *store_row = NULL;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
