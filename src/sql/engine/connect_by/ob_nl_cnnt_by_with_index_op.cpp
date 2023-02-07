@@ -437,9 +437,11 @@ int ObNLConnectByWithIndexOp::read_right_func_going()
     if (OB_FAIL(add_pseudo_column(MY_SPEC.level_expr_, LEVEL))) {
       LOG_WARN("failed to add pseudo column level", K(ret));
     } else if (OB_FAIL(connect_by_pump_.append_row(MY_SPEC.right_prior_exprs_, MY_SPEC.cur_row_exprs_))) {
-      if (OB_ERR_CBY_LOOP == ret && MY_SPEC.is_nocycle_) {
+      if (OB_ERR_CBY_LOOP == ret) {
         ret = OB_SUCCESS;
-        is_cycle_ = true;
+        if (MY_SPEC.is_nocycle_) {
+          is_cycle_ = true;
+        }
       } else {
         LOG_WARN("fail to append row", K(ret));
       }
