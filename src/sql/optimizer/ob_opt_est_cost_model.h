@@ -54,7 +54,6 @@ struct ObTableMetaInfo
       part_size_(0),
       average_row_size_(0),
       row_count_(0),
-      is_only_memtable_data_(false),
       cost_est_type_(ObEstimateType::OB_CURRENT_STAT_EST),
       has_opt_stat_(false),
       is_empty_table_(false),
@@ -68,7 +67,7 @@ struct ObTableMetaInfo
   TO_STRING_KV(K_(ref_table_id), K_(part_count), K_(micro_block_size),
                K_(part_size), K_(average_row_size), K_(table_column_count),
                K_(table_rowkey_count), K_(table_row_count), K_(row_count),
-               K_(is_only_memtable_data), K_(cost_est_type), K_(has_opt_stat),
+               K_(cost_est_type), K_(has_opt_stat),
                K_(is_empty_table), K_(micro_block_count));
 
   /// the following fields come from schema info
@@ -85,7 +84,6 @@ struct ObTableMetaInfo
   double average_row_size_; //main table best partition average row size
 
   double row_count_;  // row count after filters, estimated by stat manager
-  bool is_only_memtable_data_; // whether has only memtable data
   ObEstimateType cost_est_type_; // cost estimation type
   bool has_opt_stat_;
   bool is_empty_table_;
