@@ -119,12 +119,6 @@ void ObITable::reset()
   key_.reset();
 }
 
-int ObITable::safe_to_destroy(bool &is_safe)
-{
-  is_safe = true;
-  return OB_SUCCESS;
-}
-
 int ObITable::exist(
     ObStoreCtx &ctx,
     const uint64_t table_id,

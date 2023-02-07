@@ -118,7 +118,6 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_no_cross_and_continue)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables, tables_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
-  tables_handle.meta_mem_mgr_ = nullptr;
 
   ASSERT_EQ(0, tables_handle.get_table(0)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
   ASSERT_EQ(100, tables_handle.get_table(0)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
@@ -161,7 +160,6 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_is_not_continue)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables, tables_handle);
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
-  tables_handle.meta_mem_mgr_ = nullptr;
 }
 
 
@@ -195,7 +193,6 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_contain)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables, tables_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
-  tables_handle.meta_mem_mgr_ = nullptr;
 
   ASSERT_EQ(0, tables_handle.get_table(0)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
   ASSERT_EQ(100, tables_handle.get_table(0)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
@@ -238,7 +235,6 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_has_overlap)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables, tables_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
-  tables_handle.meta_mem_mgr_ = nullptr;
 
   ASSERT_EQ(0, tables_handle.get_table(0)->key_.scn_range_.start_scn_.get_val_for_inner_table_field());
   ASSERT_EQ(100, tables_handle.get_table(0)->key_.scn_range_.end_scn_.get_val_for_inner_table_field());
@@ -256,8 +252,6 @@ TEST_F(TestSSTableScnRangeCut, sstable_scn_range_has_overlap)
 
 int main(int argc, char** argv)
 {
-  system("rm -f test_sstable_log_ts_range_cut.log*");
-  OB_LOGGER.set_file_name("test_sstable_log_ts_range_cut.log");
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   oceanbase::lib::set_memory_limit(40L << 30);

@@ -174,7 +174,6 @@ public:
            const int64_t schema_version,
            const uint32_t freeze_clock);
   virtual void destroy();
-  virtual int safe_to_destroy(bool &is_safe);
 
   OB_INLINE void reset() { destroy(); }
 public:

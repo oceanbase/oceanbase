@@ -10723,12 +10723,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
       }
 
       // 2. try to estimate the whole memtable
-      if (OB_SUCC(ret) &&
-          table_meta_info_.table_row_count_ <= 0 &&
-          !table_meta_info_.has_opt_stat_) {
-        // a newly created which only has memtable data, and do not have any stats
-        // we use default rowcount here, and try to refine the value by estimating the memtable.
-        table_meta_info_.is_only_memtable_data_ = true;
+      if (OB_SUCC(ret) && table_meta_info_.table_row_count_ <= 0) {
         if (origin_part_cnt > 1) {
           // do nothing
         } else if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(

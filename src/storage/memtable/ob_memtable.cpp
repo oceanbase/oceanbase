@@ -267,17 +267,6 @@ void ObMemtable::destroy()
   snapshot_version_.set_max();
 }
 
-int ObMemtable::safe_to_destroy(bool &is_safe)
-{
-  int ret = OB_SUCCESS;
-
-  is_safe = (0 == get_ref() &&
-             0 == get_write_ref() &&
-             0 == get_unsubmitted_cnt() &&
-             0 == get_unsynced_cnt());
-
-  return ret;
-}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Public Functions: set/lock
 

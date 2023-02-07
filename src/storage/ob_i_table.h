@@ -160,7 +160,6 @@ public:
 
   int init(const TableKey &table_key);
   void reset();
-  virtual int safe_to_destroy(bool &is_safe);
   OB_INLINE const TableKey &get_key() const { return key_; }
   void set_scn_range(share::ObScnRange scn_range) { key_.scn_range_ = scn_range; }
   void set_table_type(ObITable::TableType table_type) { key_.table_type_ = table_type; }

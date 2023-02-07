@@ -77,7 +77,6 @@ void ObTableMetaInfo::assign(const ObTableMetaInfo &table_meta_info)
   table_rowkey_count_ = table_meta_info.table_rowkey_count_;
   table_row_count_ = table_meta_info.table_row_count_;
   row_count_ = table_meta_info.row_count_;
-  is_only_memtable_data_ = table_meta_info.is_only_memtable_data_;
   cost_est_type_ = table_meta_info.cost_est_type_;
   has_opt_stat_ = table_meta_info.has_opt_stat_;
   is_empty_table_ = table_meta_info.is_empty_table_;

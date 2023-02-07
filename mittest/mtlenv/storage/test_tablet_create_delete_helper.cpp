@@ -1143,8 +1143,6 @@ TEST_F(TestTabletCreateDeleteHelper, abort_create_tablets_no_redo)
   trans_flags.for_replay_ = false;
   trans_flags.tx_id_ = 1;
   trans_flags.scn_ = share::SCN::invalid_scn();
-  trans_flags.redo_submitted_ = true;
-  trans_flags.redo_synced_ = true;
 
   // mock, no prepare(as if prepare create failed)
   // and log ts is invalid
@@ -1849,7 +1847,7 @@ TEST_F(TestTabletCreateDeleteHelper, roll_back_prepare_remove_tablet)
   ObMulSourceDataNotifyArg trans_flags;
   trans_flags.for_replay_ = false;
   trans_flags.tx_id_ = 1;
-  const share::SCN val = share::SCN::minus(share::SCN::max_scn(), 300);
+  const share::SCN val = share::SCN::minus(share::SCN::max_scn(), 200);
   trans_flags.scn_ = val;
 
   ObLSHandle ls_handle;
@@ -1908,10 +1906,6 @@ TEST_F(TestTabletCreateDeleteHelper, roll_back_prepare_remove_tablet)
     ASSERT_EQ(OB_SUCCESS, ret);
     tablet_handle.get_obj()->get_tx_data(tx_data);
     ASSERT_EQ(ObTabletStatus::NORMAL, tx_data.tablet_status_);
-
-    trans_flags.scn_ = share::SCN::plus(trans_flags.scn_, 1);
-    ret = ls_tablet_service.on_abort_remove_tablets(arg, trans_flags);
-    ASSERT_NE(OB_SUCCESS, ret);
   }
 }
 
@@ -2375,7 +2369,7 @@ TEST_F(TestTabletCreateDeleteHelper, partial_prepare_remove_and_full_abort_remov
   int ret = OB_SUCCESS;
 
   ObMulSourceDataNotifyArg trans_flags;
-  trans_flags.for_replay_ = true;
+  trans_flags.for_replay_ = false;
   trans_flags.tx_id_ = 1;
   trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 100);
 
@@ -2433,7 +2427,7 @@ TEST_F(TestTabletCreateDeleteHelper, partial_prepare_remove_and_full_abort_remov
     ASSERT_EQ(OB_SUCCESS, ret);
 
     trans_flags.tx_id_ = 2;
-    trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 95);
+    trans_flags.scn_ = share::SCN::invalid_scn();
     // mock partial prepare remove
     ret = ls_tablet_service.on_prepare_remove_tablets(partial_arg, trans_flags);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -2452,6 +2446,7 @@ TEST_F(TestTabletCreateDeleteHelper, partial_prepare_remove_and_full_abort_remov
     ASSERT_EQ(ObTabletCommon::FINAL_TX_ID, tx_data.tx_id_);
     ASSERT_EQ(ObTabletStatus::NORMAL, tx_data.tablet_status_);
     ASSERT_TRUE(tablet_handle.get_obj()->is_data_tablet());
+
 
     key.tablet_id_ = 2;
     ret = ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle);
@@ -2918,7 +2913,7 @@ TEST_F(TestTabletCreateDeleteHelper, tablet_not_exist_commit)
 int main(int argc, char **argv)
 {
   system("rm -f test_tablet_create_delete_helper.log*");
-  OB_LOGGER.set_file_name("test_tablet_create_delete_helper.log");
+  OB_LOGGER.set_file_name("test_tablet_create_delete_helper.log", true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

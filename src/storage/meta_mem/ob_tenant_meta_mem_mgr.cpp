@@ -288,13 +288,10 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
       } else {
         TableGCItem *item = static_cast<TableGCItem *>(ptr);
         ObITable *table = item->table_;
-        bool is_safe = false;
         if (OB_ISNULL(table)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("the table in gc item is nullptr", K(ret), KP(item));
-        } else if (OB_FAIL(table->safe_to_destroy(is_safe))) {
-          LOG_WARN("fail to check safe_to_destroy", K(ret), KPC(table));
-        } else if (is_safe) {
+        } else {
           ObITable::TableType table_type = item->table_type_;
           int64_t index = static_cast<int>(table_type);
           if (OB_UNLIKELY(!ObITable::is_table_type_valid(table_type) || nullptr == pool_arr_[index])) {
@@ -304,11 +301,9 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
             pool_arr_[index]->free_obj(static_cast<void *>(table));
             table_cnt_arr[index]++;
           }
-        } else if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
-          LOG_INFO("the table is unsafe to destroy", KPC(table));
         }
 
-        if (OB_SUCC(ret) && is_safe) {
+        if (OB_SUCC(ret)) {
           left_recycle_cnt--;
           ob_free(item);
           item = nullptr;
