@@ -397,6 +397,12 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
                 LOG_WARN("cursor result set is null.", K(ret), K(cursor.get_id()));
               } else {
                 ObSPICursor *spi_cursor = cursor.get_spi_cursor();
+                // ps cursor position is be record in current_position
+                // ref cursor position is be record in get_spi_cursor()->cur_
+                if (!cursor.is_ps_cursor() && cursor.get_spi_cursor()->cur_ > 0
+                      && cursor.get_current_position() != cursor.get_spi_cursor()->cur_) {
+                  cursor.set_current_position(cursor.get_spi_cursor()->cur_ - 1);
+                }
                 cur = cursor.get_current_position();
                 max_count = spi_cursor->row_store_.get_row_cnt();
                 if (max_count > 0) {
