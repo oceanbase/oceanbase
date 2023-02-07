@@ -136,74 +136,11 @@ void ObMvccTransNode::set_snapshot_version_barrier(const SCN version)
   snapshot_version_barrier_ = version;
 }
 
-void ObMvccTransNode::set_elr()
-{
-  while (true) {
-    const uint8_t flag = ATOMIC_LOAD(&flag_);
-    const uint8_t tmp = (flag | F_ELR);
-    if (ATOMIC_BCAS(&flag_, flag, tmp)) {
-      break;
-    }
-  }
-}
-
-void ObMvccTransNode::set_committed()
-{
-  while (true) {
-    const uint8_t flag = ATOMIC_LOAD(&flag_);
-    const uint8_t tmp = (flag | F_COMMITTED);
-    if (ATOMIC_BCAS(&flag_, flag, tmp)) {
-      break;
-    }
-  }
-}
-
 void ObMvccTransNode::get_trans_id_and_seq_no(ObTransID &tx_id,
                                               int64_t &seq_no)
 {
   tx_id = tx_id_;
   seq_no = seq_no_;
-}
-
-void ObMvccTransNode::clear_aborted()
-{
-  const uint8_t consistent_flag = F_ABORTED;
-  while (true) {
-    const uint8_t flag = ATOMIC_LOAD(&flag_);
-    const uint8_t tmp = (flag & (~consistent_flag));
-    if (ATOMIC_BCAS(&flag_, flag, tmp)) {
-      break;
-    }
-  }
-}
-
-void ObMvccTransNode::set_aborted()
-{
-  while (true) {
-    const uint8_t flag = ATOMIC_LOAD(&flag_);
-    const uint8_t tmp = (flag | F_ABORTED);
-    if (ATOMIC_BCAS(&flag_, flag, tmp)) {
-      break;
-    }
-  }
-}
-
-void ObMvccTransNode::set_delayed_cleanout(const bool delayed_cleanout)
-{
-  while (true) {
-    const uint8_t flag = ATOMIC_LOAD(&flag_);
-    const uint8_t tmp = delayed_cleanout
-        ? flag | F_DELAYED_CLEANOUT
-        : flag & ~F_DELAYED_CLEANOUT;
-    if (ATOMIC_BCAS(&flag_, flag, tmp)) {
-      break;
-    }
-  }
-}
-
-bool ObMvccTransNode::is_delayed_cleanout() const
-{
-  return ATOMIC_LOAD(&flag_) & F_DELAYED_CLEANOUT;
 }
 
 int ObMvccTransNode::fill_trans_version(const SCN version)
@@ -1185,6 +1122,5 @@ void ObMvccRow::print_row()
     }
   }
 }
-
 }; // end namespace mvcc
 }; // end namespace oceanbase
