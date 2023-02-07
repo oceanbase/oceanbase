@@ -1984,14 +1984,22 @@ int ObLobManager::write_outrow_inner(ObLobAccessParam& param, ObLobQueryIter *it
   int ret = OB_SUCCESS;
   ObLobMetaScanIter meta_iter;
   uint64_t modified_len = param.len_;
-
+  int64_t mbmaxlen = 1;
   if (param.coll_type_ != CS_TYPE_BINARY) {
-    int64_t mbmaxlen = 0;
     if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(param.coll_type_, mbmaxlen))) {
-    LOG_WARN("fail to get mbmaxlen", K(ret), K(param.coll_type_));
+      LOG_WARN("fail to get mbmaxlen", K(ret), K(param.coll_type_));
     } else {
       modified_len *= mbmaxlen;
     }
+  }
+
+  // consider offset is bigger than char len, add padding size modified len
+  int64_t least_char_len = param.byte_size_ / mbmaxlen;
+  if (lob_handle_has_char_len(param)) {
+    least_char_len = *get_char_len_ptr(param);
+  }
+  if (param.offset_ > least_char_len) {
+    modified_len += (param.offset_ - least_char_len);
   }
 
   if (OB_FAIL(ret)) {
@@ -2070,9 +2078,9 @@ int ObLobManager::write_outrow_inner(ObLobAccessParam& param, ObLobQueryIter *it
 
     // insert situation for range begin and end
     // found_begin  found end  => result
-    // true         true          do range insert, seq_id in [begin, end]
-    // false        false         do padding and append
-    // true         false         do range append, seq_id in [begin, max]
+    // true         true          do range insert, seq_id in [end, next]
+    // false        false         do padding and append in [end, max]
+    // true         false         do range append, seq_id in [end, max]
     // other situations are invalid
     uint32_t inrow_st = 0;
     ObString seq_id_st, seq_id_ed;
@@ -2083,11 +2091,12 @@ int ObLobManager::write_outrow_inner(ObLobAccessParam& param, ObLobQueryIter *it
     } else if (found_begin && found_end) {
       seq_id_st = range_end.seq_id_;
       seq_id_ed = meta_iter.get_cur_info().seq_id_;
-      if (seq_id_ed.compare(seq_id_ed) == 0) {
+      if (seq_id_ed.compare(seq_id_st) == 0) {
+        // only found one and this is the last lob meta, just set end to max
         seq_id_ed.assign_ptr(nullptr, 0);
       }
     } else if (found_begin && !found_end) {
-      seq_id_st = range_end.seq_id_;
+      seq_id_st = meta_iter.get_cur_info().seq_id_;
       seq_id_ed.assign_ptr(nullptr, 0);
     } else if (!found_begin && !found_end) {
       uint64_t total_char_len = meta_iter.get_cur_pos();
