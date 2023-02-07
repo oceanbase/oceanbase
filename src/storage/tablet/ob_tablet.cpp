@@ -3350,6 +3350,21 @@ int ObTablet::clear_memtables_on_table_store() // be careful to call this func
   }
   return ret;
 }
+int ObTablet::remove_memtables_from_data_checkpoint()
+{
+  int ret = OB_SUCCESS;
+  ObIMemtableMgr *memtable_mgr = nullptr;
 
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else if (OB_FAIL(memtable_mgr->remove_memtables_from_data_checkpoint())){
+    LOG_WARN("failed to rmeove memtables from data_checkpoint", K(ret));
+  }
+
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase
