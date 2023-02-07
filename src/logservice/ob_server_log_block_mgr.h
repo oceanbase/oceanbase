@@ -198,7 +198,7 @@ public:
 
   // @brief after 'del_tenant' in ObMultiTenant success, need remove it from ObServerLogBlockMgr
   // NB: accurately, when tenant not exist in 'omt_', we can remove it from ObServerLogBlockMgr
-  int remove_tenant();
+  int remove_tenant(const int64_t log_disk_size);
 
   TO_STRING_KV("dir:",
                log_pool_path_, K_(dir_fd), K_(meta_fd), K_(log_pool_meta),

@@ -51,6 +51,11 @@ public:
   int build(const share::ObUnitInfoGetter::ObTenantConfig &unit,
             const storage::ObTenantSuperBlock &super_block);
 
+  bool is_hidden() const
+  {
+    return super_block_.is_hidden_;
+  }
+
 
   TO_STRING_KV(K_(unit), K_(super_block), K_(create_status));
 
