@@ -252,9 +252,9 @@ int ObRemoteFetchLogImpl::get_palf_base_lsn_scn_(ObLS &ls, LSN &lsn, SCN &scn)
     LOG_WARN("get end log scn failed", K(ret), K(id));
   } else if (OB_FAIL(palf_handle_guard.get_end_lsn(lsn))) {
     LOG_WARN("get end lsn failed", K(ret), K(id));
-  } else {
-    const SCN &checkpoint_scn = ls.get_clog_checkpoint_scn();
-    scn = SCN::max(scn, checkpoint_scn);
+  } else if (OB_UNLIKELY(!scn.is_valid() || !lsn.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get_palf_base_lsn_scn_, return invalid scn or lsn", K(id), K(scn), K(lsn));
   }
   return ret;
 }
