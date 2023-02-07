@@ -534,10 +534,12 @@ public:
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
+  // This interface is idempotent.
   virtual int disable_vote() = 0;
   // @brief: store a persistent flag which means this paxos replica
   // can reply ack when receiving logs.
   // By default, paxos replica can reply ack.
+  // This interface is idempotent.
   virtual int enable_vote() = 0;
 
   // ===================== Iterator start =======================

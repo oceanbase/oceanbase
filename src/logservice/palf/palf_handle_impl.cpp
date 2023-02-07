@@ -1168,10 +1168,22 @@ int PalfHandleImpl::disable_sync()
 int PalfHandleImpl::disable_vote()
 {
   int ret = OB_SUCCESS;
+  const PRIORITY_SEED_BIT new_election_inner_priority_seed = PRIORITY_SEED_BIT::SEED_IN_REBUILD_PHASE_BIT;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    // Update election priority firstly
+  } else if (OB_FAIL(election_.add_inner_priority_seed_bit(new_election_inner_priority_seed))
+      && OB_ENTRY_EXIST != ret) {
+    // Because this interface is idempotent, so we need ignore err code OB_ENTRY_EXIST.
+    PALF_LOG(WARN, "election add_inner_priority_seed_bit for rebuild failed", KPC(this));
+    // Update allow_vote flag
   } else if (OB_FAIL(set_allow_vote_flag_(false))) {
-    PALF_LOG(WARN, "set_allow_vote_flag failed", K(ret), KPC(this));
+    PALF_LOG(WARN, "set_allow_vote_flag failed", KPC(this));
+    // rollback election priority when it encounters failure
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = election_.clear_inner_priority_seed_bit(new_election_inner_priority_seed))) {
+      PALF_LOG(WARN, "election clear_inner_priority_seed_bit for rebuild failed", K(tmp_ret), KPC(this));
+    }
   } else {
     PALF_EVENT("disable_vote success", palf_id_, KPC(this));
   }
@@ -1181,10 +1193,20 @@ int PalfHandleImpl::disable_vote()
 int PalfHandleImpl::enable_vote()
 {
   int ret = OB_SUCCESS;
+  const PRIORITY_SEED_BIT election_inner_priority_seed = PRIORITY_SEED_BIT::SEED_IN_REBUILD_PHASE_BIT;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    // Update allow_vote flag firstly
   } else if (OB_FAIL(set_allow_vote_flag_(true))) {
-    PALF_LOG(WARN, "set_allow_vote_flag failed", K(ret), KPC(this));
+    PALF_LOG(WARN, "set_allow_vote_flag failed", KPC(this));
+  } else if (OB_FAIL(election_.clear_inner_priority_seed_bit(election_inner_priority_seed))
+      && OB_ENTRY_NOT_EXIST != ret) {
+    PALF_LOG(WARN, "election clear_inner_priority_seed_bit for rebuild failed", KPC(this));
+    // rollback allow_vote flag when it encounters failure
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = set_allow_vote_flag_(false))) {
+      PALF_LOG(WARN, "rollback allow_vote flag failed", K(tmp_ret), KPC(this));
+    }
   } else {
     PALF_EVENT("enable_vote success", palf_id_, KPC(this));
   }
@@ -1207,7 +1229,8 @@ int PalfHandleImpl::set_allow_vote_flag_(const bool allow_vote)
     replica_property_meta.allow_vote_ = allow_vote;
     if (false == allow_vote
         && LEADER == state_mgr_.get_role()
-        && OB_FAIL(election_.revoke(RoleChangeReason::PalfDisableVoteToRevoke))) {
+        && OB_FAIL(election_.revoke(RoleChangeReason::PalfDisableVoteToRevoke))
+        && OB_NOT_MASTER != ret) {  // ignore not master err code
       PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
     } else if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
       PALF_LOG(WARN, "submit_flush_replica_property_meta_task failed", K(ret), K(flush_meta_cb_ctx), K(replica_property_meta));
@@ -2242,9 +2265,13 @@ int PalfHandleImpl::do_init_mem_(
   const bool is_normal_replica = (log_meta.get_log_replica_property_meta().replica_type_ == NORMAL_REPLICA);
   // inner priority seed: smaller means higher priority
   // reserve some bits for future requirements
-  const uint64_t election_inner_priority_seed = is_normal_replica ?
-                                                static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED) :
-                                                0ULL | static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT);
+  uint64_t election_inner_priority_seed = is_normal_replica ?
+                                          static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED) :
+                                          0ULL | static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT);
+  const bool allow_vote = log_meta.get_log_replica_property_meta().allow_vote_;
+  if (false == allow_vote) {
+    election_inner_priority_seed |= static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_IN_REBUILD_PHASE_BIT);
+  }
   palf::PalfRoleChangeCbWrapper &role_change_cb_wrpper = role_change_cb_wrpper_;
   if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
