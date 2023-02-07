@@ -588,7 +588,7 @@ select (with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from q
 from dual;
 show create view v;
 View	Create View	character_set_client	collation_connection
-v	CREATE VIEW `v` AS select (WITH RECURSIVE `qn` as (select 'with RECURSIVE') select `qn`.`with RECURSIVE` from `qn`) AS `scal_subq`	utf8mb4	utf8mb4_general_ci
+v	CREATE VIEW `v` AS select (WITH RECURSIVE `qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` from `qn`) AS `scal_subq`	utf8mb4	utf8mb4_general_ci
 select * from v;
 +----------------+
 | scal_subq      |
@@ -599,7 +599,7 @@ drop view v;
 create view v as select * from (with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from qn)  dt;
 show create view v;
 View	Create View	character_set_client	collation_connection
-v	CREATE VIEW `v` AS select `dt`.`with RECURSIVE` AS `with RECURSIVE` from (WITH RECURSIVE `qn` as (select 'with RECURSIVE') select `qn`.`with RECURSIVE` AS `with RECURSIVE` from `qn`) `dt`	utf8mb4	utf8mb4_general_ci
+v	CREATE VIEW `v` AS select `dt`.`with RECURSIVE` AS `with RECURSIVE` from (WITH RECURSIVE `qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` AS `with RECURSIVE` from `qn`) `dt`	utf8mb4	utf8mb4_general_ci
 select * from v;
 +----------------+
 | with RECURSIVE |
