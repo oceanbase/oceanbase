@@ -382,9 +382,11 @@ int ObSharedMacroBlockMgr::get_recyclable_blocks(ObIAllocator &allocator, ObIArr
 int ObSharedMacroBlockMgr::defragment()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator task_allocator;
+  ObArenaAllocator task_allocator("SSTDefragTask", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  const lib::ObMemAttr mem_attr(MTL_ID(), "SSTDefragIter");
+  ObFIFOAllocator iter_allocator;
   ObFixedArray<MacroBlockId, ObIAllocator> macro_ids(task_allocator);
-  ObTenantTabletIterator tablet_iter(*(MTL(ObTenantMetaMemMgr*)), task_allocator);
+  ObTenantTabletIterator tablet_iter(*(MTL(ObTenantMetaMemMgr*)), iter_allocator);
   ObSSTableIndexBuilder *sstable_index_builder = nullptr;
   ObIndexBlockRebuilder *index_block_rebuilder = nullptr;
   int64_t rewrite_cnt = 0;
@@ -392,6 +394,9 @@ int ObSharedMacroBlockMgr::defragment()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSharedMacroBlockMgr hasn't been initiated", K(ret));
+  } else if (OB_FAIL(iter_allocator.init(lib::ObMallocAllocator::get_instance(),
+      OB_MALLOC_NORMAL_BLOCK_SIZE, mem_attr))) {
+    STORAGE_LOG(WARN, "fail to init fifo allocator", K(ret));
   } else if (OB_FAIL(macro_ids.init(MAX_RECYCLABLE_BLOCK_CNT))) {
     LOG_WARN("fail to init macro ids", K(ret));
   } else if (OB_FAIL(get_recyclable_blocks(task_allocator, macro_ids))) {
