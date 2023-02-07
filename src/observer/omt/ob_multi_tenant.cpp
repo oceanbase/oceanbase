@@ -824,7 +824,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   }
   // TODO: @lingyang 预期不能失败
   if (!is_virtual_tenant_id(tenant_id) && OB_TMP_FAIL(update_tenant_config(tenant_id))) {
-    LOG_ERROR("update tenant config fail", K(tenant_id), K(tmp_ret));
+    LOG_WARN("update tenant config fail", K(tenant_id), K(tmp_ret));
   }
   // no need rollback when replaying slog and creating a virtual tenant,
   // in which two case the write_slog flag is set to false
