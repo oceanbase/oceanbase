@@ -33,7 +33,7 @@ using namespace transaction;
 using namespace blocksstable;
 
 namespace storage {
-int ObTxTable::prepare_online()
+int ObTxTable::online()
 {
   ATOMIC_INC(&epoch_);
   ATOMIC_STORE(&state_, TxTableState::ONLINE);
@@ -147,7 +147,7 @@ public:
                                   &palf_param,
                                   nullptr));
     EXPECT_EQ(OB_SUCCESS, tx_table_.tx_ctx_table_.init(ls_id_));
-    tx_table_.prepare_online();
+    tx_table_.online();
     tx_table_.is_inited_ = true;
     tx_table_.ls_ = &ls_;
 
