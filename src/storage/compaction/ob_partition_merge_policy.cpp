@@ -888,11 +888,23 @@ int ObPartitionMergePolicy::check_need_major_merge(
 
       if (OB_SUCC(ret) && !can_merge && is_tablet_data_status_complete) {
         ObTabletMemtableMgr *memtable_mgr = nullptr;
+        ObTableHandleV2 last_frozen_memtable_handle;
         memtable::ObMemtable *last_frozen_memtable = nullptr;
         if (OB_ISNULL(memtable_mgr = static_cast<ObTabletMemtableMgr *>(tablet.get_memtable_mgr()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("memtable mgr is unexpected null", K(ret), K(tablet));
-        } else if (OB_ISNULL(last_frozen_memtable = memtable_mgr->get_last_frozen_memtable())) {
+        } else if (OB_FAIL(memtable_mgr->get_last_frozen_memtable(last_frozen_memtable_handle))) {
+          if (OB_ENTRY_NOT_EXIST != ret) {
+            LOG_WARN("fail to get last frozen memtable", K(ret));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        } else if (OB_FAIL(last_frozen_memtable_handle.get_data_memtable(last_frozen_memtable))) {
+          LOG_WARN("fail to get memtable", K(ret));
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(last_frozen_memtable)) {
           // no frozen memtable, need force freeze
           need_force_freeze = true;
         } else {

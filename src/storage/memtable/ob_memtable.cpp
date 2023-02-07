@@ -92,7 +92,7 @@ ObMemtable::ObMemtable()
   :   ObIMemtable(),
       ObFreezeCheckpoint(),
       is_inited_(false),
-      ls_(nullptr),
+      ls_handle_(),
       freezer_(nullptr),
       memtable_mgr_(nullptr),
       freeze_clock_(0),
@@ -135,7 +135,7 @@ ObMemtable::~ObMemtable()
 }
 
 int ObMemtable::init(const ObITable::TableKey &table_key,
-                     ObLS *ls,
+                     ObLSHandle &ls_handle,
                      storage::ObFreezer *freezer,
                      storage::ObTabletMemtableMgr *memtable_mgr,
                      const int64_t schema_version,
@@ -149,10 +149,11 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
   } else if (!table_key.is_valid() ||
              OB_ISNULL(freezer) ||
              OB_ISNULL(memtable_mgr) ||
-             schema_version < 0) {
+             schema_version < 0 ||
+             OB_UNLIKELY(!ls_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid param", K(ret), K(table_key), KP(freezer), KP(memtable_mgr),
-               K(schema_version), K(freeze_clock));
+              K(schema_version), K(freeze_clock), K(ls_handle));
   } else if (FALSE_IT(set_memtable_mgr(memtable_mgr))) {
   } else if (FALSE_IT(set_freeze_clock(freeze_clock))) {
   } else if (FALSE_IT(set_max_schema_version(schema_version))) {
@@ -170,7 +171,7 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
   } else if (OB_FAIL(ObITable::init(table_key))) {
     TRANS_LOG(WARN, "failed to set_table_key", K(ret), K(table_key));
   } else {
-    ls_ = ls;
+    ls_handle_ = ls_handle;
     ObMemtableStat::get_instance().register_memtable(this);
     if (table_key.get_tablet_id().is_sys_tablet()) {
       mode_ = lib::Worker::CompatMode::MYSQL;
@@ -243,7 +244,7 @@ void ObMemtable::destroy()
   time_guard.click();
   local_allocator_.destroy();
   time_guard.click();
-  ls_ = nullptr;
+  ls_handle_.reset();
   freezer_ = nullptr;
   memtable_mgr_ = nullptr;
   freeze_clock_ = 0;
@@ -1246,7 +1247,12 @@ int ObMemtable::set_freezer(ObFreezer *handler)
 int ObMemtable::get_ls_id(share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  ls_id = freezer_->get_ls_id();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret));
+  } else {
+    ls_id = ls_handle_.get_ls()->get_ls_id();
+  }
   return ret;
 }
 
@@ -2665,10 +2671,10 @@ int ObMemtable::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
 {
   int ret = OB_SUCCESS;
 
-  if (NULL == ls_) {
+  if (OB_UNLIKELY(!ls_handle_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "ls_ is NULL");
-  } else if (OB_FAIL(ls_->get_tx_table_guard(tx_table_guard))) {
+    TRANS_LOG(ERROR, "ls_handle is invalid", K(ret));
+  } else if (OB_FAIL(ls_handle_.get_ls()->get_tx_table_guard(tx_table_guard))) {
     TRANS_LOG(WARN, "Get tx table guard from ls failed.", KR(ret));
   }
 

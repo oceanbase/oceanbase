@@ -227,14 +227,14 @@ void ObMinorFreezeTest::tablet_freeze_for_replace_tablet_meta()
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(RunCtx.tenant_id_));
   const int64_t start = ObTimeUtility::current_time();
   while (ObTimeUtility::current_time() - start <= freeze_duration_) {
-    memtable::ObIMemtable *imemtable = nullptr;
-    int ret = ls_handle_.get_ls()->get_freezer()->tablet_freeze_for_replace_tablet_meta(tablet_id_, imemtable);
+    ObTableHandleV2 handle;
+    int ret = ls_handle_.get_ls()->get_freezer()->tablet_freeze_for_replace_tablet_meta(tablet_id_, handle);
     if (OB_EAGAIN == ret || OB_ENTRY_EXIST == ret) {
       ret = OB_SUCCESS;
     }
     ASSERT_EQ(OB_SUCCESS, ret);
     if (OB_SUCC(ret)) {
-      ASSERT_EQ(OB_SUCCESS, ls_handle_.get_ls()->get_freezer()->handle_frozen_memtable_for_replace_tablet_meta(tablet_id_, imemtable));
+      ASSERT_EQ(OB_SUCCESS, ls_handle_.get_ls()->get_freezer()->handle_frozen_memtable_for_replace_tablet_meta(tablet_id_, handle));
     }
   }
 }

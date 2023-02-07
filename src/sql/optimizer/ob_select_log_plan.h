@@ -451,6 +451,12 @@ private:
                                   ObIArray<ObWinFunRawExpr*> &current_exprs,
                                   ObIArray<OrderItem> &next_sort_keys);
 
+  int prepare_for_split_winfuncs(
+      const ObLogicalOperator *top,
+      const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
+      const ObIArray<OrderItem> &sort_keys,
+      ObIArray<double> &sort_key_ndvs,
+      ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes);
   // Split adjusted window function (`adjusted_winfunc_exprs()` called) into groups such that each
   // group hash same distribute method.
   //
@@ -464,10 +470,12 @@ private:
   int split_winfuncs_by_dist_method(const ObLogicalOperator *top,
                                     const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
                                     const common::ObIArray<ObWinFunRawExpr *> &remaining_exprs,
-                                    const ObIArray<OrderItem> &sort_keys,
                                     const int64_t stmt_func_idx,
+                                    const ObIArray<double> &sort_key_ndvs,
+                                    const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
                                     common::ObIArray<int64_t> &split,
-                                    common::ObIArray<WinDistAlgo> &methods);
+                                    common::ObIArray<WinDistAlgo> &methods,
+                                    bool &has_non_parallel_wf);
 
   // Generate sort keys for window function
   // @param[out] order_item generated sort keys
@@ -492,6 +500,13 @@ private:
                                       int64_t &pby_prefix,
                                       int64_t &pby_oby_prefix);
 
+  int get_partition_count(const ObSEArray<std::pair<int64_t, int64_t>, 8> pby_oby_prefixes,
+                          const int64_t start,
+                          const int64_t end,
+                          const ObIArray<ObRawExpr*> &partition_exprs,
+                          const int64_t prefix_pos,
+                          int64_t &part_cnt);
+
   /**
    * @brief set_default_sort_directions
    * 确定窗口函数partition表达式的排序方向
@@ -508,12 +523,15 @@ private:
   int create_merge_window_function_plan(ObLogicalOperator *&top,
                                         const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
                                         const ObIArray<OrderItem> &sort_keys,
-                                        WinDistAlgo dist_method);
+                                        const ObIArray<ObRawExpr*> &partition_exprs,
+                                        WinDistAlgo dist_method,
+                                        bool need_sort,
+                                        int64_t prefix_pos);
 
   int create_hash_window_function_plan(ObLogicalOperator *&top,
-                                       ObIArray<ObWinFunRawExpr*> &adjusted_winfunc_exprs,
+                                       const ObIArray<ObWinFunRawExpr*> &adjusted_winfunc_exprs,
                                        const ObIArray<OrderItem> &sort_keys,
-                                       ObIArray<ObRawExpr*> &partition_exprs,
+                                       const ObIArray<ObRawExpr*> &partition_exprs,
                                        const int64_t part_cnt);
 
   int adjust_window_functions(const ObLogicalOperator *top,

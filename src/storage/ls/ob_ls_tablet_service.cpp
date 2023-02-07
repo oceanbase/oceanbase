@@ -2935,6 +2935,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
   ObMetaDiskAddr disk_addr;
   ObFreezer *freezer = nullptr;
   memtable::ObIMemtable *imemtable = nullptr;
+  ObTableHandleV2 memtable_handle;
   bool is_tablet_freeze = false;
 
   if (IS_NOT_INIT) {
@@ -2971,7 +2972,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
       if (!tablet_id.is_ls_inner_tablet()) {
         if (nullptr != param.tablet_meta_
             && old_tablet->get_clog_checkpoint_ts() < param.tablet_meta_->clog_checkpoint_ts_) {
-          if (OB_FAIL(freezer->tablet_freeze_for_replace_tablet_meta(tablet_id, imemtable))) {
+          if (OB_FAIL(freezer->tablet_freeze_for_replace_tablet_meta(tablet_id, memtable_handle))) {
             LOG_WARN("failed to freeze tablet", K(ret), K(tablet_id), KPC(old_tablet));
           } else {
             is_tablet_freeze = true;
@@ -2980,7 +2981,10 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
 
         if (OB_FAIL(ret)) {
         } else if (!is_tablet_freeze) {
-        } else if (nullptr != imemtable) {
+        } else if (!memtable_handle.is_valid()) {
+        } else if (OB_FAIL(memtable_handle.get_memtable(imemtable))) {
+          LOG_WARN("failed to get memtable", K(ret), K(tablet_id));
+        } else {
           memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
           if (OB_FAIL(memtable->resolve_right_boundary_for_migration())) {
             LOG_WARN("failed to resolve right boundary", K(ret), K(tablet_id));
@@ -3041,7 +3045,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
 
   if (is_tablet_freeze) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(freezer->handle_frozen_memtable_for_replace_tablet_meta(tablet_id, imemtable))) {
+    if (OB_TMP_FAIL(freezer->handle_frozen_memtable_for_replace_tablet_meta(tablet_id, memtable_handle))) {
       LOG_WARN("failed to handle_frozen_memtable_for_replace_tablet_meta", K(tmp_ret), K(tablet_id), K(param));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }

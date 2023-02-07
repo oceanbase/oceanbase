@@ -283,6 +283,8 @@ int TestCompactionPolicy::mock_memtable(
   int64_t end_border = (end_scn == 0) ? INT64_MAX : end_scn;
   generate_table_key(ObITable::DATA_MEMTABLE, start_scn, end_border, table_key);
   ObMemtable *memtable = nullptr;
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = nullptr;
 
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
   if (OB_FAIL(t3m->acquire_memtable(table_handle))) {
@@ -290,7 +292,11 @@ int TestCompactionPolicy::mock_memtable(
   } else if (OB_ISNULL(memtable = static_cast<ObMemtable*>(table_handle.get_table()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get memtable", K(ret));
-  } else if (OB_FAIL(memtable->init(table_key, mt_mgr->ls_, mt_mgr->freezer_, mt_mgr, 0, mt_mgr->freezer_->get_freeze_clock()))) {
+  } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(ls_svr->get_ls(mt_mgr->ls_->get_ls_id(), ls_handle, ObLSGetMod::DATA_MEMTABLE_MOD))) {
+    LOG_WARN("failed to get ls handle", K(ret));
+  } else if (OB_FAIL(memtable->init(table_key, ls_handle, mt_mgr->freezer_, mt_mgr, 0, mt_mgr->freezer_->get_freeze_clock()))) {
     LOG_WARN("failed to init memtable", K(ret));
   } else if (OB_FAIL(mt_mgr->add_memtable_(table_handle))) {
     LOG_WARN("failed to add memtable to mgr", K(ret));

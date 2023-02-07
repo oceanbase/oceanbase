@@ -29,6 +29,7 @@
 #include "storage/tx/ob_trans_define_v4.h"
 #include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/ls/ob_ls.h"
+#include "storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase
 {
@@ -120,8 +121,10 @@ public:
     table_key.log_ts_range_.end_log_ts_ = ObLogTsRange::MAX_TS;
     int64_t schema_version  = 1;
     uint32_t freeze_clock = 0;
+    ObLSHandle ls_handle;
+    ls_handle.set_ls(ls_map_, ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
 
-    return mt_table.init(table_key, nullptr, &freezer_, &memtable_mgr_, schema_version, freeze_clock);
+    return mt_table.init(table_key, ls_handle, &freezer_, &memtable_mgr_, schema_version, freeze_clock);
   }
   int mock_col_desc()
   {
@@ -189,6 +192,7 @@ public:
   ObTableReadInfo read_info_;
   ObArenaAllocator allocator_;
   MemtableIDMap ctx_map_;
+  ObLSMap ls_map_;
 };
 
 class RunCtxGuard

@@ -240,7 +240,9 @@ memtable::ObMemtable *ObTxNode::create_memtable_(const int64_t tablet_id) {
   table_key.tablet_id_ = tablet_id;
   table_key.log_ts_range_.start_log_ts_ = 100;
   table_key.log_ts_range_.end_log_ts_ = ObLogTsRange::MAX_TS;
-  t->init(table_key, &fake_ls_, &fake_freezer_, &fake_memtable_mgr_, 0, 0);
+  ObLSHandle ls_handle;
+  ls_handle.set_ls(fake_ls_map_, fake_ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
+  t->init(table_key, ls_handle, &fake_freezer_, &fake_memtable_mgr_, 0, 0);
   return t;
 }
 

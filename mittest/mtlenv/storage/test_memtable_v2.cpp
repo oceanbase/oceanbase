@@ -236,7 +236,7 @@ public:
     uint32_t freeze_clock = 0;
 
     EXPECT_EQ(OB_SUCCESS, memtable->init(table_key,
-                                         ls_handle.get_ls(),
+                                         ls_handle,
                                          freezer,
                                          memtable_mgr,
                                          schema_version,
@@ -1092,6 +1092,7 @@ TEST_F(TestMemtableV2, test_write_read_conflict)
                   tmp_node,
                   2000, /*max_trans_version*/
                   1     /*total_trans_node_cnt*/);
+  memtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_tx_abort)
@@ -1204,6 +1205,7 @@ TEST_F(TestMemtableV2, test_tx_abort)
                   NULL, /*list_head*/
                   0,    /*max_trans_version*/
                   0     /*total_trans_node_cnt*/);
+  memtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_write_write_conflict)
@@ -1419,6 +1421,7 @@ TEST_F(TestMemtableV2, test_write_write_conflict)
                   wtx_case3_tnode, /*list_head*/
                   2000, /*max_trans_version*/
                   2     /*total_trans_node_cnt*/);
+  memtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_lock)
@@ -1678,6 +1681,7 @@ TEST_F(TestMemtableV2, test_lock)
            6000, /*snapshot version*/
            1,    /*key*/
            4     /*value*/);
+  memtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_sstable_lock)
@@ -1711,6 +1715,7 @@ TEST_F(TestMemtableV2, test_sstable_lock)
            false /*exist*/);
 
   is_sstable_contains_lock_ = false;
+  memtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_rollback_to)
@@ -1801,6 +1806,7 @@ TEST_F(TestMemtableV2, test_rollback_to)
            1000, /*snapshot version*/
            1,    /*key*/
            2     /*value*/);
+  memtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_replay)
@@ -1986,6 +1992,8 @@ TEST_F(TestMemtableV2, test_replay)
                   get_tx_last_tnode(ptx),
                   2000, /*max_trans_version*/
                   3     /*total_trans_node_cnt*/);
+  lmemtable->destroy();
+  fmemtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_compact)
@@ -2217,6 +2225,8 @@ TEST_F(TestMemtableV2, test_compact)
                   row->latest_compact_node_,
                   3000, /*max_trans_version*/
                   3     /*total_trans_node_cnt*/);
+  lmemtable->destroy();
+  fmemtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_compact_v2)
@@ -2382,6 +2392,7 @@ TEST_F(TestMemtableV2, test_compact_v2)
                   wtx3_first_tnode,
                   2000, /*max_trans_version*/
                   3  /*total_trans_node_cnt*/);
+  memtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_compact_v3)
@@ -2518,6 +2529,8 @@ TEST_F(TestMemtableV2, test_compact_v3)
            1,    /*key*/
            4,    /*value*/
            false /*exist*/);
+  lmemtable->destroy();
+  fmemtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_dml_flag)
@@ -2680,7 +2693,8 @@ TEST_F(TestMemtableV2, test_dml_flag)
                   ptx3_tnode1,
                   1600, /*max_trans_version*/
                   2  /*total_trans_node_cnt*/);
-
+  lmemtable->destroy();
+  fmemtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_fast_commit)
@@ -2800,6 +2814,7 @@ TEST_F(TestMemtableV2, test_fast_commit)
                   wtx_tnode,
                   2000, /*max_trans_version*/
                   1  /*total_trans_node_cnt*/);
+  memtable->destroy();
 }
 
 TEST_F(TestMemtableV2, test_fast_commit_with_no_delay_cleanout)
@@ -2924,6 +2939,7 @@ TEST_F(TestMemtableV2, test_fast_commit_with_no_delay_cleanout)
                   wtx_tnode,
                   INT64_MAX, /*max_trans_version*/
                   1  /*total_trans_node_cnt*/);
+  memtable->destroy();
 }
 
 } // namespace unittest

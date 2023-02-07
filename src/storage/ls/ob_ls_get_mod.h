@@ -37,7 +37,8 @@ enum class ObLSGetMod : int
   DDL_MOD = 14,
   TXSTORAGE_MOD = 15,
   LEADER_COORDINATOR_MOD = 16,
-  TOTAL_MAX_MOD = 17,
+  DATA_MEMTABLE_MOD = 17,
+  TOTAL_MAX_MOD = 18,
 };
 
 }

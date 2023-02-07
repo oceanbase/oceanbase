@@ -80,6 +80,9 @@ int ObLogSort::create_hash_sortkey(const common::ObIArray<OrderItem> &order_keys
   ObExecContext *exec_ctx = get_plan()->get_optimizer_context().get_exec_ctx();
   if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_HASH, hash_expr))) {
     LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_UNLIKELY(part_cnt_ > order_keys.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected order_keys count", K(ret), K(part_cnt_), K(order_keys));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < part_cnt_; ++i) {
       if (OB_FAIL(hash_expr->add_param_expr(order_keys.at(i).expr_))) {

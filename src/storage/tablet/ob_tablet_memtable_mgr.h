@@ -36,6 +36,8 @@ class ObFreezer;
 class ObTabletMemtableMgr : public ObIMemtableMgr
 {
 public:
+  friend class memtable::ObMemtable;
+public:
   typedef common::ObIArray<ObTableHandleV2> ObTableHdlArray;
 
 public:
@@ -59,16 +61,14 @@ public:
   int64_t get_memtable_count() const;
   virtual int get_memtable_for_replay(int64_t replay_log_ts,
                                       ObTableHandleV2 &handle) override;
-  memtable::ObMemtable *get_last_frozen_memtable() const;
-  memtable::ObMemtable *get_last_frozen_memtable_() const;
+  int get_last_frozen_memtable(ObTableHandleV2 &handle) const;
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) override;
   virtual int get_multi_source_data_unit(
       memtable::ObIMultiSourceDataUnit *const multi_source_data_unit,
       ObIAllocator *allocator = nullptr) const override;
   virtual int get_memtable_for_multi_source_data_unit(
-      memtable::ObMemtable *&memtable,
+      ObTableHandleV2 &handle,
       const memtable::MultiSourceDataUnitType type) const override;
-  int release_tail_memtable(memtable::ObIMemtable *memtable);
   int get_memtables(
       ObTableHdlArray &handle,
       const bool reset_handle = true,
@@ -82,9 +82,7 @@ public:
       const bool include_active_memtable = true);
   int get_memtables_nolock(ObTableHdlArray &handle);
   int get_first_frozen_memtable(ObTableHandleV2 &handle) const;
-  int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable, int64_t start_log_ts, int64_t snapshot_version);
-  int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
-  int set_is_tablet_freeze_for_active_memtable(memtable::ObIMemtable *&memtable,
+  int set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle,
                                                bool is_force_freeze = false);
 
   ObStorageSchemaRecorder &get_storage_schema_recorder()
@@ -124,6 +122,11 @@ private:
       int64_t &start_pos);
   int get_first_frozen_memtable_(ObTableHandleV2 &handle) const;
   void clean_tail_memtable_();
+  int get_last_frozen_memtable_(ObTableHandleV2 &handle) const;
+  int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable,
+                                                int64_t start_log_ts,
+                                                int64_t snapshot_version);
+  int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
 
   DISALLOW_COPY_AND_ASSIGN(ObTabletMemtableMgr);
 

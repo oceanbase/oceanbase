@@ -3886,17 +3886,27 @@ int ObSelectLogPlan::generate_window_functions_plan(const ObIArray<ObWinFunRawEx
         } else {
           ObSEArray<int64_t, 8> split;
           ObSEArray<WinDistAlgo, 8> methods;
-          if (distributed) {
-            if (OB_FAIL(split_winfuncs_by_dist_method(local_plans.at(0).plan_tree_,
-                                                      adjusted_winfunc_exprs,
-                                                      remaining_exprs,
-                                                      current_sort_keys,
-                                                      stmt_func_idx,
-                                                      split,
-                                                      methods))) {
-              LOG_WARN("split window function by distribute method failed", K(ret));
-            }
-          } else {
+          ObSEArray<double, 8> sort_key_ndvs;
+          ObSEArray<std::pair<int64_t, int64_t>, 8> pby_oby_prefixes;
+          bool has_non_parallel_wf = false;
+          if (OB_FAIL(prepare_for_split_winfuncs(
+                local_plans.at(0).plan_tree_, adjusted_winfunc_exprs, current_sort_keys,
+                sort_key_ndvs, pby_oby_prefixes))) {
+            LOG_WARN("prepare_for_split_winfuncs failed", K(ret));
+          } else if (distributed &&
+                     OB_FAIL(split_winfuncs_by_dist_method(local_plans.at(0).plan_tree_,
+                                                           adjusted_winfunc_exprs,
+                                                           remaining_exprs,
+                                                           stmt_func_idx,
+                                                           sort_key_ndvs,
+                                                           pby_oby_prefixes,
+                                                           split,
+                                                           methods,
+                                                           has_non_parallel_wf))) {
+            LOG_WARN("split window function by distribute method failed", K(ret));
+          } else if (!distributed || has_non_parallel_wf) {
+            split.reuse();
+            methods.reuse();
             if (OB_FAIL(split.push_back(adjusted_winfunc_exprs.count()))
                 || OB_FAIL(methods.push_back(WinDistAlgo::NONE))) {
               LOG_WARN("array push back failed", K(ret));
@@ -3908,11 +3918,12 @@ int ObSelectLogPlan::generate_window_functions_plan(const ObIArray<ObWinFunRawEx
             ObArrayHelper<ObWinFunRawExpr *> winfuncs(end - start,
                                                       &adjusted_winfunc_exprs.at(start),
                                                       end - start);
-            start = end;
-            stmt_func_idx++;
             const WinDistAlgo method = methods.at(si);
+            ObSEArray<ObRawExpr*, 8> partition_exprs;
             if (OB_FAIL(dist_methods.push_back(methods.at(si)))) {
               LOG_WARN("array push back failed", K(ret));
+            } else if (OB_FAIL(get_window_function_partition_exprs(winfuncs, partition_exprs))) {
+              LOG_WARN("failed to get partition exprs", K(ret));
             }
 
             FOREACH_X(plan, local_plans, OB_SUCC(ret)) {
@@ -3922,7 +3933,6 @@ int ObSelectLogPlan::generate_window_functions_plan(const ObIArray<ObWinFunRawEx
               int64_t part_cnt = 0;
               int64_t prefix_pos = 0;
               bool need_sort = false;
-              ObSEArray<ObRawExpr*, 8> partition_exprs;
               if (NULL == top) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("got NULL plan tree", K(ret));
@@ -3935,16 +3945,20 @@ int ObSelectLogPlan::generate_window_functions_plan(const ObIArray<ObWinFunRawEx
                                                                   need_sort,
                                                                   prefix_pos))) {
                 LOG_WARN("failed to check need sort", K(ret));
-              } else if (OB_FAIL(get_window_function_partition_exprs(
-                          winfuncs, partition_exprs))) {
-                LOG_WARN("failed to get partition exprs", K(ret));
-              } else if (OB_FAIL(ObOptimizerUtil::get_partition_count(
-                          top, partition_exprs, prefix_pos, part_cnt))) {
+              } else if (OB_FAIL(get_partition_count(pby_oby_prefixes,
+                                                     start,
+                                                     end,
+                                                     partition_exprs,
+                                                     prefix_pos,
+                                                     part_cnt))) {
                 LOG_WARN("failed to get partition count", K(ret));
               } else if (OB_FAIL(create_merge_window_function_plan(merge_plan.plan_tree_,
                                                                   winfuncs,
                                                                   current_sort_keys,
-                                                                  method))) {
+                                                                  partition_exprs,
+                                                                  method,
+                                                                  need_sort,
+                                                                  prefix_pos))) {
                 LOG_WARN("create merge window functions plan failed", K(ret));
               } else if (OB_FAIL(tmp_plans.push_back(merge_plan))) {
                 LOG_WARN("array push back failed", K(ret));
@@ -3966,6 +3980,8 @@ int ObSelectLogPlan::generate_window_functions_plan(const ObIArray<ObWinFunRawEx
                 LOG_WARN("array assign failed", K(ret));
               } else {
                 tmp_plans.reuse();
+                start = end;
+                stmt_func_idx++;
               }
             }
           }
@@ -3994,6 +4010,34 @@ int ObSelectLogPlan::generate_window_functions_plan(const ObIArray<ObWinFunRawEx
             }
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::get_partition_count(const ObSEArray<std::pair<int64_t, int64_t>, 8> pby_oby_prefixes,
+                                         const int64_t start,
+                                         const int64_t end,
+                                         const ObIArray<ObRawExpr*> &partition_exprs,
+                                         const int64_t prefix_pos,
+                                         int64_t &part_cnt)
+{
+  int ret = OB_SUCCESS;
+  part_cnt = 0;
+  if (OB_UNLIKELY(pby_oby_prefixes.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get empty pby_oby_prefixes", K(ret), K(pby_oby_prefixes.count()));
+  } else if (prefix_pos > 0 || partition_exprs.empty()) {
+    part_cnt = 0;
+  } else if (OB_UNLIKELY(start < 0 || end > pby_oby_prefixes.count() || start >= end)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected pby_oby_prefixes count ", K(ret), K(start), K(end), K(pby_oby_prefixes.count()));
+  } else {
+    part_cnt = pby_oby_prefixes.at(start).first;
+    for (int64_t i = start + 1; OB_SUCC(ret) && i < end; ++i) {
+      if (pby_oby_prefixes.at(i).first < part_cnt) {
+        part_cnt = pby_oby_prefixes.at(i).first;
       }
     }
   }
@@ -4229,44 +4273,36 @@ int ObSelectLogPlan::set_default_sort_directions(const ObIArray<ObWinFunRawExpr*
   return ret;
 }
 
-int ObSelectLogPlan::split_winfuncs_by_dist_method(
+int ObSelectLogPlan::prepare_for_split_winfuncs(
     const ObLogicalOperator *top,
     const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-    const common::ObIArray<ObWinFunRawExpr *> &remaining_exprs,
     const ObIArray<OrderItem> &sort_keys,
-    const int64_t stmt_func_idx,
-    common::ObIArray<int64_t> &split,
-    common::ObIArray<WinDistAlgo> &methods)
+    ObIArray<double> &sort_key_ndvs,
+    ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes)
 {
   int ret = OB_SUCCESS;
-  CK(NULL != top);
-  split.reuse();
-  methods.reuse();
-
-  // Get NDV for each sort_keys prefix first.
-  ObSEArray<double, 8> sort_key_ndvs;
   ObSEArray<ObRawExpr *, 8> sort_key_exprs;
-  ObSEArray<std::pair<int64_t, int64_t>, 8> pby_oby_prefixes;
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(sort_key_ndvs.prepare_allocate(sort_keys.count()))) {
-      LOG_WARN("array prepare allocate failed", K(ret));
-    } else {
-      for (int64_t i = 0; i < sort_keys.count() && OB_SUCC(ret); i++) {
-        if (OB_FAIL(sort_key_exprs.push_back(sort_keys.at(i).expr_))) {
-          LOG_WARN("array push back failed", K(ret));
-        } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
-                                                                get_selectivity_ctx(),
-                                                                sort_key_exprs,
-                                                                top->get_card(),
-                                                                sort_key_ndvs.at(i)))) {
-          LOG_WARN("calculate NDV failed", K(ret));
-        }
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("top is null", K(ret));
+  } else if (OB_FAIL(sort_key_ndvs.prepare_allocate(sort_keys.count()))) {
+    LOG_WARN("array prepare allocate failed", K(ret));
+  } else { // Get NDV for each sort_keys prefix first.
+    for (int64_t i = 0; i < sort_keys.count() && OB_SUCC(ret); i++) {
+      if (OB_FAIL(sort_key_exprs.push_back(sort_keys.at(i).expr_))) {
+        LOG_WARN("array push back failed", K(ret));
+      } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
+                                                              get_selectivity_ctx(),
+                                                              sort_key_exprs,
+                                                              top->get_card(),
+                                                              sort_key_ndvs.at(i)))) {
+        LOG_WARN("calculate NDV failed", K(ret));
       }
     }
   }
-  // Get each window function's partition by (PBY) and order by (OBY)'s prefix of %sort_keys.
-  // Note %sort_keys must covert PBY + OBY, which is guaranteed by `get_next_group_window_exprs()`
   if (OB_SUCC(ret)) {
+    // Get each window function's partition by (PBY) and order by (OBY)'s prefix of %sort_keys.
+    // Note %sort_keys must covert PBY + OBY, which is guaranteed by `get_next_group_window_exprs()`
     for (int64_t i = 0; OB_SUCC(ret) && i < winfunc_exprs.count(); i++) {
       int64_t pby_prefix = 0;
       int64_t pby_oby_prefix = 0;
@@ -4282,6 +4318,24 @@ int ObSelectLogPlan::split_winfuncs_by_dist_method(
       }
     }
   }
+  return ret;
+}
+
+int ObSelectLogPlan::split_winfuncs_by_dist_method(
+    const ObLogicalOperator *top,
+    const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
+    const common::ObIArray<ObWinFunRawExpr *> &remaining_exprs,
+    const int64_t stmt_func_idx,
+    const ObIArray<double> &sort_key_ndvs,
+    const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
+    common::ObIArray<int64_t> &split,
+    common::ObIArray<WinDistAlgo> &methods,
+    bool &has_non_parallel_wf)
+{
+  int ret = OB_SUCCESS;
+  CK(NULL != top);
+  split.reuse();
+  methods.reuse();
 
   // Main split logic, get current window function's distribute method (%cur_method) by
   // auto detected method and hint method. Then compare it with the previous window function's
@@ -4291,8 +4345,7 @@ int ObSelectLogPlan::split_winfuncs_by_dist_method(
     const int64_t WF_CARD_DOP_RADIO = 256;
     const int64_t dop = get_optimizer_context().get_parallel();
     int64_t prev_method = -1;
-    bool has_non_parallel_wf = false;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < winfunc_exprs.count(); ) {
+    for (int64_t idx = 0; OB_SUCC(ret) && !has_non_parallel_wf && idx < winfunc_exprs.count(); ) {
       const int64_t pby_cnt = pby_oby_prefixes.at(idx).first;
       const int64_t pby_oby_cnt = pby_oby_prefixes.at(idx).second;
       const double pby_ndv = pby_cnt == 0 ? 0 : sort_key_ndvs.at(pby_cnt - 1);
@@ -4369,7 +4422,7 @@ int ObSelectLogPlan::split_winfuncs_by_dist_method(
         if (cur_method == WinDistAlgo::NONE || cur_method == WinDistAlgo::HASH) {
           prev_method = (int)cur_method;
         } else if (cur_method >= WinDistAlgo::RANGE && prev_method == (int)WinDistAlgo::HASH
-                   && pby_oby_prefixes[idx -1].first == pby_oby_prefixes[idx].first) {
+                   && pby_oby_prefixes.at(idx - 1).first == pby_oby_prefixes.at(idx).first) {
           cur_method = WinDistAlgo::HASH;
         }
       }
@@ -4382,7 +4435,7 @@ int ObSelectLogPlan::split_winfuncs_by_dist_method(
       } else if (WinDistAlgo::RANGE == cur_method
                  || WinDistAlgo::LIST == cur_method) {
         // pby_cnt or oby_cnt miss match
-        if (pby_oby_prefixes[idx - 1] != pby_oby_prefixes[idx]) {
+        if (pby_oby_prefixes.at(idx - 1) != pby_oby_prefixes.at(idx)) {
           need_split = true;
         }
       }
@@ -4402,12 +4455,6 @@ int ObSelectLogPlan::split_winfuncs_by_dist_method(
         }
       }
     }
-    if (OB_SUCC(ret) && has_non_parallel_wf) {
-      split.reuse();
-      methods.reuse();
-      OZ(split.push_back(winfunc_exprs.count()));
-      OZ(methods.push_back(WinDistAlgo::NONE));
-    }
   }
   return ret;
 }
@@ -4425,15 +4472,15 @@ int ObSelectLogPlan::split_winfuncs_by_dist_method(
 int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
                                                        const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
                                                        const ObIArray<OrderItem> &sort_keys,
-                                                       WinDistAlgo dist_method)
+                                                       const ObIArray<ObRawExpr*> &partition_exprs,
+                                                       WinDistAlgo dist_method,
+                                                       bool need_sort,
+                                                       int64_t prefix_pos)
 {
   int ret = OB_SUCCESS;
-  bool need_sort = false;
-  int64_t prefix_pos = 0;
   ObExchangeInfo exch_info;
   bool single_part_parallel = false;
   bool is_partition_wise = false;
-  ObSEArray<ObRawExpr*, 8> partition_exprs;
   double pby_ndv = 1.0;
   ObSEArray<OrderItem, 8> range_dist_keys;
   int64_t range_dist_pby_prefix = 0;
@@ -4442,18 +4489,6 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
   if (OB_ISNULL(top) || OB_UNLIKELY(winfunc_exprs.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpecated error", K(top), K(winfunc_exprs.count()), K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(sort_keys,
-                                                      top->get_op_ordering(),
-                                                      top->get_fd_item_set(),
-                                                      top->get_output_equal_sets(),
-                                                      top->get_output_const_exprs(),
-                                                      top->get_is_at_most_one_row(),
-                                                      need_sort,
-                                                      prefix_pos))) {
-    LOG_WARN("failed to check need sort", K(ret));
-  } else if (OB_FAIL(get_window_function_partition_exprs(winfunc_exprs,
-                                                         partition_exprs))) {
-    LOG_WARN("failed to get partition exprs", K(ret));
   } else {
     // range distribution
     if (WinDistAlgo::RANGE == dist_method
@@ -4576,28 +4611,25 @@ int ObSelectLogPlan::create_merge_window_function_plan(ObLogicalOperator *&top,
  * 这里窗口函数会按照分组表达式数量进行排序（只统计非常量的分组表达式数量，数量多的排在前）。
  */
 int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
-                                                      ObIArray<ObWinFunRawExpr*> &adjusted_winfunc_exprs,
+                                                      const ObIArray<ObWinFunRawExpr*> &adjusted_winfunc_exprs,
                                                       const ObIArray<OrderItem> &sort_keys,
-                                                      ObIArray<ObRawExpr*> &partition_exprs,
+                                                      const ObIArray<ObRawExpr*> &partition_exprs,
                                                       const int64_t part_cnt)
 {
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
-  bool match_parallel = false;
   bool is_partition_wise = false;
   const ObArray<OrderItem> range_dist_keys;
   const int64_t range_dist_pby_prefix = 0;
-  if (OB_ISNULL(top)) {
+  LOG_DEBUG("create hash window function plan", K(part_cnt), K(sort_keys), K(adjusted_winfunc_exprs));
+  if (OB_ISNULL(top) || OB_UNLIKELY(partition_exprs.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(top), K(ret));
-  } else if (top->is_distributed() && !partition_exprs.empty() &&
+    LOG_WARN("get unexpected error", K(ret), K(top), K(partition_exprs.empty()));
+  } else if (top->is_distributed() &&
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(partition_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible", K(ret));
-  } else if (top->is_distributed() && !is_partition_wise && partition_exprs.empty() &&
-             OB_FAIL(match_window_function_parallel(adjusted_winfunc_exprs, match_parallel))) {
-    LOG_WARN("failed to check if match window function parallel", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise || match_parallel) {
+  } else if (!top->is_distributed() || is_partition_wise) {
     exch_info.dist_method_ = ObPQDistributeMethod::NONE;
     if (OB_FAIL(allocate_sort_and_exchange_as_top(top,
                                                   exch_info,
@@ -4610,7 +4642,7 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
                                                   part_cnt))) {
       LOG_WARN("failed to allocate sort as top", K(ret));
     } else if (OB_FAIL(allocate_window_function_as_top(adjusted_winfunc_exprs,
-                                                       match_parallel,
+                                                       false, /* match_parallel */
                                                        is_partition_wise,
                                                        range_dist_keys,
                                                        range_dist_pby_prefix,
@@ -4632,7 +4664,7 @@ int ObSelectLogPlan::create_hash_window_function_plan(ObLogicalOperator *&top,
                                                        part_cnt))) {
     LOG_WARN("failed to allocate sort as top", K(ret));
   } else if (OB_FAIL(allocate_window_function_as_top(adjusted_winfunc_exprs,
-                                                     match_parallel,
+                                                     false, /* match_parallel */
                                                      is_partition_wise,
                                                      range_dist_keys,
                                                      range_dist_pby_prefix,
