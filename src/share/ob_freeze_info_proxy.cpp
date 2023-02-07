@@ -165,6 +165,7 @@ int ObFreezeInfoProxy::get_freeze_info_larger_or_equal_than(
       }
     }
   }
+  LOG_INFO("finish load_freeze_info", KR(ret), K_(tenant_id), K(sql));
   return ret;
 }
 

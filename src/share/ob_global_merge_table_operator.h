@@ -35,7 +35,8 @@ class ObGlobalMergeTableOperator
 public:
   static int load_global_merge_info(common::ObISQLClient &sql_client,
                                     const uint64_t tenant_id,
-                                    share::ObGlobalMergeInfo &info);
+                                    share::ObGlobalMergeInfo &info,
+                                    const bool print_sql = false);
   static int insert_global_merge_info(common::ObISQLClient &sql_client,
                                       const uint64_t tenant_id,
                                       const share::ObGlobalMergeInfo &info);
@@ -43,6 +44,11 @@ public:
   static int update_partial_global_merge_info(common::ObISQLClient &sql_client,
                                               const uint64_t tenant_id,
                                               const share::ObGlobalMergeInfo &info);
+
+private:
+  static int check_scn_revert(common::ObISQLClient &sql_client,
+                              const uint64_t tenant_id,
+                              const share::ObGlobalMergeInfo &info);
 };
 
 } // end namespace share

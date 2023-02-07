@@ -235,7 +235,8 @@ bool ObZoneMergeInfo::is_valid() const
      || (!last_merged_scn_.is_valid())
      || (last_merged_time_.get_value() < 0)
      || (merge_start_time_.get_value() < 0)
-     || (!all_merged_scn_.is_valid())) {
+     || (!all_merged_scn_.is_valid())
+     || (!frozen_scn_.is_valid())) {
     is_valid = false;
   }
   return is_valid;
