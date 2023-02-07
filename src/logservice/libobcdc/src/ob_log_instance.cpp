@@ -12,7 +12,6 @@
  * OBCDC Instance
  */
 
-#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_log_instance.h"
