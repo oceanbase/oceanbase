@@ -49,11 +49,26 @@ int ObLibCacheAtomicOp::get_value(ObILibCacheNode *&cache_node)
   return ret;
 }
 
+/*
+worker thread:                   |  evict thread
+                                 |  get all plan id array(contains plan id x)
+deleting .... remove plan id x   |
+from map                         |
+dec ref cnt => ref_cnt=0         |
+                                 | ref plan id x. inc_ref=1
+deleting plan x                  |
+                                 | acess plan x --> cause core!
+*/
+
 void ObCacheObjAtomicOp::operator()(ObjKV &entry)
 {
   if (NULL != entry.second) {
-    cache_obj_ = entry.second;
-    cache_obj_->inc_ref_count(ref_handle_);
+    if (0 == entry.second->get_ref_count()) {
+      // do nothing
+    } else {
+      cache_obj_ = entry.second;
+      cache_obj_->inc_ref_count(ref_handle_);
+    }
     SQL_PC_LOG(DEBUG, "succ to get plan", "ref_count", cache_obj_->get_ref_count());
   } else {
     // do nothing

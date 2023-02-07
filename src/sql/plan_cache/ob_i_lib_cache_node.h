@@ -154,7 +154,7 @@ public:
   int unlock() { return rwlock_.unlock(); }
   int64_t inc_ref_count(const CacheRefHandleID ref_handle);
   int64_t dec_ref_count(const CacheRefHandleID ref_handle);
-  int64_t get_ref_count() const { return ref_count_; }
+  int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   common::ObIAllocator *get_allocator() { return &allocator_; }
   common::ObIAllocator &get_allocator_ref() { return allocator_; }
   lib::MemoryContext &get_mem_context() { return mem_context_; }
