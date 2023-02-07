@@ -1460,7 +1460,7 @@ static int is_piece_start_file_name_(ObString &file_name, bool &is_piece_start)
   int ret = OB_SUCCESS;
   char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   is_piece_start = false;
-  int32_t len = file_name.length() - strlen(OB_ARCHIVE_SUFFIX);
+  const int32_t len = static_cast<int32_t>(file_name.length() - strlen(OB_ARCHIVE_SUFFIX));
   if (file_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("empty file name", K(ret), K(file_name));

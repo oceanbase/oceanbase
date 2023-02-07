@@ -164,7 +164,7 @@ def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_
     else:
       set_op = 'set_timestamp({0})'.format(default_value)
   elif column_type == 'ObLongTextType':
-    set_op = 'set_lob_value(ObLongTextType, "{0}", strlen("{0}"))'.format(default_value)
+    set_op = 'set_lob_value(ObLongTextType, "{0}", static_cast<int32_t>(strlen("{0}")))'.format(default_value)
     if column_collation_type == "CS_TYPE_BINARY":
       set_op += '; {0}_default.set_collation_type(CS_TYPE_BINARY);'.format(column_name.lower())
   else:

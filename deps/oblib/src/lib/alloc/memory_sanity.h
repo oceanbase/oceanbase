@@ -90,7 +90,7 @@ static inline void sanity_poison(const void *ptr, ssize_t len)
   if (!sanity_addr_in_range(ptr)) return;
   if (((uint64_t)ptr & 0x7) != 0) abort();
   char *shadow = (char*)sanity_to_shadow(ptr);
-  int32_t n_bytes = sanity_to_shadow_size(len);
+  int32_t n_bytes = static_cast<int32_t>(sanity_to_shadow_size(len));
   if (n_bytes > 0) {
     static void *(*real_memset)(void *, int, size_t)
       = (__typeof__(real_memset)) dlsym(RTLD_NEXT, "memset");
@@ -107,7 +107,7 @@ static inline void sanity_unpoison(const void *ptr, ssize_t len)
   if (!sanity_addr_in_range(ptr)) return;
   if (((uint64_t)ptr & 0x7) != 0) abort();
   char *shadow = (char*)sanity_to_shadow(ptr);
-  int32_t n_bytes = sanity_to_shadow_size(len);
+  int32_t n_bytes = static_cast<int32_t>(sanity_to_shadow_size(len));
   if (n_bytes > 0) {
     static void *(*real_memset)(void *, int, size_t)
       = (__typeof__(real_memset)) dlsym(RTLD_NEXT, "memset");
