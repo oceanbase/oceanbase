@@ -24,6 +24,7 @@
 #define SANITY_TO_SHADOW_SIZE(args...) 0x0
 #define SANITY_MIN_CANONICAL_ADDR 0x0
 #define SANITY_MAX_CANONICAL_ADDR 0x0
+#define SANITY_CHECK_RANGE(args...)
 #else
 #define _DEFINE_SANITY_GUARD(check, var_name) SanityCheckRangeGuard<check> var_name;
 #define SANITY_ENABLE_CHECK_RANGE()  _DEFINE_SANITY_GUARD(true, CONCAT(sanity_guard, __COUNTER__))
@@ -36,6 +37,7 @@
 #define SANITY_TO_SHADOW_SIZE(size) sanity_to_shadow_size(size)
 #define SANITY_MIN_CANONICAL_ADDR sanity_min_canonical_addr
 #define SANITY_MAX_CANONICAL_ADDR sanity_max_canonical_addr
+#define SANITY_CHECK_RANGE(args...) sanity_check_range(args)
 
 #include <stdio.h>
 #include <stdint.h>
