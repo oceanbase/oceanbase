@@ -78,6 +78,7 @@ private:
   int visit_query_ref_expr(ObQueryRefRawExpr &expr,
                            const common::ObObjType dest_type,
                            const bool is_same_need);
+  int wrap_param_expr(ObIArray<ObRawExpr*> &param_exprs, ObObjType dest_typ);
 private:
   int32_t current_level_;
   ObDMLStmt *cur_stmt_;

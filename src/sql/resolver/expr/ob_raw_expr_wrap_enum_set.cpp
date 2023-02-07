@@ -264,10 +264,18 @@ int ObRawExprWrapEnumSet::visit(ObWinFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   if (expr.has_enum_set_column() || expr.has_flag(CNT_SUB_QUERY)) {
-    ObAggFunRawExpr *agg_raw_expr = expr.get_agg_expr();
-    if (OB_ISNULL(agg_raw_expr)) {
-    } else if (OB_FAIL(ObRawExprWrapEnumSet::visit(*agg_raw_expr))) {
-      LOG_WARN("fail to visit agg expr in window function", K(ret), K(agg_raw_expr));
+    if (T_WIN_FUN_LEAD == expr.get_func_type() ||
+          T_WIN_FUN_LAG == expr.get_func_type()) {
+      ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_func_params();
+      if (OB_FAIL(wrap_param_expr(real_parm_exprs, expr.get_data_type()))) {
+        LOG_WARN("failed to warp param expr", K(ret));
+      }
+    } else {
+      ObAggFunRawExpr *agg_raw_expr = expr.get_agg_expr();
+      if (OB_ISNULL(agg_raw_expr)) {
+      } else if (OB_FAIL(ObRawExprWrapEnumSet::visit(*agg_raw_expr))) {
+        LOG_WARN("fail to visit agg expr in window function", K(ret), K(agg_raw_expr));
+      }
     }
   }
   return ret;
@@ -743,24 +751,9 @@ int ObRawExprWrapEnumSet::visit(ObAggFunRawExpr &expr)
       T_FUN_MIN == expr.get_expr_type() ||
       T_FUN_JSON_OBJECTAGG == expr.get_expr_type() ||
       T_FUN_JSON_ARRAYAGG == expr.get_expr_type())) {
-    const ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_real_param_exprs();
-    const bool is_same_need = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < real_parm_exprs.count(); ++i) {
-      ObRawExpr *real_param_expr = real_parm_exprs.at(i);
-      if (OB_ISNULL(real_param_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("real param expr is null", K(i));
-      } else if (ob_is_enumset_tc(real_param_expr->get_data_type())) {
-        //here is special
-        ObObjType calc_type = expr.get_data_type();
-        ObSysFunRawExpr *wrapped_expr = NULL;
-        if (OB_FAIL(wrap_type_to_str_if_necessary(real_param_expr, calc_type, get_current_level(),
-                                                  is_same_need, wrapped_expr))) {
-          LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
-        } else if ((NULL != wrapped_expr) && OB_FAIL(expr.replace_real_param_expr(i, wrapped_expr))) {
-          LOG_WARN("failed to replace param expr", K(i), K(ret));
-        } else {/*do nothing*/}
-      } else {/*do nothing*/}
+    ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_real_param_exprs_for_update();
+    if (OB_FAIL(wrap_param_expr(real_parm_exprs, expr.get_data_type()))) {
+      LOG_WARN("failed to warp param expr", K(ret));
     }
   }
   return ret;
@@ -940,5 +933,28 @@ int ObRawExprWrapEnumSet::visit_query_ref_expr(ObQueryRefRawExpr &expr,
   }
   return ret;
 }
+
+int ObRawExprWrapEnumSet::wrap_param_expr(ObIArray<ObRawExpr*> &param_exprs, ObObjType dest_type)
+{
+  int ret = OB_SUCCESS;
+  const bool is_same_need = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_exprs.count(); ++i) {
+    ObRawExpr *param_expr = param_exprs.at(i);
+    if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("real param expr is null", K(i));
+    } else if (ob_is_enumset_tc(param_expr->get_data_type())) {
+      ObSysFunRawExpr *wrapped_expr = NULL;
+      if (OB_FAIL(wrap_type_to_str_if_necessary(param_expr, dest_type, get_current_level(),
+                                                is_same_need, wrapped_expr))) {
+        LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
+      } else if (NULL != wrapped_expr) {
+        param_exprs.at(i) = wrapped_expr;
+      } else {/*do nothing*/}
+    } else {/*do nothing*/}
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
