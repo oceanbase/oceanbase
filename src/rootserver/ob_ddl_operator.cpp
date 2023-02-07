@@ -5672,15 +5672,9 @@ int ObDDLOperator::init_tenant_users(const ObTenantSchema &tenant_schema,
       RS_LOG(WARN, "fail to init oracle public role", K(ret), K(tenant_id));
     }
   } else {
-    if (OB_FAIL(share::ObKeyGenerator::generate_encrypt_key(ora_auditor_password, ENCRYPT_KEY_LENGTH))) {
-      RS_LOG(WARN, "failed to generate auditor's password", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id, sys_user_name, ObString(""), OB_SYS_USER_ID,
+    if (OB_FAIL(init_tenant_user(tenant_id, sys_user_name, ObString(""), OB_SYS_USER_ID,
         "system administrator", trans))) {
       RS_LOG(WARN, "failed to init sys user", K(ret), K(tenant_id));
-    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_auditor_user_name,
-        ObString(ENCRYPT_KEY_LENGTH, ora_auditor_password),
-        OB_ORA_AUDITOR_USER_ID, "system administrator", trans, true))) {
-      RS_LOG(WARN, "failed to init mysql audit user", K(ret), K(tenant_id));
     }
   }
 
