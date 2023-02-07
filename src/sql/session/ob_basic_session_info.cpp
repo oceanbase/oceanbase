@@ -3706,10 +3706,14 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
 
       // update the current session's array if there is no updated deserialization sys_var.
       if (!sys_var_inc_info_.all_has_sys_var_id(sys_var_id)) {
-        sys_var_inc_info_.add_sys_var_id(sys_var_id);
+        if (OB_SUCC(ret) && OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
+          LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
+        }
       }
       // add all deserialize sys_var id.
-      tmp_sys_var_inc_info.add_sys_var_id(sys_var_id);
+      if (OB_SUCC(ret) && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
+        LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
+      }
     }
     const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
     int64_t store_idx = -1;
@@ -3728,23 +3732,12 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
             LOG_WARN("create sys var is NULL", K(ret));
           } else {
             ObObj tmp_obj = ObSysVariables::get_default_value(store_idx);
-            if (ob_is_string_type(tmp_obj.get_type())) {
-              if (OB_FAIL(deep_copy_sys_variable(*sys_var, ids.at(i), tmp_obj))) {
-                LOG_WARN("fail to update system variable", K(ret));
-              }
-            } else if (ob_is_number_tc(tmp_obj.get_type())) {
-              if (OB_FAIL(deep_copy_sys_variable(*sys_var, ids.at(i), tmp_obj))) {
-                LOG_WARN("fail to update system variable", K(ret));
-              }
-            } else {
-              // int, bool, enum, uint do not need to do deep copy
-              sys_vars_[store_idx]->set_value(tmp_obj);
-            }
+            sys_vars_[store_idx]->set_value(tmp_obj);
           }
         }
       }
     }
-    if (OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
+    if (OB_SUCC(ret) && OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
       LOG_WARN("fail to assign sys var delta info",K(ret));
     } else {
       //do nothing.
