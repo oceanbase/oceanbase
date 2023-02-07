@@ -1118,6 +1118,7 @@ int ObAccessService::ObStoreCtxGuard::init(const share::ObLSID &ls_id)
     LOG_WARN("invalid argument(s)", K(ret), K(ls_id));
   } else {
     ls_id_ = ls_id;
+    ctx_.reset();
     ctx_.ls_id_ = ls_id;
     is_inited_ = true;
     init_ts_ = ObClockGenerator::getClock();
