@@ -1405,6 +1405,7 @@ int ObTransService::wait_follower_readable_(ObLS &ls,
 
 MonotonicTs ObTransService::get_req_receive_mts_()
 {
+  /*
   MonotonicTs mts;
   const rpc::ObRequest *req = THIS_WORKER.get_cur_request();
   if (NULL != req && req->get_receive_mts().is_valid()) {
@@ -1413,6 +1414,8 @@ MonotonicTs ObTransService::get_req_receive_mts_()
     mts = MonotonicTs::current_time();
   }
   return mts;
+  */
+  return MonotonicTs::current_time();
 }
 
 /*
@@ -1532,7 +1535,7 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
   const MonotonicTs now0 = get_req_receive_mts_();
   const MonotonicTs now = now0 - MonotonicTs(gts_ahead);
   int retry_times = 0;
-  const int MAX_RETRY_TIMES = 10;
+  const int MAX_RETRY_TIMES = 100;
   do {
     int64_t n = ObClockGenerator::getClock();
     MonotonicTs rts(0);
