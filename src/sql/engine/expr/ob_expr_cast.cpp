@@ -537,7 +537,7 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
     bool is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_mode);
     dst_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
     dst_type.set_type(obj_type);
-    int64_t maxblen = 4;
+    int64_t maxblen = ObCharset::CharConvertFactorNum;
     if (ob_is_lob_locator(obj_type)) {
       // cast(x as char(10)) or cast(x as binary(10))
       dst_type.set_full_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX], param_type2.get_accuracy().get_length_semantics());

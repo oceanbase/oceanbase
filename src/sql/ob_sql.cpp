@@ -117,7 +117,7 @@ int ObSql::init(common::ObOptStatManager *opt_stat_mgr,
              KP(transport),
              KP(vt_partition_service));
   } else {
-    if (OB_FAIL(queue_.init(1, 8192))) {
+    if (OB_FAIL(queue_.init(1, 512))) {
       LOG_WARN("queue init failed", K(ret));
     } else {
       opt_stat_mgr_ = opt_stat_mgr;

@@ -4669,7 +4669,9 @@ void ObSQLUtils::adjust_time_by_ntp_offset(int64_t &dst_timeout_ts)
 
 int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                      ObSelectStmt *select_stmt,
-                                     bool reset_column_infos)
+                                     bool reset_column_infos,
+                                     ObIAllocator &alloc,
+                                     ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   ObTableSchema new_view_schema;
@@ -4693,7 +4695,7 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
       } else if (OB_ISNULL(select_stmt->get_ref_obj_table())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ref obj is null", K(ret));
-      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(), *select_stmt, new_view_schema))) {
+      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(), *select_stmt, new_view_schema, alloc, session_info))) {
         LOG_WARN("failed to update view column info", K(ret));
       } else if (!new_view_schema.is_view_table() || new_view_schema.get_column_count() <= 0) {
         ret = OB_ERR_UNEXPECTED;

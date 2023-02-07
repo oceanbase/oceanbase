@@ -243,6 +243,10 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
                                                          false/*is_index_table*/,
                                                          tschema))) {
       LOG_WARN("get table schema failed", K(ret));
+    } else if (OB_UNLIKELY(tschema->is_view_table())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("load data to the view is not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "load data to the view is");
     } else {
       load_args.table_id_ = tschema->get_table_id();
       load_args.table_name_ = table_name;

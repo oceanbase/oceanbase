@@ -89,7 +89,7 @@ private:
 class ObMaintainDepInfoTaskQueue: public share::ObAsyncTaskQueue
 {
 public:
-  static const int64_t INIT_BKT_SIZE = 8192;
+  static const int64_t INIT_BKT_SIZE = 512;
   ObMaintainDepInfoTaskQueue() : last_execute_time_(0) {}
   virtual ~ObMaintainDepInfoTaskQueue()
   {
