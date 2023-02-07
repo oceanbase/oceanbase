@@ -49,6 +49,7 @@ inline int ObExprReverse::calc_result_type1(ObExprResType &type,
     if (ObTextType == type1.get_type()
         || ObMediumTextType == type1.get_type()
         || ObLongTextType == type1.get_type()) {
+      type1.set_calc_type(type1.get_type());
       type.set_type(ObLongTextType);
       const int32_t mbmaxlen = 4;
       const int32_t default_text_length =
