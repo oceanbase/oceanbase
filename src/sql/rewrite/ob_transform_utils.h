@@ -1609,6 +1609,9 @@ public:
 
   static int check_expr_contain_lob_type(ObRawExpr *expr, bool &has_lob);
 
+  static int extract_shared_exprs(ObDMLStmt *parent,
+                                  ObIArray<ObRawExpr *> &relation_exprs,
+                                  ObIArray<ObRawExpr *> &common_exprs);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
