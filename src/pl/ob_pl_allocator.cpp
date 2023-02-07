@@ -126,35 +126,7 @@ int ObPLPkgAllocator::copy_all_element_with_new_allocator(ObIAllocator *allocato
       if (vars.at(i).is_pl_extend()
           && vars.at(i).get_meta().get_extend_type() != PL_CURSOR_TYPE) {
         OZ (pl::ObUserDefinedType::deep_copy_obj(*allocator, vars.at(i), dst, true));
-        if (OB_SUCC(ret)) {
-          switch (vars.at(i).get_meta().get_extend_type()) {
-            case PL_NESTED_TABLE_TYPE:
-            case PL_ASSOCIATIVE_ARRAY_TYPE:
-            case PL_VARRAY_TYPE: {
-              ObPLCollection *coll = reinterpret_cast<ObPLCollection*>(vars.at(i).get_ext());
-              if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
-                if (NULL == dynamic_cast<ObPLCollAllocator *>(coll->get_allocator())) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_ERROR("here must be a bug");
-                } else {
-                  coll->get_allocator()->reset();
-                }
-                coll->set_data(NULL);
-                coll->set_count(0);
-                coll->set_first(OB_INVALID_INDEX);
-                coll->set_last(OB_INVALID_INDEX);
-              }
-              break;
-            }
-            case PL_RECORD_TYPE:
-            case PL_OPAQUE_TYPE:
-              break;
-            default:
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("wrong extend type!", K(ret), K(vars.at(i).get_meta().get_extend_type()));
-              break;
-          }
-        }
+        OZ (pl::ObUserDefinedType::destruct_obj(vars.at(i), nullptr));
       } else {
         OZ (deep_copy_obj(*allocator, vars.at(i), dst));
       }
