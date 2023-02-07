@@ -306,8 +306,12 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
   bool is_batched_multi_stmt = pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt();
   int64_t query_cnt = pc_ctx.sql_ctx_.multi_stmt_item_.get_batched_stmt_cnt();
   ParamStore *params = pc_ctx.fp_result_.cache_params_;
-  if (is_batched_multi_stmt) {
-    // batch执行
+  if (OB_ISNULL(pcv_set_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("pcv_set_ is null", K(ret));
+  } else if (is_batched_multi_stmt &&
+      ObLibCacheNameSpace::NS_CRSR == pcv_set_->get_plan_cache_key().namespace_) {
+    // batch optimization and is SQL
     ObArenaAllocator tmp_alloc;
     ParamStore param_store((ObWrapperAllocator(tmp_alloc)));
     ParamStore *ab_params = pc_ctx.ab_params_;
