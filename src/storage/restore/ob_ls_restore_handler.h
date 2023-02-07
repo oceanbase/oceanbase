@@ -168,7 +168,7 @@ protected:
   int schedule_ls_restore_(
       const ObLSRestoreArg &arg,
       const share::ObTaskId &task_id);
-  int check_restore_concurrency_limit_();
+  int check_restore_concurrency_limit_(bool &reach_limit);
   int schedule_tablet_group_restore_dag_net_(
       const ObTabletGroupRestoreArg &arg,
       const share::ObTaskId &task_id);

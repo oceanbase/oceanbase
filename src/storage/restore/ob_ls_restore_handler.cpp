@@ -1333,12 +1333,13 @@ int ObILSRestoreState::reload_miss_tablet_(bool &all_finish)
   return ret;
 }
 
-int ObILSRestoreState::check_restore_concurrency_limit_()
+int ObILSRestoreState::check_restore_concurrency_limit_(bool &reach_limit)
 {
   int ret = OB_SUCCESS;
   const ObDagNetType::ObDagNetTypeEnum restore_type = ObDagNetType::DAG_NET_TYPE_RESTORE;
   ObTenantDagScheduler *scheduler = nullptr;
   int64_t restore_concurrency = 0;
+  reach_limit = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
     restore_concurrency = tenant_config->ha_high_thread_score;
@@ -1359,9 +1360,11 @@ int ObILSRestoreState::check_restore_concurrency_limit_()
   } else {
     const int64_t restore_dag_net_count = scheduler->get_dag_net_count(restore_type);
 
-    if (restore_dag_net_count > restore_concurrency) {
-      ret = OB_REACH_SERVER_DATA_COPY_IN_CONCURRENCY_LIMIT;
-      LOG_WARN("ls restore reach limit", K(ret), K(restore_concurrency), K(restore_dag_net_count));
+    if (restore_dag_net_count >= restore_concurrency) {
+      reach_limit = true;
+      if (REACH_TENANT_TIME_INTERVAL(1000 * 1000 * 60 * 5)) {
+        LOG_INFO("ls restore reach limit", K(ret), K(restore_concurrency), K(restore_dag_net_count));
+      }
     }
   }
   return ret;
@@ -1382,15 +1385,16 @@ int ObILSRestoreState::schedule_tablet_group_restore_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-
+  bool reach_limit = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("LS restore state do not init", K(ret));
   } else if (!arg.is_valid() || task_id.is_invalid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schedule tablet group restore get invalid argument", K(ret), K(arg), K(task_id));
-  } else if (OB_FAIL(check_restore_concurrency_limit_())) {
+  } else if (OB_FAIL(check_restore_concurrency_limit_(reach_limit))) {
     LOG_WARN("failed to check restore concurrency limit", K(ret), K(arg), K(task_id));
+  } else if (reach_limit) { // wait next schedule.
   } else if (OB_FAIL(schedule_tablet_group_restore_dag_net_(arg, task_id))) {
     LOG_WARN("failed to schedule tablet group restore dag net", K(ret), K(arg), K(task_id));
   } else {
@@ -1441,15 +1445,16 @@ int ObILSRestoreState::schedule_ls_restore_(
     const share::ObTaskId &task_id)
 {
   int ret = OB_SUCCESS;
-
+  bool reach_limit = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("LS restore state do not init", K(ret));
   } else if (!arg.is_valid() || task_id.is_invalid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schedule ls restore get invalid argument", K(ret), K(arg), K(task_id));
-  } else if (OB_FAIL(check_restore_concurrency_limit_())) {
+  } else if (OB_FAIL(check_restore_concurrency_limit_(reach_limit))) {
     LOG_WARN("failed to check restore concurrency limit", K(ret), K(arg), K(task_id));
+  } else if (reach_limit) { // wait next schedule.
   } else if (OB_FAIL(schedule_ls_restore_dag_net_(arg, task_id))) {
     LOG_WARN("failed to schedule tablet group restore dag net", K(ret), K(arg), K(task_id));
   } else {
