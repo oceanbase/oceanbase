@@ -247,6 +247,7 @@ private:
   int prepare_lob_common(ObLobAccessParam& param, bool &alloc_inside);
   bool lob_handle_has_char_len(ObLobAccessParam& param);
   int64_t* get_char_len_ptr(ObLobAccessParam& param);
+  int fill_lob_locator_extern(ObLobAccessParam& param);
 private:
   static const int64_t DEFAULT_LOB_META_BUCKET_CNT = 1543;
   static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K

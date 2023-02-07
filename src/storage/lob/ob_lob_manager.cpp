@@ -1017,6 +1017,9 @@ int ObLobManager::append(
           if (OB_NOT_NULL(param.lob_locator_)) {
             param.lob_locator_->ptr_ = buf;
             param.lob_locator_->size_ = total_size;
+            if (OB_FAIL(fill_lob_locator_extern(param))) {
+              LOG_WARN("fail to fill lob locator extern", K(ret), KPC(param.lob_locator_));
+            }
           }
         }
       }
@@ -1373,6 +1376,9 @@ int ObLobManager::append(
         if (OB_NOT_NULL(param.lob_locator_)) {
           param.lob_locator_->ptr_ = buf;
           param.lob_locator_->size_ = total_size;
+          if (OB_FAIL(fill_lob_locator_extern(param))) {
+            LOG_WARN("fail to fill lob locator extern", K(ret), KPC(param.lob_locator_));
+          }
         }
       }
     } else if (param.lob_locator_ != nullptr && !param.lob_locator_->is_persist_lob()) {
@@ -1702,6 +1708,22 @@ int64_t* ObLobManager::get_char_len_ptr(ObLobAccessParam& param)
   return reinterpret_cast<int64_t*>(ptr + LOB_WITH_OUTROW_CTX_SIZE);
 }
 
+int ObLobManager::fill_lob_locator_extern(ObLobAccessParam& param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(param.lob_locator_)) {
+    if (param.lob_locator_->has_extern()) {
+      ObMemLobExternHeader *ext_header = nullptr;
+      if (OB_FAIL(param.lob_locator_->get_extern_header(ext_header))) {
+        LOG_WARN("get extern header failed", K(ret), KPC(param.lob_locator_));
+      } else {
+        ext_header->payload_size_ = param.byte_size_;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLobManager::getlength(ObLobAccessParam& param, uint64_t &len)
 {
   int ret = OB_SUCCESS;
@@ -1854,6 +1876,9 @@ int ObLobManager::write_inrow_inner(ObLobAccessParam& param, ObString& data, ObS
     if (OB_NOT_NULL(param.lob_locator_)) {
       param.lob_locator_->ptr_ = buf;
       param.lob_locator_->size_ = res_len;
+      if (OB_FAIL(fill_lob_locator_extern(param))) {
+        LOG_WARN("fail to fill lob locator extern", K(ret), KPC(param.lob_locator_));
+      }
     }
   }
   return ret;
@@ -2879,6 +2904,9 @@ int ObLobManager::erase(ObLobAccessParam& param)
             }
             if (OB_NOT_NULL(param.lob_locator_)) {
               param.lob_locator_->size_ = param.lob_locator_->size_ - byte_len + char_len;
+              if (OB_FAIL(fill_lob_locator_extern(param))) {
+                LOG_WARN("fail to fill lob locator extern", K(ret), KPC(param.lob_locator_));
+              }
             }
           } else { // do erase
             char* dst_start = data.ptr() + byte_offset;
@@ -2894,6 +2922,9 @@ int ObLobManager::erase(ObLobAccessParam& param)
             }
             if (OB_NOT_NULL(param.lob_locator_)) {
               param.lob_locator_->size_ -= byte_len;
+              if (OB_FAIL(fill_lob_locator_extern(param))) {
+                LOG_WARN("fail to fill lob locator extern", K(ret), KPC(param.lob_locator_));
+              }
             }
           }
         }
