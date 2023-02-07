@@ -65,7 +65,8 @@ public:
       group_id_(0),
       cgroup_ctrl_(nullptr),
       is_inited_(false),
-      concurrency_(0)
+      concurrency_(0),
+      active_threads_(0)
   {}
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_group_id(uint64_t group_id) { group_id_ = group_id; }
@@ -75,7 +76,15 @@ public:
 
 private:
   void handle(common::ObLink *task);
-
+  void try_recycle(int64_t idle_time);
+  void disable_recycle()
+  {
+    recycle_lock_.lock();
+  }
+  void enable_recycle()
+  {
+    IGNORE_RETURN recycle_lock_.unlock();
+  }
 private:
   uint64_t tenant_id_;
   uint64_t group_id_;
@@ -83,6 +92,8 @@ private:
 	common::ObPriorityQueue2<0, 1> queue_;
   bool is_inited_;
   int64_t concurrency_;
+  int64_t active_threads_;
+  mutable common::ObSpinLock recycle_lock_;
 };
 
 class ObPxPool::Task : public common::ObLink

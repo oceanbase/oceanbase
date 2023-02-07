@@ -305,7 +305,7 @@ int ObPxThreadWorker::run_at(ObPxRpcInitTaskArgs &task_arg, omt::ObPxPool &px_po
   }
   if (OB_FAIL(ret)) {
     LOG_ERROR("Failed to submit px func to thread pool",
-             K(retry_times), "px_pool_size", px_pool.get_pool_size(),  K(ret));
+              K(retry_times), "px_pool_size", px_pool.get_pool_size(),  K(ret));
   }
   LOG_DEBUG("submit px worker to poll", K(env_args.is_oracle_mode()), K(ret));
   return ret;
