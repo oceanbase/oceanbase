@@ -889,7 +889,6 @@ int ObTableLoadStore::px_write(const ObTableLoadTransId &trans_id,
   } else {
     ObTableLoadStoreTrans *trans = nullptr;
     ObTableLoadTransStoreWriter *store_writer = nullptr;
-    ObTableLoadMutexGuard guard;
     if (OB_FAIL(store_ctx_->get_trans(trans_id, trans))) {
       LOG_WARN("fail to get trans", KR(ret));
     } else if (OB_FAIL(trans->get_store_writer_for_write(store_writer))) {
@@ -903,6 +902,38 @@ int ObTableLoadStore::px_write(const ObTableLoadTransId &trans_id,
           LOG_DEBUG("succeed to write store", K(trans_id), K(tablet_id));
         }
       }
+    }
+    if (OB_NOT_NULL(trans)) {
+      if (OB_NOT_NULL(store_writer)) {
+        trans->put_store_writer(store_writer);
+        store_writer = nullptr;
+      }
+      store_ctx_->put_trans(trans);
+      trans = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadStore::px_clean_up(const ObTableLoadTransId &trans_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
+  } else {
+    ObTableLoadStoreTrans *trans = nullptr;
+    ObTableLoadTransStoreWriter *store_writer = nullptr;
+    if (OB_FAIL(store_ctx_->get_trans(trans_id, trans))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("fail to get trans", KR(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(trans->get_store_writer_for_clean_up(store_writer))) {
+      LOG_WARN("fail to get store writer for clean up", KR(ret));
+    } else if (OB_FAIL(store_writer->clean_up(PX_DEFAULT_SESSION_ID))) {
+      LOG_WARN("fail to clean up store writer", KR(ret));
     }
     if (OB_NOT_NULL(trans)) {
       if (OB_NOT_NULL(store_writer)) {

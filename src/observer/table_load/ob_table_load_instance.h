@@ -28,6 +28,8 @@ public:
       observer::ObTableLoadExecCtx *execute_ctx);
   void destroy();
   int commit(table::ObTableLoadResultInfo &result_info);
+  int px_commit_data();
+  int px_commit_ddl();
   int write(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
   sql::ObLoadDataStat *get_job_stat() const { return job_stat_; }
   void update_job_stat_parsed_rows(int64_t parsed_rows)

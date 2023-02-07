@@ -616,6 +616,8 @@ int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistic
   return ret;
 }
 
+// commit() = px_commit_data() + px_commit_ddl()
+// used in non px_mode
 int ObTableLoadCoordinator::commit(ObExecContext &ctx, ObTableLoadResultInfo &result_info)
 {
   int ret = OB_SUCCESS;
@@ -637,6 +639,46 @@ int ObTableLoadCoordinator::commit(ObExecContext &ctx, ObTableLoadResultInfo &re
       LOG_WARN("fail to set coordinator status commit", KR(ret));
     } else {
       result_info = coordinator_ctx_->result_info_;
+    }
+  }
+  return ret;
+}
+
+// used in insert /*+ append */ into select clause
+// commit data loaded
+int ObTableLoadCoordinator::px_commit_data(ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
+  } else {
+    LOG_INFO("coordinator px_commit_data");
+    ObTableLoadSqlStatistics sql_statistics;
+    if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
+      LOG_WARN("fail to check coordinator status", KR(ret));
+    } else if (OB_FAIL(commit_peers(sql_statistics))) {
+      LOG_WARN("fail to commit peers", KR(ret));
+    } else if (param_.online_opt_stat_gather_ && OB_FAIL(drive_sql_stat(ctx, sql_statistics))) {
+      LOG_WARN("fail to drive sql stat", KR(ret));
+    }
+  }
+  return ret;
+}
+
+// commit ddl procedure
+int ObTableLoadCoordinator::px_commit_ddl()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
+  } else {
+    LOG_INFO("coordinator px_commit_ddl");
+    if (OB_FAIL(coordinator_ctx_->commit())) {
+      LOG_WARN("fail to commit coordinator", KR(ret));
+    } else if (OB_FAIL(coordinator_ctx_->set_status_commit())) {
+      LOG_WARN("fail to set coordinator status commit", KR(ret));
     }
   }
   return ret;

@@ -81,18 +81,31 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
   return ret;
 }
 
-int ObTableDirectInsertCtx::finish()
+// commit() should be called before finish()
+int ObTableDirectInsertCtx::commit()
 {
   int ret = OB_SUCCESS;
-  table::ObTableLoadResultInfo result_info;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableDirectInsertCtx is not init", KR(ret));
-  } else if (OB_FAIL(table_load_instance_->commit(result_info))) {
-    LOG_WARN("failed to commit direct loader", KR(ret));
+  } else if (OB_FAIL(table_load_instance_->px_commit_data())) {
+    LOG_WARN("failed to do px_commit_data", KR(ret));
+  }
+  return ret;
+}
+
+// finish() should be called after commit()
+int ObTableDirectInsertCtx::finish()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableDirectInsertCtx is not init", KR(ret));
+  } else if (OB_FAIL(table_load_instance_->px_commit_ddl())) {
+    LOG_WARN("failed to do px_commit_ddl", KR(ret));
   } else {
     table_load_instance_->destroy();
-    LOG_DEBUG("succeeded to commit direct loader", K(result_info));
+    LOG_DEBUG("succeeded to finish direct loader");
   }
   return ret;
 }

@@ -26,7 +26,7 @@
 #include "lib/profile/ob_perf_event.h"
 #include "share/schema/ob_table_dml_param.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "sql/engine/cmd/ob_table_direct_insert_trans.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 
 namespace oceanbase
@@ -397,10 +397,10 @@ int ObTableInsertOp::inner_open()
   }
   if (OB_SUCC(ret)) {
     const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-    if (plan->get_enable_append() && (0 != plan->get_append_table_id())) {
+    if (ObTableDirectInsertService::is_direct_insert(*plan)) {
       int64_t task_id = 1;
-      if (OB_FAIL(ObTableDirectInsertTrans::start_trans(plan->get_append_table_id(), task_id))) {
-        LOG_WARN("failed to start table direct insert trans", KR(ret),
+      if (OB_FAIL(ObTableDirectInsertService::open_task(plan->get_append_table_id(), task_id))) {
+        LOG_WARN("failed to open table direct insert task", KR(ret),
             K(plan->get_append_table_id()), K(task_id));
       }
     }
@@ -428,10 +428,10 @@ int ObTableInsertOp::inner_close()
   NG_TRACE(insert_close);
   int ret = OB_SUCCESS;
   const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
-  if (plan->get_enable_append() && (0 != plan->get_append_table_id())) {
+  if (ObTableDirectInsertService::is_direct_insert(*plan)) {
     int64_t task_id = 1;
-    if (OB_FAIL(ObTableDirectInsertTrans::finish_trans(plan->get_append_table_id(), task_id))) {
-      LOG_WARN("failed to finish table direct insert trans", KR(ret),
+    if (OB_FAIL(ObTableDirectInsertService::close_task(plan->get_append_table_id(), task_id))) {
+      LOG_WARN("failed to close table direct insert task", KR(ret),
           K(plan->get_append_table_id()), K(task_id));
     }
   }
