@@ -78,10 +78,11 @@ int ObLSRestoreTaskMgr::check_task_exist_(const share::ObTaskId &task_id,
   return OB_SUCCESS;
 }
 
+bool global_restored = false;
 int ObLSRestoreTaskMgr::check_tablet_deleted_or_restored_(storage::ObLS &ls, const common::ObTabletID &tablet_id, bool &is_deleted, bool &is_restored)
 {
   is_deleted = false;
-  is_restored = true;
+  is_restored = global_restored;
   return OB_SUCCESS;
 }
 
@@ -176,7 +177,7 @@ TEST_F(TestRestoreTaskMgr, taskMgr)
   FakeLS ls(1001);
   ObSArray<ObTabletID> tablets_need_to_restore;
   ObSArray<ObTabletID> tablets_restored;
-  ASSERT_EQ(OB_SUCCESS, task_mgr_.pop_need_restore_tablets(tablets_need_to_restore));
+  ASSERT_EQ(OB_SUCCESS, task_mgr_.pop_need_restore_tablets(ls, tablets_need_to_restore));
   ASSERT_EQ(OB_SUCCESS, task_mgr_.pop_restored_tablets(ls, tablets_restored));
   ASSERT_EQ(1024, tablets_need_to_restore.count());
   ASSERT_EQ(0, tablets_restored.count());
@@ -191,6 +192,7 @@ TEST_F(TestRestoreTaskMgr, taskMgr)
   ASSERT_EQ(1, task_mgr_.tablet_map_.size());
 
 // pop restored tablets
+  global_restored = true;
   ASSERT_EQ(OB_SUCCESS, task_mgr_.pop_restored_tablets(ls, tablets_restored));
   ASSERT_EQ(1024, task_mgr_.wait_tablet_set_.size());
   ASSERT_EQ(1024, task_mgr_.schedule_tablet_set_.size());
