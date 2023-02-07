@@ -150,6 +150,7 @@ public:
   void recycle_old_snapshots();
   void recycle_last_snapshots();
   uint32_t get_snapshots_size();
+  int cancle_update_task();
 
 private:
   typedef common::PageArena<ObSrsCacheSnapShot*, common::ModulePageAllocator> ObCGeoModuleArena;
