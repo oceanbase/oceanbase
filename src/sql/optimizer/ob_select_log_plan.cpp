@@ -4510,7 +4510,7 @@ int ObSelectLogPlan::generate_window_functions_plan(const ObIArray<ObWinFunRawEx
                 LOG_WARN("failed to check need sort", K(ret));
               } else if (OB_FAIL(get_partition_count(pby_oby_prefixes,
                                                      start,
-                                                     !distributed || has_non_parallel_wf,
+                                                     end,
                                                      partition_exprs,
                                                      prefix_pos,
                                                      part_cnt))) {
@@ -4600,7 +4600,7 @@ int ObSelectLogPlan::generate_window_functions_plan(const ObIArray<ObWinFunRawEx
 
 int ObSelectLogPlan::get_partition_count(const ObSEArray<std::pair<int64_t, int64_t>, 8> pby_oby_prefixes,
                                          const int64_t start,
-                                         const bool not_split,
+                                         const int64_t end,
                                          const ObIArray<ObRawExpr*> &partition_exprs,
                                          const int64_t prefix_pos,
                                          int64_t &part_cnt)
@@ -4612,18 +4612,16 @@ int ObSelectLogPlan::get_partition_count(const ObSEArray<std::pair<int64_t, int6
     LOG_WARN("get empty pby_oby_prefixes", K(ret), K(pby_oby_prefixes.count()));
   } else if (prefix_pos > 0 || partition_exprs.empty()) {
     part_cnt = 0;
-  } else if (not_split) {
-    part_cnt = pby_oby_prefixes.at(0).first;
-    for (int64_t i = 1; OB_SUCC(ret) && i < pby_oby_prefixes.count(); ++i) {
+  } else if (OB_UNLIKELY(start < 0 || end > pby_oby_prefixes.count() || start >= end)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected pby_oby_prefixes count ", K(ret), K(start), K(end), K(pby_oby_prefixes.count()));
+  } else {
+    part_cnt = pby_oby_prefixes.at(start).first;
+    for (int64_t i = start + 1; OB_SUCC(ret) && i < end; ++i) {
       if (pby_oby_prefixes.at(i).first < part_cnt) {
         part_cnt = pby_oby_prefixes.at(i).first;
       }
     }
-  } else if (OB_UNLIKELY(start < 0 || start >= pby_oby_prefixes.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected pby_oby_prefixes count ", K(ret), K(start), K(pby_oby_prefixes.count()));
-  } else {
-    part_cnt = pby_oby_prefixes.at(start).first;
   }
   return ret;
 }

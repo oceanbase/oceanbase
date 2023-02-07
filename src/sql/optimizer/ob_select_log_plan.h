@@ -531,7 +531,7 @@ private:
 
   int get_partition_count(const ObSEArray<std::pair<int64_t, int64_t>, 8> pby_oby_prefixes,
                           const int64_t start,
-                          const bool not_split,
+                          const int64_t end,
                           const ObIArray<ObRawExpr*> &partition_exprs,
                           const int64_t prefix_pos,
                           int64_t &part_cnt);
