@@ -74,7 +74,9 @@ ObMPQuery::ObMPQuery(const ObGlobalContext &gctx)
       single_process_timestamp_(0),
       exec_start_timestamp_(0),
       exec_end_timestamp_(0),
-      is_com_filed_list_(false)
+      is_com_filed_list_(false),
+      params_value_len_(0),
+      params_value_(NULL)
 {
   ctx_.exec_type_ = MpQuery;
 }
@@ -703,7 +705,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   ObSqlFatalErrExtraInfoGuard extra_info_guard;
   extra_info_guard.set_cur_sql(sql);
   extra_info_guard.set_tenant_id(session.get_effective_tenant_id());
-  SMART_VAR(ObMySQLResultSet, result, session, CURRENT_CONTEXT->get_arena_allocator()) {
+  ObIAllocator &allocator = CURRENT_CONTEXT->get_arena_allocator();
+  SMART_VAR(ObMySQLResultSet, result, session, allocator) {
     if (OB_FAIL(get_tenant_schema_info_(session.get_effective_tenant_id(),
                                         &cached_schema_info,
                                         schema_guard,
@@ -937,6 +940,10 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       audit_record.is_multi_stmt_ = session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS;
       audit_record.is_batched_multi_stmt_ = ctx_.multi_stmt_item_.is_batched_multi_stmt();
 
+      OZ (store_params_value_to_str(allocator, session, result.get_ps_params()));
+      audit_record.params_value_ = params_value_;
+      audit_record.params_value_len_ = params_value_len_;
+
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_ISNULL(plan_ctx)) {
         //do nothing
@@ -986,6 +993,38 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         RETRY_TYPE_NONE != retry_ctrl_.get_retry_type();
     (void)ObSQLUtils::handle_audit_record(is_need_retry, EXECUTE_LOCAL, session,
         ctx_.is_sensitive_);
+  }
+  return ret;
+}
+
+int ObMPQuery::store_params_value_to_str(ObIAllocator &allocator,
+                                         sql::ObSQLSessionInfo &session,
+                                         common::ParamStore &params)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t length = OB_MAX_SQL_LENGTH;
+  CK (OB_NOT_NULL(params_value_ = static_cast<char *>(allocator.alloc(OB_MAX_SQL_LENGTH))));
+  for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+    const common::ObObjParam &param = params.at(i);
+    if (param.is_ext()) {
+      pos = 0;
+      params_value_ = NULL;
+      params_value_len_ = 0;
+      break;
+    } else {
+      OZ (param.print_sql_literal(params_value_, length, pos, allocator, TZ_INFO(&session)));
+      if (i != params.count() - 1) {
+        OZ (databuff_printf(params_value_, length, pos, allocator, ","));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    params_value_ = NULL;
+    params_value_len_ = 0;
+    ret = OB_SUCCESS;
+  } else {
+    params_value_len_ = pos;
   }
   return ret;
 }

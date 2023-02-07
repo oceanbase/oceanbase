@@ -312,6 +312,7 @@ public:
   bool get_is_com_filed_list() { return is_com_filed_list_; }
   void set_wildcard_string(common::ObString string) { wild_str_ = string; }
   common::ObString &get_wildcard_string() { return wild_str_;}
+  common::ParamStore &get_ps_params() { return ps_params_; }
   static void replace_lob_type(const ObSQLSessionInfo &session,
                                const ObField &field,
                                obmysql::ObMySQLField &mfield);
@@ -420,6 +421,7 @@ private:
   bool is_returning_;
   bool is_com_filed_list_; //used to mark COM_FIELD_LIST
   common::ObString wild_str_;//uesd to save filed wildcard in COM_FIELD_LIST;
+  common::ParamStore ps_params_; // 文本 ps params 记录，用于填入 sql_audit
 };
 
 
@@ -490,7 +492,8 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       executor_(),
       is_returning_(false),
       is_com_filed_list_(false),
-      wild_str_()
+      wild_str_(),
+      ps_params_(ObWrapperAllocator(&allocator))
 {
   message_[0] = '\0';
   // Always called in the ObResultSet constructor
