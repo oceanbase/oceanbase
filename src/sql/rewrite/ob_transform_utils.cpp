@@ -3207,19 +3207,19 @@ int ObTransformUtils::classify_scalar_query_ref(ObRawExpr *expr,
     if (query_ref->is_set() || query_ref->get_output_column() > 1) {
       // if a query ref returns multi row or multi col,
       // we consider such query ref as a non-scalar one.
-      if (OB_FAIL(non_scalar_query_refs.push_back(query_ref))) {
+      if (OB_FAIL(add_var_to_array_no_dup(non_scalar_query_refs, expr))) {
         LOG_WARN("failed to push back non scalar query refs", K(ret));
       }
     } else {
       // if a query ref returns a scalar value
       // we consider such query ref as a scalar one.
-      if (OB_FAIL(scalar_query_refs.push_back(query_ref))) {
+      if (OB_FAIL(add_var_to_array_no_dup(scalar_query_refs, expr))) {
         LOG_WARN("failed to push back query ref", K(ret));
       }
     }
   } else if (T_REF_ALIAS_COLUMN == expr->get_expr_type()) {
     // a very special design for vector update set
-    if (OB_FAIL(scalar_query_refs.push_back(expr))) {
+    if (OB_FAIL(add_var_to_array_no_dup(scalar_query_refs, expr))) {
       LOG_WARN("failed to push back alias query ref", K(ret));
     }
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
@@ -4893,7 +4893,7 @@ int ObTransformUtils::extract_table_exprs(const ObDMLStmt &stmt,
       // do nothing
     } else if (!table_set.is_superset2(expr->get_relation_ids())) {
       /* do nothing */
-    } else if (OB_FAIL(table_exprs.push_back(expr))) {
+    } else if (OB_FAIL(add_var_to_array_no_dup(table_exprs, expr))) {
       LOG_WARN("failed to push back column expr", K(ret));
     }
   }
