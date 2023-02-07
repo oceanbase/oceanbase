@@ -11493,8 +11493,30 @@ def_table_schema(
 
 # 12367: __all_virtual_kv_hotkey_stat
 # 12368: __all_virtual_backup_transferring_tablets
-# 12369: __all_virtual_io_scheduler
 
+def_table_schema(
+  owner             = 'renju.rj',
+  table_name        = '__all_virtual_io_scheduler',
+  table_id          = '12369',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = False,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',              'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',            'int'),
+    ('thread_id',           'int'),
+    ('tenant_id',           'int'),
+    ('group_id',            'int'),
+    ('queuing_count',       'int'),
+    ('reservation_ts',      'timestamp'),
+    ('category_limit_ts',   'timestamp'),
+    ('tenant_limit_ts',     'timestamp'),
+    ('proportion_ts',       'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 #
 # 余留位置
 #
@@ -25770,6 +25792,28 @@ def_table_schema(
 
 # 21367: GV$OB_KV_HOTKEY_STAT
 # 21368: V$OB_KV_HOTKEY_STAT
+
+def_table_schema(
+  owner           = 'renju.rj',
+  table_name      = 'DBA_OB_RSRC_IO_DIRECTIVES',
+  table_id        = '21369',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      PLAN,
+      GROUP_OR_SUBPLAN,
+      COMMENTS,
+      MIN_IOPS,
+      MAX_IOPS,
+      WEIGHT_IOPS
+    FROM
+       oceanbase.__all_res_mgr_directive
+""".replace("\n", " ")
+)
 
 
 
@@ -43023,6 +43067,30 @@ def_table_schema(
   WHERE
     TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'renju.rj',
+  table_name      = 'DBA_OB_RSRC_IO_DIRECTIVES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25223',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      PLAN,
+      GROUP_OR_SUBPLAN,
+      COMMENTS,
+      MIN_IOPS,
+      MAX_IOPS,
+      WEIGHT_IOPS
+    FROM
+       SYS.ALL_VIRTUAL_RES_MGR_DIRECTIVE_REAL_AGENT
+""".replace("\n", " ")
 )
 #### End Data Dictionary View
 ################################################################################

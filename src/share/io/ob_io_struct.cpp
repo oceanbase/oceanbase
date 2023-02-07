@@ -1283,8 +1283,7 @@ int ObIOSender::get_sender_status(const uint64_t tenant_id, const uint64_t index
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || index < 0 ||
-             (index >= io_group_queues->group_phy_queues_.count() && INT64_MAX != index))) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || index < 0)) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("invalid index", K(ret), K(index));
   } else {
@@ -1294,6 +1293,9 @@ int ObIOSender::get_sender_status(const uint64_t tenant_id, const uint64_t index
     } else {
       if (OB_FAIL(tenant_groups_map_.get_refactored(tenant_id, io_group_queues))) {
         LOG_WARN("get io_group_queues from map failed", K(ret), K(tenant_id));
+      } else if (OB_UNLIKELY((index >= io_group_queues->group_phy_queues_.count() && INT64_MAX != index))) {
+        ret = OB_INVALID_CONFIG;
+        LOG_WARN("invalid index", K(ret), K(index));
       } else {
         ObPhyQueue *tmp_phy_queue = index == INT64_MAX ?
                    &(io_group_queues->other_phy_queue_) : io_group_queues->group_phy_queues_.at(index);
