@@ -914,13 +914,6 @@ int ObMergeJoinOp::ChildBatchFecther::get_next_batch(const int64_t max_row_cnt)
         brs_holder_.reset();
       }
     }
-    for (auto i = 0; OB_SUCC(ret) && i < all_exprs_->count(); i++) {
-      auto *expr = all_exprs_->at(i);
-      if (OB_FAIL(expr->eval_batch(merge_join_op_.eval_ctx_, *(brs_.skip_),
-                                   brs_.size_))) {
-        LOG_WARN("expr batch evaluation failed", K(ret), KPC(expr));
-      }
-    }
   }
   cur_idx_ = 0;
   LOG_DEBUG("end get next batch", K(this), K(brs_));
@@ -942,7 +935,9 @@ int ObMergeJoinOp::ChildBatchFecther::backup_remain_rows()
       backup_rows_cnt_ = 0;
       ObDatum *datum = NULL;
       ObDatumVector src_datum = all_exprs_->at(i)->locate_expr_datumvector(merge_join_op_.eval_ctx_);
-      if (OB_ISNULL(datum = static_cast<ObDatum *>(allocator.alloc(alloc_size)))) {
+      if (OB_FAIL(all_exprs_->at(i)->eval_batch(merge_join_op_.eval_ctx_, *brs_.skip_, brs_.size_))) {
+        LOG_WARN("eval all exprs failed", K(ret));
+      } else if (OB_ISNULL(datum = static_cast<ObDatum *>(allocator.alloc(alloc_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
       } else if (OB_FAIL(backup_datums_.push_back(datum))) {
@@ -1070,7 +1065,6 @@ int ObMergeJoinOp::ChildBatchFecther::get_next_equal_group(JoinRowList &row_list
       }
 
       if (OB_SUCC(ret) && !all_batch_finished) {
-        merge_join_op_.clear_evaluated_flag();
         if (OB_FAIL(merge_join_op_.calc_equal_conds_with_stored_row<!is_left>(
                                         stored_row, cur_idx_, cmp_res))) {
           LOG_WARN("calc equal conds failed", K(ret));
@@ -1149,6 +1143,7 @@ int ObMergeJoinOp::calc_equal_conds_with_batch_idx(int64_t &cmp_res)
   cmp_res = 0;
   int64_t l_table_batch_idx = left_brs_fetcher_.cur_idx_;
   int64_t r_table_batch_idx = right_brs_fetcher_.cur_idx_;
+  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
   for (int64_t i = 0;
        OB_SUCC(ret) && 0 == cmp_res && i < MY_SPEC.equal_cond_infos_.count();
        i++) {
@@ -1158,15 +1153,25 @@ int ObMergeJoinOp::calc_equal_conds_with_batch_idx(int64_t &cmp_res)
                                              : equal_cond.expr_->args_[0];
     ObExpr *r_child_expr = equal_cond.is_opposite_ ? equal_cond.expr_->args_[0]
                                              : equal_cond.expr_->args_[1];
-    ObDatum *l_datum = &l_child_expr->locate_expr_datum(eval_ctx_, l_table_batch_idx);
-    ObDatum *r_datum = &r_child_expr->locate_expr_datum(eval_ctx_, r_table_batch_idx);
-    if (l_datum->is_null() && r_datum->is_null()) {
-      cmp_res = (T_OP_NSEQ == equal_cond.expr_->type_) ? 0 : -1;
-    } else if (0 != (cmp_res = equal_cond.ns_cmp_func_(*l_datum, *r_datum))) {
-      cmp_res *= MY_SPEC.merge_directions_.at(i);
+
+    ObDatum *l_datum = NULL;
+    ObDatum *r_datum = NULL;
+    guard.set_batch_idx(l_table_batch_idx);
+    guard.set_batch_size(left_brs_fetcher_.brs_.size_);
+    if (OB_FAIL(l_child_expr->eval(eval_ctx_, l_datum))) {
+      LOG_WARN("eval left child expr failed", K(ret));
+    } else {
+      guard.set_batch_idx(r_table_batch_idx);
+      guard.set_batch_size(right_brs_fetcher_.brs_.size_);
+      if (OB_FAIL(r_child_expr->eval(eval_ctx_, r_datum))) {
+        LOG_WARN("eval right child expr failed", K(ret));
+      } else if (l_datum->is_null() && r_datum->is_null()) {
+        cmp_res = (T_OP_NSEQ == equal_cond.expr_->type_) ? 0 : -1;
+      } else if (0 != (cmp_res = equal_cond.ns_cmp_func_(*l_datum, *r_datum))) {
+        cmp_res *= MY_SPEC.merge_directions_.at(i);
+      }
     }
     LOG_DEBUG("calc equal cond with batch idx", KPC(l_datum), KPC(r_datum));
-
   } // for end
   LOG_DEBUG("calc equal cond with batch idx", K(l_table_batch_idx), K(r_table_batch_idx),
             K(cmp_res), K(left_brs_fetcher_.brs_), K(right_brs_fetcher_.brs_));
@@ -1183,6 +1188,8 @@ int ObMergeJoinOp::calc_equal_conds_with_stored_row(const ObChunkDatumStore::Sto
   common::ObFixedArray<int64_t, common::ObIAllocator> &equal_param_idx =
                                     is_left_table_stored_row ? left_brs_fetcher_.equal_param_idx_
                                       : right_brs_fetcher_.equal_param_idx_;
+  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+  guard.set_batch_size(MY_SPEC.max_batch_size_);
   for (int64_t i = 0;
        OB_SUCC(ret) && 0 == cmp_res && i < MY_SPEC.equal_cond_infos_.count();
        i++) {
@@ -1197,9 +1204,15 @@ int ObMergeJoinOp::calc_equal_conds_with_stored_row(const ObChunkDatumStore::Sto
 
     if (is_left_table_stored_row) {
       l_table_datum = const_cast<ObDatum *>(&stored_row->cells()[equal_param_idx.at(i)]);
-      r_table_datum = &r_child_expr->locate_expr_datum(eval_ctx_, batch_idx);
+      guard.set_batch_idx(batch_idx);
+      if (OB_FAIL(r_child_expr->eval(eval_ctx_, r_table_datum))) {
+        LOG_WARN("eval child failed", K(ret));
+      }
     } else {
-      l_table_datum = &l_child_expr->locate_expr_datum(eval_ctx_, batch_idx);
+      guard.set_batch_idx(batch_idx);
+      if (OB_FAIL(l_child_expr->eval(eval_ctx_, l_table_datum))) {
+        LOG_WARN("eval child failed", K(ret));
+      }
       r_table_datum = const_cast<ObDatum *>(&stored_row->cells()[equal_param_idx.at(i)]);
     }
     if (OB_SUCC(ret)) {
