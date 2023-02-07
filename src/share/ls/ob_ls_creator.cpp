@@ -464,6 +464,53 @@ int ObLSCreator::persist_ls_member_list_(const common::ObMemberList &member_list
 
 }
 
+int ObLSCreator::check_member_list_all_in_meta_table_(const common::ObMemberList &member_list)
+{
+  int ret = OB_SUCCESS;
+  bool has_replica_only_in_member_list = true;
+  ObLSInfo ls_info_to_check;
+  const int64_t retry_interval_us = 1000l * 1000l; // 1s
+  ObTimeoutCtx ctx;
+  if (OB_ISNULL(GCTX.lst_operator_)
+      || OB_UNLIKELY(!is_valid() || !member_list.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(member_list));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
+    LOG_WARN("failed to set default timeout", KR(ret));
+  } else {
+    while (OB_SUCC(ret) && has_replica_only_in_member_list) {
+      has_replica_only_in_member_list = false;
+      if (ctx.is_timeouted()) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("wait member list all reported to meta table timeout", KR(ret), K(member_list), K_(tenant_id), K_(id));
+      } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id, tenant_id_, id_, share::ObLSTable::DEFAULT_MODE, ls_info_to_check))) {
+        LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K_(id));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
+          const share::ObLSReplica *replica = nullptr;
+          common::ObAddr server;
+          if (OB_FAIL(member_list.get_server_by_index(i, server))) {
+            LOG_WARN("fail to get server by index", KR(ret), K(i), K(member_list));
+          } else {
+            int tmp_ret = ls_info_to_check.find(server, replica);
+            if (OB_SUCCESS == tmp_ret) {
+              // replica exists, bypass
+            } else {
+              has_replica_only_in_member_list = true;
+              LOG_INFO("has replica only in member list", KR(tmp_ret), K(member_list), K(ls_info_to_check), K(i), K(server));
+              break;
+            }
+          }
+        }
+        if (OB_SUCC(ret) && has_replica_only_in_member_list) {
+          ob_usleep(retry_interval_us);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
                                  const int64_t paxos_replica_num)
 {
@@ -475,6 +522,8 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
                          || member_list.get_member_number() < rootserver::majority(paxos_replica_num))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(member_list), K(paxos_replica_num));
+  } else if (!is_sys_tenant(tenant_id_) && OB_FAIL(check_member_list_all_in_meta_table_(member_list))) {
+    LOG_WARN("fail to check member_list all in meta table", KR(ret), K(member_list), K_(tenant_id), K_(id));
   } else {
     ObTimeoutCtx ctx;
     if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {

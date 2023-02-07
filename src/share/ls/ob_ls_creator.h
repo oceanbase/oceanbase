@@ -128,6 +128,7 @@ private:
                 const bool create_with_palf,
                 const palf::PalfBaseInfo &palf_base_info,
                 common::ObMemberList &member_list);
+ int check_member_list_all_in_meta_table_(const common::ObMemberList &member_list);
  int set_member_list_(const common::ObMemberList &member_list,
                       const int64_t paxos_replica_num);
  int persist_ls_member_list_(const common::ObMemberList &member_list);

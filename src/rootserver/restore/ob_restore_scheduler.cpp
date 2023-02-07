@@ -1232,11 +1232,11 @@ int ObRestoreService::check_all_ls_restore_finish_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret), KP(sql_proxy_));
   } else {
-    tenant_restore_status = TenantRestoreStatus::SUCCESS; 
+    tenant_restore_status = TenantRestoreStatus::SUCCESS;
     SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
       ObSqlString sql;
       common::sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql.assign_fmt("select a.ls_id, b.restore_status from %s as a "
+      if (OB_FAIL(sql.assign_fmt("select a.ls_id, b.restore_status, b.replica_status from %s as a "
               "left join %s as b on a.ls_id = b.ls_id",
               OB_ALL_LS_STATUS_TNAME, OB_ALL_LS_META_TABLE_TNAME))) {
         LOG_WARN("failed to assign sql", K(ret));
@@ -1249,6 +1249,8 @@ int ObRestoreService::check_all_ls_restore_finish_(
         int64_t ls_id = 0;
         share::ObLSRestoreStatus ls_restore_status;
         int32_t restore_status = -1;
+        ObString replica_status_str;
+        ObReplicaStatus replica_status;
         //TODO no ls in ls_meta
         //if one of ls restore failed, make tenant restore failed
         //https://work.aone.alibaba-inc.com/issue/44518531
@@ -1256,16 +1258,21 @@ int ObRestoreService::check_all_ls_restore_finish_(
             && !is_tenant_restore_failed(tenant_restore_status)) {
           EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "restore_status", restore_status, int32_t);
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
-              LOG_WARN("failed to set status", KR(ret), K(restore_status));
-            } else if (ls_restore_status.is_restore_failed()) {
-              //restore failed
-              tenant_restore_status = TenantRestoreStatus::FAILED;
-            } else if (!ls_restore_status.is_restore_none()
-               && is_tenant_restore_success(tenant_restore_status)) {
-              tenant_restore_status = TenantRestoreStatus::IN_PROGRESS;
-            }
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "replica_status", replica_status_str);
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(share::get_replica_status(replica_status_str, replica_status))) {
+            LOG_WARN("fail to get replica status from string", KR(ret), K(replica_status_str));
+          } else if (REPLICA_STATUS_NORMAL != replica_status) {
+            tenant_restore_status = TenantRestoreStatus::IN_PROGRESS;
+          } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
+            LOG_WARN("failed to set status", KR(ret), K(restore_status));
+          } else if (ls_restore_status.is_restore_failed()) {
+            //restore failed
+            tenant_restore_status = TenantRestoreStatus::FAILED;
+          } else if (!ls_restore_status.is_restore_none()
+             && is_tenant_restore_success(tenant_restore_status)) {
+            tenant_restore_status = TenantRestoreStatus::IN_PROGRESS;
           }
         } // while
         if (OB_ITER_END == ret) {
