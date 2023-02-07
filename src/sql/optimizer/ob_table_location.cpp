@@ -1257,10 +1257,11 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
 {
   int ret = OB_SUCCESS;
   is_weak_read = false;
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session) || OB_ISNULL(dml_stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected null", K(ret), K(session));
-  } else if (dml_stmt.get_query_ctx()->has_dml_write_stmt_) {
+  } else if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
+             dml_stmt.get_query_ctx()->is_contain_select_for_update_) {
     is_weak_read = false;
   } else {
     ObConsistencyLevel consistency_level = INVALID_CONSISTENCY;
