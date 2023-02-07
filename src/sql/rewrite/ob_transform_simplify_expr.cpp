@@ -1895,7 +1895,7 @@ int ObTransformSimplifyExpr::do_remove_subquery(ObDMLStmt* stmt, ObRawExpr*& exp
       LOG_WARN("failed to check limit value", K(ret), K(*sub_stmt));
     } else if (OB_FAIL(is_filter_false(sub_stmt, is_where_false, is_having_false, is_having_true))) {
       LOG_WARN("failed to judge filter is false or not", K(ret), K(*stmt));
-    } else if (FALSE_IT(is_scalar_agg = (sub_stmt->get_aggr_item_size() > 0 && sub_stmt->get_group_expr_size() <= 0))) {
+    } else if (FALSE_IT(is_scalar_agg = sub_stmt->is_scala_group_by())) {
       /* don nothing */
     } else if (is_having_false || is_limit_filter_false || (is_where_false && !is_scalar_agg)) {
       if (OB_FAIL(build_null_for_empty_set(sub_stmt, expr))) {
