@@ -4676,6 +4676,10 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
             && alter_column_schema.get_cur_default_value().is_null()) {
           ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
           LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
+        } else if (0 != origin_col_schema->get_rowkey_position()
+            && alter_column_schema.is_set_nullable_) {
+          ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
+          LOG_WARN("can't set primary key nullable", K(ret));
         } else if (ObGeometryType == origin_col_schema->get_data_type()
                    && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
           ret = OB_NOT_SUPPORTED;
@@ -4934,6 +4938,10 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
               && alter_column_schema.get_cur_default_value().is_null()) {
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
+          } else if (0 != origin_col_schema->get_rowkey_position()
+              && alter_column_schema.is_set_nullable_) {
+            ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
+            LOG_WARN("can't set primary key nullable", K(ret));
           } else if (ObGeometryType == origin_col_schema->get_data_type()
                      && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
             ret = OB_NOT_SUPPORTED;

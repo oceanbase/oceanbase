@@ -6965,6 +6965,7 @@ int ObDDLService::fill_new_column_attributes(
     if (!is_oracle_mode() || alter_column_schema.is_set_default_) {
       new_column_schema.set_cur_default_value(alter_column_schema.get_cur_default_value());
     }
+    new_column_schema.set_zero_fill(alter_column_schema.is_zero_fill());
     new_column_schema.set_is_hidden(alter_column_schema.is_hidden());
     new_column_schema.set_nullable(alter_column_schema.is_nullable());
     new_column_schema.set_autoincrement(alter_column_schema.is_autoincrement());
