@@ -117,7 +117,7 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
           expr->datum_meta_, expr->obj_meta_.has_lob_header(), wkb))) {
         LOG_WARN("fail to get real string data", K(ret), K(wkb));
-      } else if (ObGeoTypeUtil::check_geo_type(column_geo_type, wkb)) {
+      } else if (OB_FAIL(ObGeoTypeUtil::check_geo_type(column_geo_type, wkb))) {
         LOG_WARN("check geo type failed", K(ret), K(wkb));
         ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
         LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
