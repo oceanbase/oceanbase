@@ -818,24 +818,26 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
     return ret;
   }
 #endif
-  const ObMediumCompactionInfoList &medium_list = tablet.get_medium_compaction_info_list();
-  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-  const ObLSID &ls_id = ls.get_ls_id();
-  int64_t major_frozen_snapshot = 0 == input_major_snapshot ? MTL(ObTenantTabletScheduler *)->get_frozen_version() : input_major_snapshot;
-  ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
-  int64_t schedule_scn = 0;
-  bool need_merge = false;
+  if (MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
+    const ObMediumCompactionInfoList &medium_list = tablet.get_medium_compaction_info_list();
+    const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+    const ObLSID &ls_id = ls.get_ls_id();
+    int64_t major_frozen_snapshot = 0 == input_major_snapshot ? MTL(ObTenantTabletScheduler *)->get_frozen_version() : input_major_snapshot;
+    ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
+    int64_t schedule_scn = 0;
+    bool need_merge = false;
 
-  (void)tablet.get_medium_compaction_info_list().get_schedule_scn(major_frozen_snapshot, schedule_scn, compaction_type);
+    (void)tablet.get_medium_compaction_info_list().get_schedule_scn(major_frozen_snapshot, schedule_scn, compaction_type);
 
-  LOG_DEBUG("schedule_tablet_medium_merge", K(schedule_scn), K(major_frozen_snapshot), K(schedule_with_memtable), K(ls_id), K(tablet_id));
-  if (0 == schedule_scn
-    && schedule_with_memtable
-    && OB_FAIL(get_schedule_medium_from_memtable(tablet, major_frozen_snapshot, schedule_scn, compaction_type))) {
-    LOG_WARN("failed to get schedule medium scn from memtables", K(ret));
-  } else if (schedule_scn > 0) {
-    if (OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, compaction_type))) {
-      LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id), K(schedule_scn));
+    LOG_DEBUG("schedule_tablet_medium_merge", K(schedule_scn), K(major_frozen_snapshot), K(schedule_with_memtable), K(ls_id), K(tablet_id));
+    if (0 == schedule_scn
+      && schedule_with_memtable
+      && OB_FAIL(get_schedule_medium_from_memtable(tablet, major_frozen_snapshot, schedule_scn, compaction_type))) {
+      LOG_WARN("failed to get schedule medium scn from memtables", K(ret));
+    } else if (schedule_scn > 0) {
+      if (OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, compaction_type))) {
+        LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id), K(schedule_scn));
+      }
     }
   }
 
