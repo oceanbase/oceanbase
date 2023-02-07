@@ -351,6 +351,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
             monitor.mark_and_get_cost("dml-done", true);
           } // while
         } else if (is_ddl_trans){
+          trans_ctx->set_trans_redo_dispatched(); // ddl need not dispatch redo.
           // need sort_participants = on, which make sure the first PartTransTask of
           // participant_list is DDL_TRANS.
           // TODO: consider more idea to handle this.

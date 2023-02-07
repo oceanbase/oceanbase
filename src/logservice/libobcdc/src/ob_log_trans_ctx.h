@@ -239,6 +239,7 @@ public:
   int64_t get_revertable_participant_count() const;
   int set_ready_participant_objs(PartTransTask *part_trans_task);
   int append_sorted_br(ObLogBR *br);
+  void set_trans_redo_dispatched() { ATOMIC_SET(&is_trans_redo_dispatched_, true); }
   bool is_trans_sorted() const { return is_trans_sorted_; }
   void set_trans_sorted() { is_trans_sorted_ = true; }
   /// check if trans has valid br
@@ -298,6 +299,7 @@ public:
       K_(total_br_count),
       K_(committed_br_count),
       K_(revertable_participant_count),
+      K_(is_trans_redo_dispatched),
       K_(is_trans_sorted));
 
 private:
@@ -326,6 +328,8 @@ private:
   int init_trans_id_str_();
   // only init major version str for observer version less than 2_0_0
   int init_major_version_str_(const common::ObVersion &freeze_version);
+  // wait until trans redo dispatched.
+  void wait_trans_redo_dispatched_();
 
 private:
   IObLogTransCtxMgr         *host_;
@@ -352,6 +356,7 @@ private:
 
   // status info
   int64_t                   revertable_participant_count_;  // Number of participants able to be released
+  bool                      is_trans_redo_dispatched_;
   bool                      is_trans_sorted_;
   common::ObSpLinkQueue     br_out_queue_;
 
