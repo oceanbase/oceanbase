@@ -23,6 +23,7 @@
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/log_define.h"
+#include "share/ob_local_device.h"
 
 namespace oceanbase
 {
@@ -37,6 +38,9 @@ const int64_t ObTabletGCHandler::FLUSH_CHECK_INTERVAL = 5 * 1000 * 1000L;
 
 // The time interval for waiting persist tablet successful after freezing in total is 72 * 5s = 6m
 const int64_t ObTabletGCHandler::FLUSH_CHECK_MAX_TIMES = 72;
+
+// when deleted_tablet_preservation_time is not reached and disk used is more than DISK_USED_PERCENT_TRIGGER_FOR_GC_TABLET, gc tablet
+const int ObTabletGCHandler::DISK_USED_PERCENT_TRIGGER_FOR_GC_TABLET = 80;
 
 // The time interval for checking tablet_persist_trigger_ is 5s
 const int64_t ObTabletGCService::GC_CHECK_INTERVAL = 5 * 1000 * 1000L;
@@ -278,6 +282,8 @@ int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObTabletIDArray &unpersi
     STORAGE_LOG(WARN, "tablet gc handle is not inited", KR(ret));
   } else if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     STORAGE_LOG(WARN, "failed to build ls tablet iter", KR(ret), KPC(this));
+  } else if (only_deleted && !check_tablet_gc()) {
+    ret = OB_EAGAIN;
   } else {
     ObTabletHandle tablet_handle;
     while (OB_SUCC(ret)) {
@@ -454,6 +460,22 @@ void ObTabletGCHandler::online()
   set_tablet_gc_trigger();
   set_start();
   STORAGE_LOG(INFO, "tablet gc handler online", KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
+}
+
+bool ObTabletGCHandler::check_tablet_gc()
+{
+  int64_t now = ObTimeUtility::current_time();
+  static int64_t last_gc_time = now;
+  int64_t deleted_tablet_preservation_time = GCONF._ob_deleted_tablet_preservation_time;
+  int used_percent = OB_SERVER_BLOCK_MGR.get_used_macro_block_count() / OB_SERVER_BLOCK_MGR.get_total_macro_block_count();
+  bool need_gc = !((last_gc_time + deleted_tablet_preservation_time > now)
+                   && used_percent < DISK_USED_PERCENT_TRIGGER_FOR_GC_TABLET);
+  STORAGE_LOG(INFO, "[tabletgc] check tablet gc", KPC(this), KPC(ls_), K(ls_->get_ls_meta()), K(need_gc),
+              K(last_gc_time), K(deleted_tablet_preservation_time), K(used_percent));
+  if (need_gc) {
+    last_gc_time = now;
+  }
+  return need_gc;
 }
 
 } // checkpoint

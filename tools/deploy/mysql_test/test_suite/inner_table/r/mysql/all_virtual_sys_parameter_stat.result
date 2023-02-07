@@ -263,6 +263,7 @@ _migrate_block_verify_level
 _minor_compaction_amplification_factor
 _minor_compaction_interval
 _ob_ddl_timeout
+_ob_deleted_tablet_preservation_time
 _ob_elr_fast_freeze_threshold
 _ob_enable_fast_freeze
 _ob_enable_fast_parser

@@ -65,12 +65,14 @@ public:
 private:
   static const int64_t FLUSH_CHECK_MAX_TIMES;
   static const int64_t FLUSH_CHECK_INTERVAL;
+  static const int DISK_USED_PERCENT_TRIGGER_FOR_GC_TABLET;
   int freeze_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids);
   int wait_unpersist_tablet_ids_flushed(const common::ObTabletIDArray &unpersist_tablet_ids,
                                         const int64_t checkpoint_ts);
   bool is_finish() { obsys::ObWLockGuard lock(wait_lock_, false); return lock.acquired(); }
   void set_stop() { ATOMIC_STORE(&update_enabled_, false); }
   void set_start() { ATOMIC_STORE(&update_enabled_, true); }
+  bool check_tablet_gc();
 
 public:
   obsys::ObRWLock wait_lock_;
