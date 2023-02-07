@@ -347,9 +347,7 @@ int ObMallocAllocator::add_tenant_allocator(ObTenantCtxAllocator *allocator)
   while ((NULL != *cur) && (*cur)->get_tenant_id() < tenant_id) {
     cur = &((*cur)->get_next());
   }
-  if (OB_ISNULL(*cur)) {
-    *cur = allocator;
-  } else if ((*cur)->get_tenant_id() > tenant_id) {
+  if (OB_ISNULL(*cur) || (*cur)->get_tenant_id() > tenant_id) {
     ObTenantCtxAllocator *next_allocator = *cur;
     *cur = allocator;
     ((*cur)->get_next()) = next_allocator;

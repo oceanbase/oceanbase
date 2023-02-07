@@ -18,6 +18,21 @@
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
+class TestMallocAllocator : public ::testing::Test
+{
+public:
+  virtual void SetUp()
+  {
+    // cleanup
+    ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
+    for (int i = OB_USER_TENANT_ID + 1; i < ObMallocAllocator::PRESERVED_TENANT_COUNT; i++) {
+      malloc_allocator->allocators_[i] = NULL;
+    }
+    malloc_allocator->unrecycled_allocators_ = NULL;
+  }
+  virtual void TearDown() {}
+};
+
 int64_t g_ctx_id = ObCtxIds::DEFAULT_CTX_ID;
 
 TEST(TestMallocAllocator, reserved_tenant)
@@ -168,6 +183,60 @@ TEST(TestMallocAllocator, allocator_guard)
     ASSERT_EQ(0, tmp_ta->get_ref_cnt());
     ASSERT_EQ(NULL, new_guard.ref_allocator());
     ASSERT_EQ(NULL, new_guard.operator->());
+  }
+}
+
+TEST(TestMallocAllocator, bug_47543065)
+{
+  std::pair<int, int64_t> flow[] = {
+    std::make_pair(1, 1002),
+    std::make_pair(1, 1001),
+    std::make_pair(1, 1006),
+    std::make_pair(1, 1005),
+    std::make_pair(1, 1004),
+    std::make_pair(1, 1003),
+    std::make_pair(0, 1001),
+    std::make_pair(1, 1008),
+    std::make_pair(1, 1007),
+    std::make_pair(0, 1005),
+    std::make_pair(0, 1007),
+    std::make_pair(0, 1008),
+    std::make_pair(1, 1008),
+    std::make_pair(1, 1007),
+    std::make_pair(0, 1007),
+    std::make_pair(0, 1008),
+    std::make_pair(1, 1008)
+  };
+  ObMallocAllocator *malloc_allocator = ObMallocAllocator::get_instance();
+  for (int i = 0; i < sizeof(flow)/sizeof(flow[0]);i++) {
+    int create = flow[i].first;
+    int64_t tenant_id = flow[i].second;
+    if (create) {
+      ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(tenant_id));
+      // make tenant memleak
+      auto ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, 0);
+      ASSERT_NE(nullptr, ta);
+      ASSERT_NE(nullptr, ta->alloc(8, ObMemAttr(tenant_id)));
+    } else {
+      malloc_allocator->recycle_tenant_allocator(tenant_id);
+    }
+  }
+
+  // check status
+  for (int i = 0; i < ObMallocAllocator::PRESERVED_TENANT_COUNT; i++) {
+    auto ta = malloc_allocator->allocators_[i];
+    uint64_t prev_tenant_id = 0;
+    while (ta != NULL) {
+      ASSERT_EQ(ta->get_tenant_id() % ObMallocAllocator::PRESERVED_TENANT_COUNT, i);
+      ASSERT_GT(ta->get_tenant_id(), prev_tenant_id);
+      auto ta_other = malloc_allocator->unrecycled_allocators_;
+      while (ta_other) {
+        ASSERT_NE(ta, ta_other);
+        ta_other = ta_other->get_next();
+      }
+      prev_tenant_id = ta->get_tenant_id();
+      ta = ta->get_next();
+    }
   }
 }
 

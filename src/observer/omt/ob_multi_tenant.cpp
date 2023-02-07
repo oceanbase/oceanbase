@@ -844,7 +844,9 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
       tmp_ret = OB_SUCCESS;
       if (create_step >= ObTenantCreateStep::STEP_CTX_MEM_CONFIG_SETTED) {
         for (uint64_t ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
-          if (OB_SUCCESS != (tmp_ret = malloc_allocator->set_tenant_ctx_idle(tenant_id, ctx_id, 0))) {
+          if (NULL == malloc_allocator->get_tenant_ctx_allocator(tenant_id, ctx_id)) {
+            // do-nothing
+          } else if (OB_SUCCESS != (tmp_ret = malloc_allocator->set_tenant_ctx_idle(tenant_id, ctx_id, 0))) {
             LOG_ERROR("fail to cleanup ctx mem config", K(tmp_ret), K(tenant_id), K(ctx_id));
             SLEEP(1);
           }
