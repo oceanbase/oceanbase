@@ -141,7 +141,7 @@ void ObHashGroupByOp::reset()
   first_batch_from_store_ = true;
   is_init_distinct_data_ = false;
   use_distinct_data_ = false;
-  distinct_data_set_.reset();
+  reset_distinct_info();
   bypass_ctrl_.reset();
   by_pass_nth_group_ = 0;
   by_pass_child_brs_ = nullptr;
@@ -734,6 +734,17 @@ int ObHashGroupByOp::init_distinct_info(bool is_part)
   return ret;
 }
 
+void ObHashGroupByOp::reset_distinct_info()
+{
+  hash_funcs_.destroy();
+  cmp_funcs_.destroy();
+  sort_collations_.destroy();
+  distinct_data_set_.destroy_my_skip();
+  distinct_data_set_.destroy_items();
+  distinct_data_set_.destroy_distinct_map();
+  distinct_data_set_.reset();
+}
+
 int ObHashGroupByOp::finish_insert_distinct_data()
 {
   int ret = OB_SUCCESS;
@@ -758,6 +769,7 @@ int ObHashGroupByOp::insert_distinct_data()
   bool inserted = false;
   const ObChunkDatumStore::StoredRow *store_row = nullptr;
   if (!is_init_distinct_data_ && OB_FAIL(init_distinct_info(false))) {
+    LOG_WARN("failed to init distinct info", K(ret));
   } else if (OB_FAIL(distinct_data_set_.insert_row(distinct_origin_exprs_, has_exists, inserted))) {
     LOG_WARN("failed to insert row", K(ret));
   } else {
