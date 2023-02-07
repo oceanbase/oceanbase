@@ -16,6 +16,7 @@
 #include "rootserver/freeze/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
 #include "rootserver/freeze/ob_major_freeze_util.h"
+#include "rootserver/freeze/ob_major_merge_progress_checker.h"
 #include "rootserver/ob_root_utils.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_isql_client.h"
@@ -103,6 +104,7 @@ int ObChecksumValidatorBase::validate_checksum(
     const hash::ObHashMap<ObTabletLSPair, ObTabletCompactionStatus> &tablet_compaction_map,
     int64_t &table_count,
     hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    ObMergeTimeStatistics &merge_time_statistics,
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
@@ -116,7 +118,7 @@ int ObChecksumValidatorBase::validate_checksum(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn));
   } else if (OB_FAIL(check_all_table_verification_finished(stop, frozen_scn, tablet_compaction_map,
-                     table_count, table_compaction_map, expected_epoch))) {
+                     table_count, table_compaction_map, merge_time_statistics, expected_epoch))) {
     LOG_WARN("fail to check all table verification finished", KR(ret), K_(tenant_id), K(frozen_scn));
   }
   return ret;
@@ -199,12 +201,14 @@ int ObTabletChecksumValidator::check_all_table_verification_finished(
     const hash::ObHashMap<ObTabletLSPair, ObTabletCompactionStatus> &tablet_compaction_map,
     int64_t &table_count,
     hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    ObMergeTimeStatistics &merge_time_statistics,
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
   UNUSED(expected_epoch);
 
+  const int64_t start_time_us = ObTimeUtil::current_time();
   if (OB_UNLIKELY(!frozen_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn));
@@ -254,6 +258,8 @@ int ObTabletChecksumValidator::check_all_table_verification_finished(
   if (OB_CHECKSUM_ERROR == check_ret) {
     ret = check_ret;
   }
+  const int64_t cost_time_us = ObTimeUtil::current_time() - start_time_us;
+  merge_time_statistics.update_merge_status_us_.tablet_validator_us_ = cost_time_us;
 
   return ret;
 }
@@ -413,11 +419,13 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
     const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
     int64_t &table_count,
     hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+    ObMergeTimeStatistics &merge_time_statistics,
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
 
+  const int64_t start_time_us = ObTimeUtil::current_time();
   if (OB_UNLIKELY(!frozen_scn.is_valid() || tablet_compaction_map.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn),
@@ -456,7 +464,7 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
             } else if (cur_compaction_info.is_verified()) { // already finished verification, skip it!
             } else if (table_schema->has_tablet()) {
               if (cur_compaction_info.is_index_ckm_verified()) {
-              if (need_validate()) {  // need to validate cross-cluster checksum
+                if (need_validate()) {  // need to validate cross-cluster checksum
                   // check whether waiting all tablet checksum has timed out
                   bool is_wait_tablet_checksum_timeout = check_waiting_tablet_checksum_timeout();
                   if (OB_UNLIKELY(is_wait_tablet_checksum_timeout)) {
@@ -481,7 +489,7 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
                                 K(frozen_scn), KPC(table_schema));
                       }
                     } else if (OB_FAIL(handle_table_verification_finished(stop, table_schema, frozen_scn,
-                                        table_compaction_map, expected_epoch))) {
+                                        table_compaction_map, merge_time_statistics, expected_epoch))) {
                       LOG_WARN("fail to handle table verification finished", KR(ret), K_(tenant_id),
                               K(frozen_scn), KPC(table_schema));
                     }
@@ -492,7 +500,7 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
                   }
                 } else {  // no need to validate cross-cluster checksum
                   if (OB_FAIL(handle_table_verification_finished(stop, table_schema, frozen_scn,
-                                table_compaction_map, expected_epoch))) {
+                                table_compaction_map, merge_time_statistics, expected_epoch))) {
                     LOG_WARN("fail to handle table verification finished", KR(ret), K_(tenant_id),
                             K(frozen_scn), KPC(table_schema));
                   }
@@ -501,7 +509,7 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
             } else { // like VIEW that has no tablet, update report_scn for this table and mark it as VERIFIED
               if (cur_compaction_info.is_index_ckm_verified()) {
                 if (OB_FAIL(handle_table_verification_finished(stop, table_schema, frozen_scn,
-                              table_compaction_map, expected_epoch))) {
+                              table_compaction_map, merge_time_statistics, expected_epoch))) {
                   LOG_WARN("fail to handle table verification finished", KR(ret), K_(tenant_id),
                           K(frozen_scn), KPC(table_schema));
                 }
@@ -526,6 +534,8 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
   if (OB_CHECKSUM_ERROR == check_ret) {
     ret = check_ret;
   }
+  const int64_t cost_time_us = ObTimeUtil::current_time() - start_time_us;
+  merge_time_statistics.update_merge_status_us_.cross_cluster_validator_us_ = cost_time_us;
 
   return ret;
 }
@@ -656,6 +666,7 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
     const ObTableSchema *table_schema,
     const SCN &frozen_scn,
     hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    ObMergeTimeStatistics &merge_time_statistics,
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
@@ -684,6 +695,7 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
             LOG_WARN("fail to get tablet_ls pairs of current table schema", KR(ret), K_(tenant_id), K(table_id));
           } else {
             if (is_primary_service_) { // only primary major_freeze_service need to write tablet checksum
+              const int64_t write_start_time_us = ObTimeUtil::current_time();
               if (OB_FAIL(contains_first_tablet_in_sys_ls(pairs, is_containing))) {
                 LOG_WARN("fail to check if contains first tablet in sys ls", KR(ret), K_(tenant_id), K(pairs));
               } else if (is_containing) {
@@ -697,12 +709,17 @@ int ObCrossClusterTabletChecksumValidator::handle_table_verification_finished(
                                   cur_compaction_info, table_id, expected_epoch))) {
                 LOG_WARN("fail to write tablet checksum at table level", KR(ret), K_(tenant_id), K(pairs));
               }
+              const int64_t write_cost_time_us = ObTimeUtil::current_time() - write_start_time_us;
+              merge_time_statistics.update_merge_status_us_.write_tablet_checksum_us_ += write_cost_time_us;
             }
+            const int64_t update_start_time_us = ObTimeUtil::current_time();
             if (FAILEDx(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
                           tenant_id_, frozen_scn.get_val_for_tx(),
                           pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
               LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(pairs));
             }
+            const int64_t update_cost_time_us = ObTimeUtil::current_time() - update_start_time_us;
+            merge_time_statistics.update_merge_status_us_.update_report_scn_us_ += update_cost_time_us;
           }
         }
       }
@@ -925,11 +942,13 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
     const hash::ObHashMap<ObTabletLSPair, ObTabletCompactionStatus> &tablet_compaction_map,
     int64_t &table_count,
     hash::ObHashMap<uint64_t, ObTableCompactionInfo> &table_compaction_map,
+    ObMergeTimeStatistics &merge_time_statistics,
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
 
+  const int64_t start_time_us = ObTimeUtil::current_time();
   if (OB_UNLIKELY(!frozen_scn.is_valid() || tablet_compaction_map.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn),
@@ -1080,6 +1099,8 @@ int ObIndexChecksumValidator::check_all_table_verification_finished(
   if (OB_CHECKSUM_ERROR == check_ret) {
     ret = check_ret;
   }
+  const int64_t cost_time_us = ObTimeUtil::current_time() - start_time_us;
+  merge_time_statistics.update_merge_status_us_.index_validator_us_ = cost_time_us;
 
   return ret;
 }

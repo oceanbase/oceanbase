@@ -27,6 +27,7 @@
 #include "lib/container/ob_se_array_iterator.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/profile/ob_trace_id.h"
+#include "lib/time/ob_time_utility.h"
 #include "share/ob_errno.h"
 #include "share/config/ob_server_config.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
@@ -168,6 +169,7 @@ int ObMajorMergeScheduler::try_idle(
   const int64_t IMMEDIATE_RETRY_CNT = 3;
   int64_t idle_time_us = ori_idle_time_us;
   int64_t merger_check_interval = idling_.get_idle_interval_us();
+  const int64_t start_time_us = ObTimeUtil::current_time();
 
   if (OB_SUCC(work_ret)) {
     fail_count_ = 0;
@@ -203,6 +205,8 @@ int ObMajorMergeScheduler::try_idle(
   } else if (OB_FAIL(idling_.idle(idle_time_us))) {
     LOG_WARN("fail to idle", KR(ret), K(idle_time_us));
   }
+  const int64_t cost_time_us = ObTimeUtil::current_time() - start_time_us;
+  progress_checker_.merge_time_statistics_.idle_us_ = cost_time_us;
 
   return ret;
 }
@@ -286,6 +290,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
+  ObMergeTimeStatistics total_merge_time_statistics;
   HEAP_VARS_2((ObZoneMergeInfoArray, info_array), (ObGlobalMergeInfo, global_info)) {
     LOG_INFO("start to do one round major_merge", K(expected_epoch));
     // loop until 'this round major merge finished' or 'epoch changed'
@@ -293,6 +298,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
       update_last_run_timestamp();
       ObCurTraceId::init(GCONF.self_addr_);
       ObZoneArray to_merge_zone;
+      progress_checker_.merge_time_statistics_.reset();
       // Place is_last_merge_complete() to the head of this while loop.
       // So as to break this loop at once, when the last merge is complete.
       // Otherwise, may run one extra loop that should not run, and thus incur error.
@@ -331,8 +337,12 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
       tmp_ret = OB_SUCCESS;
       // treat as is_merging = true, even though last merge complete
       check_merge_interval_time(true);
+      total_merge_time_statistics += progress_checker_.merge_time_statistics_;
+      LOG_INFO("finish one round of loop in do_one_round_major_merge", K(expected_epoch),
+               "merge_time_statistics", progress_checker_.merge_time_statistics_);
     }
   }
+  LOG_INFO("finish do_one_round_major_merge", K(expected_epoch), K(total_merge_time_statistics));
 
   return ret;
 }

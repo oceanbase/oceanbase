@@ -43,6 +43,82 @@ namespace rootserver
 {
 class ObZoneMergeManager;
 
+struct ObUpdateMergeStatusTime
+{
+public:
+  ObUpdateMergeStatusTime()
+    : check_merge_progress_us_(0), tablet_validator_us_(0), index_validator_us_(0),
+      cross_cluster_validator_us_(0), update_report_scn_us_(0), write_tablet_checksum_us_(0)
+  {}
+
+  void reset()
+  {
+    check_merge_progress_us_ = 0;
+    tablet_validator_us_ = 0;
+    index_validator_us_ = 0;
+    cross_cluster_validator_us_ = 0;
+    update_report_scn_us_ = 0;
+    write_tablet_checksum_us_ = 0;
+  }
+
+  int64_t get_total_time_us() const
+  {
+    // Note: update_report_scn_us_ and write_tablet_checksum_us_ are included in
+    // cross_cluster_validator_us_ now (may be excluded later).
+    return (check_merge_progress_us_ + tablet_validator_us_ +
+            index_validator_us_ + cross_cluster_validator_us_);
+  }
+
+  ObUpdateMergeStatusTime &operator+=(const ObUpdateMergeStatusTime &o)
+  {
+    check_merge_progress_us_ += o.check_merge_progress_us_;
+    tablet_validator_us_ += o.tablet_validator_us_;
+    index_validator_us_ += o.index_validator_us_;
+    cross_cluster_validator_us_ += o.cross_cluster_validator_us_;
+    update_report_scn_us_ += o.update_report_scn_us_;
+    write_tablet_checksum_us_ += o.write_tablet_checksum_us_;
+    return *this;
+  }
+
+  TO_STRING_KV("total_us", get_total_time_us(), K_(check_merge_progress_us),
+               K_(tablet_validator_us), K_(index_validator_us), K_(cross_cluster_validator_us),
+               K_(update_report_scn_us), K_(write_tablet_checksum_us));
+
+  int64_t check_merge_progress_us_;
+  int64_t tablet_validator_us_;
+  int64_t index_validator_us_;
+  int64_t cross_cluster_validator_us_;
+  int64_t update_report_scn_us_;
+  int64_t write_tablet_checksum_us_;
+};
+
+struct ObMergeTimeStatistics
+{
+public:
+  ObMergeTimeStatistics()
+    : update_merge_status_us_(), idle_us_(0)
+  {}
+
+  void reset()
+  {
+    update_merge_status_us_.reset();
+    idle_us_ = 0;
+  }
+
+  ObMergeTimeStatistics &operator+=(const ObMergeTimeStatistics &o)
+  {
+    update_merge_status_us_ += o.update_merge_status_us_;
+    idle_us_ += o.idle_us_;
+    return *this;
+  }
+
+  TO_STRING_KV("total_us", update_merge_status_us_.get_total_time_us() + idle_us_,
+               K_(update_merge_status_us), K_(idle_us));
+
+  ObUpdateMergeStatusTime update_merge_status_us_;
+  int64_t idle_us_;
+};
+
 class ObMajorMergeProgressChecker
 {
 public:
@@ -79,6 +155,9 @@ public:
                                                const int64_t expected_epoch);
 
   void set_major_merge_start_time(const int64_t major_merge_start_us);
+
+public:
+  ObMergeTimeStatistics merge_time_statistics_;
 
 private:
   int check_tablet(const share::ObTabletInfo &tablet_info,
