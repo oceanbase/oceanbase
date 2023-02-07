@@ -356,31 +356,33 @@ int PalfHandleImpl::submit_log(
   const int64_t curr_time_us = ObClockGenerator::getClock();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret));
+    PALF_LOG(WARN, "PalfHandleImpl is not inited");
   } else if (NULL == buf || buf_len <= 0 || buf_len > MAX_LOG_BODY_SIZE
              || !ref_scn.is_valid()
              || ref_scn.convert_to_ts() > curr_time_us + MAX_ALLOWED_SKEW_FOR_REF_US) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), KP(buf), K(buf_len), K(ref_scn));
+    PALF_LOG(WARN, "invalid argument", K_(palf_id), KP(buf), K(buf_len), K(ref_scn));
   } else {
     RLockGuard guard(lock_);
     if (false == palf_env_impl_->check_disk_space_enough()) {
       ret = OB_LOG_OUTOF_DISK_SPACE;
       if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
-        PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(opts), K(ref_scn));
+        PALF_LOG(WARN, "log outof disk space", KPC(this), K(opts), K(ref_scn));
       }
     } else if (!state_mgr_.can_append(opts.proposal_id, opts.need_check_proposal_id)) {
       ret = OB_NOT_MASTER;
-      PALF_LOG(WARN, "cannot submit_log", K(ret), KPC(this), KP(buf), K(buf_len), "role",
+      PALF_LOG(WARN, "cannot submit_log", KPC(this), KP(buf), K(buf_len), "role",
           state_mgr_.get_role(), "state", state_mgr_.get_state(), "proposal_id",
           state_mgr_.get_proposal_id(), K(opts), "mode_mgr can_append", mode_mgr_.can_append());
     } else if (OB_UNLIKELY(state_mgr_.is_changing_config_with_arb())) {
       ret = OB_EAGAIN;
       if (palf_reach_time_interval(200 * 1000, chaning_config_warn_time_)) {
-        PALF_LOG(WARN, "can not submit log when memberlist is being changed", K(ret), KPC(this));
+        PALF_LOG(WARN, "can not submit log when memberlist is being changed", KPC(this));
       }
     } else if (OB_FAIL(sw_.submit_log(buf, buf_len, ref_scn, lsn, scn))) {
-      PALF_LOG(WARN, "submit_log failed", K(ret), KPC(this), KP(buf), K(buf_len));
+      if (OB_EAGAIN != ret) {
+        PALF_LOG(WARN, "submit_log failed", KPC(this), KP(buf), K(buf_len));
+      }
     } else {
       PALF_LOG(TRACE, "submit_log success", K(ret), KPC(this), K(buf_len), K(lsn), K(scn));
       if (palf_reach_time_interval(2 * 1000 * 1000, append_size_stat_time_us_)) {

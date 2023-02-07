@@ -145,10 +145,12 @@ bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
   } else if (!lsn.is_valid() || total_len <= 0 || !ref_reuse_lsn.is_valid()) {
     PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(bool_ret), K(lsn), K(total_len), K(ref_reuse_lsn));
   } else if (lsn < start_lsn) {
-    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "lsn is less than start_lsn", K(bool_ret), K(lsn), K_(start_lsn));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "lsn is less than start_lsn", K(bool_ret), K(lsn), K_(start_lsn));
   } else if (end_lsn > reuse_lsn + get_available_buffer_size()) {
-    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "end_lsn is larger than max reuse pos", K(bool_ret), K(lsn), K(end_lsn),
-        K(reuse_lsn), K_(available_buffer_size));
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      PALF_LOG_RET(WARN, OB_EAGAIN, "end_lsn is larger than max reuse pos", K(bool_ret), K(lsn), K(end_lsn),
+          K(reuse_lsn), K_(available_buffer_size));
+    }
   } else {
     bool_ret = true;
   }
@@ -185,31 +187,6 @@ int LogGroupBuffer::get_log_buf(const LSN &lsn, const int64_t total_len, LogWrit
     }
     PALF_LOG(TRACE, "get_log_buf finished", K(ret), K(lsn), K(start_pos), K(total_len), K(group_buf_tail_len), K(first_part_len),
         "second_part_len", total_len - first_part_len, K(log_buf));
-  }
-  return ret;
-}
-
-int LogGroupBuffer::wait(const LSN &lsn, const int64_t data_len)
-{
-  int ret = OB_SUCCESS;
-  const LSN end_lsn = lsn + data_len;
-  LSN start_lsn, reuse_lsn;
-  get_buffer_start_lsn_(start_lsn);
-  get_reuse_lsn_(reuse_lsn);
-  const int64_t buf_size = get_available_buffer_size();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || data_len <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(data_len));
-  } else if (lsn < start_lsn) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(WARN, "lsn is less than start_lsn", K(ret), K(lsn), K(start_lsn));
-  } else if (end_lsn > reuse_lsn + buf_size) {
-    ret = OB_EAGAIN;
-    PALF_LOG(WARN, "need retry", K(ret), K(lsn), K(data_len), K(end_lsn), K(reuse_lsn), K(start_lsn));
-  } else {
-    // wait success
   }
   return ret;
 }

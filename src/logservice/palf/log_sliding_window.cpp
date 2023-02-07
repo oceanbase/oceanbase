@@ -337,9 +337,11 @@ bool LogSlidingWindow::leader_can_submit_new_log_(const int64_t valid_log_size)
   // NB: 采用committed_lsn作为可复用起点的下界，避免写盘立即复用group_buffer导致follower的
   //     group_buffer被uncommitted log填满而无法滑出
   } else if (!group_buffer_.can_handle_new_log(curr_end_lsn, valid_log_size, curr_committed_end_lsn)) {
-    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
-        K(valid_log_size), K(curr_end_lsn), K(curr_committed_end_lsn),
-        "start_id", get_start_id(), "max_log_id", get_max_log_id());
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
+          K(valid_log_size), K(curr_end_lsn), K(curr_committed_end_lsn),
+          "start_id", get_start_id(), "max_log_id", get_max_log_id());
+    }
   } else {
     bool_ret = true;
   }
@@ -419,8 +421,10 @@ int LogSlidingWindow::submit_log(const char *buf,
   } else if (!leader_can_submit_new_log_(valid_log_size)
              || !leader_can_submit_larger_log_(get_max_log_id() + 1)) {
     ret = OB_EAGAIN;
-    PALF_LOG(WARN, "cannot submit new log now, try again", K(ret), K_(palf_id), K_(self),
-        K(valid_log_size), K(buf_len), "start_id", get_start_id(), "max_log_id", get_max_log_id());
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      PALF_LOG(WARN, "cannot submit new log now, try again", K(ret), K_(palf_id), K_(self),
+          K(valid_log_size), K(buf_len), "start_id", get_start_id(), "max_log_id", get_max_log_id());
+    }
     // sw_ cannot submit larger log
   } else if (OB_FAIL(lsn_allocator_.alloc_lsn_scn(ref_scn, valid_log_size,
             tmp_lsn, log_id, scn, is_new_log, need_gen_padding_entry, padding_size))) {
@@ -553,9 +557,10 @@ int LogSlidingWindow::wait_group_buffer_ready_(const LSN &lsn, const int64_t dat
   // NB: 尽管已经使用'committed_end_lsn_'限制了'leader_can_submit_new_log_', 但我们依旧需要判断'group_buffer_'是否已经可以复用:
   // 1. 并发提交日志会导致所有日志都能进入到提交流程;
   // 2. 不能够使用'committed_end_lsn_'判断'group_buffer_'是否可以被复用, 因为'committed_end_lsn_'可能大于'max_flushed_end_lsn'.
-  int tmp_ret = OB_SUCCESS;
   int64_t wait_times = 0;
-  while (OB_EAGAIN == (tmp_ret = group_buffer_.wait(lsn, data_len))) {
+  LSN curr_committed_end_lsn;
+  get_committed_end_lsn_(curr_committed_end_lsn);
+  while (false == group_buffer_.can_handle_new_log(lsn, data_len, curr_committed_end_lsn)) {
     // 要填充的终点超过了buffer可复用的范围
     // 需要重试直到可复用终点推大
     static const int64_t MAX_SLEEP_US = 100;
@@ -565,9 +570,9 @@ int LogSlidingWindow::wait_group_buffer_ready_(const LSN &lsn, const int64_t dat
       sleep_us = MAX_SLEEP_US;
     }
     ob_usleep(sleep_us);
-    PALF_LOG(WARN, "usleep wait", K(tmp_ret), K_(palf_id), K_(self), K(lsn), K(data_len));
+    PALF_LOG(WARN, "usleep wait", K_(palf_id), K_(self), K(lsn), K(data_len), K(curr_committed_end_lsn));
+    get_committed_end_lsn_(curr_committed_end_lsn);
   }
-  ret = tmp_ret;
   return ret;
 }
 
@@ -2816,7 +2821,9 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
         K_(last_truncate_lsn), K_(is_rebuilding), K(src_server), K(lsn), KP(buf), K(buf_len));
   } else if (!group_buffer_.can_handle_new_log(lsn, buf_len)) {
     ret = OB_EAGAIN;
-    PALF_LOG(WARN, "group_buffer_ cannot handle new log", K(ret), K_(palf_id), K_(self), K(lsn));
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      PALF_LOG(WARN, "group_buffer_ cannot handle new log", K(ret), K_(palf_id), K_(self), K(lsn));
+    }
   } else if (OB_FAIL(group_entry_header.deserialize(buf, buf_len, pos))) {
     PALF_LOG(WARN, "group_entry_header deserialize failed", K(ret), K_(palf_id), K_(self));
   } else if (!group_entry_header.check_integrity(buf + LogGroupEntryHeader::HEADER_SER_SIZE,
