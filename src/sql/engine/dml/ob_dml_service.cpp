@@ -651,11 +651,6 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
   if (upd_ctdef.is_primary_index_) {
     uint64_t ref_table_id = upd_ctdef.das_base_ctdef_.index_tid_;
     ObSQLSessionInfo *my_session = NULL;
-    if (upd_ctdef.is_heap_table_ &&
-        OB_FAIL(copy_heap_table_hidden_pk(dml_op.get_eval_ctx(), upd_ctdef))) {
-      LOG_WARN("fail to copy heap table hidden pk", K(ret), K(upd_ctdef));
-    }
-
     if (OB_SUCC(ret) && upd_ctdef.need_check_filter_null_ && !has_instead_of_trg) {
       bool is_null = false;
       if (OB_FAIL(check_rowkey_is_null(upd_ctdef.old_row_,
@@ -667,6 +662,14 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
         is_skipped = true;
       }
     }
+
+    if (OB_SUCC(ret) && !is_skipped) {
+      if (upd_ctdef.is_heap_table_ &&
+          OB_FAIL(copy_heap_table_hidden_pk(dml_op.get_eval_ctx(), upd_ctdef))) {
+        LOG_WARN("fail to copy heap table hidden pk", K(ret), K(upd_ctdef));
+      }
+    }
+
     if (OB_SUCC(ret) && !is_skipped && !has_instead_of_trg) {
       bool is_distinct = false;
       if (OB_FAIL(check_rowkey_whether_distinct(upd_ctdef.distinct_key_,
