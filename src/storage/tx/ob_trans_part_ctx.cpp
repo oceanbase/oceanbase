@@ -751,6 +751,7 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
     }
   }
   if (OB_SUCC(ret)) {
+    commit_cb_.enable();
     part_trans_action_ = ObPartTransAction::COMMIT;
     last_request_ts_ = ObClockGenerator::getClock();
   }

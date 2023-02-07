@@ -24,7 +24,7 @@ namespace transaction
 {
 void ObTxCommitCallback::reset()
 {
-  enable_ = true;
+  enable_ = false;
   inited_ = false;
   callback_count_ = 0;
   txs_ = NULL;
