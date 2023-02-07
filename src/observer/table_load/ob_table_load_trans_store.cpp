@@ -91,9 +91,7 @@ ObTableLoadTransStoreWriter::SessionContext::SessionContext(int32_t session_id, 
   : session_id_(session_id),
     cast_allocator_("TLD_TS_Caster", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
     cast_params_(cast_params),
-    last_receive_sequence_no_(0),
-    extra_buf_(nullptr),
-    extra_buf_size_(0)
+    last_receive_sequence_no_(0)
 {
 }
 
@@ -204,21 +202,10 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   param.result_info_ = &(trans_ctx_->ctx_->store_ctx_->result_info_);
   for (int64_t i = 0; OB_SUCC(ret) && i < param_.session_count_; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
-    if (store_ctx_->is_multiple_mode_) {
-      session_ctx->extra_buf_size_ = store_ctx_->table_data_desc_.extra_buf_size_;
-      if (OB_ISNULL(session_ctx->extra_buf_ =
-                      static_cast<char *>(allocator_.alloc(session_ctx->extra_buf_size_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory", KR(ret));
-      } else {
-        param.extra_buf_ = session_ctx->extra_buf_;
-        param.extra_buf_size_ = session_ctx->extra_buf_size_;
-      }
-    }
-    if (OB_FAIL(ret)) {
-    }
+    param.extra_buf_ = store_ctx_->session_ctx_array_[i].extra_buf_;
+    param.extra_buf_size_ = store_ctx_->session_ctx_array_[i].extra_buf_size_;
     // init table_store_
-    else if (OB_FAIL(session_ctx->table_store_.init(param))) {
+    if (OB_FAIL(session_ctx->table_store_.init(param))) {
       LOG_WARN("fail to init table store", KR(ret));
     }
     // init datum_row_

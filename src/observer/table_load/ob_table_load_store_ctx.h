@@ -129,7 +129,11 @@ public:
   share::schema::ObSequenceSchema sequence_schema_;
   struct SessionContext
   {
+    SessionContext() : extra_buf_(nullptr), extra_buf_size_(0) {}
     share::AutoincParam autoinc_param_;
+    // for multiple mode
+    char *extra_buf_;
+    int64_t extra_buf_size_;
   };
   SessionContext *session_ctx_array_;
 private:
