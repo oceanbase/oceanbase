@@ -469,7 +469,7 @@ private:
   int update_parts(const share::ObLSArray &parts);
   int switch_to_idle();
   int set_commit_cb(ObITxCallback *cb);
-  void execute_commit_cb();
+  bool execute_commit_cb();
 private:
   int update_part_(ObTxPart &p, bool append = true);
   int add_conflict_tx_(const ObTransIDAndAddr &conflict_tx);
@@ -706,6 +706,7 @@ private:
     int for_each(Function &fn)
     {
       int ret = OB_SUCCESS;
+      ObSpinLockGuard guard(lk_);
       auto n = list_.next_;
       while(n != &list_) {
         auto tx = CONTAINER_OF(n, ObTxDesc, alloc_link_);

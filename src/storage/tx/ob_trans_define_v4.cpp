@@ -707,14 +707,14 @@ inline bool ObTxDesc::acq_commit_cb_lock_if_need_()
  * shortcut and return.
  * for more detail, refer to 'acq_commit_cb_lock_if_need_' function.
  */
-void ObTxDesc::execute_commit_cb()
+bool ObTxDesc::execute_commit_cb()
 {
+  bool executed = false;
   if (is_tx_end() || is_xa_terminate_state_()) {
     auto tx_id = tx_id_;
     auto cb = commit_cb_;
     int ret = OB_SUCCESS;
-    bool executed = false;
-    if (OB_NOT_NULL(commit_cb_) && acq_commit_cb_lock_if_need_()) {
+     if (OB_NOT_NULL(commit_cb_) && acq_commit_cb_lock_if_need_()) {
       if (OB_NOT_NULL(commit_cb_)) {
         executed = true;
         cb = commit_cb_;
@@ -731,6 +731,7 @@ void ObTxDesc::execute_commit_cb()
     }
     TRANS_LOG(TRACE, "execute_commit_cb", KP(this), K(tx_id), KP(cb), K(executed));
   }
+  return executed;
 }
 
 ObITxCallback *ObTxDesc::cancel_commit_cb()

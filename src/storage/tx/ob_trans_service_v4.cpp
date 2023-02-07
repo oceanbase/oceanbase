@@ -328,6 +328,7 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   // in this function's following steps.
   auto tx_id = tx.tx_id_;
   int64_t now = ObClockGenerator::getClock();
+  bool cb_executed = false;
   if (OB_FAIL(tx.lock_.lock(5000000))) {
     TRANS_LOG(WARN, "failed to acquire lock in specified time", K(tx));
     // FIXME: how to handle it without lock protection
@@ -365,13 +366,13 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
       }
     }
     tx.lock_.unlock();
-    tx.execute_commit_cb();
+    cb_executed = tx.execute_commit_cb();
   }
   // NOTE:
   // it not safe and meaningless to access tx after commit_cb
   // has been called, the tx may has been reused or release
   // in the commit_cb
-  TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id));
+  TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id), K(cb_executed));
   return ret;
 }
 
@@ -2417,6 +2418,8 @@ int ObTransService::handle_timeout_for_xa(ObTxDesc &tx, const int64_t delay)
 {
   int ret = OB_SUCCESS;
   int64_t now = ObClockGenerator::getClock();
+  bool cb_executed = false;
+  auto tx_id = tx.tx_id_;
   if (OB_FAIL(tx.lock_.lock(5000000))) {
     TRANS_LOG(WARN, "failed to acquire lock in specified time", K(tx));
     // FIXME: how to handle it without lock protection
@@ -2438,9 +2441,9 @@ int ObTransService::handle_timeout_for_xa(ObTxDesc &tx, const int64_t delay)
       }
     }
     tx.lock_.unlock();
-    tx.execute_commit_cb();
+    cb_executed = tx.execute_commit_cb();
   }
-  TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx));
+  TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id), K(cb_executed));
   return ret;
 }
 
