@@ -55,7 +55,7 @@ int ObBlockMetaTree::init(const share::ObLSID &ls_id,
                           const int64_t cluster_version)
 {
   int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(MTL_ID(), "DDL_KV");
+  const ObMemAttr mem_attr(MTL_ID(), "BlockMetaTree");
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -193,11 +193,12 @@ int ObBlockMetaTree::build_sorted_rowkeys()
 {
   int ret = OB_SUCCESS;
   const int64_t version = INT64_MAX;
-  sorted_rowkeys_.reuse();
   BtreeIterator iter;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (sorted_rowkeys_.count() > 0) {
+    // already sorted, do nothing
   } else if (OB_FAIL(block_tree_.set_key_range(iter,
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MIN_ROWKEY, &data_desc_.datum_utils_),
                                                false,
