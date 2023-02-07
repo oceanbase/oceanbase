@@ -84,7 +84,7 @@ int TransDispatchCtx::reblance_budget(
 
       if (total_count <= 0) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("trans not dispatch finish but no more part to dispatch", KR(ret), K_(dispatched_part_count), K_(total_part_count));
+        LOG_ERROR("trans not dispatch finish but no more part to dispatch", KR(ret), K_(dispatched_part_count), K_(total_part_count), K(total_count));
       } else {
         // currenttly all part equal share budget, high_priority_part_budget_arr_ is not used
         // TODO: use sort feedback info to reblance budget!!
