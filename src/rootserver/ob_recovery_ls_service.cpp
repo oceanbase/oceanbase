@@ -612,7 +612,7 @@ int ObRecoveryLSService::check_valid_to_operator_ls_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("syns scn is invalid", KR(ret), K(sync_scn), K(ls_attr));
   } else if (share::is_ls_tenant_drop_pre_op(ls_attr.get_ls_operatin_type())) {
-    ret = OB_ITER_END;
+    ret = OB_ITER_STOP;
     LOG_WARN("can not process ls operator after tenant dropping", K(ls_attr));
   } else if (share::is_ls_tenant_drop_op(ls_attr.get_ls_operatin_type())) {
     ret = OB_ERR_UNEXPECTED;
