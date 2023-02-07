@@ -2999,8 +2999,7 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
       if (OB_FAIL(get_calculable_expr_val(const_expr, val, is_valid))) {
         LOG_WARN("failed to get calculable expr val", K(ret));
       } else if (!is_valid) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("should not be invalid", K(ret), K(*const_expr));
+        is_val_valid = false;
       }
     } else {
       if (OB_FAIL(get_final_expr_val(const_expr, val))) {
@@ -3020,9 +3019,11 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
       LOG_WARN("failed to try cast value type", K(ret));
     } else if (cmp == 0) {
       val.set_collation_type(pos.column_type_.get_collation_type());
-      ret = param_meta->vals_.push_back(val);
     } else {
       is_val_valid = false;
+    }
+    if (OB_SUCC(ret) && OB_FAIL(param_meta->vals_.push_back(val))) {
+      LOG_WARN("failed to push back val", K(ret));
     }
   }
   return ret;
@@ -3065,8 +3066,10 @@ int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
       LOG_WARN("failed to create new param meta", K(ret));
     } else {
       tmp_key_part->in_keypart_->table_id_ = col_expr->get_table_id();
+      tmp_key_part->in_keypart_->is_strict_in_ = true;
       new_param_meta->pos_ = key_pos;
       new_param_meta->vals_.set_block_allocator(ModulePageAllocator(allocator_));
+      ObSEArray<int64_t, 4> invalid_val_idx;
       bool always_true = false;
       for (int64_t i = 0; OB_SUCC(ret) && !always_true && i < r_expr->get_param_count(); ++i) {
         const ObRawExpr *const_expr = r_expr->get_param_expr(i);
@@ -3104,15 +3107,21 @@ int ObQueryRange::get_single_in_key_part(const ObColumnRefRawExpr *col_expr,
           GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
           always_true = true;
         } // for always false, just no need to add the value to in param
+        if (OB_SUCC(ret) && !is_val_valid && OB_FAIL(invalid_val_idx.push_back(i))) {
+          LOG_WARN("failed to push back invalid val idx", K(ret));
+        }
       }
       if (OB_SUCC(ret) && !always_true) {
-        if (new_param_meta->vals_.empty()) {
+        if (OB_UNLIKELY(new_param_meta->vals_.empty())) {
           // all always false
           GET_ALWAYS_TRUE_OR_FALSE(false, out_key_part);
         } else if (OB_FAIL(tmp_key_part->in_keypart_->in_params_.push_back(new_param_meta))) {
           LOG_WARN("failed to push back param meta", K(ret));
+        } else if (OB_FAIL(tmp_key_part->remove_in_params_vals(invalid_val_idx))) {
+          LOG_WARN("failed to adjust in param values", K(ret));
+        } else if (OB_FAIL(tmp_key_part->formalize_keypart(contain_row_))) {
+          LOG_WARN("failed to formalize in key", K(ret));
         } else {
-          tmp_key_part->in_keypart_->is_strict_in_ = true;
           out_key_part = tmp_key_part;
         }
       }
