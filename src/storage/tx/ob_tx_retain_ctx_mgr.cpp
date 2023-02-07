@@ -271,6 +271,7 @@ void ObTxRetainCtxMgr::try_advance_retain_ctx_gc(share::ObLSID ls_id)
 
   const int64_t CUR_LS_CNT = MTL(ObLSService *)->get_ls_map()->get_ls_count();
   const int64_t IDLE_GC_INTERVAL = 30 * 60 * 1000 * 1000; // 30 min
+  const int64_t MIN_RETAIN_CTX_GC_THRESHOLD = 5000;
 
   ObTimeGuard tg(__func__, 1 * 1000 * 1000);
   SpinRLockGuard guard(retain_ctx_lock_);
@@ -281,7 +282,7 @@ void ObTxRetainCtxMgr::try_advance_retain_ctx_gc(share::ObLSID ls_id)
   ObAdvanceLSCkptTask *task = nullptr;
   if (retain_ctx_list_.size() <= 0) {
     //do nothing
-  } else if (retain_ctx_list_.size() <= MAX_PART_CTX_COUNT / 10 / CUR_LS_CNT
+  } else if (retain_ctx_list_.size() <= std::min(MAX_PART_CTX_COUNT / 10 / CUR_LS_CNT, MIN_RETAIN_CTX_GC_THRESHOLD)
              && (OB_INVALID_TIMESTAMP == last_push_gc_task_ts_
                  || (OB_INVALID_TIMESTAMP != last_push_gc_task_ts_
                      && cur_time - last_push_gc_task_ts_ <= IDLE_GC_INTERVAL))) {
