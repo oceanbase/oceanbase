@@ -3715,6 +3715,7 @@ int PalfHandleImpl::inner_flashback(const share::SCN &flashback_scn)
   return ret;
 }
 
+// TODO by yunlong: this function needs refactoring in 4.2.0.0
 int PalfHandleImpl::get_ack_info_array(LogMemberAckInfoList &ack_info_array,
                                        common::GlobalLearnerList &degraded_list) const
 {
@@ -3722,11 +3723,16 @@ int PalfHandleImpl::get_ack_info_array(LogMemberAckInfoList &ack_info_array,
   RLockGuard guard(lock_);
   const bool is_leader = (state_mgr_.is_leader_active() ||
       (state_mgr_.is_leader_reconfirm() && reconfirm_.can_do_degrade()));
+  common::ObMember arb_member;
+  config_mgr_.get_arbitration_member(arb_member);
+  const bool need_degrade_or_upgrade = arb_member.is_valid();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not inited!!!", K(ret));
   } else if (false == is_leader) {
     ret = OB_NOT_MASTER;
+  } else if (false == need_degrade_or_upgrade) {
+    // do not need degrade or upgrade, skip
   } else if (OB_FAIL(sw_.get_ack_info_array(ack_info_array))) {
     PALF_LOG(WARN, "get_ack_info_array failed", K(ret), KPC(this));
   } else if (OB_FAIL(config_mgr_.get_degraded_learner_list(degraded_list))) {

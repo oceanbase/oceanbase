@@ -426,8 +426,9 @@ int LogConfigInfo::get_expected_paxos_memberlist(common::ObMemberList &paxos_mem
   if (false == log_sync_memberlist_.is_valid() ||
       0 >= log_sync_replica_num_ ||
       common::OB_MAX_MEMBER_NUMBER < log_sync_replica_num_) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "LogConfigInfo not init", KR(ret), K_(log_sync_memberlist), K_(log_sync_replica_num));
+    // memberlist may be empty when bootstraping cluster, just return empty memberlist
+    paxos_memberlist.reset();
+    paxos_replica_num = 0;
   } else if (OB_UNLIKELY(degraded_learnerlist_.is_valid())) {
     paxos_memberlist = log_sync_memberlist_;
     paxos_replica_num = log_sync_replica_num_;
