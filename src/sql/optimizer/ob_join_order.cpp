@@ -9863,25 +9863,11 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
       }
       OPT_TRACE("candi distribute methods:");
       int64_t distributed_methods = path_info.distributed_methods_;
-      const ObString dist_algo_str[] =
-      {
-        "BASIC",
-        "PULL TO LOCAL",
-        "HASH HASH",
-        "BROADCAST NONE",
-        "NONE BROADCAST",
-        "BC2HOST NONE",
-        "PARTITION NONE",
-        "NONE PARTITION",
-        "PARTITION WISE",
-        "UNKNOWN ALGO",
-        "RANDOM"
-      };
-      for (int idx = 0; idx < sizeof(dist_algo_str) / sizeof(ObString); ++idx) {
-        if (distributed_methods & 1) {
-          OPT_TRACE(dist_algo_str[idx]);
+      for (int64_t k = 1; k < DistAlgo::DIST_MAX_JOIN_METHOD; k = k << 1) {
+        if (distributed_methods & k) {
+          DistAlgo dist_algo = get_dist_algo(k);
+          OPT_TRACE(ob_dist_algo_str(dist_algo));
         }
-        distributed_methods >>= 1;
       }
     }
   }
