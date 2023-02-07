@@ -162,7 +162,8 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   return ret;
 }
 
-int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove)
+int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove,
+                                                           const int64_t max_applied_log_ts)
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(latch_);
@@ -176,8 +177,8 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable
         return false;
       }
     }, // condition for stop
-    [memtable_for_remove](ObITransCallback *callback) -> bool {
-      if (callback->get_log_ts() > memtable_for_remove->get_key().get_end_log_ts()) {
+    [max_applied_log_ts](ObITransCallback *callback) -> bool {
+      if (callback->get_log_ts() > max_applied_log_ts) {
         return true;
       } else {
         return false;

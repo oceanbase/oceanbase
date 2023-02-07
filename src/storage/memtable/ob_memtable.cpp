@@ -200,7 +200,6 @@ int ObMemtable::remove_unused_callback_for_uncommited_txn_()
   transaction::ObTransService *txs_svr = MTL(transaction::ObTransService *);
 
   if (NULL != txs_svr
-      && ObLogTsRange::MAX_TS != get_end_log_ts()
       && OB_FAIL(txs_svr->remove_callback_for_uncommited_txn(this))) {
     TRANS_LOG(WARN, "remove callback for uncommited txn failed", K(ret), K(*this));
   }

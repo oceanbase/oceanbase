@@ -400,7 +400,8 @@ public:
   bool is_can_elr() const;
   inline bool has_read_elr_data() const { return read_elr_data_; }
   int remove_callbacks_for_fast_commit();
-  int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
+  int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt,
+                                         const int64_t max_applied_log_ts);
   int rollback(const int64_t seq_no, const int64_t from_seq_no);
   bool is_all_redo_submitted();
   bool is_for_replay() const { return trans_mgr_.is_for_replay(); }

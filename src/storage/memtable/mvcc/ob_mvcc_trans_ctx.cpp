@@ -389,14 +389,16 @@ int ObTransCallbackMgr::remove_callbacks_for_fast_commit(bool &has_remove)
   return ret;
 }
 
-int ObTransCallbackMgr::remove_callback_for_uncommited_txn(ObIMemtable *memtable)
+int ObTransCallbackMgr::remove_callback_for_uncommited_txn(ObIMemtable *memtable,
+                                                           const int64_t max_applied_log_ts)
 {
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(memtable)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "memtable is null", K(ret));
-  } else if (OB_FAIL(callback_list_.remove_callbacks_for_remove_memtable(memtable))) {
+  } else if (OB_FAIL(callback_list_.remove_callbacks_for_remove_memtable(memtable,
+                                                                         max_applied_log_ts))) {
     TRANS_LOG(WARN, "fifo remove callback fail", K(ret), K(*memtable));
   }
 
