@@ -243,6 +243,8 @@ private:
                                  const IndexDMLInfo &index_dml_info,
                                  const common::ObIArray<ObRawExpr*> &new_row,
                                  DASInsCtDefArray &ins_ctdefs);
+  int generate_access_exprs(const common::ObIArray<ObColumnRefRawExpr*> &columns,
+                               common::ObIArray<ObRawExpr*> &access_exprs);
 private:
   int need_fire_update_event(const ObTableSchema &table_schema,
                             const ObString &update_events,

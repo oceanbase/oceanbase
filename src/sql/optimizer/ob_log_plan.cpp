@@ -11203,10 +11203,8 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
     } else if (OB_FAIL(scan_op->replace_gen_col_op_exprs(gen_col_replaced_exprs_))) {
       LOG_WARN("failed to replace generated tsc expr", K(ret));
     }
-  } else if (((op->get_type() == log_op_def::LOG_INSERT) &&
-            !static_cast<ObLogInsert*>(op)->is_insert_select()) ||
-            ((op->get_type() == log_op_def::LOG_INSERT_ALL) &&
-            !static_cast<ObLogInsertAll*>(op)->is_insert_select())) {
+  } else if ((op->get_type() == log_op_def::LOG_INSERT) ||
+            ((op->get_type() == log_op_def::LOG_INSERT_ALL))) {
     ObLogDelUpd *insert_op = static_cast<ObLogDelUpd*>(op);
     if (OB_FAIL(generate_ins_replace_exprs_pair(insert_op))) {
       LOG_WARN("fail to generate insert replace exprs pair");

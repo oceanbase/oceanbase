@@ -731,7 +731,6 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
                                                     ObConflictCheckerCtdef &conflict_checker_ctdef)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 16> table_column_exprs;
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
 
   if (OB_FAIL(get_table_unique_key_exprs(op, index_dml_info, rowkey_exprs))) {
@@ -745,9 +744,7 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
   } else if (OB_FAIL(cg_.generate_rt_exprs(rowkey_exprs,
                                            conflict_checker_ctdef.data_table_rowkey_expr_))) {
     LOG_WARN("fail to generate data_table rowkey_expr", K(ret), K(rowkey_exprs));
-  } else if (OB_FAIL(convert_old_row_exprs(index_dml_info.column_exprs_, table_column_exprs))) {
-      LOG_WARN("convert old row exprs failed", K(ret));
-  } else if (OB_FAIL(cg_.generate_rt_exprs(table_column_exprs,
+  } else if (OB_FAIL(cg_.generate_rt_exprs(index_dml_info.column_old_values_exprs_,
                                            conflict_checker_ctdef.table_column_exprs_))) {
     LOG_WARN("fail to generate table columns rt exprs ", K(ret));
   } else {
@@ -873,6 +870,24 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
   return ret;
 }
 
+int ObDmlCgService::generate_access_exprs(const common::ObIArray<ObColumnRefRawExpr*> &columns,
+                               common::ObIArray<ObRawExpr*> &access_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
+    ObRawExpr *expr = columns.at(i);
+    if (expr->is_column_ref_expr() &&
+      static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column()) {
+      // do nothing.
+    } else {
+      if (OB_FAIL(add_var_to_array_no_dup(access_exprs, expr))) {
+        LOG_WARN("failed to add param expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
                                         const IndexDMLInfo &index_dml_info,
                                         ObDASScanCtDef &scan_ctdef)
@@ -896,8 +911,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
   } else if (OB_FAIL(schema_guard->get_schema_guard()->get_schema_version(
       TABLE_SCHEMA, tenant_id, ref_table_id, scan_ctdef.schema_version_))) {
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K(ref_table_id));
-  } else if (FALSE_IT(access_exprs.assign(index_dml_info.column_old_values_exprs_))) {
-    // do nothing
+  } else if (OB_FAIL(generate_access_exprs(index_dml_info.column_exprs_, access_exprs))) {
+    LOG_WARN("fail to generate access exprs ", K(ret));
   } else if (OB_FAIL(cg_.generate_rt_exprs(access_exprs,
                                            scan_ctdef.pd_expr_spec_.access_exprs_))) {
     LOG_WARN("fail to generate rt exprs ", K(ret));
@@ -910,6 +925,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
       if (OB_ISNULL(item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column item", K(i), K(item));
+      } else if (item->is_virtual_generated_column()) {
+        // do nothing.
       } else if (OB_FAIL(get_column_ref_base_cid(op, item, base_cid))) {
         LOG_WARN("get base column id failed", K(ret), K(item));
       } else if (OB_FAIL(scan_ctdef.access_column_ids_.push_back(base_cid))) {
@@ -923,7 +940,7 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
     if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_))) {
       LOG_WARN("convert table param failed", K(ret));
     } else if (OB_FAIL(cg_.generate_calc_exprs(dep_exprs,
-                                               access_exprs,
+                                               index_dml_info.column_old_values_exprs_,
                                                scan_ctdef.pd_expr_spec_.calc_exprs_,
                                                op.get_type(),
                                                false))) {
