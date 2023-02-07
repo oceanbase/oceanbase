@@ -470,12 +470,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
   
   OX (is_autonomous_ = is_autonomous);
   OX (is_function_or_trigger_ = is_function_or_trigger);
-  if (is_function_or_trigger && lib::is_mysql_mode()) {
-    last_insert_id_ = session_info.get_local_last_insert_id();
-    const ObString stash_savepoint_name("PL stash savepoint");
-    OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
-    OX (has_stash_savepoint_ = true);
-  }
+
   OZ (session_info.get_pl_block_timeout(pl_block_timeout));
   if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
     pl_block_timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
@@ -567,6 +562,13 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       OX (reset_autocommit_ = true);
       OX (session_info.set_autocommit(false));
     }
+  }
+
+  if (is_function_or_trigger && lib::is_mysql_mode()) {
+    last_insert_id_ = session_info.get_local_last_insert_id();
+    const ObString stash_savepoint_name("PL stash savepoint");
+    OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
+    OX (has_stash_savepoint_ = true);
   }
   if (is_autonomous_) {
     has_inner_dml_write_ = session_info.has_exec_inner_dml();
