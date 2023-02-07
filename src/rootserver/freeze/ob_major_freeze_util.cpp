@@ -38,9 +38,9 @@ int ObMajorFreezeUtil::get_major_freeze_service(
     bool is_primary_service_paused = primary_major_freeze_service->is_paused();
     bool is_restore_service_paused = restore_major_freeze_service->is_paused();
     if (0 == (is_primary_service_paused ^ is_restore_service_paused)) {
-      ret = OB_ERR_UNEXPECTED;
-      RS_LOG(ERROR, "both primary and restore major_freeze_service are paused or not paused",
-             KR(ret), K(is_primary_service_paused), K(is_restore_service_paused));
+      ret = OB_LEADER_NOT_EXIST;
+      RS_LOG(WARN, "both primary and restore major_freeze_service are paused or not paused, may be "
+             "switching leader", KR(ret), K(is_primary_service_paused), K(is_restore_service_paused));
     } else if (!is_primary_service_paused) {
       major_freeze_service = primary_major_freeze_service;
       is_primary_service = true;

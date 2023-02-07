@@ -216,6 +216,9 @@ int ObTenantMajorFreeze::launch_major_freeze()
     ret = OB_MAJOR_FREEZE_NOT_ALLOW;
     LOG_WARN("enable_major_freeze is off, refuse to to major_freeze", 
              K_(tenant_id), KR(ret));
+  } else if (merge_scheduler_.is_paused()) {
+    ret = OB_LEADER_NOT_EXIST;
+    LOG_WARN("leader may switch", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(merge_scheduler_.try_update_epoch_and_reload())) {
     LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(check_freeze_info())) {
