@@ -505,7 +505,7 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected error", K(get_stmt()), K(ret));
         } else if (OB_FAIL(static_cast<const ObInsertStmt*>(get_stmt())->get_ddl_sort_keys(exch_info.sort_keys_))) {
-          LOG_WARN("failed to get sort ddl sort keys", K(ret));
+          LOG_WARN("fail to get ddl sort key", K(ret));
         } else if (exch_info.dist_method_ == ObPQDistributeMethod::PARTITION_RANGE &&
                    OB_FAIL(exch_info.repart_all_tablet_ids_.assign(target_sharding.get_all_tablet_ids()))) {
           LOG_WARN("failed to get all partition ids", K(ret));
@@ -1090,10 +1090,11 @@ int ObDelUpdLogPlan::get_ddl_sort_keys_with_part_expr(ObExchangeInfo &exch_info,
   int ret = OB_SUCCESS;
   sort_keys.reset();
   ObArray<OrderItem> tmp_sort_keys;
-  if (2 != get_stmt()->get_table_size()) {
+  const ObInsertStmt *ins_stmt = static_cast<const ObInsertStmt *>(get_stmt());
+  if (2 != ins_stmt->get_table_size()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, table item size is not as expected", K(ret), "table_item_size", get_stmt()->get_table_size());
-  } else if (OB_FAIL(static_cast<const ObInsertStmt *>(get_stmt())->get_ddl_sort_keys(tmp_sort_keys))) {
+    LOG_WARN("error unexpected, table item size is not as expected", K(ret), "table_item_size", ins_stmt->get_table_size());
+  } else if (OB_FAIL(ins_stmt->get_ddl_sort_keys(tmp_sort_keys))) {
     LOG_WARN("get ddl sort keys failed", K(ret));
   } else if (OB_NOT_NULL(exch_info.calc_part_id_expr_)) {
     OrderItem item;
