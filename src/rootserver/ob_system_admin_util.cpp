@@ -950,61 +950,75 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
       } else if (item->tenant_ids_.size() > 0) {
         // tenant config
         ObDMLSqlSplicer dml;
-        for (uint64_t tenant_id : item->tenant_ids_) {
-          const char *table_name = (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id ?
-                                     OB_ALL_SEED_PARAMETER_TNAME : OB_TENANT_PARAMETER_TNAME);
-          tenant_id = (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id ? OB_SYS_TENANT_ID : tenant_id);
-          uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-          dml.reset();
-          if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
-              || OB_FAIL(dml.add_pk_column("zone", item->zone_.ptr()))
-              || OB_FAIL(dml.add_pk_column("svr_type", print_server_role(OB_SERVER)))
-              || OB_FAIL(dml.add_pk_column(K(svr_ip)))
-              || OB_FAIL(dml.add_pk_column(K(svr_port)))
-              || OB_FAIL(dml.add_pk_column("name", item->name_.ptr()))
-              || OB_FAIL(dml.add_column("data_type", "varchar"))
-              || OB_FAIL(dml.add_column("value", item->value_.ptr()))
-              || OB_FAIL(dml.add_column("info", item->comment_.ptr()))
-              || OB_FAIL(dml.add_column("config_version", new_version))) {
-            LOG_WARN("add column failed", KR(ret));
-          } else if (OB_FAIL(dml.get_values().append_fmt("usec_to_time(%ld)", new_version))) {
-            LOG_WARN("append valued failed", KR(ret));
-          } else if (OB_FAIL(dml.add_column(false, "gmt_modified"))) {
-            LOG_WARN("add column failed", KR(ret));
-          } else {
-            int64_t affected_rows = 0;
-            ObDMLExecHelper exec(*ctx_.sql_proxy_, exec_tenant_id);
-            ObConfigItem *ci = nullptr;
-            // tenant not exist in RS, use SYS instead
-            omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
-            if (!tenant_config.is_valid()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to get tenant config",K(tenant_id),  KR(ret));
-            } else if (OB_ISNULL(tenant_config->get_container().get(
-                                        ObConfigStringKey(item->name_.ptr())))) {
-              ret = OB_ERR_SYS_CONFIG_UNKNOWN;
-              LOG_WARN("can't found config item", KR(ret), K(tenant_id), "item", *item);
+        share::schema::ObSchemaGetterGuard schema_guard;
+        const share::schema::ObSimpleTenantSchema *tenant_schema = NULL;
+        if (OB_FAIL(GSCHEMASERVICE.get_tenant_schema_guard(
+                OB_SYS_TENANT_ID, schema_guard))) {
+          LOG_WARN("fail to get sys tenant schema guard", KR(ret));
+        } else {
+          for (uint64_t tenant_id : item->tenant_ids_) {
+            const char *table_name = (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id ?
+                                      OB_ALL_SEED_PARAMETER_TNAME : OB_TENANT_PARAMETER_TNAME);
+            tenant_id = (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id ? OB_SYS_TENANT_ID : tenant_id);
+            uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+            dml.reset();
+            if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+              LOG_WARN("failed to get tenant ids", KR(ret), K(tenant_id));
+            } else if (OB_ISNULL(tenant_schema)) {
+              ret = OB_TENANT_NOT_EXIST;
+              LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
+            } else if (!tenant_schema->is_normal()) {
+              //tenant not normal, maybe tenant not ready, cannot add tenant config
+            } else if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
+                || OB_FAIL(dml.add_pk_column("zone", item->zone_.ptr()))
+                || OB_FAIL(dml.add_pk_column("svr_type", print_server_role(OB_SERVER)))
+                || OB_FAIL(dml.add_pk_column(K(svr_ip)))
+                || OB_FAIL(dml.add_pk_column(K(svr_port)))
+                || OB_FAIL(dml.add_pk_column("name", item->name_.ptr()))
+                || OB_FAIL(dml.add_column("data_type", "varchar"))
+                || OB_FAIL(dml.add_column("value", item->value_.ptr()))
+                || OB_FAIL(dml.add_column("info", item->comment_.ptr()))
+                || OB_FAIL(dml.add_column("config_version", new_version))) {
+              LOG_WARN("add column failed", KR(ret));
+            } else if (OB_FAIL(dml.get_values().append_fmt("usec_to_time(%ld)", new_version))) {
+              LOG_WARN("append valued failed", KR(ret));
+            } else if (OB_FAIL(dml.add_column(false, "gmt_modified"))) {
+              LOG_WARN("add column failed", KR(ret));
             } else {
-              ci = *(tenant_config->get_container().get(
-                                    ObConfigStringKey(item->name_.ptr())));
-              if (OB_FAIL(dml.add_column("section", ci->section()))
-                          || OB_FAIL(dml.add_column("scope", ci->scope()))
-                          || OB_FAIL(dml.add_column("source", ci->source()))
-                          || OB_FAIL(dml.add_column("edit_level", ci->edit_level()))) {
-                LOG_WARN("add column failed", KR(ret));
-              } else if (OB_FAIL(exec.exec_insert_update(table_name,
-                                                         dml, affected_rows))) {
-                LOG_WARN("execute insert update failed", K(tenant_id), KR(ret), "item", *item);
-              } else if (is_zero_row(affected_rows) || affected_rows > 2) {
+              int64_t affected_rows = 0;
+              ObDMLExecHelper exec(*ctx_.sql_proxy_, exec_tenant_id);
+              ObConfigItem *ci = nullptr;
+              // tenant not exist in RS, use SYS instead
+              omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
+              if (!tenant_config.is_valid()) {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected affected rows", K(tenant_id), K(affected_rows), KR(ret));
+                LOG_WARN("failed to get tenant config",K(tenant_id),  KR(ret));
+              } else if (OB_ISNULL(tenant_config->get_container().get(
+                                          ObConfigStringKey(item->name_.ptr())))) {
+                ret = OB_ERR_SYS_CONFIG_UNKNOWN;
+                LOG_WARN("can't found config item", KR(ret), K(tenant_id), "item", *item);
+              } else {
+                ci = *(tenant_config->get_container().get(
+                                      ObConfigStringKey(item->name_.ptr())));
+                if (OB_FAIL(dml.add_column("section", ci->section()))
+                            || OB_FAIL(dml.add_column("scope", ci->scope()))
+                            || OB_FAIL(dml.add_column("source", ci->source()))
+                            || OB_FAIL(dml.add_column("edit_level", ci->edit_level()))) {
+                  LOG_WARN("add column failed", KR(ret));
+                } else if (OB_FAIL(exec.exec_insert_update(table_name,
+                                                          dml, affected_rows))) {
+                  LOG_WARN("execute insert update failed", K(tenant_id), KR(ret), "item", *item);
+                } else if (is_zero_row(affected_rows) || affected_rows > 2) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected affected rows", K(tenant_id), K(affected_rows), KR(ret));
+                }
               }
             }
-          }
-          if (OB_FAIL(ret)) {
-            break;
-          }
-        } // for
+            if (OB_FAIL(ret)) {
+              break;
+            }
+          } // for
+        }
       } else {
         // sys config
         ObDMLSqlSplicer dml;
