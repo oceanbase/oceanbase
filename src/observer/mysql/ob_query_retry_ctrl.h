@@ -178,6 +178,10 @@ public:
                                  bool force_local_retry = false,
                                  bool is_inner_sql = false,
                                  bool is_from_pl = false);
+  void set_packet_retry(const int err) {
+    retry_type_ = RETRY_TYPE_PACKET;
+    retry_err_code_ = err;
+  }
   void clear_state_before_each_retry(sql::ObQueryRetryInfo &retry_info)
   {
     retry_type_ = RETRY_TYPE_NONE;
