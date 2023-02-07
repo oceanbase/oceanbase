@@ -2477,6 +2477,13 @@ int ObLSBackupDataTask::process()
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (param_.ls_id_.is_sys_ls()) {
+      SERVER_EVENT_SYNC_ADD("backup_errsim", "before_backup_sys_tablets",
+                            "ls_id", param_.ls_id_.id());
+      DEBUG_SYNC(BEFORE_BACKUP_SYS_TABLETS);
+    }
+  }
 #endif
   if (OB_FAIL(ret)) {
   } else if (IS_NOT_INIT) {
