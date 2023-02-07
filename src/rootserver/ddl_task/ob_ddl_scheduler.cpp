@@ -417,8 +417,6 @@ int ObDDLTaskHeartBeatMananger::get_inactive_ddl_task_ids(ObArray<int64_t>& remo
   return ret;
 }
 
-ObPrepareAlterTableArgParam::ObPrepareAlterTableArgParam() : session_id_(OB_INVALID_ID) {}
-
 int ObPrepareAlterTableArgParam::init(const uint64_t session_id,
                                       const ObSQLMode &sql_mode,
                                       const ObString &ddl_stmt_str,
@@ -458,9 +456,8 @@ int ObPrepareAlterTableArgParam::set_nls_formats(const common::ObString *nls_for
     ret = OB_INVALID_ARGUMENT;
   } else {
     char *tmp_ptr[ObNLSFormatEnum::NLS_MAX] = {};
-    common::ObArenaAllocator allocator;
     for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; ++i) {
-      if (OB_ISNULL(tmp_ptr[i] = (char *)allocator.alloc(nls_formats[i].length()))) {
+      if (OB_ISNULL(tmp_ptr[i] = (char *)allocator_.alloc(nls_formats[i].length()))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SHARE_LOG(ERROR, "failed to alloc memory!", "size", nls_formats[i].length(), K(ret));
       } else {
@@ -470,7 +467,7 @@ int ObPrepareAlterTableArgParam::set_nls_formats(const common::ObString *nls_for
     }
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
-        allocator.free(tmp_ptr[i]);
+        allocator_.free(tmp_ptr[i]);
       }
     }
   }

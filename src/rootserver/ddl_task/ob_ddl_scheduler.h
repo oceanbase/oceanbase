@@ -104,7 +104,13 @@ private:
 struct ObPrepareAlterTableArgParam final
 {
 public:
-  ObPrepareAlterTableArgParam();
+  ObPrepareAlterTableArgParam() :
+    session_id_(common::OB_INVALID_ID),
+    sql_mode_(0),
+    tz_info_wrap_(),
+    allocator_(lib::ObLabel("PrepAlterTblArg")),
+    nls_formats_{}
+  {}
   ~ObPrepareAlterTableArgParam() = default;
   int init(const uint64_t session_id,
           const ObSQLMode &sql_mode,
@@ -140,6 +146,7 @@ public:
   common::ObString target_database_name_;
   common::ObTimeZoneInfo tz_info_;
   common::ObTimeZoneInfoWrap tz_info_wrap_;
+  common::ObArenaAllocator allocator_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
 };
 
