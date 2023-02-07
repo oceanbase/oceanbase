@@ -330,6 +330,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
       }
     }
 #ifdef ENABLE_DEBUG_LOG
+    /*
     if (OB_SUCC(ret)) {
       access_ctx_->defensive_check_record_.query_flag_ = access_ctx_->query_flag_;
       transaction::ObTransService *trx = MTL(transaction::ObTransService *);
@@ -346,6 +347,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
       }
     }
     access_ctx_->defensive_check_record_.reset();
+    */
 #endif
     rowkey_ = NULL;
   } else {
