@@ -474,10 +474,11 @@ private:
 
   int lock_row_on_frozen_stores_(
       storage::ObStoreCtx &ctx,
+      const ObTxNodeArg &arg,
       const ObMemtableKey *key,
       ObMvccRow *value,
       const storage::ObTableReadInfo &read_info,
-      storage::ObStoreRowLockState &lock_state);
+      ObMvccWriteResult &res);
 
   int remove_unused_callback_for_uncommited_txn_();
 

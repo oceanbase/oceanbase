@@ -568,7 +568,7 @@ int ObMemtable::check_row_locked_by_myself(
     const ObIArray<ObITable *> *stores = nullptr;
     common::ObSEArray<ObITable *, 4> iter_tables;
     ctx.table_iter_->resume();
-    auto my_tx_id = ctx.mvcc_acc_ctx_.get_tx_id();
+    ObTransID my_tx_id = ctx.mvcc_acc_ctx_.get_tx_id();
     while (OB_SUCC(ret)) {
       ObITable *table_ptr = nullptr;
       if (OB_FAIL(ctx.table_iter_->get_next(table_ptr))) {
@@ -1129,12 +1129,15 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
+                                           const ObTxNodeArg &arg,
                                            const ObMemtableKey *key,
                                            ObMvccRow *value,
                                            const storage::ObTableReadInfo &read_info,
-                                           ObStoreRowLockState &lock_state)
+                                           ObMvccWriteResult &res)
 {
   int ret = OB_SUCCESS;
+  ObStoreRowLockState &lock_state = res.lock_state_;
+
   if (OB_ISNULL(value) || !ctx.mvcc_acc_ctx_.is_write() || NULL == key) {
     TRANS_LOG(WARN, "invalid param", KP(value), K(ctx), KP(key));
     ret = OB_INVALID_ARGUMENT;
@@ -1220,6 +1223,24 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
 
         value->set_lower_lock_scaned();
         TRANS_LOG(DEBUG, "lower lock check finish", K(*value), K(*stores));
+      } else {
+        // There is the lock on frozen stores by my self
+
+        // If the lock is locked by myself and the locker's tnode is DF_LOCK, it
+        // means the row is under my control and new lock is unnecessary for the
+        // semantic of the LOCK dml. So we remove the lock tnode here and report
+        // the success of the mvcc_write .
+        //
+        // NB: You need pay attention to the requirement of the parallel das
+        // update. It may insert two locks on the same row in the same sql. So
+        // it will cause two upside down lock(which means smaller lock tnode
+        // lies ahead the bigger one). So the optimization here is essential.
+        if (res.has_insert()
+            && lock_state.lock_trans_id_ == my_tx_id
+            && blocksstable::ObDmlFlag::DF_LOCK == arg.data_->dml_flag_) {
+          (void)mvcc_engine_.mvcc_undo(value);
+          res.need_insert_ = false;
+        }
       }
     }
   }
@@ -2526,12 +2547,29 @@ int ObMemtable::mvcc_write_(storage::ObStoreCtx &ctx,
       TRANS_LOG(WARN, "mvcc write fail", K(ret));
     }
   } else if (OB_FAIL(lock_row_on_frozen_stores_(ctx,
+                                                arg,
                                                 key,
                                                 value,
                                                 read_info,
-                                                res.lock_state_))) {
-    if (OB_UNLIKELY(!res.is_new_locked_) && OB_TRY_LOCK_ROW_CONFLICT == ret) {
-      TRANS_LOG(ERROR, "double lock detected", K(*key), K(*value), K(ctx));
+                                                res))) {
+    // Double lock detection is used to prevent that the row who has been
+    // operated by the same txn before will be unexpectedly conflicted with
+    // other writes in sstable. So we report the error when conflict is
+    // discovered with the data operation is not the first time.
+    //
+    // TIP: While we need notice that only the tnode which has been operated
+    // successfully this time need to be checked with double lock detection.
+    // Because under the case of parallel lock(the same row may be locked by the
+    // different threads under the same txn parallelly. You can understand the
+    // behavior through das for update), two lock operation may be inserted
+    // parallelly for the same row in the memtable, while both lock may fail
+    // with conflicts even the second lock operate successfully(the lock will be
+    // pretended to insert successfully at the beginning of mvcc_write and fail
+    // to pass the sstable row lock check for performance issue).
+    if (OB_UNLIKELY(!res.is_new_locked_)
+        && res.has_insert()
+        && OB_TRY_LOCK_ROW_CONFLICT == ret) {
+      TRANS_LOG(ERROR, "double lock detected", K(*key), K(*value), K(ctx), K(res));
     }
     if (!res.has_insert()) {
       TRANS_LOG(ERROR, "sstable conflict will occurred when already inserted", K(ctx), KPC(this));
