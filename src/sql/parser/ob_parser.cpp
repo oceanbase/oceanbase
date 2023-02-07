@@ -161,7 +161,7 @@ void ObParser::get_single_sql(const common::ObString &stmt, int64_t offset, int6
 
   bool in_comment = false;
   bool in_string  = false;
-  while ((in_comment || (stmt[str_len + offset] != ';')) && str_len < remain) {
+  while (str_len < remain && (in_comment || (stmt[str_len + offset] != ';'))) {
     if (!in_comment && !in_string) {
       if (str_len + 1 >= remain) {
       } else if ((stmt[str_len + offset] == '-' && stmt[str_len + offset + 1] == '-') || stmt[str_len + offset + 1] == '#') {
