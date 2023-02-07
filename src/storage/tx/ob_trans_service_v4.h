@@ -334,6 +334,7 @@ void fetch_cflict_tx_ids_from_mem_ctx_to_desc_(memtable::ObMvccAccessCtx &acc_ct
 int wait_follower_readable_(ObLS &ls,
                             const int64_t expire_ts,
                             const share::SCN &snapshot);
+MonotonicTs get_req_receive_mts_();
 // include tx api refacored for future
 public:
 #include "ob_tx_api.h"

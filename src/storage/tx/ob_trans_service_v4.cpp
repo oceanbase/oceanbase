@@ -17,6 +17,7 @@
 #include "lib/stat/ob_session_stat.h"
 #include "lib/ob_name_id_def.h"
 #include "lib/ob_running_mode.h"
+#include "rpc/ob_request.h"
 #include "ob_trans_ctx.h"
 #include "ob_trans_factory.h"
 #include "ob_trans_functor.h"
@@ -1267,7 +1268,7 @@ int ObTransService::validate_snapshot_version_(const SCN snapshot,
       snapshot <= ls_weak_read_ts) {
   } else {
     SCN gts;
-    const MonotonicTs stc_ahead = MonotonicTs::current_time() - MonotonicTs(GCONF._ob_get_gts_ahead_interval);
+    const MonotonicTs stc_ahead = get_req_receive_mts_() - MonotonicTs(GCONF._ob_get_gts_ahead_interval);
     MonotonicTs tmp_receive_gts_ts(0);
     do {
       ret = ts_mgr_->get_gts(tenant_id_, stc_ahead, NULL, gts, tmp_receive_gts_ts);
@@ -1402,6 +1403,18 @@ int ObTransService::wait_follower_readable_(ObLS &ls,
   return ret;
 }
 
+MonotonicTs ObTransService::get_req_receive_mts_()
+{
+  MonotonicTs mts;
+  const rpc::ObRequest *req = THIS_WORKER.get_cur_request();
+  if (NULL != req && req->get_receive_mts().is_valid()) {
+    mts = req->get_receive_mts();
+  } else {
+    mts = MonotonicTs::current_time();
+  }
+  return mts;
+}
+
 /*
  * collect trans exec result
  */
@@ -1516,10 +1529,10 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
                                               ObFunction<bool()> interrupt_checker)
 {
   int ret = OB_SUCCESS;
-  const MonotonicTs now0 = MonotonicTs::current_time();
+  const MonotonicTs now0 = get_req_receive_mts_();
   const MonotonicTs now = now0 - MonotonicTs(gts_ahead);
   int retry_times = 0;
-  const int MAX_RETRY_TIMES = 100;
+  const int MAX_RETRY_TIMES = 10;
   do {
     int64_t n = ObClockGenerator::getClock();
     MonotonicTs rts(0);
@@ -1681,7 +1694,7 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
                                         SCN &commit_version)
 {
   int ret = OB_SUCCESS;
-  MonotonicTs commit_time = MonotonicTs::current_time();
+  MonotonicTs commit_time = get_req_receive_mts_();
   ObPartTransCtx *ctx = NULL;
   if (OB_FAIL(get_tx_ctx_(coord, tx_id, ctx))) {
     TRANS_LOG(WARN, "get coordinator tx context fail", K(ret), K(tx_id), K(coord));
@@ -2544,7 +2557,7 @@ int ObTransService::sub_prepare_local_ls_(const ObTransID &tx_id,
                                           const ObXATransID &xid)
 {
   int ret = OB_SUCCESS;
-  MonotonicTs commit_time = MonotonicTs::current_time();
+  MonotonicTs commit_time = get_req_receive_mts_();
   ObPartTransCtx *ctx = NULL;
   if (OB_FAIL(get_tx_ctx_(coord, tx_id, ctx))) {
     TRANS_LOG(WARN, "get coordinator context fail", K(ret), K(tx_id), K(coord));
@@ -2730,7 +2743,7 @@ int ObTransService::sub_end_tx_local_ls_(const ObTransID &tx_id,
                                          const bool is_rollback)
 {
   int ret = OB_SUCCESS;
-  MonotonicTs commit_time = MonotonicTs::current_time();
+  MonotonicTs commit_time = get_req_receive_mts_();
   ObPartTransCtx *ctx = NULL;
   if (OB_FAIL(get_tx_ctx_(coord, tx_id, ctx))) {
     TRANS_LOG(WARN, "fail to get coordinator tx context", K(ret), K(tx_id), K(coord));
