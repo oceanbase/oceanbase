@@ -145,31 +145,30 @@ int ObDDLErrorMessageTableOperator::extract_index_key(const ObTableSchema &index
 int ObDDLErrorMessageTableOperator::load_ddl_user_error(const uint64_t tenant_id,
                                                         const int64_t task_id,
                                                         const uint64_t table_id,
-                                                        const int64_t schema_version,
                                                         ObMySQLProxy &sql_proxy,
                                                         ObBuildDDLErrorMessage &error_message)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  LOG_INFO("begin to load ddl user error", K(tenant_id), K(task_id), K(table_id), K(schema_version));
+  LOG_INFO("begin to load ddl user error", K(tenant_id), K(task_id), K(table_id));
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     sqlclient::ObMySQLResult *result = NULL;
     if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0 || OB_INVALID_ID == table_id
-        || OB_INVALID_VERSION == schema_version || nullptr != error_message.user_message_)) {
+        || nullptr != error_message.user_message_)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(table_id), K(schema_version));
+      LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(table_id));
     } else if (OB_FAIL(sql.assign_fmt(
         "SELECT ret_code, ddl_type, affected_rows, user_message, dba_message from %s WHERE tenant_id = %ld AND "
-        "task_id = %ld AND object_id = %ld AND schema_version = %ld", OB_ALL_DDL_ERROR_MESSAGE_TNAME,
+        "task_id = %ld AND object_id = %ld", OB_ALL_DDL_ERROR_MESSAGE_TNAME,
         ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-        task_id, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id), schema_version))) {
+        task_id, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id)))) {
       LOG_WARN("fail to assign sql", K(ret));
     } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
       LOG_WARN("fail to execute sql", K(ret), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ITER_END;
-      LOG_INFO("single replica has not reported before", K(ret), K(table_id), K(schema_version));
+      LOG_INFO("single replica has not reported before", K(ret), K(table_id));
     } else {
       while (OB_SUCC(ret)) {
         if (OB_FAIL(result->next())) {

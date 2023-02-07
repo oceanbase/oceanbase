@@ -966,8 +966,8 @@ int ObDDLTask::report_error_code(const ObString &forward_user_message, const int
     const bool is_ddl_retry_task = is_drop_schema_block_concurrent_trans(task_type_);
     if (OB_SUCCESS != ret_code_) {
       if (OB_FAIL(ObDDLErrorMessageTableOperator::load_ddl_user_error(tenant_id_, task_id_, object_id_,
-          schema_version_, *GCTX.sql_proxy_, error_message))) {
-        LOG_WARN("load ddl user error failed", K(ret), K(object_id_), K(schema_version_), K(error_message));
+              *GCTX.sql_proxy_, error_message))) {
+        LOG_WARN("load ddl user error failed", K(ret), K(tenant_id_), K(task_id_), K(object_id_));
         if (OB_ITER_END == ret) {     // no single replica error message found, use ret_code_
           ret = OB_SUCCESS;
           if (is_oracle_mode && DDL_CREATE_INDEX != task_type_ && OB_ERR_DUPLICATED_UNIQUE_KEY == ret_code_) {
