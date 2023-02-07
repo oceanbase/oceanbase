@@ -2804,59 +2804,62 @@ int ObRawExprUtils::resolve_gen_column_udf_expr(ObRawExpr *&udf_expr,
                                                 )
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *expr = NULL;
-  ObResolverParams params;
-  ObStmtFactory stmt_factory(expr_factory.get_allocator());
-  params.expr_factory_ = &expr_factory;
-  params.allocator_ = &(expr_factory.get_allocator());
-  params.session_info_ = const_cast<ObSQLSessionInfo *>(&session_info);
-  params.schema_checker_ = const_cast<ObSchemaChecker *>(schema_checker);
-  params.sql_proxy_ = GCTX.sql_proxy_;
-  params.stmt_factory_ = &stmt_factory;
-  params.query_ctx_ = NULL;
-  // indicate not from pl scope; all symbol is searched inside schema
-  params.secondary_namespace_ = NULL;
+  // ObRawExpr *expr = NULL;
+  // ObResolverParams params;
+  // ObStmtFactory stmt_factory(expr_factory.get_allocator());
+  // params.expr_factory_ = &expr_factory;
+  // params.allocator_ = &(expr_factory.get_allocator());
+  // params.session_info_ = const_cast<ObSQLSessionInfo *>(&session_info);
+  // params.schema_checker_ = const_cast<ObSchemaChecker *>(schema_checker);
+  // params.sql_proxy_ = GCTX.sql_proxy_;
+  // params.stmt_factory_ = &stmt_factory;
+  // params.query_ctx_ = NULL;
+  // // indicate not from pl scope; all symbol is searched inside schema
+  // params.secondary_namespace_ = NULL;
 
-  CK (OB_NOT_NULL(schema_checker));
-  CK (OB_NOT_NULL(schema_checker->get_schema_guard()));
-  if (OB_FAIL(ret)) {
-    LOG_WARN("faile to check params, NULL schema guard", K(ret));
-  } else if (OB_FAIL(ObResolverUtils::resolve_external_symbol(*params.allocator_,
-                                                        *params.expr_factory_,
-                                                        *params.session_info_,
-                                                        *params.schema_checker_->get_schema_guard(),
-                                                        params.sql_proxy_,
-                                                        &(params.external_param_info_),
-                                                        params.secondary_namespace_,
-                                                        q_name,
-                                                        columns,
-                                                        real_exprs,
-                                                        expr))) {
-    LOG_WARN("failed to resolve var", K(q_name), K(ret));
-  } else if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Invalid expr", K(expr), K(ret));
-  } else if (expr->is_udf_expr() && !expr->is_deterministic()) {
-    ret = OB_ERR_USE_UDF_NOT_DETERMIN;
-    LOG_WARN("generated column expect deterministic udf", K(q_name), K(ret));
-    LOG_USER_ERROR(OB_ERR_USE_UDF_NOT_DETERMIN);
-  } else if (expr->is_udf_expr()) {
-    ObUDFRawExpr *udf1_expr = static_cast<ObUDFRawExpr*>(expr);
-    ObSchemaObjVersion udf_version;
-    CK (OB_NOT_NULL(udf1_expr));
-    if (OB_SUCC(ret) && udf1_expr->need_add_dependency() && OB_NOT_NULL(stmt)) {
-      OZ (udf1_expr->get_schema_object_version(udf_version));
-      OZ (stmt->add_global_dependency_table(udf_version));
-    }
-    //for udf without params, we just set called_in_sql = true,
-    //if this expr go through pl :: build_raw_expr later,
-    //the flag will change to false;
-    OX (expr->set_is_called_in_sql(true));
-    OX (udf_expr = expr);
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expr, expect udf expr", K(ret), K(q_name));
-  }
+  // CK (OB_NOT_NULL(schema_checker));
+  // CK (OB_NOT_NULL(schema_checker->get_schema_guard()));
+  // if (OB_FAIL(ret)) {
+  //   LOG_WARN("faile to check params, NULL schema guard", K(ret));
+  // } else if (OB_FAIL(ObResolverUtils::resolve_external_symbol(*params.allocator_,
+  //                                                       *params.expr_factory_,
+  //                                                       *params.session_info_,
+  //                                                       *params.schema_checker_->get_schema_guard(),
+  //                                                       params.sql_proxy_,
+  //                                                       &(params.external_param_info_),
+  //                                                       params.secondary_namespace_,
+  //                                                       q_name,
+  //                                                       columns,
+  //                                                       real_exprs,
+  //                                                       expr))) {
+  //   LOG_WARN("failed to resolve var", K(q_name), K(ret));
+  // } else if (OB_ISNULL(expr)) {
+  //   ret = OB_ERR_UNEXPECTED;
+  //   LOG_WARN("Invalid expr", K(expr), K(ret));
+  // } else if (expr->is_udf_expr() && !expr->is_deterministic()) {
+  //   ret = OB_ERR_USE_UDF_NOT_DETERMIN;
+  //   LOG_WARN("generated column expect deterministic udf", K(q_name), K(ret));
+  //   LOG_USER_ERROR(OB_ERR_USE_UDF_NOT_DETERMIN);
+  // } else if (expr->is_udf_expr()) {
+  //   ObUDFRawExpr *udf1_expr = static_cast<ObUDFRawExpr*>(expr);
+  //   ObSchemaObjVersion udf_version;
+  //   CK (OB_NOT_NULL(udf1_expr));
+  //   if (OB_SUCC(ret) && udf1_expr->need_add_dependency() && OB_NOT_NULL(stmt)) {
+  //     OZ (udf1_expr->get_schema_object_version(udf_version));
+  //     OZ (stmt->add_global_dependency_table(udf_version));
+  //   }
+  //   //for udf without params, we just set called_in_sql = true,
+  //   //if this expr go through pl :: build_raw_expr later,
+  //   //the flag will change to false;
+  //   OX (expr->set_is_called_in_sql(true));
+  //   OX (udf_expr = expr);
+  // } else {
+  //   ret = OB_ERR_UNEXPECTED;
+  //   LOG_WARN("unexpected expr, expect udf expr", K(ret), K(q_name));
+  // }
+  ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "using udf as generated column");
+  LOG_WARN("using udf as generated column is not supported", K(ret));
   return ret;
 }
 
