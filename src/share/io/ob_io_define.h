@@ -220,7 +220,7 @@ public:
   void inc_out_ref();
   void dec_out_ref();
   VIRTUAL_TO_STRING_KV(K(is_inited_), K(is_finished_), K(is_canceled_), K(has_estimated_), K(io_info_), K(deadline_ts_),
-      KP(control_block_), KP(raw_buf_), KP(io_buf_), K(io_offset_), K(io_size_), K(complete_size_),
+      K(sender_index_), KP(control_block_), KP(raw_buf_), KP(io_buf_), K(io_offset_), K(io_size_), K(complete_size_),
       K(time_log_), KP(channel_), K(ref_cnt_), K(out_ref_cnt_),
       K(trace_id_), K(ret_code_), K(retry_count_), K(callback_buf_size_), KP(copied_callback_), K(tenant_io_mgr_));
 private:
@@ -232,6 +232,7 @@ public:
   bool has_estimated_;
   ObIOInfo io_info_;
   int64_t deadline_ts_;
+  int64_t sender_index_;
   ObIOCB *control_block_;
   void *raw_buf_;
   char *io_buf_;
@@ -392,6 +393,10 @@ public:
   virtual ~ObMClockQueue();
   virtual int init() override;
   virtual void destroy() override;
+  int get_time_info(int64_t &reservation_ts,
+                    int64_t &group_limitation_ts,
+                    int64_t &tenant_limitation_ts,
+                    int64_t &proportion_ts);
   int push_phyqueue(ObPhyQueue *phy_queue);
   int pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts);
   TO_STRING_KV(K(is_inited_));
@@ -410,11 +415,11 @@ private:
 private:
   bool is_inited_;
   HeapCompare<ObPhyQueue, &ObPhyQueue::reservation_ts_> r_cmp_;
-  HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_> cl_cmp_;
+  HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_> gl_cmp_;
   HeapCompare<ObPhyQueue, &ObPhyQueue::tenant_limitation_ts_> tl_cmp_;
   HeapCompare<ObPhyQueue, &ObPhyQueue::proportion_ts_> p_cmp_;
   ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::reservation_ts_>, &ObPhyQueue::reservation_pos_> r_heap_;
-  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_>, &ObPhyQueue::group_limitation_pos_> cl_heap_;
+  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_>, &ObPhyQueue::group_limitation_pos_> gl_heap_;
   ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::tenant_limitation_ts_>, &ObPhyQueue::tenant_limitation_pos_> tl_heap_;
   ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::proportion_ts_>, &ObPhyQueue::proportion_pos_> ready_heap_;
 };
