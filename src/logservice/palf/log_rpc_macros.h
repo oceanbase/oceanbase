@@ -22,7 +22,7 @@
       const ObAddr server = rpc_packet.src_;                                                                      \
       int64_t palf_id = rpc_packet.palf_id_;                                                                      \
       if (OB_ISNULL(palf_env_impl_)                                                                               \
-          && OB_FAIL(__get_palf_env_impl(rpc_pkt_->get_tenant_id(), palf_env_impl_, filter_ == NULL))) {           \
+          && OB_FAIL(__get_palf_env_impl(rpc_pkt_->get_tenant_id(), palf_env_impl_, filter_ == NULL))) {          \
       } else if (OB_UNLIKELY(NULL != filter_ && true == (*filter_)(server))) {                                    \
         PALF_LOG(INFO, "need filter this packet", K(rpc_packet));                                                 \
       } else {                                                                                                    \

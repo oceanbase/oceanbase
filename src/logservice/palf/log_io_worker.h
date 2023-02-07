@@ -68,6 +68,7 @@ public:
   LogIOWorker();
   ~LogIOWorker();
   int init(const LogIOWorkerConfig &config,
+           const int64_t tenant_id,
            int cb_thread_pool_tg_id,
            ObIAllocator *allocaotr,
            IPalfEnvImpl *palf_env_impl);

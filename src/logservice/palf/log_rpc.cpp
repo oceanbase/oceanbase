@@ -15,7 +15,6 @@
 #include "log_rpc_proxy.h"                         // LogRpcProxyV2
 #include "log_rpc_packet.h"                        // LogRpcPaket
 #include "log_req.h"                               // LogPushReq...
-#include "log_define.h"                            // PALF_ENV_ID
 namespace oceanbase
 {
 using namespace common;
@@ -33,12 +32,6 @@ LogRpc::LogRpc() : rpc_proxy_(NULL),
 LogRpc::~LogRpc()
 {
   destroy();
-}
-
-int LogRpc::init(const ObAddr &self,
-                 rpc::frame::ObReqTransport *transport)
-{
-  return init(self, PALF_ENV_ID, transport);
 }
 
 int LogRpc::init(const ObAddr &self,

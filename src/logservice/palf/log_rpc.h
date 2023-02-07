@@ -72,8 +72,6 @@ public:
   int init(const common::ObAddr &self,
            const int64_t tenant_id,
            rpc::frame::ObReqTransport *transport);
-  int init(const common::ObAddr &self,
-           rpc::frame::ObReqTransport *transport);
   void destroy();
   int update_transport_compress_options(const PalfTransportCompressOptions &compress_opt);
   const PalfTransportCompressOptions& get_compress_opts() const;

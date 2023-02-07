@@ -52,7 +52,7 @@ int PalfEnv::create_palf_env(
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(FileDirectoryUtils::delete_tmp_file_or_directory_at(base_dir))) {
     CLOG_LOG(WARN, "delete_tmp_file_or_directory_at failed", K(ret), K(base_dir));
-  } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, transport,
+  } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, MTL_ID(), transport,
                                                    log_alloc_mgr, log_block_pool))) {
     PALF_LOG(WARN, "PalfEnvImpl init failed", K(ret), K(base_dir));
   } else if (OB_FAIL(palf_env->start_())) {

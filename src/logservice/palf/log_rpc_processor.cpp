@@ -25,10 +25,7 @@ int __get_palf_env_impl(uint64_t tenant_id, IPalfEnvImpl *&palf_env_impl, const 
   int ret = OB_SUCCESS;
   logservice::ObLogService *log_service = nullptr;
   PalfEnv *palf_env = nullptr;
-   if (need_check_tenant_id && tenant_id != PALF_ENV_ID) {
-     ret = OB_ERR_UNEXPECTED;
-     COMMON_LOG(ERROR, "mtl id not match", K(tenant_id), K(PALF_ENV_ID), K(ret));
-   } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+   if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "get_log_service failed", K(ret));
 	} else if (OB_ISNULL(palf_env = log_service->get_palf_env())) {
@@ -37,6 +34,9 @@ int __get_palf_env_impl(uint64_t tenant_id, IPalfEnvImpl *&palf_env_impl, const 
   } else if (OB_ISNULL(palf_env_impl = palf_env->get_palf_env_impl())) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "get_palf_env_impl failed", K(ret), KP(log_service), KP(palf_env_impl));
+  } else if (need_check_tenant_id && tenant_id != palf_env_impl->get_tenant_id()) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "tenant_id is not same as palf_env", K(ret), K(tenant_id), "tenant_id_in_palf", palf_env_impl->get_tenant_id());
   } else {
     // do nothing
   }

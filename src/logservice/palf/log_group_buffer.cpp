@@ -54,7 +54,7 @@ int LogGroupBuffer::init(const LSN &start_lsn)
     //  // TODO: add tenant config
     //  // group_buffer_size = tenant_config->_log_groupgation_buffer_size;
     //}
-    ObMemAttr mem_attr(PALF_ENV_ID, "LogGroupBuffer");
+    ObMemAttr mem_attr(MTL_ID(), "LogGroupBuffer");
     if (NULL == (data_buf_ = static_cast<char *>(mtl_malloc(group_buffer_size, mem_attr)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       PALF_LOG(ERROR, "alloc memory failed", K(ret));

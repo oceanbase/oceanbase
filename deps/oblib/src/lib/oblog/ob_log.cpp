@@ -677,7 +677,7 @@ int ObLogger::log_head(const char *mod_name,
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                            tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, function,
                            base_file_name, line, GETTID(), GETTNAME(), is_arb_replica_ ? cluster_id_buf : "",
-                           GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id),
+                           is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id),
                            last_logging_cost_time_us_, errcode_buf);
     }
   }

@@ -2368,11 +2368,18 @@ OB_INLINE int64_t &ob_get_cluster_id()
   return cluster_id;
 }
 
+OB_INLINE int64_t &ob_get_arb_tenant_id()
+{
+  RLOCAL(int64_t, arb_tenant_id);
+  return arb_tenant_id;
+}
+
 #define GETTID() ob_gettid()
 #define GETTNAME() ob_get_tname()
 #define GET_TENANT_ID() ob_get_tenant_id()
 #define gettid GETTID
 #define GET_CLUSTER_ID() ob_get_cluster_id()
+#define GET_ARB_TENANT_ID() ob_get_arb_tenant_id()
 
 //for explain
 #define LEFT_BRACKET "("

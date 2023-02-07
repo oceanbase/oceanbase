@@ -1467,8 +1467,6 @@ int ObServer::init_config()
   // update gctx_.startup_mode_
   if (FAILEDx(parse_mode())) {
     LOG_ERROR("parse_mode failed", KR(ret));
-  } else if (is_arbitration_mode()) {
-    ObMallocAllocator::get_instance()->make_allocator_create_on_demand();
   }
 
   config_.print();
