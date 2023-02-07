@@ -44,6 +44,8 @@ int ObSingleMerge::open(const ObDatumRowkey &rowkey)
   } else if (OB_UNLIKELY(!get_table_param_.is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSingleMerge has not been inited", K(ret), K_(get_table_param));
+  } else if (OB_FAIL(full_row_.reserve(access_param_->get_max_out_col_cnt()))) {
+    STORAGE_LOG(WARN, "Failed to reserve full row", K(ret));
   } else {
     const ObTabletMeta &tablet_meta = get_table_param_.tablet_iter_.tablet_handle_.get_obj()->get_tablet_meta();
     if (OB_FAIL(fuse_row_cache_fetcher_.init(access_param_->iter_param_.tablet_id_, access_param_->iter_param_.get_read_info(), tablet_meta.clog_checkpoint_ts_))) {
