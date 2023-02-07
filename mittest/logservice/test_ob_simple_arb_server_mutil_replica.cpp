@@ -11,9 +11,11 @@
 #include <gtest/gtest.h>
 #include <signal.h>
 #define private public
+#define protected public
 #include "env/ob_simple_log_cluster_env.h"
-#undef private
 #include "rootserver/ob_rs_async_rpc_proxy.h"
+#undef private
+#undef protected
 
 const std::string TEST_NAME = "mutil_arb_server";
 
@@ -289,7 +291,8 @@ TEST_F(TestObSimpleMutilArbServer, test_gc)
       for (auto cluster_id : gc_cluster_ids) {
         ObArbGCNotifyArg arg;
         ObArbGCNotifyResult result;
-        ObRpcNetHandler::CLUSTER_ID = cluster_id;
+        //ObRpcNetHandler::CLUSTER_ID = cluster_id;
+        rpc_proxy.src_cluster_id_ = cluster_id;
         array.set_max_tenant_id(max_tenant_id);
         EXPECT_EQ(OB_SUCCESS, arg.init(epoch, array));
         EXPECT_EQ(OB_SUCCESS, rpc_proxy.to(dst_addr).arb_gc_notify(arg, result));

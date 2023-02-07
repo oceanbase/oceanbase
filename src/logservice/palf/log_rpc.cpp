@@ -35,13 +35,14 @@ LogRpc::~LogRpc()
 }
 
 int LogRpc::init(const ObAddr &self,
+                 const int64_t cluster_id,
                  const int64_t tenant_id,
                  rpc::frame::ObReqTransport *transport)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(rpc_proxy_.init(transport))) {
+  } else if (OB_FAIL(rpc_proxy_.init(transport, cluster_id))) {
     PALF_LOG(ERROR, "LogRpcProxyV2 init failed", K(ret));
   } else {
     self_ = self;

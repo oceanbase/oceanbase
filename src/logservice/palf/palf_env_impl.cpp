@@ -162,6 +162,7 @@ PalfEnvImpl::~PalfEnvImpl()
 int PalfEnvImpl::init(
     const PalfOptions &options,
     const char *base_dir, const ObAddr &self,
+    const int64_t cluster_id,
     const int64_t tenant_id,
     rpc::frame::ObReqTransport *transport,
     common::ObILogAllocator *log_alloc_mgr,
@@ -185,7 +186,7 @@ int PalfEnvImpl::init(
              KP(log_alloc_mgr), KP(log_block_pool));
   } else if (OB_FAIL(fetch_log_engine_.init(this, log_alloc_mgr))) {
     PALF_LOG(ERROR, "FetchLogEngine init failed", K(ret));
-  } else if (OB_FAIL(log_rpc_.init(self, tenant_id, transport))) {
+  } else if (OB_FAIL(log_rpc_.init(self, cluster_id, tenant_id, transport))) {
     PALF_LOG(ERROR, "LogRpc init failed", K(ret));
   } else if (OB_FAIL(cb_thread_pool_.init(io_cb_num, this))) {
     PALF_LOG(ERROR, "LogIOTaskThreadPool init failed", K(ret));

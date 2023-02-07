@@ -176,6 +176,7 @@ public:
   int init(const PalfOptions &options,
            const char *base_dir,
            const common::ObAddr &self,
+           const int64_t cluster_id,
            const int64_t tenant_id,
            rpc::frame::ObReqTransport *transport,
            common::ObILogAllocator *alloc_mgr,

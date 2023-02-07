@@ -158,12 +158,6 @@ void ObBlockMetaTree::destroy()
   macro_blocks_.reset();
   block_tree_.destroy();
   data_desc_.reset();
-  for (int64_t i = 0; i < sorted_rowkeys_.count(); ++i) {
-    const ObDataMacroBlockMeta *cur_meta = sorted_rowkeys_.at(i).block_meta_;
-    if (OB_NOT_NULL(cur_meta)) {
-      cur_meta->~ObDataMacroBlockMeta();
-    }
-  }
   sorted_rowkeys_.reset();
   tree_allocator_.reset();
   arena_.reset();
