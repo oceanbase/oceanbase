@@ -266,7 +266,7 @@ void ObMaintainDepInfoTaskQueue::run2()
             task->set_retry_times(task->get_retry_times() - 1);
             task->set_last_execute_time(ObTimeUtility::current_time());
             if (OB_FAIL(queue_.push(task))) {
-              LOG_ERROR("push task to queue failed", K(ret));
+              LOG_WARN("push task to queue failed", K(ret));
             } else {
               rescheduled = true;
             }

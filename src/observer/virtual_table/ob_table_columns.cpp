@@ -927,7 +927,11 @@ int ObTableColumns::resolve_view_definition(
                        K(select_stmt_node->type_));
             } else if (OB_FAIL(select_resolver.resolve(*select_stmt_node))) {
               LOG_WARN("resolve view definition failed", K(ret));
-              ret = OB_ERR_VIEW_INVALID;
+              if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+                ret = OB_ERR_VIEW_INVALID;
+              } else {
+                LOG_WARN("failed to resolve view", K(ret));
+              }
               if (throw_error) {
                 LOG_USER_ERROR(OB_ERR_VIEW_INVALID, db_name.length(), db_name.ptr(),
                               table_name.length(), table_name.ptr());
