@@ -112,6 +112,9 @@ int ElectionImpl::init_and_start(const int64_t id,
     } else if (CLICK_FAIL(acceptor_.start())) {
       LOG_INIT(ERROR, "start acceptor failed");
     } else {
+      if (inner_priority_seed_ & static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT)) {
+        event_recorder_.set_need_report(false);
+      }
       is_inited_ = true;
       is_running_ = true;
       LOG_INIT(INFO, "election init and start");
@@ -309,7 +312,9 @@ void ElectionImpl::refresh_priority_()
 {
   ELECT_TIME_GUARD(500_ms);
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(priority_)) {
+  if (inner_priority_seed_ & static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT)) {
+    // do nothing
+  } else if (OB_ISNULL(priority_)) {
     ELECT_LOG(INFO, "priority is null", K(*this));
   } else if (CLICK_FAIL(priority_->refresh())) {
     ELECT_LOG(WARN, "refresh priority failed", KR(ret), K(*this));

@@ -274,7 +274,6 @@ private:
   bool is_inited_;
   bool is_running_;
   uint64_t inner_priority_seed_;
-  common::ObOccamThreadPool *thread_pool_;
   common::ObOccamTimer *timer_;
   EventRecorder event_recorder_;
   mutable ElectionMsgCounter msg_counter_;

@@ -77,7 +77,8 @@ class EventRecorder
 {
 public:
   EventRecorder(const int64_t &ls_id, const ObAddr &self_addr, ObOccamTimer *&timer) :
-  ls_id_(ls_id), self_addr_(self_addr), timer_(timer) {}
+  ls_id_(ls_id), self_addr_(self_addr), timer_(timer), need_report_(true) {}
+  void set_need_report(const bool need_report) { need_report_ = need_report; }
   // proposer event
   int report_decentralized_to_be_leader_event(const MemberListWithStates &member_list_with_states);// 当选Leader
   int report_leader_lease_expired_event(const MemberListWithStates &member_list_with_states);// Leader续约失败卸任
@@ -96,6 +97,7 @@ private:
   const int64_t &ls_id_;
   const ObAddr &self_addr_;
   ObOccamTimer *&timer_;
+  bool need_report_;
 };
 
 }

@@ -63,6 +63,8 @@ int EventRecorder::report_event_(ElectionEventType type, const common::ObString 
     LOG_EVENT(WARN, "fail to create unique ownership of string");
   #undef PRINT_WRAPPER
   #define PRINT_WRAPPER KR(ret), K(retry_times), K(report_ts), K(self_addr), K(mtl_id), K(obj_to_string(type)), K(ls_id), KPC(uniq_holder.get_ptr())
+  } else if (!need_report_) {
+    LOG_EVENT(INFO, "event happened, but no need do report");
   } else if (CLICK_FAIL(GLOBAL_REPORT_TIMER.schedule_task_ignore_handle_repeat_and_immediately(15_s, [retry_times, report_ts, self_addr, mtl_id, type, ls_id, uniq_holder]() mutable -> bool {
     ELECT_TIME_GUARD(500_ms);
     int ret = OB_SUCCESS;
