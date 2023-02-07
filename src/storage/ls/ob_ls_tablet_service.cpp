@@ -4987,6 +4987,7 @@ int ObLSTabletService::process_old_row_lob_col(
               if (has_lob_header) {
                 obj.set_has_lob_header();
               }
+              run_ctx.is_old_row_valid_for_lob_ = true;
             }
           }
         }
@@ -5190,11 +5191,13 @@ int ObLSTabletService::delete_lob_tablet_rows(
     ObLobCommon *lob_common = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
       const ObColDesc &column = run_ctx.col_descs_->at(i);
-      ObObj &obj = tbl_row.row_val_.get_cell(i);
-      const ObObj &sql_obj = row.get_cell(i);
-      ObLobAccessParam lob_param;
-      if (OB_FAIL(delete_lob_col(run_ctx, column, obj, sql_obj, lob_common, lob_param))) {
-        LOG_WARN("[STORAGE_LOB]failed to erase lob col.", K(ret), K(i), K(tbl_row));
+      if (column.col_type_.is_lob_storage()) {
+        ObObj &obj = tbl_row.row_val_.get_cell(i);
+        const ObObj &sql_obj = row.get_cell(i);
+        ObLobAccessParam lob_param;
+        if (OB_FAIL(delete_lob_col(run_ctx, column, obj, sql_obj, lob_common, lob_param))) {
+          LOG_WARN("[STORAGE_LOB]failed to erase lob col.", K(ret), K(i), K(tbl_row));
+        }
       }
     }
   }
