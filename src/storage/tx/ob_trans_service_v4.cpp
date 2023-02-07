@@ -1101,17 +1101,6 @@ int ObTransService::acquire_tx_ctx(const share::ObLSID &ls_id, const ObTxDesc &t
   return ret;
 }
 
-// for standby
-int ObTransService::get_tx_ctx(const share::ObLSID &ls_id,
-                               const ObTransID &tx_id,
-                               ObPartTransCtx *&ctx)
-{
-  return tx_ctx_mgr_.get_tx_ctx(ls_id, tx_id, true, ctx);
-}
-
-int ObTransService::revert_tx_ctx(ObPartTransCtx *ctx)
-{ return revert_tx_ctx_(NULL, ctx); }
-
 // plain create
 int ObTransService::get_tx_ctx_(const share::ObLSID &ls_id,
                                 ObLS *ls,
@@ -2996,6 +2985,32 @@ int ObTransService::create_in_txn_implicit_savepoint(ObTxDesc &tx, int64_t &save
   return ret;
 }
 
+// for standby
+int ObTransService::get_tx_ctx_for_standby_(const share::ObLSID &ls_id,
+                                           const ObTransID &tx_id,
+                                           ObPartTransCtx *&ctx)
+{
+  return tx_ctx_mgr_.get_tx_ctx(ls_id, tx_id, true, ctx);
+}
+
+int ObTransService::check_for_standby(const share::ObLSID &ls_id,
+                                      const ObTransID &tx_id,
+                                      const SCN &snapshot,
+                                      bool &can_read,
+                                      SCN &trans_version,
+                                      bool &is_determined_state)
+{
+  int ret = OB_SUCCESS;
+  ObPartTransCtx *ctx = NULL;
+  if (OB_SUCC(get_tx_ctx_for_standby_(ls_id, tx_id, ctx))) {
+    ret = ctx->check_for_standby(snapshot, can_read, trans_version, is_determined_state);
+    revert_tx_ctx_(ctx);
+  } else {
+    ret = OB_ERR_SHARED_LOCK_CONFLICT;
+  }
+  return ret;
+}
+
 int ObTransService::handle_trans_ask_state(const ObAskStateMsg &msg,
                                            obrpc::ObTransRpcResult &result)
 {
@@ -3004,7 +3019,7 @@ int ObTransService::handle_trans_ask_state(const ObAskStateMsg &msg,
   share::ObLSID coord = msg.get_receiver();
   ObPartTransCtx *ctx = NULL;
   ObAskStateRespMsg resp;
-  if (OB_FAIL(get_tx_ctx_(coord, tx_id, ctx))) {
+  if (OB_FAIL(get_tx_ctx_for_standby_(coord, tx_id, ctx))) {
     TRANS_LOG(INFO, "fail to get coordinator tx context", K(ret), K(tx_id), K(coord));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       ObStateInfo state_info;
@@ -3041,23 +3056,6 @@ int ObTransService::check_and_fill_state_info(const ObTransID &tx_id, ObStateInf
   SCN version;
   if (OB_FAIL(get_tx_state_from_tx_table_(state_info.ls_id_, tx_id, tx_state, version))) {
     TRANS_LOG(INFO, "get tx state from tx table fail", K(ret), K(state_info.ls_id_), K(tx_id));
-    ObLSService *ls_svr =  MTL(ObLSService *);
-    ObLSHandle handle;
-    ObLS *ls = nullptr;
-
-    if (OB_ISNULL(ls_svr)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "log stream service is NULL", K(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(state_info.ls_id_, handle, ObLSGetMod::TRANS_MOD))) {
-      TRANS_LOG(WARN, "get log stream failed", K(ret));
-    } else if (OB_ISNULL(ls = handle.get_ls())) {
-      // todo:获取ls的状态，等待RS接口
-    } else if (OB_FAIL(ls->get_ls_replica_readable_scn(version))) {
-      TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls_id));
-    } else {
-      state_info.state_ = ObTxState::UNKNOWN;
-      state_info.version_ = version;
-    }
   } else {
     switch (tx_state) {
       case ObTxData::COMMIT:
@@ -3095,7 +3093,7 @@ int ObTransService::handle_trans_ask_state_response(const ObAskStateRespMsg &msg
   ObTransID tx_id = msg.get_trans_id();
   share::ObLSID ls_id = msg.get_receiver();
   ObPartTransCtx *ctx = NULL;
-  if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
+  if (OB_FAIL(get_tx_ctx_for_standby_(ls_id, tx_id, ctx))) {
     TRANS_LOG(INFO, "fail to get tx context", K(ret), K(tx_id), K(ls_id));
   } else if (OB_FAIL(ctx->handle_trans_ask_state_resp(msg))) {
     TRANS_LOG(WARN, "fail to handle trans ask state resp", K(ret), K(ls_id), K(tx_id));
@@ -3117,7 +3115,7 @@ int ObTransService::handle_trans_collect_state(const ObCollectStateMsg &msg,
   share::ObLSID ls_id = msg.get_receiver();
   ObPartTransCtx *ctx = NULL;
   ObCollectStateRespMsg resp;
-  if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
+  if (OB_FAIL(get_tx_ctx_for_standby_(ls_id, tx_id, ctx))) {
     TRANS_LOG(INFO, "fail to get tx context", K(ret), K(tx_id), K(ls_id));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       ObStateInfo state_info;
@@ -3166,7 +3164,7 @@ int ObTransService::handle_trans_collect_state_response(const ObCollectStateResp
   ObTransID tx_id = msg.get_trans_id();
   share::ObLSID ls_id = msg.get_receiver();
   ObPartTransCtx *ctx = NULL;
-  if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
+  if (OB_FAIL(get_tx_ctx_for_standby_(ls_id, tx_id, ctx))) {
     TRANS_LOG(INFO, "fail to get tx context", K(ret), K(tx_id), K(ls_id));
   } else if (OB_FAIL(ctx->handle_trans_collect_state_resp(msg))) {
     TRANS_LOG(WARN, "fail to handle trans collect state resp", K(ret), K(ls_id), K(tx_id));

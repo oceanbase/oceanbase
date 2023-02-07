@@ -163,10 +163,12 @@ int handle_trans_collect_state(const ObCollectStateMsg &msg, obrpc::ObTransRpcRe
 int handle_trans_collect_state_response(const ObCollectStateRespMsg &msg, obrpc::ObTransRpcResult &result);
 void build_tx_collect_state_resp_(ObCollectStateRespMsg &resp, const ObCollectStateMsg &msg);
 void build_tx_ask_state_resp_(ObAskStateRespMsg &resp, const ObAskStateMsg &msg);
-int get_tx_ctx(const share::ObLSID &ls_id,
-               const ObTransID &tx_id,
-               ObPartTransCtx *&ctx);
-int revert_tx_ctx(ObPartTransCtx *ctx);
+int check_for_standby(const share::ObLSID &ls_id,
+                      const ObTransID &tx_id,
+                      const SCN &snapshot,
+                      bool &can_read,
+                      SCN &trans_version,
+                      bool &is_determined_state);
 
 TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
@@ -204,7 +206,9 @@ int get_tx_ctx_(const share::ObLSID &ls_id,
 int get_tx_ctx_(const share::ObLSID &ls_id,
                 const ObTransID &tx_id,
                 ObPartTransCtx *&ctx);
-
+int get_tx_ctx_for_standby_(const share::ObLSID &ls_id,
+                            const ObTransID &tx_id,
+                            ObPartTransCtx *&ctx);
 int revert_tx_ctx_(ObLS *ls, ObPartTransCtx *ctx);
 int revert_tx_ctx_(ObPartTransCtx *ctx);
 int validate_snapshot_version_(const share::SCN snapshot,

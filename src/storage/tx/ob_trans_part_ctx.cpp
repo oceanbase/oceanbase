@@ -6655,7 +6655,7 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
       is_determined_state = true;
       ret = OB_SUCCESS;
     }
-    if (count == 0 || (OB_ERR_SHARED_LOCK_CONFLICT == ret && min_snapshot < snapshot)) {
+    if (count == 0 || (OB_ERR_SHARED_LOCK_CONFLICT == ret && min_snapshot <= snapshot)) {
       if (ask_state_info_interval_.reach()) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = build_and_post_ask_state_msg_(snapshot))) {
@@ -6672,9 +6672,7 @@ int ObPartTransCtx::build_and_post_ask_state_msg_(const SCN &snapshot)
 {
   int ret = OB_SUCCESS;
   if (is_root()) {
-    if (snapshot > lastest_snapshot_) {
-      build_and_post_collect_state_msg_(snapshot);
-    }
+    handle_trans_ask_state_(snapshot);
   } else {
     ObAskStateMsg msg;
     msg.snapshot_ = snapshot;
@@ -6688,9 +6686,45 @@ int ObPartTransCtx::build_and_post_ask_state_msg_(const SCN &snapshot)
     msg.receiver_ = exec_info_.upstream_;
     if (OB_FAIL(rpc_->post_msg(msg.receiver_, msg))) {
       TRANS_LOG(WARN, "post ask state msg fail", K(ret), K(msg), KPC(this));
+      if (OB_LS_NOT_EXIST == ret) {
+        ret = check_ls_state_(snapshot, msg.receiver_);
+      }
     }
   }
   TRANS_LOG(INFO, "build and post ask state msg", K(ret), K(snapshot), KPC(this));
+  return ret;
+}
+
+int ObPartTransCtx::check_ls_state_(const SCN &snapshot, const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSStatusOperator::ObLSExistState ls_state;
+  if (OB_FAIL(share::ObLSStatusOperator::check_ls_exist(MTL_ID(), ls_id, ls_state))) {
+    TRANS_LOG(WARN, "get ls state failed", K(ret));
+  } else if (ls_state.is_uncreated()) {
+    ObStateInfo state_info;
+    state_info.ls_id_ = ls_id;
+    state_info.snapshot_version_ = snapshot;
+    state_info.state_ = ObTxState::INIT;
+    state_info.version_ = snapshot;
+    if (state_info_array_.empty()) {
+      if (OB_FAIL(state_info_array_.push_back(state_info))) {
+        TRANS_LOG(WARN, "push buck state info array fail", K(ret), K(state_info));
+      }
+    } else {
+      bool is_contain = false;
+      for (int j = 0, is_contain = false; j<state_info_array_.count() && !is_contain; j++) {
+        is_contain = state_info.ls_id_ == state_info_array_.at(j).ls_id_;
+      }
+      if (!is_contain) {
+        if (OB_FAIL(state_info_array_.push_back(state_info))) {
+          TRANS_LOG(WARN, "push back state info array fail", K(ret));
+        }
+      }
+    }
+  } else {
+    ret = OB_TRANS_CTX_NOT_EXIST;
+  }
   return ret;
 }
 
@@ -6701,18 +6735,27 @@ int ObPartTransCtx::handle_trans_ask_state(const SCN &snapshot, ObAskStateRespMs
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else if (snapshot > lastest_snapshot_) {
-    build_and_post_collect_state_msg_(snapshot);
-  } else if (snapshot <= lastest_snapshot_ && standby_part_collected_.num_members() != state_info_array_.count() -1) {
-    if (refresh_state_info_interval_.reach()) {
-      build_and_post_collect_state_msg_(snapshot);
-    }
+  } else {
+    handle_trans_ask_state_(snapshot);
   }
   if (OB_SUCC(ret) && OB_FAIL(resp.state_info_array_.assign(state_info_array_))) {
     TRANS_LOG(WARN, "build ObAskStateRespMsg fail", K(ret), K(snapshot), KPC(this));
   }
   TRANS_LOG(INFO, "handle ask state msg", K(ret), K(snapshot), KPC(this));
   return ret;
+}
+
+void ObPartTransCtx::handle_trans_ask_state_(const SCN &snapshot)
+{
+  if (snapshot > lastest_snapshot_) {
+    build_and_post_collect_state_msg_(snapshot);
+  } else if (snapshot <= lastest_snapshot_ && standby_part_collected_.num_members() != state_info_array_.count()-1) {
+    if (refresh_state_info_interval_.reach()) {
+      build_and_post_collect_state_msg_(snapshot);
+    }
+  } else {
+    // do nothing
+  }
 }
 
 void ObPartTransCtx::build_and_post_collect_state_msg_(const SCN &snapshot)
@@ -6734,6 +6777,9 @@ void ObPartTransCtx::build_and_post_collect_state_msg_(const SCN &snapshot)
     msg.receiver_ = state_info_array_.at(i).ls_id_;
     if (OB_FAIL(rpc_->post_msg(msg.receiver_, msg))) {
       TRANS_LOG(WARN, "post collect state msg fail", K(ret), K(msg), KPC(this));
+      if (OB_LS_NOT_EXIST == ret) {
+        ret = check_ls_state_(snapshot, msg.receiver_);
+      }
     }
   }
   if (OB_SUCC(ret)) {

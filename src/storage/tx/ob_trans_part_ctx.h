@@ -697,6 +697,8 @@ private:
   int set_state_info_array_();
   void build_and_post_collect_state_msg_(const share::SCN &snapshot);
   int build_and_post_ask_state_msg_(const share::SCN &snapshot);
+  void handle_trans_ask_state_(const SCN &snapshot);
+  int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id);
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
 protected:
   // for xa
