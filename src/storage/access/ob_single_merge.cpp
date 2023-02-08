@@ -52,6 +52,8 @@ int ObSingleMerge::open(const ObDatumRowkey &rowkey)
       } else {
         full_row_.count_ = access_param_->get_max_out_col_cnt();
       }
+    } else if (OB_FAIL(full_row_.reserve(access_param_->get_max_out_col_cnt()))) {
+      STORAGE_LOG(WARN, "Failed to reserve full row", K(ret));
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(fuse_row_cache_fetcher_.init(access_param_->iter_param_.tablet_id_, access_param_->iter_param_.get_read_info(), tablet_meta.clog_checkpoint_scn_.get_val_for_tx()))) {
