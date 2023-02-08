@@ -322,6 +322,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObLogTenantGuard guard;
     ObLogTenant *tenant = NULL;
+    const ObTransID trans_id = trans_ctx->get_trans_id();
 
     if (OB_FAIL(trans_ctx->get_tenant_id(tenant_id))) {
       LOG_ERROR("trans_ctx get_tenant_id fail", KR(ret), K(tenant_id));
@@ -360,6 +361,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
             monitor.mark_and_get_cost("dml-done", true);
           } // while
         } else if (is_ddl_trans){
+          trans_ctx->set_trans_redo_dispatched();
           // need sort_participants = on, which make sure the first PartTransTask of
           // participant_list is DDL_TRANS.
           // TODO: consider more idea to handle this.
@@ -378,7 +380,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
       }
     }
 
-    LOG_DEBUG("handle_to_be_sequenced_trans_ end", KR(ret), KPC(trans_ctx));
+    LOG_DEBUG("handle_to_be_sequenced_trans_ end", KR(ret), K(trans_id));
   }
 
   return ret;

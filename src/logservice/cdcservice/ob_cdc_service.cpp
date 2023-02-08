@@ -88,6 +88,7 @@ void ObCdcService::run1()
 {
   int ret = OB_SUCCESS;
   int64_t tenant_id = MTL_ID();
+  lib::set_thread_name("CdcSrv");
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
     EXTLOG_LOG(ERROR, "ObCdcService is not initialized", KR(ret));

@@ -38,6 +38,7 @@
 #include "ob_log_callback.h"                        // ObILogCallback
 #include "ob_cdc_lob_ctx.h"                         // ObLobDataOutRowCtxList
 #include "ob_cdc_lob_aux_table_schema_info.h"       // ObCDCLobAuxTableSchemaInfo
+#include "ob_log_safe_arena.h"
 
 namespace oceanbase
 {
@@ -715,9 +716,9 @@ private:
   int64_t            formatted_stmt_num_;   // Number of statements that formatted
   int64_t            row_ref_cnt_;          // reference count
 
-  // Non-thread safe allocator
-  // used for Parser/Formatter
-  common::ObArenaAllocator arena_allocator_;          // allocator
+  // thread safe allocator
+  // used for Parser/Formatter/LobDataMerger
+  ObCdcSafeArena arena_allocator_;          // allocator
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogEntryTask);
