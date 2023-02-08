@@ -3045,7 +3045,8 @@ int ObLogicalOperator::adjust_plan_root_output_exprs()
              FALSE_IT(into_item = static_cast<const ObSelectStmt*>(stmt)->get_select_into())) {
     /*do nothing*/
   } else if (NULL == get_parent()) {
-    if (NULL != into_item && T_INTO_OUTFILE == into_item->into_type_) {
+    if (NULL != into_item && T_INTO_OUTFILE == into_item->into_type_ &&
+        GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
       if (OB_FAIL(build_and_put_into_outfile_expr(into_item, output_exprs_))) {
         LOG_WARN("failed to add into outfile expr to ctx", K(ret));
       } else {

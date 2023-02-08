@@ -6050,6 +6050,8 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     LOG_WARN("fail to set line str", K(op.get_line_str()), K(ret));
   } else if (OB_FAIL(spec.user_vars_.init(op.get_user_vars().count()))) {
     LOG_WARN("init fixed array failed", K(ret), K(op.get_user_vars().count()));
+  } else if (OB_FAIL(spec.select_exprs_.init(op.get_select_exprs().count()))) {
+    LOG_WARN("init fixed array failed", K(ret), K(op.get_select_exprs().count()));
   } else {
     ObString var;
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_user_vars().count(); ++i) {
@@ -6058,6 +6060,18 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
         LOG_WARN("fail to deep copy string", K(op.get_user_vars().at(i)), K(ret));
       } else if (OB_FAIL(spec.user_vars_.push_back(var))) {
         LOG_WARN("fail to push back var", K(var), K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_select_exprs().count(); ++i) {
+      ObExpr *rt_expr = nullptr;
+      const ObRawExpr* select_expr = op.get_select_exprs().at(i);
+      if (OB_ISNULL(select_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*select_expr, rt_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret));
+      } else if (OB_FAIL(spec.select_exprs_.push_back(rt_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
       }
     }
     if (OB_SUCC(ret)) {

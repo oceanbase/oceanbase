@@ -97,14 +97,19 @@ public:
   {
     return closed_cht_;
   }
+  const common::ObIArray<ObRawExpr*> &get_select_exprs() const { return select_exprs_; }
+  common::ObIArray<ObRawExpr*> &get_select_exprs() { return select_exprs_; }
   virtual int est_cost() override;
   virtual int compute_plan_type() override;
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs);
 private:
   ObItemType into_type_;
   common::ObObj outfile_name_;
   common::ObObj filed_str_;
   common::ObObj line_str_;
+  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> select_exprs_;
   common::ObSEArray<common::ObString, 16, common::ModulePageAllocator, true> user_vars_;
   char closed_cht_;
   bool is_optional_;

@@ -8606,10 +8606,28 @@ int ObLogPlan::allocate_select_into_as_top(ObLogicalOperator *&old_top)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory for ObLogSelectInto failed", K(ret));
   } else {
-    ObSelectIntoItem *into_item = stmt->get_select_into();;
+    ObSelectIntoItem *into_item = stmt->get_select_into();
+    ObSEArray<ObRawExpr*, 4> select_exprs;
+    ObRawExpr *to_outfile_expr = NULL;
     if (OB_ISNULL(into_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("into item is null", K(ret));
+    } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (T_INTO_OUTFILE == into_item->into_type_ &&
+               OB_FAIL(ObRawExprUtils::build_to_outfile_expr(
+                                    get_optimizer_context().get_expr_factory(),
+                                    get_optimizer_context().get_session_info(),
+                                    into_item,
+                                    select_exprs,
+                                    to_outfile_expr))) {
+      LOG_WARN("failed to build_to_outfile_expr", K(*into_item), K(ret));
+    } else if (T_INTO_OUTFILE == into_item->into_type_ &&
+               OB_FAIL(select_into->get_select_exprs().push_back(to_outfile_expr))) {
+      LOG_WARN("failed to add into outfile expr", K(ret));
+    } else if (T_INTO_OUTFILE != into_item->into_type_ &&
+               OB_FAIL(select_into->get_select_exprs().assign(select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
     } else {
       select_into->set_into_type(into_item->into_type_);
       select_into->set_outfile_name(into_item->outfile_name_);
@@ -11493,6 +11511,19 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("get unexpected null", K(op->get_name()));
       } else if (OB_FAIL(allocate_material_for_recursive_cte_plan(right_child->get_child_list()))) {
         LOG_WARN("faile to allocate material for recursive cte plan", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && op->get_type() == LOG_SELECT_INTO && !op->is_plan_root() &&
+        GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
+      if (!op->get_stmt()->is_select_stmt()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected stmt type", K(ret));
+      } else {
+        const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt*>(op->get_stmt());
+        if (OB_FAIL(sel_stmt->get_select_exprs(op->get_output_exprs()))) {
+          LOG_WARN("failed to get select exprs", K(ret));
+        }
       }
     }
 
