@@ -1955,26 +1955,12 @@ int ObUpgradeInspection::inner_get_next_row(common::ObNewRow *&row)
   } else if (!start_to_read_) {
     const ObTableSchema *table_schema = NULL;
     const uint64_t table_id = OB_ALL_VIRTUAL_UPGRADE_INSPECTION_TID;
-    const int64_t col_count = output_column_ids_.count();
-    ObObj *cells = NULL;
     if (OB_FAIL(schema_guard.get_table_schema(OB_SYS_TENANT_ID, table_id, table_schema))) {
       LOG_WARN("get_table_schema failed", K(table_id), K(ret));
     } else if (NULL == table_schema) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table_schema is null", KP(table_schema), K(ret));
-    } else if (0 == col_count) {
-      // column not specified [eg: count(*)]
-    } else if (NULL == (cells = static_cast<ObObj *>(
-        allocator_->alloc(col_count * sizeof(ObObj))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc cells failed", K(col_count), K(ret));
     } else {
-      new (cells)ObObj[col_count];
-    }
-
-    if (OB_SUCC(ret)) {
-      cur_row_.cells_ = cells;
-      cur_row_.count_ = col_count;
       ObArray<Column> columns;
 
 #define ADD_ROW(name, info) \
@@ -2005,7 +1991,7 @@ int ObUpgradeInspection::inner_get_next_row(common::ObNewRow *&row)
           root_inspection_->is_data_version_passed()));
 
       bool upgrade_job_passed = true;
-      for (int64_t i = 0; i < UPGRADE_JOB_TYPE_COUNT; i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < UPGRADE_JOB_TYPE_COUNT; i++) {
         int tmp = OB_SUCCESS;
         ObRsJobType job_type = upgrade_job_type_array[i];
         if (job_type > JOB_TYPE_INVALID && job_type < JOB_TYPE_MAX) {
@@ -2023,10 +2009,6 @@ int ObUpgradeInspection::inner_get_next_row(common::ObNewRow *&row)
 
 #undef CHECK_RESULT
 #undef ADD_ROW
-      if (OB_FAIL(ret)) {
-        allocator_->free(cells);
-        cells = NULL;
-      }
     }
     if (OB_SUCC(ret)) {
       scanner_it_ = scanner_.begin();

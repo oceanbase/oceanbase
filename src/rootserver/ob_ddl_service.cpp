@@ -19890,19 +19890,24 @@ int ObDDLService::add_table_schema(
     share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
   } else if (OB_FAIL(create_table_in_trans(table_schema, NULL, NULL, schema_guard))) {
     LOG_WARN("create_table_in_trans failed", KR(ret), K(table_schema));
   }
-  LOG_INFO("[UPGRADE] add inner table", KR(ret), "tenant_id", table_schema.get_tenant_id(),
-           "table_id", table_schema.get_table_id(), "table_name", table_schema.get_table_name());
+  LOG_INFO("[UPGRADE] add inner table", KR(ret),
+           "tenant_id", table_schema.get_tenant_id(),
+           "table_id", table_schema.get_table_id(),
+           "table_name", table_schema.get_table_name(),
+           "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 
 int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
   ObString *stmt = NULL;
   ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -19931,8 +19936,10 @@ int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_sch
                                          NULL, NULL, NULL))) {
     LOG_WARN("drop table in transaction failed", KR(ret), K(tenant_id), K(table_id));
   }
-  LOG_INFO("[UPGRADE] drop inner table", KR(ret), K(tenant_id), K(table_id),
-           "table_name", table_schema.get_table_name());
+  LOG_INFO("[UPGRADE] drop inner table", KR(ret),
+           K(tenant_id), K(table_id),
+           "table_name", table_schema.get_table_name(),
+           "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 

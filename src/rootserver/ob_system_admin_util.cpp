@@ -1333,23 +1333,49 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
   if (FAILEDx(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
       tenant_id, schema_guard))) {
     LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                                   table.get_database_id(),
-                                                   table.get_table_name(),
-                                                   table.is_index_table(),
-                                                   exist_schema))) {
-    LOG_WARN("get table schema failed", KR(ret), K(tenant_id), "table", table.get_table_name());
-    if (OB_TABLE_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
+  } else {
+    ObArenaAllocator allocator;
+    ObString index_name;
+    if (table.is_index_table()) {
+      // In the early version, table name of oracle virtual table index is not right
+      // (data_table_id is mysql virtual table id), which may cause we can't find duplicate index
+      // with table name and duplicate name conflict occur.
+      //
+      // ETC:
+      // OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ORA_TID = 15034;
+      // OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ORA_ALL_VIRTUAL_PLAN_CACHE_STAT_I1_TID = 19998;
+      // OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ALL_VIRTUAL_PLAN_CACHE_STAT_I1_TNAME = "__idx_1099511638779_all_virtual_plan_cache_stat_i1";
+      // OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ORA_ALL_VIRTUAL_PLAN_CACHE_STAT_I1_TNAME = "__idx_1099511642810_all_virtual_plan_cache_stat_i1";
+      //
+      // For oracle virtual table index which data_table_id is (1 << 40) | 15034 = 1099511642810,
+      // but it use OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ALL_VIRTUAL_PLAN_CACHE_STAT_I1_TNAME as table name.
+      if (OB_FAIL(table.generate_origin_index_name())) {
+        LOG_WARN("fail to generate origin index name", KR(ret), K(table));
+      } else if (OB_FAIL(ObTableSchema::build_index_table_name(
+                 allocator, table.get_data_table_id(),
+                 table.get_origin_index_name_str(), index_name))) {
+        LOG_WARN("fail to build index table name", KR(ret), K(table));
+      }
     }
-  } else if (OB_ISNULL(exist_schema)) {
-    // no duplicate table name
-  } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
-    LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
-             "table", table.get_table_name(), "table_id", table.get_table_id());
-  } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
-             tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
+    if (FAILEDx(schema_guard.get_table_schema(
+                tenant_id,
+                table.get_database_id(),
+                table.is_index_table() ? index_name : table.get_table_name(),
+                table.is_index_table(),
+                exist_schema))) {
+      LOG_WARN("get table schema failed", KR(ret), K(tenant_id), "table", table.get_table_name());
+      if (OB_TABLE_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_ISNULL(exist_schema)) {
+      // no duplicate table name
+    } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
+      LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
+               "table", table.get_table_name(), "table_id", table.get_table_id());
+    } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
+               tenant_id, schema_guard))) {
+      LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
+    }
   }
   // 2. try drop table first
   exist_schema = NULL;
