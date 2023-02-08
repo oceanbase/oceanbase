@@ -53,6 +53,7 @@ int remove_file_at(const char *dir, const char *path, ILogBlockPool *log_block_p
     PALF_LOG(ERROR, "remove_block_at failed", K(ret));
     // otherwise, unlink it.
   } else {
+    PALF_LOG(INFO, "remove_file_at success", K(dir), K(path));
   }
 
   if (-1 != fd) {

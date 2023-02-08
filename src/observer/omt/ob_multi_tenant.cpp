@@ -747,7 +747,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     if (!is_virtual_tenant_id(tenant_id)
         && !is_hidden_sys
         && OB_FAIL(GCTX.log_block_mgr_->create_tenant(log_disk_size))) {
-      LOG_ERROR("create_tenatn in ObServerLogBlockMgr failed", KR(ret));
+      LOG_ERROR("create_tenant in ObServerLogBlockMgr failed", KR(ret));
     }
     // if create_tenant in ObServerLogBlockMGR success, the log disk size need by this tenant has been pinned,
     // otherwise, the assigned log disk size of ObServerLogBlockMGR is origin.
