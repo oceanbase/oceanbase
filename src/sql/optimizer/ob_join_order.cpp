@@ -9488,7 +9488,7 @@ public:
         }
       }
       new_expr = new_query_ref;
-    } else if (old_expr == root_expr_ || copier_->is_existed(old_expr)) {
+    } else if (copier_->is_existed(old_expr)) {
       // do nothing
     } else if (old_expr->is_column_ref_expr() &&
                old_expr->get_relation_ids().is_subset(*left_table_set_)) {
