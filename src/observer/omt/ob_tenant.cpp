@@ -143,7 +143,7 @@ int ObPxPools::ThreadRecyclePoolFunc::operator() (common::hash::HashMapPair<int6
   if (NULL == pool) {
     LOG_WARN("pool is null", K(group_id));
   } else {
-    pool->thread_recycle();
+    IGNORE_RETURN pool->thread_recycle();
   }
   return ret;
 }
@@ -187,8 +187,9 @@ int ObPxPool::submit(const RunFuncT &func)
     queue_.set_limit(common::ObServerConfig::get_instance().tenant_task_queue_size);
     is_inited_ = true;
   }
+  disable_recycle();
   ATOMIC_INC(&concurrency_);
-  if (get_thread_count() < ATOMIC_LOAD(&concurrency_)) {
+  if (ATOMIC_LOAD(&active_threads_) < ATOMIC_LOAD(&concurrency_)) {
     ret = OB_SIZE_OVERFLOW;
   } else {
     Task *t = OB_NEW(Task, ObModIds::OMT_TENANT, func);
@@ -201,6 +202,7 @@ int ObPxPool::submit(const RunFuncT &func)
   if (ret != OB_SUCCESS) {
     ATOMIC_DEC(&concurrency_);
   }
+  enable_recycle();
   return ret;
 }
 
@@ -225,11 +227,13 @@ void ObPxPool::set_px_thread_name()
 
 void ObPxPool::run(int64_t idx)
 {
+  ATOMIC_INC(&active_threads_);
   set_thread_idx(idx);
   // Create worker for current thread.
   ObPxWorker worker;
   run1();
 }
+
 
 void ObPxPool::run1()
 {
@@ -243,7 +247,7 @@ void ObPxPool::run1()
   //ObTaTLCacheGuard ta_guard(tenant_id_);
   CLEAR_INTERRUPTABLE();
   ObCgroupCtrl *cgroup_ctrl = GCTX.cgroup_ctrl_;
-  LOG_INFO("run px pool", K(group_id_), K(tenant_id_));
+  LOG_INFO("run px pool", K(group_id_), K(tenant_id_), K_(active_threads));
   if (nullptr != cgroup_ctrl && OB_LIKELY(cgroup_ctrl->is_valid())) {
     pid_t pid = static_cast<pid_t>(syscall(__NR_gettid));
     cgroup_ctrl->add_thread_to_cgroup(pid, tenant_id_, group_id_);
@@ -265,21 +269,36 @@ void ObPxPool::run1()
         handle(task);
         idle_time = 0; // reset recycle timer
       } else {
-        // recycle thread policy:
-        // 1. first N threads reserved for first 10min idle period
-        // 2. no thread reserved after 1h idle period
-        const int N = 10;
         idle_time += QUEUE_WAIT_TIME;
         // if idle for more than 10 min, exit thread
-        if (idle_time > 10LL * 60 * 1000 * 1000 && get_thread_idx() >= N) {
-          Thread::current().stop();
-        } else if (idle_time > 60LL * 60 * 1000 * 1000) {
-          Thread::current().stop();
-        }
+        try_recycle(idle_time);
       }
     }
   }
 }
+
+void ObPxPool::try_recycle(int64_t idle_time)
+{
+  // recycle thread policy:
+  // 1. first N threads reserved for first 10 min idle period
+  // 2. no thread reserved after 1 hour idle period
+  //
+  // impl. note: must ensure active_threads_ > concurrency_, otherwise may hang task
+  const int N = 8;
+  if ((idle_time > 10LL * 60 * 1000 * 1000 && get_thread_count() >= N)
+      || idle_time > 60LL * 60 * 1000 * 1000) {
+    if (OB_SUCCESS == recycle_lock_.trylock()) {
+      if (ATOMIC_LOAD(&active_threads_) > ATOMIC_LOAD(&concurrency_)) {
+        ATOMIC_DEC(&active_threads_);
+        // when thread marked as stopped,
+        // it will exit the event loop and recycled by background deamon
+        Thread::current().stop();
+      }
+      recycle_lock_.unlock();
+    }
+  }
+}
+
 
 int ObResourceGroup::init()
 {
