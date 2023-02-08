@@ -199,7 +199,7 @@ int ObLogReplayService::init(PalfEnv *palf_env,
   } else if (OB_FAIL(replay_stat_.init(this))) {
     CLOG_LOG(WARN, "replay_stat_ init error", K(ret));
   } else {
-    replayable_point_.reset();
+    replayable_point_ = SCN::min_scn();
     pending_replay_log_size_ = 0;
     is_inited_ = true;
   }
