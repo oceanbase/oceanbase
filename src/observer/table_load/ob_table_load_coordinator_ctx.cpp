@@ -55,7 +55,7 @@ int ObTableLoadCoordinatorCtx::init(ObSQLSessionInfo *session_info,
     } else if (OB_FAIL(redef_table_.start())) {
       LOG_WARN("failed to create hidden table", KR(ret));
     } else if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->param_.database_id_,
-                                            ctx_->param_.target_table_id_, allocator_))) {
+                                            ctx_->param_.target_table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
                 K(ctx_->param_.target_table_id_));
     }

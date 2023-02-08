@@ -6,6 +6,7 @@
 
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "share/rc/ob_tenant_base.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 
 namespace oceanbase
@@ -163,7 +164,8 @@ int ObTableLoadSchema::check_constraints(uint64_t tenant_id,
 }
 
 ObTableLoadSchema::ObTableLoadSchema()
-  : is_partitioned_table_(false),
+  : allocator_("TLD_Schema"),
+    is_partitioned_table_(false),
     is_heap_table_(false),
     has_autoinc_column_(false),
     has_identity_column_(false),
@@ -173,25 +175,52 @@ ObTableLoadSchema::ObTableLoadSchema()
     schema_version_(0),
     is_inited_(false)
 {
+  column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
+  multi_version_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
 }
 
-int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t database_id, uint64_t table_id,
-                            ObIAllocator &allocator)
+ObTableLoadSchema::~ObTableLoadSchema()
+{
+  reset();
+}
+
+void ObTableLoadSchema::reset()
+{
+  database_name_.reset();
+  table_name_.reset();
+  is_partitioned_table_ = false;
+  is_heap_table_ = false;
+  has_autoinc_column_ = false;
+  has_identity_column_ = false;
+  rowkey_column_count_ = 0;
+  column_count_ = 0;
+  collation_type_ = CS_TYPE_INVALID;
+  schema_version_ = 0;
+  column_descs_.reset();
+  multi_version_column_descs_.reset();
+  datum_utils_.reset();
+  partition_ids_.reset();
+  allocator_.reset();
+  is_inited_ = false;
+}
+
+int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t database_id, uint64_t table_id)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadSchema init twice", KR(ret));
   } else {
+    allocator_.set_tenant_id(tenant_id);
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *database_schema = nullptr;
     const ObTableSchema *table_schema = nullptr;
     if (OB_FAIL(get_database_and_table_schema(tenant_id, database_id, table_id, schema_guard,
                                               database_schema, table_schema))) {
       LOG_WARN("fail to get database and table schema", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(init_database_schema(database_schema, allocator))) {
+    } else if (OB_FAIL(init_database_schema(database_schema))) {
       LOG_WARN("fail to init database schema", KR(ret));
-    } else if (OB_FAIL(init_table_schema(table_schema, allocator))) {
+    } else if (OB_FAIL(init_table_schema(table_schema))) {
       LOG_WARN("fail to init table schema", KR(ret));
     } else {
       is_inited_ = true;
@@ -200,8 +229,7 @@ int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t database_id, uint64_t t
   return ret;
 }
 
-int ObTableLoadSchema::init_database_schema(const ObDatabaseSchema *database_schema,
-                                            ObIAllocator &allocator)
+int ObTableLoadSchema::init_database_schema(const ObDatabaseSchema *database_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(database_schema)) {
@@ -209,15 +237,14 @@ int ObTableLoadSchema::init_database_schema(const ObDatabaseSchema *database_sch
     LOG_WARN("invalid args", KR(ret), KP(database_schema));
   } else {
     if (OB_FAIL(ObTableLoadUtils::deep_copy(database_schema->get_database_name_str(),
-                                            database_name_, allocator))) {
+                                            database_name_, allocator_))) {
       LOG_WARN("fail to deep copy database name", KR(ret));
     }
   }
   return ret;
 }
 
-int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema,
-                                         ObIAllocator &allocator)
+int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)) {
@@ -232,14 +259,14 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema,
     collation_type_ = table_schema->get_collation_type();
     schema_version_ = table_schema->get_schema_version();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
-                                            allocator))) {
+                                            allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));
     } else if (OB_FAIL(table_schema->get_column_ids(column_descs_))) {
       LOG_WARN("fail to get column descs", KR(ret));
      } else if (OB_FAIL(table_schema->get_multi_version_column_descs(multi_version_column_descs_))) {
       LOG_WARN("fail to get multi version column descs", KR(ret));
     } else if (OB_FAIL(datum_utils_.init(multi_version_column_descs_, rowkey_column_count_,
-                                         lib::is_oracle_mode(), allocator))) {
+                                         lib::is_oracle_mode(), allocator_))) {
       LOG_WARN("fail to init datum utils", KR(ret));
     }
     if (OB_SUCC(ret)) {
@@ -247,7 +274,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema,
       ObArray<uint64_t> part_ids;
       if (OB_FAIL(table_schema->get_all_tablet_and_object_ids(tablet_ids, part_ids))) {
         LOG_WARN("fail to get all tablet ids", KR(ret));
-      } else if (OB_FAIL(partition_ids_.create(part_ids.count(), allocator))) {
+      } else if (OB_FAIL(partition_ids_.create(part_ids.count(), allocator_))) {
         LOG_WARN("fail to create array", KR(ret));
       } else {
         for (int64_t i = 0; i < part_ids.count(); ++i) {

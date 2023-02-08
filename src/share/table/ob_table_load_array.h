@@ -94,9 +94,9 @@ public:
   void reset()
   {
     if (nullptr != ptr_ && !is_ref_) {
-      for (int64_t i = 0; i < count_; ++i) {
-        ptr_[i].~T();
-      }
+      // for (int64_t i = 0; i < count_; ++i) {
+      //   ptr_[i].~T();
+      // }
       if (nullptr != allocator_) {
         allocator_->free(ptr_);
       }
